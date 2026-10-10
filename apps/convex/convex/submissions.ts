@@ -1,6 +1,8 @@
 import {
   confirmSubmission,
   expireUploadSessions,
+  listOrphanUploadObjects,
+  markUploadObjectsPurged,
   prepareSubmission,
   recordItemFailed,
   recordItemVerified,
@@ -195,4 +197,18 @@ export const expireSessions = internalMutation({
     const ids = await expireUploadSessions(createAppContext(ctx.db), 100);
     return ids.length;
   },
+});
+
+/** 清掃: abandoned セッションの未削除オブジェクト一覧（Hono の cron が http.ts 経由で取得）。 */
+export const listOrphanObjects = internalMutation({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) =>
+    listOrphanUploadObjects(createAppContext(ctx.db), Math.min(limit ?? 100, 500)),
+});
+
+/** 清掃: R2 から削除済みの項目を記録（冪等）。 */
+export const markObjectsPurged = internalMutation({
+  args: { itemIds: v.array(v.id("uploadItems")) },
+  handler: async (ctx, { itemIds }) =>
+    markUploadObjectsPurged(createAppContext(ctx.db), itemIds.slice(0, 500)),
 });

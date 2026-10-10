@@ -518,4 +518,48 @@ describe("Convex 統合: 認可と状態遷移", () => {
       { id: cast.reviewer.id, name: "reviewer", email: "reviewer@example.invalid" },
     ]);
   });
+
+  it("v1 清掃: abandoned セッションの R2 オブジェクトを Hono が取りに来て削除記録する（共有秘密で認証）", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const stale = await submit(t, cast, workId); // 検証済みだが確定しない
+    vi.setSystemTime(Date.now() + 48 * HOUR);
+    expect(await t.mutation(internal.submissions.expireSessions, {})).toBe(1);
+
+    const prev = process.env.MF100_CLEANUP_SECRET;
+    process.env.MF100_CLEANUP_SECRET = "test-cleanup-secret-0123456789";
+    try {
+      const unauthorized = await t.fetch("/internal/upload-orphans", {
+        headers: { Authorization: "Bearer wrong" },
+      });
+      expect(unauthorized.status).toBe(404);
+      const headers = { Authorization: `Bearer ${process.env.MF100_CLEANUP_SECRET}` };
+      const listed = (await (
+        await t.fetch("/internal/upload-orphans?limit=10", { headers })
+      ).json()) as {
+        items: Array<{ itemId: string; objectKey: string }>;
+      };
+      expect(listed.items.map((i) => i.itemId).sort()).toEqual(stale.items.map((i) => i.id).sort());
+      const purged = (await (
+        await t.fetch("/internal/upload-orphans/purged", {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ itemIds: listed.items.map((i) => i.itemId) }),
+        })
+      ).json()) as { purged: number };
+      expect(purged.purged).toBe(2);
+      const again = (await (await t.fetch("/internal/upload-orphans", { headers })).json()) as {
+        items: unknown[];
+      };
+      expect(again.items).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.MF100_CLEANUP_SECRET;
+      else process.env.MF100_CLEANUP_SECRET = prev;
+    }
+    // 確定済みの版の実体は対象外: 新しい提出を確定しても一覧に出ない
+    const ok = await submit(t, cast, workId);
+    await cast.creator.as.mutation(api.submissions.confirm, { sessionId: ok.sessionId });
+    expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([]);
+  });
 });

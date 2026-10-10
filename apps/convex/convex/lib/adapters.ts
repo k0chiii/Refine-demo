@@ -178,6 +178,14 @@ export function createAppContext(
           compact(toFields(item) as Strip<Doc<"uploadItems">>),
         );
       },
+      async listAbandonedUnpurged(limit) {
+        const docs = await db
+          .query("uploadSessions")
+          .withIndex("by_state_expires", (q) => q.eq("state", "abandoned"))
+          .filter((q) => q.eq(q.field("purgedAt"), undefined))
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as UploadSession);
+      },
     },
     threads: {
       async findById(id) {

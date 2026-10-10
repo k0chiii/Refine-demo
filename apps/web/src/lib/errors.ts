@@ -25,7 +25,7 @@ const messages: Record<string, string> = {
   comment_reason_required: "不採用・持越には理由の入力が必要です",
   comment_invalid_resolution_transition: "この状態からその判断へは変更できません",
   comment_reply_not_allowed: "受付終了後の返信は制作者の処置記録のみ可能です（D5 暫定）",
-  anchor_invalid: "コメント位置が不正です",
+  anchor_invalid: "コメント位置が不正です（文章の範囲は 1 文字以上、引用は 200 文字まで）",
   anchor_artifact_mismatch: "コメント位置がこの版のファイルを指していません",
   approval_not_approver: "校了できるのは、この制作物の校了権限者だけです",
   approval_revision_not_candidate: "校了できるのは最新の通常版だけです",

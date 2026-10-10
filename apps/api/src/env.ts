@@ -7,4 +7,6 @@ export interface Bindings {
   CONVEX_SITE_URL: string;
   /** CORS 許可オリジン（カンマ区切り） */
   ALLOWED_ORIGINS: string;
+  /** R2 清掃 cron が Convex の /internal エンドポイントを呼ぶための共有秘密（`wrangler secret put`）。未設定なら清掃は走らない */
+  MF100_CLEANUP_SECRET?: string;
 }

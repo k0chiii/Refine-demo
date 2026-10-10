@@ -48,15 +48,17 @@ npx convex env set CONVEX_SITE_ORIGIN https://xxxx-yyyy-123.convex.site
 npx convex env set FRONTEND_URL http://localhost:5173
 npx convex env set NOGIKU_MOCK_ENABLED true
 npx convex env set MF100_SYSTEM_ADMIN_SUBJECTS mock-nogiku-admin
+npx convex env set MF100_CLEANUP_SECRET "$(openssl rand -hex 24)"   # R2 清掃用の共有秘密（任意。Hono 側にも同じ値を設定）
 npx convex env list   # 確認
 ```
 
-| 変数                          | 意味                                                                |
-| ----------------------------- | ------------------------------------------------------------------- |
-| `CONVEX_SITE_ORIGIN`          | Convex Auth の issuer。`auth.config.ts` が参照                      |
-| `FRONTEND_URL`                | ログイン後に戻る Web の URL                                         |
-| `NOGIKU_MOCK_ENABLED`         | `true`: Nogiku OIDC を呼ばず、モック委員でサインイン                |
-| `MF100_SYSTEM_ADMIN_SUBJECTS` | 校正システム管理者にする Nogiku sub（モックは `mock-nogiku-admin`） |
+| 変数                          | 意味                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `CONVEX_SITE_ORIGIN`          | Convex Auth の issuer。`auth.config.ts` が参照                                                         |
+| `FRONTEND_URL`                | ログイン後に戻る Web の URL                                                                            |
+| `NOGIKU_MOCK_ENABLED`         | `true`: Nogiku OIDC を呼ばず、モック委員でサインイン                                                   |
+| `MF100_SYSTEM_ADMIN_SUBJECTS` | 校正システム管理者にする Nogiku sub（モックは `mock-nogiku-admin`）                                    |
+| `MF100_CLEANUP_SECRET`        | Hono の R2 清掃 cron が `/internal/upload-orphans` を呼ぶ共有秘密（16 文字以上）。未設定なら清掃は無効 |
 
 > 本物の Nogiku に切り替えるときは `NOGIKU_MOCK_ENABLED` を外し、`NOGIKU_ISSUER` / `NOGIKU_CLIENT_ID` / `NOGIKU_CLIENT_SECRET` を設定する（HANDOVER 参照）。
 
@@ -78,8 +80,10 @@ cat > .dev.vars <<EOF
 CONVEX_URL=https://xxxx-yyyy-123.convex.cloud
 CONVEX_SITE_URL=https://xxxx-yyyy-123.convex.site
 ALLOWED_ORIGINS=http://localhost:5173
+MF100_CLEANUP_SECRET=<Convex に設定した値と同じ>
 EOF
 pnpm dev     # http://127.0.0.1:8787 。R2 はローカルにエミュレーションされる（Cloudflare アカウント不要）
+# 清掃 cron を手で動かす: pnpm exec wrangler dev --test-scheduled → curl http://127.0.0.1:8787/__scheduled
 ```
 
 初回は `wrangler` が Cloudflare ログインを求めることがあるが、`wrangler dev` のローカル実行だけなら **ログイン不要**（求められたら Esc で抜けてよい）。

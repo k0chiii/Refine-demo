@@ -131,6 +131,11 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
           .all()
           .filter((s) => s.state === "open" && s.expiresAt <= t)
           .slice(0, limit),
+      listAbandonedUnpurged: async (limit) =>
+        state.sessions
+          .all()
+          .filter((s) => s.state === "abandoned" && s.purgedAt === undefined)
+          .slice(0, limit),
     },
     threads: {
       findById: async (id) => state.threads.get(id),

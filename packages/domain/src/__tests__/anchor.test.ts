@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   fromViewportRect,
+  TEXT_QUOTE_MAX,
+  textRangeAnchor,
   toViewportRect,
   validateAnchor,
   type Viewport,
@@ -62,5 +64,33 @@ describe("validateAnchor", () => {
       validateAnchor({ type: "pdf_rect", artifactId: "a", page: 1, rect }),
     ).not.toThrow();
     expect(() => validateAnchor({ type: "image_rect", artifactId: "a", rect })).not.toThrow();
+  });
+
+  it("F-12: text_range は [start, end) の文字オフセットと引用文を持ち、空範囲・長すぎる引用は拒否", () => {
+    const text = "五月祭常任委員会のパンフレット。表紙の配色を確認してください。";
+    const a = textRangeAnchor("art1", text, 0, 8);
+    expect(a).toEqual({
+      type: "text_range",
+      artifactId: "art1",
+      start: 0,
+      end: 8,
+      quote: "五月祭常任委員会",
+    });
+    expect(() => validateAnchor(a)).not.toThrow();
+    expect(() => validateAnchor({ ...a, end: 0 })).toThrow(
+      expect.objectContaining({ code: "anchor_invalid" }),
+    );
+    expect(() => validateAnchor({ ...a, start: -1 })).toThrow(
+      expect.objectContaining({ code: "anchor_invalid" }),
+    );
+    expect(() => validateAnchor({ ...a, quote: "x".repeat(TEXT_QUOTE_MAX + 1) })).toThrow(
+      expect.objectContaining({ code: "anchor_invalid" }),
+    );
+    // 範囲外はスナップショット長に丸める
+    expect(textRangeAnchor("art1", text, 100, 200)).toMatchObject({
+      start: text.length,
+      end: text.length,
+      quote: "",
+    });
   });
 });

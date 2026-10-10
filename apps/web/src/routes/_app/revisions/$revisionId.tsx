@@ -1,11 +1,12 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import type { Anchor, NormalizedRect } from "@mf100/domain";
+import { textRangeAnchor, type Anchor, type NormalizedRect } from "@mf100/domain";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
 import { PdfViewer, anchorPage } from "@/features/annotation/PdfViewer";
+import { TextViewer } from "@/features/annotation/TextViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { formatJst, formatJstShort, remaining } from "@/lib/format";
@@ -34,7 +35,12 @@ import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
 
 export const Route = createFileRoute("/_app/revisions/$revisionId")({ component: Workspace });
 
-type Draft = { page?: number; rect?: NormalizedRect; point?: { x: number; y: number } };
+type Draft = {
+  page?: number;
+  rect?: NormalizedRect;
+  point?: { x: number; y: number };
+  range?: { start: number; end: number };
+};
 
 /**
  * U-05 校正ワークスペース + U-06 指摘対応。
@@ -100,6 +106,18 @@ function Workspace() {
 
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
   const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null);
+  // 文章添付は版スナップショットとして UTF-8 テキストに復号して保持する（F-12）
+  const [text, setText] = useState<{ artifactId: string; body: string } | null>(null);
+  useEffect(() => {
+    if (!artifact || artifact.type !== "document" || !blob.blob) return;
+    let cancelled = false;
+    void blob.blob.text().then((body) => {
+      if (!cancelled) setText({ artifactId: artifact.id, body });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artifact?.id, artifact?.type, blob.blob]);
   const me = useQuery(api.me.me, {});
   const carryCandidates = useQuery(
     api.comments.carryCandidates,
@@ -122,6 +140,8 @@ function Workspace() {
           : draft.point
             ? { type: "image_pin", artifactId: artifact.id, point: draft.point }
             : undefined;
+      else if (artifact.type === "document" && draft.range && text?.artifactId === artifact.id)
+        anchor = textRangeAnchor(artifact.id, text.body, draft.range.start, draft.range.end);
     }
     await post({
       revisionId: revisionId as Id<"revisions">,
@@ -487,6 +507,17 @@ function Workspace() {
               onDraft={setDraft}
               requestedPage={requestedPage}
             />
+          ) : artifact.type === "document" && text?.artifactId === artifact.id ? (
+            <TextViewer
+              text={text.body}
+              artifactId={artifact.id}
+              threads={overlayThreads}
+              activeThreadId={activeThreadId}
+              onSelectThread={setActiveThreadId}
+              selecting={selecting}
+              draft={draft?.range ?? null}
+              onDraft={(r) => setDraft(r ? { range: r } : null)}
+            />
           ) : artifact.type === "image" && blob.url ? (
             <ImageViewer
               url={blob.url}
@@ -634,6 +665,9 @@ function Workspace() {
                       {t.author?.name}・{formatJstShort(t.createdAt)}
                     </span>
                   </div>
+                  {t.anchor?.type === "text_range" ? (
+                    <blockquote className="thread__quote small">「{t.anchor.quote}」</blockquote>
+                  ) : null}
                   <div className="thread__body">{t.body}</div>
                   <ThreadEvents threadId={t.id} active={t.id === activeThreadId} />
                   {t.id === activeThreadId ? (
@@ -801,11 +835,13 @@ function Workspace() {
                   </M3eIconButton>
                   <span className="small muted">
                     {draft
-                      ? draft.rect
+                      ? draft.rect || draft.range
                         ? "範囲を指定済み"
                         : "ピンを指定済み"
                       : selecting
-                        ? "ビューア上でドラッグ（範囲）またはクリック（ピン）"
+                        ? artifact?.type === "document"
+                          ? "本文をドラッグして範囲を指定"
+                          : "ビューア上でドラッグ（範囲）またはクリック（ピン）"
                         : "位置指定なし"}
                   </span>
                   {draft ? (

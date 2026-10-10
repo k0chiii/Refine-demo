@@ -1,0 +1,78 @@
+[
+  {
+    "screen": "01-signin",
+    "violations": []
+  },
+  {
+    "screen": "02-works-list",
+    "violations": []
+  },
+  {
+    "screen": "03-work-detail-empty",
+    "violations": []
+  },
+  {
+    "screen": "14-submit-required-checks",
+    "violations": []
+  },
+  {
+    "screen": "04-submit-verified",
+    "violations": []
+  },
+  {
+    "screen": "05-submit-confirmed",
+    "violations": []
+  },
+  {
+    "screen": "06-work-detail-with-revision",
+    "violations": []
+  },
+  {
+    "screen": "15-work-edit",
+    "violations": []
+  },
+  {
+    "screen": "07-queue",
+    "violations": []
+  },
+  {
+    "screen": "08-workspace-comment",
+    "violations": []
+  },
+  {
+    "screen": "16-required-check-done",
+    "violations": []
+  },
+  {
+    "screen": "19-text-range",
+    "violations": []
+  },
+  {
+    "screen": "09-decision",
+    "violations": []
+  },
+  {
+    "screen": "17-carry-forward",
+    "violations": []
+  },
+  {
+    "screen": "10-finalize-dialog",
+    "violations": []
+  },
+  {
+    "screen": "11-work-finalized",
+    "violations": []
+  },
+  {
+    "screen": "18-notifications",
+    "violations": []
+  },
+  {
+    "screen": "12-acl",
+    "violations": []
+  },
+  {
+    "screen": "13-admin-audit",
+    "violations": []
+  }
+]

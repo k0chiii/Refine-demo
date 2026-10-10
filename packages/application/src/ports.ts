@@ -57,6 +57,8 @@ export interface UploadSessionRepository {
   updateItem(item: UploadItem): Promise<void>;
   /** open のまま expiresAt を過ぎたセッション */
   listOpenExpired(now: Instant, limit: number): Promise<UploadSession[]>;
+  /** abandoned で、R2 の孤立オブジェクト清掃がまだ終わっていないセッション */
+  listAbandonedUnpurged(limit: number): Promise<UploadSession[]>;
 }
 
 export interface ThreadRepository {

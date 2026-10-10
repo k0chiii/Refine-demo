@@ -5,6 +5,8 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // 放置アップロードセッションの孤立 R2 オブジェクト清掃（D14）。Convex 側の abandoned 化（毎時）の後に走る
+  "triggers": { "crons": ["23 * * * *"] },
   "r2_buckets": [
     {
       "binding": "ASSETS",

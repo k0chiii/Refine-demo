@@ -28,6 +28,8 @@ export interface UploadSession {
   confirmedRevisionId?: string;
   /** 確定時に作る専門確認（§2.2-4）。 */
   requiredChecks?: Array<{ type: string; label: string; assigneeId?: string }>;
+  /** abandoned 後に R2 の孤立オブジェクトを全て削除し終えた時刻（D14 清掃） */
+  purgedAt?: Instant;
 }
 
 export type UploadItemStatus = "pending" | "uploaded" | "verified" | "failed";
@@ -48,6 +50,8 @@ export interface UploadItem {
   pageCount?: number;
   status: UploadItemStatus;
   failureMessage?: string;
+  /** R2 上のオブジェクトを清掃で削除した時刻（objectKey は履歴のため残す） */
+  purgedAt?: Instant;
 }
 
 export function assertSessionOpen(session: UploadSession, now: Instant): void {

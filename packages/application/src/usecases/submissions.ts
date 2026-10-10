@@ -362,3 +362,68 @@ async function loadOwnItem(
 function sanitizeFileName(name: string): string {
   return name.replace(/[^\w.\-぀-ヿ一-龯]+/g, "_").slice(0, 120) || "file";
 }
+
+/** 清掃対象の孤立オブジェクト（§8.1 / D14）。Hono（R2 を持つ側）が取りに来る。 */
+export interface OrphanUploadObject {
+  itemId: string;
+  objectKey: string;
+}
+
+/**
+ * abandoned セッションのうち、まだ R2 から削除されていないオブジェクトを列挙する。
+ * 削除対象が残っていないセッションはここで purgedAt を付けて、次回以降の走査から外す。
+ */
+export async function listOrphanUploadObjects(
+  ctx: AppContext,
+  limit = 100,
+): Promise<OrphanUploadObject[]> {
+  const now = ctx.clock.now();
+  const out: OrphanUploadObject[] = [];
+  for (const session of await ctx.uploads.listAbandonedUnpurged(limit)) {
+    const pending = (await ctx.uploads.listItems(session.id)).filter(
+      (i) => i.objectKey !== undefined && i.purgedAt === undefined,
+    );
+    if (pending.length === 0) {
+      await ctx.uploads.update({ ...session, purgedAt: now });
+      continue;
+    }
+    for (const i of pending) out.push({ itemId: i.id, objectKey: i.objectKey! });
+  }
+  return out;
+}
+
+/**
+ * R2 から削除済みのオブジェクトを記録する（冪等）。セッションの全項目が削除済みになれば purgedAt を付ける。
+ * objectKey 自体は監査のために残す（削除の事実は purgedAt と監査ログ）。
+ */
+export async function markUploadObjectsPurged(ctx: AppContext, itemIds: string[]): Promise<number> {
+  const now = ctx.clock.now();
+  const touched = new Set<string>();
+  let count = 0;
+  for (const itemId of new Set(itemIds)) {
+    const item = await ctx.uploads.findItem(itemId);
+    if (!item || item.objectKey === undefined || item.purgedAt !== undefined) continue;
+    const session = await ctx.uploads.findById(item.sessionId);
+    if (!session || session.state !== "abandoned") continue; // 確定済み・進行中の実体は絶対に消さない
+    await ctx.uploads.updateItem({ ...item, purgedAt: now });
+    touched.add(session.id);
+    count++;
+  }
+  for (const sessionId of touched) {
+    const session = await ctx.uploads.findById(sessionId);
+    if (!session) continue;
+    const remaining = (await ctx.uploads.listItems(sessionId)).filter(
+      (i) => i.objectKey !== undefined && i.purgedAt === undefined,
+    );
+    if (remaining.length === 0) await ctx.uploads.update({ ...session, purgedAt: now });
+    await ctx.audit.record({
+      entityType: "uploadSession",
+      entityId: sessionId,
+      operation: "objects_purged",
+      actorId: "system",
+      after: { remaining: remaining.length },
+      at: now,
+    });
+  }
+  return count;
+}

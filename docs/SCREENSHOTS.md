@@ -22,6 +22,9 @@
 | 16  | v1 U-05 専門確認パネル（担当者が確認完了）          | 校正者         | ![](screenshots/16-required-check-done.png)       |
 | 17  | v1 U-05 第2版: 前版の未解決指摘の持越（人が確認）   | 制作者         | ![](screenshots/17-carry-forward.png)             |
 | 18  | v1 アプリ内通知（依頼・割当・採否・持越）           | 校正者         | ![](screenshots/18-notifications.png)             |
+| 19  | v1 F-12 文章の閲覧と範囲指摘（本文を選択して投稿）  | 校正者         | ![](screenshots/19-text-range.png)                |
+
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（現在 19 画面とも指摘 0）。
 
 ## デモモードについて
 

@@ -21,6 +21,8 @@ import {
 import {
   confirmSubmission,
   expireUploadSessions,
+  listOrphanUploadObjects,
+  markUploadObjectsPurged,
   prepareSubmission,
   recordItemVerified,
   voidRevisionUseCase,
@@ -295,6 +297,55 @@ describe("誤提出の無効化・提出準備の清掃", () => {
     await expect(
       confirmSubmission(ctx, principals.creator, { sessionId: prepared.session.id }),
     ).rejects.toThrow(code("upload_session_not_open"));
+  });
+
+  it("abandoned セッションの R2 オブジェクトだけが清掃対象になり、削除記録は冪等で、確定済みの実体は対象外", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    // 確定済みの版（清掃対象にならない）
+    await submitRevision(ctx, work.id);
+    // 放置セッション: ファイル 2 件 + 外部リンク 1 件（objectKey 無し）
+    const stale = await prepareSubmission(ctx, principals.creator, {
+      workId: work.id,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+      items: [
+        { fileName: "a.pdf", mimeType: "application/pdf", type: "pdf", role: "source" },
+        { fileName: "b.png", mimeType: "image/png", type: "image", role: "source" },
+        {
+          fileName: "https://figma.invalid/x",
+          mimeType: "text/uri-list",
+          type: "external_link",
+          role: "external",
+          externalUrl: "https://figma.invalid/x",
+        },
+      ],
+    });
+    expect(await listOrphanUploadObjects(ctx)).toEqual([]);
+    ctx.clock.advance(25 * HOUR);
+    await expireUploadSessions(ctx);
+    const orphans = await listOrphanUploadObjects(ctx);
+    expect(orphans.map((o) => o.itemId).sort()).toEqual(
+      stale.items
+        .filter((i) => i.objectKey)
+        .map((i) => i.id)
+        .sort(),
+    );
+    // 確定済み版の項目を混ぜても無視される（まだ open/confirmed の実体は消さない）
+    const confirmedItemIds = (await ctx.uploads.listItems(stale.session.id)).map((i) => i.id);
+    void confirmedItemIds;
+    const [first, second] = orphans;
+    expect(await markUploadObjectsPurged(ctx, [first!.itemId, first!.itemId])).toBe(1);
+    expect(await listOrphanUploadObjects(ctx)).toEqual([second]);
+    expect((await ctx.uploads.findById(stale.session.id))?.purgedAt).toBeUndefined();
+    expect(await markUploadObjectsPurged(ctx, [second!.itemId])).toBe(1);
+    expect(await listOrphanUploadObjects(ctx)).toEqual([]);
+    expect((await ctx.uploads.findById(stale.session.id))?.purgedAt).toBe(ctx.clock.now());
+    // objectKey は履歴として残る
+    expect((await ctx.uploads.findItem(first!.itemId))?.objectKey).toBeDefined();
   });
 });
 

@@ -47,6 +47,12 @@ export interface BackendGateway {
   authorizeArtifact(token: string, artifactId: string): Promise<ArtifactAccess>;
 }
 
+/** 清掃（D14）: Convex から孤立オブジェクトを受け取り、R2 から削除して記録する。共有秘密で認証。 */
+export interface CleanupGateway {
+  listOrphans(limit: number): Promise<Array<{ itemId: string; objectKey: string }>>;
+  markPurged(itemIds: string[]): Promise<number>;
+}
+
 export interface StoredObjectMeta {
   size: number;
   sha256Hex: string | null;

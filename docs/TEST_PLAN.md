@@ -5,7 +5,8 @@
 - `packages/domain/src/__tests__/*.test.ts` — 不変条件（60 件。v1 の専門確認・持越・無効化は `v1.test.ts`）
 - `packages/application/src/__tests__/*.test.ts` — ユースケース（インメモリ、38 件。組織権限の拡張点 `org.test.ts`、v1 の通知・リマインド・清掃は `v1.test.ts`）
 - `apps/convex/convex/mvp.test.ts` — convex-test による統合（認可・状態遷移、7 シナリオ。「v1」で専門確認→校了ガード、担当者・訂正、持越、無効化、通知、清掃、ユーザー検索を一周）
-- `apps/api/src/__tests__/app.test.ts` — Hono（10 件）
+- `apps/api/src/__tests__/app.test.ts` / `cleanup.test.ts` — Hono（12 件。R2 清掃を含む）
+- `apps/web/e2e/screenshots.mjs`（`pnpm a11y`）— デモモードで 19 画面を一周し axe-core（WCAG 2.1 A/AA）を実行。結果は `docs/a11y-report.json`
 - `apps/web/src/features/upload/submissionFlow.test.ts` — 提出オーケストレーション（4 件）
 
 | ID   | 条件                                             | 自動テスト                                                                                          | 状態                                                                                                                                     |
@@ -24,7 +25,7 @@
 | A-12 | Figma / frame.io URL 登録                        | application `submissions.test`（external item）/ web ワークスペース UI で「同期していない」旨を明示 | ✅ 外部リンクの保存はテスト済み。v1 で「合意事項として記録」フォームを追加（デモモードで表示確認）                                       |
 | A-13 | 600×6×5×10 負荷                                  | —                                                                                                   | ❌ 未実施。`listMine` は職責＋ACL 由来の ID から読み、全件購読しない設計。p95 は PoC で計測                                              |
 | A-14 | バックアップ復元                                 | —                                                                                                   | ❌ 未実施（Convex エクスポート＋R2 の整合手順は HANDOVER 参照）                                                                          |
-| A-15 | キーボード操作                                   | —                                                                                                   | ⚠️ 設計対応（テーブル・スレッドに tabIndex / focus-visible、reduced-motion）。実機・スクリーンリーダー検証は未実施                       |
+| A-15 | キーボード操作                                   | `pnpm a11y`（axe-core、19 画面）                                                                    | ⚠️ 自動検査は指摘 0（コントラスト 1 件を修正）。キーボードのみ操作・スクリーンリーダーの実機検証は未実施                                 |
 | A-16 | 第 2 版のアップロード失敗                        | application / convex                                                                                | ✅ 第 1 版の受付維持                                                                                                                     |
 | A-17 | 第 2 版の確定成功                                | application / convex                                                                                | ✅ 同一処理で第 1 版 superseded、第 1 版への新規コメント拒否                                                                             |
 | A-18 | 0版 → 第 1 版                                    | domain / application / convex                                                                       | ✅ 0版は別区分、通常版は 1 から、0版の指摘は残る、0版の再提出は可（旧ラフ superseded）、0版からの直接校了は拒否                          |
@@ -35,5 +36,6 @@
 
 1. 実 Convex deployment・実 Nogiku Auth との接続（本セッションはクラウド未接続。モック provider と convex-test で代替）
 2. 実 Convex / Hono 経由でのブラウザ動作（デモモードでは M3E 表示・PDF.js 描画・ドラッグ位置指定を確認済み）
-3. A-13 負荷、A-14 復元、A-15 アクセシビリティ監査
-4. Workers 実機での R2 sha256 検証と大容量（D15）
+3. A-13 負荷、A-14 復元、A-15 の実機（キーボードのみ・スクリーンリーダー）確認
+4. R2 清掃 cron の実機（`wrangler dev --test-scheduled`）
+5. Workers 実機での R2 sha256 検証と大容量（D15）

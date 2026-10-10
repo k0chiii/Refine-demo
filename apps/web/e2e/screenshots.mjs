@@ -4,7 +4,8 @@
  *   2) BASE_URL=http://127.0.0.1:4173 pnpm screenshots
  * Chromium は PLAYWRIGHT_BROWSERS_PATH（または `npx playwright-core install chromium`）で解決する。
  */
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -14,6 +15,12 @@ const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";
 const OUT = process.env.OUT_DIR ?? resolve(here, "../../../docs/screenshots");
 const FIXTURES = process.env.FIXTURES_DIR ?? resolve(here, "fixtures");
 mkdirSync(OUT, { recursive: true });
+/** A11Y=1 で各画面に axe-core（WCAG 2.1 A/AA）を実行し、違反を docs/a11y-report.json に書く（A-15）。 */
+const A11Y = process.env.A11Y === "1";
+const axeSource = A11Y
+  ? readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8")
+  : null;
+const a11yReport = [];
 
 const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
@@ -39,6 +46,26 @@ const shot = async (name, scrollTo) => {
   await page.waitForTimeout(600);
   await page.screenshot({ path: resolve(OUT, `${name}.png`), fullPage: false });
   console.log("saved", name);
+  if (A11Y) {
+    await page.evaluate(axeSource);
+    const result = await page.evaluate(async () =>
+      // eslint-disable-next-line no-undef
+      axe.run(document, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+      }),
+    );
+    const violations = result.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      help: v.help,
+      nodes: v.nodes.slice(0, 5).map((n) => ({ target: n.target, summary: n.failureSummary })),
+    }));
+    a11yReport.push({ screen: name, violations });
+    console.log(
+      `  a11y: ${violations.length} violation(s)`,
+      violations.map((v) => `${v.id}(${v.impact}×${v.nodes.length})`).join(" "),
+    );
+  }
 };
 const ready = () =>
   page.waitForFunction(() => Boolean(globalThis.__mf100demo && globalThis.__mf100router), null, {
@@ -99,6 +126,7 @@ async function main() {
   await page.setInputFiles('input[type="file"]', [
     resolve(FIXTURES, "sample.pdf"),
     resolve(FIXTURES, "poster.png"),
+    resolve(FIXTURES, "greeting.txt"),
   ]);
   await page.fill("textarea >> nth=0", "初稿。表紙と地図ページ。");
   await page.fill("textarea >> nth=1", "表紙の配色と団体名の表記");
@@ -113,7 +141,7 @@ async function main() {
   await shot("14-submit-required-checks", "fieldset");
   await btn("アップロードを開始").click();
   await page.waitForFunction(
-    () => document.querySelectorAll(".upload-item .chip--ok").length >= 2,
+    () => document.querySelectorAll(".upload-item .chip--ok").length >= 3,
     null,
     { timeout: 30_000 },
   );
@@ -180,6 +208,41 @@ async function main() {
   await page.waitForSelector("text=すべて完了");
   await shot("16-required-check-done");
 
+  // 19 文章の範囲指摘（F-12 前倒し分）: 本文を選択して指摘
+  await page.locator("m3e-filter-chip", { hasText: "greeting.txt" }).click();
+  await page.waitForSelector(".text-viewer__body");
+  await page.locator('m3e-icon-button[aria-label="位置を指定"]').click();
+  await page.evaluate(() => {
+    const body = document.querySelector(".text-viewer__body");
+    const needle = "歴代の委員や参加団体の皆さま";
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const i = node.textContent.indexOf(needle);
+      if (i >= 0) {
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + needle.length);
+        const sel = getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        break;
+      }
+    }
+    body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  });
+  await page.waitForSelector("text=範囲を指定済み");
+  await page.selectOption('select[aria-label="重大度"]', "major");
+  await page.fill(
+    'textarea[aria-label="指摘本文"]',
+    "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
+  );
+  await btn("投稿").click();
+  await page.waitForSelector(".text-anchor");
+  await page.locator(".thread").last().click();
+  await shot("19-text-range");
+  await page.locator("m3e-filter-chip", { hasText: "sample.pdf" }).click();
+
   // 09 採否判断（制作者）
   await signInAs("mock-nogiku-creator");
   await go(revisionUrl);
@@ -210,6 +273,7 @@ async function main() {
   await shot("17-carry-forward");
   await page
     .locator('section[aria-label="前版の未解決指摘"] m3e-button', { hasText: "この版へ引き継ぐ" })
+    .first()
     .click();
   await page.waitForSelector("text=前版から持越");
 
@@ -256,4 +320,9 @@ try {
   process.exit(1);
 }
 await browser.close();
+if (A11Y) {
+  const path = resolve(OUT, "../a11y-report.json");
+  writeFileSync(path, JSON.stringify(a11yReport, null, 2));
+  console.log("a11y report ->", path);
+}
 console.log("done ->", OUT);

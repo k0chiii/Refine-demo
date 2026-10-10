@@ -95,6 +95,13 @@ export const anchorValidator = v.union(
   v.object({ type: v.literal("image_rect"), artifactId: v.string(), rect }),
   v.object({ type: v.literal("image_pin"), artifactId: v.string(), point }),
   v.object({ type: v.literal("external"), artifactId: v.string(), note: v.string() }),
+  v.object({
+    type: v.literal("text_range"),
+    artifactId: v.string(),
+    start: v.number(),
+    end: v.number(),
+    quote: v.string(),
+  }),
 );
 
 export default defineSchema({
@@ -219,6 +226,7 @@ export default defineSchema({
         v.object({ type: v.string(), label: v.string(), assigneeId: v.optional(v.string()) }),
       ),
     ),
+    purgedAt: v.optional(v.number()),
   })
     .index("by_work", ["workId"])
     .index("by_submitter", ["submittedBy", "state"])
@@ -238,6 +246,7 @@ export default defineSchema({
     pageCount: v.optional(v.number()),
     status: artifactStatus,
     failureMessage: v.optional(v.string()),
+    purgedAt: v.optional(v.number()),
   }).index("by_session", ["sessionId"]),
 
   commentThreads: defineTable({

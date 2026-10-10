@@ -8,6 +8,11 @@ import schema from "../convex/schema";
  */
 export const modules = import.meta.glob("../convex/**/*.*s");
 
+// http.ts（t.fetch）は auth.ts を読み込むため、モック provider で組み立てられるよう環境を固定する
+process.env.NOGIKU_MOCK_ENABLED ??= "true";
+process.env.CONVEX_SITE_ORIGIN ??= "http://test.invalid";
+process.env.FRONTEND_URL ??= "http://localhost:5173";
+
 export type Harness = TestConvex<typeof schema>;
 
 export function createHarness(): Harness {
