@@ -1,0 +1,37 @@
+{
+  "name": "@mf100/convex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MF100 業務データの正本（Convex）。schema・認可・状態遷移・監査。application 層のポートを ctx.db で実装するアダプタ。",
+  "exports": {
+    "./api": {
+      "types": "./convex/_generated/api.d.ts",
+      "default": "./convex/_generated/api.js"
+    },
+    "./dataModel": {
+      "types": "./convex/_generated/dataModel.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "codegen": "node scripts/codegen.mjs",
+    "test": "vp test run",
+    "typecheck": "tsc -p convex/tsconfig.json --noEmit",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "@auth/core": "0.41.3",
+    "@convex-dev/auth": "0.0.96",
+    "@mf100/application": "workspace:*",
+    "@mf100/domain": "workspace:*",
+    "convex": "1.46.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "convex-test": "0.0.61",
+    "typescript": "5.9.3",
+    "vite-plus": "1.1.0",
+    "@types/node": "^22.18.0"
+  }
+}
