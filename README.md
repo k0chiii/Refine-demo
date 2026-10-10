@@ -36,6 +36,8 @@ pnpm typecheck      # 各パッケージの tsc --noEmit
 
 ## ローカル起動
 
+初めての場合は手順書 [`docs/HANDS_ON_CONVEX.md`](docs/HANDS_ON_CONVEX.md)（Convex 無料枠＋Nogiku モックで一周）を参照。
+
 ### Convex（業務データ）
 
 ```bash

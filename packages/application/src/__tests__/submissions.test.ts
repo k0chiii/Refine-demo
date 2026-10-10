@@ -183,6 +183,18 @@ describe("版提出: 準備と確定の分離（F-04, A-02, A-16, A-17）", () =
     );
   });
 
+  it("0版は通常版の前なら再提出できる。旧ラフは superseded、通常版は第1版から", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const r0a = await submitRevision(ctx, work.id, { kind: "rough" });
+    ctx.clock.advance(HOUR);
+    const r0b = await submitRevision(ctx, work.id, { kind: "rough" });
+    expect(r0b).toMatchObject({ kind: "rough", sequence: 1 });
+    expect((await ctx.revisions.findById(r0a.id))?.reviewClosedReason).toBe("superseded");
+    ctx.clock.advance(HOUR);
+    expect((await submitRevision(ctx, work.id)).sequence).toBe(1);
+  });
+
   it("制作者以外（校正者・無関係者）は版を提出できない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);

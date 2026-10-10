@@ -16,6 +16,7 @@ const principal = (userId: string, isSystemAdmin = false) => ({
   userId,
   isSystemAdmin,
   groupIds: [],
+  orgPermissions: ["*"],
 });
 
 describe("effectivePermission / 個人 ACL（C10, A-01, A-11, A-19, A-20）", () => {
@@ -36,7 +37,12 @@ describe("effectivePermission / 個人 ACL（C10, A-01, A-11, A-19, A-20）", ()
     const g = grant({ principalType: "group", principalId: "g1", permission: "manage" });
     expect(effectivePermission([g], principal("viewer"))).toBeNull();
     expect(
-      effectivePermission([g], { userId: "viewer", isSystemAdmin: false, groupIds: ["g1"] }),
+      effectivePermission([g], {
+        userId: "viewer",
+        isSystemAdmin: false,
+        groupIds: ["g1"],
+        orgPermissions: ["*"],
+      }),
     ).toBe("manage");
   });
 });

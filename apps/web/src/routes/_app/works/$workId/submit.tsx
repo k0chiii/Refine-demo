@@ -172,14 +172,14 @@ function Submit() {
           <Field
             label="版の種別"
             required
-            hint="0版（ラフ）は方向性確認用で通常版と別区分です。作品につき1件、通常版の前のみ。"
+            hint="0版（ラフ）は方向性確認用で通常版と別区分です。通常版の前なら再提出できます（旧ラフの受付は終了）。0版から直接校了はできません。"
           >
             <Select value={form.kind} onChange={set("kind")}>
               <option value="standard">
                 通常版（第{revisions.filter((r) => r.kind === "standard").length + 1}版）
               </option>
-              <option value="rough" disabled={hasRough || hasStandard}>
-                0版（ラフ）{hasRough ? "・既に提出済み" : hasStandard ? "・通常版提出後は不可" : ""}
+              <option value="rough" disabled={hasStandard}>
+                0版（ラフ）{hasStandard ? "・通常版提出後は不可" : hasRough ? "・再提出" : ""}
               </option>
             </Select>
           </Field>

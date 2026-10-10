@@ -3,7 +3,9 @@ import {
   type Confidentiality,
   DomainError,
   type MediaType,
+  orgPermissions,
   type Principal,
+  requireOrgPermission,
   transitionLifecycle,
   type Work,
   type WorkLifecycle,
@@ -33,13 +35,14 @@ export interface CreateWorkInput {
 /**
  * 制作物登録（F-02 / UC-01）。
  * 実装上の仮置き: 認証済みユーザーは誰でも登録でき、登録者は自動的に主管担当（managerIds）に含まれる。
- * 「登録できる人」の制度上の範囲は D3/D10 と合わせて確認する。
+ * 登録できる人は Nogiku の組織権限 `works:create` で管理する（利用者決定 2026-10-10）。Nogiku Access 未接続の MVP では全員が持つ。
  */
 export async function createWork(
   ctx: AppContext,
   principal: Principal,
   input: CreateWorkInput,
 ): Promise<Work> {
+  requireOrgPermission(principal, orgPermissions.worksCreate);
   if (input.title.trim() === "") throw new DomainError("forbidden", { reason: "title_required" });
   if (input.creatorIds.length === 0)
     throw new DomainError("forbidden", { reason: "creator_required" });

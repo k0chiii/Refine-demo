@@ -23,7 +23,12 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
   it("A-19: 管理者が閲覧者を追加/除外でき、一般ユーザーは ACL を変更できない。履歴が残る", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
-    const viewer = { userId: "u_viewer", isSystemAdmin: false, groupIds: [] };
+    const viewer = {
+      userId: "u_viewer",
+      isSystemAdmin: false,
+      groupIds: [],
+      orgPermissions: ["*"],
+    };
 
     await expect(
       grantWorkPermission(ctx, principals.manager, {

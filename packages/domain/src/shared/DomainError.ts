@@ -14,7 +14,6 @@ export const domainErrorCodes = [
   "work_not_finalized",
   "work_invalid_lifecycle_transition",
   // 版
-  "revision_rough_already_exists",
   "revision_rough_after_standard",
   "revision_sequence_conflict",
   "revision_not_accepting",

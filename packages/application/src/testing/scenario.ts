@@ -9,12 +9,12 @@ import type { InMemoryContext } from "./inMemory.ts";
 
 /** テスト・サンプルデータ生成で共用する主体 */
 export const principals = {
-  manager: { userId: "u_manager", isSystemAdmin: false, groupIds: [] },
-  creator: { userId: "u_creator", isSystemAdmin: false, groupIds: [] },
-  approver: { userId: "u_approver", isSystemAdmin: false, groupIds: [] },
-  reviewer: { userId: "u_reviewer", isSystemAdmin: false, groupIds: [] },
-  stranger: { userId: "u_stranger", isSystemAdmin: false, groupIds: [] },
-  sysadmin: { userId: "u_sysadmin", isSystemAdmin: true, groupIds: [] },
+  manager: { userId: "u_manager", isSystemAdmin: false, groupIds: [], orgPermissions: ["*"] },
+  creator: { userId: "u_creator", isSystemAdmin: false, groupIds: [], orgPermissions: ["*"] },
+  approver: { userId: "u_approver", isSystemAdmin: false, groupIds: [], orgPermissions: ["*"] },
+  reviewer: { userId: "u_reviewer", isSystemAdmin: false, groupIds: [], orgPermissions: ["*"] },
+  stranger: { userId: "u_stranger", isSystemAdmin: false, groupIds: [], orgPermissions: ["*"] },
+  sysadmin: { userId: "u_sysadmin", isSystemAdmin: true, groupIds: [], orgPermissions: ["*"] },
 } satisfies Record<string, Principal>;
 
 export const HOUR = 3_600_000;

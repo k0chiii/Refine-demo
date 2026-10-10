@@ -3,7 +3,7 @@
 実行コマンド: `pnpm test`（Vite+ が全プロジェクトの Vitest を実行）。層ごとのテスト:
 
 - `packages/domain/src/__tests__/*.test.ts` — 不変条件（54 件）
-- `packages/application/src/__tests__/*.test.ts` — ユースケース（インメモリ、26 件）
+- `packages/application/src/__tests__/*.test.ts` — ユースケース（インメモリ、29 件。組織権限の拡張点 `org.test.ts` を含む）
 - `apps/convex/convex/mvp.test.ts` — convex-test による統合（認可・状態遷移、6 シナリオ）
 - `apps/api/src/__tests__/app.test.ts` — Hono（10 件）
 - `apps/web/src/features/upload/submissionFlow.test.ts` — 提出オーケストレーション（4 件）
@@ -27,7 +27,7 @@
 | A-15 | キーボード操作                                   | —                                                                                                   | ⚠️ 設計対応（テーブル・スレッドに tabIndex / focus-visible、reduced-motion）。実機・スクリーンリーダー検証は未実施 |
 | A-16 | 第 2 版のアップロード失敗                        | application / convex                                                                                | ✅ 第 1 版の受付維持                                                                                               |
 | A-17 | 第 2 版の確定成功                                | application / convex                                                                                | ✅ 同一処理で第 1 版 superseded、第 1 版への新規コメント拒否                                                       |
-| A-18 | 0版 → 第 1 版                                    | domain / application / convex                                                                       | ✅ 0版は別区分、通常版は 1 から、0版の指摘は残る、0版からの直接校了は拒否                                          |
+| A-18 | 0版 → 第 1 版                                    | domain / application / convex                                                                       | ✅ 0版は別区分、通常版は 1 から、0版の指摘は残る、0版の再提出は可（旧ラフ superseded）、0版からの直接校了は拒否    |
 | A-19 | 管理者の ACL 追加／除外                          | application / convex                                                                                | ✅ 履歴（付与者・取消者・時刻）が残り、一般ユーザーは変更不可                                                      |
 | A-20 | グループ情報が無い環境                           | application / convex                                                                                | ✅ 個人 ACL のみで一周。group 主体は明示的に拒否                                                                   |
 

@@ -88,7 +88,12 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
       principalId: "u_viewer",
       permission: "view",
     });
-    const viewer = { userId: "u_viewer", isSystemAdmin: false, groupIds: [] };
+    const viewer = {
+      userId: "u_viewer",
+      isSystemAdmin: false,
+      groupIds: [],
+      orgPermissions: ["*"],
+    };
     await expect(
       postComment(ctx, viewer, {
         revisionId: revision.id,

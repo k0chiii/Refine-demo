@@ -36,8 +36,9 @@ export function isAccepting(revision: Revision): boolean {
 
 /**
  * 新しい版の計画（提出確定の前段）。
- * - rough: 作品につき 1 件、かつ通常版が存在する前に限る（実装上の仮置き §2.3）。
- * - standard: 既存 standard の最大 sequence + 1（最小 1）。
+ * - rough: 通常版が存在する前に限る。再提出は可（利用者決定 2026-10-10）。sequence は 0 始まりの提出回数で、
+ *   表示は常に「0版（ラフ）」。旧ラフは新ラフの確定で superseded になる。0版からの直接校了は不可。
+ * - standard: 既存 standard の最大 sequence + 1（最小 1）。0版の回数は通常版の番号に影響しない。
  * - 受付中の版は高々 1 件なので、open な版があればそれを superseded として閉じる対象にする。
  */
 export interface RevisionPlan {
@@ -53,8 +54,7 @@ export function planRevision(existing: readonly Revision[], kind: RevisionKind):
   let sequence: number;
   if (kind === "rough") {
     if (standards.length > 0) throw new DomainError("revision_rough_after_standard");
-    if (roughs.length > 0) throw new DomainError("revision_rough_already_exists");
-    sequence = 0;
+    sequence = roughs.length;
   } else {
     sequence = standards.reduce((max, r) => Math.max(max, r.sequence), 0) + 1;
   }
@@ -171,7 +171,9 @@ export function latestStandardRevision(revisions: readonly Revision[]): Revision
   return best;
 }
 
-/** 表示用ラベル: 0版は「ラフ」、通常版は「第n版」。連番扱いしない。 */
+/** 表示用ラベル: 0版は「ラフ」（再提出は回数を併記）、通常版は「第n版」。連番扱いしない。 */
 export function revisionLabel(revision: Pick<Revision, "kind" | "sequence">): string {
-  return revision.kind === "rough" ? "0版（ラフ）" : `第${revision.sequence}版`;
+  if (revision.kind === "rough")
+    return revision.sequence === 0 ? "0版（ラフ）" : `0版（ラフ・${revision.sequence + 1}回目）`;
+  return `第${revision.sequence}版`;
 }

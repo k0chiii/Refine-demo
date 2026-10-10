@@ -10,7 +10,6 @@ const messages: Record<string, string> = {
   work_already_finalized:
     "この制作物は校了済みです。変更するには校了権限者が理由付きで再開してください",
   work_not_finalized: "この制作物は校了されていません",
-  revision_rough_already_exists: "0版（ラフ）は制作物につき1件のみです",
   revision_rough_after_standard: "通常版の提出後に0版（ラフ）は提出できません",
   revision_not_accepting: "この版は校正を受け付けていません",
   revision_deadline_passed: "校正期限を過ぎています（サーバー時刻で判定）",

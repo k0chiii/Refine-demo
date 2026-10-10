@@ -38,6 +38,8 @@ export interface Principal {
   /** 校正システム管理者（ACL 設定・運用）。業務上の校了権限を意味しない（§2.1, §5.2-12）。 */
   isSystemAdmin: boolean;
   groupIds: readonly GroupId[];
+  /** Nogiku Access 由来の組織権限名（例 "works:create"）。"*" は制限なし（連携前の MVP）。 */
+  orgPermissions: readonly string[];
 }
 
 /** 主体に有効な最大権限レベルを求める。該当なしは null。 */

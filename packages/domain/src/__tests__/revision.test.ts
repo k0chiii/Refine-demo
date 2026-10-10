@@ -18,11 +18,14 @@ describe("planRevision（0版と通常版の分離 / C8, D1, A-18）", () => {
     const rough = makeRevision({ id: "r0", kind: "rough", sequence: 0, reviewState: "closed" });
     expect(planRevision([rough], "standard")).toEqual({ sequence: 1, toSupersede: null });
   });
-  it("0版は作品につき1件のみ", () => {
+  it("0版は再提出でき、旧ラフは superseded 対象になる（利用者決定）", () => {
     const rough = makeRevision({ id: "r0", kind: "rough", sequence: 0 });
-    expect(() => planRevision([rough], "rough")).toThrowError(
-      expect.objectContaining({ code: "revision_rough_already_exists" }),
-    );
+    const plan = planRevision([rough], "rough");
+    expect(plan.sequence).toBe(1);
+    expect(plan.toSupersede?.id).toBe("r0");
+    const closed = { ...rough, reviewState: "closed" as const };
+    const second = makeRevision({ id: "r0b", kind: "rough", sequence: 1 });
+    expect(planRevision([closed, second], "standard").sequence).toBe(1);
   });
   it("通常版の後に0版は作れない", () => {
     expect(() => planRevision([makeRevision()], "rough")).toThrowError(
@@ -123,6 +126,7 @@ describe("latestStandardRevision / revisionLabel", () => {
   });
   it("ラベルは 0版（ラフ）/ 第n版", () => {
     expect(revisionLabel({ kind: "rough", sequence: 0 })).toBe("0版（ラフ）");
+    expect(revisionLabel({ kind: "rough", sequence: 1 })).toBe("0版（ラフ・2回目）");
     expect(revisionLabel({ kind: "standard", sequence: 3 })).toBe("第3版");
   });
 });

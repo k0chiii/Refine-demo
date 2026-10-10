@@ -114,6 +114,8 @@ export default defineSchema({
     source: v.optional(v.union(v.literal("nogiku"), v.literal("nogiku_mock"))),
     /** 校正システム管理者。業務上の校了権限ではない（§2.1）。 */
     isSystemAdmin: v.optional(v.boolean()),
+    /** Nogiku Access から同期した組織権限名（後続）。NOGIKU_ACCESS_ENABLED=true のときだけ参照する。 */
+    orgPermissions: v.optional(v.array(v.string())),
     lastLoginAt: v.optional(v.number()),
   })
     .index("email", ["email"])

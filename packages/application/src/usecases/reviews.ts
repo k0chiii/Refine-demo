@@ -1,8 +1,11 @@
 import {
   closeByDeadline,
   DomainError,
+  hasOrgPermission,
+  isAllowed,
   markResponded,
   markViewed,
+  orgPermissions,
   type Principal,
   type ReviewAssignment,
   type Revision,
@@ -10,7 +13,10 @@ import {
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 
-/** 校正者の割当（F-05）。割当は review 権限の ACL を自動で意味しない。閲覧権限は管理者が ACL で付与する（D3）。 */
+/**
+ * 校正者の割当（F-05）。割当できる人は Nogiku の組織権限 `reviews:assign`、または作品の制作者・edit 委任者
+ * （利用者決定: Nogiku の役職・個人で管理）。割当は review 権限の ACL を自動で意味しない。閲覧権限は管理者が ACL で付与する（D3）。
+ */
 export async function assignReviewers(
   ctx: AppContext,
   principal: Principal,
@@ -18,7 +24,11 @@ export async function assignReviewers(
 ): Promise<ReviewAssignment[]> {
   const revision = await ctx.revisions.findById(input.revisionId);
   if (!revision) throw new DomainError("forbidden", { revisionId: input.revisionId });
-  await loadAuthorizedWork(ctx, principal, revision.workId, "review.assign");
+  const { work, grants } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  const byRole = isAllowed("review.assign", { work, grants, principal });
+  if (!byRole && !hasOrgPermission(principal, orgPermissions.reviewsAssign)) {
+    throw new DomainError("forbidden", { action: "review.assign" });
+  }
   const out: ReviewAssignment[] = [];
   for (const reviewerId of new Set(input.reviewerIds)) {
     const existing = await ctx.assignments.find(revision.id, reviewerId);

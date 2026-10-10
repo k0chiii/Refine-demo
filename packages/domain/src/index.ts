@@ -3,6 +3,7 @@ export * from "./shared/time.ts";
 export * from "./shared/ids.ts";
 export * from "./acl/Permission.ts";
 export * from "./acl/authorize.ts";
+export * from "./acl/OrgPermission.ts";
 export * from "./work/Work.ts";
 export * from "./revision/Revision.ts";
 export * from "./revision/Artifact.ts";
