@@ -2,8 +2,8 @@
   "name": "@mf100/api",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "MF100 HTTP 境界（Hono on Cloudflare Workers）。R2 へのファイル提出・実体検証・認可付き配信。業務 CRUD は持たない（Convex に一元化）。",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

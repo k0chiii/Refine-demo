@@ -2,12 +2,8 @@
   "name": "mf100-refine",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "MF100 校正システム（refine）- 東京大学五月祭常任委員会",
-  "packageManager": "pnpm@10.28.0",
-  "engines": {
-    "node": ">=22.18.0"
-  },
+  "type": "module",
   "scripts": {
     "check": "vp check",
     "fmt": "vp fmt",
@@ -23,5 +19,9 @@
   "devDependencies": {
     "typescript": "5.9.3",
     "vite-plus": "1.1.0"
-  }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@10.28.0"
 }

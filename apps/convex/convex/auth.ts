@@ -21,7 +21,12 @@ function asString(value: unknown): string | undefined {
 
 /** 初期ブートストラップ: 環境変数に列挙した Nogiku sub を校正システム管理者として扱う。以後は管理画面で変更できる。 */
 function bootstrapAdminSubjects(): Set<string> {
-  return new Set((process.env.MF100_SYSTEM_ADMIN_SUBJECTS ?? "").split(",").map((s: string) => s.trim()).filter(Boolean));
+  return new Set(
+    (process.env.MF100_SYSTEM_ADMIN_SUBJECTS ?? "")
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean),
+  );
 }
 
 function makeNogikuProvider() {
@@ -41,7 +46,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [makeNogikuProvider()],
   callbacks: {
     async createOrUpdateUser(ctx, args) {
-      if (args.provider.id !== "nogiku") throw new Error(`unsupported provider: ${args.provider.id}`);
+      if (args.provider.id !== "nogiku")
+        throw new Error(`unsupported provider: ${args.provider.id}`);
       const subject = asString(args.profile.id) ?? asString(args.profile.sub);
       if (!subject) throw new Error("Nogiku profile has no subject");
       const isMock = process.env.NOGIKU_MOCK_ENABLED === "true";
@@ -51,8 +57,12 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         source: (isMock ? "nogiku_mock" : "nogiku") as "nogiku" | "nogiku_mock",
         lastLoginAt: now,
         ...(asString(args.profile.name) !== undefined ? { name: asString(args.profile.name) } : {}),
-        ...(asString(args.profile.email) !== undefined ? { email: asString(args.profile.email) } : {}),
-        ...(asString(args.profile.image) !== undefined ? { image: asString(args.profile.image) } : {}),
+        ...(asString(args.profile.email) !== undefined
+          ? { email: asString(args.profile.email) }
+          : {}),
+        ...(asString(args.profile.image) !== undefined
+          ? { image: asString(args.profile.image) }
+          : {}),
       };
       const bootstrapAdmin = bootstrapAdminSubjects().has(subject);
 
@@ -71,7 +81,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         .withIndex("by_nogikuSubject", (q) => q.eq("nogikuSubject", subject))
         .unique();
       if (bySubject) {
-        await ctx.db.patch(bySubject._id, { ...fields, isSystemAdmin: (bySubject.isSystemAdmin ?? false) || bootstrapAdmin });
+        await ctx.db.patch(bySubject._id, {
+          ...fields,
+          isSystemAdmin: (bySubject.isSystemAdmin ?? false) || bootstrapAdmin,
+        });
         return bySubject._id;
       }
       return ctx.db.insert("users", { ...fields, isSystemAdmin: bootstrapAdmin });

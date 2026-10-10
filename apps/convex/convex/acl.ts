@@ -9,7 +9,12 @@ import { vPermissionLevel, vPrincipalType } from "./lib/validators.ts";
 
 /** 作品の閲覧 ACL 付与（U-08 / A-19）。システム管理者のみ。 */
 export const grant = mutation({
-  args: { workId: v.id("works"), principalType: vPrincipalType, principalId: v.string(), permission: vPermissionLevel },
+  args: {
+    workId: v.id("works"),
+    principalType: vPrincipalType,
+    principalId: v.string(),
+    permission: vPermissionLevel,
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
@@ -34,9 +39,17 @@ export const list = query({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       const grants = await listWorkPermissions(createReadContext(ctx.db), principal, workId);
-      const users = await resolveUsers(ctx.db, grants.flatMap((g) => [g.principalId, g.grantedBy, ...(g.revokedBy ? [g.revokedBy] : [])]));
+      const users = await resolveUsers(
+        ctx.db,
+        grants.flatMap((g) => [g.principalId, g.grantedBy, ...(g.revokedBy ? [g.revokedBy] : [])]),
+      );
       return grants
-        .map((g) => ({ ...g, principal: users.get(g.principalId), granter: users.get(g.grantedBy), revoker: g.revokedBy ? users.get(g.revokedBy) : null }))
+        .map((g) => ({
+          ...g,
+          principal: users.get(g.principalId),
+          granter: users.get(g.grantedBy),
+          revoker: g.revokedBy ? users.get(g.revokedBy) : null,
+        }))
         .sort((a, b) => b.grantedAt - a.grantedAt);
     });
   },
@@ -57,6 +70,11 @@ export const searchUsers = query({
       .filter((u) => u.nogikuSubject !== undefined)
       .filter((u) => q === "" || `${u.name ?? ""} ${u.email ?? ""}`.toLowerCase().includes(q))
       .slice(0, 20)
-      .map((u) => ({ id: u._id, name: u.name ?? "", email: u.email ?? null, isSystemAdmin: u.isSystemAdmin ?? false }));
+      .map((u) => ({
+        id: u._id,
+        name: u.name ?? "",
+        email: u.email ?? null,
+        isSystemAdmin: u.isSystemAdmin ?? false,
+      }));
   },
 });

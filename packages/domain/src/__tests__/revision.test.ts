@@ -20,10 +20,14 @@ describe("planRevision（0版と通常版の分離 / C8, D1, A-18）", () => {
   });
   it("0版は作品につき1件のみ", () => {
     const rough = makeRevision({ id: "r0", kind: "rough", sequence: 0 });
-    expect(() => planRevision([rough], "rough")).toThrowError(expect.objectContaining({ code: "revision_rough_already_exists" }));
+    expect(() => planRevision([rough], "rough")).toThrowError(
+      expect.objectContaining({ code: "revision_rough_already_exists" }),
+    );
   });
   it("通常版の後に0版は作れない", () => {
-    expect(() => planRevision([makeRevision()], "rough")).toThrowError(expect.objectContaining({ code: "revision_rough_after_standard" }));
+    expect(() => planRevision([makeRevision()], "rough")).toThrowError(
+      expect.objectContaining({ code: "revision_rough_after_standard" }),
+    );
   });
   it("受付中の版があればそれが superseded 対象になる", () => {
     const open = makeRevision({ id: "r1", sequence: 1 });
@@ -33,7 +37,9 @@ describe("planRevision（0版と通常版の分離 / C8, D1, A-18）", () => {
   });
   it("void な版は番号計算から除外する", () => {
     const voided = makeRevision({ id: "r2", sequence: 2, reviewState: "void" });
-    expect(planRevision([makeRevision({ reviewState: "closed" }), voided], "standard").sequence).toBe(2);
+    expect(
+      planRevision([makeRevision({ reviewState: "closed" }), voided], "standard").sequence,
+    ).toBe(2);
   });
 });
 
@@ -64,20 +70,30 @@ describe("assertCanPostComment（期限境界 / A-04）", () => {
     expect(() => assertCanPostComment(r, r.deadlineAt - 1000, r.id)).not.toThrow();
   });
   it("期限ちょうどは拒否する", () => {
-    expect(() => assertCanPostComment(r, r.deadlineAt, r.id)).toThrowError(expect.objectContaining({ code: "revision_deadline_passed" }));
+    expect(() => assertCanPostComment(r, r.deadlineAt, r.id)).toThrowError(
+      expect.objectContaining({ code: "revision_deadline_passed" }),
+    );
   });
   it("期限の1秒後は拒否する", () => {
-    expect(() => assertCanPostComment(r, r.deadlineAt + 1000, r.id)).toThrowError(expect.objectContaining({ code: "revision_deadline_passed" }));
+    expect(() => assertCanPostComment(r, r.deadlineAt + 1000, r.id)).toThrowError(
+      expect.objectContaining({ code: "revision_deadline_passed" }),
+    );
   });
   it("期限ジョブが遅れて open のままでも時刻比較で拒否する", () => {
-    expect(() => assertCanPostComment({ ...r, reviewState: "open" }, r.deadlineAt + 1, r.id)).toThrow();
+    expect(() =>
+      assertCanPostComment({ ...r, reviewState: "open" }, r.deadlineAt + 1, r.id),
+    ).toThrow();
   });
   it("superseded 済みの版には投稿できない", () => {
     const closed = supersede(r, makeRevision({ id: "r2", sequence: 2 }), T0 + HOUR);
-    expect(() => assertCanPostComment(closed, T0 + 2 * HOUR, "r2")).toThrowError(expect.objectContaining({ code: "revision_not_accepting" }));
+    expect(() => assertCanPostComment(closed, T0 + 2 * HOUR, "r2")).toThrowError(
+      expect.objectContaining({ code: "revision_not_accepting" }),
+    );
   });
   it("最新の受付対象版でなければ拒否する", () => {
-    expect(() => assertCanPostComment(r, T0 + HOUR, "other")).toThrowError(expect.objectContaining({ code: "revision_not_latest" }));
+    expect(() => assertCanPostComment(r, T0 + HOUR, "other")).toThrowError(
+      expect.objectContaining({ code: "revision_not_latest" }),
+    );
   });
 });
 
@@ -85,7 +101,16 @@ describe("createRevision", () => {
   it("過去の期限では版を作れない", () => {
     expect(() =>
       createRevision(
-        { workId: "w", kind: "standard", reviewType: "general", submittedBy: "c", now: T0, deadlineAt: T0, changeSummary: "", focusNotes: "" },
+        {
+          workId: "w",
+          kind: "standard",
+          reviewType: "general",
+          submittedBy: "c",
+          now: T0,
+          deadlineAt: T0,
+          changeSummary: "",
+          focusNotes: "",
+        },
         { sequence: 1, toSupersede: null },
       ),
     ).toThrowError(expect.objectContaining({ code: "revision_deadline_in_past" }));

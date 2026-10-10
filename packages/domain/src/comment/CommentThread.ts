@@ -12,7 +12,14 @@ export const severities = ["critical", "major", "minor", "info"] as const;
 export type Severity = (typeof severities)[number];
 
 /** Comment.resolution（§5.1）。accepted=反映すると判断、resolved=反映済みなど確認された。単一フラグに統合しない。 */
-export const resolutions = ["open", "acknowledged", "accepted", "rejected", "deferred", "resolved"] as const;
+export const resolutions = [
+  "open",
+  "acknowledged",
+  "accepted",
+  "rejected",
+  "deferred",
+  "resolved",
+] as const;
 export type Resolution = (typeof resolutions)[number];
 
 export interface CommentThread {
@@ -53,7 +60,10 @@ export function decideThread(
   reason: string | undefined,
 ): CommentThread {
   if (!allowed[thread.resolution].includes(action)) {
-    throw new DomainError("comment_invalid_resolution_transition", { from: thread.resolution, to: action });
+    throw new DomainError("comment_invalid_resolution_transition", {
+      from: thread.resolution,
+      to: action,
+    });
   }
   if (requiresReason(action) && (reason === undefined || reason.trim() === "")) {
     throw new DomainError("comment_reason_required", { action });
@@ -62,18 +72,20 @@ export function decideThread(
 }
 
 /** 校了をブロックする「未対応の重大な指摘」か。閾値はポリシーで差し替え可能（D6）。 */
-export function isBlockingForApproval(thread: CommentThread, blockingSeverities: readonly Severity[]): boolean {
+export function isBlockingForApproval(
+  thread: CommentThread,
+  blockingSeverities: readonly Severity[],
+): boolean {
   if (thread.kind === "discussion") return false;
   if (!blockingSeverities.includes(thread.severity)) return false;
-  return thread.resolution === "open" || thread.resolution === "acknowledged" || thread.resolution === "accepted";
+  return (
+    thread.resolution === "open" ||
+    thread.resolution === "acknowledged" ||
+    thread.resolution === "accepted"
+  );
 }
 
-export type CommentEventType =
-  | "created"
-  | "replied"
-  | "decided"
-  | "edited"
-  | "carried_forward";
+export type CommentEventType = "created" | "replied" | "decided" | "edited" | "carried_forward";
 
 export interface CommentEvent {
   threadId: ThreadId;

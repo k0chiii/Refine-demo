@@ -1,4 +1,11 @@
-import { DomainError, requireAllowed, type Principal, type Work, type WorkAction, type WorkPermissionGrant } from "@mf100/domain";
+import {
+  DomainError,
+  requireAllowed,
+  type Principal,
+  type Work,
+  type WorkAction,
+  type WorkPermissionGrant,
+} from "@mf100/domain";
 import type { AppContext } from "./ports.ts";
 
 export interface LoadedWork {
@@ -24,7 +31,12 @@ export async function loadAuthorizedWork(
 }
 
 /** 冪等実行。同じ scope+key の再送には保存済み結果を返す（二重版・二重校了・二重通知を防ぐ）。 */
-export async function idempotent<T>(ctx: AppContext, scope: string, key: string | undefined, fn: () => Promise<T>): Promise<T> {
+export async function idempotent<T>(
+  ctx: AppContext,
+  scope: string,
+  key: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
   if (key === undefined || key === "") return fn();
   const hit = await ctx.idempotency.get(scope, key);
   if (hit) return hit.result as T;

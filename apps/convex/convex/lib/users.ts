@@ -11,7 +11,10 @@ export function summarizeUser(user: Doc<"users"> | null, fallbackId: string): Us
   return { id: fallbackId, name: user?.name ?? "（不明なユーザー）", email: user?.email ?? null };
 }
 
-export async function resolveUsers(db: DatabaseReader, ids: Iterable<string>): Promise<Map<string, UserSummary>> {
+export async function resolveUsers(
+  db: DatabaseReader,
+  ids: Iterable<string>,
+): Promise<Map<string, UserSummary>> {
   const out = new Map<string, UserSummary>();
   for (const id of new Set(ids)) {
     if (id === "system") {

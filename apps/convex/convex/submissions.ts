@@ -1,4 +1,10 @@
-import { confirmSubmission, prepareSubmission, recordItemFailed, recordItemVerified, resetItem } from "@mf100/application";
+import {
+  confirmSubmission,
+  prepareSubmission,
+  recordItemFailed,
+  recordItemVerified,
+  resetItem,
+} from "@mf100/application";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
@@ -32,14 +38,28 @@ export const prepare = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       const { session, items } = await prepareSubmission(createAppContext(ctx.db), principal, args);
-      return { sessionId: session.id, expiresAt: session.expiresAt, items: items.map((i) => ({ id: i.id, fileName: i.fileName, objectKey: i.objectKey ?? null, status: i.status })) };
+      return {
+        sessionId: session.id,
+        expiresAt: session.expiresAt,
+        items: items.map((i) => ({
+          id: i.id,
+          fileName: i.fileName,
+          objectKey: i.objectKey ?? null,
+          status: i.status,
+        })),
+      };
     });
   },
 });
 
 /** Hono（R2 実体検証後）から利用者のトークンで呼ばれる。 */
 export const markVerified = mutation({
-  args: { itemId: v.id("uploadItems"), size: v.number(), sha256: v.string(), pageCount: v.optional(v.number()) },
+  args: {
+    itemId: v.id("uploadItems"),
+    size: v.number(),
+    sha256: v.string(),
+    pageCount: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
@@ -73,12 +93,25 @@ export const reset = mutation({
 
 /** 提出確定（D1 / A-16 / A-17）。 */
 export const confirm = mutation({
-  args: { sessionId: v.id("uploadSessions"), requestId: v.optional(v.string()), expectedWorkVersion: v.optional(v.number()) },
+  args: {
+    sessionId: v.id("uploadSessions"),
+    requestId: v.optional(v.string()),
+    expectedWorkVersion: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const { revision, supersededRevisionId } = await confirmSubmission(createAppContext(ctx.db), principal, args);
-      return { revisionId: revision.id, sequence: revision.sequence, kind: revision.kind, supersededRevisionId };
+      const { revision, supersededRevisionId } = await confirmSubmission(
+        createAppContext(ctx.db),
+        principal,
+        args,
+      );
+      return {
+        revisionId: revision.id,
+        sequence: revision.sequence,
+        kind: revision.kind,
+        supersededRevisionId,
+      };
     });
   },
 });
@@ -90,8 +123,12 @@ export const get = query({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       const session = await ctx.db.get("uploadSessions", sessionId);
-      if (!session || session.submittedBy !== principal.userId) throw new DomainError("forbidden", { sessionId });
-      const items = await ctx.db.query("uploadItems").withIndex("by_session", (q) => q.eq("sessionId", sessionId)).collect();
+      if (!session || session.submittedBy !== principal.userId)
+        throw new DomainError("forbidden", { sessionId });
+      const items = await ctx.db
+        .query("uploadItems")
+        .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+        .collect();
       return { session, items };
     });
   },
@@ -109,12 +146,25 @@ export const itemForUpload = query({
       const item = await ctx.db.get("uploadItems", itemId);
       if (!item) throw new DomainError("upload_item_not_found", { itemId });
       const session = await ctx.db.get("uploadSessions", item.sessionId);
-      if (!session || session.submittedBy !== principal.userId) throw new DomainError("upload_item_not_found", { itemId });
-      if (session.state !== "open") throw new DomainError("upload_session_not_open", { sessionId: session._id, state: session.state });
-      if (Date.now() >= session.expiresAt) throw new DomainError("upload_session_expired", { sessionId: session._id });
-      if (!item.objectKey) throw new DomainError("upload_item_invalid_state", { itemId, reason: "external_link" });
-      if (item.status === "verified") throw new DomainError("upload_item_invalid_state", { itemId, reason: "already_verified" });
-      return { objectKey: item.objectKey, mimeType: item.mimeType, declaredSize: item.declaredSize ?? null, fileName: item.fileName };
+      if (!session || session.submittedBy !== principal.userId)
+        throw new DomainError("upload_item_not_found", { itemId });
+      if (session.state !== "open")
+        throw new DomainError("upload_session_not_open", {
+          sessionId: session._id,
+          state: session.state,
+        });
+      if (Date.now() >= session.expiresAt)
+        throw new DomainError("upload_session_expired", { sessionId: session._id });
+      if (!item.objectKey)
+        throw new DomainError("upload_item_invalid_state", { itemId, reason: "external_link" });
+      if (item.status === "verified")
+        throw new DomainError("upload_item_invalid_state", { itemId, reason: "already_verified" });
+      return {
+        objectKey: item.objectKey,
+        mimeType: item.mimeType,
+        declaredSize: item.declaredSize ?? null,
+        fileName: item.fileName,
+      };
     });
   },
 });

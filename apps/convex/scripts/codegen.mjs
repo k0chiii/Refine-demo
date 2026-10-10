@@ -17,7 +17,14 @@ mkdirSync(out, { recursive: true });
 
 const EXCLUDE = new Set(["schema.ts", "auth.config.ts", "convex.config.ts"]);
 const modules = readdirSync(root, { withFileTypes: true })
-  .filter((d) => d.isFile() && d.name.endsWith(".ts") && !d.name.endsWith(".test.ts") && !d.name.endsWith(".d.ts") && !EXCLUDE.has(d.name))
+  .filter(
+    (d) =>
+      d.isFile() &&
+      d.name.endsWith(".ts") &&
+      !d.name.endsWith(".test.ts") &&
+      !d.name.endsWith(".d.ts") &&
+      !EXCLUDE.has(d.name),
+  )
   .map((d) => d.name.replace(/\.ts$/, ""))
   .sort();
 

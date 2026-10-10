@@ -11,8 +11,24 @@ beforeEach(() => {
   gateway = new FakeGateway();
   store = new MemoryStore();
   app = createApp({ verifier: fakeVerifier, gateway, store, allowedOrigins: [ORIGIN] });
-  gateway.items.set("item1", { objectKey: "works/w1/sessions/s1/0-a.pdf", mimeType: "application/pdf", declaredSize: null, fileName: "a.pdf", owner: "creator", status: "pending", failureMessage: null });
-  gateway.items.set("item2", { objectKey: "works/w1/sessions/s1/1-b.pdf", mimeType: "application/pdf", declaredSize: 3, fileName: "b.pdf", owner: "creator", status: "pending", failureMessage: null });
+  gateway.items.set("item1", {
+    objectKey: "works/w1/sessions/s1/0-a.pdf",
+    mimeType: "application/pdf",
+    declaredSize: null,
+    fileName: "a.pdf",
+    owner: "creator",
+    status: "pending",
+    failureMessage: null,
+  });
+  gateway.items.set("item2", {
+    objectKey: "works/w1/sessions/s1/1-b.pdf",
+    mimeType: "application/pdf",
+    declaredSize: 3,
+    fileName: "b.pdf",
+    owner: "creator",
+    status: "pending",
+    failureMessage: null,
+  });
 });
 
 const body = new TextEncoder().encode("%PDF-1.7 test").buffer as ArrayBuffer;
@@ -20,7 +36,11 @@ const body = new TextEncoder().encode("%PDF-1.7 test").buffer as ArrayBuffer;
 async function put(itemId: string, token: string, data: ArrayBuffer, sha?: string) {
   return app.request(`/uploads/items/${itemId}`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/pdf", "X-MF100-Sha256": sha ?? (await sha256Hex(data)) },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/pdf",
+      "X-MF100-Sha256": sha ?? (await sha256Hex(data)),
+    },
     body: data,
   });
 }
@@ -58,7 +78,11 @@ describe("PUT /uploads/items/:itemId（F-04 / A-02）", () => {
     expect(store.objects.size).toBe(0);
   });
   it("ヘッダー無しは 400", async () => {
-    const res = await app.request("/uploads/items/item1", { method: "PUT", headers: { Authorization: "Bearer valid:creator" }, body });
+    const res = await app.request("/uploads/items/item1", {
+      method: "PUT",
+      headers: { Authorization: "Bearer valid:creator" },
+      body,
+    });
     expect(res.status).toBe(400);
   });
   it("検証済みの項目には上書きできない（確定した版のファイルを無言で差し替えない）", async () => {
@@ -70,11 +94,22 @@ describe("PUT /uploads/items/:itemId（F-04 / A-02）", () => {
 
 describe("GET /files/:artifactId（§9.1 / A-11）", () => {
   beforeEach(async () => {
-    await store.put("works/w1/rev1/a.pdf", body, { contentType: "application/pdf", sha256Hex: await sha256Hex(body) });
-    gateway.artifacts.set("art1", { objectKey: "works/w1/rev1/a.pdf", mimeType: "application/pdf", fileName: "表紙.pdf", size: body.byteLength, viewers: ["reviewer"] });
+    await store.put("works/w1/rev1/a.pdf", body, {
+      contentType: "application/pdf",
+      sha256Hex: await sha256Hex(body),
+    });
+    gateway.artifacts.set("art1", {
+      objectKey: "works/w1/rev1/a.pdf",
+      mimeType: "application/pdf",
+      fileName: "表紙.pdf",
+      size: body.byteLength,
+      viewers: ["reviewer"],
+    });
   });
   it("許可された利用者にだけ配信し、キャッシュ禁止ヘッダーを付ける", async () => {
-    const res = await app.request("/files/art1", { headers: { Authorization: "Bearer valid:reviewer" } });
+    const res = await app.request("/files/art1", {
+      headers: { Authorization: "Bearer valid:reviewer" },
+    });
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/pdf");
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
@@ -82,14 +117,26 @@ describe("GET /files/:artifactId（§9.1 / A-11）", () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body));
   });
   it("権限のない利用者は 403。剥奪後は即時に拒否される（署名 URL を発行しないため）", async () => {
-    expect((await app.request("/files/art1", { headers: { Authorization: "Bearer valid:stranger" } })).status).toBe(403);
+    expect(
+      (await app.request("/files/art1", { headers: { Authorization: "Bearer valid:stranger" } }))
+        .status,
+    ).toBe(403);
     gateway.artifacts.get("art1")!.viewers = [];
-    expect((await app.request("/files/art1", { headers: { Authorization: "Bearer valid:reviewer" } })).status).toBe(403);
+    expect(
+      (await app.request("/files/art1", { headers: { Authorization: "Bearer valid:reviewer" } }))
+        .status,
+    ).toBe(403);
   });
   it("CORS は許可オリジンのみ", async () => {
-    const ok = await app.request("/files/art1", { method: "OPTIONS", headers: { Origin: ORIGIN, "Access-Control-Request-Method": "GET" } });
+    const ok = await app.request("/files/art1", {
+      method: "OPTIONS",
+      headers: { Origin: ORIGIN, "Access-Control-Request-Method": "GET" },
+    });
     expect(ok.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
-    const ng = await app.request("/files/art1", { method: "OPTIONS", headers: { Origin: "https://evil.example", "Access-Control-Request-Method": "GET" } });
+    const ng = await app.request("/files/art1", {
+      method: "OPTIONS",
+      headers: { Origin: "https://evil.example", "Access-Control-Request-Method": "GET" },
+    });
     expect(ng.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 });

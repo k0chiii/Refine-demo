@@ -20,7 +20,7 @@ export function permissionIncludes(granted: PermissionLevel, required: Permissio
 export interface WorkPermissionGrant {
   workId: WorkId;
   principalType: PrincipalType;
-  principalId: UserId | GroupId;
+  principalId: UserId;
   permission: PermissionLevel;
   grantedBy: UserId;
   grantedAt: Instant;

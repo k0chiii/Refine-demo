@@ -1,5 +1,17 @@
-import { changeWorkLifecycle, createWork, loadAuthorizedWork, updateWork } from "@mf100/application";
-import { canViewWork, isAccepting, isAllowed, isGrantActive, revisionLabel, type Work } from "@mf100/domain";
+import {
+  changeWorkLifecycle,
+  createWork,
+  loadAuthorizedWork,
+  updateWork,
+} from "@mf100/application";
+import {
+  canViewWork,
+  isAccepting,
+  isAllowed,
+  isGrantActive,
+  revisionLabel,
+  type Work,
+} from "@mf100/domain";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
@@ -53,7 +65,11 @@ export const create = mutation({
 });
 
 export const update = mutation({
-  args: { workId: v.id("works"), expectedVersion: v.optional(v.number()), patch: v.object(workPatch) },
+  args: {
+    workId: v.id("works"),
+    expectedVersion: v.optional(v.number()),
+    patch: v.object(workPatch),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
@@ -88,7 +104,9 @@ export const get = query({
     const app = createReadContext(ctx.db);
     return runUseCase(async () => {
       const { work, grants } = await loadAuthorizedWork(app, principal, workId, "work.view");
-      const revisions = (await app.revisions.listByWork(work.id)).sort((a, b) => (a.kind === b.kind ? b.sequence - a.sequence : a.kind === "rough" ? 1 : -1));
+      const revisions = (await app.revisions.listByWork(work.id)).sort((a, b) =>
+        a.kind === b.kind ? b.sequence - a.sequence : a.kind === "rough" ? 1 : -1,
+      );
       const approvals = await app.approvals.listByWork(work.id);
       const authz = { work, grants, principal };
       const users = await resolveUsers(ctx.db, [
@@ -101,7 +119,15 @@ export const get = query({
       const openCounts = new Map<string, number>();
       for (const r of revisions) {
         const threads = await app.threads.listByRevision(r.id);
-        openCounts.set(r.id, threads.filter((t) => t.resolution === "open" || t.resolution === "acknowledged" || t.resolution === "accepted").length);
+        openCounts.set(
+          r.id,
+          threads.filter(
+            (t) =>
+              t.resolution === "open" ||
+              t.resolution === "acknowledged" ||
+              t.resolution === "accepted",
+          ).length,
+        );
       }
       return {
         work,
@@ -110,9 +136,16 @@ export const get = query({
           managers: work.managerIds.map((id) => users.get(id)),
           approver: users.get(work.approverId),
         },
-        revisions: revisions.map((r) => ({ ...r, label: revisionLabel(r), submitter: users.get(r.submittedBy), unresolvedCount: openCounts.get(r.id) ?? 0 })),
+        revisions: revisions.map((r) => ({
+          ...r,
+          label: revisionLabel(r),
+          submitter: users.get(r.submittedBy),
+          unresolvedCount: openCounts.get(r.id) ?? 0,
+        })),
         acceptingRevisionId: revisions.find(isAccepting)?.id ?? null,
-        approvals: approvals.map((a) => ({ ...a, actor: users.get(a.actorId) })).sort((a, b) => a.createdAt - b.createdAt),
+        approvals: approvals
+          .map((a) => ({ ...a, actor: users.get(a.actorId) }))
+          .sort((a, b) => a.createdAt - b.createdAt),
         activeGrantCount: grants.filter(isGrantActive).length,
         can: {
           edit: isAllowed("work.edit", authz),
@@ -136,15 +169,32 @@ export const get = query({
 export const listMine = query({
   args: {
     year: v.optional(v.number()),
-    lifecycle: v.optional(v.union(v.literal("draft"), v.literal("active"), v.literal("on_hold"), v.literal("finalized"), v.literal("cancelled"))),
+    lifecycle: v.optional(
+      v.union(
+        v.literal("draft"),
+        v.literal("active"),
+        v.literal("on_hold"),
+        v.literal("finalized"),
+        v.literal("cancelled"),
+      ),
+    ),
     text: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     const app = createReadContext(ctx.db);
     const ids = new Set<string>();
-    for (const r of await ctx.db.query("workRoles").withIndex("by_user", (q) => q.eq("userId", principal.userId)).collect()) ids.add(r.workId);
-    for (const g of await ctx.db.query("workPermissions").withIndex("by_principal", (q) => q.eq("principalType", "user").eq("principalId", principal.userId)).collect()) {
+    for (const r of await ctx.db
+      .query("workRoles")
+      .withIndex("by_user", (q) => q.eq("userId", principal.userId))
+      .collect())
+      ids.add(r.workId);
+    for (const g of await ctx.db
+      .query("workPermissions")
+      .withIndex("by_principal", (q) =>
+        q.eq("principalType", "user").eq("principalId", principal.userId),
+      )
+      .collect()) {
       if (g.revokedAt === undefined) ids.add(g.workId);
     }
     const text = args.text?.trim().toLowerCase() ?? "";
@@ -157,17 +207,34 @@ export const listMine = query({
       if (!canViewWork({ work, grants, principal })) continue;
       if (args.year !== undefined && work.year !== args.year) continue;
       if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
-      if (text && !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose}`.toLowerCase().includes(text)) continue;
+      if (
+        text &&
+        !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose}`
+          .toLowerCase()
+          .includes(text)
+      )
+        continue;
       const revisions = await app.revisions.listByWork(work.id);
       const accepting = revisions.find(isAccepting) ?? null;
-      const latest = revisions.filter((r) => r.reviewState !== "void").sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
+      const latest =
+        revisions
+          .filter((r) => r.reviewState !== "void")
+          .sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
       out.push(summarize(work, latest, accepting));
     }
-    return out.sort((a, b) => (a.acceptingDeadlineAt ?? Infinity) - (b.acceptingDeadlineAt ?? Infinity) || a.title.localeCompare(b.title, "ja"));
+    return out.sort(
+      (a, b) =>
+        (a.acceptingDeadlineAt ?? Infinity) - (b.acceptingDeadlineAt ?? Infinity) ||
+        a.title.localeCompare(b.title, "ja"),
+    );
   },
 });
 
-function summarize(work: Work, latest: { kind: "rough" | "standard"; sequence: number } | null, accepting: { id: string; deadlineAt: number } | null) {
+function summarize(
+  work: Work,
+  latest: { kind: "rough" | "standard"; sequence: number } | null,
+  accepting: { id: string; deadlineAt: number } | null,
+) {
   return {
     id: work.id as Id<"works">,
     title: work.title,

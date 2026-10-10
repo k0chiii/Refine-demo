@@ -11,7 +11,9 @@ export default {
       verifier: createJoseVerifier(env.CONVEX_SITE_URL),
       gateway: createConvexGateway(env.CONVEX_URL),
       store: createR2Store(env.ASSETS),
-      allowedOrigins: env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
+      allowedOrigins: env.ALLOWED_ORIGINS.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     });
     return app.fetch(request, env, ctx);
   },

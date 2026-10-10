@@ -39,9 +39,24 @@ export const myQueue = query({
     const { principal } = await requireUser(ctx);
     const now = Date.now();
     const assignments = [
-      ...(await ctx.db.query("reviewAssignments").withIndex("by_reviewer_state", (q) => q.eq("reviewerId", principal.userId).eq("state", "pending")).collect()),
-      ...(await ctx.db.query("reviewAssignments").withIndex("by_reviewer_state", (q) => q.eq("reviewerId", principal.userId).eq("state", "viewed")).collect()),
-      ...(await ctx.db.query("reviewAssignments").withIndex("by_reviewer_state", (q) => q.eq("reviewerId", principal.userId).eq("state", "responded")).collect()),
+      ...(await ctx.db
+        .query("reviewAssignments")
+        .withIndex("by_reviewer_state", (q) =>
+          q.eq("reviewerId", principal.userId).eq("state", "pending"),
+        )
+        .collect()),
+      ...(await ctx.db
+        .query("reviewAssignments")
+        .withIndex("by_reviewer_state", (q) =>
+          q.eq("reviewerId", principal.userId).eq("state", "viewed"),
+        )
+        .collect()),
+      ...(await ctx.db
+        .query("reviewAssignments")
+        .withIndex("by_reviewer_state", (q) =>
+          q.eq("reviewerId", principal.userId).eq("state", "responded"),
+        )
+        .collect()),
     ];
     const items = [];
     for (const a of assignments) {
@@ -50,14 +65,25 @@ export const myQueue = query({
       const work = await ctx.db.get("works", revision.workId);
       if (!work) continue;
       // 割当があっても ACL/職責が無い作品は出さない（割当 ≠ 閲覧権限、D3）
-      const grants = await ctx.db.query("workPermissions").withIndex("by_work", (q) => q.eq("workId", work._id)).collect();
+      const grants = await ctx.db
+        .query("workPermissions")
+        .withIndex("by_work", (q) => q.eq("workId", work._id))
+        .collect();
       const hasAccess =
         work.creatorIds.includes(principal.userId) ||
         work.managerIds.includes(principal.userId) ||
         work.approverId === principal.userId ||
-        grants.some((g) => g.revokedAt === undefined && g.principalType === "user" && g.principalId === principal.userId);
+        grants.some(
+          (g) =>
+            g.revokedAt === undefined &&
+            g.principalType === "user" &&
+            g.principalId === principal.userId,
+        );
       if (!hasAccess) continue;
-      const myThreads = await ctx.db.query("commentThreads").withIndex("by_revision", (q) => q.eq("revisionId", revision._id)).collect();
+      const myThreads = await ctx.db
+        .query("commentThreads")
+        .withIndex("by_revision", (q) => q.eq("revisionId", revision._id))
+        .collect();
       items.push({
         revisionId: revision._id,
         workId: work._id,

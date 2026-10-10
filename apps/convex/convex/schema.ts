@@ -9,22 +9,83 @@ import { v } from "convex/values";
  * - 認可は関数内で行う。テーブル構造だけで非公開作品の存在を隠すことはできないので、クエリ側で必ず絞る。
  */
 
-const permissionLevel = v.union(v.literal("view"), v.literal("review"), v.literal("edit"), v.literal("manage"));
+const permissionLevel = v.union(
+  v.literal("view"),
+  v.literal("review"),
+  v.literal("edit"),
+  v.literal("manage"),
+);
 const principalType = v.union(v.literal("user"), v.literal("group"));
-const lifecycle = v.union(v.literal("draft"), v.literal("active"), v.literal("on_hold"), v.literal("finalized"), v.literal("cancelled"));
+const lifecycle = v.union(
+  v.literal("draft"),
+  v.literal("active"),
+  v.literal("on_hold"),
+  v.literal("finalized"),
+  v.literal("cancelled"),
+);
 const confidentiality = v.union(v.literal("normal"), v.literal("restricted"));
-const mediaType = v.union(v.literal("pdf"), v.literal("image"), v.literal("document"), v.literal("video"), v.literal("web"), v.literal("figma"), v.literal("other"));
+const mediaType = v.union(
+  v.literal("pdf"),
+  v.literal("image"),
+  v.literal("document"),
+  v.literal("video"),
+  v.literal("web"),
+  v.literal("figma"),
+  v.literal("other"),
+);
 const revisionKind = v.union(v.literal("rough"), v.literal("standard"));
-const reviewState = v.union(v.literal("scheduled"), v.literal("open"), v.literal("closed"), v.literal("void"));
+const reviewState = v.union(
+  v.literal("scheduled"),
+  v.literal("open"),
+  v.literal("closed"),
+  v.literal("void"),
+);
 const closedReason = v.union(v.literal("deadline"), v.literal("superseded"), v.literal("void"));
 const artifactRole = v.union(v.literal("source"), v.literal("preview"), v.literal("external"));
-const artifactType = v.union(v.literal("pdf"), v.literal("image"), v.literal("document"), v.literal("other"), v.literal("external_link"));
-const artifactStatus = v.union(v.literal("pending"), v.literal("uploaded"), v.literal("verified"), v.literal("failed"));
-const threadKind = v.union(v.literal("correction"), v.literal("question"), v.literal("discussion"), v.literal("decision"));
-const severity = v.union(v.literal("critical"), v.literal("major"), v.literal("minor"), v.literal("info"));
-const resolution = v.union(v.literal("open"), v.literal("acknowledged"), v.literal("accepted"), v.literal("rejected"), v.literal("deferred"), v.literal("resolved"));
-const assignmentState = v.union(v.literal("pending"), v.literal("viewed"), v.literal("responded"), v.literal("excused"));
-const approvalAction = v.union(v.literal("finalized"), v.literal("reopened"), v.literal("exception_finalized"));
+const artifactType = v.union(
+  v.literal("pdf"),
+  v.literal("image"),
+  v.literal("document"),
+  v.literal("other"),
+  v.literal("external_link"),
+);
+const artifactStatus = v.union(
+  v.literal("pending"),
+  v.literal("uploaded"),
+  v.literal("verified"),
+  v.literal("failed"),
+);
+const threadKind = v.union(
+  v.literal("correction"),
+  v.literal("question"),
+  v.literal("discussion"),
+  v.literal("decision"),
+);
+const severity = v.union(
+  v.literal("critical"),
+  v.literal("major"),
+  v.literal("minor"),
+  v.literal("info"),
+);
+const resolution = v.union(
+  v.literal("open"),
+  v.literal("acknowledged"),
+  v.literal("accepted"),
+  v.literal("rejected"),
+  v.literal("deferred"),
+  v.literal("resolved"),
+);
+const assignmentState = v.union(
+  v.literal("pending"),
+  v.literal("viewed"),
+  v.literal("responded"),
+  v.literal("excused"),
+);
+const approvalAction = v.union(
+  v.literal("finalized"),
+  v.literal("reopened"),
+  v.literal("exception_finalized"),
+);
 
 const rect = v.object({ x: v.number(), y: v.number(), w: v.number(), h: v.number() });
 const point = v.object({ x: v.number(), y: v.number() });
@@ -188,7 +249,13 @@ export default defineSchema({
 
   commentEvents: defineTable({
     threadId: v.id("commentThreads"),
-    eventType: v.union(v.literal("created"), v.literal("replied"), v.literal("decided"), v.literal("edited"), v.literal("carried_forward")),
+    eventType: v.union(
+      v.literal("created"),
+      v.literal("replied"),
+      v.literal("decided"),
+      v.literal("edited"),
+      v.literal("carried_forward"),
+    ),
     actorId: v.string(),
     reason: v.optional(v.string()),
     payload: v.optional(v.any()),

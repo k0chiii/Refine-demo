@@ -11,13 +11,23 @@ import type { NogikuOAuthProfile } from "./nogiku.ts";
  * UniQ との差分: 単一の固定ユーザーではなく `sub` / `name` / `email` を引数で受け取り、
  * 制作者・校正者・校了者・管理者など複数の委員を切り替えて動作確認できるようにした。
  */
-export const MOCK_DEFAULT = { sub: "mock-nogiku-creator", name: "五月 めい", email: "mock-creator@example.invalid" } as const;
+export const MOCK_DEFAULT = {
+  sub: "mock-nogiku-creator",
+  name: "五月 めい",
+  email: "mock-creator@example.invalid",
+} as const;
 
 export default function NogikuMock() {
   return ConvexCredentials({
     id: "nogiku",
-    authorize: async (credentials: Record<string, unknown>, ctx: GenericActionCtx<GenericDataModel>) => {
-      const sub = typeof credentials.sub === "string" && credentials.sub !== "" ? credentials.sub : MOCK_DEFAULT.sub;
+    authorize: async (
+      credentials: Record<string, unknown>,
+      ctx: GenericActionCtx<GenericDataModel>,
+    ) => {
+      const sub =
+        typeof credentials.sub === "string" && credentials.sub !== ""
+          ? credentials.sub
+          : MOCK_DEFAULT.sub;
       const profile: NogikuOAuthProfile = {
         id: sub,
         name: typeof credentials.name === "string" ? credentials.name : MOCK_DEFAULT.name,

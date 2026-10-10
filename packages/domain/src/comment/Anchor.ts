@@ -30,22 +30,37 @@ function inUnit(v: number): boolean {
 }
 
 function validRect(r: NormalizedRect): boolean {
-  return inUnit(r.x) && inUnit(r.y) && r.w > 0 && r.h > 0 && r.x + r.w <= 1 + 1e-9 && r.y + r.h <= 1 + 1e-9;
+  return (
+    inUnit(r.x) &&
+    inUnit(r.y) &&
+    r.w > 0 &&
+    r.h > 0 &&
+    r.x + r.w <= 1 + 1e-9 &&
+    r.y + r.h <= 1 + 1e-9
+  );
 }
 
 export function validateAnchor(anchor: Anchor): void {
   switch (anchor.type) {
     case "pdf_rect":
-      if (!Number.isInteger(anchor.page) || anchor.page < 1 || !validRect(anchor.rect)) throw new DomainError("anchor_invalid", { anchor });
+      if (!Number.isInteger(anchor.page) || anchor.page < 1 || !validRect(anchor.rect))
+        throw new DomainError("anchor_invalid", { anchor });
       return;
     case "pdf_pin":
-      if (!Number.isInteger(anchor.page) || anchor.page < 1 || !inUnit(anchor.point.x) || !inUnit(anchor.point.y)) throw new DomainError("anchor_invalid", { anchor });
+      if (
+        !Number.isInteger(anchor.page) ||
+        anchor.page < 1 ||
+        !inUnit(anchor.point.x) ||
+        !inUnit(anchor.point.y)
+      )
+        throw new DomainError("anchor_invalid", { anchor });
       return;
     case "image_rect":
       if (!validRect(anchor.rect)) throw new DomainError("anchor_invalid", { anchor });
       return;
     case "image_pin":
-      if (!inUnit(anchor.point.x) || !inUnit(anchor.point.y)) throw new DomainError("anchor_invalid", { anchor });
+      if (!inUnit(anchor.point.x) || !inUnit(anchor.point.y))
+        throw new DomainError("anchor_invalid", { anchor });
       return;
     case "external":
       return;
@@ -89,7 +104,12 @@ export function toViewportRect(rect: NormalizedRect, vp: Viewport): PixelRect {
 
 /** 回転後ビューポートのピクセル矩形 → 回転 0 の正規化座標（toViewportRect の逆）。 */
 export function fromViewportRect(px: PixelRect, vp: Viewport): NormalizedRect {
-  const r: NormalizedRect = { x: px.x / vp.width, y: px.y / vp.height, w: px.w / vp.width, h: px.h / vp.height };
+  const r: NormalizedRect = {
+    x: px.x / vp.width,
+    y: px.y / vp.height,
+    w: px.w / vp.width,
+    h: px.h / vp.height,
+  };
   let out: NormalizedRect;
   switch (vp.rotation) {
     case 0:

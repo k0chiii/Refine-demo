@@ -1,0 +1,36 @@
+{
+  "name": "@mf100/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MF100 校正システム Web/PWA フロントエンド（React 19 + TanStack Router + Material 3 Expressive）",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "test": "vp test run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@convex-dev/auth": "0.0.96",
+    "@lit/react": "1.0.8",
+    "@m3e/react": "2.9.2",
+    "@m3e/web": "2.9.2",
+    "@mf100/convex": "workspace:*",
+    "@mf100/domain": "workspace:*",
+    "@tanstack/react-router": "1.170.42",
+    "convex": "1.46.0",
+    "lit": "3.3.3",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "1.168.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "5.9.3",
+    "vite-plus": "1.1.0"
+  }
+}

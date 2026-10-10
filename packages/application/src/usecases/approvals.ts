@@ -31,7 +31,11 @@ export interface FinalizeOutcome {
  * 校了宣言（C3 / C6 / F-09 / U-07 / A-08 / A-10）。
  * 本人認証・対象制作物・校了権限・最終版・重大未解決・例外理由をサーバーで一致確認して確定する。
  */
-export async function finalizeWork(ctx: AppContext, principal: Principal, input: FinalizeWorkInput): Promise<FinalizeOutcome> {
+export async function finalizeWork(
+  ctx: AppContext,
+  principal: Principal,
+  input: FinalizeWorkInput,
+): Promise<FinalizeOutcome> {
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "work.finalize");
   return idempotent(ctx, `finalizeWork:${work.id}`, input.requestId, async () => {
     assertExpectedVersion(work, input.expectedVersion);
@@ -45,12 +49,18 @@ export async function finalizeWork(ctx: AppContext, principal: Principal, input:
       actorId: principal.userId,
     };
     if (input.exceptionReason !== undefined) req.exceptionReason = input.exceptionReason;
-    if (input.independentConfirmerId !== undefined) req.independentConfirmerId = input.independentConfirmerId;
+    if (input.independentConfirmerId !== undefined)
+      req.independentConfirmerId = input.independentConfirmerId;
     if (input.policy !== undefined) req.policy = input.policy;
     const outcome = evaluateFinalization(req);
 
     const now = ctx.clock.now();
-    const next: Work = { ...work, lifecycle: "finalized", finalRevisionId: outcome.revision.id, version: work.version + 1 };
+    const next: Work = {
+      ...work,
+      lifecycle: "finalized",
+      finalRevisionId: outcome.revision.id,
+      version: work.version + 1,
+    };
     await ctx.works.update(next);
     const event: ApprovalEvent = {
       workId: work.id,
@@ -60,7 +70,8 @@ export async function finalizeWork(ctx: AppContext, principal: Principal, input:
       requiredChecksSnapshot: outcome.requiredChecksSnapshot,
       createdAt: now,
     };
-    if (outcome.usedException && input.exceptionReason !== undefined) event.exceptionReason = input.exceptionReason;
+    if (outcome.usedException && input.exceptionReason !== undefined)
+      event.exceptionReason = input.exceptionReason;
     await ctx.approvals.append(event);
     await ctx.audit.record({
       entityType: "work",
@@ -77,10 +88,15 @@ export async function finalizeWork(ctx: AppContext, principal: Principal, input:
 }
 
 /** 理由付き再開（A-09）。過去の校了イベントは消さず、再開イベントを追記する。 */
-export async function reopenWork(ctx: AppContext, principal: Principal, input: { workId: string; reason: string; expectedVersion?: number }): Promise<FinalizeOutcome> {
+export async function reopenWork(
+  ctx: AppContext,
+  principal: Principal,
+  input: { workId: string; reason: string; expectedVersion?: number },
+): Promise<FinalizeOutcome> {
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "work.reopen");
   assertExpectedVersion(work, input.expectedVersion);
-  if (work.lifecycle !== "finalized") throw new DomainError("work_not_finalized", { workId: work.id });
+  if (work.lifecycle !== "finalized")
+    throw new DomainError("work_not_finalized", { workId: work.id });
   const reason = assertReopenReason(input.reason);
   const now = ctx.clock.now();
   const next: Work = { ...work, lifecycle: "active", version: work.version + 1 };
@@ -96,6 +112,14 @@ export async function reopenWork(ctx: AppContext, principal: Principal, input: {
     createdAt: now,
   };
   await ctx.approvals.append(event);
-  await ctx.audit.record({ entityType: "work", entityId: work.id, operation: "reopened", actorId: principal.userId, before: { finalRevisionId: work.finalRevisionId }, after: { lifecycle: "active" }, at: now });
+  await ctx.audit.record({
+    entityType: "work",
+    entityId: work.id,
+    operation: "reopened",
+    actorId: principal.userId,
+    before: { finalRevisionId: work.finalRevisionId },
+    after: { lifecycle: "active" },
+    at: now,
+  });
   return { work: next, event };
 }

@@ -44,19 +44,29 @@ export function createApp(deps: AppDeps) {
     const itemId = c.req.param("itemId");
     const token = c.get("token");
     const sha256Hex = (c.req.header("X-MF100-Sha256") ?? "").toLowerCase();
-    if (!SHA256_HEX.test(sha256Hex)) return c.json({ code: "sha256_required", message: "X-MF100-Sha256 ヘッダー（16進 64 文字）が必要です" }, 400);
+    if (!SHA256_HEX.test(sha256Hex))
+      return c.json(
+        { code: "sha256_required", message: "X-MF100-Sha256 ヘッダー（16進 64 文字）が必要です" },
+        400,
+      );
     if (!c.req.raw.body) return c.json({ code: "body_required" }, 400);
 
     const target = await deps.gateway.itemForUpload(token, itemId);
     try {
-      const meta = await deps.store.put(target.objectKey, c.req.raw.body, { contentType: target.mimeType, sha256Hex });
+      const meta = await deps.store.put(target.objectKey, c.req.raw.body, {
+        contentType: target.mimeType,
+        sha256Hex,
+      });
       if (target.declaredSize !== null && target.declaredSize !== meta.size) {
         await deps.store.delete(target.objectKey);
         const message = `サイズ不一致: 申告 ${target.declaredSize} / 実体 ${meta.size}`;
         await deps.gateway.markFailed(token, itemId, message);
         return c.json({ code: "size_mismatch", message }, 400);
       }
-      const result = await deps.gateway.markVerified(token, itemId, { size: meta.size, sha256: sha256Hex });
+      const result = await deps.gateway.markVerified(token, itemId, {
+        size: meta.size,
+        sha256: sha256Hex,
+      });
       return c.json({ itemId, ...result, size: meta.size, sha256: sha256Hex });
     } catch (error) {
       if (error instanceof GatewayError) throw error;
@@ -85,7 +95,14 @@ export function createApp(deps: AppDeps) {
 
   app.onError((error, c) => {
     if (error instanceof GatewayError) {
-      const status = error.code === "unauthenticated" ? 401 : error.code === "forbidden" || error.code.startsWith("acl_") ? 403 : error.code.endsWith("not_found") ? 404 : 409;
+      const status =
+        error.code === "unauthenticated"
+          ? 401
+          : error.code === "forbidden" || error.code.startsWith("acl_")
+            ? 403
+            : error.code.endsWith("not_found")
+              ? 404
+              : 409;
       return c.json({ code: error.code, details: error.details }, status);
     }
     console.error("unhandled", error);

@@ -61,11 +61,16 @@ export function transitionLifecycle(work: Work, to: WorkLifecycle): Work {
 }
 
 export function assertWorkActive(work: Work): void {
-  if (work.lifecycle === "finalized") throw new DomainError("work_already_finalized", { workId: work.id });
-  if (work.lifecycle !== "active") throw new DomainError("work_not_active", { workId: work.id, lifecycle: work.lifecycle });
+  if (work.lifecycle === "finalized")
+    throw new DomainError("work_already_finalized", { workId: work.id });
+  if (work.lifecycle !== "active")
+    throw new DomainError("work_not_active", { workId: work.id, lifecycle: work.lifecycle });
 }
 
-export function assertExpectedVersion(work: { version: number }, expectedVersion: number | undefined): void {
+export function assertExpectedVersion(
+  work: { version: number },
+  expectedVersion: number | undefined,
+): void {
   if (expectedVersion !== undefined && expectedVersion !== work.version) {
     throw new DomainError("version_conflict", { expected: expectedVersion, actual: work.version });
   }

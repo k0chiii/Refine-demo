@@ -2,8 +2,8 @@
   "name": "@mf100/convex",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "MF100 業務データの正本（Convex）。schema・認可・状態遷移・監査。application 層のポートを ctx.db で実装するアダプタ。",
+  "type": "module",
   "exports": {
     "./api": {
       "types": "./convex/_generated/api.d.ts",
@@ -29,9 +29,9 @@
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^22.18.0",
     "convex-test": "0.0.61",
     "typescript": "5.9.3",
-    "vite-plus": "1.1.0",
-    "@types/node": "^22.18.0"
+    "vite-plus": "1.1.0"
   }
 }

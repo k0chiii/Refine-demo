@@ -38,7 +38,11 @@ export class GatewayError extends Error {
 
 export interface BackendGateway {
   itemForUpload(token: string, itemId: string): Promise<UploadTarget>;
-  markVerified(token: string, itemId: string, meta: { size: number; sha256: string }): Promise<{ status: string; failureMessage: string | null }>;
+  markVerified(
+    token: string,
+    itemId: string,
+    meta: { size: number; sha256: string },
+  ): Promise<{ status: string; failureMessage: string | null }>;
   markFailed(token: string, itemId: string, message: string): Promise<void>;
   authorizeArtifact(token: string, artifactId: string): Promise<ArtifactAccess>;
 }
@@ -56,7 +60,11 @@ export interface StoredObject {
 
 export interface ObjectStore {
   /** sha256 は 16 進。ストア側で検証し、不一致なら例外。 */
-  put(key: string, body: ReadableStream | ArrayBuffer, opts: { contentType: string; sha256Hex: string }): Promise<StoredObjectMeta>;
+  put(
+    key: string,
+    body: ReadableStream | ArrayBuffer,
+    opts: { contentType: string; sha256Hex: string },
+  ): Promise<StoredObjectMeta>;
   head(key: string): Promise<StoredObjectMeta | null>;
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;

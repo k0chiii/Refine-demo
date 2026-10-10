@@ -51,34 +51,51 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
   const policy = req.policy ?? defaultApprovalPolicy;
   const { work } = req;
 
-  if (work.lifecycle === "finalized") throw new DomainError("work_already_finalized", { workId: work.id });
-  if (work.lifecycle !== "active") throw new DomainError("work_not_active", { lifecycle: work.lifecycle });
-  if (work.approverId !== req.actorId) throw new DomainError("approval_not_approver", { actorId: req.actorId });
+  if (work.lifecycle === "finalized")
+    throw new DomainError("work_already_finalized", { workId: work.id });
+  if (work.lifecycle !== "active")
+    throw new DomainError("work_not_active", { lifecycle: work.lifecycle });
+  if (work.approverId !== req.actorId)
+    throw new DomainError("approval_not_approver", { actorId: req.actorId });
 
   const candidate = latestStandardRevision(req.revisions);
   const target = req.revisions.find((r) => r.id === req.revisionId);
-  if (!target) throw new DomainError("approval_revision_not_candidate", { revisionId: req.revisionId });
-  if (target.kind === "rough") throw new DomainError("approval_rough_revision", { revisionId: target.id });
+  if (!target)
+    throw new DomainError("approval_revision_not_candidate", { revisionId: req.revisionId });
+  if (target.kind === "rough")
+    throw new DomainError("approval_rough_revision", { revisionId: target.id });
   if (!candidate || candidate.id !== target.id) {
-    throw new DomainError("approval_revision_not_candidate", { revisionId: target.id, latest: candidate?.id ?? null });
+    throw new DomainError("approval_revision_not_candidate", {
+      revisionId: target.id,
+      latest: candidate?.id ?? null,
+    });
   }
 
   const isSelf = work.creatorIds.includes(req.actorId);
   if (isSelf && !policy.allowSelfApproval) {
     const confirmer = req.independentConfirmerId;
-    const independent = confirmer !== undefined && confirmer !== req.actorId && !work.creatorIds.includes(confirmer);
-    if (!independent) throw new DomainError("approval_self_approval_not_allowed", { actorId: req.actorId });
+    const independent =
+      confirmer !== undefined && confirmer !== req.actorId && !work.creatorIds.includes(confirmer);
+    if (!independent)
+      throw new DomainError("approval_self_approval_not_allowed", { actorId: req.actorId });
   }
 
   const blocking = req.threads
-    .filter((t) => t.revisionId === target.id && isBlockingForApproval(t, policy.blockingSeverities))
+    .filter(
+      (t) => t.revisionId === target.id && isBlockingForApproval(t, policy.blockingSeverities),
+    )
     .map((t) => t.id);
 
   let usedException = false;
   if (blocking.length > 0) {
-    if (!policy.allowException) throw new DomainError("approval_blocking_threads_remain", { blocking });
+    if (!policy.allowException)
+      throw new DomainError("approval_blocking_threads_remain", { blocking });
     const reason = req.exceptionReason?.trim() ?? "";
-    if (reason === "") throw new DomainError("approval_blocking_threads_remain", { blocking, hint: "exception_reason_required" });
+    if (reason === "")
+      throw new DomainError("approval_blocking_threads_remain", {
+        blocking,
+        hint: "exception_reason_required",
+      });
     usedException = true;
   }
 

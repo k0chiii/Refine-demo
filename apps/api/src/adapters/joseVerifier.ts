@@ -11,7 +11,10 @@ export function createJoseVerifier(convexSiteUrl: string): TokenVerifier {
   return {
     async verify(token) {
       try {
-        const { payload } = await jwtVerify(token, jwks, { issuer: convexSiteUrl, audience: "convex" });
+        const { payload } = await jwtVerify(token, jwks, {
+          issuer: convexSiteUrl,
+          audience: "convex",
+        });
         return typeof payload.sub === "string" ? { subject: payload.sub } : null;
       } catch {
         return null;

@@ -21,8 +21,14 @@ export const authorizeAccess = query({
       const revision = await app.revisions.findById(artifact.revisionId);
       if (!revision) throw new DomainError("forbidden", { artifactId });
       await loadAuthorizedWork(app, principal, revision.workId, "work.view");
-      if (artifact.role === "external" || !artifact.objectKey) throw new DomainError("forbidden", { artifactId, reason: "not_a_stored_object" });
-      return { objectKey: artifact.objectKey, mimeType: artifact.mimeType, fileName: artifact.fileName, size: artifact.size ?? null };
+      if (artifact.role === "external" || !artifact.objectKey)
+        throw new DomainError("forbidden", { artifactId, reason: "not_a_stored_object" });
+      return {
+        objectKey: artifact.objectKey,
+        mimeType: artifact.mimeType,
+        fileName: artifact.fileName,
+        size: artifact.size ?? null,
+      };
     });
   },
 });

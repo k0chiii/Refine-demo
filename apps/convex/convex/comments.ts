@@ -63,12 +63,24 @@ export const events = query({
       if (!thread) throw new DomainError("forbidden", { threadId });
       const revision = await app.revisions.findById(thread.revisionId);
       if (!revision) throw new DomainError("forbidden", { threadId });
-      const { work, grants } = await loadAuthorizedWork(app, principal, revision.workId, "work.view");
+      const { work, grants } = await loadAuthorizedWork(
+        app,
+        principal,
+        revision.workId,
+        "work.view",
+      );
       const events = await app.threads.listEvents(threadId);
-      const users = await resolveUsers(ctx.db, events.map((e) => e.actorId));
+      const users = await resolveUsers(
+        ctx.db,
+        events.map((e) => e.actorId),
+      );
       return {
-        canDecide: isAllowed("comment.decide", { work, grants, principal }) && work.lifecycle !== "finalized",
-        events: events.map((e) => ({ ...e, actor: users.get(e.actorId) })).sort((a, b) => a.createdAt - b.createdAt),
+        canDecide:
+          isAllowed("comment.decide", { work, grants, principal }) &&
+          work.lifecycle !== "finalized",
+        events: events
+          .map((e) => ({ ...e, actor: users.get(e.actorId) }))
+          .sort((a, b) => a.createdAt - b.createdAt),
       };
     });
   },

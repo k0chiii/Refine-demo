@@ -19,7 +19,12 @@ export const get = query({
     return runUseCase(async () => {
       const revision = await app.revisions.findById(revisionId);
       if (!revision) throw new DomainError("forbidden", { revisionId });
-      const { work, grants } = await loadAuthorizedWork(app, principal, revision.workId, "work.view");
+      const { work, grants } = await loadAuthorizedWork(
+        app,
+        principal,
+        revision.workId,
+        "work.view",
+      );
       const authz = { work, grants, principal };
       const siblings = await app.revisions.listByWork(work.id);
       const accepting = siblings.find(isAccepting) ?? null;
@@ -27,14 +32,34 @@ export const get = query({
       const artifacts = await app.artifacts.listByRevision(revision.id);
       const threads = await app.threads.listByRevision(revision.id);
       const assignments = await app.assignments.listByRevision(revision.id);
-      const users = await resolveUsers(ctx.db, [...threads.map((t) => t.authorId), ...assignments.map((a) => a.reviewerId), revision.submittedBy]);
+      const users = await resolveUsers(ctx.db, [
+        ...threads.map((t) => t.authorId),
+        ...assignments.map((a) => a.reviewerId),
+        revision.submittedBy,
+      ]);
       const myAssignment = assignments.find((a) => a.reviewerId === principal.userId) ?? null;
-      const canPostNow = isAllowed("comment.post", authz) && work.lifecycle !== "finalized" && accepting?.id === revision.id && now < revision.deadlineAt;
+      const canPostNow =
+        isAllowed("comment.post", authz) &&
+        work.lifecycle !== "finalized" &&
+        accepting?.id === revision.id &&
+        now < revision.deadlineAt;
       return {
-        revision: { ...revision, label: revisionLabel(revision), submitter: users.get(revision.submittedBy) },
-        work: { id: work.id, title: work.title, lifecycle: work.lifecycle, mediaType: work.mediaType, finalRevisionId: work.finalRevisionId ?? null },
+        revision: {
+          ...revision,
+          label: revisionLabel(revision),
+          submitter: users.get(revision.submittedBy),
+        },
+        work: {
+          id: work.id,
+          title: work.title,
+          lifecycle: work.lifecycle,
+          mediaType: work.mediaType,
+          finalRevisionId: work.finalRevisionId ?? null,
+        },
         artifacts,
-        threads: threads.map((t) => ({ ...t, author: users.get(t.authorId) })).sort((a, b) => a.createdAt - b.createdAt),
+        threads: threads
+          .map((t) => ({ ...t, author: users.get(t.authorId) }))
+          .sort((a, b) => a.createdAt - b.createdAt),
         assignments: assignments.map((a) => ({ ...a, reviewer: users.get(a.reviewerId) })),
         myAssignment,
         acceptingRevisionId: accepting?.id ?? null,
@@ -42,7 +67,10 @@ export const get = query({
           comment: canPostNow,
           decide: isAllowed("comment.decide", authz) && work.lifecycle !== "finalized",
           assign: isAllowed("review.assign", authz),
-          completeReview: myAssignment !== null && myAssignment.state !== "responded" && myAssignment.state !== "excused",
+          completeReview:
+            myAssignment !== null &&
+            myAssignment.state !== "responded" &&
+            myAssignment.state !== "excused",
         },
         /** UI が「なぜ投稿できないか」を説明するための理由 */
         commentBlockedReason: canPostNow

@@ -30,7 +30,12 @@ export function assertArtifactsReadyForConfirm(artifacts: readonly Artifact[]): 
   const notReady = artifacts.filter((a) => a.role !== "external" && a.status !== "verified");
   if (notReady.length > 0) {
     throw new DomainError("revision_artifacts_not_verified", {
-      artifacts: notReady.map((a) => ({ id: a.id, fileName: a.fileName, status: a.status, failureMessage: a.failureMessage })),
+      artifacts: notReady.map((a) => ({
+        id: a.id,
+        fileName: a.fileName,
+        status: a.status,
+        failureMessage: a.failureMessage,
+      })),
     });
   }
 }

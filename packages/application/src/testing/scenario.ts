@@ -1,6 +1,10 @@
 import type { Principal, Revision } from "@mf100/domain";
 import { createWork } from "../usecases/works.ts";
-import { confirmSubmission, prepareSubmission, recordItemVerified } from "../usecases/submissions.ts";
+import {
+  confirmSubmission,
+  prepareSubmission,
+  recordItemVerified,
+} from "../usecases/submissions.ts";
 import type { InMemoryContext } from "./inMemory.ts";
 
 /** テスト・サンプルデータ生成で共用する主体 */
@@ -15,7 +19,10 @@ export const principals = {
 
 export const HOUR = 3_600_000;
 
-export async function seedWork(ctx: InMemoryContext, over: Partial<Parameters<typeof createWork>[2]> = {}) {
+export async function seedWork(
+  ctx: InMemoryContext,
+  over: Partial<Parameters<typeof createWork>[2]> = {},
+) {
   return createWork(ctx, principals.manager, {
     title: "MF100 パンフレット",
     purpose: "来場者向け案内",
@@ -32,7 +39,13 @@ export async function seedWork(ctx: InMemoryContext, over: Partial<Parameters<ty
 export async function submitRevision(
   ctx: InMemoryContext,
   workId: string,
-  opts: { kind?: "rough" | "standard"; deadlineInHours?: number; files?: number; requestId?: string; principal?: Principal } = {},
+  opts: {
+    kind?: "rough" | "standard";
+    deadlineInHours?: number;
+    files?: number;
+    requestId?: string;
+    principal?: Principal;
+  } = {},
 ): Promise<Revision> {
   const principal = opts.principal ?? principals.creator;
   const files = opts.files ?? 1;
@@ -43,10 +56,20 @@ export async function submitRevision(
     deadlineAt: ctx.clock.now() + (opts.deadlineInHours ?? 24) * HOUR,
     changeSummary: "初稿",
     focusNotes: "表紙の配色",
-    items: Array.from({ length: files }, (_, i) => ({ fileName: `file${i}.pdf`, mimeType: "application/pdf", type: "pdf" as const, role: "source" as const })),
+    items: Array.from({ length: files }, (_, i) => ({
+      fileName: `file${i}.pdf`,
+      mimeType: "application/pdf",
+      type: "pdf" as const,
+      role: "source" as const,
+    })),
   });
   for (const item of prepared.items) {
-    await recordItemVerified(ctx, principal, { itemId: item.id, size: 1234, sha256: "abc", pageCount: 2 });
+    await recordItemVerified(ctx, principal, {
+      itemId: item.id,
+      size: 1234,
+      sha256: "abc",
+      pageCount: 2,
+    });
   }
   const confirmInput: Parameters<typeof confirmSubmission>[2] = { sessionId: prepared.session.id };
   if (opts.requestId !== undefined) confirmInput.requestId = opts.requestId;

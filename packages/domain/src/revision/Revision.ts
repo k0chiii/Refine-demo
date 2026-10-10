@@ -84,7 +84,10 @@ export interface NewRevisionInput {
 
 export function createRevision(input: NewRevisionInput, plan: RevisionPlan): NewRevision {
   if (!isBeforeDeadline(input.now, input.deadlineAt)) {
-    throw new DomainError("revision_deadline_in_past", { now: input.now, deadlineAt: input.deadlineAt });
+    throw new DomainError("revision_deadline_in_past", {
+      now: input.now,
+      deadlineAt: input.deadlineAt,
+    });
   }
   const revision: NewRevision = {
     workId: input.workId,
@@ -118,7 +121,12 @@ export function supersede(previous: Revision, by: Pick<Revision, "id">, now: Ins
 export function closeByDeadline(revision: Revision, now: Instant): Revision {
   if (revision.reviewState !== "open") return revision;
   if (isBeforeDeadline(now, revision.deadlineAt)) return revision;
-  return { ...revision, reviewState: "closed", reviewClosedReason: "deadline", reviewClosedAt: now };
+  return {
+    ...revision,
+    reviewState: "closed",
+    reviewClosedReason: "deadline",
+    reviewClosedAt: now,
+  };
 }
 
 /**
@@ -126,15 +134,30 @@ export function closeByDeadline(revision: Revision, now: Instant): Revision {
  * `now < deadlineAt` かつ受付中、かつ当該制作物の最新の受付対象版であること。
  * 表示上の期限ジョブが遅延していても、ここでの比較で拒否する。
  */
-export function assertCanPostComment(revision: Revision, now: Instant, latestAcceptingRevisionId: RevisionId | null): void {
+export function assertCanPostComment(
+  revision: Revision,
+  now: Instant,
+  latestAcceptingRevisionId: RevisionId | null,
+): void {
   if (revision.reviewState !== "open") {
-    throw new DomainError("revision_not_accepting", { revisionId: revision.id, reviewState: revision.reviewState, reason: revision.reviewClosedReason });
+    throw new DomainError("revision_not_accepting", {
+      revisionId: revision.id,
+      reviewState: revision.reviewState,
+      reason: revision.reviewClosedReason,
+    });
   }
   if (!isBeforeDeadline(now, revision.deadlineAt)) {
-    throw new DomainError("revision_deadline_passed", { revisionId: revision.id, now, deadlineAt: revision.deadlineAt });
+    throw new DomainError("revision_deadline_passed", {
+      revisionId: revision.id,
+      now,
+      deadlineAt: revision.deadlineAt,
+    });
   }
   if (latestAcceptingRevisionId !== revision.id) {
-    throw new DomainError("revision_not_latest", { revisionId: revision.id, latestAcceptingRevisionId });
+    throw new DomainError("revision_not_latest", {
+      revisionId: revision.id,
+      latestAcceptingRevisionId,
+    });
   }
 }
 

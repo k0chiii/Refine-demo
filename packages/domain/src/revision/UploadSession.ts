@@ -49,15 +49,31 @@ export interface UploadItem {
 }
 
 export function assertSessionOpen(session: UploadSession, now: Instant): void {
-  if (session.state !== "open") throw new DomainError("upload_session_not_open", { sessionId: session.id, state: session.state });
-  if (now >= session.expiresAt) throw new DomainError("upload_session_expired", { sessionId: session.id });
+  if (session.state !== "open")
+    throw new DomainError("upload_session_not_open", {
+      sessionId: session.id,
+      state: session.state,
+    });
+  if (now >= session.expiresAt)
+    throw new DomainError("upload_session_expired", { sessionId: session.id });
 }
 
 /** R2 上の実体確認が済んだことを記録する。失敗は failed として理由を残し、再実行（再アップロード）を許す。 */
-export function markItemVerified(item: UploadItem, meta: { size: number; sha256: string; pageCount?: number }): UploadItem {
-  if (item.role === "external") throw new DomainError("upload_item_invalid_state", { itemId: item.id, reason: "external_link" });
+export function markItemVerified(
+  item: UploadItem,
+  meta: { size: number; sha256: string; pageCount?: number },
+): UploadItem {
+  if (item.role === "external")
+    throw new DomainError("upload_item_invalid_state", {
+      itemId: item.id,
+      reason: "external_link",
+    });
   if (item.declaredSize !== undefined && item.declaredSize !== meta.size) {
-    return { ...item, status: "failed", failureMessage: `サイズ不一致: 申告 ${item.declaredSize} / 実体 ${meta.size}` };
+    return {
+      ...item,
+      status: "failed",
+      failureMessage: `サイズ不一致: 申告 ${item.declaredSize} / 実体 ${meta.size}`,
+    };
   }
   const next: UploadItem = { ...item, status: "verified", size: meta.size, sha256: meta.sha256 };
   delete next.failureMessage;
@@ -75,7 +91,12 @@ export function assertItemsReadyForConfirm(items: readonly UploadItem[]): void {
   const notReady = items.filter((i) => i.role !== "external" && i.status !== "verified");
   if (notReady.length > 0) {
     throw new DomainError("revision_artifacts_not_verified", {
-      items: notReady.map((i) => ({ id: i.id, fileName: i.fileName, status: i.status, failureMessage: i.failureMessage ?? null })),
+      items: notReady.map((i) => ({
+        id: i.id,
+        fileName: i.fileName,
+        status: i.status,
+        failureMessage: i.failureMessage ?? null,
+      })),
     });
   }
 }

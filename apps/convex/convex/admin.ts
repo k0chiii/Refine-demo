@@ -30,7 +30,11 @@ export const setSystemAdmin = mutation({
 
 /** 監査ログ（F-13）。管理者のみ。 */
 export const auditLog = query({
-  args: { entityType: v.optional(v.string()), entityId: v.optional(v.string()), limit: v.optional(v.number()) },
+  args: {
+    entityType: v.optional(v.string()),
+    entityId: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     if (!principal.isSystemAdmin) unauthenticated();
@@ -38,7 +42,11 @@ export const auditLog = query({
     if (args.entityType && args.entityId) {
       const et = args.entityType;
       const ei = args.entityId;
-      return ctx.db.query("auditEvents").withIndex("by_entity", (q) => q.eq("entityType", et).eq("entityId", ei)).order("desc").take(limit);
+      return ctx.db
+        .query("auditEvents")
+        .withIndex("by_entity", (q) => q.eq("entityType", et).eq("entityId", ei))
+        .order("desc")
+        .take(limit);
     }
     return ctx.db.query("auditEvents").withIndex("by_at").order("desc").take(limit);
   },

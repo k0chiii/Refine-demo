@@ -29,5 +29,8 @@ export async function optionalUser(ctx: QueryCtx | MutationCtx): Promise<Authent
   if (!userId) return null;
   const user = await ctx.db.get(userId);
   if (!user) return null;
-  return { user, principal: { userId: user._id, isSystemAdmin: user.isSystemAdmin ?? false, groupIds: [] } };
+  return {
+    user,
+    principal: { userId: user._id, isSystemAdmin: user.isSystemAdmin ?? false, groupIds: [] },
+  };
 }

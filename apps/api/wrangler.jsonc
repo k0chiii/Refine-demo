@@ -10,13 +10,13 @@
       "binding": "ASSETS",
       // 非公開バケット。公開 URL は設定しない（§13 / §14 やってはいけないこと）
       "bucket_name": "mf100-assets",
-      "preview_bucket_name": "mf100-assets-dev"
-    }
+      "preview_bucket_name": "mf100-assets-dev",
+    },
   ],
   "vars": {
     // `wrangler dev` 用の既定値。本番は `wrangler secret` / ダッシュボードで上書きする
     "CONVEX_URL": "http://127.0.0.1:3210",
     "CONVEX_SITE_URL": "http://127.0.0.1:3211",
-    "ALLOWED_ORIGINS": "http://localhost:5173"
-  }
+    "ALLOWED_ORIGINS": "http://localhost:5173",
+  },
 }

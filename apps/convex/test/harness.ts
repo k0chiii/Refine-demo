@@ -19,7 +19,11 @@ export interface TestUser {
   as: ReturnType<Harness["withIdentity"]>;
 }
 
-export async function createUser(t: Harness, name: string, opts: { isSystemAdmin?: boolean } = {}): Promise<TestUser> {
+export async function createUser(
+  t: Harness,
+  name: string,
+  opts: { isSystemAdmin?: boolean } = {},
+): Promise<TestUser> {
   const id = await t.run(async (ctx) =>
     ctx.db.insert("users", {
       name,

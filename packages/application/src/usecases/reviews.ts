@@ -1,4 +1,12 @@
-import { closeByDeadline, DomainError, markResponded, markViewed, type Principal, type ReviewAssignment, type Revision } from "@mf100/domain";
+import {
+  closeByDeadline,
+  DomainError,
+  markResponded,
+  markViewed,
+  type Principal,
+  type ReviewAssignment,
+  type Revision,
+} from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 
@@ -18,16 +26,32 @@ export async function assignReviewers(
       out.push(existing);
       continue;
     }
-    const a: ReviewAssignment = { revisionId: revision.id, reviewerId, reviewType: input.reviewType, state: "pending" };
+    const a: ReviewAssignment = {
+      revisionId: revision.id,
+      reviewerId,
+      reviewType: input.reviewType,
+      state: "pending",
+    };
     await ctx.assignments.upsert(a);
     out.push(a);
   }
-  await ctx.audit.record({ entityType: "reviewAssignment", entityId: revision.id, operation: "assign", actorId: principal.userId, after: input.reviewerIds, at: ctx.clock.now() });
+  await ctx.audit.record({
+    entityType: "reviewAssignment",
+    entityId: revision.id,
+    operation: "assign",
+    actorId: principal.userId,
+    after: input.reviewerIds,
+    at: ctx.clock.now(),
+  });
   return out;
 }
 
 /** 校正者が版を開いたとき。pending → viewed のみ。responded には自動遷移しない。 */
-export async function markRevisionViewed(ctx: AppContext, principal: Principal, revisionId: string): Promise<void> {
+export async function markRevisionViewed(
+  ctx: AppContext,
+  principal: Principal,
+  revisionId: string,
+): Promise<void> {
   const a = await ctx.assignments.find(revisionId, principal.userId);
   if (!a) return;
   const next = markViewed(a, ctx.clock.now());
@@ -35,7 +59,11 @@ export async function markRevisionViewed(ctx: AppContext, principal: Principal, 
 }
 
 /** 校正者が「自分の確認を完了」と明示したとき（A-06: コメント投稿では遷移しない）。 */
-export async function completeMyReview(ctx: AppContext, principal: Principal, revisionId: string): Promise<ReviewAssignment> {
+export async function completeMyReview(
+  ctx: AppContext,
+  principal: Principal,
+  revisionId: string,
+): Promise<ReviewAssignment> {
   const a = await ctx.assignments.find(revisionId, principal.userId);
   if (!a) throw new DomainError("forbidden", { revisionId });
   const next = markResponded(a, ctx.clock.now());
@@ -55,7 +83,13 @@ export async function closeExpiredReviews(ctx: AppContext, limit = 100): Promise
     const next = closeByDeadline(r, now);
     if (next === r) continue;
     await ctx.revisions.update(next);
-    await ctx.audit.record({ entityType: "revision", entityId: r.id, operation: "review_closed:deadline", actorId: "system", at: now });
+    await ctx.audit.record({
+      entityType: "revision",
+      entityId: r.id,
+      operation: "review_closed:deadline",
+      actorId: "system",
+      at: now,
+    });
     closed.push(next);
   }
   return closed;

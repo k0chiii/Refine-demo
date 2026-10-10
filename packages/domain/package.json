@@ -2,8 +2,8 @@
   "name": "@mf100/domain",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "MF100 校正ドメイン層。フレームワーク・DB・UI に依存しない純粋な TypeScript。",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./src/index.ts",

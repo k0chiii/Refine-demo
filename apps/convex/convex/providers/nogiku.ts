@@ -37,7 +37,9 @@ export type NogikuOAuthProfile = {
   generation?: number;
 };
 
-export default function Nogiku<P extends NogikuProfile>(options: OAuthUserConfig<P>): OAuthConfig<P> {
+export default function Nogiku<P extends NogikuProfile>(
+  options: OAuthUserConfig<P>,
+): OAuthConfig<P> {
   return {
     id: "nogiku",
     name: "NOGIKU",
