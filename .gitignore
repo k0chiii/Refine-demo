@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+.vite/
+.wrangler/
+*.tsbuildinfo
+
+# env files（秘密情報はコミットしない）
+.env
+.env.*
+!.env.example
+
+# Convex のデプロイメント設定（個人の dev deployment を指す）
+apps/convex/.env.local
+
+# TanStack Router の自動生成ファイル
+apps/web/src/routeTree.gen.ts
+
+# OS / editor
+.DS_Store
+.idea/
+*.log
+
+# Vite+ task cache
+.vite-plus/
+node_modules/.vite-plus/

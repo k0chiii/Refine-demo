@@ -1,0 +1,22 @@
+{
+  "name": "@mf100/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MF100 校正ドメイン層。フレームワーク・DB・UI に依存しない純粋な TypeScript。",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "vp test run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pack": "vp pack"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite-plus": "1.1.0"
+  }
+}

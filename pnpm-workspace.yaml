@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# ネイティブバイナリ等のビルドスクリプトを許可するパッケージ（pnpm 10 の既定は拒否）
+onlyBuiltDependencies:
+  - "@voidzero-dev/vite-plus-core"
+  - "vite-plus"
+  - esbuild
+  - workerd
+  - sharp

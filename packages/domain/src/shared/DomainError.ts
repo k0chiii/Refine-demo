@@ -1,0 +1,78 @@
+/**
+ * ドメイン層で発生する業務ルール違反。
+ * code は UI・API・監査ログで安定して参照できる識別子（日本語メッセージは表示層で解決する）。
+ */
+export const domainErrorCodes = [
+  // 認可
+  "forbidden",
+  "acl_requires_system_admin",
+  "acl_group_principal_not_enabled",
+  "acl_cannot_revoke_role_holder",
+  // 制作物
+  "work_not_active",
+  "work_already_finalized",
+  "work_not_finalized",
+  "work_invalid_lifecycle_transition",
+  // 版
+  "revision_rough_already_exists",
+  "revision_rough_after_standard",
+  "revision_sequence_conflict",
+  "revision_not_accepting",
+  "revision_deadline_passed",
+  "revision_not_latest",
+  "revision_deadline_in_past",
+  "revision_artifacts_not_verified",
+  "revision_no_artifacts",
+  // 提出準備（アップロードセッション）
+  "upload_session_not_open",
+  "upload_session_work_mismatch",
+  "upload_item_not_found",
+  "upload_item_invalid_state",
+  "upload_session_expired",
+  // 指摘
+  "comment_reason_required",
+  "comment_invalid_resolution_transition",
+  "comment_not_decider",
+  "comment_reply_not_allowed",
+  "comment_thread_revision_mismatch",
+  "anchor_invalid",
+  "anchor_artifact_mismatch",
+  // 校了
+  "approval_not_approver",
+  "approval_revision_not_candidate",
+  "approval_rough_revision",
+  "approval_blocking_threads_remain",
+  "approval_self_approval_not_allowed",
+  "approval_exception_reason_required",
+  "approval_exception_not_permitted",
+  "approval_reopen_reason_required",
+  // 冪等性 / 競合
+  "idempotency_conflict",
+  "version_conflict",
+] as const;
+
+export type DomainErrorCode = (typeof domainErrorCodes)[number];
+
+export class DomainError extends Error {
+  readonly code: DomainErrorCode;
+  readonly details: Record<string, unknown>;
+
+  constructor(code: DomainErrorCode, details: Record<string, unknown> = {}) {
+    super(code);
+    this.name = "DomainError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export function isDomainError(error: unknown): error is DomainError {
+  return error instanceof DomainError;
+}
+
+export function assertDomain(
+  condition: unknown,
+  code: DomainErrorCode,
+  details?: Record<string, unknown>,
+): asserts condition {
+  if (!condition) throw new DomainError(code, details);
+}
