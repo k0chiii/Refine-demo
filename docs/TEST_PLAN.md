@@ -2,9 +2,9 @@
 
 実行コマンド: `pnpm test`（Vite+ が全プロジェクトの Vitest を実行）。層ごとのテスト:
 
-- `packages/domain/src/__tests__/*.test.ts` — 不変条件（54 件）
-- `packages/application/src/__tests__/*.test.ts` — ユースケース（インメモリ、29 件。組織権限の拡張点 `org.test.ts` を含む）
-- `apps/convex/convex/mvp.test.ts` — convex-test による統合（認可・状態遷移、6 シナリオ）
+- `packages/domain/src/__tests__/*.test.ts` — 不変条件（60 件。v1 の専門確認・持越・無効化は `v1.test.ts`）
+- `packages/application/src/__tests__/*.test.ts` — ユースケース（インメモリ、38 件。組織権限の拡張点 `org.test.ts`、v1 の通知・リマインド・清掃は `v1.test.ts`）
+- `apps/convex/convex/mvp.test.ts` — convex-test による統合（認可・状態遷移、7 シナリオ。「v1」で専門確認→校了ガード、担当者・訂正、持越、無効化、通知、清掃、ユーザー検索を一周）
 - `apps/api/src/__tests__/app.test.ts` — Hono（10 件）
 - `apps/web/src/features/upload/submissionFlow.test.ts` — 提出オーケストレーション（4 件）
 
@@ -17,11 +17,11 @@
 | A-05 | 期限到来時に未読・未対応あり                     | application `comments.test` / convex `mvp.test`                                                     | ✅ 受付だけ終了、他は不変                                                                                                                |
 | A-06 | コメント 1 件投稿                                | application `comments.test`                                                                         | ✅ 確認済み・解決・校了へ遷移しない                                                                                                      |
 | A-07 | 不採用                                           | application `comments.test` / convex `mvp.test`                                                     | ✅ 理由・判断者・日時・原文が残る                                                                                                        |
-| A-08 | 重大未解決で校了                                 | domain `approval.test` / application `approvals.test` / convex `mvp.test`                           | ✅ 通常拒否、理由付き例外は監査付きで可                                                                                                  |
+| A-08 | 重大未解決で校了                                 | domain `approval.test` / application `approvals.test` / convex `mvp.test`                           | ✅ 通常拒否、理由付き例外は監査付きで可。v1: 専門確認の未完了も同様にブロック（`v1.test`）                                               |
 | A-09 | 校了後の操作と再開                               | application `approvals.test` / convex `mvp.test`                                                    | ✅                                                                                                                                       |
 | A-10 | 同一リクエスト再送                               | application `submissions/comments/approvals.test` / convex `mvp.test` / web `submissionFlow.test`   | ✅ 二重版・二重校了・二重投稿なし。**通知は未実装のため「二重通知なし」は対象外**                                                        |
 | A-11 | ACL 解除後                                       | application `acl.test` / convex `mvp.test` / api `app.test`（配信 403）                             | ✅ 署名 URL を発行しないため即時に効く                                                                                                   |
-| A-12 | Figma / frame.io URL 登録                        | application `submissions.test`（external item）/ web ワークスペース UI で「同期していない」旨を明示 | ⚠️ 外部リンクの保存はテスト済み。UI 文言は手動確認待ち                                                                                   |
+| A-12 | Figma / frame.io URL 登録                        | application `submissions.test`（external item）/ web ワークスペース UI で「同期していない」旨を明示 | ✅ 外部リンクの保存はテスト済み。v1 で「合意事項として記録」フォームを追加（デモモードで表示確認）                                       |
 | A-13 | 600×6×5×10 負荷                                  | —                                                                                                   | ❌ 未実施。`listMine` は職責＋ACL 由来の ID から読み、全件購読しない設計。p95 は PoC で計測                                              |
 | A-14 | バックアップ復元                                 | —                                                                                                   | ❌ 未実施（Convex エクスポート＋R2 の整合手順は HANDOVER 参照）                                                                          |
 | A-15 | キーボード操作                                   | —                                                                                                   | ⚠️ 設計対応（テーブル・スレッドに tabIndex / focus-visible、reduced-motion）。実機・スクリーンリーダー検証は未実施                       |

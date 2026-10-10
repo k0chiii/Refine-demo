@@ -12,6 +12,7 @@ import { formatJst, formatJstShort, remaining } from "@/lib/format";
 import {
   assignmentLabel,
   blockedReasonLabel,
+  checkStateLabel,
   closedReasonLabel,
   kindLabel,
   resolutionLabel,
@@ -20,7 +21,16 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { Field, Select, TextArea } from "@/ui/Field";
-import { M3eButton, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import {
+  M3eButton,
+  M3eDialog,
+  M3eFilterChip,
+  M3eFilterChipSet,
+  M3eIcon,
+  M3eIconButton,
+} from "@/ui/m3e";
+import { UserPicker } from "@/ui/UserPicker";
+import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
 
 export const Route = createFileRoute("/_app/revisions/$revisionId")({ component: Workspace });
 
@@ -38,6 +48,13 @@ function Workspace() {
   const decide = useMutation(api.comments.decide);
   const reply = useMutation(api.comments.reply);
   const complete = useMutation(api.reviews.complete);
+  const assignThread = useMutation(api.comments.assign);
+  const editThread = useMutation(api.comments.edit);
+  const carryForward = useMutation(api.comments.carryForward);
+  const completeCheck = useMutation(api.checks.complete);
+  const waiveCheck = useMutation(api.checks.waive);
+  const addCheck = useMutation(api.checks.add);
+  const voidRevision = useMutation(api.submissions.voidRevision);
 
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -57,6 +74,14 @@ function Workspace() {
     reason: string;
   } | null>(null);
   const [replyDraft, setReplyDraft] = useState<{ threadId: string; body: string } | null>(null);
+  const [assignDraft, setAssignDraft] = useState<{ threadId: string; ids: string[] } | null>(null);
+  const [editDraft, setEditDraft] = useState<{ threadId: string; body: string } | null>(null);
+  const [waiveDraft, setWaiveDraft] = useState<{ checkId: string; reason: string } | null>(null);
+  const [addCheckDraft, setAddCheckDraft] = useState<{ type: string; assignee: string[] } | null>(
+    null,
+  );
+  const [voidDraft, setVoidDraft] = useState<string | null>(null);
+  const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -76,6 +101,10 @@ function Workspace() {
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
   const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null);
   const me = useQuery(api.me.me, {});
+  const carryCandidates = useQuery(
+    api.comments.carryCandidates,
+    data?.can.carryForward ? { revisionId: revisionId as Id<"revisions"> } : "skip",
+  );
 
   const doPost = useAction(async () => {
     if (!data) return;
@@ -124,6 +153,66 @@ function Workspace() {
   const doComplete = useAction(async () => {
     await complete({ revisionId: revisionId as Id<"revisions"> });
   });
+  const doAssignThread = useAction(async () => {
+    if (!assignDraft) return;
+    await assignThread({
+      threadId: assignDraft.threadId as Id<"commentThreads">,
+      assigneeId: assignDraft.ids[0] ?? null,
+    });
+    setAssignDraft(null);
+  });
+  const doEditThread = useAction(async () => {
+    if (!editDraft) return;
+    await editThread({
+      threadId: editDraft.threadId as Id<"commentThreads">,
+      body: editDraft.body,
+    });
+    setEditDraft(null);
+  });
+  const doCarry = useAction(async (threadId: string) => {
+    await carryForward({
+      threadId: threadId as Id<"commentThreads">,
+      targetRevisionId: revisionId as Id<"revisions">,
+    });
+  });
+  const doCompleteCheck = useAction(async (checkId: string) => {
+    await completeCheck({ checkId: checkId as Id<"requiredChecks"> });
+  });
+  const doWaiveCheck = useAction(async () => {
+    if (!waiveDraft) return;
+    await waiveCheck({
+      checkId: waiveDraft.checkId as Id<"requiredChecks">,
+      reason: waiveDraft.reason,
+    });
+    setWaiveDraft(null);
+  });
+  const doAddCheck = useAction(async () => {
+    if (!addCheckDraft) return;
+    await addCheck({
+      revisionId: revisionId as Id<"revisions">,
+      type: addCheckDraft.type as CheckType,
+      ...(addCheckDraft.assignee[0] ? { assigneeId: addCheckDraft.assignee[0] } : {}),
+    });
+    setAddCheckDraft(null);
+  });
+  const doVoid = useAction(async () => {
+    if (voidDraft === null) return;
+    await voidRevision({ revisionId: revisionId as Id<"revisions">, reason: voidDraft });
+    setVoidDraft(null);
+  });
+  const doRecordExternal = useAction(async () => {
+    if (!artifact || !externalNote.trim()) return;
+    await post({
+      revisionId: revisionId as Id<"revisions">,
+      body: externalNote.trim(),
+      kind: "decision",
+      severity: "info",
+      requestId,
+      anchor: { type: "external", artifactId: artifact.id, note: artifact.externalUrl ?? "" },
+    });
+    setExternalNote("");
+    setRequestId(newRequestId());
+  });
 
   const threads = useMemo(() => {
     if (!data) return [];
@@ -138,7 +227,8 @@ function Workspace() {
   }, [data, filter, me?.id]);
 
   if (data === undefined) return <p className="muted">読み込み中…</p>;
-  const { revision, work, can, assignments, myAssignment } = data;
+  const { revision, work, can, assignments, myAssignment, checks } = data;
+  const pendingChecks = checks.filter((c) => c.state === "pending").length;
   const overlayThreads: OverlayThread[] = data.threads
     .map((t, i) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: i + 1 }))
     .filter((t) => t.anchor);
@@ -192,11 +282,141 @@ function Workspace() {
         ) : myAssignment?.state === "responded" ? (
           <span className="chip chip--ok">確認完了</span>
         ) : null}
+        {can.void ? (
+          <M3eButton variant="text" onClick={() => setVoidDraft("")}>
+            <M3eIcon slot="icon" name="block" />
+            誤提出を無効化
+          </M3eButton>
+        ) : null}
       </h1>
       {revision.focusNotes ? (
         <div className="alert alert--info" style={{ marginBottom: 12 }}>
           見てほしい観点: {revision.focusNotes}
         </div>
+      ) : null}
+
+      {checks.length > 0 || can.addCheck ? (
+        <section className="card" style={{ marginBottom: 12 }} aria-label="専門確認">
+          <div className="row">
+            <h3 style={{ margin: 0 }}>専門確認</h3>
+            {checks.length > 0 ? (
+              <span className={`chip ${pendingChecks > 0 ? "chip--warn" : "chip--ok"}`}>
+                {pendingChecks > 0 ? `未完了 ${pendingChecks} 件` : "すべて完了"}
+              </span>
+            ) : (
+              <span className="small muted">この版に専門確認は宣言されていません</span>
+            )}
+            <span className="spacer" />
+            {can.addCheck && !addCheckDraft ? (
+              <M3eButton
+                variant="text"
+                onClick={() => setAddCheckDraft({ type: "photo", assignee: [] })}
+              >
+                <M3eIcon slot="icon" name="add" />
+                確認を追加
+              </M3eButton>
+            ) : null}
+          </div>
+          {checks.length > 0 ? (
+            <div className="checks" style={{ marginTop: 8 }}>
+              {checks.map((c) => (
+                <div key={c.id} className={`check ${c.state !== "pending" ? "check--done" : ""}`}>
+                  <span
+                    className={`chip ${c.state === "done" ? "chip--ok" : c.state === "waived" ? "" : "chip--warn"}`}
+                  >
+                    {checkStateLabel[c.state]}
+                  </span>
+                  <div>
+                    <strong>{c.label}</strong>
+                    <div className="small muted">
+                      担当: {c.assignee?.name ?? "未指定（主管・校了権限者が代行）"}
+                      {c.doneByUser
+                        ? ` ／ ${c.state === "waived" ? "免除" : "確認"}: ${c.doneByUser.name}・${formatJstShort(c.doneAt ?? 0)}`
+                        : ""}
+                      {c.note ? ` ／ ${c.note}` : ""}
+                    </div>
+                  </div>
+                  <div className="row">
+                    {c.canComplete ? (
+                      <M3eButton
+                        variant="tonal"
+                        disabled={doCompleteCheck.pending}
+                        onClick={() => void doCompleteCheck.run(c.id)}
+                      >
+                        <M3eIcon slot="icon" name="task_alt" />
+                        確認完了
+                      </M3eButton>
+                    ) : null}
+                    {c.canWaive ? (
+                      <M3eButton
+                        variant="text"
+                        onClick={() => setWaiveDraft({ checkId: c.id, reason: "" })}
+                      >
+                        免除
+                      </M3eButton>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {waiveDraft ? (
+            <div className="stack" style={{ marginTop: 8 }}>
+              <Field label="免除の理由（必須・監査に残ります）" required>
+                <TextArea
+                  value={waiveDraft.reason}
+                  onChange={(e) => setWaiveDraft({ ...waiveDraft, reason: e.target.value })}
+                />
+              </Field>
+              <div className="row">
+                <M3eButton variant="text" onClick={() => setWaiveDraft(null)}>
+                  取消
+                </M3eButton>
+                <M3eButton
+                  variant="filled"
+                  disabled={doWaiveCheck.pending || !waiveDraft.reason.trim()}
+                  onClick={() => void doWaiveCheck.run()}
+                >
+                  免除を記録
+                </M3eButton>
+              </div>
+            </div>
+          ) : null}
+          {addCheckDraft ? (
+            <div className="grid-2" style={{ marginTop: 8, alignItems: "end" }}>
+              <Field label="確認の種別">
+                <Select
+                  value={addCheckDraft.type}
+                  onChange={(e) => setAddCheckDraft({ ...addCheckDraft, type: e.target.value })}
+                >
+                  {checkTypes.map((t) => (
+                    <option key={t} value={t}>
+                      {checkTypeLabels[t]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <UserPicker
+                label="担当者（任意）"
+                single
+                value={addCheckDraft.assignee}
+                onChange={(ids) => setAddCheckDraft({ ...addCheckDraft, assignee: ids })}
+              />
+              <div className="row">
+                <M3eButton variant="text" onClick={() => setAddCheckDraft(null)}>
+                  取消
+                </M3eButton>
+                <M3eButton
+                  variant="filled"
+                  disabled={doAddCheck.pending}
+                  onClick={() => void doAddCheck.run()}
+                >
+                  追加する
+                </M3eButton>
+              </div>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       <div className="workspace">
@@ -225,6 +445,31 @@ function Workspace() {
                 外部ツール上のコメントはこのシステムに同期されていません。議論の結論・未解決点は右のスレッドに「合意事項」として記録してください（§9.3
                 / A-12）。
               </div>
+              {can.comment ? (
+                <div className="stack" aria-label="外部での議論結果を記録">
+                  <Field
+                    label="外部での議論結果（合意事項として記録。この外部リンクに紐づきます）"
+                    hint="Figma / frame.io 上で決まったこと・未解決のまま残ったことを要約してください（F-10）。"
+                  >
+                    <TextArea
+                      value={externalNote}
+                      onChange={(e) => setExternalNote(e.target.value)}
+                      placeholder="例: 表紙のメインビジュアルは案Bで確定。地図ページの配色は次版で再検討。"
+                    />
+                  </Field>
+                  <div className="row">
+                    <span className="spacer" />
+                    <M3eButton
+                      variant="tonal"
+                      disabled={doRecordExternal.pending || !externalNote.trim()}
+                      onClick={() => void doRecordExternal.run()}
+                    >
+                      <M3eIcon slot="icon" name="handshake" />
+                      合意事項として記録
+                    </M3eButton>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : blob.error ? (
             <div className="alert">{blob.error}</div>
@@ -307,6 +552,44 @@ function Workspace() {
             </M3eFilterChipSet>
           </div>
           <div className="comments__list">
+            {carryCandidates && carryCandidates.length > 0 ? (
+              <section className="card card--outlined stack" aria-label="前版の未解決指摘">
+                <div className="row">
+                  <M3eIcon name="move_up" />
+                  <strong>前版の未解決指摘 {carryCandidates.length} 件</strong>
+                </div>
+                <p className="small muted" style={{ margin: 0 }}>
+                  この版にも当てはまるものを人が確認して引き継ぎます。位置情報は引き継がれません（版が変わるため）。元の指摘は「次版へ持越」になります。
+                </p>
+                {carryCandidates.map((c) => (
+                  <div key={c.id} className="carry">
+                    <div className="thread__meta">
+                      <span className="chip">{c.revisionLabel}</span>
+                      <span
+                        className={`chip ${c.severity === "critical" ? "chip--error" : c.severity === "major" ? "chip--warn" : ""}`}
+                      >
+                        {severityLabel[c.severity]}
+                      </span>
+                      <span className="chip">{resolutionLabel[c.resolution]}</span>
+                      <span className="spacer" />
+                      <span>{c.author?.name}</span>
+                    </div>
+                    <div className="thread__body">{c.body}</div>
+                    <div className="row">
+                      <span className="spacer" />
+                      <M3eButton
+                        variant="tonal"
+                        disabled={doCarry.pending}
+                        onClick={() => void doCarry.run(c.id)}
+                      >
+                        <M3eIcon slot="icon" name="move_up" />
+                        この版へ引き継ぐ
+                      </M3eButton>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            ) : null}
             {threads.length === 0 ? (
               <p className="muted small" style={{ padding: 8 }}>
                 表示する指摘はありません。
@@ -336,6 +619,15 @@ function Workspace() {
                     </span>
                     {t.anchor ? (
                       <M3eIcon style={{ fontSize: 16 }} title="位置指定あり" name="location_on" />
+                    ) : null}
+                    {t.carriedFromThreadId ? <span className="chip">前版から持越</span> : null}
+                    {t.assignee ? (
+                      <span className="chip" title="対応担当">
+                        担当: {t.assignee.name}
+                      </span>
+                    ) : null}
+                    {t.editCount ? (
+                      <span className="small muted">（訂正 {t.editCount} 回）</span>
                     ) : null}
                     <span className="spacer" />
                     <span>
@@ -369,6 +661,75 @@ function Workspace() {
                       >
                         返信
                       </M3eButton>
+                      {can.decide ? (
+                        <M3eButton
+                          variant="text"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssignDraft({
+                              threadId: t.id,
+                              ids: t.assigneeId ? [t.assigneeId] : [],
+                            });
+                          }}
+                        >
+                          担当者
+                        </M3eButton>
+                      ) : null}
+                      {t.authorId === me?.id && work.lifecycle !== "finalized" ? (
+                        <M3eButton
+                          variant="text"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditDraft({ threadId: t.id, body: t.body });
+                          }}
+                        >
+                          訂正
+                        </M3eButton>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {assignDraft?.threadId === t.id ? (
+                    <div className="stack" onClick={(e) => e.stopPropagation()}>
+                      <UserPicker
+                        label="対応担当者（空にすると解除）"
+                        single
+                        value={assignDraft.ids}
+                        onChange={(ids) => setAssignDraft({ ...assignDraft, ids })}
+                      />
+                      <div className="row">
+                        <M3eButton variant="text" onClick={() => setAssignDraft(null)}>
+                          取消
+                        </M3eButton>
+                        <M3eButton
+                          variant="filled"
+                          disabled={doAssignThread.pending}
+                          onClick={() => void doAssignThread.run()}
+                        >
+                          記録する
+                        </M3eButton>
+                      </div>
+                    </div>
+                  ) : null}
+                  {editDraft?.threadId === t.id ? (
+                    <div className="stack" onClick={(e) => e.stopPropagation()}>
+                      <Field label="本文の訂正（原文は履歴に残ります）">
+                        <TextArea
+                          value={editDraft.body}
+                          onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })}
+                        />
+                      </Field>
+                      <div className="row">
+                        <M3eButton variant="text" onClick={() => setEditDraft(null)}>
+                          取消
+                        </M3eButton>
+                        <M3eButton
+                          variant="filled"
+                          disabled={doEditThread.pending || !editDraft.body.trim()}
+                          onClick={() => void doEditThread.run()}
+                        >
+                          訂正を保存
+                        </M3eButton>
+                      </div>
                     </div>
                   ) : null}
                   {decision?.threadId === t.id ? (
@@ -499,6 +860,38 @@ function Workspace() {
           </div>
         </aside>
       </div>
+
+      <M3eDialog open={voidDraft !== null} onClosed={() => setVoidDraft(null)} closeLabel="閉じる">
+        <span slot="header">誤提出した版を無効化</span>
+        <div className="dialog-body">
+          <p className="small muted" style={{ margin: 0 }}>
+            この版（{revision.label}
+            ）の受付を終了し「無効」にします。添付と指摘は履歴として残り、版番号は欠番になります（次の版は第
+            {revision.kind === "standard" ? revision.sequence + 1 : 1}
+            版）。校了済みや受付終了後の版は無効化できません。
+          </p>
+          <Field label="理由" required>
+            <TextArea
+              required
+              value={voidDraft ?? ""}
+              onChange={(e) => setVoidDraft(e.target.value)}
+              placeholder="例: 別の制作物のファイルを提出した"
+            />
+          </Field>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setVoidDraft(null)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doVoid.pending || !voidDraft?.trim()}
+            onClick={() => void doVoid.run()}
+          >
+            無効化する
+          </M3eButton>
+        </div>
+      </M3eDialog>
     </>
   );
 }
@@ -523,6 +916,20 @@ function ThreadEvents({ threadId, active }: { threadId: string; active: boolean 
             </>
           ) : e.eventType === "replied" ? (
             <>返信: {(e.payload as { body?: string } | undefined)?.body}</>
+          ) : e.eventType === "assigned" ? (
+            <>
+              対応担当を
+              {(e.payload as { assigneeId?: string | null } | undefined)?.assigneeId
+                ? "指定"
+                : "解除"}
+            </>
+          ) : e.eventType === "edited" ? (
+            <>
+              本文を訂正（原文: {(e.payload as { previousBody?: string } | undefined)?.previousBody}
+              ）
+            </>
+          ) : e.eventType === "carried_forward" ? (
+            <>次版へ持ち越し</>
           ) : (
             e.eventType
           )}

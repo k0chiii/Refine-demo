@@ -15,8 +15,17 @@ import {
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
-import { notify, workStakeholders } from "./notifications.ts";
+import { notify } from "./notifications.ts";
 import { editThreadBody, isCarryCandidate, planCarryForward, revisionLabel } from "@mf100/domain";
+
+/** 通知文面用の採否ラベル（表示名は UI 側と同じ日本語。状態名自体は設計提案）。 */
+const resolutionLabels: Record<string, string> = {
+  acknowledged: "確認済",
+  accepted: "採用",
+  rejected: "不採用",
+  deferred: "次版へ持越",
+  resolved: "反映済",
+};
 
 export interface PostCommentInput {
   revisionId: string;
@@ -176,8 +185,8 @@ export async function decideThread(
     principal.userId,
     {
       kind: "comment_decided",
-      title: `指摘の判断: ${input.action}`,
-      body: `「${work.title}」の指摘が「${input.action}」になりました。${input.reason ? `理由: ${input.reason}` : ""}`,
+      title: `指摘の判断: ${resolutionLabels[input.action] ?? input.action}`,
+      body: `「${work.title}」の指摘が「${resolutionLabels[input.action] ?? input.action}」になりました。${input.reason ? `理由: ${input.reason}` : ""}`,
       workId: work.id,
       revisionId: revision.id,
       threadId: thread.id,

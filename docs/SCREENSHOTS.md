@@ -1,6 +1,6 @@
 # 画面一覧（デモモードで撮影）
 
-`apps/web` の**デモモード**（`pnpm build:demo` → `vp preview --mode demo`、バックエンド無しで Convex の実関数を `convex-test` によりブラウザ内実行）で、Nogiku モック委員 5 名を切り替えながら「登録済み制作物 → 版提出 → 割当 → 指摘 → 採否 → 校了」を一周して撮影した。撮影スクリプト: `apps/web/e2e/screenshots.mjs`（`pnpm screenshots`）。
+`apps/web` の**デモモード**（`pnpm build:demo` → `vp preview --mode demo`、バックエンド無しで Convex の実関数を `convex-test` によりブラウザ内実行）で、Nogiku モック委員 5 名を切り替えながら「登録済み制作物 → 版提出（専門確認の宣言） → 割当 → 指摘 → 専門確認完了 → 採否 → 第2版提出と指摘の持越 → 校了 → 通知」を一周して撮影した（v1 機能を含む）。撮影スクリプト: `apps/web/e2e/screenshots.mjs`（`pnpm screenshots`）。
 
 | #   | 画面（要件 §4）                                     | 役割           | 画像                                              |
 | --- | --------------------------------------------------- | -------------- | ------------------------------------------------- |
@@ -17,6 +17,11 @@
 | 11  | U-03 校了後（校了履歴・校了版）                     | 校了権限者     | ![](screenshots/11-work-finalized.png)            |
 | 12  | U-08 作品の閲覧権限（個人 ACL）と変更履歴           | システム管理者 | ![](screenshots/12-acl.png)                       |
 | 13  | U-08 管理（ACL 対象作品・ユーザー・監査ログ）       | システム管理者 | ![](screenshots/13-admin-audit.png)               |
+| 14  | v1 U-04 版提出: 専門確認の宣言と担当者選択          | 制作者         | ![](screenshots/14-submit-required-checks.png)    |
+| 15  | v1 制作物の編集（職責はユーザー選択 UI）            | 主管           | ![](screenshots/15-work-edit.png)                 |
+| 16  | v1 U-05 専門確認パネル（担当者が確認完了）          | 校正者         | ![](screenshots/16-required-check-done.png)       |
+| 17  | v1 U-05 第2版: 前版の未解決指摘の持越（人が確認）   | 制作者         | ![](screenshots/17-carry-forward.png)             |
+| 18  | v1 アプリ内通知（依頼・割当・採否・持越）           | 校正者         | ![](screenshots/18-notifications.png)             |
 
 ## デモモードについて
 

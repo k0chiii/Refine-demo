@@ -117,7 +117,14 @@ export const get = query({
         ...approvals.map((a) => a.actorId),
       ]);
       const openCounts = new Map<string, number>();
+      const pendingChecks = new Map<string, string[]>();
       for (const r of revisions) {
+        pendingChecks.set(
+          r.id,
+          (await app.checks.listByRevision(r.id))
+            .filter((c) => c.state === "pending")
+            .map((c) => c.label),
+        );
         const threads = await app.threads.listByRevision(r.id);
         openCounts.set(
           r.id,
@@ -141,6 +148,7 @@ export const get = query({
           label: revisionLabel(r),
           submitter: users.get(r.submittedBy),
           unresolvedCount: openCounts.get(r.id) ?? 0,
+          pendingChecks: pendingChecks.get(r.id) ?? [],
         })),
         acceptingRevisionId: revisions.find(isAccepting)?.id ?? null,
         approvals: approvals

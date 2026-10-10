@@ -7,6 +7,7 @@ import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton } from "@/ui/m3e";
+import { UserPicker } from "@/ui/UserPicker";
 
 export const Route = createFileRoute("/_app/works/new")({ component: NewWork });
 
@@ -21,11 +22,11 @@ function NewWork() {
     category: "",
     mediaType: "pdf",
     legacyId: "",
-    creatorIds: "",
-    approverId: "",
     deadline: "",
     confidentiality: "normal",
   });
+  const [creatorIds, setCreatorIds] = useState<string[]>([]);
+  const [approverIds, setApproverIds] = useState<string[]>([]);
   const { run, pending, error } = useAction(async (e: FormEvent) => {
     e.preventDefault();
     const deadlineAt = form.deadline ? jstLocalToEpoch(form.deadline) : null;
@@ -36,8 +37,8 @@ function NewWork() {
       mediaType: form.mediaType as "pdf",
       year: 100,
       ...(form.legacyId ? { legacyId: form.legacyId } : {}),
-      creatorIds: form.creatorIds.split(/[\s,]+/).filter(Boolean),
-      approverId: form.approverId.trim(),
+      creatorIds,
+      approverId: approverIds[0] ?? "",
       ...(deadlineAt ? { deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
     });
@@ -81,26 +82,31 @@ function NewWork() {
             </Select>
           </Field>
         </div>
-        <Field
-          label="制作者のユーザーID（カンマ区切り）"
+        <UserPicker
+          label="制作者"
           required
-          hint={`自分のID: ${me?.id ?? ""}。ユーザーIDは「管理 → ユーザー」または ACL 画面の検索で確認できます（Nogiku 連携のユーザー選択 UI は後続）。`}
-        >
-          <TextInput required value={form.creatorIds} onChange={set("creatorIds")} />
-        </Field>
-        <Field
-          label="校了権限者のユーザーID"
+          value={creatorIds}
+          onChange={setCreatorIds}
+          hint={`自分（${me?.name ?? ""}）を含める場合も選択してください。登録者は主管担当として自動的に記録されます。`}
+        />
+        <UserPicker
+          label="校了権限者"
           required
+          single
+          value={approverIds}
+          onChange={setApproverIds}
           hint="校了を宣言できるのはこの一人だけです（C3）。制作者本人を指定すると、独立確認なしの自己校了は拒否されます（D2 暫定）。"
-        >
-          <TextInput required value={form.approverId} onChange={set("approverId")} />
-        </Field>
+        />
         {error ? <div className="alert">{error.message}</div> : null}
         <div className="form__actions">
           <M3eButton variant="text" type="button" onClick={() => navigate({ to: "/works" })}>
             キャンセル
           </M3eButton>
-          <M3eButton variant="filled" type="submit" disabled={pending}>
+          <M3eButton
+            variant="filled"
+            type="submit"
+            disabled={pending || creatorIds.length === 0 || approverIds.length === 0}
+          >
             登録する
           </M3eButton>
         </div>

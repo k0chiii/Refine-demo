@@ -30,11 +30,12 @@ page.on("console", (m) => {
   if (m.type() === "error") console.error("[console]", m.text());
 });
 
-const shot = async (name) => {
-  await page.evaluate(async () => {
+const shot = async (name, scrollTo) => {
+  await page.evaluate(async (sel) => {
     window.scrollTo(0, 0);
+    if (sel) document.querySelector(sel)?.scrollIntoView({ block: "center" });
     await document.fonts.load('400 24px "Material Symbols Outlined"');
-  });
+  }, scrollTo ?? null);
   await page.waitForTimeout(600);
   await page.screenshot({ path: resolve(OUT, `${name}.png`), fullPage: false });
   console.log("saved", name);
@@ -62,6 +63,15 @@ const signInAs = async (sub) => {
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
+/** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
+const pickUser = async (scope, name) => {
+  const input = scope.locator('input[role="combobox"]').first();
+  await input.click();
+  await input.fill(name);
+  const opt = scope.locator(".picker__option", { hasText: name }).first();
+  await opt.click();
+  await page.waitForTimeout(200);
+};
 
 async function main() {
   // 01 サインイン
@@ -80,7 +90,6 @@ async function main() {
   await page.locator("table.table a", { hasText: "MF100 公式パンフレット" }).click();
   await page.waitForURL(/\/works\//);
   const workUrl = page.url();
-  const workId = workUrl.split("/works/")[1];
   await page.waitForSelector("text=基本情報");
   await shot("03-work-detail-empty");
 
@@ -93,6 +102,15 @@ async function main() {
   ]);
   await page.fill("textarea >> nth=0", "初稿。表紙と地図ページ。");
   await page.fill("textarea >> nth=1", "表紙の配色と団体名の表記");
+  // 専門確認: 写真（肖像・権利）を校正者に依頼
+  const all = await users();
+  const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
+  await page.check("#check-photo");
+  await pickUser(
+    page.locator(".check").filter({ has: page.locator("#check-photo") }),
+    reviewer.name,
+  );
+  await shot("14-submit-required-checks", "fieldset");
   await btn("アップロードを開始").click();
   await page.waitForFunction(
     () => document.querySelectorAll(".upload-item .chip--ok").length >= 2,
@@ -104,18 +122,22 @@ async function main() {
   await page.waitForSelector("text=を提出確定しました");
   await shot("05-submit-confirmed");
 
-  // 06 校正者を割当（主管）
-  const all = await users();
-  const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
+  // 06 校正者を割当（主管）: ユーザー選択 UI
   await signInAs("mock-nogiku-manager");
   await go(workUrl);
   await page.waitForSelector("text=版履歴");
   await btn("校正者を割当").click();
-  await page.waitForSelector("m3e-dialog[open] input");
-  await page.fill("m3e-dialog[open] input", reviewer.id);
+  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
   await page.waitForTimeout(500);
   await shot("06-work-detail-with-revision");
+
+  // 15 制作物の編集（主管）
+  await go(`${workUrl}/edit`);
+  await page.waitForSelector("text=制作物を編集");
+  await page.waitForSelector(".picker__chip");
+  await shot("15-work-edit");
 
   // 07 校正待ち（校正者）
   await signInAs("mock-nogiku-reviewer");
@@ -143,8 +165,20 @@ async function main() {
   );
   await btn("投稿").click();
   await page.waitForSelector(".thread");
+  // 2 件目（軽微・位置なし）は未対応のまま残し、次版への持越候補にする
+  await page.selectOption('select[aria-label="重大度"]', "minor");
+  await page.fill(
+    'textarea[aria-label="指摘本文"]',
+    "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
+  );
+  await btn("投稿").click();
+  await page.waitForFunction(() => document.querySelectorAll(".thread").length >= 2);
   await page.locator(".thread").first().click();
   await shot("08-workspace-comment");
+  // 専門確認を完了（担当の校正者）
+  await page.locator('section[aria-label="専門確認"] m3e-button', { hasText: "確認完了" }).click();
+  await page.waitForSelector("text=すべて完了");
+  await shot("16-required-check-done");
 
   // 09 採否判断（制作者）
   await signInAs("mock-nogiku-creator");
@@ -156,6 +190,28 @@ async function main() {
   await page.locator(".thread m3e-button", { hasText: "記録する" }).click();
   await page.waitForSelector("text=判断:");
   await shot("09-decision");
+
+  // 17 第 2 版を提出し、前版の未解決指摘を持ち越す（制作者）
+  await go(`${workUrl}/submit`);
+  await page.waitForSelector('input[type="file"]');
+  await page.setInputFiles('input[type="file"]', [resolve(FIXTURES, "sample.pdf")]);
+  await page.fill("textarea >> nth=0", "団体名表記は規約どおり維持。凡例の文字サイズを調整。");
+  await btn("アップロードを開始").click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item .chip--ok").length >= 1,
+    null,
+    { timeout: 30_000 },
+  );
+  await btn("提出を確定する").click();
+  await page.waitForSelector("text=を提出確定しました");
+  await btn("校正ワークスペースを開く").click();
+  await page.waitForURL(/\/revisions\//);
+  await page.waitForSelector('section[aria-label="前版の未解決指摘"]');
+  await shot("17-carry-forward");
+  await page
+    .locator('section[aria-label="前版の未解決指摘"] m3e-button', { hasText: "この版へ引き継ぐ" })
+    .click();
+  await page.waitForSelector("text=前版から持越");
 
   // 10 校了ダイアログ（校了権限者）と校了後
   await signInAs("mock-nogiku-approver");
@@ -170,6 +226,12 @@ async function main() {
     timeout: 15_000,
   });
   await shot("11-work-finalized");
+
+  // 18 通知（校正者）: 依頼・割当・校了などのアプリ内通知
+  await signInAs("mock-nogiku-reviewer");
+  await go(`${BASE}/notifications`);
+  await page.waitForSelector(".notification");
+  await shot("18-notifications");
 
   // 12 閲覧権限（管理者）と管理画面
   await signInAs("mock-nogiku-admin");

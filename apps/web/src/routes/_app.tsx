@@ -13,6 +13,7 @@ export const Route = createFileRoute("/_app")({ component: AppLayout });
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
+  const unread = useQuery(api.notifications.unreadCount, isAuthenticated && me ? {} : "skip") ?? 0;
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -27,6 +28,12 @@ function AppLayout() {
   const items = [
     { to: "/queue", icon: "fact_check", label: "校正待ち" },
     { to: "/works", icon: "folder_open", label: "制作物" },
+    {
+      to: "/notifications",
+      icon: unread > 0 ? "notifications_active" : "notifications",
+      label: "通知",
+      count: unread,
+    },
     ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
   ];
 
@@ -38,6 +45,11 @@ function AppLayout() {
             <M3eNavItem selected={path === it.to || path.startsWith(`${it.to}/`)}>
               <M3eIcon slot="icon" name={it.icon} />
               {it.label}
+              {"count" in it && it.count > 0 ? (
+                <span className="nav-count" aria-label={`未読 ${it.count} 件`}>
+                  {it.count > 99 ? "99+" : it.count}
+                </span>
+              ) : null}
             </M3eNavItem>
           </Link>
         ))}

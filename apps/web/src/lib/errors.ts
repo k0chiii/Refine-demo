@@ -35,6 +35,19 @@ const messages: Record<string, string> = {
   approval_self_approval_not_allowed:
     "制作者本人による校了は、独立した確認者の記録がない限りできません（D2 承認待ち）",
   approval_reopen_reason_required: "再開には理由が必要です",
+  work_invalid_lifecycle_transition: "この状態からその状態へは変更できません",
+  comment_edit_not_author: "指摘本文を訂正できるのは投稿者本人だけです（原文は履歴に残ります）",
+  comment_carry_target_not_accepting: "持越先の版は校正を受け付けていません",
+  comment_already_carried: "この指摘は既に次版へ持ち越されています",
+  comment_carry_same_revision: "同じ版へは持ち越せません",
+  revision_void_not_allowed: "無効化できるのは受付中の版だけです",
+  revision_void_reason_required: "無効化には理由が必要です",
+  check_not_found: "専門確認が見つかりません",
+  check_already_done: "この専門確認は既に完了または免除されています",
+  check_not_assignee: "この専門確認を完了できるのは担当者（または主管・校了権限者）だけです",
+  check_waive_reason_required: "免除には理由が必要です",
+  approval_required_checks_incomplete:
+    "未完了の専門確認があります。確認を完了（または理由付きで免除）するか、理由を記入して例外校了してください",
   version_conflict: "他の人が先に変更しました。画面を更新して再度お試しください",
   idempotency_conflict: "同じ操作が既に処理されています",
 };

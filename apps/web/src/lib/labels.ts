@@ -72,3 +72,26 @@ export const blockedReasonLabel: Record<string, string> = {
   not_latest: "最新の受付対象版ではありません",
   forbidden: "この制作物に指摘を投稿する権限がありません",
 };
+export const checkStateLabel: Record<string, string> = {
+  pending: "未確認",
+  done: "確認済",
+  waived: "免除",
+};
+export const notificationKindLabel: Record<string, string> = {
+  revision_submitted: "版の提出",
+  review_assigned: "校正の割当",
+  comment_posted: "指摘",
+  comment_decided: "採否",
+  comment_assigned: "対応担当",
+  check_requested: "専門確認の依頼",
+  check_completed: "専門確認の完了",
+  deadline_approaching: "期限接近",
+  work_finalized: "校了",
+  work_reopened: "再開",
+  revision_voided: "版の無効化",
+};
+export const lifecycleActionLabel: Record<string, string> = {
+  active: "進行中に戻す",
+  on_hold: "保留にする",
+  cancelled: "中止する",
+};

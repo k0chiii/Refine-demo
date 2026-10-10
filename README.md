@@ -95,3 +95,4 @@ pnpm dev                      # http://localhost:5173
 
 - 受け入れ条件 A-01〜A-20 と自動テストの対応は [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md)。
 - 実行していない試験・未実装は [`docs/HANDOVER.md`](docs/HANDOVER.md)。
+- v0 → v1 で追加した機能と対象外は [`docs/V1_GAP.md`](docs/V1_GAP.md)。

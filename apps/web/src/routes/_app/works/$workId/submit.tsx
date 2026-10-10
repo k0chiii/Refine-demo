@@ -16,6 +16,8 @@ import { describeError } from "@/lib/errors";
 import { epochToJstLocal, formatBytes, formatJst, jstLocalToEpoch } from "@/lib/format";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eIcon, M3eLinearProgressIndicator } from "@/ui/m3e";
+import { UserPicker } from "@/ui/UserPicker";
+import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
 
 export const Route = createFileRoute("/_app/works/$workId/submit")({ component: Submit });
 
@@ -49,6 +51,10 @@ function Submit() {
     externalUrl: "",
   });
   const [files, setFiles] = useState<File[]>([]);
+  /** 専門確認（§2.2-4）。種別ごとに要否・担当者を宣言する。校了時に未完了ならブロック（D6）。 */
+  const [checks, setChecks] = useState<Record<string, { on: boolean; assignee: string[] }>>(
+    Object.fromEntries(checkTypes.map((t) => [t, { on: false, assignee: [] }])),
+  );
   const [flow, setFlow] = useState<SubmissionFlow | null>(null);
   const [state, setState] = useState<FlowState>(initialState);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +95,13 @@ function Submit() {
           ]
         : []),
     ];
+    const requiredChecks = checkTypes
+      .filter((t) => checks[t]?.on)
+      .map((t) => ({
+        type: t as CheckType,
+        label: checkTypeLabels[t],
+        ...(checks[t]?.assignee[0] ? { assigneeId: checks[t]!.assignee[0]! } : {}),
+      }));
     const requestId = crypto.randomUUID();
     const f = new SubmissionFlow(
       {
@@ -101,6 +114,7 @@ function Submit() {
             changeSummary: form.changeSummary,
             focusNotes: form.focusNotes,
             items,
+            ...(requiredChecks.length > 0 ? { requiredChecks } : {}),
             requestId,
           }).then((r) => ({ sessionId: r.sessionId, items: r.items })),
         upload: (itemId, file, onProgress) => uploadItem(token, itemId, file, onProgress),
@@ -236,6 +250,40 @@ function Submit() {
               placeholder="https://"
             />
           </Field>
+          <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="field__label">
+              専門確認（この版で必要な確認。未完了のまま理由なしの校了はできません）
+            </legend>
+            <div className="checks">
+              {checkTypes.map((t) => (
+                <div key={t} className="check">
+                  <input
+                    type="checkbox"
+                    id={`check-${t}`}
+                    checked={checks[t]?.on ?? false}
+                    onChange={(e) =>
+                      setChecks((c) => ({ ...c, [t]: { ...c[t]!, on: e.target.checked } }))
+                    }
+                  />
+                  <label htmlFor={`check-${t}`}>{checkTypeLabels[t]}</label>
+                  {checks[t]?.on ? (
+                    <div style={{ minWidth: 260 }}>
+                      <UserPicker
+                        label="担当者（任意）"
+                        single
+                        value={checks[t]?.assignee ?? []}
+                        onChange={(ids) =>
+                          setChecks((c) => ({ ...c, [t]: { ...c[t]!, assignee: ids } }))
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              ))}
+            </div>
+          </fieldset>
           {error ? <div className="alert">{error}</div> : null}
           <div className="form__actions">
             <Link to="/works/$workId" params={{ workId }}>

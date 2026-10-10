@@ -7,13 +7,15 @@ import { formatJst } from "@/lib/format";
 import {
   approvalActionLabel,
   closedReasonLabel,
+  lifecycleActionLabel,
   lifecycleLabel,
   mediaLabel,
   reviewStateLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
-import { Field, TextArea, TextInput } from "@/ui/Field";
+import { Field, TextArea } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { UserPicker } from "@/ui/UserPicker";
 
 export const Route = createFileRoute("/_app/works/$workId/")({ component: WorkDetail });
 
@@ -25,13 +27,14 @@ function WorkDetail() {
   const finalize = useMutation(api.approvals.finalize);
   const reopen = useMutation(api.approvals.reopen);
   const assign = useMutation(api.reviews.assign);
+  const changeLifecycle = useMutation(api.works.changeLifecycle);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [assignFor, setAssignFor] = useState<string | null>(null);
   const [exceptionReason, setExceptionReason] = useState("");
-  const [confirmer, setConfirmer] = useState("");
+  const [confirmer, setConfirmer] = useState<string[]>([]);
   const [reopenReason, setReopenReason] = useState("");
-  const [reviewerIds, setReviewerIds] = useState("");
+  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
   // フックは早期 return より前に揃える（React の規則）。data 未取得時は候補版が null になるだけ。
@@ -44,7 +47,7 @@ function WorkDetail() {
       requestId,
       expectedVersion: data.work.version,
       ...(exceptionReason.trim() ? { exceptionReason: exceptionReason.trim() } : {}),
-      ...(confirmer.trim() ? { independentConfirmerId: confirmer.trim() } : {}),
+      ...(confirmer[0] ? { independentConfirmerId: confirmer[0] } : {}),
     });
     setFinalizeOpen(false);
   });
@@ -61,16 +64,36 @@ function WorkDetail() {
     if (!assignFor) return;
     await assign({
       revisionId: assignFor as Id<"revisions">,
-      reviewerIds: reviewerIds.split(/[\s,]+/).filter(Boolean),
+      reviewerIds,
       reviewType: "general",
     });
     setAssignFor(null);
-    setReviewerIds("");
+    setReviewerIds([]);
+  });
+  const doLifecycle = useAction(async (to: "active" | "on_hold" | "cancelled") => {
+    if (!data) return;
+    if (
+      to === "cancelled" &&
+      !window.confirm("この制作物を中止します。元に戻せません。よろしいですか？")
+    )
+      return;
+    await changeLifecycle({
+      workId: data.work.id as Id<"works">,
+      to,
+      expectedVersion: data.work.version,
+    });
   });
 
   if (data === undefined) return <p className="muted">読み込み中…</p>;
   const { work, revisions, people, approvals, can } = data;
   const blocking = candidate?.unresolvedCount ?? 0;
+  const pendingChecks = candidate?.pendingChecks ?? [];
+  const lifecycleTargets: Array<"active" | "on_hold" | "cancelled"> =
+    work.lifecycle === "active"
+      ? ["on_hold", "cancelled"]
+      : work.lifecycle === "on_hold" || work.lifecycle === "draft"
+        ? ["active", "cancelled"]
+        : [];
 
   return (
     <>
@@ -104,6 +127,30 @@ function WorkDetail() {
             理由付きで再開
           </M3eButton>
         ) : null}
+        {can.edit && work.lifecycle !== "finalized" && work.lifecycle !== "cancelled" ? (
+          <Link to="/works/$workId/edit" params={{ workId }}>
+            <M3eButton variant="outlined">
+              <M3eIcon slot="icon" name="edit" />
+              編集
+            </M3eButton>
+          </Link>
+        ) : null}
+        {can.edit
+          ? lifecycleTargets.map((to) => (
+              <M3eButton
+                key={to}
+                variant="text"
+                disabled={doLifecycle.pending}
+                onClick={() => void doLifecycle.run(to)}
+              >
+                <M3eIcon
+                  slot="icon"
+                  name={to === "active" ? "play_arrow" : to === "on_hold" ? "pause" : "cancel"}
+                />
+                {lifecycleActionLabel[to]}
+              </M3eButton>
+            ))
+          : null}
         {can.manageAcl ? (
           <Link to="/works/$workId/acl" params={{ workId }}>
             <M3eButton variant="outlined">
@@ -184,6 +231,7 @@ function WorkDetail() {
               <th>提出</th>
               <th>変更点 / 見てほしい点</th>
               <th>未対応指摘</th>
+              <th>専門確認</th>
               <th></th>
             </tr>
           </thead>
@@ -226,6 +274,13 @@ function WorkDetail() {
                     <span className="muted">0</span>
                   )}
                 </td>
+                <td className="small">
+                  {r.pendingChecks.length > 0 ? (
+                    <span className="chip chip--warn">未完了 {r.pendingChecks.length}</span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td>
                   {can.assign ? (
                     <M3eButton variant="text" onClick={() => setAssignFor(r.id)}>
@@ -247,6 +302,12 @@ function WorkDetail() {
             対象版: <strong>{candidate?.label ?? "（通常版がありません）"}</strong>。宣言者:{" "}
             <strong>{people.approver?.name}</strong>（校了権限者）
           </p>
+          {pendingChecks.length > 0 ? (
+            <div className="alert--warn alert">
+              未完了の専門確認が {pendingChecks.length} 件あります（{pendingChecks.join("、")}
+              ）。確認完了または免除されるまで、理由なしの校了は拒否されます（D6）。
+            </div>
+          ) : null}
           {blocking > 0 ? (
             <div className="alert--warn alert">
               未対応の指摘が {blocking} 件あります。重大度 critical/major
@@ -261,9 +322,13 @@ function WorkDetail() {
               onChange={(e) => setExceptionReason(e.target.value)}
             />
           </Field>
-          <Field label="独立確認者のユーザーID（制作者本人が校了する場合のみ・D2 暫定）">
-            <TextInput value={confirmer} onChange={(e) => setConfirmer(e.target.value)} />
-          </Field>
+          <UserPicker
+            label="独立確認者（制作者本人が校了する場合のみ・D2 暫定）"
+            single
+            value={confirmer}
+            onChange={setConfirmer}
+            exclude={[work.approverId, ...work.creatorIds]}
+          />
           {doFinalize.error ? <div className="alert">{doFinalize.error.message}</div> : null}
         </div>
         <div slot="actions" className="row">
@@ -314,9 +379,7 @@ function WorkDetail() {
           <p className="small muted" style={{ margin: 0 }}>
             割当は「自分の校正待ち」に表示されます。作品の閲覧許可（ACL）は別に管理者が付与する必要があります（D3）。
           </p>
-          <Field label="校正者のユーザーID（カンマ区切り）">
-            <TextInput value={reviewerIds} onChange={(e) => setReviewerIds(e.target.value)} />
-          </Field>
+          <UserPicker label="校正者" value={reviewerIds} onChange={setReviewerIds} />
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setAssignFor(null)}>
@@ -324,7 +387,7 @@ function WorkDetail() {
           </M3eButton>
           <M3eButton
             variant="filled"
-            disabled={doAssign.pending}
+            disabled={doAssign.pending || reviewerIds.length === 0}
             onClick={() => void doAssign.run()}
           >
             割り当てる
