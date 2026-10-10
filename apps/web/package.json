@@ -9,10 +9,15 @@
     "build": "vp build",
     "preview": "vp preview",
     "test": "vp test run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:demo": "vp dev --mode demo",
+    "build:demo": "vp build --mode demo --outDir dist-demo",
+    "screenshots": "node e2e/screenshots.mjs"
   },
   "dependencies": {
     "@convex-dev/auth": "0.0.96",
+    "@fontsource-variable/material-symbols-outlined": "5.3.8",
+    "@fontsource/noto-sans-jp": "5.3.0",
     "@lit/react": "1.0.8",
     "@m3e/react": "2.9.2",
     "@m3e/web": "2.9.2",
@@ -30,6 +35,8 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "6.1.2",
+    "convex-test": "0.0.61",
+    "playwright-core": "^1.58.0",
     "typescript": "5.9.3",
     "vite-plus": "1.1.0"
   }

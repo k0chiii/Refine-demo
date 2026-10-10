@@ -7,8 +7,14 @@ interface ImportMetaEnv {
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+  /** Vite の import.meta.glob（デモモードで Convex 関数モジュールを集めるために使用） */
+  glob(pattern: string): Record<string, () => Promise<unknown>>;
 }
 declare module "*.css" {
   const css: string;
   export default css;
+}
+declare module "*?url" {
+  const url: string;
+  export default url;
 }

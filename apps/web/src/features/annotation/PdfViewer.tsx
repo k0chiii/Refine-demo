@@ -1,5 +1,5 @@
 import type { Anchor, NormalizedRect, Viewport } from "@mf100/domain";
-import * as pdfjs from "pdfjs-dist";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useEffect, useRef, useState } from "react";
 import { M3eIconButton, M3eIcon } from "@/ui/m3e";
@@ -7,7 +7,7 @@ import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 
 // Vite がワーカーを別チャンクとして配信する
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
+  "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
   import.meta.url,
 ).toString();
 
@@ -105,7 +105,7 @@ export function PdfViewer({
           disabled={page <= 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
         >
-          <M3eIcon>chevron_left</M3eIcon>
+          <M3eIcon name="chevron_left" />
         </M3eIconButton>
         <span className="small">{pageCount ? `${page} / ${pageCount} ページ` : "読込中…"}</span>
         <M3eIconButton
@@ -113,20 +113,20 @@ export function PdfViewer({
           disabled={page >= pageCount}
           onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
         >
-          <M3eIcon>chevron_right</M3eIcon>
+          <M3eIcon name="chevron_right" />
         </M3eIconButton>
         <M3eIconButton aria-label="縮小" onClick={() => setScale((s) => Math.max(0.4, s - 0.2))}>
-          <M3eIcon>zoom_out</M3eIcon>
+          <M3eIcon name="zoom_out" />
         </M3eIconButton>
         <span className="small">{Math.round(scale * 100)}%</span>
         <M3eIconButton aria-label="拡大" onClick={() => setScale((s) => Math.min(4, s + 0.2))}>
-          <M3eIcon>zoom_in</M3eIcon>
+          <M3eIcon name="zoom_in" />
         </M3eIconButton>
         <M3eIconButton
           aria-label="右に回転"
           onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
         >
-          <M3eIcon>rotate_right</M3eIcon>
+          <M3eIcon name="rotate_right" />
         </M3eIconButton>
         {selecting ? (
           <span className="chip chip--warn">ドラッグで範囲、クリックでピンを指定</span>

@@ -3,6 +3,7 @@ node_modules/
 
 # build outputs
 dist/
+dist-demo/
 .vite/
 .wrangler/
 *.tsbuildinfo

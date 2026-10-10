@@ -39,11 +39,11 @@ export function ImageViewer({
     <div className="viewer">
       <div className="viewer__toolbar" role="toolbar" aria-label="画像操作">
         <M3eIconButton aria-label="縮小" onClick={() => setScale((s) => Math.max(0.2, s - 0.1))}>
-          <M3eIcon>zoom_out</M3eIcon>
+          <M3eIcon name="zoom_out" />
         </M3eIconButton>
         <span className="small">{Math.round(scale * 100)}%</span>
         <M3eIconButton aria-label="拡大" onClick={() => setScale((s) => Math.min(4, s + 0.1))}>
-          <M3eIcon>zoom_in</M3eIcon>
+          <M3eIcon name="zoom_in" />
         </M3eIconButton>
         {natural ? (
           <span className="small muted">

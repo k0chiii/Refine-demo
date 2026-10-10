@@ -78,3 +78,52 @@ export const searchUsers = query({
       }));
   },
 });
+
+/**
+ * ACL 管理のための作品メタ情報（管理者のみ）。
+ * 管理者は作品の内容（版・添付・指摘）を当然には閲覧できないが（§7.2）、閲覧者を調整するには対象作品を特定できる必要がある。
+ * 返すのは名称・旧ID・区分・状態のみ。
+ */
+export const workSummary = query({
+  args: { workId: v.id("works") },
+  handler: async (ctx, { workId }) => {
+    const { principal } = await requireUser(ctx);
+    if (!principal.isSystemAdmin) unauthenticated();
+    const work = await ctx.db.get("works", workId);
+    if (!work) return null;
+    return {
+      id: work._id,
+      title: work.title,
+      legacyId: work.legacyId ?? null,
+      category: work.category,
+      lifecycle: work.lifecycle,
+      confidentiality: work.confidentiality,
+    };
+  },
+});
+
+export const adminWorks = query({
+  args: {},
+  handler: async (ctx) => {
+    const { principal } = await requireUser(ctx);
+    if (!principal.isSystemAdmin) unauthenticated();
+    const works = await ctx.db.query("works").order("desc").take(500);
+    const out = [];
+    for (const w of works) {
+      const grants = await ctx.db
+        .query("workPermissions")
+        .withIndex("by_work", (q) => q.eq("workId", w._id))
+        .collect();
+      out.push({
+        id: w._id,
+        title: w.title,
+        legacyId: w.legacyId ?? null,
+        category: w.category,
+        lifecycle: w.lifecycle,
+        confidentiality: w.confidentiality,
+        activeGrantCount: grants.filter((g) => g.revokedAt === undefined).length,
+      });
+    }
+    return out;
+  },
+});

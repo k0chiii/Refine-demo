@@ -16,6 +16,7 @@ export default defineConfig({
   lint: {
     ignorePatterns: [
       "**/dist/**",
+      "**/dist-demo/**",
       "**/node_modules/**",
       "apps/convex/convex/_generated/**",
       "apps/web/src/routeTree.gen.ts",

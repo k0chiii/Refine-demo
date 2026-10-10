@@ -34,28 +34,26 @@ function WorkDetail() {
   const [reviewerIds, setReviewerIds] = useState("");
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
-  if (data === undefined) return <p className="muted">読み込み中…</p>;
-  const { work, revisions, people, approvals, can } = data;
-  const candidate = revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
-  const blocking = candidate?.unresolvedCount ?? 0;
-
+  // フックは早期 return より前に揃える（React の規則）。data 未取得時は候補版が null になるだけ。
+  const candidate = data?.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
   const doFinalize = useAction(async () => {
-    if (!candidate) return;
+    if (!data || !candidate) return;
     await finalize({
-      workId: work.id as Id<"works">,
+      workId: data.work.id as Id<"works">,
       revisionId: candidate.id as Id<"revisions">,
       requestId,
-      expectedVersion: work.version,
+      expectedVersion: data.work.version,
       ...(exceptionReason.trim() ? { exceptionReason: exceptionReason.trim() } : {}),
       ...(confirmer.trim() ? { independentConfirmerId: confirmer.trim() } : {}),
     });
     setFinalizeOpen(false);
   });
   const doReopen = useAction(async () => {
+    if (!data) return;
     await reopen({
-      workId: work.id as Id<"works">,
+      workId: data.work.id as Id<"works">,
       reason: reopenReason,
-      expectedVersion: work.version,
+      expectedVersion: data.work.version,
     });
     setReopenOpen(false);
   });
@@ -69,6 +67,10 @@ function WorkDetail() {
     setAssignFor(null);
     setReviewerIds("");
   });
+
+  if (data === undefined) return <p className="muted">読み込み中…</p>;
+  const { work, revisions, people, approvals, can } = data;
+  const blocking = candidate?.unresolvedCount ?? 0;
 
   return (
     <>
@@ -86,23 +88,27 @@ function WorkDetail() {
             variant="filled"
             onClick={() => navigate({ to: "/works/$workId/submit", params: { workId } })}
           >
-            <M3eIcon slot="icon">upload_file</M3eIcon>版を提出
+            <M3eIcon slot="icon" name="upload_file" />
+            版を提出
           </M3eButton>
         ) : null}
         {can.finalize && work.lifecycle === "active" ? (
           <M3eButton variant="tonal" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
-            <M3eIcon slot="icon">verified</M3eIcon>校了を宣言
+            <M3eIcon slot="icon" name="verified" />
+            校了を宣言
           </M3eButton>
         ) : null}
         {can.reopen && work.lifecycle === "finalized" ? (
           <M3eButton variant="outlined" onClick={() => setReopenOpen(true)}>
-            <M3eIcon slot="icon">lock_open</M3eIcon>理由付きで再開
+            <M3eIcon slot="icon" name="lock_open" />
+            理由付きで再開
           </M3eButton>
         ) : null}
         {can.manageAcl ? (
           <Link to="/works/$workId/acl" params={{ workId }}>
             <M3eButton variant="outlined">
-              <M3eIcon slot="icon">manage_accounts</M3eIcon>閲覧権限
+              <M3eIcon slot="icon" name="manage_accounts" />
+              閲覧権限
             </M3eButton>
           </Link>
         ) : null}

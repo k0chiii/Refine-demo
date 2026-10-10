@@ -186,7 +186,8 @@ function Workspace() {
             disabled={doComplete.pending}
             onClick={() => void doComplete.run()}
           >
-            <M3eIcon slot="icon">task_alt</M3eIcon>自分の確認を完了
+            <M3eIcon slot="icon" name="task_alt" />
+            自分の確認を完了
           </M3eButton>
         ) : myAssignment?.state === "responded" ? (
           <span className="chip chip--ok">確認完了</span>
@@ -334,9 +335,7 @@ function Workspace() {
                       {resolutionLabel[t.resolution]}
                     </span>
                     {t.anchor ? (
-                      <M3eIcon style={{ fontSize: 16 }} title="位置指定あり">
-                        location_on
-                      </M3eIcon>
+                      <M3eIcon style={{ fontSize: 16 }} title="位置指定あり" name="location_on" />
                     ) : null}
                     <span className="spacer" />
                     <span>
@@ -437,7 +436,7 @@ function Workspace() {
                     disabled={!artifact || artifact.role === "external"}
                     onClick={() => setSelecting((v) => !v)}
                   >
-                    <M3eIcon>add_location_alt</M3eIcon>
+                    <M3eIcon name="add_location_alt" />
                   </M3eIconButton>
                   <span className="small muted">
                     {draft
@@ -491,7 +490,8 @@ function Workspace() {
                     disabled={doPost.pending || !compose.body.trim()}
                     onClick={() => void doPost.run()}
                   >
-                    <M3eIcon slot="icon">send</M3eIcon>投稿
+                    <M3eIcon slot="icon" name="send" />
+                    投稿
                   </M3eButton>
                 </div>
               </>

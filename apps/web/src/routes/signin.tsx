@@ -32,7 +32,7 @@ function SignIn() {
   }, [isLoading, isAuthenticated, me, navigate]);
 
   // モックかどうかはサーバー設定（NOGIKU_MOCK_ENABLED）が正本。未ログインでは分からないので dev ビルドでのみ UI を出す。
-  const showMock = import.meta.env.DEV;
+  const showMock = import.meta.env.DEV || import.meta.env.MODE === "demo";
 
   const start = async (params: Record<string, string>) => {
     setError(null);
@@ -52,7 +52,7 @@ function SignIn() {
           委員共通アカウント（Nogiku）でサインインします。このシステムはパスワードを保持しません。
         </p>
         <M3eButton variant="filled" onClick={() => start({ redirectTo: "/queue" })}>
-          <M3eIcon slot="icon">login</M3eIcon>
+          <M3eIcon slot="icon" name="login" />
           Nogiku でサインイン
         </M3eButton>
         {error ? <div className="alert">{error}</div> : null}

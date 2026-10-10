@@ -15,7 +15,10 @@ export const Route = createFileRoute("/_app/works/$workId/acl")({ component: Acl
 function Acl() {
   const { workId } = Route.useParams();
   const me = useQuery(api.me.me, {});
-  const work = useQuery(api.works.get, { workId });
+  const work = useQuery(
+    api.acl.workSummary,
+    me?.isSystemAdmin ? { workId: workId as Id<"works"> } : "skip",
+  );
   const grants = useQuery(api.acl.list, { workId });
   const [search, setSearch] = useState("");
   const candidates = useQuery(api.acl.searchUsers, me?.isSystemAdmin ? { text: search } : "skip");
@@ -48,7 +51,7 @@ function Acl() {
         閲覧権限{" "}
         <span className="muted small">
           <Link to="/works/$workId" params={{ workId }}>
-            {work.work.title}
+            {work?.title ?? "（作品が見つかりません）"}
           </Link>
         </span>
       </h1>
@@ -101,7 +104,8 @@ function Acl() {
               disabled={!principalId.trim() || doGrant.pending}
               onClick={() => void doGrant.run()}
             >
-              <M3eIcon slot="icon">person_add</M3eIcon>付与
+              <M3eIcon slot="icon" name="person_add" />
+              付与
             </M3eButton>
           </div>
         </section>

@@ -248,7 +248,8 @@ function Submit() {
               type="submit"
               disabled={files.length === 0 && !form.externalUrl.trim()}
             >
-              <M3eIcon slot="icon">cloud_upload</M3eIcon>アップロードを開始
+              <M3eIcon slot="icon" name="cloud_upload" />
+              アップロードを開始
             </M3eButton>
           </div>
         </form>
@@ -316,7 +317,8 @@ function Submit() {
               disabled={!canConfirm(state)}
               onClick={() => void flow.confirm().catch(() => undefined)}
             >
-              <M3eIcon slot="icon">check_circle</M3eIcon>提出を確定する
+              <M3eIcon slot="icon" name="check_circle" />
+              提出を確定する
             </M3eButton>
           </div>
         </div>

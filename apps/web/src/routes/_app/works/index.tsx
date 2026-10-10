@@ -24,7 +24,8 @@ function Works() {
         <span className="spacer" />
         <Link to="/works/new">
           <M3eButton variant="filled">
-            <M3eIcon slot="icon">add</M3eIcon>制作物を登録
+            <M3eIcon slot="icon" name="add" />
+            制作物を登録
           </M3eButton>
         </Link>
       </h1>

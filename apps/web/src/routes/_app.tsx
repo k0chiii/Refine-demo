@@ -36,7 +36,7 @@ function AppLayout() {
         {items.map((it) => (
           <Link key={it.to} to={it.to} style={{ textDecoration: "none", color: "inherit" }}>
             <M3eNavItem selected={path === it.to || path.startsWith(`${it.to}/`)}>
-              <M3eIcon slot="icon">{it.icon}</M3eIcon>
+              <M3eIcon slot="icon" name={it.icon} />
               {it.label}
             </M3eNavItem>
           </Link>
@@ -55,7 +55,8 @@ function AppLayout() {
             variant="text"
             onClick={() => signOut().then(() => navigate({ to: "/signin" }))}
           >
-            <M3eIcon slot="icon">logout</M3eIcon>サインアウト
+            <M3eIcon slot="icon" name="logout" />
+            サインアウト
           </M3eButton>
         </M3eAppBar>
         <main className="shell__content">
