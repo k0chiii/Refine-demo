@@ -5,6 +5,7 @@ import type {
   CommentThread,
   Instant,
   Principal,
+  RequiredCheck,
   ReviewAssignment,
   Revision,
   RevisionId,
@@ -54,6 +55,8 @@ export interface UploadSessionRepository {
   findItem(itemId: string): Promise<UploadItem | null>;
   insertItem(item: Omit<UploadItem, "id">): Promise<UploadItem>;
   updateItem(item: UploadItem): Promise<void>;
+  /** open のまま expiresAt を過ぎたセッション */
+  listOpenExpired(now: Instant, limit: number): Promise<UploadSession[]>;
 }
 
 export interface ThreadRepository {
@@ -69,6 +72,53 @@ export interface ReviewAssignmentRepository {
   listByRevision(revisionId: RevisionId): Promise<ReviewAssignment[]>;
   find(revisionId: RevisionId, reviewerId: UserId): Promise<ReviewAssignment | null>;
   upsert(assignment: ReviewAssignment): Promise<void>;
+  /** 期限接近リマインド用: 未確認（pending/viewed）の割当 */
+  listUnresponded(limit: number): Promise<ReviewAssignment[]>;
+}
+
+export interface RequiredCheckRepository {
+  findById(id: string): Promise<RequiredCheck | null>;
+  listByRevision(revisionId: RevisionId): Promise<RequiredCheck[]>;
+  insert(check: Omit<RequiredCheck, "id">): Promise<RequiredCheck>;
+  update(check: RequiredCheck): Promise<void>;
+}
+
+/**
+ * アプリ内通知（F-11）。業務データの正本は「自分の校正待ち」と版の状態であり、通知は補助（§10-1）。
+ * Slack 等の外部送信は NotificationJob として別途キューイングする（後続）。
+ */
+export type NotificationKind =
+  | "revision_submitted"
+  | "review_assigned"
+  | "comment_posted"
+  | "comment_decided"
+  | "comment_assigned"
+  | "check_requested"
+  | "check_completed"
+  | "deadline_approaching"
+  | "work_finalized"
+  | "work_reopened"
+  | "revision_voided";
+
+export interface Notification {
+  id: string;
+  recipientId: UserId;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  workId?: WorkId;
+  revisionId?: RevisionId;
+  threadId?: string;
+  createdAt: Instant;
+  readAt?: Instant;
+}
+
+export interface NotificationRepository {
+  insert(notification: Omit<Notification, "id">): Promise<Notification>;
+  listForUser(userId: UserId, limit: number): Promise<Notification[]>;
+  findById(id: string): Promise<Notification | null>;
+  update(notification: Notification): Promise<void>;
+  countUnread(userId: UserId): Promise<number>;
 }
 
 export interface AclRepository {
@@ -117,6 +167,8 @@ export interface AppContext {
   assignments: ReviewAssignmentRepository;
   acl: AclRepository;
   approvals: ApprovalRepository;
+  checks: RequiredCheckRepository;
+  notifications: NotificationRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
 }

@@ -55,3 +55,11 @@ export const vLifecycleTarget = v.union(
   v.literal("on_hold"),
   v.literal("cancelled"),
 );
+export const vCheckType = v.union(
+  v.literal("photo"),
+  v.literal("name"),
+  v.literal("language"),
+  v.literal("rules"),
+  v.literal("design"),
+  v.literal("other"),
+);

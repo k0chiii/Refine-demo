@@ -16,9 +16,15 @@ import {
   type UploadSession,
   type ArtifactRole,
   type ArtifactType,
+  type CheckType,
+  type RequiredCheck,
+  checkTypeLabels,
+  revisionLabel,
+  voidRevision,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
+import { notify, workStakeholders } from "./notifications.ts";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -37,6 +43,8 @@ export interface PrepareSubmissionInput {
     declaredSize?: number;
     externalUrl?: string;
   }>;
+  /** この版で必要な専門確認（§2.2-4）。確定時に RequiredCheck として作られる。 */
+  requiredChecks?: Array<{ type: CheckType; label?: string; assigneeId?: string }>;
   requestId?: string;
 }
 
@@ -80,6 +88,15 @@ export async function prepareSubmission(
         state: "open",
         createdAt: now,
         expiresAt: now + SESSION_TTL_MS,
+        ...(input.requiredChecks && input.requiredChecks.length > 0
+          ? {
+              requiredChecks: input.requiredChecks.map((c) => ({
+                type: c.type,
+                label: c.label?.trim() || checkTypeLabels[c.type],
+                ...(c.assigneeId ? { assigneeId: c.assigneeId } : {}),
+              })),
+            }
+          : {}),
       });
       const items: UploadItem[] = [];
       for (const [index, it] of input.items.entries()) {
@@ -223,6 +240,16 @@ export async function confirmSubmission(
     );
     const revision = await ctx.revisions.insert(newRevision);
     for (const item of items) await ctx.artifacts.insert(toArtifact(item, revision.id));
+    for (const c of session.requiredChecks ?? []) {
+      const data: Omit<RequiredCheck, "id"> = {
+        revisionId: revision.id,
+        type: c.type as CheckType,
+        label: c.label,
+        state: "pending",
+      };
+      if (c.assigneeId) data.assigneeId = c.assigneeId;
+      await ctx.checks.insert(data);
+    }
 
     let supersededRevisionId: string | null = null;
     if (plan.toSupersede) {
@@ -241,8 +268,79 @@ export async function confirmSubmission(
       after: { sequence: revision.sequence, kind: revision.kind, supersededRevisionId },
       at: now,
     });
+    await notify(ctx, workStakeholders(work), principal.userId, {
+      kind: "revision_submitted",
+      title: `${revisionLabel(revision)}が提出されました: ${work.title}`,
+      body: revision.changeSummary || "変更点の記載なし",
+      workId: work.id,
+      revisionId: revision.id,
+    });
+    for (const c of session.requiredChecks ?? []) {
+      if (c.assigneeId) {
+        await notify(ctx, [c.assigneeId], principal.userId, {
+          kind: "check_requested",
+          title: `専門確認の依頼: ${c.label}`,
+          body: `「${work.title}」${revisionLabel(revision)}で ${c.label} の確認が必要です。`,
+          workId: work.id,
+          revisionId: revision.id,
+        });
+      }
+    }
     return { revision, supersededRevisionId };
   });
+}
+
+/**
+ * 誤提出の無効化（§5.2-6）。受付中の最新版を理由付きで void にする。指摘・添付・監査は残す。
+ * 無効化後は受付中の版が無くなる。正しい版を再提出する（番号は進む）。
+ */
+export async function voidRevisionUseCase(
+  ctx: AppContext,
+  principal: Principal,
+  input: { revisionId: string; reason: string },
+): Promise<Revision> {
+  const revision = await ctx.revisions.findById(input.revisionId);
+  if (!revision) throw new DomainError("forbidden", { revisionId: input.revisionId });
+  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "revision.submit");
+  assertWorkActive(work);
+  const now = ctx.clock.now();
+  const next = voidRevision(revision, input.reason, now);
+  await ctx.revisions.update(next);
+  await ctx.audit.record({
+    entityType: "revision",
+    entityId: revision.id,
+    operation: "void",
+    actorId: principal.userId,
+    after: { reason: input.reason.trim() },
+    at: now,
+  });
+  const reviewers = (await ctx.assignments.listByRevision(revision.id)).map((a) => a.reviewerId);
+  await notify(ctx, [...workStakeholders(work), ...reviewers], principal.userId, {
+    kind: "revision_voided",
+    title: `${revisionLabel(revision)}が無効化されました: ${work.title}`,
+    body: `理由: ${input.reason.trim()}`,
+    workId: work.id,
+    revisionId: revision.id,
+  });
+  return next;
+}
+
+/** 放置された提出準備を abandoned にする（§8.1 孤立ファイルの清掃。R2 側の削除は Hono の責務）。 */
+export async function expireUploadSessions(ctx: AppContext, limit = 100): Promise<string[]> {
+  const now = ctx.clock.now();
+  const ids: string[] = [];
+  for (const s of await ctx.uploads.listOpenExpired(now, limit)) {
+    await ctx.uploads.update({ ...s, state: "abandoned" });
+    await ctx.audit.record({
+      entityType: "uploadSession",
+      entityId: s.id,
+      operation: "abandoned",
+      actorId: "system",
+      at: now,
+    });
+    ids.push(s.id);
+  }
+  return ids;
 }
 
 async function loadOwnItem(

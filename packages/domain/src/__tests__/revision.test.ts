@@ -38,11 +38,11 @@ describe("planRevision（0版と通常版の分離 / C8, D1, A-18）", () => {
     expect(plan.sequence).toBe(2);
     expect(plan.toSupersede?.id).toBe("r1");
   });
-  it("void な版は番号計算から除外する", () => {
+  it("void な版も番号は消費する（版番号は制作物内で一意）。受付対象にはならない", () => {
     const voided = makeRevision({ id: "r2", sequence: 2, reviewState: "void" });
-    expect(
-      planRevision([makeRevision({ reviewState: "closed" }), voided], "standard").sequence,
-    ).toBe(2);
+    const plan = planRevision([makeRevision({ reviewState: "closed" }), voided], "standard");
+    expect(plan.sequence).toBe(3);
+    expect(plan.toSupersede).toBeNull();
   });
 });
 

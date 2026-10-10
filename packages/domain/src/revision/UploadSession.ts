@@ -26,6 +26,8 @@ export interface UploadSession {
   /** 放置されたセッションの清掃期限 */
   expiresAt: Instant;
   confirmedRevisionId?: string;
+  /** 確定時に作る専門確認（§2.2-4）。 */
+  requiredChecks?: Array<{ type: string; label: string; assigneeId?: string }>;
 }
 
 export type UploadItemStatus = "pending" | "uploaded" | "verified" | "failed";

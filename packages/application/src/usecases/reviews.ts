@@ -9,9 +9,11 @@ import {
   type Principal,
   type ReviewAssignment,
   type Revision,
+  revisionLabel,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
+import { notify } from "./notifications.ts";
 
 /**
  * 校正者の割当（F-05）。割当できる人は Nogiku の組織権限 `reviews:assign`、または作品の制作者・edit 委任者
@@ -30,12 +32,14 @@ export async function assignReviewers(
     throw new DomainError("forbidden", { action: "review.assign" });
   }
   const out: ReviewAssignment[] = [];
+  const newlyAssigned: string[] = [];
   for (const reviewerId of new Set(input.reviewerIds)) {
     const existing = await ctx.assignments.find(revision.id, reviewerId);
     if (existing) {
       out.push(existing);
       continue;
     }
+    newlyAssigned.push(reviewerId);
     const a: ReviewAssignment = {
       revisionId: revision.id,
       reviewerId,
@@ -53,7 +57,46 @@ export async function assignReviewers(
     after: input.reviewerIds,
     at: ctx.clock.now(),
   });
+  await notify(ctx, newlyAssigned, principal.userId, {
+    kind: "review_assigned",
+    title: `校正の割当: ${work.title} ${revisionLabel(revision)}`,
+    body: revision.focusNotes ? `見てほしい観点: ${revision.focusNotes}` : "校正をお願いします。",
+    workId: work.id,
+    revisionId: revision.id,
+  });
   return out;
+}
+
+/**
+ * 期限接近リマインド（F-11 / §10-3）: 受付中で期限が windowMs 以内、かつ未確認の割当に 1 回だけ通知する。
+ * 同じ内容を何度も送らない（冪等キーで版×校正者につき 1 回）。
+ */
+export async function remindUpcomingDeadlines(
+  ctx: AppContext,
+  windowMs = 24 * 3_600_000,
+  limit = 500,
+): Promise<number> {
+  const now = ctx.clock.now();
+  let sent = 0;
+  for (const a of await ctx.assignments.listUnresponded(limit)) {
+    const revision = await ctx.revisions.findById(a.revisionId);
+    if (!revision || revision.reviewState !== "open") continue;
+    if (revision.deadlineAt <= now || revision.deadlineAt - now > windowMs) continue;
+    const key = `${revision.id}:${a.reviewerId}`;
+    if (await ctx.idempotency.get("deadlineReminder", key)) continue;
+    const work = await ctx.works.findById(revision.workId);
+    if (!work) continue;
+    await notify(ctx, [a.reviewerId], null, {
+      kind: "deadline_approaching",
+      title: `校正期限が近づいています: ${work.title} ${revisionLabel(revision)}`,
+      body: "未確認の校正があります。期限を過ぎると新規の指摘はできません。",
+      workId: work.id,
+      revisionId: revision.id,
+    });
+    await ctx.idempotency.put("deadlineReminder", key, { sentAt: now });
+    sent++;
+  }
+  return sent;
 }
 
 /** 校正者が版を開いたとき。pending → viewed のみ。responded には自動遷移しない。 */

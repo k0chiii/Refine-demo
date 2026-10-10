@@ -3,6 +3,7 @@ import type {
   Artifact,
   CommentEvent,
   CommentThread,
+  RequiredCheck,
   ReviewAssignment,
   Revision,
   UploadItem,
@@ -10,7 +11,7 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
-import type { AppContext, AuditEntry } from "../ports.ts";
+import type { AppContext, AuditEntry, Notification } from "../ports.ts";
 
 /**
  * インメモリのポート実装。ユースケースの単体テストと、将来の UI プロトタイプ用。
@@ -67,6 +68,8 @@ export interface InMemoryContext extends AppContext {
     assignments: ReviewAssignment[];
     grants: WorkPermissionGrant[];
     approvals: ApprovalEvent[];
+    checks: Table<RequiredCheck>;
+    notifications: Table<Notification>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
   };
@@ -84,6 +87,8 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     assignments: [],
     grants: [],
     approvals: [],
+    checks: new Table<RequiredCheck>("chk"),
+    notifications: new Table<Notification>("ntf"),
     audit: [],
     idempotency: new Map(),
   };
@@ -121,6 +126,11 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       findItem: async (id) => state.items.get(id),
       insertItem: async (i) => state.items.insert(i),
       updateItem: async (i) => state.items.put(i),
+      listOpenExpired: async (t, limit) =>
+        state.sessions
+          .all()
+          .filter((s) => s.state === "open" && s.expiresAt <= t)
+          .slice(0, limit),
     },
     threads: {
       findById: async (id) => state.threads.get(id),
@@ -150,6 +160,11 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         if (i >= 0) state.assignments[i] = clone(a);
         else state.assignments.push(clone(a));
       },
+      listUnresponded: async (limit) =>
+        state.assignments
+          .filter((a) => a.state === "pending" || a.state === "viewed")
+          .map((a) => clone(a))
+          .slice(0, limit),
     },
     acl: {
       listByWork: async (workId) =>
@@ -185,6 +200,27 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       record: async (e) => {
         state.audit.push(clone(e));
       },
+    },
+    checks: {
+      findById: async (id) => state.checks.get(id),
+      listByRevision: async (revisionId) =>
+        state.checks.all().filter((c) => c.revisionId === revisionId),
+      insert: async (c) => state.checks.insert(c),
+      update: async (c) => state.checks.put(c),
+    },
+    notifications: {
+      insert: async (n) => state.notifications.insert(n),
+      listForUser: async (userId, limit) =>
+        state.notifications
+          .all()
+          .filter((n) => n.recipientId === userId)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, limit),
+      findById: async (id) => state.notifications.get(id),
+      update: async (n) => state.notifications.put(n),
+      countUnread: async (userId) =>
+        state.notifications.all().filter((n) => n.recipientId === userId && n.readAt === undefined)
+          .length,
     },
     idempotency: {
       get: async (scope, key) =>

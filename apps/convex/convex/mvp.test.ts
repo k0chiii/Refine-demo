@@ -350,4 +350,172 @@ describe("Convex 統合: 認可と状態遷移", () => {
       }),
     ).rejects.toThrow(code("approval_rough_revision"));
   });
+
+  it("v1: 専門確認・通知・担当者・訂正・持越・無効化・清掃が一周する", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+
+    // 提出時に専門確認を宣言（担当: reviewer）
+    const prepared = await cast.creator.as.mutation(api.submissions.prepare, {
+      workId,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: Date.now() + 2 * HOUR,
+      changeSummary: "初稿",
+      focusNotes: "",
+      items: [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf", role: "source" }],
+      requiredChecks: [{ type: "photo", label: "写真の権利確認", assigneeId: cast.reviewer.id }],
+    });
+    await cast.creator.as.mutation(api.submissions.markVerified, {
+      itemId: prepared.items[0]!.id as Id<"uploadItems">,
+      size: 1,
+      sha256: "a",
+    });
+    const { revisionId: rid1 } = await cast.creator.as.mutation(api.submissions.confirm, {
+      sessionId: prepared.sessionId as Id<"uploadSessions">,
+    });
+    const revisionId = rid1 as Id<"revisions">;
+
+    // 提出通知: 職責者（manager/approver）に届き、本人（creator）には届かない。確認担当にも依頼が届く
+    expect(await cast.manager.as.query(api.notifications.unreadCount, {})).toBe(1);
+    expect(await cast.creator.as.query(api.notifications.unreadCount, {})).toBe(0);
+    const reviewerNotes = await cast.reviewer.as.query(api.notifications.list, {});
+    expect(reviewerNotes.map((n) => n.kind)).toContain("check_requested");
+
+    // 校了は確認未完了でブロック。例外理由付きなら可（ここでは通常経路で完了させる）
+    await expect(
+      cast.approver.as.mutation(api.approvals.finalize, { workId, revisionId }),
+    ).rejects.toThrow(code("approval_required_checks_incomplete"));
+
+    const ws = await cast.reviewer.as.query(api.revisions.get, { revisionId });
+    expect(ws.checks).toHaveLength(1);
+    expect(ws.checks[0]).toMatchObject({ state: "pending", canComplete: true, canWaive: false });
+    expect(ws.can).toMatchObject({ void: false, addCheck: false });
+    const checkId = ws.checks[0]!.id as Id<"requiredChecks">;
+    // 無関係者は完了できない
+    await expect(cast.stranger.as.mutation(api.checks.complete, { checkId })).rejects.toThrow(
+      code("forbidden"),
+    );
+    expect(await cast.reviewer.as.mutation(api.checks.complete, { checkId, note: "OK" })).toBe(
+      "done",
+    );
+    await expect(cast.reviewer.as.mutation(api.checks.complete, { checkId })).rejects.toThrow(
+      code("check_already_done"),
+    );
+
+    // 指摘 → 担当者指定 → 本文訂正（本人のみ）
+    const threadId = (await cast.reviewer.as.mutation(api.comments.post, {
+      revisionId,
+      body: "誤字",
+      kind: "correction",
+      severity: "major",
+    })) as Id<"commentThreads">;
+    await cast.creator.as.mutation(api.comments.assign, { threadId, assigneeId: cast.manager.id });
+    await expect(
+      cast.creator.as.mutation(api.comments.edit, { threadId, body: "x" }),
+    ).rejects.toThrow(code("comment_edit_not_author"));
+    await cast.reviewer.as.mutation(api.comments.edit, { threadId, body: "誤字（3 ページ）" });
+    const ev = await cast.creator.as.query(api.comments.events, { threadId });
+    expect(ev.events.map((e) => e.eventType)).toEqual(["created", "assigned", "edited"]);
+    const ws2 = await cast.creator.as.query(api.revisions.get, { revisionId });
+    expect(ws2.threads[0]).toMatchObject({ body: "誤字（3 ページ）", editCount: 1 });
+    expect(ws2.threads[0]!.assignee?.id).toBe(cast.manager.id);
+
+    // 第 2 版を提出 → 前版の未解決指摘が持越候補 → 持越
+    vi.setSystemTime(Date.now() + HOUR);
+    const s2 = await submit(t, cast, workId);
+    const { revisionId: rid2 } = await cast.creator.as.mutation(api.submissions.confirm, {
+      sessionId: s2.sessionId,
+    });
+    const revision2 = rid2 as Id<"revisions">;
+    const candidates = await cast.creator.as.query(api.comments.carryCandidates, {
+      revisionId: revision2,
+    });
+    expect(candidates.map((c) => c.id)).toEqual([threadId]);
+    expect(candidates[0]!.revisionLabel).toBe("第1版");
+    const carried = await cast.creator.as.mutation(api.comments.carryForward, {
+      threadId,
+      targetRevisionId: revision2,
+    });
+    expect(
+      await cast.creator.as.query(api.comments.carryCandidates, { revisionId: revision2 }),
+    ).toEqual([]);
+    const ws3 = await cast.creator.as.query(api.revisions.get, { revisionId: revision2 });
+    expect(ws3.threads.map((th) => th.id)).toEqual([carried]);
+    expect(ws3.threads[0]).toMatchObject({ carriedFromThreadId: threadId, resolution: "open" });
+
+    // 誤提出の無効化（理由必須・受付中のみ）
+    await expect(
+      cast.creator.as.mutation(api.submissions.voidRevision, {
+        revisionId: revision2,
+        reason: " ",
+      }),
+    ).rejects.toThrow(code("revision_void_reason_required"));
+    await expect(
+      cast.reviewer.as.mutation(api.submissions.voidRevision, {
+        revisionId: revision2,
+        reason: "x",
+      }),
+    ).rejects.toThrow(code("forbidden"));
+    await cast.creator.as.mutation(api.submissions.voidRevision, {
+      revisionId: revision2,
+      reason: "別作品のファイルを提出した",
+    });
+    await expect(
+      cast.creator.as.mutation(api.submissions.voidRevision, { revisionId, reason: "x" }),
+    ).rejects.toThrow(code("revision_void_not_allowed"));
+    // 無効化後の次版は欠番にならず第 3 版
+    const s3 = await submit(t, cast, workId);
+    const r3 = await cast.creator.as.mutation(api.submissions.confirm, { sessionId: s3.sessionId });
+    expect(r3.sequence).toBe(3);
+
+    // 期限リマインド: 第 3 版の割当者に 1 回だけ
+    await cast.manager.as.mutation(api.reviews.assign, {
+      revisionId: r3.revisionId as Id<"revisions">,
+      reviewerIds: [cast.reviewer.id],
+      reviewType: "general",
+    });
+    expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);
+    expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(0);
+    const notes = await cast.reviewer.as.query(api.notifications.list, {});
+    expect(notes.filter((n) => n.kind === "deadline_approaching")).toHaveLength(1);
+    const unread = await cast.reviewer.as.query(api.notifications.unreadCount, {});
+    await cast.reviewer.as.mutation(api.notifications.markRead, {
+      notificationId: notes[0]!.id as Id<"notifications">,
+    });
+    expect(await cast.reviewer.as.query(api.notifications.unreadCount, {})).toBe(unread - 1);
+    await cast.reviewer.as.mutation(api.notifications.markAllRead, {});
+    expect(await cast.reviewer.as.query(api.notifications.unreadCount, {})).toBe(0);
+    // 他人の通知は既読にできない
+    await expect(
+      cast.manager.as.mutation(api.notifications.markRead, {
+        notificationId: notes[0]!.id as Id<"notifications">,
+      }),
+    ).rejects.toThrow(code("forbidden"));
+
+    // 放置セッションの清掃: 期限切れ open セッションだけ abandoned
+    const stale = await cast.creator.as.mutation(api.submissions.prepare, {
+      workId,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: Date.now() + 48 * HOUR,
+      changeSummary: "放置",
+      focusNotes: "",
+      items: [{ fileName: "z.pdf", mimeType: "application/pdf", type: "pdf", role: "source" }],
+    });
+    expect(await t.mutation(internal.submissions.expireSessions, {})).toBe(0);
+    vi.setSystemTime(stale.expiresAt + 1);
+    expect(await t.mutation(internal.submissions.expireSessions, {})).toBe(1);
+    const staleState = await cast.creator.as.query(api.submissions.get, {
+      sessionId: stale.sessionId as Id<"uploadSessions">,
+    });
+    expect(staleState.session.state).toBe("abandoned");
+
+    // ユーザー検索は一般利用者も可（表示名・メールのみ）
+    const found = await cast.creator.as.query(api.users.search, { text: "review" });
+    expect(found).toEqual([
+      { id: cast.reviewer.id, name: "reviewer", email: "reviewer@example.invalid" },
+    ]);
+  });
 });

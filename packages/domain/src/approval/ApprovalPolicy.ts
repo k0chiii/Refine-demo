@@ -1,4 +1,5 @@
 import type { CommentThread, Severity } from "../comment/CommentThread.ts";
+import { incompleteChecks, type RequiredCheck } from "../review/RequiredCheck.ts";
 import { isBlockingForApproval } from "../comment/CommentThread.ts";
 import type { Revision } from "../revision/Revision.ts";
 import { latestStandardRevision } from "../revision/Revision.ts";
@@ -18,12 +19,15 @@ export interface ApprovalPolicy {
   allowSelfApproval: boolean;
   /** 例外校了（重大未解決を残して校了）を許すか。 */
   allowException: boolean;
+  /** 専門確認（必須チェック）が未完了なら校了をブロックするか（C3 / D6）。 */
+  requireChecksComplete: boolean;
 }
 
 export const defaultApprovalPolicy: ApprovalPolicy = {
   blockingSeverities: ["critical", "major"],
   allowSelfApproval: false,
   allowException: true,
+  requireChecksComplete: true,
 };
 
 export interface FinalizationRequest {
@@ -32,6 +36,8 @@ export interface FinalizationRequest {
   revisions: readonly Revision[];
   /** 対象版に紐づくスレッド（前版の持越しを含めるかは呼び出し側で決める） */
   threads: readonly CommentThread[];
+  /** 対象版の専門確認。未指定なら無し。 */
+  checks?: readonly RequiredCheck[];
   actorId: UserId;
   exceptionReason?: string;
   /** D2 暫定: 自己校了時に独立した確認者の証跡（ユーザー ID）があれば許容する余地を残す。 */
@@ -42,6 +48,7 @@ export interface FinalizationRequest {
 export interface FinalizationOutcome {
   revision: Revision;
   blockingThreadIds: readonly string[];
+  incompleteCheckIds: readonly string[];
   usedException: boolean;
   requiredChecksSnapshot: Record<string, unknown>;
 }
@@ -86,11 +93,17 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
     )
     .map((t) => t.id);
 
+  const incomplete = policy.requireChecksComplete
+    ? incompleteChecks(req.checks ?? [])
+        .filter((c) => c.revisionId === target.id)
+        .map((c) => c.id)
+    : [];
+
   let usedException = false;
+  const reason = req.exceptionReason?.trim() ?? "";
   if (blocking.length > 0) {
     if (!policy.allowException)
       throw new DomainError("approval_blocking_threads_remain", { blocking });
-    const reason = req.exceptionReason?.trim() ?? "";
     if (reason === "")
       throw new DomainError("approval_blocking_threads_remain", {
         blocking,
@@ -98,14 +111,28 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
       });
     usedException = true;
   }
+  if (incomplete.length > 0) {
+    if (!policy.allowException || reason === "") {
+      throw new DomainError("approval_required_checks_incomplete", {
+        incomplete,
+        hint: "exception_reason_required",
+      });
+    }
+    usedException = true;
+  }
 
   return {
     revision: target,
     blockingThreadIds: blocking,
+    incompleteCheckIds: incomplete,
     usedException,
     requiredChecksSnapshot: {
       policy,
       blockingThreadIds: blocking,
+      incompleteCheckIds: incomplete,
+      checks: (req.checks ?? [])
+        .filter((c) => c.revisionId === target.id)
+        .map((c) => ({ id: c.id, type: c.type, state: c.state, doneBy: c.doneBy ?? null })),
       selfApproval: isSelf,
       independentConfirmerId: req.independentConfirmerId ?? null,
       revisionSequence: target.sequence,

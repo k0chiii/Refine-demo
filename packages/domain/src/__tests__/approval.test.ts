@@ -66,6 +66,7 @@ describe("evaluateFinalization（校了ガード / C3, C6, D2, A-08）", () => {
           blockingSeverities: ["critical"],
           allowSelfApproval: false,
           allowException: false,
+          requireChecksComplete: true,
         },
       }),
     ).toThrow();

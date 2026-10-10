@@ -1,5 +1,13 @@
-import { decideThread, postComment, replyToThread } from "@mf100/application";
-import { DomainError, isAllowed } from "@mf100/domain";
+import {
+  assignThread,
+  carryForwardThread,
+  decideThread,
+  editThread,
+  listCarryCandidates,
+  postComment,
+  replyToThread,
+} from "@mf100/application";
+import { DomainError, isAllowed, revisionLabel } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
@@ -82,6 +90,72 @@ export const events = query({
           .map((e) => ({ ...e, actor: users.get(e.actorId) }))
           .sort((a, b) => a.createdAt - b.createdAt),
       };
+    });
+  },
+});
+
+/** 指摘の対応担当者を指定／解除（v1）。採否判断権限者のみ。 */
+export const assign = mutation({
+  args: { threadId: v.id("commentThreads"), assigneeId: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await assignThread(createAppContext(ctx.db), principal, args);
+      return null;
+    });
+  },
+});
+
+/** 自分の指摘本文の訂正（v1）。原文は履歴イベントに残る。 */
+export const edit = mutation({
+  args: { threadId: v.id("commentThreads"), body: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await editThread(createAppContext(ctx.db), principal, args);
+      return null;
+    });
+  },
+});
+
+/** 前版の未解決指摘のうち、この版へ持ち越せる候補（v1 / C5）。 */
+export const carryCandidates = query({
+  args: { revisionId: v.id("revisions") },
+  handler: async (ctx, { revisionId }) => {
+    const { principal } = await requireUser(ctx);
+    const app = createReadContext(ctx.db);
+    return runUseCase(async () => {
+      const candidates = await listCarryCandidates(app, principal, revisionId);
+      const revisions = new Map<string, string>();
+      for (const c of candidates) {
+        if (!revisions.has(c.revisionId)) {
+          const r = await app.revisions.findById(c.revisionId);
+          revisions.set(c.revisionId, r ? revisionLabel(r) : "?");
+        }
+      }
+      const users = await resolveUsers(
+        ctx.db,
+        candidates.map((c) => c.authorId),
+      );
+      return candidates
+        .map((c) => ({
+          ...c,
+          author: users.get(c.authorId),
+          revisionLabel: revisions.get(c.revisionId) ?? "?",
+        }))
+        .sort((a, b) => a.createdAt - b.createdAt);
+    });
+  },
+});
+
+/** 前版の指摘を次版へ持ち越す（人が確認して実行。AI 提案は後続）。 */
+export const carryForward = mutation({
+  args: { threadId: v.id("commentThreads"), targetRevisionId: v.id("revisions") },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      const created = await carryForwardThread(createAppContext(ctx.db), principal, args);
+      return created.id;
     });
   },
 });

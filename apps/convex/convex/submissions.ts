@@ -1,16 +1,18 @@
 import {
   confirmSubmission,
+  expireUploadSessions,
   prepareSubmission,
   recordItemFailed,
   recordItemVerified,
   resetItem,
+  voidRevisionUseCase,
 } from "@mf100/application";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { vArtifactRole, vArtifactType, vRevisionKind } from "./lib/validators.ts";
+import { vArtifactRole, vArtifactType, vCheckType, vRevisionKind } from "./lib/validators.ts";
 import { DomainError } from "@mf100/domain";
 
 /** 版提出の準備（U-04 / F-04）。Revision はまだ作らない。 */
@@ -31,6 +33,11 @@ export const prepare = mutation({
         declaredSize: v.optional(v.number()),
         externalUrl: v.optional(v.string()),
       }),
+    ),
+    requiredChecks: v.optional(
+      v.array(
+        v.object({ type: vCheckType, label: v.string(), assigneeId: v.optional(v.string()) }),
+      ),
     ),
     requestId: v.optional(v.string()),
   },
@@ -166,5 +173,26 @@ export const itemForUpload = query({
         fileName: item.fileName,
       };
     });
+  },
+});
+
+/** 誤提出した版の無効化（v1）。受付中の版のみ。理由必須。以後の版番号は欠番にならない。 */
+export const voidRevision = mutation({
+  args: { revisionId: v.id("revisions"), reason: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      const r = await voidRevisionUseCase(createAppContext(ctx.db), principal, args);
+      return { reviewState: r.reviewState };
+    });
+  },
+});
+
+/** cron: 期限切れの open なアップロードセッションを abandoned にする（D14 の清掃）。 */
+export const expireSessions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ids = await expireUploadSessions(createAppContext(ctx.db), 100);
+    return ids.length;
   },
 });

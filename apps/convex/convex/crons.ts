@@ -7,4 +7,8 @@ import { internal } from "./_generated/api";
  */
 const crons = cronJobs();
 crons.interval("close expired review windows", { minutes: 1 }, internal.revisions.closeExpired, {});
+/** 期限 24h 前の未確認校正者へのアプリ内リマインド（F-11）。冪等キーで二重通知なし（A-10）。 */
+crons.interval("remind upcoming deadlines", { hours: 1 }, internal.revisions.remindDeadlines, {});
+/** 放置アップロードセッションの清掃（D14）。R2 の孤立オブジェクト削除は Hono 側の後続。 */
+crons.interval("expire upload sessions", { hours: 1 }, internal.submissions.expireSessions, {});
 export default crons;

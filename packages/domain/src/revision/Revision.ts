@@ -47,13 +47,15 @@ export interface RevisionPlan {
 }
 
 export function planRevision(existing: readonly Revision[], kind: RevisionKind): RevisionPlan {
+  // 版番号は無効化した版も含めて一意（§5.2-6: 誤提出の訂正は履歴を持つ）
+  const standards = existing.filter((r) => r.kind === "standard");
+  const roughs = existing.filter((r) => r.kind === "rough");
   const live = existing.filter((r) => r.reviewState !== "void");
-  const standards = live.filter((r) => r.kind === "standard");
-  const roughs = live.filter((r) => r.kind === "rough");
 
   let sequence: number;
   if (kind === "rough") {
-    if (standards.length > 0) throw new DomainError("revision_rough_after_standard");
+    if (standards.some((r) => r.reviewState !== "void"))
+      throw new DomainError("revision_rough_after_standard");
     sequence = roughs.length;
   } else {
     sequence = standards.reduce((max, r) => Math.max(max, r.sequence), 0) + 1;
@@ -159,6 +161,25 @@ export function assertCanPostComment(
       latestAcceptingRevisionId,
     });
   }
+}
+
+/**
+ * 誤提出の無効化（§5.2-6）。受付中の最新版のみ、理由必須。指摘・添付は履歴として残す（削除しない）。
+ * 無効化後は受付中の版が無くなる（旧版は再開しない。必要なら正しい版を再提出する）。
+ */
+export function voidRevision(
+  revision: Revision,
+  reason: string | undefined,
+  now: Instant,
+): Revision {
+  if (revision.reviewState !== "open")
+    throw new DomainError("revision_void_not_allowed", {
+      revisionId: revision.id,
+      reviewState: revision.reviewState,
+    });
+  const r = reason?.trim() ?? "";
+  if (r === "") throw new DomainError("revision_void_reason_required");
+  return { ...revision, reviewState: "void", reviewClosedReason: "void", reviewClosedAt: now };
 }
 
 /** 校了候補となる最終版: void でない最新の standard 版（0版からの直接校了は制度承認まで不可）。 */

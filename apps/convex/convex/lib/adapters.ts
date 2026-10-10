@@ -1,9 +1,10 @@
-import type { AppContext } from "@mf100/application";
+import type { AppContext, Notification } from "@mf100/application";
 import type {
   ApprovalEvent,
   Artifact,
   CommentEvent,
   CommentThread,
+  RequiredCheck,
   ReviewAssignment,
   Revision,
   UploadItem,
@@ -164,6 +165,13 @@ export function createAppContext(
         const id = await db.insert("uploadItems", compact(item as Strip<Doc<"uploadItems">>));
         return { ...item, id } as UploadItem;
       },
+      async listOpenExpired(now, limit) {
+        const docs = await db
+          .query("uploadSessions")
+          .withIndex("by_state_expires", (q) => q.eq("state", "open").lte("expiresAt", now))
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as UploadSession);
+      },
       async updateItem(item) {
         await db.replace(
           item.id as Id<"uploadItems">,
@@ -247,6 +255,70 @@ export function createAppContext(
         });
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
+      },
+      async listUnresponded(limit) {
+        const pending = await db
+          .query("reviewAssignments")
+          .withIndex("by_reviewer_state")
+          .filter((q) => q.or(q.eq(q.field("state"), "pending"), q.eq(q.field("state"), "viewed")))
+          .take(limit);
+        return pending.map(stripAssignment);
+      },
+    },
+    checks: {
+      async findById(id) {
+        const doc = await db.get("requiredChecks", id as Id<"requiredChecks">).catch(() => null);
+        return doc ? (fromDoc(doc) as RequiredCheck) : null;
+      },
+      async listByRevision(revisionId) {
+        const docs = await db
+          .query("requiredChecks")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId as Id<"revisions">))
+          .collect();
+        return docs.map((d) => fromDoc(d) as RequiredCheck);
+      },
+      async insert(check) {
+        const id = await db.insert(
+          "requiredChecks",
+          compact({ ...check, revisionId: check.revisionId as Id<"revisions"> }),
+        );
+        return { ...check, id } as RequiredCheck;
+      },
+      async update(check) {
+        await db.replace(
+          check.id as Id<"requiredChecks">,
+          compact({ ...toFields(check), revisionId: check.revisionId as Id<"revisions"> }),
+        );
+      },
+    },
+    notifications: {
+      async insert(n) {
+        const id = await db.insert("notifications", compact(n));
+        return { ...n, id } as Notification;
+      },
+      async listForUser(userId, limit) {
+        const docs = await db
+          .query("notifications")
+          .withIndex("by_recipient", (q) => q.eq("recipientId", userId))
+          .order("desc")
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as Notification);
+      },
+      async findById(id) {
+        const doc = await db.get("notifications", id as Id<"notifications">).catch(() => null);
+        return doc ? (fromDoc(doc) as Notification) : null;
+      },
+      async update(n) {
+        await db.replace(n.id as Id<"notifications">, compact(toFields(n)));
+      },
+      async countUnread(userId) {
+        const docs = await db
+          .query("notifications")
+          .withIndex("by_recipient_read", (q) =>
+            q.eq("recipientId", userId).eq("readAt", undefined),
+          )
+          .take(100);
+        return docs.length;
       },
     },
     acl: {

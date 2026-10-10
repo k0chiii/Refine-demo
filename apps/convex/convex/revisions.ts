@@ -1,4 +1,9 @@
-import { closeExpiredReviews, loadAuthorizedWork, markRevisionViewed } from "@mf100/application";
+import {
+  closeExpiredReviews,
+  loadAuthorizedWork,
+  markRevisionViewed,
+  remindUpcomingDeadlines,
+} from "@mf100/application";
 import { DomainError, isAccepting, isAllowed, revisionLabel } from "@mf100/domain";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
@@ -32,12 +37,19 @@ export const get = query({
       const artifacts = await app.artifacts.listByRevision(revision.id);
       const threads = await app.threads.listByRevision(revision.id);
       const assignments = await app.assignments.listByRevision(revision.id);
+      const checks = await app.checks.listByRevision(revision.id);
       const users = await resolveUsers(ctx.db, [
         ...threads.map((t) => t.authorId),
+        ...threads.flatMap((t) => (t.assigneeId ? [t.assigneeId] : [])),
         ...assignments.map((a) => a.reviewerId),
+        ...checks.flatMap((c) => [
+          ...(c.assigneeId ? [c.assigneeId] : []),
+          ...(c.doneBy ? [c.doneBy] : []),
+        ]),
         revision.submittedBy,
       ]);
       const myAssignment = assignments.find((a) => a.reviewerId === principal.userId) ?? null;
+      const canManageChecks = isAllowed("work.edit", authz) || isAllowed("work.finalize", authz);
       const canPostNow =
         isAllowed("comment.post", authz) &&
         work.lifecycle !== "finalized" &&
@@ -58,15 +70,38 @@ export const get = query({
         },
         artifacts,
         threads: threads
-          .map((t) => ({ ...t, author: users.get(t.authorId) }))
+          .map((t) => ({
+            ...t,
+            author: users.get(t.authorId),
+            assignee: t.assigneeId ? users.get(t.assigneeId) : null,
+          }))
           .sort((a, b) => a.createdAt - b.createdAt),
         assignments: assignments.map((a) => ({ ...a, reviewer: users.get(a.reviewerId) })),
+        checks: checks.map((c) => ({
+          ...c,
+          assignee: c.assigneeId ? users.get(c.assigneeId) : null,
+          doneByUser: c.doneBy ? users.get(c.doneBy) : null,
+          canComplete:
+            c.state === "pending" &&
+            work.lifecycle !== "finalized" &&
+            (c.assigneeId === principal.userId || canManageChecks),
+          canWaive: c.state === "pending" && work.lifecycle !== "finalized" && canManageChecks,
+        })),
         myAssignment,
         acceptingRevisionId: accepting?.id ?? null,
         can: {
           comment: canPostNow,
           decide: isAllowed("comment.decide", authz) && work.lifecycle !== "finalized",
           assign: isAllowed("review.assign", authz),
+          addCheck: isAllowed("review.assign", authz) && work.lifecycle !== "finalized",
+          void:
+            isAllowed("revision.submit", authz) &&
+            work.lifecycle !== "finalized" &&
+            revision.reviewState === "open",
+          carryForward:
+            isAllowed("comment.decide", authz) &&
+            work.lifecycle !== "finalized" &&
+            accepting?.id === revision.id,
           completeReview:
             myAssignment !== null &&
             myAssignment.state !== "responded" &&
@@ -112,4 +147,10 @@ export const closeExpired = internalMutation({
     const closed = await closeExpiredReviews(createAppContext(ctx.db), 200);
     return closed.length;
   },
+});
+
+/** cron: 期限 24 時間前の未確認校正者へリマインド（F-11 最小通知）。同一版×校正者に 1 回。 */
+export const remindDeadlines = internalMutation({
+  args: {},
+  handler: async (ctx) => remindUpcomingDeadlines(createAppContext(ctx.db)),
 });

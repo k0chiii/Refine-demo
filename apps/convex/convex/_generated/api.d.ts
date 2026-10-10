@@ -13,14 +13,17 @@ import type * as admin from "../admin.js";
 import type * as approvals from "../approvals.js";
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
+import type * as checks from "../checks.js";
 import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as me from "../me.js";
+import type * as notifications from "../notifications.js";
 import type * as reviews from "../reviews.js";
 import type * as revisions from "../revisions.js";
 import type * as seed from "../seed.js";
 import type * as submissions from "../submissions.js";
+import type * as users from "../users.js";
 import type * as works from "../works.js";
 import type { ApiFromModules, FilterApi, FunctionReference, AnyComponents } from "convex/server";
 
@@ -30,14 +33,17 @@ declare const fullApi: ApiFromModules<{
   approvals: typeof approvals;
   artifacts: typeof artifacts;
   auth: typeof auth;
+  checks: typeof checks;
   comments: typeof comments;
   crons: typeof crons;
   http: typeof http;
   me: typeof me;
+  notifications: typeof notifications;
   reviews: typeof reviews;
   revisions: typeof revisions;
   seed: typeof seed;
   submissions: typeof submissions;
+  users: typeof users;
   works: typeof works;
 }>;
 

@@ -214,9 +214,15 @@ export default defineSchema({
     createdAt: v.number(),
     expiresAt: v.number(),
     confirmedRevisionId: v.optional(v.string()),
+    requiredChecks: v.optional(
+      v.array(
+        v.object({ type: v.string(), label: v.string(), assigneeId: v.optional(v.string()) }),
+      ),
+    ),
   })
     .index("by_work", ["workId"])
-    .index("by_submitter", ["submittedBy", "state"]),
+    .index("by_submitter", ["submittedBy", "state"])
+    .index("by_state_expires", ["state", "expiresAt"]),
 
   uploadItems: defineTable({
     sessionId: v.id("uploadSessions"),
@@ -245,6 +251,9 @@ export default defineSchema({
     resolution,
     createdAt: v.number(),
     carriedFromThreadId: v.optional(v.string()),
+    carriedToThreadId: v.optional(v.string()),
+    assigneeId: v.optional(v.string()),
+    editCount: v.optional(v.number()),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
@@ -257,6 +266,7 @@ export default defineSchema({
       v.literal("decided"),
       v.literal("edited"),
       v.literal("carried_forward"),
+      v.literal("assigned"),
     ),
     actorId: v.string(),
     reason: v.optional(v.string()),
@@ -275,6 +285,42 @@ export default defineSchema({
     .index("by_revision", ["revisionId"])
     .index("by_revision_reviewer", ["revisionId", "reviewerId"])
     .index("by_reviewer_state", ["reviewerId", "state"]),
+
+  /** 専門確認（必須チェック）（§2.2-4） */
+  requiredChecks: defineTable({
+    revisionId: v.id("revisions"),
+    type: v.union(
+      v.literal("photo"),
+      v.literal("name"),
+      v.literal("language"),
+      v.literal("rules"),
+      v.literal("design"),
+      v.literal("other"),
+    ),
+    label: v.string(),
+    assigneeId: v.optional(v.string()),
+    state: v.union(v.literal("pending"), v.literal("done"), v.literal("waived")),
+    doneBy: v.optional(v.string()),
+    doneAt: v.optional(v.number()),
+    note: v.optional(v.string()),
+  })
+    .index("by_revision", ["revisionId"])
+    .index("by_assignee_state", ["assigneeId", "state"]),
+
+  /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
+  notifications: defineTable({
+    recipientId: v.string(),
+    kind: v.string(),
+    title: v.string(),
+    body: v.string(),
+    workId: v.optional(v.string()),
+    revisionId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    createdAt: v.number(),
+    readAt: v.optional(v.number()),
+  })
+    .index("by_recipient", ["recipientId", "createdAt"])
+    .index("by_recipient_read", ["recipientId", "readAt"]),
 
   approvalEvents: defineTable({
     workId: v.id("works"),

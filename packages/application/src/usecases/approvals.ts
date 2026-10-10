@@ -10,6 +10,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
+import { notify, workStakeholders } from "./notifications.ts";
 
 export interface FinalizeWorkInput {
   workId: string;
@@ -41,11 +42,13 @@ export async function finalizeWork(
     assertExpectedVersion(work, input.expectedVersion);
     const revisions = await ctx.revisions.listByWork(work.id);
     const threads = await ctx.threads.listByRevision(input.revisionId);
+    const checks = await ctx.checks.listByRevision(input.revisionId);
     const req: Parameters<typeof evaluateFinalization>[0] = {
       work,
       revisionId: input.revisionId,
       revisions,
       threads,
+      checks,
       actorId: principal.userId,
     };
     if (input.exceptionReason !== undefined) req.exceptionReason = input.exceptionReason;
@@ -82,6 +85,16 @@ export async function finalizeWork(
       before: { lifecycle: work.lifecycle },
       after: { lifecycle: "finalized", finalRevisionId: outcome.revision.id },
       at: now,
+    });
+    const reviewers = (await ctx.assignments.listByRevision(outcome.revision.id)).map(
+      (a) => a.reviewerId,
+    );
+    await notify(ctx, [...workStakeholders(work), ...reviewers], principal.userId, {
+      kind: "work_finalized",
+      title: `校了: ${work.title}`,
+      body: `${event.action === "exception_finalized" ? "例外校了（理由付き）" : "校了"}が宣言されました。`,
+      workId: work.id,
+      revisionId: outcome.revision.id,
     });
     return { work: next, event };
   });
@@ -120,6 +133,12 @@ export async function reopenWork(
     before: { finalRevisionId: work.finalRevisionId },
     after: { lifecycle: "active" },
     at: now,
+  });
+  await notify(ctx, workStakeholders(work), principal.userId, {
+    kind: "work_reopened",
+    title: `校了を解除して再開: ${work.title}`,
+    body: `理由: ${reason}`,
+    workId: work.id,
   });
   return { work: next, event };
 }
