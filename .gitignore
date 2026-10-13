@@ -12,6 +12,7 @@ dist-demo/
 .env
 .env.*
 !.env.example
+.dev.vars
 
 # Convex のデプロイメント設定（個人の dev deployment を指す）
 apps/convex/.env.local

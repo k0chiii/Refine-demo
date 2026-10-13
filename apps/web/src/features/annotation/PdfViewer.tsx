@@ -1,8 +1,8 @@
 import type { Anchor, NormalizedRect, Viewport } from "@mf100/domain";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { useEffect, useRef, useState } from "react";
-import { M3eIconButton, M3eIcon } from "@/ui/m3e";
+import { M3eIcon, M3eIconButton } from "@/ui/m3e";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 
 // Vite がワーカーを別チャンクとして配信する
@@ -18,9 +18,17 @@ interface Props {
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
   selecting: boolean;
-  draft: { page: number; rect?: NormalizedRect; point?: { x: number; y: number } } | null;
+  draft: {
+    page: number;
+    rect?: NormalizedRect;
+    point?: { x: number; y: number };
+  } | null;
   onDraft: (
-    d: { page: number; rect?: NormalizedRect; point?: { x: number; y: number } } | null,
+    d: {
+      page: number;
+      rect?: NormalizedRect;
+      point?: { x: number; y: number };
+    } | null,
   ) => void;
   /** 指摘カードから「位置へ移動」したときのページ移動要求 */
   requestedPage: number | null;
@@ -52,7 +60,13 @@ export function PdfViewer({
     let cancelled = false;
     void blob.arrayBuffer().then((data) =>
       pdfjs
-        .getDocument({ data })
+        .getDocument({
+          data,
+          cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
+          cMapPacked: true,
+          standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
+          useSystemFonts: true,
+        })
         .promise.then((d) => {
           if (!cancelled) setDoc(d);
         })
@@ -72,7 +86,10 @@ export function PdfViewer({
     let cancelled = false;
     void doc.getPage(page).then(async (p) => {
       if (cancelled) return;
-      const vp = p.getViewport({ scale, rotation: (p.rotate + rotation) % 360 });
+      const vp = p.getViewport({
+        scale,
+        rotation: (p.rotate + rotation) % 360,
+      });
       const canvas = canvasRef.current!;
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.floor(vp.width * dpr);
