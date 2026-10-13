@@ -941,22 +941,15 @@ m3e-search-bar {
   transform: rotate(90deg);
 }
 
-/* アカウント（右上） */
-.account-avatar {
-  --m3e-avatar-size: 32px;
-  --m3e-avatar-font-size: 14px;
-  --m3e-avatar-color: var(--mf-primary-container);
-  --m3e-avatar-label-color: var(--mf-on-primary-container);
+/* アカウント（右上）: Humation アバター */
+.user-avatar {
+  display: block;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--mf-surface-container-high);
 }
-.account-avatar m3e-icon {
-  font-size: 20px;
-}
-.account-avatar--large m3e-icon {
-  font-size: 24px;
-}
-.account-avatar--large {
-  --m3e-avatar-size: 40px;
-  --m3e-avatar-font-size: 16px;
+.user-avatar--placeholder {
+  display: inline-block;
 }
 .account-menu__header {
   display: flex;

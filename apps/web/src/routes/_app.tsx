@@ -5,7 +5,6 @@ import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect } from "react";
 import {
   M3eAppBar,
-  M3eAvatar,
   M3eBadge,
   M3eIcon,
   M3eIconButton,
@@ -16,12 +15,13 @@ import {
   M3eNavItem,
   M3eNavRail,
 } from "@/ui/m3e";
+import { UserAvatar } from "@/ui/UserAvatar";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
 /**
  * 認証ガード＋共通レイアウト。広い画面は navigation rail、狭い画面は navigation bar。
- * 右上はアカウント（アバター → 氏名・メール・サインアウトのメニュー）。
+ * 右上はアカウント（Humation のアバター → 氏名・メール・サインアウトのメニュー）。
  */
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -73,17 +73,15 @@ function AppLayout() {
         <M3eAppBar size="small">
           <span slot="title">MF100 校正</span>
           <M3eIconButton slot="trailing-icon" aria-label={`アカウント: ${me.name}`}>
-            <M3eAvatar className="account-avatar">
-              <M3eIcon name="person" className="icon--filled" />
-            </M3eAvatar>
+            <UserAvatar seed={me.email ?? me.id} size={32} />
             <M3eMenuTrigger htmlFor="account-menu" />
           </M3eIconButton>
         </M3eAppBar>
         <M3eMenu id="account-menu" positionX="before">
           <div className="account-menu__header">
-            <M3eAvatar className="account-avatar account-avatar--large">
-              <M3eIcon name="person" className="icon--filled" />
-            </M3eAvatar>
+            <span aria-hidden="true">
+              <UserAvatar seed={me.email ?? me.id} size={40} />
+            </span>
             <div>
               <div className="label-large">{me.name}</div>
               {me.email ? <div className="small muted">{me.email}</div> : null}

@@ -88,6 +88,12 @@ importers:
       '@fontsource/noto-sans-jp':
         specifier: 5.3.0
         version: 5.3.0
+      '@humation/assets-humation-1':
+        specifier: ^1.0.3
+        version: 1.0.3
+      '@humation/react':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)
       '@lit/react':
         specifier: 1.0.8
         version: 1.0.8(@types/react@19.3.0)
@@ -660,6 +666,20 @@ packages:
 
   '@fontsource/noto-sans-jp@5.3.0':
     resolution: {integrity: sha512-OZbBzZ8LrFRs2RFT2Cc0HUV2C2ZeSfyEXhDJWR0EZuZaraJfRubpvrFmUnCljuBDEkw8Vn6CE/+nf9dj9b+0lg==}
+
+  '@humation/assets-humation-1@1.0.3':
+    resolution: {integrity: sha512-wZrNdi6/T/mwjStq6tRxxF9JJ713yc5W+edesHqLnOXcwZ2ffumoKkzqjRv1qW+MUPvTwdkxkyG3sbgaqFXMuw==}
+    engines: {node: '>=18.0.0'}
+
+  '@humation/core@1.0.3':
+    resolution: {integrity: sha512-m161o5C1/aVNN1gtgt8txTHOkbHBy0FZM8kAmkG9uTSM7+Ub1a1m99slAsE5y83pOLPkRIeV1ecgxzBFfZf3bQ==}
+    engines: {node: '>=18.0.0'}
+
+  '@humation/react@1.0.3':
+    resolution: {integrity: sha512-SxNU5dMuPhb+vYKitWbqjjjXDyWv7W/4iazdiKUXRm86O3bR1oG4y6Wxw4QgAWE78ew1Kw3I/bLQcUUizlhz+A==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2815,6 +2835,17 @@ snapshots:
   '@fontsource-variable/material-symbols-outlined@5.3.8': {}
 
   '@fontsource/noto-sans-jp@5.3.0': {}
+
+  '@humation/assets-humation-1@1.0.3':
+    dependencies:
+      '@humation/core': 1.0.3
+
+  '@humation/core@1.0.3': {}
+
+  '@humation/react@1.0.3(react@19.3.0)':
+    dependencies:
+      '@humation/core': 1.0.3
+      react: 19.3.0
 
   '@img/colour@1.1.0': {}
 
