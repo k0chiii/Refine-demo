@@ -6,7 +6,8 @@ import { jstLocalToEpoch } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton } from "@/ui/m3e";
+import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 
 export const Route = createFileRoute("/_app/works/new")({ component: NewWork });
@@ -48,7 +49,7 @@ function NewWork() {
     setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <>
-      <h1 className="page-title">制作物を登録</h1>
+      <PageHeader title="制作物を登録" />
       <form className="form" onSubmit={(e) => void run(e)}>
         <Field label="名称" required>
           <TextInput required value={form.title} onChange={set("title")} />
@@ -97,7 +98,12 @@ function NewWork() {
           onChange={setApproverIds}
           hint="校了を宣言できるのはこの一人だけです（C3）。制作者本人を指定すると、独立確認なしの自己校了は拒否されます（D2 暫定）。"
         />
-        {error ? <div className="alert">{error.message}</div> : null}
+        {error ? (
+          <div className="alert">
+            <M3eIcon name="error" />
+            {error.message}
+          </div>
+        ) : null}
         <div className="form__actions">
           <M3eButton variant="text" type="button" onClick={() => navigate({ to: "/works" })}>
             キャンセル
@@ -107,6 +113,7 @@ function NewWork() {
             type="submit"
             disabled={pending || creatorIds.length === 0 || approverIds.length === 0}
           >
+            <M3eIcon slot="icon" name="add" />
             登録する
           </M3eButton>
         </div>

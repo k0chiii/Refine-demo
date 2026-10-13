@@ -13,8 +13,12 @@ import {
   reviewStateLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
+import { lifecycleTone } from "../index";
+import { Card } from "@/ui/Card";
+import { StatusChip } from "@/ui/Chip";
 import { Field, TextArea } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 
 export const Route = createFileRoute("/_app/works/$workId/")({ component: WorkDetail });
@@ -97,15 +101,24 @@ function WorkDetail() {
 
   return (
     <>
-      <h1 className="page-title">
-        {work.title}
-        <span className={`chip ${work.lifecycle === "finalized" ? "chip--ok" : "chip--primary"}`}>
-          {lifecycleLabel[work.lifecycle]}
-        </span>
-        {work.confidentiality === "restricted" ? (
-          <span className="chip chip--error">非公開</span>
-        ) : null}
-        <span className="spacer" />
+      <PageHeader
+        title={work.title}
+        meta={
+          <>
+            <StatusChip
+              tone={lifecycleTone[work.lifecycle] ?? "neutral"}
+              icon={work.lifecycle === "finalized" ? "verified" : undefined}
+            >
+              {lifecycleLabel[work.lifecycle]}
+            </StatusChip>
+            {work.confidentiality === "restricted" ? (
+              <StatusChip tone="error" icon="lock">
+                非公開
+              </StatusChip>
+            ) : null}
+          </>
+        }
+      >
         {can.submit && work.lifecycle === "active" ? (
           <M3eButton
             variant="filled"
@@ -128,7 +141,7 @@ function WorkDetail() {
           </M3eButton>
         ) : null}
         {can.edit && work.lifecycle !== "finalized" && work.lifecycle !== "cancelled" ? (
-          <Link to="/works/$workId/edit" params={{ workId }}>
+          <Link to="/works/$workId/edit" params={{ workId }} className="nav-link">
             <M3eButton variant="outlined">
               <M3eIcon slot="icon" name="edit" />
               編集
@@ -152,19 +165,18 @@ function WorkDetail() {
             ))
           : null}
         {can.manageAcl ? (
-          <Link to="/works/$workId/acl" params={{ workId }}>
+          <Link to="/works/$workId/acl" params={{ workId }} className="nav-link">
             <M3eButton variant="outlined">
               <M3eIcon slot="icon" name="manage_accounts" />
               閲覧権限
             </M3eButton>
           </Link>
         ) : null}
-      </h1>
+      </PageHeader>
 
       <div className="grid-2">
-        <section className="card">
-          <h3>基本情報</h3>
-          <dl className="stack small">
+        <Card title="基本情報">
+          <dl>
             <div>
               <dt className="muted">目的・対象</dt>
               <dd>{work.purpose || "—"}</dd>
@@ -196,102 +208,136 @@ function WorkDetail() {
               <dd>{data.activeGrantCount} 件</dd>
             </div>
           </dl>
-        </section>
-        <section className="card">
-          <h3>校了履歴</h3>
+        </Card>
+        <Card title="校了履歴">
           {approvals.length === 0 ? (
-            <p className="muted small">まだ校了はありません。</p>
+            <p className="muted small" style={{ margin: 0 }}>
+              まだ校了はありません。
+            </p>
           ) : (
-            <ul className="small" style={{ margin: 0, paddingLeft: 16 }}>
+            <ul className="stack" style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {approvals.map((a, i) => (
-                <li key={i}>
-                  <strong>{approvalActionLabel[a.action]}</strong> — {a.actor?.name}・
-                  {formatJst(a.createdAt)}
+                <li key={i} className="stack" style={{ gap: 4 }}>
+                  <div className="row">
+                    <StatusChip
+                      tone={a.action === "reopened" ? "warning" : "success"}
+                      icon={a.action === "reopened" ? "lock_open" : "verified"}
+                    >
+                      {approvalActionLabel[a.action]}
+                    </StatusChip>
+                    <span className="small muted">
+                      {a.actor?.name}・{formatJst(a.createdAt)}
+                    </span>
+                  </div>
                   {a.exceptionReason ? (
-                    <div className="chip chip--warn">例外理由: {a.exceptionReason}</div>
+                    <div className="alert alert--warn">
+                      <M3eIcon name="warning" />
+                      例外理由: {a.exceptionReason}
+                    </div>
                   ) : null}
-                  {a.reason ? <div className="muted">理由: {a.reason}</div> : null}
+                  {a.reason ? <div className="small muted">理由: {a.reason}</div> : null}
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       </div>
 
-      <h2 style={{ fontSize: 18, marginTop: 24 }}>版履歴</h2>
+      <h2 className="section-title">版履歴</h2>
       {revisions.length === 0 ? (
-        <div className="empty">まだ版が提出されていません。</div>
+        <div className="empty">
+          <M3eIcon name="upload_file" />
+          まだ版が提出されていません。
+        </div>
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>版</th>
-              <th>受付</th>
-              <th>締切（JST）</th>
-              <th>提出</th>
-              <th>変更点 / 見てほしい点</th>
-              <th>未対応指摘</th>
-              <th>専門確認</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {revisions.map((r) => (
-              <tr key={r.id}>
-                <td>
-                  <Link to="/revisions/$revisionId" params={{ revisionId: r.id }}>
-                    {r.label}
-                  </Link>
-                  {r.kind === "rough" ? (
-                    <div className="chip chip--warn">ラフ（通常版とは別区分）</div>
-                  ) : null}
-                  {work.finalRevisionId === r.id ? (
-                    <div className="chip chip--ok">校了版</div>
-                  ) : null}
-                </td>
-                <td>
-                  <span className={`chip ${r.reviewState === "open" ? "chip--primary" : ""}`}>
-                    {reviewStateLabel[r.reviewState]}
-                  </span>
-                  {r.reviewClosedReason ? (
-                    <div className="small muted">{closedReasonLabel[r.reviewClosedReason]}</div>
-                  ) : null}
-                </td>
-                <td className="small">{formatJst(r.deadlineAt)}</td>
-                <td className="small">
-                  {r.submitter?.name}
-                  <br />
-                  {formatJst(r.submittedAt)}
-                </td>
-                <td className="small">
-                  {r.changeSummary || "—"}
-                  {r.focusNotes ? <div className="muted">観点: {r.focusNotes}</div> : null}
-                </td>
-                <td>
-                  {r.unresolvedCount > 0 ? (
-                    <span className="chip chip--warn">{r.unresolvedCount}</span>
-                  ) : (
-                    <span className="muted">0</span>
-                  )}
-                </td>
-                <td className="small">
-                  {r.pendingChecks.length > 0 ? (
-                    <span className="chip chip--warn">未完了 {r.pendingChecks.length}</span>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-                <td>
-                  {can.assign ? (
-                    <M3eButton variant="text" onClick={() => setAssignFor(r.id)}>
-                      校正者を割当
-                    </M3eButton>
-                  ) : null}
-                </td>
+        <div className="table-wrap" tabIndex={0}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>版</th>
+                <th>受付</th>
+                <th>締切（JST）</th>
+                <th>提出</th>
+                <th>変更点 / 見てほしい点</th>
+                <th>未対応指摘</th>
+                <th>専門確認</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {revisions.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <Link to="/revisions/$revisionId" params={{ revisionId: r.id }}>
+                      {r.label}
+                    </Link>
+                    {r.kind === "rough" ? (
+                      <div>
+                        <StatusChip tone="warning">ラフ（通常版とは別区分）</StatusChip>
+                      </div>
+                    ) : null}
+                    {work.finalRevisionId === r.id ? (
+                      <div>
+                        <StatusChip tone="success" icon="verified">
+                          校了版
+                        </StatusChip>
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>
+                    <StatusChip
+                      tone={
+                        r.reviewState === "open"
+                          ? "primary"
+                          : r.reviewState === "void"
+                            ? "error"
+                            : "neutral"
+                      }
+                    >
+                      {reviewStateLabel[r.reviewState]}
+                    </StatusChip>
+                    {r.reviewClosedReason ? (
+                      <div className="small muted">{closedReasonLabel[r.reviewClosedReason]}</div>
+                    ) : null}
+                  </td>
+                  <td className="small">{formatJst(r.deadlineAt)}</td>
+                  <td className="small">
+                    {r.submitter?.name}
+                    <br />
+                    {formatJst(r.submittedAt)}
+                  </td>
+                  <td className="small">
+                    {r.changeSummary || "—"}
+                    {r.focusNotes ? <div className="muted">観点: {r.focusNotes}</div> : null}
+                  </td>
+                  <td>
+                    {r.unresolvedCount > 0 ? (
+                      <StatusChip tone="warning">{r.unresolvedCount}</StatusChip>
+                    ) : (
+                      <span className="muted">0</span>
+                    )}
+                  </td>
+                  <td className="small">
+                    {r.pendingChecks.length > 0 ? (
+                      <StatusChip tone="warning" icon="pending">
+                        未完了 {r.pendingChecks.length}
+                      </StatusChip>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {can.assign ? (
+                      <M3eButton variant="text" onClick={() => setAssignFor(r.id)}>
+                        校正者を割当
+                      </M3eButton>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* U-07 校了: 校了版・必須確認・重大未解決・例外理由・実行者を最終確認して確定。二重クリック防止。 */}
@@ -304,17 +350,26 @@ function WorkDetail() {
           </p>
           {pendingChecks.length > 0 ? (
             <div className="alert--warn alert">
-              未完了の専門確認が {pendingChecks.length} 件あります（{pendingChecks.join("、")}
-              ）。確認完了または免除されるまで、理由なしの校了は拒否されます（D6）。
+              <M3eIcon name="pending_actions" />
+              <span>
+                未完了の専門確認が {pendingChecks.length} 件あります（{pendingChecks.join("、")}
+                ）。確認完了または免除されるまで、理由なしの校了は拒否されます（D6）。
+              </span>
             </div>
           ) : null}
           {blocking > 0 ? (
             <div className="alert--warn alert">
-              未対応の指摘が {blocking} 件あります。重大度 critical/major
-              の未対応が残っている場合、理由を記入しない限り校了は拒否されます（C6）。
+              <M3eIcon name="warning" />
+              <span>
+                未対応の指摘が {blocking} 件あります。重大度 critical/major
+                の未対応が残っている場合、理由を記入しない限り校了は拒否されます（C6）。
+              </span>
             </div>
           ) : (
-            <div className="alert alert--info">未対応の指摘はありません。</div>
+            <div className="alert alert--info">
+              <M3eIcon name="check_circle" />
+              未対応の指摘はありません。
+            </div>
           )}
           <Field label="例外校了の理由（重大未解決を残して校了する場合のみ）">
             <TextArea
@@ -329,7 +384,12 @@ function WorkDetail() {
             onChange={setConfirmer}
             exclude={[work.approverId, ...work.creatorIds]}
           />
-          {doFinalize.error ? <div className="alert">{doFinalize.error.message}</div> : null}
+          {doFinalize.error ? (
+            <div className="alert">
+              <M3eIcon name="error" />
+              {doFinalize.error.message}
+            </div>
+          ) : null}
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setFinalizeOpen(false)}>

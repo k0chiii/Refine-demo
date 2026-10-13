@@ -4,12 +4,21 @@ import { useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJst } from "@/lib/format";
 import { lifecycleLabel, mediaLabel } from "@/lib/labels";
-import { Select, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { StatusChip, type ChipTone } from "@/ui/Chip";
+import { M3eButton, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eSearchBar } from "@/ui/m3e";
+import { PageHeader } from "@/ui/PageHeader";
 
 export const Route = createFileRoute("/_app/works/")({ component: Works });
 
-/** U-02 制作物一覧。権限のない作品は一覧にも出ない（サーバー側で絞る）。 */
+export const lifecycleTone: Record<string, ChipTone> = {
+  draft: "neutral",
+  active: "primary",
+  on_hold: "warning",
+  finalized: "success",
+  cancelled: "neutral",
+};
+
+/** U-02 制作物一覧。権限のない作品は一覧にも出ない（サーバー側で絞る）。検索は search bar、状態はフィルターチップ。 */
 function Works() {
   const [text, setText] = useState("");
   const [lifecycle, setLifecycle] = useState<string>("");
@@ -19,87 +28,88 @@ function Works() {
   });
   return (
     <>
-      <h1 className="page-title">
-        制作物
-        <span className="spacer" />
-        <Link to="/works/new">
+      <PageHeader title="制作物">
+        <Link to="/works/new" className="nav-link">
           <M3eButton variant="filled">
             <M3eIcon slot="icon" name="add" />
             制作物を登録
           </M3eButton>
         </Link>
-      </h1>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <TextInput
-          placeholder="名称・旧ID・担当・用途で検索"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          style={{ minWidth: 280 }}
-          aria-label="検索"
-        />
-        <Select
-          value={lifecycle}
-          onChange={(e) => setLifecycle(e.target.value)}
-          aria-label="状態で絞り込み"
-        >
-          <option value="">すべての状態</option>
+      </PageHeader>
+      <div className="row" style={{ marginBottom: 16 }}>
+        <M3eSearchBar className="search" clearable onClear={() => setText("")}>
+          <M3eIcon slot="leading" name="search" />
+          <input
+            slot="input"
+            placeholder="名称・旧ID・担当・用途で検索"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label="検索"
+          />
+        </M3eSearchBar>
+        <M3eFilterChipSet aria-label="状態で絞り込み">
           {Object.entries(lifecycleLabel).map(([k, v]) => (
-            <option key={k} value={k}>
+            <M3eFilterChip
+              key={k}
+              selected={lifecycle === k}
+              onClick={() => setLifecycle((cur) => (cur === k ? "" : k))}
+            >
               {v}
-            </option>
+            </M3eFilterChip>
           ))}
-        </Select>
+        </M3eFilterChipSet>
       </div>
       {works === undefined ? (
         <p className="muted">読み込み中…</p>
       ) : works.length === 0 ? (
         <div className="empty">
+          <M3eIcon name="folder_off" />
           閲覧できる制作物がありません。関係する制作物の閲覧許可は校正システム管理者が付与します。
         </div>
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>名称</th>
-              <th>旧ID</th>
-              <th>区分</th>
-              <th>媒体</th>
-              <th>状態</th>
-              <th>現在版</th>
-              <th>受付締切（JST）</th>
-            </tr>
-          </thead>
-          <tbody>
-            {works.map((w) => (
-              <tr key={w.id}>
-                <td>
-                  <Link to="/works/$workId" params={{ workId: w.id }}>
-                    {w.title}
-                  </Link>
-                  {w.confidentiality === "restricted" ? (
-                    <span className="chip chip--error" style={{ marginLeft: 6 }}>
-                      非公開
-                    </span>
-                  ) : null}
-                </td>
-                <td className="small muted">{w.legacyId ?? "—"}</td>
-                <td>{w.category}</td>
-                <td>{mediaLabel[w.mediaType]}</td>
-                <td>
-                  <span
-                    className={`chip ${w.lifecycle === "finalized" ? "chip--ok" : w.lifecycle === "active" ? "chip--primary" : ""}`}
-                  >
-                    {lifecycleLabel[w.lifecycle]}
-                  </span>
-                </td>
-                <td>{w.latestRevisionLabel ?? "未提出"}</td>
-                <td className="small">
-                  {w.acceptingDeadlineAt ? formatJst(w.acceptingDeadlineAt) : "受付中の版なし"}
-                </td>
+        <div className="table-wrap" tabIndex={0}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>旧ID</th>
+                <th>区分</th>
+                <th>媒体</th>
+                <th>状態</th>
+                <th>現在版</th>
+                <th>受付締切（JST）</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {works.map((w) => (
+                <tr key={w.id} className={w.lifecycle === "finalized" ? "row--done" : ""}>
+                  <td>
+                    <Link to="/works/$workId" params={{ workId: w.id }}>
+                      {w.title}
+                    </Link>
+                    {w.confidentiality === "restricted" ? (
+                      <StatusChip tone="error" icon="lock" className="ml">
+                        非公開
+                      </StatusChip>
+                    ) : null}
+                  </td>
+                  <td className="small muted">{w.legacyId ?? "—"}</td>
+                  <td>{w.category}</td>
+                  <td>{mediaLabel[w.mediaType]}</td>
+                  <td>
+                    <StatusChip tone={lifecycleTone[w.lifecycle] ?? "neutral"}>
+                      {lifecycleLabel[w.lifecycle]}
+                    </StatusChip>
+                  </td>
+                  <td>{w.latestRevisionLabel ?? "未提出"}</td>
+                  <td className="small">
+                    {w.acceptingDeadlineAt ? formatJst(w.acceptingDeadlineAt) : "受付中の版なし"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

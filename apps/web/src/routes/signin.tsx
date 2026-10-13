@@ -4,8 +4,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { describeError } from "@/lib/errors";
+import { Card } from "@/ui/Card";
 import { Field, Select, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton, M3eHeading, M3eIcon } from "@/ui/m3e";
 
 export const Route = createFileRoute("/signin")({ component: SignIn });
 
@@ -46,16 +47,29 @@ function SignIn() {
 
   return (
     <main className="signin">
-      <div className="signin__card">
-        <h1 style={{ margin: 0, fontSize: 24 }}>MF100 校正システム</h1>
+      <Card variant="elevated" className="signin__card">
+        <div className="signin__brand">
+          <M3eIcon name="rule" />
+          <div>
+            <M3eHeading variant="headline" size="small" level={1} emphasized style={{ margin: 0 }}>
+              MF100 校正システム
+            </M3eHeading>
+            <div className="small muted">東京大学五月祭常任委員会</div>
+          </div>
+        </div>
         <p className="muted" style={{ margin: 0 }}>
           委員共通アカウント（Nogiku）でサインインします。このシステムはパスワードを保持しません。
         </p>
-        <M3eButton variant="filled" onClick={() => start({ redirectTo: "/queue" })}>
+        <M3eButton variant="filled" size="medium" onClick={() => start({ redirectTo: "/queue" })}>
           <M3eIcon slot="icon" name="login" />
           Nogiku でサインイン
         </M3eButton>
-        {error ? <div className="alert">{error}</div> : null}
+        {error ? (
+          <div className="alert">
+            <M3eIcon name="error" />
+            {error}
+          </div>
+        ) : null}
         {showMock ? (
           <details>
             <summary className="small muted">
@@ -79,12 +93,13 @@ function SignIn() {
                 />
               </Field>
               <M3eButton variant="tonal" onClick={() => start({ sub: customSub || mockSub })}>
+                <M3eIcon slot="icon" name="person" />
                 モックでサインイン
               </M3eButton>
             </div>
           </details>
         ) : null}
-      </div>
+      </Card>
     </main>
   );
 }

@@ -5,7 +5,9 @@ import { useMutation, useQuery } from "convex/react";
 import { formatJst } from "@/lib/format";
 import { notificationKindLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { StatusChip } from "@/ui/Chip";
+import { M3eActionList, M3eButton, M3eIcon, M3eListAction } from "@/ui/m3e";
+import { PageHeader } from "@/ui/PageHeader";
 
 export const Route = createFileRoute("/_app/notifications")({ component: Notifications });
 
@@ -23,7 +25,7 @@ const icon: Record<string, string> = {
   revision_voided: "block",
 };
 
-/** アプリ内通知（F-11 最小通知 / D8）。Slack 等への外部送信は行わない。 */
+/** アプリ内通知（F-11 最小通知 / D8）。M3E list（leading icon / overline / supporting text / trailing）。 */
 function Notifications() {
   const navigate = useNavigate();
   const list = useQuery(api.notifications.list, { limit: 100 });
@@ -42,10 +44,14 @@ function Notifications() {
   const unread = list.filter((n) => n.readAt === undefined).length;
   return (
     <>
-      <h1 className="page-title">
-        通知
-        {unread > 0 ? <span className="chip chip--primary">未読 {unread}</span> : null}
-        <span className="spacer" />
+      <PageHeader
+        title="通知"
+        meta={
+          <span className={`count ${unread === 0 ? "count--zero" : ""}`} aria-label="未読の件数">
+            {unread}
+          </span>
+        }
+      >
         <M3eButton
           variant="text"
           disabled={unread === 0 || doMarkAll.pending}
@@ -54,36 +60,46 @@ function Notifications() {
           <M3eIcon slot="icon" name="done_all" />
           すべて既読にする
         </M3eButton>
-      </h1>
-      <p className="small muted">
+      </PageHeader>
+      <p className="small muted" style={{ marginTop: 0 }}>
         自分が関わる制作物の提出・割当・指摘・採否・専門確認・期限接近・校了をここに表示します。本人の操作は通知されません。Slack
         連携は後続（D8）。
       </p>
       {list.length === 0 ? (
-        <div className="empty">通知はありません。</div>
-      ) : (
-        <div className="stack">
-          {list.map((n) => (
-            <article
-              key={n.id}
-              className={`notification ${n.readAt === undefined ? "notification--unread" : ""}`}
-              tabIndex={0}
-              role="button"
-              onClick={() => void openOne.run(n)}
-              onKeyDown={(e) => e.key === "Enter" && void openOne.run(n)}
-            >
-              <M3eIcon name={icon[n.kind] ?? "notifications"} />
-              <div>
-                <div className="row">
-                  <span className="chip">{notificationKindLabel[n.kind] ?? n.kind}</span>
-                  <strong>{n.title}</strong>
-                </div>
-                <div className="small">{n.body}</div>
-              </div>
-              <span className="small muted">{formatJst(n.createdAt)}</span>
-            </article>
-          ))}
+        <div className="empty">
+          <M3eIcon name="notifications_off" />
+          通知はありません。
         </div>
+      ) : (
+        <M3eActionList className="notification-list" aria-label="通知一覧">
+          {list.map((n) => {
+            const unreadOne = n.readAt === undefined;
+            return (
+              <M3eListAction
+                key={n.id}
+                className={`notification ${unreadOne ? "notification--unread" : "notification--read"}`}
+                onClick={() => void openOne.run(n)}
+              >
+                <M3eIcon
+                  slot="leading"
+                  className="notification__icon"
+                  name={icon[n.kind] ?? "notifications"}
+                  style={unreadOne ? { fontVariationSettings: '"FILL" 1' } : undefined}
+                />
+                <span slot="overline">
+                  <StatusChip tone={unreadOne ? "primary" : "neutral"}>
+                    {notificationKindLabel[n.kind] ?? n.kind}
+                  </StatusChip>
+                </span>
+                <span className={unreadOne ? "label-large" : ""}>{n.title}</span>
+                <span slot="supporting-text">{n.body}</span>
+                <span slot="trailing" className="small muted">
+                  {formatJst(n.createdAt)}
+                </span>
+              </M3eListAction>
+            );
+          })}
+        </M3eActionList>
       )}
     </>
   );

@@ -89,6 +89,18 @@ const signInAs = async (sub) => {
   await page.waitForTimeout(300);
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
+/** m3e-select（aria-label で特定）に値を入れて change を発火する。 */
+const selectValue = async (label, value) => {
+  await page.evaluate(
+    ([l, v]) => {
+      const el = document.querySelector(`m3e-select[aria-label="${l}"]`);
+      el.value = v;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+    [label, value],
+  );
+  await page.waitForTimeout(100);
+};
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
@@ -133,7 +145,8 @@ async function main() {
   // 専門確認: 写真（肖像・権利）を校正者に依頼
   const all = await users();
   const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
-  await page.check("#check-photo");
+  await page.locator("m3e-checkbox#check-photo").click();
+  await page.waitForSelector(".check:not(.check--done)");
   await pickUser(
     page.locator(".check").filter({ has: page.locator("#check-photo") }),
     reviewer.name,
@@ -164,7 +177,7 @@ async function main() {
   // 15 制作物の編集（主管）
   await go(`${workUrl}/edit`);
   await page.waitForSelector("text=制作物を編集");
-  await page.waitForSelector(".picker__chip");
+  await page.waitForSelector("m3e-input-chip");
   await shot("15-work-edit");
 
   // 07 校正待ち（校正者）
@@ -186,7 +199,7 @@ async function main() {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.22, { steps: 8 });
   await page.mouse.up();
-  await page.selectOption('select[aria-label="重大度"]', "critical");
+  await selectValue("重大度", "critical");
   await page.fill(
     'textarea[aria-label="指摘本文"]',
     "団体名の表記が「五月祭常任委員会」ではなく「五月祭実行委員会」になっています。全ページ要確認。",
@@ -194,7 +207,7 @@ async function main() {
   await btn("投稿").click();
   await page.waitForSelector(".thread");
   // 2 件目（軽微・位置なし）は未対応のまま残し、次版への持越候補にする
-  await page.selectOption('select[aria-label="重大度"]', "minor");
+  await selectValue("重大度", "minor");
   await page.fill(
     'textarea[aria-label="指摘本文"]',
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
@@ -204,7 +217,7 @@ async function main() {
   await page.locator(".thread").first().click();
   await shot("08-workspace-comment");
   // 専門確認を完了（担当の校正者）
-  await page.locator('section[aria-label="専門確認"] m3e-button', { hasText: "確認完了" }).click();
+  await page.locator('[aria-label="専門確認"] m3e-button', { hasText: "確認完了" }).click();
   await page.waitForSelector("text=すべて完了");
   await shot("16-required-check-done");
 
@@ -232,7 +245,7 @@ async function main() {
     body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
   await page.waitForSelector("text=範囲を指定済み");
-  await page.selectOption('select[aria-label="重大度"]', "major");
+  await selectValue("重大度", "major");
   await page.fill(
     'textarea[aria-label="指摘本文"]',
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
@@ -269,10 +282,10 @@ async function main() {
   await page.waitForSelector("text=を提出確定しました");
   await btn("校正ワークスペースを開く").click();
   await page.waitForURL(/\/revisions\//);
-  await page.waitForSelector('section[aria-label="前版の未解決指摘"]');
+  await page.waitForSelector('[aria-label="前版の未解決指摘"]');
   await shot("17-carry-forward");
   await page
-    .locator('section[aria-label="前版の未解決指摘"] m3e-button', { hasText: "この版へ引き継ぐ" })
+    .locator('[aria-label="前版の未解決指摘"] m3e-button', { hasText: "この版へ引き継ぐ" })
     .first()
     .click();
   await page.waitForSelector("text=前版から持越");
@@ -305,6 +318,24 @@ async function main() {
   await go(`${BASE}/admin`);
   await page.waitForSelector("text=監査ログ");
   await shot("13-admin-audit");
+
+  // 20 ダークモード（scheme=auto: OS 設定に追従。色はすべて M3 トークン由来）
+  await signInAs("mock-nogiku-reviewer");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await go(revisionUrl);
+  await page.waitForSelector(".thread");
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await page.locator(".thread").first().click();
+  await shot("20-dark-workspace");
+  await page.emulateMedia({ colorScheme: "light" });
+
+  // 21 モバイル幅（下部ナビゲーションバー）
+  await page.setViewportSize({ width: 412, height: 915 });
+  await go(`${BASE}/queue`);
+  await page.waitForSelector("m3e-nav-bar");
+  await page.waitForTimeout(400);
+  await shot("21-mobile-queue");
+  await page.setViewportSize({ width: 1440, height: 900 });
 }
 
 try {

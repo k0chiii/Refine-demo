@@ -3,12 +3,21 @@ import { api } from "@mf100/convex/api";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect } from "react";
-import { M3eAppBar, M3eButton, M3eIcon, M3eNavItem, M3eNavRail } from "@/ui/m3e";
+import {
+  M3eAppBar,
+  M3eBadge,
+  M3eButton,
+  M3eIcon,
+  M3eNavBar,
+  M3eNavItem,
+  M3eNavRail,
+} from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
 /**
  * 認証ガード＋共通レイアウト（UniQ の _cmsProtected と同じ 2 段階: 認可確定まで子を描かない → 不可なら /signin）。
+ * ナビゲーションは M3 の canonical layout: 広い画面は左の navigation rail、狭い画面は下の navigation bar。
  */
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -26,33 +35,43 @@ function AppLayout() {
   if (isLoading || !isAuthenticated || !me) return null;
 
   const items = [
-    { to: "/queue", icon: "fact_check", label: "校正待ち" },
-    { to: "/works", icon: "folder_open", label: "制作物" },
-    {
-      to: "/notifications",
-      icon: unread > 0 ? "notifications_active" : "notifications",
-      label: "通知",
-      count: unread,
-    },
-    ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
+    { to: "/queue", icon: "fact_check", label: "校正待ち", count: 0 },
+    { to: "/works", icon: "folder_open", label: "制作物", count: 0 },
+    { to: "/notifications", icon: "notifications", label: "通知", count: unread },
+    ...(me.isSystemAdmin
+      ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理", count: 0 }]
+      : []),
   ];
+  const selected = (to: string) => path === to || path.startsWith(`${to}/`);
+  const navItems = (orientation: "vertical" | "horizontal") =>
+    items.map((it) => (
+      <Link key={it.to} to={it.to} className="nav-link">
+        <M3eNavItem selected={selected(it.to)} orientation={orientation}>
+          <span slot="icon" className="nav-icon">
+            <M3eIcon name={it.icon} />
+            {it.count > 0 ? (
+              <M3eBadge size="large" className="nav-icon__badge" aria-label={`未読 ${it.count} 件`}>
+                {it.count > 99 ? "99+" : it.count}
+              </M3eBadge>
+            ) : null}
+          </span>
+          <span slot="selected-icon" className="nav-icon">
+            <M3eIcon name={it.icon} style={{ fontVariationSettings: '"FILL" 1' }} />
+            {it.count > 0 ? (
+              <M3eBadge size="large" className="nav-icon__badge">
+                {it.count > 99 ? "99+" : it.count}
+              </M3eBadge>
+            ) : null}
+          </span>
+          {it.label}
+        </M3eNavItem>
+      </Link>
+    ));
 
   return (
     <div className="shell">
       <M3eNavRail className="shell__rail" aria-label="主要ナビゲーション">
-        {items.map((it) => (
-          <Link key={it.to} to={it.to} style={{ textDecoration: "none", color: "inherit" }}>
-            <M3eNavItem selected={path === it.to || path.startsWith(`${it.to}/`)}>
-              <M3eIcon slot="icon" name={it.icon} />
-              {it.label}
-              {"count" in it && it.count > 0 ? (
-                <span className="nav-count" aria-label={`未読 ${it.count} 件`}>
-                  {it.count > 99 ? "99+" : it.count}
-                </span>
-              ) : null}
-            </M3eNavItem>
-          </Link>
-        ))}
+        {navItems("vertical")}
       </M3eNavRail>
       <div className="shell__main">
         <M3eAppBar size="small">
@@ -75,6 +94,9 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション（モバイル）">
+        {navItems("vertical")}
+      </M3eNavBar>
     </div>
   );
 }

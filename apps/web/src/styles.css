@@ -1,45 +1,163 @@
-/* MF100 校正システム: M3E トークン上の補完スタイル。校正テーブルの情報密度・キーボード操作・可読性を優先（§4 / §13）。 */
+/*
+ * MF100 校正システム: Material 3 Expressive（@m3e）トークン上の補完スタイル。
+ * - 色は必ず --md-sys-color-*（<m3e-theme> が html に定義。index.html / src/theme.ts）から取る。
+ *   --mf-* はその別名で、ライト／ダーク・動的カラーに自動で追従する。
+ * - 文字は M3 タイプスケール（body / label / title）、形は M3 シェイプスケールを使う。
+ * - 独自実装が残るのは、密度の高いテーブル・PDF／画像ビューア・座標指定だけ（§4 / §13）。
+ */
 :root {
-  --mf-font: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mf-surface: var(--md-sys-color-surface, #f7f9fb);
-  --mf-surface-container: var(--md-sys-color-surface-container, #eceef0);
-  --mf-surface-container-low: var(--md-sys-color-surface-container-low, #f2f4f6);
-  --mf-surface-container-high: var(--md-sys-color-surface-container-high, #e6e8ea);
-  --mf-on-surface: var(--md-sys-color-on-surface, #191c1e);
-  --mf-on-surface-variant: var(--md-sys-color-on-surface-variant, #43474e);
-  --mf-outline: var(--md-sys-color-outline, #73777f);
-  --mf-outline-variant: var(--md-sys-color-outline-variant, #c3c7cf);
-  --mf-primary: var(--md-sys-color-primary, #005cbb);
+  --mf-font: "Noto Sans JP", "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* 色役割（M3 color roles） */
+  --mf-surface: var(--md-sys-color-surface, #f9f9ff);
+  --mf-surface-dim: var(--md-sys-color-surface-dim, #d9dae3);
+  --mf-surface-container-lowest: var(--md-sys-color-surface-container-lowest, #ffffff);
+  --mf-surface-container-low: var(--md-sys-color-surface-container-low, #f3f3fa);
+  --mf-surface-container: var(--md-sys-color-surface-container, #eeedf4);
+  --mf-surface-container-high: var(--md-sys-color-surface-container-high, #e8e7ef);
+  --mf-surface-container-highest: var(--md-sys-color-surface-container-highest, #e2e2e9);
+  --mf-on-surface: var(--md-sys-color-on-surface, #191c20);
+  --mf-on-surface-variant: var(--md-sys-color-on-surface-variant, #44474e);
+  --mf-outline: var(--md-sys-color-outline, #74777f);
+  --mf-outline-variant: var(--md-sys-color-outline-variant, #c4c6cf);
+  --mf-primary: var(--md-sys-color-primary, #2b5ea8);
   --mf-on-primary: var(--md-sys-color-on-primary, #ffffff);
-  --mf-primary-container: var(--md-sys-color-primary-container, #d7e3ff);
+  --mf-primary-container: var(--md-sys-color-primary-container, #d6e3ff);
+  --mf-on-primary-container: var(--md-sys-color-on-primary-container, #001b3e);
+  --mf-secondary-container: var(--md-sys-color-secondary-container, #dae2f9);
+  --mf-on-secondary-container: var(--md-sys-color-on-secondary-container, #131c2b);
+  --mf-tertiary: var(--md-sys-color-tertiary, #6f5675);
+  --mf-tertiary-container: var(--md-sys-color-tertiary-container, #f9d8fd);
+  --mf-on-tertiary-container: var(--md-sys-color-on-tertiary-container, #28132f);
   --mf-error: var(--md-sys-color-error, #ba1a1a);
   --mf-error-container: var(--md-sys-color-error-container, #ffdad6);
-  --mf-tertiary-container: var(--md-sys-color-tertiary-container, #ffdcc1);
-  --mf-radius: 12px;
+  --mf-on-error-container: var(--md-sys-color-on-error-container, #410002);
+  --mf-inverse-surface: var(--md-sys-color-inverse-surface, #2e3036);
+  --mf-inverse-on-surface: var(--md-sys-color-inverse-on-surface, #f0f0f7);
+  /* M3 の色役割に無い「成功」「注意」。動的カラーの tertiary/secondary は seed 次第で緑にもなり
+     意味を担保できないため、固定の補助色にし、ライト／ダークで切り替える（下の @media）。
+     重大（critical）だけは M3 の error を使う。 */
+  --mf-success-container: #c6efc8;
+  --mf-on-success-container: #0a2e12;
+  --mf-success: #1f6b2d;
+  --mf-warning-container: #ffe08c;
+  --mf-on-warning-container: #3e2e00;
+  --mf-warning: #7a5a00;
+
+  /* 形（M3 shape scale） */
+  --mf-shape-xs: 4px;
+  --mf-shape-sm: 8px;
+  --mf-shape-md: 12px;
+  --mf-shape-lg: 16px;
+  --mf-shape-xl: 28px;
+  --mf-radius: var(--mf-shape-md);
+
+  /* 動き（M3 motion: standard easing） */
+  --mf-motion: 200ms cubic-bezier(0.2, 0, 0, 1);
+
+  /* 文字（M3 type scale。フォント指定は body に集約） */
+  --mf-type-body-large: 400 16px/24px var(--mf-font);
+  --mf-type-body-medium: 400 14px/20px var(--mf-font);
+  --mf-type-body-small: 400 12px/16px var(--mf-font);
+  --mf-type-label-large: 500 14px/20px var(--mf-font);
+  --mf-type-label-medium: 500 12px/16px var(--mf-font);
+  --mf-type-title-medium: 500 16px/24px var(--mf-font);
+  --mf-type-title-small: 500 14px/20px var(--mf-font);
+
+  /* M3E 部品にも同じ書体を使わせる */
+  --md-sys-typescale-font: var(--mf-font);
+  --md-ref-typeface-plain: var(--mf-font);
+  --md-ref-typeface-brand: var(--mf-font);
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mf-success-container: #1d4a26;
+    --mf-on-success-container: #c6efc8;
+    --mf-success: #8fd79a;
+    --mf-warning-container: #5b4300;
+    --mf-on-warning-container: #ffe08c;
+    --mf-warning: #f5c84c;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
 html,
 body,
-#root {
+#root,
+m3e-theme {
   height: 100%;
   margin: 0;
 }
 body {
-  font-family: var(--mf-font);
+  font: var(--mf-type-body-medium);
+  font-family: var(--mf-font) !important; /* m3e-theme の body フォント指定より優先 */
   background: var(--mf-surface);
   color: var(--mf-on-surface);
-  font-size: 14px;
-  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 a {
   color: var(--mf-primary);
+  text-underline-offset: 2px;
+  border-radius: var(--mf-shape-xs);
+}
+a:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
+}
+code {
+  font-size: 12px;
+  background: var(--mf-surface-container-high);
+  padding: 1px 4px;
+  border-radius: var(--mf-shape-xs);
 }
 m3e-icon {
   font-family: "Material Symbols Outlined";
 }
+/* 画面上の M3E 部品に書体を揃える（shadow 内は継承） */
+m3e-heading,
+m3e-button,
+m3e-form-field,
+m3e-select,
+m3e-option,
+m3e-list-item,
+m3e-nav-item,
+m3e-filter-chip,
+m3e-assist-chip,
+m3e-input-chip,
+m3e-dialog,
+m3e-app-bar,
+m3e-step,
+m3e-search-bar {
+  font-family: var(--mf-font);
+}
 
+/* ---------- 文字ユーティリティ（M3 type scale） */
+.body-large {
+  font: var(--mf-type-body-large);
+}
+.label-large {
+  font: var(--mf-type-label-large);
+}
+.label {
+  font: var(--mf-type-label-medium);
+}
+.title-small {
+  font: var(--mf-type-title-small);
+}
+.muted {
+  color: var(--mf-on-surface-variant);
+}
+.small {
+  font: var(--mf-type-body-small);
+}
+.small.muted,
+.label.muted {
+  color: var(--mf-on-surface-variant);
+}
+
+/* ---------- アプリ外枠 */
 .shell {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -51,9 +169,12 @@ m3e-icon {
   min-width: 0;
 }
 .shell__content {
-  padding: 16px 24px 48px;
+  padding: 8px 24px 48px;
   max-width: 1400px;
   width: 100%;
+}
+.shell__bar {
+  display: none;
 }
 @media (max-width: 720px) {
   .shell {
@@ -62,26 +183,54 @@ m3e-icon {
   .shell__rail {
     display: none;
   }
+  .shell__content {
+    padding: 8px 16px 96px; /* 下部ナビの高さ分 */
+  }
+  .shell__bar {
+    display: block;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+  }
+}
+.nav-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
 }
 
-.page-title {
-  font-size: 22px;
-  font-weight: 500;
-  margin: 8px 0 16px;
+/* ---------- 画面見出し */
+.page-header {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  margin: 12px 0 16px;
+  min-height: 48px;
 }
+.page-header__title {
+  margin: 0;
+}
+.page-header .spacer,
+.row .spacer,
 .page-title .spacer {
   flex: 1;
 }
-.muted {
-  color: var(--mf-on-surface-variant);
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 0 16px;
+  font: 500 22px/28px var(--mf-font);
 }
-.small {
-  font-size: 12px;
+.section-title {
+  font: var(--mf-type-title-medium);
+  margin: 24px 0 8px;
 }
+
+/* ---------- レイアウト */
 .row {
   display: flex;
   gap: 8px;
@@ -99,42 +248,86 @@ m3e-icon {
   gap: 16px;
 }
 
+/* ---------- カード（m3e-card） */
 .card {
-  background: var(--mf-surface-container-low);
-  border-radius: var(--mf-radius);
-  padding: 16px;
+  --m3e-card-shape: var(--mf-shape-md);
+  display: block;
 }
-.card--outlined {
-  background: transparent;
-  border: 1px solid var(--mf-outline-variant);
+.card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 0;
 }
-.card h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 500;
+.card__title {
+  margin: 0;
+  flex: 1;
+}
+.card__content {
+  display: grid;
+  gap: 8px;
+}
+.card dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.card dt {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.card dd {
+  margin: 0;
 }
 
-/* 校正用テーブル: 密度を保ち、行全体をキーボードで辿れる */
+/* ---------- 校正用テーブル: 密度を保ち、行全体をキーボードで辿れる（独自実装を維持） */
+.table-wrap {
+  background: var(--mf-surface-container-lowest);
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-md);
+  overflow: auto;
+}
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font: var(--mf-type-body-medium);
 }
 .table th {
   text-align: left;
-  font-weight: 500;
+  font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
-  padding: 8px 10px;
+  background: var(--mf-surface-container-low);
+  padding: 10px 12px;
   border-bottom: 1px solid var(--mf-outline-variant);
   white-space: nowrap;
 }
 .table td {
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--mf-surface-container-high);
   vertical-align: top;
+  transition: background var(--mf-motion);
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
 }
 .table tr:hover td {
-  background: var(--mf-surface-container);
+  background: color-mix(in srgb, var(--mf-on-surface) 6%, transparent);
+}
+.table tr.row--urgent td {
+  background: color-mix(in srgb, var(--mf-error-container) 55%, transparent);
+}
+.table tr.row--urgent:hover td {
+  background: color-mix(in srgb, var(--mf-error-container) 75%, transparent);
+}
+.table tr.row--done td {
+  color: var(--mf-on-surface-variant);
+}
+.table a {
+  font: var(--mf-type-label-large);
+  text-decoration: none;
+}
+.table a:hover {
+  text-decoration: underline;
 }
 .table a:focus-visible,
 .table button:focus-visible {
@@ -142,113 +335,188 @@ m3e-icon {
   outline-offset: 2px;
 }
 
+/* ---------- 状態チップ（読み取り専用。M3 color roles で意味を固定） */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  background: var(--mf-surface-container-high);
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--mf-shape-sm);
+  font: var(--mf-type-label-medium);
+  background: var(--mf-surface-container-highest);
   color: var(--mf-on-surface-variant);
   white-space: nowrap;
+  vertical-align: middle;
+}
+.chip__icon {
+  font-size: 16px;
+}
+.chip--neutral {
+  background: var(--mf-surface-container-highest);
+  color: var(--mf-on-surface-variant);
 }
 .chip--primary {
   background: var(--mf-primary-container);
-  color: var(--mf-on-surface);
+  color: var(--mf-on-primary-container);
 }
 .chip--error {
   background: var(--mf-error-container);
-  color: var(--mf-error);
+  color: var(--mf-on-error-container);
 }
-.chip--warn {
-  background: var(--mf-tertiary-container);
-  color: var(--mf-on-surface);
+.chip--warn,
+.chip--warning {
+  background: var(--mf-warning-container);
+  color: var(--mf-on-warning-container);
 }
-.chip--ok {
-  background: #cdeec6;
-  color: #0f3d14;
+.chip--ok,
+.chip--success {
+  background: var(--mf-success-container);
+  color: var(--mf-on-success-container);
+}
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  font: var(--mf-type-label-large);
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+}
+.count--zero {
+  background: var(--mf-surface-container-highest);
+  color: var(--mf-on-surface-variant);
 }
 
+/* ---------- フォーム（m3e-form-field + native 入力） */
 .field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.field__label {
-  font-size: 12px;
-  color: var(--mf-on-surface-variant);
+  display: block;
+  width: 100%;
+  --m3e-form-field-width: 100%;
 }
 .field__required {
   color: var(--mf-error);
 }
-.field__hint {
-  font-size: 12px;
+.field__hint,
+.field__label {
+  font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
 .input {
-  font: inherit;
-  padding: 10px 12px;
-  border: 1px solid var(--mf-outline);
-  border-radius: 8px;
-  background: var(--mf-surface);
+  font: var(--mf-type-body-large);
+  font-family: var(--mf-font);
   color: inherit;
-  min-height: 40px;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  min-width: 0;
 }
-.input:focus-visible {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: 0;
-  border-color: var(--mf-primary);
+.input:focus {
+  outline: none;
 }
 .input--area {
-  min-height: 88px;
+  min-height: 72px;
   resize: vertical;
+}
+.select {
+  width: 100%;
+}
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.checkbox label {
+  cursor: pointer;
 }
 .form {
   display: grid;
   gap: 16px;
-  max-width: 720px;
+  max-width: 760px;
 }
 .form__actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  padding-top: 8px;
+}
+.file-drop {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed var(--mf-outline);
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-low);
+}
+.file-drop input[type="file"] {
+  font: var(--mf-type-body-medium);
+}
+.search {
+  min-width: min(360px, 100%);
+}
+.search input {
+  font: var(--mf-type-body-large);
+  font-family: var(--mf-font);
+  border: 0;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  color: inherit;
 }
 
+/* ---------- 通知・案内（M3 の色役割） */
 .alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
   padding: 12px 16px;
-  border-radius: var(--mf-radius);
+  border-radius: var(--mf-shape-md);
   background: var(--mf-error-container);
-  color: var(--mf-error);
+  color: var(--mf-on-error-container);
+  font: var(--mf-type-body-medium);
 }
 .alert--info {
   background: var(--mf-primary-container);
-  color: var(--mf-on-surface);
+  color: var(--mf-on-primary-container);
 }
 .alert--warn {
-  background: var(--mf-tertiary-container);
-  color: var(--mf-on-surface);
+  background: var(--mf-warning-container);
+  color: var(--mf-on-warning-container);
+}
+.alert m3e-icon {
+  flex: none;
+  font-size: 20px;
 }
 .empty {
-  padding: 32px;
+  padding: 40px 24px;
   text-align: center;
   color: var(--mf-on-surface-variant);
   background: var(--mf-surface-container-low);
-  border-radius: var(--mf-radius);
+  border-radius: var(--mf-shape-lg);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.empty m3e-icon {
+  font-size: 40px;
+  color: var(--mf-outline);
 }
 
 .dialog-body {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   min-width: min(520px, 90vw);
 }
 
-/* 校正ワークスペース（U-05）: 左ビューア / 右コメント */
+/* ---------- 校正ワークスペース（U-05）: 左ビューア / 右コメント */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 400px;
   gap: 16px;
-  height: calc(100vh - 140px);
+  height: calc(100vh - 150px);
   min-height: 480px;
 }
 @media (max-width: 960px) {
@@ -261,7 +529,7 @@ m3e-icon {
   display: flex;
   flex-direction: column;
   background: var(--mf-surface-container);
-  border-radius: var(--mf-radius);
+  border-radius: var(--mf-shape-lg);
   overflow: hidden;
   min-height: 400px;
 }
@@ -283,8 +551,11 @@ m3e-icon {
 }
 .viewer__page {
   position: relative;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.3),
+    0 4px 8px 3px rgb(0 0 0 / 0.15);
   background: #fff;
+  border-radius: 2px;
 }
 .viewer__page canvas,
 .viewer__page img {
@@ -297,18 +568,18 @@ m3e-icon {
   touch-action: none;
 }
 .anchor-rect {
-  fill: rgb(0 92 187 / 0.12);
+  fill: color-mix(in srgb, var(--mf-primary) 14%, transparent);
   stroke: var(--mf-primary);
   stroke-width: 2;
   cursor: pointer;
 }
 .anchor-rect--active {
-  fill: rgb(0 92 187 / 0.3);
+  fill: color-mix(in srgb, var(--mf-primary) 30%, transparent);
   stroke-width: 3;
 }
 .anchor-rect--critical {
   stroke: var(--mf-error);
-  fill: rgb(186 26 26 / 0.12);
+  fill: color-mix(in srgb, var(--mf-error) 14%, transparent);
 }
 .anchor-pin {
   fill: var(--mf-primary);
@@ -317,14 +588,13 @@ m3e-icon {
   cursor: pointer;
 }
 .anchor-draft {
-  fill: rgb(255 170 0 / 0.2);
-  stroke: #c77700;
+  fill: color-mix(in srgb, var(--mf-warning) 25%, transparent);
+  stroke: var(--mf-warning);
   stroke-dasharray: 6 4;
   stroke-width: 2;
 }
 .anchor-label {
-  font-size: 11px;
-  font-weight: 700;
+  font: 700 11px var(--mf-font);
   fill: #fff;
   pointer-events: none;
 }
@@ -333,51 +603,76 @@ m3e-icon {
   display: flex;
   flex-direction: column;
   background: var(--mf-surface-container-low);
-  border-radius: var(--mf-radius);
+  border-radius: var(--mf-shape-lg);
   overflow: hidden;
 }
 .comments__header {
   padding: 12px;
-  border-bottom: 1px solid var(--mf-outline-variant);
   display: grid;
   gap: 8px;
+  background: var(--mf-surface-container);
 }
 .comments__list {
   flex: 1;
   overflow: auto;
-  padding: 8px;
+  padding: 10px;
   display: grid;
   gap: 8px;
   align-content: start;
 }
+/* 指摘カード: 重大度は左の色帯＋チップ、対応状況は濃淡で表す（解決済みは沈む） */
 .thread {
-  background: var(--mf-surface);
-  border-radius: 10px;
-  padding: 10px 12px;
+  background: var(--mf-surface-container-lowest);
+  border-radius: var(--mf-shape-md);
+  padding: 10px 12px 10px 14px;
   border-left: 4px solid var(--mf-outline-variant);
   display: grid;
   gap: 6px;
+  cursor: pointer;
+  transition:
+    box-shadow var(--mf-motion),
+    transform var(--mf-motion);
+}
+.thread:hover {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.3),
+    0 1px 3px 1px rgb(0 0 0 / 0.15);
 }
 .thread--active {
   outline: 2px solid var(--mf-primary);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.3),
+    0 4px 8px 3px rgb(0 0 0 / 0.15);
 }
 .thread--critical {
   border-left-color: var(--mf-error);
 }
 .thread--major {
-  border-left-color: #c77700;
+  border-left-color: var(--mf-warning);
+}
+.thread--closed {
+  background: var(--mf-surface-container);
+  color: var(--mf-on-surface-variant);
 }
 .thread__meta {
   display: flex;
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
-  font-size: 12px;
+  font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
 .thread__body {
   white-space: pre-wrap;
   word-break: break-word;
+  font: var(--mf-type-body-medium);
+}
+.thread__quote {
+  margin: 0;
+  padding: 2px 10px;
+  border-left: 3px solid var(--mf-outline-variant);
+  color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-small);
 }
 .thread__actions {
   display: flex;
@@ -389,46 +684,59 @@ m3e-icon {
 }
 .compose {
   padding: 12px;
-  border-top: 1px solid var(--mf-outline-variant);
   display: grid;
   gap: 8px;
-  background: var(--mf-surface);
+  background: var(--mf-surface-container-lowest);
+  border-top: 1px solid var(--mf-outline-variant);
 }
 
+/* ---------- アップロード項目（版提出） */
 .upload-item {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
-  padding: 8px 12px;
-  background: var(--mf-surface);
-  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--mf-surface-container-lowest);
+  border-radius: var(--mf-shape-md);
+  border: 1px solid var(--mf-outline-variant);
 }
 .upload-item__bar {
   grid-column: 1 / -1;
-  height: 4px;
-  background: var(--mf-surface-container-high);
-  border-radius: 2px;
-  overflow: hidden;
 }
-.upload-item__bar > div {
-  height: 100%;
-  background: var(--mf-primary);
+.stepper {
+  margin-bottom: 16px;
 }
 
+/* ---------- サインイン */
 .signin {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
+  background:
+    radial-gradient(
+      1200px 600px at 10% -10%,
+      color-mix(in srgb, var(--mf-primary-container) 70%, transparent),
+      transparent 60%
+    ),
+    var(--mf-surface);
 }
 .signin__card {
-  width: min(440px, 100%);
-  display: grid;
+  width: min(460px, 100%);
+  --m3e-card-shape: var(--mf-shape-xl);
+}
+.signin__card .card__content {
   gap: 16px;
-  padding: 32px;
-  background: var(--mf-surface-container-low);
-  border-radius: 28px;
+}
+.signin__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.signin__brand m3e-icon {
+  font-size: 36px;
+  color: var(--mf-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -438,30 +746,15 @@ m3e-icon {
   }
 }
 
-/* ユーザー選択（v1） */
+/* ---------- ユーザー選択（v1） */
 .picker {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  gap: 8px;
 }
 .picker__chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.picker__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.picker__remove {
-  display: inline-flex;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  cursor: pointer;
-  line-height: 1;
 }
 .picker__search {
   position: relative;
@@ -470,13 +763,15 @@ m3e-icon {
   position: absolute;
   z-index: 20;
   inset-inline: 0;
-  top: calc(100% + 4px);
+  top: calc(100% - 16px);
   margin: 0;
   padding: 4px;
   list-style: none;
   background: var(--mf-surface-container-high);
-  border-radius: var(--mf-radius);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+  border-radius: var(--mf-shape-md);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.3),
+    0 4px 8px 3px rgb(0 0 0 / 0.15);
   max-height: 240px;
   overflow: auto;
 }
@@ -487,26 +782,26 @@ m3e-icon {
   gap: 12px;
   border: 0;
   background: transparent;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: var(--mf-shape-sm);
   text-align: left;
   cursor: pointer;
-  font: inherit;
+  font: var(--mf-type-body-medium);
   color: inherit;
 }
 .picker__option:hover,
 .picker__option:focus-visible {
-  background: var(--mf-primary-container);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
   outline: none;
 }
 .picker__empty {
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 
-/* 専門確認・持越・通知（v1） */
+/* ---------- 専門確認・持越・通知（v1） */
 .checks {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
 }
 .check {
@@ -514,78 +809,76 @@ m3e-icon {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--mf-surface-container-low);
+  padding: 8px 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-lowest);
 }
 .check--done {
   background: var(--mf-surface-container);
-}
-.notification {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--mf-radius);
-  background: var(--mf-surface-container-low);
-  align-items: start;
-}
-.notification--unread {
-  background: var(--mf-primary-container);
-}
-.nav-count {
-  display: inline-block;
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--mf-error);
-  color: #fff;
-  font-size: 11px;
-  line-height: 18px;
-  text-align: center;
-  margin-left: 4px;
+  color: var(--mf-on-surface-variant);
 }
 .carry {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--mf-surface-container-low);
+  padding: 10px 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-lowest);
+}
+.notification-list {
+  --m3e-list-item-container-color: var(--mf-surface-container-lowest);
+  display: block;
+  background: var(--mf-surface-container-lowest);
+  border-radius: var(--mf-shape-lg);
+  overflow: hidden;
+}
+.notification {
+  cursor: pointer;
+}
+.notification--unread {
+  background: color-mix(in srgb, var(--mf-primary-container) 45%, transparent);
+}
+.notification__icon {
+  color: var(--mf-primary);
+}
+.notification--read .notification__icon {
+  color: var(--mf-outline);
 }
 
-/* 文章ビューア（F-12） */
+/* ---------- 文章ビューア（F-12） */
 .text-viewer__body {
   margin: 0;
   padding: 24px 28px;
   width: min(100%, 820px);
   min-height: 300px;
   background: #fff;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  color: #191c20;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.3),
+    0 4px 8px 3px rgb(0 0 0 / 0.15);
+  border-radius: 2px;
   font: 15px/1.9 var(--mf-font);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: var(--mf-on-surface);
 }
 .text-anchor {
-  background: rgb(0 92 187 / 0.14);
-  border-bottom: 2px solid var(--mf-primary);
+  background: color-mix(in srgb, #2b5ea8 14%, transparent);
+  border-bottom: 2px solid #2b5ea8;
   cursor: pointer;
 }
 .text-anchor--major {
-  background: rgb(255 170 60 / 0.25);
+  background: color-mix(in srgb, #8a4b00 20%, transparent);
   border-bottom-color: #8a4b00;
 }
 .text-anchor--critical {
-  background: rgb(186 26 26 / 0.16);
-  border-bottom-color: var(--mf-error);
+  background: color-mix(in srgb, #ba1a1a 16%, transparent);
+  border-bottom-color: #ba1a1a;
 }
 .text-anchor--active {
-  outline: 2px solid var(--mf-primary);
+  outline: 2px solid #2b5ea8;
   outline-offset: 1px;
 }
 .text-anchor--draft {
-  background: rgb(0 92 187 / 0.28);
+  background: color-mix(in srgb, #2b5ea8 28%, transparent);
 }
 .text-anchor[data-index]::before {
   content: attr(data-index);
@@ -594,8 +887,8 @@ m3e-icon {
   padding: 0 4px;
   margin-right: 2px;
   border-radius: 8px;
-  background: var(--mf-primary);
-  color: var(--mf-on-primary);
+  background: #2b5ea8;
+  color: #fff;
   font-size: 10px;
   line-height: 16px;
   text-align: center;
@@ -603,11 +896,17 @@ m3e-icon {
   user-select: none;
 }
 .text-anchor:focus-visible {
-  outline: 2px solid var(--mf-primary);
+  outline: 2px solid #2b5ea8;
 }
-.thread__quote {
-  margin: 4px 0;
-  padding: 2px 8px;
-  border-left: 3px solid var(--mf-outline-variant);
-  color: var(--mf-on-surface-variant);
+.nav-icon {
+  position: relative;
+  display: inline-flex;
+}
+.nav-icon__badge {
+  position: absolute;
+  top: -6px;
+  left: 14px;
+}
+.ml {
+  margin-left: 6px;
 }

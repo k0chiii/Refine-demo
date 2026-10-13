@@ -14,8 +14,10 @@ import {
 import { uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
 import { epochToJstLocal, formatBytes, formatJst, jstLocalToEpoch } from "@/lib/format";
-import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon, M3eLinearProgressIndicator } from "@/ui/m3e";
+import { StatusChip } from "@/ui/Chip";
+import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
+import { M3eButton, M3eIcon, M3eLinearProgressIndicator, M3eStep, M3eStepper } from "@/ui/m3e";
+import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
 
@@ -137,48 +139,75 @@ function Submit() {
     }
   };
 
+  const step = state.confirmed ? 2 : flow ? 1 : 0;
+  const steps = (
+    <M3eStepper className="stepper" orientation="horizontal" aria-label="提出の手順">
+      <M3eStep slot="step" selected={step === 0} completed={step > 0}>
+        <M3eIcon slot="icon" name="edit_note" />
+        内容とファイル
+      </M3eStep>
+      <M3eStep slot="step" selected={step === 1} completed={step > 1}>
+        <M3eIcon slot="icon" name="cloud_upload" />
+        転送と検証
+      </M3eStep>
+      <M3eStep slot="step" selected={step === 2} completed={step === 2}>
+        <M3eIcon slot="icon" name="check_circle" />
+        提出確定
+      </M3eStep>
+    </M3eStepper>
+  );
+
   if (state.confirmed) {
     return (
-      <div className="card stack">
-        <h2 style={{ margin: 0 }}>
-          {state.confirmed.kind === "rough" ? "0版（ラフ）" : `第${state.confirmed.sequence}版`}
-          を提出確定しました
-        </h2>
-        {state.confirmed.supersededRevisionId ? (
-          <p className="muted" style={{ margin: 0 }}>
-            旧版の新規校正受付は同時に終了しました。旧版の既存指摘は履歴として残ります。
-          </p>
-        ) : null}
-        <div className="row">
-          <M3eButton
-            variant="filled"
-            onClick={() =>
-              navigate({
-                to: "/revisions/$revisionId",
-                params: { revisionId: state.confirmed!.revisionId },
-              })
-            }
-          >
-            校正ワークスペースを開く
-          </M3eButton>
-          <Link to="/works/$workId" params={{ workId }}>
-            <M3eButton variant="text">制作物に戻る</M3eButton>
-          </Link>
+      <>
+        <PageHeader title="版を提出" meta={<span className="muted">{work.title}</span>} />
+        {steps}
+        <div className="empty" style={{ textAlign: "left", justifyItems: "start" }}>
+          <StatusChip tone="success" icon="check_circle">
+            提出確定
+          </StatusChip>
+          <h2 style={{ margin: 0 }} className="title-small">
+            {state.confirmed.kind === "rough" ? "0版（ラフ）" : `第${state.confirmed.sequence}版`}
+            を提出確定しました
+          </h2>
+          {state.confirmed.supersededRevisionId ? (
+            <p className="muted" style={{ margin: 0 }}>
+              旧版の新規校正受付は同時に終了しました。旧版の既存指摘は履歴として残ります。
+            </p>
+          ) : null}
+          <div className="row">
+            <M3eButton
+              variant="filled"
+              onClick={() =>
+                navigate({
+                  to: "/revisions/$revisionId",
+                  params: { revisionId: state.confirmed!.revisionId },
+                })
+              }
+            >
+              校正ワークスペースを開く
+            </M3eButton>
+            <Link to="/works/$workId" params={{ workId }} className="nav-link">
+              <M3eButton variant="text">制作物に戻る</M3eButton>
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <>
-      <h1 className="page-title">
-        版を提出 <span className="muted small">{work.title}</span>
-      </h1>
+      <PageHeader title="版を提出" meta={<span className="muted">{work.title}</span>} />
+      {steps}
       {accepting ? (
-        <div className="alert alert--info">
-          現在 <strong>{accepting.label}</strong> が受付中（締切 {formatJst(accepting.deadlineAt)}
-          ）。この提出が<strong>確定した時点</strong>
-          で受付が終了します。失敗した場合は受付が維持されます（D1）。
+        <div className="alert alert--info" style={{ marginBottom: 16 }}>
+          <M3eIcon name="info" />
+          <span>
+            現在 <strong>{accepting.label}</strong> が受付中（締切 {formatJst(accepting.deadlineAt)}
+            ）。この提出が<strong>確定した時点</strong>
+            で受付が終了します。失敗した場合は受付が維持されます（D1）。
+          </span>
         </div>
       ) : null}
       {!flow ? (
@@ -220,25 +249,28 @@ function Submit() {
           <Field label="見てほしい観点">
             <TextArea value={form.focusNotes} onChange={set("focusNotes")} />
           </Field>
-          <Field
-            label="ファイル（PDF / 画像 / 原本。複数可）"
-            hint="複数案は1つのファイルにまとめてください（C9）。"
-          >
+          <div className="file-drop">
+            <div className="row">
+              <M3eIcon name="attach_file" />
+              <span className="label-large">ファイル（PDF / 画像 / 文章。複数可）</span>
+            </div>
             <input
               type="file"
               multiple
+              aria-label="ファイルを選択"
               onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             />
-          </Field>
-          {files.length > 0 ? (
-            <ul className="small muted" style={{ margin: 0 }}>
-              {files.map((f) => (
-                <li key={f.name}>
-                  {f.name}（{formatBytes(f.size)}）
-                </li>
-              ))}
-            </ul>
-          ) : null}
+            <span className="small muted">複数案は 1 つのファイルにまとめてください（C9）。</span>
+            {files.length > 0 ? (
+              <div className="row">
+                {files.map((f) => (
+                  <StatusChip key={f.name} icon="draft">
+                    {f.name}（{formatBytes(f.size)}）
+                  </StatusChip>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <Field
             label="外部リンク（Figma / frame.io / Web など、任意）"
             hint="外部ツール上のコメントは同期されません。結論はこのシステムに記録してください（A-12）。"
@@ -250,22 +282,23 @@ function Submit() {
               placeholder="https://"
             />
           </Field>
-          <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="field__label">
-              専門確認（この版で必要な確認。未完了のまま理由なしの校了はできません）
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="label-large" style={{ padding: 0, marginBottom: 8 }}>
+              専門確認
+              <span className="small muted">
+                　この版で必要な確認。未完了のまま理由なしの校了はできません（D6）
+              </span>
             </legend>
             <div className="checks">
               {checkTypes.map((t) => (
-                <div key={t} className="check">
-                  <input
-                    type="checkbox"
+                <div key={t} className={`check ${checks[t]?.on ? "" : "check--done"}`}>
+                  <Checkbox
                     id={`check-${t}`}
                     checked={checks[t]?.on ?? false}
-                    onChange={(e) =>
-                      setChecks((c) => ({ ...c, [t]: { ...c[t]!, on: e.target.checked } }))
-                    }
+                    onChange={(on) => setChecks((c) => ({ ...c, [t]: { ...c[t]!, on } }))}
+                    label={checkTypeLabels[t]}
                   />
-                  <label htmlFor={`check-${t}`}>{checkTypeLabels[t]}</label>
+                  <span />
                   {checks[t]?.on ? (
                     <div style={{ minWidth: 260 }}>
                       <UserPicker
@@ -284,9 +317,14 @@ function Submit() {
               ))}
             </div>
           </fieldset>
-          {error ? <div className="alert">{error}</div> : null}
+          {error ? (
+            <div className="alert">
+              <M3eIcon name="error" />
+              {error}
+            </div>
+          ) : null}
           <div className="form__actions">
-            <Link to="/works/$workId" params={{ workId }}>
+            <Link to="/works/$workId" params={{ workId }} className="nav-link">
               <M3eButton variant="text" type="button">
                 キャンセル
               </M3eButton>
@@ -310,7 +348,9 @@ function Submit() {
                 {it.file ? (
                   <span className="muted small">（{formatBytes(it.file.size)}）</span>
                 ) : (
-                  <span className="chip">外部リンク</span>
+                  <StatusChip icon="link" className="ml">
+                    外部リンク
+                  </StatusChip>
                 )}
                 {it.error ? (
                   <div className="small" style={{ color: "var(--mf-error)" }}>
@@ -319,15 +359,31 @@ function Submit() {
                 ) : null}
               </div>
               <div className="row">
-                <span
-                  className={`chip ${it.status === "verified" ? "chip--ok" : it.status === "failed" ? "chip--error" : "chip--primary"}`}
+                <StatusChip
+                  tone={
+                    it.status === "verified"
+                      ? "success"
+                      : it.status === "failed"
+                        ? "error"
+                        : "primary"
+                  }
+                  icon={
+                    it.status === "verified"
+                      ? "check_circle"
+                      : it.status === "failed"
+                        ? "error"
+                        : it.status === "uploading"
+                          ? "sync"
+                          : "schedule"
+                  }
+                  className={it.status === "verified" ? "chip--ok" : ""}
                 >
                   {
                     { pending: "待機", uploading: "転送中", verified: "検証済み", failed: "失敗" }[
                       it.status
                     ]
                   }
-                </span>
+                </StatusChip>
                 {it.status === "failed" ? (
                   <M3eButton
                     variant="tonal"
@@ -342,22 +398,33 @@ function Submit() {
                 ) : null}
               </div>
               {it.status === "uploading" ? (
-                <div className="upload-item__bar">
-                  <div style={{ width: `${Math.round(it.progress * 100)}%` }} />
-                </div>
+                <M3eLinearProgressIndicator
+                  className="upload-item__bar"
+                  value={Math.round(it.progress * 100)}
+                  max={100}
+                  aria-label={`${it.fileName} の転送`}
+                />
               ) : null}
             </div>
           ))}
           {failedItems(state).length > 0 ? (
             <div className="alert">
-              {failedItems(state).length}{" "}
-              件のファイルが失敗しました。失敗したファイルだけを再アップロードしてから確定してください。旧版の受付は維持されています。
+              <M3eIcon name="error" />
+              <span>
+                {failedItems(state).length}{" "}
+                件のファイルが失敗しました。失敗したファイルだけを再アップロードしてから確定してください。旧版の受付は維持されています。
+              </span>
             </div>
           ) : null}
           {state.confirming ? <M3eLinearProgressIndicator aria-label="確定処理中" /> : null}
-          {state.error || error ? <div className="alert">{state.error ?? error}</div> : null}
+          {state.error || error ? (
+            <div className="alert">
+              <M3eIcon name="error" />
+              {state.error ?? error}
+            </div>
+          ) : null}
           <div className="form__actions">
-            <Link to="/works/$workId" params={{ workId }}>
+            <Link to="/works/$workId" params={{ workId }} className="nav-link">
               <M3eButton variant="text">中止して戻る</M3eButton>
             </Link>
             <M3eButton

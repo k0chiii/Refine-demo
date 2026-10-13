@@ -21,6 +21,8 @@ import {
   severityLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
+import { Card } from "@/ui/Card";
+import { StatusChip, type ChipTone } from "@/ui/Chip";
 import { Field, Select, TextArea } from "@/ui/Field";
 import {
   M3eButton,
@@ -30,10 +32,27 @@ import {
   M3eIcon,
   M3eIconButton,
 } from "@/ui/m3e";
+import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
 
 export const Route = createFileRoute("/_app/revisions/$revisionId")({ component: Workspace });
+
+const severityTone: Record<string, ChipTone> = {
+  critical: "error",
+  major: "warning",
+  minor: "neutral",
+  info: "neutral",
+};
+const resolutionTone: Record<string, ChipTone> = {
+  open: "primary",
+  acknowledged: "neutral",
+  accepted: "primary",
+  rejected: "neutral",
+  deferred: "neutral",
+  resolved: "success",
+};
+const closedResolutions = ["rejected", "resolved", "deferred"];
 
 type Draft = {
   page?: number;
@@ -265,23 +284,32 @@ function Workspace() {
 
   return (
     <>
-      <h1 className="page-title" style={{ fontSize: 18 }}>
-        <Link to="/works/$workId" params={{ workId: work.id }}>
-          {work.title}
-        </Link>
-        <span className="chip chip--primary">{revision.label}</span>
-        <span className={`chip ${open ? "chip--ok" : "chip--error"}`}>
-          {open
-            ? `受付中・${remaining(revision.deadlineAt, now)}`
-            : revision.reviewClosedReason
-              ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-              : reviewStateLabel[revision.reviewState]}
-        </span>
-        <span className="small muted">締切 {formatJst(revision.deadlineAt)}</span>
-        {work.finalRevisionId === revision.id ? (
-          <span className="chip chip--ok">校了版</span>
-        ) : null}
-        <span className="spacer" />
+      <PageHeader
+        size="small"
+        title={
+          <Link to="/works/$workId" params={{ workId: work.id }}>
+            {work.title}
+          </Link>
+        }
+        meta={
+          <>
+            <StatusChip tone="primary">{revision.label}</StatusChip>
+            <StatusChip tone={open ? "success" : "neutral"} icon={open ? "schedule" : "lock"}>
+              {open
+                ? `受付中・${remaining(revision.deadlineAt, now)}`
+                : revision.reviewClosedReason
+                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  : reviewStateLabel[revision.reviewState]}
+            </StatusChip>
+            <span className="small muted">締切 {formatJst(revision.deadlineAt)}</span>
+            {work.finalRevisionId === revision.id ? (
+              <StatusChip tone="success" icon="verified">
+                校了版
+              </StatusChip>
+            ) : null}
+          </>
+        }
+      >
         <span className="small muted">
           校正対象者:{" "}
           {assignments.length === 0
@@ -300,7 +328,9 @@ function Workspace() {
             自分の確認を完了
           </M3eButton>
         ) : myAssignment?.state === "responded" ? (
-          <span className="chip chip--ok">確認完了</span>
+          <StatusChip tone="success" icon="task_alt">
+            確認完了
+          </StatusChip>
         ) : null}
         {can.void ? (
           <M3eButton variant="text" onClick={() => setVoidDraft("")}>
@@ -308,26 +338,35 @@ function Workspace() {
             誤提出を無効化
           </M3eButton>
         ) : null}
-      </h1>
+      </PageHeader>
       {revision.focusNotes ? (
         <div className="alert alert--info" style={{ marginBottom: 12 }}>
-          見てほしい観点: {revision.focusNotes}
+          <M3eIcon name="visibility" />
+          <span>見てほしい観点: {revision.focusNotes}</span>
         </div>
       ) : null}
 
       {checks.length > 0 || can.addCheck ? (
-        <section className="card" style={{ marginBottom: 12 }} aria-label="専門確認">
-          <div className="row">
-            <h3 style={{ margin: 0 }}>専門確認</h3>
-            {checks.length > 0 ? (
-              <span className={`chip ${pendingChecks > 0 ? "chip--warn" : "chip--ok"}`}>
-                {pendingChecks > 0 ? `未完了 ${pendingChecks} 件` : "すべて完了"}
-              </span>
-            ) : (
-              <span className="small muted">この版に専門確認は宣言されていません</span>
-            )}
-            <span className="spacer" />
-            {can.addCheck && !addCheckDraft ? (
+        <Card
+          ariaLabel="専門確認"
+          style={{ marginBottom: 12 }}
+          title={
+            <span className="row">
+              専門確認
+              {checks.length > 0 ? (
+                <StatusChip
+                  tone={pendingChecks > 0 ? "warning" : "success"}
+                  icon={pendingChecks > 0 ? "pending" : "task_alt"}
+                >
+                  {pendingChecks > 0 ? `未完了 ${pendingChecks} 件` : "すべて完了"}
+                </StatusChip>
+              ) : (
+                <span className="small muted">この版に専門確認は宣言されていません</span>
+              )}
+            </span>
+          }
+          actions={
+            can.addCheck && !addCheckDraft ? (
               <M3eButton
                 variant="text"
                 onClick={() => setAddCheckDraft({ type: "photo", assignee: [] })}
@@ -335,17 +374,27 @@ function Workspace() {
                 <M3eIcon slot="icon" name="add" />
                 確認を追加
               </M3eButton>
-            ) : null}
-          </div>
+            ) : null
+          }
+        >
           {checks.length > 0 ? (
-            <div className="checks" style={{ marginTop: 8 }}>
+            <div className="checks">
               {checks.map((c) => (
                 <div key={c.id} className={`check ${c.state !== "pending" ? "check--done" : ""}`}>
-                  <span
-                    className={`chip ${c.state === "done" ? "chip--ok" : c.state === "waived" ? "" : "chip--warn"}`}
+                  <StatusChip
+                    tone={
+                      c.state === "done" ? "success" : c.state === "waived" ? "neutral" : "warning"
+                    }
+                    icon={
+                      c.state === "done"
+                        ? "check_circle"
+                        : c.state === "waived"
+                          ? "do_not_disturb_on"
+                          : "pending"
+                    }
                   >
                     {checkStateLabel[c.state]}
-                  </span>
+                  </StatusChip>
                   <div>
                     <strong>{c.label}</strong>
                     <div className="small muted">
@@ -436,7 +485,7 @@ function Workspace() {
               </div>
             </div>
           ) : null}
-        </section>
+        </Card>
       ) : null}
 
       <div className="workspace">
@@ -456,14 +505,17 @@ function Workspace() {
           {!artifact ? (
             <div className="empty">添付がありません</div>
           ) : artifact.role === "external" ? (
-            <div className="card stack">
-              <h3>外部媒体</h3>
+            <Card title="外部媒体" variant="outlined">
               <a href={artifact.externalUrl ?? "#"} target="_blank" rel="noreferrer noopener">
+                <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
                 {artifact.externalUrl}
               </a>
               <div className="alert alert--warn">
-                外部ツール上のコメントはこのシステムに同期されていません。議論の結論・未解決点は右のスレッドに「合意事項」として記録してください（§9.3
-                / A-12）。
+                <M3eIcon name="sync_disabled" />
+                <span>
+                  外部ツール上のコメントはこのシステムに同期されていません。議論の結論・未解決点は右のスレッドに「合意事項」として記録してください（§9.3
+                  / A-12）。
+                </span>
               </div>
               {can.comment ? (
                 <div className="stack" aria-label="外部での議論結果を記録">
@@ -490,9 +542,12 @@ function Workspace() {
                   </div>
                 </div>
               ) : null}
-            </div>
+            </Card>
           ) : blob.error ? (
-            <div className="alert">{blob.error}</div>
+            <div className="alert">
+              <M3eIcon name="error" />
+              {blob.error}
+            </div>
           ) : !blob.blob ? (
             <div className="empty">ファイルを取得中…</div>
           ) : artifact.type === "pdf" ? (
@@ -530,15 +585,16 @@ function Workspace() {
               onDraft={setDraft}
             />
           ) : (
-            <div className="card stack">
-              <h3>{artifact.fileName}</h3>
-              <p className="muted">この形式はブラウザ内でプレビューできません。</p>
+            <Card title={artifact.fileName} variant="outlined">
+              <p className="muted" style={{ margin: 0 }}>
+                この形式はブラウザ内でプレビューできません。
+              </p>
               {blob.url ? (
                 <a href={blob.url} download={artifact.fileName}>
                   ダウンロード
                 </a>
               ) : null}
-            </div>
+            </Card>
           )}
         </div>
 
@@ -584,24 +640,27 @@ function Workspace() {
           </div>
           <div className="comments__list">
             {carryCandidates && carryCandidates.length > 0 ? (
-              <section className="card card--outlined stack" aria-label="前版の未解決指摘">
-                <div className="row">
-                  <M3eIcon name="move_up" />
-                  <strong>前版の未解決指摘 {carryCandidates.length} 件</strong>
-                </div>
+              <Card
+                variant="outlined"
+                ariaLabel="前版の未解決指摘"
+                title={
+                  <span className="row">
+                    <M3eIcon name="move_up" />
+                    前版の未解決指摘 {carryCandidates.length} 件
+                  </span>
+                }
+              >
                 <p className="small muted" style={{ margin: 0 }}>
                   この版にも当てはまるものを人が確認して引き継ぎます。位置情報は引き継がれません（版が変わるため）。元の指摘は「次版へ持越」になります。
                 </p>
                 {carryCandidates.map((c) => (
                   <div key={c.id} className="carry">
                     <div className="thread__meta">
-                      <span className="chip">{c.revisionLabel}</span>
-                      <span
-                        className={`chip ${c.severity === "critical" ? "chip--error" : c.severity === "major" ? "chip--warn" : ""}`}
-                      >
+                      <StatusChip>{c.revisionLabel}</StatusChip>
+                      <StatusChip tone={severityTone[c.severity] ?? "neutral"}>
                         {severityLabel[c.severity]}
-                      </span>
-                      <span className="chip">{resolutionLabel[c.resolution]}</span>
+                      </StatusChip>
+                      <StatusChip>{resolutionLabel[c.resolution]}</StatusChip>
                       <span className="spacer" />
                       <span>{c.author?.name}</span>
                     </div>
@@ -619,7 +678,7 @@ function Workspace() {
                     </div>
                   </div>
                 ))}
-              </section>
+              </Card>
             ) : null}
             {threads.length === 0 ? (
               <p className="muted small" style={{ padding: 8 }}>
@@ -629,33 +688,40 @@ function Workspace() {
               threads.map((t) => (
                 <article
                   key={t.id}
-                  className={`thread thread--${t.severity} ${t.id === activeThreadId ? "thread--active" : ""}`}
+                  className={`thread thread--${t.severity} ${t.id === activeThreadId ? "thread--active" : ""} ${closedResolutions.includes(t.resolution) ? "thread--closed" : ""}`}
                   tabIndex={0}
                   onClick={() => jumpTo(t)}
                   onKeyDown={(e) => e.key === "Enter" && jumpTo(t)}
                   aria-label={`指摘 ${t.index}`}
                 >
                   <div className="thread__meta">
-                    <span className="chip chip--primary">#{t.index}</span>
-                    <span className="chip">{kindLabel[t.kind]}</span>
-                    <span
-                      className={`chip ${t.severity === "critical" ? "chip--error" : t.severity === "major" ? "chip--warn" : ""}`}
+                    <StatusChip tone="primary">#{t.index}</StatusChip>
+                    <StatusChip>{kindLabel[t.kind]}</StatusChip>
+                    <StatusChip
+                      tone={severityTone[t.severity] ?? "neutral"}
+                      icon={
+                        t.severity === "critical"
+                          ? "error"
+                          : t.severity === "major"
+                            ? "warning"
+                            : undefined
+                      }
                     >
                       {severityLabel[t.severity]}
-                    </span>
-                    <span
-                      className={`chip ${["rejected", "resolved", "deferred"].includes(t.resolution) ? "chip--ok" : ""}`}
-                    >
+                    </StatusChip>
+                    <StatusChip tone={resolutionTone[t.resolution] ?? "neutral"}>
                       {resolutionLabel[t.resolution]}
-                    </span>
+                    </StatusChip>
                     {t.anchor ? (
                       <M3eIcon style={{ fontSize: 16 }} title="位置指定あり" name="location_on" />
                     ) : null}
-                    {t.carriedFromThreadId ? <span className="chip">前版から持越</span> : null}
+                    {t.carriedFromThreadId ? (
+                      <StatusChip icon="move_up">前版から持越</StatusChip>
+                    ) : null}
                     {t.assignee ? (
-                      <span className="chip" title="対応担当">
+                      <StatusChip icon="person" title="対応担当">
                         担当: {t.assignee.name}
-                      </span>
+                      </StatusChip>
                     ) : null}
                     {t.editCount ? (
                       <span className="small muted">（訂正 {t.editCount} 回）</span>

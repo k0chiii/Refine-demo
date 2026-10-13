@@ -74,5 +74,13 @@
   {
     "screen": "13-admin-audit",
     "violations": []
+  },
+  {
+    "screen": "20-dark-workspace",
+    "violations": []
+  },
+  {
+    "screen": "21-mobile-queue",
+    "violations": []
   }
 ]

@@ -1,19 +1,27 @@
 /**
- * Material 3 Expressive（@m3e/react）の採用コンポーネントを 1 箇所に集約する。
- * - PoC で実在と API を確認済み（v2.9.2）。不足するもの（データテーブル・フォーム入力）は tokens.css のトークンで補完する。
- * - Lit ベースの Web Components なので、slot 名（icon / trailing-icon / header / actions など）は文字列属性で指定する。
+ * Material 3 Expressive（@m3e/react 2.9.2）の採用コンポーネントを 1 箇所に集約する。
+ * - Lit ベースの Web Components。slot 名（icon / label / hint / header / content / actions など）は文字列属性で指定する。
+ * - フォーム入力は M3eFormField の中に native input / textarea（IME・キーボード操作を優先）、
+ *   選択は M3eSelect + M3eOption、真偽は M3eCheckbox を使う（ui/Field.tsx が包む）。
+ * - テーマ（<m3e-theme>）は index.html の body 直下（src/theme.ts）。
  */
 export { M3eButton } from "@m3e/react/button";
 export { M3eIconButton } from "@m3e/react/icon-button";
 export { M3eIcon } from "@m3e/react/icon";
-export { M3eTheme } from "@m3e/react/theme";
 export { M3eAppBar } from "@m3e/react/app-bar";
 export { M3eNavRail } from "@m3e/react/nav-rail";
-export { M3eNavItem } from "@m3e/react/nav-bar";
+export { M3eNavBar, M3eNavItem } from "@m3e/react/nav-bar";
 export { M3eCard } from "@m3e/react/card";
 export { M3eDialog } from "@m3e/react/dialog";
-export { M3eFilterChip, M3eFilterChipSet, M3eAssistChip, M3eChipSet } from "@m3e/react/chips";
-export { M3eList, M3eListItem } from "@m3e/react/list";
+export {
+  M3eFilterChip,
+  M3eFilterChipSet,
+  M3eAssistChip,
+  M3eChipSet,
+  M3eInputChip,
+  M3eSuggestionChip,
+} from "@m3e/react/chips";
+export { M3eList, M3eListItem, M3eActionList, M3eListAction } from "@m3e/react/list";
 export { M3eTabs, M3eTab, M3eTabPanel } from "@m3e/react/tabs";
 export { M3eBadge } from "@m3e/react/badge";
 export { M3eTooltip } from "@m3e/react/tooltip";
@@ -23,4 +31,12 @@ export {
 } from "@m3e/react/progress-indicator";
 export { M3eDivider } from "@m3e/react/divider";
 export { M3eHeading } from "@m3e/react/heading";
+export { M3eFormField } from "@m3e/react/form-field";
+export { M3eSelect } from "@m3e/react/select";
+export { M3eOption } from "@m3e/react/option";
+export { M3eCheckbox } from "@m3e/react/checkbox";
+export { M3eSearchBar } from "@m3e/react/search";
+export { M3eTextareaAutosize } from "@m3e/react/textarea-autosize";
+export { M3eStepper, M3eStep, M3eStepPanel } from "@m3e/react/stepper";
+export { M3eSkeleton } from "@m3e/react/skeleton";
 export { M3eSnackbar } from "@m3e/web/snackbar";
