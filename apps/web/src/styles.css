@@ -169,8 +169,7 @@ m3e-search-bar {
   min-width: 0;
 }
 .shell__content {
-  padding: 8px 24px 48px;
-  max-width: 1400px;
+  padding: 8px 32px 48px;
   width: 100%;
 }
 .shell__bar {
@@ -456,7 +455,15 @@ m3e-search-bar {
 .form {
   display: grid;
   gap: 16px;
-  max-width: 760px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+.form > .grid-2,
+.form > .form__actions,
+.form > details,
+.form > .alert,
+.form > .file-drop,
+.form > fieldset {
+  grid-column: 1 / -1;
 }
 .form__actions {
   display: flex;
@@ -533,7 +540,7 @@ m3e-search-bar {
 /* ---------- 校正ワークスペース（U-05）: 左ビューア / 右コメント */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 28vw, 560px);
   gap: 16px;
   height: calc(100vh - 150px);
   min-height: 480px;
@@ -857,7 +864,7 @@ m3e-search-bar {
 .text-viewer__body {
   margin: 0;
   padding: 24px 28px;
-  width: min(100%, 820px);
+  width: 100%;
   min-height: 300px;
   background: #fff;
   color: #191c20;

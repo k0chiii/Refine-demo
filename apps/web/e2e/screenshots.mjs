@@ -137,7 +137,7 @@ async function main() {
   await page.locator('m3e-icon-button[aria-label="カレンダーから選ぶ"]').first().click();
   await page.waitForTimeout(600);
   await shot("22-date-picker", "m3e-date-input");
-  await page.keyboard.press("Escape");
+  await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
   await page.waitForTimeout(300);
   await page.locator("details.checks-details > summary").click();
   await page.locator("m3e-checkbox#check-photo").click();
