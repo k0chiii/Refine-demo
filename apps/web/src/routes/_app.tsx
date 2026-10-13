@@ -1,8 +1,15 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+  useSearch,
+} from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   M3eAppBar,
   M3eBadge,
@@ -14,14 +21,16 @@ import {
   M3eNavBar,
   M3eNavItem,
   M3eNavRail,
+  M3eSearchBar,
 } from "@/ui/m3e";
 import { UserAvatar } from "@/ui/UserAvatar";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
 /**
- * 認証ガード＋共通レイアウト。広い画面は navigation rail、狭い画面は navigation bar。
- * 右上はアカウント（Humation のアバター → 氏名・メール・サインアウトのメニュー）。
+ * 認証ガード＋共通レイアウト（Gmail / Google ドライブと同じ骨格）。
+ * 左: navigation rail（狭い画面は下部 navigation bar）。上: 題名を置かず、検索バーと右上のアカウントだけ。
+ * 検索は制作物一覧（/works?q=）に反映する。
  */
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -70,9 +79,11 @@ function AppLayout() {
         {navItems()}
       </M3eNavRail>
       <div className="shell__main">
-        <M3eAppBar size="small">
-          <span slot="title">MF100 校正</span>
-          <M3eIconButton slot="trailing-icon" aria-label={`アカウント: ${me.name}`}>
+        <M3eAppBar size="small" className="shell__appbar">
+          <div slot="title" className="shell__search">
+            <WorkSearch />
+          </div>
+          <M3eIconButton slot="trailing" aria-label={`アカウント: ${me.name}`}>
             <UserAvatar seed={me.email ?? me.id} size={32} />
             <M3eMenuTrigger htmlFor="account-menu" />
           </M3eIconButton>
@@ -101,5 +112,50 @@ function AppLayout() {
         {navItems()}
       </M3eNavBar>
     </div>
+  );
+}
+
+/** アプリバーの検索（Google ドライブ式）。入力は制作物一覧の `q` に反映し、一覧以外の画面からは一覧へ移動する。 */
+function WorkSearch() {
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { q?: string };
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const [text, setText] = useState(search.q ?? "");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!path.startsWith("/works")) setText("");
+    else setText(search.q ?? "");
+  }, [search.q, path.startsWith("/works")]);
+  const apply = (q: string) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      void navigate({
+        to: "/works",
+        search: q ? { q } : {},
+        replace: path.startsWith("/works"),
+      });
+    }, 250);
+  };
+  return (
+    <M3eSearchBar
+      className="search search--appbar"
+      clearable
+      onClear={() => {
+        setText("");
+        apply("");
+      }}
+    >
+      <M3eIcon slot="leading" name="search" />
+      <input
+        slot="input"
+        placeholder="制作物を検索"
+        aria-label="制作物を検索"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          apply(e.target.value);
+        }}
+      />
+    </M3eSearchBar>
   );
 }

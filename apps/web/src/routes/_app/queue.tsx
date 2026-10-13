@@ -1,28 +1,22 @@
 import { api } from "@mf100/convex/api";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJstDate, remaining } from "@/lib/format";
 import { assignmentLabel } from "@/lib/labels";
-import { StatusChip, StatusText } from "@/ui/Chip";
-import { M3eFilterChip, M3eFilterChipSet } from "@/ui/m3e";
+import { M3eActionList, M3eFilterChip, M3eFilterChipSet, M3eListAction } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 
 export const Route = createFileRoute("/_app/queue")({ component: Queue });
 
-const assignmentTone = {
-  pending: "primary",
-  viewed: "neutral",
-  responded: "success",
-  excused: "neutral",
-} as const;
-
 /**
  * U-01 自分の校正待ち。締切が近い順。
- * 表現: 期限超過は行ごと error コンテナで強調、確認完了・受付終了は沈める（M3E: 強調は業務上の意味に結び付ける）。
+ * Gmail と同じ 2 行のリスト（m3e-action-list）: 1 行目は制作物と版、2 行目は締切と指摘数。
+ * 色を付けるのは期限超過だけ。
  */
 function Queue() {
   const items = useQuery(api.reviews.myQueue, {});
+  const navigate = useNavigate();
   const [showDone, setShowDone] = useState(false);
   if (items === undefined) return <p className="muted">読み込み中…</p>;
   const visible = items.filter((i) => showDone || (i.isOpen && i.assignmentState !== "responded"));
@@ -31,7 +25,7 @@ function Queue() {
       <PageHeader title="校正待ち">
         <M3eFilterChipSet>
           <M3eFilterChip selected={showDone} onClick={() => setShowDone((v) => !v)}>
-            確認済み・受付終了も表示
+            確認済みも表示
           </M3eFilterChip>
         </M3eFilterChipSet>
       </PageHeader>
@@ -40,57 +34,42 @@ function Queue() {
           {items.length === 0 ? "割り当てられた校正はありません。" : "未確認の校正はありません。"}
         </div>
       ) : (
-        <div className="table-wrap" tabIndex={0}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>制作物</th>
-                <th>締切</th>
-                <th>状態</th>
-                <th>指摘</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((i) => {
-                const done = !i.isOpen || i.assignmentState === "responded";
-                return (
-                  <tr
-                    key={i.revisionId}
-                    className={i.overdue && i.isOpen ? "row--urgent" : done ? "row--done" : ""}
-                  >
-                    <td>
-                      <Link to="/revisions/$revisionId" params={{ revisionId: i.revisionId }}>
-                        {i.workTitle}
-                        {"　"}
-                        {i.revisionLabel}
-                      </Link>
-                      {i.kind === "rough" ? <span className="meta ml">ラフ</span> : null}
-                      {i.focusNotes ? <div className="small muted">{i.focusNotes}</div> : null}
-                    </td>
-                    <td>
-                      <div>{formatJstDate(i.deadlineAt)}</div>
-                      {i.isOpen ? (
-                        <StatusText tone={i.overdue ? "error" : "neutral"}>
-                          {remaining(i.deadlineAt)}
-                        </StatusText>
-                      ) : (
-                        <span className="small muted">
-                          {i.reviewState === "open" ? "期限超過" : "受付終了"}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <StatusChip tone={assignmentTone[i.assignmentState]}>
-                        {assignmentLabel[i.assignmentState]}
-                      </StatusChip>
-                    </td>
-                    <td className="small">{i.totalCommentCount}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <M3eActionList className="list" aria-label="校正待ち">
+          {visible.map((i) => {
+            const done = !i.isOpen || i.assignmentState === "responded";
+            const urgent = i.overdue && i.isOpen;
+            return (
+              <M3eListAction
+                key={i.revisionId}
+                className={`list__item ${done ? "list__item--done" : ""} ${urgent ? "list__item--urgent" : ""}`}
+                onClick={() =>
+                  void navigate({
+                    to: "/revisions/$revisionId",
+                    params: { revisionId: i.revisionId },
+                  })
+                }
+              >
+                <span className="list__headline">
+                  {i.workTitle}
+                  <span className="muted">　{i.revisionLabel}</span>
+                  {i.kind === "rough" ? <span className="muted">　ラフ</span> : null}
+                </span>
+                <span slot="supporting-text">
+                  {i.isOpen
+                    ? `締切 ${formatJstDate(i.deadlineAt)}（${remaining(i.deadlineAt)}）`
+                    : i.reviewState === "open"
+                      ? "期限超過"
+                      : "受付終了"}
+                  {i.totalCommentCount > 0 ? `・指摘 ${i.totalCommentCount}` : ""}
+                  {i.focusNotes ? `・${i.focusNotes}` : ""}
+                </span>
+                <span slot="trailing" className={`meta ${urgent ? "meta--error" : ""}`}>
+                  {urgent ? "期限超過" : assignmentLabel[i.assignmentState]}
+                </span>
+              </M3eListAction>
+            );
+          })}
+        </M3eActionList>
       )}
     </>
   );

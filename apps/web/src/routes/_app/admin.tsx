@@ -3,12 +3,11 @@ import type { Id } from "@mf100/convex/dataModel";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import { lifecycleTone } from "./works/index";
 import { formatJst } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
-import { StatusChip } from "@/ui/Chip";
+import { StatusChip, StatusText } from "@/ui/Chip";
 import { M3eButton, M3eIcon, M3eSearchBar } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 
@@ -58,9 +57,9 @@ function Admin() {
                       ) : null}
                     </td>
                     <td>
-                      <StatusChip tone={lifecycleTone[w.lifecycle] ?? "neutral"}>
+                      <StatusText tone={w.lifecycle === "finalized" ? "success" : "neutral"}>
                         {lifecycleLabel[w.lifecycle] ?? w.lifecycle}
-                      </StatusChip>
+                      </StatusText>
                     </td>
                     <td>{w.activeGrantCount} 件</td>
                     <td>

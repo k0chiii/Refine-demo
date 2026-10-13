@@ -1,10 +1,12 @@
 import type { Anchor } from "@mf100/domain";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { OverlayThread } from "./AnchorOverlay";
 
 export interface TextRangeDraft {
   start: number;
   end: number;
+  /** 選択範囲の表示位置（本文コンテナ基準 px）。投稿欄をそのそばに出すために使う */
+  box?: { x: number; y: number; w: number; h: number };
 }
 
 interface Props {
@@ -17,6 +19,10 @@ interface Props {
   selecting: boolean;
   draft: TextRangeDraft | null;
   onDraft: (d: TextRangeDraft | null) => void;
+  /** 本文の上に重ねるもの（投稿欄など。座標は本文コンテナ基準） */
+  inPage?: ReactNode;
+  /** 本文の右に並べるもの。各スレッドの縦位置（本文コンテナ基準 px）を渡す */
+  renderGutter?: (positions: Map<string, number>, height: number) => ReactNode;
 }
 
 type TextThread = OverlayThread & { anchor: Extract<Anchor, { type: "text_range" }> };
@@ -37,8 +43,13 @@ export function TextViewer({
   selecting,
   draft,
   onDraft,
+  inPage,
+  renderGutter,
 }: Props) {
   const bodyRef = useRef<HTMLPreElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [positions, setPositions] = useState<Map<string, number>>(new Map());
+  const [height, setHeight] = useState(0);
   const mine = threads.filter(
     (t): t is TextThread => t.anchor.type === "text_range" && t.anchor.artifactId === artifactId,
   );
@@ -74,8 +85,30 @@ export function TextViewer({
       ?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeThreadId]);
 
+  // 各スレッドの先頭セグメントの縦位置を測る（整列レイアウト用）
+  const key = mine.map((t) => `${t.id}:${t.anchor.start}`).join("|");
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const body = bodyRef.current;
+    if (!wrap || !body) return;
+    const measure = () => {
+      const base = wrap.getBoundingClientRect();
+      const next = new Map<string, number>();
+      for (const t of mine) {
+        const el = body.querySelector(`[data-thread~="${CSS.escape(t.id)}"]`);
+        if (el) next.set(t.id, el.getBoundingClientRect().top - base.top);
+      }
+      setPositions(next);
+      setHeight(wrap.offsetHeight);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [key, text]);
+
   const readSelection = () => {
-    if (!selecting || !bodyRef.current) return;
+    if (!selecting || !bodyRef.current || !wrapRef.current) return;
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
@@ -87,70 +120,70 @@ export function TextViewer({
     const start = pre.toString().length;
     pre.setEnd(range.endContainer, range.endOffset);
     const end = pre.toString().length;
-    if (end > start) onDraft({ start, end });
+    if (end <= start) return;
+    const r = range.getBoundingClientRect();
+    const base = wrapRef.current.getBoundingClientRect();
+    onDraft({
+      start,
+      end,
+      box: { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height },
+    });
   };
 
   return (
     <div className="viewer text-viewer">
-      <div className="viewer__toolbar" role="toolbar" aria-label="文章操作">
-        <span className="small muted">{text.length.toLocaleString("ja-JP")} 文字</span>
-        {selecting ? <span className="chip chip--warn">本文をドラッグして範囲を指定</span> : null}
-        <span className="small muted">
-          文章の共同編集はこのシステムでは行いません（版スナップショットの閲覧・範囲指摘のみ）
-        </span>
-      </div>
-      <div className="viewer__stage">
-        <pre
-          ref={bodyRef}
-          className="text-viewer__body"
-          aria-label="校正対象の文章"
-          onMouseUp={readSelection}
-          onKeyUp={readSelection}
-        >
-          {segments.map((seg) => {
-            const first = seg.threads.filter((t) => t.anchor.start === seg.start);
-            const active = seg.threads.some((t) => t.id === activeThreadId);
-            const severity = seg.threads.find((t) => t.severity === "critical")
-              ? "critical"
-              : seg.threads.find((t) => t.severity === "major")
-                ? "major"
-                : "";
-            const label = first.map((t) => t.index).join(",");
-            const cls = [
-              seg.threads.length > 0 ? "text-anchor" : "",
-              active ? "text-anchor--active" : "",
-              severity ? `text-anchor--${severity}` : "",
-              seg.draft ? "text-anchor--draft" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            const content = text.slice(seg.start, seg.end);
-            if (!cls) return <span key={seg.start}>{content}</span>;
-            return (
-              <span
-                key={seg.start}
-                className={cls}
-                data-thread={seg.threads.map((t) => t.id).join(" ")}
-                {...(label ? { "data-index": label } : {})}
-                {...(seg.threads.length > 0
-                  ? {
-                      role: "button",
-                      tabIndex: 0,
-                      title: `指摘 ${seg.threads.map((t) => `#${t.index}`).join(" ")}`,
-                      onClick: (e: { stopPropagation: () => void }) => {
-                        e.stopPropagation();
-                        onSelectThread(seg.threads[0]!.id);
-                      },
-                      onKeyDown: (e: { key: string }) =>
-                        e.key === "Enter" && onSelectThread(seg.threads[0]!.id),
-                    }
-                  : {})}
-              >
-                {content}
-              </span>
-            );
-          })}
-        </pre>
+      <div className="viewer__stage" tabIndex={0}>
+        <div className="text-viewer__wrap" ref={wrapRef}>
+          <pre
+            ref={bodyRef}
+            className="text-viewer__body"
+            aria-label="校正対象の文章"
+            onMouseUp={readSelection}
+            onKeyUp={readSelection}
+          >
+            {segments.map((seg) => {
+              const first = seg.threads.filter((t) => t.anchor.start === seg.start);
+              const active = seg.threads.some((t) => t.id === activeThreadId);
+              const severity = seg.threads.find((t) => t.severity === "critical") ? "critical" : "";
+              const label = first.map((t) => t.index).join(",");
+              const cls = [
+                seg.threads.length > 0 ? "text-anchor" : "",
+                active ? "text-anchor--active" : "",
+                severity ? `text-anchor--${severity}` : "",
+                seg.draft ? "text-anchor--draft" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const content = text.slice(seg.start, seg.end);
+              if (!cls) return <span key={seg.start}>{content}</span>;
+              return (
+                <span
+                  key={seg.start}
+                  className={cls}
+                  data-thread={seg.threads.map((t) => t.id).join(" ")}
+                  {...(label ? { "data-index": label } : {})}
+                  {...(seg.threads.length > 0
+                    ? {
+                        role: "button",
+                        tabIndex: 0,
+                        title: `指摘 ${seg.threads.map((t) => `#${t.index}`).join(" ")}`,
+                        onClick: (e: { stopPropagation: () => void }) => {
+                          e.stopPropagation();
+                          onSelectThread(seg.threads[0]!.id);
+                        },
+                        onKeyDown: (e: { key: string }) =>
+                          e.key === "Enter" && onSelectThread(seg.threads[0]!.id),
+                      }
+                    : {})}
+                >
+                  {content}
+                </span>
+              );
+            })}
+          </pre>
+          {inPage}
+        </div>
+        {renderGutter ? renderGutter(positions, height) : null}
       </div>
     </div>
   );

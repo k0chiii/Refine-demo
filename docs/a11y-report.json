@@ -25,56 +25,31 @@
         "nodes": [
           {
             "target": [
-              [
-                "#_r_9_-picker",
-                "m3e-calendar",
-                "m3e-month-view[active=\"\"]",
-                "#date-9-1-2026"
-              ]
+              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-1-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              [
-                "#_r_9_-picker",
-                "m3e-calendar",
-                "m3e-month-view[active=\"\"]",
-                "#date-9-2-2026"
-              ]
+              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-2-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              [
-                "#_r_9_-picker",
-                "m3e-calendar",
-                "m3e-month-view[active=\"\"]",
-                "#date-9-3-2026"
-              ]
+              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-3-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              [
-                "#_r_9_-picker",
-                "m3e-calendar",
-                "m3e-month-view[active=\"\"]",
-                "#date-9-4-2026"
-              ]
+              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-4-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              [
-                "#_r_9_-picker",
-                "m3e-calendar",
-                "m3e-month-view[active=\"\"]",
-                "#date-9-5-2026"
-              ]
+              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-5-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           }
@@ -111,6 +86,14 @@
     "violations": []
   },
   {
+    "screen": "23-layout-aligned",
+    "violations": []
+  },
+  {
+    "screen": "24-layout-pins",
+    "violations": []
+  },
+  {
     "screen": "16-required-check-done",
     "violations": []
   },
@@ -124,6 +107,10 @@
   },
   {
     "screen": "17-carry-forward",
+    "violations": []
+  },
+  {
+    "screen": "25-compare",
     "violations": []
   },
   {
@@ -148,6 +135,10 @@
   },
   {
     "screen": "20-mobile-queue",
+    "violations": []
+  },
+  {
+    "screen": "26-mobile-workspace",
     "violations": []
   }
 ]

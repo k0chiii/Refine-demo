@@ -1,8 +1,7 @@
 import type { Anchor, NormalizedRect, Viewport } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { useEffect, useRef, useState } from "react";
-import { M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 
 // Vite がワーカーを別チャンクとして配信する
@@ -11,27 +10,27 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
+export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: number; y: number } };
+
 interface Props {
   blob: Blob;
   artifactId: string;
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
+  /** ドラッグで範囲、クリックでピンを指定できるか（投稿権限があれば常時） */
   selecting: boolean;
-  draft: {
-    page: number;
-    rect?: NormalizedRect;
-    point?: { x: number; y: number };
-  } | null;
-  onDraft: (
-    d: {
-      page: number;
-      rect?: NormalizedRect;
-      point?: { x: number; y: number };
-    } | null,
-  ) => void;
-  /** 指摘カードから「位置へ移動」したときのページ移動要求 */
-  requestedPage: number | null;
+  draft: PdfDraft | null;
+  onDraft: (d: PdfDraft | null) => void;
+  /** 表示状態は親（フローティングツールバー）が持つ */
+  page: number;
+  scale: number;
+  rotation: 0 | 90 | 180 | 270;
+  onPageCount?: (n: number) => void;
+  /** ページの上に重ねるもの（投稿欄・吹き出し）。座標は viewport px */
+  renderInPage?: (vp: Viewport) => ReactNode;
+  /** ページの右に並べるもの（Google ドキュメント式に整列したコメント） */
+  renderGutter?: (vp: Viewport) => ReactNode;
 }
 
 /**
@@ -46,13 +45,15 @@ export function PdfViewer({
   selecting,
   draft,
   onDraft,
-  requestedPage,
+  page,
+  scale,
+  rotation,
+  onPageCount,
+  renderInPage,
+  renderGutter,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
-  const [page, setPage] = useState(1);
-  const [scale, setScale] = useState(1.2);
-  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +69,9 @@ export function PdfViewer({
           useSystemFonts: true,
         })
         .promise.then((d) => {
-          if (!cancelled) setDoc(d);
+          if (cancelled) return;
+          setDoc(d);
+          onPageCount?.(d.numPages);
         })
         .catch((e: unknown) => setError(e instanceof Error ? e.message : "PDF を読み込めません")),
     );
@@ -78,18 +81,12 @@ export function PdfViewer({
   }, [blob]);
 
   useEffect(() => {
-    if (requestedPage && requestedPage !== page) setPage(requestedPage);
-  }, [requestedPage]);
-
-  useEffect(() => {
     if (!doc || !canvasRef.current) return;
     let cancelled = false;
-    void doc.getPage(page).then(async (p) => {
+    const n = Math.min(Math.max(1, page), doc.numPages);
+    void doc.getPage(n).then(async (p) => {
       if (cancelled) return;
-      const vp = p.getViewport({
-        scale,
-        rotation: (p.rotate + rotation) % 360,
-      });
+      const vp = p.getViewport({ scale, rotation: (p.rotate + rotation) % 360 });
       const canvas = canvasRef.current!;
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.floor(vp.width * dpr);
@@ -106,7 +103,6 @@ export function PdfViewer({
     };
   }, [doc, page, scale, rotation]);
 
-  const pageCount = doc?.numPages ?? 0;
   const pageThreads = threads.filter(
     (t) =>
       (t.anchor.type === "pdf_rect" || t.anchor.type === "pdf_pin") &&
@@ -116,41 +112,8 @@ export function PdfViewer({
 
   return (
     <div className="viewer">
-      <div className="viewer__toolbar" role="toolbar" aria-label="PDF 操作">
-        <M3eIconButton
-          aria-label="前のページ"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-        >
-          <M3eIcon name="chevron_left" />
-        </M3eIconButton>
-        <span className="small">{pageCount ? `${page} / ${pageCount} ページ` : "読込中…"}</span>
-        <M3eIconButton
-          aria-label="次のページ"
-          disabled={page >= pageCount}
-          onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-        >
-          <M3eIcon name="chevron_right" />
-        </M3eIconButton>
-        <M3eIconButton aria-label="縮小" onClick={() => setScale((s) => Math.max(0.4, s - 0.2))}>
-          <M3eIcon name="zoom_out" />
-        </M3eIconButton>
-        <span className="small">{Math.round(scale * 100)}%</span>
-        <M3eIconButton aria-label="拡大" onClick={() => setScale((s) => Math.min(4, s + 0.2))}>
-          <M3eIcon name="zoom_in" />
-        </M3eIconButton>
-        <M3eIconButton
-          aria-label="右に回転"
-          onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
-        >
-          <M3eIcon name="rotate_right" />
-        </M3eIconButton>
-        {selecting ? (
-          <span className="chip chip--warn">ドラッグで範囲、クリックでピンを指定</span>
-        ) : null}
-      </div>
       {error ? <div className="alert">{error}</div> : null}
-      <div className="viewer__stage">
+      <div className="viewer__stage" tabIndex={0}>
         <div className="viewer__page">
           <canvas ref={canvasRef} aria-label={`PDF ${page} ページ目`} />
           {viewport ? (
@@ -164,7 +127,9 @@ export function PdfViewer({
               onDraft={(d) => onDraft({ page, ...d })}
             />
           ) : null}
+          {viewport ? renderInPage?.(viewport) : null}
         </div>
+        {viewport && renderGutter ? renderGutter(viewport) : null}
       </div>
     </div>
   );

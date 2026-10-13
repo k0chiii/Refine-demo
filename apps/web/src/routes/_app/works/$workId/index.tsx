@@ -1,9 +1,10 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import { formatJst, formatJstDate } from "@/lib/format";
+import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { formatJstDate, formatJstShort, remaining } from "@/lib/format";
 import {
   approvalActionLabel,
   closedReasonLabel,
@@ -13,27 +14,37 @@ import {
   reviewStateLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
-import { lifecycleTone } from "../index";
-import { Card } from "@/ui/Card";
-import { StatusChip, StatusText } from "@/ui/Chip";
+import { StatusText } from "@/ui/Chip";
 import { Field, TextArea } from "@/ui/Field";
 import {
+  M3eActionList,
   M3eButton,
+  M3eCard,
   M3eDialog,
+  M3eHeading,
   M3eIcon,
   M3eIconButton,
+  M3eListAction,
   M3eMenu,
   M3eMenuItem,
   M3eMenuTrigger,
 } from "@/ui/m3e";
-import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 
-export const Route = createFileRoute("/_app/works/$workId/")({ component: WorkDetail });
+export const Route = createFileRoute("/_app/works/$workId/")({
+  validateSearch: (s: Record<string, unknown>): { submit?: boolean } =>
+    s.submit === true || s.submit === "true" ? { submit: true } : {},
+  component: WorkDetail,
+});
 
-/** U-03 制作物詳細 + U-07 校了ダイアログ。 */
+/**
+ * U-03 制作物詳細 + U-07 校了。
+ * 主役は版: 最新の版へ 1 クリックで行ける大きな導線と版の履歴。基本情報・校了は右の補助パネル（M3 supporting pane）。
+ * 版提出はダイアログ（`?submit=1` で開く）。
+ */
 function WorkDetail() {
   const { workId } = Route.useParams();
+  const { submit } = Route.useSearch();
   const navigate = useNavigate();
   const data = useQuery(api.works.get, { workId });
   const finalize = useMutation(api.approvals.finalize);
@@ -49,7 +60,6 @@ function WorkDetail() {
   const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
-  // フックは早期 return より前に揃える（React の規則）。data 未取得時は候補版が null になるだけ。
   const candidate = data?.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
   const doFinalize = useAction(async () => {
     if (!data || !candidate) return;
@@ -95,9 +105,24 @@ function WorkDetail() {
       expectedVersion: data.work.version,
     });
   });
+  const openSubmit = (open: boolean) =>
+    void navigate({
+      to: "/works/$workId",
+      params: { workId },
+      search: (s) => {
+        const { submit: _drop, ...rest } = s;
+        return open ? { ...rest, submit: true } : rest;
+      },
+      replace: !open,
+    });
 
   if (data === undefined) return <p className="muted">読み込み中…</p>;
   const { work, revisions, people, approvals, can } = data;
+  const latest =
+    revisions.find((r) => r.id === data.acceptingRevisionId) ??
+    revisions.find((r) => r.reviewState !== "void") ??
+    null;
+  const history = revisions.filter((r) => r.id !== latest?.id);
   const blocking = candidate?.unresolvedCount ?? 0;
   const pendingChecks = candidate?.pendingChecks ?? [];
   const lifecycleTargets: Array<"active" | "on_hold" | "cancelled"> =
@@ -106,91 +131,170 @@ function WorkDetail() {
       : work.lifecycle === "on_hold" || work.lifecycle === "draft"
         ? ["active", "cancelled"]
         : [];
+  const openRevision = (id: string) =>
+    void navigate({ to: "/revisions/$revisionId", params: { revisionId: id } });
 
   return (
-    <>
-      <PageHeader
-        title={work.title}
-        meta={
-          <>
-            <StatusChip tone={lifecycleTone[work.lifecycle] ?? "neutral"}>
-              {lifecycleLabel[work.lifecycle]}
-            </StatusChip>
-            {work.confidentiality === "restricted" ? (
-              <M3eIcon name="lock" title="非公開" style={{ fontSize: 18 }} />
-            ) : null}
-          </>
-        }
-      >
+    <div className="work">
+      <header className="page-header work__header">
+        <M3eIconButton
+          className="list-detail__back"
+          aria-label="一覧へ戻る"
+          onClick={() => void navigate({ to: "/works", search: (s) => s })}
+        >
+          <M3eIcon name="arrow_back" />
+        </M3eIconButton>
+        <M3eHeading
+          variant="headline"
+          size="small"
+          level={1}
+          emphasized
+          className="page-header__title"
+        >
+          {work.title}
+        </M3eHeading>
+        {work.lifecycle !== "active" ? (
+          <StatusText tone={work.lifecycle === "finalized" ? "success" : "neutral"}>
+            {lifecycleLabel[work.lifecycle]}
+          </StatusText>
+        ) : null}
+        {work.confidentiality === "restricted" ? (
+          <M3eIcon name="lock" title="非公開" style={{ fontSize: 18 }} />
+        ) : null}
+        <span className="spacer" />
         {can.submit && work.lifecycle === "active" ? (
-          <M3eButton
-            variant="filled"
-            onClick={() => navigate({ to: "/works/$workId/submit", params: { workId } })}
-          >
+          <M3eButton variant="filled" onClick={() => openSubmit(true)}>
             <M3eIcon slot="icon" name="upload_file" />
             版を提出
           </M3eButton>
         ) : null}
-        {can.finalize && work.lifecycle === "active" ? (
-          <M3eButton variant="tonal" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
-            校了を宣言
-          </M3eButton>
-        ) : null}
-        {can.reopen && work.lifecycle === "finalized" ? (
-          <M3eButton variant="outlined" onClick={() => setReopenOpen(true)}>
-            理由付きで再開
-          </M3eButton>
-        ) : null}
         {can.edit || can.manageAcl ? (
-          <>
-            <M3eIconButton aria-label="その他の操作">
-              <M3eIcon name="more_vert" />
-              <M3eMenuTrigger htmlFor="work-menu" />
-            </M3eIconButton>
-            <M3eMenu id="work-menu">
-              {can.edit && work.lifecycle !== "finalized" && work.lifecycle !== "cancelled" ? (
-                <M3eMenuItem
-                  onClick={() => navigate({ to: "/works/$workId/edit", params: { workId } })}
-                >
-                  編集
-                </M3eMenuItem>
-              ) : null}
-              {can.manageAcl ? (
-                <M3eMenuItem
-                  onClick={() => navigate({ to: "/works/$workId/acl", params: { workId } })}
-                >
-                  閲覧権限
-                </M3eMenuItem>
-              ) : null}
-              {can.edit
-                ? lifecycleTargets.map((to) => (
-                    <M3eMenuItem key={to} onClick={() => void doLifecycle.run(to)}>
-                      <M3eIcon
-                        slot="icon"
-                        name={
-                          to === "active" ? "play_arrow" : to === "on_hold" ? "pause" : "cancel"
-                        }
-                      />
-                      {lifecycleActionLabel[to]}
-                    </M3eMenuItem>
-                  ))
-                : null}
-            </M3eMenu>
-          </>
+          <M3eIconButton aria-label="その他の操作">
+            <M3eIcon name="more_vert" />
+            <M3eMenuTrigger htmlFor="work-menu" />
+          </M3eIconButton>
         ) : null}
-      </PageHeader>
+      </header>
+      {can.edit || can.manageAcl ? (
+        <M3eMenu id="work-menu" positionX="before">
+          {can.edit && work.lifecycle !== "finalized" && work.lifecycle !== "cancelled" ? (
+            <M3eMenuItem
+              onClick={() => navigate({ to: "/works/$workId/edit", params: { workId } })}
+            >
+              編集
+            </M3eMenuItem>
+          ) : null}
+          {can.manageAcl ? (
+            <M3eMenuItem onClick={() => navigate({ to: "/works/$workId/acl", params: { workId } })}>
+              閲覧権限
+            </M3eMenuItem>
+          ) : null}
+          {can.edit
+            ? lifecycleTargets.map((to) => (
+                <M3eMenuItem key={to} onClick={() => void doLifecycle.run(to)}>
+                  {lifecycleActionLabel[to]}
+                </M3eMenuItem>
+              ))
+            : null}
+        </M3eMenu>
+      ) : null}
 
-      <div className="grid-2">
-        <Card title="基本情報">
-          <dl>
+      <div className="work__body">
+        <div className="work__main">
+          {!latest ? (
+            <div className="empty">
+              <M3eIcon name="upload_file" />
+              まだ版がありません。
+            </div>
+          ) : (
+            <M3eCard
+              variant="outlined"
+              actionable
+              className="latest"
+              aria-label={`最新の版 ${latest.label} を開く`}
+              onClick={() => openRevision(latest.id)}
+            >
+              <div slot="content" className="latest__content">
+                <div>
+                  <div className="latest__label">
+                    {latest.label}
+                    {work.finalRevisionId === latest.id ? (
+                      <StatusText tone="success" className="ml">
+                        校了版
+                      </StatusText>
+                    ) : null}
+                  </div>
+                  <div className="muted">
+                    {latest.reviewState === "open"
+                      ? `受付中・締切 ${formatJstDate(latest.deadlineAt)}（${remaining(latest.deadlineAt)}）`
+                      : latest.reviewState === "void"
+                        ? reviewStateLabel.void
+                        : `受付終了${latest.reviewClosedReason ? `・${closedReasonLabel[latest.reviewClosedReason]}` : ""}`}
+                    {latest.unresolvedCount > 0 ? `・未対応 ${latest.unresolvedCount}` : ""}
+                    {latest.pendingChecks.length > 0
+                      ? `・専門確認 ${latest.pendingChecks.length}`
+                      : ""}
+                  </div>
+                </div>
+                <M3eIcon name="arrow_forward" className="latest__arrow" />
+              </div>
+            </M3eCard>
+          )}
+          {latest && can.assign ? (
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <M3eButton variant="text" onClick={() => setAssignFor(latest.id)}>
+                校正者を割当
+              </M3eButton>
+            </div>
+          ) : null}
+          {history.length > 0 ? (
+            <>
+              <h2 className="section-title">これまでの版</h2>
+              <M3eActionList className="list" aria-label="版履歴">
+                {history.map((r) => (
+                  <M3eListAction
+                    key={r.id}
+                    className="list__item list__item--done"
+                    onClick={() => openRevision(r.id)}
+                  >
+                    <span className="list__headline">
+                      {r.label}
+                      {work.finalRevisionId === r.id ? (
+                        <StatusText tone="success" className="ml">
+                          校了版
+                        </StatusText>
+                      ) : null}
+                    </span>
+                    <span slot="supporting-text">
+                      {r.reviewState === "void"
+                        ? reviewStateLabel.void
+                        : r.reviewState === "open"
+                          ? `受付中・締切 ${formatJstDate(r.deadlineAt)}`
+                          : (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "受付終了")}
+                      ・{r.submitter?.name}・{formatJstShort(r.submittedAt)}
+                    </span>
+                    {r.unresolvedCount > 0 ? (
+                      <span slot="trailing" className="meta">
+                        未対応 {r.unresolvedCount}
+                      </span>
+                    ) : null}
+                  </M3eListAction>
+                ))}
+              </M3eActionList>
+            </>
+          ) : null}
+        </div>
+
+        <aside className="work__info" aria-label="基本情報">
+          <dl className="info">
             {work.purpose ? (
               <div>
-                <dt>目的・対象</dt>
+                <dt>目的</dt>
                 <dd>{work.purpose}</dd>
               </div>
             ) : null}
             <div>
-              <dt>区分 / 媒体</dt>
+              <dt>区分</dt>
               <dd>
                 {work.category} / {mediaLabel[work.mediaType]}
               </dd>
@@ -200,122 +304,55 @@ function WorkDetail() {
               <dd>{formatJstDate(work.deadlineAt)}</dd>
             </div>
             <div>
-              <dt>担当</dt>
-              <dd>
-                制作 {people.creators.map((p) => p?.name).join("、") || "—"}
-                <span className="muted">　校了 </span>
-                {people.approver?.name}
-                <span className="muted">　主管 </span>
-                {people.managers.map((p) => p?.name).join("、") || "—"}
-              </dd>
+              <dt>制作</dt>
+              <dd>{people.creators.map((p) => p?.name).join("、") || "—"}</dd>
+            </div>
+            <div>
+              <dt>校了</dt>
+              <dd>{people.approver?.name}</dd>
+            </div>
+            <div>
+              <dt>主管</dt>
+              <dd>{people.managers.map((p) => p?.name).join("、") || "—"}</dd>
             </div>
           </dl>
-        </Card>
-        {approvals.length > 0 ? (
-          <Card title="校了履歴">
-            {
-              <ul className="stack" style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                {approvals.map((a, i) => (
-                  <li key={i} className="stack" style={{ gap: 4 }}>
-                    <div className="row">
-                      <StatusText tone={a.action === "reopened" ? "warning" : "success"}>
-                        {approvalActionLabel[a.action]}
-                      </StatusText>
-                      <span className="small muted">
-                        {a.actor?.name}・{formatJst(a.createdAt)}
-                      </span>
-                    </div>
-                    {a.exceptionReason ? (
-                      <div className="alert alert--warn">例外理由: {a.exceptionReason}</div>
-                    ) : null}
-                    {a.reason ? <div className="small muted">理由: {a.reason}</div> : null}
-                  </li>
-                ))}
-              </ul>
-            }
-          </Card>
-        ) : null}
+          {can.finalize && work.lifecycle === "active" ? (
+            <M3eButton variant="tonal" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
+              <M3eIcon slot="icon" name="verified" />
+              校了を宣言
+            </M3eButton>
+          ) : null}
+          {can.reopen && work.lifecycle === "finalized" ? (
+            <M3eButton variant="outlined" onClick={() => setReopenOpen(true)}>
+              理由付きで再開
+            </M3eButton>
+          ) : null}
+          {approvals.length > 0 ? (
+            <ul className="info__history">
+              {approvals.map((a, i) => (
+                <li key={i}>
+                  <StatusText tone={a.action === "reopened" ? "warning" : "success"}>
+                    {approvalActionLabel[a.action]}
+                  </StatusText>
+                  <span className="small muted">
+                    　{a.actor?.name}・{formatJstShort(a.createdAt)}
+                  </span>
+                  {a.exceptionReason ? (
+                    <div className="small muted">例外理由: {a.exceptionReason}</div>
+                  ) : null}
+                  {a.reason ? <div className="small muted">理由: {a.reason}</div> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </aside>
       </div>
 
-      <h2 className="section-title">版履歴</h2>
-      {revisions.length === 0 ? (
-        <div className="empty">
-          <M3eIcon name="upload_file" />
-          まだ版が提出されていません。
-        </div>
-      ) : (
-        <div className="table-wrap" tabIndex={0}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>版</th>
-                <th>受付</th>
-                <th>提出</th>
-                <th>残作業</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {revisions.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link to="/revisions/$revisionId" params={{ revisionId: r.id }}>
-                      {r.label}
-                    </Link>
-                    {work.finalRevisionId === r.id ? (
-                      <div>
-                        <StatusText tone="success">校了版</StatusText>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td>
-                    <StatusChip
-                      tone={
-                        r.reviewState === "open"
-                          ? "primary"
-                          : r.reviewState === "void"
-                            ? "error"
-                            : "neutral"
-                      }
-                    >
-                      {reviewStateLabel[r.reviewState]}
-                    </StatusChip>
-                    <div className="small muted">
-                      {r.reviewState === "open"
-                        ? `締切 ${formatJstDate(r.deadlineAt)}`
-                        : (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "")}
-                    </div>
-                  </td>
-                  <td className="small">
-                    {r.submitter?.name}
-                    <div className="muted">{formatJst(r.submittedAt)}</div>
-                  </td>
-                  <td>
-                    <div className="row">
-                      {r.unresolvedCount > 0 ? (
-                        <StatusText tone="warning">未対応の指摘 {r.unresolvedCount}</StatusText>
-                      ) : null}
-                      {r.pendingChecks.length > 0 ? (
-                        <StatusText tone="warning">専門確認 {r.pendingChecks.length}</StatusText>
-                      ) : null}
-                      {r.unresolvedCount === 0 && r.pendingChecks.length === 0 ? (
-                        <span className="muted">—</span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td>
-                    {can.assign ? (
-                      <M3eButton variant="text" onClick={() => setAssignFor(r.id)}>
-                        校正者を割当
-                      </M3eButton>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <SubmitDialog
+        workId={workId}
+        open={submit === true && can.submit && work.lifecycle === "active"}
+        onClose={() => openSubmit(false)}
+      />
 
       {/* U-07 校了: 校了版・必須確認・重大未解決・例外理由・実行者を最終確認して確定。二重クリック防止。 */}
       <M3eDialog open={finalizeOpen} onClosed={() => setFinalizeOpen(false)} closeLabel="閉じる">
@@ -323,7 +360,7 @@ function WorkDetail() {
         <div className="dialog-body">
           <p style={{ margin: 0 }}>
             対象版: <strong>{candidate?.label ?? "（通常版がありません）"}</strong>。宣言者:{" "}
-            <strong>{people.approver?.name}</strong>（校了権限者）
+            <strong>{people.approver?.name}</strong>
           </p>
           {pendingChecks.length > 0 ? (
             <div className="alert--warn alert">
@@ -335,14 +372,9 @@ function WorkDetail() {
           ) : null}
           {blocking > 0 ? (
             <div className="alert--warn alert">
-              <span>
-                未対応の指摘が {blocking}{" "}
-                件あります。重大・重要が残っていると、理由なしでは校了できません。
-              </span>
+              <span>未対応の指摘が {blocking} 件あります。理由なしでは校了できません。</span>
             </div>
-          ) : (
-            <div className="alert alert--info">未対応の指摘はありません。</div>
-          )}
+          ) : null}
           <Field label="例外校了の理由（未解決を残す場合のみ）">
             <TextArea
               value={exceptionReason}
@@ -415,6 +447,6 @@ function WorkDetail() {
           </M3eButton>
         </div>
       </M3eDialog>
-    </>
+    </div>
   );
 }

@@ -52,6 +52,8 @@ export function AnchorOverlay({
 
   const onPointerDown = (e: PointerEvent<SVGSVGElement>) => {
     if (!selecting || e.button !== 0) return;
+    // 既存のピン・範囲の上では選択を始めない（クリックはそのスレッドを開く）
+    if ((e.target as Element).closest("[data-anchor]")) return;
     const p = toLocal(e);
     setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
     svgRef.current?.setPointerCapture(e.pointerId);
@@ -103,6 +105,7 @@ export function AnchorOverlay({
           return (
             <g
               key={t.id}
+              data-anchor={t.id}
               onClick={() => onSelectThread(t.id)}
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && onSelectThread(t.id)}
@@ -116,7 +119,12 @@ export function AnchorOverlay({
                 height={px.h}
                 rx={2}
               />
-              <circle cx={px.x} cy={px.y} r={10} className="anchor-pin" />
+              <circle
+                cx={px.x}
+                cy={px.y}
+                r={10}
+                className={`anchor-pin ${active ? "anchor-pin--active" : ""}`}
+              />
               <text className="anchor-label" x={px.x} y={px.y + 4} textAnchor="middle">
                 {t.index}
               </text>
@@ -128,12 +136,18 @@ export function AnchorOverlay({
           return (
             <g
               key={t.id}
+              data-anchor={t.id}
               onClick={() => onSelectThread(t.id)}
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && onSelectThread(t.id)}
               aria-label={`指摘 ${t.index}`}
             >
-              <circle cx={px.x} cy={px.y} r={active ? 13 : 10} className="anchor-pin" />
+              <circle
+                cx={px.x}
+                cy={px.y}
+                r={active ? 13 : 10}
+                className={`anchor-pin ${active ? "anchor-pin--active" : ""}`}
+              />
               <text className="anchor-label" x={px.x} y={px.y + 4} textAnchor="middle">
                 {t.index}
               </text>

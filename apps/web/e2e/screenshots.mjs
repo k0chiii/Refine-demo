@@ -100,6 +100,40 @@ const pickUser = async (scope, name) => {
   await page.waitForTimeout(200);
 };
 
+/** 添付の切替（ヘッダーの m3e-select） */
+const pickArtifact = async (name) => {
+  await page.locator("m3e-select.ws__artifact").click();
+  await page.locator('m3e-option[role="option"][id]', { hasText: name }).last().click();
+  await page.waitForTimeout(400);
+};
+/** ビューア上でドラッグ（範囲指定）→ その場の投稿欄に本文を入れて投稿 */
+const commentOnRect = async (x0, y0, x1, y1, body) => {
+  const overlay = page.locator(".viewer__overlay");
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + box.width * x0, box.y + box.height * y0);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * x1, box.y + box.height * y1, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForSelector(".compose-pop textarea");
+  await page.fill(".compose-pop textarea", body);
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+};
+/** 版提出ダイアログを開いてファイルを置き、確定して校正画面へ */
+const submitRevision = async (files, summary, beforeStart) => {
+  await btn("版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  await page.setInputFiles('m3e-dialog[open] input[type="file"]', files);
+  await page.fill("m3e-dialog[open] textarea >> nth=0", summary);
+  if (beforeStart) await beforeStart();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    (n) => document.querySelectorAll(".upload-item__state--verified").length >= n,
+    files.length,
+    { timeout: 30_000 },
+  );
+};
+
 async function main() {
   // 01 サインイン
   await page.goto(`${BASE}/signin`);
@@ -107,10 +141,10 @@ async function main() {
   await page.locator("summary").click();
   await shot("01-signin");
 
-  // 02 制作物一覧（制作者）
+  // 02 制作物（制作者）: 左に一覧、右に中身
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
-  await page.waitForSelector("table.table a");
+  await page.waitForSelector("m3e-list-action");
   await shot("02-works-list");
   // 22 アカウントメニュー（右上のアバター）
   await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
@@ -119,55 +153,56 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
 
-  // 03 制作物詳細
-  await page.locator("table.table a", { hasText: "MF100 公式パンフレット" }).click();
+  // 03 制作物詳細（版なし）
+  await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).click();
   await page.waitForURL(/\/works\//);
   const workUrl = page.url();
-  await page.waitForSelector("text=基本情報");
+  await page.waitForSelector(".work__info");
   await shot("03-work-detail-empty");
 
-  // 04 版提出: ファイル選択 → 転送 → 検証済み → 確定
-  await go(`${workUrl}/submit`);
-  await page.waitForSelector('input[type="file"]');
-  await page.setInputFiles('input[type="file"]', [
-    resolve(FIXTURES, "sample.pdf"),
-    resolve(FIXTURES, "poster.png"),
-    resolve(FIXTURES, "greeting.txt"),
-  ]);
-  await page.fill("textarea >> nth=0", "初稿。表紙と地図ページ。");
-  await page.fill("textarea >> nth=1", "表紙の配色と団体名の表記");
-  // 専門確認: 写真（肖像・権利）を校正者に依頼
+  // 04 版提出（ダイアログ）: ファイル → 専門確認 → 転送 → 検証済み → 確定
   const all = await users();
   const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
-  // 21 日付ピッカー（校正期限は日付のみ・0:00 JST）
-  await page.locator('m3e-icon-button[aria-label="カレンダーから選ぶ"]').first().click();
-  await page.waitForTimeout(600);
-  await shot("21-date-picker", "m3e-date-input");
-  await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
-  await page.waitForTimeout(300);
-  await page.locator("details.checks-details > summary").click();
-  await page.locator("m3e-checkbox#check-photo").click();
-  await page.waitForSelector(".check:not(.check--done)");
-  await pickUser(
-    page.locator(".check").filter({ has: page.locator("#check-photo") }),
-    reviewer.name,
-  );
-  await shot("14-submit-required-checks", "details.checks-details");
-  await btn("アップロードを開始").click();
-  await page.waitForFunction(
-    () => document.querySelectorAll(".upload-item .chip--ok").length >= 3,
-    null,
-    { timeout: 30_000 },
+  await submitRevision(
+    [
+      resolve(FIXTURES, "sample.pdf"),
+      resolve(FIXTURES, "poster.png"),
+      resolve(FIXTURES, "greeting.txt"),
+    ],
+    "初稿。表紙と地図ページ。",
+    async () => {
+      await page.fill("m3e-dialog[open] textarea >> nth=1", "表紙の配色と団体名の表記");
+      // 21 日付ピッカー（校正期限は日付のみ・0:00 JST）
+      await page
+        .locator('m3e-dialog[open] m3e-icon-button[aria-label="カレンダーから選ぶ"]')
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+      await shot("21-date-picker");
+      await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
+      await page.waitForTimeout(300);
+      // 専門確認: 写真（肖像・権利）を校正者に依頼
+      await page.locator("m3e-dialog[open] details.checks-details > summary").click();
+      await page.locator("m3e-checkbox#check-photo").click();
+      await page.waitForSelector("m3e-dialog[open] .check:not(.check--done)");
+      await pickUser(
+        page.locator(".check").filter({ has: page.locator("#check-photo") }),
+        reviewer.name,
+      );
+      await shot("14-submit-required-checks");
+    },
   );
   await shot("04-submit-verified");
-  await btn("提出を確定する").click();
-  await page.waitForSelector("text=を提出確定しました");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/revisions\//, { timeout: 15_000 });
+  const revisionUrl = page.url();
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
   await shot("05-submit-confirmed");
 
   // 06 校正者を割当（主管）: ユーザー選択 UI
   await signInAs("mock-nogiku-manager");
   await go(workUrl);
-  await page.waitForSelector("text=版履歴");
+  await page.waitForSelector(".latest");
   await btn("校正者を割当").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
@@ -181,49 +216,52 @@ async function main() {
   await page.waitForSelector("m3e-input-chip");
   await shot("15-work-edit");
 
-  // 07 校正待ち（校正者）
+  // 07 校正待ち（校正者）: 2 行のリスト
   await signInAs("mock-nogiku-reviewer");
   await go(`${BASE}/queue`);
-  await page.waitForSelector("table.table a");
+  await page.waitForSelector("m3e-list-action");
   await shot("07-queue");
 
-  // 08 校正ワークスペース: PDF 上で範囲指定して重大指摘を投稿
-  await page.locator("table.table a", { hasText: "第1版" }).click();
+  // 08 校正画面: PDF 上でドラッグするとその場に投稿欄が出る
+  await page.locator("m3e-list-action", { hasText: "第1版" }).click();
   await page.waitForURL(/\/revisions\//);
-  const revisionUrl = page.url();
   await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
   await page.waitForSelector(".viewer__overlay");
-  await page.locator('m3e-icon-button[aria-label="位置を指定"]').click();
-  const overlay = page.locator(".viewer__overlay");
-  const box = await overlay.boundingBox();
-  await page.mouse.move(box.x + box.width * 0.15, box.y + box.height * 0.12);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.22, { steps: 8 });
-  await page.mouse.up();
-  await page.fill(
-    'textarea[aria-label="指摘本文"]',
+  await commentOnRect(
+    0.15,
+    0.12,
+    0.6,
+    0.22,
     "団体名の表記が「五月祭常任委員会」ではなく「五月祭実行委員会」になっています。全ページ要確認。",
   );
-  await btn("投稿").click();
   await page.waitForSelector(".thread");
-  // 2 件目（軽微・位置なし）は未対応のまま残し、次版への持越候補にする
+  // 2 件目（位置なし）は未対応のまま残し、次版への持越候補にする
+  await page.locator('m3e-icon-button[aria-label="位置なしでコメント"]').click();
   await page.fill(
-    'textarea[aria-label="指摘本文"]',
+    ".compose-pop textarea",
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
   );
-  await btn("投稿").click();
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForFunction(() => document.querySelectorAll(".thread").length >= 2);
-  await page.locator(".thread").first().click();
+  await page.locator(".thread .thread__body").first().click();
   await shot("08-workspace-comment");
+  // 23 ピンの高さに並べる（Google ドキュメント式） / 24 ピンだけ（Figma 式）
+  await page.locator('m3e-icon-button[aria-label="ピンの高さに並べる"]').click();
+  await page.waitForSelector(".gutter .thread");
+  await shot("23-layout-aligned");
+  await page.locator('m3e-icon-button[aria-label="ピンだけ"]').click();
+  await page.waitForSelector(".thread-pop .thread"); // 選択中のスレッドがピンの横に出る
+  await shot("24-layout-pins");
+  await page.locator('m3e-icon-button[aria-label="横に一覧"]').click();
+  await page.waitForSelector(".comments .thread");
   // 専門確認を完了（担当の校正者）
   await page.locator('[aria-label="専門確認"] m3e-button', { hasText: "確認完了" }).click();
   await page.waitForSelector("text=すべて完了");
   await shot("16-required-check-done");
 
-  // 19 文章の範囲指摘（F-12 前倒し分）: 本文を選択して指摘
-  await page.locator("m3e-filter-chip", { hasText: "greeting.txt" }).click();
+  // 19 文章の範囲指摘（F-12 前倒し分）: 本文を選択するとその場に投稿欄が出る
+  await pickArtifact("greeting.txt");
   await page.waitForSelector(".text-viewer__body");
-  await page.locator('m3e-icon-button[aria-label="位置を指定"]').click();
   await page.evaluate(() => {
     const body = document.querySelector(".text-viewer__body");
     const needle = "歴代の委員や参加団体の皆さま";
@@ -243,43 +281,43 @@ async function main() {
     }
     body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
-  await page.waitForSelector("text=範囲を指定済み");
+  await page.waitForSelector(".compose-pop textarea");
   await page.fill(
-    'textarea[aria-label="指摘本文"]',
+    ".compose-pop textarea",
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
   );
-  await btn("投稿").click();
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".text-anchor");
-  await page.locator(".thread").last().click();
+  await page.locator(".comments .thread .thread__body").last().click();
   await shot("19-text-range");
-  await page.locator("m3e-filter-chip", { hasText: "sample.pdf" }).click();
+  await pickArtifact("sample.pdf");
 
-  // 09 採否判断（制作者）
+  // 09 採否判断（制作者）: ⋮ → 不採用（理由）
   await signInAs("mock-nogiku-creator");
   await go(revisionUrl);
-  await page.waitForSelector(".thread");
-  await page.locator(".thread").first().click();
-  await page.locator(".thread m3e-button", { hasText: "不採用" }).click();
+  await page.waitForSelector(".comments .thread");
+  const first = page.locator(".comments .thread").first();
+  await first.locator(".thread__body").click();
+  await page.waitForTimeout(300);
+  await first.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+  await page.waitForTimeout(300);
+  await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
   await page.fill(".thread textarea", "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み");
-  await page.locator(".thread m3e-button", { hasText: "記録する" }).click();
-  await page.waitForSelector("text=判断:");
+  await page.locator(".thread m3e-button", { hasText: "不採用" }).click();
+  await page.waitForSelector("text=不採用:");
   await shot("09-decision");
 
   // 17 第 2 版を提出し、前版の未解決指摘を持ち越す（制作者）
-  await go(`${workUrl}/submit`);
-  await page.waitForSelector('input[type="file"]');
-  await page.setInputFiles('input[type="file"]', [resolve(FIXTURES, "sample.pdf")]);
-  await page.fill("textarea >> nth=0", "団体名表記は規約どおり維持。凡例の文字サイズを調整。");
-  await btn("アップロードを開始").click();
-  await page.waitForFunction(
-    () => document.querySelectorAll(".upload-item .chip--ok").length >= 1,
-    null,
-    { timeout: 30_000 },
+  await go(workUrl);
+  await page.waitForSelector(".latest");
+  await submitRevision(
+    [resolve(FIXTURES, "sample.pdf")],
+    "団体名表記は規約どおり維持。凡例の文字サイズを調整。",
   );
-  await btn("提出を確定する").click();
-  await page.waitForSelector("text=を提出確定しました");
-  await btn("校正ワークスペースを開く").click();
-  await page.waitForURL(/\/revisions\//);
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL((u) => /\/revisions\//.test(u.toString()) && u.toString() !== revisionUrl, {
+    timeout: 15_000,
+  });
   await page.waitForSelector('[aria-label="前版の未解決指摘"]');
   await shot("17-carry-forward");
   await page
@@ -287,21 +325,34 @@ async function main() {
     .first()
     .click();
   await page.waitForSelector("text=前版から持越");
-  // 持ち越したコメントを反映済みにする（未解決が残ると理由なしでは校了できない）
-  await page.locator(".thread").first().click();
-  await page.locator(".thread m3e-button", { hasText: "反映済" }).click();
-  await page.locator(".thread m3e-button", { hasText: "記録する" }).click();
-  await page.waitForSelector("text=判断:");
+  // 25 版の比較（前版と並べる）
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await page.locator('m3e-icon-button[aria-label="版を比較"]').click();
+  await page.locator("m3e-menu-item", { hasText: "第1版" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".compare .viewer__page canvas").length >= 2,
+    null,
+    {
+      timeout: 30_000,
+    },
+  );
+  await shot("25-compare");
+  await page.locator('m3e-icon-button[aria-label="版を比較"]').click();
+  await page.locator("m3e-menu-item", { hasText: "比較を終了" }).click();
+  await page.waitForTimeout(300);
+  // 持ち越したコメントを ✓ で反映済みにする（未解決が残ると理由なしでは校了できない）
+  await page.locator(".comments .thread .thread__body").first().click();
+  await page.locator('.comments .thread m3e-icon-button[aria-label^="解決"]').first().click();
+  await page.waitForFunction(() => document.body.innerText.includes("反映済"));
 
   // 10 校了ダイアログ（校了権限者）と校了後
   await signInAs("mock-nogiku-approver");
   await go(workUrl);
-  await page.waitForSelector("text=版履歴");
+  await page.waitForSelector(".latest");
   await btn("校了を宣言").click();
   await page.waitForSelector("m3e-dialog[open]");
   await shot("10-finalize-dialog");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "校了を確定する" }).click();
-  await page.waitForSelector("text=校了履歴");
   await page.waitForFunction(() => document.body.innerText.includes("校了版"), null, {
     timeout: 15_000,
   });
@@ -322,12 +373,18 @@ async function main() {
   await page.waitForSelector("text=監査ログ");
   await shot("13-admin-audit");
 
-  // 20 モバイル幅（下部ナビゲーションバー）
+  // 20 モバイル幅（下部ナビゲーションバー）/ 26 モバイルの校正画面（コメントはボトムシート）
+  await signInAs("mock-nogiku-reviewer");
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${BASE}/queue`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForTimeout(400);
   await shot("20-mobile-queue");
+  await go(revisionUrl);
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await page.waitForSelector("m3e-bottom-sheet");
+  await page.waitForTimeout(600);
+  await shot("26-mobile-workspace");
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 

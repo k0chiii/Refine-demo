@@ -1,58 +1,133 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { textRangeAnchor, type Anchor, type NormalizedRect } from "@mf100/domain";
+import {
+  checkTypeLabels,
+  checkTypes,
+  textRangeAnchor,
+  toViewportRect,
+  type Anchor,
+  type CheckType,
+  type NormalizedRect,
+  type Viewport,
+} from "@mf100/domain";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlignedGutter, type GutterItem } from "@/features/annotation/AlignedGutter";
+import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
 import { PdfViewer, anchorPage } from "@/features/annotation/PdfViewer";
 import { TextViewer } from "@/features/annotation/TextViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
-import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
+import { ComposePopover } from "@/features/review/ComposePopover";
+import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { formatJstDate, formatJstShort, remaining } from "@/lib/format";
 import {
   blockedReasonLabel,
   checkStateLabel,
   closedReasonLabel,
-  kindLabel,
   resolutionLabel,
   reviewStateLabel,
-  severityLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
-import { Card } from "@/ui/Card";
-import { StatusChip, StatusText } from "@/ui/Chip";
+import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea } from "@/ui/Field";
 import {
+  M3eBottomSheet,
   M3eButton,
   M3eDialog,
   M3eFilterChip,
-  M3eFilterChipSet,
   M3eIcon,
   M3eIconButton,
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuTrigger,
+  M3eToolbar,
 } from "@/ui/m3e";
-import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
-import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
 
 export const Route = createFileRoute("/_app/revisions/$revisionId")({ component: Workspace });
 
-const closedResolutions = ["rejected", "resolved", "deferred"];
+type Layout = "panel" | "aligned" | "pins";
+const LAYOUT_KEY = "mf100.workspace.layout";
+const layouts: Array<{ id: Layout; icon: string; label: string }> = [
+  { id: "panel", icon: "view_sidebar", label: "横に一覧" },
+  { id: "aligned", icon: "view_agenda", label: "ピンの高さに並べる" },
+  { id: "pins", icon: "location_on", label: "ピンだけ" },
+];
+function readLayout(): Layout {
+  try {
+    const v = localStorage.getItem(LAYOUT_KEY);
+    if (v === "panel" || v === "aligned" || v === "pins") return v;
+  } catch {}
+  return "panel";
+}
 
 type Draft = {
   page?: number;
   rect?: NormalizedRect;
   point?: { x: number; y: number };
   range?: { start: number; end: number };
+  box?: { x: number; y: number; w: number; h: number };
+  /** 位置なしのコメント（ツールバーから） */
+  free?: boolean;
 };
+
+const COMPOSE_W = 300;
+
+function anchorTop(anchor: Anchor, vp: Viewport): number | null {
+  if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
+    return toViewportRect(anchor.rect, vp).y;
+  if (anchor.type === "pdf_pin" || anchor.type === "image_pin")
+    return toViewportRect({ x: anchor.point.x, y: anchor.point.y, w: 0.0001, h: 0.0001 }, vp).y;
+  return null;
+}
+function anchorBox(
+  anchor: Anchor,
+  vp: Viewport,
+): { x: number; y: number; w: number; h: number } | null {
+  if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
+    return toViewportRect(anchor.rect, vp);
+  if (anchor.type === "pdf_pin" || anchor.type === "image_pin")
+    return {
+      ...toViewportRect({ x: anchor.point.x, y: anchor.point.y, w: 0.0001, h: 0.0001 }, vp),
+      w: 0,
+      h: 0,
+    };
+  return null;
+}
+/** 範囲・ピンの右に吹き出しを置く。右に入らなければ左、左にも入らなければ下（範囲を隠さない）。 */
+function popoverPos(box: { x: number; y: number; w: number; h: number }, vp: Viewport) {
+  const right = box.x + box.w + 10;
+  if (right + COMPOSE_W <= vp.width) return { x: right, y: box.y };
+  const left = box.x - COMPOSE_W - 10;
+  if (left >= 0) return { x: left, y: box.y };
+  return { x: Math.max(0, Math.min(box.x, vp.width - COMPOSE_W)), y: box.y + box.h + 10 };
+}
+
+function useMedia(query: string) {
+  const [m, setM] = useState(() =>
+    typeof window === "undefined" ? false : matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const mq = matchMedia(query);
+    const on = () => setM(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return m;
+}
 
 /**
  * U-05 校正ワークスペース + U-06 指摘対応。
- * 左: PDF/画像/外部リンク、右: スレッド。位置とスレッドを双方向リンク。版・残り時間・校正対象者を常時表示。
+ * ビューアの上でドラッグ（範囲）かクリック（ピン）するとその場に投稿欄が出る。
+ * コメントの見せ方は 3 つから選べる: 横に一覧（パネル）／ピンの高さに並べる（Google ドキュメント式）／ピンだけ（Figma 式）。
+ * ページ送り・倍率・レイアウト・版比較は画面下のフローティングツールバー（M3E toolbar）。
  */
 function Workspace() {
   const { revisionId } = Route.useParams();
   const data = useQuery(api.revisions.get, { revisionId });
+  const me = useQuery(api.me.me, {});
   const markViewed = useMutation(api.revisions.markViewed);
   const post = useMutation(api.comments.post);
   const decide = useMutation(api.comments.decide);
@@ -66,28 +141,27 @@ function Workspace() {
   const addCheck = useMutation(api.checks.add);
   const voidRevision = useMutation(api.submissions.voidRevision);
 
+  const mobile = useMedia("(max-width: 960px)");
+  const [layoutPref, setLayoutPref] = useState<Layout>(readLayout);
+  const layout: Layout = mobile ? "panel" : layoutPref;
+  const setLayout = (l: Layout) => {
+    setLayoutPref(l);
+    try {
+      localStorage.setItem(LAYOUT_KEY, l);
+    } catch {}
+  };
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [showResolved, setShowResolved] = useState(false);
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [selecting, setSelecting] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [requestedPage, setRequestedPage] = useState<number | null>(null);
-  const [filter, setFilter] = useState<{
-    unresolvedOnly: boolean;
-    severity: string | null;
-    mineOnly: boolean;
-  }>({ unresolvedOnly: false, severity: null, mineOnly: false });
-  // 投稿者は分類しない（Google ドライブのコメントと同じ）。種別は「修正提案」、重大度は「重要」を既定にし、
-  // 未解決のまま残れば理由なしでは校了できない安全側に倒す。重大（critical）の明示は後続。
-  const [compose, setCompose] = useState({ body: "", kind: "correction", severity: "major" });
+  const [body, setBody] = useState("");
   const [requestId, setRequestId] = useState(newRequestId);
-  const [decision, setDecision] = useState<{
-    threadId: string;
-    action: string;
-    reason: string;
-  } | null>(null);
-  const [replyDraft, setReplyDraft] = useState<{ threadId: string; body: string } | null>(null);
-  const [assignDraft, setAssignDraft] = useState<{ threadId: string; ids: string[] } | null>(null);
-  const [editDraft, setEditDraft] = useState<{ threadId: string; body: string } | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(0);
+  const [scale, setScale] = useState(1.2);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [compareWith, setCompareWith] = useState<string | null>(null);
   const [waiveDraft, setWaiveDraft] = useState<{ checkId: string; reason: string } | null>(null);
   const [addCheckDraft, setAddCheckDraft] = useState<{ type: string; assignee: string[] } | null>(
     null,
@@ -95,6 +169,7 @@ function Workspace() {
   const [voidDraft, setVoidDraft] = useState<string | null>(null);
   const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
+  const sheetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -109,6 +184,24 @@ function Workspace() {
         data.artifacts.find((a) => a.role !== "external")?.id ?? data.artifacts[0]?.id ?? null,
       );
   }, [data, artifactId]);
+  // ボトムシート（狭い画面）: detents は属性でしか渡せないので ref で設定し、show(1)（半分の高さ）で開く
+  useEffect(() => {
+    const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
+    if (!el) return;
+    el.setAttribute("detents", "fit half full");
+    const id = requestAnimationFrame(() => el.show?.(1));
+    return () => cancelAnimationFrame(id);
+  }, [mobile, data === undefined]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDraft(null);
+        setBody("");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
   const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null);
@@ -117,23 +210,38 @@ function Workspace() {
   useEffect(() => {
     if (!artifact || artifact.type !== "document" || !blob.blob) return;
     let cancelled = false;
-    void blob.blob.text().then((body) => {
-      if (!cancelled) setText({ artifactId: artifact.id, body });
+    void blob.blob.text().then((t) => {
+      if (!cancelled) setText({ artifactId: artifact.id, body: t });
     });
     return () => {
       cancelled = true;
     };
   }, [artifact?.id, artifact?.type, blob.blob]);
-  const me = useQuery(api.me.me, {});
   const carryCandidates = useQuery(
     api.comments.carryCandidates,
     data?.can.carryForward ? { revisionId: revisionId as Id<"revisions"> } : "skip",
   );
+  // 版比較: 同じ制作物の他の版
+  const siblings = useQuery(api.works.get, data ? { workId: data.work.id } : "skip");
+  const others = (siblings?.revisions ?? []).filter(
+    (r) => r.id !== revisionId && r.reviewState !== "void",
+  );
+  const other = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
+  const otherArtifact =
+    other?.artifacts.find((a) => a.role !== "external" && a.fileName === artifact?.fileName) ??
+    other?.artifacts.find((a) => a.role !== "external" && a.type === artifact?.type) ??
+    other?.artifacts.find((a) => a.role !== "external") ??
+    null;
+  const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null);
 
+  const resetCompose = () => {
+    setDraft(null);
+    setBody("");
+  };
   const doPost = useAction(async () => {
-    if (!data) return;
+    if (!data || !draft) return;
     let anchor: Anchor | undefined;
-    if (artifact && draft) {
+    if (artifact && !draft.free) {
       if (artifact.type === "pdf" && draft.page)
         anchor = draft.rect
           ? { type: "pdf_rect", artifactId: artifact.id, page: draft.page, rect: draft.rect }
@@ -149,51 +257,36 @@ function Workspace() {
       else if (artifact.type === "document" && draft.range && text?.artifactId === artifact.id)
         anchor = textRangeAnchor(artifact.id, text.body, draft.range.start, draft.range.end);
     }
+    // 投稿者は分類しない。内部では「修正提案・重要」で保存し、未解決が残れば理由なしの校了を拒否する（安全側）
     await post({
       revisionId: revisionId as Id<"revisions">,
-      body: compose.body,
-      kind: compose.kind as "correction",
-      severity: compose.severity as "minor",
+      body,
+      kind: "correction",
+      severity: "major",
       requestId,
       ...(anchor ? { anchor } : {}),
     });
-    setCompose((c) => ({ ...c, body: "" }));
-    setDraft(null);
-    setSelecting(false);
+    resetCompose();
     setRequestId(newRequestId());
   });
-  const doDecide = useAction(async () => {
-    if (!decision) return;
+  const doDecide = useAction(async (threadId: string, action: string, reason: string) => {
     await decide({
-      threadId: decision.threadId as Id<"commentThreads">,
-      action: decision.action as "accepted",
-      ...(decision.reason.trim() ? { reason: decision.reason.trim() } : {}),
+      threadId: threadId as Id<"commentThreads">,
+      action: action as "accepted",
+      ...(reason.trim() ? { reason: reason.trim() } : {}),
     });
-    setDecision(null);
   });
-  const doReply = useAction(async () => {
-    if (!replyDraft) return;
-    await reply({ threadId: replyDraft.threadId as Id<"commentThreads">, body: replyDraft.body });
-    setReplyDraft(null);
+  const doReply = useAction(async (threadId: string, b: string) => {
+    await reply({ threadId: threadId as Id<"commentThreads">, body: b });
+  });
+  const doAssignThread = useAction(async (threadId: string, ids: string[]) => {
+    await assignThread({ threadId: threadId as Id<"commentThreads">, assigneeId: ids[0] ?? null });
+  });
+  const doEditThread = useAction(async (threadId: string, b: string) => {
+    await editThread({ threadId: threadId as Id<"commentThreads">, body: b });
   });
   const doComplete = useAction(async () => {
     await complete({ revisionId: revisionId as Id<"revisions"> });
-  });
-  const doAssignThread = useAction(async () => {
-    if (!assignDraft) return;
-    await assignThread({
-      threadId: assignDraft.threadId as Id<"commentThreads">,
-      assigneeId: assignDraft.ids[0] ?? null,
-    });
-    setAssignDraft(null);
-  });
-  const doEditThread = useAction(async () => {
-    if (!editDraft) return;
-    await editThread({
-      threadId: editDraft.threadId as Id<"commentThreads">,
-      body: editDraft.body,
-    });
-    setEditDraft(null);
   });
   const doCarry = useAction(async (threadId: string) => {
     await carryForward({
@@ -240,156 +333,476 @@ function Workspace() {
     setRequestId(newRequestId());
   });
 
-  const threads = useMemo(() => {
-    if (!data) return [];
-    return data.threads
-      .map((t, i) => ({ ...t, index: i + 1 }))
-      .filter(
-        (t) =>
-          !filter.unresolvedOnly || ["open", "acknowledged", "accepted"].includes(t.resolution),
-      )
-      .filter((t) => !filter.severity || t.severity === filter.severity)
-      .filter((t) => !filter.mineOnly || t.authorId === me?.id);
-  }, [data, filter, me?.id]);
+  const allThreads = useMemo(
+    () => (data ? data.threads.map((t, i) => ({ ...t, index: i + 1 })) : []),
+    [data],
+  );
+  const threads = useMemo(
+    () => allThreads.filter((t) => showResolved || !isClosed(t) || t.id === activeThreadId),
+    [allThreads, showResolved, activeThreadId],
+  );
 
   if (data === undefined) return <p className="muted">読み込み中…</p>;
   const { revision, work, can, myAssignment, checks } = data;
   const pendingChecks = checks.filter((c) => c.state === "pending").length;
-  const overlayThreads: OverlayThread[] = data.threads
-    .map((t, i) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: i + 1 }))
+  const resolvedCount = allThreads.filter(isClosed).length;
+  const openCount = allThreads.length - resolvedCount;
+  const overlayThreads: OverlayThread[] = threads
+    .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
     .filter((t) => t.anchor);
   const open = revision.reviewState === "open" && now < revision.deadlineAt;
+  const selecting = can.comment && !compareWith;
+  const busy =
+    doPost.pending ||
+    doDecide.pending ||
+    doReply.pending ||
+    doAssignThread.pending ||
+    doEditThread.pending;
 
-  const jumpTo = (t: (typeof data.threads)[number]) => {
+  const jumpTo = (t: Thread) => {
     setActiveThreadId(t.id);
     if (t.anchor) {
       if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor as Anchor);
-      if (p) setRequestedPage(p);
+      if (p) setPage(p);
     }
   };
+  const card = (t: Thread & { index: number }, className?: string) => (
+    <ThreadCard
+      key={t.id}
+      thread={t}
+      active={t.id === activeThreadId}
+      meId={me?.id ?? null}
+      canDecide={can.decide}
+      canReply={can.comment || can.decide}
+      canEdit={work.lifecycle !== "finalized"}
+      pending={busy}
+      {...(className ? { className } : {})}
+      onSelect={() => jumpTo(t)}
+      onResolve={() => doDecide.run(t.id, "resolved", "")}
+      onDecide={(a, r) => doDecide.run(t.id, a, r)}
+      onReply={(b) => doReply.run(t.id, b)}
+      onAssign={(ids) => doAssignThread.run(t.id, ids)}
+      onEdit={(b) => doEditThread.run(t.id, b)}
+    />
+  );
+
+  /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは右上 */
+  const compose = (vp: Viewport | null, box: Draft["box"] | null) => {
+    if (!draft || !can.comment) return null;
+    let pos = { x: 8, y: 8 };
+    if (draft.free && vp) pos = { x: Math.max(8, vp.width - COMPOSE_W - 8), y: 8 };
+    else if (vp && (draft.rect || draft.point)) {
+      const b = draft.rect
+        ? toViewportRect(draft.rect, vp)
+        : {
+            ...toViewportRect({ x: draft.point!.x, y: draft.point!.y, w: 0.0001, h: 0.0001 }, vp),
+            w: 0,
+            h: 0,
+          };
+      pos = popoverPos(b, vp);
+    } else if (box) pos = { x: Math.max(0, box.x), y: box.y + box.h + 6 };
+    return (
+      <ComposePopover
+        x={pos.x}
+        y={pos.y}
+        value={body}
+        onChange={setBody}
+        onSubmit={() => void doPost.run()}
+        onCancel={resetCompose}
+        pending={doPost.pending}
+      />
+    );
+  };
+  /** ピンだけのレイアウト: 選択中のスレッドをピンの横に出す */
+  const popoverCard = (vp: Viewport) => {
+    if (layout !== "pins" || !activeThreadId) return null;
+    const t = threads.find((x) => x.id === activeThreadId);
+    if (!t?.anchor) return null;
+    const a = t.anchor as Anchor;
+    if (anchorPage(a) && anchorPage(a) !== page) return null;
+    if (a.artifactId !== artifactId) return null;
+    const b = anchorBox(a, vp);
+    if (!b) return null;
+    const pos = popoverPos(b, vp);
+    return (
+      <div className="thread-pop" style={{ left: pos.x, top: pos.y }}>
+        {card(t)}
+      </div>
+    );
+  };
+  const inPage = (vp: Viewport) => (
+    <>
+      {popoverCard(vp)}
+      {compose(vp, null)}
+    </>
+  );
+  /** Google ドキュメント式: 現在のページ・添付に位置があるものはその高さ、それ以外はページの下 */
+  const gutter = (vp: Viewport) => {
+    if (layout !== "aligned") return null;
+    const items: GutterItem[] = threads.map((t) => {
+      const a = t.anchor as Anchor | null;
+      const here =
+        a && a.artifactId === artifactId && (anchorPage(a) === null || anchorPage(a) === page);
+      return { id: t.id, y: here ? anchorTop(a, vp) : null, node: card(t) };
+    });
+    return <AlignedGutter items={items} minHeight={vp.height} activeId={activeThreadId} />;
+  };
+  const textGutter = (positions: Map<string, number>, height: number) => {
+    if (layout !== "aligned") return null;
+    const items: GutterItem[] = threads.map((t) => ({
+      id: t.id,
+      y: positions.get(t.id) ?? null,
+      node: card(t),
+    }));
+    return <AlignedGutter items={items} minHeight={height} activeId={activeThreadId} />;
+  };
+
+  const viewerProps = {
+    threads: overlayThreads,
+    activeThreadId,
+    onSelectThread: (id: string) => {
+      const t = threads.find((x) => x.id === id);
+      if (t) jumpTo(t);
+    },
+    selecting,
+  };
+  const renderViewer = (): ReactNode => {
+    if (!artifact) return <div className="empty">添付がありません</div>;
+    if (artifact.role === "external")
+      return (
+        <div className="external">
+          <a href={artifact.externalUrl ?? "#"} target="_blank" rel="noreferrer noopener">
+            <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
+            {artifact.externalUrl}
+          </a>
+          <p className="muted small">
+            外部ツール上のコメントは同期されません。結論はここに記録してください。
+          </p>
+          {can.comment ? (
+            <>
+              <Field label="外部での議論結果（合意事項として記録）">
+                <TextArea value={externalNote} onChange={(e) => setExternalNote(e.target.value)} />
+              </Field>
+              <div className="row">
+                <span className="spacer" />
+                <M3eButton
+                  variant="tonal"
+                  disabled={doRecordExternal.pending || !externalNote.trim()}
+                  onClick={() => void doRecordExternal.run()}
+                >
+                  記録
+                </M3eButton>
+              </div>
+            </>
+          ) : null}
+        </div>
+      );
+    if (blob.error) return <div className="alert">{blob.error}</div>;
+    if (!blob.blob) return <div className="empty">ファイルを取得中…</div>;
+    if (artifact.type === "pdf")
+      return (
+        <PdfViewer
+          blob={blob.blob}
+          artifactId={artifact.id}
+          {...viewerProps}
+          draft={draft?.page ? (draft as Draft & { page: number }) : null}
+          onDraft={(d) => {
+            setDraft(d);
+            setActiveThreadId(null);
+          }}
+          page={page}
+          scale={scale}
+          rotation={rotation}
+          onPageCount={setPageCount}
+          renderInPage={inPage}
+          renderGutter={gutter}
+        />
+      );
+    if (artifact.type === "document" && text?.artifactId === artifact.id)
+      return (
+        <TextViewer
+          text={text.body}
+          artifactId={artifact.id}
+          {...viewerProps}
+          draft={draft?.range ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) } : null}
+          onDraft={(r) => {
+            setDraft(
+              r
+                ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) }
+                : null,
+            );
+            setActiveThreadId(null);
+          }}
+          inPage={compose(null, draft?.box ?? null)}
+          renderGutter={textGutter}
+        />
+      );
+    if (artifact.type === "image" && blob.url)
+      return (
+        <ImageViewer
+          url={blob.url}
+          artifactId={artifact.id}
+          {...viewerProps}
+          draft={draft?.rect || draft?.point ? draft : null}
+          onDraft={(d) => {
+            setDraft(d);
+            setActiveThreadId(null);
+          }}
+          scale={scale}
+          renderInPage={inPage}
+          renderGutter={gutter}
+        />
+      );
+    return (
+      <div className="empty">
+        この形式はブラウザ内でプレビューできません。
+        {blob.url ? (
+          <a href={blob.url} download={artifact.fileName}>
+            ダウンロード
+          </a>
+        ) : null}
+      </div>
+    );
+  };
+  const renderOther = (): ReactNode => {
+    if (!compareWith) return null;
+    if (!other || !otherArtifact) return <div className="empty">比較する添付がありません</div>;
+    if (!otherBlob.blob) return <div className="empty">ファイルを取得中…</div>;
+    const none = {
+      threads: [],
+      activeThreadId: null,
+      onSelectThread: () => undefined,
+      selecting: false,
+    };
+    if (otherArtifact.type === "pdf")
+      return (
+        <PdfViewer
+          blob={otherBlob.blob}
+          artifactId={otherArtifact.id}
+          {...none}
+          draft={null}
+          onDraft={() => undefined}
+          page={page}
+          scale={scale}
+          rotation={rotation}
+        />
+      );
+    if (otherArtifact.type === "image" && otherBlob.url)
+      return (
+        <ImageViewer
+          url={otherBlob.url}
+          artifactId={otherArtifact.id}
+          {...none}
+          draft={null}
+          onDraft={() => undefined}
+          scale={scale}
+        />
+      );
+    return <div className="empty">この形式は比較できません</div>;
+  };
+
+  const isPdf = artifact?.type === "pdf";
+  const isImage = artifact?.type === "image";
+  const panelVisible = layout === "panel" && panelOpen;
+
+  const panel = (
+    <aside className="comments" aria-label="コメント">
+      <div className="comments__header">
+        <strong>コメント {openCount}</strong>
+        {resolvedCount > 0 ? (
+          <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
+            解決済み {resolvedCount}
+          </M3eFilterChip>
+        ) : null}
+        <span className="spacer" />
+        {!mobile ? (
+          <M3eIconButton aria-label="パネルを閉じる" onClick={() => setPanelOpen(false)}>
+            <M3eIcon name="right_panel_close" />
+          </M3eIconButton>
+        ) : null}
+      </div>
+      <div className="comments__list">
+        {carryCandidates && carryCandidates.length > 0 ? (
+          <div className="carry-box" aria-label="前版の未解決指摘">
+            <div className="label-large">前版の未解決指摘 {carryCandidates.length}</div>
+            {carryCandidates.map((c) => (
+              <div key={c.id} className="carry">
+                <div className="small muted">
+                  {c.revisionLabel}・{resolutionLabel[c.resolution]}・{c.author?.name}
+                </div>
+                <div className="thread__body">{c.body}</div>
+                <div className="row">
+                  <span className="spacer" />
+                  <M3eButton
+                    variant="text"
+                    disabled={doCarry.pending}
+                    onClick={() => void doCarry.run(c.id)}
+                  >
+                    この版へ引き継ぐ
+                  </M3eButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {threads.length === 0 ? (
+          <p className="muted small comments__empty">
+            {can.comment
+              ? "ファイルの上でドラッグすると、その場にコメントできます。"
+              : "コメントはありません。"}
+          </p>
+        ) : (
+          threads.map((t) => card(t))
+        )}
+      </div>
+      {!can.comment ? (
+        <div className="comments__blocked small muted">
+          {blockedReasonLabel[data.commentBlockedReason ?? "forbidden"]}
+        </div>
+      ) : null}
+    </aside>
+  );
 
   return (
-    <>
-      <PageHeader
-        size="small"
-        title={
-          <>
-            <Link to="/works/$workId" params={{ workId: work.id }}>
-              {work.title}
-            </Link>
-            <span className="muted">　{revision.label}</span>
-          </>
-        }
-        meta={
-          <>
-            <StatusChip tone={open ? "success" : "primary"}>
-              {open
-                ? `受付中・${remaining(revision.deadlineAt, now)}`
-                : revision.reviewClosedReason
-                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-                  : reviewStateLabel[revision.reviewState]}
-            </StatusChip>
-            <span className="small muted">締切 {formatJstDate(revision.deadlineAt)}</span>
+    <div className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""}`}>
+      <header className="ws__header">
+        <Link
+          to="/works/$workId"
+          params={{ workId: work.id }}
+          className="ws__back"
+          aria-label="制作物へ戻る"
+        >
+          <M3eIcon name="arrow_back" />
+        </Link>
+        <div className="ws__title">
+          <span className="ws__work">{work.title}</span>
+          <span className="ws__rev">{revision.label}</span>
+          <span className="ws__state">
+            {open ? (
+              <>受付中・{remaining(revision.deadlineAt, now)}</>
+            ) : revision.reviewClosedReason ? (
+              `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+            ) : (
+              reviewStateLabel[revision.reviewState]
+            )}
             {work.finalRevisionId === revision.id ? (
-              <StatusText tone="success">校了版</StatusText>
+              <StatusText tone="success" className="ml">
+                校了版
+              </StatusText>
             ) : null}
-          </>
-        }
-      >
+          </span>
+          {revision.focusNotes ? (
+            <span className="ws__focus muted">見てほしい観点: {revision.focusNotes}</span>
+          ) : null}
+        </div>
+        <span className="spacer" />
+        {data.artifacts.length > 1 ? (
+          <Select
+            aria-label="添付"
+            value={artifactId ?? ""}
+            onChange={(e) => {
+              setArtifactId(e.target.value);
+              setPage(1);
+              resetCompose();
+            }}
+            className="ws__artifact"
+          >
+            {data.artifacts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.role === "external" ? "外部: " : ""}
+                {a.fileName}
+              </option>
+            ))}
+          </Select>
+        ) : null}
         {can.completeReview ? (
           <M3eButton
             variant="tonal"
             disabled={doComplete.pending}
             onClick={() => void doComplete.run()}
           >
-            自分の確認を完了
+            確認を完了
           </M3eButton>
         ) : myAssignment?.state === "responded" ? (
           <StatusText tone="success">確認完了</StatusText>
         ) : null}
-        {can.void ? (
-          <M3eButton variant="text" onClick={() => setVoidDraft("")}>
-            誤提出を無効化
-          </M3eButton>
+        {can.void || can.addCheck ? (
+          <>
+            <M3eIconButton aria-label="その他の操作">
+              <M3eIcon name="more_vert" />
+              <M3eMenuTrigger htmlFor="ws-menu" />
+            </M3eIconButton>
+          </>
         ) : null}
-      </PageHeader>
-      {revision.focusNotes ? (
-        <div className="alert alert--info" style={{ marginBottom: 12 }}>
-          <span>見てほしい観点: {revision.focusNotes}</span>
-        </div>
+      </header>
+      {can.void || can.addCheck ? (
+        <M3eMenu id="ws-menu" positionX="before">
+          {can.addCheck ? (
+            <M3eMenuItem onClick={() => setAddCheckDraft({ type: "photo", assignee: [] })}>
+              専門確認を追加
+            </M3eMenuItem>
+          ) : null}
+          {can.void ? (
+            <M3eMenuItem onClick={() => setVoidDraft("")}>誤提出を無効化</M3eMenuItem>
+          ) : null}
+        </M3eMenu>
       ) : null}
 
-      {checks.length > 0 || can.addCheck ? (
-        <Card
-          ariaLabel="専門確認"
-          style={{ marginBottom: 12 }}
-          title={
-            <span className="row">
-              専門確認
-              {checks.length > 0 ? (
-                <StatusText tone={pendingChecks > 0 ? "warning" : "success"}>
-                  {pendingChecks > 0 ? `未完了 ${pendingChecks} 件` : "すべて完了"}
-                </StatusText>
-              ) : null}
-            </span>
-          }
-          actions={
-            can.addCheck && !addCheckDraft ? (
-              <M3eButton
-                variant="text"
-                onClick={() => setAddCheckDraft({ type: "photo", assignee: [] })}
-              >
-                <M3eIcon slot="icon" name="add" />
-                確認を追加
-              </M3eButton>
-            ) : null
-          }
+      {checks.length > 0 || addCheckDraft ? (
+        <details
+          className="details ws__checks"
+          open={pendingChecks > 0 || !!addCheckDraft}
+          aria-label="専門確認"
         >
-          {checks.length > 0 ? (
-            <div className="checks">
-              {checks.map((c) => (
-                <div key={c.id} className={`check ${c.state !== "pending" ? "check--done" : ""}`}>
-                  <StatusText
-                    tone={
-                      c.state === "done" ? "success" : c.state === "waived" ? "neutral" : "warning"
-                    }
-                  >
-                    {checkStateLabel[c.state]}
-                  </StatusText>
-                  <div>
-                    <strong>{c.label}</strong>
-                    <div className="small muted">
-                      担当: {c.assignee?.name ?? "未指定（主管・校了権限者が代行）"}
-                      {c.doneByUser
-                        ? ` ／ ${c.state === "waived" ? "免除" : "確認"}: ${c.doneByUser.name}・${formatJstShort(c.doneAt ?? 0)}`
-                        : ""}
-                      {c.note ? ` ／ ${c.note}` : ""}
-                    </div>
-                  </div>
-                  <div className="row">
-                    {c.canComplete ? (
-                      <M3eButton
-                        variant="tonal"
-                        disabled={doCompleteCheck.pending}
-                        onClick={() => void doCompleteCheck.run(c.id)}
-                      >
-                        確認完了
-                      </M3eButton>
-                    ) : null}
-                    {c.canWaive ? (
-                      <M3eButton
-                        variant="text"
-                        onClick={() => setWaiveDraft({ checkId: c.id, reason: "" })}
-                      >
-                        免除
-                      </M3eButton>
-                    ) : null}
-                  </div>
+          <summary>
+            専門確認{" "}
+            <StatusText tone={pendingChecks > 0 ? "warning" : "success"}>
+              {pendingChecks > 0 ? `未完了 ${pendingChecks}` : "すべて完了"}
+            </StatusText>
+          </summary>
+          <div className="checks">
+            {checks.map((c) => (
+              <div key={c.id} className={`check ${c.state !== "pending" ? "check--done" : ""}`}>
+                <StatusText
+                  tone={
+                    c.state === "done" ? "success" : c.state === "waived" ? "neutral" : "warning"
+                  }
+                >
+                  {checkStateLabel[c.state]}
+                </StatusText>
+                <div>
+                  {c.label}
+                  <span className="small muted">
+                    　{c.assignee?.name ?? "担当未指定"}
+                    {c.doneByUser
+                      ? `・${c.state === "waived" ? "免除" : "確認"} ${c.doneByUser.name} ${formatJstShort(c.doneAt ?? 0)}`
+                      : ""}
+                    {c.note ? `・${c.note}` : ""}
+                  </span>
                 </div>
-              ))}
-            </div>
-          ) : null}
+                <div className="row">
+                  {c.canComplete ? (
+                    <M3eButton
+                      variant="tonal"
+                      disabled={doCompleteCheck.pending}
+                      onClick={() => void doCompleteCheck.run(c.id)}
+                    >
+                      確認完了
+                    </M3eButton>
+                  ) : null}
+                  {c.canWaive ? (
+                    <M3eButton
+                      variant="text"
+                      onClick={() => setWaiveDraft({ checkId: c.id, reason: "" })}
+                    >
+                      免除
+                    </M3eButton>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
           {waiveDraft ? (
             <div className="stack" style={{ marginTop: 8 }}>
               <Field label="免除の理由（必須・監査に残ります）" required>
@@ -399,6 +812,7 @@ function Workspace() {
                 />
               </Field>
               <div className="row">
+                <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setWaiveDraft(null)}>
                   取消
                 </M3eButton>
@@ -433,6 +847,7 @@ function Workspace() {
                 onChange={(ids) => setAddCheckDraft({ ...addCheckDraft, assignee: ids })}
               />
               <div className="row">
+                <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setAddCheckDraft(null)}>
                   取消
                 </M3eButton>
@@ -441,426 +856,163 @@ function Workspace() {
                   disabled={doAddCheck.pending}
                   onClick={() => void doAddCheck.run()}
                 >
-                  追加する
+                  追加
                 </M3eButton>
               </div>
             </div>
           ) : null}
-        </Card>
+        </details>
       ) : null}
 
-      <div className="workspace">
-        <div className="stack" style={{ minWidth: 0 }}>
-          <div className="row">
-            {data.artifacts.map((a) => (
-              <M3eFilterChip
-                key={a.id}
-                selected={a.id === artifactId}
-                onClick={() => setArtifactId(a.id)}
-              >
-                {a.role === "external" ? "外部: " : ""}
-                {a.fileName}
-              </M3eFilterChip>
-            ))}
-          </div>
-          {!artifact ? (
-            <div className="empty">添付がありません</div>
-          ) : artifact.role === "external" ? (
-            <Card title="外部媒体" variant="outlined">
-              <a href={artifact.externalUrl ?? "#"} target="_blank" rel="noreferrer noopener">
-                <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
-                {artifact.externalUrl}
-              </a>
-              <div className="alert alert--warn">
-                <span>外部ツール上のコメントは同期されません。結論は下に記録してください。</span>
+      <div className={`ws__body ${panelVisible && !mobile ? "ws__body--panel" : ""}`}>
+        <div className="ws__viewer">
+          {compareWith ? (
+            <div className="compare">
+              <div className="compare__pane">
+                <div className="compare__label">{other?.revision.label ?? "…"}</div>
+                {renderOther()}
               </div>
-              {can.comment ? (
-                <div className="stack" aria-label="外部での議論結果を記録">
-                  <Field label="外部での議論結果（合意事項として記録）">
-                    <TextArea
-                      value={externalNote}
-                      onChange={(e) => setExternalNote(e.target.value)}
-                      placeholder="例: 表紙のメインビジュアルは案Bで確定。地図ページの配色は次版で再検討。"
-                    />
-                  </Field>
-                  <div className="row">
-                    <span className="spacer" />
-                    <M3eButton
-                      variant="tonal"
-                      disabled={doRecordExternal.pending || !externalNote.trim()}
-                      onClick={() => void doRecordExternal.run()}
-                    >
-                      合意事項として記録
-                    </M3eButton>
-                  </div>
-                </div>
-              ) : null}
-            </Card>
-          ) : blob.error ? (
-            <div className="alert">{blob.error}</div>
-          ) : !blob.blob ? (
-            <div className="empty">ファイルを取得中…</div>
-          ) : artifact.type === "pdf" ? (
-            <PdfViewer
-              blob={blob.blob}
-              artifactId={artifact.id}
-              threads={overlayThreads}
-              activeThreadId={activeThreadId}
-              onSelectThread={setActiveThreadId}
-              selecting={selecting}
-              draft={draft?.page ? (draft as Draft & { page: number }) : null}
-              onDraft={setDraft}
-              requestedPage={requestedPage}
-            />
-          ) : artifact.type === "document" && text?.artifactId === artifact.id ? (
-            <TextViewer
-              text={text.body}
-              artifactId={artifact.id}
-              threads={overlayThreads}
-              activeThreadId={activeThreadId}
-              onSelectThread={setActiveThreadId}
-              selecting={selecting}
-              draft={draft?.range ?? null}
-              onDraft={(r) => setDraft(r ? { range: r } : null)}
-            />
-          ) : artifact.type === "image" && blob.url ? (
-            <ImageViewer
-              url={blob.url}
-              artifactId={artifact.id}
-              threads={overlayThreads}
-              activeThreadId={activeThreadId}
-              onSelectThread={setActiveThreadId}
-              selecting={selecting}
-              draft={draft}
-              onDraft={setDraft}
-            />
-          ) : (
-            <Card title={artifact.fileName} variant="outlined">
-              <p className="muted" style={{ margin: 0 }}>
-                この形式はブラウザ内でプレビューできません。
-              </p>
-              {blob.url ? (
-                <a href={blob.url} download={artifact.fileName}>
-                  ダウンロード
-                </a>
-              ) : null}
-            </Card>
-          )}
-        </div>
-
-        <aside className="comments" aria-label="指摘・コメント">
-          <div className="comments__header">
-            <div className="row">
-              <strong>コメント {data.threads.length}</strong>
-              <span className="spacer" />
+              <div className="compare__pane">
+                <div className="compare__label">{revision.label}</div>
+                {renderViewer()}
+              </div>
             </div>
-            <M3eFilterChipSet>
-              <M3eFilterChip
-                selected={filter.unresolvedOnly}
-                onClick={() => setFilter((f) => ({ ...f, unresolvedOnly: !f.unresolvedOnly }))}
-              >
-                未対応のみ
-              </M3eFilterChip>
-              <M3eFilterChip
-                selected={filter.mineOnly}
-                onClick={() => setFilter((f) => ({ ...f, mineOnly: !f.mineOnly }))}
-              >
-                自分の指摘
-              </M3eFilterChip>
-            </M3eFilterChipSet>
-          </div>
-          <div className="comments__list">
-            {carryCandidates && carryCandidates.length > 0 ? (
-              <Card
-                variant="outlined"
-                ariaLabel="前版の未解決指摘"
-                title={
-                  <span className="row">
-                    <M3eIcon name="move_up" />
-                    前版の未解決指摘 {carryCandidates.length} 件
-                  </span>
-                }
-              >
-                <p className="small muted" style={{ margin: 0 }}>
-                  この版にも当てはまるものを引き継ぎます（位置は引き継がれません）。
-                </p>
-                {carryCandidates.map((c) => (
-                  <div key={c.id} className="carry">
-                    <div className="thread__meta">
-                      <StatusChip>{c.revisionLabel}</StatusChip>
-                      <StatusChip>{resolutionLabel[c.resolution]}</StatusChip>
-                      <span className="spacer" />
-                      <span>{c.author?.name}</span>
-                    </div>
-                    <div className="thread__body">{c.body}</div>
-                    <div className="row">
-                      <span className="spacer" />
-                      <M3eButton
-                        variant="tonal"
-                        disabled={doCarry.pending}
-                        onClick={() => void doCarry.run(c.id)}
-                      >
-                        <M3eIcon slot="icon" name="move_up" />
-                        この版へ引き継ぐ
-                      </M3eButton>
-                    </div>
-                  </div>
-                ))}
-              </Card>
-            ) : null}
-            {threads.length === 0 ? (
-              <p className="muted small" style={{ padding: 8 }}>
-                表示する指摘はありません。
-              </p>
-            ) : (
-              threads.map((t) => (
-                <article
-                  key={t.id}
-                  className={`thread thread--${t.severity} ${t.id === activeThreadId ? "thread--active" : ""} ${closedResolutions.includes(t.resolution) ? "thread--closed" : ""}`}
-                  tabIndex={0}
-                  onClick={() => jumpTo(t)}
-                  onKeyDown={(e) => e.key === "Enter" && jumpTo(t)}
-                  aria-label={`指摘 ${t.index}`}
-                >
-                  <div className="thread__meta">
-                    <span className="meta">#{t.index}</span>
-                    {t.kind === "decision" ? <StatusChip>{kindLabel[t.kind]}</StatusChip> : null}
-                    {t.severity === "critical" ? (
-                      <StatusText tone="error">{severityLabel[t.severity]}</StatusText>
-                    ) : null}
-                    <StatusText
-                      tone={
-                        t.resolution === "open"
-                          ? "warning"
-                          : t.resolution === "resolved"
-                            ? "success"
-                            : "neutral"
-                      }
-                    >
-                      {resolutionLabel[t.resolution]}
-                    </StatusText>
-                    {t.anchor ? (
-                      <M3eIcon style={{ fontSize: 16 }} title="位置指定あり" name="location_on" />
-                    ) : null}
-                    {t.carriedFromThreadId ? <StatusChip>前版から持越</StatusChip> : null}
-                    {t.assignee ? (
-                      <StatusChip title="対応担当">担当: {t.assignee.name}</StatusChip>
-                    ) : null}
-                    {t.editCount ? (
-                      <span className="small muted">（訂正 {t.editCount} 回）</span>
-                    ) : null}
-                    <span className="spacer" />
-                    <span>
-                      {t.author?.name}・{formatJstShort(t.createdAt)}
-                    </span>
-                  </div>
-                  {t.anchor?.type === "text_range" ? (
-                    <blockquote className="thread__quote small">「{t.anchor.quote}」</blockquote>
-                  ) : null}
-                  <div className="thread__body">{t.body}</div>
-                  <ThreadEvents threadId={t.id} active={t.id === activeThreadId} />
-                  {t.id === activeThreadId ? (
-                    <div className="thread__actions">
-                      {can.decide
-                        ? (["resolved", "rejected", "deferred"] as const).map((a) => (
-                            <M3eButton
-                              key={a}
-                              variant="text"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDecision({ threadId: t.id, action: a, reason: "" });
-                              }}
-                            >
-                              {resolutionLabel[a]}
-                            </M3eButton>
-                          ))
-                        : null}
-                      <M3eButton
-                        variant="text"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setReplyDraft({ threadId: t.id, body: "" });
-                        }}
-                      >
-                        返信
-                      </M3eButton>
-                      {can.decide ? (
-                        <M3eButton
-                          variant="text"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAssignDraft({
-                              threadId: t.id,
-                              ids: t.assigneeId ? [t.assigneeId] : [],
-                            });
-                          }}
-                        >
-                          担当者
-                        </M3eButton>
-                      ) : null}
-                      {t.authorId === me?.id && work.lifecycle !== "finalized" ? (
-                        <M3eButton
-                          variant="text"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditDraft({ threadId: t.id, body: t.body });
-                          }}
-                        >
-                          訂正
-                        </M3eButton>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {assignDraft?.threadId === t.id ? (
-                    <div className="stack" onClick={(e) => e.stopPropagation()}>
-                      <UserPicker
-                        label="対応担当者（空にすると解除）"
-                        single
-                        value={assignDraft.ids}
-                        onChange={(ids) => setAssignDraft({ ...assignDraft, ids })}
-                      />
-                      <div className="row">
-                        <M3eButton variant="text" onClick={() => setAssignDraft(null)}>
-                          取消
-                        </M3eButton>
-                        <M3eButton
-                          variant="filled"
-                          disabled={doAssignThread.pending}
-                          onClick={() => void doAssignThread.run()}
-                        >
-                          記録する
-                        </M3eButton>
-                      </div>
-                    </div>
-                  ) : null}
-                  {editDraft?.threadId === t.id ? (
-                    <div className="stack" onClick={(e) => e.stopPropagation()}>
-                      <Field label="本文の訂正（原文は履歴に残ります）">
-                        <TextArea
-                          value={editDraft.body}
-                          onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })}
-                        />
-                      </Field>
-                      <div className="row">
-                        <M3eButton variant="text" onClick={() => setEditDraft(null)}>
-                          取消
-                        </M3eButton>
-                        <M3eButton
-                          variant="filled"
-                          disabled={doEditThread.pending || !editDraft.body.trim()}
-                          onClick={() => void doEditThread.run()}
-                        >
-                          訂正を保存
-                        </M3eButton>
-                      </div>
-                    </div>
-                  ) : null}
-                  {decision?.threadId === t.id ? (
-                    <div className="stack" onClick={(e) => e.stopPropagation()}>
-                      <Field
-                        label={`${resolutionLabel[decision.action]} の理由${["rejected", "deferred"].includes(decision.action) ? "（必須）" : "（任意）"}`}
-                      >
-                        <TextArea
-                          value={decision.reason}
-                          onChange={(e) => setDecision({ ...decision, reason: e.target.value })}
-                        />
-                      </Field>
-                      <div className="row">
-                        <M3eButton variant="text" onClick={() => setDecision(null)}>
-                          取消
-                        </M3eButton>
-                        <M3eButton
-                          variant="filled"
-                          disabled={doDecide.pending}
-                          onClick={() => void doDecide.run()}
-                        >
-                          記録する
-                        </M3eButton>
-                      </div>
-                    </div>
-                  ) : null}
-                  {replyDraft?.threadId === t.id ? (
-                    <div className="stack" onClick={(e) => e.stopPropagation()}>
-                      <TextArea
-                        value={replyDraft.body}
-                        onChange={(e) => setReplyDraft({ ...replyDraft, body: e.target.value })}
-                        placeholder="返信（原文は変更されません）"
-                      />
-                      <div className="row">
-                        <M3eButton variant="text" onClick={() => setReplyDraft(null)}>
-                          取消
-                        </M3eButton>
-                        <M3eButton
-                          variant="filled"
-                          disabled={doReply.pending || !replyDraft.body.trim()}
-                          onClick={() => void doReply.run()}
-                        >
-                          送信
-                        </M3eButton>
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              ))
-            )}
-          </div>
-          <div className="compose">
-            {!can.comment ? (
-              <div className="small muted">
-                {blockedReasonLabel[data.commentBlockedReason ?? "forbidden"]}
-              </div>
-            ) : (
-              <>
-                <div className="row">
+          ) : (
+            renderViewer()
+          )}
+
+          {artifact && artifact.role !== "external" ? (
+            <M3eToolbar
+              className="ws__toolbar"
+              shape="rounded"
+              elevated
+              aria-label="ビューアの操作"
+            >
+              {isPdf ? (
+                <>
                   <M3eIconButton
-                    aria-label="位置を指定"
-                    variant={selecting ? "filled" : "standard"}
-                    toggle
-                    selected={selecting}
-                    disabled={!artifact || artifact.role === "external"}
-                    onClick={() => setSelecting((v) => !v)}
+                    aria-label="前のページ"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    <M3eIcon name="add_location_alt" />
+                    <M3eIcon name="chevron_left" />
                   </M3eIconButton>
-                  <span className="small muted">
-                    {draft
-                      ? draft.rect || draft.range
-                        ? "範囲を指定済み"
-                        : "ピンを指定済み"
-                      : selecting
-                        ? artifact?.type === "document"
-                          ? "本文をドラッグして範囲を指定"
-                          : "ビューア上でドラッグ（範囲）またはクリック（ピン）"
-                        : "位置指定なし"}
+                  <span className="ws__toolbar-text">
+                    {pageCount ? `${page} / ${pageCount}` : "…"}
                   </span>
-                  {draft ? (
-                    <M3eButton variant="text" onClick={() => setDraft(null)}>
-                      解除
-                    </M3eButton>
-                  ) : null}
-                </div>
-                <TextArea
-                  aria-label="指摘本文"
-                  value={compose.body}
-                  onChange={(e) => setCompose((c) => ({ ...c, body: e.target.value }))}
-                  placeholder="コメント"
-                />
-                <div className="row">
-                  <span className="spacer" />
-                  <M3eButton
-                    variant="filled"
-                    disabled={doPost.pending || !compose.body.trim()}
-                    onClick={() => void doPost.run()}
+                  <M3eIconButton
+                    aria-label="次のページ"
+                    disabled={page >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   >
-                    <M3eIcon slot="icon" name="send" />
-                    投稿
-                  </M3eButton>
-                </div>
-              </>
-            )}
-          </div>
-        </aside>
+                    <M3eIcon name="chevron_right" />
+                  </M3eIconButton>
+                </>
+              ) : null}
+              {isPdf || isImage ? (
+                <>
+                  <M3eIconButton
+                    aria-label="縮小"
+                    onClick={() => setScale((s) => Math.max(0.4, +(s - 0.2).toFixed(2)))}
+                  >
+                    <M3eIcon name="zoom_out" />
+                  </M3eIconButton>
+                  <span className="ws__toolbar-text">{Math.round(scale * 100)}%</span>
+                  <M3eIconButton
+                    aria-label="拡大"
+                    onClick={() => setScale((s) => Math.min(4, +(s + 0.2).toFixed(2)))}
+                  >
+                    <M3eIcon name="zoom_in" />
+                  </M3eIconButton>
+                </>
+              ) : null}
+              {isPdf ? (
+                <M3eIconButton
+                  aria-label="右に回転"
+                  onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
+                >
+                  <M3eIcon name="rotate_right" />
+                </M3eIconButton>
+              ) : null}
+              {can.comment ? (
+                <M3eIconButton
+                  aria-label="位置なしでコメント"
+                  onClick={() => {
+                    setDraft({ free: true });
+                    setActiveThreadId(null);
+                  }}
+                >
+                  <M3eIcon name="add_comment" />
+                </M3eIconButton>
+              ) : null}
+              {others.length > 0 ? (
+                <M3eIconButton
+                  aria-label="版を比較"
+                  toggle
+                  selected={!!compareWith}
+                  className={compareWith ? "icon--filled" : ""}
+                >
+                  <M3eIcon name="compare" />
+                  <M3eMenuTrigger htmlFor="compare-menu" />
+                </M3eIconButton>
+              ) : null}
+              {!mobile ? (
+                <>
+                  <span className="ws__toolbar-sep" />
+                  {layouts.map((l) => (
+                    <M3eIconButton
+                      key={l.id}
+                      aria-label={l.label}
+                      toggle
+                      selected={layout === l.id}
+                      onClick={() => {
+                        setLayout(l.id);
+                        if (l.id === "panel") setPanelOpen(true);
+                      }}
+                    >
+                      <M3eIcon name={l.icon} className={layout === l.id ? "icon--filled" : ""} />
+                    </M3eIconButton>
+                  ))}
+                  {layout === "panel" && !panelOpen ? (
+                    <M3eIconButton
+                      aria-label={`コメントを開く（${openCount}）`}
+                      onClick={() => setPanelOpen(true)}
+                    >
+                      <M3eIcon name="comment" />
+                    </M3eIconButton>
+                  ) : null}
+                </>
+              ) : null}
+            </M3eToolbar>
+          ) : null}
+        </div>
+        {panelVisible && !mobile ? panel : null}
       </div>
+      {mobile ? (
+        <M3eBottomSheet ref={sheetRef as never} handle handleLabel="コメント" className="ws__sheet">
+          {panel}
+        </M3eBottomSheet>
+      ) : null}
+
+      {others.length > 0 ? (
+        <M3eMenu id="compare-menu">
+          {others.map((r) => (
+            <M3eMenuItem
+              key={r.id}
+              onClick={() => {
+                setCompareWith(r.id);
+                setScale(0.7); // 2 枚並べるので縮める
+              }}
+            >
+              {r.label}
+              <span className="muted">　{formatJstDate(r.submittedAt)}</span>
+            </M3eMenuItem>
+          ))}
+          {compareWith ? (
+            <M3eMenuItem onClick={() => setCompareWith(null)}>比較を終了</M3eMenuItem>
+          ) : null}
+        </M3eMenu>
+      ) : null}
 
       <M3eDialog open={voidDraft !== null} onClosed={() => setVoidDraft(null)} closeLabel="閉じる">
         <span slot="header">誤提出した版を無効化</span>
@@ -891,51 +1043,6 @@ function Workspace() {
           </M3eButton>
         </div>
       </M3eDialog>
-    </>
-  );
-}
-
-function ThreadEvents({ threadId, active }: { threadId: string; active: boolean }) {
-  const data = useQuery(
-    api.comments.events,
-    active ? { threadId: threadId as Id<"commentThreads"> } : "skip",
-  );
-  if (!active || !data) return null;
-  const rest = data.events.filter((e) => e.eventType !== "created");
-  if (rest.length === 0) return null;
-  return (
-    <ul className="small muted" style={{ margin: 0, paddingLeft: 16 }}>
-      {rest.map((e, i) => (
-        <li key={i}>
-          {e.eventType === "decided" ? (
-            <>
-              判断:{" "}
-              {resolutionLabel[String((e.payload as { to?: string } | undefined)?.to ?? "")] ?? "—"}
-              {e.reason ? `（理由: ${e.reason}）` : ""}
-            </>
-          ) : e.eventType === "replied" ? (
-            <>返信: {(e.payload as { body?: string } | undefined)?.body}</>
-          ) : e.eventType === "assigned" ? (
-            <>
-              対応担当を
-              {(e.payload as { assigneeId?: string | null } | undefined)?.assigneeId
-                ? "指定"
-                : "解除"}
-            </>
-          ) : e.eventType === "edited" ? (
-            <>
-              本文を訂正（原文: {(e.payload as { previousBody?: string } | undefined)?.previousBody}
-              ）
-            </>
-          ) : e.eventType === "carried_forward" ? (
-            <>次版へ持ち越し</>
-          ) : (
-            e.eventType
-          )}
-          {" — "}
-          {e.actor?.name}・{formatJstShort(e.createdAt)}
-        </li>
-      ))}
-    </ul>
+    </div>
   );
 }

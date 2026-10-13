@@ -45,3 +45,10 @@ export { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
 export { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 export { M3eAvatar } from "@m3e/react/avatar";
 export { M3eSnackbar } from "@m3e/web/snackbar";
+// 4 回目の見直し（利用者の選択）: 下部フローティングツールバー、分割ボタン、セグメント切替、ボトムシート、FAB
+export { M3eToolbar } from "@m3e/react/toolbar";
+export { M3eSplitButton } from "@m3e/react/split-button";
+export { M3eSegmentedButton, M3eButtonSegment } from "@m3e/react/segmented-button";
+export { M3eBottomSheet } from "@m3e/react/bottom-sheet";
+export { M3eFab } from "@m3e/react/fab";
+export { M3eButtonGroup } from "@m3e/react/button-group";

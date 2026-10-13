@@ -1,6 +1,5 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
-import { useState } from "react";
-import { M3eIconButton, M3eIcon } from "@/ui/m3e";
+import { useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 
 interface Props {
@@ -12,6 +11,10 @@ interface Props {
   selecting: boolean;
   draft: { rect?: NormalizedRect; point?: { x: number; y: number } } | null;
   onDraft: (d: { rect?: NormalizedRect; point?: { x: number; y: number } } | null) => void;
+  /** 表示倍率は親が持つ（1 = 幅 900px に収める） */
+  scale: number;
+  renderInPage?: (vp: Viewport) => ReactNode;
+  renderGutter?: (vp: Viewport) => ReactNode;
 }
 
 /** 画像ビューア。座標は原画像基準の 0..1（表示幅に依存しない）。 */
@@ -24,11 +27,14 @@ export function ImageViewer({
   selecting,
   draft,
   onDraft,
+  scale,
+  renderInPage,
+  renderGutter,
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
-  const [scale, setScale] = useState(1);
+  const fit = natural ? Math.min(1, 900 / natural.w) : 1;
   const viewport: Viewport | null = natural
-    ? { width: natural.w * scale, height: natural.h * scale, rotation: 0 }
+    ? { width: natural.w * fit * scale, height: natural.h * fit * scale, rotation: 0 }
     : null;
   const mine = threads.filter(
     (t) =>
@@ -37,24 +43,7 @@ export function ImageViewer({
   );
   return (
     <div className="viewer">
-      <div className="viewer__toolbar" role="toolbar" aria-label="画像操作">
-        <M3eIconButton aria-label="縮小" onClick={() => setScale((s) => Math.max(0.2, s - 0.1))}>
-          <M3eIcon name="zoom_out" />
-        </M3eIconButton>
-        <span className="small">{Math.round(scale * 100)}%</span>
-        <M3eIconButton aria-label="拡大" onClick={() => setScale((s) => Math.min(4, s + 0.1))}>
-          <M3eIcon name="zoom_in" />
-        </M3eIconButton>
-        {natural ? (
-          <span className="small muted">
-            {natural.w}×{natural.h}px
-          </span>
-        ) : null}
-        {selecting ? (
-          <span className="chip chip--warn">ドラッグで範囲、クリックでピンを指定</span>
-        ) : null}
-      </div>
-      <div className="viewer__stage">
+      <div className="viewer__stage" tabIndex={0}>
         <div className="viewer__page">
           <img
             src={url}
@@ -63,7 +52,6 @@ export function ImageViewer({
             onLoad={(e) => {
               const img = e.currentTarget;
               setNatural({ w: img.naturalWidth, h: img.naturalHeight });
-              setScale(Math.min(1, 900 / img.naturalWidth));
             }}
           />
           {viewport ? (
@@ -77,7 +65,9 @@ export function ImageViewer({
               onDraft={onDraft}
             />
           ) : null}
+          {viewport ? renderInPage?.(viewport) : null}
         </div>
+        {viewport && renderGutter ? renderGutter(viewport) : null}
       </div>
     </div>
   );
