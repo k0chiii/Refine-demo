@@ -78,8 +78,6 @@ function AppLayout() {
           <span slot="title">MF100 校正システム</span>
           <span slot="subtitle" className="small">
             {me.name}
-            {me.isSystemAdmin ? "（システム管理者）" : ""}
-            {me.mock ? "・モック" : ""}
           </span>
           <M3eButton
             slot="trailing-icon"

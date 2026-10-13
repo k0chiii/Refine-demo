@@ -26,7 +26,7 @@
 | 20  | ダークモード（`scheme="auto"`、全色が M3 トークン由来） | 校正者         | ![](screenshots/20-dark-workspace.png)            |
 | 21  | モバイル幅（下部ナビゲーションバー・未読バッジ）        | 校正者         | ![](screenshots/21-mobile-queue.png)              |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（現在 19 画面とも指摘 0）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（22 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 Material 3 Expressive 適用前の画面は `docs/screenshots-before/`、前後比較と検証は [`UI_M3E.md`](UI_M3E.md)。
 

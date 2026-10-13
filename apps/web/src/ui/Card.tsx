@@ -9,7 +9,7 @@ export function Card({
   title,
   actions,
   children,
-  variant = "filled",
+  variant = "outlined",
   className,
   ariaLabel,
   style,

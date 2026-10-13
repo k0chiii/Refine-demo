@@ -89,18 +89,6 @@ const signInAs = async (sub) => {
   await page.waitForTimeout(300);
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
-/** m3e-select（aria-label で特定）に値を入れて change を発火する。 */
-const selectValue = async (label, value) => {
-  await page.evaluate(
-    ([l, v]) => {
-      const el = document.querySelector(`m3e-select[aria-label="${l}"]`);
-      el.value = v;
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-    [label, value],
-  );
-  await page.waitForTimeout(100);
-};
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
@@ -145,13 +133,20 @@ async function main() {
   // 専門確認: 写真（肖像・権利）を校正者に依頼
   const all = await users();
   const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
+  // 22 日付ピッカー（校正期限は日付のみ・0:00 JST）
+  await page.locator('m3e-icon-button[aria-label="カレンダーから選ぶ"]').first().click();
+  await page.waitForTimeout(600);
+  await shot("22-date-picker", "m3e-date-input");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  await page.locator("details.checks-details > summary").click();
   await page.locator("m3e-checkbox#check-photo").click();
   await page.waitForSelector(".check:not(.check--done)");
   await pickUser(
     page.locator(".check").filter({ has: page.locator("#check-photo") }),
     reviewer.name,
   );
-  await shot("14-submit-required-checks", "fieldset");
+  await shot("14-submit-required-checks", "details.checks-details");
   await btn("アップロードを開始").click();
   await page.waitForFunction(
     () => document.querySelectorAll(".upload-item .chip--ok").length >= 3,
@@ -199,7 +194,6 @@ async function main() {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.22, { steps: 8 });
   await page.mouse.up();
-  await selectValue("重大度", "critical");
   await page.fill(
     'textarea[aria-label="指摘本文"]',
     "団体名の表記が「五月祭常任委員会」ではなく「五月祭実行委員会」になっています。全ページ要確認。",
@@ -207,7 +201,6 @@ async function main() {
   await btn("投稿").click();
   await page.waitForSelector(".thread");
   // 2 件目（軽微・位置なし）は未対応のまま残し、次版への持越候補にする
-  await selectValue("重大度", "minor");
   await page.fill(
     'textarea[aria-label="指摘本文"]',
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
@@ -245,7 +238,6 @@ async function main() {
     body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
   await page.waitForSelector("text=範囲を指定済み");
-  await selectValue("重大度", "major");
   await page.fill(
     'textarea[aria-label="指摘本文"]',
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
@@ -289,6 +281,11 @@ async function main() {
     .first()
     .click();
   await page.waitForSelector("text=前版から持越");
+  // 持ち越したコメントを反映済みにする（未解決が残ると理由なしでは校了できない）
+  await page.locator(".thread").first().click();
+  await page.locator(".thread m3e-button", { hasText: "反映済" }).click();
+  await page.locator(".thread m3e-button", { hasText: "記録する" }).click();
+  await page.waitForSelector("text=判断:");
 
   // 10 校了ダイアログ（校了権限者）と校了後
   await signInAs("mock-nogiku-approver");

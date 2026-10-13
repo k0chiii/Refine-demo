@@ -3,9 +3,9 @@ import type { Id } from "@mf100/convex/dataModel";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState, type FormEvent } from "react";
-import { epochToJstLocal, jstLocalToEpoch } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
+import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eIcon } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
@@ -25,7 +25,7 @@ function EditWork() {
     category: string;
     mediaType: string;
     legacyId: string;
-    deadline: string;
+    deadlineAt: number | null;
     confidentiality: string;
     creatorIds: string[];
     approverIds: string[];
@@ -41,7 +41,7 @@ function EditWork() {
         category: w.category,
         mediaType: w.mediaType,
         legacyId: w.legacyId ?? "",
-        deadline: w.deadlineAt ? epochToJstLocal(w.deadlineAt) : "",
+        deadlineAt: w.deadlineAt ?? null,
         confidentiality: w.confidentiality,
         creatorIds: [...w.creatorIds],
         approverIds: [w.approverId],
@@ -53,7 +53,7 @@ function EditWork() {
   const { run, pending, error } = useAction(async (e: FormEvent) => {
     e.preventDefault();
     if (!data || !form) return;
-    const deadlineAt = form.deadline ? jstLocalToEpoch(form.deadline) : null;
+    const deadlineAt = form.deadlineAt;
     await update({
       workId: workId as Id<"works">,
       expectedVersion: data.work.version,
@@ -116,24 +116,16 @@ function EditWork() {
               ))}
             </Select>
           </Field>
-          <Field label="旧ID（任意）">
-            <TextInput value={form.legacyId} onChange={set("legacyId")} />
-          </Field>
-          <Field label="納期（JST）">
-            <TextInput type="datetime-local" value={form.deadline} onChange={set("deadline")} />
-          </Field>
-          <Field label="機密区分">
-            <Select value={form.confidentiality} onChange={set("confidentiality")}>
-              <option value="normal">通常</option>
-              <option value="restricted">非公開・取扱注意</option>
-            </Select>
-          </Field>
+          <DateField
+            label="納期"
+            value={form.deadlineAt}
+            onChange={(v) => setForm((f) => (f ? { ...f, deadlineAt: v } : f))}
+          />
         </div>
         <UserPicker
           label="主管・制作統括"
           value={form.managerIds}
           onChange={setIds("managerIds")}
-          hint="制作物の編集・校正者割当・採否判断ができます。"
         />
         <UserPicker
           label="制作者"
@@ -148,6 +140,20 @@ function EditWork() {
           value={form.approverIds}
           onChange={setIds("approverIds")}
         />
+        <details className="details">
+          <summary>詳細設定（旧ID・機密区分）</summary>
+          <div className="grid-2" style={{ marginTop: 12 }}>
+            <Field label="旧ID（Notion 等）">
+              <TextInput value={form.legacyId} onChange={set("legacyId")} />
+            </Field>
+            <Field label="機密区分">
+              <Select value={form.confidentiality} onChange={set("confidentiality")}>
+                <option value="normal">通常</option>
+                <option value="restricted">非公開・取扱注意</option>
+              </Select>
+            </Field>
+          </div>
+        </details>
         {error ? (
           <div className="alert">
             <M3eIcon name="error" />

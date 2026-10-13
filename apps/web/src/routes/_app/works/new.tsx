@@ -1,10 +1,10 @@
 import { api } from "@mf100/convex/api";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useState, type FormEvent } from "react";
-import { jstLocalToEpoch } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
+import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eIcon } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
@@ -15,7 +15,6 @@ export const Route = createFileRoute("/_app/works/new")({ component: NewWork });
 /** 制作物登録（UC-01）。登録者は主管担当として自動的に含まれる（実装上の仮置き）。 */
 function NewWork() {
   const navigate = useNavigate();
-  const me = useQuery(api.me.me, {});
   const create = useMutation(api.works.create);
   const [form, setForm] = useState({
     title: "",
@@ -23,14 +22,13 @@ function NewWork() {
     category: "",
     mediaType: "pdf",
     legacyId: "",
-    deadline: "",
     confidentiality: "normal",
   });
+  const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [creatorIds, setCreatorIds] = useState<string[]>([]);
   const [approverIds, setApproverIds] = useState<string[]>([]);
   const { run, pending, error } = useAction(async (e: FormEvent) => {
     e.preventDefault();
-    const deadlineAt = form.deadline ? jstLocalToEpoch(form.deadline) : null;
     const id = await create({
       title: form.title,
       purpose: form.purpose,
@@ -58,7 +56,7 @@ function NewWork() {
           <TextArea value={form.purpose} onChange={set("purpose")} />
         </Field>
         <div className="grid-2">
-          <Field label="区分（例: 印刷物 / Web / グラフィック）" required>
+          <Field label="区分" required>
             <TextInput required value={form.category} onChange={set("category")} />
           </Field>
           <Field label="媒体" required>
@@ -70,34 +68,30 @@ function NewWork() {
               ))}
             </Select>
           </Field>
-          <Field label="旧ID（Notion 等の制作物ID、任意）">
-            <TextInput value={form.legacyId} onChange={set("legacyId")} />
-          </Field>
-          <Field label="納期（JST）">
-            <TextInput type="datetime-local" value={form.deadline} onChange={set("deadline")} />
-          </Field>
-          <Field label="機密区分">
-            <Select value={form.confidentiality} onChange={set("confidentiality")}>
-              <option value="normal">通常</option>
-              <option value="restricted">非公開・取扱注意</option>
-            </Select>
-          </Field>
+          <DateField label="納期" value={deadlineAt} onChange={setDeadlineAt} />
         </div>
-        <UserPicker
-          label="制作者"
-          required
-          value={creatorIds}
-          onChange={setCreatorIds}
-          hint={`自分（${me?.name ?? ""}）を含める場合も選択してください。登録者は主管担当として自動的に記録されます。`}
-        />
+        <UserPicker label="制作者" required value={creatorIds} onChange={setCreatorIds} />
         <UserPicker
           label="校了権限者"
           required
           single
           value={approverIds}
           onChange={setApproverIds}
-          hint="校了を宣言できるのはこの一人だけです（C3）。制作者本人を指定すると、独立確認なしの自己校了は拒否されます（D2 暫定）。"
         />
+        <details className="details">
+          <summary>詳細設定（旧ID・機密区分）</summary>
+          <div className="grid-2" style={{ marginTop: 12 }}>
+            <Field label="旧ID（Notion 等）">
+              <TextInput value={form.legacyId} onChange={set("legacyId")} />
+            </Field>
+            <Field label="機密区分">
+              <Select value={form.confidentiality} onChange={set("confidentiality")}>
+                <option value="normal">通常</option>
+                <option value="restricted">非公開・取扱注意</option>
+              </Select>
+            </Field>
+          </div>
+        </details>
         {error ? (
           <div className="alert">
             <M3eIcon name="error" />

@@ -7,7 +7,7 @@ import { formatJst } from "@/lib/format";
 import { permissionLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
-import { StatusChip } from "@/ui/Chip";
+import { StatusText } from "@/ui/Chip";
 import { Field, Select } from "@/ui/Field";
 import { M3eButton, M3eIcon } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
@@ -63,15 +63,7 @@ function Acl() {
           </Link>
         }
       />
-      <div className="alert alert--info">
-        <M3eIcon name="info" />
-        <span>
-          MVP では Nogiku ユーザーを個人単位で指定します。Nogiku Access
-          のグループ・役職による自動付与は後続機能です（C10 /
-          D3）。管理者権限は業務上の校了権限を意味しません。
-        </span>
-      </div>
-      <div className="grid-2" style={{ marginTop: 16 }}>
+      <div className="grid-2">
         <Card title="許可を追加">
           <UserPicker
             label="ユーザー"
@@ -79,7 +71,6 @@ function Acl() {
             value={principal}
             onChange={setPrincipal}
             exclude={active.map((g) => g.principalId)}
-            hint="このシステムに一度でもログインした委員から選びます"
           />
           <Field label="権限レベル">
             <Select value={permission} onChange={(e) => setPermission(e.target.value as "view")}>
@@ -105,7 +96,7 @@ function Acl() {
         <Card title={`有効な許可（${active.length}）`}>
           {active.length === 0 ? (
             <p className="muted small" style={{ margin: 0 }}>
-              個人 ACL はありません（職責による関与者のみ閲覧可）。
+              個人の許可はありません。
             </p>
           ) : (
             <div className="table-wrap" tabIndex={0}>
@@ -125,9 +116,7 @@ function Acl() {
                         {g.principal?.name}
                         <div className="small muted">{g.principal?.email}</div>
                       </td>
-                      <td>
-                        <StatusChip tone="primary">{permissionLabel[g.permission]}</StatusChip>
-                      </td>
+                      <td>{permissionLabel[g.permission]}</td>
                       <td className="small">
                         {g.granter?.name}
                         <br />
@@ -174,7 +163,7 @@ function Acl() {
                   {g.revokedAt ? (
                     `${g.revoker?.name}・${formatJst(g.revokedAt)}`
                   ) : (
-                    <StatusChip tone="success">有効</StatusChip>
+                    <StatusText tone="success">有効</StatusText>
                   )}
                 </td>
               </tr>

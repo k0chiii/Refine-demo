@@ -61,10 +61,6 @@ function Notifications() {
           すべて既読にする
         </M3eButton>
       </PageHeader>
-      <p className="small muted" style={{ marginTop: 0 }}>
-        自分が関わる制作物の提出・割当・指摘・採否・専門確認・期限接近・校了をここに表示します。本人の操作は通知されません。Slack
-        連携は後続（D8）。
-      </p>
       {list.length === 0 ? (
         <div className="empty">
           <M3eIcon name="notifications_off" />
@@ -87,9 +83,7 @@ function Notifications() {
                   style={unreadOne ? { fontVariationSettings: '"FILL" 1' } : undefined}
                 />
                 <span slot="overline">
-                  <StatusChip tone={unreadOne ? "primary" : "neutral"}>
-                    {notificationKindLabel[n.kind] ?? n.kind}
-                  </StatusChip>
+                  <StatusChip>{notificationKindLabel[n.kind] ?? n.kind}</StatusChip>
                 </span>
                 <span className={unreadOne ? "label-large" : ""}>{n.title}</span>
                 <span slot="supporting-text">{n.body}</span>

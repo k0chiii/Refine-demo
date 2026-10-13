@@ -18,7 +18,7 @@ const fmtShort = new Intl.DateTimeFormat("ja-JP", {
 });
 
 export function formatJst(ms: number | null | undefined): string {
-  return ms === null || ms === undefined ? "—" : `${fmt.format(new Date(ms))} JST`;
+  return ms === null || ms === undefined ? "—" : fmt.format(new Date(ms));
 }
 export function formatJstShort(ms: number): string {
   return fmtShort.format(new Date(ms));
@@ -29,6 +29,29 @@ export function jstLocalToEpoch(value: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
   if (!m) return null;
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, Number(m[5]));
+}
+
+/** 日付だけの表示（締切・納期は日付単位。時刻は常に 0:00 JST） */
+const fmtDate = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+export function formatJstDate(ms: number | null | undefined): string {
+  return ms === null || ms === undefined ? "—" : fmtDate.format(new Date(ms));
+}
+
+/** YYYY-MM-DD（JST の暦日）→ その日の 0:00 JST の epoch ms */
+export function jstDateToEpoch(value: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), -9, 0);
+}
+
+/** epoch ms → その JST 暦日の 0:00 JST */
+export function startOfJstDay(ms: number): number {
+  return jstDateToEpoch(epochToJstLocal(ms)) ?? ms;
 }
 
 export function epochToJstLocal(ms: number): string {

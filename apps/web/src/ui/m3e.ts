@@ -39,4 +39,8 @@ export { M3eSearchBar } from "@m3e/react/search";
 export { M3eTextareaAutosize } from "@m3e/react/textarea-autosize";
 export { M3eStepper, M3eStep, M3eStepPanel } from "@m3e/react/stepper";
 export { M3eSkeleton } from "@m3e/react/skeleton";
+export { M3eDateInput } from "@m3e/react/date-input";
+export { M3eDatepicker, M3eDatepickerToggle } from "@m3e/react/datepicker";
+export { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
+export { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 export { M3eSnackbar } from "@m3e/web/snackbar";

@@ -2,7 +2,7 @@ import { api } from "@mf100/convex/api";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useState } from "react";
-import { formatJst } from "@/lib/format";
+import { formatJstDate } from "@/lib/format";
 import { lifecycleLabel, mediaLabel } from "@/lib/labels";
 import { StatusChip, type ChipTone } from "@/ui/Chip";
 import { M3eButton, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eSearchBar } from "@/ui/m3e";
@@ -48,7 +48,16 @@ function Works() {
           />
         </M3eSearchBar>
         <M3eFilterChipSet aria-label="状態で絞り込み">
-          {Object.entries(lifecycleLabel).map(([k, v]) => (
+          {(["active", "on_hold", "finalized"] as const).map((k) => (
+            <M3eFilterChip
+              key={k}
+              selected={lifecycle === k}
+              onClick={() => setLifecycle((cur) => (cur === k ? "" : k))}
+            >
+              {lifecycleLabel[k]}
+            </M3eFilterChip>
+          ))}
+          {([] as Array<[string, string]>).map(([k, v]) => (
             <M3eFilterChip
               key={k}
               selected={lifecycle === k}
@@ -64,7 +73,7 @@ function Works() {
       ) : works.length === 0 ? (
         <div className="empty">
           <M3eIcon name="folder_off" />
-          閲覧できる制作物がありません。関係する制作物の閲覧許可は校正システム管理者が付与します。
+          閲覧できる制作物がありません。
         </div>
       ) : (
         <div className="table-wrap" tabIndex={0}>
@@ -72,12 +81,9 @@ function Works() {
             <thead>
               <tr>
                 <th>名称</th>
-                <th>旧ID</th>
-                <th>区分</th>
-                <th>媒体</th>
                 <th>状態</th>
                 <th>現在版</th>
-                <th>受付締切（JST）</th>
+                <th>受付締切</th>
               </tr>
             </thead>
             <tbody>
@@ -88,14 +94,12 @@ function Works() {
                       {w.title}
                     </Link>
                     {w.confidentiality === "restricted" ? (
-                      <StatusChip tone="error" icon="lock" className="ml">
-                        非公開
-                      </StatusChip>
+                      <M3eIcon name="lock" className="ml" title="非公開" style={{ fontSize: 16 }} />
                     ) : null}
+                    <div className="small muted">
+                      {w.category}・{mediaLabel[w.mediaType]}
+                    </div>
                   </td>
-                  <td className="small muted">{w.legacyId ?? "—"}</td>
-                  <td>{w.category}</td>
-                  <td>{mediaLabel[w.mediaType]}</td>
                   <td>
                     <StatusChip tone={lifecycleTone[w.lifecycle] ?? "neutral"}>
                       {lifecycleLabel[w.lifecycle]}
@@ -103,7 +107,7 @@ function Works() {
                   </td>
                   <td>{w.latestRevisionLabel ?? "未提出"}</td>
                   <td className="small">
-                    {w.acceptingDeadlineAt ? formatJst(w.acceptingDeadlineAt) : "受付中の版なし"}
+                    {w.acceptingDeadlineAt ? formatJstDate(w.acceptingDeadlineAt) : "—"}
                   </td>
                 </tr>
               ))}

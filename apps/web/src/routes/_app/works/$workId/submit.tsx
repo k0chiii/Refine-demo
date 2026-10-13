@@ -13,8 +13,9 @@ import {
 } from "@/features/upload/submissionFlow";
 import { uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
-import { epochToJstLocal, formatBytes, formatJst, jstLocalToEpoch } from "@/lib/format";
+import { formatBytes, formatJstDate, startOfJstDay } from "@/lib/format";
 import { StatusChip } from "@/ui/Chip";
+import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eIcon, M3eLinearProgressIndicator, M3eStep, M3eStepper } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
@@ -43,11 +44,12 @@ function Submit() {
   const reset = useMutation(api.submissions.reset);
   const confirm = useMutation(api.submissions.confirm);
 
-  const defaultDeadline = useMemo(() => epochToJstLocal(Date.now() + 3 * 86_400_000), []);
+  // 既定は 3 日後。締切は暦日単位（その日の 0:00 JST）なので、最短は翌日
+  const defaultDeadline = useMemo(() => startOfJstDay(Date.now() + 3 * 86_400_000), []);
+  const [deadlineAt, setDeadlineAt] = useState<number | null>(defaultDeadline);
   const [form, setForm] = useState({
     kind: "standard",
     reviewType: "general",
-    deadline: defaultDeadline,
     changeSummary: "",
     focusNotes: "",
     externalUrl: "",
@@ -74,7 +76,6 @@ function Submit() {
   const start = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    const deadlineAt = jstLocalToEpoch(form.deadline);
     if (!deadlineAt) return setError("校正期限を入力してください");
     if (!token) return setError("認証トークンがありません。再度サインインしてください");
     const items = [
@@ -204,19 +205,14 @@ function Submit() {
         <div className="alert alert--info" style={{ marginBottom: 16 }}>
           <M3eIcon name="info" />
           <span>
-            現在 <strong>{accepting.label}</strong> が受付中（締切 {formatJst(accepting.deadlineAt)}
-            ）。この提出が<strong>確定した時点</strong>
-            で受付が終了します。失敗した場合は受付が維持されます（D1）。
+            <strong>{accepting.label}</strong> が受付中（締切 {formatJstDate(accepting.deadlineAt)}
+            ）。この提出を確定した時点で受付が終了します。
           </span>
         </div>
       ) : null}
       {!flow ? (
         <form className="form" onSubmit={(e) => void start(e)}>
-          <Field
-            label="版の種別"
-            required
-            hint="0版（ラフ）は方向性確認用で通常版と別区分です。通常版の前なら再提出できます（旧ラフの受付は終了）。0版から直接校了はできません。"
-          >
+          <Field label="版の種別" required>
             <Select value={form.kind} onChange={set("kind")}>
               <option value="standard">
                 通常版（第{revisions.filter((r) => r.kind === "standard").length + 1}版）
@@ -226,23 +222,13 @@ function Submit() {
               </option>
             </Select>
           </Field>
-          <div className="grid-2">
-            <Field
-              label="校正期限（JST）"
-              required
-              hint="期限ちょうどの時刻以降は新規指摘を受け付けません。"
-            >
-              <TextInput
-                type="datetime-local"
-                required
-                value={form.deadline}
-                onChange={set("deadline")}
-              />
-            </Field>
-            <Field label="校正の種類">
-              <TextInput value={form.reviewType} onChange={set("reviewType")} />
-            </Field>
-          </div>
+          <DateField
+            label="校正期限"
+            required
+            value={deadlineAt}
+            onChange={setDeadlineAt}
+            min={startOfJstDay(Date.now() + 86_400_000)}
+          />
           <Field label="変更点">
             <TextArea value={form.changeSummary} onChange={set("changeSummary")} />
           </Field>
@@ -252,7 +238,7 @@ function Submit() {
           <div className="file-drop">
             <div className="row">
               <M3eIcon name="attach_file" />
-              <span className="label-large">ファイル（PDF / 画像 / 文章。複数可）</span>
+              <span className="label-large">ファイル</span>
             </div>
             <input
               type="file"
@@ -260,7 +246,6 @@ function Submit() {
               aria-label="ファイルを選択"
               onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             />
-            <span className="small muted">複数案は 1 つのファイルにまとめてください（C9）。</span>
             {files.length > 0 ? (
               <div className="row">
                 {files.map((f) => (
@@ -271,24 +256,8 @@ function Submit() {
               </div>
             ) : null}
           </div>
-          <Field
-            label="外部リンク（Figma / frame.io / Web など、任意）"
-            hint="外部ツール上のコメントは同期されません。結論はこのシステムに記録してください（A-12）。"
-          >
-            <TextInput
-              type="url"
-              value={form.externalUrl}
-              onChange={set("externalUrl")}
-              placeholder="https://"
-            />
-          </Field>
-          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="label-large" style={{ padding: 0, marginBottom: 8 }}>
-              専門確認
-              <span className="small muted">
-                　この版で必要な確認。未完了のまま理由なしの校了はできません（D6）
-              </span>
-            </legend>
+          <details className="details checks-details">
+            <summary>専門確認を依頼する</summary>
             <div className="checks">
               {checkTypes.map((t) => (
                 <div key={t} className={`check ${checks[t]?.on ? "" : "check--done"}`}>
@@ -316,7 +285,20 @@ function Submit() {
                 </div>
               ))}
             </div>
-          </fieldset>
+          </details>
+          <details className="details">
+            <summary>外部リンク</summary>
+            <div style={{ marginTop: 12 }}>
+              <Field label="URL">
+                <TextInput
+                  type="url"
+                  value={form.externalUrl}
+                  onChange={set("externalUrl")}
+                  placeholder="https://"
+                />
+              </Field>
+            </div>
+          </details>
           {error ? (
             <div className="alert">
               <M3eIcon name="error" />

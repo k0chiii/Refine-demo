@@ -9,7 +9,7 @@
 - Convex: スキーマ、Nogiku OIDC provider（UniQ 由来）とモック、ポートアダプタ、公開関数一式、cron、convex-test による統合テスト。
 - Hono API: R2 ストリーミング提出（sha256 検証、サイズ照合、失敗記録）、認可付き配信、JWT 検証、CORS。
 - Web デモモード（`--mode demo`）: バックエンド無しで Convex の実関数をブラウザ内実行。Playwright で 21 画面を撮影済み（`docs/screenshots`）。
-- **Material 3 Expressive 適用**（[`UI_M3E.md`](UI_M3E.md)）: テーマを body 直下に移して動的カラー・ダークモードを有効化、フォーム／カード／チップ／リスト／ナビ／ステッパーを M3E 部品に置換。
+- **Material 3 Expressive 適用**（[`UI_M3E.md`](UI_M3E.md)）: テーマを body 直下に移して動的カラー・ダークモードを有効化、フォーム／カード／チップ／リスト／ナビ／ステッパー／日付ピッカーを M3E 部品に置換。2 回目の見直しで情報量と塗りを削減（`UI_M3E.md` §8）。締切・納期は日付のみ（0:00 JST）。
 - **v1 追加**（[`V1_GAP.md`](V1_GAP.md)）: 専門確認と校了ガード、指摘の担当者・訂正・次版持越、版の無効化、アプリ内通知と期限リマインド、放置セッション清掃と R2 孤立オブジェクト削除、ユーザー選択 UI、制作物の編集・ライフサイクル、外部媒体の議論結果記録、文章の閲覧・範囲指摘、axe-core によるアクセシビリティ監査（19 画面で指摘 0）。
 - Web: サインイン（本物／モック）、校正待ち、制作物一覧・登録・詳細、版提出（進捗・失敗ファイル再送・確定）、校正ワークスペース（PDF.js／画像の矩形・ピン、スレッド、採否、返信、確認完了）、ACL 管理、管理（管理者付与・監査ログ）。本番ビルド成功。
 
@@ -28,7 +28,7 @@
 | 孤立 R2 オブジェクトの削除                         | 実装済み（未実機） | Convex と Hono の両方に同じ `MF100_CLEANUP_SECRET`（16 文字以上）を設定すると毎時走る。`wrangler dev --test-scheduled` で `curl http://127.0.0.1:8787/__scheduled` により手動実行できる                                                                                                                            |
 | バックアップ・復元試験（A-14）                     | 未実施             | Convex スナップショットエクスポート＋R2 バケットの同一時点取得手順を決めて復元試験                                                                                                                                                                                                                                 |
 | 負荷試験（A-13）                                   | 未実施             | `seed` を拡張して 600×6×5×10 を生成し、`listMine` / `myQueue` / `revisions.get` の p95 を計測                                                                                                                                                                                                                      |
-| アクセシビリティ監査（A-15）                       | 自動検査のみ       | axe-core（WCAG 2.1 A/AA）は `pnpm a11y` で 19 画面とも指摘 0。キーボードのみ操作・スクリーンリーダーの実機確認は未実施                                                                                                                                                                                             |
+| アクセシビリティ監査（A-15）                       | 自動検査のみ       | axe-core（WCAG 2.1 A/AA）は `pnpm a11y` で 22 画面。残る指摘は M3E の calendar 内部（過去日セルの accessible name）のみ。キーボードのみ操作・スクリーンリーダーの実機確認は未実施                                                                                                                                  |
 | Nogiku Access 連動（登録権限・割当権限・グループ） | 拡張点のみ実装     | 利用者決定: 登録者と割当者は Nogiku の権限・役職で管理。`orgPermissions`（`works:create` / `reviews:assign`）を Nogiku Access `/permission/check` から同期し `NOGIKU_ACCESS_ENABLED=true` にする。権限名は NAPS `/.well-known/permissions` で宣言。`Principal.groupIds` の供給経路も同時に設計（INVESTIGATION §2） |
 | Tauri / 過去データ移行 / 本番デプロイ / 課金       | 対象外             | —                                                                                                                                                                                                                                                                                                                  |
 

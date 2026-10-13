@@ -54,12 +54,8 @@ function SignIn() {
             <M3eHeading variant="headline" size="small" level={1} emphasized style={{ margin: 0 }}>
               MF100 校正システム
             </M3eHeading>
-            <div className="small muted">東京大学五月祭常任委員会</div>
           </div>
         </div>
-        <p className="muted" style={{ margin: 0 }}>
-          委員共通アカウント（Nogiku）でサインインします。このシステムはパスワードを保持しません。
-        </p>
         <M3eButton variant="filled" size="medium" onClick={() => start({ redirectTo: "/queue" })}>
           <M3eIcon slot="icon" name="login" />
           Nogiku でサインイン
@@ -72,9 +68,7 @@ function SignIn() {
         ) : null}
         {showMock ? (
           <details>
-            <summary className="small muted">
-              開発用: モック委員でサインイン（NOGIKU_MOCK_ENABLED=true のデプロイメントのみ）
-            </summary>
+            <summary className="small muted">モック委員でサインイン</summary>
             <div className="stack" style={{ marginTop: 12 }}>
               <Field label="役割">
                 <Select value={mockSub} onChange={(e) => setMockSub(e.target.value)}>
@@ -85,7 +79,7 @@ function SignIn() {
                   ))}
                 </Select>
               </Field>
-              <Field label="任意の sub（空なら上の役割）">
+              <Field label="任意の sub（省略可）">
                 <TextInput
                   value={customSub}
                   onChange={(e) => setCustomSub(e.target.value)}
