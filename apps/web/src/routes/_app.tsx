@@ -52,17 +52,9 @@ function AppLayout() {
       <Link key={it.to} to={it.to} className="nav-link">
         <M3eNavItem selected={selected(it.to)}>
           <span slot="icon" className="nav-icon">
-            <M3eIcon name={it.icon} />
+            <M3eIcon name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
             {it.count > 0 ? (
               <M3eBadge size="large" className="nav-icon__badge" aria-label={`未読 ${it.count} 件`}>
-                {it.count > 99 ? "99+" : it.count}
-              </M3eBadge>
-            ) : null}
-          </span>
-          <span slot="selected-icon" className="nav-icon">
-            <M3eIcon name={it.icon} style={{ fontVariationSettings: '"FILL" 1' }} />
-            {it.count > 0 ? (
-              <M3eBadge size="large" className="nav-icon__badge">
                 {it.count > 99 ? "99+" : it.count}
               </M3eBadge>
             ) : null}
@@ -82,7 +74,7 @@ function AppLayout() {
           <span slot="title">MF100 校正</span>
           <M3eIconButton slot="trailing-icon" aria-label={`アカウント: ${me.name}`}>
             <M3eAvatar className="account-avatar">
-              <M3eIcon name="person" style={{ fontVariationSettings: '"FILL" 1' }} />
+              <M3eIcon name="person" className="icon--filled" />
             </M3eAvatar>
             <M3eMenuTrigger htmlFor="account-menu" />
           </M3eIconButton>
@@ -90,7 +82,7 @@ function AppLayout() {
         <M3eMenu id="account-menu" positionX="before">
           <div className="account-menu__header">
             <M3eAvatar className="account-avatar account-avatar--large">
-              <M3eIcon name="person" style={{ fontVariationSettings: '"FILL" 1' }} />
+              <M3eIcon name="person" className="icon--filled" />
             </M3eAvatar>
             <div>
               <div className="label-large">{me.name}</div>

@@ -97,8 +97,44 @@ code {
   padding: 1px 4px;
   border-radius: var(--mf-shape-xs);
 }
+/* Material Symbols（可変フォント）: 選択・ホバーで輪郭 → 塗りへ連続的に変化させる（M3 Expressive の motion） */
 m3e-icon {
   font-family: "Material Symbols Outlined";
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  transition: font-variation-settings 350ms cubic-bezier(0.2, 0, 0, 1);
+}
+m3e-icon.icon--filled {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 24;
+}
+m3e-nav-item:hover m3e-icon,
+m3e-icon-button:hover m3e-icon,
+m3e-button:hover m3e-icon {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 24;
+}
+m3e-nav-item:hover m3e-icon.icon--filled,
+m3e-icon-button:hover m3e-icon.icon--filled {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 24;
+}
+@media (prefers-reduced-motion: reduce) {
+  m3e-icon {
+    transition: none;
+  }
 }
 /* 画面上の M3E 部品に書体を揃える（shadow 内は継承） */
 m3e-heading,
