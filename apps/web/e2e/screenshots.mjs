@@ -112,6 +112,12 @@ async function main() {
   await go(`${BASE}/works`);
   await page.waitForSelector("table.table a");
   await shot("02-works-list");
+  // 22 アカウントメニュー（右上のアバター）
+  await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+  await page.waitForTimeout(500);
+  await shot("22-account-menu");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 
   // 03 制作物詳細
   await page.locator("table.table a", { hasText: "MF100 公式パンフレット" }).click();
@@ -133,10 +139,10 @@ async function main() {
   // 専門確認: 写真（肖像・権利）を校正者に依頼
   const all = await users();
   const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
-  // 22 日付ピッカー（校正期限は日付のみ・0:00 JST）
+  // 21 日付ピッカー（校正期限は日付のみ・0:00 JST）
   await page.locator('m3e-icon-button[aria-label="カレンダーから選ぶ"]').first().click();
   await page.waitForTimeout(600);
-  await shot("22-date-picker", "m3e-date-input");
+  await shot("21-date-picker", "m3e-date-input");
   await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
   await page.waitForTimeout(300);
   await page.locator("details.checks-details > summary").click();
@@ -316,22 +322,12 @@ async function main() {
   await page.waitForSelector("text=監査ログ");
   await shot("13-admin-audit");
 
-  // 20 ダークモード（scheme=auto: OS 設定に追従。色はすべて M3 トークン由来）
-  await signInAs("mock-nogiku-reviewer");
-  await page.emulateMedia({ colorScheme: "dark" });
-  await go(revisionUrl);
-  await page.waitForSelector(".thread");
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
-  await page.locator(".thread").first().click();
-  await shot("20-dark-workspace");
-  await page.emulateMedia({ colorScheme: "light" });
-
-  // 21 モバイル幅（下部ナビゲーションバー）
+  // 20 モバイル幅（下部ナビゲーションバー）
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${BASE}/queue`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForTimeout(400);
-  await shot("21-mobile-queue");
+  await shot("20-mobile-queue");
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 

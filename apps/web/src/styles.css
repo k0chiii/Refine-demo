@@ -1,7 +1,7 @@
 /*
  * MF100 校正システム: Material 3 Expressive（@m3e）トークン上の補完スタイル。
  * - 色は必ず --md-sys-color-*（<m3e-theme> が html に定義。index.html / src/theme.ts）から取る。
- *   --mf-* はその別名で、ライト／ダーク・動的カラーに自動で追従する。
+ *   --mf-* はその別名。配色は light 固定（切り替えは行わない）。
  * - 文字は M3 タイプスケール（body / label / title）、形は M3 シェイプスケールを使う。
  * - 独自実装が残るのは、密度の高いテーブル・PDF／画像ビューア・座標指定だけ（§4 / §13）。
  */
@@ -63,21 +63,6 @@
   --mf-type-label-medium: 500 12px/16px var(--mf-font);
   --mf-type-title-medium: 500 16px/24px var(--mf-font);
   --mf-type-title-small: 500 14px/20px var(--mf-font);
-
-  /* M3E 部品にも同じ書体を使わせる */
-  --md-sys-typescale-font: var(--mf-font);
-  --md-ref-typeface-plain: var(--mf-font);
-  --md-ref-typeface-brand: var(--mf-font);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --mf-success-container: #1d4a26;
-    --mf-on-success-container: #c6efc8;
-    --mf-success: #8fd79a;
-    --mf-warning-container: #5b4300;
-    --mf-on-warning-container: #ffe08c;
-    --mf-warning: #f5c84c;
-  }
 }
 
 * {
@@ -394,22 +379,6 @@ m3e-search-bar {
   background: var(--mf-success-container);
   color: var(--mf-on-success-container);
 }
-.count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 14px;
-  font: var(--mf-type-label-large);
-  background: var(--mf-primary);
-  color: var(--mf-on-primary);
-}
-.count--zero {
-  background: var(--mf-surface-container-highest);
-  color: var(--mf-on-surface-variant);
-}
 
 /* ---------- フォーム（m3e-form-field + native 入力） */
 .field {
@@ -525,10 +494,6 @@ m3e-search-bar {
   display: grid;
   justify-items: center;
   gap: 8px;
-}
-.empty m3e-icon {
-  font-size: 40px;
-  color: var(--mf-outline);
 }
 
 .dialog-body {
@@ -656,9 +621,6 @@ m3e-search-bar {
   display: grid;
   gap: 6px;
   cursor: pointer;
-  transition:
-    box-shadow var(--mf-motion),
-    transform var(--mf-motion);
 }
 .thread:hover {
   box-shadow:
@@ -728,9 +690,6 @@ m3e-search-bar {
 }
 .upload-item__bar {
   grid-column: 1 / -1;
-}
-.stepper {
-  margin-bottom: 16px;
 }
 
 /* ---------- サインイン */
@@ -944,4 +903,37 @@ m3e-search-bar {
 }
 .details[open] > summary::before {
   transform: rotate(90deg);
+}
+
+/* アカウント（右上） */
+.account-avatar {
+  --m3e-avatar-size: 32px;
+  --m3e-avatar-font-size: 14px;
+  --m3e-avatar-color: var(--mf-primary-container);
+  --m3e-avatar-label-color: var(--mf-on-primary-container);
+}
+.account-avatar m3e-icon {
+  font-size: 20px;
+}
+.account-avatar--large m3e-icon {
+  font-size: 24px;
+}
+.account-avatar--large {
+  --m3e-avatar-size: 40px;
+  --m3e-avatar-font-size: 16px;
+}
+.account-menu__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 8px;
+  min-width: 240px;
+  border-bottom: 1px solid var(--mf-outline-variant);
+  margin-bottom: 4px;
+}
+#account-menu {
+  --m3e-menu-container-max-width: 360px;
+}
+.account-menu__header .small {
+  white-space: nowrap;
 }

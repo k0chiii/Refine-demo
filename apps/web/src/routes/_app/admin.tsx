@@ -27,12 +27,7 @@ function Admin() {
   });
   if (!me) return null;
   if (!me.isSystemAdmin)
-    return (
-      <div className="alert">
-        <M3eIcon name="block" />
-        管理画面は校正システム管理者のみ利用できます。
-      </div>
-    );
+    return <div className="alert">管理画面は校正システム管理者のみ利用できます。</div>;
   return (
     <>
       <PageHeader title="管理" />
@@ -70,10 +65,7 @@ function Admin() {
                     <td>{w.activeGrantCount} 件</td>
                     <td>
                       <Link to="/works/$workId/acl" params={{ workId: w.id }} className="nav-link">
-                        <M3eButton variant="text">
-                          <M3eIcon slot="icon" name="manage_accounts" />
-                          編集
-                        </M3eButton>
+                        <M3eButton variant="text">編集</M3eButton>
                       </Link>
                     </td>
                   </tr>

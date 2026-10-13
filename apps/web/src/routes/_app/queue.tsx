@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatJstDate, remaining } from "@/lib/format";
 import { assignmentLabel } from "@/lib/labels";
 import { StatusChip, StatusText } from "@/ui/Chip";
-import { M3eFilterChip, M3eFilterChipSet, M3eIcon } from "@/ui/m3e";
+import { M3eFilterChip, M3eFilterChipSet } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 
 export const Route = createFileRoute("/_app/queue")({ component: Queue });
@@ -25,21 +25,10 @@ function Queue() {
   const items = useQuery(api.reviews.myQueue, {});
   const [showDone, setShowDone] = useState(false);
   if (items === undefined) return <p className="muted">読み込み中…</p>;
-  const pending = items.filter((i) => i.isOpen && i.assignmentState !== "responded");
   const visible = items.filter((i) => showDone || (i.isOpen && i.assignmentState !== "responded"));
   return (
     <>
-      <PageHeader
-        title="校正待ち"
-        meta={
-          <span
-            className={`count ${pending.length === 0 ? "count--zero" : ""}`}
-            aria-label="未確認の件数"
-          >
-            {pending.length}
-          </span>
-        }
-      >
+      <PageHeader title="校正待ち">
         <M3eFilterChipSet>
           <M3eFilterChip selected={showDone} onClick={() => setShowDone((v) => !v)}>
             確認済み・受付終了も表示
@@ -48,7 +37,6 @@ function Queue() {
       </PageHeader>
       {visible.length === 0 ? (
         <div className="empty">
-          <M3eIcon name="task_alt" />
           {items.length === 0 ? "割り当てられた校正はありません。" : "未確認の校正はありません。"}
         </div>
       ) : (

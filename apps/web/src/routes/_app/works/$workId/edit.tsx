@@ -7,7 +7,7 @@ import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 
@@ -74,13 +74,7 @@ function EditWork() {
   });
 
   if (data === undefined || !form) return <p className="muted">読み込み中…</p>;
-  if (!data.can.edit)
-    return (
-      <div className="alert">
-        <M3eIcon name="block" />
-        この制作物を編集する権限がありません。
-      </div>
-    );
+  if (!data.can.edit) return <div className="alert">この制作物を編集する権限がありません。</div>;
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => (f ? { ...f, [k]: e.target.value } : f));
   const setIds = (k: "creatorIds" | "approverIds" | "managerIds") => (ids: string[]) =>
@@ -154,12 +148,7 @@ function EditWork() {
             </Field>
           </div>
         </details>
-        {error ? (
-          <div className="alert">
-            <M3eIcon name="error" />
-            {error.message}
-          </div>
-        ) : null}
+        {error ? <div className="alert">{error.message}</div> : null}
         <div className="form__actions">
           <Link to="/works/$workId" params={{ workId }}>
             <M3eButton variant="text" type="button">
@@ -171,7 +160,6 @@ function EditWork() {
             type="submit"
             disabled={pending || form.creatorIds.length === 0 || form.approverIds.length === 0}
           >
-            <M3eIcon slot="icon" name="save" />
             保存する
           </M3eButton>
         </div>

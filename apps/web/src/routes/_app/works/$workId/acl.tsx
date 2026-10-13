@@ -9,7 +9,7 @@ import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select } from "@/ui/Field";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 
@@ -45,12 +45,7 @@ function Acl() {
   if (!me || work === undefined || grants === undefined)
     return <p className="muted">読み込み中…</p>;
   if (!me.isSystemAdmin)
-    return (
-      <div className="alert">
-        <M3eIcon name="block" />
-        閲覧権限の変更は校正システム管理者のみ行えます。
-      </div>
-    );
+    return <div className="alert">閲覧権限の変更は校正システム管理者のみ行えます。</div>;
   const active = grants.filter((g) => g.revokedAt === undefined);
 
   return (
@@ -88,7 +83,6 @@ function Acl() {
               disabled={principal.length === 0 || doGrant.pending}
               onClick={() => void doGrant.run()}
             >
-              <M3eIcon slot="icon" name="person_add" />
               付与
             </M3eButton>
           </div>
@@ -128,7 +122,6 @@ function Acl() {
                           disabled={doRevoke.pending}
                           onClick={() => void doRevoke.run(g.principalId)}
                         >
-                          <M3eIcon slot="icon" name="person_remove" />
                           剥奪
                         </M3eButton>
                       </td>

@@ -17,7 +17,7 @@ import { formatBytes, formatJstDate, startOfJstDay } from "@/lib/format";
 import { StatusChip } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon, M3eLinearProgressIndicator, M3eStep, M3eStepper } from "@/ui/m3e";
+import { M3eButton, M3eLinearProgressIndicator } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 import { UserPicker } from "@/ui/UserPicker";
 import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
@@ -140,33 +140,12 @@ function Submit() {
     }
   };
 
-  const step = state.confirmed ? 2 : flow ? 1 : 0;
-  const steps = (
-    <M3eStepper className="stepper" orientation="horizontal" aria-label="提出の手順">
-      <M3eStep slot="step" selected={step === 0} completed={step > 0}>
-        <M3eIcon slot="icon" name="edit_note" />
-        内容とファイル
-      </M3eStep>
-      <M3eStep slot="step" selected={step === 1} completed={step > 1}>
-        <M3eIcon slot="icon" name="cloud_upload" />
-        転送と検証
-      </M3eStep>
-      <M3eStep slot="step" selected={step === 2} completed={step === 2}>
-        <M3eIcon slot="icon" name="check_circle" />
-        提出確定
-      </M3eStep>
-    </M3eStepper>
-  );
-
   if (state.confirmed) {
     return (
       <>
         <PageHeader title="版を提出" meta={<span className="muted">{work.title}</span>} />
-        {steps}
         <div className="empty" style={{ textAlign: "left", justifyItems: "start" }}>
-          <StatusChip tone="success" icon="check_circle">
-            提出確定
-          </StatusChip>
+          <StatusChip tone="success">提出確定</StatusChip>
           <h2 style={{ margin: 0 }} className="title-small">
             {state.confirmed.kind === "rough" ? "0版（ラフ）" : `第${state.confirmed.sequence}版`}
             を提出確定しました
@@ -200,10 +179,8 @@ function Submit() {
   return (
     <>
       <PageHeader title="版を提出" meta={<span className="muted">{work.title}</span>} />
-      {steps}
       {accepting ? (
         <div className="alert alert--info" style={{ marginBottom: 16 }}>
-          <M3eIcon name="info" />
           <span>
             <strong>{accepting.label}</strong> が受付中（締切 {formatJstDate(accepting.deadlineAt)}
             ）。この提出を確定した時点で受付が終了します。
@@ -237,7 +214,6 @@ function Submit() {
           </Field>
           <div className="file-drop">
             <div className="row">
-              <M3eIcon name="attach_file" />
               <span className="label-large">ファイル</span>
             </div>
             <input
@@ -249,7 +225,7 @@ function Submit() {
             {files.length > 0 ? (
               <div className="row">
                 {files.map((f) => (
-                  <StatusChip key={f.name} icon="draft">
+                  <StatusChip key={f.name}>
                     {f.name}（{formatBytes(f.size)}）
                   </StatusChip>
                 ))}
@@ -299,12 +275,7 @@ function Submit() {
               </Field>
             </div>
           </details>
-          {error ? (
-            <div className="alert">
-              <M3eIcon name="error" />
-              {error}
-            </div>
-          ) : null}
+          {error ? <div className="alert">{error}</div> : null}
           <div className="form__actions">
             <Link to="/works/$workId" params={{ workId }} className="nav-link">
               <M3eButton variant="text" type="button">
@@ -316,7 +287,6 @@ function Submit() {
               type="submit"
               disabled={files.length === 0 && !form.externalUrl.trim()}
             >
-              <M3eIcon slot="icon" name="cloud_upload" />
               アップロードを開始
             </M3eButton>
           </div>
@@ -330,9 +300,7 @@ function Submit() {
                 {it.file ? (
                   <span className="muted small">（{formatBytes(it.file.size)}）</span>
                 ) : (
-                  <StatusChip icon="link" className="ml">
-                    外部リンク
-                  </StatusChip>
+                  <StatusChip className="ml">外部リンク</StatusChip>
                 )}
                 {it.error ? (
                   <div className="small" style={{ color: "var(--mf-error)" }}>
@@ -348,15 +316,6 @@ function Submit() {
                       : it.status === "failed"
                         ? "error"
                         : "primary"
-                  }
-                  icon={
-                    it.status === "verified"
-                      ? "check_circle"
-                      : it.status === "failed"
-                        ? "error"
-                        : it.status === "uploading"
-                          ? "sync"
-                          : "schedule"
                   }
                   className={it.status === "verified" ? "chip--ok" : ""}
                 >
@@ -391,7 +350,6 @@ function Submit() {
           ))}
           {failedItems(state).length > 0 ? (
             <div className="alert">
-              <M3eIcon name="error" />
               <span>
                 {failedItems(state).length}{" "}
                 件のファイルが失敗しました。失敗したファイルだけを再アップロードしてから確定してください。旧版の受付は維持されています。
@@ -399,12 +357,7 @@ function Submit() {
             </div>
           ) : null}
           {state.confirming ? <M3eLinearProgressIndicator aria-label="確定処理中" /> : null}
-          {state.error || error ? (
-            <div className="alert">
-              <M3eIcon name="error" />
-              {state.error ?? error}
-            </div>
-          ) : null}
+          {state.error || error ? <div className="alert">{state.error ?? error}</div> : null}
           <div className="form__actions">
             <Link to="/works/$workId" params={{ workId }} className="nav-link">
               <M3eButton variant="text">中止して戻る</M3eButton>
@@ -414,7 +367,6 @@ function Submit() {
               disabled={!canConfirm(state)}
               onClick={() => void flow.confirm().catch(() => undefined)}
             >
-              <M3eIcon slot="icon" name="check_circle" />
               提出を確定する
             </M3eButton>
           </div>

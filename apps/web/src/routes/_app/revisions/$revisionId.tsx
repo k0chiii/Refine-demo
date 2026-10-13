@@ -292,9 +292,7 @@ function Workspace() {
             </StatusChip>
             <span className="small muted">締切 {formatJstDate(revision.deadlineAt)}</span>
             {work.finalRevisionId === revision.id ? (
-              <StatusText tone="success" icon="verified">
-                校了版
-              </StatusText>
+              <StatusText tone="success">校了版</StatusText>
             ) : null}
           </>
         }
@@ -305,24 +303,19 @@ function Workspace() {
             disabled={doComplete.pending}
             onClick={() => void doComplete.run()}
           >
-            <M3eIcon slot="icon" name="task_alt" />
             自分の確認を完了
           </M3eButton>
         ) : myAssignment?.state === "responded" ? (
-          <StatusText tone="success" icon="task_alt">
-            確認完了
-          </StatusText>
+          <StatusText tone="success">確認完了</StatusText>
         ) : null}
         {can.void ? (
           <M3eButton variant="text" onClick={() => setVoidDraft("")}>
-            <M3eIcon slot="icon" name="block" />
             誤提出を無効化
           </M3eButton>
         ) : null}
       </PageHeader>
       {revision.focusNotes ? (
         <div className="alert alert--info" style={{ marginBottom: 12 }}>
-          <M3eIcon name="visibility" />
           <span>見てほしい観点: {revision.focusNotes}</span>
         </div>
       ) : null}
@@ -361,13 +354,6 @@ function Workspace() {
                     tone={
                       c.state === "done" ? "success" : c.state === "waived" ? "neutral" : "warning"
                     }
-                    icon={
-                      c.state === "done"
-                        ? "check_circle"
-                        : c.state === "waived"
-                          ? "do_not_disturb_on"
-                          : "radio_button_unchecked"
-                    }
                   >
                     {checkStateLabel[c.state]}
                   </StatusText>
@@ -388,7 +374,6 @@ function Workspace() {
                         disabled={doCompleteCheck.pending}
                         onClick={() => void doCompleteCheck.run(c.id)}
                       >
-                        <M3eIcon slot="icon" name="task_alt" />
                         確認完了
                       </M3eButton>
                     ) : null}
@@ -487,7 +472,6 @@ function Workspace() {
                 {artifact.externalUrl}
               </a>
               <div className="alert alert--warn">
-                <M3eIcon name="sync_disabled" />
                 <span>外部ツール上のコメントは同期されません。結論は下に記録してください。</span>
               </div>
               {can.comment ? (
@@ -506,7 +490,6 @@ function Workspace() {
                       disabled={doRecordExternal.pending || !externalNote.trim()}
                       onClick={() => void doRecordExternal.run()}
                     >
-                      <M3eIcon slot="icon" name="handshake" />
                       合意事項として記録
                     </M3eButton>
                   </div>
@@ -514,10 +497,7 @@ function Workspace() {
               ) : null}
             </Card>
           ) : blob.error ? (
-            <div className="alert">
-              <M3eIcon name="error" />
-              {blob.error}
-            </div>
+            <div className="alert">{blob.error}</div>
           ) : !blob.blob ? (
             <div className="empty">ファイルを取得中…</div>
           ) : artifact.type === "pdf" ? (
@@ -662,13 +642,9 @@ function Workspace() {
                     {t.anchor ? (
                       <M3eIcon style={{ fontSize: 16 }} title="位置指定あり" name="location_on" />
                     ) : null}
-                    {t.carriedFromThreadId ? (
-                      <StatusChip icon="move_up">前版から持越</StatusChip>
-                    ) : null}
+                    {t.carriedFromThreadId ? <StatusChip>前版から持越</StatusChip> : null}
                     {t.assignee ? (
-                      <StatusChip icon="person" title="対応担当">
-                        担当: {t.assignee.name}
-                      </StatusChip>
+                      <StatusChip title="対応担当">担当: {t.assignee.name}</StatusChip>
                     ) : null}
                     {t.editCount ? (
                       <span className="small muted">（訂正 {t.editCount} 回）</span>

@@ -44,28 +44,17 @@ function Notifications() {
   const unread = list.filter((n) => n.readAt === undefined).length;
   return (
     <>
-      <PageHeader
-        title="通知"
-        meta={
-          <span className={`count ${unread === 0 ? "count--zero" : ""}`} aria-label="未読の件数">
-            {unread}
-          </span>
-        }
-      >
+      <PageHeader title="通知">
         <M3eButton
           variant="text"
           disabled={unread === 0 || doMarkAll.pending}
           onClick={() => void doMarkAll.run()}
         >
-          <M3eIcon slot="icon" name="done_all" />
           すべて既読にする
         </M3eButton>
       </PageHeader>
       {list.length === 0 ? (
-        <div className="empty">
-          <M3eIcon name="notifications_off" />
-          通知はありません。
-        </div>
+        <div className="empty">通知はありません。</div>
       ) : (
         <M3eActionList className="notification-list" aria-label="通知一覧">
           {list.map((n) => {

@@ -92,12 +92,7 @@ function NewWork() {
             </Field>
           </div>
         </details>
-        {error ? (
-          <div className="alert">
-            <M3eIcon name="error" />
-            {error.message}
-          </div>
-        ) : null}
+        {error ? <div className="alert">{error.message}</div> : null}
         <div className="form__actions">
           <M3eButton variant="text" type="button" onClick={() => navigate({ to: "/works" })}>
             キャンセル

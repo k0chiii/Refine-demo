@@ -10,7 +10,7 @@ export const THEME = {
   /** 動的カラーの種（五月祭の青） */
   color: "#1b5fb4",
   variant: "expressive",
-  scheme: "auto",
+  scheme: "light",
   motion: "expressive",
 } as const;
 

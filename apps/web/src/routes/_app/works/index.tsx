@@ -71,10 +71,7 @@ function Works() {
       {works === undefined ? (
         <p className="muted">読み込み中…</p>
       ) : works.length === 0 ? (
-        <div className="empty">
-          <M3eIcon name="folder_off" />
-          閲覧できる制作物がありません。
-        </div>
+        <div className="empty">閲覧できる制作物がありません。</div>
       ) : (
         <div className="table-wrap" tabIndex={0}>
           <table className="table">

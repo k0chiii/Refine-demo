@@ -63,7 +63,6 @@ export function UserPicker({
                 removeLabel={`${u?.name ?? id} を外す`}
                 onRemove={() => remove(id)}
               >
-                <M3eIcon slot="icon" name="person" />
                 {u?.name ?? "…"}
               </M3eInputChip>
             );

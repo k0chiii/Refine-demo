@@ -43,4 +43,5 @@ export { M3eDateInput } from "@m3e/react/date-input";
 export { M3eDatepicker, M3eDatepickerToggle } from "@m3e/react/datepicker";
 export { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
 export { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+export { M3eAvatar } from "@m3e/react/avatar";
 export { M3eSnackbar } from "@m3e/web/snackbar";

@@ -8,11 +8,15 @@
     "violations": []
   },
   {
+    "screen": "22-account-menu",
+    "violations": []
+  },
+  {
     "screen": "03-work-detail-empty",
     "violations": []
   },
   {
-    "screen": "22-date-picker",
+    "screen": "21-date-picker",
     "violations": [
       {
         "id": "aria-command-name",
@@ -118,11 +122,7 @@
     "violations": []
   },
   {
-    "screen": "20-dark-workspace",
-    "violations": []
-  },
-  {
-    "screen": "21-mobile-queue",
+    "screen": "20-mobile-queue",
     "violations": []
   }
 ]

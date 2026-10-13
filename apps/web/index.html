@@ -3,9 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f9ff" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111318" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f9f9ff" />
     <title>MF100 校正システム</title>
     <link rel="manifest" href="/manifest.webmanifest" />
   </head>
@@ -15,7 +14,7 @@
       html に、フォント・背景色を body に適用する（それ以外は m3e-theme 自身の shadow に閉じる）。
       React のルートはその内側。設定値は src/theme.ts で登録・更新する。
     -->
-    <m3e-theme color="#1b5fb4" variant="expressive" scheme="auto" motion="expressive" strong-focus>
+    <m3e-theme color="#1b5fb4" variant="expressive" scheme="light" motion="expressive" strong-focus>
       <div id="root"></div>
     </m3e-theme>
     <script type="module" src="/src/main.tsx"></script>

@@ -113,10 +113,7 @@ function WorkDetail() {
         title={work.title}
         meta={
           <>
-            <StatusChip
-              tone={lifecycleTone[work.lifecycle] ?? "neutral"}
-              icon={work.lifecycle === "finalized" ? "verified" : undefined}
-            >
+            <StatusChip tone={lifecycleTone[work.lifecycle] ?? "neutral"}>
               {lifecycleLabel[work.lifecycle]}
             </StatusChip>
             {work.confidentiality === "restricted" ? (
@@ -136,13 +133,11 @@ function WorkDetail() {
         ) : null}
         {can.finalize && work.lifecycle === "active" ? (
           <M3eButton variant="tonal" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
-            <M3eIcon slot="icon" name="verified" />
             校了を宣言
           </M3eButton>
         ) : null}
         {can.reopen && work.lifecycle === "finalized" ? (
           <M3eButton variant="outlined" onClick={() => setReopenOpen(true)}>
-            <M3eIcon slot="icon" name="lock_open" />
             理由付きで再開
           </M3eButton>
         ) : null}
@@ -157,7 +152,6 @@ function WorkDetail() {
                 <M3eMenuItem
                   onClick={() => navigate({ to: "/works/$workId/edit", params: { workId } })}
                 >
-                  <M3eIcon slot="icon" name="edit" />
                   編集
                 </M3eMenuItem>
               ) : null}
@@ -165,7 +159,6 @@ function WorkDetail() {
                 <M3eMenuItem
                   onClick={() => navigate({ to: "/works/$workId/acl", params: { workId } })}
                 >
-                  <M3eIcon slot="icon" name="manage_accounts" />
                   閲覧権限
                 </M3eMenuItem>
               ) : null}
@@ -225,10 +218,7 @@ function WorkDetail() {
                 {approvals.map((a, i) => (
                   <li key={i} className="stack" style={{ gap: 4 }}>
                     <div className="row">
-                      <StatusText
-                        tone={a.action === "reopened" ? "warning" : "success"}
-                        icon={a.action === "reopened" ? "lock_open" : "verified"}
-                      >
+                      <StatusText tone={a.action === "reopened" ? "warning" : "success"}>
                         {approvalActionLabel[a.action]}
                       </StatusText>
                       <span className="small muted">
@@ -236,10 +226,7 @@ function WorkDetail() {
                       </span>
                     </div>
                     {a.exceptionReason ? (
-                      <div className="alert alert--warn">
-                        <M3eIcon name="warning" />
-                        例外理由: {a.exceptionReason}
-                      </div>
+                      <div className="alert alert--warn">例外理由: {a.exceptionReason}</div>
                     ) : null}
                     {a.reason ? <div className="small muted">理由: {a.reason}</div> : null}
                   </li>
@@ -277,9 +264,7 @@ function WorkDetail() {
                     </Link>
                     {work.finalRevisionId === r.id ? (
                       <div>
-                        <StatusText tone="success" icon="verified">
-                          校了版
-                        </StatusText>
+                        <StatusText tone="success">校了版</StatusText>
                       </div>
                     ) : null}
                   </td>
@@ -342,7 +327,6 @@ function WorkDetail() {
           </p>
           {pendingChecks.length > 0 ? (
             <div className="alert--warn alert">
-              <M3eIcon name="pending_actions" />
               <span>
                 未完了の専門確認: {pendingChecks.join("、")}
                 。完了または免除されるまで、理由なしの校了はできません。
@@ -351,17 +335,13 @@ function WorkDetail() {
           ) : null}
           {blocking > 0 ? (
             <div className="alert--warn alert">
-              <M3eIcon name="warning" />
               <span>
                 未対応の指摘が {blocking}{" "}
                 件あります。重大・重要が残っていると、理由なしでは校了できません。
               </span>
             </div>
           ) : (
-            <div className="alert alert--info">
-              <M3eIcon name="check_circle" />
-              未対応の指摘はありません。
-            </div>
+            <div className="alert alert--info">未対応の指摘はありません。</div>
           )}
           <Field label="例外校了の理由（未解決を残す場合のみ）">
             <TextArea
@@ -376,12 +356,7 @@ function WorkDetail() {
             onChange={setConfirmer}
             exclude={[work.approverId, ...work.creatorIds]}
           />
-          {doFinalize.error ? (
-            <div className="alert">
-              <M3eIcon name="error" />
-              {doFinalize.error.message}
-            </div>
-          ) : null}
+          {doFinalize.error ? <div className="alert">{doFinalize.error.message}</div> : null}
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setFinalizeOpen(false)}>
