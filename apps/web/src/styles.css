@@ -249,6 +249,7 @@ m3e-search-bar {
 }
 .page-header .spacer,
 .row .spacer,
+.ws__header .spacer,
 .page-title .spacer {
   flex: 1;
 }
@@ -909,105 +910,79 @@ m3e-search-bar {
   vertical-align: middle;
 }
 
-/* ---------- 制作物: 左に一覧、右に中身（M3 list-detail） */
-.list-detail {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 0 40px;
-  min-height: calc(100vh - 120px);
-}
-.list-detail__list {
-  border-right: 1px solid var(--mf-outline-variant);
-  padding-right: 24px;
-  position: sticky;
-  top: 72px;
-  align-self: start;
-  max-height: calc(100vh - 88px);
-  overflow: auto;
-}
-.list-detail__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0 8px;
-  min-height: 48px;
-}
-.list-detail__filters {
+/* ---------- 制作物一覧 */
+.works__filters {
   margin-bottom: 8px;
 }
-.list-detail__detail {
-  min-width: 0;
-}
-.list-detail__placeholder {
-  min-height: 50vh;
-  align-content: center;
-}
-.list-detail__back {
-  display: none;
-}
-@media (max-width: 960px) {
-  .list-detail {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-  .list-detail__list {
-    border-right: 0;
-    padding-right: 0;
-    position: static;
-    max-height: none;
-  }
-  .list-detail--child .list-detail__list,
-  .list-detail__placeholder {
-    display: none;
-  }
-  .list-detail__back {
-    display: inline-flex;
-  }
-}
 
-/* ---------- 制作物の詳細: 版が主役、基本情報は右の補助パネル */
-.work__body {
+/* ---------- ダッシュボード */
+.dash {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 40px;
-  align-items: start;
+  padding-top: 12px;
 }
-@media (max-width: 1280px) {
-  .work__body {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-}
-.work__main {
+.dash__section {
   display: grid;
-  gap: 8px;
+  gap: 16px;
 }
-.latest {
-  --m3e-card-shape: var(--mf-shape-lg);
-  display: block;
+.dash__group {
+  display: grid;
+  gap: 4px;
 }
-.latest__content {
+.dash__title {
+  font: var(--mf-type-title-medium);
+  margin: 0;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 4px;
+  gap: 8px;
 }
-.latest__content > div:first-child {
-  flex: 1;
-  min-width: 0;
+.dash__count {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
 }
-.latest__label {
-  font: 500 22px/28px var(--mf-font);
+.dash__empty {
+  font: var(--mf-type-body-large);
 }
-.latest__arrow {
-  color: var(--mf-primary);
-  font-size: 28px;
+
+/* ---------- 通知のパネル（アプリバーのベル） */
+#notif-menu {
+  --m3e-menu-container-max-width: 420px;
 }
-.work__info {
+#notif-menu .notif {
+  --m3e-menu-item-container-height: auto;
+  min-height: 56px;
+  padding-block: 4px;
+}
+.notif-menu__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 4px 16px;
+  min-width: 320px;
+}
+.notif-menu__empty {
+  padding: 8px 16px 12px;
+}
+.notif__body {
   display: grid;
-  gap: 16px;
-  padding-top: 8px;
+  gap: 2px;
+  white-space: normal;
+  line-height: 1.4;
+  padding: 4px 0;
 }
+.notif__title {
+  font: var(--mf-type-body-medium);
+}
+.notif--unread .notif__title {
+  font-weight: 500;
+}
+.notif__sub,
+.notif__time {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
+
+/* ---------- エディタの引き出し「情報」 */
 .info {
   margin: 0;
   display: grid;
@@ -1215,19 +1190,75 @@ m3e-search-bar {
   margin: 0 4px;
 }
 
-/* コメント列（パネル） */
-.comments {
+/* 引き出し（コメント／版／情報） */
+.drawer {
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--mf-surface-container-low);
   border-radius: var(--mf-shape-lg);
 }
+.drawer__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 8px 0;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.drawer__tab {
+  font: var(--mf-type-label-large);
+  font-family: var(--mf-font);
+  color: var(--mf-on-surface-variant);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+}
+.drawer__tab--on {
+  color: var(--mf-primary);
+  border-bottom-color: var(--mf-primary);
+}
+.drawer__tab:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: -2px;
+  border-radius: var(--mf-shape-xs);
+}
+.drawer__n {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.drawer--sheet .drawer__body {
+  max-height: 60vh;
+}
+.ws__drawer-buttons {
+  display: inline-flex;
+  gap: 2px;
+}
+.comments {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
 .comments__header {
-  padding: 12px 8px 8px 16px;
+  padding: 8px 12px 0;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.comments__header:empty {
+  display: none;
 }
 .comments__list {
   flex: 1;
@@ -1248,9 +1279,8 @@ m3e-search-bar {
   --m3e-bottom-sheet-z-index: 31; /* 下部ナビ（30）より手前 */
   margin-top: -80px !important; /* 下部ナビの高さ分だけ持ち上げる */
 }
-.ws__sheet .comments {
+.ws__sheet .drawer {
   background: transparent;
-  max-height: 60vh;
 }
 
 /* コメントカード（Google ドキュメント式・M3 card） */
@@ -1449,6 +1479,97 @@ m3e-search-bar {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
   padding: 0 4px 6px;
+}
+
+/* 引き出し「版」 */
+.versions {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  align-content: start;
+}
+.versions__submit {
+  justify-self: start;
+}
+.versions__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+.version {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mf-outline-variant);
+  display: grid;
+  gap: 2px;
+}
+.version--current {
+  --mf-current: 1;
+}
+.version--void {
+  color: var(--mf-on-surface-variant);
+}
+.version__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+}
+.version__label {
+  font: var(--mf-type-title-small);
+}
+.versions__void {
+  justify-self: start;
+}
+
+/* 引き出し「情報」 */
+.info-tab {
+  display: grid;
+  gap: 20px;
+  padding: 16px;
+  align-content: start;
+}
+.info-tab__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.info-tab__section {
+  display: grid;
+  gap: 8px;
+}
+.info-tab__h {
+  font: var(--mf-type-title-small);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.acl {
+  display: grid;
+  gap: 8px;
+}
+.acl__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+.acl__list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.acl__add {
+  display: grid;
+  gap: 12px;
+  padding-top: 8px;
+}
+.editor__empty {
+  min-height: 320px;
+  align-content: center;
 }
 
 /* 文章ビューア */

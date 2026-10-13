@@ -10,11 +10,12 @@ import {
   isAllowed,
   isGrantActive,
   revisionLabel,
+  type Principal,
   type Work,
 } from "@mf100/domain";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type DatabaseReader } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
@@ -191,28 +192,10 @@ export const listMine = query({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     const app = createReadContext(ctx.db);
-    const ids = new Set<string>();
-    for (const r of await ctx.db
-      .query("workRoles")
-      .withIndex("by_user", (q) => q.eq("userId", principal.userId))
-      .collect())
-      ids.add(r.workId);
-    for (const g of await ctx.db
-      .query("workPermissions")
-      .withIndex("by_principal", (q) =>
-        q.eq("principalType", "user").eq("principalId", principal.userId),
-      )
-      .collect()) {
-      if (g.revokedAt === undefined) ids.add(g.workId);
-    }
+    const mine = await listMyWorks(ctx.db, principal);
     const text = args.text?.trim().toLowerCase() ?? "";
     const out = [];
-    for (const id of ids) {
-      const work = await app.works.findById(id);
-      if (!work) continue;
-      // 職責/ACL から集めた ID でも、取消直後の整合のため最終判定はドメインで行う
-      const grants = await app.acl.listByWork(work.id);
-      if (!canViewWork({ work, grants, principal })) continue;
+    for (const work of mine) {
       if (args.year !== undefined && work.year !== args.year) continue;
       if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
       if (
@@ -237,6 +220,36 @@ export const listMine = query({
     );
   },
 });
+
+/**
+ * 自分が関わる制作物（職責または有効な ACL）。閲覧可否はドメインで最終判定する（取消直後の整合）。
+ * 一覧とダッシュボードで共用。
+ */
+export async function listMyWorks(db: DatabaseReader, principal: Principal): Promise<Work[]> {
+  const app = createReadContext(db);
+  const ids = new Set<string>();
+  for (const r of await db
+    .query("workRoles")
+    .withIndex("by_user", (q) => q.eq("userId", principal.userId))
+    .collect())
+    ids.add(r.workId);
+  for (const g of await db
+    .query("workPermissions")
+    .withIndex("by_principal", (q) =>
+      q.eq("principalType", "user").eq("principalId", principal.userId),
+    )
+    .collect()) {
+    if (g.revokedAt === undefined) ids.add(g.workId);
+  }
+  const out: Work[] = [];
+  for (const id of ids) {
+    const work = await app.works.findById(id);
+    if (!work) continue;
+    const grants = await app.acl.listByWork(work.id);
+    if (canViewWork({ work, grants, principal })) out.push(work);
+  }
+  return out;
+}
 
 function summarize(
   work: Work,

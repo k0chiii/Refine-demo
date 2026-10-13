@@ -1,6 +1,6 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJst } from "@/lib/format";
@@ -8,7 +8,8 @@ import { lifecycleLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
 import { StatusChip, StatusText } from "@/ui/Chip";
-import { M3eButton, M3eIcon, M3eSearchBar } from "@/ui/m3e";
+import { AclPanel } from "@/features/work/AclPanel";
+import { M3eButton, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
 import { PageHeader } from "@/ui/PageHeader";
 
 export const Route = createFileRoute("/_app/admin")({ component: Admin });
@@ -21,6 +22,7 @@ function Admin() {
   const audit = useQuery(api.admin.auditLog, me?.isSystemAdmin ? { limit: 100 } : "skip");
   const works = useQuery(api.acl.adminWorks, me?.isSystemAdmin ? {} : "skip");
   const setAdmin = useMutation(api.admin.setSystemAdmin);
+  const [aclFor, setAclFor] = useState<{ id: string; title: string } | null>(null);
   const toggle = useAction(async (userId: string, value: boolean) => {
     await setAdmin({ userId: userId as Id<"users">, value });
   });
@@ -63,9 +65,9 @@ function Admin() {
                     </td>
                     <td>{w.activeGrantCount} 件</td>
                     <td>
-                      <Link to="/works/$workId/acl" params={{ workId: w.id }} className="nav-link">
-                        <M3eButton variant="text">編集</M3eButton>
-                      </Link>
+                      <M3eButton variant="text" onClick={() => setAclFor(w)}>
+                        閲覧権限
+                      </M3eButton>
                     </td>
                   </tr>
                 ))}
@@ -145,6 +147,15 @@ function Admin() {
           </Card>
         </div>
       </div>
+      <M3eDialog open={aclFor !== null} onClosed={() => setAclFor(null)} closeLabel="閉じる">
+        <span slot="header">閲覧権限: {aclFor?.title}</span>
+        <div className="dialog-body">{aclFor ? <AclPanel workId={aclFor.id} /> : null}</div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setAclFor(null)}>
+            閉じる
+          </M3eButton>
+        </div>
+      </M3eDialog>
     </>
   );
 }

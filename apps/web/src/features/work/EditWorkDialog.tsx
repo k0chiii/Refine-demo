@@ -1,62 +1,49 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useMutation } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { useEffect, useState } from "react";
 import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton } from "@/ui/m3e";
-import { PageHeader } from "@/ui/PageHeader";
+import { M3eButton, M3eDialog } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 
-export const Route = createFileRoute("/_app/works/$workId/edit")({ component: EditWork });
+type Work = FunctionReturnType<typeof api.works.get>["work"];
 
 /** 制作物の編集（v1 / UC-01 の更新）。職責の変更も含む。楽観的排他（version）で競合を検出する。 */
-function EditWork() {
-  const { workId } = Route.useParams();
-  const navigate = useNavigate();
-  const data = useQuery(api.works.get, { workId });
+export function EditWorkDialog({
+  work,
+  open,
+  onClose,
+}: {
+  work: Work;
+  open: boolean;
+  onClose: () => void;
+}) {
   const update = useMutation(api.works.update);
-  const [form, setForm] = useState<{
-    title: string;
-    purpose: string;
-    category: string;
-    mediaType: string;
-    legacyId: string;
-    deadlineAt: number | null;
-    confidentiality: string;
-    creatorIds: string[];
-    approverIds: string[];
-    managerIds: string[];
-  } | null>(null);
-
+  const initial = () => ({
+    title: work.title,
+    purpose: work.purpose,
+    category: work.category,
+    mediaType: work.mediaType as string,
+    legacyId: work.legacyId ?? "",
+    deadlineAt: work.deadlineAt ?? null,
+    confidentiality: work.confidentiality as string,
+    creatorIds: [...work.creatorIds],
+    approverIds: [work.approverId],
+    managerIds: [...work.managerIds],
+  });
+  const [form, setForm] = useState(initial);
   useEffect(() => {
-    if (data && !form) {
-      const w = data.work;
-      setForm({
-        title: w.title,
-        purpose: w.purpose,
-        category: w.category,
-        mediaType: w.mediaType,
-        legacyId: w.legacyId ?? "",
-        deadlineAt: w.deadlineAt ?? null,
-        confidentiality: w.confidentiality,
-        creatorIds: [...w.creatorIds],
-        approverIds: [w.approverId],
-        managerIds: [...w.managerIds],
-      });
-    }
-  }, [data, form]);
+    if (open) setForm(initial());
+  }, [open, work.version]);
 
-  const { run, pending, error } = useAction(async (e: FormEvent) => {
-    e.preventDefault();
-    if (!data || !form) return;
-    const deadlineAt = form.deadlineAt;
+  const { run, pending, error } = useAction(async () => {
     await update({
-      workId: workId as Id<"works">,
-      expectedVersion: data.work.version,
+      workId: work.id as Id<"works">,
+      expectedVersion: work.version,
       patch: {
         title: form.title,
         purpose: form.purpose,
@@ -64,40 +51,30 @@ function EditWork() {
         mediaType: form.mediaType as "pdf",
         confidentiality: form.confidentiality as "normal",
         creatorIds: form.creatorIds,
-        approverId: form.approverIds[0] ?? data.work.approverId,
+        approverId: form.approverIds[0] ?? work.approverId,
         managerIds: form.managerIds,
         ...(form.legacyId ? { legacyId: form.legacyId } : {}),
-        ...(deadlineAt ? { deadlineAt } : {}),
+        ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       },
     });
-    void navigate({ to: "/works/$workId", params: { workId } });
+    onClose();
   });
-
-  if (data === undefined || !form) return <p className="muted">読み込み中…</p>;
-  if (!data.can.edit) return <div className="alert">この制作物を編集する権限がありません。</div>;
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
-    setForm((f) => (f ? { ...f, [k]: e.target.value } : f));
+    setForm((f) => ({ ...f, [k]: e.target.value }));
   const setIds = (k: "creatorIds" | "approverIds" | "managerIds") => (ids: string[]) =>
-    setForm((f) => (f ? { ...f, [k]: ids } : f));
+    setForm((f) => ({ ...f, [k]: ids }));
 
   return (
-    <>
-      <PageHeader
-        title="制作物を編集"
-        meta={
-          <Link to="/works/$workId" params={{ workId }}>
-            {data.work.title}
-          </Link>
-        }
-      />
-      <form className="form" onSubmit={(e) => void run(e)}>
+    <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
+      <span slot="header">制作物を編集</span>
+      <div className="dialog-body">
         <Field label="名称" required>
           <TextInput required value={form.title} onChange={set("title")} />
         </Field>
         <Field label="目的・対象者">
           <TextArea value={form.purpose} onChange={set("purpose")} />
         </Field>
-        <div className="grid-2">
+        <div className="form">
           <Field label="区分" required>
             <TextInput required value={form.category} onChange={set("category")} />
           </Field>
@@ -113,7 +90,7 @@ function EditWork() {
           <DateField
             label="納期"
             value={form.deadlineAt}
-            onChange={(v) => setForm((f) => (f ? { ...f, deadlineAt: v } : f))}
+            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
           />
         </div>
         <UserPicker
@@ -136,7 +113,7 @@ function EditWork() {
         />
         <details className="details">
           <summary>詳細設定（旧ID・機密区分）</summary>
-          <div className="grid-2" style={{ marginTop: 12 }}>
+          <div className="form" style={{ marginTop: 12 }}>
             <Field label="旧ID（Notion 等）">
               <TextInput value={form.legacyId} onChange={set("legacyId")} />
             </Field>
@@ -149,21 +126,19 @@ function EditWork() {
           </div>
         </details>
         {error ? <div className="alert">{error.message}</div> : null}
-        <div className="form__actions">
-          <Link to="/works/$workId" params={{ workId }}>
-            <M3eButton variant="text" type="button">
-              キャンセル
-            </M3eButton>
-          </Link>
-          <M3eButton
-            variant="filled"
-            type="submit"
-            disabled={pending || form.creatorIds.length === 0 || form.approverIds.length === 0}
-          >
-            保存する
-          </M3eButton>
-        </div>
-      </form>
-    </>
+      </div>
+      <div slot="actions" className="row">
+        <M3eButton variant="text" onClick={onClose}>
+          キャンセル
+        </M3eButton>
+        <M3eButton
+          variant="filled"
+          disabled={pending || form.creatorIds.length === 0 || form.approverIds.length === 0}
+          onClick={() => void run()}
+        >
+          保存
+        </M3eButton>
+      </div>
+    </M3eDialog>
   );
 }

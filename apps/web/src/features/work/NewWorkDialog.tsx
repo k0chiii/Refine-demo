@@ -1,19 +1,16 @@
 import { api } from "@mf100/convex/api";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
-import { PageHeader } from "@/ui/PageHeader";
+import { M3eButton, M3eDialog } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 
-export const Route = createFileRoute("/_app/works/new")({ component: NewWork });
-
-/** 制作物登録（UC-01）。登録者は主管担当として自動的に含まれる（実装上の仮置き）。 */
-function NewWork() {
+/** 制作物登録（UC-01）のダイアログ。登録者は主管担当として自動的に含まれる。登録後はそのままエディタへ。 */
+export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const create = useMutation(api.works.create);
   const [form, setForm] = useState({
@@ -27,8 +24,7 @@ function NewWork() {
   const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [creatorIds, setCreatorIds] = useState<string[]>([]);
   const [approverIds, setApproverIds] = useState<string[]>([]);
-  const { run, pending, error } = useAction(async (e: FormEvent) => {
-    e.preventDefault();
+  const { run, pending, error } = useAction(async () => {
     const id = await create({
       title: form.title,
       purpose: form.purpose,
@@ -41,21 +37,22 @@ function NewWork() {
       ...(deadlineAt ? { deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
     });
+    onClose();
     void navigate({ to: "/works/$workId", params: { workId: id } });
   });
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
-    <>
-      <PageHeader title="制作物を登録" />
-      <form className="form" onSubmit={(e) => void run(e)}>
+    <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
+      <span slot="header">制作物を登録</span>
+      <div className="dialog-body">
         <Field label="名称" required>
           <TextInput required value={form.title} onChange={set("title")} />
         </Field>
         <Field label="目的・対象者">
           <TextArea value={form.purpose} onChange={set("purpose")} />
         </Field>
-        <div className="grid-2">
+        <div className="form">
           <Field label="区分" required>
             <TextInput required value={form.category} onChange={set("category")} />
           </Field>
@@ -80,7 +77,7 @@ function NewWork() {
         />
         <details className="details">
           <summary>詳細設定（旧ID・機密区分）</summary>
-          <div className="grid-2" style={{ marginTop: 12 }}>
+          <div className="form" style={{ marginTop: 12 }}>
             <Field label="旧ID（Notion 等）">
               <TextInput value={form.legacyId} onChange={set("legacyId")} />
             </Field>
@@ -93,20 +90,25 @@ function NewWork() {
           </div>
         </details>
         {error ? <div className="alert">{error.message}</div> : null}
-        <div className="form__actions">
-          <M3eButton variant="text" type="button" onClick={() => navigate({ to: "/works" })}>
-            キャンセル
-          </M3eButton>
-          <M3eButton
-            variant="filled"
-            type="submit"
-            disabled={pending || creatorIds.length === 0 || approverIds.length === 0}
-          >
-            <M3eIcon slot="icon" name="add" />
-            登録する
-          </M3eButton>
-        </div>
-      </form>
-    </>
+      </div>
+      <div slot="actions" className="row">
+        <M3eButton variant="text" onClick={onClose}>
+          キャンセル
+        </M3eButton>
+        <M3eButton
+          variant="filled"
+          disabled={
+            pending ||
+            !form.title.trim() ||
+            !form.category.trim() ||
+            creatorIds.length === 0 ||
+            approverIds.length === 0
+          }
+          onClick={() => void run()}
+        >
+          登録
+        </M3eButton>
+      </div>
+    </M3eDialog>
   );
 }

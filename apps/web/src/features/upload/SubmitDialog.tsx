@@ -70,9 +70,9 @@ export function SubmitDialog({
   useEffect(() => (flow ? flow.subscribe(setState) : undefined), [flow]);
   useEffect(() => {
     if (!state.confirmed) return;
-    const id = state.confirmed.revisionId;
+    const n = state.confirmed.kind === "rough" ? 0 : state.confirmed.sequence;
     onClose();
-    void navigate({ to: "/revisions/$revisionId", params: { revisionId: id } });
+    void navigate({ to: "/works/$workId/v/$n", params: { workId, n: String(n) } });
   }, [state.confirmed?.revisionId]);
 
   const work = data?.work ?? null;

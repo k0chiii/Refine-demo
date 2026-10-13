@@ -12,7 +12,7 @@
     "violations": []
   },
   {
-    "screen": "03-work-detail-empty",
+    "screen": "03-editor-empty",
     "violations": []
   },
   {
@@ -25,31 +25,31 @@
         "nodes": [
           {
             "target": [
-              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-1-2026"]
+              ["#_r_e_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-1-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-2-2026"]
+              ["#_r_e_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-2-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-3-2026"]
+              ["#_r_e_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-3-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-4-2026"]
+              ["#_r_e_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-4-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           },
           {
             "target": [
-              ["#_r_3_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-5-2026"]
+              ["#_r_e_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-5-2026"]
             ],
             "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
           }
@@ -70,7 +70,7 @@
     "violations": []
   },
   {
-    "screen": "06-work-detail-with-revision",
+    "screen": "06-editor-info",
     "violations": []
   },
   {
@@ -78,7 +78,7 @@
     "violations": []
   },
   {
-    "screen": "07-queue",
+    "screen": "07-dashboard-reviewer",
     "violations": []
   },
   {
@@ -102,11 +102,19 @@
     "violations": []
   },
   {
+    "screen": "27-dashboard-creator",
+    "violations": []
+  },
+  {
     "screen": "09-decision",
     "violations": []
   },
   {
     "screen": "17-carry-forward",
+    "violations": []
+  },
+  {
+    "screen": "28-versions",
     "violations": []
   },
   {
@@ -126,15 +134,15 @@
     "violations": []
   },
   {
-    "screen": "12-acl",
-    "violations": []
-  },
-  {
     "screen": "13-admin-audit",
     "violations": []
   },
   {
-    "screen": "20-mobile-queue",
+    "screen": "12-acl",
+    "violations": []
+  },
+  {
+    "screen": "20-mobile-dashboard",
     "violations": []
   },
   {

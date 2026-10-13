@@ -10,9 +10,9 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
+import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import {
   M3eAppBar,
-  M3eBadge,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
@@ -29,13 +29,12 @@ export const Route = createFileRoute("/_app")({ component: AppLayout });
 
 /**
  * 認証ガード＋共通レイアウト（Gmail / Google ドライブと同じ骨格）。
- * 左: navigation rail（狭い画面は下部 navigation bar）。上: 題名を置かず、検索バーと右上のアカウントだけ。
- * 検索は制作物一覧（/works?q=）に反映する。
+ * 左: ダッシュボードと制作物の 2 つ（管理者には管理）。上: 検索バー、通知のベル、アカウント。題名は置かない。
+ * 通知は独立した画面を持たず、ベルのパネルから対象へ飛ぶ。
  */
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
-  const unread = useQuery(api.notifications.unreadCount, isAuthenticated && me ? {} : "skip") ?? 0;
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -48,26 +47,17 @@ function AppLayout() {
   if (isLoading || !isAuthenticated || !me) return null;
 
   const items = [
-    { to: "/queue", icon: "fact_check", label: "校正待ち", count: 0 },
-    { to: "/works", icon: "folder", label: "制作物", count: 0 },
-    { to: "/notifications", icon: "notifications", label: "通知", count: unread },
-    ...(me.isSystemAdmin
-      ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理", count: 0 }]
-      : []),
+    { to: "/", icon: "space_dashboard", label: "ダッシュボード" },
+    { to: "/works", icon: "folder", label: "制作物" },
+    ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
   ];
-  const selected = (to: string) => path === to || path.startsWith(`${to}/`);
+  const selected = (to: string) =>
+    to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
   const navItems = () =>
     items.map((it) => (
       <Link key={it.to} to={it.to} className="nav-link">
         <M3eNavItem selected={selected(it.to)}>
-          <span slot="icon" className="nav-icon">
-            <M3eIcon name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
-            {it.count > 0 ? (
-              <M3eBadge size="large" className="nav-icon__badge" aria-label={`未読 ${it.count} 件`}>
-                {it.count > 99 ? "99+" : it.count}
-              </M3eBadge>
-            ) : null}
-          </span>
+          <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
           {it.label}
         </M3eNavItem>
       </Link>
@@ -83,11 +73,16 @@ function AppLayout() {
           <div slot="title" className="shell__search">
             <WorkSearch />
           </div>
+          <M3eIconButton slot="trailing" aria-label="通知">
+            <NotificationsBell.Icon />
+            <M3eMenuTrigger htmlFor="notif-menu" />
+          </M3eIconButton>
           <M3eIconButton slot="trailing" aria-label={`アカウント: ${me.name}`}>
             <UserAvatar seed={me.email ?? me.id} size={32} />
             <M3eMenuTrigger htmlFor="account-menu" />
           </M3eIconButton>
         </M3eAppBar>
+        <NotificationsBell.Menu id="notif-menu" />
         <M3eMenu id="account-menu" positionX="before">
           <div className="account-menu__header">
             <span aria-hidden="true">
@@ -120,20 +115,16 @@ function WorkSearch() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { q?: string };
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const onList = path === "/works" || path === "/works/";
   const [text, setText] = useState(search.q ?? "");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!path.startsWith("/works")) setText("");
-    else setText(search.q ?? "");
-  }, [search.q, path.startsWith("/works")]);
+    setText(onList ? (search.q ?? "") : "");
+  }, [search.q, onList]);
   const apply = (q: string) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      void navigate({
-        to: "/works",
-        search: q ? { q } : {},
-        replace: path.startsWith("/works"),
-      });
+      void navigate({ to: "/works", search: q ? { q } : {}, replace: onList });
     }, 250);
   };
   return (

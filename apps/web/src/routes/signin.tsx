@@ -29,7 +29,7 @@ function SignIn() {
   const [customSub, setCustomSub] = useState("");
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && me) void navigate({ to: "/queue", replace: true });
+    if (!isLoading && isAuthenticated && me) void navigate({ to: "/", replace: true });
   }, [isLoading, isAuthenticated, me, navigate]);
 
   // モックかどうかはサーバー設定（NOGIKU_MOCK_ENABLED）が正本。未ログインでは分からないので dev ビルドでのみ UI を出す。
@@ -39,7 +39,7 @@ function SignIn() {
     setError(null);
     try {
       const result = await signIn("nogiku", params);
-      if (!result.redirect) void navigate({ to: "/queue", replace: true });
+      if (!result.redirect) void navigate({ to: "/", replace: true });
     } catch (e) {
       setError(describeError(e).message);
     }
@@ -51,7 +51,7 @@ function SignIn() {
         <M3eHeading variant="headline" size="small" level={1} emphasized style={{ margin: 0 }}>
           MF100 校正システム
         </M3eHeading>
-        <M3eButton variant="filled" size="medium" onClick={() => start({ redirectTo: "/queue" })}>
+        <M3eButton variant="filled" size="medium" onClick={() => start({ redirectTo: "/" })}>
           Nogiku でサインイン
         </M3eButton>
         {error ? <div className="alert">{error}</div> : null}
