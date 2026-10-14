@@ -53,7 +53,20 @@
 | 45  | 指摘を見ながら直す（補助ペイン「指摘」→ 本文の該当箇所を選ぶ）                    | 制作者         | ![](screenshots/45-write-refs.png)             |
 | 46  | compact の文章エディタ（下端のドッキングツールバー）                              | 制作者         | ![](screenshots/46-write-compact.png)          |
 | 47  | compact の「その他」はボトムシート                                                | 制作者         | ![](screenshots/47-write-compact-more.png)     |
+| 50  | 表記ルール: 一覧と詳細（編集・例外・履歴）                                        | システム管理者 | ![](screenshots/50-notation-rules.png)         |
+| 51  | 表記ルール「試す」（端末内の検査。カテゴリの継承）                                | システム管理者 | ![](screenshots/51-notation-try.png)           |
+| 52  | 表記ルールの提案（承認・却下・編集して承認・まとめて処理）                        | システム管理者 | ![](screenshots/52-notation-proposals.png)     |
+| 53  | 文章エディタの表記の検査（波線と表記パネル）                                      | 制作者         | ![](screenshots/53-write-notation.png)         |
+| 54  | 提出時の自動校正（PDF の文字と画像の OCR。「自動校正」のコメント）                | 制作者         | ![](screenshots/54-auto-proofread.png)         |
+| 55  | PDF の版比較（ページの自動対応: 旧 5 → 新 6・追加 1、同期と差分）                 | 制作者         | ![](screenshots/55-compare-pdf.png)            |
+| 56  | SNS 投稿の編集とプレビュー（Instagram カルーセル・iPhone）                        | 制作者         | ![](screenshots/56-sns-editor.png)             |
+| 57  | SNS 投稿のプレビュー: プロフィールのグリッド                                      | 制作者         | ![](screenshots/57-sns-preview-grid.png)       |
+| 58  | 校正画面の SNS 投稿プレビュー（校了前は書き出せない）                             | 制作者         | ![](screenshots/58-sns-review.png)             |
+| 59  | 校了した SNS 投稿の書き出し（本文のコピー・画像・ZIP）                            | 校了権限者     | ![](screenshots/59-sns-export.png)             |
+| 60  | compact: 表記ルール（下部バーに「表記ルール」）                                   | 校了権限者     | ![](screenshots/60-notation-compact.png)       |
 
 `pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（37 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+
+50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 
 Material 3 Expressive 適用前の画面は `docs/screenshots-before/`、前後比較と検証は [`UI_M3E.md`](UI_M3E.md)。

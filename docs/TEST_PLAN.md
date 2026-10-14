@@ -10,6 +10,8 @@
 - `apps/web/src/features/upload/submissionFlow.test.ts` — 提出オーケストレーション（4 件）
 - 文章エディタ: domain `document.test.ts`（下書きの版番号・上限・文字カウント）、application `documents.test.ts`（権限・競合・進行中のみ）、convex `documents.test.ts`（統合）、web `writing/plainText.test.ts`（本文 ⇔ 平文のオフセット往復）。撮影 39〜47 で、書く→提出→書式付きで範囲指摘→指摘から本文を選ぶ、を実ブラウザで検証
 
+- v2（[`FEATURES_V2.md`](FEATURES_V2.md) §8）: domain `comparison.test`（16）・`notation.test`（32）・`social.test`（5）、application `notation.test`（11）・`autoProofread.test`（3）・`documents.test`（SNS 下書き）、convex `comparisons/notation/proofreading/ai.test`、web `zip.test`、E2E 50〜60（表記ルール・文章エディタの検査・提出時の自動校正・PDF の版比較・SNS 投稿の提出から書き出しまで）。試験用ファイルは `apps/web/e2e/make-compare-fixtures.mjs` / `make-notation-fixtures.mjs` で作る
+
 | ID   | 条件                                             | 自動テスト                                                                                          | 状態                                                                                                                                     |
 | ---- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | A-01 | 権限の無い Nogiku ユーザーが制作物 ID を直接指定 | application `acl.test` / convex `mvp.test`「A-01 / A-20」/ domain `acl.test`                        | ✅ 一覧・詳細・添付認可・コメントすべて forbidden                                                                                        |
