@@ -57,6 +57,7 @@ function AppLayout() {
   const cls = useWindowClass();
   const [railPref, setRailPref] = useState(readRailPref);
   const [modalOpen, setModalOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -64,7 +65,10 @@ function AppLayout() {
   }, [isLoading, isAuthenticated, me, navigate]);
 
   // モーダルの展開レールは、行き先を選んだ時・幅が変わった時・Esc で閉じる
-  useEffect(() => setModalOpen(false), [path, cls]);
+  useEffect(() => {
+    setModalOpen(false);
+    setNotifOpen(false);
+  }, [path, cls]);
   useEffect(() => {
     if (!modalOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -167,16 +171,17 @@ function AppLayout() {
             </div>
             {cls === "compact" ? null : (
               <>
-                <M3eIconButton slot="trailing" aria-label="通知" className="shell__bell">
-                  <NotificationsBell.Icon />
-                  <M3eMenuTrigger htmlFor="notif-menu" />
-                </M3eIconButton>
-                {account(32)}
+                <NotificationsBell.Bell menuId="notif-menu" />
+                {account(32, "shell__account")}
               </>
             )}
           </M3eAppBar>
         )}
-        <NotificationsBell.Menu id="notif-menu" />
+        {cls === "compact" ? (
+          <NotificationsBell.Sheet open={notifOpen} onClose={() => setNotifOpen(false)} />
+        ) : (
+          <NotificationsBell.Menu id="notif-menu" />
+        )}
         <M3eMenu id="account-menu" positionX="before">
           <div className="account-menu__header">
             <span aria-hidden="true">
@@ -200,10 +205,9 @@ function AppLayout() {
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
           {navItems()}
-          <M3eNavItem className="shell__bar-notif">
+          <M3eNavItem className="shell__bar-notif" onClick={() => setNotifOpen(true)}>
             <NotificationsBell.Icon slot="icon" />
             通知
-            <M3eMenuTrigger htmlFor="notif-menu" />
           </M3eNavItem>
         </M3eNavBar>
       ) : null}

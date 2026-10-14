@@ -240,6 +240,9 @@ m3e-search-bar {
   width: 100%;
   min-width: 0;
   --m3e-search-bar-container-color: var(--mf-surface-container-high);
+  /* M3 Search 規定: 高さ 56、幅 360–720、先頭アイコンは端から 24、ラベルはタッチ領域（48）から 4 ＝ 端から 64。
+     M3E は先頭スロットに 12 の内側余白を持つので、容器の先頭余白を 12 にして 24 に合わせる */
+  --m3e-search-bar-leading-space: 12px;
 }
 .search--appbar input::placeholder {
   color: var(--mf-on-surface-variant);
@@ -261,16 +264,13 @@ m3e-search-bar {
   .shell__search {
     width: 100%;
   }
-  .shell__bell {
-    display: none; /* 通知は下部バーの 3 件目から */
-  }
   /* 検索バーがアプリバー（M3 Search: 高さ 56、左右の余白 16）。コンテナ余白 12 ＋ 題名スロットの 4 ＝ 16 */
   .shell__appbar {
     --m3e-app-bar-padding-left: 12px;
     --m3e-app-bar-padding-right: 12px;
   }
   .search--appbar {
-    --m3e-search-bar-trailing-space: 7px; /* 末尾のアバター（30）の右端を 16 に（M3 Search: trailing avatar 30） */
+    --m3e-search-bar-trailing-space: 15px; /* 末尾のアバター（30、タッチ領域 48）の右端を規定の 24 に */
   }
   .shell__search-account {
     --m3e-icon-button-icon-size: 30px;
@@ -887,10 +887,40 @@ m3e-search-bar {
   position: relative;
   display: inline-flex;
 }
-.nav-icon__badge {
+/* バッジ（M3 Badges 規定: 大バッジ高さ 16・1 桁 16×16・2 桁以上は左右 4・角 8・label-small・error/on-error）。
+   錨はアイコン（24）の枠の上端後端: 左端＝アイコン右端 − 12、下端＝アイコン上端 + 14（Compose BadgedBox の既定） */
+.badge {
   position: absolute;
-  top: -6px;
-  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--mf-error);
+  color: var(--md-sys-color-on-error, #ffffff);
+  font: 500 11px/16px var(--mf-font);
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.nav-icon .badge {
+  left: 12px;
+  top: -2px;
+}
+/* アプリバーのベル: ボタン（48 のタッチ領域、アイコンは 12,12 から 24）の外にバッジを置く */
+.bell {
+  position: relative;
+  display: inline-flex;
+}
+.bell .badge {
+  left: 24px;
+  top: 10px;
+}
+.shell__account {
+  --m3e-icon-button-icon-size: 32px; /* 右上のアバターは 32（アイコンボタンの既定 24 で潰さない） */
 }
 .ml {
   margin-left: 6px;
@@ -1002,8 +1032,38 @@ m3e-search-bar {
 }
 
 /* ---------- 通知のパネル（アプリバーのベル） */
+/* 通知パネル（medium 以上）: Scaffold の「浮遊する一時的なペイン」。幅は推奨値 360 */
 #notif-menu {
-  --m3e-menu-container-max-width: 420px;
+  --m3e-menu-container-max-width: 360px;
+}
+@media (min-width: 600px) {
+  #notif-menu,
+  #account-menu {
+    margin-left: -8px; /* 窓の右端に密着させない（錨の右端 = 窓端 − 4 のため） */
+  }
+}
+/* 通知シート（compact）: Scaffold の「下端にドックしたペイン」 */
+.notif-sheet {
+  --m3e-bottom-sheet-max-width: 100%;
+  --m3e-bottom-sheet-z-index: 40;
+}
+.notif-sheet__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 4px 16px;
+}
+.notif-sheet__header .spacer {
+  flex: 1;
+}
+.notif-sheet__empty {
+  padding: 8px 16px 24px;
+}
+.notif-list {
+  margin: 0 -16px;
+}
+.notif-list .list__item {
+  --m3e-list-item-container-shape: 0;
 }
 #notif-menu .notif {
   --m3e-menu-item-container-height: auto;

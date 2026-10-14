@@ -402,7 +402,7 @@ async function main() {
 
   // 18 通知（校正者）: アプリバーのベルのパネル
   await signInAs("mock-nogiku-reviewer");
-  await page.locator('m3e-icon-button[aria-label="通知"]').click();
+  await page.locator('.bell m3e-icon-button[aria-label^="通知"]').click();
   await page.waitForSelector("#notif-menu .notif");
   await page.waitForTimeout(400);
   await shot("18-notifications");
@@ -433,18 +433,18 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
 
-  // 20 compact（<600）: ダッシュボード（下部ナビ 3 件: ダッシュボード・制作物・通知）/ 32 「通知」は同じパネル
+  // 20 compact（<600）: ダッシュボード（下部ナビ 3 件: ダッシュボード・制作物・通知）/ 32 「通知」はボトムシート
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${BASE}/`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForTimeout(400);
   await shot("20-mobile-dashboard");
   await page.locator("m3e-nav-bar m3e-nav-item.shell__bar-notif").click();
-  await page.waitForSelector("#notif-menu .notif");
-  await page.waitForTimeout(500);
+  await page.waitForSelector("m3e-bottom-sheet.notif-sheet .notif");
+  await page.waitForTimeout(800);
   await shot("32-mobile-notifications");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.notif-sheet").hide());
+  await page.waitForTimeout(600);
   // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う）
   await go(`${BASE}/works`);
   await page.waitForSelector("m3e-list-action");
@@ -452,11 +452,11 @@ async function main() {
   // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
   await go(revision2Url);
   await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
-  await page.waitForSelector("m3e-bottom-sheet");
+  await page.waitForSelector("m3e-bottom-sheet.ws__sheet"); // 通知のシート（非表示）と区別する
   await page.waitForTimeout(800);
   await shot("26-mobile-workspace");
   // 34 シートを半分まで上げる（タブを押しても上がる）
-  await page.evaluate(() => document.querySelector("m3e-bottom-sheet").show(1));
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").show(1));
   await page.waitForTimeout(700);
   await shot("34-mobile-sheet-half");
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -2,9 +2,20 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
 import { formatJstShort } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
-import { M3eBadge, M3eIcon, M3eMenu, M3eMenuItem } from "@/ui/m3e";
+import {
+  M3eActionList,
+  M3eBottomSheet,
+  M3eButton,
+  M3eIcon,
+  M3eIconButton,
+  M3eListAction,
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuTrigger,
+} from "@/ui/m3e";
 
 const icon: Record<string, string> = {
   revision_submitted: "upload_file",
@@ -20,26 +31,12 @@ const icon: Record<string, string> = {
   revision_voided: "block",
 };
 
-/** アプリバーのベル（compact では下部バーの「通知」にも使う）。未読数のバッジ付きアイコン（`Icon`）と、押すと出る通知のパネル（`Menu`）。 */
-function Icon({ slot }: { slot?: string }) {
-  const unread = useQuery(api.notifications.unreadCount, {}) ?? 0;
-  return (
-    <span slot={slot} className="nav-icon">
-      <M3eIcon name="notifications" className={unread > 0 ? "icon--filled" : ""} />
-      {unread > 0 ? (
-        <M3eBadge size="large" className="nav-icon__badge" aria-label={`未読 ${unread} 件`}>
-          {unread > 99 ? "99+" : unread}
-        </M3eBadge>
-      ) : null}
-    </span>
-  );
+function useUnread() {
+  return useQuery(api.notifications.unreadCount, {}) ?? 0;
 }
 
-/**
- * 通知のパネル（F-11 最小通知 / D8）。独立した画面は持たない。
- * 押した通知は既読にして、対象（その版のエディタ）へ飛ぶ。
- */
-function Menu({ id }: { id: string }) {
+/** 通知の一覧と操作（パネルとシートで共用） */
+function useNotifications() {
   const navigate = useNavigate();
   const list = useQuery(api.notifications.list, { limit: 20 });
   const markRead = useMutation(api.notifications.markRead);
@@ -54,6 +51,56 @@ function Menu({ id }: { id: string }) {
     else if (n.workId) void navigate({ to: "/works/$workId", params: { workId: n.workId } });
   });
   const unread = (list ?? []).filter((n) => n.readAt === undefined).length;
+  return { list, unread, doMarkAll, openOne };
+}
+
+/**
+ * 未読数のバッジ（M3 Badges: 大バッジは高さ 16、1 桁 16×16、2 桁以上は左右 4、角 8、最大 4 文字）。
+ * 置き場所は親が決める（アイコンの枠の内側・上端後端）。
+ */
+function Badge({ unread }: { unread: number }) {
+  if (unread <= 0) return null;
+  return (
+    <span className="badge" aria-label={`未読 ${unread} 件`}>
+      {unread > 999 ? "999+" : unread}
+    </span>
+  );
+}
+
+/** 下部ナビゲーションバー用: アイコン（24）とその枠に錨したバッジ。 */
+function Icon({ slot }: { slot?: string }) {
+  const unread = useUnread();
+  return (
+    <span slot={slot} className="nav-icon">
+      <M3eIcon name="notifications" className={unread > 0 ? "icon--filled" : ""} />
+      <Badge unread={unread} />
+    </span>
+  );
+}
+
+/**
+ * アプリバー用のベル。アイコンボタン（容器 40・タッチ 48・アイコン 24）の**外**にバッジを置く。
+ * M3E のアイコンボタンは中身を容器で切り取るため、中に置くとバッジが欠ける。
+ */
+function Bell({ menuId }: { menuId: string }) {
+  const unread = useUnread();
+  return (
+    <span slot="trailing" className="bell">
+      <M3eIconButton aria-label={unread > 0 ? `通知（未読 ${unread} 件）` : "通知"}>
+        <M3eIcon name="notifications" className={unread > 0 ? "icon--filled" : ""} />
+        <M3eMenuTrigger htmlFor={menuId} />
+      </M3eIconButton>
+      <Badge unread={unread} />
+    </span>
+  );
+}
+
+/**
+ * medium 以上の通知パネル（F-11 最小通知 / D8）。M3 の Scaffold では「浮遊する一時的なペイン」。幅は推奨値 360。
+ * 押した通知は既読にして、対象（その版のエディタ）へ飛ぶ。
+ */
+function Menu({ id }: { id: string }) {
+  const { list, unread, doMarkAll, openOne } = useNotifications();
   return (
     <M3eMenu id={id} positionX="before" className="notif-menu">
       <div className="notif-menu__header">
@@ -87,4 +134,74 @@ function Menu({ id }: { id: string }) {
   );
 }
 
-export const NotificationsBell = { Icon, Menu };
+/**
+ * compact の通知。M3 の Scaffold では「下端にドックしたペイン」＝モーダルのボトムシート（半分 → 全部）。
+ * 下部バーの「通知」から開き、外側を押す・下へ払う・通知を押すと閉じる。
+ */
+function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { list, unread, doMarkAll, openOne } = useNotifications();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = ref.current as
+      | (HTMLElement & { show?: (d?: number) => void; hide?: () => void })
+      | null;
+    if (!el) return;
+    el.setAttribute("detents", "half full");
+    if (open) {
+      const id = requestAnimationFrame(() => el.show?.(0));
+      return () => cancelAnimationFrame(id);
+    }
+    el.hide?.();
+    return;
+  }, [open]);
+  return (
+    <M3eBottomSheet
+      ref={ref as never}
+      modal
+      hideable
+      handle
+      handleLabel="通知"
+      className="notif-sheet"
+      onClosed={onClose}
+    >
+      <div slot="header" className="notif-sheet__header">
+        <span className="title-small">通知</span>
+        <span className="spacer" />
+        {unread > 0 ? (
+          <M3eButton
+            variant="text"
+            disabled={doMarkAll.pending}
+            onClick={() => void doMarkAll.run()}
+          >
+            すべて既読にする
+          </M3eButton>
+        ) : null}
+      </div>
+      {!list || list.length === 0 ? (
+        <p className="muted notif-sheet__empty">通知はありません。</p>
+      ) : (
+        <M3eActionList className="list notif-list" aria-label="通知">
+          {list.map((n) => (
+            <M3eListAction
+              key={n.id}
+              className={`list__item notif ${n.readAt === undefined ? "notif--unread" : ""}`}
+              onClick={() => {
+                onClose();
+                void openOne.run(n);
+              }}
+            >
+              <M3eIcon slot="leading" name={icon[n.kind] ?? "notifications"} />
+              <span className="list__headline notif__title">{n.title}</span>
+              <span slot="supporting-text">
+                {n.body}
+                <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
+              </span>
+            </M3eListAction>
+          ))}
+        </M3eActionList>
+      )}
+    </M3eBottomSheet>
+  );
+}
+
+export const NotificationsBell = { Icon, Bell, Menu, Sheet };

@@ -351,9 +351,33 @@
 | panes           | ダッシュボード・制作物: 1 ペイン（余白 24、compact 16）。エディタ: 主ペイン（紙面）＋固定ペイン（引き出し）、スペーサー 24 | 固定ペイン幅を **expanded 360 / large 以上 412** に修正（従来は常に 360） |
 | compact の補助  | 補助ペインは下（ボトムシート）、スペーサー 0                                                                               | 合致                                                                      |
 
-### 要確認（原典を読めたら確定する）
+### 原典で確定したこと（同日、`m3.material.io` を Allowed domains に追加後）
 
-- compact の余白 16（コミュニティ資料と Android ガイドの慣行。m3.material.io の compact ページでは未確認）。
-- pane の 4 型（fixed / flexible / floating / semi-permanent）の定義と、ペインを視覚的な容器（角丸の surface container）として描くかどうか。現状は 2 ペインのエディタだけ容器として描いている。
-- リサイズ可能なペインのスペーサーに置くドラッグハンドル（M3 は「リサイズできるならハンドルを置く」）。未実装。
-- `m3.material.io` を環境の Allowed domains に加えれば `ax https://m3.material.io/foundations/layout/scaffold/guidelines --md` で原典を読める。
+m3.material.io は Angular の SPA で、本文は `/_dsm/content/m3/<版>/<ページID>.json` から読み込まれる。ページ ID は `static/angular/main.*.js` の `{"slug":…,"exportedCarbonFileId":…}` にある。`ax <URL> --body` で JS と JSON を取り、本文 HTML を文字にした（`scratchpad` の `m3/pages/*.md`）。
+
+- **compact の余白は 16 で確定**（Breakpoints › Compact「Margins are 16dp from the leading and trailing edge of the window」）。medium 以上は 24。
+- **Scaffold の原文**: 「bars はページを縁取る（アプリバー・下部ナビ）。bars は 1 ペインの幅でも窓の全幅でもよい」「rails は bars の次の層で、ペインの外周を埋める。compact では上下の rail 領域にツールバー・チャット入力・FAB、大きい画面では先頭側の rail にナビゲーションレール、末尾側に内容を操作する縦ツールバー」「panes は 1–3。推奨数: compact 1 / medium 1（2 可）/ expanded 2 / large 2 / extra-large 2（1, 3 可）」。
+- **pane の型**: fixed（幅が変わらない）/ flexible（空きで伸縮。少なくとも 1 つ必要）、permanent / temporary、表示は co-planar（並置）/ floating（上に浮く。一時的な作業はどの幅でも floating）/ docked（窓端に固定。ボトムシートなど）。適応は show and hide / levitate / reflow。推奨の固定幅は 360 と 412（extra-large の固定ペインは 412、サイドシートは最大 400）。
+- 本システムの当てはめ: エディタの引き出しは **fixed + temporary + co-planar**（expanded 360 / large 412）、compact では **docked**（ボトムシート）。通知パネルは **floating + temporary**（幅 360）、compact では **docked**（§14）。
+- 未実装のまま: リサイズ可能なペインのドラッグハンドル（M3 は「ハンドルで折りたたみ・展開」を推奨）。
+
+## 14. 検索バー・アイコン・通知を規定値に合わせる（2026-10-14・利用者指摘「検索バー・アイコン・通知がおかしい、見切れている」）
+
+原典（m3.material.io の本文 JSON、§13 の方法）と M3E 2.9.2 の実装、Compose の原典（`Badge.kt`）で規定値を取り、デモを Playwright で実測して合わせた。
+
+| 部品           | 規定（出典）                                                                                                                                                                       | 直したこと・実測                                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 検索バー       | 幅 360–720、高さ 56、先頭・末尾の余白 24（フォーカス時 12 ＋タッチ領域）、ラベルはタッチ領域から 4、アバター 30（Search › Specs）                                                  | 先頭アイコンの字面を端から 24、ラベルを 64 に（`--m3e-search-bar-leading-space: 12`）。compact の末尾アバター（30）の右端を 24 に（`--m3e-search-bar-trailing-space: 15`）。実測: 1440 幅で 104–664（560）、412 幅で 16–396（380） |
+| バッジ         | 大バッジ高さ 16、1 桁 16×16、最大 16×34、角 8、最大 4 文字、アイコンの枠の上端後端に錨（Badges › Specs）。錨の位置は Compose `BadgedBox`: 左端＝アイコン右端 − 12、下端＝上端 + 14 | M3E の `m3e-badge`（medium 22 / large 28）をやめ、規定寸法の自前バッジに。アプリバーではアイコンボタン（`contain: paint` で中身を切る）の**外**に置いて欠けを解消。実測: アイコン (1352,20) に対しバッジ (1364,18)、2 桁で 22×16   |
+| アイコンボタン | 容器 40・タッチ 48・アイコン 24（XS/S はタッチ 48 以上）（Icon buttons › Specs）                                                                                                   | M3E 既定のまま。右上のアバターだけ `--m3e-icon-button-icon-size: 32` で 24 に潰れないように                                                                                                                                        |
+| アプリバー     | 小: 高さ 64、題名 title-large、容器余白 4（M3E 既定）。「題名と 1–2 の必須操作（検索・戻る）」（Scaffold › Bars）                                                                  | そのまま。compact のエディタのアプリバーは戻る・題名・副題・添付・確認完了                                                                                                                                                         |
+| メニュー       | 幅 112–280、項目高さ 48、左右余白 12、アイコン 24（Menus › Specs）                                                                                                                 | アカウントメニューは 280。錨の右端が窓端 − 4 なので `margin-left: -8` で右端を窓端から 12 離し、角が欠けて見えるのを解消                                                                                                           |
+| 通知           | Scaffold: 一時的な作業は floating、compact では docked（ボトムシート）。推奨ペイン幅 360                                                                                           | medium 以上: 幅 360 の浮遊パネル（`m3e-menu`）。**compact: モーダルのボトムシート**（半分 → 全部、外側を押す・下へ払うと閉じる、`m3e-action-list` の 2 行リスト）。下部バーの「通知」はメニューではなくシートを開く                |
+| 下部バー       | 「3–5 の主要ビュー」「窓の全幅」「compact / medium」（Navigation bar、Scaffold › Bars）                                                                                            | そのまま（ダッシュボード・制作物・通知。管理者は 4 件）。項目のバッジは規定位置（アイコン右端 − 12、上端 − 2）                                                                                                                     |
+
+- **なぜ欠けていたか**: M3E のアイコンボタンは `.base` に `contain: layout style paint` があり、スロットの中身を 40 の円で切り取る。バッジをアイコンの枠の外側（右上）に出す規定と相性が悪い。ボタンの外に置き、ボタンの座標（タッチ領域 48 の中でアイコンは 12,12）から位置を計算した。
+- compact の通知がメニューだと、下部バーの項目を錨にするため窓の右端に密着し、長い本文が窮屈だった。Scaffold の「compact では docked」に従ってシートにした。
+
+### 検証
+
+- `vp check` 0 エラー、typecheck、`vp test`、デモビルド成功。撮影 34 画面（#18 通知パネル、#32 compact の通知シートを更新）、axe の残りは M3E calendar 内部の 1 件のみ。
