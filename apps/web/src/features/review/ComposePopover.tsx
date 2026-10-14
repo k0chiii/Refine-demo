@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { M3eButton, M3eIconButton, M3eIcon } from "@/ui/m3e";
 
 /**
@@ -16,6 +16,7 @@ export function ComposePopover({
   pending,
   label = "コメント",
   style,
+  extra,
 }: {
   x: number;
   y: number;
@@ -26,6 +27,8 @@ export function ComposePopover({
   pending?: boolean;
   label?: string;
   style?: CSSProperties;
+  /** 投稿以外の操作（例: 選んだ文字を表記ルールに提案） */
+  extra?: ReactNode;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -58,6 +61,7 @@ export function ComposePopover({
           <M3eIcon name="close" />
         </M3eIconButton>
         <span className="spacer" />
+        {extra}
         <M3eButton variant="filled" disabled={pending || !value.trim()} onClick={onSubmit}>
           投稿
         </M3eButton>

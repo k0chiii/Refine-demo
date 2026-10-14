@@ -35,6 +35,7 @@ import { formatJstShort } from "@/lib/format";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Card } from "@/ui/Card";
+import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import {
   M3eButton,
@@ -171,6 +172,11 @@ function PostSurface({
   }, [post.images, token]);
 
   // 自動保存
+  const replace = (next: SocialPost) => {
+    setPost(next);
+    dirty.current = true;
+    setStatus((s) => ({ ...s, kind: "dirty" }));
+  };
   const update = (patch: Partial<SocialPost>) => {
     setPost((p) => ({ ...p, ...patch }));
     dirty.current = true;
@@ -340,6 +346,17 @@ function PostSurface({
               />
             </Field>
           </div>
+          <DateField
+            label="予定日（任意。予約投稿はしません）"
+            value={post.scheduledAt ?? null}
+            onChange={(v) => {
+              if (v) update({ scheduledAt: v });
+              else {
+                const { scheduledAt: _s, ...rest } = post;
+                replace(rest);
+              }
+            }}
+          />
         </div>
       </Card>
       <Card title="本文">

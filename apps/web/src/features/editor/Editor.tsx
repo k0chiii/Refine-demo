@@ -23,6 +23,7 @@ import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { PostReview } from "@/features/social/PostReview";
+import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
@@ -205,6 +206,12 @@ export function Editor({
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [proposeFrom, setProposeFrom] = useState<{
+    quote: string;
+    surrounding: string;
+    artifactId: string;
+    revisionId: string;
+  } | null>(null);
   const [body, setBody] = useState("");
   const [requestId, setRequestId] = useState(newRequestId);
   const [page, setPage] = useState(1);
@@ -514,6 +521,28 @@ export function Editor({
         onSubmit={() => void doPost.run()}
         onCancel={resetCompose}
         pending={doPost.pending}
+        {...(draft.range && text && artifact && revisionId
+          ? {
+              extra: (
+                <M3eButton
+                  variant="text"
+                  onClick={() => {
+                    const r = draft.range!;
+                    setProposeFrom({
+                      quote: text.body.slice(r.start, r.end).slice(0, 200),
+                      surrounding: text.body
+                        .slice(Math.max(0, r.start - 30), r.end + 30)
+                        .replace(/\n/g, " "),
+                      artifactId: artifact.id,
+                      revisionId,
+                    });
+                  }}
+                >
+                  表記ルールに提案
+                </M3eButton>
+              ),
+            }
+          : {})}
       />
     );
   };
@@ -1254,6 +1283,17 @@ export function Editor({
       ) : null}
 
       <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+      {proposeFrom ? (
+        <ProposeDialog
+          open
+          onClose={() => setProposeFrom(null)}
+          quote={proposeFrom.quote}
+          surrounding={proposeFrom.surrounding}
+          workId={workId}
+          revisionId={proposeFrom.revisionId}
+          artifactId={proposeFrom.artifactId}
+        />
+      ) : null}
       {compareWith && cmp.kind === "pdf" ? (
         <PageMappingDialog
           open={mappingOpen}
