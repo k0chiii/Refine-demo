@@ -27,6 +27,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AiAssist } from "@/features/notation/AiAssist";
 import { FindingList } from "@/features/notation/FindingList";
 import { useProofreader } from "@/features/notation/useProofreader";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
@@ -385,7 +386,24 @@ function PostSurface({
                 ) : null
               }
             />
-          ) : rules && !rules.categories.length ? (
+          ) : null}
+          <AiAssist
+            workId={workId}
+            readOnly={!canEdit}
+            getText={() => post.body}
+            onApply={(f) => {
+              const at =
+                post.body.slice(f.start, f.end) === f.original
+                  ? f.start
+                  : post.body.indexOf(f.original);
+              if (at < 0) return;
+              update({
+                body:
+                  post.body.slice(0, at) + f.suggestion + post.body.slice(at + f.original.length),
+              });
+            }}
+          />
+          {!findings.length && rules && !rules.categories.length ? (
             <p className="small muted">
               表記統一のカテゴリが未設定のため、表記の検査はしていません（制作物の編集で選べます）。
             </p>

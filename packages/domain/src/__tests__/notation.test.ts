@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  aiBlockReason,
   applyFindings,
   canAssignManagers,
   canEditCategory,
   compileRulePattern,
+  defaultAiPolicy,
   defaultRuleCategories,
   expandCategories,
   isBotAuthor,
   isLikelyCatastrophic,
   notationRole,
   parseCsv,
+  placeAiCandidates,
   planBotThreads,
   PROOFREADER_ID,
   runStatusOf,
@@ -549,5 +552,37 @@ describe("自動校正: スレッドの計画", () => {
       ]),
     ).toBe("failed");
     expect(isBotAuthor(PROOFREADER_ID)).toBe(true);
+  });
+});
+
+describe("AI 校正の候補（サーバーでの確認）", () => {
+  it("本文に無い候補・同じ文字は捨て、要確認の候補として位置を付ける", () => {
+    const text = "五月祭は5月に開催。5月に来てね";
+    const f = placeAiCandidates(
+      text,
+      [
+        { original: "5月", suggestion: "五月", reason: "漢数字", ruleId: "A1-0001" },
+        { original: "5月", suggestion: "五月", reason: "漢数字" },
+        { original: "存在しない", suggestion: "x", reason: "" },
+        { original: "開催", suggestion: "開催", reason: "" },
+      ],
+      new Map([["A1-0001", 3]]),
+    );
+    expect(f.map((x) => [x.start, x.ruleId, x.ruleRevision])).toEqual([
+      [4, "A1-0001", 3],
+      [10, "AI", 0],
+    ]);
+    expect(f.every((x) => x.detector === "ai" && x.needsReview)).toBe(true);
+  });
+  it("機密区分で使えるかを決める（既定は非公開に送らない）", () => {
+    expect(aiBlockReason(defaultAiPolicy, { confidentiality: "normal" })).toMatch(
+      /設定されていません/,
+    );
+    const on = { ...defaultAiPolicy, enabled: true };
+    expect(aiBlockReason(on, { confidentiality: "normal" })).toBeNull();
+    expect(aiBlockReason(on, { confidentiality: "restricted" })).toMatch(/非公開/);
+    expect(
+      aiBlockReason({ ...on, allowRestricted: true }, { confidentiality: "restricted" }),
+    ).toBeNull();
   });
 });

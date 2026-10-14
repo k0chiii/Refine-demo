@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPlainText, offsetToPos } from "@/features/writing/plainText";
 import { setNotationMarks } from "@/features/writing/plugins";
 import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { AiAssist } from "./AiAssist";
 import { FindingList } from "./FindingList";
 import { useProofreader } from "./useProofreader";
 
@@ -130,10 +131,12 @@ export function NotationPanel({
   editor,
   check,
   readOnly,
+  workId,
 }: {
   editor: Editor;
   check: ReturnType<typeof useNotationCheck>;
   readOnly: boolean;
+  workId: string;
 }) {
   const [lastFix, setLastFix] = useState<string | null>(null);
   const fixable = check.findings.filter((f) => !f.needsReview && f.suggestion);
@@ -245,6 +248,25 @@ export function NotationPanel({
         />
       )}
       <p className="small muted">検査はこの端末の中で行い、文章を外部に送りません。</p>
+      <AiAssist
+        workId={workId}
+        readOnly={readOnly}
+        getText={() => buildPlainText(editor.state.doc).text}
+        onApply={(f) => {
+          // AI に送った後に書き換わっていてもよいように、平文の中で同じ文字を探し直す
+          const index = buildPlainText(editor.state.doc);
+          const at =
+            index.text.slice(f.start, f.end) === f.original
+              ? f.start
+              : index.text.indexOf(f.original);
+          if (at < 0) return;
+          const size = editor.state.doc.content.size;
+          const from = offsetToPos(index, at, size);
+          const to = offsetToPos(index, at + f.original.length, size);
+          editor.view.dispatch(editor.state.tr.insertText(f.suggestion, from, to));
+          setLastFix(`「${f.original}」→「${f.suggestion}」`);
+        }}
+      />
     </div>
   );
 }

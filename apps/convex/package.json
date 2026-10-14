@@ -21,6 +21,7 @@
     "deploy": "convex deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@auth/core": "0.41.3",
     "@convex-dev/auth": "0.0.96",
     "@mf100/application": "workspace:*",

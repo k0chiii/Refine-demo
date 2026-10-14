@@ -415,7 +415,7 @@ function WriteSurface({
     ) : p === "find" ? (
       <FindPanel editor={editor} focusKey={findFocus} readOnly={!canEdit} />
     ) : p === "notation" ? (
-      <NotationPanel editor={editor} check={notation} readOnly={!canEdit} />
+      <NotationPanel editor={editor} check={notation} readOnly={!canEdit} workId={workId} />
     ) : p === "refs" ? (
       <ReferencePanel
         editor={editor}

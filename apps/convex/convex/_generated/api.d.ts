@@ -10,6 +10,7 @@
 
 import type * as acl from "../acl.js";
 import type * as admin from "../admin.js";
+import type * as ai from "../ai.js";
 import type * as approvals from "../approvals.js";
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
@@ -35,6 +36,7 @@ import type { ApiFromModules, FilterApi, FunctionReference, AnyComponents } from
 declare const fullApi: ApiFromModules<{
   acl: typeof acl;
   admin: typeof admin;
+  ai: typeof ai;
   approvals: typeof approvals;
   artifacts: typeof artifacts;
   auth: typeof auth;
