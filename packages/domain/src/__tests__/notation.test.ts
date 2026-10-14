@@ -510,6 +510,23 @@ describe("自動校正: スレッドの計画", () => {
     expect(ocr.planned[0]!.anchor.type).toBe("image_rect");
     expect(ocr.planned[0]!.origin.detector).toBe("ocr");
     expect(ocr.planned[0]!.origin.needsReview).toBe(true);
+    // 文字の無い PDF ページを OCR したものは OCR 由来（低信頼なら要確認）
+    const scanned = planBotThreads(
+      "art5",
+      [
+        {
+          kind: "page",
+          page: 2,
+          text: "5月祭",
+          ocrConfidence: 0.5,
+          boxes: [{ start: 0, end: 3, rect: { x: 0, y: 0, w: 0.5, h: 0.1 } }],
+        },
+      ],
+      rules,
+    );
+    expect(scanned.planned[0]!.anchor.type).toBe("pdf_rect");
+    expect(scanned.planned[0]!.origin.textSource).toBe("ocr");
+    expect(scanned.planned[0]!.origin.needsReview).toBe(true);
     // 矩形の無い文字は作らない
     expect(
       planBotThreads("art4", [{ kind: "page", page: 1, text: "5月祭", boxes: [] }], rules).planned,

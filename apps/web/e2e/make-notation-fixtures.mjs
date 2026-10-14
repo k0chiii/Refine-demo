@@ -3,10 +3,11 @@
  * - notation-sample.pdf: PDF.js で文字を取り出せる PDF（2 ページ）
  * - notation-sample.png: 文字を画像にしたもの（OCR 用）
  * - notation-sample.txt: 平文
+ * - notation-scan.pdf: 文字を画像として貼った PDF（文字の無いページの OCR 用）
  * 実行: node e2e/make-notation-fixtures.mjs
  */
 import { chromium } from "playwright-core";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -61,6 +62,18 @@ await write(
   ".sheet{background:#fff;color:#111;padding:40px 48px} p{font-size:40px;margin:0 0 20px;line-height:1.4}",
 );
 await p.locator(".sheet").screenshot({ path: resolve(here, "fixtures", "notation-sample.png") });
+// スキャンした PDF の代わり: 文字を画像として貼った PDF（PDF.js では文字を取り出せない → OCR に回る）
+const png = readFileSync(resolve(here, "fixtures", "notation-sample.png")).toString("base64");
+await write(
+  "scan",
+  `<img src="data:image/png;base64,${png}" style="width:100%">`,
+  "@page{size:A5 landscape;margin:8mm}",
+);
+await p.pdf({
+  path: resolve(here, "fixtures", "notation-scan.pdf"),
+  format: "A5",
+  landscape: true,
+});
 writeFileSync(
   resolve(here, "fixtures", "notation-sample.txt"),
   pages.flatMap((pg) => [pg.title, ...pg.lines]).join("\n") + "\n",

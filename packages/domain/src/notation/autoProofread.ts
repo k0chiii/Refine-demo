@@ -44,7 +44,14 @@ export type ProofreadSegment =
   /** 文章の版（平文全体）。指摘は text_range */
   | { kind: "text"; text: string }
   /** PDF の 1 ページ。boxes は平文の [start, end) とページ上の正規化矩形の対応（PDF.js のテキスト項目ごと） */
-  | { kind: "page"; page: number; text: string; boxes: TextBox[] }
+  | {
+      kind: "page";
+      page: number;
+      text: string;
+      boxes: TextBox[];
+      /** 文字の無いページを OCR で読んだときの信頼度（0..1）。PDF の文字なら無し */
+      ocrConfidence?: number;
+    }
   /** 画像の OCR。confidence は 0..1 */
   | { kind: "image"; text: string; boxes: TextBox[]; confidence: number };
 
@@ -124,10 +131,12 @@ export function planBotThreads(
   let truncated = false;
   for (const seg of segments.slice(0, SEGMENTS_MAX)) {
     const text = seg.text.slice(0, SEGMENT_TEXT_MAX);
-    const isOcr = seg.kind === "image";
+    const ocrConfidence =
+      seg.kind === "image" ? seg.confidence : seg.kind === "page" ? seg.ocrConfidence : undefined;
+    const isOcr = ocrConfidence !== undefined;
     const r = proofread(text, rules, {
       source: isOcr ? "ocr" : "text",
-      ...(isOcr ? { ocrConfidence: seg.confidence } : {}),
+      ...(isOcr ? { ocrConfidence } : {}),
       timeBudgetMs: 2000,
     });
     truncated ||= r.truncated;
@@ -168,7 +177,7 @@ export function planBotThreads(
           needsReview: f.needsReview,
           original: f.original,
           suggestion: f.suggestion,
-          textSource: seg.kind === "text" ? "document" : seg.kind === "page" ? "pdf_text" : "ocr",
+          textSource: seg.kind === "text" ? "document" : isOcr ? "ocr" : "pdf_text",
         },
       });
       if (planned.length >= BOT_THREADS_PER_ARTIFACT) return { planned, truncated: true };

@@ -155,6 +155,7 @@ export const vProofreadSegment = v.union(
     page: v.number(),
     text: v.string(),
     boxes: v.array(vTextBox),
+    ocrConfidence: v.optional(v.number()),
   }),
   v.object({
     kind: v.literal("image"),

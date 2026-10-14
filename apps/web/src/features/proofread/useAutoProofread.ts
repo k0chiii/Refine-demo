@@ -3,7 +3,13 @@ import { useAuthToken } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { fetchArtifactBlob } from "@/integrations/api";
-import { documentSegments, imageSegments, pdfSegments, type ArtifactRef } from "./extract";
+import {
+  documentSegments,
+  imageSegments,
+  pdfOcrSegments,
+  pdfSegments,
+  type ArtifactRef,
+} from "./extract";
 
 export interface AutoProofreadProgress {
   artifactId: string;
@@ -53,6 +59,17 @@ export function useAutoProofread(revisionId: string | null, artifacts: readonly 
             }),
           );
           segments = r.segments;
+          // 文字の無いページ（スキャン）は OCR で読む
+          if (r.textless.length)
+            segments = [
+              ...segments,
+              ...(await pdfOcrSegments(blob, r.textless, (d, t) =>
+                setProgress({
+                  artifactId: artifact.id,
+                  label: `${name} の文字の無いページを OCR で読み取っています（${d}/${t}）`,
+                }),
+              )),
+            ];
         } else {
           segments = await imageSegments(blob, (p) =>
             setProgress({
