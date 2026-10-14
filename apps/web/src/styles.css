@@ -2370,7 +2370,8 @@ m3e-icon.icon--on {
 }
 
 /* ---------- 表記ルール（表記統一）: 広い画面は編集できる表、狭い画面はリスト。詳細はダイアログ */
-.notation__tabs {
+.notation__tabs,
+.page-tabs {
   margin: 0 -8px 12px;
   padding-top: 0;
 }

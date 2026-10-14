@@ -1,6 +1,6 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJst } from "@/lib/format";
@@ -10,16 +10,36 @@ import { AclPanel } from "@/features/work/AclPanel";
 import { M3eButton, M3eChip, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
 import { DataTable, EditableSwitch } from "@/ui/DataTable";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { PaneTabs } from "@/ui/PaneTabs";
 
-export const Route = createFileRoute("/_app/admin")({ component: Admin });
+type Tab = "works" | "users" | "audit";
 
-/** U-08 管理: 作品ごとの ACL 入口、ユーザー（システム管理者の付与）、監査ログ（F-13）。 */
+export const Route = createFileRoute("/_app/admin")({
+  component: Admin,
+  validateSearch: (s: Record<string, unknown>): { view?: Tab } =>
+    s.view === "users" || s.view === "audit" ? { view: s.view } : {},
+});
+
+/**
+ * U-08 管理: 作品ごとの ACL 入口、ユーザー（システム管理者の付与）、監査ログ（F-13）。
+ * 1 画面に詰め込まず、M3E tabs で切り替える（選んだタブは URL の view に残す）。
+ */
 function Admin() {
   const me = useQuery(api.me.me, {});
+  const { view: tab = "works" } = Route.useSearch();
+  const navigate = useNavigate();
+  const setTab = (t: Tab) =>
+    void navigate({ to: "/admin", search: t === "works" ? {} : { view: t }, replace: true });
   const [text, setText] = useState("");
-  const users = useQuery(api.acl.searchUsers, me?.isSystemAdmin ? { text } : "skip");
-  const audit = useQuery(api.admin.auditLog, me?.isSystemAdmin ? { limit: 100 } : "skip");
-  const works = useQuery(api.acl.adminWorks, me?.isSystemAdmin ? {} : "skip");
+  const users = useQuery(
+    api.acl.searchUsers,
+    me?.isSystemAdmin && tab === "users" ? { text } : "skip",
+  );
+  const audit = useQuery(
+    api.admin.auditLog,
+    me?.isSystemAdmin && tab === "audit" ? { limit: 100 } : "skip",
+  );
+  const works = useQuery(api.acl.adminWorks, me?.isSystemAdmin && tab === "works" ? {} : "skip");
   const setAdmin = useMutation(api.admin.setSystemAdmin);
   const [aclFor, setAclFor] = useState<{ id: string; title: string } | null>(null);
   const toggle = useAction(async (userId: string, value: boolean) => {
@@ -37,9 +57,22 @@ function Admin() {
   return (
     <>
       {title}
-      <div className="stack">
-        <section>
-          <h2 className="section-title">作品ごとの閲覧権限（個人 ACL）</h2>
+      <PaneTabs
+        label="管理"
+        className="page-tabs"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: "works", label: "閲覧権限" },
+          { id: "users", label: "ユーザー" },
+          { id: "audit", label: "監査ログ" },
+        ]}
+      />
+      {tab === "works" ? (
+        <section className="stack">
+          <p className="muted small">
+            作品ごとに、個人へ閲覧・校正・編集・管理の権限を付与します（個人 ACL）。
+          </p>
           <DataTable
             label="作品ごとの閲覧権限"
             rows={works ?? []}
@@ -93,87 +126,86 @@ function Admin() {
             ]}
           />
         </section>
-        <div className="grid-2">
-          <section>
-            <h2 className="section-title">ユーザー</h2>
-            <div className="stack">
-              <M3eSearchBar className="search" clearable onClear={() => setText("")}>
-                <M3eIcon slot="leading" name="search" />
-                <input
-                  slot="input"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="名前・メールで検索"
-                  aria-label="ユーザー検索"
-                />
-              </M3eSearchBar>
-              <DataTable
-                label="ユーザー"
-                rows={users ?? []}
-                rowKey={(u) => u.id}
-                columns={[
-                  {
-                    key: "name",
-                    header: "名前",
-                    rowHeader: true,
-                    sort: (a, b) => a.name.localeCompare(b.name, "ja"),
-                    cell: (u) => (
-                      <>
-                        {u.name}
-                        <div className="small muted">{u.email}</div>
-                      </>
-                    ),
-                  },
-                  {
-                    key: "admin",
-                    header: "システム管理者",
-                    width: "152px",
-                    cell: (u) => (
-                      <EditableSwitch
-                        label={`${u.name} をシステム管理者にする`}
-                        checked={u.isSystemAdmin}
-                        disabled={u.id === me.id}
-                        onSave={async (on) => {
-                          await toggle.run(u.id, on);
-                        }}
-                      />
-                    ),
-                  },
-                ]}
+      ) : tab === "users" ? (
+        <section>
+          <div className="stack">
+            <M3eSearchBar className="search" clearable onClear={() => setText("")}>
+              <M3eIcon slot="leading" name="search" />
+              <input
+                slot="input"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="名前・メールで検索"
+                aria-label="ユーザー検索"
               />
-            </div>
-          </section>
-          <section>
-            <h2 className="section-title">監査ログ</h2>
+            </M3eSearchBar>
             <DataTable
-              label="監査ログ"
-              rows={audit ?? []}
-              rowKey={(e) => e._id}
+              label="ユーザー"
+              rows={users ?? []}
+              rowKey={(u) => u.id}
               columns={[
                 {
-                  key: "at",
-                  header: "時刻",
-                  width: "176px",
-                  sort: (a, b) => a.at - b.at,
-                  cell: (e) => <span className="small">{formatJst(e.at)}</span>,
+                  key: "name",
+                  header: "名前",
+                  rowHeader: true,
+                  sort: (a, b) => a.name.localeCompare(b.name, "ja"),
+                  cell: (u) => (
+                    <>
+                      {u.name}
+                      <div className="small muted">{u.email}</div>
+                    </>
+                  ),
                 },
                 {
-                  key: "op",
-                  header: "操作",
-                  sort: (a, b) => a.operation.localeCompare(b.operation),
-                  cell: (e) => <span className="mono">{e.operation}</span>,
-                },
-                {
-                  key: "entity",
-                  header: "対象",
-                  sort: (a, b) => a.entityType.localeCompare(b.entityType),
-                  cell: (e) => <span className="small muted">{e.entityType}</span>,
+                  key: "admin",
+                  header: "システム管理者",
+                  width: "152px",
+                  cell: (u) => (
+                    <EditableSwitch
+                      label={`${u.name} をシステム管理者にする`}
+                      checked={u.isSystemAdmin}
+                      disabled={u.id === me.id}
+                      onSave={async (on) => {
+                        await toggle.run(u.id, on);
+                      }}
+                    />
+                  ),
                 },
               ]}
             />
-          </section>
-        </div>
-      </div>
+          </div>
+        </section>
+      ) : (
+        <section className="stack">
+          <p className="muted small">直近 100 件の操作。</p>
+          <DataTable
+            label="監査ログ"
+            rows={audit ?? []}
+            rowKey={(e) => e._id}
+            columns={[
+              {
+                key: "at",
+                header: "時刻",
+                width: "176px",
+                sort: (a, b) => a.at - b.at,
+                cell: (e) => <span className="small">{formatJst(e.at)}</span>,
+              },
+              {
+                key: "op",
+                header: "操作",
+                sort: (a, b) => a.operation.localeCompare(b.operation),
+                cell: (e) => <span className="mono">{e.operation}</span>,
+              },
+              {
+                key: "entity",
+                header: "対象",
+                sort: (a, b) => a.entityType.localeCompare(b.entityType),
+                cell: (e) => <span className="small muted">{e.entityType}</span>,
+              },
+            ]}
+          />
+        </section>
+      )}
       <M3eDialog open={aclFor !== null} onClosed={() => setAclFor(null)} closeLabel="閉じる">
         <span slot="header">閲覧権限: {aclFor?.title}</span>
         <div className="dialog-body">{aclFor ? <AclPanel workId={aclFor.id} /> : null}</div>

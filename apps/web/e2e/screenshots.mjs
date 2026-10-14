@@ -516,14 +516,21 @@ async function main() {
   // 13 管理画面 / 12 閲覧権限（管理者）: 管理画面のダイアログ（管理者は内容を閲覧しない: D3）
   await signInAs("mock-nogiku-admin");
   await go(`${BASE}/admin`);
-  await page.waitForSelector("text=監査ログ");
-  await shot("13-admin-audit");
+  await page.waitForSelector(".data-table m3e-button");
+  await shot("13-admin-works");
   await page.locator(".data-table m3e-button", { hasText: "閲覧権限" }).first().click();
   await page.waitForSelector("m3e-dialog[open] .acl");
   await page.waitForTimeout(400);
   await shot("12-acl");
   await page.locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "閉じる" }).click();
   await page.waitForTimeout(300);
+  // 13a・13b 管理のタブ（ユーザー・監査ログ）
+  await page.locator("m3e-tab", { hasText: "ユーザー" }).click();
+  await page.waitForSelector(".data-table m3e-switch");
+  await shot("13a-admin-users");
+  await page.locator("m3e-tab", { hasText: "監査ログ" }).click();
+  await page.waitForSelector(".data-table .mono");
+  await shot("13b-admin-audit");
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）
   await signInAs("mock-nogiku-reviewer");

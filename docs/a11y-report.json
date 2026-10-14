@@ -154,11 +154,19 @@
     "violations": []
   },
   {
-    "screen": "13-admin-audit",
+    "screen": "13-admin-works",
     "violations": []
   },
   {
     "screen": "12-acl",
+    "violations": []
+  },
+  {
+    "screen": "13a-admin-users",
+    "violations": []
+  },
+  {
+    "screen": "13b-admin-audit",
     "violations": []
   },
   {

@@ -114,7 +114,7 @@
 | 校了後                 | ![before](screenshots-before/11-work-finalized.png)            | ![after](screenshots/11-work-finalized.png)            |
 | 通知                   | ![before](screenshots-before/18-notifications.png)             | ![after](screenshots/18-notifications.png)             |
 | 閲覧権限               | ![before](screenshots-before/12-acl.png)                       | ![after](screenshots/12-acl.png)                       |
-| 管理                   | ![before](screenshots-before/13-admin-audit.png)               | ![after](screenshots/13-admin-audit.png)               |
+| 管理                   | ![before](screenshots-before/13-admin-audit.png)               | ![after](screenshots/13-admin-works.png)               |
 | ダークモード（自動）   | —                                                              | ![after](screenshots/20-dark-workspace.png)            |
 | モバイル幅（下部ナビ） | —                                                              | ![after](screenshots/21-mobile-queue.png)              |
 
@@ -577,3 +577,7 @@ M3 / M3E に data table が無いので、Material の data table（MDC `mdc-dat
 ### スマホの通知
 
 通知のベルはどのウィンドウサイズでもアプリバーのアカウントの隣に置く（Gmail・Google ドライブなど一般的な配置）。compact ではベルを押すと全画面の通知シートを開き、下のナビゲーションバーからは「通知」を外した（撮影 20・32）。
+
+### 管理画面のタブ分け（2026-10-14・利用者指摘「管理画面詰め込みすぎ」）
+
+1 画面に 3 つの表を並べていたのを、`m3e-tabs`（表記ルールと同じ secondary の `PaneTabs`）で「閲覧権限／ユーザー／監査ログ」に分けた。選んだタブは URL の `view`（`/admin?view=users` など）に残し、再読み込みや共有でも同じタブが開く。データの取得は開いているタブの分だけ（撮影 13・13a・13b）。
