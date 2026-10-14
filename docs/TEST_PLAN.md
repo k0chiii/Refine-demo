@@ -6,6 +6,7 @@
 - `packages/application/src/__tests__/*.test.ts` — ユースケース（インメモリ、38 件。組織権限の拡張点 `org.test.ts`、v1 の通知・リマインド・清掃は `v1.test.ts`）
 - `apps/convex/convex/mvp.test.ts` — convex-test による統合（認可・状態遷移、7 シナリオ。「v1」で専門確認→校了ガード、担当者・訂正、持越、無効化、通知、清掃、ユーザー検索を一周）
 - `apps/api/src/__tests__/app.test.ts` / `cleanup.test.ts` — Hono（12 件。R2 清掃を含む）
+- `apps/web/e2e/pwa.mjs`（`pnpm e2e:pwa`）— PWA（マニフェスト・Service Worker・キャッシュの範囲・オフライン・更新）。詳細は `docs/PWA.md`
 - `apps/web/e2e/screenshots.mjs`（`pnpm a11y`）— デモモードで 62 画面を一周し axe-core（WCAG 2.1 A/AA）を実行。結果は `docs/a11y-report.json`
 - `apps/web/src/features/upload/submissionFlow.test.ts` — 提出オーケストレーション（4 件）
 - 文章エディタ: domain `document.test.ts`（下書きの版番号・上限・文字カウント）、application `documents.test.ts`（権限・競合・進行中のみ）、convex `documents.test.ts`（統合）、web `writing/plainText.test.ts`（本文 ⇔ 平文のオフセット往復）。撮影 39〜47 で、書く→提出→書式付きで範囲指摘→指摘から本文を選ぶ、を実ブラウザで検証

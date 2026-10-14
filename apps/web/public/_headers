@@ -1,0 +1,14 @@
+# 静的配信（Cloudflare Pages 等）のキャッシュ指定。
+# sw.js・マニフェスト・index.html は毎回確かめさせ、新しい版に気づけるようにする（古い Service Worker が居座らない）。
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
+/manifest.webmanifest
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+# ハッシュ付きのファイルは中身が変わらない
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

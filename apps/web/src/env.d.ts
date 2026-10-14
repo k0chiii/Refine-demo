@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   /** Vite の公開ベースパス。末尾は `/` */
   readonly BASE_URL: string;
   readonly DEV: boolean;
+  readonly PROD: boolean;
   readonly MODE: string;
 }
 interface ImportMeta {

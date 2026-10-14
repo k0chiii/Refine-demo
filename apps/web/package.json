@@ -13,7 +13,9 @@
     "dev:demo": "vp dev --mode demo",
     "build:demo": "vp build --mode demo --outDir dist-demo",
     "screenshots": "node e2e/screenshots.mjs",
-    "a11y": "A11Y=1 node e2e/screenshots.mjs"
+    "a11y": "A11Y=1 node e2e/screenshots.mjs",
+    "e2e:pwa": "node e2e/pwa.mjs",
+    "pwa:icons": "node scripts/pwa-icons.mjs"
   },
   "dependencies": {
     "@convex-dev/auth": "0.0.96",

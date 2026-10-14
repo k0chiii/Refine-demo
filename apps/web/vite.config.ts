@@ -1,6 +1,7 @@
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
@@ -49,6 +50,48 @@ function ocrAssets(): Plugin {
 }
 
 /**
+ * PWA: ビルドのときだけ Service Worker（pwa/sw.template.js）を sw.js として書き出す。
+ * 外枠（index.html・JS・CSS・PDF.js のワーカー・マニフェスト・アイコン）を先にキャッシュする一覧と、
+ * その一覧から作った版（中身が変わると版が変わり、画面に「更新」が出る）を埋め込む。
+ * フォント（日本語は数百の分割ファイル）は先読みせず、使ったものだけキャッシュする。
+ */
+function pwa(): Plugin {
+  const template = fileURLToPath(new URL("./pwa/sw.template.js", import.meta.url));
+  const fromPublic = [
+    "/manifest.webmanifest",
+    "/icons/icon-192.png",
+    "/icons/icon-512.png",
+    "/icons/icon-maskable-512.png",
+    "/icons/apple-touch-icon.png",
+    "/icons/favicon-32.png",
+  ];
+  return {
+    name: "mf100-pwa",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      // index.html は HTML の処理（vite:build-html）がこの後で書き出すため、bundle にまだ無いことがある。明示的に入れる
+      const built = Object.keys(bundle)
+        .filter((f) => /\.(?:m?js|css)$/.test(f))
+        .map((f) => `/${f}`)
+        .sort();
+      const precache = ["/index.html", ...built, ...fromPublic];
+      const version = createHash("sha256")
+        .update(precache.join("\n"))
+        .update(
+          readFileSync(fileURLToPath(new URL("./public/manifest.webmanifest", import.meta.url))),
+        )
+        .update(readFileSync(template))
+        .digest("hex")
+        .slice(0, 12);
+      const source = readFileSync(template, "utf8")
+        .replace("__VERSION__", JSON.stringify(version))
+        .replace("__PRECACHE__", JSON.stringify(precache));
+      this.emitFile({ type: "asset", fileName: "sw.js", source });
+    },
+  };
+}
+
+/**
  * `--mode demo`: バックエンド無しで動くデモモード。convex/react と Convex Auth、Hono API 呼び出しを
  * src/demo/* に差し替え、apps/convex の実際の関数を convex-test でブラウザ内実行する（UI 開発・E2E・スクショ用）。
  */
@@ -63,6 +106,7 @@ export default defineConfig(({ mode }) => ({
     }),
     react(),
     ocrAssets(),
+    pwa(),
   ],
   resolve: {
     alias: {

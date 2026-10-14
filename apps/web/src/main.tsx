@@ -1,6 +1,7 @@
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { registerServiceWorker } from "./lib/pwa";
 import { routeTree } from "./routeTree.gen";
 import "./theme";
 import "./fonts";
@@ -23,3 +24,5 @@ createRoot(document.getElementById("root")!).render(
     <RouterProvider router={router} />
   </StrictMode>,
 );
+
+registerServiceWorker();

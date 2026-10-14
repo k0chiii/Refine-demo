@@ -4,6 +4,7 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tan
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
+import { useInstallPrompt } from "@/lib/pwa";
 import { useWindowClass } from "@/lib/useMedia";
 import {
   M3eAppBar,
@@ -43,6 +44,7 @@ function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
   const navigate = useNavigate();
+  const install = useInstallPrompt();
   const { signOut } = useAuthActions();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const cls = useWindowClass();
@@ -201,6 +203,12 @@ function AppLayout() {
               {me.email ? <div className="small muted">{me.email}</div> : null}
             </div>
           </div>
+          {install ? (
+            <M3eMenuItem onClick={() => void install()}>
+              <M3eIcon slot="icon" name="install_desktop" />
+              アプリとしてインストール
+            </M3eMenuItem>
+          ) : null}
           <M3eMenuItem onClick={() => signOut().then(() => navigate({ to: "/signin" }))}>
             <M3eIcon slot="icon" name="logout" />
             サインアウト
