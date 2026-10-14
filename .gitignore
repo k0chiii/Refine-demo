@@ -28,3 +28,6 @@ apps/web/src/routeTree.gen.ts
 # Vite+ task cache
 .vite-plus/
 node_modules/.vite-plus/
+
+# pnpm dev がサービスごとに書くログ
+.logs/

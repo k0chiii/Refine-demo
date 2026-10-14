@@ -11,10 +11,12 @@
     "test": "vp test",
     "typecheck": "vp run -r typecheck",
     "build": "vp run -r build",
-    "dev": "vp run @mf100/web#dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vp run @mf100/web#dev",
     "dev:convex": "vp run @mf100/convex#dev",
     "dev:api": "vp run @mf100/api#dev",
-    "codegen": "vp run @mf100/convex#codegen"
+    "codegen": "vp run @mf100/convex#codegen",
+    "deploy:demo": "pnpm --filter @mf100/web build:demo && cd apps/api && pnpm exec wrangler pages deploy ../web/dist-demo --project-name mf100-refine-demo"
   },
   "devDependencies": {
     "typescript": "5.9.3",
