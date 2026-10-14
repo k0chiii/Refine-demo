@@ -147,6 +147,12 @@ export function InfoTab({
           <dt>納期</dt>
           <dd>{formatJstDate(w.deadlineAt)}</dd>
         </div>
+        {revision?.revision.focusNotes ? (
+          <div>
+            <dt>観点</dt>
+            <dd>{revision.revision.focusNotes}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>制作</dt>
           <dd>{people.creators.map((p) => p?.name).join("、") || "—"}</dd>

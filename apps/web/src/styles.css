@@ -272,7 +272,6 @@ m3e-search-bar {
 }
 .page-header .spacer,
 .row .spacer,
-.ws__header .spacer,
 .page-title .spacer {
   flex: 1;
 }
@@ -1092,48 +1091,46 @@ m3e-search-bar {
 }
 
 /* ---------- 校正ワークスペース（U-05） */
+/* エディタ: 見出し・戻る・操作は共通アプリバー（64）へ差し込み、残りの高さ全部を紙面に使う */
 .ws {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  height: calc(100vh - 80px); /* アプリバー 64px ＋ 余白。ビューアは画面内に収める */
+  height: calc(100dvh - 64px);
+  box-sizing: border-box;
+  padding: 8px 0 16px;
 }
-.ws__header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  min-height: 48px;
-  margin-top: 4px;
+.shell--editor .shell__content {
+  padding-top: 0;
+  padding-bottom: 0;
 }
-.ws__back {
+.appbar-slot {
+  display: contents;
+}
+.appbar-slot--title {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.appbar-slot--actions {
   display: inline-flex;
-  color: var(--mf-on-surface-variant);
-  padding: 12px; /* タッチ領域 48（M3 Density: 既定は 48×48 以上） */
-  border-radius: 50%;
-  margin-inline-start: -12px;
+  align-items: center;
 }
-.ws__title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-  min-width: 0;
+.ws__done {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  color: var(--mf-primary);
 }
-.ws__work {
-  font: 500 18px/24px var(--mf-font);
-}
-.ws__rev {
-  font: 500 18px/24px var(--mf-font);
-  color: var(--mf-on-surface-variant);
-}
-.ws__state,
-.ws__focus {
-  font: var(--mf-type-body-medium);
-  color: var(--mf-on-surface-variant);
-}
-.ws__artifact {
-  width: 240px;
+/* ペインの操作（コメント／版／情報）: 紙面ペインの末尾側に縦の浮遊ツールバー（M3 Toolbars: 大きい幅では縦にしてレールの反対側、窓端から 24） */
+.ws__side-toolbar {
+  position: absolute;
+  inset-inline-end: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
 }
 .ws__checks {
   padding: 0 4px;
@@ -1367,10 +1364,6 @@ m3e-search-bar {
 }
 .drawer--sheet .drawer__body {
   max-height: 60vh;
-}
-.ws__drawer-buttons {
-  display: inline-flex;
-  gap: 4px;
 }
 .comments {
   display: flex;
@@ -1754,26 +1747,10 @@ m3e-search-bar {
 }
 /* compact（<600）のエディタ: トップアプリバー（64）＋紙面（残り全部）＋覗き見のボトムシート（60 ＝ 8 ＋タブ 46 ＋ 6） */
 .ws--compact {
-  height: 100dvh;
-  gap: 0;
-}
-.ws__appbar {
-  flex: none;
-}
-.ws__appbar-title,
-.ws__appbar-sub {
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ws__done {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
-  color: var(--mf-primary);
+  height: calc(
+    100dvh - 64px
+  ); /* 839 以下の height: auto を打ち消す。アプリバー 64 の下を全部使う */
+  padding: 0;
 }
 .ws--compact .ws__body {
   flex: 1;

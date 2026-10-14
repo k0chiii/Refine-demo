@@ -7,7 +7,7 @@ import {
   type NormalizedRect,
   type Viewport,
 } from "@mf100/domain";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AlignedGutter, type GutterItem } from "@/features/annotation/AlignedGutter";
@@ -29,16 +29,18 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
-import { StatusText } from "@/ui/Chip";
 import { ActionSheet } from "@/ui/ActionSheet";
-import { Field, Select, TextArea } from "@/ui/Field";
+import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Field, TextArea } from "@/ui/Field";
 import {
-  M3eAppBar,
   M3eBottomSheet,
   M3eButton,
   M3eFilterChip,
   M3eIcon,
   M3eIconButton,
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuTrigger,
   M3eToolbar,
 } from "@/ui/m3e";
 import { InfoTab } from "./InfoTab";
@@ -761,163 +763,61 @@ export function Editor({
     <div
       className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""} ${compact ? "ws--compact" : ""}`}
     >
-      {compact ? (
-        <>
-          <M3eAppBar size="small" className="ws__appbar">
-            <M3eIconButton
-              slot="leading"
-              aria-label="制作物一覧へ戻る"
-              onClick={() => void navigate({ to: "/works" })}
-            >
-              <M3eIcon name="arrow_back" className="icon--mirror" />
-            </M3eIconButton>
-            <span slot="title" className="ws__appbar-title">
-              {work.title}
-            </span>
-            {revision ? (
-              <span slot="subtitle" className="ws__appbar-sub">
-                {revision.label}・
-                {open
-                  ? `受付中・${remaining(revision.deadlineAt, now)}`
-                  : revision.reviewClosedReason
-                    ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-                    : reviewStateLabel[revision.reviewState]}
-                {work.finalRevisionId === revision.id ? "・校了版" : ""}
-              </span>
-            ) : null}
-            {data && data.artifacts.length > 1 ? (
-              <M3eIconButton
-                slot="trailing"
-                aria-label="添付を切り替え"
-                onClick={() => setArtifactSheet(true)}
-              >
-                <M3eIcon name="attach_file" />
-              </M3eIconButton>
-            ) : null}
-            {can?.completeReview ? (
-              <M3eIconButton
-                slot="trailing"
-                aria-label="確認を完了"
-                disabled={doComplete.pending}
-                onClick={() => void doComplete.run()}
-              >
-                <M3eIcon name="task_alt" />
-              </M3eIconButton>
-            ) : data?.myAssignment?.state === "responded" ? (
-              <span slot="trailing" className="ws__done" title="確認完了">
-                <M3eIcon name="check_circle" className="icon--filled" />
-              </span>
-            ) : null}
-          </M3eAppBar>
-          {data && data.artifacts.length > 1 ? (
-            <ActionSheet
-              open={artifactSheet}
-              onClose={() => setArtifactSheet(false)}
-              title="添付"
-              items={data.artifacts.map((a) => ({
-                icon: "draft",
-                label: `${a.role === "external" ? "外部: " : ""}${a.fileName}`,
-                selected: a.id === artifactId,
-                onSelect: () => {
-                  setArtifactId(a.id);
-                  setPage(1);
-                  resetCompose();
-                },
-              }))}
-            />
-          ) : null}
-        </>
-      ) : (
-        <header className="ws__header">
-          <Link to="/works" className="ws__back" aria-label="制作物一覧へ戻る">
-            <M3eIcon name="arrow_back" className="icon--mirror" />
-          </Link>
-          <div className="ws__title">
-            <span className="ws__work">{work.title}</span>
-            {revision ? (
-              <>
-                <span className="ws__rev">{revision.label}</span>
-                <span className="ws__state">
-                  {open ? (
-                    <>受付中・{remaining(revision.deadlineAt, now)}</>
-                  ) : revision.reviewClosedReason ? (
-                    `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-                  ) : (
-                    reviewStateLabel[revision.reviewState]
-                  )}
-                  {work.finalRevisionId === revision.id ? (
-                    <StatusText tone="success" className="ml">
-                      校了版
-                    </StatusText>
-                  ) : null}
-                </span>
-                {revision.focusNotes ? (
-                  <span className="ws__focus muted">見てほしい観点: {revision.focusNotes}</span>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-          <span className="spacer" />
-          {data && data.artifacts.length > 1 ? (
-            <Select
-              aria-label="添付"
-              value={artifactId ?? ""}
-              onChange={(e) => {
-                setArtifactId(e.target.value);
-                setPage(1);
-                resetCompose();
-              }}
-              className="ws__artifact"
-            >
-              {data.artifacts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.role === "external" ? "外部: " : ""}
-                  {a.fileName}
-                </option>
-              ))}
-            </Select>
-          ) : null}
-          {can?.completeReview ? (
-            <M3eButton
-              variant="tonal"
-              disabled={doComplete.pending}
-              onClick={() => void doComplete.run()}
-            >
-              確認を完了
-            </M3eButton>
-          ) : data?.myAssignment?.state === "responded" ? (
-            <StatusText tone="success">確認完了</StatusText>
-          ) : null}
-          {!mobile ? (
-            <div className="ws__drawer-buttons">
-              <M3eIconButton
-                aria-label={`コメント（${openCount}）`}
-                toggle
-                selected={drawer === "comments"}
-                onClick={() => openDrawer("comments")}
-              >
-                <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
-              </M3eIconButton>
-              <M3eIconButton
-                aria-label="版"
-                toggle
-                selected={drawer === "versions"}
-                onClick={() => openDrawer("versions")}
-              >
-                <M3eIcon name="history" className={drawer === "versions" ? "icon--filled" : ""} />
-              </M3eIconButton>
-              <M3eIconButton
-                aria-label="情報"
-                toggle
-                selected={drawer === "info"}
-                onClick={() => openDrawer("info")}
-              >
-                <M3eIcon name="info" className={drawer === "info" ? "icon--filled" : ""} />
-              </M3eIconButton>
-            </div>
-          ) : null}
-        </header>
-      )}
+      {/* 見出し・戻る・主要操作は共通アプリバーへ（M3 App bars: ページの見出し＋戻る＋ 1–2 の必須操作。多い操作はツールバーへ） */}
+      <AppBarSlot slot="leading">
+        <M3eIconButton
+          aria-label="制作物一覧へ戻る"
+          onClick={() => void navigate({ to: "/works" })}
+        >
+          <M3eIcon name="arrow_back" className="icon--mirror" />
+        </M3eIconButton>
+      </AppBarSlot>
+      <AppBarSlot slot="title">{work.title}</AppBarSlot>
+      {revision ? (
+        <AppBarSlot slot="subtitle">
+          {revision.label}・
+          {open
+            ? `受付中・${remaining(revision.deadlineAt, now)}`
+            : revision.reviewClosedReason
+              ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+              : reviewStateLabel[revision.reviewState]}
+          {work.finalRevisionId === revision.id ? "・校了版" : ""}
+        </AppBarSlot>
+      ) : null}
+      <AppBarSlot slot="actions">
+        {can?.completeReview ? (
+          <M3eIconButton
+            variant="tonal"
+            aria-label="確認を完了"
+            title="確認を完了"
+            disabled={doComplete.pending}
+            onClick={() => void doComplete.run()}
+          >
+            <M3eIcon name="task_alt" />
+          </M3eIconButton>
+        ) : data?.myAssignment?.state === "responded" ? (
+          <span className="ws__done" title="確認完了" aria-label="確認完了">
+            <M3eIcon name="check_circle" className="icon--filled" />
+          </span>
+        ) : null}
+      </AppBarSlot>
+      {data && data.artifacts.length > 1 && compact ? (
+        <ActionSheet
+          open={artifactSheet}
+          onClose={() => setArtifactSheet(false)}
+          title="添付"
+          items={data.artifacts.map((a) => ({
+            icon: "draft",
+            label: `${a.role === "external" ? "外部: " : ""}${a.fileName}`,
+            selected: a.id === artifactId,
+            onSelect: () => {
+              setArtifactId(a.id);
+              setPage(1);
+              resetCompose();
+            },
+          }))}
+        />
+      ) : null}
 
       <div
         ref={setBodyEl}
@@ -1023,6 +923,15 @@ export function Editor({
                   <M3eIcon name="compare" className="icon--filled" />
                 </M3eIconButton>
               ) : null}
+              {data && data.artifacts.length > 1 ? (
+                <M3eIconButton
+                  aria-label="添付を切り替え"
+                  {...(compact ? { onClick: () => setArtifactSheet(true) } : {})}
+                >
+                  <M3eIcon name="attach_file" />
+                  {compact ? null : <M3eMenuTrigger htmlFor="artifact-menu" />}
+                </M3eIconButton>
+              ) : null}
               {!mobile ? (
                 <>
                   <span className="ws__toolbar-sep" />
@@ -1039,6 +948,59 @@ export function Editor({
                   ))}
                 </>
               ) : null}
+            </M3eToolbar>
+          ) : null}
+          {data && data.artifacts.length > 1 && !compact ? (
+            <M3eMenu id="artifact-menu" positionY="above">
+              {data.artifacts.map((a) => (
+                <M3eMenuItem
+                  key={a.id}
+                  onClick={() => {
+                    setArtifactId(a.id);
+                    setPage(1);
+                    resetCompose();
+                  }}
+                >
+                  <M3eIcon slot="icon" name={a.id === artifactId ? "check" : "draft"} />
+                  {a.role === "external" ? "外部: " : ""}
+                  {a.fileName}
+                </M3eMenuItem>
+              ))}
+            </M3eMenu>
+          ) : null}
+          {!mobile ? (
+            /* ペインの操作は縦の浮遊ツールバー（レールの反対側）。Scaffold の trailing rail 領域 */
+            <M3eToolbar
+              vertical
+              className="ws__side-toolbar"
+              shape="rounded"
+              elevated
+              aria-label="引き出しの操作"
+            >
+              <M3eIconButton
+                aria-label={`コメント（${openCount}）`}
+                toggle
+                selected={drawer === "comments"}
+                onClick={() => openDrawer("comments")}
+              >
+                <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
+              </M3eIconButton>
+              <M3eIconButton
+                aria-label="版"
+                toggle
+                selected={drawer === "versions"}
+                onClick={() => openDrawer("versions")}
+              >
+                <M3eIcon name="history" className={drawer === "versions" ? "icon--filled" : ""} />
+              </M3eIconButton>
+              <M3eIconButton
+                aria-label="情報"
+                toggle
+                selected={drawer === "info"}
+                onClick={() => openDrawer("info")}
+              >
+                <M3eIcon name="info" className={drawer === "info" ? "icon--filled" : ""} />
+              </M3eIconButton>
             </M3eToolbar>
           ) : null}
         </div>

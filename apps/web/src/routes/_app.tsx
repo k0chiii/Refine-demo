@@ -33,7 +33,7 @@ const readRailPref = () => {
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
  * - compact（<600）: アプリバーはアカウントだけ。下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。
- *   エディタ（`/works/:id`）では共通バーを隠し、エディタのトップアプリバー（戻る・題名）だけにする。
+ *   エディタ（`/works/:id`）では下部バーを隠す（詳細画面）。アプリバーはどの幅でも 1 本で、エディタが戻る・題名・操作を差し込む。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
  * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「制作物を登録」、その下に行き先。アカウントは右上に残す。
@@ -110,7 +110,8 @@ function AppLayout() {
   const register = () => void navigate({ to: "/works", search: { new: true } });
   const modal = cls !== "large" && cls !== "compact" && modalOpen;
   // compact のエディタは詳細画面: 共通のアプリバーと下部バーを隠し、エディタ自身のトップアプリバー（戻る・題名）に譲る（M3 list-detail の compact）
-  const immersive = cls === "compact" && /^\/works\/[^/]+/.test(path);
+  const editorRoute = /^\/works\/[^/]+/.test(path);
+  const immersive = cls === "compact" && editorRoute;
   const account = (size: number, className?: string) => (
     <M3eIconButton
       slot="trailing"
@@ -123,7 +124,9 @@ function AppLayout() {
   );
 
   return (
-    <div className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""}`}>
+    <div
+      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${editorRoute ? "shell--editor" : ""}`}
+    >
       <div className="shell__nav">
         {modal ? (
           <div className="shell__scrim" onClick={() => setModalOpen(false)} aria-hidden="true" />
@@ -153,13 +156,19 @@ function AppLayout() {
         </M3eNavRail>
       </div>
       <div className="shell__main">
-        {immersive ? null : (
-          <M3eAppBar size="small" className="shell__appbar">
-            {/* 題名も検索も置かない（利用者判断）。通知は medium 以上だけ（compact は下部バーの「通知」）、アカウントは常に右上 */}
-            {cls === "compact" ? null : <NotificationsBell.Bell menuId="notif-menu" />}
-            {account(32, "shell__account")}
-          </M3eAppBar>
-        )}
+        {/* アプリバーは 1 本。画面ごとの見出し・戻る・操作は AppBarSlot で差し込む（M3 App bars）。全体の操作（通知・アカウント）は末尾 */}
+        <M3eAppBar size="small" className="shell__appbar">
+          <span slot="leading" id="appbar-leading" className="appbar-slot" />
+          <span slot="title" id="appbar-title" className="appbar-slot appbar-slot--title" />
+          <span
+            slot="subtitle"
+            id="appbar-subtitle"
+            className="appbar-slot appbar-slot--subtitle"
+          />
+          <span slot="trailing" id="appbar-actions" className="appbar-slot appbar-slot--actions" />
+          {cls === "compact" ? null : <NotificationsBell.Bell menuId="notif-menu" />}
+          {account(32, "shell__account")}
+        </M3eAppBar>
         {cls === "compact" ? (
           <NotificationsBell.Sheet open={notifOpen} onClose={() => setNotifOpen(false)} />
         ) : (

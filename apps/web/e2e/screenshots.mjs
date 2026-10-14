@@ -100,10 +100,10 @@ const pickUser = async (scope, name) => {
   await page.waitForTimeout(200);
 };
 
-/** 添付の切替（ヘッダーの m3e-select） */
+/** 添付の切替（下部ツールバーの添付ボタン → メニュー） */
 const pickArtifact = async (name) => {
-  await page.locator("m3e-select.ws__artifact").click();
-  await page.locator('m3e-option[role="option"][id]', { hasText: name }).last().click();
+  await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
+  await page.locator("#artifact-menu m3e-menu-item:visible", { hasText: name }).first().click();
   await page.waitForTimeout(400);
 };
 /** ビューア上でドラッグ（範囲指定）→ その場の投稿欄に本文を入れて投稿 */
@@ -135,9 +135,9 @@ const submitRevision = async (buttonText, files, summary, beforeStart) => {
 };
 /** レール上部のメニュー（展開レールの開閉） */
 const railToggle = page.locator('m3e-nav-rail m3e-icon-button[aria-label^="メニュー"]');
-/** エディタの引き出し（コメント／版／情報）を開く */
+/** エディタの引き出し（コメント／版／情報）を縦ツールバーから開く */
 const drawer = async (label) => {
-  const b = page.locator(`.ws__drawer-buttons m3e-icon-button[aria-label^="${label}"]`);
+  const b = page.locator(`.ws__side-toolbar m3e-icon-button[aria-label^="${label}"]`);
   if ((await b.getAttribute("selected")) === null) await b.click();
   await page.waitForSelector(".drawer__body");
   await page.waitForTimeout(300);
