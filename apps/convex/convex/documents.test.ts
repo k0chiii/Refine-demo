@@ -80,3 +80,44 @@ describe("Convex 統合: 文章の下書き", () => {
     ).rejects.toThrow(code("document_invalid"));
   });
 });
+
+describe("Convex 統合: エディタの入口", () => {
+  it("書ける担当の制作物だけが下書きの要約つきで出る。校正だけの人・関係ない人には出ない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const create = (title: string) =>
+      cast.manager.as.mutation(api.works.create, {
+        title,
+        purpose: "来場者向け",
+        category: "文章",
+        mediaType: "document",
+        year: 100,
+        creatorIds: [cast.creator.id],
+        approverId: cast.approver.id,
+        confidentiality: "restricted",
+      }) as Promise<Id<"works">>;
+    const a = await create("あいさつ文");
+    const b = await create("会場案内");
+    await cast.admin.as.mutation(api.acl.grant, {
+      workId: a,
+      principalType: "user",
+      principalId: cast.reviewer.id,
+      permission: "review",
+    });
+    await cast.creator.as.mutation(api.documents.save, {
+      workId: b,
+      title: "会場案内の文案",
+      content: doc("本郷キャンパス"),
+      text: "本郷キャンパス",
+      baseVersion: 0,
+    });
+
+    const mine = await cast.creator.as.query(api.documents.writable, {});
+    expect(mine.map((w) => w.title)).toEqual(["会場案内", "あいさつ文"]);
+    expect(mine[0]!.draft).toMatchObject({ title: "会場案内の文案", chars: 7 });
+    expect(mine[0]!.draft?.updatedBy?.id).toBe(cast.creator.id);
+    expect(mine[0]).not.toHaveProperty("draft.content");
+    expect(await cast.reviewer.as.query(api.documents.writable, {})).toEqual([]);
+    expect(await cast.stranger.as.query(api.documents.writable, {})).toEqual([]);
+  });
+});

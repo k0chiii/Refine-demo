@@ -614,6 +614,24 @@ async function main() {
     { timeout: 15_000 },
   );
   await shot("39-write-editor");
+  // 39a サイドレールの「エディタ」: 書ける担当の制作物を選ぶ（最近書いた下書きが上）→ 選ぶとエディタへ
+  await page.locator('m3e-nav-item[data-to="/write"]').first().click();
+  await page.waitForURL(/\/write$/);
+  await page.waitForSelector(".write-picker m3e-list-action");
+  const firstPick = await page.locator(".write-picker m3e-list-action").first().innerText();
+  expectTrue(
+    firstPick.includes("公式サイト トップページ") && firstPick.includes("下書き"),
+    `エディタの入口: 最近書いた下書きが上に出ない（${firstPick}）`,
+  );
+  await shot("39a-write-picker");
+  await page.locator(".write-picker m3e-list-action").first().click();
+  await page.waitForSelector(".doc[contenteditable=true]");
+  expectTrue(
+    await page.evaluate(
+      () => document.querySelector('m3e-nav-item[data-to="/write"]')?.selected === true,
+    ),
+    "エディタを開いているのにレールの「エディタ」が選択されていない",
+  );
   // 40 段落スタイル（メニューは各スタイルの見た目で並ぶ。ショートカットも表示）
   await page.locator("#wt-style").click();
   await page.waitForTimeout(500);

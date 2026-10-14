@@ -30,6 +30,11 @@
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
+      "name": "エディタ",
+      "url": "/write",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "制作物",
       "url": "/works",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]

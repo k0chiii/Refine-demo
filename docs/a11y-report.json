@@ -202,6 +202,10 @@
     "violations": []
   },
   {
+    "screen": "39a-write-picker",
+    "violations": []
+  },
+  {
     "screen": "40-write-style-menu",
     "violations": []
   },

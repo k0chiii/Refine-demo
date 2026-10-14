@@ -76,11 +76,20 @@ function AppLayout() {
   const items = [
     { to: "/", icon: "space_dashboard", label: "ダッシュボード" },
     { to: "/works", icon: "folder", label: "制作物" },
+    { to: "/write", icon: "edit_document", label: "エディタ" },
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
     ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
   ];
+  // 文章・投稿のエディタ（/works/:id/write・/post）を開いているあいだは「エディタ」を選択中にする
+  const writing = /^\/works\/[^/]+\/(write|post)$/.test(path);
   const selected = (to: string) =>
-    to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
+    to === "/"
+      ? path === "/"
+      : to === "/write"
+        ? path === "/write" || writing
+        : to === "/works"
+          ? !writing && (path === to || path.startsWith(`${to}/`))
+          : path === to || path.startsWith(`${to}/`);
   const navItems = (list = items) =>
     list.map((it) => (
       <Link key={it.to} to={it.to} className="nav-link">

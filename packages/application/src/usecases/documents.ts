@@ -5,6 +5,7 @@ import {
   isAllowed,
   nextDraft,
   type Principal,
+  type Work,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
@@ -50,4 +51,54 @@ export async function saveDocumentDraft(
   if (current) await ctx.documents.update({ ...next, id: current.id });
   else await ctx.documents.insert(next);
   return { version: next.version, updatedAt: next.updatedAt };
+}
+
+export interface WritableWork {
+  workId: string;
+  title: string;
+  mediaType: Work["mediaType"];
+  category: string;
+  deadlineAt: number | null;
+  /** 下書き（まだ無ければ null）。本文そのものは返さない */
+  draft: { title: string; chars: number; updatedAt: number; updatedBy: string } | null;
+}
+
+/**
+ * エディタの入口（サイドレールの「エディタ」）: 自分の担当で、いま書ける制作物。
+ * 書けるのは版を提出できる人（制作者・主管担当など）で、制作物が進行中のものだけ（getDocumentDraft の canEdit と同じ判定）。
+ * 並びは、最近書いた下書きが上、次に締切の近い順、最後に名前順。
+ */
+export async function listWritableWorks(
+  ctx: AppContext,
+  principal: Principal,
+  works: readonly Work[],
+): Promise<WritableWork[]> {
+  const out: WritableWork[] = [];
+  for (const work of works) {
+    if (work.lifecycle !== "active") continue;
+    const grants = await ctx.acl.listByWork(work.id);
+    if (!isAllowed("revision.submit", { work, grants, principal })) continue;
+    const draft = await ctx.documents.findByWork(work.id);
+    out.push({
+      workId: work.id,
+      title: work.title,
+      mediaType: work.mediaType,
+      category: work.category,
+      deadlineAt: work.deadlineAt ?? null,
+      draft: draft
+        ? {
+            title: draft.title,
+            chars: Array.from(draft.text.replace(/\s/g, "")).length,
+            updatedAt: draft.updatedAt,
+            updatedBy: draft.updatedBy,
+          }
+        : null,
+    });
+  }
+  return out.sort(
+    (a, b) =>
+      (b.draft?.updatedAt ?? 0) - (a.draft?.updatedAt ?? 0) ||
+      (a.deadlineAt ?? Infinity) - (b.deadlineAt ?? Infinity) ||
+      a.title.localeCompare(b.title, "ja"),
+  );
 }

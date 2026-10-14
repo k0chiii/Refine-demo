@@ -2855,3 +2855,8 @@ m3e-icon.icon--on {
 .prop-table tr + tr > * {
   border-top: 1px solid var(--mf-outline-variant);
 }
+
+/* エディタの入口（書く制作物を選ぶ） */
+.write-picker__lead {
+  margin: 0 0 8px;
+}

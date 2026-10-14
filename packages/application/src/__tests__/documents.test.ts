@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
-import { getDocumentDraft, saveDocumentDraft } from "../usecases/documents.ts";
+import { getDocumentDraft, listWritableWorks, saveDocumentDraft } from "../usecases/documents.ts";
 import { changeWorkLifecycle } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork } from "../testing/scenario.ts";
@@ -111,5 +111,46 @@ describe("SNS 投稿の下書き", () => {
         baseVersion: 1,
       }),
     ).rejects.toEqual(code("document_invalid"));
+  });
+});
+
+describe("エディタの入口（書ける担当の制作物）", () => {
+  it("版を提出できる人の、進行中の制作物だけ。最近書いた下書きが上", async () => {
+    const ctx = createInMemoryContext();
+    const a = await seedWork(ctx, { title: "A パンフレット" });
+    const b = await seedWork(ctx, { title: "B ポスター" });
+    const c = await seedWork(ctx, { title: "C 保留中" });
+    await changeWorkLifecycle(ctx, principals.manager, { workId: c.id, to: "on_hold" });
+    await saveDocumentDraft(ctx, principals.creator, {
+      workId: b.id,
+      title: "ポスター文案",
+      content: doc("五 月 祭"),
+      text: "五 月 祭",
+      baseVersion: 0,
+    });
+    const works = await Promise.all([a, b, c].map((w) => ctx.works.findById(w.id)));
+    const list = await listWritableWorks(
+      ctx,
+      principals.creator,
+      works.filter((w) => w !== null),
+    );
+    expect(list.map((w) => w.title)).toEqual(["B ポスター", "A パンフレット"]);
+    expect(list[0]!.draft).toMatchObject({ title: "ポスター文案", chars: 3 });
+    expect(list[1]!.draft).toBeNull();
+
+    // 校正の権限だけの人には出ない
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: a.id,
+      principalType: "user",
+      principalId: principals.reviewer.userId,
+      permission: "review",
+    });
+    expect(
+      await listWritableWorks(
+        ctx,
+        principals.reviewer,
+        works.filter((w) => w !== null),
+      ),
+    ).toEqual([]);
   });
 });
