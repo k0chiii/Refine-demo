@@ -5,7 +5,11 @@ import {
   type NormalizedRect,
   type Viewport,
 } from "@mf100/domain";
-import { useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+
+/** タッチで範囲選択を始めるまでの長押しの時間と、長押しとみなす指のぶれの上限 */
+export const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP = 10;
 
 export interface OverlayThread {
   id: string;
@@ -28,6 +32,9 @@ interface Props {
 
 /**
  * PDF / 画像の上に重ねる SVG レイヤー。保存値は常に正規化座標で、表示倍率・回転は Viewport で吸収する（A-03）。
+ * - マウス・ペン: ドラッグで範囲、クリックでピン（従来どおり）
+ * - タッチ: なぞるとふつうにスクロールする。**長押しすると選択が始まり**、そのまま指を動かすと範囲、離すとその場にピン。
+ *   長押しの前に指が動いたらスクロールとして扱い、選択は始めない。短いタップでは何も作らない（ピン・範囲を押すとそのスレッドを開く）
  */
 export function AnchorOverlay({
   viewport,
@@ -50,34 +57,104 @@ export function AnchorOverlay({
     };
   };
 
+  /** タッチの長押しの状態（armed になるまではスクロールに任せる） */
+  const press = useRef<{
+    id: number;
+    cx: number;
+    cy: number;
+    x: number;
+    y: number;
+    timer: number;
+    armed: boolean;
+  } | null>(null);
+  const clearPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  useEffect(() => clearPress, []);
+  // 長押しで選択が始まったら、指を動かしてもページがスクロールしないようにする（touchmove の既定動作を止める）
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (press.current?.armed) e.preventDefault();
+    };
+    svg.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => svg.removeEventListener("touchmove", onTouchMove);
+  }, []);
+
+  const finish = (d: { x0: number; y0: number; x1: number; y1: number }) => {
+    const w = Math.abs(d.x1 - d.x0);
+    const h = Math.abs(d.y1 - d.y0);
+    if (w < 6 && h < 6) {
+      const n = fromViewportRect({ x: d.x0, y: d.y0, w: 1, h: 1 }, viewport);
+      onDraft({ point: { x: n.x, y: n.y } });
+    } else {
+      onDraft({
+        rect: fromViewportRect(
+          { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w, h },
+          viewport,
+        ),
+      });
+    }
+  };
+
   const onPointerDown = (e: PointerEvent<SVGSVGElement>) => {
     if (!selecting || e.button !== 0) return;
     // 既存のピン・範囲の上では選択を始めない（クリックはそのスレッドを開く）
     if ((e.target as Element).closest("[data-anchor]")) return;
     const p = toLocal(e);
+    if (e.pointerType === "touch") {
+      clearPress();
+      const id = e.pointerId;
+      press.current = {
+        id,
+        cx: e.clientX,
+        cy: e.clientY,
+        ...p,
+        armed: false,
+        timer: window.setTimeout(() => {
+          const cur = press.current;
+          if (!cur || cur.id !== id) return;
+          cur.armed = true;
+          try {
+            svgRef.current?.setPointerCapture(id);
+          } catch {
+            // 指がもう離れている
+          }
+          navigator.vibrate?.(10);
+          setDrag({ x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y });
+        }, LONG_PRESS_MS),
+      };
+      return;
+    }
     setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
     svgRef.current?.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: PointerEvent<SVGSVGElement>) => {
+    const cur = press.current;
+    if (cur && cur.id === e.pointerId && !cur.armed) {
+      // 長押しの前に動いた → スクロール
+      if (Math.hypot(e.clientX - cur.cx, e.clientY - cur.cy) > LONG_PRESS_SLOP) clearPress();
+      return;
+    }
     if (!drag) return;
     const p = toLocal(e);
     setDrag({ ...drag, x1: p.x, y1: p.y });
   };
-  const onPointerUp = () => {
-    if (!drag) return;
-    const w = Math.abs(drag.x1 - drag.x0);
-    const h = Math.abs(drag.y1 - drag.y0);
-    if (w < 6 && h < 6) {
-      const n = fromViewportRect({ x: drag.x0, y: drag.y0, w: 1, h: 1 }, viewport);
-      onDraft({ point: { x: n.x, y: n.y } });
-    } else {
-      onDraft({
-        rect: fromViewportRect(
-          { x: Math.min(drag.x0, drag.x1), y: Math.min(drag.y0, drag.y1), w, h },
-          viewport,
-        ),
-      });
+  const onPointerUp = (e: PointerEvent<SVGSVGElement>) => {
+    const cur = press.current;
+    if (cur && cur.id === e.pointerId) {
+      const armed = cur.armed;
+      clearPress();
+      if (!armed) return; // 短いタップ: 何も作らない
     }
+    if (!drag) return;
+    finish(drag);
+    setDrag(null);
+  };
+  const onPointerCancel = () => {
+    clearPress();
     setDrag(null);
   };
 
@@ -95,6 +172,9 @@ export function AnchorOverlay({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      // 長押しで出るブラウザのメニュー（画像の保存など）を出さない
+      onContextMenu={selecting ? (e) => e.preventDefault() : undefined}
     >
       {visible.map((t) => {
         const a = t.anchor;

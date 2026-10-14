@@ -282,6 +282,10 @@
     "violations": []
   },
   {
+    "screen": "26a-mobile-long-press",
+    "violations": []
+  },
+  {
     "screen": "56-sns-editor",
     "violations": []
   },

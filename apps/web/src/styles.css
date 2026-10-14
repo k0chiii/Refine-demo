@@ -68,6 +68,13 @@
 * {
   box-sizing: border-box;
 }
+/*
+ * 縦のバウンス（iOS のラバーバンド・Android の引っ張り）とスクロールの連鎖を止める（利用者指示 2026-10-14）。
+ * :where で詳細度を 0 にし、個別に許したい所は上書きできるようにする。横は戻る操作のジェスチャーがあるので触らない
+ */
+:where(html, body, *) {
+  overscroll-behavior-y: none;
+}
 html,
 body,
 #root,
@@ -1202,7 +1209,11 @@ m3e-dialog [slot="actions"] {
 .viewer__overlay {
   position: absolute;
   inset: 0;
-  touch-action: none;
+  /* タッチはスクロールに任せ、長押ししてから範囲選択（AnchorOverlay）。マウスは従来どおりドラッグで選ぶ */
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .anchor-rect {
   fill: color-mix(in srgb, var(--mf-primary) 14%, transparent);
@@ -1254,6 +1265,12 @@ m3e-dialog [slot="actions"] {
   transform: translateX(-50%);
   max-width: calc(100% - 32px);
   z-index: 20;
+  /* 狭い幅で項目が入りきらないとき（compact の版比較など）は、はみ出さずに横へスクロール */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ws__toolbar::-webkit-scrollbar {
+  display: none;
 }
 .ws__toolbar-text {
   position: relative; /* m3e-toolbar の面（elevated）が位置指定のない子の上に描かれて文字が隠れるのを防ぐ */
@@ -1525,7 +1542,7 @@ m3e-dialog [slot="actions"] {
 .compose-pop {
   position: absolute;
   width: 300px;
-  z-index: 6;
+  z-index: 25; /* 書いているあいだはビューアの浮遊ツールバー（20）より手前 */
   background: var(--mf-surface-container-lowest);
   border-radius: var(--mf-shape-md);
   box-shadow:

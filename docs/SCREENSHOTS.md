@@ -36,6 +36,7 @@
 | 24  | エディタのレイアウト「ピンだけ」（Figma 式）                                      | 校正者         | `24-layout-pins`             |
 | 25  | 版の比較（引き出し「版」の「比較」。新しい版が右、ページ・倍率を共有）            | 制作者         | `25-compare`                 |
 | 26  | compact: エディタ（独自のトップアプリバー、紙面は幅に合わせ、覗き見のシート）     | 校正者         | `26-mobile-workspace`        |
+| 26a | compact: 長押ししてなぞると範囲が選べ、その場に投稿欄（なぞるだけならスクロール） | 校正者         | `26a-mobile-long-press`      |
 | 27  | ダッシュボード「あなたの担当 › 返事をする」                                       | 制作者         | `27-dashboard-creator`       |
 | 28  | エディタの引き出し「版」: 履歴・開く・比較・提出・無効化                          | 制作者         | `28-versions`                |
 | 29  | large（1200 以上）: 標準の展開レール（メニューで開閉、状態を保存）                | 校正者         | `29-rail-expanded`           |
@@ -75,7 +76,7 @@
 | 59  | 校了した SNS 投稿の書き出し（本文のコピー・画像・ZIP）                            | 校了権限者     | `59-sns-export`              |
 | 60  | compact: 表記ルール（下部バーに「表記ルール」）                                   | 校了権限者     | `60-notation-compact`        |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（66 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（67 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 

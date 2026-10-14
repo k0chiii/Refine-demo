@@ -882,6 +882,55 @@ async function v2Scenes() {
   );
   await page.waitForTimeout(800);
   await shot("55-compare-pdf");
+  // 26a タッチ（compact・受付中の版）: なぞるだけではコメントを作らない（スクロール）。長押ししてからなぞると範囲が選べ、投稿欄が出る
+  const posterV2 = new URL(page.url()).pathname;
+  await page.setViewportSize({ width: 412, height: 915 });
+  await go(posterV2);
+  await pdfReady();
+  await page.waitForTimeout(800);
+  const touchOn = (type, x, y) =>
+    page.evaluate(
+      ([type, x, y]) => {
+        // 比較表示なら右（新しい版）の層。コメントできるのは表示中の版だけ
+        const svg = [...document.querySelectorAll(".viewer__overlay")].at(-1);
+        svg.scrollIntoView({ block: "center" });
+        const r = svg.getBoundingClientRect();
+        svg.dispatchEvent(
+          new PointerEvent(type, {
+            pointerType: "touch",
+            pointerId: 7,
+            isPrimary: true,
+            button: 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            clientX: r.left + x,
+            clientY: r.top + y,
+            bubbles: true,
+          }),
+        );
+      },
+      [type, x, y],
+    );
+  await touchOn("pointerdown", 80, 120);
+  await touchOn("pointermove", 80, 60);
+  await touchOn("pointerup", 80, 60);
+  await page.waitForTimeout(700);
+  expectTrue((await page.locator(".compose-pop").count()) === 0, "なぞっただけで投稿欄が出た");
+  await touchOn("pointerdown", 60, 120);
+  await page.waitForTimeout(650); // 長押し（450ms）
+  await touchOn("pointermove", 140, 170);
+  await touchOn("pointermove", 220, 230);
+  await touchOn("pointerup", 220, 230);
+  await page.waitForSelector(".compose-pop", { timeout: 5000 });
+  expectTrue(
+    (await page.locator(".viewer__overlay .anchor-draft").count()) > 0,
+    "長押しで範囲が描かれない",
+  );
+  await page.waitForTimeout(300);
+  await shot("26a-mobile-long-press");
+  await page.locator('.compose-pop m3e-icon-button[aria-label="取消"]').click();
+  await page.waitForTimeout(300);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(400);
   void poster;
 
   // 56–59 SNS 投稿: 編集とプレビュー → 提出 → 校正画面のプレビュー → 校了版の書き出し

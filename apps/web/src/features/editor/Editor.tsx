@@ -180,6 +180,8 @@ export function Editor({
 
   // M3 の compact/medium（839 以下）: 補助ペインは置けないので引き出しはボトムシート
   const mobile = useMedia("(max-width: 839px)");
+  /** 指で操作する端末（長押しで範囲選択。AnchorOverlay） */
+  const touch = useMedia("(pointer: coarse)");
   // compact（<600）: 共通バーは無く、エディタ自身のトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
   const compact = useWindowClass() === "compact";
   const [layoutPref, setLayoutPref] = useState<Layout>(readLayout);
@@ -891,7 +893,9 @@ export function Editor({
         ) : threads.length === 0 ? (
           <p className="muted small comments__empty">
             {canComment
-              ? "ファイルの上でドラッグすると、その場にコメントできます。"
+              ? touch
+                ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます。"
+                : "ファイルの上でドラッグすると、その場にコメントできます。"
               : "コメントはありません。"}
           </p>
         ) : (
@@ -1059,6 +1063,8 @@ export function Editor({
               shape="rounded"
               elevated
               aria-label="ビューアの操作"
+              // 狭い幅では横にスクロールする領域になるので、キーボードでも辿れるようにする
+              tabIndex={0}
             >
               {isPdf ? (
                 <>
