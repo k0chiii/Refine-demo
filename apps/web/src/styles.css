@@ -917,24 +917,10 @@ m3e-dialog [slot="actions"] {
 .ml {
   margin-inline-start: 8px;
 }
-.details > summary {
-  cursor: pointer;
-  font: var(--mf-type-label-large);
-  color: var(--mf-primary);
-  padding: 8px 0;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.details > summary::before {
-  content: "chevron_right";
-  font-family: "Material Symbols Outlined";
-  font-size: 20px;
-  transition: transform var(--mf-motion);
-}
-.details[open] > summary::before {
-  transform: rotate(90deg);
+/* 折りたたみは M3E expansion panel。背景はペインに溶け込ませる */
+.expansion {
+  --m3e-expansion-panel-container-color: transparent;
+  --m3e-expansion-panel-elevation: 0;
 }
 
 /* アカウント（右上）: Humation アバター */
@@ -1587,18 +1573,7 @@ m3e-dialog [slot="actions"] {
   color: var(--mf-on-surface-variant);
 }
 .thread__reply-open {
-  font: var(--mf-type-body-medium);
-  font-family: var(--mf-font);
-  text-align: start;
-  color: var(--mf-on-surface-variant);
-  background: transparent;
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: 999px;
-  padding: 8px 12px;
-  cursor: text;
-}
-.thread__reply-open:hover {
-  background: var(--mf-surface-container);
+  align-self: flex-start;
 }
 .thread__form {
   display: grid;
@@ -2565,18 +2540,10 @@ m3e-icon.icon--on {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
-.rule-editor__exceptions {
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: var(--mf-shape-md);
-  padding: 8px 12px;
+.rule-editor__exceptions .card__content {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.rule-editor__exceptions legend,
-.category-picker__legend {
-  font: var(--mf-type-label-large);
-  padding: 0 4px;
 }
 .rule-editor__exception {
   display: grid;
@@ -2593,13 +2560,6 @@ m3e-icon.icon--on {
 .mono textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.rule-history__list {
-  margin: 8px 0 0;
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .policy-notes {
   white-space: pre-wrap;
   font-family: inherit;
@@ -2610,12 +2570,7 @@ m3e-icon.icon--on {
   max-height: 200px;
   overflow: auto;
 }
-.category-picker {
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: var(--mf-shape-md);
-  padding: 8px 12px 4px;
-  margin: 0;
-}
+
 .category-picker__list {
   display: flex;
   flex-wrap: wrap;
@@ -2625,20 +2580,9 @@ m3e-icon.icon--on {
   margin: 4px 0;
 }
 .proposal-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.proposal {
-  padding: 12px 16px;
-  border-radius: var(--mf-shape-md);
-  background: var(--mf-surface-container-low);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 .proposal__head {
   display: flex;
@@ -2646,55 +2590,13 @@ m3e-icon.icon--on {
   gap: 8px;
   flex-wrap: wrap;
 }
-.proposal__kind {
-  font: var(--mf-type-label-medium);
-  padding: 2px 8px;
-  border-radius: var(--mf-shape-full, 999px);
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-}
-.proposal__correct {
-  font-weight: 600;
-}
-.proposal__wrong {
-  color: var(--mf-on-surface-variant);
-  margin-left: 4px;
-}
 .proposal__quote {
   margin: 0;
   padding-left: 8px;
   border-left: 3px solid var(--mf-outline-variant);
 }
-.import-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  font: var(--mf-type-label-large);
-}
 .warn-text {
   color: var(--mf-tertiary);
-}
-.file-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: var(--mf-shape-full, 999px);
-  border: 1px solid var(--mf-outline);
-  color: var(--mf-primary);
-  font: var(--mf-type-label-large);
-  cursor: pointer;
-}
-.file-button input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-.file-button:focus-within {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: 2px;
 }
 .field--narrow {
   max-width: 220px;
@@ -2704,36 +2606,12 @@ m3e-icon.icon--on {
   padding-top: 4px;
   padding-bottom: 4px;
 }
-.finding-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.finding {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-  padding: 8px 12px;
-  border-radius: var(--mf-shape-sm);
-  border-left: 3px solid var(--mf-error);
-  background: var(--mf-surface-container-low);
-}
-.finding--review {
-  border-left-color: var(--mf-tertiary);
-}
 .finding__orig {
   text-decoration: line-through;
   text-decoration-color: var(--mf-error);
 }
 .finding__sugg {
   font-weight: 600;
-}
-.finding__meta {
-  flex-basis: 100%;
 }
 /* フォームの先頭の浮きラベルがダイアログ本文のスクロール境界で切れないように */
 .dialog-body > .rule-editor {
@@ -2748,23 +2626,71 @@ m3e-icon.icon--on {
 .notation-hit--review {
   text-decoration: underline dotted var(--mf-tertiary);
 }
-.finding__jump {
-  all: unset;
-  cursor: pointer;
-  border-radius: var(--mf-shape-xs);
-}
-.finding__jump:focus-visible {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: 2px;
-}
-.finding__actions {
-  margin-left: auto;
-  display: inline-flex;
-  gap: 0;
-}
 .notation-panel__undo {
   justify-content: space-between;
 }
 .panel-pad {
   padding: 12px 16px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* M3E の部品の最小限の調整（並べ方だけ。見た目は M3E に任せる） */
+.proposal__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.proposal__content p {
+  margin: 0 0 4px;
+}
+.proposal__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.finding__icon {
+  color: var(--mf-error);
+}
+.finding--review .finding__icon {
+  color: var(--mf-tertiary);
+}
+.finding__actions {
+  display: inline-flex;
+}
+.chip--error {
+  --m3e-chip-label-text-color: var(--mf-error);
+}
+.pane-tabs__badge {
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+.thread__bot {
+  --m3e-avatar-size: 28px;
+  flex: none;
+}
+.thread__bot-chips {
+  display: inline-flex;
+}
+.auto-status {
+  padding: 4px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.auto-status__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.auto-status__icon {
+  color: var(--mf-primary);
 }

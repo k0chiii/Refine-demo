@@ -13,7 +13,16 @@ import { useEffect, useState } from "react";
 import { formatJst } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon, M3eIconButton, M3eSnackbar } from "@/ui/m3e";
+import {
+  M3eButton,
+  M3eIcon,
+  M3eIconButton,
+  M3eSnackbar,
+  M3eExpansionPanel,
+  M3eList,
+  M3eListItem,
+} from "@/ui/m3e";
+import { Card } from "@/ui/Card";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 type Rule = Book["rules"][number];
@@ -224,8 +233,7 @@ export function RuleEditor({
           onChange={(e) => set("description", e.target.value)}
         />
       </Field>
-      <fieldset className="rule-editor__exceptions">
-        <legend>例外</legend>
+      <Card title="例外" className="rule-editor__exceptions">
         {d.exceptions.map((ex, i) => (
           <div key={i} className="rule-editor__exception">
             <Select
@@ -288,10 +296,10 @@ export function RuleEditor({
           <M3eIcon slot="icon" name="add" />
           例外を追加
         </M3eButton>
-      </fieldset>
-      <details className="details">
-        <summary>適用範囲・年度・厳格さ・言語</summary>
-        <div className="rule-editor__grid" style={{ marginTop: 12 }}>
+      </Card>
+      <M3eExpansionPanel className="expansion">
+        <span slot="header">適用範囲・年度・厳格さ・言語</span>
+        <div className="rule-editor__grid">
           <Field label="厳格さ">
             <Select
               value={d.strictness}
@@ -348,16 +356,14 @@ export function RuleEditor({
             }
           />
         </Field>
-      </details>
+      </M3eExpansionPanel>
       <Field label={canEdit || onDecide ? "変更の理由（履歴に残ります）" : "提案の理由"}>
         <TextInput value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
       {errors.length ? (
-        <ul className="error-text small">
-          {errors.map((e) => (
-            <li key={e}>{e}</li>
-          ))}
-        </ul>
+        <p className="error-text small" role="alert">
+          {errors.join("／")}
+        </p>
       ) : null}
       <div className="row">
         {rule && canEdit && !onDecide ? (
@@ -404,20 +410,22 @@ function RuleHistory({ ruleId }: { ruleId: string }) {
   const hist = useQuery(api.notation.ruleHistory, { ruleId });
   if (!hist?.length) return null;
   return (
-    <details className="details rule-history">
-      <summary>変更履歴（{hist.length}）</summary>
-      <ol className="rule-history__list">
+    <M3eExpansionPanel className="expansion rule-history">
+      <span slot="header">変更履歴（{hist.length}）</span>
+      <M3eList aria-label="変更履歴">
         {hist.map((h) => (
-          <li key={h.revision}>
-            <b>版 {h.revision}</b>・{opLabel[h.operation] ?? h.operation}・{h.actor.name}・
-            {formatJst(h.at)}
-            <div className="small muted">
-              {h.rule.correct[0]} ← {[...h.rule.incorrect, ...h.rule.patterns].join(" / ")}
-              {h.reason ? `（${h.reason}）` : ""}
-            </div>
-          </li>
+          <M3eListItem key={h.revision}>
+            <span slot="overline">
+              版 {h.revision}・{opLabel[h.operation] ?? h.operation}
+            </span>
+            {h.rule.correct[0]} ← {[...h.rule.incorrect, ...h.rule.patterns].join(" / ")}
+            <span slot="supporting-text">
+              {h.actor.name}・{formatJst(h.at)}
+              {h.reason ? `・${h.reason}` : ""}
+            </span>
+          </M3eListItem>
         ))}
-      </ol>
-    </details>
+      </M3eList>
+    </M3eExpansionPanel>
   );
 }

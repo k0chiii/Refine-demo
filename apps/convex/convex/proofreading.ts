@@ -33,7 +33,12 @@ export const claim = mutation({
 });
 
 export const submit = mutation({
-  args: { runId: v.string(), artifactId: v.string(), segments: v.array(vProofreadSegment) },
+  args: {
+    runId: v.string(),
+    artifactId: v.string(),
+    segments: v.array(vProofreadSegment),
+    partial: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() => submitProofreadSegments(createAppContext(ctx.db), principal, args));

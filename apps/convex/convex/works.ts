@@ -120,6 +120,7 @@ export const get = query({
         ...approvals.map((a) => a.actorId),
       ]);
       const openCounts = new Map<string, number>();
+      const openBotCounts = new Map<string, number>();
       const pendingChecks = new Map<string, string[]>();
       for (const r of revisions) {
         pendingChecks.set(
@@ -129,6 +130,15 @@ export const get = query({
             .map((c) => c.label),
         );
         const threads = await app.threads.listByRevision(r.id);
+        // 自動校正の未確認（校了時に確認メモを求める。校了は止めない）
+        openBotCounts.set(
+          r.id,
+          threads.filter(
+            (t) =>
+              t.origin?.kind === "bot" &&
+              (t.resolution === "open" || t.resolution === "acknowledged"),
+          ).length,
+        );
         openCounts.set(
           r.id,
           threads.filter(
@@ -151,6 +161,7 @@ export const get = query({
           label: revisionLabel(r),
           submitter: users.get(r.submittedBy),
           unresolvedCount: openCounts.get(r.id) ?? 0,
+          openBotCount: openBotCounts.get(r.id) ?? 0,
           pendingChecks: pendingChecks.get(r.id) ?? [],
         })),
         acceptingRevisionId: revisions.find(isAccepting)?.id ?? null,

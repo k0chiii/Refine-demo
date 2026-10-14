@@ -7,7 +7,7 @@ import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog } from "@/ui/m3e";
+import { M3eButton, M3eDialog, M3eExpansionPanel } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
 
@@ -118,9 +118,9 @@ export function EditWorkDialog({
           value={form.notationCategories}
           onChange={(codes) => setForm((f) => ({ ...f, notationCategories: codes }))}
         />
-        <details className="details">
-          <summary>詳細設定（旧ID・機密区分）</summary>
-          <div className="form" style={{ marginTop: 12 }}>
+        <M3eExpansionPanel className="expansion ">
+          <span slot="header">詳細設定（旧ID・機密区分）</span>
+          <div className="form">
             <Field label="旧ID（Notion 等）">
               <TextInput value={form.legacyId} onChange={set("legacyId")} />
             </Field>
@@ -131,7 +131,7 @@ export function EditWorkDialog({
               </Select>
             </Field>
           </div>
-        </details>
+        </M3eExpansionPanel>
         {error ? <div className="alert">{error.message}</div> : null}
       </div>
       <div slot="actions" className="row">

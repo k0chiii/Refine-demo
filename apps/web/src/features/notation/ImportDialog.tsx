@@ -7,10 +7,21 @@ import {
 } from "@mf100/domain";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eIcon, M3eSnackbar } from "@/ui/m3e";
+import {
+  M3eAccordion,
+  M3eButton,
+  M3eChip,
+  M3eChipSet,
+  M3eDialog,
+  M3eExpansionPanel,
+  M3eIcon,
+  M3eList,
+  M3eListItem,
+  M3eSnackbar,
+} from "@/ui/m3e";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 
@@ -37,6 +48,7 @@ export function ImportDialog({
   const [overwrite, setOverwrite] = useState(false);
   const [raw, setRaw] = useState<{ kind: "csv" | "json"; text: string } | null>(null);
   const existing: RuleDraft[] = book.rules;
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const build = (r: { kind: "csv" | "json"; text: string }, y: number) => {
     try {
@@ -121,15 +133,17 @@ export function ImportDialog({
           が正本なので、旧年度のルールには年度を付けて取り込み、MF100 に無条件では当てません。
         </p>
         <div className="row">
-          <label className="file-button">
-            <input
-              type="file"
-              accept=".csv,.json,text/csv,application/json"
-              onChange={(e) => void onFile(e.target.files?.[0])}
-            />
-            <M3eIcon name="upload_file" />
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            accept=".csv,.json,text/csv,application/json"
+            onChange={(e) => void onFile(e.target.files?.[0])}
+          />
+          <M3eButton variant="outlined" onClick={() => fileRef.current?.click()}>
+            <M3eIcon slot="icon" name="upload_file" />
             ファイルを選ぶ
-          </label>
+          </M3eButton>
           <span className="small">{fileName}</span>
           <span className="spacer" />
           <Field label="年度の指定が無い行の年度" className="field--narrow">
@@ -145,91 +159,95 @@ export function ImportDialog({
         </div>
         {preview ? (
           <>
-            <div className="import-summary">
-              <span>ルール {preview.rules.length}</span>
-              <span>
-                うち既存の ID {preview.rules.filter((r) => existingIds.has(r.ruleId)).length}
-              </span>
-              <span>説明行 {preview.notes.length}</span>
-              <span className={preview.warnings.length ? "warn-text" : ""}>
-                警告 {preview.warnings.length}
-              </span>
-              <span>重複 {preview.duplicates.length}</span>
-              <span className={preview.conflicts.length ? "error-text" : ""}>
+            <M3eChipSet aria-label="取り込みの内容" className="import-summary">
+              <M3eChip>ルール {preview.rules.length}</M3eChip>
+              <M3eChip>
+                既存の ID {preview.rules.filter((r) => existingIds.has(r.ruleId)).length}
+              </M3eChip>
+              <M3eChip>説明行 {preview.notes.length}</M3eChip>
+              <M3eChip>警告 {preview.warnings.length}</M3eChip>
+              <M3eChip>重複 {preview.duplicates.length}</M3eChip>
+              <M3eChip className={preview.conflicts.length ? "chip--error" : ""}>
                 矛盾 {preview.conflicts.length}
-              </span>
-            </div>
+              </M3eChip>
+            </M3eChipSet>
             {blocked.length ? (
               <div className="alert">
                 権限の無いカテゴリのルール {blocked.length} 件は取り込みません（
                 {Array.from(new Set(blocked.map((r) => r.categoryCode))).join("・")}）。
               </div>
             ) : null}
-            {preview.conflicts.length ? (
-              <details className="details" open>
-                <summary>矛盾（同じ誤表記に別の統一表記）</summary>
-                <ul className="small">
-                  {preview.conflicts.map((c) => (
-                    <li key={c.key}>
-                      {c.key.replace(/^\w+:/, "")} → {c.corrects.join(" / ")}（
-                      {c.ruleIds.join(", ")}）
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-            {preview.warnings.length ? (
-              <details className="details">
-                <summary>警告</summary>
-                <ul className="small">
-                  {preview.warnings.slice(0, 200).map((w, i) => (
-                    <li key={i}>
-                      {w.line ? `${w.line} 行目: ` : ""}
-                      {w.message}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-            {preview.notes.length ? (
-              <details className="details">
-                <summary>説明行（カテゴリの運用メモに入れます）</summary>
-                <ul className="small">
-                  {preview.notes.slice(0, 200).map((n, i) => (
-                    <li key={i}>
-                      [{n.categoryCode}] {n.text}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-            <div className="table-wrap" tabIndex={0}>
-              <table className="table table--dense">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>カテゴリ</th>
-                    <th>統一表記</th>
-                    <th>誤表記・正規表現</th>
-                    <th>年度</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.rules.slice(0, 300).map((r) => (
-                    <tr key={r.ruleId} className={existingIds.has(r.ruleId) ? "row--done" : ""}>
-                      <td className="small">{r.ruleId}</td>
-                      <td>{r.categoryCode}</td>
-                      <td>{r.correct.join(" / ")}</td>
-                      <td className="small">{[...r.incorrect, ...r.patterns].join(" / ")}</td>
-                      <td className="small">{r.years.join(", ") || "全"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {preview.rules.length > 300 ? (
-                <p className="small muted">ほか {preview.rules.length - 300} 件</p>
+            <M3eAccordion multi className="import-details">
+              {preview.conflicts.length ? (
+                <M3eExpansionPanel open>
+                  <span slot="header">
+                    矛盾（同じ誤表記に別の統一表記）{preview.conflicts.length}
+                  </span>
+                  <M3eList>
+                    {preview.conflicts.map((c) => (
+                      <M3eListItem key={c.key}>
+                        {c.key.replace(/^\w+:/, "")} → {c.corrects.join(" / ")}
+                        <span slot="supporting-text">{c.ruleIds.join(", ")}</span>
+                      </M3eListItem>
+                    ))}
+                  </M3eList>
+                </M3eExpansionPanel>
               ) : null}
-            </div>
+              {preview.warnings.length ? (
+                <M3eExpansionPanel>
+                  <span slot="header">警告 {preview.warnings.length}</span>
+                  <M3eList>
+                    {preview.warnings.slice(0, 200).map((w, i) => (
+                      <M3eListItem key={i}>
+                        {w.message}
+                        {w.line ? <span slot="supporting-text">{w.line} 行目</span> : null}
+                      </M3eListItem>
+                    ))}
+                  </M3eList>
+                </M3eExpansionPanel>
+              ) : null}
+              {preview.notes.length ? (
+                <M3eExpansionPanel>
+                  <span slot="header">
+                    説明行（カテゴリの運用メモに入れます）{preview.notes.length}
+                  </span>
+                  <M3eList>
+                    {preview.notes.slice(0, 200).map((n, i) => (
+                      <M3eListItem key={i}>
+                        {n.text}
+                        <span slot="supporting-text">
+                          {n.categoryCode}・{n.line} 行目
+                        </span>
+                      </M3eListItem>
+                    ))}
+                  </M3eList>
+                </M3eExpansionPanel>
+              ) : null}
+              <M3eExpansionPanel open>
+                <span slot="header">取り込むルール {preview.rules.length}</span>
+                <M3eList aria-label="取り込むルール">
+                  {preview.rules.slice(0, 300).map((r) => (
+                    <M3eListItem
+                      key={r.ruleId}
+                      className={existingIds.has(r.ruleId) ? "list__item--done" : ""}
+                    >
+                      <span slot="overline">
+                        {r.ruleId}・{r.categoryCode}・
+                        {r.years.length ? `MF${r.years.join(",")}` : "全年度"}
+                        {existingIds.has(r.ruleId) ? "・既存" : ""}
+                      </span>
+                      {r.correct.join(" / ")}
+                      <span slot="supporting-text">
+                        ← {[...r.incorrect, ...r.patterns].join(" / ")}
+                      </span>
+                    </M3eListItem>
+                  ))}
+                </M3eList>
+                {preview.rules.length > 300 ? (
+                  <p className="small muted">ほか {preview.rules.length - 300} 件</p>
+                ) : null}
+              </M3eExpansionPanel>
+            </M3eAccordion>
             <Checkbox
               checked={overwrite}
               onChange={setOverwrite}

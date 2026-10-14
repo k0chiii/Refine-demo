@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { Card } from "@/ui/Card";
 import { Field, Select, TextInput } from "@/ui/Field";
-import { M3eButton, M3eHeading } from "@/ui/m3e";
+import { M3eButton, M3eExpansionPanel, M3eHeading } from "@/ui/m3e";
 
 export const Route = createFileRoute("/signin")({ component: SignIn });
 
@@ -56,9 +56,9 @@ function SignIn() {
         </M3eButton>
         {error ? <div className="alert">{error}</div> : null}
         {showMock ? (
-          <details>
-            <summary className="small muted">モック委員でサインイン</summary>
-            <div className="stack" style={{ marginTop: 12 }}>
+          <M3eExpansionPanel className="expansion">
+            <span slot="header">モック委員でサインイン</span>
+            <div className="stack">
               <Field label="役割">
                 <Select value={mockSub} onChange={(e) => setMockSub(e.target.value)}>
                   {MOCK_USERS.map((u) => (
@@ -79,7 +79,7 @@ function SignIn() {
                 モックでサインイン
               </M3eButton>
             </div>
-          </details>
+          </M3eExpansionPanel>
         ) : null}
       </Card>
     </main>

@@ -16,7 +16,7 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { StatusText } from "@/ui/Chip";
-import { Field, Select, TextArea } from "@/ui/Field";
+import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 import type { WorkData } from "./VersionsTab";
@@ -49,6 +49,7 @@ export function InfoTab({
   const [assignOpen, setAssignOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState("");
+  const [autoNote, setAutoNote] = useState("");
   const [confirmer, setConfirmer] = useState<string[]>([]);
   const [reopenReason, setReopenReason] = useState("");
   const [reviewerIds, setReviewerIds] = useState<string[]>([]);
@@ -80,6 +81,7 @@ export function InfoTab({
       expectedVersion: w.version,
       ...(exceptionReason.trim() ? { exceptionReason: exceptionReason.trim() } : {}),
       ...(confirmer[0] ? { independentConfirmerId: confirmer[0] } : {}),
+      ...(autoNote.trim() ? { autoProofreadNote: autoNote.trim() } : {}),
     });
     setFinalizeOpen(false);
   });
@@ -383,6 +385,19 @@ export function InfoTab({
             <div className="alert--warn alert">
               <span>未対応の指摘が {blocking} 件あります。理由なしでは校了できません。</span>
             </div>
+          ) : null}
+          {candidate && candidate.openBotCount > 0 ? (
+            <>
+              <div className="alert--warn alert">
+                <span>
+                  自動校正の指摘が {candidate.openBotCount}{" "}
+                  件、まだ確認されていません。校了はできますが、件数とメモが校了の記録に残ります。
+                </span>
+              </div>
+              <Field label="自動校正についてのメモ（任意）">
+                <TextInput value={autoNote} onChange={(e) => setAutoNote(e.target.value)} />
+              </Field>
+            </>
           ) : null}
           <Field label="例外校了の理由（未解決を残す場合のみ）">
             <TextArea

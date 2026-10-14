@@ -137,7 +137,13 @@ const expectedSegment: Record<string, ProofreadSegment["kind"]> = {
 export async function submitProofreadSegments(
   ctx: AppContext,
   principal: Principal,
-  input: { runId: string; artifactId: string; segments: ProofreadSegment[] },
+  input: {
+    runId: string;
+    artifactId: string;
+    segments: ProofreadSegment[];
+    /** 大きな添付を分けて送るときの途中分（完了にしない） */
+    partial?: boolean;
+  },
 ): Promise<{ created: number; duplicates: number; truncated: boolean; skipped?: string }> {
   const { run, work, revision } = await loadForRun(ctx, principal, input.runId);
   const now = ctx.clock.now();
@@ -216,9 +222,28 @@ export async function submitProofreadSegments(
     created++;
   }
   const source: TextSource = kind === "text" ? "document" : kind === "page" ? "pdf_text" : "ocr";
+  // この添付の自動校正の指摘の数（分割送信・再試行でも数え直す）
+  const findings = (await ctx.threads.listByRevision(revision.id)).filter(
+    (t) => t.origin?.kind === "bot" && t.origin.runId === run.id && t.artifactId === artifact.id,
+  ).length;
+  if (input.partial) {
+    const fresh = (await ctx.proofreadingRuns.findById(run.id)) ?? run;
+    const artifacts = fresh.artifacts.map((x) =>
+      x.artifactId === artifact.id
+        ? { ...x, status: "running" as const, findings, source, leaseUntil: now + LEASE_MS }
+        : x,
+    );
+    await ctx.proofreadingRuns.update({
+      ...fresh,
+      artifacts,
+      status: runStatusOf(artifacts),
+      updatedAt: now,
+    });
+    return { created, duplicates, truncated };
+  }
   const res = await finish({
     status: "done",
-    findings: created + duplicates,
+    findings,
     source,
     ...(truncated ? { error: "長いため一部だけを検査しました" } : {}),
   });

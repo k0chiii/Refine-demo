@@ -1,6 +1,7 @@
 import { api } from "@mf100/convex/api";
 import { defaultRuleCategories, ruleSetPresets } from "@mf100/domain";
 import { useQuery } from "convex/react";
+import { Card } from "@/ui/Card";
 import { Checkbox } from "@/ui/Field";
 import { M3eFilterChip, M3eFilterChipSet } from "@/ui/m3e";
 
@@ -21,8 +22,7 @@ export function CategoryPicker({
   const parentsOf = (code: string) => categories.find((c) => c.code === code)?.parents ?? [];
   const inherited = new Set(value.flatMap(parentsOf).filter((p) => !value.includes(p)));
   return (
-    <fieldset className="category-picker">
-      <legend className="category-picker__legend">表記統一のカテゴリ</legend>
+    <Card title="表記統一のカテゴリ" className="category-picker">
       <M3eFilterChipSet aria-label="よく使う組み合わせ" className="category-picker__presets">
         {ruleSetPresets.map((p) => (
           <M3eFilterChip
@@ -54,6 +54,6 @@ export function CategoryPicker({
           ? "未選択のときは表記の検査をしません。"
           : "B・C・D は A1〜A3 の一般ルールも継承します。用途に近いカテゴリのルールが優先されます。"}
       </p>
-    </fieldset>
+    </Card>
   );
 }

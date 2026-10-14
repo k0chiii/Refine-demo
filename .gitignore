@@ -31,3 +31,4 @@ node_modules/.vite-plus/
 
 # pnpm dev がサービスごとに書くログ
 .logs/
+apps/web/public/ocr/

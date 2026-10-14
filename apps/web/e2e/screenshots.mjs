@@ -154,7 +154,7 @@ async function main() {
   // 01 サインイン
   await page.goto(`${BASE}/signin`);
   await ready();
-  await page.locator("summary").click();
+  await page.locator(`m3e-expansion-panel [slot="header"]`).first().click();
   await shot("01-signin");
 
   // 02 制作物（制作者）: 探して開くだけの一覧
@@ -209,7 +209,7 @@ async function main() {
       await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
       await page.waitForTimeout(300);
       // 専門確認: 写真（肖像・権利）を校正者に依頼
-      await page.locator("m3e-dialog[open] details.checks-details > summary").click();
+      await page.locator("m3e-dialog[open] m3e-expansion-panel.checks-details").click();
       await page.locator("m3e-checkbox#check-photo").click();
       await page.waitForSelector("m3e-dialog[open] .check:not(.check--done)");
       await pickUser(

@@ -1,12 +1,13 @@
 import { api } from "@mf100/convex/api";
-import { ruleStrictnessLabels, type Finding } from "@mf100/domain";
+import type { Finding } from "@mf100/domain";
 import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPlainText, offsetToPos } from "@/features/writing/plainText";
 import { setNotationMarks } from "@/features/writing/plugins";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { FindingList } from "./FindingList";
 import { useProofreader } from "./useProofreader";
 
 export interface PlacedFinding extends Finding {
@@ -211,41 +212,37 @@ export function NotationPanel({
       {check.findings.length === 0 && check.state === "ready" ? (
         <p className="small muted">表記の指摘はありません。</p>
       ) : (
-        <ul className="finding-list">
-          {check.findings.map((f) => (
-            <li
-              key={`${f.fingerprint}-${f.from}`}
-              className={`finding ${f.needsReview ? "finding--review" : ""}`}
-            >
-              <button
-                type="button"
-                className="finding__jump"
-                onClick={() => go(f)}
+        <FindingList
+          label="表記の指摘"
+          findings={check.findings}
+          actions={(f) => (
+            <>
+              <M3eIconButton
                 aria-label={`「${f.original}」へ移動`}
+                title="該当箇所へ移動"
+                onClick={() => go(f)}
               >
-                <span className="finding__orig">{f.original}</span>
-                <span aria-hidden="true"> → </span>
-                <span className="finding__sugg">{f.suggestion || "（要確認）"}</span>
-              </button>
-              <span className="finding__meta small muted">
-                {f.needsReview ? "要確認・" : `${ruleStrictnessLabels[f.strictness]}・`}
-                {f.reason || f.title}
-                {f.exceptionNote ? `（例外: ${f.exceptionNote}）` : ""}・{f.ruleId} 版{" "}
-                {f.ruleRevision}
-              </span>
-              <span className="finding__actions">
-                {!readOnly && f.suggestion ? (
-                  <M3eButton variant="text" onClick={() => fix(f)}>
-                    修正
-                  </M3eButton>
-                ) : null}
-                <M3eButton variant="text" onClick={() => check.ignore(f)}>
-                  無視
-                </M3eButton>
-              </span>
-            </li>
-          ))}
-        </ul>
+                <M3eIcon name="my_location" />
+              </M3eIconButton>
+              {!readOnly && f.suggestion ? (
+                <M3eIconButton
+                  aria-label={`「${f.suggestion}」に修正`}
+                  title="修正"
+                  onClick={() => fix(f)}
+                >
+                  <M3eIcon name="check" />
+                </M3eIconButton>
+              ) : null}
+              <M3eIconButton
+                aria-label="この指摘を無視"
+                title="無視（この画面を開いている間）"
+                onClick={() => check.ignore(f)}
+              >
+                <M3eIcon name="visibility_off" />
+              </M3eIconButton>
+            </>
+          )}
+        />
       )}
       <p className="small muted">検査はこの端末の中で行い、文章を外部に送りません。</p>
     </div>

@@ -25,6 +25,7 @@ import {
 import { documentExtensions, highlightColors, paragraphStyles, textColors } from "./extensions";
 import { buildPlainText, documentHtml } from "./plainText";
 import { NotationMarks, SearchReplace } from "./plugins";
+import { PaneTabs } from "@/ui/PaneTabs";
 import { NotationPanel, useNotationCheck } from "@/features/notation/NotationPanel";
 import { LinkDialog, ShortcutsDialog, WordCountDialog } from "./WriteDialogs";
 import { FindPanel, OutlinePanel, ReferencePanel, type ReferenceThread } from "./WritePanels";
@@ -423,26 +424,21 @@ function WriteSurface({
       />
     ) : null;
   const panelTabs = (current: Panel | null, onPick: (p: Panel) => void) => (
-    <div className="drawer__tabs" role="tablist" aria-label="補助ペイン">
-      {panels.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          role="tab"
-          aria-selected={current === p.id}
-          className={`drawer__tab ${current === p.id ? "drawer__tab--on" : ""}`}
-          onClick={() => onPick(p.id)}
-        >
-          {p.label}
-          {p.id === "refs" && refThreads && refThreads.length > 0 ? (
-            <span className="drawer__n">{refThreads.length}</span>
-          ) : null}
-          {p.id === "notation" && notation.findings.length > 0 ? (
-            <span className="drawer__n">{notation.findings.length}</span>
-          ) : null}
-        </button>
-      ))}
-    </div>
+    <PaneTabs
+      label="補助ペイン"
+      value={current ?? "outline"}
+      onChange={onPick}
+      items={panels.map((p) => ({
+        id: p.id,
+        label: p.label,
+        count:
+          p.id === "refs"
+            ? (refThreads?.length ?? 0)
+            : p.id === "notation"
+              ? notation.findings.length
+              : null,
+      }))}
+    />
   );
 
   return (

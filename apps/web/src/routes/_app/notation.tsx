@@ -10,6 +10,7 @@ import { draftOf, emptyDraft, RuleEditor } from "@/features/notation/RuleEditor"
 import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { PaneTabs } from "@/ui/PaneTabs";
 import { Select } from "@/ui/Field";
 import {
   M3eActionList,
@@ -102,28 +103,18 @@ function Notation() {
   return (
     <div className="notation">
       {title}
-      <div className="drawer__tabs notation__tabs" role="tablist" aria-label="表記ルール">
-        {(
-          [
-            ["rules", "ルール", book.rules.filter((r) => r.enabled).length],
-            ["proposals", "提案", openCount],
-            ["categories", "カテゴリ", null],
-            ["try", "試す", null],
-          ] as Array<[Tab, string, number | null]>
-        ).map(([id, label, n]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={`drawer__tab ${tab === id ? "drawer__tab--on" : ""}`}
-            onClick={() => setTab(id)}
-          >
-            {label}
-            {n ? <span className="drawer__n">{n}</span> : null}
-          </button>
-        ))}
-      </div>
+      <PaneTabs
+        label="表記ルール"
+        className="notation__tabs"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: "rules", label: "ルール" },
+          { id: "proposals", label: "提案", count: openCount },
+          { id: "categories", label: "カテゴリ" },
+          { id: "try", label: "試す" },
+        ]}
+      />
       {tab === "proposals" ? (
         <ProposalsPanel book={book} />
       ) : tab === "categories" ? (

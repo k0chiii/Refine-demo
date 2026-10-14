@@ -27,6 +27,8 @@
     "@mf100/convex": "workspace:*",
     "@mf100/domain": "workspace:*",
     "@tanstack/react-router": "1.170.42",
+    "@tesseract.js-data/jpn": "1.0.0",
+    "@tesseract.js-data/jpn_vert": "1.0.0",
     "@tiptap/core": "3.31.3",
     "@tiptap/extension-highlight": "3.31.3",
     "@tiptap/extension-list": "3.31.3",
@@ -44,7 +46,8 @@
     "lit": "3.3.3",
     "pdfjs-dist": "6.4.299",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "1.168.43",

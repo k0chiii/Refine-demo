@@ -8,9 +8,12 @@ import { useAction } from "@/lib/useAction";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
 import {
   M3eButton,
+  M3eCard,
+  M3eChip,
   M3eDialog,
   M3eFilterChip,
   M3eFilterChipSet,
+  M3eHeading,
   M3eIcon,
   M3eSnackbar,
 } from "@/ui/m3e";
@@ -94,54 +97,58 @@ export function ProposalsPanel({ book }: { book: Book }) {
           {status === "open" ? "未処理の提案はありません。" : "該当する提案はありません。"}
         </div>
       ) : (
-        <ul className="proposal-list">
+        <div className="proposal-list">
           {list.map((p) => (
-            <li key={p.id} className="proposal">
-              <div className="proposal__head">
+            <M3eCard key={p.id} variant="outlined" className="proposal">
+              <div slot="header" className="proposal__head">
                 {p.canDecide ? (
                   <Checkbox
                     checked={picked.includes(p.id)}
                     onChange={(on) =>
                       setPicked((xs) => (on ? [...xs, p.id] : xs.filter((x) => x !== p.id)))
                     }
-                    label={<span className="sr-only">選ぶ</span>}
+                    label={<span className="sr-only">「{p.title}」を選ぶ</span>}
                   />
                 ) : null}
-                <span className="proposal__kind">{kindLabel[p.kind]}</span>
-                <b>{p.categoryCode}</b>
-                <span className="proposal__title">{p.title}</span>
-                {p.ruleId ? <span className="small muted">（{p.ruleId}）</span> : null}
+                <M3eChip className="proposal__kind">{kindLabel[p.kind]}</M3eChip>
+                <M3eHeading variant="title" size="small" level={3} className="proposal__title">
+                  {p.categoryCode} {p.title}
+                  {p.ruleId ? <span className="small muted">（{p.ruleId}）</span> : null}
+                </M3eHeading>
               </div>
-              <div className="proposal__body">
-                {p.correct.length ? (
-                  <span className="proposal__correct">{p.correct.join(" / ")}</span>
+              <div slot="content" className="proposal__content">
+                {p.correct.length || p.incorrect.length || p.patterns.length ? (
+                  <p>
+                    {p.correct.length ? <b>{p.correct.join(" / ")}</b> : null}
+                    {p.incorrect.length || p.patterns.length ? (
+                      <span className="muted">
+                        {" "}
+                        ← {[...p.incorrect, ...p.patterns].join(" / ")}
+                      </span>
+                    ) : null}
+                  </p>
                 ) : null}
-                {p.incorrect.length || p.patterns.length ? (
-                  <span className="proposal__wrong">
-                    ← {[...p.incorrect, ...p.patterns].join(" / ")}
-                  </span>
+                {p.reason ? <p className="small">{p.reason}</p> : null}
+                {p.contextHidden ? (
+                  <p className="small muted">元の制作物を閲覧できないため、文脈は表示しません。</p>
+                ) : p.context.quote ? (
+                  <p className="small proposal__quote">
+                    「{p.context.quote}」
+                    {p.context.surrounding ? (
+                      <span className="muted"> — {p.context.surrounding}</span>
+                    ) : null}
+                  </p>
                 ) : null}
-              </div>
-              {p.reason ? <p className="small">{p.reason}</p> : null}
-              {p.contextHidden ? (
-                <p className="small muted">元の制作物を閲覧できないため、文脈は表示しません。</p>
-              ) : p.context.quote ? (
-                <blockquote className="proposal__quote small">
-                  「{p.context.quote}」
-                  {p.context.surrounding ? (
-                    <span className="muted">— {p.context.surrounding}</span>
-                  ) : null}
-                </blockquote>
-              ) : null}
-              <div className="small muted">
-                {p.proposer.name}・{formatJst(p.proposedAt)}
-                {p.supporters.length ? `・賛同 ${p.supporters.length}` : ""}
-                {p.decider ? `・${statusLabel[p.status]}: ${p.decider.name}` : ""}
-                {p.decisionNote ? `（${p.decisionNote}）` : ""}
-                {p.resultRuleId ? `・ルール ${p.resultRuleId} 版 ${p.resultRevision}` : ""}
+                <p className="small muted">
+                  {p.proposer.name}・{formatJst(p.proposedAt)}
+                  {p.supporters.length ? `・賛同 ${p.supporters.length}` : ""}
+                  {p.decider ? `・${statusLabel[p.status]}: ${p.decider.name}` : ""}
+                  {p.decisionNote ? `（${p.decisionNote}）` : ""}
+                  {p.resultRuleId ? `・ルール ${p.resultRuleId} 版 ${p.resultRevision}` : ""}
+                </p>
               </div>
               {p.canDecide ? (
-                <div className="row">
+                <div slot="actions" className="proposal__actions">
                   <M3eButton
                     variant="text"
                     disabled={one.pending}
@@ -162,9 +169,9 @@ export function ProposalsPanel({ book }: { book: Book }) {
                   </M3eButton>
                 </div>
               ) : null}
-            </li>
+            </M3eCard>
           ))}
-        </ul>
+        </div>
       )}
       <M3eDialog
         open={editing !== null}

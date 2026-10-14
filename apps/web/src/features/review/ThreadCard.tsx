@@ -10,8 +10,11 @@ import { resolutionLabel, severityLabel } from "@/lib/labels";
 import { StatusText } from "@/ui/Chip";
 import { TextArea } from "@/ui/Field";
 import {
+  M3eAvatar,
   M3eButton,
   M3eCard,
+  M3eChip,
+  M3eChipSet,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
@@ -110,7 +113,13 @@ export function ThreadCard({
       >
         <div slot="content" className="thread__content">
           <div className="thread__head">
-            <UserAvatar seed={t.author?.email ?? t.authorId} size={28} />
+            {t.origin ? (
+              <M3eAvatar className="thread__bot" aria-hidden="true">
+                <M3eIcon name="smart_toy" />
+              </M3eAvatar>
+            ) : (
+              <UserAvatar seed={t.author?.email ?? t.authorId} size={28} />
+            )}
             <div className="thread__who">
               <span className="thread__name">{t.author?.name}</span>
               <span className="thread__time">{formatJstShort(t.createdAt)}</span>
@@ -151,8 +160,19 @@ export function ThreadCard({
             <blockquote className="thread__quote">「{t.anchor.quote}」</blockquote>
           ) : null}
           <div className="thread__body">{t.body}</div>
-          {closed || t.severity === "critical" || t.carriedFromThreadId || t.assignee ? (
+          {closed ||
+          t.severity === "critical" ||
+          t.carriedFromThreadId ||
+          t.assignee ||
+          t.origin?.needsReview ||
+          t.origin?.textSource === "ocr" ? (
             <div className="thread__meta">
+              {t.origin && (t.origin.needsReview || t.origin.textSource === "ocr") ? (
+                <M3eChipSet aria-label="自動校正の根拠" className="thread__bot-chips">
+                  {t.origin.needsReview ? <M3eChip>要確認</M3eChip> : null}
+                  {t.origin.textSource === "ocr" ? <M3eChip>OCR</M3eChip> : null}
+                </M3eChipSet>
+              ) : null}
               {closed ? (
                 <StatusText tone={t.resolution === "resolved" ? "success" : "neutral"}>
                   {resolutionLabel[t.resolution]}
@@ -167,9 +187,9 @@ export function ThreadCard({
           ) : null}
           {active ? <ThreadEvents threadId={t.id} /> : null}
           {active && mode === null && canReply ? (
-            <button type="button" className="thread__reply-open" onClick={() => open("reply")}>
+            <M3eButton variant="text" className="thread__reply-open" onClick={() => open("reply")}>
               返信…
-            </button>
+            </M3eButton>
           ) : null}
           {mode === "reply" || mode === "rejected" || mode === "deferred" || mode === "edit" ? (
             <div className="thread__form" onClick={stop}>

@@ -20,6 +20,9 @@ import { ComposePopover } from "@/features/review/ComposePopover";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PaneHandle } from "@/features/editor/PaneHandle";
+import { PaneTabs } from "@/ui/PaneTabs";
+import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
+import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
 import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
 import { useCompareSession } from "@/features/compare/useCompareSession";
@@ -41,6 +44,7 @@ import {
   M3eBottomSheet,
   M3eButton,
   M3eFilterChip,
+  M3eFilterChipSet,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
@@ -181,6 +185,8 @@ export function Editor({
     search.tab ?? (readLayout() === "panel" ? "comments" : null),
   );
   const [showResolved, setShowResolved] = useState(false);
+  /** コメントの絞り込み: 人の指摘だけ / 自動校正だけ */
+  const [who, setWho] = useState<"all" | "human" | "bot">("all");
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [artifactSheet, setArtifactSheet] = useState(false);
   // 固定ペイン（引き出し）の幅。supporting pane は temporary resizing: 閉じたら既定（expanded 360 / large 412）に戻す
@@ -411,15 +417,22 @@ export function Editor({
     [data],
   );
   const threads = useMemo(
-    () => allThreads.filter((t) => showResolved || !isClosed(t) || t.id === activeThreadId),
-    [allThreads, showResolved, activeThreadId],
+    () =>
+      allThreads.filter(
+        (t) =>
+          (showResolved || !isClosed(t) || t.id === activeThreadId) &&
+          (who === "all" || (who === "bot") === Boolean(t.origin)),
+      ),
+    [allThreads, showResolved, activeThreadId, who],
   );
+  const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
   if (workData === undefined) return <p className="muted">読み込み中…</p>;
   const { work } = workData;
   const revision = data?.revision ?? null;
   const can = data?.can ?? null;
   const resolvedCount = allThreads.filter(isClosed).length;
+  const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
   const openCount = allThreads.length - resolvedCount;
   const overlayThreads: OverlayThread[] = threads
     .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
@@ -773,12 +786,32 @@ export function Editor({
 
   const commentsPanel = (
     <div className="comments">
+      <AutoProofreadStatus auto={auto} />
       <div className="comments__header">
-        {resolvedCount > 0 ? (
-          <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
-            解決済み {resolvedCount}
-          </M3eFilterChip>
-        ) : null}
+        <M3eFilterChipSet aria-label="コメントの絞り込み">
+          {botCount > 0 ? (
+            <>
+              <M3eFilterChip
+                selected={who === "human"}
+                onClick={() => setWho((v) => (v === "human" ? "all" : "human"))}
+              >
+                人の指摘
+              </M3eFilterChip>
+              <M3eFilterChip
+                selected={who === "bot"}
+                onClick={() => setWho((v) => (v === "bot" ? "all" : "bot"))}
+              >
+                <M3eIcon slot="icon" name="smart_toy" />
+                自動校正 {botCount}
+              </M3eFilterChip>
+            </>
+          ) : null}
+          {resolvedCount > 0 ? (
+            <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
+              解決済み {resolvedCount}
+            </M3eFilterChip>
+          ) : null}
+        </M3eFilterChipSet>
       </div>
       <div className="comments__list">
         {carryCandidates && carryCandidates.length > 0 ? (
@@ -824,27 +857,16 @@ export function Editor({
     </div>
   );
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
-    <div className="drawer__tabs" role="tablist" aria-label="引き出し">
-      {(
-        [
-          ["comments", "コメント", openCount],
-          ["versions", "版", revisions.length],
-          ["info", "情報", null],
-        ] as Array<[Drawer, string, number | null]>
-      ).map(([id, label, n]) => (
-        <button
-          key={id}
-          type="button"
-          role="tab"
-          aria-selected={current === id}
-          className={`drawer__tab ${current === id ? "drawer__tab--on" : ""}`}
-          onClick={() => onPick(id)}
-        >
-          {label}
-          {n !== null && n > 0 ? <span className="drawer__n">{n}</span> : null}
-        </button>
-      ))}
-    </div>
+    <PaneTabs
+      label="引き出し"
+      value={current ?? "comments"}
+      onChange={onPick}
+      items={[
+        { id: "comments", label: "コメント", count: openCount },
+        { id: "versions", label: "版" },
+        { id: "info", label: "情報" },
+      ]}
+    />
   );
   const drawerBody = (d: Drawer | null) =>
     d === "comments" ? (

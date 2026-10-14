@@ -17,11 +17,21 @@ export {
   M3eFilterChip,
   M3eFilterChipSet,
   M3eAssistChip,
+  M3eChip,
   M3eChipSet,
   M3eInputChip,
   M3eSuggestionChip,
 } from "@m3e/react/chips";
-export { M3eList, M3eListItem, M3eActionList, M3eListAction } from "@m3e/react/list";
+export {
+  M3eList,
+  M3eListItem,
+  M3eActionList,
+  M3eListAction,
+  M3eListOption,
+  M3eSelectionList,
+  M3eExpandableListItem,
+} from "@m3e/react/list";
+export { M3eExpansionPanel, M3eAccordion } from "@m3e/react/expansion-panel";
 export { M3eTabs, M3eTab, M3eTabPanel } from "@m3e/react/tabs";
 export { M3eBadge } from "@m3e/react/badge";
 export { M3eTooltip } from "@m3e/react/tooltip";

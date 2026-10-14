@@ -1,9 +1,10 @@
 import { api } from "@mf100/convex/api";
-import { proofread, resolveRuleSet, ruleStrictnessLabels } from "@mf100/domain";
+import { proofread, resolveRuleSet } from "@mf100/domain";
 import type { FunctionReturnType } from "convex/server";
 import { useDeferredValue, useMemo, useState } from "react";
 import { Field, TextArea } from "@/ui/Field";
 import { CategoryPicker } from "./CategoryPicker";
+import { FindingList } from "./FindingList";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 
@@ -35,20 +36,7 @@ export function RuleTester({ book }: { book: Book }) {
       {result.findings.length === 0 ? (
         <p className="small muted">指摘はありません。</p>
       ) : (
-        <ul className="finding-list">
-          {result.findings.map((f) => (
-            <li key={f.fingerprint} className={`finding ${f.needsReview ? "finding--review" : ""}`}>
-              <span className="finding__orig">{f.original}</span>
-              <span aria-hidden="true">→</span>
-              <span className="finding__sugg">{f.suggestion}</span>
-              <span className="finding__meta small muted">
-                {f.ruleId}（版 {f.ruleRevision}）・{ruleStrictnessLabels[f.strictness]}
-                {f.reason ? `・${f.reason}` : ""}
-                {f.exceptionNote ? `・例外: ${f.exceptionNote}` : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <FindingList label="試した結果" findings={result.findings} />
       )}
     </div>
   );

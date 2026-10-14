@@ -11,7 +11,13 @@ import { formatBytes, formatJstDate, startOfJstDay } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eIcon, M3eLinearProgressIndicator } from "@/ui/m3e";
+import {
+  M3eButton,
+  M3eDialog,
+  M3eExpansionPanel,
+  M3eIcon,
+  M3eLinearProgressIndicator,
+} from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 import {
   SubmissionFlow,
@@ -241,8 +247,8 @@ export function SubmitDialog({
             <Field label="見てほしい観点">
               <TextArea value={form.focusNotes} onChange={set("focusNotes")} />
             </Field>
-            <details className="details checks-details">
-              <summary>専門確認を依頼する</summary>
+            <M3eExpansionPanel className="expansion checks-">
+              <span slot="header">専門確認を依頼する</span>
               <div className="checks">
                 {checkTypes.map((t) => (
                   <div key={t} className={`check ${checks[t]?.on ? "" : "check--done"}`}>
@@ -270,10 +276,10 @@ export function SubmitDialog({
                   </div>
                 ))}
               </div>
-            </details>
-            <details className="details">
-              <summary>外部リンク</summary>
-              <div style={{ marginTop: 12 }}>
+            </M3eExpansionPanel>
+            <M3eExpansionPanel className="expansion ">
+              <span slot="header">外部リンク</span>
+              <div>
                 <Field label="URL">
                   <TextInput
                     type="url"
@@ -283,7 +289,7 @@ export function SubmitDialog({
                   />
                 </Field>
               </div>
-            </details>
+            </M3eExpansionPanel>
             {error ? <div className="alert">{error}</div> : null}
           </>
         ) : (

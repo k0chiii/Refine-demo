@@ -6,7 +6,7 @@ import { formatJstShort } from "@/lib/format";
 import { permissionLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Field, Select } from "@/ui/Field";
-import { M3eButton } from "@/ui/m3e";
+import { M3eButton, M3eExpansionPanel } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 
 /** U-08 作品ごとの閲覧許可（Nogiku ユーザー単位）。エディタの「情報」に置く。付与・剥奪と履歴（F-14 / A-19）。 */
@@ -85,12 +85,13 @@ export function AclPanel({ workId }: { workId: string }) {
         </div>
       </div>
       {grants.length > active.length || history ? (
-        <details
-          className="details"
+        <M3eExpansionPanel
+          className="expansion"
           open={history}
-          onToggle={(e) => setHistory(e.currentTarget.open)}
+          onOpened={() => setHistory(true)}
+          onClosed={() => setHistory(false)}
         >
-          <summary>変更履歴</summary>
+          <span slot="header">変更履歴</span>
           <ul className="acl__list small">
             {grants.map((g) => (
               <li key={`${g.principalId}-${g.grantedAt}-${g.permission}`}>
@@ -102,7 +103,7 @@ export function AclPanel({ workId }: { workId: string }) {
               </li>
             ))}
           </ul>
-        </details>
+        </M3eExpansionPanel>
       ) : null}
     </div>
   );
