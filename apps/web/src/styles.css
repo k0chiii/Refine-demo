@@ -97,7 +97,8 @@ code {
   padding: 1px 4px;
   border-radius: var(--mf-shape-xs);
 }
-/* Material Symbols（可変フォント）: 選択・ホバーで輪郭 → 塗りへ連続的に変化させる（M3 Expressive の motion） */
+/* Material Symbols（可変フォント）: 選択で輪郭 → 塗りへ連続的に変化させる（M3 の active icon は filled）。
+   太さ（wght）は常に 400。太さを変えると字面が外側へ膨らんで位置がずれて見えるため、ホバーでも変えない */
 m3e-icon {
   font-family: "Material Symbols Outlined";
   font-variation-settings:
@@ -110,24 +111,7 @@ m3e-icon {
 m3e-icon.icon--filled {
   font-variation-settings:
     "FILL" 1,
-    "wght" 500,
-    "GRAD" 0,
-    "opsz" 24;
-}
-m3e-nav-item:hover m3e-icon,
-m3e-icon-button:hover m3e-icon,
-m3e-button:hover m3e-icon {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 600,
-    "GRAD" 0,
-    "opsz" 24;
-}
-m3e-nav-item:hover m3e-icon.icon--filled,
-m3e-icon-button:hover m3e-icon.icon--filled {
-  font-variation-settings:
-    "FILL" 1,
-    "wght" 600,
+    "wght" 400,
     "GRAD" 0,
     "opsz" 24;
 }
