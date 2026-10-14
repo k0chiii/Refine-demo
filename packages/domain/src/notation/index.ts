@@ -4,3 +4,4 @@ export * from "./ruleset.ts";
 export * from "./proofreader.ts";
 export * from "./importer.ts";
 export * from "./permission.ts";
+export * from "./proposal.ts";

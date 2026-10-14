@@ -28,6 +28,8 @@ export interface CreateWorkInput {
   approverId: string;
   deadlineAt?: number;
   confidentiality?: Confidentiality;
+  /** 表記統一のルールカテゴリ（人が選ぶ。空なら検査しない） */
+  notationCategories?: string[];
   /** 登録と有効化を分ける案（§7.2）に備え、既定は即時 active。 */
   activate?: boolean;
 }
@@ -65,6 +67,8 @@ export async function createWork(
   if (input.legacyId !== undefined) data.legacyId = input.legacyId;
   if (input.ownerTeamId !== undefined) data.ownerTeamId = input.ownerTeamId;
   if (input.deadlineAt !== undefined) data.deadlineAt = input.deadlineAt;
+  if (input.notationCategories !== undefined)
+    data.notationCategories = cleanCategories(input.notationCategories);
   const work = await ctx.works.insert(data);
   await ctx.audit.record({
     entityType: "work",
@@ -96,6 +100,7 @@ export interface UpdateWorkInput {
       | "ownerTeamId"
       | "productionTeamIds"
       | "relatedTeamIds"
+      | "notationCategories"
     >
   >;
 }
@@ -109,7 +114,10 @@ export async function updateWork(
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  const next: Work = { ...work, ...stripUndefined(input.patch), version: work.version + 1 };
+  const patch = stripUndefined(input.patch);
+  if (patch.notationCategories)
+    patch.notationCategories = cleanCategories(patch.notationCategories);
+  const next: Work = { ...work, ...patch, version: work.version + 1 };
   await ctx.works.update(next);
   await ctx.audit.record({
     entityType: "work",
@@ -152,4 +160,11 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
   for (const [k, v] of Object.entries(obj))
     if (v !== undefined) (out as Record<string, unknown>)[k] = v;
   return out;
+}
+
+/** カテゴリコードの正規化（重複・空を除く。存在確認は表記統一側で行い、知らないコードは検査で無視される） */
+function cleanCategories(codes: readonly string[]): string[] {
+  return Array.from(
+    new Set(codes.map((c) => c.trim()).filter((c) => /^[A-Za-z][A-Za-z0-9_-]{0,15}$/.test(c))),
+  ).slice(0, 20);
 }

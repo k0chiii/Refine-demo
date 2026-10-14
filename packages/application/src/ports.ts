@@ -6,10 +6,15 @@ import type {
   DocumentDraft,
   Instant,
   ManualPair,
+  NotationRule,
   Principal,
   RequiredCheck,
   ReviewAssignment,
   Revision,
+  RuleCategory,
+  RuleCategoryManager,
+  RuleProposal,
+  RuleRevision,
   RevisionId,
   UploadItem,
   UploadSession,
@@ -102,7 +107,9 @@ export type NotificationKind =
   | "deadline_approaching"
   | "work_finalized"
   | "work_reopened"
-  | "revision_voided";
+  | "revision_voided"
+  | "rule_proposed"
+  | "rule_proposal_decided";
 
 export interface Notification {
   id: string;
@@ -198,8 +205,32 @@ export interface AppContext {
   notifications: NotificationRepository;
   documents: DocumentDraftRepository;
   alignments: AlignmentOverrideRepository;
+  notation: NotationRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
+}
+
+/**
+ * 表記統一（ルール・カテゴリ・履歴・カテゴリ管理者・変更提案）。
+ * カテゴリは保存したものが既定値（defaultRuleCategories）を上書きする（未保存の既定カテゴリはそのまま使える）。
+ */
+export interface NotationRepository {
+  listCategories(): Promise<RuleCategory[]>;
+  upsertCategory(category: RuleCategory): Promise<void>;
+  listRules(): Promise<NotationRule[]>;
+  findRule(ruleId: string): Promise<NotationRule | null>;
+  insertRule(rule: NotationRule): Promise<void>;
+  updateRule(rule: NotationRule): Promise<void>;
+  appendRevision(revision: RuleRevision): Promise<void>;
+  listRevisions(ruleId: string): Promise<RuleRevision[]>;
+  listManagers(): Promise<RuleCategoryManager[]>;
+  addManager(manager: RuleCategoryManager): Promise<void>;
+  removeManager(userId: string, categoryCode: string): Promise<void>;
+  findProposal(id: string): Promise<RuleProposal | null>;
+  findOpenProposalByKey(dedupeKey: string): Promise<RuleProposal | null>;
+  listProposals(status: RuleProposal["status"] | null, limit: number): Promise<RuleProposal[]>;
+  insertProposal(proposal: Omit<RuleProposal, "id">): Promise<RuleProposal>;
+  updateProposal(proposal: RuleProposal): Promise<void>;
 }
 
 export type { Principal };

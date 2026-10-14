@@ -147,3 +147,32 @@ export const ruleSetPresets: Array<{ id: string; label: string; categories: stri
   { id: "committee", label: "委員会企画", categories: ["D"] },
   { id: "mei", label: "めい語", categories: ["E"] },
 ];
+
+/** ルールの変更履歴（版ごとの全内容）。校正結果は ruleId と revision で、この履歴の内容を引ける */
+export const ruleOperations = [
+  "create",
+  "update",
+  "disable",
+  "enable",
+  "import",
+  "proposal",
+] as const;
+export type RuleOperation = (typeof ruleOperations)[number];
+export interface RuleRevision {
+  ruleId: string;
+  revision: number;
+  rule: NotationRule;
+  operation: RuleOperation;
+  reason: string;
+  actorId: UserId;
+  at: Instant;
+  proposalId?: string;
+}
+
+/** カテゴリ管理者（システム管理者が個人単位で設定する。Nogiku の組織権限が無くても使える） */
+export interface RuleCategoryManager {
+  userId: UserId;
+  categoryCode: string;
+  assignedBy: UserId;
+  assignedAt: Instant;
+}

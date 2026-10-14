@@ -5,9 +5,14 @@ import type {
   CommentEvent,
   CommentThread,
   DocumentDraft,
+  NotationRule,
   RequiredCheck,
   ReviewAssignment,
   Revision,
+  RuleCategory,
+  RuleCategoryManager,
+  RuleProposal,
+  RuleRevision,
   UploadItem,
   UploadSession,
   Work,
@@ -28,6 +33,16 @@ function fromDoc<T extends TableNames, D extends Doc<T>>(doc: D): Strip<D> & { i
   const { _id, _creationTime, ...rest } = doc;
   void _creationTime;
   return { ...(rest as Strip<D>), id: _id as string };
+}
+
+/** id を持たない行（ruleId などの業務キーで引く表） */
+function strip<D extends { _id: unknown; _creationTime: number }>(
+  doc: D,
+): Omit<D, "_id" | "_creationTime"> {
+  const { _id, _creationTime, ...rest } = doc;
+  void _id;
+  void _creationTime;
+  return rest;
 }
 
 function toFields<T extends { id: string }>(entity: T): Omit<T, "id"> {
@@ -328,6 +343,94 @@ export function createAppContext(
           )
           .take(100);
         return docs.length;
+      },
+    },
+    notation: {
+      async listCategories() {
+        return (await db.query("ruleCategories").collect()).map((d) => strip(d) as RuleCategory);
+      },
+      async upsertCategory(c) {
+        const cur = await db
+          .query("ruleCategories")
+          .withIndex("by_code", (q) => q.eq("code", c.code))
+          .unique();
+        if (cur) await db.replace(cur._id, c);
+        else await db.insert("ruleCategories", c);
+      },
+      async listRules() {
+        return (await db.query("notationRules").collect()).map((d) => strip(d) as NotationRule);
+      },
+      async findRule(ruleId) {
+        const d = await db
+          .query("notationRules")
+          .withIndex("by_ruleId", (q) => q.eq("ruleId", ruleId))
+          .unique();
+        return d ? (strip(d) as NotationRule) : null;
+      },
+      async insertRule(rule) {
+        await db.insert("notationRules", compact(rule));
+      },
+      async updateRule(rule) {
+        const d = await db
+          .query("notationRules")
+          .withIndex("by_ruleId", (q) => q.eq("ruleId", rule.ruleId))
+          .unique();
+        if (!d) throw new Error(`rule not found: ${rule.ruleId}`);
+        await db.replace(d._id, compact(rule));
+      },
+      async appendRevision(r) {
+        await db.insert("ruleRevisions", compact({ ...r, rule: compact(r.rule) }));
+      },
+      async listRevisions(ruleId) {
+        const docs = await db
+          .query("ruleRevisions")
+          .withIndex("by_rule", (q) => q.eq("ruleId", ruleId))
+          .collect();
+        return docs.map((d) => strip(d) as RuleRevision);
+      },
+      async listManagers() {
+        return (await db.query("ruleCategoryManagers").collect()).map(
+          (d) => strip(d) as RuleCategoryManager,
+        );
+      },
+      async addManager(m) {
+        await db.insert("ruleCategoryManagers", m);
+      },
+      async removeManager(userId, categoryCode) {
+        const rows = await db
+          .query("ruleCategoryManagers")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .collect();
+        for (const r of rows) if (r.categoryCode === categoryCode) await db.delete(r._id);
+      },
+      async findProposal(id) {
+        const d = await db.get("ruleProposals", id as Id<"ruleProposals">).catch(() => null);
+        return d ? (fromDoc(d) as RuleProposal) : null;
+      },
+      async findOpenProposalByKey(key) {
+        const d = await db
+          .query("ruleProposals")
+          .withIndex("by_key", (q) => q.eq("dedupeKey", key).eq("status", "open"))
+          .first();
+        return d ? (fromDoc(d) as RuleProposal) : null;
+      },
+      async listProposals(status, limit) {
+        const docs =
+          status === null
+            ? await db.query("ruleProposals").order("desc").take(limit)
+            : await db
+                .query("ruleProposals")
+                .withIndex("by_status", (q) => q.eq("status", status))
+                .order("desc")
+                .take(limit);
+        return docs.map((d) => fromDoc(d) as RuleProposal);
+      },
+      async insertProposal(p) {
+        const id = await db.insert("ruleProposals", compact(p));
+        return { ...p, id } as RuleProposal;
+      },
+      async updateProposal(p) {
+        await db.replace(p.id as Id<"ruleProposals">, compact(toFields(p)));
       },
     },
     alignments: {

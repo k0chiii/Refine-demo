@@ -22,6 +22,7 @@ export async function setupWork(
     year: 100,
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
+    ...(over.notationCategories ? { notationCategories: over.notationCategories } : {}),
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,

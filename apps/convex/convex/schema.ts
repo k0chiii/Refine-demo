@@ -1,6 +1,15 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  vProposalContext,
+  vProposalKind,
+  vProposalStatus,
+  vRuleCategoryFields,
+  vRuleException,
+  vRuleFields,
+  vRuleSetSnapshot,
+} from "./lib/validators.ts";
 
 /**
  * MF100 校正システムのスキーマ（要件 §6 の論理モデルを Convex に写像）。
@@ -145,6 +154,8 @@ export default defineSchema({
     lifecycle,
     confidentiality,
     finalRevisionId: v.optional(v.string()),
+    /** 表記統一のルールカテゴリ（人が選ぶ） */
+    notationCategories: v.optional(v.array(v.string())),
     version: v.number(),
   })
     .index("by_year", ["year"])
@@ -189,6 +200,8 @@ export default defineSchema({
     changeSummary: v.string(),
     focusNotes: v.string(),
     snapshotHash: v.optional(v.string()),
+    /** 提出時の表記統一ルールの組（ルール ID と版） */
+    notationSnapshot: v.optional(vRuleSetSnapshot),
   })
     .index("by_work", ["workId"])
     .index("by_work_state", ["workId", "reviewState"])
@@ -341,6 +354,66 @@ export default defineSchema({
     updatedBy: v.string(),
     updatedAt: v.number(),
   }).index("by_artifacts", ["leftArtifactId", "rightArtifactId"]),
+
+  // ---------------------------------------------------------------- 表記統一
+  /** カテゴリ（保存したものが既定カテゴリを上書きする） */
+  ruleCategories: defineTable(vRuleCategoryFields).index("by_code", ["code"]),
+  /** ルールの現在の版（削除せず enabled で無効化） */
+  notationRules: defineTable(vRuleFields)
+    .index("by_ruleId", ["ruleId"])
+    .index("by_category", ["categoryCode"]),
+  /** ルールの全版（校正結果は ruleId + revision でここを引く） */
+  ruleRevisions: defineTable({
+    ruleId: v.string(),
+    revision: v.number(),
+    rule: v.object(vRuleFields),
+    operation: v.union(
+      v.literal("create"),
+      v.literal("update"),
+      v.literal("disable"),
+      v.literal("enable"),
+      v.literal("import"),
+      v.literal("proposal"),
+    ),
+    reason: v.string(),
+    actorId: v.string(),
+    at: v.number(),
+    proposalId: v.optional(v.string()),
+  }).index("by_rule", ["ruleId", "revision"]),
+  /** カテゴリ管理者（システム管理者が個人単位で設定） */
+  ruleCategoryManagers: defineTable({
+    userId: v.string(),
+    categoryCode: v.string(),
+    assignedBy: v.string(),
+    assignedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_category", ["categoryCode"]),
+  /** ルールの変更提案・誤表記の報告 */
+  ruleProposals: defineTable({
+    kind: vProposalKind,
+    categoryCode: v.string(),
+    ruleId: v.optional(v.string()),
+    title: v.string(),
+    correct: v.array(v.string()),
+    incorrect: v.array(v.string()),
+    patterns: v.array(v.string()),
+    exceptions: v.array(vRuleException),
+    reason: v.string(),
+    context: vProposalContext,
+    status: vProposalStatus,
+    dedupeKey: v.string(),
+    proposedBy: v.string(),
+    proposedAt: v.number(),
+    supporters: v.array(v.string()),
+    decidedBy: v.optional(v.string()),
+    decidedAt: v.optional(v.number()),
+    decisionNote: v.optional(v.string()),
+    resultRuleId: v.optional(v.string()),
+    resultRevision: v.optional(v.number()),
+  })
+    .index("by_status", ["status", "proposedAt"])
+    .index("by_key", ["dedupeKey", "status"]),
 
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({

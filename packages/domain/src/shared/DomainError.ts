@@ -59,6 +59,11 @@ export const domainErrorCodes = [
   "approval_reopen_reason_required",
   // 文章の下書き
   "document_invalid",
+  // 表記統一
+  "notation_rule_invalid",
+  "notation_not_manager",
+  "notation_category_invalid",
+  "notation_proposal_closed",
   // 冪等性 / 競合
   "idempotency_conflict",
   "version_conflict",

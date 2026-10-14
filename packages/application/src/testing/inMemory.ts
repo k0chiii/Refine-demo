@@ -4,9 +4,14 @@ import type {
   CommentEvent,
   CommentThread,
   DocumentDraft,
+  NotationRule,
   RequiredCheck,
   ReviewAssignment,
   Revision,
+  RuleCategory,
+  RuleCategoryManager,
+  RuleProposal,
+  RuleRevision,
   UploadItem,
   UploadSession,
   Work,
@@ -73,6 +78,11 @@ export interface InMemoryContext extends AppContext {
     notifications: Table<Notification>;
     documents: Table<DocumentDraft>;
     alignments: Table<AlignmentOverride>;
+    categories: Map<string, RuleCategory>;
+    rules: Map<string, NotationRule>;
+    ruleRevisions: RuleRevision[];
+    managers: RuleCategoryManager[];
+    proposals: Table<RuleProposal>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
   };
@@ -94,6 +104,11 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     notifications: new Table<Notification>("ntf"),
     documents: new Table<DocumentDraft>("doc"),
     alignments: new Table<AlignmentOverride>("aln"),
+    categories: new Map(),
+    rules: new Map(),
+    ruleRevisions: [],
+    managers: [],
+    proposals: new Table<RuleProposal>("prp"),
     audit: [],
     idempotency: new Map(),
   };
@@ -243,6 +258,42 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         null,
       insert: async (x) => state.alignments.insert(x),
       update: async (x) => state.alignments.put(x),
+    },
+    notation: {
+      listCategories: async () => [...state.categories.values()].map(clone),
+      upsertCategory: async (c) => {
+        state.categories.set(c.code, clone(c));
+      },
+      listRules: async () => [...state.rules.values()].map(clone),
+      findRule: async (id) => (state.rules.has(id) ? clone(state.rules.get(id)!) : null),
+      insertRule: async (r) => {
+        state.rules.set(r.ruleId, clone(r));
+      },
+      updateRule: async (r) => {
+        state.rules.set(r.ruleId, clone(r));
+      },
+      appendRevision: async (r) => {
+        state.ruleRevisions.push(clone(r));
+      },
+      listRevisions: async (id) => state.ruleRevisions.filter((r) => r.ruleId === id).map(clone),
+      listManagers: async () => state.managers.map(clone),
+      addManager: async (m) => {
+        state.managers.push(clone(m));
+      },
+      removeManager: async (u, c) => {
+        state.managers = state.managers.filter((m) => !(m.userId === u && m.categoryCode === c));
+      },
+      findProposal: async (id) => state.proposals.get(id),
+      findOpenProposalByKey: async (k) =>
+        state.proposals.all().find((p) => p.status === "open" && p.dedupeKey === k) ?? null,
+      listProposals: async (status, limit) =>
+        state.proposals
+          .all()
+          .filter((p) => status === null || p.status === status)
+          .sort((a, b) => b.proposedAt - a.proposedAt)
+          .slice(0, limit),
+      insertProposal: async (p) => state.proposals.insert(p),
+      updateProposal: async (p) => state.proposals.put(p),
     },
     idempotency: {
       get: async (scope, key) =>

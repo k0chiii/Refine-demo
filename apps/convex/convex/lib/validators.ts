@@ -63,3 +63,70 @@ export const vCheckType = v.union(
   v.literal("design"),
   v.literal("other"),
 );
+
+// ---------------------------------------------------------------- 表記統一
+export const vRuleException = v.object({
+  kind: v.union(
+    v.literal("phrase"),
+    v.literal("before"),
+    v.literal("after"),
+    v.literal("category"),
+  ),
+  value: v.string(),
+  note: v.optional(v.string()),
+});
+export const vRuleDraftFields = {
+  ruleId: v.string(),
+  categoryCode: v.string(),
+  title: v.string(),
+  description: v.string(),
+  correct: v.array(v.string()),
+  incorrect: v.array(v.string()),
+  patterns: v.array(v.string()),
+  exceptions: v.array(vRuleException),
+  language: v.union(v.literal("ja"), v.literal("en"), v.literal("zh")),
+  scopes: v.array(v.string()),
+  years: v.array(v.number()),
+  priority: v.number(),
+  strictness: v.union(v.literal("required"), v.literal("recommended"), v.literal("review")),
+  enabled: v.boolean(),
+  note: v.optional(v.string()),
+  translations: v.optional(v.object({ en: v.optional(v.string()), zh: v.optional(v.string()) })),
+};
+export const vRuleDraft = v.object(vRuleDraftFields);
+export const vRuleFields = {
+  ...vRuleDraftFields,
+  revision: v.number(),
+  createdBy: v.string(),
+  updatedBy: v.string(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  publishedAt: v.optional(v.number()),
+};
+export const vRuleCategoryFields = {
+  code: v.string(),
+  name: v.string(),
+  description: v.string(),
+  parents: v.array(v.string()),
+  policyNotes: v.string(),
+  order: v.number(),
+};
+export const vRuleSetSnapshot = v.object({
+  categories: v.array(v.string()),
+  year: v.number(),
+  rules: v.array(v.object({ ruleId: v.string(), revision: v.number() })),
+  hash: v.string(),
+});
+export const vProposalKind = v.union(v.literal("new"), v.literal("change"), v.literal("report"));
+export const vProposalStatus = v.union(
+  v.literal("open"),
+  v.literal("approved"),
+  v.literal("rejected"),
+);
+export const vProposalContext = v.object({
+  workId: v.optional(v.string()),
+  revisionId: v.optional(v.string()),
+  artifactId: v.optional(v.string()),
+  quote: v.optional(v.string()),
+  surrounding: v.optional(v.string()),
+});

@@ -50,6 +50,10 @@ const messages: Record<string, string> = {
     "未完了の専門確認があります。確認を完了（または理由付きで免除）するか、理由を記入して例外校了してください",
   version_conflict: "他の人が先に変更しました。画面を更新して再度お試しください",
   document_invalid: "文章を保存できません（大きすぎるか、形式が壊れています）",
+  notation_rule_invalid: "ルールの内容に誤りがあります",
+  notation_not_manager: "このカテゴリのルールを編集・承認する権限がありません",
+  notation_category_invalid: "カテゴリの設定に誤りがあります（存在しない継承元・循環など）",
+  notation_proposal_closed: "この提案はすでに処理されています",
   idempotency_conflict: "同じ操作が既に処理されています",
 };
 

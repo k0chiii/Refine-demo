@@ -36,6 +36,7 @@ const workPatch = {
   ownerTeamId: v.optional(v.string()),
   productionTeamIds: v.optional(v.array(v.string())),
   relatedTeamIds: v.optional(v.array(v.string())),
+  notationCategories: v.optional(v.array(v.string())),
 };
 
 export const create = mutation({
@@ -54,6 +55,7 @@ export const create = mutation({
     approverId: v.string(),
     deadlineAt: v.optional(v.number()),
     confidentiality: v.optional(vConfidentiality),
+    notationCategories: v.optional(v.array(v.string())),
     activate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {

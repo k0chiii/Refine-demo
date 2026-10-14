@@ -25,6 +25,7 @@ import {
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { notify, workStakeholders } from "./notifications.ts";
+import { currentRuleSet } from "./notation.ts";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -238,6 +239,11 @@ export async function confirmSubmission(
       },
       plan,
     );
+    // 表記統一: どのルールのどの版で検査するかを版に記録する（後からルールが変わっても版の結果は変わらない）
+    if (work.notationCategories?.length) {
+      const set = await currentRuleSet(ctx, work.notationCategories, work.year);
+      newRevision.notationSnapshot = set.snapshot;
+    }
     const revision = await ctx.revisions.insert(newRevision);
     for (const item of items) await ctx.artifacts.insert(toArtifact(item, revision.id));
     for (const c of session.requiredChecks ?? []) {

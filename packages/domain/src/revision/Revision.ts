@@ -1,6 +1,7 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import { isBeforeDeadline, type Instant } from "../shared/time.ts";
+import type { RuleSetSnapshot } from "../notation/ruleset.ts";
 
 /** 0版（ラフ）と第1版以降（通常版）は別種別（C8 / D1）。 */
 export type RevisionKind = "rough" | "standard";
@@ -28,6 +29,8 @@ export interface Revision {
   changeSummary: string;
   focusNotes: string;
   snapshotHash?: string;
+  /** 提出時の表記統一ルールの組（どのルールのどの版で検査するか）。後からルールを変えても版の結果は変わらない */
+  notationSnapshot?: RuleSetSnapshot;
 }
 
 export function isAccepting(revision: Revision): boolean {

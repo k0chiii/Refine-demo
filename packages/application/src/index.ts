@@ -11,3 +11,4 @@ export * from "./usecases/notifications.ts";
 export * from "./usecases/dashboard.ts";
 export * from "./usecases/documents.ts";
 export * from "./usecases/comparisons.ts";
+export * from "./usecases/notation.ts";

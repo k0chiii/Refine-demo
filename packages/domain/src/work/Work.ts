@@ -37,6 +37,11 @@ export interface Work {
   lifecycle: WorkLifecycle;
   confidentiality: Confidentiality;
   finalRevisionId?: RevisionId;
+  /**
+   * 表記統一で使うルールカテゴリ（A1, B など）。制作物ごとに人が選ぶ。媒体・部署から自動では決めない。
+   * 未設定・空なら表記の検査をしない（登録・編集画面で選ぶよう促す）
+   */
+  notationCategories?: readonly string[];
   /** 楽観的排他用のバージョン */
   version: number;
 }
