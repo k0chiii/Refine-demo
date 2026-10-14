@@ -128,7 +128,7 @@ export function xWeightedLength(text: string): number {
 
 /** 文字数（コードポイント単位。Instagram の本文） */
 export function charLength(text: string): number {
-  return [...text].length;
+  return Array.from(text).length;
 }
 
 export interface PostIssue {

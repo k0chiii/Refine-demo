@@ -72,8 +72,8 @@ export function CroppedImage({
 /** 本文（ハッシュタグ・URL・メンションを色付け。Instagram は長文を「続きを読む」で切る） */
 export function PostText({ text, clamp }: { text: string; clamp?: number }) {
   const [open, setOpen] = useState(false);
-  const cut = clamp && !open && [...text].length > clamp;
-  const shown = cut ? [...text].slice(0, clamp).join("") : text;
+  const cut = clamp && !open && Array.from(text).length > clamp;
+  const shown = cut ? Array.from(text).slice(0, clamp).join("") : text;
   const marks = [
     ...extractHashtags(shown).map((m) => ({ ...m, cls: "sp-tag" })),
     ...extractUrls(shown).map((m) => ({ ...m, cls: "sp-link" })),
@@ -107,7 +107,7 @@ export function PostText({ text, clamp }: { text: string; clamp?: number }) {
 function Avatar({ name }: { name: string }) {
   return (
     <span className="sp-avatar" aria-hidden="true">
-      {[...(name || "?")][0]}
+      {Array.from(name || "?")[0]}
     </span>
   );
 }
