@@ -40,7 +40,15 @@ pnpm typecheck      # 各パッケージの tsc --noEmit
 
 ## ローカル起動
 
-初めての場合は手順書 [`docs/HANDS_ON_CONVEX.md`](docs/HANDS_ON_CONVEX.md)（Convex 無料枠＋Nogiku モックで一周）を参照。
+初めての場合は手順書 [`docs/HANDS_ON_CONVEX.md`](docs/HANDS_ON_CONVEX.md)（Convex 無料枠＋Nogiku モックで一周）を参照。設定が済んだあとは、リポジトリ直下の1コマンドで Convex・Hono API・Web をまとめて起動できる。
+
+```bash
+pnpm dev
+```
+
+ターミナル内のタブでログが分かれる。`1` `2` `3`、Tab、左右で Convex・API・Web を切り替える。上矢印でそのタブのログを遡れ、End で末尾に戻る。Ctrl+C で全部止まる。一部だけ起動するときは `pnpm dev -- web api` のように名前を渡す。初回の Convex ログインだけは対話が必要なので `pnpm dev:convex` を使う。
+
+個別に起動する場合は以下。
 
 ### Convex（業務データ）
 
