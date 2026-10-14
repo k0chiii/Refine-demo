@@ -42,8 +42,7 @@ const readRailPref = () => {
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
  * - compact（<600）: 検索バーがアプリバー（アバターは検索バーの末尾）。下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。
  *   エディタ（`/works/:id`）では共通バーを隠し、エディタのトップアプリバー（戻る・題名）だけにする。
- * - medium（600–839）: 折りたたみレール（96）。
- * - expanded（840–1199）: 折りたたみレール。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
+ * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
  * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「制作物を登録」、その下に行き先。アカウントは右上に残す。
  * 通知は独立した画面を持たず、ベル（compact では下部バーの「通知」）のパネルから対象へ飛ぶ。
@@ -104,8 +103,9 @@ function AppLayout() {
     });
   };
 
-  const expandable = cls === "large" || cls === "expanded";
-  const railExpanded = cls === "large" ? railPref : cls === "expanded" ? modalOpen : false;
+  // M3 Breakpoints「置き換えられる部品」: compact/medium/expanded はモーダル展開レール、large 以上は標準展開レール
+  const expandable = cls !== "compact";
+  const railExpanded = cls === "large" ? railPref : modalOpen;
   const toggleRail = () => {
     if (cls === "large") {
       const next = !railPref;
@@ -116,7 +116,7 @@ function AppLayout() {
     } else setModalOpen((o) => !o);
   };
   const register = () => void navigate({ to: "/works", search: { new: true } });
-  const modal = cls === "expanded" && modalOpen;
+  const modal = cls !== "large" && cls !== "compact" && modalOpen;
   // compact のエディタは詳細画面: 共通のアプリバーと下部バーを隠し、エディタ自身のトップアプリバー（戻る・題名）に譲る（M3 list-detail の compact）
   const immersive = cls === "compact" && /^\/works\/[^/]+/.test(path);
   const account = (size: number, className?: string) => (

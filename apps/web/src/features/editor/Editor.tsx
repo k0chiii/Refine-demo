@@ -9,7 +9,7 @@ import {
 } from "@mf100/domain";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AlignedGutter, type GutterItem } from "@/features/annotation/AlignedGutter";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
@@ -19,6 +19,7 @@ import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { ComposePopover } from "@/features/review/ComposePopover";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { PaneHandle } from "@/features/editor/PaneHandle";
 import { remaining } from "@/lib/format";
 import {
   blockedReasonLabel,
@@ -29,6 +30,7 @@ import {
 import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
 import { StatusText } from "@/ui/Chip";
+import { ActionSheet } from "@/ui/ActionSheet";
 import { Field, Select, TextArea } from "@/ui/Field";
 import {
   M3eAppBar,
@@ -37,9 +39,6 @@ import {
   M3eFilterChip,
   M3eIcon,
   M3eIconButton,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
   M3eToolbar,
 } from "@/ui/m3e";
 import { InfoTab } from "./InfoTab";
@@ -172,6 +171,19 @@ export function Editor({
   );
   const [showResolved, setShowResolved] = useState(false);
   const [artifactId, setArtifactId] = useState<string | null>(null);
+  const [artifactSheet, setArtifactSheet] = useState(false);
+  // 固定ペイン（引き出し）の幅。supporting pane は temporary resizing: 閉じたら既定（expanded 360 / large 412）に戻す
+  const [paneW, setPaneW] = useState<number | null>(null);
+  const [lastDrawer, setLastDrawer] = useState<Drawer>("comments");
+  const defaultPane = useMedia("(min-width: 1200px)") ? 412 : 360;
+  const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null); // 本体は読み込み後に現れるので callback ref
+  const [bodyW, setBodyW] = useState(0);
+  useEffect(() => {
+    if (!bodyEl) return;
+    const ro = new ResizeObserver(() => setBodyW(bodyEl.clientWidth));
+    ro.observe(bodyEl);
+    return () => ro.disconnect();
+  }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [body, setBody] = useState("");
@@ -194,6 +206,10 @@ export function Editor({
     if (l === "panel") setDrawer("comments");
     else if (drawer === "comments") setDrawer(null);
   };
+  useEffect(() => {
+    if (drawer === null) setPaneW(null);
+    else setLastDrawer(drawer);
+  }, [drawer]);
   const openDrawer = (d: Drawer) => {
     if (drawer === d) setDrawer(null);
     else {
@@ -231,8 +247,8 @@ export function Editor({
   useEffect(() => {
     const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
     if (!el) return;
-    // 覗き見（タブだけ 60px）→ 半分 → 全部。最初は覗き見にして紙面を見せる
-    el.setAttribute("detents", "60px half full");
+    // 覗き見（タブだけ 64px ＝ 8 ＋ 48 ＋ 8）→ 半分 → 全部。最初は覗き見にして紙面を見せる
+    el.setAttribute("detents", "64px half full");
     const id = requestAnimationFrame(() => el.show?.(0));
     return () => cancelAnimationFrame(id);
   }, [mobile, data === undefined]);
@@ -753,7 +769,7 @@ export function Editor({
               aria-label="制作物一覧へ戻る"
               onClick={() => void navigate({ to: "/works" })}
             >
-              <M3eIcon name="arrow_back" />
+              <M3eIcon name="arrow_back" className="icon--mirror" />
             </M3eIconButton>
             <span slot="title" className="ws__appbar-title">
               {work.title}
@@ -770,9 +786,12 @@ export function Editor({
               </span>
             ) : null}
             {data && data.artifacts.length > 1 ? (
-              <M3eIconButton slot="trailing" aria-label="添付を切り替え">
+              <M3eIconButton
+                slot="trailing"
+                aria-label="添付を切り替え"
+                onClick={() => setArtifactSheet(true)}
+              >
                 <M3eIcon name="attach_file" />
-                <M3eMenuTrigger htmlFor="artifact-menu" />
               </M3eIconButton>
             ) : null}
             {can?.completeReview ? (
@@ -791,28 +810,27 @@ export function Editor({
             ) : null}
           </M3eAppBar>
           {data && data.artifacts.length > 1 ? (
-            <M3eMenu id="artifact-menu" positionX="before">
-              {data.artifacts.map((a) => (
-                <M3eMenuItem
-                  key={a.id}
-                  onClick={() => {
-                    setArtifactId(a.id);
-                    setPage(1);
-                    resetCompose();
-                  }}
-                >
-                  <M3eIcon slot="icon" name={a.id === artifactId ? "check" : "draft"} />
-                  {a.role === "external" ? "外部: " : ""}
-                  {a.fileName}
-                </M3eMenuItem>
-              ))}
-            </M3eMenu>
+            <ActionSheet
+              open={artifactSheet}
+              onClose={() => setArtifactSheet(false)}
+              title="添付"
+              items={data.artifacts.map((a) => ({
+                icon: "draft",
+                label: `${a.role === "external" ? "外部: " : ""}${a.fileName}`,
+                selected: a.id === artifactId,
+                onSelect: () => {
+                  setArtifactId(a.id);
+                  setPage(1);
+                  resetCompose();
+                },
+              }))}
+            />
           ) : null}
         </>
       ) : (
         <header className="ws__header">
           <Link to="/works" className="ws__back" aria-label="制作物一覧へ戻る">
-            <M3eIcon name="arrow_back" />
+            <M3eIcon name="arrow_back" className="icon--mirror" />
           </Link>
           <div className="ws__title">
             <span className="ws__work">{work.title}</span>
@@ -901,7 +919,15 @@ export function Editor({
         </header>
       )}
 
-      <div className={`ws__body ${desktopDrawer ? "ws__body--panel" : ""}`}>
+      <div
+        ref={setBodyEl}
+        className={`ws__body ${desktopDrawer ? "ws__body--panel" : mobile ? "" : "ws__body--handle"}`}
+        style={
+          desktopDrawer && paneW !== null
+            ? ({ "--ws-pane": `${paneW}px` } as CSSProperties)
+            : undefined
+        }
+      >
         <div className="ws__viewer">
           {compareWith ? (
             <div className="compare">
@@ -1016,6 +1042,18 @@ export function Editor({
             </M3eToolbar>
           ) : null}
         </div>
+        {!mobile ? (
+          <div className="ws__spacer">
+            <PaneHandle
+              width={paneW ?? defaultPane}
+              defaultWidth={defaultPane}
+              maxWidth={Math.max(240, bodyW - 24 - 360)}
+              collapsed={!desktopDrawer}
+              onResize={setPaneW}
+              onToggle={() => (desktopDrawer ? setDrawer(null) : openDrawer(lastDrawer))}
+            />
+          </div>
+        ) : null}
         {desktopDrawer ? (
           <aside className="drawer" aria-label="引き出し">
             {drawerTabs(drawer, (d) => openDrawer(d))}

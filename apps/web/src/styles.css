@@ -136,6 +136,10 @@ m3e-icon-button:hover m3e-icon.icon--filled {
     transition: none;
   }
 }
+/* RTL では方向を持つアイコン（戻る・進む）を鏡映する（Bidirectionality › Icons & symbols） */
+[dir="rtl"] m3e-icon.icon--mirror {
+  transform: scaleX(-1);
+}
 /* 画面上の M3E 部品に書体を揃える（shadow 内は継承） */
 m3e-heading,
 m3e-button,
@@ -228,7 +232,7 @@ m3e-search-bar {
   min-width: 0;
 }
 .shell__content {
-  padding: 8px 24px 64px; /* M3 のペイン余白 24（medium 以上）。要確認: 公式値の裏取りは未 */
+  padding: 8px 24px 64px; /* M3 のペイン余白 24（medium 以上。Breakpoints › Medium / Expanded / Large） */
   width: 100%;
   box-sizing: border-box;
 }
@@ -259,7 +263,7 @@ m3e-search-bar {
     display: none;
   }
   .shell__content {
-    padding: 8px 16px 96px; /* 余白 16（compact）＋下部ナビの高さ分。要確認 */
+    padding: 8px 16px calc(96px + env(safe-area-inset-bottom, 0px)); /* 余白 16（compact。Breakpoints › Compact）＋下部ナビの高さ分＋セーフエリア */
   }
   .shell__search {
     width: 100%;
@@ -285,6 +289,10 @@ m3e-search-bar {
     inset-inline: 0;
     bottom: 0;
     z-index: 30;
+    padding-bottom: env(
+      safe-area-inset-bottom,
+      0px
+    ); /* セーフエリア（ジェスチャーバー）に主要操作を置かない */
   }
 }
 .nav-link {
@@ -384,7 +392,7 @@ m3e-search-bar {
   font: var(--mf-type-body-medium);
 }
 .table th {
-  text-align: left;
+  text-align: start;
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
   padding: 8px 12px;
@@ -597,7 +605,7 @@ m3e-search-bar {
   display: grid;
   gap: 4px;
   color: var(--mf-on-surface);
-  text-align: left;
+  text-align: start;
 }
 .file-drop__files li {
   display: flex;
@@ -610,9 +618,9 @@ m3e-search-bar {
   color: var(--mf-on-surface-variant);
   cursor: pointer;
   display: inline-flex;
-  padding: 2px;
+  padding: 4px;
   border-radius: 50%;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .file-drop__remove m3e-icon {
   font-size: 18px;
@@ -633,7 +641,7 @@ m3e-search-bar {
 /* ---------- 通知・案内（M3 の色役割） */
 .alert {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
   padding: 12px 16px;
   border-radius: var(--mf-shape-md);
@@ -696,7 +704,7 @@ m3e-search-bar {
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--mf-outline-variant);
 }
 .upload-item__bar {
@@ -746,7 +754,7 @@ m3e-search-bar {
 .picker__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 .picker__search {
   position: relative;
@@ -774,9 +782,9 @@ m3e-search-bar {
   gap: 12px;
   border: 0;
   background: transparent;
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: var(--mf-shape-sm);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   font: var(--mf-type-body-medium);
   color: inherit;
@@ -794,13 +802,13 @@ m3e-search-bar {
 /* ---------- 専門確認・持越・通知（v1） */
 .checks {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 .check {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--mf-outline-variant);
 }
@@ -812,8 +820,8 @@ m3e-search-bar {
 }
 .carry {
   display: grid;
-  gap: 6px;
-  padding: 10px 0;
+  gap: 8px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--mf-outline-variant);
 }
 .notification-list {
@@ -870,7 +878,7 @@ m3e-search-bar {
   display: inline-block;
   min-width: 16px;
   padding: 0 4px;
-  margin-right: 2px;
+  margin-inline-end: 4px;
   border-radius: 8px;
   background: #2b5ea8;
   color: #fff;
@@ -907,7 +915,7 @@ m3e-search-bar {
   white-space: nowrap;
 }
 .nav-icon .badge {
-  left: 12px;
+  inset-inline-start: 12px; /* RTL では左上に鏡映（Bidirectionality › Badges） */
   top: -2px;
 }
 /* アプリバーのベル: ボタン（48 のタッチ領域、アイコンは 12,12 から 24）の外にバッジを置く */
@@ -916,14 +924,14 @@ m3e-search-bar {
   display: inline-flex;
 }
 .bell .badge {
-  left: 24px;
+  inset-inline-start: 24px;
   top: 10px;
 }
 .shell__account {
   --m3e-icon-button-icon-size: 32px; /* 右上のアバターは 32（アイコンボタンの既定 24 で潰さない） */
 }
 .ml {
-  margin-left: 6px;
+  margin-inline-start: 8px;
 }
 .details > summary {
   cursor: pointer;
@@ -933,7 +941,7 @@ m3e-search-bar {
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .details > summary::before {
   content: "chevron_right";
@@ -1039,7 +1047,7 @@ m3e-search-bar {
 @media (min-width: 600px) {
   #notif-menu,
   #account-menu {
-    margin-left: -8px; /* 窓の右端に密着させない（錨の右端 = 窓端 − 4 のため） */
+    margin-inline-start: -8px; /* 窓の端に密着させない（錨の端 = 窓端 − 4 のため） */
   }
 }
 /* 通知シート（compact）: Scaffold の「下端にドックしたペイン」 */
@@ -1082,7 +1090,7 @@ m3e-search-bar {
 }
 .notif__body {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   white-space: normal;
   line-height: 1.4;
   padding: 4px 0;
@@ -1103,7 +1111,7 @@ m3e-search-bar {
 .info {
   margin: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 .info > div {
   display: grid;
@@ -1123,7 +1131,7 @@ m3e-search-bar {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* ---------- 校正ワークスペース（U-05） */
@@ -1144,9 +1152,9 @@ m3e-search-bar {
 .ws__back {
   display: inline-flex;
   color: var(--mf-on-surface-variant);
-  padding: 8px;
+  padding: 12px; /* タッチ領域 48（M3 Density: 既定は 48×48 以上） */
   border-radius: 50%;
-  margin-left: -8px;
+  margin-inline-start: -12px;
 }
 .ws__title {
   display: flex;
@@ -1177,16 +1185,55 @@ m3e-search-bar {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 24px; /* M3 のペイン間スペーサー 24（expanded 以上） */
   min-height: 0;
-}
-.ws__body--panel {
-  grid-template-columns: minmax(0, 1fr) 360px; /* M3 supporting pane: expanded の固定ペイン 360（Compose の既定 DefaultPreferredWidth） */
+  --ws-pane: 360px; /* M3 supporting pane: expanded の固定ペイン 360（Breakpoints › Expanded、Compose DefaultPreferredWidth） */
 }
 @media (min-width: 1200px) {
-  .ws__body--panel {
-    grid-template-columns: minmax(0, 1fr) 412px; /* large 以上の固定ペインは 412（M3 Breakpoints: large/extra-large、Compose DefaultPreferredWidthXL） */
+  .ws__body {
+    --ws-pane: 412px; /* large 以上の固定ペインは 412（Breakpoints › Large & extra-large、Compose DefaultPreferredWidthXL） */
   }
+}
+/* 固定＋可変の 2 ペイン: 紙面（可変）｜スペーサー 24（ドラッグハンドル）｜引き出し（固定） */
+.ws__body--panel {
+  grid-template-columns: minmax(0, 1fr) 24px var(--ws-pane);
+}
+/* 折りたたみ時もスペーサーとハンドルを残す（ハンドルで 1 ペイン ⇄ 2 ペインを切り替える） */
+.ws__body--handle {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+.ws__spacer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+/* ドラッグハンドル: 4×48、角 full、on-surface-variant 40%。タッチ領域 48×48 は両側のペインに少し重なる */
+.ws__handle {
+  position: relative;
+  width: 4px;
+  height: 48px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mf-on-surface-variant) 40%, transparent);
+  cursor: col-resize;
+  outline: none;
+  touch-action: none;
+  transition: background var(--mf-motion);
+}
+.ws__handle::before {
+  content: "";
+  position: absolute;
+  inset: -0px -22px;
+}
+.ws__handle:hover,
+.ws__handle:focus-visible {
+  background: var(--mf-on-surface-variant);
+}
+.ws__handle:focus-visible {
+  box-shadow: 0 0 0 3px var(--mf-secondary);
+}
+.ws__handle--collapsed {
+  cursor: pointer;
 }
 .ws__viewer {
   position: relative;
@@ -1333,11 +1380,12 @@ m3e-search-bar {
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
-  padding: 8px 12px;
+  padding: 0 12px;
+  min-height: 48px; /* タッチ領域 48 */
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: -1px;
 }
 .drawer__tab--on {
@@ -1365,7 +1413,7 @@ m3e-search-bar {
 }
 .ws__drawer-buttons {
   display: inline-flex;
-  gap: 2px;
+  gap: 4px;
 }
 .comments {
   display: flex;
@@ -1387,7 +1435,7 @@ m3e-search-bar {
   overflow: auto;
   padding: 4px 12px 16px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   align-content: start;
 }
 .comments__empty {
@@ -1396,9 +1444,28 @@ m3e-search-bar {
 .comments__blocked {
   padding: 8px 16px 12px;
 }
+.ws__sheet,
+.notif-sheet,
+.action-sheet {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
 .ws__sheet {
   --m3e-bottom-sheet-max-width: 100%;
   --m3e-bottom-sheet-z-index: 31;
+}
+/* compact の補助的な選択（スレッドの操作・添付の切替）: ボトムシート */
+.action-sheet {
+  --m3e-bottom-sheet-max-width: 100%;
+  --m3e-bottom-sheet-z-index: 40;
+}
+.action-sheet__header {
+  padding: 0 16px 4px;
+}
+.action-sheet__list {
+  margin: 0 -16px;
+}
+.action-sheet__list .list__item {
+  --m3e-list-item-container-shape: 0;
 }
 .ws__sheet .drawer {
   background: transparent;
@@ -1407,7 +1474,7 @@ m3e-search-bar {
 /* コメントカード（Google ドキュメント式・M3 card） */
 .thread {
   --m3e-card-shape: var(--mf-shape-md);
-  --m3e-card-padding: 12px 12px 10px;
+  --m3e-card-padding: 12px;
   display: block;
   cursor: pointer;
   color: var(--mf-on-surface);
@@ -1421,7 +1488,7 @@ m3e-search-bar {
 }
 .thread__content {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 .thread__head {
   display: flex;
@@ -1458,14 +1525,14 @@ m3e-search-bar {
 }
 .thread__quote {
   margin: 0;
-  padding: 2px 10px;
-  border-left: 3px solid var(--mf-outline-variant);
+  padding: 4px 12px;
+  border-inline-start: 3px solid var(--mf-outline-variant);
   color: var(--mf-on-surface-variant);
   font: var(--mf-type-body-small);
 }
 .thread__meta {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -1482,7 +1549,7 @@ m3e-search-bar {
   align-items: flex-start;
 }
 .thread__replyitem .thread__name {
-  margin-right: 6px;
+  margin-inline-end: 8px;
 }
 .thread__event {
   font: var(--mf-type-body-small);
@@ -1491,12 +1558,12 @@ m3e-search-bar {
 .thread__reply-open {
   font: var(--mf-type-body-medium);
   font-family: var(--mf-font);
-  text-align: left;
+  text-align: start;
   color: var(--mf-on-surface-variant);
   background: transparent;
   border: 1px solid var(--mf-outline-variant);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   cursor: text;
 }
 .thread__reply-open:hover {
@@ -1511,7 +1578,7 @@ m3e-search-bar {
   min-height: 56px;
   border: 1px solid var(--mf-outline-variant);
   border-radius: var(--mf-shape-sm);
-  padding: 8px 10px;
+  padding: 8px 12px;
   font: var(--mf-type-body-medium);
   font-family: var(--mf-font);
 }
@@ -1540,8 +1607,7 @@ m3e-search-bar {
 }
 .gutter__item {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   transition: top var(--mf-motion);
 }
 .gutter__item--active {
@@ -1563,7 +1629,7 @@ m3e-search-bar {
   box-shadow:
     0 1px 3px rgb(0 0 0 / 0.3),
     0 4px 8px 3px rgb(0 0 0 / 0.15);
-  padding: 10px 10px 6px;
+  padding: 12px 12px 8px;
   display: grid;
   gap: 4px;
   cursor: default;
@@ -1604,7 +1670,7 @@ m3e-search-bar {
 .compare__label {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
-  padding: 0 4px 6px;
+  padding: 0 4px 8px;
 }
 
 /* 引き出し「版」 */
@@ -1624,10 +1690,10 @@ m3e-search-bar {
   display: grid;
 }
 .version {
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--mf-outline-variant);
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 .version--current {
   --mf-current: 1;
@@ -1685,7 +1751,7 @@ m3e-search-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 0;
+  padding: 4px 0;
   border-bottom: 1px solid var(--mf-outline-variant);
 }
 .acl__add {
@@ -1764,11 +1830,13 @@ m3e-search-bar {
   border-radius: 0;
 }
 .ws--compact .viewer__stage {
-  padding: 16px 16px 152px; /* 下端はシートの覗き見（60）＋ 16 ＋ツールバー（64）＋ 16 */
+  padding: 16px 16px 160px; /* 下端はシートの覗き見（64）＋ 16 ＋ツールバー（64）＋ 16 */
 }
 .ws--compact .ws__toolbar {
   top: auto;
-  bottom: 76px; /* 覗き見 60 ＋ 16 */
+  bottom: calc(
+    80px + env(safe-area-inset-bottom, 0px)
+  ); /* 覗き見 64 ＋ 16。セーフエリア（M3 Scaffold › Safety region）を避ける */
 }
 /* compact のリストは端から端まで（本文の左端 16 が題名と揃う）。.list の後に置く */
 @media (max-width: 599px) {

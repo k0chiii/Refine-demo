@@ -86,11 +86,19 @@
     "violations": []
   },
   {
+    "screen": "36-rtl-dashboard",
+    "violations": []
+  },
+  {
     "screen": "29-rail-expanded",
     "violations": []
   },
   {
     "screen": "08-workspace-comment",
+    "violations": []
+  },
+  {
+    "screen": "35-pane-drag-handle",
     "violations": []
   },
   {
@@ -167,6 +175,10 @@
   },
   {
     "screen": "26-mobile-workspace",
+    "violations": []
+  },
+  {
+    "screen": "37-mobile-action-sheet",
     "violations": []
   },
   {

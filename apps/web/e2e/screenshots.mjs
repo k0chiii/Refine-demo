@@ -244,6 +244,16 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await page.waitForSelector("m3e-list-action");
   await shot("07-dashboard-reviewer");
+  // 36 RTL（Bidirectionality）: レールは先頭端（右）、アプリバー・バッジ・リストが鏡映
+  await page.evaluate(() => {
+    document.documentElement.dir = "rtl";
+  });
+  await page.waitForTimeout(500);
+  await shot("36-rtl-dashboard");
+  await page.evaluate(() => {
+    document.documentElement.dir = "ltr";
+  });
+  await page.waitForTimeout(300);
   // 29 large（1200 以上）: メニューで標準の展開レール（220）。内容を押す。状態は保存され、既定は折りたたみ
   await railToggle.click();
   await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "expanded");
@@ -278,6 +288,22 @@ async function main() {
   await page.waitForFunction(() => document.querySelectorAll(".thread").length >= 2);
   await page.locator(".thread .thread__body").first().click();
   await shot("08-workspace-comment");
+  // 35 ドラッグハンドル（Scaffold › Pane expansion & resizing）: スペーサーのハンドルで固定ペインを 412 → 360 にスナップ
+  {
+    const hb = await page.locator(".ws__handle").boundingBox();
+    await page.mouse.move(hb.x + 2, hb.y + 24);
+    await page.mouse.down();
+    await page.mouse.move(hb.x + 2 + 56, hb.y + 24, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    await page.locator(".ws__handle").hover();
+    await page.waitForTimeout(300);
+    await shot("35-pane-drag-handle");
+    await page.locator(".ws__handle").focus();
+    await page.keyboard.press("Home"); // 既定幅に戻す
+    await page.mouse.move(700, 400);
+    await page.waitForTimeout(300);
+  }
   // 23 ピンの高さに並べる（Google ドキュメント式） / 24 ピンだけ（Figma 式）
   await page.locator('m3e-icon-button[aria-label="ピンの高さに並べる"]').click();
   await page.waitForSelector(".gutter .thread");
@@ -455,6 +481,19 @@ async function main() {
   await page.waitForSelector("m3e-bottom-sheet.ws__sheet"); // 通知のシート（非表示）と区別する
   await page.waitForTimeout(800);
   await shot("26-mobile-workspace");
+  // 37 compact の補助的な選択はボトムシート（Breakpoints: compact は Bottom sheet、medium 以上は Menu）。添付が複数ある第1版で
+  await go(revisionUrl);
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await page.waitForTimeout(600);
+  await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
+  await page.waitForSelector("m3e-bottom-sheet.action-sheet .list__item");
+  await page.waitForTimeout(700);
+  await shot("37-mobile-action-sheet");
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.action-sheet").hide());
+  await page.waitForTimeout(600);
+  await go(revision2Url);
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await page.waitForTimeout(600);
   // 34 シートを半分まで上げる（タブを押しても上がる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").show(1));
   await page.waitForTimeout(700);

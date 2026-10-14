@@ -4,43 +4,46 @@
 
 画面構成は 2026-10-13 の見直し（[`UI_M3E.md`](UI_M3E.md) §11）に従う: **ダッシュボード／制作物／エディタ** の 3 画面＋管理。通知はアプリバーのベル（compact では下部バーの「通知」からボトムシート）。制作物に関する操作はすべてエディタの引き出し（コメント／版／情報）で行う。サイドバーとレイアウトは M3 のウィンドウサイズクラス（§12）: 600 以上はレール（メニュー・FAB「制作物を登録」・行き先）、599 以下は検索バーがアプリバー（アバターは末尾）＋下部バー。compact のエディタは共通バーを消し、独自のトップアプリバーと覗き見のボトムシート。
 
-| #   | 画面                                                                          | 役割           | 画像                                           |
-| --- | ----------------------------------------------------------------------------- | -------------- | ---------------------------------------------- |
-| 1   | サインイン（Nogiku SSO / 開発用モック）                                       | —              | ![](screenshots/01-signin.png)                 |
-| 2   | 制作物: 探して開くだけの一覧（登録はレールの FAB）                            | 制作者         | ![](screenshots/02-works-list.png)             |
-| 3   | エディタ（版なし）: 最初の版を提出する導線だけ                                | 制作者         | ![](screenshots/03-editor-empty.png)           |
-| 4   | 版提出ダイアログ: 全ファイル検証済み（確定前）                                | 制作者         | ![](screenshots/04-submit-verified.png)        |
-| 5   | 提出確定直後（その版のエディタへ）                                            | 制作者         | ![](screenshots/05-submit-confirmed.png)       |
-| 6   | エディタの引き出し「情報」: 基本情報・操作・専門確認（校正者割当後）          | 主管           | ![](screenshots/06-editor-info.png)            |
-| 7   | ダッシュボード「あなたの担当 › 校正する」                                     | 校正者         | ![](screenshots/07-dashboard-reviewer.png)     |
-| 8   | エディタ: PDF をドラッグしてその場で投稿（コメントを横に一覧）                | 校正者         | ![](screenshots/08-workspace-comment.png)      |
-| 9   | 指摘対応: ⋮ から理由付き不採用、履歴                                          | 制作者         | ![](screenshots/09-decision.png)               |
-| 10  | 校了ダイアログ（引き出し「情報」から）                                        | 校了権限者     | ![](screenshots/10-finalize-dialog.png)        |
-| 11  | 校了後（校了版・校了履歴・再開）                                              | 校了権限者     | ![](screenshots/11-work-finalized.png)         |
-| 12  | 管理: 作品ごとの閲覧権限（ダイアログ。管理者は内容を閲覧しない: D3）          | システム管理者 | ![](screenshots/12-acl.png)                    |
-| 13  | 管理（ACL 対象作品・ユーザー・監査ログ）                                      | システム管理者 | ![](screenshots/13-admin-audit.png)            |
-| 14  | 版提出: 専門確認の宣言と担当者選択（ダイアログ内）                            | 制作者         | ![](screenshots/14-submit-required-checks.png) |
-| 15  | 制作物の編集（引き出し「情報」からのダイアログ）                              | 主管           | ![](screenshots/15-work-edit.png)              |
-| 16  | 専門確認（担当者が確認完了。引き出し「情報」）                                | 校正者         | ![](screenshots/16-required-check-done.png)    |
-| 17  | 第2版: 前版の未解決指摘の持越（人が確認）                                     | 制作者         | ![](screenshots/17-carry-forward.png)          |
-| 18  | 通知: アプリバーのベル（規定寸法のバッジ）と幅 360 の浮遊パネル               | 校正者         | ![](screenshots/18-notifications.png)          |
-| 19  | 文章の閲覧と範囲指摘（本文を選択するとその場に投稿欄）                        | 校正者         | ![](screenshots/19-text-range.png)             |
-| 20  | compact: ダッシュボード（検索バーがアプリバー、下部バー 3 件）                | 校正者         | ![](screenshots/20-mobile-dashboard.png)       |
-| 21  | 日付ピッカー（校正期限は日付のみ・0:00 JST）                                  | 制作者         | ![](screenshots/21-date-picker.png)            |
-| 22  | アカウントメニュー（右上の Humation アバター）                                | 制作者         | ![](screenshots/22-account-menu.png)           |
-| 23  | エディタのレイアウト「ピンの高さに並べる」（Google ドキュメント式）           | 校正者         | ![](screenshots/23-layout-aligned.png)         |
-| 24  | エディタのレイアウト「ピンだけ」（Figma 式）                                  | 校正者         | ![](screenshots/24-layout-pins.png)            |
-| 25  | 版の比較（引き出し「版」の「比較」。ページ・倍率を共有）                      | 制作者         | ![](screenshots/25-compare.png)                |
-| 26  | compact: エディタ（独自のトップアプリバー、紙面は幅に合わせ、覗き見のシート） | 校正者         | ![](screenshots/26-mobile-workspace.png)       |
-| 27  | ダッシュボード「あなたの担当 › 返事をする」                                   | 制作者         | ![](screenshots/27-dashboard-creator.png)      |
-| 28  | エディタの引き出し「版」: 履歴・開く・比較・提出・無効化                      | 制作者         | ![](screenshots/28-versions.png)               |
-| 29  | large（1200 以上）: 標準の展開レール（メニューで開閉、状態を保存）            | 校正者         | ![](screenshots/29-rail-expanded.png)          |
-| 30  | expanded（840–1199）: モーダルの展開レール（スクリム、Esc で閉じる）          | 校正者         | ![](screenshots/30-rail-modal.png)             |
-| 31  | レールの FAB「制作物を登録」→ 登録ダイアログ                                  | 制作者         | ![](screenshots/31-new-work-fab.png)           |
-| 32  | compact: 下部バーの「通知」はモーダルのボトムシート                           | 校正者         | ![](screenshots/32-mobile-notifications.png)   |
-| 33  | compact: 制作物一覧（リストは端から端まで、題名と左端 16 で揃う）             | 校正者         | ![](screenshots/33-mobile-works.png)           |
-| 34  | compact: エディタの引き出しを半分まで上げた状態                               | 校正者         | ![](screenshots/34-mobile-sheet-half.png)      |
+| #   | 画面                                                                              | 役割           | 画像                                           |
+| --- | --------------------------------------------------------------------------------- | -------------- | ---------------------------------------------- |
+| 1   | サインイン（Nogiku SSO / 開発用モック）                                           | —              | ![](screenshots/01-signin.png)                 |
+| 2   | 制作物: 探して開くだけの一覧（登録はレールの FAB）                                | 制作者         | ![](screenshots/02-works-list.png)             |
+| 3   | エディタ（版なし）: 最初の版を提出する導線だけ                                    | 制作者         | ![](screenshots/03-editor-empty.png)           |
+| 4   | 版提出ダイアログ: 全ファイル検証済み（確定前）                                    | 制作者         | ![](screenshots/04-submit-verified.png)        |
+| 5   | 提出確定直後（その版のエディタへ）                                                | 制作者         | ![](screenshots/05-submit-confirmed.png)       |
+| 6   | エディタの引き出し「情報」: 基本情報・操作・専門確認（校正者割当後）              | 主管           | ![](screenshots/06-editor-info.png)            |
+| 7   | ダッシュボード「あなたの担当 › 校正する」                                         | 校正者         | ![](screenshots/07-dashboard-reviewer.png)     |
+| 8   | エディタ: PDF をドラッグしてその場で投稿（コメントを横に一覧）                    | 校正者         | ![](screenshots/08-workspace-comment.png)      |
+| 9   | 指摘対応: ⋮ から理由付き不採用、履歴                                              | 制作者         | ![](screenshots/09-decision.png)               |
+| 10  | 校了ダイアログ（引き出し「情報」から）                                            | 校了権限者     | ![](screenshots/10-finalize-dialog.png)        |
+| 11  | 校了後（校了版・校了履歴・再開）                                                  | 校了権限者     | ![](screenshots/11-work-finalized.png)         |
+| 12  | 管理: 作品ごとの閲覧権限（ダイアログ。管理者は内容を閲覧しない: D3）              | システム管理者 | ![](screenshots/12-acl.png)                    |
+| 13  | 管理（ACL 対象作品・ユーザー・監査ログ）                                          | システム管理者 | ![](screenshots/13-admin-audit.png)            |
+| 14  | 版提出: 専門確認の宣言と担当者選択（ダイアログ内）                                | 制作者         | ![](screenshots/14-submit-required-checks.png) |
+| 15  | 制作物の編集（引き出し「情報」からのダイアログ）                                  | 主管           | ![](screenshots/15-work-edit.png)              |
+| 16  | 専門確認（担当者が確認完了。引き出し「情報」）                                    | 校正者         | ![](screenshots/16-required-check-done.png)    |
+| 17  | 第2版: 前版の未解決指摘の持越（人が確認）                                         | 制作者         | ![](screenshots/17-carry-forward.png)          |
+| 18  | 通知: アプリバーのベル（規定寸法のバッジ）と幅 360 の浮遊パネル                   | 校正者         | ![](screenshots/18-notifications.png)          |
+| 19  | 文章の閲覧と範囲指摘（本文を選択するとその場に投稿欄）                            | 校正者         | ![](screenshots/19-text-range.png)             |
+| 20  | compact: ダッシュボード（検索バーがアプリバー、下部バー 3 件）                    | 校正者         | ![](screenshots/20-mobile-dashboard.png)       |
+| 21  | 日付ピッカー（校正期限は日付のみ・0:00 JST）                                      | 制作者         | ![](screenshots/21-date-picker.png)            |
+| 22  | アカウントメニュー（右上の Humation アバター）                                    | 制作者         | ![](screenshots/22-account-menu.png)           |
+| 23  | エディタのレイアウト「ピンの高さに並べる」（Google ドキュメント式）               | 校正者         | ![](screenshots/23-layout-aligned.png)         |
+| 24  | エディタのレイアウト「ピンだけ」（Figma 式）                                      | 校正者         | ![](screenshots/24-layout-pins.png)            |
+| 25  | 版の比較（引き出し「版」の「比較」。ページ・倍率を共有）                          | 制作者         | ![](screenshots/25-compare.png)                |
+| 26  | compact: エディタ（独自のトップアプリバー、紙面は幅に合わせ、覗き見のシート）     | 校正者         | ![](screenshots/26-mobile-workspace.png)       |
+| 27  | ダッシュボード「あなたの担当 › 返事をする」                                       | 制作者         | ![](screenshots/27-dashboard-creator.png)      |
+| 28  | エディタの引き出し「版」: 履歴・開く・比較・提出・無効化                          | 制作者         | ![](screenshots/28-versions.png)               |
+| 29  | large（1200 以上）: 標準の展開レール（メニューで開閉、状態を保存）                | 校正者         | ![](screenshots/29-rail-expanded.png)          |
+| 30  | expanded（840–1199）: モーダルの展開レール（スクリム、Esc で閉じる）              | 校正者         | ![](screenshots/30-rail-modal.png)             |
+| 31  | レールの FAB「制作物を登録」→ 登録ダイアログ                                      | 制作者         | ![](screenshots/31-new-work-fab.png)           |
+| 32  | compact: 下部バーの「通知」はモーダルのボトムシート                               | 校正者         | ![](screenshots/32-mobile-notifications.png)   |
+| 33  | compact: 制作物一覧（リストは端から端まで、題名と左端 16 で揃う）                 | 校正者         | ![](screenshots/33-mobile-works.png)           |
+| 34  | compact: エディタの引き出しを半分まで上げた状態                                   | 校正者         | ![](screenshots/34-mobile-sheet-half.png)      |
+| 35  | ドラッグハンドル: スペーサー 24 の中のハンドルで固定ペインを 412 → 360 にスナップ | 校正者         | ![](screenshots/35-pane-drag-handle.png)       |
+| 36  | RTL（`dir=rtl`）: レールは先頭端（右）、アプリバー・リストが鏡映                  | 校正者         | ![](screenshots/36-rtl-dashboard.png)          |
+| 37  | compact の補助的な選択（添付の切替）はボトムシート                                | 校正者         | ![](screenshots/37-mobile-action-sheet.png)    |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（34 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（37 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 Material 3 Expressive 適用前の画面は `docs/screenshots-before/`、前後比較と検証は [`UI_M3E.md`](UI_M3E.md)。

@@ -3,6 +3,8 @@ import type { Id } from "@mf100/convex/dataModel";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
+import { useWindowClass } from "@/lib/useMedia";
+import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { formatJstShort } from "@/lib/format";
 import { resolutionLabel, severityLabel } from "@/lib/labels";
 import { StatusText } from "@/ui/Chip";
@@ -82,6 +84,21 @@ export function ThreadCard({
   };
   const menuId = `tm-${t.id}`;
   const hasMenu = canDecide || canEdit;
+  // compact の補助的な選択はボトムシート（M3 Breakpoints: compact は Bottom sheet、medium 以上は Menu）
+  const compact = useWindowClass() === "compact";
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const actions: ActionSheetItem[] = [
+    ...(canDecide && !closed
+      ? [
+          { icon: "block", label: "不採用（理由を書く）", onSelect: () => open("rejected") },
+          { icon: "move_down", label: "次版へ持越", onSelect: () => open("deferred") },
+        ]
+      : []),
+    ...(canDecide ? [{ icon: "person_pin", label: "担当者", onSelect: () => open("assign") }] : []),
+    ...(canEdit && t.authorId === meId
+      ? [{ icon: "edit", label: "訂正", onSelect: () => open("edit", t.body) }]
+      : []),
+  ];
 
   return (
     <>
@@ -113,9 +130,20 @@ export function ThreadCard({
               </M3eIconButton>
             ) : null}
             {hasMenu ? (
-              <M3eIconButton aria-label="その他の操作" className="thread__more">
+              <M3eIconButton
+                aria-label="その他の操作"
+                className="thread__more"
+                {...(compact
+                  ? {
+                      onClick: (e: Event) => {
+                        stop(e);
+                        setSheetOpen(true);
+                      },
+                    }
+                  : {})}
+              >
                 <M3eIcon name="more_vert" />
-                <M3eMenuTrigger htmlFor={menuId} />
+                {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}
               </M3eIconButton>
             ) : null}
           </div>
@@ -208,7 +236,15 @@ export function ThreadCard({
           ) : null}
         </div>
       </M3eCard>
-      {hasMenu ? (
+      {hasMenu && compact ? (
+        <ActionSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="コメントの操作"
+          items={actions}
+        />
+      ) : null}
+      {hasMenu && !compact ? (
         <M3eMenu id={menuId} positionX="before" onClick={stop}>
           {canDecide && !closed ? (
             <M3eMenuItem onClick={() => open("rejected")}>
