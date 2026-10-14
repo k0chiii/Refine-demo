@@ -97,8 +97,8 @@ code {
   padding: 1px 4px;
   border-radius: var(--mf-shape-xs);
 }
-/* Material Symbols（可変フォント）: 選択で輪郭 → 塗りへ連続的に変化させる（M3 の active icon は filled）。
-   太さ（wght）は常に 400。太さを変えると字面が外側へ膨らんで位置がずれて見えるため、ホバーでも変えない */
+/* Material Symbols（可変フォント）: 選択・ホバーで輪郭 → 塗り、太さを連続的に変化させる（M3 Expressive の motion）。
+   一度やめたが利用者の希望で復活。位置ずれの原因は展開時の項目の高さ差（修正済み）で、この変化ではない */
 m3e-icon {
   font-family: "Material Symbols Outlined";
   font-variation-settings:
@@ -106,22 +106,36 @@ m3e-icon {
     "wght" 400,
     "GRAD" 0,
     "opsz" 24;
-  /* 輪郭 → 塗りの連続変化（350ms）はやめた。変化中は字面の重心が動いて「アイコンが動く」ように見えるため、Compose と同じく即時に切り替える */
+  transition: font-variation-settings 350ms cubic-bezier(0.2, 0, 0, 1);
 }
 m3e-icon.icon--filled {
   font-variation-settings:
     "FILL" 1,
-    "wght" 400,
+    "wght" 500,
     "GRAD" 0,
     "opsz" 24;
 }
-/* レールと下部バーの項目は動かさない: M3E が描画時・向き変更時に入れるアイコンの 4px スライド、ラベルのフェード、
-   インジケーターの伸縮（short-1 / short-2 / medium-1 の長さを使う）を 0 にする */
-.shell__rail,
-.shell__bar {
-  --md-sys-motion-duration-short-1: 0ms;
-  --md-sys-motion-duration-short-2: 0ms;
-  --md-sys-motion-duration-medium-1: 0ms;
+m3e-nav-item:hover m3e-icon,
+m3e-icon-button:hover m3e-icon,
+m3e-button:hover m3e-icon {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 24;
+}
+m3e-nav-item:hover m3e-icon.icon--filled,
+m3e-icon-button:hover m3e-icon.icon--filled {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 24;
+}
+@media (prefers-reduced-motion: reduce) {
+  m3e-icon {
+    transition: none;
+  }
 }
 /* RTL では方向を持つアイコン（戻る・進む）を鏡映する（Bidirectionality › Icons & symbols） */
 [dir="rtl"] m3e-icon.icon--mirror {
