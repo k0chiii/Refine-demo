@@ -1,15 +1,8 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  useRouterState,
-  useSearch,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { useWindowClass } from "@/lib/useMedia";
 import {
@@ -23,7 +16,6 @@ import {
   M3eNavBar,
   M3eNavItem,
   M3eNavRail,
-  M3eSearchBar,
 } from "@/ui/m3e";
 import { UserAvatar } from "@/ui/UserAvatar";
 
@@ -40,7 +32,7 @@ const readRailPref = () => {
 
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
- * - compact（<600）: 検索バーがアプリバー（アバターは検索バーの末尾）。下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。
+ * - compact（<600）: アプリバーはアカウントだけ。下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。
  *   エディタ（`/works/:id`）では共通バーを隠し、エディタのトップアプリバー（戻る・題名）だけにする。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
@@ -163,18 +155,9 @@ function AppLayout() {
       <div className="shell__main">
         {immersive ? null : (
           <M3eAppBar size="small" className="shell__appbar">
-            <div slot="title" className="shell__search">
-              {/* compact は検索バーがアプリバーそのもの（M3 Search: 高さ 56、左右 16、アバター 30 を末尾に） */}
-              <WorkSearch
-                trailing={cls === "compact" ? account(30, "shell__search-account") : null}
-              />
-            </div>
-            {cls === "compact" ? null : (
-              <>
-                <NotificationsBell.Bell menuId="notif-menu" />
-                {account(32, "shell__account")}
-              </>
-            )}
+            {/* 題名も検索も置かない（利用者判断）。通知は medium 以上だけ（compact は下部バーの「通知」）、アカウントは常に右上 */}
+            {cls === "compact" ? null : <NotificationsBell.Bell menuId="notif-menu" />}
+            {account(32, "shell__account")}
           </M3eAppBar>
         )}
         {cls === "compact" ? (
@@ -212,47 +195,5 @@ function AppLayout() {
         </M3eNavBar>
       ) : null}
     </div>
-  );
-}
-
-/** アプリバーの検索（Google ドライブ式）。入力は制作物一覧の `q` に反映し、一覧以外の画面からは一覧へ移動する。 */
-function WorkSearch({ trailing }: { trailing?: ReactNode }) {
-  const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { q?: string };
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  const onList = path === "/works" || path === "/works/";
-  const [text, setText] = useState(search.q ?? "");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    setText(onList ? (search.q ?? "") : "");
-  }, [search.q, onList]);
-  const apply = (q: string) => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      void navigate({ to: "/works", search: q ? { q } : {}, replace: onList });
-    }, 250);
-  };
-  return (
-    <M3eSearchBar
-      className="search search--appbar"
-      clearable
-      onClear={() => {
-        setText("");
-        apply("");
-      }}
-    >
-      <M3eIcon slot="leading" name="search" />
-      <input
-        slot="input"
-        placeholder="制作物を検索"
-        aria-label="制作物を検索"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          apply(e.target.value);
-        }}
-      />
-      {trailing}
-    </M3eSearchBar>
   );
 }

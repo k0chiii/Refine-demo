@@ -203,6 +203,8 @@ m3e-search-bar {
   box-sizing: border-box;
   --m3e-nav-rail-compact-width: 96px; /* M3 折りたたみレール */
   --m3e-nav-rail-expanded-width: 220px; /* M3 展開レール（最小） */
+  /* M3 の「上端からヘッダーまで 44」は Android のステータスバーを含む値。web ではアプリバー（64）のアイコン中心 32 に揃える: 12 ＋ 40 / 2 ＝ 32 */
+  --m3e-nav-rail-top-space: 12px;
 }
 /* expanded（840–1199）: 展開レールはモーダル。折りたたみ分（96）の列幅だけ残し、本体は重ねる */
 .shell--modal .shell__nav {
@@ -236,21 +238,6 @@ m3e-search-bar {
   width: 100%;
   box-sizing: border-box;
 }
-.shell__search {
-  display: block;
-  width: min(560px, 100%);
-}
-.search--appbar {
-  width: 100%;
-  min-width: 0;
-  --m3e-search-bar-container-color: var(--mf-surface-container-high);
-  /* M3 Search 規定: 高さ 56、幅 360–720、先頭アイコンは端から 24、ラベルはタッチ領域（48）から 4 ＝ 端から 64。
-     M3E は先頭スロットに 12 の内側余白を持つので、容器の先頭余白を 12 にして 24 に合わせる */
-  --m3e-search-bar-leading-space: 12px;
-}
-.search--appbar input::placeholder {
-  color: var(--mf-on-surface-variant);
-}
 .shell__bar {
   display: none;
 }
@@ -264,20 +251,6 @@ m3e-search-bar {
   }
   .shell__content {
     padding: 8px 16px calc(96px + env(safe-area-inset-bottom, 0px)); /* 余白 16（compact。Breakpoints › Compact）＋下部ナビの高さ分＋セーフエリア */
-  }
-  .shell__search {
-    width: 100%;
-  }
-  /* 検索バーがアプリバー（M3 Search: 高さ 56、左右の余白 16）。コンテナ余白 12 ＋ 題名スロットの 4 ＝ 16 */
-  .shell__appbar {
-    --m3e-app-bar-padding-left: 12px;
-    --m3e-app-bar-padding-right: 12px;
-  }
-  .search--appbar {
-    --m3e-search-bar-trailing-space: 15px; /* 末尾のアバター（30、タッチ領域 48）の右端を規定の 24 に */
-  }
-  .shell__search-account {
-    --m3e-icon-button-icon-size: 30px;
   }
   /* エディタ（詳細画面）: 共通バーと下部バーを消し、エディタのトップアプリバーに譲る */
   .shell--immersive .shell__content {
