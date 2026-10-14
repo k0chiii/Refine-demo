@@ -5,14 +5,8 @@ import { useState } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { formatJstDate } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
-import {
-  M3eActionList,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eHeading,
-  M3eIcon,
-  M3eListAction,
-} from "@/ui/m3e";
+import { AppBarSlot } from "@/ui/AppBarSlot";
+import { M3eActionList, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eListAction } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (s: Record<string, unknown>): { q?: string; new?: boolean } => ({
@@ -24,7 +18,7 @@ export const Route = createFileRoute("/_app/works/")({
 
 /**
  * U-02 制作物。探して開くだけの入口。行を押すとエディタ（最新版）が開く。登録はレールの FAB「制作物を登録」が開くダイアログ（`?new=1`）。
- * 検索語はアプリバーの検索から `q` で渡る。
+ * 検索語は `q` で渡る（検索バーは一旦外している）。見出し「制作物」は共通アプリバーに差し込む（M3 App bars）。
  */
 function Works() {
   const { q, new: creating } = Route.useSearch();
@@ -46,17 +40,7 @@ function Works() {
 
   return (
     <div className="works">
-      <header className="page-header">
-        <M3eHeading
-          variant="headline"
-          size="small"
-          level={1}
-          emphasized
-          className="page-header__title"
-        >
-          制作物
-        </M3eHeading>
-      </header>
+      <AppBarSlot slot="title">制作物</AppBarSlot>
       <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
         {(["active", "on_hold", "finalized"] as const).map((k) => (
           <M3eFilterChip

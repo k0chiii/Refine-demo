@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { formatJstDate, remaining } from "@/lib/format";
+import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eActionList, M3eHeading, M3eListAction } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/")({ component: Dashboard });
@@ -38,6 +39,7 @@ const backlogGroups: Array<[keyof Dashboard["backlog"], string, (i: Item) => str
 /**
  * U-00 ダッシュボード。開いた瞬間に「次に何をするか」が分かる画面。
  * 上: あなたの担当（役割ごとに自動で出る）。下: 自分が関わる制作物で溜まっているもの。行を押すとエディタへ直行。
+ * 画面の見出し「あなたの担当」は共通アプリバーに差し込む（M3 App bars: 見出しはアプリバーに置く）。
  */
 function Dashboard() {
   const data = useQuery(api.dashboard.get, {});
@@ -66,17 +68,7 @@ function Dashboard() {
 
   return (
     <div>
-      <header className="page-header">
-        <M3eHeading
-          variant="headline"
-          size="small"
-          level={1}
-          emphasized
-          className="page-header__title"
-        >
-          あなたの担当
-        </M3eHeading>
-      </header>
+      <AppBarSlot slot="title">あなたの担当</AppBarSlot>
       <div className="dash">
         <section className="dash__section">
           {mine.length === 0 ? (

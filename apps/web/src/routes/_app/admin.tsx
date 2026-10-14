@@ -10,7 +10,7 @@ import { Card } from "@/ui/Card";
 import { StatusChip, StatusText } from "@/ui/Chip";
 import { AclPanel } from "@/features/work/AclPanel";
 import { M3eButton, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
-import { PageHeader } from "@/ui/PageHeader";
+import { AppBarSlot } from "@/ui/AppBarSlot";
 
 export const Route = createFileRoute("/_app/admin")({ component: Admin });
 
@@ -27,11 +27,17 @@ function Admin() {
     await setAdmin({ userId: userId as Id<"users">, value });
   });
   if (!me) return null;
+  const title = <AppBarSlot slot="title">管理</AppBarSlot>;
   if (!me.isSystemAdmin)
-    return <div className="alert">管理画面は校正システム管理者のみ利用できます。</div>;
+    return (
+      <>
+        {title}
+        <div className="alert">管理画面は校正システム管理者のみ利用できます。</div>
+      </>
+    );
   return (
     <>
-      <PageHeader title="管理" />
+      {title}
       <div className="stack">
         <Card title="作品ごとの閲覧権限（個人 ACL）">
           <div className="table-wrap" tabIndex={0}>
