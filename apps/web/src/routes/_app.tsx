@@ -81,9 +81,14 @@ function AppLayout() {
   const navItems = () =>
     items.map((it) => (
       <Link key={it.to} to={it.to} className="nav-link">
-        <M3eNavItem selected={selected(it.to)} data-to={it.to}>
+        <M3eNavItem
+          selected={selected(it.to)}
+          data-to={it.to}
+          aria-label={it.label}
+          title={it.label}
+        >
           <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
-          {it.label}
+          <span className="nav-label">{it.label}</span>
         </M3eNavItem>
       </Link>
     ));
@@ -134,7 +139,7 @@ function AppLayout() {
         <M3eNavRail
           id="app-rail"
           mode={railExpanded ? "expanded" : "compact"}
-          className={`shell__rail ${modal ? "shell__rail--modal" : ""}`}
+          className={`shell__rail ${modal ? "shell__rail--modal" : ""} ${railExpanded ? "" : "shell__rail--collapsed"}`}
           aria-label="主要ナビゲーション"
           onChange={resync}
         >

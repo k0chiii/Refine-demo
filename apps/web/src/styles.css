@@ -193,6 +193,15 @@ m3e-search-bar {
   /* M3 の「上端からヘッダーまで 44」は Android のステータスバーを含む値。web ではアプリバー（64）のアイコン中心 32 に揃える: 12 ＋ 40 / 2 ＝ 32 */
   --m3e-nav-rail-top-space: 12px;
 }
+/* 折りたたみ時はアイコンだけ（ラベルはツールチップと読み上げ名）。項目の高さを展開時と同じ 56 にし、アイコンの中心を両状態で y=28 に固定する。
+   M3E 既定（アイコンの下にラベル、項目 68）だと展開⇄折りたたみでアイコンが上下に動くため。M3 Expressive の「折りたたみでもラベル」からは外れる（利用者判断） */
+.shell__rail--collapsed .nav-label {
+  display: none;
+}
+.shell__rail--collapsed m3e-nav-item {
+  --m3e-vertical-nav-item-active-indicator-margin: 12px; /* 12 ＋ 32 ＋ 12 ＝ 56 */
+  --m3e-nav-item-spacing: 0px;
+}
 /* expanded（840–1199）: 展開レールはモーダル。折りたたみ分（96）の列幅だけ残し、本体は重ねる */
 .shell--modal .shell__nav {
   width: 96px;
