@@ -323,3 +323,37 @@
 
 - `vp check` 0 エラー、全パッケージ typecheck、`vp test`、デモビルド成功。
 - 撮影 34 画面（#29 標準展開レール、#30 モーダル展開レール、#31 FAB からの登録ダイアログ、#32 compact の通知、#33 compact の一覧、#34 シートを半分）。`pnpm a11y`: 残る指摘は M3E calendar 内部の 1 件のみ。
+
+## 13. Layout scaffold（2026-10-14・利用者指示「m3.material.io/foundations/layout/scaffold を調べて反映」）
+
+`m3.material.io` は作業環境のネットワークポリシーで拒否される（403 CONNECT）ため、本文は直接読めていない。yusukebe/ax（GitHub から取得し bun で実行）で到達できる情報源を集め、検索結果の引用で m3.material.io の文言を補った。**裏取り済み**と**要確認**を分けて書く。
+
+### 裏取り済み（出典）
+
+| 規定                                                                                                                                                                                               | 出典                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scaffold は適応レイアウトのすべてを **bars / rails / panes** に分ける。bars は画面を縁取り（アプリバー・下部ナビ）、rails はペインの外周（ナビレール・ツールバー・ペイン操作）、panes は内容の容器 | m3.material.io Scaffold overview / Layout overview（検索スニペット）                                                                                                                                 |
+| pane は fixed / flexible / floating / semi-permanent のいずれか                                                                                                                                    | 同上（各型の定義文は未取得）                                                                                                                                                                         |
+| 置く順: bars と rails を使える領域の縁に先に置き、残りを panes で埋める                                                                                                                            | m3.material.io Grids & spacing（検索スニペット）                                                                                                                                                     |
+| ナビゲーションレールはどのペインの外にも置き、常にウィンドウの先頭端に沿わせる。本文の中に入れない                                                                                                 | m3.material.io Navigation rail guidelines（検索スニペット）                                                                                                                                          |
+| ドック型ツールバーはウィンドウの下端のみ。浮遊ツールバーは窓端から横型 16 / 縦型 24 を保ち、ウィンドウやペインの縁をはみ出さない。レールがあるとき縦型は反対側                                     | m3.material.io Toolbars guidelines（検索スニペット）                                                                                                                                                 |
+| ペイン数: compact / medium は 1、expanded / large は 2、extra-large は 3 も可                                                                                                                      | m3.material.io Breakpoints（検索スニペット）、Compose `calculatePaneScaffoldDirective`（ax で原典取得）                                                                                              |
+| 余白 24・スペーサー 24（medium / large / extra-large）。medium の 2 ペインは 50/50 で独自幅を避ける                                                                                                | m3.material.io Breakpoints medium / large-extra-large（検索スニペット）                                                                                                                              |
+| 固定ペインの既定幅: expanded 360、large 以上 412                                                                                                                                                   | Compose `PaneScaffoldDirective.DefaultPreferredWidth = 360.dp` / `DefaultPreferredWidthXL = 412.dp`（ax で androidx 原典取得）、m3.material.io Breakpoints large/extra-large「固定ペインは既定 412」 |
+| 間隔は 8dp 尺度（space100 = 8）                                                                                                                                                                    | m3.material.io Spacing（検索スニペット）、M3E `MeasurementToken`                                                                                                                                     |
+
+### 本システムへの当てはめ
+
+| Scaffold の領域 | 本システム                                                                                                                 | 判定                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| bars            | 上: 検索バー付きアプリバー（`.shell__appbar`）。compact の下: ナビゲーションバー（`.shell__bar`）                          | 合致                                                                      |
+| rails           | ナビゲーションレール（`.shell__nav`）: 先頭端に全高、ペインの外。エディタの浮遊ツールバーはペイン内の下端から 16           | 合致                                                                      |
+| panes           | ダッシュボード・制作物: 1 ペイン（余白 24、compact 16）。エディタ: 主ペイン（紙面）＋固定ペイン（引き出し）、スペーサー 24 | 固定ペイン幅を **expanded 360 / large 以上 412** に修正（従来は常に 360） |
+| compact の補助  | 補助ペインは下（ボトムシート）、スペーサー 0                                                                               | 合致                                                                      |
+
+### 要確認（原典を読めたら確定する）
+
+- compact の余白 16（コミュニティ資料と Android ガイドの慣行。m3.material.io の compact ページでは未確認）。
+- pane の 4 型（fixed / flexible / floating / semi-permanent）の定義と、ペインを視覚的な容器（角丸の surface container）として描くかどうか。現状は 2 ペインのエディタだけ容器として描いている。
+- リサイズ可能なペインのスペーサーに置くドラッグハンドル（M3 は「リサイズできるならハンドルを置く」）。未実装。
+- `m3.material.io` を環境の Allowed domains に加えれば `ax https://m3.material.io/foundations/layout/scaffold/guidelines --md` で原典を読める。

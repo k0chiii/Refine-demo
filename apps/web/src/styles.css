@@ -178,7 +178,12 @@ m3e-search-bar {
   color: var(--mf-on-surface-variant);
 }
 
-/* ---------- アプリ外枠（M3 Layout: ウィンドウサイズクラス compact <600 / medium 600–839 / expanded 840–1199 / large ≥1200） */
+/* ---------- アプリ外枠 ＝ M3 の Layout scaffold（bars / rails / panes）
+ * - bars（画面を縁取る）: .shell__appbar（上）、.shell__bar（compact の下部ナビ）
+ * - rails（ペインの外周）: .shell__nav（ナビゲーションレール。先頭端に全高、ペインの外）
+ * - panes（内容）: .shell__content（1 ペイン。エディタは .ws__body で 2 ペイン）
+ * 置く順: bars と rails を画面の縁に先に置き、残りを panes で埋める。
+ * ウィンドウサイズクラス: compact <600 / medium 600–839 / expanded 840–1199 / large ≥1200 */
 .shell {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1112,11 +1117,16 @@ m3e-search-bar {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 24px;
+  gap: 24px; /* M3 のペイン間スペーサー 24（expanded 以上） */
   min-height: 0;
 }
 .ws__body--panel {
-  grid-template-columns: minmax(0, 1fr) 360px; /* M3 supporting pane: 固定 360 */
+  grid-template-columns: minmax(0, 1fr) 360px; /* M3 supporting pane: expanded の固定ペイン 360（Compose の既定 DefaultPreferredWidth） */
+}
+@media (min-width: 1200px) {
+  .ws__body--panel {
+    grid-template-columns: minmax(0, 1fr) 412px; /* large 以上の固定ペインは 412（M3 Breakpoints: large/extra-large、Compose DefaultPreferredWidthXL） */
+  }
 }
 .ws__viewer {
   position: relative;
@@ -1462,6 +1472,11 @@ m3e-search-bar {
   position: relative;
   width: 360px; /* 補助ペインと同じ幅 */
   flex: none;
+}
+@media (min-width: 1200px) {
+  .gutter {
+    width: 412px;
+  }
 }
 .gutter__item {
   position: absolute;
