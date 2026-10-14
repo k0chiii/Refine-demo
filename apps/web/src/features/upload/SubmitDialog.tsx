@@ -36,10 +36,13 @@ export function SubmitDialog({
   workId,
   open,
   onClose,
+  initialFiles,
 }: {
   workId: string;
   open: boolean;
   onClose: () => void;
+  /** 文章エディタの「版として提出」: 下書きから作った HTML を最初から入れておく */
+  initialFiles?: File[];
 }) {
   const navigate = useNavigate();
   const token = useAuthToken();
@@ -68,6 +71,9 @@ export function SubmitDialog({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => (flow ? flow.subscribe(setState) : undefined), [flow]);
+  useEffect(() => {
+    if (open && initialFiles && initialFiles.length > 0) setFiles(initialFiles);
+  }, [open, initialFiles]);
   useEffect(() => {
     if (!state.confirmed) return;
     const n = state.confirmed.kind === "rough" ? 0 : state.confirmed.sequence;

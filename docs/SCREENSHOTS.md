@@ -44,6 +44,15 @@
 | 36  | RTL（`dir=rtl`）: レールは先頭端（右）、アプリバー・リストが鏡映                  | 校正者         | ![](screenshots/36-rtl-dashboard.png)          |
 | 37  | compact の補助的な選択（添付の切替）はボトムシート                                | 校正者         | ![](screenshots/37-mobile-action-sheet.png)    |
 | 38  | 比較しながら新しい版（右）に範囲でコメント（§19）                                 | 校正者         | ![](screenshots/38-compare-comment.png)        |
+| 39  | 文章エディタ: 浮遊ツールバー＋A4 の紙面＋補助ペイン「概要」（自動保存）           | 制作者         | ![](screenshots/39-write-editor.png)           |
+| 40  | 段落スタイルのメニュー（各スタイルの見た目・ショートカット）                      | 制作者         | ![](screenshots/40-write-style-menu.png)       |
+| 41  | 検索と置換（Ctrl+H、補助ペイン。一致を強調）                                      | 制作者         | ![](screenshots/41-write-find.png)             |
+| 42  | 文字カウント（選択範囲と文書全体、入力中に表示の切替）                            | 制作者         | ![](screenshots/42-write-word-count.png)       |
+| 43  | 提出した文章を校正（書式付きのまま。文字を選ぶとその場に投稿欄）                  | 校正者         | ![](screenshots/43-write-review-select.png)    |
+| 44  | 範囲指摘の番号と強調（書式付きの文章）                                            | 校正者         | ![](screenshots/44-write-review-comment.png)   |
+| 45  | 指摘を見ながら直す（補助ペイン「指摘」→ 本文の該当箇所を選ぶ）                    | 制作者         | ![](screenshots/45-write-refs.png)             |
+| 46  | compact の文章エディタ（下端のドッキングツールバー）                              | 制作者         | ![](screenshots/46-write-compact.png)          |
+| 47  | compact の「その他」はボトムシート                                                | 制作者         | ![](screenshots/47-write-compact-more.png)     |
 
 `pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（37 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 

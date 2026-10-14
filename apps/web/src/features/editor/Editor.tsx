@@ -20,6 +20,8 @@ import { ComposePopover } from "@/features/review/ComposePopover";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PaneHandle } from "@/features/editor/PaneHandle";
+import { htmlToPlainText, RichTextViewer } from "@/features/annotation/RichTextViewer";
+import { bodyOfHtml, isHtmlArtifact } from "@/features/writing/plainText";
 import { remaining } from "@/lib/format";
 import {
   blockedReasonLabel,
@@ -199,7 +201,8 @@ export function Editor({
   // 紙面の倍率は「幅に合わせた大きさ」に掛ける値（1 ＝ 左右の余白が同じ）。表示する数値は実寸比（zoom）
   const [scale, setScale] = useState(1);
   const [zoom, setZoom] = useState<number | null>(null);
-  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  // 回転ボタンは利用者判断で外した（2026-10-14）。原稿は正位置で校正する。ビューアの回転機能自体は残す
+  const rotation = 0 as const;
   const [compareWith, setCompareWith] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [externalNote, setExternalNote] = useState("");
@@ -284,12 +287,19 @@ export function Editor({
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
   const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null);
   // 文章添付は版スナップショットとして UTF-8 テキストに復号して保持する（F-12）
-  const [text, setText] = useState<{ artifactId: string; body: string } | null>(null);
+  // 文章エディタから提出した HTML は書式付きで表示し、範囲指摘のオフセットは本文の平文で数える
+  const [text, setText] = useState<{ artifactId: string; body: string; html?: string } | null>(
+    null,
+  );
   useEffect(() => {
     if (!artifact || artifact.type !== "document" || !blob.blob) return;
     let cancelled = false;
     void blob.blob.text().then((t) => {
-      if (!cancelled) setText({ artifactId: artifact.id, body: t });
+      if (cancelled) return;
+      if (isHtmlArtifact(artifact)) {
+        const html = bodyOfHtml(t);
+        setText({ artifactId: artifact.id, body: htmlToPlainText(html), html });
+      } else setText({ artifactId: artifact.id, body: t });
     });
     return () => {
       cancelled = true;
@@ -537,9 +547,18 @@ export function Editor({
           <M3eIcon name="upload_file" />
           まだ版がありません。
           {workData.can.submit && work.lifecycle === "active" ? (
-            <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
-              最初の版を提出
-            </M3eButton>
+            <div className="row">
+              <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
+                最初の版を提出
+              </M3eButton>
+              <M3eButton
+                variant="tonal"
+                onClick={() => void navigate({ to: "/works/$workId/write", params: { workId } })}
+              >
+                <M3eIcon slot="icon" name="edit_document" />
+                文章を書く
+              </M3eButton>
+            </div>
           ) : null}
         </div>
       );
@@ -599,7 +618,24 @@ export function Editor({
         />
       );
     if (artifact.type === "document" && text?.artifactId === artifact.id)
-      return (
+      return text.html !== undefined ? (
+        <RichTextViewer
+          html={text.html}
+          artifactId={artifact.id}
+          {...viewerProps}
+          draft={draft?.range ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) } : null}
+          onDraft={(r) => {
+            setDraft(
+              r
+                ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) }
+                : null,
+            );
+            setActiveThreadId(null);
+          }}
+          inPage={compose(null, draft?.box ?? null)}
+          renderGutter={textGutter}
+        />
+      ) : (
         <TextViewer
           text={text.body}
           artifactId={artifact.id}
@@ -785,6 +821,7 @@ export function Editor({
           else setCompareWith(id);
         }}
         onSubmit={() => setSubmitOpen(true)}
+        onWrite={() => void navigate({ to: "/works/$workId/write", params: { workId } })}
       />
     ) : d === "info" ? (
       <InfoTab work={workData} revision={data ?? null} isAdmin={me?.isSystemAdmin ?? false} />
@@ -936,14 +973,6 @@ export function Editor({
                     <M3eIcon name="zoom_in" />
                   </M3eIconButton>
                 </>
-              ) : null}
-              {isPdf ? (
-                <M3eIconButton
-                  aria-label="右に回転"
-                  onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
-                >
-                  <M3eIcon name="rotate_right" />
-                </M3eIconButton>
               ) : null}
               {canComment ? (
                 <M3eIconButton

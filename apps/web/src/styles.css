@@ -308,6 +308,10 @@ m3e-search-bar {
   align-items: center;
   flex-wrap: wrap;
 }
+/* M3 Dialogs: 操作は末尾側に揃え、確定を端に置く（RTL では自動で反転） */
+m3e-dialog [slot="actions"] {
+  justify-content: flex-end;
+}
 .stack {
   display: flex;
   flex-direction: column;
@@ -1856,4 +1860,486 @@ m3e-search-bar {
   .list__item {
     --m3e-list-item-container-shape: 0;
   }
+}
+
+/* ======================================================================
+ * 文章エディタ（/works/:id/write）。docs/EDITOR_RESEARCH.md
+ * 骨格は M3 supporting pane（主＝紙面、副＝概要／検索と置換／指摘）。格子は校正画面（.ws__body）と同じ規則
+ * ====================================================================== */
+.write {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 64px);
+  padding: 8px 0 16px;
+}
+.write-loading {
+  padding: 24px;
+}
+.write__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  --ws-pane: 360px;
+}
+@media (min-width: 1200px) {
+  .write__body {
+    --ws-pane: 412px;
+  }
+}
+.write__body--panel {
+  grid-template-columns: minmax(0, 1fr) 24px var(--ws-pane);
+}
+.write__body--handle {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+.write__main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--mf-surface-container-low);
+  border-radius: var(--mf-shape-lg);
+  overflow: hidden;
+}
+/* 書式の浮遊ツールバー: 紙面の上端中央。M3 Toolbars: 浮遊ツールバーは窓端から 16 以上、入らない操作は末尾のその他へ */
+.write__toolbar {
+  display: flex;
+  justify-content: center;
+  padding: 12px 16px 0;
+  position: relative;
+  z-index: 5;
+}
+.wtb {
+  max-width: 100%;
+  --m3e-toolbar-container-color: var(--mf-surface-container);
+}
+.wtb m3e-icon-button,
+.wtb m3e-button {
+  flex: none;
+}
+.wtb__sep {
+  position: relative; /* m3e-toolbar の面の上に描く */
+  width: 1px;
+  align-self: stretch;
+  margin: 12px 4px;
+  background: var(--mf-outline-variant);
+  flex: none;
+}
+.wtb__group {
+  flex: none;
+  width: auto;
+}
+.wtb__style {
+  min-width: 132px;
+  justify-content: space-between;
+}
+/* 選択中のトグル: 塗りのあるアイコンは塗り、無いもの（太字など）は太さで示す（M3 Icon buttons: 色以外の 2 つ目の手がかり） */
+m3e-icon.icon--on {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 700,
+    "GRAD" 0,
+    "opsz" 24;
+}
+.swatch {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--mf-outline-variant);
+}
+.wtb-menu__kbd {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+/* 段落スタイルのメニューは各スタイルの見た目で示す（Google ドキュメントと同じ） */
+.wtb-menu__style--h1 {
+  font: 400 22px/28px var(--mf-font);
+}
+.wtb-menu__style--h2 {
+  font: 400 18px/24px var(--mf-font);
+}
+.wtb-menu__style--h3 {
+  font: 500 16px/24px var(--mf-font);
+}
+/* 紙面（Google ドキュメントの「ページ分けあり」に相当する見た目。幅は A4 の 794px、余白 72） */
+.write__canvas {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 96px 96px; /* 840 以上は縦ツールバー（窓端 24 ＋ 64 ＋ 8）を避けて左右 96 */
+}
+.write__page {
+  max-width: 794px;
+  min-height: 1123px;
+  margin-inline: auto;
+  background: #fff;
+  color: #1f1f1f;
+  border-radius: 2px;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.3),
+    0 4px 8px 3px rgb(0 0 0 / 0.15);
+  padding: 72px 80px;
+}
+@media (max-width: 839px) {
+  .write {
+    height: calc(100dvh - 64px);
+  }
+  .write__canvas {
+    padding: 16px 16px 96px;
+  }
+  .write__page {
+    padding: 48px 32px;
+    min-height: 0;
+  }
+}
+/* 本文の文字。段落スタイルを M3 のタイプスケールに対応させる（body-large / headline-medium / headline-small / title-large） */
+.doc {
+  outline: none;
+  font: 400 16px/1.75 var(--mf-font);
+  min-height: 60vh;
+  word-break: break-word;
+  caret-color: var(--mf-primary);
+}
+.doc > * + * {
+  margin-top: 0.6em;
+}
+.doc p {
+  margin: 0;
+}
+.doc h1 {
+  font: 400 28px/36px var(--mf-font);
+  margin: 1.2em 0 0.4em;
+}
+.doc h2 {
+  font: 400 24px/32px var(--mf-font);
+  margin: 1.1em 0 0.3em;
+}
+.doc h3 {
+  font: 500 22px/28px var(--mf-font);
+  margin: 1em 0 0.3em;
+}
+.doc > :first-child {
+  margin-top: 0;
+}
+.doc a {
+  color: #1a73e8;
+  text-decoration: underline;
+}
+.doc ul,
+.doc ol {
+  padding-inline-start: 1.6em;
+  margin: 0.4em 0;
+}
+.doc blockquote {
+  margin: 0.6em 0;
+  padding-inline-start: 16px;
+  border-inline-start: 3px solid var(--mf-outline-variant);
+  color: #474747;
+}
+.doc hr {
+  border: 0;
+  border-top: 1px solid #c4c6cf;
+  margin: 1.2em 0;
+}
+.doc ul[data-type="taskList"] {
+  list-style: none;
+  padding-inline-start: 0.2em;
+}
+.doc ul[data-type="taskList"] li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.doc ul[data-type="taskList"] li > label {
+  flex: none;
+  margin-top: 0.3em;
+}
+.doc ul[data-type="taskList"] li > label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--mf-primary);
+}
+.doc ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: #6b6b6b;
+}
+.doc table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+  table-layout: fixed;
+}
+.doc th,
+.doc td {
+  border: 1px solid #c4c6cf;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.doc th {
+  background: #f1f3f4;
+  font-weight: 600;
+  text-align: start;
+}
+.doc .selectedCell {
+  background: color-mix(in srgb, var(--mf-primary) 12%, transparent);
+}
+.doc p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #8a8a8a;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.doc mark {
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.search-hit {
+  background: #fde293;
+  border-radius: 2px;
+}
+.search-hit--current {
+  background: #f9ab00;
+}
+/* 入力中の文字カウント（Google ドキュメントの左下のボックス） */
+.write__count {
+  position: absolute;
+  inset-inline-start: 16px;
+  bottom: 16px;
+  z-index: 5;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  border: 0;
+  background: var(--mf-surface-container-high);
+  color: var(--mf-on-surface);
+  font: var(--mf-type-label-large);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  cursor: pointer;
+}
+.write__side-item {
+  display: contents;
+}
+.write__status {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.write__status--error,
+.write__status--conflict {
+  color: var(--mf-error);
+}
+.write__error {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 24px;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 16px;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-inverse-surface);
+  color: var(--mf-inverse-on-surface);
+  font: var(--mf-type-body-medium);
+  z-index: 50;
+  --m3e-text-button-label-text-color: var(--md-sys-color-inverse-primary, #a9c7ff);
+}
+/* compact: 下端のドッキングツールバー（M3: 窓の全幅、角丸なし、項目は等間隔） */
+.write__docked {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 30;
+  justify-content: space-around;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --m3e-toolbar-container-color: var(--mf-surface-container);
+}
+.write--compact {
+  padding: 0;
+}
+.write--compact .write__main {
+  border-radius: 0;
+}
+.write--compact .write__canvas {
+  padding: 0 0 calc(80px + env(safe-area-inset-bottom, 0px));
+}
+.write--compact .write__page {
+  box-shadow: none;
+  border-radius: 0;
+  padding: 24px 16px;
+}
+/* 補助ペインの中身 */
+.write-panel__empty {
+  padding: 16px;
+}
+.outline {
+  padding: 8px 0;
+}
+.outline__item {
+  --m3e-list-item-container-color: transparent;
+}
+/* 階層は字下げで示す（M3E のリスト項目の先頭余白。既定 16） */
+.outline__item--2 {
+  --m3e-list-item-leading-space: 32px;
+}
+.outline__item--3 {
+  --m3e-list-item-leading-space: 48px;
+}
+/* 現在位置の見出し: 丸い面で示す（Google ドキュメントの概要／タブ、M3 Navigation drawer の active indicator と同じ） */
+.outline__item--current {
+  --m3e-list-item-container-color: var(--mf-secondary-container);
+  --m3e-list-item-label-text-color: var(--mf-on-secondary-container);
+  --m3e-list-item-container-shape: 28px;
+  --m3e-list-item-hover-container-shape: 28px;
+  font-weight: 600;
+}
+.outline {
+  padding-inline: 8px;
+}
+.outline__text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.find {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  align-content: start;
+}
+.find__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+}
+.find__actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.refs__head {
+  padding: 12px 16px 0;
+  margin: 0;
+}
+.count-table th,
+.count-table td {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.count-table th[scope="row"] {
+  text-align: start;
+}
+/* 行見出しと数値の行で罫線と高さを揃える */
+.count-table th,
+.count-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.count-table tbody tr:last-child th,
+.count-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  cursor: pointer;
+}
+.shortcuts {
+  display: grid;
+  gap: 16px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.shortcuts h3 {
+  margin: 0 0 4px;
+}
+.shortcuts__list {
+  margin: 0;
+  display: grid;
+}
+.shortcuts__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.shortcuts__row dd {
+  margin: 0;
+}
+.shortcuts kbd {
+  font: var(--mf-type-label-medium);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--mf-on-surface-variant);
+}
+.versions__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 印刷: 紙面だけを出す（Google ドキュメントの Ctrl+P） */
+@media print {
+  .shell__nav,
+  .shell__appbar,
+  .shell__bar,
+  .write__toolbar,
+  .write__side,
+  .write__count,
+  .write__docked,
+  .ws__spacer,
+  .drawer {
+    display: none !important;
+  }
+  .write,
+  .write__body,
+  .write__main,
+  .write__canvas {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    background: none;
+  }
+  .write__page {
+    box-shadow: none;
+    max-width: none;
+    min-height: 0;
+    padding: 0;
+  }
+}
+/* 校正画面で書式付き文章（文章エディタから提出した版）を見るとき: 紙面は書いたときと同じ */
+.rich-viewer__wrap {
+  width: min(794px, 100%);
+}
+.rich-viewer__page {
+  min-height: 0;
+}
+.doc--view {
+  min-height: 0;
+}
+.text-anchor__badge {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  margin-inline-end: 2px;
+  border-radius: 8px;
+  background: #2b5ea8;
+  color: #fff;
+  font: 500 10px/16px var(--mf-font);
+  text-align: center;
+  vertical-align: top;
+  user-select: none;
+  cursor: pointer;
+}
+.write--compact .write__canvas {
+  background: #fff;
+}
+.write--compact .write__page {
+  min-height: 100%;
 }

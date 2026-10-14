@@ -17,6 +17,7 @@ import type * as checks from "../checks.js";
 import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
+import type * as documents from "../documents.js";
 import type * as http from "../http.js";
 import type * as me from "../me.js";
 import type * as notifications from "../notifications.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   comments: typeof comments;
   crons: typeof crons;
   dashboard: typeof dashboard;
+  documents: typeof documents;
   http: typeof http;
   me: typeof me;
   notifications: typeof notifications;

@@ -3,6 +3,7 @@ import type {
   Artifact,
   CommentEvent,
   CommentThread,
+  DocumentDraft,
   RequiredCheck,
   ReviewAssignment,
   Revision,
@@ -70,6 +71,7 @@ export interface InMemoryContext extends AppContext {
     approvals: ApprovalEvent[];
     checks: Table<RequiredCheck>;
     notifications: Table<Notification>;
+    documents: Table<DocumentDraft>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
   };
@@ -89,6 +91,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     approvals: [],
     checks: new Table<RequiredCheck>("chk"),
     notifications: new Table<Notification>("ntf"),
+    documents: new Table<DocumentDraft>("doc"),
     audit: [],
     idempotency: new Map(),
   };
@@ -226,6 +229,11 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       countUnread: async (userId) =>
         state.notifications.all().filter((n) => n.recipientId === userId && n.readAt === undefined)
           .length,
+    },
+    documents: {
+      findByWork: async (workId) => state.documents.all().find((d) => d.workId === workId) ?? null,
+      insert: async (d) => state.documents.insert(d),
+      update: async (d) => state.documents.put(d),
     },
     idempotency: {
       get: async (scope, key) =>

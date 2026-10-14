@@ -35,6 +35,7 @@ export { M3eFormField } from "@m3e/react/form-field";
 export { M3eSelect } from "@m3e/react/select";
 export { M3eOption } from "@m3e/react/option";
 export { M3eCheckbox } from "@m3e/react/checkbox";
+export { M3eSwitch } from "@m3e/react/switch";
 export { M3eSearchBar } from "@m3e/react/search";
 export { M3eTextareaAutosize } from "@m3e/react/textarea-autosize";
 export { M3eStepper, M3eStep, M3eStepPanel } from "@m3e/react/stepper";
@@ -42,7 +43,14 @@ export { M3eSkeleton } from "@m3e/react/skeleton";
 export { M3eDateInput } from "@m3e/react/date-input";
 export { M3eDatepicker, M3eDatepickerToggle } from "@m3e/react/datepicker";
 export { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
-export { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+export {
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuItemCheckbox,
+  M3eMenuItemGroup,
+  M3eMenuItemRadio,
+  M3eMenuTrigger,
+} from "@m3e/react/menu";
 export { M3eAvatar } from "@m3e/react/avatar";
 export { M3eSnackbar } from "@m3e/web/snackbar";
 // 4 回目の見直し（利用者の選択）: 下部フローティングツールバー、分割ボタン、セグメント切替、ボトムシート、FAB

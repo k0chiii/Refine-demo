@@ -4,6 +4,7 @@ import type {
   Artifact,
   CommentEvent,
   CommentThread,
+  DocumentDraft,
   RequiredCheck,
   ReviewAssignment,
   Revision,
@@ -327,6 +328,29 @@ export function createAppContext(
           )
           .take(100);
         return docs.length;
+      },
+    },
+    documents: {
+      async findByWork(workId) {
+        const doc = await db
+          .query("documentDrafts")
+          .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+          .unique();
+        return doc ? (fromDoc(doc) as DocumentDraft) : null;
+      },
+      async insert(draft) {
+        const id = await db.insert("documentDrafts", {
+          ...draft,
+          workId: draft.workId as Id<"works">,
+        });
+        return { ...draft, id } as DocumentDraft;
+      },
+      async update(draft) {
+        const { id, ...fields } = draft;
+        await db.replace(id as Id<"documentDrafts">, {
+          ...fields,
+          workId: fields.workId as Id<"works">,
+        });
       },
     },
     acl: {

@@ -57,6 +57,8 @@ export const domainErrorCodes = [
   "approval_exception_reason_required",
   "approval_exception_not_permitted",
   "approval_reopen_reason_required",
+  // 文章の下書き
+  "document_invalid",
   // 冪等性 / 競合
   "idempotency_conflict",
   "version_conflict",
