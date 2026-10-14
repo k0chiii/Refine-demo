@@ -27,6 +27,7 @@ import {
   reviewStateLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
+import { useMedia } from "@/lib/useMedia";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea } from "@/ui/Field";
 import {
@@ -102,18 +103,6 @@ function popoverPos(box: { x: number; y: number; w: number; h: number }, vp: Vie
   if (left >= 0) return { x: left, y: box.y };
   return { x: Math.max(0, Math.min(box.x, vp.width - COMPOSE_W)), y: box.y + box.h + 10 };
 }
-function useMedia(query: string) {
-  const [m, setM] = useState(() =>
-    typeof window === "undefined" ? false : matchMedia(query).matches,
-  );
-  useEffect(() => {
-    const mq = matchMedia(query);
-    const on = () => setM(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, [query]);
-  return m;
-}
 const versionOf = (r: { kind: string; sequence: number }) => (r.kind === "rough" ? 0 : r.sequence);
 
 /**
@@ -168,7 +157,8 @@ export function Editor({
   const editThread = useMutation(api.comments.edit);
   const carryForward = useMutation(api.comments.carryForward);
 
-  const mobile = useMedia("(max-width: 960px)");
+  // M3 の compact/medium（839 以下）: 補助ペインは置けないので引き出しはボトムシート
+  const mobile = useMedia("(max-width: 839px)");
   const [layoutPref, setLayoutPref] = useState<Layout>(readLayout);
   const layout: Layout = mobile ? "panel" : layoutPref;
   const [drawer, setDrawer] = useState<Drawer | null>(

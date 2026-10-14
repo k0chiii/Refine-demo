@@ -12,6 +12,10 @@
     "violations": []
   },
   {
+    "screen": "31-new-work-fab",
+    "violations": []
+  },
+  {
     "screen": "03-editor-empty",
     "violations": []
   },
@@ -82,6 +86,10 @@
     "violations": []
   },
   {
+    "screen": "29-rail-expanded",
+    "violations": []
+  },
+  {
     "screen": "08-workspace-comment",
     "violations": []
   },
@@ -142,7 +150,15 @@
     "violations": []
   },
   {
+    "screen": "30-rail-modal",
+    "violations": []
+  },
+  {
     "screen": "20-mobile-dashboard",
+    "violations": []
+  },
+  {
+    "screen": "32-mobile-notifications",
     "violations": []
   },
   {

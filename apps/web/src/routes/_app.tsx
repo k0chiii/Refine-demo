@@ -11,8 +11,10 @@ import {
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
+import { useWindowClass } from "@/lib/useMedia";
 import {
   M3eAppBar,
+  M3eFab,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
@@ -27,10 +29,23 @@ import { UserAvatar } from "@/ui/UserAvatar";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
+const RAIL_KEY = "mf100.rail.expanded";
+const readRailPref = () => {
+  try {
+    return localStorage.getItem(RAIL_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 /**
- * 認証ガード＋共通レイアウト（Gmail / Google ドライブと同じ骨格）。
- * 左: ダッシュボードと制作物の 2 つ（管理者には管理）。上: 検索バー、通知のベル、アカウント。題名は置かない。
- * 通知は独立した画面を持たず、ベルのパネルから対象へ飛ぶ。
+ * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
+ * - compact（<600）: 下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。通知はベルと同じパネルを開く。
+ * - medium（600–839）: 折りたたみレール（96）。
+ * - expanded（840–1199）: 折りたたみレール。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
+ * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
+ * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「制作物を登録」、その下に行き先。アカウントは右上に残す。
+ * 通知は独立した画面を持たず、ベル（compact では下部バーの「通知」）のパネルから対象へ飛ぶ。
  */
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -38,11 +53,25 @@ function AppLayout() {
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const cls = useWindowClass();
+  const [railPref, setRailPref] = useState(readRailPref);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated || me === null) void navigate({ to: "/signin", replace: true });
   }, [isLoading, isAuthenticated, me, navigate]);
+
+  // モーダルの展開レールは、行き先を選んだ時・幅が変わった時・Esc で閉じる
+  useEffect(() => setModalOpen(false), [path, cls]);
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [modalOpen]);
 
   if (isLoading || !isAuthenticated || !me) return null;
 
@@ -56,24 +85,70 @@ function AppLayout() {
   const navItems = () =>
     items.map((it) => (
       <Link key={it.to} to={it.to} className="nav-link">
-        <M3eNavItem selected={selected(it.to)}>
+        <M3eNavItem selected={selected(it.to)} data-to={it.to}>
           <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
           {it.label}
         </M3eNavItem>
       </Link>
     ));
+  /** M3E は押した項目を自動で選択状態にするため、経路に基づく選択へ戻す（下部バーの「通知」は経路ではない） */
+  const resync = (e: { currentTarget: EventTarget | null }) => {
+    const root = e.currentTarget as HTMLElement | null;
+    root?.querySelectorAll<HTMLElement & { selected: boolean }>("m3e-nav-item").forEach((el) => {
+      el.selected = el.dataset.to ? selected(el.dataset.to) : false;
+    });
+  };
+
+  const expandable = cls === "large" || cls === "expanded";
+  const railExpanded = cls === "large" ? railPref : cls === "expanded" ? modalOpen : false;
+  const toggleRail = () => {
+    if (cls === "large") {
+      const next = !railPref;
+      setRailPref(next);
+      try {
+        localStorage.setItem(RAIL_KEY, next ? "1" : "0");
+      } catch {}
+    } else setModalOpen((o) => !o);
+  };
+  const register = () => void navigate({ to: "/works", search: { new: true } });
+  const modal = cls === "expanded" && modalOpen;
 
   return (
-    <div className="shell">
-      <M3eNavRail className="shell__rail" aria-label="主要ナビゲーション">
-        {navItems()}
-      </M3eNavRail>
+    <div className={`shell ${modal ? "shell--modal" : ""}`}>
+      <div className="shell__nav">
+        {modal ? (
+          <div className="shell__scrim" onClick={() => setModalOpen(false)} aria-hidden="true" />
+        ) : null}
+        <M3eNavRail
+          id="app-rail"
+          mode={railExpanded ? "expanded" : "compact"}
+          className={`shell__rail ${modal ? "shell__rail--modal" : ""}`}
+          aria-label="主要ナビゲーション"
+          onChange={resync}
+        >
+          {expandable ? (
+            <M3eIconButton
+              aria-label={railExpanded ? "メニューを閉じる" : "メニューを開く"}
+              aria-expanded={railExpanded}
+              aria-controls="app-rail"
+              onClick={toggleRail}
+            >
+              <M3eIcon name={railExpanded ? "menu_open" : "menu"} />
+            </M3eIconButton>
+          ) : null}
+          <M3eFab size="small" aria-label="制作物を登録" onClick={register}>
+            <M3eIcon name="add" />
+            <span slot="label">制作物を登録</span>
+          </M3eFab>
+          {navItems()}
+        </M3eNavRail>
+      </div>
       <div className="shell__main">
         <M3eAppBar size="small" className="shell__appbar">
           <div slot="title" className="shell__search">
             <WorkSearch />
           </div>
-          <M3eIconButton slot="trailing" aria-label="通知">
+          <M3eIconButton slot="trailing" aria-label="通知" className="shell__bell">
             <NotificationsBell.Icon />
             <M3eMenuTrigger htmlFor="notif-menu" />
           </M3eIconButton>
@@ -103,9 +178,16 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
-      <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション（モバイル）">
-        {navItems()}
-      </M3eNavBar>
+      {cls === "compact" ? (
+        <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
+          {navItems()}
+          <M3eNavItem className="shell__bar-notif">
+            <NotificationsBell.Icon slot="icon" />
+            通知
+            <M3eMenuTrigger htmlFor="notif-menu" />
+          </M3eNavItem>
+        </M3eNavBar>
+      ) : null}
     </div>
   );
 }

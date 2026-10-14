@@ -133,6 +133,8 @@ const submitRevision = async (buttonText, files, summary, beforeStart) => {
     { timeout: 30_000 },
   );
 };
+/** レール上部のメニュー（展開レールの開閉） */
+const railToggle = page.locator('m3e-nav-rail m3e-icon-button[aria-label^="メニュー"]');
 /** エディタの引き出し（コメント／版／情報）を開く */
 const drawer = async (label) => {
   const b = page.locator(`.ws__drawer-buttons m3e-icon-button[aria-label^="${label}"]`);
@@ -158,6 +160,16 @@ async function main() {
   await page.waitForTimeout(500);
   await shot("22-account-menu");
   await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // 31 レールの FAB「制作物を登録」→ 登録ダイアログ（一覧には登録ボタンを置かない）
+  await page.locator("m3e-nav-rail m3e-fab").click();
+  await page.waitForSelector("m3e-dialog[open] input");
+  await page.waitForTimeout(400);
+  await shot("31-new-work-fab");
+  await page
+    .locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
+    .click();
+  await page.waitForURL(/\/works$/);
   await page.waitForTimeout(300);
 
   // 03 エディタ（版なし）
@@ -232,6 +244,14 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await page.waitForSelector("m3e-list-action");
   await shot("07-dashboard-reviewer");
+  // 29 large（1200 以上）: メニューで標準の展開レール（220）。内容を押す。状態は保存され、既定は折りたたみ
+  await railToggle.click();
+  await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "expanded");
+  await page.waitForTimeout(500);
+  await shot("29-rail-expanded");
+  await railToggle.click();
+  await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "compact");
+  await page.waitForTimeout(400);
 
   // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る
   await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).click();
@@ -401,13 +421,31 @@ async function main() {
   await page.locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "閉じる" }).click();
   await page.waitForTimeout(300);
 
-  // 20 モバイル幅: ダッシュボード（下部ナビ）/ 26 モバイルのエディタ（引き出しはボトムシート）
+  // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）
   await signInAs("mock-nogiku-reviewer");
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await go(revision2Url);
+  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await railToggle.click();
+  await page.waitForSelector(".shell__scrim");
+  await page.waitForTimeout(600);
+  await shot("30-rail-modal");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".shell__scrim", { state: "detached" });
+
+  // 20 compact（<600）: ダッシュボード（下部ナビ 3 件: ダッシュボード・制作物・通知）/ 32 「通知」は同じパネル
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${BASE}/`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForTimeout(400);
   await shot("20-mobile-dashboard");
+  await page.locator("m3e-nav-bar m3e-nav-item.shell__bar-notif").click();
+  await page.waitForSelector("#notif-menu .notif");
+  await page.waitForTimeout(500);
+  await shot("32-mobile-notifications");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // 26 compact のエディタ（引き出しはボトムシート）
   await go(revision2Url);
   await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
   await page.waitForSelector("m3e-bottom-sheet");

@@ -20,11 +20,11 @@ const icon: Record<string, string> = {
   revision_voided: "block",
 };
 
-/** アプリバーのベル。未読数のバッジ付きアイコン（`Icon`）と、押すと出る通知のパネル（`Menu`）。 */
-function Icon() {
+/** アプリバーのベル（compact では下部バーの「通知」にも使う）。未読数のバッジ付きアイコン（`Icon`）と、押すと出る通知のパネル（`Menu`）。 */
+function Icon({ slot }: { slot?: string }) {
   const unread = useQuery(api.notifications.unreadCount, {}) ?? 0;
   return (
-    <span className="nav-icon">
+    <span slot={slot} className="nav-icon">
       <M3eIcon name="notifications" className={unread > 0 ? "icon--filled" : ""} />
       {unread > 0 ? (
         <M3eBadge size="large" className="nav-icon__badge" aria-label={`未読 ${unread} 件`}>

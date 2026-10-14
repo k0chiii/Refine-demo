@@ -7,7 +7,6 @@ import { formatJstDate } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
 import {
   M3eActionList,
-  M3eButton,
   M3eFilterChip,
   M3eFilterChipSet,
   M3eHeading,
@@ -24,7 +23,7 @@ export const Route = createFileRoute("/_app/works/")({
 });
 
 /**
- * U-02 制作物。探して開くだけの入口。行を押すとエディタ（最新版）が開く。登録はダイアログ（`?new=1`）。
+ * U-02 制作物。探して開くだけの入口。行を押すとエディタ（最新版）が開く。登録はレールの FAB「制作物を登録」が開くダイアログ（`?new=1`）。
  * 検索語はアプリバーの検索から `q` で渡る。
  */
 function Works() {
@@ -57,11 +56,6 @@ function Works() {
         >
           制作物
         </M3eHeading>
-        <span className="spacer" />
-        <M3eButton variant="filled" onClick={() => setCreating(true)}>
-          <M3eIcon slot="icon" name="add" />
-          登録
-        </M3eButton>
       </header>
       <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
         {(["active", "on_hold", "finalized"] as const).map((k) => (

@@ -49,7 +49,7 @@
 | 状態チップ         | `StatusChip`（tone: neutral/primary/success/warning/error, アイコン任意）。ライフサイクル・受付状態・重大度・採否・割当・権限の色を一箇所で固定                                                       |
 | 一覧               | テーブルは独自実装を維持（密度優先）。ヘッダーを label-large、角丸コンテナ、ホバーの state layer、**期限超過行は error コンテナ、完了・校了行は沈める**。スクロール領域は tabIndex でキーボード到達可 |
 | 通知               | `m3e-action-list` / `m3e-list-action`（leading icon / overline / supporting text / trailing）                                                                                                         |
-| ナビ               | 広い画面は `m3e-nav-rail`、720px 以下は `m3e-nav-bar`（下部固定）。未読数は `m3e-badge`（画面 #21）                                                                                                   |
+| ナビ               | `m3e-nav-rail`（600 以上。メニュー＋FAB＋行き先。1200 以上は標準展開、840–1199 はモーダル展開）、599 以下は `m3e-nav-bar`（下部固定、通知を含む 3 件）。未読数は `m3e-badge`（§12）                   |
 | 版提出             | `m3e-stepper`（内容とファイル → 転送と検証 → 提出確定）、`m3e-linear-progress-indicator`、ファイル選択はドロップ風コンテナ                                                                            |
 | 案内               | `.alert` に色役割（info=primary container / warn=補助の注意色 / error）とアイコン                                                                                                                     |
 | 校正ワークスペース | 指摘カードは左の色帯（critical=error, major=注意色）＋チップで重大度、解決済みは濃淡を落として沈める。専門確認・持越・外部媒体は `Card`                                                               |
@@ -271,3 +271,37 @@
 
 - `vp check` 0 エラー、全パッケージ typecheck、`vp test`（application 44 件、convex 8 件、web 4 件、domain）、デモビルド成功。
 - 撮影経路を新構成に書き直し、28 画面（[`SCREENSHOTS.md`](SCREENSHOTS.md)）。`pnpm a11y`: 残る指摘は M3E calendar 内部のみ。
+
+## 12. 6 回目の見直し（2026-10-14・サイドバーとレイアウトを M3 の規定に合わせる）
+
+利用者の指示「まずサイドバーとレイアウトだけ直す。Navigation rail と Layout のガイドライン（overview 以外のページも）を確認して方針を出す」に対し、方針 3 点（通知は compact の下部バーの 3 件目／FAB「制作物を登録」をレールに／展開レールの既定は折りたたみ）を提示し、承認を得て実装した。
+
+### 根拠にした規定（m3.material.io は作業環境から到達できなかったため、Android 版ガイド・material-components-android・M3E 2.9.2 の実装から取った）
+
+| 項目                   | 規定                                                                                                                                                               | 本システムでの適用                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ウィンドウサイズクラス | compact <600 / medium 600–839 / expanded 840–1199 / large 1200–1599 / extra-large ≥1600                                                                            | `lib/useMedia.ts` の `useWindowClass()` と `styles.css` のメディアクエリ（599 / 839 / 1199）を対にした。旧来の 720 / 960 / 1280 は廃止                                         |
+| クラス別のナビ         | compact: ナビゲーションバー（3–5 件）。medium: レール。expanded 以上: レール（展開はモーダルか標準）                                                               | compact: 下部バー 3 件（ダッシュボード・制作物・**通知**。管理者は 4 件）。medium: 折りたたみレール。expanded: 折りたたみ＋**モーダル**展開。large: **標準**展開（内容を押す） |
+| レールの解剖図         | 上にメニュー（展開中は閉じるアイコン）、FAB（任意、elevation 0、展開時は拡張 FAB）、行き先 3–7 件。折りたたみ幅 96、展開幅 220–360、折りたたみ行高 64、展開行高 56 | `m3e-nav-rail mode="compact                                                                                                                                                    | expanded"` の既定トークン（96 / 220）をそのまま使う。メニュー → FAB「制作物を登録」（小 56、展開で拡張）→ 行き先。アカウントは右上に残す |
+| モーダル展開           | surface-container、角 16、elevation 3、スクリム、Esc で閉じる                                                                                                      | `.shell__rail--modal` ＋ `.shell__scrim`。行き先を選ぶ・幅が変わる・Esc で閉じる                                                                                               |
+| 展開状態の既定         | 折りたたみが既定。利用者の操作で展開                                                                                                                               | large では `localStorage` の `mf100.rail.expanded` に保存。expanded のモーダルは保存しない                                                                                     |
+| ペインの余白           | compact 16 / medium 以上 24（**要確認**: 公式値の裏取りは未）                                                                                                      | `.shell__content` の左右 padding。以前の 40 を 24 に                                                                                                                           |
+| 補助ペイン             | Canonical layout「supporting pane」: expanded 以上は固定幅 360 の補助ペイン、それ未満は下（ボトムシート）                                                          | エディタの引き出しは 360 固定（`.ws__body--panel`、`.gutter`）。839 以下はボトムシート（旧 960）                                                                               |
+
+### 直したこと
+
+- **制作物一覧の「登録」ボタンを撤去**し、レールの FAB に一本化（どの画面からでも登録できる。`/works?new=1` のダイアログを開く）。
+- **通知**: 広い画面はアプリバーのベル、compact は下部バーの「通知」。どちらも同じパネル（`#notif-menu`）を開く。バーの項目は経路ではないため、M3E が押下で付ける選択状態を経路に基づいて戻す（`resync`）。
+- `useMedia` をエディタから `lib/useMedia.ts` へ移し、レイアウト（`_app.tsx`）とエディタで同じ境界を使う。
+
+### 実装上の知見（M3E 2.9.2）
+
+- `m3e-nav-rail` は `m3e-nav-bar` を継承し、`mode` を React から切り替えれば `currentMode` が追従する（`m3e-nav-rail-toggle` は使わず、React 側で状態を持つ方が保存・モーダル判定を一元化できる）。
+- 直下の `m3e-fab` は自動で elevation 0 になり、展開時に `extended` が付く。既定サイズ `medium`（80）は折りたたみ幅 96 に収まらないので `size="small"`（56）にする。
+- `m3e-nav-item` は押すと自分を選択状態にする（`selected = true`）。経路以外の項目を置くときは `change` で戻す。
+- `m3e-menu-trigger` は親要素の click を拾うので、`m3e-nav-item` の中に置けば項目全体がトリガーになる。
+
+### 検証
+
+- `vp check` 0 エラー、全パッケージ typecheck、`vp test`、デモビルド成功。
+- 撮影 32 画面（#29 標準展開レール、#30 モーダル展開レール、#31 FAB からの登録ダイアログ、#32 compact の通知）。`pnpm a11y`: 残る指摘は M3E calendar 内部の 1 件のみ。
