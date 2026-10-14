@@ -706,12 +706,52 @@ async function main() {
   const picked = await page.evaluate(() => getSelection()?.toString() ?? "");
   if (!picked.includes("百花繚乱")) throw new Error(`指摘から本文を選べない: ${picked}`);
   await shot("45-write-refs");
-  // 46 compact の文章エディタ: 下端のドッキングツールバー / 47 その他はボトムシート
+  // 46 compact の文章エディタ: 画面下に浮かぶ vibrant のツールバー
   await page.setViewportSize({ width: 412, height: 915 });
   await page.waitForTimeout(800);
   await page.click(".doc");
   await shot("46-write-compact");
-  await page.locator('.write__docked m3e-icon-button[aria-label="その他"]').click();
+  // 46a 丸いボタン（文字の書式）で 2 本目のツールバーが伸びる。押しても本文のフォーカスは外れない
+  await page.locator('.mfb__bar m3e-icon-button[aria-label="文字の書式"]').click();
+  await page.waitForSelector(".mfb__panel--text");
+  await page.waitForTimeout(500);
+  expectTrue(
+    await page.evaluate(() => document.activeElement?.closest(".doc") !== null),
+    "丸いボタンで本文のフォーカスが外れた",
+  );
+  await shot("46a-write-compact-expand");
+  // 46b キーボードが出たとき（visual viewport を 336px 縮めて再現）: ツールバーがキーボードのすぐ上へ
+  await page.evaluate(() => {
+    const vv = window.visualViewport;
+    Object.defineProperty(vv, "height", {
+      configurable: true,
+      get: () => window.innerHeight - 336,
+    });
+    vv.dispatchEvent(new Event("resize"));
+  });
+  await page.waitForSelector('.mfb__bar m3e-icon-button[aria-label="キーボードを閉じる"]');
+  const barBottom = await page.evaluate(
+    () => window.innerHeight - document.querySelector(".mfb__row").getBoundingClientRect().bottom,
+  );
+  expectTrue(
+    Math.abs(barBottom - (336 + 12)) <= 2,
+    `キーボードの上に出ない（下端から ${barBottom}px）`,
+  );
+  await shot("46b-write-compact-keyboard");
+  await page.evaluate(() => {
+    delete window.visualViewport.height;
+    window.visualViewport.dispatchEvent(new Event("resize"));
+  });
+  await page.locator('.mfb__bar m3e-icon-button[aria-label="文字の書式"]').click();
+  // 46c 隣の丸い FAB（挿入）: 押すと＋が×に回り、挿入の操作が伸びて出る
+  await page.locator('.mfb__fab[aria-label="挿入"]').click();
+  await page.waitForSelector(".mfb__panel--insert");
+  await page.waitForTimeout(500);
+  await shot("46c-write-compact-fab");
+  await page.locator('.mfb__fab[aria-label="挿入を閉じる"]').click();
+  await page.waitForTimeout(300);
+  // 47 その他（補助ペインと道具）はボトムシート
+  await page.locator('.mfb__bar m3e-icon-button[aria-label="その他"]').click();
   await page.waitForTimeout(700);
   await shot("47-write-compact-more");
   await page.keyboard.press("Escape");

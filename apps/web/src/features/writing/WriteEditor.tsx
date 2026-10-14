@@ -10,6 +10,7 @@ import { PaneHandle } from "@/features/editor/PaneHandle";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { describeError } from "@/lib/errors";
 import { formatJstShort } from "@/lib/format";
+import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -27,6 +28,7 @@ import { buildPlainText, documentHtml } from "./plainText";
 import { NotationMarks, SearchReplace } from "./plugins";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { NotationPanel, useNotationCheck } from "@/features/notation/NotationPanel";
+import { MobileFormatBar } from "./MobileFormatBar";
 import { LinkDialog, ShortcutsDialog, WordCountDialog } from "./WriteDialogs";
 import { FindPanel, OutlinePanel, ReferencePanel, type ReferenceThread } from "./WritePanels";
 import {
@@ -50,7 +52,7 @@ const LIVE_COUNT_KEY = "mf100.write.liveCount";
 /**
  * 文章エディタ（`/works/:id/write`）。Google ドキュメントの「書く」体験を M3 Expressive の部品で組む。
  * - 骨格は M3 の supporting pane: 主＝紙面、副＝概要／検索と置換／指摘（expanded 以上は固定 360 / 412、839 以下はボトムシート）
- * - 書式は上端の浮遊ツールバー（compact は下端のドッキングツールバー＋その他はボトムシート）
+ * - 書式は上端の浮遊ツールバー（compact はキーボードの上に浮かぶ vibrant のツールバー。丸いボタンで系統ごとに展開。補助ペインはボトムシート）
  * - 下書きは数秒ごとに自動保存（版番号で競合を検出）。「版として提出」で HTML の版スナップショットを作り、校正に回す
  */
 export function WriteEditor({ workId }: { workId: string }) {
@@ -105,6 +107,7 @@ function WriteSurface({
   const save = useMutation(api.documents.save);
   const cls = useWindowClass();
   const compact = cls === "compact";
+  const kb = useKeyboardInset(compact);
   const mobile = useMedia("(max-width: 839px)");
   const defaultPane = useMedia("(min-width: 1200px)") ? 412 : 360;
   const canEdit = doc.canEdit;
@@ -220,6 +223,17 @@ function WriteSurface({
       schedule();
     },
   });
+
+  // compact: 入力位置がキーボードの上の浮遊ツールバーに隠れないよう、本文のスクロールに下の余白を取る
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const m = compact ? { top: 16, right: 8, bottom: 168, left: 8 } : 5;
+    try {
+      editor.view.setProps({ scrollMargin: m, scrollThreshold: m });
+    } catch {
+      // 表示前（view が無い）なら何もしない
+    }
+  }, [editor, compact]);
 
   const flush = useCallback(async () => {
     window.clearTimeout(timer.current);
@@ -442,7 +456,10 @@ function WriteSurface({
   );
 
   return (
-    <div className={`write ${compact ? "write--compact" : ""}`}>
+    <div
+      className={`write ${compact ? "write--compact" : ""} ${kb > 0 ? "write--keyboard" : ""}`}
+      style={compact ? ({ "--kb": `${kb}px` } as CSSProperties) : undefined}
+    >
       <AppBarSlot slot="leading">
         <M3eIconButton
           aria-label="制作物へ戻る"
@@ -528,11 +545,28 @@ function WriteSurface({
             </M3eToolbar>
           ) : null}
           {editor && fmt && canEdit && compact ? (
-            <CompactToolbar
+            <MobileFormatBar
               editor={editor}
               state={fmt}
-              onMore={() => setSheet(moreSheet(editor, fmt, actions, openPanel, setSheet))}
+              keyboard={kb > 0}
               onStyle={() => setSheet(styleSheet(editor, fmt))}
+              onColor={() =>
+                setSheet(
+                  colorSheet("文字の色", textColors, formatCommands(editor).color, fmt.color),
+                )
+              }
+              onHighlight={() =>
+                setSheet(
+                  colorSheet(
+                    "ハイライトの色",
+                    highlightColors,
+                    formatCommands(editor).highlight,
+                    fmt.highlight,
+                  ),
+                )
+              }
+              onLink={actions.openLink}
+              onMore={() => setSheet(moreSheet(editor, actions, openPanel))}
             />
           ) : null}
         </div>
@@ -656,50 +690,6 @@ function WriteSurface({
   );
 }
 
-/** compact: 下端のドッキングツールバー（M3 Toolbars: compact はツールバー 1 本、入らない操作はボトムシート） */
-function CompactToolbar({
-  editor,
-  state: s,
-  onMore,
-  onStyle,
-}: {
-  editor: Editor;
-  state: FormatState;
-  onMore: () => void;
-  onStyle: () => void;
-}) {
-  const cmd = formatCommands(editor);
-  const keep = (e: { preventDefault: () => void }) => e.preventDefault();
-  const btn = (
-    label: string,
-    icon: string,
-    on: boolean | null,
-    run: () => unknown,
-    disabled = false,
-  ) => (
-    <M3eIconButton
-      aria-label={label}
-      {...(on !== null ? { toggle: true, selected: on } : {})}
-      {...(disabled ? { disabled: true } : {})}
-      onMouseDown={keep}
-      onClick={() => void run()}
-    >
-      <M3eIcon name={icon} className={on ? "icon--on" : ""} />
-    </M3eIconButton>
-  );
-  return (
-    <M3eToolbar className="write__docked" aria-label="書式">
-      {btn("元に戻す", "undo", null, cmd.undo, !s.canUndo)}
-      {btn("段落スタイル", "text_fields", null, onStyle)}
-      {btn("太字", "format_bold", s.bold, cmd.bold)}
-      {btn("斜体", "format_italic", s.italic, cmd.italic)}
-      {btn("チェックリスト", "checklist", s.task, cmd.task)}
-      {btn("箇条書き", "format_list_bulleted", s.bullet, cmd.bullet)}
-      {btn("その他", "more_vert", null, onMore)}
-    </M3eToolbar>
-  );
-}
-
 function styleSheet(editor: Editor, s: FormatState) {
   const cmd = formatCommands(editor);
   return {
@@ -713,78 +703,31 @@ function styleSheet(editor: Editor, s: FormatState) {
   };
 }
 
-function moreSheet(
-  editor: Editor,
-  s: FormatState,
-  actions: ToolbarActions,
-  openPanel: (p: Panel) => void,
-  setSheet: (v: { title: string; items: ActionSheetItem[] } | null) => void,
+function colorSheet(
+  title: string,
+  list: typeof textColors,
+  run: (v: string | null) => unknown,
+  current: string | null,
 ) {
-  const cmd = formatCommands(editor);
-  const colorSheet =
-    (
-      title: string,
-      list: typeof textColors,
-      run: (v: string | null) => unknown,
-      current: string | null,
-    ) =>
-    () =>
-      setTimeout(
-        () =>
-          setSheet({
-            title,
-            items: list.map((c) => ({
-              icon: c.value ? "circle" : "block",
-              label: c.label,
-              selected: current === c.value,
-              onSelect: () => void run(c.value),
-            })),
-          }),
-        0,
-      );
+  return {
+    title,
+    items: list.map((c) => ({
+      icon: c.value ? "circle" : "block",
+      label: c.label,
+      selected: current === c.value,
+      onSelect: () => void run(c.value),
+    })),
+  };
+}
+
+/** compact の「その他」: 書式はツールバーから出すので、ここは書式のクリアと補助ペイン・道具 */
+function moreSheet(editor: Editor, actions: ToolbarActions, openPanel: (p: Panel) => void) {
   const items: ActionSheetItem[] = [
-    { icon: "redo", label: "やり直す", onSelect: () => void cmd.redo() },
     {
-      icon: "format_underlined",
-      label: "下線",
-      selected: s.underline,
-      onSelect: () => void cmd.underline(),
+      icon: "format_clear",
+      label: "書式をクリア",
+      onSelect: () => void formatCommands(editor).clear(),
     },
-    {
-      icon: "format_strikethrough",
-      label: "取り消し線",
-      selected: s.strike,
-      onSelect: () => void cmd.strike(),
-    },
-    {
-      icon: "format_color_text",
-      label: "文字の色",
-      onSelect: colorSheet("文字の色", textColors, cmd.color, s.color),
-    },
-    {
-      icon: "ink_highlighter",
-      label: "ハイライトの色",
-      onSelect: colorSheet("ハイライトの色", highlightColors, cmd.highlight, s.highlight),
-    },
-    { icon: "link", label: "リンクを挿入", onSelect: actions.openLink },
-    {
-      icon: "format_list_numbered",
-      label: "番号付きリスト",
-      selected: s.ordered,
-      onSelect: () => void cmd.ordered(),
-    },
-    { icon: "format_indent_increase", label: "インデント増", onSelect: () => void cmd.sink() },
-    { icon: "format_indent_decrease", label: "インデント減", onSelect: () => void cmd.lift() },
-    {
-      icon: "format_align_center",
-      label: "中央揃え",
-      selected: s.align === "center",
-      onSelect: () => void cmd.align(s.align === "center" ? "left" : "center"),
-    },
-    { icon: "format_quote", label: "引用", selected: s.quote, onSelect: () => void cmd.quote() },
-    { icon: "table", label: "表を挿入", onSelect: () => void cmd.table() },
-    { icon: "horizontal_rule", label: "区切り線を挿入", onSelect: () => void cmd.rule() },
-    { icon: "format_clear", label: "書式をクリア", onSelect: () => void cmd.clear() },
     { icon: "toc", label: "概要", onSelect: () => openPanel("outline") },
     { icon: "find_replace", label: "検索と置換", onSelect: () => actions.openFind(true) },
     { icon: "spellcheck", label: "表記", onSelect: () => openPanel("notation") },

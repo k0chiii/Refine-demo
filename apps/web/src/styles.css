@@ -2030,24 +2030,86 @@ m3e-icon.icon--on {
   z-index: 50;
   --m3e-text-button-label-text-color: var(--md-sys-color-inverse-primary, #a9c7ff);
 }
-/* compact: 下端のドッキングツールバー（M3: 窓の全幅、角丸なし、項目は等間隔） */
-.write__docked {
+/*
+ * compact: 書式のツールバー（M3 Expressive の floating toolbar・vibrant・rounded）。
+ * キーボードが出ているときはそのすぐ上（--kb はキーボードの高さ）、出ていないときは画面下に浮かぶ。
+ * 丸いボタンで開く 2 本目（standard・elevated）は下から弾むように伸びる（expressive の spatial spring）。
+ */
+.mfb {
   position: fixed;
   inset-inline: 0;
-  bottom: 0;
+  bottom: calc(var(--kb, 0px) + 12px);
   z-index: 30;
-  justify-content: space-around;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  --m3e-toolbar-container-color: var(--mf-surface-container);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 8px;
+  pointer-events: none;
+}
+.write--compact:not(.write--keyboard) .mfb {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.mfb > * {
+  pointer-events: auto;
+  max-width: 100%;
+}
+.mfb__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.mfb__bar {
+  --m3e-toolbar-spacing: 2px;
+}
+.mfb__panel {
+  transform-origin: 50% 100%;
+  animation: mfb-pop 360ms cubic-bezier(0.42, 1.67, 0.21, 0.9) both;
+}
+@keyframes mfb-pop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.7, 0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mfb__fab {
+  flex: none;
+}
+.mfb__fab m3e-icon {
+  transition: rotate 360ms cubic-bezier(0.42, 1.67, 0.21, 0.9);
+}
+.mfb__fab--open m3e-icon {
+  rotate: 45deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mfb__panel {
+    animation: none;
+  }
+  .mfb__fab m3e-icon {
+    transition: none;
+  }
 }
 .write--compact {
   padding: 0;
+  /* キーボードが出たら、その上までを本文の範囲にする（入力位置がキーボードに隠れない） */
+  height: calc(100dvh - 64px - var(--kb, 0px));
 }
 .write--compact .write__main {
   border-radius: 0;
 }
 .write--compact .write__canvas {
-  padding: 0 0 calc(80px + env(safe-area-inset-bottom, 0px));
+  padding: 0 0 calc(104px + env(safe-area-inset-bottom, 0px));
+}
+/* 文字数の表示は浮遊ツールバーと重ならないよう上に */
+.write--compact .write__count {
+  bottom: auto;
+  top: 8px;
+  inset-inline: auto 12px;
 }
 .write--compact .write__page {
   box-shadow: none;
@@ -2155,7 +2217,7 @@ m3e-icon.icon--on {
   .write__toolbar,
   .write__side,
   .write__count,
-  .write__docked,
+  .mfb,
   .ws__spacer,
   .drawer {
     display: none !important;

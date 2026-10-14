@@ -230,6 +230,18 @@
     "violations": []
   },
   {
+    "screen": "46a-write-compact-expand",
+    "violations": []
+  },
+  {
+    "screen": "46b-write-compact-keyboard",
+    "violations": []
+  },
+  {
+    "screen": "46c-write-compact-fab",
+    "violations": []
+  },
+  {
     "screen": "47-write-compact-more",
     "violations": []
   },
