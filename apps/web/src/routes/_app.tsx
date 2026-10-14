@@ -32,7 +32,7 @@ const readRailPref = () => {
 
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
- * - compact（<600）: アプリバーは見出しとアカウントだけ。下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。
+ * - compact（<600）: アプリバーは見出しとアカウントだけ。下部ナビゲーションバー 3 件（ダッシュボード・通知・制作物）。
  *   エディタ（`/works/:id`）では下部バーを隠す（詳細画面）。アプリバーはどの幅でも 1 本で、エディタが戻る・題名・操作を差し込む。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
@@ -78,8 +78,8 @@ function AppLayout() {
   ];
   const selected = (to: string) =>
     to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
-  const navItems = () =>
-    items.map((it) => (
+  const navItems = (list = items) =>
+    list.map((it) => (
       <Link key={it.to} to={it.to} className="nav-link">
         <M3eNavItem
           selected={selected(it.to)}
@@ -207,11 +207,13 @@ function AppLayout() {
       </div>
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
-          {navItems()}
+          {/* 通知はダッシュボードの隣（利用者指示 2026-10-14）。ダッシュボード・通知・制作物（・管理）の順 */}
+          {navItems(items.slice(0, 1))}
           <M3eNavItem className="shell__bar-notif" onClick={() => setNotifOpen(true)}>
             <NotificationsBell.Icon slot="icon" />
             通知
           </M3eNavItem>
+          {navItems(items.slice(1))}
         </M3eNavBar>
       ) : null}
     </div>

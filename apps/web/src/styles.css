@@ -259,7 +259,7 @@ m3e-search-bar {
 .shell__bar {
   display: none;
 }
-/* compact（<600）: レールを隠し、下部ナビゲーションバー（3 件: ダッシュボード・制作物・通知） */
+/* compact（<600）: レールを隠し、下部ナビゲーションバー（3 件: ダッシュボード・通知・制作物） */
 @media (max-width: 599px) {
   .shell {
     grid-template-columns: 1fr;
@@ -290,6 +290,17 @@ m3e-search-bar {
   text-decoration: none;
   color: inherit;
   display: block;
+}
+/* 下部バー: リンクで包んだ項目も素の項目（通知）も同じ幅に並べる */
+.shell__bar .nav-link,
+.shell__bar > m3e-nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.shell__bar .nav-link > m3e-nav-item,
+.shell__bar > m3e-nav-item {
+  width: 100%;
+  min-width: 0;
 }
 
 /* ---------- 画面見出し: 内容側には置かない。各画面が AppBarSlot で共通アプリバーの見出しに差し込む（M3 App bars） */

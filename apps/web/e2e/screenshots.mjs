@@ -525,7 +525,7 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
 
-  // 20 compact（<600）: ダッシュボード（下部ナビ 3 件: ダッシュボード・制作物・通知）/ 32 「通知」はボトムシート
+  // 20 compact（<600）: ダッシュボード（下部ナビ 3 件: ダッシュボード・通知・制作物）/ 32 「通知」はボトムシート
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${BASE}/`);
   await page.waitForSelector("m3e-nav-bar");
