@@ -41,6 +41,7 @@ export const get = query({
       const users = await resolveUsers(ctx.db, [
         ...threads.map((t) => t.authorId),
         ...threads.flatMap((t) => (t.assigneeId ? [t.assigneeId] : [])),
+        ...threads.flatMap((t) => t.mentions ?? []),
         ...assignments.map((a) => a.reviewerId),
         ...checks.flatMap((c) => [
           ...(c.assigneeId ? [c.assigneeId] : []),
@@ -74,6 +75,10 @@ export const get = query({
             ...t,
             author: users.get(t.authorId),
             assignee: t.assigneeId ? users.get(t.assigneeId) : null,
+            mentionUsers: (t.mentions ?? []).flatMap((id) => {
+              const u = users.get(id);
+              return u ? [u] : [];
+            }),
           }))
           .sort((a, b) => a.createdAt - b.createdAt),
         assignments: assignments.map((a) => ({ ...a, reviewer: users.get(a.reviewerId) })),

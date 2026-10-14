@@ -25,7 +25,7 @@ export interface ToolbarActions {
   openCount: () => void;
   openShortcuts: () => void;
   print: () => void;
-  download: (kind: "html" | "txt") => void;
+  download: (kind: "html" | "txt" | "md") => void;
 }
 
 export function useFormatState(editor: Editor | null) {
@@ -503,6 +503,11 @@ export function WriteToolbar({
           icon="download"
           label="HTML でダウンロード"
           onClick={() => actions.download("html")}
+        />
+        <MoreItem
+          icon="markdown"
+          label="Markdown でダウンロード"
+          onClick={() => actions.download("md")}
         />
         <MoreItem
           icon="text_snippet"

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
-import { decideThread, postComment, replyToThread } from "../usecases/comments.ts";
+import {
+  decideThread,
+  listMentionCandidates,
+  postComment,
+  replyToThread,
+} from "../usecases/comments.ts";
 import { assignReviewers, closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -221,5 +226,82 @@ describe("採否判断（A-07, D5）", () => {
     await expect(
       replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "追加で" }),
     ).rejects.toThrow(code("comment_reply_not_allowed"));
+  });
+});
+
+describe("メンション", () => {
+  /** コメント（threadId つき）の通知だけを見る */
+  const kinds = (ctx: Awaited<ReturnType<typeof setup>>["ctx"], userId: string) =>
+    ctx.state.notifications
+      .all()
+      .filter((n) => n.recipientId === userId && n.threadId)
+      .map((n) => n.kind);
+
+  it("見られる人だけをメンションでき、メンションされた人に通知が届く（制作者は重ねて通知しない）", async () => {
+    const { ctx, work, revision } = await setup();
+    expect((await listMentionCandidates(ctx, principals.reviewer, work.id)).sort()).toEqual(
+      [
+        principals.approver.userId,
+        principals.creator.userId,
+        principals.manager.userId,
+        principals.reviewer.userId,
+      ].sort(),
+    );
+    await expect(listMentionCandidates(ctx, principals.stranger, work.id)).rejects.toThrow(
+      code("forbidden"),
+    );
+
+    const thread = await postComment(ctx, principals.reviewer, {
+      revisionId: revision.id,
+      body: "@五月 めい ここ確認お願いします",
+      kind: "correction",
+      severity: "major",
+      mentions: [principals.creator.userId, principals.approver.userId],
+    });
+    expect(thread.mentions).toEqual([principals.creator.userId, principals.approver.userId]);
+    expect(kinds(ctx, principals.creator.userId)).toEqual(["mentioned"]);
+    expect(kinds(ctx, principals.approver.userId)).toEqual(["mentioned"]);
+
+    await expect(
+      postComment(ctx, principals.reviewer, {
+        revisionId: revision.id,
+        body: "x",
+        kind: "correction",
+        severity: "minor",
+        mentions: [principals.stranger.userId],
+      }),
+    ).rejects.toThrow(code("mention_not_allowed"));
+
+    // 返信でのメンション（自分自身は通知しない）
+    await replyToThread(ctx, principals.creator, {
+      threadId: thread.id,
+      body: "@本郷 校正 直しました",
+      mentions: [principals.reviewer.userId, principals.creator.userId],
+    });
+    expect(kinds(ctx, principals.reviewer.userId)).toContain("mentioned");
+    expect(kinds(ctx, principals.creator.userId)).toEqual(["mentioned"]);
+    const replied = (await ctx.threads.listEvents(thread.id)).find(
+      (e) => e.eventType === "replied",
+    );
+    expect(replied?.payload).toMatchObject({
+      mentions: [principals.reviewer.userId, principals.creator.userId],
+    });
+    await expect(
+      replyToThread(ctx, principals.creator, { threadId: thread.id, body: "  " }),
+    ).rejects.toThrow(code("forbidden"));
+  });
+
+  it("同じ箇所に複数の人がそれぞれ指摘を立てられる", async () => {
+    const { ctx, revision } = await setup();
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: revision.workId,
+      principalType: "user",
+      principalId: principals.manager.userId,
+      permission: "review",
+    });
+    const at = { revisionId: revision.id, kind: "correction" as const, severity: "minor" as const };
+    const a = await postComment(ctx, principals.reviewer, { ...at, body: "表記が違う" });
+    const b = await postComment(ctx, principals.manager, { ...at, body: "私もそう思う" });
+    expect(a.id).not.toBe(b.id);
   });
 });

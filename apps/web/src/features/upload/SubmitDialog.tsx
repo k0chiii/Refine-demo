@@ -26,13 +26,7 @@ import {
   initialState,
   type FlowState,
 } from "./submissionFlow";
-
-function guessType(file: File): "pdf" | "image" | "document" | "other" {
-  if (file.type === "application/pdf") return "pdf";
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("text/") || file.type.includes("document")) return "document";
-  return "other";
-}
+import { guessArtifactType, guessMimeType } from "./fileKind";
 
 /**
  * U-04 版提出（ダイアログ。狭い画面では全画面）。制作物の画面を離れずに提出し、確定後はその版の校正画面へ移る。
@@ -108,8 +102,8 @@ export function SubmitDialog({
     const items = [
       ...files.map((f) => ({
         fileName: f.name,
-        mimeType: f.type || "application/octet-stream",
-        type: guessType(f),
+        mimeType: guessMimeType(f.name, f.type),
+        type: guessArtifactType(f.name, f.type),
         role: "source" as const,
         declaredSize: f.size,
       })),

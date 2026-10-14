@@ -1,8 +1,7 @@
+import { documentView } from "@/features/writing/documentView";
 import type { ProofreadSegment } from "@mf100/domain";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { htmlToPlainText } from "@/features/annotation/RichTextViewer";
 import { extractPageFeature } from "@/features/compare/pdfFeatures";
-import { bodyOfHtml, isHtmlArtifact } from "@/features/writing/plainText";
 
 /**
  * 自動校正のために添付から文字と位置を取り出す（利用者の端末で行う。外部には送らない）。
@@ -23,7 +22,7 @@ export async function documentSegments(
   blob: Blob,
 ): Promise<ProofreadSegment[]> {
   const t = await blob.text();
-  const text = isHtmlArtifact(artifact) ? htmlToPlainText(bodyOfHtml(t)) : t;
+  const text = documentView(artifact, t).body;
   return [{ kind: "text", text }];
 }
 

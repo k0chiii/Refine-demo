@@ -362,12 +362,16 @@ async function main() {
     body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
   await page.waitForSelector(".compose-pop textarea");
-  await page.fill(
-    ".compose-pop textarea",
+  // 「@」で制作物を見られる人をメンション（候補から選ぶ）
+  await page.fill(".compose-pop textarea", "@五月");
+  await page.locator(".mention-list m3e-list-action", { hasText: "五月 めい" }).click();
+  await page.locator(".compose-pop textarea").press("End");
+  await page.keyboard.type(
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
   );
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".text-anchor");
+  await page.waitForSelector(".thread__body .mention");
   await page.locator(".comments .thread .thread__body").last().click();
   await shot("19-text-range");
   await pickArtifact("sample.pdf");
@@ -713,6 +717,61 @@ async function main() {
   const quote = await page.locator(".rich-viewer__page .text-anchor").first().innerText();
   if (!quote.includes("百花繚乱")) throw new Error(`範囲指摘の位置がずれている: ${quote}`);
   await shot("44-write-review-comment");
+  // 44a スマホ（指の操作）: 文字を選ぶと「選んだ文字にコメント」ボタン → 投稿欄は画面下に全幅（引用つき）
+  await page.evaluate(() => {
+    const orig = window.matchMedia.bind(window);
+    window.__origMatchMedia = orig;
+    window.matchMedia = (q) =>
+      q.includes("pointer: coarse")
+        ? {
+            matches: true,
+            media: q,
+            addEventListener() {},
+            removeEventListener() {},
+            onchange: null,
+          }
+        : orig(q);
+  });
+  await page.setViewportSize({ width: 412, height: 915 });
+  // 同じ URL だと画面が作り直されず、差し替えた matchMedia を読まないので、一度離れてから開く
+  await go("/");
+  await go(writeWorkUrl);
+  await page.waitForSelector(".rich-viewer__page .doc");
+  await page.waitForTimeout(600);
+  await page.evaluate((needle) => {
+    const root = document.querySelector(".rich-viewer__page .doc");
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const i = node.textContent.indexOf(needle);
+      if (i >= 0) {
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + needle.length);
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+        break;
+      }
+    }
+  }, "入場は無料");
+  await page.waitForSelector(".touch-comment", { timeout: 5000 });
+  expectTrue(
+    (await page.locator(".compose-pop").count()) === 0,
+    "指の操作で選んだ瞬間に投稿欄が出た",
+  );
+  await page.locator(".touch-comment").click();
+  await page.waitForSelector(".compose-pop--docked .compose-pop__quote");
+  expectTrue(
+    (await page.locator(".compose-pop__quote").innerText()).includes("入場は無料"),
+    "投稿欄に選んだ文字の引用が出ない",
+  );
+  await shot("44a-mobile-text-comment");
+  await page.locator('.compose-pop m3e-icon-button[aria-label="取消"]').click();
+  await page.evaluate(() => {
+    window.matchMedia = window.__origMatchMedia;
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(400);
   // 45 指摘を見ながら直す（制作者）: 補助ペイン「指摘」→ 押すと本文の該当箇所を選ぶ
   await signInAs("mock-nogiku-creator");
   await go(`${writeWorkUrl}/write`);

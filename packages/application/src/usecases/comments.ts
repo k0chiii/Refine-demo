@@ -16,7 +16,14 @@ import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
 import { notify } from "./notifications.ts";
-import { editThreadBody, isCarryCandidate, planCarryForward, revisionLabel } from "@mf100/domain";
+import {
+  editThreadBody,
+  isCarryCandidate,
+  mentionableUserIds,
+  planCarryForward,
+  revisionLabel,
+  validateMentions,
+} from "@mf100/domain";
 
 /** 通知文面用の採否ラベル（表示名は UI 側と同じ日本語。状態名自体は設計提案）。 */
 const resolutionLabels: Record<string, string> = {
@@ -34,6 +41,8 @@ export interface PostCommentInput {
   severity: Severity;
   anchor?: Anchor;
   requestId?: string;
+  /** 本文でメンションした人（制作物を見られる人だけ。上限 10） */
+  mentions?: string[];
 }
 
 /**
@@ -49,10 +58,16 @@ export async function postComment(
 ): Promise<CommentThread> {
   const revision = await ctx.revisions.findById(input.revisionId);
   if (!revision) throw new DomainError("forbidden", { revisionId: input.revisionId });
-  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "comment.post");
+  const { work, grants } = await loadAuthorizedWork(
+    ctx,
+    principal,
+    revision.workId,
+    "comment.post",
+  );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const mentions = validateMentions(input.mentions, work, grants);
 
   const now = ctx.clock.now();
   const siblings = await ctx.revisions.listByWork(work.id);
@@ -88,6 +103,7 @@ export async function postComment(
         data.anchor = input.anchor;
         data.artifactId = input.anchor.artifactId;
       }
+      if (mentions.length) data.mentions = mentions;
       const thread = await ctx.threads.insert(data);
       await ctx.threads.appendEvent({
         threadId: thread.id,
@@ -96,10 +112,22 @@ export async function postComment(
         createdAt: now,
       });
       await markRevisionViewed(ctx, principal, revision.id);
-      await notify(ctx, work.creatorIds, principal.userId, {
-        kind: "comment_posted",
-        title: `新しい指摘: ${work.title} ${revisionLabel(revision)}`,
-        body: input.body.slice(0, 120),
+      // メンションされた人には「メンション」だけを送る（制作者がメンションされたら新しい指摘の通知と重ねない）
+      await notify(
+        ctx,
+        work.creatorIds.filter((id) => !mentions.includes(id)),
+        principal.userId,
+        {
+          kind: "comment_posted",
+          title: `新しい指摘: ${work.title} ${revisionLabel(revision)}`,
+          body: input.body.slice(0, 120),
+          workId: work.id,
+          revisionId: revision.id,
+          threadId: thread.id,
+        },
+      );
+      await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
+        body: input.body,
         workId: work.id,
         revisionId: revision.id,
         threadId: thread.id,
@@ -116,8 +144,9 @@ export async function postComment(
 export async function replyToThread(
   ctx: AppContext,
   principal: Principal,
-  input: { threadId: string; body: string },
+  input: { threadId: string; body: string; mentions?: string[] },
 ): Promise<void> {
+  if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
   const thread = await ctx.threads.findById(input.threadId);
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
   const revision = await ctx.revisions.findById(thread.revisionId);
@@ -135,12 +164,39 @@ export async function replyToThread(
   if (!open && !isAllowed("comment.decide", { work, grants, principal })) {
     throw new DomainError("comment_reply_not_allowed", { threadId: thread.id });
   }
+  const mentions = validateMentions(input.mentions, work, grants);
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "replied",
     actorId: principal.userId,
-    payload: { body: input.body },
+    payload: mentions.length ? { body: input.body, mentions } : { body: input.body },
     createdAt: now,
+  });
+  await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
+    body: input.body,
+    workId: work.id,
+    revisionId: revision.id,
+    threadId: thread.id,
+  });
+}
+
+/** メンションされた人に知らせる（本人は除く。見られる人かは validateMentions で確認済み） */
+async function notifyMentions(
+  ctx: AppContext,
+  actorId: string,
+  mentions: readonly string[],
+  workTitle: string,
+  label: string,
+  at: { body: string; workId: string; revisionId: string; threadId: string },
+) {
+  if (!mentions.length) return;
+  await notify(ctx, mentions, actorId, {
+    kind: "mentioned",
+    title: `メンションされました: ${workTitle} ${label}`,
+    body: at.body.slice(0, 120),
+    workId: at.workId,
+    revisionId: at.revisionId,
+    threadId: at.threadId,
   });
 }
 
@@ -320,4 +376,14 @@ export async function carryForwardThread(
     threadId: created.id,
   });
   return created;
+}
+
+/** メンションの候補: その制作物を見られる人（見られる人だけが候補を取れる） */
+export async function listMentionCandidates(
+  ctx: AppContext,
+  principal: Principal,
+  workId: string,
+): Promise<string[]> {
+  const { work, grants } = await loadAuthorizedWork(ctx, principal, workId, "work.view");
+  return mentionableUserIds(work, grants);
 }

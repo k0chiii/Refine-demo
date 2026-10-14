@@ -105,6 +105,12 @@ export function AnchorOverlay({
     if ((e.target as Element).closest("[data-anchor]")) return;
     const p = toLocal(e);
     if (e.pointerType === "touch") {
+      // 2 本目の指（ピンチ）: 長押しの選択はやめる
+      if (press.current && press.current.id !== e.pointerId) {
+        clearPress();
+        setDrag(null);
+        return;
+      }
       clearPress();
       const id = e.pointerId;
       press.current = {

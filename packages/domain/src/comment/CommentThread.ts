@@ -45,6 +45,8 @@ export interface CommentThread {
   editCount?: number;
   /** 自動校正の指摘（投稿者はシステム）。人の投稿では設定しない */
   origin?: BotOrigin;
+  /** 本文でメンションした人（制作物を見られる人だけ。validateMentions） */
+  mentions?: UserId[];
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;

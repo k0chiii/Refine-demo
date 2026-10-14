@@ -1,3 +1,4 @@
+import { documentView } from "@/features/writing/documentView";
 import {
   diffHighlights,
   diffText,
@@ -10,9 +11,7 @@ import {
 } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { htmlToPlainText } from "@/features/annotation/RichTextViewer";
 import type { PdfViewerController, ViewPosition } from "@/features/annotation/PdfViewer";
-import { bodyOfHtml, isHtmlArtifact } from "@/features/writing/plainText";
 import type { TextViewerController } from "./textSync";
 import { usePdfComparison, type PdfComparison } from "./useComparison";
 
@@ -116,10 +115,7 @@ export function useCompareSession(opts: {
     let cancelled = false;
     void leftBlob.text().then((t) => {
       if (cancelled) return;
-      if (isHtmlArtifact(left)) {
-        const html = bodyOfHtml(t);
-        setOtherText({ id: left.id, body: htmlToPlainText(html), html });
-      } else setOtherText({ id: left.id, body: t });
+      setOtherText({ id: left.id, ...documentView(left, t) });
     });
     return () => {
       cancelled = true;

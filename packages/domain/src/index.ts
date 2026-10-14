@@ -9,6 +9,7 @@ export * from "./revision/Revision.ts";
 export * from "./revision/Artifact.ts";
 export * from "./comment/Anchor.ts";
 export * from "./comment/CommentThread.ts";
+export * from "./comment/mentions.ts";
 export * from "./review/ReviewAssignment.ts";
 export * from "./review/RequiredCheck.ts";
 export * from "./approval/ApprovalPolicy.ts";

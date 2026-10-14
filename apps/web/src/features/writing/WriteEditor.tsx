@@ -28,6 +28,7 @@ import { buildPlainText, documentHtml } from "./plainText";
 import { NotationMarks, SearchReplace } from "./plugins";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { NotationPanel, useNotationCheck } from "@/features/notation/NotationPanel";
+import { jsonToMarkdown } from "./markdown";
 import { MobileFormatBar } from "./MobileFormatBar";
 import { LinkDialog, ShortcutsDialog, WordCountDialog } from "./WriteDialogs";
 import { FindPanel, OutlinePanel, ReferencePanel, type ReferenceThread } from "./WritePanels";
@@ -335,13 +336,16 @@ function WriteSurface({
         })
         .run();
   };
-  const download = (kind: "html" | "txt") => {
+  const download = (kind: "html" | "txt" | "md") => {
     if (!editor) return;
     const body =
       kind === "html"
         ? documentHtml(workTitle, editor.getHTML())
-        : buildPlainText(editor.state.doc).text;
-    const blob = new Blob([body], { type: kind === "html" ? "text/html" : "text/plain" });
+        : kind === "md"
+          ? jsonToMarkdown(editor.getJSON())
+          : buildPlainText(editor.state.doc).text;
+    const type = { html: "text/html", md: "text/markdown", txt: "text/plain" }[kind];
+    const blob = new Blob([body], { type });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${workTitle}.${kind}`;
@@ -733,6 +737,7 @@ function moreSheet(editor: Editor, actions: ToolbarActions, openPanel: (p: Panel
     { icon: "spellcheck", label: "表記", onSelect: () => openPanel("notation") },
     { icon: "rate_review", label: "指摘", onSelect: () => openPanel("refs") },
     { icon: "match_word", label: "文字カウント", onSelect: actions.openCount },
+    { icon: "markdown", label: "Markdown でダウンロード", onSelect: () => actions.download("md") },
   ];
   return { title: "その他", items };
 }

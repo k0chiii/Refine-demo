@@ -4,6 +4,7 @@ import {
   decideThread,
   editThread,
   listCarryCandidates,
+  listMentionCandidates,
   postComment,
   replyToThread,
 } from "@mf100/application";
@@ -27,6 +28,7 @@ export const post = mutation({
     severity: vSeverity,
     anchor: v.optional(anchorValidator),
     requestId: v.optional(v.string()),
+    mentions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -38,7 +40,11 @@ export const post = mutation({
 });
 
 export const reply = mutation({
-  args: { threadId: v.id("commentThreads"), body: v.string() },
+  args: {
+    threadId: v.id("commentThreads"),
+    body: v.string(),
+    mentions: v.optional(v.array(v.string())),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
@@ -78,16 +84,27 @@ export const events = query({
         "work.view",
       );
       const events = await app.threads.listEvents(threadId);
-      const users = await resolveUsers(
-        ctx.db,
-        events.map((e) => e.actorId),
-      );
+      const mentionsOf = (e: (typeof events)[number]): string[] => {
+        const m = (e.payload as { mentions?: unknown } | undefined)?.mentions;
+        return Array.isArray(m) ? m.filter((x): x is string => typeof x === "string") : [];
+      };
+      const users = await resolveUsers(ctx.db, [
+        ...events.map((e) => e.actorId),
+        ...events.flatMap(mentionsOf),
+      ]);
       return {
         canDecide:
           isAllowed("comment.decide", { work, grants, principal }) &&
           work.lifecycle !== "finalized",
         events: events
-          .map((e) => ({ ...e, actor: users.get(e.actorId) }))
+          .map((e) => ({
+            ...e,
+            actor: users.get(e.actorId),
+            mentionUsers: mentionsOf(e).flatMap((id) => {
+              const u = users.get(id);
+              return u ? [u] : [];
+            }),
+          }))
           .sort((a, b) => a.createdAt - b.createdAt),
       };
     });
@@ -156,6 +173,24 @@ export const carryForward = mutation({
     return runUseCase(async () => {
       const created = await carryForwardThread(createAppContext(ctx.db), principal, args);
       return created.id;
+    });
+  },
+});
+
+/** メンションの候補（その制作物を見られる人）。候補を取れるのも見られる人だけ */
+export const mentionCandidates = query({
+  args: { workId: v.string() },
+  handler: async (ctx, { workId }) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      const ids = await listMentionCandidates(createReadContext(ctx.db), principal, workId);
+      const users = await resolveUsers(ctx.db, ids);
+      return ids
+        .flatMap((id) => {
+          const u = users.get(id);
+          return u ? [u] : [];
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "ja"));
     });
   },
 });

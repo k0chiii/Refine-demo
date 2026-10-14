@@ -111,7 +111,8 @@ export type NotificationKind =
   | "revision_voided"
   | "auto_proofread_done"
   | "rule_proposed"
-  | "rule_proposal_decided";
+  | "rule_proposal_decided"
+  | "mentioned";
 
 export interface Notification {
   id: string;

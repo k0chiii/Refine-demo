@@ -9,7 +9,12 @@ import "@m3e/web/theme";
 export const THEME = {
   /** 動的カラーの種（五月祭の青） */
   color: "#1b5fb4",
-  variant: "expressive",
+  /**
+   * vibrant: 主色を種の青に近いまま保ち、secondary も青の系統になる（利用者指摘 2026-10-14「青なのにホバーや選択に緑が混じる」）。
+   * expressive は secondary / tertiary の色相を回すため、この種では緑（secondary-container #cffbe3 など）が出ていた。
+   * 意味を持つ色（成功・注意）は styles.css の固定の補助色を使い、tertiary には頼らない
+   */
+  variant: "vibrant",
   scheme: "light",
   motion: "expressive",
 } as const;

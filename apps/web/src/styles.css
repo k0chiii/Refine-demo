@@ -75,6 +75,14 @@
 :where(html, body, *) {
   overscroll-behavior-y: none;
 }
+/*
+ * アプリ全体はピンチやダブルタップで拡大しない（利用者指示 2026-10-14）。拡大縮小は校正物・文章のビューアの中だけ（usePinchZoom）。
+ * viewport の user-scalable=no は使わない（WCAG 1.4.4 の検査に掛かり、iOS は無視する）。iOS の gesture イベントは main.tsx で止める
+ */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
 :root {
   /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
   --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));
@@ -676,28 +684,38 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- サインイン */
+/*
+ * サインイン: 見えている画面のちょうど真ん中に（iOS の 100vh はツールバーの分だけ大きいので dvh を使う）。
+ * セーフエリアも余白に入れ、内容は中央揃え（アプリのアイコン・名前・説明・ボタン）
+ */
 .signin {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
   background: var(--mf-surface);
 }
 .signin__card {
-  width: min(460px, 100%);
+  width: min(420px, 100%);
   --m3e-card-shape: var(--mf-shape-xl);
 }
 .signin__card .card__content {
-  gap: 16px;
+  gap: 24px;
+  padding: 32px 24px 24px;
 }
 .signin__brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  text-align: center;
 }
-.signin__brand m3e-icon {
-  font-size: 36px;
-  color: var(--mf-primary);
+.signin__logo {
+  border-radius: 16px;
+}
+.signin__lead {
+  margin: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1285,12 +1303,17 @@ m3e-dialog [slot="actions"] {
   transform: translateX(-50%);
   max-width: calc(100% - 32px);
   z-index: 20;
-  /* 狭い幅で項目が入りきらないとき（compact の版比較など）は、はみ出さずに横へスクロール */
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.ws__toolbar::-webkit-scrollbar {
-  display: none;
+/* compact で項目が入りきらないとき（版比較など）は、はみ出さずに横へスクロール。
+   影（elevation）が切れるので広い画面では付けない */
+@media (max-width: 599px) {
+  .ws__toolbar {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ws__toolbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 .ws__toolbar-text {
   position: relative; /* m3e-toolbar の面（elevated）が位置指定のない子の上に描かれて文字が隠れるのを防ぐ */
@@ -2565,7 +2588,7 @@ m3e-icon.icon--on {
   border-left: 3px solid var(--mf-outline-variant);
 }
 .warn-text {
-  color: var(--mf-tertiary);
+  color: var(--mf-warning);
 }
 .field--narrow {
   max-width: 220px;
@@ -2588,7 +2611,7 @@ m3e-icon.icon--on {
   text-underline-offset: 3px;
 }
 .notation-hit--review {
-  text-decoration: underline dotted var(--mf-tertiary);
+  text-decoration: underline dotted var(--mf-warning);
 }
 .notation-panel__undo {
   justify-content: space-between;
@@ -2625,7 +2648,7 @@ m3e-icon.icon--on {
   color: var(--mf-error);
 }
 .finding--review .finding__icon {
-  color: var(--mf-tertiary);
+  color: var(--mf-warning);
 }
 .finding__actions {
   display: inline-flex;
@@ -2896,4 +2919,59 @@ m3e-icon.icon--on {
 /* エディタの入口（書く制作物を選ぶ） */
 .write-picker__lead {
   margin: 0 0 8px;
+}
+
+/* ---------- 投稿欄（compact は画面下・キーボードの上に全幅で出す。ComposePopover docked） */
+.compose-pop--docked {
+  position: fixed;
+  inset-inline: 8px;
+  width: auto;
+  max-width: 640px;
+  margin-inline: auto;
+  z-index: 40;
+}
+.compose-pop__quote {
+  padding: 8px 12px 0;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 指で選んだ文字にコメントする拡張 FAB（覗き見シート 64 ＋ツールバー 64 ＋余白の上） */
+.touch-comment {
+  position: fixed;
+  inset-inline-end: 16px;
+  bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+  z-index: 35;
+}
+
+/* ---------- メンション */
+.mention-wrap {
+  position: relative;
+  display: block;
+}
+.mention-wrap > textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.mention-list {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  z-index: 50;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-surface-container);
+  box-shadow:
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 1px 2px rgb(0 0 0 / 0.3);
+}
+.mention-list__item--active {
+  --m3e-list-item-container-color: var(--mf-secondary-container);
+}
+.mention {
+  color: var(--mf-primary);
+  font-weight: 500;
 }

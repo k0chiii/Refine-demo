@@ -3,6 +3,7 @@ import type { Id } from "@mf100/convex/dataModel";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
+import { MentionTextarea, renderWithMentions } from "./mentions";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { formatJstShort } from "@/lib/format";
@@ -59,7 +60,7 @@ export function ThreadCard({
   onSelect: () => void;
   onResolve: () => Promise<void>;
   onDecide: (action: "rejected" | "deferred", reason: string) => Promise<void>;
-  onReply: (body: string) => Promise<void>;
+  onReply: (body: string, mentions: string[]) => Promise<void>;
   onAssign: (ids: string[]) => Promise<void>;
   onEdit: (body: string) => Promise<void>;
   pending?: boolean;
@@ -68,6 +69,7 @@ export function ThreadCard({
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState("");
   const [ids, setIds] = useState<string[]>([]);
+  const [mentions, setMentions] = useState<string[]>([]);
   const closed = isClosed(t);
   const open = (m: Mode, initial = "") => {
     setMode(m);
@@ -77,12 +79,13 @@ export function ThreadCard({
   };
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
   const submit = async () => {
-    if (mode === "reply") await onReply(text);
+    if (mode === "reply") await onReply(text, mentions);
     else if (mode === "rejected" || mode === "deferred") await onDecide(mode, text);
     else if (mode === "assign") await onAssign(ids);
     else if (mode === "edit") await onEdit(text);
     setMode(null);
     setText("");
+    setMentions([]);
   };
   const menuId = `tm-${t.id}`;
   const hasMenu = canDecide || canEdit;
@@ -160,7 +163,7 @@ export function ThreadCard({
           {t.anchor?.type === "text_range" ? (
             <blockquote className="thread__quote">「{t.anchor.quote}」</blockquote>
           ) : null}
-          <div className="thread__body">{t.body}</div>
+          <div className="thread__body">{renderWithMentions(t.body, t.mentionUsers)}</div>
           {closed ||
           t.severity === "critical" ||
           t.carriedFromThreadId ||
@@ -224,29 +227,41 @@ export function ThreadCard({
                       : `${resolutionLabel[mode]} の理由`
                 }
               >
-                <TextArea
-                  autoFocus
-                  aria-label={
-                    mode === "reply"
-                      ? "返信"
-                      : mode === "edit"
-                        ? "本文の訂正"
-                        : `${resolutionLabel[mode]} の理由`
-                  }
-                  placeholder={
-                    mode === "reply"
-                      ? "返信"
-                      : mode === "edit"
+                {mode === "reply" ? (
+                  <MentionTextarea
+                    autoFocus
+                    rows={3}
+                    className="input input--area"
+                    aria-label="返信"
+                    placeholder="返信（@ でメンション）"
+                    value={text}
+                    onValue={setText}
+                    mentions={mentions}
+                    onMentions={setMentions}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setMode(null);
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim())
+                        void submit();
+                    }}
+                  />
+                ) : (
+                  <TextArea
+                    autoFocus
+                    aria-label={mode === "edit" ? "本文の訂正" : `${resolutionLabel[mode]} の理由`}
+                    placeholder={
+                      mode === "edit"
                         ? "本文の訂正（原文は履歴に残ります）"
                         : `${resolutionLabel[mode]} の理由（必須）`
-                  }
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setMode(null);
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
-                  }}
-                />
+                    }
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setMode(null);
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim())
+                        void submit();
+                    }}
+                  />
+                )}
               </Field>
               <div className="row">
                 <span className="spacer" />
@@ -350,7 +365,9 @@ function ThreadEvents({ threadId }: { threadId: string }) {
               <div>
                 <span className="thread__name">{e.actor?.name}</span>
                 <span className="thread__time">{formatJstShort(e.createdAt)}</span>
-                <div className="thread__body">{p.body}</div>
+                <div className="thread__body">
+                  {renderWithMentions(p.body ?? "", e.mentionUsers)}
+                </div>
               </div>
             </li>
           );

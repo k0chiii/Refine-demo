@@ -48,9 +48,13 @@ function SignIn() {
   return (
     <main className="signin">
       <Card variant="elevated" className="signin__card">
-        <M3eHeading variant="headline" size="small" level={1} emphasized style={{ margin: 0 }}>
-          MF100 校正システム
-        </M3eHeading>
+        <div className="signin__brand">
+          <img src="/icons/icon-192.png" alt="" width={64} height={64} className="signin__logo" />
+          <M3eHeading variant="headline" size="small" level={1} emphasized style={{ margin: 0 }}>
+            MF100 校正システム
+          </M3eHeading>
+          <p className="muted small signin__lead">第100回五月祭の制作物を提出・校正・校了する</p>
+        </div>
         <M3eButton variant="filled" size="medium" onClick={() => start({ redirectTo: "/" })}>
           Nogiku でサインイン
         </M3eButton>

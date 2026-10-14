@@ -1,5 +1,7 @@
+import { nextStacked } from "./stacked";
+import { TouchCommentButton, useTouchSelection } from "./touchSelection";
 import type { Anchor } from "@mf100/domain";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { diffKindAt, type TextCompareProps } from "@/features/compare/textSync";
 import type { OverlayThread } from "./AnchorOverlay";
 
@@ -18,6 +20,8 @@ interface Props extends TextCompareProps {
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
   selecting: boolean;
+  /** 表示倍率（ピンチ・拡大ボタン）。CSS の zoom で本文だけを拡大し、位置の計算は変えない */
+  scale?: number;
   draft: TextRangeDraft | null;
   onDraft: (d: TextRangeDraft | null) => void;
   /** 本文の上に重ねるもの（投稿欄など。座標は本文コンテナ基準） */
@@ -42,6 +46,7 @@ export function TextViewer({
   activeThreadId,
   onSelectThread,
   selecting,
+  scale = 1,
   draft,
   onDraft,
   inPage,
@@ -139,31 +144,47 @@ export function TextViewer({
     return () => ro.disconnect();
   }, [key, text]);
 
-  const readSelection = () => {
-    if (!selecting || !bodyRef.current || !wrapRef.current) return;
+  /** いまの選択を本文の位置に直す（本文の外・空なら null） */
+  const computeSelection = useCallback((): TextRangeDraft | null => {
+    if (!selecting || !bodyRef.current || !wrapRef.current) return null;
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
     const range = sel.getRangeAt(0);
     const body = bodyRef.current;
-    if (!body.contains(range.startContainer) || !body.contains(range.endContainer)) return;
+    if (!body.contains(range.startContainer) || !body.contains(range.endContainer)) return null;
     const pre = document.createRange();
     pre.setStart(body, 0);
     pre.setEnd(range.startContainer, range.startOffset);
     const start = pre.toString().length;
     pre.setEnd(range.endContainer, range.endOffset);
     const end = pre.toString().length;
-    if (end <= start) return;
+    if (end <= start) return null;
     const r = range.getBoundingClientRect();
     const base = wrapRef.current.getBoundingClientRect();
-    onDraft({
+    return {
       start,
       end,
       box: { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height },
-    });
+    };
+  }, [selecting]);
+
+  const touchSel = useTouchSelection(selecting, computeSelection);
+  const readSelection = () => {
+    // 指の操作では選び終えた合図が取れないので、ボタン（TouchCommentButton）で確定する
+    if (touchSel.touch) return;
+    const d = computeSelection();
+    if (d) onDraft(d);
+  };
+  const commitTouch = () => {
+    const d = touchSel.candidate;
+    touchSel.clear();
+    window.getSelection()?.removeAllRanges();
+    if (d) onDraft(d);
   };
 
   return (
     <div className="viewer text-viewer">
+      {touchSel.candidate ? <TouchCommentButton onCommit={commitTouch} /> : null}
       <div
         className="viewer__stage"
         tabIndex={0}
@@ -176,6 +197,7 @@ export function TextViewer({
           <pre
             ref={bodyRef}
             className="text-viewer__body"
+            style={{ zoom: scale }}
             aria-label="校正対象の文章"
             onMouseUp={readSelection}
             onKeyUp={readSelection}
@@ -216,12 +238,23 @@ export function TextViewer({
                         role: "button",
                         tabIndex: 0,
                         title: `指摘 ${seg.threads.map((t) => `#${t.index}`).join(" ")}`,
+                        // 同じ箇所に複数あれば押すたびに次のコメントへ
                         onClick: (e: { stopPropagation: () => void }) => {
                           e.stopPropagation();
-                          onSelectThread(seg.threads[0]!.id);
+                          const id = nextStacked(
+                            seg.threads.map((t) => t.id),
+                            activeThreadId,
+                          );
+                          if (id) onSelectThread(id);
                         },
-                        onKeyDown: (e: { key: string }) =>
-                          e.key === "Enter" && onSelectThread(seg.threads[0]!.id),
+                        onKeyDown: (e: { key: string }) => {
+                          if (e.key !== "Enter") return;
+                          const id = nextStacked(
+                            seg.threads.map((t) => t.id),
+                            activeThreadId,
+                          );
+                          if (id) onSelectThread(id);
+                        },
                       }
                     : {})}
                 >

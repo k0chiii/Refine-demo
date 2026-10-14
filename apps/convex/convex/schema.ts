@@ -281,6 +281,8 @@ export default defineSchema({
     editCount: v.optional(v.number()),
     /** 自動校正の指摘（投稿者はシステム） */
     origin: v.optional(vBotOrigin),
+    /** 本文でメンションした人（制作物を見られる人だけ） */
+    mentions: v.optional(v.array(v.string())),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),

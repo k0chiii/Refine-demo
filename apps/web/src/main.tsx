@@ -26,3 +26,7 @@ createRoot(document.getElementById("root")!).render(
 );
 
 registerServiceWorker();
+
+// iOS Safari はピンチで画面全体を拡大する（touch-action を見ない場面がある）。拡大はビューアの中だけで行うので、全体の拡大を止める
+for (const type of ["gesturestart", "gesturechange"])
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });

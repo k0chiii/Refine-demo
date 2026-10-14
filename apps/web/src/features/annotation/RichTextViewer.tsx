@@ -1,8 +1,18 @@
+import { nextStacked } from "./stacked";
+import { TouchCommentButton, useTouchSelection } from "./touchSelection";
 import type { Anchor } from "@mf100/domain";
 import { getSchema, generateJSON } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { documentExtensions } from "@/features/writing/extensions";
 import { buildPlainText, offsetToPos, posToOffset } from "@/features/writing/plainText";
 import { RangeHighlight, setHighlights, type HighlightRange } from "@/features/writing/plugins";
@@ -33,6 +43,7 @@ export function RichTextViewer({
   activeThreadId,
   onSelectThread,
   selecting,
+  scale = 1,
   draft,
   onDraft,
   inPage,
@@ -47,6 +58,8 @@ export function RichTextViewer({
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
   selecting: boolean;
+  /** 表示倍率（ピンチ・拡大ボタン）。CSS の zoom で本文だけを拡大し、位置の計算は変えない */
+  scale?: number;
   draft: TextRangeDraft | null;
   onDraft: (d: TextRangeDraft | null) => void;
   inPage?: ReactNode;
@@ -171,36 +184,52 @@ export function RichTextViewer({
       },
     };
 
-  const readSelection = () => {
-    if (!selecting || !editor || !wrapRef.current) return;
+  /** いまの選択を本文の位置に直す（本文の外・空なら null） */
+  const computeSelection = useCallback((): TextRangeDraft | null => {
+    if (!selecting || !editor || !wrapRef.current) return null;
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
     const range = sel.getRangeAt(0);
     const dom = editor.view.dom;
-    if (!dom.contains(range.startContainer) || !dom.contains(range.endContainer)) return;
+    if (!dom.contains(range.startContainer) || !dom.contains(range.endContainer)) return null;
     let from: number;
     let to: number;
     try {
       from = editor.view.posAtDOM(range.startContainer, range.startOffset);
       to = editor.view.posAtDOM(range.endContainer, range.endOffset);
     } catch {
-      return;
+      return null;
     }
     const index = buildPlainText(editor.state.doc);
     const start = posToOffset(index, Math.min(from, to));
     const end = posToOffset(index, Math.max(from, to));
-    if (end <= start) return;
+    if (end <= start) return null;
     const r = range.getBoundingClientRect();
     const base = wrapRef.current.getBoundingClientRect();
-    onDraft({
+    return {
       start,
       end,
       box: { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height },
-    });
+    };
+  }, [selecting, editor]);
+
+  const touchSel = useTouchSelection(selecting, computeSelection);
+  const readSelection = () => {
+    // 指の操作では選び終えた合図が取れないので、ボタン（TouchCommentButton）で確定する
+    if (touchSel.touch) return;
+    const d = computeSelection();
+    if (d) onDraft(d);
+  };
+  const commitTouch = () => {
+    const d = touchSel.candidate;
+    touchSel.clear();
+    window.getSelection()?.removeAllRanges();
+    if (d) onDraft(d);
   };
 
   return (
     <div className="viewer text-viewer">
+      {touchSel.candidate ? <TouchCommentButton onCommit={commitTouch} /> : null}
       <div
         className="viewer__stage"
         tabIndex={0}
@@ -215,12 +244,20 @@ export function RichTextViewer({
           onMouseUp={readSelection}
           onKeyUp={readSelection}
           onClick={(e) => {
-            const el = (e.target as HTMLElement).closest<HTMLElement>("[data-thread]");
-            const id = el?.dataset.thread?.split(" ")[0];
+            // 重なった範囲は入れ子の装飾になるので、押した位置を含むコメントをすべて集め、押すたびに次へ
+            const ids: string[] = [];
+            for (
+              let el = (e.target as HTMLElement).closest<HTMLElement>("[data-thread]");
+              el;
+              el = el.parentElement?.closest<HTMLElement>("[data-thread]") ?? null
+            )
+              for (const id of el.dataset.thread?.split(" ") ?? [])
+                if (id && !ids.includes(id)) ids.push(id);
+            const id = nextStacked(ids, activeThreadId);
             if (id) onSelectThread(id);
           }}
         >
-          <div className="write__page rich-viewer__page">
+          <div className="write__page rich-viewer__page" style={{ zoom: scale }}>
             <EditorContent editor={editor} />
           </div>
           {inPage}

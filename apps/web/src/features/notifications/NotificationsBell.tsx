@@ -32,6 +32,7 @@ const icon: Record<string, string> = {
   auto_proofread_done: "smart_toy",
   rule_proposed: "spellcheck",
   rule_proposal_decided: "rule",
+  mentioned: "alternate_email",
 };
 
 function useUnread() {
@@ -50,7 +51,11 @@ function useNotifications() {
   const openOne = useAction(async (n: NonNullable<typeof list>[number]) => {
     if (n.readAt === undefined) await markRead({ notificationId: n.id as Id<"notifications"> });
     if (n.revisionId)
-      void navigate({ to: "/revisions/$revisionId", params: { revisionId: n.revisionId } });
+      void navigate({
+        to: "/revisions/$revisionId",
+        params: { revisionId: n.revisionId },
+        search: n.threadId ? { thread: n.threadId } : {},
+      });
     else if (n.workId) void navigate({ to: "/works/$workId", params: { workId: n.workId } });
     else if (n.kind === "rule_proposed" || n.kind === "rule_proposal_decided")
       void navigate({ to: "/notation", search: { view: "proposals" } });

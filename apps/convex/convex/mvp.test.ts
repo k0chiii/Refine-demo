@@ -562,4 +562,41 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await cast.creator.as.mutation(api.submissions.confirm, { sessionId: ok.sessionId });
     expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([]);
   });
+
+  it("メンション: 候補は見られる人だけ、見られない人は拒否、メンションされた人に通知が届き名前が返る", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const { sessionId } = await submit(t, cast, workId);
+    const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
+
+    const candidates = await cast.reviewer.as.query(api.comments.mentionCandidates, { workId });
+    expect(candidates.map((u) => u.id).sort()).toEqual(
+      [cast.creator.id, cast.approver.id, cast.manager.id, cast.reviewer.id].sort(),
+    );
+    await expect(
+      cast.stranger.as.query(api.comments.mentionCandidates, { workId }),
+    ).rejects.toThrow(code("forbidden"));
+    await expect(
+      cast.reviewer.as.mutation(api.comments.post, {
+        revisionId: revisionId as Id<"revisions">,
+        body: "@x",
+        kind: "question",
+        severity: "info",
+        mentions: [cast.stranger.id],
+      }),
+    ).rejects.toThrow(code("mention_not_allowed"));
+
+    await cast.reviewer.as.mutation(api.comments.post, {
+      revisionId: revisionId as Id<"revisions">,
+      body: "@駒場 校了 ご確認ください",
+      kind: "question",
+      severity: "info",
+      mentions: [cast.approver.id],
+    });
+    const rev = await cast.approver.as.query(api.revisions.get, { revisionId });
+    expect(rev.threads[0]!.mentionUsers.map((u) => u.id)).toEqual([cast.approver.id]);
+    const notes = await cast.approver.as.query(api.notifications.list, {});
+    expect(notes.some((n) => n.kind === "mentioned")).toBe(true);
+  });
 });

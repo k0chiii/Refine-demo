@@ -47,6 +47,8 @@ export const domainErrorCodes = [
   "comment_thread_revision_mismatch",
   "anchor_invalid",
   "anchor_artifact_mismatch",
+  "mention_too_many",
+  "mention_not_allowed",
   // 校了
   "approval_not_approver",
   "approval_revision_not_candidate",
