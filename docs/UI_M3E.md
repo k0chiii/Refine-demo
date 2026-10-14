@@ -92,31 +92,7 @@
 
 ## 5. 画面比較（改修前 → 改修後）
 
-改修前は `docs/screenshots-before/`、改修後は `docs/screenshots/`（同じ Playwright 経路で撮影）。
-
-| 画面                   | 改修前                                                         | 改修後                                                 |
-| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------ |
-| サインイン             | ![before](screenshots-before/01-signin.png)                    | ![after](screenshots/01-signin.png)                    |
-| 制作物一覧             | ![before](screenshots-before/02-works-list.png)                | ![after](screenshots/02-works-list.png)                |
-| 制作物詳細（版なし）   | ![before](screenshots-before/03-work-detail-empty.png)         | ![after](screenshots/03-work-detail-empty.png)         |
-| 版提出（専門確認）     | ![before](screenshots-before/14-submit-required-checks.png)    | ![after](screenshots/14-submit-required-checks.png)    |
-| 版提出（検証済み）     | ![before](screenshots-before/04-submit-verified.png)           | ![after](screenshots/04-submit-verified.png)           |
-| 提出確定               | ![before](screenshots-before/05-submit-confirmed.png)          | ![after](screenshots/05-submit-confirmed.png)          |
-| 制作物詳細（割当後）   | ![before](screenshots-before/06-work-detail-with-revision.png) | ![after](screenshots/06-work-detail-with-revision.png) |
-| 制作物の編集           | ![before](screenshots-before/15-work-edit.png)                 | ![after](screenshots/15-work-edit.png)                 |
-| 校正待ち               | ![before](screenshots-before/07-queue.png)                     | ![after](screenshots/07-queue.png)                     |
-| 校正ワークスペース     | ![before](screenshots-before/08-workspace-comment.png)         | ![after](screenshots/08-workspace-comment.png)         |
-| 専門確認の完了         | ![before](screenshots-before/16-required-check-done.png)       | ![after](screenshots/16-required-check-done.png)       |
-| 文章の範囲指摘         | ![before](screenshots-before/19-text-range.png)                | ![after](screenshots/19-text-range.png)                |
-| 採否                   | ![before](screenshots-before/09-decision.png)                  | ![after](screenshots/09-decision.png)                  |
-| 持越                   | ![before](screenshots-before/17-carry-forward.png)             | ![after](screenshots/17-carry-forward.png)             |
-| 校了ダイアログ         | ![before](screenshots-before/10-finalize-dialog.png)           | ![after](screenshots/10-finalize-dialog.png)           |
-| 校了後                 | ![before](screenshots-before/11-work-finalized.png)            | ![after](screenshots/11-work-finalized.png)            |
-| 通知                   | ![before](screenshots-before/18-notifications.png)             | ![after](screenshots/18-notifications.png)             |
-| 閲覧権限               | ![before](screenshots-before/12-acl.png)                       | ![after](screenshots/12-acl.png)                       |
-| 管理                   | ![before](screenshots-before/13-admin-audit.png)               | ![after](screenshots/13-admin-works.png)               |
-| ダークモード（自動）   | —                                                              | ![after](screenshots/20-dark-workspace.png)            |
-| モバイル幅（下部ナビ） | —                                                              | ![after](screenshots/21-mobile-queue.png)              |
+改修前後の比較画像は当時撮影して確認した（画像はリポジトリに置かない方針になったため削除。同じ経路は `pnpm screenshots` で手元に再現できる）。
 
 ## 6. 検証
 
@@ -162,7 +138,6 @@
 ### 検証
 
 - 22 画面で axe 違反は **M3E の calendar 内部（過去日のセルに accessible name が無い）だけ**（`aria-command-name` ×5）。アプリ側から名前を付けられない library 由来の問題なので、ライブラリ更新で解消を待つ（`docs/a11y-report.json`）。
-- 画面比較: 1 回目の M3E 適用直後の画面は `docs/screenshots-before/` には含まれない（v1 の画面と今回の画面を比較する表は §5）。
 
 ## 8. 2 回目の見直し（2026-10-13・利用者フィードバック）
 
@@ -542,7 +517,7 @@ ax で M3E の各部品の README（`matraic/m3e` の `packages/web/src/*/README
 
 ## 22. スクリーンショットでの M3E との差分の修正・表と編集できるセル・スマホの通知（2026-10-14・利用者指摘「コメントのカードあたりが怪しい」「表の活用と editable セルの活用」「スマホの通知はアイコンの横が相場」）
 
-### コメントのカード（撮影 08・09・54）
+### コメントのカード
 
 | 差分                                                                                                                          | 直し方                                                                                                  |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -576,8 +551,8 @@ M3 / M3E に data table が無いので、Material の data table（MDC `mdc-dat
 
 ### スマホの通知
 
-通知のベルはどのウィンドウサイズでもアプリバーのアカウントの隣に置く（Gmail・Google ドライブなど一般的な配置）。compact ではベルを押すと全画面の通知シートを開き、下のナビゲーションバーからは「通知」を外した（撮影 20・32）。
+通知のベルはどのウィンドウサイズでもアプリバーのアカウントの隣に置く（Gmail・Google ドライブなど一般的な配置）。compact ではベルを押すと全画面の通知シートを開き、下のナビゲーションバーからは「通知」を外した。
 
 ### 管理画面のタブ分け（2026-10-14・利用者指摘「管理画面詰め込みすぎ」）
 
-1 画面に 3 つの表を並べていたのを、`m3e-tabs`（表記ルールと同じ secondary の `PaneTabs`）で「閲覧権限／ユーザー／監査ログ」に分けた。選んだタブは URL の `view`（`/admin?view=users` など）に残し、再読み込みや共有でも同じタブが開く。データの取得は開いているタブの分だけ（撮影 13・13a・13b）。
+1 画面に 3 つの表を並べていたのを、`m3e-tabs`（表記ルールと同じ secondary の `PaneTabs`）で「閲覧権限／ユーザー／監査ログ」に分けた。選んだタブは URL の `view`（`/admin?view=users` など）に残し、再読み込みや共有でも同じタブが開く。データの取得は開いているタブの分だけ。

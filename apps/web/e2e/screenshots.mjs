@@ -1,5 +1,5 @@
 /**
- * デモモード（バックエンド無し）で主要画面を一周し、docs/screenshots に PNG を保存する。
+ * デモモード（バックエンド無し）で主要画面を一周し、e2e/out/screenshots に PNG を保存する（git 管理外）。
  *   1) pnpm build:demo && pnpm exec vp preview --mode demo --outDir dist-demo --port 4173
  *   2) BASE_URL=http://127.0.0.1:4173 pnpm screenshots
  * Chromium は PLAYWRIGHT_BROWSERS_PATH（または `npx playwright-core install chromium`）で解決する。
@@ -12,7 +12,7 @@ import { chromium } from "playwright-core";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";
-const OUT = process.env.OUT_DIR ?? resolve(here, "../../../docs/screenshots");
+const OUT = process.env.OUT_DIR ?? resolve(here, "out/screenshots");
 const FIXTURES = process.env.FIXTURES_DIR ?? resolve(here, "fixtures");
 mkdirSync(OUT, { recursive: true });
 /** A11Y=1 で各画面に axe-core（WCAG 2.1 A/AA）を実行し、違反を docs/a11y-report.json に書く（A-15）。 */
@@ -902,7 +902,7 @@ try {
 }
 await browser.close();
 if (A11Y) {
-  const path = resolve(OUT, "../a11y-report.json");
+  const path = resolve(here, "../../../docs/a11y-report.json");
   writeFileSync(path, JSON.stringify(a11yReport, null, 2));
   console.log("a11y report ->", path);
 }

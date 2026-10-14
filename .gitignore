@@ -32,3 +32,6 @@ node_modules/.vite-plus/
 # pnpm dev がサービスごとに書くログ
 .logs/
 apps/web/public/ocr/
+
+# 撮影の出力（画像はリポジトリに置かない）
+apps/web/e2e/out/
