@@ -65,41 +65,51 @@ function Dashboard() {
   );
 
   return (
-    <div className="dash">
-      <section className="dash__section">
-        <M3eHeading variant="headline" size="small" level={1} emphasized>
+    <div>
+      <header className="page-header">
+        <M3eHeading
+          variant="headline"
+          size="small"
+          level={1}
+          emphasized
+          className="page-header__title"
+        >
           あなたの担当
         </M3eHeading>
-        {mine.length === 0 ? (
-          <p className="muted dash__empty">いま やることはありません。</p>
-        ) : (
-          mine.map(([k, title, sub]) => (
-            <div key={k} className="dash__group">
-              <h2 className="dash__title">
-                {title}
-                <span className="dash__count">{data.mine[k].length}</span>
-              </h2>
-              {list(data.mine[k], sub, title)}
-            </div>
-          ))
-        )}
-      </section>
-      {backlog.length > 0 ? (
+      </header>
+      <div className="dash">
         <section className="dash__section">
-          <M3eHeading variant="headline" size="small" level={2} emphasized>
-            溜まっているもの
-          </M3eHeading>
-          {backlog.map(([k, title, sub]) => (
-            <div key={k} className="dash__group">
-              <h2 className="dash__title">
-                {title}
-                <span className="dash__count">{data.backlog[k].length}</span>
-              </h2>
-              {list(data.backlog[k], sub, title)}
-            </div>
-          ))}
+          {mine.length === 0 ? (
+            <p className="muted dash__empty">いま やることはありません。</p>
+          ) : (
+            mine.map(([k, title, sub]) => (
+              <div key={k} className="dash__group">
+                <h2 className="dash__title">
+                  {title}
+                  <span className="dash__count">{data.mine[k].length}</span>
+                </h2>
+                {list(data.mine[k], sub, title)}
+              </div>
+            ))
+          )}
         </section>
-      ) : null}
+        {backlog.length > 0 ? (
+          <section className="dash__section">
+            <M3eHeading variant="headline" size="small" level={2} emphasized>
+              溜まっているもの
+            </M3eHeading>
+            {backlog.map(([k, title, sub]) => (
+              <div key={k} className="dash__group">
+                <h2 className="dash__title">
+                  {title}
+                  <span className="dash__count">{data.backlog[k].length}</span>
+                </h2>
+                {list(data.backlog[k], sub, title)}
+              </div>
+            ))}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

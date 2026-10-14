@@ -27,15 +27,19 @@ import {
   reviewStateLabel,
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
-import { useMedia } from "@/lib/useMedia";
+import { useMedia, useWindowClass } from "@/lib/useMedia";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea } from "@/ui/Field";
 import {
+  M3eAppBar,
   M3eBottomSheet,
   M3eButton,
   M3eFilterChip,
   M3eIcon,
   M3eIconButton,
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuTrigger,
   M3eToolbar,
 } from "@/ui/m3e";
 import { InfoTab } from "./InfoTab";
@@ -159,6 +163,8 @@ export function Editor({
 
   // M3 の compact/medium（839 以下）: 補助ペインは置けないので引き出しはボトムシート
   const mobile = useMedia("(max-width: 839px)");
+  // compact（<600）: 共通バーは無く、エディタ自身のトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
+  const compact = useWindowClass() === "compact";
   const [layoutPref, setLayoutPref] = useState<Layout>(readLayout);
   const layout: Layout = mobile ? "panel" : layoutPref;
   const [drawer, setDrawer] = useState<Drawer | null>(
@@ -221,12 +227,13 @@ export function Editor({
         data.artifacts.find((a) => a.role !== "external")?.id ?? data.artifacts[0]?.id ?? null,
       );
   }, [data, artifactId]);
-  // ボトムシート（狭い画面）: detents は属性でしか渡せないので ref で設定し、show(1)（半分の高さ）で開く
+  // ボトムシート（狭い画面）: detents は属性でしか渡せないので ref で設定する
   useEffect(() => {
     const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
     if (!el) return;
-    el.setAttribute("detents", "fit half full");
-    const id = requestAnimationFrame(() => el.show?.(1));
+    // 覗き見（タブだけ 60px）→ 半分 → 全部。最初は覗き見にして紙面を見せる
+    el.setAttribute("detents", "60px half full");
+    const id = requestAnimationFrame(() => el.show?.(0));
     return () => cancelAnimationFrame(id);
   }, [mobile, data === undefined]);
   useEffect(() => {
@@ -538,7 +545,8 @@ export function Editor({
             setActiveThreadId(null);
           }}
           page={page}
-          scale={scale}
+          scale={viewScale}
+          fitWidth={compact}
           rotation={rotation}
           onPageCount={setPageCount}
           renderInPage={inPage}
@@ -575,7 +583,8 @@ export function Editor({
             setDraft(d);
             setActiveThreadId(null);
           }}
-          scale={scale}
+          scale={viewScale}
+          fitWidth={compact}
           renderInPage={inPage}
           renderGutter={gutter}
         />
@@ -610,7 +619,8 @@ export function Editor({
           draft={null}
           onDraft={() => undefined}
           page={page}
-          scale={scale}
+          scale={viewScale}
+          fitWidth={compact}
           rotation={rotation}
         />
       );
@@ -622,7 +632,8 @@ export function Editor({
           {...none}
           draft={null}
           onDraft={() => undefined}
-          scale={scale}
+          scale={viewScale}
+          fitWidth={compact}
         />
       );
     return <div className="empty">この形式は比較できません</div>;
@@ -726,99 +737,169 @@ export function Editor({
       <InfoTab work={workData} revision={data ?? null} isAdmin={me?.isSystemAdmin ?? false} />
     ) : null;
   const desktopDrawer = drawer !== null && !mobile;
+  // compact は「幅に合わせた大きさ」が 100%。既定倍率 1.2 を打ち消す
+  const viewScale = compact ? scale / 1.2 : scale;
   const sheetTab: Drawer = drawer ?? "comments";
 
   return (
-    <div className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""}`}>
-      <header className="ws__header">
-        <Link to="/works" className="ws__back" aria-label="制作物一覧へ戻る">
-          <M3eIcon name="arrow_back" />
-        </Link>
-        <div className="ws__title">
-          <span className="ws__work">{work.title}</span>
-          {revision ? (
-            <>
-              <span className="ws__rev">{revision.label}</span>
-              <span className="ws__state">
-                {open ? (
-                  <>受付中・{remaining(revision.deadlineAt, now)}</>
-                ) : revision.reviewClosedReason ? (
-                  `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-                ) : (
-                  reviewStateLabel[revision.reviewState]
-                )}
-                {work.finalRevisionId === revision.id ? (
-                  <StatusText tone="success" className="ml">
-                    校了版
-                  </StatusText>
-                ) : null}
+    <div
+      className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""} ${compact ? "ws--compact" : ""}`}
+    >
+      {compact ? (
+        <>
+          <M3eAppBar size="small" className="ws__appbar">
+            <M3eIconButton
+              slot="leading"
+              aria-label="制作物一覧へ戻る"
+              onClick={() => void navigate({ to: "/works" })}
+            >
+              <M3eIcon name="arrow_back" />
+            </M3eIconButton>
+            <span slot="title" className="ws__appbar-title">
+              {work.title}
+            </span>
+            {revision ? (
+              <span slot="subtitle" className="ws__appbar-sub">
+                {revision.label}・
+                {open
+                  ? `受付中・${remaining(revision.deadlineAt, now)}`
+                  : revision.reviewClosedReason
+                    ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                    : reviewStateLabel[revision.reviewState]}
+                {work.finalRevisionId === revision.id ? "・校了版" : ""}
               </span>
-              {revision.focusNotes ? (
-                <span className="ws__focus muted">見てほしい観点: {revision.focusNotes}</span>
-              ) : null}
-            </>
+            ) : null}
+            {data && data.artifacts.length > 1 ? (
+              <M3eIconButton slot="trailing" aria-label="添付を切り替え">
+                <M3eIcon name="attach_file" />
+                <M3eMenuTrigger htmlFor="artifact-menu" />
+              </M3eIconButton>
+            ) : null}
+            {can?.completeReview ? (
+              <M3eIconButton
+                slot="trailing"
+                aria-label="確認を完了"
+                disabled={doComplete.pending}
+                onClick={() => void doComplete.run()}
+              >
+                <M3eIcon name="task_alt" />
+              </M3eIconButton>
+            ) : data?.myAssignment?.state === "responded" ? (
+              <span slot="trailing" className="ws__done" title="確認完了">
+                <M3eIcon name="check_circle" className="icon--filled" />
+              </span>
+            ) : null}
+          </M3eAppBar>
+          {data && data.artifacts.length > 1 ? (
+            <M3eMenu id="artifact-menu" positionX="before">
+              {data.artifacts.map((a) => (
+                <M3eMenuItem
+                  key={a.id}
+                  onClick={() => {
+                    setArtifactId(a.id);
+                    setPage(1);
+                    resetCompose();
+                  }}
+                >
+                  <M3eIcon slot="icon" name={a.id === artifactId ? "check" : "draft"} />
+                  {a.role === "external" ? "外部: " : ""}
+                  {a.fileName}
+                </M3eMenuItem>
+              ))}
+            </M3eMenu>
           ) : null}
-        </div>
-        <span className="spacer" />
-        {data && data.artifacts.length > 1 ? (
-          <Select
-            aria-label="添付"
-            value={artifactId ?? ""}
-            onChange={(e) => {
-              setArtifactId(e.target.value);
-              setPage(1);
-              resetCompose();
-            }}
-            className="ws__artifact"
-          >
-            {data.artifacts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.role === "external" ? "外部: " : ""}
-                {a.fileName}
-              </option>
-            ))}
-          </Select>
-        ) : null}
-        {can?.completeReview ? (
-          <M3eButton
-            variant="tonal"
-            disabled={doComplete.pending}
-            onClick={() => void doComplete.run()}
-          >
-            確認を完了
-          </M3eButton>
-        ) : data?.myAssignment?.state === "responded" ? (
-          <StatusText tone="success">確認完了</StatusText>
-        ) : null}
-        {!mobile ? (
-          <div className="ws__drawer-buttons">
-            <M3eIconButton
-              aria-label={`コメント（${openCount}）`}
-              toggle
-              selected={drawer === "comments"}
-              onClick={() => openDrawer("comments")}
-            >
-              <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
-            </M3eIconButton>
-            <M3eIconButton
-              aria-label="版"
-              toggle
-              selected={drawer === "versions"}
-              onClick={() => openDrawer("versions")}
-            >
-              <M3eIcon name="history" className={drawer === "versions" ? "icon--filled" : ""} />
-            </M3eIconButton>
-            <M3eIconButton
-              aria-label="情報"
-              toggle
-              selected={drawer === "info"}
-              onClick={() => openDrawer("info")}
-            >
-              <M3eIcon name="info" className={drawer === "info" ? "icon--filled" : ""} />
-            </M3eIconButton>
+        </>
+      ) : (
+        <header className="ws__header">
+          <Link to="/works" className="ws__back" aria-label="制作物一覧へ戻る">
+            <M3eIcon name="arrow_back" />
+          </Link>
+          <div className="ws__title">
+            <span className="ws__work">{work.title}</span>
+            {revision ? (
+              <>
+                <span className="ws__rev">{revision.label}</span>
+                <span className="ws__state">
+                  {open ? (
+                    <>受付中・{remaining(revision.deadlineAt, now)}</>
+                  ) : revision.reviewClosedReason ? (
+                    `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  ) : (
+                    reviewStateLabel[revision.reviewState]
+                  )}
+                  {work.finalRevisionId === revision.id ? (
+                    <StatusText tone="success" className="ml">
+                      校了版
+                    </StatusText>
+                  ) : null}
+                </span>
+                {revision.focusNotes ? (
+                  <span className="ws__focus muted">見てほしい観点: {revision.focusNotes}</span>
+                ) : null}
+              </>
+            ) : null}
           </div>
-        ) : null}
-      </header>
+          <span className="spacer" />
+          {data && data.artifacts.length > 1 ? (
+            <Select
+              aria-label="添付"
+              value={artifactId ?? ""}
+              onChange={(e) => {
+                setArtifactId(e.target.value);
+                setPage(1);
+                resetCompose();
+              }}
+              className="ws__artifact"
+            >
+              {data.artifacts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.role === "external" ? "外部: " : ""}
+                  {a.fileName}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+          {can?.completeReview ? (
+            <M3eButton
+              variant="tonal"
+              disabled={doComplete.pending}
+              onClick={() => void doComplete.run()}
+            >
+              確認を完了
+            </M3eButton>
+          ) : data?.myAssignment?.state === "responded" ? (
+            <StatusText tone="success">確認完了</StatusText>
+          ) : null}
+          {!mobile ? (
+            <div className="ws__drawer-buttons">
+              <M3eIconButton
+                aria-label={`コメント（${openCount}）`}
+                toggle
+                selected={drawer === "comments"}
+                onClick={() => openDrawer("comments")}
+              >
+                <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
+              </M3eIconButton>
+              <M3eIconButton
+                aria-label="版"
+                toggle
+                selected={drawer === "versions"}
+                onClick={() => openDrawer("versions")}
+              >
+                <M3eIcon name="history" className={drawer === "versions" ? "icon--filled" : ""} />
+              </M3eIconButton>
+              <M3eIconButton
+                aria-label="情報"
+                toggle
+                selected={drawer === "info"}
+                onClick={() => openDrawer("info")}
+              >
+                <M3eIcon name="info" className={drawer === "info" ? "icon--filled" : ""} />
+              </M3eIconButton>
+            </div>
+          ) : null}
+        </header>
+      )}
 
       <div className={`ws__body ${desktopDrawer ? "ws__body--panel" : ""}`}>
         <div className="ws__viewer">
@@ -873,7 +954,9 @@ export function Editor({
                   >
                     <M3eIcon name="zoom_out" />
                   </M3eIconButton>
-                  <span className="ws__toolbar-text">{Math.round(scale * 100)}%</span>
+                  {!compact ? (
+                    <span className="ws__toolbar-text">{Math.round(scale * 100)}%</span>
+                  ) : null}
                   <M3eIconButton
                     aria-label="拡大"
                     onClick={() => setScale((s) => Math.min(4, +(s + 0.2).toFixed(2)))}

@@ -9,7 +9,7 @@ import {
   useSearch,
 } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { useWindowClass } from "@/lib/useMedia";
 import {
@@ -40,7 +40,8 @@ const readRailPref = () => {
 
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
- * - compact（<600）: 下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。通知はベルと同じパネルを開く。
+ * - compact（<600）: 検索バーがアプリバー（アバターは検索バーの末尾）。下部ナビゲーションバー 3 件（ダッシュボード・制作物・通知）。
+ *   エディタ（`/works/:id`）では共通バーを隠し、エディタのトップアプリバー（戻る・題名）だけにする。
  * - medium（600–839）: 折りたたみレール（96）。
  * - expanded（840–1199）: 折りたたみレール。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
@@ -112,9 +113,21 @@ function AppLayout() {
   };
   const register = () => void navigate({ to: "/works", search: { new: true } });
   const modal = cls === "expanded" && modalOpen;
+  // compact のエディタは詳細画面: 共通のアプリバーと下部バーを隠し、エディタ自身のトップアプリバー（戻る・題名）に譲る（M3 list-detail の compact）
+  const immersive = cls === "compact" && /^\/works\/[^/]+/.test(path);
+  const account = (size: number, className?: string) => (
+    <M3eIconButton
+      slot="trailing"
+      aria-label={`アカウント: ${me.name}`}
+      className={className ?? ""}
+    >
+      <UserAvatar seed={me.email ?? me.id} size={size} />
+      <M3eMenuTrigger htmlFor="account-menu" />
+    </M3eIconButton>
+  );
 
   return (
-    <div className={`shell ${modal ? "shell--modal" : ""}`}>
+    <div className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""}`}>
       <div className="shell__nav">
         {modal ? (
           <div className="shell__scrim" onClick={() => setModalOpen(false)} aria-hidden="true" />
@@ -144,19 +157,25 @@ function AppLayout() {
         </M3eNavRail>
       </div>
       <div className="shell__main">
-        <M3eAppBar size="small" className="shell__appbar">
-          <div slot="title" className="shell__search">
-            <WorkSearch />
-          </div>
-          <M3eIconButton slot="trailing" aria-label="通知" className="shell__bell">
-            <NotificationsBell.Icon />
-            <M3eMenuTrigger htmlFor="notif-menu" />
-          </M3eIconButton>
-          <M3eIconButton slot="trailing" aria-label={`アカウント: ${me.name}`}>
-            <UserAvatar seed={me.email ?? me.id} size={32} />
-            <M3eMenuTrigger htmlFor="account-menu" />
-          </M3eIconButton>
-        </M3eAppBar>
+        {immersive ? null : (
+          <M3eAppBar size="small" className="shell__appbar">
+            <div slot="title" className="shell__search">
+              {/* compact は検索バーがアプリバーそのもの（M3 Search: 高さ 56、左右 16、アバター 30 を末尾に） */}
+              <WorkSearch
+                trailing={cls === "compact" ? account(30, "shell__search-account") : null}
+              />
+            </div>
+            {cls === "compact" ? null : (
+              <>
+                <M3eIconButton slot="trailing" aria-label="通知" className="shell__bell">
+                  <NotificationsBell.Icon />
+                  <M3eMenuTrigger htmlFor="notif-menu" />
+                </M3eIconButton>
+                {account(32)}
+              </>
+            )}
+          </M3eAppBar>
+        )}
         <NotificationsBell.Menu id="notif-menu" />
         <M3eMenu id="account-menu" positionX="before">
           <div className="account-menu__header">
@@ -178,7 +197,7 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
-      {cls === "compact" ? (
+      {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
           {navItems()}
           <M3eNavItem className="shell__bar-notif">
@@ -193,7 +212,7 @@ function AppLayout() {
 }
 
 /** アプリバーの検索（Google ドライブ式）。入力は制作物一覧の `q` に反映し、一覧以外の画面からは一覧へ移動する。 */
-function WorkSearch() {
+function WorkSearch({ trailing }: { trailing?: ReactNode }) {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { q?: string };
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -229,6 +248,7 @@ function WorkSearch() {
           apply(e.target.value);
         }}
       />
+      {trailing}
     </M3eSearchBar>
   );
 }

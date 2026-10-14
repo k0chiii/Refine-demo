@@ -1,6 +1,7 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
 import { useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
+import { STAGE_INSET, useStageWidth } from "./useStageWidth";
 
 interface Props {
   url: string;
@@ -11,8 +12,9 @@ interface Props {
   selecting: boolean;
   draft: { rect?: NormalizedRect; point?: { x: number; y: number } } | null;
   onDraft: (d: { rect?: NormalizedRect; point?: { x: number; y: number } } | null) => void;
-  /** 表示倍率は親が持つ（1 = 幅 900px に収める） */
+  /** 表示倍率は親が持つ（1 = 幅 900px に収める。`fitWidth` のときは舞台の幅） */
   scale: number;
+  fitWidth?: boolean;
   renderInPage?: (vp: Viewport) => ReactNode;
   renderGutter?: (vp: Viewport) => ReactNode;
 }
@@ -28,11 +30,17 @@ export function ImageViewer({
   draft,
   onDraft,
   scale,
+  fitWidth,
   renderInPage,
   renderGutter,
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
-  const fit = natural ? Math.min(1, 900 / natural.w) : 1;
+  const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(fitWidth === true);
+  const fit = natural
+    ? fitWidth && stageWidth > 0
+      ? (stageWidth - STAGE_INSET) / natural.w
+      : Math.min(1, 900 / natural.w)
+    : 1;
   const viewport: Viewport | null = natural
     ? { width: natural.w * fit * scale, height: natural.h * fit * scale, rotation: 0 }
     : null;
@@ -43,7 +51,7 @@ export function ImageViewer({
   );
   return (
     <div className="viewer">
-      <div className="viewer__stage" tabIndex={0}>
+      <div className="viewer__stage" tabIndex={0} ref={stageRef}>
         <div className="viewer__page">
           <img
             src={url}

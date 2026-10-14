@@ -259,6 +259,21 @@ m3e-search-bar {
   .shell__bell {
     display: none; /* 通知は下部バーの 3 件目から */
   }
+  /* 検索バーがアプリバー（M3 Search: 高さ 56、左右の余白 16）。コンテナ余白 12 ＋ 題名スロットの 4 ＝ 16 */
+  .shell__appbar {
+    --m3e-app-bar-padding-left: 12px;
+    --m3e-app-bar-padding-right: 12px;
+  }
+  .search--appbar {
+    --m3e-search-bar-trailing-space: 7px; /* 末尾のアバター（30）の右端を 16 に（M3 Search: trailing avatar 30） */
+  }
+  .shell__search-account {
+    --m3e-icon-button-icon-size: 30px;
+  }
+  /* エディタ（詳細画面）: 共通バーと下部バーを消し、エディタのトップアプリバーに譲る */
+  .shell--immersive .shell__content {
+    padding: 0;
+  }
   .shell__bar {
     display: block;
     position: fixed;
@@ -279,8 +294,8 @@ m3e-search-bar {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin: 12px 0 16px;
-  min-height: 48px;
+  margin: 8px 0 16px; /* アプリバー直下: 8（content）＋ 8 ＝ 16。どの画面も題名が同じ高さに来る */
+  min-height: 40px;
 }
 .page-header__title {
   margin: 0;
@@ -957,7 +972,6 @@ m3e-search-bar {
 .dash {
   display: grid;
   gap: 40px;
-  padding-top: 12px;
 }
 .dash__section {
   display: grid;
@@ -1314,8 +1328,7 @@ m3e-search-bar {
 }
 .ws__sheet {
   --m3e-bottom-sheet-max-width: 100%;
-  --m3e-bottom-sheet-z-index: 31; /* 下部ナビ（30）より手前 */
-  margin-top: -80px !important; /* 下部ナビの高さ分だけ持ち上げる */
+  --m3e-bottom-sheet-z-index: 31;
 }
 .ws__sheet .drawer {
   background: transparent;
@@ -1639,5 +1652,55 @@ m3e-search-bar {
   }
   .compare {
     grid-template-columns: 1fr;
+  }
+}
+/* compact（<600）のエディタ: トップアプリバー（64）＋紙面（残り全部）＋覗き見のボトムシート（60 ＝ 8 ＋タブ 46 ＋ 6） */
+.ws--compact {
+  height: 100dvh;
+  gap: 0;
+}
+.ws__appbar {
+  flex: none;
+}
+.ws__appbar-title,
+.ws__appbar-sub {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ws__done {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  color: var(--mf-primary);
+}
+.ws--compact .ws__body {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.ws--compact .ws__viewer > .viewer {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  border-radius: 0;
+}
+.ws--compact .viewer__stage {
+  padding: 16px 16px 152px; /* 下端はシートの覗き見（60）＋ 16 ＋ツールバー（64）＋ 16 */
+}
+.ws--compact .ws__toolbar {
+  top: auto;
+  bottom: 76px; /* 覗き見 60 ＋ 16 */
+}
+/* compact のリストは端から端まで（本文の左端 16 が題名と揃う）。.list の後に置く */
+@media (max-width: 599px) {
+  .list {
+    margin: 0 -16px;
+  }
+  .list__item {
+    --m3e-list-item-container-shape: 0;
   }
 }

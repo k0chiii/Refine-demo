@@ -3,6 +3,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
+import { STAGE_INSET, useStageWidth } from "./useStageWidth";
 
 // Vite がワーカーを別チャンクとして配信する
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -26,6 +27,8 @@ interface Props {
   page: number;
   scale: number;
   rotation: 0 | 90 | 180 | 270;
+  /** 紙面の幅を舞台の幅に合わせる（compact）。`scale` はその上に掛かる倍率 */
+  fitWidth?: boolean;
   onPageCount?: (n: number) => void;
   /** ページの上に重ねるもの（投稿欄・吹き出し）。座標は viewport px */
   renderInPage?: (vp: Viewport) => ReactNode;
@@ -48,11 +51,13 @@ export function PdfViewer({
   page,
   scale,
   rotation,
+  fitWidth,
   onPageCount,
   renderInPage,
   renderGutter,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(fitWidth === true);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +88,14 @@ export function PdfViewer({
   useEffect(() => {
     if (!doc || !canvasRef.current) return;
     let cancelled = false;
+    let task: { cancel: () => void; promise: Promise<void> } | null = null;
     const n = Math.min(Math.max(1, page), doc.numPages);
     void doc.getPage(n).then(async (p) => {
       if (cancelled) return;
-      const vp = p.getViewport({ scale, rotation: (p.rotate + rotation) % 360 });
+      const rot = (p.rotate + rotation) % 360;
+      const base = fitWidth && stageWidth > 0 ? p.getViewport({ scale: 1, rotation: rot }) : null;
+      const s = base ? scale * Math.max(0.1, (stageWidth - STAGE_INSET) / base.width) : scale;
+      const vp = p.getViewport({ scale: s, rotation: rot });
       const canvas = canvasRef.current!;
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.floor(vp.width * dpr);
@@ -95,13 +104,20 @@ export function PdfViewer({
       canvas.style.height = `${vp.height}px`;
       const ctx = canvas.getContext("2d")!;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      await p.render({ canvas, canvasContext: ctx, viewport: vp }).promise;
+      // 倍率や幅が続けて変わると前の描画が走ったままになるので、同じ canvas への二重描画を避けて前の描画を止める
+      task = p.render({ canvas, canvasContext: ctx, viewport: vp });
+      try {
+        await task.promise;
+      } catch {
+        return; // 取り消し
+      }
       if (!cancelled) setViewport({ width: vp.width, height: vp.height, rotation });
     });
     return () => {
       cancelled = true;
+      task?.cancel();
     };
-  }, [doc, page, scale, rotation]);
+  }, [doc, page, scale, rotation, fitWidth, stageWidth]);
 
   const pageThreads = threads.filter(
     (t) =>
@@ -113,7 +129,7 @@ export function PdfViewer({
   return (
     <div className="viewer">
       {error ? <div className="alert">{error}</div> : null}
-      <div className="viewer__stage" tabIndex={0}>
+      <div className="viewer__stage" tabIndex={0} ref={stageRef}>
         <div className="viewer__page">
           <canvas ref={canvasRef} aria-label={`PDF ${page} ページ目`} />
           {viewport ? (

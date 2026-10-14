@@ -445,12 +445,20 @@ async function main() {
   await shot("32-mobile-notifications");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
-  // 26 compact のエディタ（引き出しはボトムシート）
+  // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う）
+  await go(`${BASE}/works`);
+  await page.waitForSelector("m3e-list-action");
+  await shot("33-mobile-works");
+  // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
   await go(revision2Url);
   await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
   await page.waitForSelector("m3e-bottom-sheet");
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(800);
   await shot("26-mobile-workspace");
+  // 34 シートを半分まで上げる（タブを押しても上がる）
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet").show(1));
+  await page.waitForTimeout(700);
+  await shot("34-mobile-sheet-half");
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
