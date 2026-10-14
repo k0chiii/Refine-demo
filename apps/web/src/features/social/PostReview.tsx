@@ -1,0 +1,230 @@
+import { useAuthToken } from "@convex-dev/auth/react";
+import { parsePostManifest, POST_BODY_NAME, type SocialPost } from "@mf100/domain";
+import { useEffect, useState } from "react";
+import { fetchArtifactBlob } from "@/integrations/api";
+import { useAction } from "@/lib/useAction";
+import { Card } from "@/ui/Card";
+import {
+  M3eButton,
+  M3eButtonSegment,
+  M3eIcon,
+  M3eList,
+  M3eListItem,
+  M3eSegmentedButton,
+  M3eSnackbar,
+} from "@/ui/m3e";
+import {
+  PostPreview,
+  type PreviewDevice,
+  type PreviewImage,
+  type PreviewView,
+} from "./preview/PostPreview";
+import { makeZip } from "./zip";
+
+interface ArtifactLike {
+  id: string;
+  fileName: string;
+  type: string;
+}
+
+/**
+ * 校正画面での SNS 投稿の表示（版に記録した内容から組み立てるプレビュー）と、校了版の書き出し。
+ * - 書き出しは校了した版だけ（校了前の版を投稿用と取り違えないため）
+ * - 実際の投稿はしない。本文のコピー・画像の保存・まとめて ZIP
+ */
+export function PostReview({
+  manifestArtifactId,
+  artifacts,
+  isFinal,
+  workTitle,
+  revisionLabel,
+}: {
+  manifestArtifactId: string;
+  artifacts: readonly ArtifactLike[];
+  isFinal: boolean;
+  workTitle: string;
+  revisionLabel: string;
+}) {
+  const token = useAuthToken();
+  const [post, setPost] = useState<SocialPost | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<Array<PreviewImage & { blob: Blob; fileName: string }>>([]);
+  const [device, setDevice] = useState<PreviewDevice>("iphone");
+  const [view, setView] = useState<PreviewView>("post");
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const urls: string[] = [];
+    void (async () => {
+      try {
+        const m = parsePostManifest(
+          JSON.parse(await (await fetchArtifactBlob(token, manifestArtifactId)).text()),
+        );
+        if (!m) throw new Error("投稿の記録を読めません");
+        if (cancelled) return;
+        setPost(m);
+        const byName = new Map(artifacts.map((a) => [a.fileName, a]));
+        const out = [];
+        for (const im of m.images) {
+          const a = byName.get(im.fileName);
+          if (!a) continue;
+          const blob = await fetchArtifactBlob(token, a.id);
+          const url = URL.createObjectURL(blob);
+          urls.push(url);
+          const size = await new Promise<{ w: number; h: number }>((r) => {
+            const img = new Image();
+            img.onload = () => r({ w: img.naturalWidth, h: img.naturalHeight });
+            img.onerror = () => r({ w: 1, h: 1 });
+            img.src = url;
+          });
+          out.push({ key: im.key, url, ...size, blob, fileName: im.fileName });
+        }
+        if (!cancelled) setImages(out);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+      for (const u of urls) URL.revokeObjectURL(u);
+    };
+  }, [manifestArtifactId, token]);
+
+  const save = (name: string, blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.hidden = true;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const altText = (p: SocialPost) =>
+    p.images.map((im, i) => `${i + 1}. ${im.fileName}\n${im.alt || "（未設定）"}`).join("\n\n") +
+    "\n";
+  const zip = useAction(async () => {
+    if (!post) return;
+    const enc = new TextEncoder();
+    const entries = [
+      { name: POST_BODY_NAME, data: enc.encode(post.body) },
+      { name: "alt.txt", data: enc.encode(altText(post)) },
+      {
+        name: "manifest.json",
+        data: enc.encode(
+          JSON.stringify(
+            { kind: "mf100-post-export", work: workTitle, revision: revisionLabel, ...post },
+            null,
+            2,
+          ),
+        ),
+      },
+      ...(await Promise.all(
+        images.map(async (im) => ({
+          name: `images/${im.fileName}`,
+          data: new Uint8Array(await im.blob.arrayBuffer()),
+        })),
+      )),
+    ];
+    save(
+      `${workTitle}-${revisionLabel}.zip`,
+      new Blob([makeZip(entries) as Uint8Array<ArrayBuffer>], { type: "application/zip" }),
+    );
+  });
+
+  if (error) return <div className="alert">{error}</div>;
+  if (!post) return <p className="muted">読み込み中…</p>;
+  return (
+    <div className="post-review">
+      <div className="post-preview stack">
+        <div className="row">
+          <M3eSegmentedButton aria-label="端末">
+            {(
+              [
+                ["iphone", "iPhone"],
+                ["android", "Android"],
+                ["pc", "PC"],
+              ] as const
+            ).map(([d, l]) => (
+              <M3eButtonSegment key={d} checked={device === d} onClick={() => setDevice(d)}>
+                {l}
+              </M3eButtonSegment>
+            ))}
+          </M3eSegmentedButton>
+          {post.platform === "instagram" && post.format !== "story" ? (
+            <M3eSegmentedButton aria-label="表示">
+              {(
+                [
+                  ["post", "投稿"],
+                  ["grid", "プロフィール"],
+                ] as const
+              ).map(([v, l]) => (
+                <M3eButtonSegment key={v} checked={view === v} onClick={() => setView(v)}>
+                  {l}
+                </M3eButtonSegment>
+              ))}
+            </M3eSegmentedButton>
+          ) : null}
+        </div>
+        <PostPreview post={post} images={images} device={device} view={view} safeArea />
+        <p className="small muted">
+          本文への指摘は添付「{POST_BODY_NAME}」、画像への指摘は各画像の添付で行います。
+        </p>
+      </div>
+      <Card title="投稿用に書き出す">
+        {isFinal ? (
+          <div className="stack">
+            <p className="small muted">校了した版の内容です。この画面から投稿はしません。</p>
+            <div className="row">
+              <M3eButton
+                variant="tonal"
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(post.body)
+                    .then(() => M3eSnackbar.open("本文をコピーしました", { duration: 3000 }))
+                }
+              >
+                <M3eIcon slot="icon" name="content_copy" />
+                本文をコピー
+              </M3eButton>
+              <M3eButton variant="filled" disabled={zip.pending} onClick={() => void zip.run()}>
+                <M3eIcon slot="icon" name="folder_zip" />
+                まとめて ZIP（本文・画像・ALT・記録）
+              </M3eButton>
+            </div>
+            <M3eList aria-label="画像（投稿の順）">
+              {post.images.map((im, i) => {
+                const a = images.find((x) => x.key === im.key);
+                return (
+                  <M3eListItem key={im.key}>
+                    {a ? (
+                      <img slot="leading" className="post-image__thumb" src={a.url} alt="" />
+                    ) : null}
+                    <span slot="overline">{i + 1} 枚目</span>
+                    {im.fileName}
+                    <span slot="supporting-text">ALT: {im.alt || "（未設定）"}</span>
+                    {a ? (
+                      <M3eButton
+                        slot="trailing"
+                        variant="text"
+                        onClick={() => save(im.fileName, a.blob)}
+                      >
+                        保存
+                      </M3eButton>
+                    ) : null}
+                  </M3eListItem>
+                );
+              })}
+            </M3eList>
+          </div>
+        ) : (
+          <p className="small muted">
+            書き出しは校了した版だけでできます（校了前の版を投稿用と取り違えないため）。
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}

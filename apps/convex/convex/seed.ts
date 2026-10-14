@@ -94,6 +94,14 @@ export const demo = internalMutation({
         legacyId: "EVE-012",
         notationCategories: ["D"],
       },
+      {
+        title: "公式 Instagram 開催告知",
+        purpose: "SNS での開催告知（Instagram カルーセル）",
+        category: "SNS",
+        mediaType: "sns" as const,
+        legacyId: "SNS-021",
+        notationCategories: ["A1", "A2", "A3"],
+      },
     ];
     const created: string[] = [];
     for (const s of samples) {

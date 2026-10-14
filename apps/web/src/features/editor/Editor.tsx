@@ -6,6 +6,7 @@ import {
   type Anchor,
   type NormalizedRect,
   type Viewport,
+  POST_MANIFEST_NAME,
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -21,6 +22,7 @@ import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard"
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { PaneTabs } from "@/ui/PaneTabs";
+import { PostReview } from "@/features/social/PostReview";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
@@ -270,7 +272,10 @@ export function Editor({
     if (!data) return;
     if (!artifactId || !data.artifacts.some((a) => a.id === artifactId))
       setArtifactId(
-        data.artifacts.find((a) => a.role !== "external")?.id ?? data.artifacts[0]?.id ?? null,
+        data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
+          data.artifacts.find((a) => a.role !== "external")?.id ??
+          data.artifacts[0]?.id ??
+          null,
       );
   }, [data, artifactId]);
   // ボトムシート（狭い画面）: detents は属性でしか渡せないので ref で設定する
@@ -429,6 +434,12 @@ export function Editor({
 
   if (workData === undefined) return <p className="muted">読み込み中…</p>;
   const { work } = workData;
+  const isSns = work.mediaType === "sns";
+  const openAuthoring = () =>
+    void navigate({
+      to: isSns ? "/works/$workId/post" : "/works/$workId/write",
+      params: { workId },
+    });
   const revision = data?.revision ?? null;
   const can = data?.can ?? null;
   const resolvedCount = allThreads.filter(isClosed).length;
@@ -577,12 +588,9 @@ export function Editor({
               <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
                 最初の版を提出
               </M3eButton>
-              <M3eButton
-                variant="tonal"
-                onClick={() => void navigate({ to: "/works/$workId/write", params: { workId } })}
-              >
-                <M3eIcon slot="icon" name="edit_document" />
-                文章を書く
+              <M3eButton variant="tonal" onClick={openAuthoring}>
+                <M3eIcon slot="icon" name={isSns ? "post_add" : "edit_document"} />
+                {isSns ? "投稿を作る" : "文章を書く"}
               </M3eButton>
             </div>
           ) : null}
@@ -590,6 +598,18 @@ export function Editor({
       );
     if (!data) return <div className="empty">読み込み中…</div>;
     if (!artifact) return <div className="empty">添付がありません</div>;
+    if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
+      return (
+        <div className="post-review-wrap">
+          <PostReview
+            manifestArtifactId={artifact.id}
+            artifacts={data.artifacts}
+            isFinal={work.finalRevisionId === data.revision.id}
+            workTitle={work.title}
+            revisionLabel={data.revision.label}
+          />
+        </div>
+      );
     if (artifact.role === "external")
       return (
         <div className="external">
@@ -892,7 +912,7 @@ export function Editor({
           else setCompareWith(id);
         }}
         onSubmit={() => setSubmitOpen(true)}
-        onWrite={() => void navigate({ to: "/works/$workId/write", params: { workId } })}
+        onWrite={openAuthoring}
       />
     ) : d === "info" ? (
       <InfoTab work={workData} revision={data ?? null} isAdmin={me?.isSystemAdmin ?? false} />

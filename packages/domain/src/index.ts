@@ -16,3 +16,4 @@ export * from "./revision/UploadSession.ts";
 export * from "./document/DocumentDraft.ts";
 export * from "./comparison/index.ts";
 export * from "./notation/index.ts";
+export * from "./social/index.ts";

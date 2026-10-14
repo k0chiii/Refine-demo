@@ -29,6 +29,9 @@ const icon: Record<string, string> = {
   work_finalized: "verified",
   work_reopened: "lock_open",
   revision_voided: "block",
+  auto_proofread_done: "smart_toy",
+  rule_proposed: "spellcheck",
+  rule_proposal_decided: "rule",
 };
 
 function useUnread() {
@@ -49,6 +52,8 @@ function useNotifications() {
     if (n.revisionId)
       void navigate({ to: "/revisions/$revisionId", params: { revisionId: n.revisionId } });
     else if (n.workId) void navigate({ to: "/works/$workId", params: { workId: n.workId } });
+    else if (n.kind === "rule_proposed" || n.kind === "rule_proposal_decided")
+      void navigate({ to: "/notation", search: { view: "proposals" } });
   });
   const unread = (list ?? []).filter((n) => n.readAt === undefined).length;
   return { list, unread, doMarkAll, openOne };

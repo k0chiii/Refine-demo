@@ -64,7 +64,8 @@ export function InfoTab({
   const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
   const checks = revision?.checks ?? [];
   const pendingChecks = checks.filter((c) => c.state === "pending").length;
-  const blocking = candidate?.unresolvedCount ?? 0;
+  // 人の未対応の指摘（自動校正は校了を止めないので別に数える）
+  const blocking = Math.max(0, (candidate?.unresolvedCount ?? 0) - (candidate?.openBotCount ?? 0));
   const lifecycleTargets: Array<"active" | "on_hold" | "cancelled"> =
     w.lifecycle === "active"
       ? ["on_hold", "cancelled"]

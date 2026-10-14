@@ -11,6 +11,7 @@ export const vMediaType = v.union(
   v.literal("pdf"),
   v.literal("image"),
   v.literal("document"),
+  v.literal("sns"),
   v.literal("video"),
   v.literal("web"),
   v.literal("figma"),

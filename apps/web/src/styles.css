@@ -2694,3 +2694,48 @@ m3e-icon.icon--on {
 .auto-status__icon {
   color: var(--mf-primary);
 }
+
+/* ---------- SNS 投稿の編集: 左に編集、右にプレビュー（expanded 以上） */
+.post__split {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.post-preview {
+  position: sticky;
+  top: 8px;
+  align-items: center;
+}
+.post-image__thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--mf-shape-sm);
+}
+.post-image__fields {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 8px;
+  margin-top: 8px;
+}
+.post-image__actions {
+  display: inline-flex;
+}
+.post-review-wrap {
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+.post-review {
+  display: grid;
+  grid-template-columns: minmax(380px, auto) minmax(280px, 420px);
+  gap: 24px;
+  justify-content: center;
+  align-items: start;
+}
+@media (max-width: 1199px) {
+  .post-review {
+    grid-template-columns: 1fr;
+  }
+}

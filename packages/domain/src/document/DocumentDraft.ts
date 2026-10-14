@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import { isPostDraftContent } from "../social/post.ts";
 import type { Instant } from "../shared/time.ts";
 import type { UserId, WorkId } from "../shared/ids.ts";
 
@@ -88,7 +89,8 @@ export function nextDraft(
     throw new DomainError("document_invalid", { reason: "content_too_large" });
   if (input.text.length > DOCUMENT_LIMITS.textChars)
     throw new DomainError("document_invalid", { reason: "text_too_long" });
-  if (!isDocumentContent(input.content))
+  // SNS 投稿の制作物は同じ保存先に投稿の内容（mf100-post）を保存する
+  if (!isDocumentContent(input.content) && !isPostDraftContent(input.content))
     throw new DomainError("document_invalid", { reason: "content_not_document" });
   return {
     workId,

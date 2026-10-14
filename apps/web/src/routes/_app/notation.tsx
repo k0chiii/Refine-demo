@@ -88,7 +88,10 @@ function Notation() {
     const a = document.createElement("a");
     a.href = url;
     a.download = name;
+    a.hidden = true;
+    document.body.append(a);
     a.click();
+    a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const exportList = rules.map(draftOf);

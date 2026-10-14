@@ -1,0 +1,320 @@
+/* SNS 投稿のプレビュー（Instagram / X の見た目の近似）。アプリの UI ではなく、他サービスの画面を模したもの */
+.sp-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sp-caption {
+  font-size: 12px;
+  color: var(--mf-on-surface-variant);
+  text-align: center;
+  max-width: 420px;
+}
+.sp-device {
+  --sp-bg: #fff;
+  --sp-fg: #0f1419;
+  --sp-muted: #536471;
+  --sp-link: #1d9bf0;
+  background: var(--sp-bg);
+  color: var(--sp-fg);
+  font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.12),
+    0 8px 24px rgb(0 0 0 / 0.12);
+  display: flex;
+  flex-direction: column;
+}
+.sp-device--iphone {
+  width: 390px;
+  max-width: 100%;
+  height: 780px;
+  border-radius: 44px;
+  border: 10px solid #1c1c1e;
+}
+.sp-device--android {
+  width: 412px;
+  max-width: 100%;
+  height: 820px;
+  border-radius: 24px;
+  border: 8px solid #2b2b2b;
+}
+.sp-device--pc {
+  width: 600px;
+  max-width: 100%;
+  min-height: 520px;
+  border-radius: 12px;
+}
+.sp-device--dark {
+  --sp-bg: #000;
+  --sp-fg: #fff;
+}
+.sp-device__status {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 28px 6px;
+}
+.sp-device__screen {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+.sp-muted {
+  color: var(--sp-muted);
+}
+.sp-note {
+  font-size: 12px;
+  padding: 8px 12px;
+}
+.sp-img {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  background: #eff3f4;
+}
+.sp-img img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+}
+.sp-img__none {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--sp-muted);
+  font-size: 12px;
+}
+.sp-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #f58529, #dd2a7b 50%, #8134af);
+}
+.sp-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sp-tag {
+  color: #00376b;
+}
+.sp-link {
+  color: var(--sp-link);
+}
+.sp-more {
+  all: unset;
+  color: var(--sp-muted);
+  cursor: pointer;
+}
+/* Instagram */
+.sp-ig__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.sp-ig__dots {
+  margin-left: auto;
+  letter-spacing: 1px;
+}
+.sp-ig__media {
+  position: relative;
+}
+.sp-ig__count {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.sp-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: rgb(255 255 255 / 0.85);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sp-nav--prev {
+  left: 8px;
+}
+.sp-nav--next {
+  right: 8px;
+}
+.sp-ig__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  font-size: 20px;
+  position: relative;
+}
+.sp-ig__pager {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+}
+.sp-ig__pager i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c7c7c7;
+}
+.sp-ig__pager i.on {
+  background: #0095f6;
+}
+.sp-ig__save {
+  margin-left: auto;
+}
+.sp-ig__caption {
+  margin: 0;
+  padding: 0 12px 12px;
+}
+/* ストーリーズ */
+.sp-story {
+  position: relative;
+  height: 100%;
+  background: #000;
+}
+.sp-story .sp-img {
+  height: 100%;
+  aspect-ratio: auto !important;
+}
+.sp-story__top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  color: #fff;
+}
+.sp-story__bar {
+  display: block;
+  height: 2px;
+  background: rgb(255 255 255 / 0.9);
+  border-radius: 1px;
+  margin-bottom: 8px;
+}
+.sp-story__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+}
+.sp-story__reply {
+  position: absolute;
+  bottom: 16px;
+  left: 12px;
+  right: 12px;
+  border: 1px solid rgb(255 255 255 / 0.7);
+  border-radius: 22px;
+  color: #fff;
+  padding: 10px 16px;
+  font-size: 13px;
+}
+.sp-story__safe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(
+    rgb(255 0 80 / 0.25) 0 14%,
+    transparent 14% 80%,
+    rgb(255 0 80 / 0.25) 80%
+  );
+  color: #fff;
+  font-size: 11px;
+}
+.sp-story__safe span {
+  padding: 4px 8px;
+  margin-top: 64px;
+}
+.sp-story__safe span:last-child {
+  margin: 0 0 64px;
+}
+/* プロフィールのグリッド */
+.sp-grid__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.sp-grid__tile--empty {
+  aspect-ratio: 4 / 5;
+  background: #efefef;
+}
+/* X */
+.sp-x {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.sp-x .sp-avatar {
+  width: 40px;
+  height: 40px;
+  background: #1d9bf0;
+}
+.sp-x__main {
+  flex: 1;
+  min-width: 0;
+}
+.sp-x__text {
+  margin: 2px 0 10px;
+  font-size: 15px;
+}
+.sp-x .sp-tag {
+  color: var(--sp-link);
+}
+.sp-x__media {
+  display: grid;
+  gap: 2px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #cfd9de;
+}
+.sp-x__media--2,
+.sp-x__media--4 {
+  grid-template-columns: 1fr 1fr;
+}
+.sp-x__media--3 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.sp-x__media--3 > :first-child {
+  grid-row: span 2;
+  height: 100%;
+  aspect-ratio: auto !important;
+}
+.sp-x__actions {
+  display: flex;
+  justify-content: space-between;
+  max-width: 420px;
+  margin-top: 10px;
+}

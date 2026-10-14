@@ -86,3 +86,30 @@ describe("文章の下書き", () => {
     ).rejects.toThrow(code("work_not_active"));
   });
 });
+
+describe("SNS 投稿の下書き", () => {
+  it("投稿の内容（mf100-post）を同じ保存先に保存でき、壊れた内容は拒否する", async () => {
+    const { emptyPost, postManifest } = await import("@mf100/domain");
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { mediaType: "sns" });
+    const content = postManifest({ ...emptyPost("x"), body: "#五月祭 開催！" });
+    const r = await saveDocumentDraft(ctx, principals.creator, {
+      workId: work.id,
+      title: "告知",
+      content,
+      text: "#五月祭 開催！",
+      baseVersion: 0,
+    });
+    expect(r.version).toBe(1);
+    expect((await getDocumentDraft(ctx, principals.creator, work.id)).draft!.content).toBe(content);
+    await expect(
+      saveDocumentDraft(ctx, principals.creator, {
+        workId: work.id,
+        title: "告知",
+        content: '{"kind":"mf100-post","version":9}',
+        text: "",
+        baseVersion: 1,
+      }),
+    ).rejects.toEqual(code("document_invalid"));
+  });
+});

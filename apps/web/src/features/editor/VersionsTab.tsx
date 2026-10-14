@@ -52,8 +52,11 @@ export function VersionsTab({
             新しい版を提出
           </M3eButton>
           <M3eButton variant="tonal" onClick={onWrite}>
-            <M3eIcon slot="icon" name="edit_document" />
-            文章を書く
+            <M3eIcon
+              slot="icon"
+              name={work.work.mediaType === "sns" ? "post_add" : "edit_document"}
+            />
+            {work.work.mediaType === "sns" ? "投稿を作る" : "文章を書く"}
           </M3eButton>
         </div>
       ) : null}

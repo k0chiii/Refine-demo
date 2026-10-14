@@ -11,7 +11,16 @@ export const confidentialities = ["normal", "restricted"] as const;
 export type Confidentiality = (typeof confidentialities)[number];
 
 /** 媒体種別。導入対象外（external）は外部リンクで管理する（C5 / A-12）。 */
-export const mediaTypes = ["pdf", "image", "document", "video", "web", "figma", "other"] as const;
+export const mediaTypes = [
+  "pdf",
+  "image",
+  "document",
+  "sns",
+  "video",
+  "web",
+  "figma",
+  "other",
+] as const;
 export type MediaType = (typeof mediaTypes)[number];
 
 export interface Work {

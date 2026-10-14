@@ -53,6 +53,7 @@ export const mediaLabel: Record<string, string> = {
   pdf: "PDF",
   image: "画像",
   document: "文章",
+  sns: "SNS 投稿",
   video: "動画",
   web: "Web",
   figma: "Figma",
@@ -89,6 +90,9 @@ export const notificationKindLabel: Record<string, string> = {
   work_finalized: "校了",
   work_reopened: "再開",
   revision_voided: "版の無効化",
+  auto_proofread_done: "自動校正",
+  rule_proposed: "表記ルールの提案",
+  rule_proposal_decided: "提案の結果",
 };
 export const lifecycleActionLabel: Record<string, string> = {
   active: "進行中に戻す",
