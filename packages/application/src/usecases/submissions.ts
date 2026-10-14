@@ -26,6 +26,7 @@ import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { notify, workStakeholders } from "./notifications.ts";
 import { currentRuleSet } from "./notation.ts";
+import { createProofreadingRun } from "./autoProofread.ts";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -245,7 +246,11 @@ export async function confirmSubmission(
       newRevision.notationSnapshot = set.snapshot;
     }
     const revision = await ctx.revisions.insert(newRevision);
-    for (const item of items) await ctx.artifacts.insert(toArtifact(item, revision.id));
+    const inserted = [];
+    for (const item of items)
+      inserted.push(await ctx.artifacts.insert(toArtifact(item, revision.id)));
+    // 自動校正の実行を作る（重い処理はブラウザで行う。ここでは待ち状態を作るだけ）
+    await createProofreadingRun(ctx, work, revision, inserted);
     for (const c of session.requiredChecks ?? []) {
       const data: Omit<RequiredCheck, "id"> = {
         revisionId: revision.id,

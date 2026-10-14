@@ -130,3 +130,63 @@ export const vProposalContext = v.object({
   quote: v.optional(v.string()),
   surrounding: v.optional(v.string()),
 });
+
+// ---------------------------------------------------------------- 自動校正
+export const vTextSource = v.union(v.literal("document"), v.literal("pdf_text"), v.literal("ocr"));
+export const vBotOrigin = v.object({
+  kind: v.literal("bot"),
+  detector: v.union(v.literal("rule"), v.literal("morphology"), v.literal("ocr"), v.literal("ai")),
+  ruleId: v.string(),
+  ruleRevision: v.number(),
+  runId: v.string(),
+  fingerprint: v.string(),
+  confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+  needsReview: v.boolean(),
+  original: v.string(),
+  suggestion: v.string(),
+  textSource: vTextSource,
+});
+const vRect = v.object({ x: v.number(), y: v.number(), w: v.number(), h: v.number() });
+const vTextBox = v.object({ start: v.number(), end: v.number(), rect: vRect });
+export const vProofreadSegment = v.union(
+  v.object({ kind: v.literal("text"), text: v.string() }),
+  v.object({
+    kind: v.literal("page"),
+    page: v.number(),
+    text: v.string(),
+    boxes: v.array(vTextBox),
+  }),
+  v.object({
+    kind: v.literal("image"),
+    text: v.string(),
+    boxes: v.array(vTextBox),
+    confidence: v.number(),
+  }),
+);
+const vRunStatus = v.union(
+  v.literal("pending"),
+  v.literal("running"),
+  v.literal("done"),
+  v.literal("failed"),
+  v.literal("skipped"),
+);
+export const vProofreadingRunFields = {
+  workId: v.string(),
+  revisionId: v.string(),
+  status: vRunStatus,
+  snapshotHash: v.string(),
+  artifacts: v.array(
+    v.object({
+      artifactId: v.string(),
+      status: vRunStatus,
+      findings: v.number(),
+      source: v.optional(vTextSource),
+      error: v.optional(v.string()),
+      leaseUntil: v.optional(v.number()),
+    }),
+  ),
+  attempts: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  note: v.optional(v.string()),
+};

@@ -14,6 +14,7 @@ export const finalize = mutation({
     independentConfirmerId: v.optional(v.string()),
     expectedVersion: v.optional(v.number()),
     requestId: v.optional(v.string()),
+    autoProofreadNote: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);

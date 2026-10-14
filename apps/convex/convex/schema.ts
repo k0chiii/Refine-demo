@@ -9,6 +9,8 @@ import {
   vRuleException,
   vRuleFields,
   vRuleSetSnapshot,
+  vBotOrigin,
+  vProofreadingRunFields,
 } from "./lib/validators.ts";
 
 /**
@@ -276,6 +278,8 @@ export default defineSchema({
     carriedToThreadId: v.optional(v.string()),
     assigneeId: v.optional(v.string()),
     editCount: v.optional(v.number()),
+    /** 自動校正の指摘（投稿者はシステム） */
+    origin: v.optional(vBotOrigin),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
@@ -354,6 +358,9 @@ export default defineSchema({
     updatedBy: v.string(),
     updatedAt: v.number(),
   }).index("by_artifacts", ["leftArtifactId", "rightArtifactId"]),
+
+  /** 提出時の自動校正の実行（版ごとに 1 件） */
+  proofreadingRuns: defineTable(vProofreadingRunFields).index("by_revision", ["revisionId"]),
 
   // ---------------------------------------------------------------- 表記統一
   /** カテゴリ（保存したものが既定カテゴリを上書きする） */

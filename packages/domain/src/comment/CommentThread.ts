@@ -2,6 +2,7 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { ArtifactId, RevisionId, ThreadId, UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { Anchor } from "./Anchor.ts";
+import type { BotOrigin } from "../notation/autoProofread.ts";
 
 /** スレッド種別（§9.1 設計案） */
 export const threadKinds = ["correction", "question", "discussion", "decision"] as const;
@@ -42,6 +43,8 @@ export interface CommentThread {
   assigneeId?: UserId;
   /** 本文の訂正回数。訂正前の本文は CommentEvent("edited") に残す（§5.2-9）。 */
   editCount?: number;
+  /** 自動校正の指摘（投稿者はシステム）。人の投稿では設定しない */
+  origin?: BotOrigin;
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;
@@ -147,6 +150,8 @@ export function planCarryForward(
     carriedFromThreadId: source.id,
   };
   if (source.assigneeId !== undefined) target.assigneeId = source.assigneeId;
+  // 自動校正の指摘は持ち越しても自動校正の指摘として表示する（根拠のルールと版も引き継ぐ）
+  if (source.origin !== undefined) target.origin = source.origin;
   return { target, sourceAfter };
 }
 

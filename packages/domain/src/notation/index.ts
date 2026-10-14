@@ -5,3 +5,4 @@ export * from "./proofreader.ts";
 export * from "./importer.ts";
 export * from "./permission.ts";
 export * from "./proposal.ts";
+export * from "./autoProofread.ts";

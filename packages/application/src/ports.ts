@@ -7,6 +7,7 @@ import type {
   Instant,
   ManualPair,
   NotationRule,
+  ProofreadingRun,
   Principal,
   RequiredCheck,
   ReviewAssignment,
@@ -108,6 +109,7 @@ export type NotificationKind =
   | "work_finalized"
   | "work_reopened"
   | "revision_voided"
+  | "auto_proofread_done"
   | "rule_proposed"
   | "rule_proposal_decided";
 
@@ -206,6 +208,7 @@ export interface AppContext {
   documents: DocumentDraftRepository;
   alignments: AlignmentOverrideRepository;
   notation: NotationRepository;
+  proofreadingRuns: ProofreadingRunRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
 }
@@ -231,6 +234,14 @@ export interface NotationRepository {
   listProposals(status: RuleProposal["status"] | null, limit: number): Promise<RuleProposal[]>;
   insertProposal(proposal: Omit<RuleProposal, "id">): Promise<RuleProposal>;
   updateProposal(proposal: RuleProposal): Promise<void>;
+}
+
+/** 自動校正の実行（版ごとに 1 件） */
+export interface ProofreadingRunRepository {
+  findById(id: string): Promise<ProofreadingRun | null>;
+  findByRevision(revisionId: string): Promise<ProofreadingRun | null>;
+  insert(run: Omit<ProofreadingRun, "id">): Promise<ProofreadingRun>;
+  update(run: ProofreadingRun): Promise<void>;
 }
 
 export type { Principal };

@@ -5,6 +5,7 @@ import type {
   CommentThread,
   DocumentDraft,
   NotationRule,
+  ProofreadingRun,
   RequiredCheck,
   ReviewAssignment,
   Revision,
@@ -83,6 +84,7 @@ export interface InMemoryContext extends AppContext {
     ruleRevisions: RuleRevision[];
     managers: RuleCategoryManager[];
     proposals: Table<RuleProposal>;
+    runs: Table<ProofreadingRun>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
   };
@@ -109,6 +111,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     ruleRevisions: [],
     managers: [],
     proposals: new Table<RuleProposal>("prp"),
+    runs: new Table<ProofreadingRun>("run"),
     audit: [],
     idempotency: new Map(),
   };
@@ -294,6 +297,12 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
           .slice(0, limit),
       insertProposal: async (p) => state.proposals.insert(p),
       updateProposal: async (p) => state.proposals.put(p),
+    },
+    proofreadingRuns: {
+      findById: async (id) => state.runs.get(id),
+      findByRevision: async (rid) => state.runs.all().find((r) => r.revisionId === rid) ?? null,
+      insert: async (r) => state.runs.insert(r),
+      update: async (r) => state.runs.put(r),
     },
     idempotency: {
       get: async (scope, key) =>

@@ -21,6 +21,11 @@ export interface FinalizeWorkInput {
   requestId?: string;
   /** 制度承認後に差し替えるポリシー。未指定なら安全側の既定値。 */
   policy?: ApprovalPolicy;
+  /**
+   * 自動校正の未確認の指摘が残っているときの確認メモ（校了は止めない。記録だけ残す）。
+   * 既存の校了条件（重大な指摘・専門確認・自己校了）はこれで緩めない。
+   */
+  autoProofreadNote?: string;
 }
 
 export interface FinalizeOutcome {
@@ -75,6 +80,14 @@ export async function finalizeWork(
     };
     if (outcome.usedException && input.exceptionReason !== undefined)
       event.exceptionReason = input.exceptionReason;
+    const openBot = threads.filter(
+      (t) =>
+        t.origin?.kind === "bot" && (t.resolution === "open" || t.resolution === "acknowledged"),
+    ).length;
+    if (openBot > 0)
+      event.reason = `自動校正の未確認の指摘 ${openBot} 件を残して校了${
+        input.autoProofreadNote?.trim() ? `: ${input.autoProofreadNote.trim().slice(0, 500)}` : ""
+      }`;
     await ctx.approvals.append(event);
     await ctx.audit.record({
       entityType: "work",

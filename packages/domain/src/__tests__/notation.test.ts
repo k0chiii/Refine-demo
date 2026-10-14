@@ -6,9 +6,13 @@ import {
   compileRulePattern,
   defaultRuleCategories,
   expandCategories,
+  isBotAuthor,
   isLikelyCatastrophic,
   notationRole,
   parseCsv,
+  planBotThreads,
+  PROOFREADER_ID,
+  runStatusOf,
   rulesToCsv,
   rulesToJson,
   previewCsvImport,
@@ -454,5 +458,79 @@ describe("表記統一: 権限", () => {
     expect(notationRole(p({ orgPermissions: ["*"] }), "A1", [])).toBe("member");
     expect(canAssignManagers(p({ orgPermissions: ["*"] }))).toBe(false);
     expect(canAssignManagers(p({ isSystemAdmin: true }))).toBe(true);
+  });
+});
+
+describe("自動校正: スレッドの計画", () => {
+  const rules = resolveRuleSet(cats, ["A1", "A2"], seed, { year: 100 });
+  it("文章は text_range、PDF はページ上の矩形、OCR は画像の矩形で、指紋は同じ入力で同じ", () => {
+    const text = planBotThreads("art1", [{ kind: "text", text: "5月祭に来て頂き" }], rules);
+    expect(text.planned.map((p) => p.anchor.type)).toEqual(["text_range", "text_range"]);
+    expect(text.planned[0]!.body).toContain("「5月祭」→「五月祭」");
+    expect(text.planned[0]!.body).toContain("A1-0001 版 1");
+    expect(text.planned[0]!.severity).toBe("minor");
+    expect(text.planned[1]!.body.startsWith("【要確認】")).toBe(true);
+    expect(text.planned[1]!.severity).toBe("info");
+    const again = planBotThreads("art1", [{ kind: "text", text: "5月祭に来て頂き" }], rules);
+    expect(again.planned.map((p) => p.fingerprint)).toEqual(text.planned.map((p) => p.fingerprint));
+
+    const page = planBotThreads(
+      "art2",
+      [
+        {
+          kind: "page",
+          page: 3,
+          text: "今年の5月祭",
+          boxes: [{ start: 0, end: 6, rect: { x: 0.1, y: 0.2, w: 0.6, h: 0.05 } }],
+        },
+      ],
+      rules,
+    );
+    const a = page.planned[0]!.anchor;
+    expect(a.type).toBe("pdf_rect");
+    if (a.type === "pdf_rect") {
+      expect(a.page).toBe(3);
+      expect(a.rect.x).toBeCloseTo(0.1 + 0.6 * (3 / 6));
+      expect(a.rect.w).toBeCloseTo(0.6 * (3 / 6));
+    }
+    expect(page.planned[0]!.origin.textSource).toBe("pdf_text");
+
+    const ocr = planBotThreads(
+      "art3",
+      [
+        {
+          kind: "image",
+          text: "5月祭",
+          confidence: 0.5,
+          boxes: [{ start: 0, end: 3, rect: { x: 0, y: 0, w: 0.5, h: 0.1 } }],
+        },
+      ],
+      rules,
+    );
+    expect(ocr.planned[0]!.anchor.type).toBe("image_rect");
+    expect(ocr.planned[0]!.origin.detector).toBe("ocr");
+    expect(ocr.planned[0]!.origin.needsReview).toBe(true);
+    // 矩形の無い文字は作らない
+    expect(
+      planBotThreads("art4", [{ kind: "page", page: 1, text: "5月祭", boxes: [] }], rules).planned,
+    ).toEqual([]);
+  });
+
+  it("実行の状態", () => {
+    expect(runStatusOf([])).toBe("skipped");
+    expect(runStatusOf([{ artifactId: "a", status: "pending", findings: 0 }])).toBe("pending");
+    expect(
+      runStatusOf([
+        { artifactId: "a", status: "done", findings: 1 },
+        { artifactId: "b", status: "pending", findings: 0 },
+      ]),
+    ).toBe("running");
+    expect(
+      runStatusOf([
+        { artifactId: "a", status: "done", findings: 1 },
+        { artifactId: "b", status: "failed", findings: 0 },
+      ]),
+    ).toBe("failed");
+    expect(isBotAuthor(PROOFREADER_ID)).toBe(true);
   });
 });

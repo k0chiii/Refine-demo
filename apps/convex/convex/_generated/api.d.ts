@@ -23,6 +23,7 @@ import type * as http from "../http.js";
 import type * as me from "../me.js";
 import type * as notation from "../notation.js";
 import type * as notifications from "../notifications.js";
+import type * as proofreading from "../proofreading.js";
 import type * as reviews from "../reviews.js";
 import type * as revisions from "../revisions.js";
 import type * as seed from "../seed.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   me: typeof me;
   notation: typeof notation;
   notifications: typeof notifications;
+  proofreading: typeof proofreading;
   reviews: typeof reviews;
   revisions: typeof revisions;
   seed: typeof seed;

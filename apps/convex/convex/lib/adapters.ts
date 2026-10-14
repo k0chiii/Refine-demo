@@ -6,6 +6,7 @@ import type {
   CommentThread,
   DocumentDraft,
   NotationRule,
+  ProofreadingRun,
   RequiredCheck,
   ReviewAssignment,
   Revision,
@@ -343,6 +344,26 @@ export function createAppContext(
           )
           .take(100);
         return docs.length;
+      },
+    },
+    proofreadingRuns: {
+      async findById(id) {
+        const d = await db.get("proofreadingRuns", id as Id<"proofreadingRuns">).catch(() => null);
+        return d ? (fromDoc(d) as ProofreadingRun) : null;
+      },
+      async findByRevision(revisionId) {
+        const d = await db
+          .query("proofreadingRuns")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+          .first();
+        return d ? (fromDoc(d) as ProofreadingRun) : null;
+      },
+      async insert(run) {
+        const id = await db.insert("proofreadingRuns", compact(run));
+        return { ...run, id } as ProofreadingRun;
+      },
+      async update(run) {
+        await db.replace(run.id as Id<"proofreadingRuns">, compact(toFields(run)));
       },
     },
     notation: {
