@@ -47,9 +47,13 @@ import { InfoTab } from "./InfoTab";
 import { VersionsTab } from "./VersionsTab";
 
 export type Drawer = "comments" | "versions" | "info";
-export type EditorSearch = { tab?: Drawer };
+/** `compare`: 開いた直後に並べる相手の版（新しい版から比較を始めるため、古い版を見ている時に新しい版を選ぶとここ経由で入れ替える） */
+export type EditorSearch = { tab?: Drawer; compare?: string };
 export function validateEditorSearch(s: Record<string, unknown>): EditorSearch {
-  return s.tab === "comments" || s.tab === "versions" || s.tab === "info" ? { tab: s.tab } : {};
+  return {
+    ...(s.tab === "comments" || s.tab === "versions" || s.tab === "info" ? { tab: s.tab } : {}),
+    ...(typeof s.compare === "string" && s.compare ? { compare: s.compare } : {}),
+  };
 }
 
 type Layout = "panel" | "aligned" | "pins";
@@ -192,7 +196,9 @@ export function Editor({
   const [requestId, setRequestId] = useState(newRequestId);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
-  const [scale, setScale] = useState(1.2);
+  // 紙面の倍率は「幅に合わせた大きさ」に掛ける値（1 ＝ 左右の余白が同じ）。表示する数値は実寸比（zoom）
+  const [scale, setScale] = useState(1);
+  const [zoom, setZoom] = useState<number | null>(null);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [compareWith, setCompareWith] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -234,9 +240,19 @@ export function Editor({
   useEffect(() => {
     setArtifactId(null);
     setPage(1);
-    setCompareWith(null);
+    setCompareWith(revisionId ? (search.compare ?? null) : null);
     setDraft(null);
     setActiveThreadId(null);
+    if (revisionId && search.compare)
+      void navigate({
+        to: ".",
+        search: (s: EditorSearch) => {
+          const { compare: _drop, ...rest } = s;
+          return rest;
+        },
+        replace: true,
+      });
+    // search.compare は版が変わった時だけ読む
   }, [revisionId]);
   useEffect(() => {
     if (!data) return;
@@ -387,7 +403,8 @@ export function Editor({
     .filter((t) => t.anchor);
   const open = revision ? revision.reviewState === "open" && now < revision.deadlineAt : false;
   const canComment = can?.comment ?? false;
-  const selecting = canComment && !compareWith;
+  // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
+  const selecting = canComment;
   const busy =
     doPost.pending ||
     doDecide.pending ||
@@ -425,9 +442,10 @@ export function Editor({
     />
   );
 
-  /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは右上 */
-  const compose = (vp: Viewport | null, box: Draft["box"] | null) => {
+  /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
+  const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
     if (!draft || !canComment) return null;
+    if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     if (draft.free && vp) pos = { x: Math.max(8, vp.width - COMPOSE_W - 8), y: 8 };
     else if (vp && (draft.rect || draft.point)) {
@@ -453,12 +471,12 @@ export function Editor({
     );
   };
   /** ピンだけのレイアウト: 選択中のスレッドをピンの横に出す */
-  const popoverCard = (vp: Viewport) => {
+  const popoverCard = (vp: Viewport, n?: number) => {
     if (layout !== "pins" || !activeThreadId) return null;
     const t = threads.find((x) => x.id === activeThreadId);
     if (!t?.anchor) return null;
     const a = t.anchor as Anchor;
-    if (anchorPage(a) && anchorPage(a) !== page) return null;
+    if ((anchorPage(a) ?? undefined) !== n) return null;
     if (a.artifactId !== artifactId) return null;
     const b = anchorBox(a, vp);
     if (!b) return null;
@@ -469,20 +487,27 @@ export function Editor({
       </div>
     );
   };
-  const inPage = (vp: Viewport) => (
+  const inPage = (vp: Viewport, n?: number) => (
     <>
-      {popoverCard(vp)}
-      {compose(vp, null)}
+      {popoverCard(vp, n)}
+      {compose(vp, null, n)}
     </>
   );
-  /** Google ドキュメント式: 現在のページ・添付に位置があるものはその高さ、それ以外はページの下 */
-  const gutter = (vp: Viewport) => {
-    if (layout !== "aligned") return null;
-    const items: GutterItem[] = threads.map((t) => {
-      const a = t.anchor as Anchor | null;
-      const here =
-        a && a.artifactId === artifactId && (anchorPage(a) === null || anchorPage(a) === page);
-      return { id: t.id, y: here ? anchorTop(a, vp) : null, node: card(t) };
+  /**
+   * Google ドキュメント式: そのページ（画像は 1 枚）に位置があるものはその高さ。位置の無いもの・他の添付のものは最後のページの下。
+   * `n` は PDF のページ（連続表示で各ページの横に列を置く）
+   */
+  const gutter = (vp: Viewport, n?: number) => {
+    // 比較中は半分の幅しかないので、カードは補助ペイン（引き出し「コメント」）に出す（M3 Supporting pane）
+    if (layout !== "aligned" || compareWith) return null;
+    const last = n === undefined || n >= pageCount;
+    const items: GutterItem[] = threads.flatMap((t) => {
+      const a = (t.anchor ?? null) as Anchor | null; // 位置なしは undefined のこともある
+      const mine = a !== null && a.artifactId === artifactId;
+      const p = a ? anchorPage(a) : null;
+      if (mine && (p ?? undefined) === n) return [{ id: t.id, y: anchorTop(a, vp), node: card(t) }];
+      if (mine && p !== null) return []; // 同じ PDF の別ページ
+      return last ? [{ id: t.id, y: null, node: card(t) }] : [];
     });
     return <AlignedGutter items={items} minHeight={vp.height} activeId={activeThreadId} />;
   };
@@ -563,8 +588,10 @@ export function Editor({
             setActiveThreadId(null);
           }}
           page={page}
-          scale={viewScale}
-          fitWidth={compact}
+          onPageChange={setPage}
+          scale={scale}
+          besideWidth={besideWidth}
+          onZoom={setZoom}
           rotation={rotation}
           onPageCount={setPageCount}
           renderInPage={inPage}
@@ -601,8 +628,9 @@ export function Editor({
             setDraft(d);
             setActiveThreadId(null);
           }}
-          scale={viewScale}
-          fitWidth={compact}
+          scale={scale}
+          besideWidth={besideWidth}
+          onZoom={setZoom}
           renderInPage={inPage}
           renderGutter={gutter}
         />
@@ -637,8 +665,7 @@ export function Editor({
           draft={null}
           onDraft={() => undefined}
           page={page}
-          scale={viewScale}
-          fitWidth={compact}
+          scale={scale}
           rotation={rotation}
         />
       );
@@ -650,8 +677,7 @@ export function Editor({
           {...none}
           draft={null}
           onDraft={() => undefined}
-          scale={viewScale}
-          fitWidth={compact}
+          scale={scale}
         />
       );
     return <div className="empty">この形式は比較できません</div>;
@@ -746,8 +772,17 @@ export function Editor({
         canVoid={can?.void ?? false}
         onOpen={goVersion}
         onCompare={(id) => {
-          setCompareWith(id);
-          setScale(id ? 0.7 : 1.2);
+          setScale(1);
+          // 新しい版を常に末尾（右）の操作できる側に置く。古い版を見ている時に新しい版を選んだら、新しい版を開いて今の版と並べる
+          const cur = workData.revisions.find((r) => r.id === revisionId);
+          const next = id ? workData.revisions.find((r) => r.id === id) : undefined;
+          if (cur && next && next.submittedAt > cur.submittedAt)
+            void navigate({
+              to: "/works/$workId/v/$n",
+              params: { workId, n: String(versionOf(next)) },
+              search: { tab: "versions", compare: cur.id },
+            });
+          else setCompareWith(id);
         }}
         onSubmit={() => setSubmitOpen(true)}
       />
@@ -755,8 +790,10 @@ export function Editor({
       <InfoTab work={workData} revision={data ?? null} isAdmin={me?.isSystemAdmin ?? false} />
     ) : null;
   const desktopDrawer = drawer !== null && !mobile;
-  // compact は「幅に合わせた大きさ」が 100%。既定倍率 1.2 を打ち消す
-  const viewScale = compact ? scale / 1.2 : scale;
+  // 「ピンの高さに並べる」では紙面の横にコメントの列（補助ペインと同じ 360 / 412）＋間隔 24 が並ぶので、幅合わせから除く
+  const besideWidth = layout === "aligned" && !compareWith ? defaultPane + 24 : 0;
+  const zoomStep = (dir: 1 | -1) =>
+    setScale((s) => Math.min(5, Math.max(0.25, +(dir > 0 ? s * 1.25 : s / 1.25).toFixed(3))));
   const sheetTab: Drawer = drawer ?? "comments";
 
   return (
@@ -836,7 +873,10 @@ export function Editor({
                 {renderOther()}
               </div>
               <div className="compare__pane">
-                <div className="compare__label">{revision?.label}</div>
+                <div className="compare__label">
+                  {revision?.label}
+                  {canComment ? <span className="compare__hint">コメントできます</span> : null}
+                </div>
                 {renderViewer()}
               </div>
             </div>
@@ -853,40 +893,46 @@ export function Editor({
             >
               {isPdf ? (
                 <>
-                  <M3eIconButton
-                    aria-label="前のページ"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <M3eIcon name="chevron_left" />
-                  </M3eIconButton>
+                  {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
+                  {compact ? null : (
+                    <M3eIconButton
+                      aria-label="前のページ"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      <M3eIcon name="chevron_left" />
+                    </M3eIconButton>
+                  )}
                   <span className="ws__toolbar-text">
                     {pageCount ? `${page} / ${pageCount}` : "…"}
                   </span>
-                  <M3eIconButton
-                    aria-label="次のページ"
-                    disabled={page >= pageCount}
-                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  >
-                    <M3eIcon name="chevron_right" />
-                  </M3eIconButton>
+                  {compact ? null : (
+                    <M3eIconButton
+                      aria-label="次のページ"
+                      disabled={page >= pageCount}
+                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                    >
+                      <M3eIcon name="chevron_right" />
+                    </M3eIconButton>
+                  )}
                 </>
               ) : null}
               {isPdf || isImage ? (
                 <>
-                  <M3eIconButton
-                    aria-label="縮小"
-                    onClick={() => setScale((s) => Math.max(0.4, +(s - 0.2).toFixed(2)))}
-                  >
+                  <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
                     <M3eIcon name="zoom_out" />
                   </M3eIconButton>
-                  {!compact ? (
-                    <span className="ws__toolbar-text">{Math.round(scale * 100)}%</span>
-                  ) : null}
-                  <M3eIconButton
-                    aria-label="拡大"
-                    onClick={() => setScale((s) => Math.min(4, +(s + 0.2).toFixed(2)))}
+                  {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す */}
+                  <button
+                    type="button"
+                    className="ws__toolbar-text ws__zoom"
+                    title="幅に合わせる"
+                    aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと幅に合わせる）`}
+                    onClick={() => setScale(1)}
                   >
+                    {zoom ? `${Math.round(zoom * 100)}%` : "…"}
+                  </button>
+                  <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
                     <M3eIcon name="zoom_in" />
                   </M3eIconButton>
                 </>
@@ -917,7 +963,8 @@ export function Editor({
                   selected
                   onClick={() => {
                     setCompareWith(null);
-                    setScale(1.2);
+                    setScale(1);
+                    resetCompose();
                   }}
                 >
                   <M3eIcon name="compare" className="icon--filled" />

@@ -1260,6 +1260,33 @@ m3e-search-bar {
 .viewer__page img {
   display: block;
 }
+/* PDF は全ページを縦に連続で並べる。各行はページ＋（並べるレイアウトでは）コメントの列 */
+.viewer__pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-inline: auto;
+  flex: none;
+}
+.viewer__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+.viewer__page > canvas {
+  width: 100%;
+  height: 100%;
+}
+/* 840 以上: 縦の浮遊ツールバー（窓端から 24、幅 64）に紙面が重ならず、左右の余白が同じになるよう両側を 96 空ける */
+@media (min-width: 840px) {
+  .ws:not(.ws--compare) .viewer__stage {
+    padding-inline: 96px;
+  }
+  .ws--compare .viewer__stage {
+    padding-inline: 16px;
+  }
+}
 .viewer__overlay {
   position: absolute;
   inset: 0;
@@ -1317,11 +1344,33 @@ m3e-search-bar {
   z-index: 20;
 }
 .ws__toolbar-text {
-  font: var(--mf-type-label-medium);
-  color: var(--mf-on-surface-variant);
+  position: relative; /* m3e-toolbar の面（elevated）が位置指定のない子の上に描かれて文字が隠れるのを防ぐ */
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface);
   min-width: 3.5em;
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+/* 倍率の数値: 押すと幅に合わせる。48 の押せる高さ（M3 の最小タッチ領域） */
+.ws__zoom {
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.ws__zoom::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.ws__zoom:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.ws__zoom:focus-visible {
+  outline: 3px solid var(--mf-secondary);
+  outline-offset: 2px;
 }
 .ws__toolbar-sep {
   width: 1px;
@@ -1638,6 +1687,16 @@ m3e-search-bar {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
   padding: 0 4px 8px;
+}
+.compare__hint {
+  margin-inline-start: 8px;
+  color: var(--mf-primary);
+}
+/* 縦の浮遊ツールバー（窓端から 24）が新しい版の紙面に重ならないよう、比較の末尾側を空ける（840 以上だけ出る） */
+@media (min-width: 840px) {
+  .ws--compare .compare {
+    padding-inline-end: var(--ws-side-toolbar-space, 88px);
+  }
 }
 
 /* 引き出し「版」 */

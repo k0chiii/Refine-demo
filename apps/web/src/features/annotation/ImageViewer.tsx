@@ -1,7 +1,7 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
-import { STAGE_INSET, useStageWidth } from "./useStageWidth";
+import { useStageWidth } from "./useStageWidth";
 
 interface Props {
   url: string;
@@ -12,9 +12,12 @@ interface Props {
   selecting: boolean;
   draft: { rect?: NormalizedRect; point?: { x: number; y: number } } | null;
   onDraft: (d: { rect?: NormalizedRect; point?: { x: number; y: number } } | null) => void;
-  /** 表示倍率は親が持つ（1 = 幅 900px に収める。`fitWidth` のときは舞台の幅） */
+  /** 幅に合わせた大きさに掛ける倍率（1 ＝ 左右の余白が同じになる幅） */
   scale: number;
-  fitWidth?: boolean;
+  /** 紙面の横に並べる列の幅＋間隔。幅合わせから差し引く */
+  besideWidth?: number;
+  /** 原寸に対する表示倍率（1 ＝ 100%）を返す */
+  onZoom?: (actual: number) => void;
   renderInPage?: (vp: Viewport) => ReactNode;
   renderGutter?: (vp: Viewport) => ReactNode;
 }
@@ -30,20 +33,23 @@ export function ImageViewer({
   draft,
   onDraft,
   scale,
-  fitWidth,
+  besideWidth = 0,
+  onZoom,
   renderInPage,
   renderGutter,
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
-  const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(fitWidth === true);
-  const fit = natural
-    ? fitWidth && stageWidth > 0
-      ? (stageWidth - STAGE_INSET) / natural.w
-      : Math.min(1, 900 / natural.w)
-    : 1;
-  const viewport: Viewport | null = natural
-    ? { width: natural.w * fit * scale, height: natural.h * fit * scale, rotation: 0 }
-    : null;
+  const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(true);
+  // 最初は舞台の内容幅（横の列を除く）に合わせる。左右の余白が同じになる
+  const fit =
+    natural && stageWidth > 0 ? Math.max(0.05, (stageWidth - besideWidth) / natural.w) : 0;
+  const viewport: Viewport | null =
+    natural && fit > 0
+      ? { width: natural.w * fit * scale, height: natural.h * fit * scale, rotation: 0 }
+      : null;
+  useEffect(() => {
+    if (fit > 0) onZoom?.(fit * scale);
+  }, [fit, scale]);
   const mine = threads.filter(
     (t) =>
       (t.anchor.type === "image_rect" || t.anchor.type === "image_pin") &&

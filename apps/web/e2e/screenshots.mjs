@@ -100,6 +100,13 @@ const pickUser = async (scope, name) => {
   await page.waitForTimeout(200);
 };
 
+/** PDF の最初のページが描かれるまで待つ（連続表示では canvas は先に置かれ、画面の近くに来てから描かれる） */
+const pdfReady = () =>
+  page.waitForFunction(
+    () => (document.querySelector(".viewer__page canvas")?.width ?? 0) > 0,
+    null,
+    { timeout: 30_000 },
+  );
 /** 添付の切替（下部ツールバーの添付ボタン → メニュー） */
 const pickArtifact = async (name) => {
   await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
@@ -108,7 +115,7 @@ const pickArtifact = async (name) => {
 };
 /** ビューア上でドラッグ（範囲指定）→ その場の投稿欄に本文を入れて投稿 */
 const commentOnRect = async (x0, y0, x1, y1, body) => {
-  const overlay = page.locator(".viewer__overlay");
+  const overlay = page.locator(".viewer__overlay").first();
   const box = await overlay.boundingBox();
   await page.mouse.move(box.x + box.width * x0, box.y + box.height * y0);
   await page.mouse.down();
@@ -216,13 +223,13 @@ async function main() {
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   const revisionUrl = page.url();
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await shot("05-submit-confirmed");
 
   // 06 校正者を割当（主管）: 引き出し「情報」から
   await signInAs("mock-nogiku-manager");
   await go(workUrl);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await drawer("情報");
   await btn("校正者を割当").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
@@ -266,8 +273,8 @@ async function main() {
   // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る
   await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).click();
   await page.waitForURL(/\/works\//);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
-  await page.waitForSelector(".viewer__overlay");
+  await pdfReady();
+  await page.locator(".viewer__overlay").first().waitFor();
   await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
   await drawer("コメント");
   await commentOnRect(
@@ -382,7 +389,7 @@ async function main() {
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   const revision2Url = page.url();
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await drawer("コメント");
   await page.waitForSelector('[aria-label="前版の未解決指摘"]');
   await shot("17-carry-forward");
@@ -399,23 +406,82 @@ async function main() {
     .locator("m3e-button", { hasText: "比較" })
     .click();
   await page.waitForFunction(
-    () => document.querySelectorAll(".compare .viewer__page canvas").length >= 2,
+    () =>
+      [...document.querySelectorAll(".compare__pane")].every(
+        (p) => (p.querySelector(".viewer__page canvas")?.width ?? 0) > 0,
+      ),
     null,
     { timeout: 30_000 },
   );
   await shot("25-compare");
   await page.locator('m3e-icon-button[aria-label="比較を終了"]').click();
   await page.waitForTimeout(300);
-  // 持ち越したコメントを ✓ で反映済みにする（未解決が残ると理由なしでは校了できない）
+
+  // 38 比較しながら新しい版にコメント（校正者）: 第1版を開いて第2版と比較 → 第2版が右（操作できる側）に入れ替わる
+  await signInAs("mock-nogiku-reviewer");
+  await go(revision2Url.replace(/\/v\/2$/, "/v/1"));
+  await pdfReady();
+  await drawer("版");
+  await page
+    .locator(".version", { hasText: "第2版" })
+    .locator("m3e-button", { hasText: "比較" })
+    .click();
+  await page.waitForURL(/\/v\/2(\?|$)/, { timeout: 15_000 });
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll(".compare__pane")].every(
+        (p) => (p.querySelector(".viewer__page canvas")?.width ?? 0) > 0,
+      ),
+    null,
+    { timeout: 30_000 },
+  );
+  const labels = await page.locator(".compare__label").allInnerTexts();
+  if (!labels[0]?.startsWith("第1版") || !labels[1]?.startsWith("第2版"))
+    throw new Error(`比較の並びが違う: ${labels.join(" / ")}`);
+  {
+    const overlay = page.locator(".compare__pane").last().locator(".viewer__overlay").first();
+    const box = await overlay.boundingBox();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.42);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForSelector(".compose-pop textarea");
+    await page.fill(
+      ".compose-pop textarea",
+      "第1版より凡例が小さくなっています。8pt 以上に戻してください。",
+    );
+    await shot("38-compare-comment");
+    const pins = () => page.locator(".compare__pane").last().locator(".anchor-pin").count();
+    const before = await pins();
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".compare__pane:last-child .anchor-pin").length > n,
+      before,
+      { timeout: 10_000 },
+    );
+  }
+
+  // 持ち越したコメントと比較中のコメントを ✓ で反映済みにする（未解決が残ると理由なしでは校了できない。制作者）
+  await signInAs("mock-nogiku-creator");
+  await go(revision2Url);
+  await pdfReady();
   await drawer("コメント");
-  await page.locator(".comments .thread .thread__body").first().click();
-  await page.locator('.comments .thread m3e-icon-button[aria-label^="解決"]').first().click();
+  for (let i = 0; i < 5; i++) {
+    const resolveBtn = page
+      .locator('.comments .thread m3e-icon-button[aria-label^="解決"]')
+      .first();
+    if ((await resolveBtn.count()) === 0) break;
+    await page.locator(".comments .thread .thread__body").first().click();
+    await resolveBtn.click();
+    await page.waitForTimeout(500);
+  }
   await page.waitForFunction(() => document.body.innerText.includes("反映済"));
 
   // 10 校了ダイアログ（校了権限者）と校了後: 引き出し「情報」
   await signInAs("mock-nogiku-approver");
   await go(workUrl);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await drawer("情報");
   await btn("校了を宣言").click();
   await page.waitForSelector("m3e-dialog[open]");
@@ -451,7 +517,7 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await page.setViewportSize({ width: 1024, height: 800 });
   await go(revision2Url);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await railToggle.click();
   await page.waitForSelector(".shell__scrim");
   await page.waitForTimeout(600);
@@ -477,13 +543,13 @@ async function main() {
   await shot("33-mobile-works");
   // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
   await go(revision2Url);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await page.waitForSelector("m3e-bottom-sheet.ws__sheet"); // 通知のシート（非表示）と区別する
   await page.waitForTimeout(800);
   await shot("26-mobile-workspace");
   // 37 compact の補助的な選択はボトムシート（Breakpoints: compact は Bottom sheet、medium 以上は Menu）。添付が複数ある第1版で
   await go(revisionUrl);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await page.waitForTimeout(600);
   await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
   await page.waitForSelector("m3e-bottom-sheet.action-sheet .list__item");
@@ -492,7 +558,7 @@ async function main() {
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.action-sheet").hide());
   await page.waitForTimeout(600);
   await go(revision2Url);
-  await page.waitForSelector(".viewer__page canvas", { timeout: 30_000 });
+  await pdfReady();
   await page.waitForTimeout(600);
   // 34 シートを半分まで上げる（タブを押しても上がる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").show(1));

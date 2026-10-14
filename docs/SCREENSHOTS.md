@@ -30,7 +30,7 @@
 | 22  | アカウントメニュー（右上の Humation アバター）                                    | 制作者         | ![](screenshots/22-account-menu.png)           |
 | 23  | エディタのレイアウト「ピンの高さに並べる」（Google ドキュメント式）               | 校正者         | ![](screenshots/23-layout-aligned.png)         |
 | 24  | エディタのレイアウト「ピンだけ」（Figma 式）                                      | 校正者         | ![](screenshots/24-layout-pins.png)            |
-| 25  | 版の比較（引き出し「版」の「比較」。ページ・倍率を共有）                          | 制作者         | ![](screenshots/25-compare.png)                |
+| 25  | 版の比較（引き出し「版」の「比較」。新しい版が右、ページ・倍率を共有）            | 制作者         | ![](screenshots/25-compare.png)                |
 | 26  | compact: エディタ（独自のトップアプリバー、紙面は幅に合わせ、覗き見のシート）     | 校正者         | ![](screenshots/26-mobile-workspace.png)       |
 | 27  | ダッシュボード「あなたの担当 › 返事をする」                                       | 制作者         | ![](screenshots/27-dashboard-creator.png)      |
 | 28  | エディタの引き出し「版」: 履歴・開く・比較・提出・無効化                          | 制作者         | ![](screenshots/28-versions.png)               |
@@ -43,6 +43,7 @@
 | 35  | ドラッグハンドル: スペーサー 24 の中のハンドルで固定ペインを 412 → 360 にスナップ | 校正者         | ![](screenshots/35-pane-drag-handle.png)       |
 | 36  | RTL（`dir=rtl`）: レールは先頭端（右）、アプリバー・リストが鏡映                  | 校正者         | ![](screenshots/36-rtl-dashboard.png)          |
 | 37  | compact の補助的な選択（添付の切替）はボトムシート                                | 校正者         | ![](screenshots/37-mobile-action-sheet.png)    |
+| 38  | 比較しながら新しい版（右）に範囲でコメント（§19）                                 | 校正者         | ![](screenshots/38-compare-comment.png)        |
 
 `pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（37 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 

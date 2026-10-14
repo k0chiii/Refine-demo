@@ -138,6 +138,10 @@
     "violations": []
   },
   {
+    "screen": "38-compare-comment",
+    "violations": []
+  },
+  {
     "screen": "10-finalize-dialog",
     "violations": []
   },
