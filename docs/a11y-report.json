@@ -188,5 +188,41 @@
   {
     "screen": "34-mobile-sheet-half",
     "violations": []
+  },
+  {
+    "screen": "39-write-editor",
+    "violations": []
+  },
+  {
+    "screen": "40-write-style-menu",
+    "violations": []
+  },
+  {
+    "screen": "41-write-find",
+    "violations": []
+  },
+  {
+    "screen": "42-write-word-count",
+    "violations": []
+  },
+  {
+    "screen": "43-write-review-select",
+    "violations": []
+  },
+  {
+    "screen": "44-write-review-comment",
+    "violations": []
+  },
+  {
+    "screen": "45-write-refs",
+    "violations": []
+  },
+  {
+    "screen": "46-write-compact",
+    "violations": []
+  },
+  {
+    "screen": "47-write-compact-more",
+    "violations": []
   }
 ]

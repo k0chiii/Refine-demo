@@ -13,3 +13,4 @@ export * from "./review/ReviewAssignment.ts";
 export * from "./review/RequiredCheck.ts";
 export * from "./approval/ApprovalPolicy.ts";
 export * from "./revision/UploadSession.ts";
+export * from "./document/DocumentDraft.ts";

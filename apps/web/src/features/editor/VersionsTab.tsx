@@ -21,6 +21,7 @@ export function VersionsTab({
   onOpen,
   onCompare,
   onSubmit,
+  onWrite,
 }: {
   work: WorkData;
   currentId: string | null;
@@ -29,6 +30,8 @@ export function VersionsTab({
   onOpen: (r: WorkData["revisions"][number]) => void;
   onCompare: (id: string | null) => void;
   onSubmit: () => void;
+  /** 文章エディタを開く（下書きを書いて版として提出する） */
+  onWrite: () => void;
 }) {
   const voidRevision = useMutation(api.submissions.voidRevision);
   const [voidDraft, setVoidDraft] = useState<string | null>(null);
@@ -43,10 +46,16 @@ export function VersionsTab({
   return (
     <div className="versions">
       {work.can.submit && active ? (
-        <M3eButton variant="filled" className="versions__submit" onClick={onSubmit}>
-          <M3eIcon slot="icon" name="upload_file" />
-          新しい版を提出
-        </M3eButton>
+        <div className="row versions__actions">
+          <M3eButton variant="filled" className="versions__submit" onClick={onSubmit}>
+            <M3eIcon slot="icon" name="upload_file" />
+            新しい版を提出
+          </M3eButton>
+          <M3eButton variant="tonal" onClick={onWrite}>
+            <M3eIcon slot="icon" name="edit_document" />
+            文章を書く
+          </M3eButton>
+        </div>
       ) : null}
       {work.revisions.length === 0 ? (
         <p className="muted small">まだ版がありません。</p>

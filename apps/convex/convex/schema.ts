@@ -316,6 +316,20 @@ export default defineSchema({
     .index("by_revision", ["revisionId"])
     .index("by_assignee_state", ["assigneeId", "state"]),
 
+  /**
+   * 文章の下書き（F-12 の前段）。1 制作物に 1 つ。本文はエディタ（ProseMirror）の JSON 文字列と平文。
+   * 共同編集は後続（§3.2）なので、version による楽観的排他だけを行う。
+   */
+  documentDrafts: defineTable({
+    workId: v.id("works"),
+    title: v.string(),
+    content: v.string(),
+    text: v.string(),
+    version: v.number(),
+    updatedBy: v.string(),
+    updatedAt: v.number(),
+  }).index("by_work", ["workId"]),
+
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({
     recipientId: v.string(),

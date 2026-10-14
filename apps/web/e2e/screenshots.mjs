@@ -565,6 +565,138 @@ async function main() {
   await page.waitForTimeout(700);
   await shot("34-mobile-sheet-half");
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  // ---------- 文章エディタ（Google ドキュメント相当。docs/EDITOR_RESEARCH.md）
+  // 39 書く（制作者）: 版のない制作物の「文章を書く」→ 上端の浮遊ツールバー＋紙面＋補助ペイン「概要」
+  await signInAs("mock-nogiku-creator");
+  await go(`${BASE}/works`);
+  await page.waitForSelector("m3e-list-action");
+  await page.locator("m3e-list-action", { hasText: "公式サイト トップページ" }).click();
+  await page.waitForURL(/\/works\/[^/]+$/);
+  const writeWorkUrl = page.url();
+  await page.waitForSelector(".editor__empty");
+  await btn("文章を書く").click();
+  await page.waitForSelector(".doc[contenteditable=true]");
+  await page.click(".doc");
+  await page.keyboard.type("# 第100回五月祭へようこそ\n");
+  await page.keyboard.type("今年のテーマは「百花繚乱」です。");
+  await page.keyboard.press("Control+b");
+  await page.keyboard.type("入場は無料");
+  await page.keyboard.press("Control+b");
+  await page.keyboard.type("で、どなたでもご来場いただけます。\n");
+  await page.keyboard.type("## 開催概要\n");
+  await page.keyboard.type("- 日程: 5月16日（土）・17日（日）\n会場: 東京大学 本郷キャンパス\n\n");
+  await page.keyboard.type("## 来場の皆さまへ\n");
+  await page.keyboard.type("[ ] 混雑時は係員の指示に従ってください\nごみは各所のごみ箱へ\n\n");
+  await page.keyboard.type("五月祭常任委員会");
+  await page.waitForFunction(
+    () => document.querySelector(".write__status")?.textContent?.includes("保存しました"),
+    null,
+    { timeout: 15_000 },
+  );
+  await shot("39-write-editor");
+  // 40 段落スタイル（メニューは各スタイルの見た目で並ぶ。ショートカットも表示）
+  await page.locator("#wt-style").click();
+  await page.waitForTimeout(500);
+  await shot("40-write-style-menu");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // 41 検索と置換（Ctrl+H）: 補助ペインで検索しながら編集を続けられる
+  await page.click(".doc");
+  await page.keyboard.press("Control+h");
+  await page.waitForSelector(".find input");
+  await page.locator(".find input").first().fill("五月祭");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(400);
+  await shot("41-write-find");
+  // 42 文字カウント（その他メニュー → 文字カウント。入力中に表示も切り替えられる）
+  await page.locator("#wt-more").click();
+  await page.waitForTimeout(300);
+  await page.locator("#wt-more-menu m3e-menu-item", { hasText: "文字カウント" }).click();
+  await page.waitForSelector("m3e-dialog[open] .count-table");
+  await page.waitForTimeout(300);
+  await shot("42-write-word-count");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "完了" }).click();
+  await page.waitForTimeout(300);
+  // 版として提出 → HTML の版スナップショット（書式付き）が第1版になる
+  await page.locator("m3e-button", { hasText: "版として提出" }).click();
+  await page.waitForSelector("m3e-dialog[open] textarea");
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "トップページの文章 初稿");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item__state--verified").length >= 1,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1(\?|$)/, { timeout: 15_000 });
+  // 校正者を割り当てる（主管）
+  await signInAs("mock-nogiku-manager");
+  await go(writeWorkUrl);
+  await page.waitForSelector(".rich-viewer__page .doc");
+  await drawer("情報");
+  await btn("校正者を割当").click();
+  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
+  await page.waitForTimeout(500);
+  // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
+  await signInAs("mock-nogiku-reviewer");
+  await go(writeWorkUrl);
+  await page.waitForSelector(".rich-viewer__page .doc");
+  await page.evaluate((needle) => {
+    const root = document.querySelector(".rich-viewer__page .doc");
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const i = node.textContent.indexOf(needle);
+      if (i >= 0) {
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + needle.length);
+        const sel = getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        break;
+      }
+    }
+    document
+      .querySelector(".rich-viewer__wrap")
+      .dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  }, "百花繚乱");
+  await page.waitForSelector(".compose-pop textarea");
+  await page.fill(
+    ".compose-pop textarea",
+    "テーマ名は公式表記「百花繚乱 ―ひゃっかりょうらん―」に合わせ、ふりがなを付けてください。",
+  );
+  await shot("43-write-review-select");
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+  await page.waitForSelector(".rich-viewer__page .text-anchor");
+  await page.waitForTimeout(500);
+  const quote = await page.locator(".rich-viewer__page .text-anchor").first().innerText();
+  if (!quote.includes("百花繚乱")) throw new Error(`範囲指摘の位置がずれている: ${quote}`);
+  await shot("44-write-review-comment");
+  // 45 指摘を見ながら直す（制作者）: 補助ペイン「指摘」→ 押すと本文の該当箇所を選ぶ
+  await signInAs("mock-nogiku-creator");
+  await go(`${writeWorkUrl}/write`);
+  await page.waitForSelector(".doc[contenteditable=true]");
+  await page.locator('.write__side m3e-icon-button[aria-label="指摘"]').click();
+  await page.waitForSelector(".refs__item");
+  await page.locator(".refs__item").first().click();
+  await page.waitForTimeout(400);
+  const picked = await page.evaluate(() => getSelection()?.toString() ?? "");
+  if (!picked.includes("百花繚乱")) throw new Error(`指摘から本文を選べない: ${picked}`);
+  await shot("45-write-refs");
+  // 46 compact の文章エディタ: 下端のドッキングツールバー / 47 その他はボトムシート
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.waitForTimeout(800);
+  await page.click(".doc");
+  await shot("46-write-compact");
+  await page.locator('.write__docked m3e-icon-button[aria-label="その他"]').click();
+  await page.waitForTimeout(700);
+  await shot("47-write-compact-more");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1440, height: 900 });
 }
 
 try {

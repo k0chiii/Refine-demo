@@ -49,6 +49,7 @@ const messages: Record<string, string> = {
   approval_required_checks_incomplete:
     "未完了の専門確認があります。確認を完了（または理由付きで免除）するか、理由を記入して例外校了してください",
   version_conflict: "他の人が先に変更しました。画面を更新して再度お試しください",
+  document_invalid: "文章を保存できません（大きすぎるか、形式が壊れています）",
   idempotency_conflict: "同じ操作が既に処理されています",
 };
 

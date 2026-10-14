@@ -3,6 +3,7 @@ import type {
   Artifact,
   CommentEvent,
   CommentThread,
+  DocumentDraft,
   Instant,
   Principal,
   RequiredCheck,
@@ -159,6 +160,13 @@ export interface IdempotencyStore {
   put(scope: string, key: string, result: unknown): Promise<void>;
 }
 
+/** 文章の下書き（1 制作物に 1 つ） */
+export interface DocumentDraftRepository {
+  findByWork(workId: WorkId): Promise<DocumentDraft | null>;
+  insert(draft: Omit<DocumentDraft, "id">): Promise<DocumentDraft>;
+  update(draft: DocumentDraft): Promise<void>;
+}
+
 export interface AppContext {
   clock: Clock;
   works: WorkRepository;
@@ -171,6 +179,7 @@ export interface AppContext {
   approvals: ApprovalRepository;
   checks: RequiredCheckRepository;
   notifications: NotificationRepository;
+  documents: DocumentDraftRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
 }
