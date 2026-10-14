@@ -121,3 +121,38 @@ describe("Convex 統合: エディタの入口", () => {
     expect(await cast.stranger.as.query(api.documents.writable, {})).toEqual([]);
   });
 });
+
+describe("Convex 統合: SNS のアカウント（本体の設定）", () => {
+  it("管理者だけが登録でき、制作物の編集権限で割り当てられる。使っているアカウントは消せない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const profile = {
+      platform: "instagram" as const,
+      displayName: "第100回五月祭",
+      username: "mayfes_official",
+      verified: true,
+    };
+    await expect(cast.manager.as.mutation(api.social.save, profile)).rejects.toThrow(
+      code("forbidden"),
+    );
+    const id = await cast.admin.as.mutation(api.social.save, profile);
+    expect((await cast.creator.as.query(api.social.list, {})).map((p) => p.id)).toEqual([id]);
+    const workId = (await cast.manager.as.mutation(api.works.create, {
+      title: "公式 Instagram",
+      purpose: "告知",
+      category: "SNS",
+      mediaType: "sns",
+      year: 100,
+      creatorIds: [cast.creator.id],
+      approverId: cast.approver.id,
+    })) as Id<"works">;
+    await cast.manager.as.mutation(api.works.update, { workId, patch: { socialProfileId: id } });
+    expect((await cast.creator.as.query(api.works.get, { workId })).work.socialProfileId).toBe(id);
+    await expect(cast.admin.as.mutation(api.social.remove, { id })).rejects.toThrow(
+      code("social_profile_in_use"),
+    );
+    await cast.manager.as.mutation(api.works.update, { workId, patch: { socialProfileId: null } });
+    await cast.admin.as.mutation(api.social.remove, { id });
+    expect(await cast.creator.as.query(api.social.list, {})).toEqual([]);
+  });
+});

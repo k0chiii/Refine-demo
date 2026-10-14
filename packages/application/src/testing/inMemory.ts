@@ -17,6 +17,7 @@ import type {
   UploadSession,
   Work,
   WorkPermissionGrant,
+  SocialProfile,
 } from "@mf100/domain";
 import type { AlignmentOverride, AppContext, AuditEntry, Notification } from "../ports.ts";
 
@@ -78,6 +79,7 @@ export interface InMemoryContext extends AppContext {
     checks: Table<RequiredCheck>;
     notifications: Table<Notification>;
     documents: Table<DocumentDraft>;
+    socialProfiles: Table<SocialProfile>;
     alignments: Table<AlignmentOverride>;
     categories: Map<string, RuleCategory>;
     rules: Map<string, NotationRule>;
@@ -105,6 +107,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     checks: new Table<RequiredCheck>("chk"),
     notifications: new Table<Notification>("ntf"),
     documents: new Table<DocumentDraft>("doc"),
+    socialProfiles: new Table<SocialProfile>("sp"),
     alignments: new Table<AlignmentOverride>("aln"),
     categories: new Map(),
     rules: new Map(),
@@ -254,6 +257,17 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       findByWork: async (workId) => state.documents.all().find((d) => d.workId === workId) ?? null,
       insert: async (d) => state.documents.insert(d),
       update: async (d) => state.documents.put(d),
+    },
+    socialProfiles: {
+      list: async () => state.socialProfiles.all(),
+      findById: async (id) => state.socialProfiles.get(id),
+      insert: async (p) => state.socialProfiles.insert(p),
+      update: async (p) => state.socialProfiles.put(p),
+      remove: async (id) => {
+        state.socialProfiles.rows.delete(id);
+      },
+      countWorksUsing: async (id) =>
+        state.works.all().filter((w) => w.socialProfileId === id).length,
     },
     alignments: {
       find: async (l, r) =>

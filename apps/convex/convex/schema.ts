@@ -159,9 +159,12 @@ export default defineSchema({
     finalRevisionId: v.optional(v.string()),
     /** 表記統一のルールカテゴリ（人が選ぶ） */
     notationCategories: v.optional(v.array(v.string())),
+    /** SNS 投稿で使うアカウント（socialProfiles の ID） */
+    socialProfileId: v.optional(v.string()),
     version: v.number(),
   })
     .index("by_year", ["year"])
+    .index("by_social_profile", ["socialProfileId"])
     .index("by_lifecycle", ["lifecycle"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
@@ -340,6 +343,25 @@ export default defineSchema({
    * 文章の下書き（F-12 の前段）。1 制作物に 1 つ。本文はエディタ（ProseMirror）の JSON 文字列と平文。
    * 共同編集は後続（§3.2）なので、version による楽観的排他だけを行う。
    */
+  /** SNS のアカウント（本体の設定。プレビューの見た目だけ。ログイン情報は持たない） */
+  socialProfiles: defineTable({
+    platform: v.union(v.literal("instagram"), v.literal("x")),
+    displayName: v.string(),
+    username: v.string(),
+    avatar: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    verified: v.boolean(),
+    stats: v.optional(
+      v.object({
+        posts: v.optional(v.number()),
+        followers: v.optional(v.number()),
+        following: v.optional(v.number()),
+      }),
+    ),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }),
+
   documentDrafts: defineTable({
     workId: v.id("works"),
     title: v.string(),

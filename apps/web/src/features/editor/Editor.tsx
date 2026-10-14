@@ -662,6 +662,7 @@ export function Editor({
             artifacts={data.artifacts}
             isFinal={work.finalRevisionId === data.revision.id}
             workTitle={work.title}
+            socialProfileId={workData.work.socialProfileId}
             revisionLabel={data.revision.label}
           />
         </div>
@@ -1095,147 +1096,151 @@ export function Editor({
                 shape="rounded"
                 elevated
                 aria-label="ビューアの操作"
-                // 狭い幅では横にスクロールする領域になるので、キーボードでも辿れるようにする
-                tabIndex={0}
               >
-                {isPdf ? (
-                  <>
-                    {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
-                    {compact ? null : (
-                      <M3eIconButton
-                        aria-label="前のページ"
-                        disabled={page <= 1}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      >
-                        <M3eIcon name="chevron_left" />
+                {/* 項目が入りきらない幅では中だけを横にスクロールする（ツールバー自体に overflow を付けると影が切れる） */}
+                <div className="ws__toolbar-items" tabIndex={0}>
+                  {isPdf ? (
+                    <>
+                      {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
+                      {compact ? null : (
+                        <M3eIconButton
+                          aria-label="前のページ"
+                          disabled={page <= 1}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        >
+                          <M3eIcon name="chevron_left" />
+                        </M3eIconButton>
+                      )}
+                      <span className="ws__toolbar-text">
+                        {pageCount ? `${page} / ${pageCount}` : "…"}
+                      </span>
+                      {compact ? null : (
+                        <M3eIconButton
+                          aria-label="次のページ"
+                          disabled={page >= pageCount}
+                          onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                        >
+                          <M3eIcon name="chevron_right" />
+                        </M3eIconButton>
+                      )}
+                    </>
+                  ) : null}
+                  {isPdf || isImage || artifact.type === "document" ? (
+                    <>
+                      <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
+                        <M3eIcon name="zoom_out" />
                       </M3eIconButton>
-                    )}
-                    <span className="ws__toolbar-text">
-                      {pageCount ? `${page} / ${pageCount}` : "…"}
-                    </span>
-                    {compact ? null : (
-                      <M3eIconButton
-                        aria-label="次のページ"
-                        disabled={page >= pageCount}
-                        onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                      {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す */}
+                      <button
+                        type="button"
+                        className="ws__toolbar-text ws__zoom"
+                        title="幅に合わせる"
+                        aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと幅に合わせる）`}
+                        onClick={() => setScale(1)}
                       >
-                        <M3eIcon name="chevron_right" />
+                        {zoom ? `${Math.round(zoom * 100)}%` : "…"}
+                      </button>
+                      <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
+                        <M3eIcon name="zoom_in" />
                       </M3eIconButton>
-                    )}
-                  </>
-                ) : null}
-                {isPdf || isImage || artifact.type === "document" ? (
-                  <>
-                    <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
-                      <M3eIcon name="zoom_out" />
-                    </M3eIconButton>
-                    {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す */}
-                    <button
-                      type="button"
-                      className="ws__toolbar-text ws__zoom"
-                      title="幅に合わせる"
-                      aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと幅に合わせる）`}
-                      onClick={() => setScale(1)}
-                    >
-                      {zoom ? `${Math.round(zoom * 100)}%` : "…"}
-                    </button>
-                    <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
-                      <M3eIcon name="zoom_in" />
-                    </M3eIconButton>
-                  </>
-                ) : null}
-                {canComment ? (
-                  <M3eIconButton
-                    aria-label="位置なしでコメント"
-                    onClick={() => {
-                      setDraft({ free: true });
-                      setActiveThreadId(null);
-                    }}
-                  >
-                    <M3eIcon name="add_comment" />
-                  </M3eIconButton>
-                ) : null}
-                {compareWith && (cmp.kind === "pdf" || cmp.kind === "document") ? (
-                  <>
+                    </>
+                  ) : null}
+                  {canComment ? (
                     <M3eIconButton
-                      aria-label={cmp.syncOn ? "スクロール同期をやめる" : "スクロールを同期する"}
-                      toggle
-                      selected={cmp.syncOn}
-                      onClick={() => cmp.setSyncOn(!cmp.syncOn)}
+                      aria-label="位置なしでコメント"
+                      onClick={() => {
+                        setDraft({ free: true });
+                        setActiveThreadId(null);
+                      }}
                     >
-                      <M3eIcon
-                        name={cmp.syncOn ? "sync" : "sync_disabled"}
-                        className={cmp.syncOn ? "icon--filled" : ""}
-                      />
+                      <M3eIcon name="add_comment" />
                     </M3eIconButton>
-                    <M3eIconButton
-                      aria-label={cmp.diffOn ? "文章の差分を隠す" : "文章の差分を表示"}
-                      toggle
-                      selected={cmp.diffOn}
-                      onClick={() => cmp.setDiffOn(!cmp.diffOn)}
-                    >
-                      <M3eIcon name="difference" className={cmp.diffOn ? "icon--filled" : ""} />
-                    </M3eIconButton>
-                  </>
-                ) : null}
-                {compareWith && cmp.kind === "pdf" ? (
-                  <M3eIconButton
-                    aria-label="ページの対応を確認・修正"
-                    disabled={cmp.pdf.status !== "ready"}
-                    onClick={() => setMappingOpen(true)}
-                  >
-                    <M3eIcon name="low_density" />
-                  </M3eIconButton>
-                ) : null}
-                {compareWith && cmp.kind === "image" ? (
-                  <M3eIconButton
-                    aria-label={swipe ? "左右に並べる" : "重ねて比較"}
-                    toggle
-                    selected={swipe}
-                    onClick={() => setSwipe((v) => !v)}
-                  >
-                    <M3eIcon name="vertical_split" className={swipe ? "icon--filled" : ""} />
-                  </M3eIconButton>
-                ) : null}
-                {compareWith ? (
-                  <M3eIconButton
-                    aria-label="比較を終了"
-                    toggle
-                    selected
-                    onClick={() => {
-                      setCompareWith(null);
-                      setScale(1);
-                      resetCompose();
-                    }}
-                  >
-                    <M3eIcon name="compare" className="icon--filled" />
-                  </M3eIconButton>
-                ) : null}
-                {data && data.artifacts.length > 1 ? (
-                  <M3eIconButton
-                    aria-label="添付を切り替え"
-                    {...(compact ? { onClick: () => setArtifactSheet(true) } : {})}
-                  >
-                    <M3eIcon name="attach_file" />
-                    {compact ? null : <M3eMenuTrigger htmlFor="artifact-menu" />}
-                  </M3eIconButton>
-                ) : null}
-                {!mobile ? (
-                  <>
-                    <span className="ws__toolbar-sep" />
-                    {layouts.map((l) => (
+                  ) : null}
+                  {compareWith && (cmp.kind === "pdf" || cmp.kind === "document") ? (
+                    <>
                       <M3eIconButton
-                        key={l.id}
-                        aria-label={l.label}
+                        aria-label={cmp.syncOn ? "スクロール同期をやめる" : "スクロールを同期する"}
                         toggle
-                        selected={layout === l.id}
-                        onClick={() => setLayout(l.id)}
+                        selected={cmp.syncOn}
+                        onClick={() => cmp.setSyncOn(!cmp.syncOn)}
                       >
-                        <M3eIcon name={l.icon} className={layout === l.id ? "icon--filled" : ""} />
+                        <M3eIcon
+                          name={cmp.syncOn ? "sync" : "sync_disabled"}
+                          className={cmp.syncOn ? "icon--filled" : ""}
+                        />
                       </M3eIconButton>
-                    ))}
-                  </>
-                ) : null}
+                      <M3eIconButton
+                        aria-label={cmp.diffOn ? "文章の差分を隠す" : "文章の差分を表示"}
+                        toggle
+                        selected={cmp.diffOn}
+                        onClick={() => cmp.setDiffOn(!cmp.diffOn)}
+                      >
+                        <M3eIcon name="difference" className={cmp.diffOn ? "icon--filled" : ""} />
+                      </M3eIconButton>
+                    </>
+                  ) : null}
+                  {compareWith && cmp.kind === "pdf" ? (
+                    <M3eIconButton
+                      aria-label="ページの対応を確認・修正"
+                      disabled={cmp.pdf.status !== "ready"}
+                      onClick={() => setMappingOpen(true)}
+                    >
+                      <M3eIcon name="low_density" />
+                    </M3eIconButton>
+                  ) : null}
+                  {compareWith && cmp.kind === "image" ? (
+                    <M3eIconButton
+                      aria-label={swipe ? "左右に並べる" : "重ねて比較"}
+                      toggle
+                      selected={swipe}
+                      onClick={() => setSwipe((v) => !v)}
+                    >
+                      <M3eIcon name="vertical_split" className={swipe ? "icon--filled" : ""} />
+                    </M3eIconButton>
+                  ) : null}
+                  {compareWith ? (
+                    <M3eIconButton
+                      aria-label="比較を終了"
+                      toggle
+                      selected
+                      onClick={() => {
+                        setCompareWith(null);
+                        setScale(1);
+                        resetCompose();
+                      }}
+                    >
+                      <M3eIcon name="compare" className="icon--filled" />
+                    </M3eIconButton>
+                  ) : null}
+                  {data && data.artifacts.length > 1 ? (
+                    <M3eIconButton
+                      aria-label="添付を切り替え"
+                      {...(compact ? { onClick: () => setArtifactSheet(true) } : {})}
+                    >
+                      <M3eIcon name="attach_file" />
+                      {compact ? null : <M3eMenuTrigger htmlFor="artifact-menu" />}
+                    </M3eIconButton>
+                  ) : null}
+                  {!mobile ? (
+                    <>
+                      <span className="ws__toolbar-sep" />
+                      {layouts.map((l) => (
+                        <M3eIconButton
+                          key={l.id}
+                          aria-label={l.label}
+                          toggle
+                          selected={layout === l.id}
+                          onClick={() => setLayout(l.id)}
+                        >
+                          <M3eIcon
+                            name={l.icon}
+                            className={layout === l.id ? "icon--filled" : ""}
+                          />
+                        </M3eIconButton>
+                      ))}
+                    </>
+                  ) : null}
+                </div>
               </M3eToolbar>
             ) : null}
             {data && data.artifacts.length > 1 && !compact ? (

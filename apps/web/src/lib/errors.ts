@@ -25,6 +25,11 @@ const messages: Record<string, string> = {
   comment_reason_required: "不採用・持越には理由の入力が必要です",
   comment_invalid_resolution_transition: "この状態からその判断へは変更できません",
   comment_reply_not_allowed: "受付終了後の返信は制作者の処置記録のみ可能です（D5 暫定）",
+  social_profile_invalid:
+    "SNS アカウントの内容を確かめてください（ユーザー名は各サービスの規則、アイコンは画像）",
+  social_profile_limit: "SNS アカウントはこれ以上登録できません",
+  social_profile_in_use:
+    "この SNS アカウントは制作物に割り当てられているため削除できません（先に割り当てを外してください）",
   mention_too_many: "一度にメンションできるのは 10 人までです",
   mention_not_allowed: "この制作物を見られない人はメンションできません",
   anchor_invalid: "コメント位置が不正です（文章の範囲は 1 文字以上、引用は 200 文字まで）",

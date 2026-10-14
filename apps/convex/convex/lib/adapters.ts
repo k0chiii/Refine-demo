@@ -5,6 +5,7 @@ import type {
   CommentEvent,
   CommentThread,
   DocumentDraft,
+  SocialProfile,
   NotationRule,
   ProofreadingRun,
   RequiredCheck,
@@ -475,6 +476,34 @@ export function createAppContext(
           ...fields,
           workId: fields.workId as Id<"works">,
         });
+      },
+    },
+    socialProfiles: {
+      async list() {
+        return (await db.query("socialProfiles").take(100)).map((d) => fromDoc(d) as SocialProfile);
+      },
+      async findById(id) {
+        const doc = await db.get("socialProfiles", id as Id<"socialProfiles">).catch(() => null);
+        return doc ? (fromDoc(doc) as SocialProfile) : null;
+      },
+      async insert(profile) {
+        const id = await db.insert("socialProfiles", profile);
+        return { ...profile, id } as SocialProfile;
+      },
+      async update(profile) {
+        const { id, ...fields } = profile;
+        await db.replace(id as Id<"socialProfiles">, fields);
+      },
+      async remove(id) {
+        await db.delete(id as Id<"socialProfiles">);
+      },
+      async countWorksUsing(id) {
+        return (
+          await db
+            .query("works")
+            .withIndex("by_social_profile", (q) => q.eq("socialProfileId", id))
+            .take(1000)
+        ).length;
       },
     },
     documents: {

@@ -23,6 +23,7 @@ import type {
   Work,
   WorkId,
   WorkPermissionGrant,
+  SocialProfile,
 } from "@mf100/domain";
 
 /**
@@ -171,6 +172,17 @@ export interface IdempotencyStore {
   put(scope: string, key: string, result: unknown): Promise<void>;
 }
 
+/** SNS のアカウント（本体の設定） */
+export interface SocialProfileRepository {
+  list(): Promise<SocialProfile[]>;
+  findById(id: string): Promise<SocialProfile | null>;
+  insert(profile: Omit<SocialProfile, "id">): Promise<SocialProfile>;
+  update(profile: SocialProfile): Promise<void>;
+  remove(id: string): Promise<void>;
+  /** このアカウントを割り当てている制作物の数（使っているものは消せない） */
+  countWorksUsing(id: string): Promise<number>;
+}
+
 /** 文章の下書き（1 制作物に 1 つ） */
 export interface DocumentDraftRepository {
   findByWork(workId: WorkId): Promise<DocumentDraft | null>;
@@ -207,6 +219,7 @@ export interface AppContext {
   checks: RequiredCheckRepository;
   notifications: NotificationRepository;
   documents: DocumentDraftRepository;
+  socialProfiles: SocialProfileRepository;
   alignments: AlignmentOverrideRepository;
   notation: NotationRepository;
   proofreadingRuns: ProofreadingRunRepository;

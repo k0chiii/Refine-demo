@@ -1,3 +1,5 @@
+import { api } from "@mf100/convex/api";
+import { useQuery } from "convex/react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import { parsePostManifest, POST_BODY_NAME, type SocialPost } from "@mf100/domain";
 import { useEffect, useState } from "react";
@@ -37,14 +39,19 @@ export function PostReview({
   artifacts,
   isFinal,
   workTitle,
+  socialProfileId,
   revisionLabel,
 }: {
   manifestArtifactId: string;
   artifacts: readonly ArtifactLike[];
   isFinal: boolean;
   workTitle: string;
+  /** 制作物に割り当てた SNS アカウント（プロフィール画面の自己紹介・数字に使う） */
+  socialProfileId?: string | undefined;
   revisionLabel: string;
 }) {
+  const profiles = useQuery(api.social.list, socialProfileId ? {} : "skip");
+  const profile = profiles?.find((p) => p.id === socialProfileId);
   const token = useAuthToken();
   const [post, setPost] = useState<SocialPost | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +175,14 @@ export function PostReview({
             </M3eSegmentedButton>
           ) : null}
         </div>
-        <PostPreview post={post} images={images} device={device} view={view} safeArea />
+        <PostPreview
+          post={post}
+          images={images}
+          device={device}
+          view={view}
+          safeArea
+          {...(profile ? { profile } : {})}
+        />
         <p className="small muted">
           本文への指摘は添付「{POST_BODY_NAME}」、画像への指摘は各画像の添付で行います。
         </p>

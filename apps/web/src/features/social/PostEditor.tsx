@@ -2,6 +2,7 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { useAuthToken } from "@convex-dev/auth/react";
 import {
+  accountOfProfile,
   applyFindings,
   charLength,
   checkPost,
@@ -126,6 +127,25 @@ function PostSurface({
     kind: "saved",
     at: doc.draft?.updatedAt ?? null,
   });
+  // 投稿するアカウント: 制作物に割り当てた SNS アカウント（本体の設定）。割り当てがあればサービスと見た目はそれに従う
+  const profiles = useQuery(api.social.list, {});
+  const profile = profiles?.find((p) => p.id === work.work.socialProfileId) ?? null;
+  useEffect(() => {
+    if (!profile || !canEdit) return;
+    const account = accountOfProfile(profile);
+    if (
+      post.platform === profile.platform &&
+      JSON.stringify(post.account) === JSON.stringify(account)
+    )
+      return;
+    update({
+      account,
+      ...(post.platform !== profile.platform
+        ? { platform: profile.platform, format: socialFormats[profile.platform][0] as SocialFormat }
+        : {}),
+    });
+    // 割り当てたアカウントが変わったときだけ写す
+  }, [profile?.id, profile?.updatedAt, canEdit]);
   const [device, setDevice] = useState<PreviewDevice>("iphone");
   const [view, setView] = useState<PreviewView>("post");
   const [safeArea, setSafeArea] = useState(true);
@@ -295,22 +315,47 @@ function PostSurface({
     <div className="post-edit stack">
       <Card title="投稿先">
         <div className="stack">
-          <M3eSegmentedButton aria-label="サービス">
-            {socialPlatforms.map((p) => (
-              <M3eButtonSegment
-                key={p}
-                checked={post.platform === p}
-                disabled={!canEdit}
-                onClick={() => {
-                  if (post.platform === p) return;
-                  const format = socialFormats[p][0] as SocialFormat;
-                  update({ platform: p as SocialPlatform, format });
-                }}
-              >
-                {socialPlatformLabels[p]}
-              </M3eButtonSegment>
-            ))}
-          </M3eSegmentedButton>
+          {profile ? (
+            <div className="post-account">
+              <span className="post-account__avatar" aria-hidden="true">
+                {profile.avatar ? (
+                  <img src={profile.avatar} alt="" />
+                ) : (
+                  Array.from(profile.displayName)[0]
+                )}
+              </span>
+              <div className="post-account__name">
+                <div className="label-large">{profile.displayName}</div>
+                <div className="small muted">
+                  {socialPlatformLabels[profile.platform]}・@{profile.username}
+                </div>
+              </div>
+              <span className="small muted">制作物の「情報」で変更</span>
+            </div>
+          ) : (
+            <>
+              <div className="alert alert--info small">
+                SNS
+                アカウントが割り当てられていません。制作物の「情報」で選ぶと、サービスとアカウントの見た目がそろいます。
+              </div>
+              <M3eSegmentedButton aria-label="サービス">
+                {socialPlatforms.map((p) => (
+                  <M3eButtonSegment
+                    key={p}
+                    checked={post.platform === p}
+                    disabled={!canEdit}
+                    onClick={() => {
+                      if (post.platform === p) return;
+                      const format = socialFormats[p][0] as SocialFormat;
+                      update({ platform: p as SocialPlatform, format });
+                    }}
+                  >
+                    {socialPlatformLabels[p]}
+                  </M3eButtonSegment>
+                ))}
+              </M3eSegmentedButton>
+            </>
+          )}
           {post.platform === "instagram" ? (
             <M3eSegmentedButton aria-label="形式">
               {socialFormats.instagram.map((f) => (
@@ -325,28 +370,30 @@ function PostSurface({
               ))}
             </M3eSegmentedButton>
           ) : null}
-          <div className="rule-editor__grid">
-            <Field label="表示名">
-              <TextInput
-                value={post.account.displayName}
-                disabled={!canEdit}
-                onChange={(e) =>
-                  update({ account: { ...post.account, displayName: e.target.value } })
-                }
-              />
-            </Field>
-            <Field label="ユーザー名（@ なし）">
-              <TextInput
-                value={post.account.username}
-                disabled={!canEdit}
-                onChange={(e) =>
-                  update({
-                    account: { ...post.account, username: e.target.value.replace(/^@/, "") },
-                  })
-                }
-              />
-            </Field>
-          </div>
+          {profile ? null : (
+            <div className="rule-editor__grid">
+              <Field label="表示名">
+                <TextInput
+                  value={post.account.displayName}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    update({ account: { ...post.account, displayName: e.target.value } })
+                  }
+                />
+              </Field>
+              <Field label="ユーザー名（@ なし）">
+                <TextInput
+                  value={post.account.username}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    update({
+                      account: { ...post.account, username: e.target.value.replace(/^@/, "") },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          )}
           <DateField
             label="予定日（任意。予約投稿はしません）"
             value={post.scheduledAt ?? null}
@@ -570,6 +617,7 @@ function PostSurface({
       </div>
       <PostPreview
         post={post}
+        {...(profile ? { profile } : {})}
         images={previewImages}
         device={device}
         view={view}

@@ -44,7 +44,8 @@ export interface SocialPost {
   version: 1;
   platform: SocialPlatform;
   format: SocialFormat;
-  account: { displayName: string; username: string };
+  /** 投稿したアカウントの見た目（制作物に割り当てた SNS アカウントから写す。版ごとに固定） */
+  account: { displayName: string; username: string; avatar?: string; verified?: boolean };
   body: string;
   images: SocialImage[];
   /** 予定日時（任意。実際の予約投稿はしない） */
@@ -256,6 +257,12 @@ export function parsePostManifest(json: unknown): SocialPost | null {
     account: {
       displayName: typeof acc.displayName === "string" ? acc.displayName.slice(0, 100) : "",
       username: typeof acc.username === "string" ? acc.username.slice(0, 50) : "",
+      ...(typeof acc.avatar === "string" &&
+      acc.avatar.length <= 80_000 &&
+      /^data:image\/(png|jpeg|webp);base64,/.test(acc.avatar)
+        ? { avatar: acc.avatar }
+        : {}),
+      ...(acc.verified === true ? { verified: true } : {}),
     },
     body: typeof o.body === "string" ? o.body.slice(0, 10_000) : "",
     images: images.slice(0, 20).flatMap((raw, i) => {

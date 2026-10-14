@@ -11,13 +11,14 @@ import { M3eButton, M3eChip, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
 import { DataTable, EditableSwitch } from "@/ui/DataTable";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
+import { ProfilesAdmin } from "@/features/social/ProfilesAdmin";
 
-type Tab = "works" | "users" | "audit";
+type Tab = "works" | "users" | "sns" | "audit";
 
 export const Route = createFileRoute("/_app/admin")({
   component: Admin,
   validateSearch: (s: Record<string, unknown>): { view?: Tab } =>
-    s.view === "users" || s.view === "audit" ? { view: s.view } : {},
+    s.view === "users" || s.view === "sns" || s.view === "audit" ? { view: s.view } : {},
 });
 
 /**
@@ -65,6 +66,7 @@ function Admin() {
         items={[
           { id: "works", label: "閲覧権限" },
           { id: "users", label: "ユーザー" },
+          { id: "sns", label: "SNS アカウント" },
           { id: "audit", label: "監査ログ" },
         ]}
       />
@@ -175,6 +177,8 @@ function Admin() {
             />
           </div>
         </section>
+      ) : tab === "sns" ? (
+        <ProfilesAdmin />
       ) : (
         <section className="stack">
           <p className="muted small">直近 100 件の操作。</p>

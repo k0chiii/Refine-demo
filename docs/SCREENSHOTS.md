@@ -23,6 +23,7 @@
 | 13  | 管理: 閲覧権限のタブ（作品ごとの個人 ACL）                                             | システム管理者 | `13-admin-works`             |
 | 13a | 管理: ユーザーのタブ（システム管理者をその場で切り替え）                               | システム管理者 | `13a-admin-users`            |
 | 13b | 管理: 監査ログのタブ                                                                   | システム管理者 | `13b-admin-audit`            |
+| 13c | 管理: SNS アカウント（本体の設定。表で直せる・アイコン・認証バッジ）                   | システム管理者 | `13c-admin-sns`              |
 | 14  | 版提出: 専門確認の宣言と担当者選択（ダイアログ内）                                     | 制作者         | `14-submit-required-checks`  |
 | 15  | 制作物の編集（引き出し「情報」からのダイアログ）                                       | 主管           | `15-work-edit`               |
 | 16  | 専門確認（担当者が確認完了。引き出し「情報」）                                         | 校正者         | `16-required-check-done`     |
@@ -77,7 +78,7 @@
 | 59  | 校了した SNS 投稿の書き出し（本文のコピー・画像・ZIP）                                 | 校了権限者     | `59-sns-export`              |
 | 60  | compact: 表記ルール（下部バーに「表記ルール」）                                        | 校了権限者     | `60-notation-compact`        |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（68 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（69 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 

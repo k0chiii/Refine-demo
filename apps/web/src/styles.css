@@ -389,6 +389,10 @@ m3e-dialog [slot="actions"] {
   display: grid;
   gap: 8px;
 }
+/* 見出しの直後に outlined のフィールドが来ると、浮いたラベル（枠の上に 8px はみ出す）が見出しに重なるので空ける */
+.card__header + .card__content {
+  padding-top: 8px;
+}
 .card dl {
   margin: 0;
   display: grid;
@@ -1304,16 +1308,24 @@ m3e-dialog [slot="actions"] {
   max-width: calc(100% - 32px);
   z-index: 20;
 }
-/* compact で項目が入りきらないとき（版比較など）は、はみ出さずに横へスクロール。
-   影（elevation）が切れるので広い画面では付けない */
-@media (max-width: 599px) {
-  .ws__toolbar {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .ws__toolbar::-webkit-scrollbar {
-    display: none;
-  }
+/* 項目が入りきらないとき（compact の版比較など）は中だけ横へスクロール。影（elevation）は M3E が host の中に描くので host は切らない */
+.ws__toolbar-items {
+  position: relative; /* elevated の面が位置指定のない子の上に描かれないように（.ws__toolbar-text と同じ） */
+  display: flex;
+  align-items: center;
+  gap: var(--m3e-toolbar-spacing, 4px);
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: inherit;
+}
+.ws__toolbar-items::-webkit-scrollbar {
+  display: none;
+}
+.ws__toolbar-items:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
 }
 .ws__toolbar-text {
   position: relative; /* m3e-toolbar の面（elevated）が位置指定のない子の上に描かれて文字が隠れるのを防ぐ */
@@ -2974,4 +2986,39 @@ m3e-icon.icon--on {
 .mention {
   color: var(--mf-primary);
   font-weight: 500;
+}
+
+/* SNS アカウント（管理・投稿の編集） */
+.profile-avatar,
+.post-account__avatar img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.post-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.post-account__avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--mf-primary-container);
+  color: var(--mf-on-primary-container);
+  font: var(--mf-type-title-medium);
+}
+.post-account__avatar img {
+  width: 40px;
+  height: 40px;
+}
+.post-account__name {
+  flex: 1;
+  min-width: 0;
 }

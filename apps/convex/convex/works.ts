@@ -37,6 +37,8 @@ const workPatch = {
   productionTeamIds: v.optional(v.array(v.string())),
   relatedTeamIds: v.optional(v.array(v.string())),
   notationCategories: v.optional(v.array(v.string())),
+  /** SNS のアカウントの割り当て（null で外す） */
+  socialProfileId: v.optional(v.union(v.string(), v.null())),
 };
 
 export const create = mutation({

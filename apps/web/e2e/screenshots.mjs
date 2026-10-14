@@ -535,6 +535,10 @@ async function main() {
   await page.locator("m3e-tab", { hasText: "監査ログ" }).click();
   await page.waitForSelector(".data-table .mono");
   await shot("13b-admin-audit");
+  // 13c SNS アカウント（本体の設定）: 表で直せる。制作物ごとにどれを使うか割り当てる
+  await page.locator("m3e-tab", { hasText: "SNS アカウント" }).click();
+  await page.waitForSelector(".data-table .profile-avatar");
+  await shot("13c-admin-sns");
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）
   await signInAs("mock-nogiku-reviewer");
@@ -996,9 +1000,13 @@ async function v2Scenes() {
   const sns = await openWork("公式 Instagram 開催告知");
   await btn("投稿を作る").click();
   await page.waitForSelector(".post-edit");
+  // アカウントは制作物に割り当てた SNS アカウント（本体の設定）から写る
+  await page.waitForSelector(".post-account");
+  expectTrue(
+    (await page.locator(".post-account").innerText()).includes("mayfes_official"),
+    "割り当てた SNS アカウントが出ない",
+  );
   await page.locator("m3e-button-segment", { hasText: "カルーセル" }).click();
-  await page.locator(".post-edit input").nth(0).fill("第100回五月祭");
-  await page.locator(".post-edit input").nth(1).fill("mayfes_official");
   await page
     .locator(".post-edit textarea")
     .first()

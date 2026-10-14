@@ -1,4 +1,9 @@
-/* SNS 投稿のプレビュー（Instagram / X の見た目の近似）。アプリの UI ではなく、他サービスの画面を模したもの */
+/*
+ * SNS 投稿のプレビュー（Instagram / X のスマホアプリの見た目に寄せた再現）。アプリの UI ではなく、他サービスの画面を模したもの。
+ * 文字・色・寸法は公開ページ（埋め込み表示）の実測値:
+ *   Instagram: system フォント、ユーザー名 600 14/18 #000、補足 12/14 #737373、本文 14/18、ハッシュタグ #00376B、アイコン 24
+ *   X: system フォント、名前 700 15/20 #0F1419、@・時刻 15/20 #536471、本文 15/20、リンク #1D9BF0、認証 #1D9BF0
+ */
 .sp-figure {
   margin: 0;
   display: flex;
@@ -14,67 +19,118 @@
 }
 .sp-device {
   --sp-bg: #fff;
-  --sp-fg: #0f1419;
-  --sp-muted: #536471;
-  --sp-link: #0b66c2; /* X の青に近いが、文字のコントラスト 4.5:1 を満たす色 */
+  --sp-fg: #000;
+  --sp-muted: #737373;
+  --sp-line: #dbdbdb;
   background: var(--sp-bg);
   color: var(--sp-fg);
-  font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Hiragino Sans",
+    "Noto Sans JP", sans-serif;
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 18px;
   overflow: hidden;
-  box-shadow:
-    0 0 0 1px rgb(0 0 0 / 0.12),
-    0 8px 24px rgb(0 0 0 / 0.12);
   display: flex;
   flex-direction: column;
+  position: relative;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.12),
+    0 10px 30px rgb(0 0 0 / 0.14);
+  -webkit-font-smoothing: antialiased;
 }
 .sp-device--iphone {
-  width: 390px;
+  width: 393px;
   max-width: 100%;
-  height: 780px;
-  border-radius: 44px;
-  border: 10px solid #1c1c1e;
+  height: 800px;
+  border-radius: 54px;
+  border: 11px solid #1c1c1e;
 }
 .sp-device--android {
   width: 412px;
   max-width: 100%;
   height: 820px;
-  border-radius: 24px;
-  border: 8px solid #2b2b2b;
+  border-radius: 34px;
+  border: 9px solid #202124;
 }
 .sp-device--pc {
   width: 600px;
   max-width: 100%;
-  min-height: 520px;
+  min-height: 420px;
   border-radius: 12px;
+  background: #fff;
+  padding: 24px 0;
 }
 .sp-device--dark {
   --sp-bg: #000;
   --sp-fg: #fff;
 }
 .sp-device__status {
-  font-size: 13px;
+  flex: none;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 28px 0 36px;
+  font-size: 16px;
+  position: relative;
+}
+.sp-device__status b {
   font-weight: 600;
-  padding: 10px 28px 6px;
+}
+.sp-device__status--android {
+  height: 32px;
+  padding: 0 18px;
+  font-size: 13px;
+}
+.sp-device__island {
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  transform: translateX(-50%);
+  width: 122px;
+  height: 35px;
+  border-radius: 18px;
+  background: #000;
 }
 .sp-device__screen {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
-.sp-muted {
-  color: var(--sp-muted);
+.sp-device__home {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--sp-fg);
+  z-index: 3;
 }
-.sp-note {
-  font-size: 12px;
-  padding: 8px 12px;
+.sp-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sp-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.sp-scroll:focus-visible {
+  outline: 2px solid #0095f6;
+  outline-offset: -2px;
 }
 .sp-img {
   position: relative;
   overflow: hidden;
   width: 100%;
-  background: #eff3f4;
+  background: #efefef;
 }
 .sp-img img {
   position: absolute;
@@ -91,15 +147,19 @@
 }
 .sp-avatar {
   flex: none;
-  width: 32px;
-  height: 32px;
   border-radius: 50%;
+  overflow: hidden;
   display: grid;
   place-items: center;
   font-weight: 700;
-  font-size: 14px;
   color: #fff;
-  background: linear-gradient(135deg, #f58529, #dd2a7b 50%, #8134af);
+  background: #c7c7c7;
+}
+.sp-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .sp-text {
   white-space: pre-wrap;
@@ -109,62 +169,100 @@
   color: #00376b;
 }
 .sp-link {
-  color: var(--sp-link);
+  color: #1d9bf0;
 }
 .sp-more {
   all: unset;
   color: var(--sp-muted);
   cursor: pointer;
 }
-/* Instagram */
+.sp-badge {
+  flex: none;
+  vertical-align: -2px;
+  margin-left: 4px;
+}
+.sp-badge--ig {
+  color: #0095f6;
+}
+.sp-badge--x {
+  color: #1d9bf0;
+  margin-left: 2px;
+}
+.sp-rot90 {
+  transform: rotate(90deg);
+}
+.sp-rot-90 {
+  transform: rotate(-90deg);
+}
+
+/* ---------- Instagram: フィードの投稿 */
 .sp-ig__head {
+  height: 54px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 0 12px;
 }
-.sp-ig__dots {
+.sp-ig__ring {
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(from 200deg, #f9ce34, #ee2a7b, #6228d7, #f9ce34);
+  display: grid;
+}
+.sp-ig__ring .sp-avatar {
+  outline: 2px solid var(--sp-bg);
+}
+.sp-ig__user {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+.sp-ig__more {
   margin-left: auto;
-  letter-spacing: 1px;
 }
 .sp-ig__media {
   position: relative;
 }
 .sp-ig__count {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgb(0 0 0 / 0.6);
+  top: 14px;
+  right: 14px;
+  background: rgb(18 18 18 / 0.7);
   color: #fff;
   font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 5px 8px;
+  border-radius: 13px;
 }
 .sp-nav {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
   background: rgb(255 255 255 / 0.85);
-  font-size: 18px;
-  line-height: 1;
+  color: #000;
   cursor: pointer;
+  box-shadow: 0 0 4px rgb(0 0 0 / 0.2);
 }
 .sp-nav--prev {
-  left: 8px;
+  left: 10px;
 }
 .sp-nav--next {
-  right: 8px;
+  right: 10px;
 }
 .sp-ig__actions {
+  height: 46px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 12px;
-  font-size: 20px;
+  gap: 16px;
+  padding: 0 12px;
   position: relative;
 }
 .sp-ig__pager {
@@ -178,7 +276,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #c7c7c7;
+  background: #dbdbdb;
 }
 .sp-ig__pager i.on {
   background: #0095f6;
@@ -188,49 +286,214 @@
 }
 .sp-ig__caption {
   margin: 0;
-  padding: 0 12px 12px;
+  padding: 0 12px;
 }
-/* ストーリーズ */
+.sp-ig__caption b {
+  font-weight: 600;
+}
+.sp-ig__time {
+  margin: 6px 0 0;
+  padding: 0 12px 12px;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--sp-muted);
+}
+.sp-ig__next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+.sp-ig__next i {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #efefef;
+}
+.sp-ig__next span {
+  width: 120px;
+  height: 10px;
+  border-radius: 5px;
+  background: #efefef;
+}
+.sp-ig-tabs {
+  flex: none;
+  height: 50px;
+  padding-bottom: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-top: 0.5px solid var(--sp-line);
+  background: var(--sp-bg);
+}
+.sp-device--pc .sp-ig-tabs,
+.sp-device--android .sp-ig-tabs {
+  padding-bottom: 8px;
+}
+
+/* ---------- Instagram: プロフィール */
+.sp-prof__bar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  font-size: 20px;
+  line-height: 24px;
+}
+.sp-prof__bar b {
+  font-weight: 700;
+}
+.sp-prof__bar-icons {
+  margin-left: auto;
+  display: flex;
+  gap: 20px;
+}
+.sp-prof {
+  padding: 8px 16px 12px;
+}
+.sp-prof__top {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.sp-prof__side {
+  flex: 1;
+  min-width: 0;
+}
+.sp-prof__name {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+.sp-prof__stats {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0 0;
+}
+.sp-prof__stats div {
+  display: flex;
+  flex-direction: column;
+}
+.sp-prof__stats dt {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 20px;
+}
+.sp-prof__stats dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 16px;
+}
+.sp-prof__bio {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+.sp-prof__buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.sp-prof__buttons span {
+  flex: 1;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #efefef;
+  font-weight: 600;
+  font-size: 13px;
+}
+.sp-prof__tabs {
+  display: flex;
+  border-bottom: 0.5px solid var(--sp-line);
+}
+.sp-prof__tabs span {
+  flex: 1;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--sp-muted);
+}
+.sp-prof__tabs span.on {
+  color: var(--sp-fg);
+  box-shadow: inset 0 -1px 0 var(--sp-fg);
+}
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.sp-grid__tile--empty {
+  aspect-ratio: 3 / 4;
+  background: #efefef;
+}
+
+/* ---------- Instagram: ストーリーズ */
 .sp-story {
   position: relative;
-  height: 100%;
+  flex: 1;
   background: #000;
+  color: #fff;
+  overflow: hidden;
 }
-.sp-story .sp-img {
+.sp-story > .sp-img {
   height: 100%;
   aspect-ratio: auto !important;
+  border-radius: 8px;
 }
 .sp-story__top {
   position: absolute;
   top: 8px;
   left: 8px;
   right: 8px;
-  color: #fff;
 }
-.sp-story__bar {
-  display: block;
+.sp-story__bars {
+  display: flex;
+  gap: 2px;
+}
+.sp-story__bars i {
+  flex: 1;
   height: 2px;
-  background: rgb(255 255 255 / 0.9);
   border-radius: 1px;
-  margin-bottom: 8px;
+  background: rgb(255 255 255 / 0.95);
 }
 .sp-story__user {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+  margin-top: 10px;
+  text-shadow: 0 0 4px rgb(0 0 0 / 0.4);
 }
-.sp-story__reply {
+.sp-story__user b {
+  font-weight: 600;
+}
+.sp-story__time {
+  color: rgb(255 255 255 / 0.7);
+}
+.sp-story__icons {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+}
+.sp-story__bottom {
   position: absolute;
-  bottom: 16px;
   left: 12px;
   right: 12px;
-  border: 1px solid rgb(255 255 255 / 0.7);
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.sp-story__reply {
+  flex: 1;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  border: 1px solid rgb(255 255 255 / 0.6);
   border-radius: 22px;
-  color: #fff;
-  padding: 10px 16px;
-  font-size: 13px;
 }
 .sp-story__safe {
   position: absolute;
@@ -244,7 +507,6 @@
     transparent 14% 80%,
     rgb(255 0 80 / 0.25) 80%
   );
-  color: #fff;
   font-size: 11px;
 }
 .sp-story__safe span {
@@ -252,47 +514,71 @@
   margin-top: 64px;
 }
 .sp-story__safe span:last-child {
-  margin: 0 0 64px;
+  margin: 0 0 76px;
 }
-/* プロフィールのグリッド */
-.sp-grid__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-}
-.sp-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
-}
-.sp-grid__tile--empty {
-  aspect-ratio: 4 / 5;
-  background: #efefef;
-}
-/* X */
+
+/* ---------- X */
 .sp-x {
+  --sp-fg: #0f1419;
+  --sp-muted: #536471;
+  color: #0f1419;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   padding: 12px 16px;
+  font-size: 15px;
+  line-height: 20px;
+  border-bottom: 1px solid #eff3f4;
 }
-.sp-x .sp-avatar {
-  width: 40px;
-  height: 40px;
-  background: #1d9bf0;
+.sp-x-pc .sp-x {
+  border: 1px solid #eff3f4;
+  border-radius: 0;
+  margin: 0 24px;
 }
 .sp-x__main {
   flex: 1;
   min-width: 0;
 }
-.sp-x__text {
-  margin: 2px 0 10px;
-  font-size: 15px;
+.sp-x__head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
 }
-.sp-x .sp-tag {
-  color: var(--sp-link);
+/* 幅が足りないときは表示名と @ をそれぞれ省略し、時刻は残す（X の表示に合わせる） */
+.sp-x__name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 2em;
+}
+.sp-x__meta {
+  color: #536471;
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 3 auto;
+  min-width: 2em;
+}
+.sp-x__time {
+  color: #536471;
+  margin-left: 4px;
+  flex: none;
+}
+.sp-x__more {
+  margin-left: auto;
+  color: #536471;
+  flex: none;
+}
+.sp-x__text {
+  margin: 2px 0 0;
+}
+.sp-x .sp-tag,
+.sp-x .sp-link {
+  color: #1d9bf0;
 }
 .sp-x__media {
+  margin-top: 12px;
   display: grid;
   gap: 2px;
   border-radius: 16px;
@@ -314,7 +600,58 @@
 }
 .sp-x__actions {
   display: flex;
+  align-items: center;
+  gap: 0;
   justify-content: space-between;
-  max-width: 420px;
-  margin-top: 10px;
+  margin-top: 12px;
+  color: #536471;
+}
+.sp-x__end {
+  display: flex;
+  gap: 16px;
+}
+.sp-x__next {
+  height: 80px;
+  border-bottom: 1px solid #eff3f4;
+}
+.sp-x-tabs {
+  flex: none;
+  height: 53px;
+  display: flex;
+  border-bottom: 1px solid #eff3f4;
+  color: #536471;
+  font-size: 15px;
+  font-weight: 500;
+}
+.sp-x-tabs span {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.sp-x-tabs span.on {
+  color: #0f1419;
+  font-weight: 700;
+}
+.sp-x-tabs span.on::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: #1d9bf0;
+}
+.sp-x-nav {
+  flex: none;
+  height: 52px;
+  padding-bottom: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-top: 1px solid #eff3f4;
+  color: #0f1419;
+}
+.sp-device--android .sp-x-nav {
+  padding-bottom: 8px;
 }

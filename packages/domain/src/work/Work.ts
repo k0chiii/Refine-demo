@@ -51,6 +51,8 @@ export interface Work {
    * 未設定・空なら表記の検査をしない（登録・編集画面で選ぶよう促す）
    */
   notationCategories?: readonly string[];
+  /** SNS 投稿の制作物で使うアカウント（本体の設定の SocialProfile の ID） */
+  socialProfileId?: string;
   /** 楽観的排他用のバージョン */
   version: number;
 }

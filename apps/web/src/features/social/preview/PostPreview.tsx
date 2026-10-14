@@ -7,12 +7,14 @@ import {
   type SocialPost,
 } from "@mf100/domain";
 import { useState, type ReactNode } from "react";
+import { Icon, StatusIcons } from "./icons";
 import "./preview.css";
 
 /**
- * SNS 投稿のプレビュー（テンプレート集。編集画面・校正画面・書き出しで共用する独立したモジュール）。
- * 実際の Instagram / X の画面ではなく、公開されている見た目に寄せた近似。文字の折り返し・切り詰め・
- * 余白はサービスや端末の設定で変わるため、確定の表示は実機で確認する（画面に注記を出す）。
+ * SNS 投稿のプレビュー（編集画面・校正画面・書き出しで共用）。
+ * 実物の画面（2026 年時点のスマホアプリ）の並び・文字の大きさ・色に寄せた再現。寸法と色は各サービスの公開ページ
+ * （埋め込み表示）を実測した値を使う（docs/UI_M3E.md §28）。ロゴ・公式アイコンの画像は使わず、線画はこのアプリで描いたもの。
+ * 文字の折り返し・切り詰めは端末やアプリの版で変わるので、確定の表示は実機で確認する（画面に注記を出す）。
  */
 export interface PreviewImage {
   key: string;
@@ -23,6 +25,15 @@ export interface PreviewImage {
 }
 export type PreviewDevice = "iphone" | "android" | "pc";
 export type PreviewView = "post" | "grid" | "story";
+/** プロフィール画面に出す見た目（本体の設定の SNS アカウント） */
+export interface PreviewProfile {
+  displayName: string;
+  username: string;
+  avatar?: string;
+  bio?: string;
+  verified: boolean;
+  stats?: { posts?: number; followers?: number; following?: number };
+}
 
 const ratio = (a: SocialAspect, w: number, h: number) => {
   if (a === "original") return w > 0 && h > 0 ? w / h : 1;
@@ -69,46 +80,133 @@ export function CroppedImage({
   );
 }
 
-/** 本文（ハッシュタグ・URL・メンションを色付け。Instagram は長文を「続きを読む」で切る） */
-export function PostText({ text, clamp }: { text: string; clamp?: number }) {
+/** X の URL の見せ方: スキームを外し、長ければ省略記号で切る（実際の表示に寄せる） */
+function xUrlLabel(url: string): string {
+  const s = url.replace(/^https?:\/\/(www\.)?/, "");
+  return s.length > 26 ? `${s.slice(0, 25)}…` : s;
+}
+
+/**
+ * Instagram のキャプションの切り詰め: 2 行に収まる分だけ残す（「… 続きを読む」の分を空ける）。
+ * 幅は全角 1・半角 0.55 で数え、1 行は全角 26 字（393px の端末・14px の文字）。改行は行を進める。
+ * 実物は文字ごとの実際の幅で切るので、ここは近似（数文字ずれることがある）。
+ */
+export function igTruncate(text: string, lead: number, lines = 2, perLine = 26): string | null {
+  let line = 0;
+  let used = lead;
+  const out: string[] = [];
+  const budget = (l: number) => (l === lines - 1 ? perLine - 5 : perLine);
+  for (const ch of text) {
+    if (ch === "\n") {
+      line += 1;
+      used = 0;
+      if (line >= lines) return out.join("").trimEnd();
+      out.push(ch);
+      continue;
+    }
+    const w = ch.charCodeAt(0) <= 0xff ? 0.55 : 1;
+    if (used + w > budget(line)) {
+      line += 1;
+      used = 0;
+      if (line >= lines) return out.join("").trimEnd();
+    }
+    used += w;
+    out.push(ch);
+  }
+  return null;
+}
+
+/**
+ * 本文。ハッシュタグ・メンションは各サービスの色。Instagram の本文の URL はリンクにならない（黒い文字のまま）。
+ * Instagram は 2 行で切って「続きを読む」。
+ */
+export function PostText({
+  text: full,
+  platform,
+  clamp,
+}: {
+  text: string;
+  platform: "instagram" | "x";
+  /** Instagram: 2 行で切る。数値は 1 行目の先頭に並ぶユーザー名の幅（全角換算） */
+  clamp?: number;
+}) {
   const [open, setOpen] = useState(false);
-  const cut = clamp && !open && Array.from(text).length > clamp;
-  const shown = cut ? Array.from(text).slice(0, clamp).join("") : text;
+  const cut = clamp !== undefined && !open ? igTruncate(full, clamp) : null;
+  const text = cut ?? full;
   const marks = [
-    ...extractHashtags(shown).map((m) => ({ ...m, cls: "sp-tag" })),
-    ...extractUrls(shown).map((m) => ({ ...m, cls: "sp-link" })),
-    ...extractMentions(shown).map((m) => ({ ...m, cls: "sp-tag" })),
+    ...extractHashtags(text).map((m) => ({ ...m, kind: "tag" as const })),
+    ...extractMentions(text).map((m) => ({ ...m, kind: "tag" as const })),
+    ...extractUrls(text).map((m) => ({ ...m, kind: "url" as const })),
   ].sort((a, b) => a.start - b.start);
   const parts: ReactNode[] = [];
   let at = 0;
   for (const [i, m] of marks.entries()) {
     if (m.start < at) continue;
-    if (m.start > at) parts.push(shown.slice(at, m.start));
-    parts.push(
-      <span key={i} className={m.cls}>
-        {shown.slice(m.start, m.end)}
-      </span>,
-    );
+    if (m.start > at) parts.push(text.slice(at, m.start));
+    const raw = text.slice(m.start, m.end);
+    if (m.kind === "url" && platform === "instagram") parts.push(raw);
+    else
+      parts.push(
+        <span key={i} className={m.kind === "url" ? "sp-link" : "sp-tag"}>
+          {m.kind === "url" ? xUrlLabel(raw) : raw}
+        </span>,
+      );
     at = m.end;
   }
-  parts.push(shown.slice(at));
+  parts.push(text.slice(at));
   return (
-    <span className="sp-text">
-      {parts}
-      {cut ? (
-        <button type="button" className="sp-more" onClick={() => setOpen(true)}>
-          …続きを読む
-        </button>
+    <>
+      <span className="sp-text">{parts}</span>
+      {cut !== null ? (
+        <>
+          …{" "}
+          <button type="button" className="sp-more" onClick={() => setOpen(true)}>
+            続きを読む
+          </button>
+        </>
       ) : null}
+    </>
+  );
+}
+
+function Avatar({
+  account,
+  size,
+}: {
+  account: { displayName: string; username: string; avatar?: string };
+  size: number;
+}) {
+  return (
+    <span
+      className="sp-avatar"
+      style={{ width: size, height: size, fontSize: size * 0.42 }}
+      aria-hidden="true"
+    >
+      {account.avatar ? (
+        <img src={account.avatar} alt="" />
+      ) : (
+        Array.from(account.displayName || account.username || "?")[0]
+      )}
     </span>
   );
 }
 
-function Avatar({ name }: { name: string }) {
+const fmtCount = (n: number | undefined) => {
+  if (n === undefined) return "—";
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}億`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1).replace(/\.0$/, "")}万`;
+  return n.toLocaleString("ja-JP");
+};
+
+function IgTabBar({ account }: { account: SocialPost["account"] }) {
   return (
-    <span className="sp-avatar" aria-hidden="true">
-      {Array.from(name || "?")[0]}
-    </span>
+    <nav className="sp-ig-tabs" aria-hidden="true">
+      <Icon name="home" size={26} fill="currentColor" />
+      <Icon name="search" size={26} />
+      <Icon name="plusSquare" size={26} />
+      <Icon name="reels" size={26} />
+      <Avatar account={account} size={26} />
+    </nav>
   );
 }
 
@@ -118,64 +216,87 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
   const cur = list[Math.min(index, Math.max(0, list.length - 1))];
   const user = post.account.username || "username";
   return (
-    <article className="sp-ig">
-      <header className="sp-ig__head">
-        <Avatar name={post.account.displayName || user} />
-        <b>{user}</b>
-        <span className="sp-ig__dots">•••</span>
-      </header>
-      <div className="sp-ig__media">
-        <CroppedImage
-          image={images.find((i) => i.key === cur?.key)}
-          aspect={cur?.aspect ?? "1:1"}
-          focus={cur?.focus}
-          alt={cur?.alt ?? ""}
-        />
-        {list.length > 1 ? (
-          <>
-            <span className="sp-ig__count">
-              {index + 1}/{list.length}
+    <div className="sp-screen">
+      <div className="sp-scroll" tabIndex={0} aria-label="プレビューの画面">
+        <article className="sp-ig">
+          <header className="sp-ig__head">
+            <span className="sp-ig__ring">
+              <Avatar account={post.account} size={32} />
             </span>
-            {index > 0 ? (
-              <button
-                type="button"
-                className="sp-nav sp-nav--prev"
-                aria-label="前の画像"
-                onClick={() => setIndex(index - 1)}
-              >
-                ‹
-              </button>
+            <span className="sp-ig__user">
+              {user}
+              {post.account.verified ? (
+                <Icon name="verified" size={12} className="sp-badge sp-badge--ig" />
+              ) : null}
+            </span>
+            <Icon name="more" size={24} className="sp-ig__more" />
+          </header>
+          <div className="sp-ig__media">
+            <CroppedImage
+              image={images.find((i) => i.key === cur?.key)}
+              aspect={cur?.aspect ?? "1:1"}
+              focus={cur?.focus}
+              alt={cur?.alt ?? ""}
+            />
+            {list.length > 1 ? (
+              <>
+                <span className="sp-ig__count">
+                  {index + 1}/{list.length}
+                </span>
+                {index > 0 ? (
+                  <button
+                    type="button"
+                    className="sp-nav sp-nav--prev"
+                    aria-label="前の画像"
+                    onClick={() => setIndex(index - 1)}
+                  >
+                    <Icon name="chevronDown" size={16} className="sp-rot90" />
+                  </button>
+                ) : null}
+                {index < list.length - 1 ? (
+                  <button
+                    type="button"
+                    className="sp-nav sp-nav--next"
+                    aria-label="次の画像"
+                    onClick={() => setIndex(index + 1)}
+                  >
+                    <Icon name="chevronDown" size={16} className="sp-rot-90" />
+                  </button>
+                ) : null}
+              </>
             ) : null}
-            {index < list.length - 1 ? (
-              <button
-                type="button"
-                className="sp-nav sp-nav--next"
-                aria-label="次の画像"
-                onClick={() => setIndex(index + 1)}
-              >
-                ›
-              </button>
+          </div>
+          <div className="sp-ig__actions" aria-hidden="true">
+            <Icon name="heart" />
+            <Icon name="bubble" />
+            <Icon name="repost" />
+            <Icon name="send" />
+            {list.length > 1 ? (
+              <span className="sp-ig__pager">
+                {list.map((im, i) => (
+                  <i key={im.key} className={i === index ? "on" : ""} />
+                ))}
+              </span>
             ) : null}
-          </>
-        ) : null}
+            <Icon name="bookmark" className="sp-ig__save" />
+          </div>
+          <p className="sp-ig__caption">
+            <b>{user}</b>{" "}
+            <PostText
+              text={post.body}
+              platform="instagram"
+              clamp={Array.from(user).length * 0.6 + 1}
+            />
+          </p>
+          <p className="sp-ig__time">1分前</p>
+        </article>
+        <div className="sp-ig__next" aria-hidden="true">
+          <i />
+          <span />
+        </div>
       </div>
-      <div className="sp-ig__actions" aria-hidden="true">
-        <span>♡</span>
-        <span>💬</span>
-        <span>➤</span>
-        {list.length > 1 ? (
-          <span className="sp-ig__pager">
-            {list.map((im, i) => (
-              <i key={im.key} className={i === index ? "on" : ""} />
-            ))}
-          </span>
-        ) : null}
-        <span className="sp-ig__save">🔖</span>
-      </div>
-      <p className="sp-ig__caption">
-        <b>{user}</b> <PostText text={post.body} clamp={125} />
-      </p>
-    </article>
+      <IgTabBar account={post.account} />
+    </div>
   );
 }
 
@@ -199,14 +320,26 @@ function InstagramStory({
         alt={cur?.alt ?? ""}
       />
       <div className="sp-story__top">
-        <i className="sp-story__bar" />
-        <span className="sp-story__user">
-          <Avatar name={post.account.displayName || user} /> {user}
-        </span>
+        <div className="sp-story__bars">
+          <i />
+        </div>
+        <div className="sp-story__user">
+          <Avatar account={post.account} size={32} />
+          <b>{user}</b>
+          <span className="sp-story__time">1時間</span>
+          <span className="sp-story__icons">
+            <Icon name="more" size={24} />
+            <Icon name="close" size={24} />
+          </span>
+        </div>
       </div>
-      <div className="sp-story__reply">メッセージを送信</div>
+      <div className="sp-story__bottom" aria-hidden="true">
+        <span className="sp-story__reply">メッセージを送信</span>
+        <Icon name="heart" size={26} />
+        <Icon name="send" size={26} />
+      </div>
       {safeArea ? (
-        <div className="sp-story__safe" aria-label="安全領域（上下 14% は UI と重なる目安）">
+        <div className="sp-story__safe" aria-label="安全領域（上 14%・下 20% は UI と重なる目安）">
           <span>上 14%: アカウント名・進行バー</span>
           <span>下 20%: 返信欄</span>
         </div>
@@ -215,54 +348,120 @@ function InstagramStory({
   );
 }
 
-function InstagramGrid({ post, images }: { post: SocialPost; images: PreviewImage[] }) {
+function InstagramProfile({
+  post,
+  images,
+  profile,
+}: {
+  post: SocialPost;
+  images: PreviewImage[];
+  profile?: PreviewProfile | undefined;
+}) {
+  const account = { ...post.account, ...(profile?.avatar ? { avatar: profile.avatar } : {}) };
   const user = post.account.username || "username";
-  const tiles = [...post.images.slice(0, 1), ...Array.from({ length: 8 }, () => null)];
+  const tiles = [...post.images.slice(0, 1), ...Array.from({ length: 11 }, () => null)];
   return (
-    <div className="sp-grid-page">
-      <header className="sp-grid__head">
-        <Avatar name={post.account.displayName || user} />
-        <div>
+    <div className="sp-screen">
+      <div className="sp-scroll" tabIndex={0} aria-label="プレビューの画面">
+        <header className="sp-prof__bar">
           <b>{user}</b>
-          <div className="sp-muted">{post.account.displayName}</div>
+          <Icon name="chevronDown" size={18} />
+          <span className="sp-prof__bar-icons">
+            <Icon name="plusSquare" size={24} />
+            <Icon name="menu" size={24} />
+          </span>
+        </header>
+        <section className="sp-prof">
+          <div className="sp-prof__top">
+            <Avatar account={account} size={86} />
+            <div className="sp-prof__side">
+              <b className="sp-prof__name">
+                {post.account.displayName || user}
+                {post.account.verified ? (
+                  <Icon name="verified" size={14} className="sp-badge sp-badge--ig" />
+                ) : null}
+              </b>
+              <dl className="sp-prof__stats">
+                <div>
+                  <dt>{fmtCount(profile?.stats?.posts)}</dt>
+                  <dd>投稿</dd>
+                </div>
+                <div>
+                  <dt>{fmtCount(profile?.stats?.followers)}</dt>
+                  <dd>フォロワー</dd>
+                </div>
+                <div>
+                  <dt>{fmtCount(profile?.stats?.following)}</dt>
+                  <dd>フォロー中</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          {profile?.bio ? <p className="sp-prof__bio">{profile.bio}</p> : null}
+          <div className="sp-prof__buttons" aria-hidden="true">
+            <span>プロフィールを編集</span>
+            <span>プロフィールをシェア</span>
+          </div>
+        </section>
+        <div className="sp-prof__tabs" aria-hidden="true">
+          <span className="on">
+            <Icon name="grid" size={22} />
+          </span>
+          <span>
+            <Icon name="reels" size={22} />
+          </span>
+          <span>
+            <Icon name="tagged" size={22} />
+          </span>
         </div>
-      </header>
-      <div className="sp-grid">
-        {tiles.map((t, i) =>
-          t ? (
-            <CroppedImage
-              key={i}
-              image={images.find((x) => x.key === t.key)}
-              aspect="4:5"
-              focus={t.focus}
-              alt={t.alt}
-              className="sp-grid__tile"
-            />
-          ) : (
-            <div key={i} className="sp-grid__tile sp-grid__tile--empty" aria-hidden="true" />
-          ),
-        )}
+        <div className="sp-grid">
+          {tiles.map((t, i) =>
+            t ? (
+              <CroppedImage
+                key={i}
+                image={images.find((x) => x.key === t.key)}
+                aspect={"3:4" as SocialAspect}
+                focus={t.focus}
+                alt={t.alt}
+                className="sp-grid__tile"
+              />
+            ) : (
+              <div key={i} className="sp-grid__tile sp-grid__tile--empty" aria-hidden="true" />
+            ),
+          )}
+        </div>
       </div>
-      <p className="sp-muted sp-note">
-        先頭が今回の投稿（1 枚目）。他は既存の投稿の位置の目安です。
-      </p>
+      <IgTabBar account={account} />
     </div>
   );
 }
 
-function XPost({ post, images }: { post: SocialPost; images: PreviewImage[] }) {
+function XPost({
+  post,
+  images,
+  device,
+}: {
+  post: SocialPost;
+  images: PreviewImage[];
+  device: PreviewDevice;
+}) {
   const user = post.account.username || "username";
   const list = post.images.slice(0, 4);
-  return (
+  const card = (
     <article className="sp-x">
-      <Avatar name={post.account.displayName || user} />
+      <Avatar account={post.account} size={40} />
       <div className="sp-x__main">
         <div className="sp-x__head">
-          <b>{post.account.displayName || "表示名"}</b>{" "}
-          <span className="sp-muted">@{user}・今</span>
+          <b className="sp-x__name">{post.account.displayName || "表示名"}</b>
+          {post.account.verified ? (
+            <Icon name="verified" size={18} className="sp-badge sp-badge--x" />
+          ) : null}
+          <span className="sp-x__meta">@{user}</span>
+          <span className="sp-x__time">· 1分</span>
+          <Icon name="more" size={18} className="sp-x__more" />
         </div>
         <p className="sp-x__text">
-          <PostText text={post.body} />
+          <PostText text={post.body} platform="x" />
         </p>
         {list.length ? (
           <div className={`sp-x__media sp-x__media--${list.length}`}>
@@ -270,25 +469,54 @@ function XPost({ post, images }: { post: SocialPost; images: PreviewImage[] }) {
               <CroppedImage
                 key={im.key}
                 image={images.find((x) => x.key === im.key)}
-                aspect={list.length === 1 ? im.aspect : list.length === 2 ? "4:5" : "16:9"}
+                aspect={
+                  list.length === 1
+                    ? im.aspect
+                    : list.length === 2
+                      ? ("7:8" as SocialAspect)
+                      : "16:9"
+                }
                 focus={im.focus}
                 alt={im.alt}
               />
             ))}
           </div>
         ) : null}
-        <div className="sp-x__actions sp-muted" aria-hidden="true">
-          <span>💬</span>
-          <span>🔁</span>
-          <span>♡</span>
-          <span>📊</span>
+        <div className="sp-x__actions" aria-hidden="true">
+          <Icon name="reply" size={19} stroke={1.8} />
+          <Icon name="repost" size={19} stroke={1.8} />
+          <Icon name="heart" size={19} stroke={1.8} />
+          <Icon name="views" size={19} stroke={1.8} />
+          <span className="sp-x__end">
+            <Icon name="bookmark" size={19} stroke={1.8} />
+            <Icon name="share" size={19} stroke={1.8} />
+          </span>
         </div>
       </div>
     </article>
   );
+  if (device === "pc") return <div className="sp-x-pc">{card}</div>;
+  return (
+    <div className="sp-screen">
+      <div className="sp-x-tabs" aria-hidden="true">
+        <span className="on">おすすめ</span>
+        <span>フォロー中</span>
+      </div>
+      <div className="sp-scroll" tabIndex={0} aria-label="プレビューの画面">
+        {card}
+        <div className="sp-x__next" aria-hidden="true" />
+      </div>
+      <nav className="sp-x-nav" aria-hidden="true">
+        <Icon name="home" size={26} fill="currentColor" />
+        <Icon name="search" size={26} />
+        <Icon name="bell" size={26} />
+        <Icon name="mail" size={26} />
+      </nav>
+    </div>
+  );
 }
 
-/** 端末の枠（iPhone / Android / PC）。幅は各端末の CSS ピクセルの代表値 */
+/** 端末の枠（iPhone / Android / PC）。幅は各端末の CSS ピクセルの代表値（iPhone 16: 393、Pixel: 412） */
 function DeviceFrame({
   device,
   dark,
@@ -300,12 +528,20 @@ function DeviceFrame({
 }) {
   return (
     <div className={`sp-device sp-device--${device} ${dark ? "sp-device--dark" : ""}`}>
-      {device !== "pc" ? (
+      {device === "iphone" ? (
         <div className="sp-device__status" aria-hidden="true">
-          9:41
+          <b>9:41</b>
+          <i className="sp-device__island" />
+          <StatusIcons />
+        </div>
+      ) : device === "android" ? (
+        <div className="sp-device__status sp-device__status--android" aria-hidden="true">
+          <b>9:41</b>
+          <StatusIcons />
         </div>
       ) : null}
       <div className="sp-device__screen">{children}</div>
+      {device !== "pc" ? <i className="sp-device__home" aria-hidden="true" /> : null}
     </div>
   );
 }
@@ -316,29 +552,31 @@ export function PostPreview({
   device,
   view,
   safeArea = false,
+  profile,
 }: {
   post: SocialPost;
   images: PreviewImage[];
   device: PreviewDevice;
   view: PreviewView;
   safeArea?: boolean;
+  profile?: PreviewProfile;
 }) {
   const story = post.platform === "instagram" && (post.format === "story" || view === "story");
   return (
     <figure className="sp-figure" aria-label="投稿のプレビュー">
       <DeviceFrame device={device} dark={story}>
         {post.platform === "x" ? (
-          <XPost post={post} images={images} />
+          <XPost post={post} images={images} device={device} />
         ) : story ? (
           <InstagramStory post={post} images={images} safeArea={safeArea} />
         ) : view === "grid" ? (
-          <InstagramGrid post={post} images={images} />
+          <InstagramProfile post={post} images={images} profile={profile} />
         ) : (
           <InstagramPost post={post} images={images} />
         )}
       </DeviceFrame>
       <figcaption className="sp-caption">
-        見た目の近似です。実際の表示（折り返し・切り詰め・余白）はサービスと端末で変わります。
+        実際の画面に寄せた再現です。折り返し・切り詰め・余白は端末やアプリの版で変わるので、確定の表示は実機で確認してください。
       </figcaption>
     </figure>
   );

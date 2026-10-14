@@ -49,6 +49,10 @@ export const domainErrorCodes = [
   "anchor_artifact_mismatch",
   "mention_too_many",
   "mention_not_allowed",
+  // SNS のアカウント（本体の設定）
+  "social_profile_invalid",
+  "social_profile_limit",
+  "social_profile_in_use",
   // 校了
   "approval_not_approver",
   "approval_revision_not_candidate",

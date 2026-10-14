@@ -1,7 +1,7 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
-import { useMutation } from "convex/react";
+import { checkTypeLabels, checkTypes, socialPlatformLabels, type CheckType } from "@mf100/domain";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/labels";
 import { describeError } from "@/lib/errors";
 import { newRequestId, useAction } from "@/lib/useAction";
-import { EditableText } from "@/ui/DataTable";
+import { EditableSelect, EditableText } from "@/ui/DataTable";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
@@ -76,8 +76,15 @@ export function InfoTab({
         : [];
 
   const update = useMutation(api.works.update);
+  // SNS 投稿の制作物: どのアカウント（本体の設定）で投稿するか
+  const profiles = useQuery(api.social.list, w.mediaType === "sns" ? {} : "skip");
   const editable = can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled";
-  const patch = async (p: { purpose?: string; category?: string; legacyId?: string }) => {
+  const patch = async (p: {
+    purpose?: string;
+    category?: string;
+    legacyId?: string;
+    socialProfileId?: string | null;
+  }) => {
     try {
       await update({ workId: w.id as Id<"works">, expectedVersion: w.version, patch: p });
     } catch (e) {
@@ -206,6 +213,26 @@ export function InfoTab({
               />
             </td>
           </tr>
+          {w.mediaType === "sns" ? (
+            <tr>
+              <th scope="row">SNS</th>
+              <td>
+                <EditableSelect
+                  label="SNS アカウント"
+                  value={w.socialProfileId ?? ""}
+                  disabled={!editable || profiles === undefined}
+                  options={[
+                    { value: "", label: "未設定" },
+                    ...(profiles ?? []).map((p) => ({
+                      value: p.id,
+                      label: `${socialPlatformLabels[p.platform]} @${p.username}`,
+                    })),
+                  ]}
+                  onSave={(v) => patch({ socialProfileId: v || null })}
+                />
+              </td>
+            </tr>
+          ) : null}
           {w.confidentiality === "restricted" ? (
             <tr>
               <th scope="row">機密</th>

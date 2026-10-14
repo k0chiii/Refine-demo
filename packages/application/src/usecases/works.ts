@@ -102,7 +102,10 @@ export interface UpdateWorkInput {
       | "relatedTeamIds"
       | "notationCategories"
     >
-  >;
+  > & {
+    /** SNS のアカウント（本体の設定）の割り当て。null で外す */
+    socialProfileId?: string | null;
+  };
 }
 
 export async function updateWork(
@@ -114,10 +117,17 @@ export async function updateWork(
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  const patch = stripUndefined(input.patch);
+  const { socialProfileId, ...rest } = input.patch;
+  const patch = stripUndefined(rest);
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
   const next: Work = { ...work, ...patch, version: work.version + 1 };
+  if (socialProfileId === null) delete next.socialProfileId;
+  else if (socialProfileId !== undefined) {
+    if (!(await ctx.socialProfiles.findById(socialProfileId)))
+      throw new DomainError("social_profile_invalid", { field: "socialProfileId" });
+    next.socialProfileId = socialProfileId;
+  }
   await ctx.works.update(next);
   await ctx.audit.record({
     entityType: "work",
