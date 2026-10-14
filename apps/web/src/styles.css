@@ -75,6 +75,24 @@
 :where(html, body, *) {
   overscroll-behavior-y: none;
 }
+:root {
+  /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
+  --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));
+}
+/*
+ * 画面の上下の縁（ステータスバー・ホームインジケーターの下）までバーの色で塗る。
+ * M3E のバーは色を shadow の中で塗るので、セーフエリアの余白（host の padding）は透明になり、下地の色が覗いてしまう。
+ * host にも同じ色を塗る。上のバーは画面に貼り付け（sticky）、iOS Safari がスクロール中の本文を上端でぼかす
+ * （スクロール端の効果）代わりにバーの色で塗るようにする。
+ */
+.shell__appbar {
+  position: sticky;
+  top: 0;
+  z-index: 29;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+  background-color: var(--m3e-app-bar-container-color, var(--mf-surface));
+}
 html,
 body,
 #root,
@@ -291,6 +309,8 @@ m3e-search-bar {
       safe-area-inset-bottom,
       0px
     ); /* セーフエリア（ジェスチャーバー）に主要操作を置かない */
+    /* セーフエリアの余白もバーの色で塗る（M3E は色を shadow の中で塗るため、host の padding は透明になる） */
+    background-color: var(--m3e-nav-bar-container-color, var(--mf-surface-container));
   }
 }
 .nav-link {
@@ -1027,7 +1047,7 @@ m3e-dialog [slot="actions"] {
 .ws {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 64px);
+  height: calc(100dvh - var(--mf-appbar-h));
   box-sizing: border-box;
   padding: 8px 0 16px;
 }
@@ -1727,7 +1747,7 @@ m3e-dialog [slot="actions"] {
 /* compact（<600）のエディタ: トップアプリバー（64）＋紙面（残り全部）＋覗き見のボトムシート（60 ＝ 8 ＋タブ 46 ＋ 6） */
 .ws--compact {
   height: calc(
-    100dvh - 64px
+    100dvh - var(--mf-appbar-h)
   ); /* 839 以下の height: auto を打ち消す。アプリバー 64 の下を全部使う */
   padding: 0;
 }
@@ -1768,7 +1788,7 @@ m3e-dialog [slot="actions"] {
 .write {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 64px);
+  height: calc(100dvh - var(--mf-appbar-h));
   padding: 8px 0 16px;
 }
 .write-loading {
@@ -1883,7 +1903,7 @@ m3e-icon.icon--on {
 }
 @media (max-width: 839px) {
   .write {
-    height: calc(100dvh - 64px);
+    height: calc(100dvh - var(--mf-appbar-h));
   }
   .write__canvas {
     padding: 16px 16px 96px;
@@ -2114,7 +2134,7 @@ m3e-icon.icon--on {
 .write--compact {
   padding: 0;
   /* キーボードが出たら、その上までを本文の範囲にする（入力位置がキーボードに隠れない） */
-  height: calc(100dvh - 64px - var(--kb, 0px));
+  height: calc(100dvh - var(--mf-appbar-h) - var(--kb, 0px));
 }
 .write--compact .write__main {
   border-radius: 0;
