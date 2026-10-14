@@ -1,0 +1,55 @@
+import { api } from "@mf100/convex/api";
+import { proofread, resolveRuleSet, ruleStrictnessLabels } from "@mf100/domain";
+import type { FunctionReturnType } from "convex/server";
+import { useDeferredValue, useMemo, useState } from "react";
+import { Field, TextArea } from "@/ui/Field";
+import { CategoryPicker } from "./CategoryPicker";
+
+type Book = FunctionReturnType<typeof api.notation.ruleBook>;
+
+/** ルールを試す（ブラウザ内で検査。外部には送らない） */
+export function RuleTester({ book }: { book: Book }) {
+  const [text, setText] = useState(
+    "去年の5月祭では、本郷の出し物にご参加頂きありがとうございました。お問合せは下記まで。",
+  );
+  const [cats, setCats] = useState<string[]>(["B"]);
+  const deferred = useDeferredValue(text);
+  const result = useMemo(() => {
+    const rules = resolveRuleSet(book.categories, cats, book.rules, { year: 100 });
+    return { rules: rules.length, ...proofread(deferred, rules) };
+  }, [book, cats, deferred]);
+  return (
+    <div className="stack">
+      <CategoryPicker value={cats} onChange={setCats} />
+      <Field
+        label="試す文章"
+        hint={`適用されるルール ${result.rules} 件（MF100）・ブラウザ内で検査し、外部には送りません`}
+      >
+        <TextArea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
+      </Field>
+      {result.skipped.length ? (
+        <p className="small error-text">
+          使えないルール: {result.skipped.map((s) => `${s.ruleId}（${s.reason}）`).join("、")}
+        </p>
+      ) : null}
+      {result.findings.length === 0 ? (
+        <p className="small muted">指摘はありません。</p>
+      ) : (
+        <ul className="finding-list">
+          {result.findings.map((f) => (
+            <li key={f.fingerprint} className={`finding ${f.needsReview ? "finding--review" : ""}`}>
+              <span className="finding__orig">{f.original}</span>
+              <span aria-hidden="true">→</span>
+              <span className="finding__sugg">{f.suggestion}</span>
+              <span className="finding__meta small muted">
+                {f.ruleId}（版 {f.ruleRevision}）・{ruleStrictnessLabels[f.strictness]}
+                {f.reason ? `・${f.reason}` : ""}
+                {f.exceptionNote ? `・例外: ${f.exceptionNote}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

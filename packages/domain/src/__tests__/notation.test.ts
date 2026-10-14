@@ -9,6 +9,8 @@ import {
   isLikelyCatastrophic,
   notationRole,
   parseCsv,
+  rulesToCsv,
+  rulesToJson,
   previewCsvImport,
   previewJsonImport,
   proofread,
@@ -366,6 +368,60 @@ describe("表記統一: 取り込み", () => {
     expect(p.rules[1]!.exceptions[0]!.note).toBe("本動詞として使われる場合");
     expect(p.rules[0]!.years).toEqual([100]);
     expect(p.warnings).toHaveLength(1);
+  });
+
+  it("書き出し → 取り込みで内容が戻る（CSV は ID・複数表記・正規表現の | を保つ）", () => {
+    const src = previewJsonImport(
+      [
+        {
+          ruleId: "A1-0002",
+          categoryCode: "A1",
+          title: "昨年",
+          correct: ["昨年の五月祭"],
+          patterns: ["(去年|前回)の五月祭", "昨年度の五月祭"],
+          years: [100, 101],
+          strictness: "recommended",
+          enabled: false,
+        },
+        {
+          ruleId: "A2-0001",
+          categoryCode: "A2",
+          title: "ください",
+          correct: ["ください"],
+          incorrect: ["下さい", "下さ い"],
+          description: "補助動詞, ひらがな",
+        },
+      ],
+      { defaultYear: 100 },
+    ).rules;
+    const back = previewCsvImport(rulesToCsv(src), { defaultYear: 100 }).rules;
+    expect(
+      back.map((r) => [
+        r.ruleId,
+        r.categoryCode,
+        r.correct,
+        r.incorrect,
+        r.patterns,
+        r.years,
+        r.strictness,
+        r.enabled,
+        r.description,
+      ]),
+    ).toEqual(
+      src.map((r) => [
+        r.ruleId,
+        r.categoryCode,
+        r.correct,
+        r.incorrect,
+        r.patterns,
+        r.years,
+        r.strictness,
+        r.enabled,
+        r.description,
+      ]),
+    );
+    const json = previewJsonImport(JSON.parse(rulesToJson(src, [])), { defaultYear: 99 }).rules;
+    expect(json).toEqual(src);
   });
 
   it("ルールの検証", () => {

@@ -2515,3 +2515,256 @@ m3e-icon.icon--on {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- 表記ルール（表記統一）: 一覧と詳細。詳細は広い画面で右、狭い画面では全画面ダイアログ */
+.notation__tabs {
+  margin: 0 -8px 12px;
+  padding-top: 0;
+}
+.notation__ld--split {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(380px, 1.1fr);
+  gap: 24px;
+  align-items: start;
+}
+.notation__detail {
+  position: sticky;
+  top: 8px;
+  max-height: calc(100dvh - 160px);
+  overflow: auto;
+  padding: 16px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-low);
+}
+.notation__toolbar {
+  margin-bottom: 8px;
+}
+.notation__search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.notation__filters {
+  margin-bottom: 4px;
+}
+.notation__filters .select {
+  min-width: 200px;
+}
+.rule-row__correct {
+  font-weight: 600;
+}
+.rule-row__wrong {
+  color: var(--mf-on-surface-variant);
+}
+.rule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rule-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.rule-editor__exceptions {
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-md);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rule-editor__exceptions legend,
+.category-picker__legend {
+  font: var(--mf-type-label-large);
+  padding: 0 4px;
+}
+.rule-editor__exception {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+@media (max-width: 599px) {
+  .rule-editor__exception {
+    grid-template-columns: 1fr auto;
+  }
+}
+.mono,
+.mono textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.rule-history__list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.policy-notes {
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-surface-container);
+  max-height: 200px;
+  overflow: auto;
+}
+.category-picker {
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-md);
+  padding: 8px 12px 4px;
+  margin: 0;
+}
+.category-picker__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+}
+.category-picker__presets {
+  margin: 4px 0;
+}
+.proposal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proposal {
+  padding: 12px 16px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-low);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.proposal__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.proposal__kind {
+  font: var(--mf-type-label-medium);
+  padding: 2px 8px;
+  border-radius: var(--mf-shape-full, 999px);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.proposal__correct {
+  font-weight: 600;
+}
+.proposal__wrong {
+  color: var(--mf-on-surface-variant);
+  margin-left: 4px;
+}
+.proposal__quote {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 3px solid var(--mf-outline-variant);
+}
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font: var(--mf-type-label-large);
+}
+.warn-text {
+  color: var(--mf-tertiary);
+}
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--mf-shape-full, 999px);
+  border: 1px solid var(--mf-outline);
+  color: var(--mf-primary);
+  font: var(--mf-type-label-large);
+  cursor: pointer;
+}
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.file-button:focus-within {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
+}
+.field--narrow {
+  max-width: 220px;
+}
+.table--dense td,
+.table--dense th {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.finding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.finding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  border-radius: var(--mf-shape-sm);
+  border-left: 3px solid var(--mf-error);
+  background: var(--mf-surface-container-low);
+}
+.finding--review {
+  border-left-color: var(--mf-tertiary);
+}
+.finding__orig {
+  text-decoration: line-through;
+  text-decoration-color: var(--mf-error);
+}
+.finding__sugg {
+  font-weight: 600;
+}
+.finding__meta {
+  flex-basis: 100%;
+}
+/* フォームの先頭の浮きラベルがダイアログ本文のスクロール境界で切れないように */
+.dialog-body > .rule-editor {
+  padding-top: 8px;
+}
+/* 表記統一: 文章エディタの誤表記（波線）。要確認は点線で弱く */
+.notation-hit {
+  text-decoration: underline wavy var(--mf-error);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+}
+.notation-hit--review {
+  text-decoration: underline dotted var(--mf-tertiary);
+}
+.finding__jump {
+  all: unset;
+  cursor: pointer;
+  border-radius: var(--mf-shape-xs);
+}
+.finding__jump:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
+}
+.finding__actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0;
+}
+.notation-panel__undo {
+  justify-content: space-between;
+}
+.panel-pad {
+  padding: 12px 16px;
+}

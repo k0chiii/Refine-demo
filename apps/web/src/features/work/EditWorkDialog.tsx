@@ -9,6 +9,7 @@ import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
+import { CategoryPicker } from "@/features/notation/CategoryPicker";
 
 type Work = FunctionReturnType<typeof api.works.get>["work"];
 
@@ -34,6 +35,7 @@ export function EditWorkDialog({
     creatorIds: [...work.creatorIds],
     approverIds: [work.approverId],
     managerIds: [...work.managerIds],
+    notationCategories: [...(work.notationCategories ?? [])],
   });
   const [form, setForm] = useState(initial);
   useEffect(() => {
@@ -53,6 +55,7 @@ export function EditWorkDialog({
         creatorIds: form.creatorIds,
         approverId: form.approverIds[0] ?? work.approverId,
         managerIds: form.managerIds,
+        notationCategories: form.notationCategories,
         ...(form.legacyId ? { legacyId: form.legacyId } : {}),
         ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       },
@@ -110,6 +113,10 @@ export function EditWorkDialog({
           single
           value={form.approverIds}
           onChange={setIds("approverIds")}
+        />
+        <CategoryPicker
+          value={form.notationCategories}
+          onChange={(codes) => setForm((f) => ({ ...f, notationCategories: codes }))}
         />
         <details className="details">
           <summary>詳細設定（旧ID・機密区分）</summary>

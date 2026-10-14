@@ -58,6 +58,8 @@ export function parseCsv(text: string): string[][] {
 }
 
 const headerAliases: Record<string, string[]> = {
+  ruleId: ["ID", "ルールID", "ruleId"],
+  enabled: ["有効", "enabled"],
   category: ["カテゴリ", "カテゴリー", "分類", "区分"],
   title: ["項目名", "項目", "見出し"],
   correct: ["統一表記", "正しい表記", "正", "表記"],
@@ -142,7 +144,11 @@ export function previewCsvImport(
     if (cat) currentCategory = cat;
     const correct = splitList(cell("correct"));
     const incorrect = splitList(cell("incorrect"));
-    const patterns = splitList(cell("pattern")).length ? [cell("pattern")] : [];
+    // 正規表現は「|」「/」を含むので、セル内の改行だけで区切る
+    const patterns = cell("pattern")
+      .split(/\r?\n/)
+      .map((x) => x.trim())
+      .filter(Boolean);
     if (correct.length === 0 && incorrect.length === 0 && patterns.length === 0) {
       // カテゴリ見出し行（例: 「A2 日本語頻出単語」）や説明行
       const maybeCat = categoryCodeOf(joined);
@@ -183,8 +189,12 @@ export function previewCsvImport(
         : "required";
     const en = cell("en");
     const zh = cell("zh");
+    const givenId = cell("ruleId");
+    const enabledCell = cell("enabled");
     preview.rules.push({
-      ruleId: `${opts.idPrefix ?? "MF"}${opts.defaultYear}-${currentCategory}-${String(n).padStart(4, "0")}`,
+      ruleId:
+        givenId ||
+        `${opts.idPrefix ?? "MF"}${opts.defaultYear}-${currentCategory}-${String(n).padStart(4, "0")}`,
       categoryCode: currentCategory,
       title: cell("title") || correct[0]!,
       description: cell("note"),
@@ -197,7 +207,7 @@ export function previewCsvImport(
       years,
       priority: 0,
       strictness,
-      enabled: true,
+      enabled: !/^(false|0|無効|いいえ)$/i.test(enabledCell),
       ...(en || zh ? { translations: { ...(en ? { en } : {}), ...(zh ? { zh } : {}) } } : {}),
     });
   }
@@ -295,6 +305,10 @@ export function previewJsonImport(
       priority: typeof o.priority === "number" ? o.priority : 0,
       strictness: strict,
       enabled: o.enabled !== false,
+      ...(typeof o.note === "string" && o.note ? { note: o.note } : {}),
+      ...(o.translations && typeof o.translations === "object"
+        ? { translations: o.translations as { en?: string; zh?: string } }
+        : {}),
     });
   });
   detectDuplicates(preview, opts.existing ?? []);
@@ -321,4 +335,60 @@ export function validateRuleDraft(r: RuleDraft): string[] {
   if (!ruleLanguages.includes(r.language)) errors.push("言語が不正です");
   if (!ruleStrictness.includes(r.strictness)) errors.push("厳格さが不正です");
   return errors;
+}
+
+const csvCell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/**
+ * CSV に書き出す（取り込みと同じ列名）。複数の表記はセル内の改行で区切る。
+ * 例外条件の構造（語句・直前・直後）は CSV では説明文になるので、完全な移行には JSON を使う。
+ */
+export function rulesToCsv(rules: readonly RuleDraft[]): string {
+  const head = [
+    "ID",
+    "カテゴリ",
+    "項目名",
+    "統一表記",
+    "誤表記",
+    "正規表現",
+    "例外",
+    "備考",
+    "英語表記",
+    "中国語表記",
+    "年度",
+    "厳格さ",
+    "有効",
+  ];
+  const strict: Record<RuleStrictness, string> = {
+    required: "必須",
+    recommended: "推奨",
+    review: "要確認",
+  };
+  const rows = rules.map((r) =>
+    [
+      r.ruleId,
+      r.categoryCode,
+      r.title,
+      r.correct.join("\n"),
+      r.incorrect.join("\n"),
+      r.patterns.join("\n"),
+      r.exceptions
+        .map((e) => e.note ?? (e.kind === "phrase" ? e.value : `${e.kind}: ${e.value}`))
+        .join("\n"),
+      r.description,
+      r.translations?.en ?? "",
+      r.translations?.zh ?? "",
+      r.years.join("\n"),
+      strict[r.strictness],
+      r.enabled ? "有効" : "無効",
+    ]
+      .map(csvCell)
+      .join(","),
+  );
+  return [head.join(","), ...rows].join("\r\n") + "\r\n";
+}
+
+/** JSON に書き出す（MF100 の形式。previewJsonImport でそのまま取り込める） */
+export function rulesToJson(rules: readonly RuleDraft[], categories: readonly unknown[]): string {
+  return JSON.stringify({ format: "mf100-notation", version: 1, categories, rules }, null, 2);
 }

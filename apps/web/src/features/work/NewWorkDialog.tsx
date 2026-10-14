@@ -8,6 +8,7 @@ import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
+import { CategoryPicker } from "@/features/notation/CategoryPicker";
 
 /** 制作物登録（UC-01）のダイアログ。登録者は主管担当として自動的に含まれる。登録後はそのままエディタへ。 */
 export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -20,6 +21,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
     mediaType: "pdf",
     legacyId: "",
     confidentiality: "normal",
+    notationCategories: [] as string[],
   });
   const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [creatorIds, setCreatorIds] = useState<string[]>([]);
@@ -36,6 +38,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
       approverId: approverIds[0] ?? "",
       ...(deadlineAt ? { deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
+      notationCategories: form.notationCategories,
     });
     onClose();
     void navigate({ to: "/works/$workId", params: { workId: id } });
@@ -74,6 +77,10 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
           single
           value={approverIds}
           onChange={setApproverIds}
+        />
+        <CategoryPicker
+          value={form.notationCategories}
+          onChange={(codes) => setForm((f) => ({ ...f, notationCategories: codes }))}
         />
         <details className="details">
           <summary>詳細設定（旧ID・機密区分）</summary>

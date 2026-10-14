@@ -24,7 +24,8 @@ import {
 } from "@/ui/m3e";
 import { documentExtensions, highlightColors, paragraphStyles, textColors } from "./extensions";
 import { buildPlainText, documentHtml } from "./plainText";
-import { SearchReplace } from "./plugins";
+import { NotationMarks, SearchReplace } from "./plugins";
+import { NotationPanel, useNotationCheck } from "@/features/notation/NotationPanel";
 import { LinkDialog, ShortcutsDialog, WordCountDialog } from "./WriteDialogs";
 import { FindPanel, OutlinePanel, ReferencePanel, type ReferenceThread } from "./WritePanels";
 import {
@@ -36,10 +37,11 @@ import {
   type ToolbarTier,
 } from "./WriteToolbar";
 
-type Panel = "outline" | "find" | "refs";
+type Panel = "outline" | "find" | "notation" | "refs";
 const panels: Array<{ id: Panel; label: string; icon: string }> = [
   { id: "outline", label: "概要", icon: "toc" },
   { id: "find", label: "検索と置換", icon: "find_replace" },
+  { id: "notation", label: "表記", icon: "spellcheck" },
   { id: "refs", label: "指摘", icon: "rate_review" },
 ];
 const LIVE_COUNT_KEY = "mf100.write.liveCount";
@@ -195,6 +197,7 @@ function WriteSurface({
         editable: canEdit,
       }),
       SearchReplace,
+      NotationMarks,
       shortcuts,
     ],
     content: initial,
@@ -404,11 +407,14 @@ function WriteSurface({
               ? `下書きを保存しました・${formatJstShort(status.at)}`
               : "まだ保存していません";
 
+  const notation = useNotationCheck(editor, workId);
   const panelBody = (p: Panel | null) =>
     !editor ? null : p === "outline" ? (
       <OutlinePanel editor={editor} />
     ) : p === "find" ? (
       <FindPanel editor={editor} focusKey={findFocus} readOnly={!canEdit} />
+    ) : p === "notation" ? (
+      <NotationPanel editor={editor} check={notation} readOnly={!canEdit} />
     ) : p === "refs" ? (
       <ReferencePanel
         editor={editor}
@@ -430,6 +436,9 @@ function WriteSurface({
           {p.label}
           {p.id === "refs" && refThreads && refThreads.length > 0 ? (
             <span className="drawer__n">{refThreads.length}</span>
+          ) : null}
+          {p.id === "notation" && notation.findings.length > 0 ? (
+            <span className="drawer__n">{notation.findings.length}</span>
           ) : null}
         </button>
       ))}
@@ -782,6 +791,7 @@ function moreSheet(
     { icon: "format_clear", label: "書式をクリア", onSelect: () => void cmd.clear() },
     { icon: "toc", label: "概要", onSelect: () => openPanel("outline") },
     { icon: "find_replace", label: "検索と置換", onSelect: () => actions.openFind(true) },
+    { icon: "spellcheck", label: "表記", onSelect: () => openPanel("notation") },
     { icon: "rate_review", label: "指摘", onSelect: () => openPanel("refs") },
     { icon: "match_word", label: "文字カウント", onSelect: actions.openCount },
   ];

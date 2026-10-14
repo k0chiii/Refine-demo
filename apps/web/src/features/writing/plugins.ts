@@ -174,3 +174,52 @@ export const RangeHighlight = Extension.create({
 export function setHighlights(editor: Editor, ranges: HighlightRange[]) {
   editor.view.dispatch(editor.state.tr.setMeta(rangeKey, ranges).setMeta("addToHistory", false));
 }
+
+/* ---------- 表記統一の指摘（文章エディタ: 誤表記に波線） */
+
+export interface NotationMark {
+  from: number;
+  to: number;
+  id: string;
+  review: boolean;
+  title: string;
+}
+const notationKey = new PluginKey<DecorationSet>("mf100-notation");
+
+export const NotationMarks = Extension.create({
+  name: "mf100Notation",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: notationKey,
+        state: {
+          init: () => DecorationSet.empty,
+          apply: (tr, old) => {
+            const next = tr.getMeta(notationKey) as NotationMark[] | undefined;
+            if (next)
+              return DecorationSet.create(
+                tr.doc,
+                next
+                  .filter((m) => m.to > m.from && m.to <= tr.doc.content.size)
+                  .map((m) =>
+                    Decoration.inline(m.from, m.to, {
+                      class: `notation-hit ${m.review ? "notation-hit--review" : ""}`,
+                      "data-finding": m.id,
+                      title: m.title,
+                    }),
+                  ),
+              );
+            // 入力中は位置だけ追従させる（次の検査で作り直す）
+            return old.map(tr.mapping, tr.doc);
+          },
+        },
+        props: { decorations: (state) => notationKey.getState(state) },
+      }),
+    ];
+  },
+});
+
+export function setNotationMarks(editor: Editor, marks: NotationMark[]) {
+  if (editor.isDestroyed) return;
+  editor.view.dispatch(editor.state.tr.setMeta(notationKey, marks).setMeta("addToHistory", false));
+}

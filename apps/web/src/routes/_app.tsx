@@ -74,6 +74,7 @@ function AppLayout() {
   const items = [
     { to: "/", icon: "space_dashboard", label: "ダッシュボード" },
     { to: "/works", icon: "folder", label: "制作物" },
+    { to: "/notation", icon: "spellcheck", label: "表記ルール" },
     ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
   ];
   const selected = (to: string) =>
