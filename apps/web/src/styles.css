@@ -743,45 +743,6 @@ m3e-dialog [slot="actions"] {
 .picker__search {
   position: relative;
 }
-.picker__list {
-  position: absolute;
-  z-index: 20;
-  inset-inline: 0;
-  top: calc(100% - 16px);
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: var(--mf-surface-container-high);
-  border-radius: var(--mf-shape-md);
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.3),
-    0 4px 8px 3px rgb(0 0 0 / 0.15);
-  max-height: 240px;
-  overflow: auto;
-}
-.picker__option {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  border: 0;
-  background: transparent;
-  padding: 12px;
-  border-radius: var(--mf-shape-sm);
-  text-align: start;
-  cursor: pointer;
-  font: var(--mf-type-body-medium);
-  color: inherit;
-}
-.picker__option:hover,
-.picker__option:focus-visible {
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-  outline: none;
-}
-.picker__empty {
-  padding: 8px 12px;
-}
 
 /* ---------- 専門確認・持越・通知（v1） */
 .checks {

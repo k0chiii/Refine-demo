@@ -538,4 +538,4 @@ ax で M3E の各部品の README（`matraic/m3e` の `packages/web/src/*/README
 | 進み具合                       | `m3e-linear-progress-indicator`                                                                                                             | 自動校正                                                                               |
 | 切り替え                       | `m3e-segmented-button` / `m3e-button-segment`、`m3e-switch`                                                                                 | SNS の編集・プレビュー、提案ダイアログ                                                 |
 
-**M3E に相当する部品が無いため独自のまま**: 表（管理画面・閲覧権限。M3E に data table が無い）、利用者の候補リスト（listbox。M3E の autocomplete は検討中）、投稿欄（`compose-pop`、本文の入力は native textarea）、文章エディタの波線（エディタの装飾）、SNS プレビューの模擬画面（Instagram / X の見た目を再現するためのもので、アプリの UI ではない）。
+**M3E に相当する部品が無いため独自のまま**: 表（管理画面・閲覧権限。M3E に data table が無い）、投稿欄（`compose-pop`、本文の入力は native textarea）、文章エディタの波線（エディタの装飾）、SNS プレビューの模擬画面（Instagram / X の見た目を再現するためのもので、アプリの UI ではない）。

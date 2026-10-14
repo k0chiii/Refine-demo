@@ -16,7 +16,7 @@
   --sp-bg: #fff;
   --sp-fg: #0f1419;
   --sp-muted: #536471;
-  --sp-link: #1d9bf0;
+  --sp-link: #0b66c2; /* X の青に近いが、文字のコントラスト 4.5:1 を満たす色 */
   background: var(--sp-bg);
   color: var(--sp-fg);
   font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;

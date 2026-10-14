@@ -1,7 +1,7 @@
 import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
 import { useId, useState } from "react";
-import { M3eFormField, M3eIcon, M3eInputChip } from "./m3e";
+import { M3eAutocomplete, M3eFormField, M3eIcon, M3eInputChip, M3eOption } from "./m3e";
 
 export interface UserPickerProps {
   label: string;
@@ -38,13 +38,13 @@ export function UserPicker({
   const listId = useId();
   const inputId = useId();
   const selected = useQuery(api.users.byIds, value.length > 0 ? { ids: value } : "skip") ?? [];
-  const candidates = useQuery(api.users.search, open ? { text, limit: 8 } : "skip") ?? [];
+  const rawCandidates = useQuery(api.users.search, open ? { text, limit: 8 } : "skip");
+  const candidates = rawCandidates ?? [];
   const hidden = new Set([...value, ...exclude]);
   const visible = candidates.filter((u) => !hidden.has(u.id));
   const pick = (id: string) => {
     onChange(single ? [id] : [...value, id]);
     setText("");
-    if (single) setOpen(false);
   };
   const remove = (id: string) => onChange(value.filter((v) => v !== id));
   const canAdd = !single || value.length === 0;
@@ -85,51 +85,37 @@ export function UserPicker({
             <input
               id={inputId}
               className="input"
-              role="combobox"
-              aria-expanded={open}
-              aria-controls={listId}
-              aria-autocomplete="list"
               value={text}
               placeholder={placeholder ?? "名前・メールで検索"}
               onFocus={() => setOpen(true)}
-              onBlur={() => setTimeout(() => setOpen(false), 150)}
               onChange={(e) => {
                 setText(e.target.value);
                 setOpen(true);
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && visible[0]) {
-                  e.preventDefault();
-                  pick(visible[0].id);
-                }
-                if (e.key === "Escape") setOpen(false);
-              }}
             />
             {hint ? <span slot="hint">{hint}</span> : null}
           </M3eFormField>
-          {open ? (
-            <ul id={listId} role="listbox" className="picker__list">
-              {visible.length === 0 ? (
-                <li className="picker__empty muted small">
-                  {text ? "該当する委員がいません" : "候補を表示するには文字を入力"}
-                </li>
-              ) : (
-                visible.map((u) => (
-                  <li key={u.id} role="option" aria-selected={false}>
-                    <button
-                      type="button"
-                      className="picker__option"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => pick(u.id)}
-                    >
-                      <span>{u.name}</span>
-                      <span className="muted small">{u.email ?? ""}</span>
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
-          ) : null}
+          {/* 候補は M3E autocomplete（キーボード操作・読み上げは M3E 側）。絞り込みはサーバーの検索に任せる */}
+          <M3eAutocomplete
+            htmlFor={inputId}
+            filter="none"
+            autoActivate
+            hideSelectionIndicator
+            loading={open && rawCandidates === undefined}
+            loadingLabel="検索しています…"
+            noDataLabel={text ? "該当する委員がいません" : "候補を表示するには文字を入力"}
+            onChange={(e) => {
+              const id = (e.target as unknown as { value: string | null }).value;
+              if (id) pick(id);
+            }}
+          >
+            {visible.map((u) => (
+              <M3eOption key={u.id} value={u.id} className="picker__option">
+                {u.name}
+                {u.email ? <span className="muted small"> {u.email}</span> : null}
+              </M3eOption>
+            ))}
+          </M3eAutocomplete>
         </div>
       ) : (
         <span id={`${listId}-label`} className="field__label">

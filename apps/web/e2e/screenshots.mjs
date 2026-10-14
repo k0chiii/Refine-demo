@@ -99,11 +99,14 @@ const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
-  const input = scope.locator('input[role="combobox"]').first();
+  const input = scope.locator(".picker__search input").first();
   await input.click();
   await input.fill(name);
-  const opt = scope.locator(".picker__option", { hasText: name }).first();
-  await opt.click();
+  // 候補は M3E autocomplete のメニュー（option ロール）に出る
+  await page
+    .getByRole("option", { name: new RegExp(name) })
+    .first()
+    .click();
   await page.waitForTimeout(200);
 };
 

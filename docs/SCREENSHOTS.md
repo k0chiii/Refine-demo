@@ -65,7 +65,7 @@
 | 59  | 校了した SNS 投稿の書き出し（本文のコピー・画像・ZIP）                            | 校了権限者     | ![](screenshots/59-sns-export.png)             |
 | 60  | compact: 表記ルール（下部バーに「表記ルール」）                                   | 校了権限者     | ![](screenshots/60-notation-compact.png)       |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（37 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（58 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 
