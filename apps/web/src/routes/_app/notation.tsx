@@ -7,11 +7,12 @@ import { CategoriesPanel } from "@/features/notation/CategoriesPanel";
 import { ImportDialog } from "@/features/notation/ImportDialog";
 import { ProposalsPanel } from "@/features/notation/ProposalsPanel";
 import { draftOf, emptyDraft, RuleEditor } from "@/features/notation/RuleEditor";
+import { RuleTable } from "@/features/notation/RuleTable";
 import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
-import { Select } from "@/ui/Field";
+import { Field, Select } from "@/ui/Field";
 import {
   M3eActionList,
   M3eButton,
@@ -125,7 +126,7 @@ function Notation() {
       ) : tab === "try" ? (
         <RuleTester book={book} />
       ) : (
-        <div className={`notation__ld ${wide && detail ? "notation__ld--split" : ""}`}>
+        <div className="notation__ld">
           <div className="notation__list">
             <div className="row notation__toolbar">
               <M3eSearchBar
@@ -187,18 +188,20 @@ function Notation() {
               </M3eMenu>
             </div>
             <div className="row notation__filters">
-              <Select
-                aria-label="カテゴリで絞り込み"
-                value={cat || "all"}
-                onChange={(e) => setCat(e.target.value === "all" ? "" : e.target.value)}
-              >
-                <option value="all">すべてのカテゴリ</option>
-                {book.categories.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} {c.name}
-                  </option>
-                ))}
-              </Select>
+              <Field label="カテゴリ" className="notation__cat">
+                <Select
+                  aria-label="カテゴリで絞り込み"
+                  value={cat || "all"}
+                  onChange={(e) => setCat(e.target.value === "all" ? "" : e.target.value)}
+                >
+                  <option value="all">すべてのカテゴリ</option>
+                  {book.categories.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <M3eFilterChipSet aria-label="絞り込み">
                 <M3eFilterChip selected={onlyThisYear} onClick={() => setOnlyThisYear((x) => !x)}>
                   MF100 に適用
@@ -213,6 +216,16 @@ function Notation() {
               <div className="empty">
                 {text ? `「${text}」に一致するルールはありません。` : "ルールがありません。"}
               </div>
+            ) : wide ? (
+              <RuleTable
+                book={book}
+                rules={rules}
+                selected={selected}
+                onOpen={(id) => {
+                  setCreating(null);
+                  setSelected(id);
+                }}
+              />
             ) : (
               <M3eActionList className="list" aria-label="ルール">
                 {rules.map((r) => (
@@ -243,28 +256,22 @@ function Notation() {
               </M3eActionList>
             )}
           </div>
-          {wide && detail ? (
-            <section className="notation__detail" aria-label="ルールの詳細">
-              {detail}
-            </section>
-          ) : null}
         </div>
       )}
-      {!wide ? (
-        <M3eDialog
-          open={tab === "rules" && detail !== null}
-          onClosed={() => {
-            setSelected(null);
-            setCreating(null);
-          }}
-          closeLabel="閉じる"
-          dismissible
-          className="dialog--full"
-        >
-          <span slot="header">{creating ? "ルールを追加" : (current?.title ?? "ルール")}</span>
-          <div className="dialog-body">{detail}</div>
-        </M3eDialog>
-      ) : null}
+      {/* 詳細（説明・例外・履歴）はダイアログ。広い画面では表の上で直接直せるので、詳細は必要なときだけ開く */}
+      <M3eDialog
+        open={tab === "rules" && detail !== null}
+        onClosed={() => {
+          setSelected(null);
+          setCreating(null);
+        }}
+        closeLabel="閉じる"
+        dismissible
+        className="dialog--full"
+      >
+        <span slot="header">{creating ? "ルールを追加" : (current?.title ?? "ルール")}</span>
+        <div className="dialog-body">{detail}</div>
+      </M3eDialog>
       <ImportDialog book={book} open={importing} onClose={() => setImporting(false)} />
     </div>
   );

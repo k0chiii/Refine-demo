@@ -9,6 +9,7 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { useAction } from "@/lib/useAction";
+import { DataTable } from "@/ui/DataTable";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
 import {
   M3eAccordion,
@@ -225,24 +226,53 @@ export function ImportDialog({
               ) : null}
               <M3eExpansionPanel open>
                 <span slot="header">取り込むルール {preview.rules.length}</span>
-                <M3eList aria-label="取り込むルール">
-                  {preview.rules.slice(0, 300).map((r) => (
-                    <M3eListItem
-                      key={r.ruleId}
-                      className={existingIds.has(r.ruleId) ? "list__item--done" : ""}
-                    >
-                      <span slot="overline">
-                        {r.ruleId}・{r.categoryCode}・
-                        {r.years.length ? `MF${r.years.join(",")}` : "全年度"}
-                        {existingIds.has(r.ruleId) ? "・既存" : ""}
-                      </span>
-                      {r.correct.join(" / ")}
-                      <span slot="supporting-text">
-                        ← {[...r.incorrect, ...r.patterns].join(" / ")}
-                      </span>
-                    </M3eListItem>
-                  ))}
-                </M3eList>
+                <DataTable
+                  label="取り込むルール"
+                  rows={preview.rules.slice(0, 300)}
+                  rowKey={(r) => r.ruleId}
+                  columns={[
+                    {
+                      key: "id",
+                      header: "ID",
+                      rowHeader: true,
+                      sort: (a, b) => a.ruleId.localeCompare(b.ruleId),
+                      cell: (r) => <span className="small">{r.ruleId}</span>,
+                    },
+                    {
+                      key: "cat",
+                      header: "カテゴリ",
+                      sort: (a, b) => a.categoryCode.localeCompare(b.categoryCode),
+                      cell: (r) => r.categoryCode,
+                    },
+                    { key: "correct", header: "統一表記", cell: (r) => r.correct.join(" / ") },
+                    {
+                      key: "wrong",
+                      header: "誤表記・正規表現",
+                      cell: (r) => (
+                        <span className="small">{[...r.incorrect, ...r.patterns].join(" / ")}</span>
+                      ),
+                    },
+                    {
+                      key: "years",
+                      header: "年度",
+                      cell: (r) => (r.years.length ? `MF${r.years.join(",")}` : "全年度"),
+                    },
+                    {
+                      key: "state",
+                      header: "取り込み",
+                      sort: (a, b) =>
+                        Number(existingIds.has(a.ruleId)) - Number(existingIds.has(b.ruleId)),
+                      cell: (r) =>
+                        !editable(r.categoryCode) ? (
+                          <M3eChip className="chip--error">権限なし</M3eChip>
+                        ) : existingIds.has(r.ruleId) ? (
+                          <M3eChip>{overwrite ? "上書き" : "既存のため除外"}</M3eChip>
+                        ) : (
+                          <M3eChip className="chip--success">追加</M3eChip>
+                        ),
+                    },
+                  ]}
+                />
                 {preview.rules.length > 300 ? (
                   <p className="small muted">ほか {preview.rules.length - 300} 件</p>
                 ) : null}

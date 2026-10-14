@@ -230,6 +230,14 @@
     "violations": []
   },
   {
+    "screen": "50a-notation-cell-edit",
+    "violations": []
+  },
+  {
+    "screen": "50b-notation-rule-detail",
+    "violations": []
+  },
+  {
     "screen": "51-notation-try",
     "violations": []
   },

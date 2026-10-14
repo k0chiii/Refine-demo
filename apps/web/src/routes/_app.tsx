@@ -32,12 +32,12 @@ const readRailPref = () => {
 
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
- * - compact（<600）: アプリバーは見出しとアカウントだけ。下部ナビゲーションバー 3 件（ダッシュボード・通知・制作物）。
+ * - compact（<600）: アプリバーは見出し・通知・アカウント。下部ナビゲーションバー（ダッシュボード・制作物・表記ルール（・管理））。
  *   エディタ（`/works/:id`）では下部バーを隠す（詳細画面）。アプリバーはどの幅でも 1 本で、エディタが戻る・題名・操作を差し込む。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
  * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「制作物を登録」、その下に行き先。アカウントは右上に残す。
- * 通知は独立した画面を持たず、ベル（compact では下部バーの「通知」）のパネルから対象へ飛ぶ。
+ * 通知は独立した画面を持たず、アカウントの隣のベルのパネル（compact はボトムシート）から対象へ飛ぶ。
  */
 function AppLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -93,7 +93,7 @@ function AppLayout() {
         </M3eNavItem>
       </Link>
     ));
-  /** M3E は押した項目を自動で選択状態にするため、経路に基づく選択へ戻す（下部バーの「通知」は経路ではない） */
+  /** M3E は押した項目を自動で選択状態にするため、経路に基づく選択へ戻す */
   const resync = (e: { currentTarget: EventTarget | null }) => {
     const root = e.currentTarget as HTMLElement | null;
     root?.querySelectorAll<HTMLElement & { selected: boolean }>("m3e-nav-item").forEach((el) => {
@@ -178,7 +178,12 @@ function AppLayout() {
             className="appbar-slot appbar-slot--subtitle"
           />
           <span slot="trailing" id="appbar-actions" className="appbar-slot appbar-slot--actions" />
-          {cls === "compact" ? null : <NotificationsBell.Bell menuId="notif-menu" />}
+          {/* 通知はアカウントの隣（全サイズ共通。利用者指示 2026-10-14「アイコンの横が相場」）。compact はボトムシート */}
+          {cls === "compact" ? (
+            <NotificationsBell.Bell onOpen={() => setNotifOpen(true)} />
+          ) : (
+            <NotificationsBell.Bell menuId="notif-menu" />
+          )}
           {account(32, "shell__account")}
         </M3eAppBar>
         {cls === "compact" ? (
@@ -208,13 +213,7 @@ function AppLayout() {
       </div>
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
-          {/* 通知はダッシュボードの隣（利用者指示 2026-10-14）。ダッシュボード・通知・制作物（・管理）の順 */}
-          {navItems(items.slice(0, 1))}
-          <M3eNavItem className="shell__bar-notif" onClick={() => setNotifOpen(true)}>
-            <NotificationsBell.Icon slot="icon" />
-            通知
-          </M3eNavItem>
-          {navItems(items.slice(1))}
+          {navItems()}
         </M3eNavBar>
       ) : null}
     </div>

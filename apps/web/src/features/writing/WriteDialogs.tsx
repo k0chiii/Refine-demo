@@ -1,5 +1,6 @@
 import { countText } from "@mf100/domain";
 import { useEffect, useState } from "react";
+import { DataTable } from "@/ui/DataTable";
 import { Field, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eSwitch } from "@/ui/m3e";
 
@@ -106,24 +107,36 @@ export function WordCountDialog({
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる">
       <span slot="header">文字カウント</span>
       <div className="dialog-body">
-        <table className="table count-table">
-          <thead>
-            <tr>
-              <th />
-              {sel ? <th>選択範囲</th> : null}
-              <th>文書全体</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([label, k]) => (
-              <tr key={k}>
-                <th scope="row">{label}</th>
-                {sel ? <td>{sel[k].toLocaleString("ja-JP")}</td> : null}
-                <td>{all[k].toLocaleString("ja-JP")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          label="文字カウント"
+          className="count-table"
+          rows={rows}
+          rowKey={([, k]) => k}
+          columns={[
+            {
+              key: "label",
+              header: <span className="sr-only">項目</span>,
+              rowHeader: true,
+              cell: ([label]) => label,
+            },
+            ...(sel
+              ? [
+                  {
+                    key: "sel",
+                    header: "選択範囲",
+                    numeric: true,
+                    cell: ([, k]: (typeof rows)[number]) => sel[k].toLocaleString("ja-JP"),
+                  },
+                ]
+              : []),
+            {
+              key: "all",
+              header: "文書全体",
+              numeric: true,
+              cell: ([, k]) => all[k].toLocaleString("ja-JP"),
+            },
+          ]}
+        />
         <label className="switch-row">
           <M3eSwitch
             checked={live}

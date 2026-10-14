@@ -7,8 +7,7 @@ import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { formatJstShort } from "@/lib/format";
 import { resolutionLabel, severityLabel } from "@/lib/labels";
-import { StatusText } from "@/ui/Chip";
-import { TextArea } from "@/ui/Field";
+import { Field, TextArea, TextInput } from "@/ui/Field";
 import {
   M3eAvatar,
   M3eButton,
@@ -106,7 +105,7 @@ export function ThreadCard({
   return (
     <>
       <M3eCard
-        variant="elevated"
+        variant={active ? "elevated" : "outlined"}
         className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${className ?? ""}`}
         aria-label={`コメント ${t.author?.name ?? ""}`}
         onClick={onSelect}
@@ -128,6 +127,7 @@ export function ThreadCard({
             {canDecide && !closed ? (
               <M3eIconButton
                 aria-label="解決（反映済にする）"
+                size="extra-small"
                 className="thread__resolve"
                 disabled={pending === true}
                 onClick={(e) => {
@@ -141,6 +141,7 @@ export function ThreadCard({
             {hasMenu ? (
               <M3eIconButton
                 aria-label="その他の操作"
+                size="extra-small"
                 className="thread__more"
                 {...(compact
                   ? {
@@ -173,49 +174,80 @@ export function ThreadCard({
                   {t.origin.textSource === "ocr" ? <M3eChip>OCR</M3eChip> : null}
                 </M3eChipSet>
               ) : null}
-              {closed ? (
-                <StatusText tone={t.resolution === "resolved" ? "success" : "neutral"}>
-                  {resolutionLabel[t.resolution]}
-                </StatusText>
+              {closed || t.severity === "critical" || t.carriedFromThreadId || t.assignee ? (
+                <M3eChipSet aria-label="コメントの状態">
+                  {closed ? (
+                    <M3eChip className={t.resolution === "resolved" ? "chip--success" : ""}>
+                      <M3eIcon
+                        slot="icon"
+                        name={t.resolution === "resolved" ? "check_circle" : "do_not_disturb_on"}
+                      />
+                      {resolutionLabel[t.resolution]}
+                    </M3eChip>
+                  ) : null}
+                  {t.severity === "critical" ? (
+                    <M3eChip className="chip--error">
+                      <M3eIcon slot="icon" name="priority_high" />
+                      {severityLabel[t.severity]}
+                    </M3eChip>
+                  ) : null}
+                  {t.carriedFromThreadId ? <M3eChip>前版から持越</M3eChip> : null}
+                  {t.assignee ? (
+                    <M3eChip>
+                      <M3eIcon slot="icon" name="person" />
+                      担当 {t.assignee.name}
+                    </M3eChip>
+                  ) : null}
+                </M3eChipSet>
               ) : null}
-              {t.severity === "critical" ? (
-                <StatusText tone="error">{severityLabel[t.severity]}</StatusText>
-              ) : null}
-              {t.carriedFromThreadId ? <span className="meta">前版から持越</span> : null}
-              {t.assignee ? <span className="meta">担当 {t.assignee.name}</span> : null}
             </div>
           ) : null}
           {active ? <ThreadEvents threadId={t.id} /> : null}
           {active && mode === null && canReply ? (
-            <M3eButton variant="text" className="thread__reply-open" onClick={() => open("reply")}>
-              返信…
-            </M3eButton>
+            <Field label="返信" className="thread__reply-open">
+              <TextInput
+                readOnly
+                placeholder="返信を書く"
+                onFocus={() => open("reply")}
+                onClick={stop}
+              />
+            </Field>
           ) : null}
           {mode === "reply" || mode === "rejected" || mode === "deferred" || mode === "edit" ? (
             <div className="thread__form" onClick={stop}>
-              <TextArea
-                autoFocus
-                aria-label={
+              <Field
+                label={
                   mode === "reply"
                     ? "返信"
                     : mode === "edit"
                       ? "本文の訂正"
                       : `${resolutionLabel[mode]} の理由`
                 }
-                placeholder={
-                  mode === "reply"
-                    ? "返信"
-                    : mode === "edit"
-                      ? "本文の訂正（原文は履歴に残ります）"
-                      : `${resolutionLabel[mode]} の理由（必須）`
-                }
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setMode(null);
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
-                }}
-              />
+              >
+                <TextArea
+                  autoFocus
+                  aria-label={
+                    mode === "reply"
+                      ? "返信"
+                      : mode === "edit"
+                        ? "本文の訂正"
+                        : `${resolutionLabel[mode]} の理由`
+                  }
+                  placeholder={
+                    mode === "reply"
+                      ? "返信"
+                      : mode === "edit"
+                        ? "本文の訂正（原文は履歴に残ります）"
+                        : `${resolutionLabel[mode]} の理由（必須）`
+                  }
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setMode(null);
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
+                  }}
+                />
+              </Field>
               <div className="row">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setMode(null)}>

@@ -86,14 +86,18 @@ function Icon({ slot }: { slot?: string }) {
 /**
  * アプリバー用のベル。アイコンボタン（容器 40・タッチ 48・アイコン 24）の**外**にバッジを置く。
  * M3E のアイコンボタンは中身を容器で切り取るため、中に置くとバッジが欠ける。
+ * medium 以上はメニュー（menuId）、compact はボトムシートを開く（onOpen）。どちらもアカウントの隣。
  */
-function Bell({ menuId }: { menuId: string }) {
+function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
   const unread = useUnread();
   return (
     <span slot="trailing" className="bell">
-      <M3eIconButton aria-label={unread > 0 ? `通知（未読 ${unread} 件）` : "通知"}>
+      <M3eIconButton
+        aria-label={unread > 0 ? `通知（未読 ${unread} 件）` : "通知"}
+        {...(onOpen ? { onClick: onOpen } : {})}
+      >
         <M3eIcon name="notifications" className={unread > 0 ? "icon--filled" : ""} />
-        <M3eMenuTrigger htmlFor={menuId} />
+        {menuId ? <M3eMenuTrigger htmlFor={menuId} /> : null}
       </M3eIconButton>
       <Badge unread={unread} />
     </span>

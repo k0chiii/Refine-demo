@@ -304,8 +304,9 @@ m3e-search-bar {
 }
 
 /* ---------- 画面見出し: 内容側には置かない。各画面が AppBarSlot で共通アプリバーの見出しに差し込む（M3 App bars） */
-.row .spacer {
-  flex: 1;
+/* 行の中で後ろの要素を末尾側へ寄せる（flex の行ならどこでも） */
+.spacer {
+  flex: 1 1 auto;
 }
 .section-title {
   font: var(--mf-type-title-medium);
@@ -364,57 +365,6 @@ m3e-dialog [slot="actions"] {
 }
 .card dd {
   margin: 0;
-}
-
-/* ---------- 校正用テーブル: 密度を保ち、行全体をキーボードで辿れる（独自実装を維持） */
-.table-wrap {
-  overflow: auto;
-}
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font: var(--mf-type-body-medium);
-}
-.table th {
-  text-align: start;
-  font: var(--mf-type-label-medium);
-  color: var(--mf-on-surface-variant);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--mf-outline-variant);
-  white-space: nowrap;
-}
-.table td {
-  padding: 12px 12px;
-  border-bottom: 1px solid var(--mf-outline-variant);
-  vertical-align: top;
-  transition: background var(--mf-motion);
-}
-.table tbody tr:last-child td {
-  border-bottom: 0;
-}
-.table tr:hover td {
-  background: color-mix(in srgb, var(--mf-on-surface) 4%, transparent);
-}
-.table tr.row--urgent td {
-  background: color-mix(in srgb, var(--mf-error-container) 55%, transparent);
-}
-.table tr.row--urgent:hover td {
-  background: color-mix(in srgb, var(--mf-error-container) 75%, transparent);
-}
-.table tr.row--done td {
-  color: var(--mf-on-surface-variant);
-}
-.table a {
-  font: var(--mf-type-label-large);
-  text-decoration: none;
-}
-.table a:hover {
-  text-decoration: underline;
-}
-.table a:focus-visible,
-.table button:focus-visible {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: 2px;
 }
 
 /* ---------- 状態チップ（読み取り専用。M3 color roles で意味を固定） */
@@ -1411,7 +1361,7 @@ m3e-dialog [slot="actions"] {
 .comments__list {
   flex: 1;
   overflow: auto;
-  padding: 4px 12px 16px;
+  padding: 12px 12px 16px;
   display: grid;
   gap: 12px;
   align-content: start;
@@ -1451,18 +1401,12 @@ m3e-dialog [slot="actions"] {
 
 /* コメントカード（Google ドキュメント式・M3 card） */
 .thread {
-  --m3e-card-shape: var(--mf-shape-md);
-  --m3e-card-padding: 12px;
   display: block;
   cursor: pointer;
   color: var(--mf-on-surface);
 }
-.thread--active {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: -1px;
-}
-.thread--closed {
-  opacity: 0.72;
+.thread--closed .thread__body {
+  color: var(--mf-on-surface-variant);
 }
 .thread__content {
   display: grid;
@@ -1490,7 +1434,6 @@ m3e-dialog [slot="actions"] {
 }
 .thread__resolve,
 .thread__more {
-  --m3e-icon-button-container-size: 32px;
   margin: -4px 0;
 }
 .thread__resolve {
@@ -1540,14 +1483,6 @@ m3e-dialog [slot="actions"] {
   display: grid;
   gap: 8px;
   margin-top: 4px;
-}
-.thread__form .input--area {
-  min-height: 56px;
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: var(--mf-shape-sm);
-  padding: 8px 12px;
-  font: var(--mf-type-body-medium);
-  font-family: var(--mf-font);
 }
 .carry-box {
   display: grid;
@@ -2173,24 +2108,6 @@ m3e-icon.icon--on {
   padding: 12px 16px 0;
   margin: 0;
 }
-.count-table th,
-.count-table td {
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-}
-.count-table th[scope="row"] {
-  text-align: start;
-}
-/* 行見出しと数値の行で罫線と高さを揃える */
-.count-table th,
-.count-table td {
-  padding: 12px;
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
-.count-table tbody tr:last-child th,
-.count-table tbody tr:last-child td {
-  border-bottom: 0;
-}
 .switch-row {
   display: flex;
   align-items: center;
@@ -2452,25 +2369,10 @@ m3e-icon.icon--on {
   }
 }
 
-/* ---------- 表記ルール（表記統一）: 一覧と詳細。詳細は広い画面で右、狭い画面では全画面ダイアログ */
+/* ---------- 表記ルール（表記統一）: 広い画面は編集できる表、狭い画面はリスト。詳細はダイアログ */
 .notation__tabs {
   margin: 0 -8px 12px;
   padding-top: 0;
-}
-.notation__ld--split {
-  display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(380px, 1.1fr);
-  gap: 24px;
-  align-items: start;
-}
-.notation__detail {
-  position: sticky;
-  top: 8px;
-  max-height: calc(100dvh - 160px);
-  overflow: auto;
-  padding: 16px;
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-surface-container-low);
 }
 .notation__toolbar {
   margin-bottom: 8px;
@@ -2482,8 +2384,14 @@ m3e-icon.icon--on {
 .notation__filters {
   margin-bottom: 4px;
 }
-.notation__filters .select {
-  min-width: 200px;
+.notation__cat {
+  width: 240px;
+  flex: none;
+}
+/* 編集でセルの中身が変わっても列幅が動かないように（幅は列ごとに指定） */
+.rule-table .data-table__table {
+  table-layout: fixed;
+  min-width: 1040px;
 }
 .rule-row__correct {
   font-weight: 600;
@@ -2561,11 +2469,6 @@ m3e-icon.icon--on {
 }
 .field--narrow {
   max-width: 220px;
-}
-.table--dense td,
-.table--dense th {
-  padding-top: 4px;
-  padding-bottom: 4px;
 }
 .finding__orig {
   text-decoration: line-through;
@@ -2699,4 +2602,193 @@ m3e-icon.icon--on {
   .post-review {
     grid-template-columns: 1fr;
   }
+}
+
+/* 状態の chip（M3E chip）。色は意味（成功・注意）だけを変える */
+.chip--success {
+  --m3e-chip-icon-color: var(--mf-success, #1b6c35);
+}
+.chip--error {
+  --m3e-chip-icon-color: var(--mf-error);
+  --m3e-chip-label-text-color: var(--mf-error);
+}
+
+/* ---------- データ表（Material data table の寸法を M3 のトークンで。ui/DataTable.tsx） */
+.data-table {
+  overflow: auto;
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface);
+  max-width: 100%;
+}
+.data-table:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 2px;
+}
+.data-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface);
+}
+.data-table__th {
+  height: 56px;
+  padding: 0 16px;
+  text-align: start;
+  vertical-align: middle;
+  font: var(--mf-type-title-small);
+  color: var(--mf-on-surface);
+  border-bottom: 1px solid var(--mf-outline-variant);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--mf-surface);
+  z-index: 1;
+}
+.data-table__td,
+.data-table__rowhead {
+  height: 52px;
+  padding: 0 16px;
+  vertical-align: middle;
+  text-align: start;
+  font: var(--mf-type-body-medium);
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.data-table__rowhead {
+  font-weight: 500;
+}
+.data-table__row:last-child > * {
+  border-bottom: 0;
+}
+.data-table__num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.data-table__row:hover > * {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.data-table__row--selected > * {
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.data-table__row--action {
+  cursor: pointer;
+}
+.data-table__empty {
+  height: 52px;
+  padding: 0 16px;
+  color: var(--mf-on-surface-variant);
+}
+.data-table__sort {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: var(--mf-shape-xs);
+}
+.data-table__sort:focus-visible {
+  outline: 2px solid var(--mf-primary);
+}
+.data-table__sort-icon {
+  font-size: 18px;
+  opacity: 0;
+  color: var(--mf-on-surface-variant);
+}
+.data-table__sort:hover .data-table__sort-icon,
+.data-table__sort-icon--on {
+  opacity: 1;
+}
+.data-table__sort-icon--on {
+  color: var(--mf-on-surface);
+}
+/* 編集できるセル: 普段は値だけ（hover・フォーカスで鉛筆）。編集中は入力欄（フォーカス時のテキストフィールドの見た目） */
+.cell-edit {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  min-width: 48px;
+  max-width: 100%;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  border-radius: var(--mf-shape-xs);
+  cursor: text;
+}
+.cell-edit:hover,
+.cell-edit:focus-visible {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.cell-edit:focus-visible {
+  outline: 2px solid var(--mf-primary);
+}
+.cell-edit__icon {
+  font-size: 16px;
+  color: var(--mf-on-surface-variant);
+  opacity: 0;
+}
+.cell-edit:hover .cell-edit__icon,
+.cell-edit:focus-visible .cell-edit__icon {
+  opacity: 1;
+}
+.cell-editing {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+.cell-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 120px;
+  height: 36px;
+  padding: 0 8px;
+  margin: 0 -8px;
+  font: inherit;
+  color: var(--mf-on-surface);
+  background: var(--mf-surface-container-lowest);
+  border: 2px solid var(--mf-primary);
+  border-radius: var(--mf-shape-xs);
+  outline: none;
+}
+.cell-input--error {
+  border-color: var(--mf-error);
+}
+.cell-error {
+  flex-basis: 100%;
+  font: var(--mf-type-body-small);
+  color: var(--mf-error);
+}
+.cell-select .select {
+  min-width: 120px;
+}
+.cell-text {
+  overflow-wrap: anywhere;
+}
+/* 基本情報の表（見出し列 + 値。値は編集できるセル） */
+.prop-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--mf-type-body-medium);
+}
+.prop-table th {
+  width: 64px;
+  padding: 0 12px 0 0;
+  text-align: start;
+  vertical-align: middle;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+  white-space: nowrap;
+}
+.prop-table td {
+  height: 44px;
+  padding: 0 8px;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.prop-table tr + tr > * {
+  border-top: 1px solid var(--mf-outline-variant);
 }

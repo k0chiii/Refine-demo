@@ -5,6 +5,8 @@ import { useState } from "react";
 import { formatJstShort } from "@/lib/format";
 import { permissionLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
+import { describeError } from "@/lib/errors";
+import { DataTable, EditableSelect } from "@/ui/DataTable";
 import { Field, Select } from "@/ui/Field";
 import { M3eButton, M3eExpansionPanel } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
@@ -37,24 +39,62 @@ export function AclPanel({ workId }: { workId: string }) {
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません。</p>
       ) : (
-        <ul className="acl__list">
-          {active.map((g) => (
-            <li key={`${g.principalId}-${g.grantedAt}`}>
-              <span>
-                {g.principal?.name}
-                <span className="muted">　{permissionLabel[g.permission]}</span>
-              </span>
-              <span className="spacer" />
-              <M3eButton
-                variant="text"
-                disabled={doRevoke.pending}
-                onClick={() => void doRevoke.run(g.principalId)}
-              >
-                剥奪
-              </M3eButton>
-            </li>
-          ))}
-        </ul>
+        <DataTable
+          label="個人の許可"
+          rows={active}
+          rowKey={(g) => g.principalId}
+          columns={[
+            {
+              key: "who",
+              header: "ユーザー",
+              rowHeader: true,
+              sort: (a, b) =>
+                (a.principal?.name ?? "").localeCompare(b.principal?.name ?? "", "ja"),
+              cell: (g) => g.principal?.name,
+            },
+            {
+              key: "perm",
+              header: "権限",
+              width: "160px",
+              cell: (g) => (
+                <EditableSelect
+                  label={`${g.principal?.name ?? ""} の権限`}
+                  value={g.permission}
+                  options={(["view", "review", "edit", "manage"] as const).map((v) => ({
+                    value: v,
+                    label: permissionLabel[v] ?? v,
+                  }))}
+                  onSave={async (v) => {
+                    try {
+                      await grant({
+                        workId: workId as Id<"works">,
+                        principalType: "user",
+                        principalId: g.principalId,
+                        permission: v as "view",
+                      });
+                    } catch (e) {
+                      throw new Error(describeError(e).message);
+                    }
+                  }}
+                />
+              ),
+            },
+            {
+              key: "revoke",
+              header: <span className="sr-only">操作</span>,
+              width: "96px",
+              cell: (g) => (
+                <M3eButton
+                  variant="text"
+                  disabled={doRevoke.pending}
+                  onClick={() => void doRevoke.run(g.principalId)}
+                >
+                  剥奪
+                </M3eButton>
+              ),
+            },
+          ]}
+        />
       )}
       <div className="acl__add">
         <UserPicker
@@ -92,17 +132,37 @@ export function AclPanel({ workId }: { workId: string }) {
           onClosed={() => setHistory(false)}
         >
           <span slot="header">変更履歴</span>
-          <ul className="acl__list small">
-            {grants.map((g) => (
-              <li key={`${g.principalId}-${g.grantedAt}-${g.permission}`}>
-                <span>
-                  {g.principal?.name}・{permissionLabel[g.permission]}・{g.granter?.name}{" "}
-                  {formatJstShort(g.grantedAt)}
-                  {g.revokedAt ? `・剥奪 ${g.revoker?.name} ${formatJstShort(g.revokedAt)}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <DataTable
+            label="閲覧権限の変更履歴"
+            rows={grants}
+            rowKey={(g) => `${g.principalId}-${g.grantedAt}-${g.permission}`}
+            columns={[
+              { key: "who", header: "ユーザー", rowHeader: true, cell: (g) => g.principal?.name },
+              { key: "perm", header: "権限", cell: (g) => permissionLabel[g.permission] },
+              {
+                key: "granted",
+                header: "付与",
+                sort: (a, b) => a.grantedAt - b.grantedAt,
+                cell: (g) => (
+                  <span className="small">
+                    {g.granter?.name} {formatJstShort(g.grantedAt)}
+                  </span>
+                ),
+              },
+              {
+                key: "revoked",
+                header: "剥奪",
+                cell: (g) =>
+                  g.revokedAt ? (
+                    <span className="small">
+                      {g.revoker?.name} {formatJstShort(g.revokedAt)}
+                    </span>
+                  ) : (
+                    "—"
+                  ),
+              },
+            ]}
+          />
         </M3eExpansionPanel>
       ) : null}
     </div>

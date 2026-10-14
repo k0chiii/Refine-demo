@@ -14,7 +14,9 @@ import {
   lifecycleLabel,
   mediaLabel,
 } from "@/lib/labels";
+import { describeError } from "@/lib/errors";
 import { newRequestId, useAction } from "@/lib/useAction";
+import { EditableText } from "@/ui/DataTable";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
@@ -73,6 +75,15 @@ export function InfoTab({
         ? ["active", "cancelled"]
         : [];
 
+  const update = useMutation(api.works.update);
+  const editable = can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled";
+  const patch = async (p: { purpose?: string; category?: string; legacyId?: string }) => {
+    try {
+      await update({ workId: w.id as Id<"works">, expectedVersion: w.version, patch: p });
+    } catch (e) {
+      throw new Error(describeError(e).message);
+    }
+  };
   const doFinalize = useAction(async () => {
     if (!candidate) return;
     await finalize({
@@ -133,54 +144,76 @@ export function InfoTab({
           {lifecycleLabel[w.lifecycle]}
         </StatusText>
       ) : null}
-      <dl className="info">
-        {w.purpose ? (
-          <div>
-            <dt>目的</dt>
-            <dd>{w.purpose}</dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>区分</dt>
-          <dd>
-            {w.category} / {mediaLabel[w.mediaType]}
-          </dd>
-        </div>
-        <div>
-          <dt>納期</dt>
-          <dd>{formatJstDate(w.deadlineAt)}</dd>
-        </div>
-        {revision?.revision.focusNotes ? (
-          <div>
-            <dt>観点</dt>
-            <dd>{revision.revision.focusNotes}</dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>制作</dt>
-          <dd>{people.creators.map((p) => p?.name).join("、") || "—"}</dd>
-        </div>
-        <div>
-          <dt>校了</dt>
-          <dd>{people.approver?.name}</dd>
-        </div>
-        <div>
-          <dt>主管</dt>
-          <dd>{people.managers.map((p) => p?.name).join("、") || "—"}</dd>
-        </div>
-        {w.legacyId ? (
-          <div>
-            <dt>旧ID</dt>
-            <dd>{w.legacyId}</dd>
-          </div>
-        ) : null}
-        {w.confidentiality === "restricted" ? (
-          <div>
-            <dt>機密</dt>
-            <dd>非公開・取扱注意</dd>
-          </div>
-        ) : null}
-      </dl>
+      {/* 基本情報の表。目的・区分・旧ID はその場で直せる（編集できる人だけ。版番号で競合を検出） */}
+      <table className="prop-table">
+        <tbody>
+          <tr>
+            <th scope="row">目的</th>
+            <td>
+              <EditableText
+                label="目的"
+                value={w.purpose}
+                disabled={!editable}
+                placeholder="未入力"
+                onSave={(v) => patch({ purpose: v })}
+              />
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">区分</th>
+            <td>
+              <EditableText
+                label="区分"
+                value={w.category}
+                disabled={!editable}
+                validate={(v) => (v.trim() ? null : "区分を入力してください")}
+                onSave={(v) => patch({ category: v })}
+              />
+              <span className="small muted"> / {mediaLabel[w.mediaType]}</span>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">納期</th>
+            <td>{formatJstDate(w.deadlineAt)}</td>
+          </tr>
+          {revision?.revision.focusNotes ? (
+            <tr>
+              <th scope="row">観点</th>
+              <td>{revision.revision.focusNotes}</td>
+            </tr>
+          ) : null}
+          <tr>
+            <th scope="row">制作</th>
+            <td>{people.creators.map((p) => p?.name).join("、") || "—"}</td>
+          </tr>
+          <tr>
+            <th scope="row">校了</th>
+            <td>{people.approver?.name}</td>
+          </tr>
+          <tr>
+            <th scope="row">主管</th>
+            <td>{people.managers.map((p) => p?.name).join("、") || "—"}</td>
+          </tr>
+          <tr>
+            <th scope="row">旧ID</th>
+            <td>
+              <EditableText
+                label="旧ID"
+                value={w.legacyId ?? ""}
+                disabled={!editable}
+                placeholder="なし"
+                onSave={(v) => patch({ legacyId: v })}
+              />
+            </td>
+          </tr>
+          {w.confidentiality === "restricted" ? (
+            <tr>
+              <th scope="row">機密</th>
+              <td>非公開・取扱注意</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
 
       <div className="info-tab__actions">
         {can.finalize && w.lifecycle === "active" ? (

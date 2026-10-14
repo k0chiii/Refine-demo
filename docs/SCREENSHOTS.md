@@ -53,7 +53,9 @@
 | 45  | 指摘を見ながら直す（補助ペイン「指摘」→ 本文の該当箇所を選ぶ）                    | 制作者         | ![](screenshots/45-write-refs.png)             |
 | 46  | compact の文章エディタ（下端のドッキングツールバー）                              | 制作者         | ![](screenshots/46-write-compact.png)          |
 | 47  | compact の「その他」はボトムシート                                                | 制作者         | ![](screenshots/47-write-compact-more.png)     |
-| 50  | 表記ルール: 一覧と詳細（編集・例外・履歴）                                        | システム管理者 | ![](screenshots/50-notation-rules.png)         |
+| 50  | 表記ルール: 編集できる表（統一表記・誤表記・カテゴリ・厳格さ・年度・有効）        | システム管理者 | ![](screenshots/50-notation-rules.png)         |
+| 50a | 表のセルをその場で編集（Enter で保存・Esc で取消）                                | システム管理者 | ![](screenshots/50a-notation-cell-edit.png)    |
+| 50b | 行の詳細（説明・例外・履歴）はダイアログ                                          | システム管理者 | ![](screenshots/50b-notation-rule-detail.png)  |
 | 51  | 表記ルール「試す」（端末内の検査。カテゴリの継承）                                | システム管理者 | ![](screenshots/51-notation-try.png)           |
 | 52  | 表記ルールの提案（承認・却下・編集して承認・まとめて処理）                        | システム管理者 | ![](screenshots/52-notation-proposals.png)     |
 | 53  | 文章エディタの表記の検査（波線と表記パネル）                                      | 制作者         | ![](screenshots/53-write-notation.png)         |
@@ -65,7 +67,7 @@
 | 59  | 校了した SNS 投稿の書き出し（本文のコピー・画像・ZIP）                            | 校了権限者     | ![](screenshots/59-sns-export.png)             |
 | 60  | compact: 表記ルール（下部バーに「表記ルール」）                                   | 校了権限者     | ![](screenshots/60-notation-compact.png)       |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（58 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（60 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 

@@ -518,7 +518,7 @@ async function main() {
   await go(`${BASE}/admin`);
   await page.waitForSelector("text=監査ログ");
   await shot("13-admin-audit");
-  await page.locator("table.table m3e-button", { hasText: "閲覧権限" }).first().click();
+  await page.locator(".data-table m3e-button", { hasText: "閲覧権限" }).first().click();
   await page.waitForSelector("m3e-dialog[open] .acl");
   await page.waitForTimeout(400);
   await shot("12-acl");
@@ -537,13 +537,13 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
 
-  // 20 compact（<600）: ダッシュボード（下部ナビ 3 件: ダッシュボード・通知・制作物）/ 32 「通知」はボトムシート
+  // 20 compact（<600）: ダッシュボード（下部ナビ: ダッシュボード・制作物・表記ルール）/ 32 アプリバーのベル（アカウントの隣）→ ボトムシート
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${BASE}/`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForTimeout(400);
   await shot("20-mobile-dashboard");
-  await page.locator("m3e-nav-bar m3e-nav-item.shell__bar-notif").click();
+  await page.locator(".shell__appbar .bell m3e-icon-button").click();
   await page.waitForSelector("m3e-bottom-sheet.notif-sheet .notif");
   await page.waitForTimeout(800);
   await shot("32-mobile-notifications");
@@ -730,19 +730,28 @@ async function v2Scenes() {
   // 50–52 表記ルール（システム管理者）: 一覧と詳細・試す・提案
   await signInAs("mock-nogiku-admin");
   await go("/notation");
-  await page.waitForSelector("m3e-list-action");
-  await page.locator("m3e-list-action", { hasText: "いただき" }).click();
-  await page.waitForSelector(".notation__detail .rule-editor");
+  await page.waitForSelector(".rule-table .data-table__row");
   await shot("50-notation-rules");
+  // 50a 表のセルをその場で編集（統一表記）
+  await page.getByRole("button", { name: /A2-0001 の統一表記/ }).click();
+  await page.waitForSelector(".rule-table .cell-input");
+  await shot("50a-notation-cell-edit");
+  await page.keyboard.press("Escape");
+  // 50b 行の詳細（説明・例外・履歴）はダイアログ
+  await page.locator('m3e-icon-button[aria-label="A2-0001 の詳細（説明・例外・履歴）"]').click();
+  await page.waitForSelector("m3e-dialog[open] .rule-editor");
+  await page.waitForTimeout(400);
+  await shot("50b-notation-rule-detail");
   await go("/notation?view=try");
   await page.waitForSelector("m3e-list-item.finding");
   expectTrue((await page.locator("m3e-list-item.finding").count()) >= 3, "試す: 指摘が出ない");
   await shot("51-notation-try");
   await signInAs("mock-nogiku-reviewer");
   await go("/notation");
-  await page.waitForSelector("m3e-list-action");
+  await page.waitForSelector(".rule-table .data-table__row");
   await btn("追加を提案").click();
-  const ed = page.locator(".notation__detail");
+  await page.waitForSelector("m3e-dialog[open] .rule-editor");
+  const ed = page.locator("m3e-dialog[open]");
   await ed.locator("input").nth(1).fill("ウェブ");
   await ed.locator("textarea").nth(0).fill("Web");
   await ed.locator("textarea").nth(1).fill("ウェッブ");
