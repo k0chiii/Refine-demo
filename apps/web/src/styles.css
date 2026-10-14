@@ -207,6 +207,14 @@ m3e-search-bar {
   /* M3 の「上端からヘッダーまで 44」は Android のステータスバーを含む値。web ではアプリバー（64）のアイコン中心 32 に揃える: 12 ＋ 40 / 2 ＝ 32 */
   --m3e-nav-rail-top-space: 12px;
 }
+/* 設計原則（利用者決定 2026-10-14）: ナビのアイコンの高さは一切動かさない（Gmail と同じ）。
+   静止位置を両状態で同じにしたうえで、M3E が入れる縦方向の一瞬の動き（選択時の 4px スライド = short-2、向き変更時の margin の遷移 = short-1）だけを 0 にする。
+   横方向の動き（インジケーターの伸縮、ラベルのフェード、塗りの変化、リップル）は残す */
+.shell__rail,
+.shell__bar {
+  --md-sys-motion-duration-short-1: 0ms;
+  --md-sys-motion-duration-short-2: 0ms;
+}
 /* 折りたたみ時はアイコンだけ（ラベルはツールチップと読み上げ名）。項目の高さを展開時と同じ 56 にし、アイコンの中心を両状態で y=28 に固定する。
    M3E 既定（アイコンの下にラベル、項目 68）だと展開⇄折りたたみでアイコンが上下に動くため。M3 Expressive の「折りたたみでもラベル」からは外れる（利用者判断） */
 .shell__rail--collapsed .nav-label {
@@ -244,7 +252,7 @@ m3e-search-bar {
   min-width: 0;
 }
 .shell__content {
-  padding: 8px 24px 64px; /* M3 のペイン余白 24（medium 以上。Breakpoints › Medium / Expanded / Large） */
+  padding: 16px 24px 64px; /* M3 のペイン余白 24（medium 以上。Breakpoints › Medium / Expanded / Large）。見出しはアプリバーにあるので内容は 16 から始める */
   width: 100%;
   box-sizing: border-box;
 }
@@ -260,7 +268,7 @@ m3e-search-bar {
     display: none;
   }
   .shell__content {
-    padding: 8px 16px calc(96px + env(safe-area-inset-bottom, 0px)); /* 余白 16（compact。Breakpoints › Compact）＋下部ナビの高さ分＋セーフエリア */
+    padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px)); /* 余白 16（compact。Breakpoints › Compact）＋下部ナビの高さ分＋セーフエリア */
   }
   /* エディタ（詳細画面）: 共通バーと下部バーを消し、エディタのトップアプリバーに譲る */
   .shell--immersive .shell__content {
@@ -284,30 +292,9 @@ m3e-search-bar {
   display: block;
 }
 
-/* ---------- 画面見出し */
-.page-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 8px 0 16px; /* アプリバー直下: 8（content）＋ 8 ＝ 16。どの画面も題名が同じ高さに来る */
-  min-height: 40px;
-}
-.page-header__title {
-  margin: 0;
-}
-.page-header .spacer,
-.row .spacer,
-.page-title .spacer {
+/* ---------- 画面見出し: 内容側には置かない。各画面が AppBarSlot で共通アプリバーの見出しに差し込む（M3 App bars） */
+.row .spacer {
   flex: 1;
-}
-.page-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 8px 0 16px;
-  font: 500 22px/28px var(--mf-font);
 }
 .section-title {
   font: var(--mf-type-title-medium);
@@ -1137,6 +1124,10 @@ m3e-search-bar {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 先頭ボタンが無い画面: 見出しはバーの端から 16（M3 App bars。バー自体の内側余白 8 ＋ 8） */
+#appbar-leading:empty + .appbar-slot--title {
+  padding-inline-start: 8px;
 }
 .appbar-slot--actions {
   display: inline-flex;
