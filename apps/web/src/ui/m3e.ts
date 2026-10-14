@@ -36,6 +36,7 @@ export { M3eSelect } from "@m3e/react/select";
 export { M3eOption } from "@m3e/react/option";
 export { M3eCheckbox } from "@m3e/react/checkbox";
 export { M3eSwitch } from "@m3e/react/switch";
+export { M3eSlider, M3eSliderThumb } from "@m3e/react/slider";
 export { M3eSearchBar } from "@m3e/react/search";
 export { M3eTextareaAutosize } from "@m3e/react/textarea-autosize";
 export { M3eStepper, M3eStep, M3eStepPanel } from "@m3e/react/stepper";

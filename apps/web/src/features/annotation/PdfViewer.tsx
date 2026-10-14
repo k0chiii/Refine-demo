@@ -13,6 +13,19 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: number; y: number } };
 
+/** 表示位置: ページと、ページ上端からの割合（舞台の上から 40% の線） */
+export interface ViewPosition {
+  page: number;
+  rel: number;
+}
+
+/** 版比較のスクロール同期で親が使う操作 */
+export interface PdfViewerController {
+  getPosition: () => ViewPosition | null;
+  /** その位置を舞台の 40% の線に合わせる。このスクロールは onUserScroll に通知しない */
+  scrollToPosition: (pos: ViewPosition) => void;
+}
+
 /** PDF.js の倍率 1 は 1pt = 1px。Acrobat などの「100%」（実寸）は 96 / 72 倍 */
 export const PDF_ACTUAL_SIZE = 96 / 72;
 
@@ -41,6 +54,12 @@ interface Props {
   renderInPage?: (vp: Viewport, page: number) => ReactNode;
   /** ページの右に並べるもの（Google ドキュメント式に整列したコメント） */
   renderGutter?: (vp: Viewport, page: number) => ReactNode;
+  /** 読み込んだ PDF を親と共有する（版比較の特徴抽出で同じ文書を使い、二重に読まない） */
+  onDoc?: (doc: PDFDocumentProxy) => void;
+  /** 版比較: 親がスクロール位置を読み書きする */
+  controller?: { current: PdfViewerController | null };
+  /** 版比較: 利用者がスクロールしたとき（プログラムからのスクロールでは呼ばない） */
+  onUserScroll?: (pos: ViewPosition) => void;
 }
 
 type Size = { w: number; h: number };
@@ -68,6 +87,9 @@ export function PdfViewer({
   onZoom,
   renderInPage,
   renderGutter,
+  onDoc,
+  controller,
+  onUserScroll,
 }: Props) {
   const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(true);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
@@ -98,6 +120,7 @@ export function PdfViewer({
         .promise.then((d) => {
           if (cancelled) return;
           setDoc(d);
+          onDoc?.(d);
           onPageCount?.(d.numPages);
         })
         .catch((e: unknown) => setError(e instanceof Error ? e.message : "PDF を読み込めません")),
@@ -133,10 +156,47 @@ export function PdfViewer({
     if (renderScale > 0) onZoom?.(renderScale / PDF_ACTUAL_SIZE);
   }, [renderScale]);
 
+  // プログラムからのスクロール（同期）の間は利用者のスクロールとして扱わない（同期のループを防ぐ）
+  const programmatic = useRef(0);
+  const position = (): ViewPosition | null => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    const line = stage.getBoundingClientRect().top + stage.clientHeight * 0.4;
+    for (let i = 0; i < pageEls.current.length; i++) {
+      const el = pageEls.current[i];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const next = pageEls.current[i + 1]?.getBoundingClientRect();
+      if (line < r.bottom || !next || line < next.top)
+        return {
+          page: i + 1,
+          rel: Math.min(1, Math.max(0, (line - r.top) / Math.max(1, r.height))),
+        };
+    }
+    return null;
+  };
+  if (controller)
+    controller.current = {
+      getPosition: position,
+      scrollToPosition: (pos) => {
+        const stage = stageRef.current;
+        const el = pageEls.current[pos.page - 1];
+        if (!stage || !el) return;
+        const r = el.getBoundingClientRect();
+        const line = stage.getBoundingClientRect().top + stage.clientHeight * 0.4;
+        programmatic.current = performance.now();
+        stage.scrollTop += r.top + pos.rel * r.height - line;
+      },
+    };
+
   // 倍率が変わっても読んでいた位置（縦の割合）を保つ
   const onScroll = () => {
     const stage = stageRef.current;
     if (!stage) return;
+    if (onUserScroll && performance.now() - programmatic.current > 120) {
+      const pos = position();
+      if (pos) onUserScroll(pos);
+    }
     ratio.current = stage.scrollHeight > 0 ? stage.scrollTop / stage.scrollHeight : 0;
     // 舞台の上から 40% の線にかかっているページを「表示中」とする
     const line = stage.getBoundingClientRect().top + stage.clientHeight * 0.4;

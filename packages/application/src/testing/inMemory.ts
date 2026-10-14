@@ -12,7 +12,7 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
-import type { AppContext, AuditEntry, Notification } from "../ports.ts";
+import type { AlignmentOverride, AppContext, AuditEntry, Notification } from "../ports.ts";
 
 /**
  * インメモリのポート実装。ユースケースの単体テストと、将来の UI プロトタイプ用。
@@ -72,6 +72,7 @@ export interface InMemoryContext extends AppContext {
     checks: Table<RequiredCheck>;
     notifications: Table<Notification>;
     documents: Table<DocumentDraft>;
+    alignments: Table<AlignmentOverride>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
   };
@@ -92,6 +93,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     checks: new Table<RequiredCheck>("chk"),
     notifications: new Table<Notification>("ntf"),
     documents: new Table<DocumentDraft>("doc"),
+    alignments: new Table<AlignmentOverride>("aln"),
     audit: [],
     idempotency: new Map(),
   };
@@ -234,6 +236,13 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       findByWork: async (workId) => state.documents.all().find((d) => d.workId === workId) ?? null,
       insert: async (d) => state.documents.insert(d),
       update: async (d) => state.documents.put(d),
+    },
+    alignments: {
+      find: async (l, r) =>
+        state.alignments.all().find((x) => x.leftArtifactId === l && x.rightArtifactId === r) ??
+        null,
+      insert: async (x) => state.alignments.insert(x),
+      update: async (x) => state.alignments.put(x),
     },
     idempotency: {
       get: async (scope, key) =>

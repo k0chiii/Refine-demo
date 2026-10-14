@@ -330,6 +330,18 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_work", ["workId"]),
 
+  /** 版比較の手動ページ対応（同じ添付の組で再利用。表示専用で、指摘の座標は書き換えない） */
+  alignmentOverrides: defineTable({
+    workId: v.id("works"),
+    leftArtifactId: v.string(),
+    rightArtifactId: v.string(),
+    pairs: v.array(
+      v.object({ left: v.union(v.number(), v.null()), right: v.union(v.number(), v.null()) }),
+    ),
+    updatedBy: v.string(),
+    updatedAt: v.number(),
+  }).index("by_artifacts", ["leftArtifactId", "rightArtifactId"]),
+
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({
     recipientId: v.string(),

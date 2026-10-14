@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { documentExtensions } from "@/features/writing/extensions";
 import { buildPlainText, offsetToPos, posToOffset } from "@/features/writing/plainText";
 import { RangeHighlight, setHighlights, type HighlightRange } from "@/features/writing/plugins";
+import type { TextCompareProps } from "@/features/compare/textSync";
 import type { OverlayThread } from "./AnchorOverlay";
 import type { TextRangeDraft } from "./TextViewer";
 
@@ -36,7 +37,10 @@ export function RichTextViewer({
   onDraft,
   inPage,
   renderGutter,
-}: {
+  diff,
+  controller,
+  onUserScroll,
+}: TextCompareProps & {
   html: string;
   artifactId: string;
   threads: OverlayThread[];
@@ -49,6 +53,8 @@ export function RichTextViewer({
   renderGutter?: (positions: Map<string, number>, height: number) => ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const programmatic = useRef(0);
   const [positions, setPositions] = useState<Map<string, number>>(new Map());
   const [height, setHeight] = useState(0);
   const editor = useEditor(
@@ -75,7 +81,7 @@ export function RichTextViewer({
   );
 
   // 指摘の範囲と下書き範囲を強調する
-  const key = `${mine.map((t) => `${t.id}:${t.anchor.start}-${t.anchor.end}:${t.severity}`).join("|")}|${activeThreadId}|${draft?.start}-${draft?.end}`;
+  const key = `${mine.map((t) => `${t.id}:${t.anchor.start}-${t.anchor.end}:${t.severity}`).join("|")}|${activeThreadId}|${draft?.start}-${draft?.end}|${(diff ?? []).map((d) => `${d.kind}${d.start}-${d.end}`).join(",")}`;
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const doc = editor.state.doc;
@@ -100,6 +106,14 @@ export function RichTextViewer({
         to: offsetToPos(index, draft.end, size),
         className: "text-anchor text-anchor--draft",
       });
+    for (const d of diff ?? []) {
+      if (d.kind === "change") continue;
+      ranges.push({
+        from: offsetToPos(index, d.start, size),
+        to: offsetToPos(index, d.end, size),
+        className: `diff-hl diff-hl--${d.kind}`,
+      });
+    }
     setHighlights(editor, ranges);
   }, [editor, key]);
 
@@ -136,6 +150,27 @@ export function RichTextViewer({
     return () => ro.disconnect();
   }, [editor, key]);
 
+  if (controller)
+    controller.current = {
+      stage: () => stageRef.current,
+      markProgrammatic: () => {
+        programmatic.current = performance.now();
+      },
+      yOf: (offset) => {
+        const stage = stageRef.current;
+        if (!stage || !editor || editor.isDestroyed) return null;
+        try {
+          const index = buildPlainText(editor.state.doc);
+          const c = editor.view.coordsAtPos(
+            offsetToPos(index, offset, editor.state.doc.content.size),
+          );
+          return c.top - stage.getBoundingClientRect().top + stage.scrollTop;
+        } catch {
+          return null;
+        }
+      },
+    };
+
   const readSelection = () => {
     if (!selecting || !editor || !wrapRef.current) return;
     const sel = window.getSelection();
@@ -166,7 +201,14 @@ export function RichTextViewer({
 
   return (
     <div className="viewer text-viewer">
-      <div className="viewer__stage" tabIndex={0}>
+      <div
+        className="viewer__stage"
+        tabIndex={0}
+        ref={stageRef}
+        onScroll={() => {
+          if (onUserScroll && performance.now() - programmatic.current > 120) onUserScroll();
+        }}
+      >
         <div
           className="text-viewer__wrap rich-viewer__wrap"
           ref={wrapRef}

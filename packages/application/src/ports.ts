@@ -5,6 +5,7 @@ import type {
   CommentThread,
   DocumentDraft,
   Instant,
+  ManualPair,
   Principal,
   RequiredCheck,
   ReviewAssignment,
@@ -167,6 +168,22 @@ export interface DocumentDraftRepository {
   update(draft: DocumentDraft): Promise<void>;
 }
 
+/** 版比較の手動ページ対応（同じ添付の組で再利用する） */
+export interface AlignmentOverride {
+  id: string;
+  workId: WorkId;
+  leftArtifactId: string;
+  rightArtifactId: string;
+  pairs: ManualPair[];
+  updatedBy: UserId;
+  updatedAt: Instant;
+}
+export interface AlignmentOverrideRepository {
+  find(leftArtifactId: string, rightArtifactId: string): Promise<AlignmentOverride | null>;
+  insert(row: Omit<AlignmentOverride, "id">): Promise<AlignmentOverride>;
+  update(row: AlignmentOverride): Promise<void>;
+}
+
 export interface AppContext {
   clock: Clock;
   works: WorkRepository;
@@ -180,6 +197,7 @@ export interface AppContext {
   checks: RequiredCheckRepository;
   notifications: NotificationRepository;
   documents: DocumentDraftRepository;
+  alignments: AlignmentOverrideRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
 }

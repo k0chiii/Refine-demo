@@ -15,6 +15,7 @@ import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
 import type * as checks from "../checks.js";
 import type * as comments from "../comments.js";
+import type * as comparisons from "../comparisons.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as documents from "../documents.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   checks: typeof checks;
   comments: typeof comments;
+  comparisons: typeof comparisons;
   crons: typeof crons;
   dashboard: typeof dashboard;
   documents: typeof documents;

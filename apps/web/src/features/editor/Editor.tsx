@@ -20,6 +20,9 @@ import { ComposePopover } from "@/features/review/ComposePopover";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PaneHandle } from "@/features/editor/PaneHandle";
+import { ImageSwipe } from "@/features/compare/ImageSwipe";
+import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
+import { useCompareSession } from "@/features/compare/useCompareSession";
 import { htmlToPlainText, RichTextViewer } from "@/features/annotation/RichTextViewer";
 import { bodyOfHtml, isHtmlArtifact } from "@/features/writing/plainText";
 import { remaining } from "@/lib/format";
@@ -317,6 +320,16 @@ export function Editor({
     other?.artifacts.find((a) => a.role !== "external") ??
     null;
   const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null);
+  // 高度な版比較: ページの自動対応・スクロール同期・文章差分（features/compare）
+  const cmp = useCompareSession({
+    active: compareWith !== null,
+    left: otherArtifact,
+    right: artifact,
+    leftBlob: otherBlob.blob ?? null,
+    rightText: artifact && text?.artifactId === artifact.id ? text.body : null,
+  });
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [swipe, setSwipe] = useState(false);
 
   const resetCompose = () => {
     setDraft(null);
@@ -613,8 +626,18 @@ export function Editor({
           onZoom={setZoom}
           rotation={rotation}
           onPageCount={setPageCount}
-          renderInPage={inPage}
+          renderInPage={
+            compareWith
+              ? (vp, n) => (
+                  <>
+                    {cmp.pageOverlay("right", vp, n)}
+                    {inPage(vp, n)}
+                  </>
+                )
+              : inPage
+          }
           renderGutter={gutter}
+          {...(compareWith ? cmp.pdfProps("right") : {})}
         />
       );
     if (artifact.type === "document" && text?.artifactId === artifact.id)
@@ -634,6 +657,7 @@ export function Editor({
           }}
           inPage={compose(null, draft?.box ?? null)}
           renderGutter={textGutter}
+          {...(compareWith ? cmp.textProps("right") : {})}
         />
       ) : (
         <TextViewer
@@ -651,6 +675,7 @@ export function Editor({
           }}
           inPage={compose(null, draft?.box ?? null)}
           renderGutter={textGutter}
+          {...(compareWith ? cmp.textProps("right") : {})}
         />
       );
     if (artifact.type === "image" && blob.url)
@@ -700,11 +725,35 @@ export function Editor({
           {...none}
           draft={null}
           onDraft={() => undefined}
-          page={page}
+          page={1}
           scale={scale}
           rotation={rotation}
+          renderInPage={(vp, n) => cmp.pageOverlay("left", vp, n)}
+          {...cmp.pdfProps("left")}
         />
       );
+    if (otherArtifact.type === "document") {
+      if (!cmp.otherText) return <div className="empty">文章を読み込み中…</div>;
+      return cmp.otherText.html !== undefined ? (
+        <RichTextViewer
+          html={cmp.otherText.html}
+          artifactId={otherArtifact.id}
+          {...none}
+          draft={null}
+          onDraft={() => undefined}
+          {...cmp.textProps("left")}
+        />
+      ) : (
+        <TextViewer
+          text={cmp.otherText.body}
+          artifactId={otherArtifact.id}
+          {...none}
+          draft={null}
+          onDraft={() => undefined}
+          {...cmp.textProps("left")}
+        />
+      );
+    }
     if (otherArtifact.type === "image" && otherBlob.url)
       return (
         <ImageViewer
@@ -904,18 +953,30 @@ export function Editor({
       >
         <div className="ws__viewer">
           {compareWith ? (
-            <div className="compare">
-              <div className="compare__pane">
-                <div className="compare__label">{other?.revision.label ?? "…"}</div>
-                {renderOther()}
-              </div>
-              <div className="compare__pane">
-                <div className="compare__label">
-                  {revision?.label}
-                  {canComment ? <span className="compare__hint">コメントできます</span> : null}
+            <div className="compare-wrap">
+              <CompareStatus cmp={cmp} />
+              {swipe && cmp.kind === "image" && otherBlob.url && blob.url ? (
+                <ImageSwipe
+                  leftUrl={otherBlob.url}
+                  rightUrl={blob.url}
+                  leftLabel={other?.revision.label ?? "旧版"}
+                  rightLabel={revision?.label ?? "新版"}
+                />
+              ) : (
+                <div className="compare">
+                  <div className="compare__pane">
+                    <div className="compare__label">{other?.revision.label ?? "…"}</div>
+                    {renderOther()}
+                  </div>
+                  <div className="compare__pane">
+                    <div className="compare__label">
+                      {revision?.label}
+                      {canComment ? <span className="compare__hint">コメントできます</span> : null}
+                    </div>
+                    {renderViewer()}
+                  </div>
                 </div>
-                {renderViewer()}
-              </div>
+              )}
             </div>
           ) : (
             renderViewer()
@@ -983,6 +1044,48 @@ export function Editor({
                   }}
                 >
                   <M3eIcon name="add_comment" />
+                </M3eIconButton>
+              ) : null}
+              {compareWith && (cmp.kind === "pdf" || cmp.kind === "document") ? (
+                <>
+                  <M3eIconButton
+                    aria-label={cmp.syncOn ? "スクロール同期をやめる" : "スクロールを同期する"}
+                    toggle
+                    selected={cmp.syncOn}
+                    onClick={() => cmp.setSyncOn(!cmp.syncOn)}
+                  >
+                    <M3eIcon
+                      name={cmp.syncOn ? "sync" : "sync_disabled"}
+                      className={cmp.syncOn ? "icon--filled" : ""}
+                    />
+                  </M3eIconButton>
+                  <M3eIconButton
+                    aria-label={cmp.diffOn ? "文章の差分を隠す" : "文章の差分を表示"}
+                    toggle
+                    selected={cmp.diffOn}
+                    onClick={() => cmp.setDiffOn(!cmp.diffOn)}
+                  >
+                    <M3eIcon name="difference" className={cmp.diffOn ? "icon--filled" : ""} />
+                  </M3eIconButton>
+                </>
+              ) : null}
+              {compareWith && cmp.kind === "pdf" ? (
+                <M3eIconButton
+                  aria-label="ページの対応を確認・修正"
+                  disabled={cmp.pdf.status !== "ready"}
+                  onClick={() => setMappingOpen(true)}
+                >
+                  <M3eIcon name="low_density" />
+                </M3eIconButton>
+              ) : null}
+              {compareWith && cmp.kind === "image" ? (
+                <M3eIconButton
+                  aria-label={swipe ? "左右に並べる" : "重ねて比較"}
+                  toggle
+                  selected={swipe}
+                  onClick={() => setSwipe((v) => !v)}
+                >
+                  <M3eIcon name="vertical_split" className={swipe ? "icon--filled" : ""} />
                 </M3eIconButton>
               ) : null}
               {compareWith ? (
@@ -1109,6 +1212,58 @@ export function Editor({
       ) : null}
 
       <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+      {compareWith && cmp.kind === "pdf" ? (
+        <PageMappingDialog
+          open={mappingOpen}
+          pdf={cmp.pdf}
+          leftLabel={other?.revision.label ?? "旧版"}
+          rightLabel={revision?.label ?? "新版"}
+          onClose={() => setMappingOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** 比較の状況（解析中・同期を止めた理由・差分の件数）。M3: 状態はテキストで短く */
+function CompareStatus({ cmp }: { cmp: ReturnType<typeof useCompareSession> }) {
+  const parts: string[] = [];
+  if (cmp.kind === "pdf") {
+    if (cmp.pdf.status === "analyzing") parts.push("ページの対応を解析中…");
+    else if (cmp.pdf.status === "error")
+      parts.push("ページの対応を解析できませんでした（同じページ番号で並べています）");
+    else if (cmp.pdf.status === "ready") {
+      const inserted = cmp.pdf.pairs.filter((p) => p.left === null).length;
+      const deleted = cmp.pdf.pairs.filter((p) => p.right === null).length;
+      const moved = cmp.pdf.pairs.filter((p) => p.kind === "moved").length;
+      const low = cmp.pdf.pairs.filter(
+        (p) => p.left !== null && p.right !== null && p.confidence === "low",
+      ).length;
+      parts.push(
+        [
+          `ページ対応: 旧 ${cmp.pdf.leftCount} → 新 ${cmp.pdf.rightCount}`,
+          inserted ? `追加 ${inserted}` : "",
+          deleted ? `削除 ${deleted}` : "",
+          moved ? `移動 ${moved}` : "",
+          low ? `要確認 ${low}` : "",
+          cmp.pdf.manual.length ? "手動の対応あり" : "",
+        ]
+          .filter(Boolean)
+          .join("・"),
+      );
+    }
+  } else if (cmp.kind === "document" && cmp.stats) {
+    const s = cmp.stats;
+    parts.push(
+      `文章の差分: 追加 ${s.inserted}・削除 ${s.deleted}・変更 ${s.changed}${s.moved ? `・移動 ${s.moved}` : ""}`,
+    );
+  } else if (cmp.kind === "other")
+    parts.push("この組み合わせは左右に並べて表示します（自動の対応・差分はありません）");
+  if (cmp.syncNote) parts.push(cmp.syncNote);
+  if (parts.length === 0) return null;
+  return (
+    <div className={`compare-status ${cmp.syncNote ? "compare-status--warn" : ""}`} role="status">
+      {parts.join("　")}
     </div>
   );
 }

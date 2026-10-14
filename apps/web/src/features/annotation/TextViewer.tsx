@@ -1,5 +1,6 @@
 import type { Anchor } from "@mf100/domain";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { diffKindAt, type TextCompareProps } from "@/features/compare/textSync";
 import type { OverlayThread } from "./AnchorOverlay";
 
 export interface TextRangeDraft {
@@ -9,7 +10,7 @@ export interface TextRangeDraft {
   box?: { x: number; y: number; w: number; h: number };
 }
 
-interface Props {
+interface Props extends TextCompareProps {
   /** 版スナップショットの本文（添付テキストをそのまま） */
   text: string;
   artifactId: string;
@@ -45,8 +46,34 @@ export function TextViewer({
   onDraft,
   inPage,
   renderGutter,
+  diff,
+  controller,
+  onUserScroll,
 }: Props) {
   const bodyRef = useRef<HTMLPreElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const programmatic = useRef(0);
+  if (controller)
+    controller.current = {
+      stage: () => stageRef.current,
+      markProgrammatic: () => {
+        programmatic.current = performance.now();
+      },
+      yOf: (offset) => {
+        const stage = stageRef.current;
+        const body = bodyRef.current;
+        if (!stage || !body) return null;
+        for (const el of body.querySelectorAll<HTMLElement>("[data-start]")) {
+          const st = Number(el.dataset.start);
+          const en = Number(el.dataset.end);
+          if (offset >= st && offset < en)
+            return (
+              el.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop
+            );
+        }
+        return null;
+      },
+    };
   const wrapRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Map<string, number>>(new Map());
   const [height, setHeight] = useState(0);
@@ -63,6 +90,11 @@ export function TextViewer({
   if (draft) {
     bounds.add(draft.start);
     bounds.add(draft.end);
+  }
+  for (const d of diff ?? []) {
+    if (d.kind === "change") continue;
+    bounds.add(Math.min(d.start, text.length));
+    bounds.add(Math.min(d.end, text.length));
   }
   const points = [...bounds].sort((a, b) => a - b);
   const segments: Segment[] = [];
@@ -132,7 +164,14 @@ export function TextViewer({
 
   return (
     <div className="viewer text-viewer">
-      <div className="viewer__stage" tabIndex={0}>
+      <div
+        className="viewer__stage"
+        tabIndex={0}
+        ref={stageRef}
+        onScroll={() => {
+          if (onUserScroll && performance.now() - programmatic.current > 120) onUserScroll();
+        }}
+      >
         <div className="text-viewer__wrap" ref={wrapRef}>
           <pre
             ref={bodyRef}
@@ -151,14 +190,24 @@ export function TextViewer({
                 active ? "text-anchor--active" : "",
                 severity ? `text-anchor--${severity}` : "",
                 seg.draft ? "text-anchor--draft" : "",
+                diffKindAt(diff, seg.start, seg.end)
+                  ? `diff-hl diff-hl--${diffKindAt(diff, seg.start, seg.end)}`
+                  : "",
               ]
                 .filter(Boolean)
                 .join(" ");
               const content = text.slice(seg.start, seg.end);
-              if (!cls) return <span key={seg.start}>{content}</span>;
+              if (!cls)
+                return (
+                  <span key={seg.start} data-start={seg.start} data-end={seg.end}>
+                    {content}
+                  </span>
+                );
               return (
                 <span
                   key={seg.start}
+                  data-start={seg.start}
+                  data-end={seg.end}
                   className={cls}
                   data-thread={seg.threads.map((t) => t.id).join(" ")}
                   {...(label ? { "data-index": label } : {})}

@@ -1,4 +1,4 @@
-import type { AppContext, Notification } from "@mf100/application";
+import type { AlignmentOverride, AppContext, Notification } from "@mf100/application";
 import type {
   ApprovalEvent,
   Artifact,
@@ -328,6 +328,29 @@ export function createAppContext(
           )
           .take(100);
         return docs.length;
+      },
+    },
+    alignments: {
+      async find(l, r) {
+        const doc = await db
+          .query("alignmentOverrides")
+          .withIndex("by_artifacts", (q) => q.eq("leftArtifactId", l).eq("rightArtifactId", r))
+          .unique();
+        return doc ? (fromDoc(doc) as AlignmentOverride) : null;
+      },
+      async insert(row) {
+        const id = await db.insert("alignmentOverrides", {
+          ...row,
+          workId: row.workId as Id<"works">,
+        });
+        return { ...row, id } as AlignmentOverride;
+      },
+      async update(row) {
+        const { id, ...fields } = row;
+        await db.replace(id as Id<"alignmentOverrides">, {
+          ...fields,
+          workId: fields.workId as Id<"works">,
+        });
       },
     },
     documents: {
