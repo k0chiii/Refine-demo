@@ -73,7 +73,14 @@ const ready = () =>
   });
 // デモのデータはメモリ上にあるため、ページ再読込（page.goto）ではなく SPA 内遷移で移動する
 const go = async (path) => {
-  await page.evaluate((p) => globalThis.__mf100router.navigate({ to: p }), path.replace(BASE, ""));
+  await page.evaluate(
+    (p) => {
+      const [to, q] = p.split("?");
+      const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
+      return globalThis.__mf100router.navigate(search ? { to, search } : { to });
+    },
+    path.replace(BASE, ""),
+  );
   await page.waitForTimeout(800);
 };
 
@@ -209,7 +216,9 @@ async function main() {
       await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
       await page.waitForTimeout(300);
       // 専門確認: 写真（肖像・権利）を校正者に依頼
-      await page.locator("m3e-dialog[open] m3e-expansion-panel.checks-details").click();
+      await page
+        .locator('m3e-dialog[open] m3e-expansion-panel.checks-details [slot="header"]')
+        .click();
       await page.locator("m3e-checkbox#check-photo").click();
       await page.waitForSelector("m3e-dialog[open] .check:not(.check--done)");
       await pickUser(
@@ -696,6 +705,167 @@ async function main() {
   await page.waitForTimeout(700);
   await shot("47-write-compact-more");
   await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await v2Scenes();
+}
+
+/** 制作物一覧から名前で開き、その URL を返す */
+const openWork = async (title) => {
+  await go("/works");
+  await page.waitForSelector("m3e-list-action");
+  await page.locator("m3e-list-action", { hasText: title }).first().click();
+  await page.waitForURL(/\/works\/[^/]+$/);
+  await page.waitForTimeout(500);
+  return new URL(page.url()).pathname;
+};
+const expectTrue = (cond, msg) => {
+  if (!cond) throw new Error(msg);
+};
+
+/** v2: 表記統一・自動校正・版比較・SNS 投稿 */
+async function v2Scenes() {
+  // 50–52 表記ルール（システム管理者）: 一覧と詳細・試す・提案
+  await signInAs("mock-nogiku-admin");
+  await go("/notation");
+  await page.waitForSelector("m3e-list-action");
+  await page.locator("m3e-list-action", { hasText: "いただき" }).click();
+  await page.waitForSelector(".notation__detail .rule-editor");
+  await shot("50-notation-rules");
+  await go("/notation?view=try");
+  await page.waitForSelector("m3e-list-item.finding");
+  expectTrue((await page.locator("m3e-list-item.finding").count()) >= 3, "試す: 指摘が出ない");
+  await shot("51-notation-try");
+  await signInAs("mock-nogiku-reviewer");
+  await go("/notation");
+  await page.waitForSelector("m3e-list-action");
+  await btn("追加を提案").click();
+  const ed = page.locator(".notation__detail");
+  await ed.locator("input").nth(1).fill("ウェブ");
+  await ed.locator("textarea").nth(0).fill("Web");
+  await ed.locator("textarea").nth(1).fill("ウェッブ");
+  await ed.locator("m3e-button", { hasText: "追加を提案" }).click();
+  await page.waitForTimeout(600);
+  await signInAs("mock-nogiku-admin");
+  await go("/notation?view=proposals");
+  await page.waitForSelector("m3e-card.proposal");
+  await shot("52-notation-proposals");
+
+  // 53 文章エディタの表記の検査（800ms 後に波線、表記パネル）
+  await signInAs("mock-nogiku-creator");
+  const sitePath = await openWork("公式サイト トップページ");
+  await go(`${sitePath}/write`);
+  await page.waitForSelector(".doc[contenteditable=true]");
+  await page.click(".doc");
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("今年の5月祭では、お問合せは受付まで。");
+  await page.waitForSelector(".notation-hit", { timeout: 10_000 });
+  await page.locator('.write__side m3e-icon-button[aria-label="表記"]').click();
+  await page.waitForSelector(".notation-panel m3e-list-item.finding");
+  await shot("53-write-notation");
+
+  // 54–55 提出時の自動校正と PDF の版比較（委員会企画 D の制作物。D は A を継承）
+  const poster = await openWork("EVE 企画ポスター");
+  await submitRevision("最初の版を提出", [resolve(FIXTURES, "compare-v1.pdf")], "初稿");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await pdfReady();
+  await drawer("版");
+  await submitRevision(
+    "新しい版を提出",
+    ["compare-v2.pdf", "notation-sample.pdf", "notation-sample.png"].map((f) =>
+      resolve(FIXTURES, f),
+    ),
+    "協賛ページを追加",
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+  await pdfReady();
+  await drawer("コメント");
+  await page.waitForFunction(
+    () => /表記の指摘 \d+ 件/.test(document.querySelector(".auto-status")?.textContent ?? ""),
+    null,
+    {
+      timeout: 90_000,
+    },
+  );
+  expectTrue((await page.locator(".thread .thread__bot").count()) > 0, "自動校正の指摘が無い");
+  await shot("54-auto-proofread");
+  await drawer("版");
+  await page
+    .locator(".version", { hasText: "第1版" })
+    .locator("m3e-button", { hasText: "比較" })
+    .click();
+  await page.waitForFunction(
+    () => document.querySelector(".compare-status")?.textContent?.includes("追加 1"),
+    null,
+    {
+      timeout: 30_000,
+    },
+  );
+  await page.waitForTimeout(800);
+  await shot("55-compare-pdf");
+  void poster;
+
+  // 56–59 SNS 投稿: 編集とプレビュー → 提出 → 校正画面のプレビュー → 校了版の書き出し
+  const sns = await openWork("公式 Instagram 開催告知");
+  await btn("投稿を作る").click();
+  await page.waitForSelector(".post-edit");
+  await page.locator("m3e-button-segment", { hasText: "カルーセル" }).click();
+  await page.locator(".post-edit input").nth(0).fill("第100回五月祭");
+  await page.locator(".post-edit input").nth(1).fill("mayfes_official");
+  await page
+    .locator(".post-edit textarea")
+    .first()
+    .fill(
+      "第100回五月祭を本郷キャンパスで開催します！\n詳しくは https://example.invalid をご覧ください。\n#五月祭 #MF100",
+    );
+  await page.setInputFiles('.post-edit input[type="file"]', [
+    resolve(FIXTURES, "poster.png"),
+    resolve(FIXTURES, "notation-sample.png"),
+  ]);
+  await page.waitForSelector(".post-image__thumb");
+  await page.locator(".post-image input").first().fill("五月祭のポスター");
+  await page.waitForTimeout(600);
+  await shot("56-sns-editor");
+  await page.locator("m3e-button-segment", { hasText: "プロフィール" }).click();
+  await page.waitForTimeout(300);
+  await shot("57-sns-preview-grid", ".post-preview");
+  await btn("版として提出").click();
+  await page.waitForSelector("m3e-dialog[open]");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item__state--verified").length >= 4,
+    null,
+    {
+      timeout: 30_000,
+    },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await page.waitForSelector(".sp-figure", { timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  expectTrue(
+    (await page.locator(".post-review").innerText()).includes("校了した版だけ"),
+    "校了前に書き出せてしまう",
+  );
+  await shot("58-sns-review");
+  await signInAs("mock-nogiku-approver");
+  await go(`${sns}/v/1`);
+  await page.waitForSelector(".sp-figure", { timeout: 20_000 });
+  await drawer("情報");
+  await btn("校了を宣言").click();
+  await page.waitForSelector("m3e-dialog[open]");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "校了を確定する" }).click();
+  await page.waitForSelector('m3e-button:has-text("まとめて ZIP")', { timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await shot("59-sns-export");
+
+  // 60 表記ルール（compact）
+  await page.setViewportSize({ width: 412, height: 915 });
+  await go("/notation");
+  await page.waitForSelector("m3e-list-action");
+  await shot("60-notation-compact");
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 

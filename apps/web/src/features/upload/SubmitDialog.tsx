@@ -247,7 +247,7 @@ export function SubmitDialog({
             <Field label="見てほしい観点">
               <TextArea value={form.focusNotes} onChange={set("focusNotes")} />
             </Field>
-            <M3eExpansionPanel className="expansion checks-">
+            <M3eExpansionPanel className="expansion checks-details">
               <span slot="header">専門確認を依頼する</span>
               <div className="checks">
                 {checkTypes.map((t) => (
@@ -277,7 +277,7 @@ export function SubmitDialog({
                 ))}
               </div>
             </M3eExpansionPanel>
-            <M3eExpansionPanel className="expansion ">
+            <M3eExpansionPanel className="expansion">
               <span slot="header">外部リンク</span>
               <div>
                 <Field label="URL">

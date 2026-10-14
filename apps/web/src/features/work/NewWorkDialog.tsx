@@ -82,7 +82,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
           value={form.notationCategories}
           onChange={(codes) => setForm((f) => ({ ...f, notationCategories: codes }))}
         />
-        <M3eExpansionPanel className="expansion ">
+        <M3eExpansionPanel className="expansion">
           <span slot="header">詳細設定（旧ID・機密区分）</span>
           <div className="form">
             <Field label="旧ID（Notion 等）">
