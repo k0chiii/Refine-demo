@@ -47,7 +47,6 @@ import {
   M3eList,
   M3eListItem,
   M3eSegmentedButton,
-  M3eSwitch,
 } from "@/ui/m3e";
 import { PaneTabs } from "@/ui/PaneTabs";
 import {
@@ -56,7 +55,8 @@ import {
   type PreviewImage,
   type PreviewView,
 } from "./preview/PostPreview";
-import { DevicePicker, usePreviewDevice } from "./preview/DevicePicker";
+import { usePreviewDevice } from "./preview/DevicePicker";
+import { PreviewSettings } from "./preview/PreviewSettings";
 
 /** 画像の実体（URL と大きさ）。前の版の画像は添付から、新しい画像は端末のファイルから */
 interface ImageAsset extends PreviewImage {
@@ -571,39 +571,6 @@ function PostSurface({
 
   const previewPane = (
     <div className="post-preview stack">
-      <div className="row">
-        <DevicePicker device={device.device} color={device.color} onChange={device.set} />
-        {compact ? (
-          // スマホ: 自分の端末の画面いっぱいに出す（そのアプリが入っているように見える）
-          <M3eButton variant="tonal" onClick={() => setFull(true)}>
-            <M3eIcon slot="icon" name="fullscreen" />
-            全画面で見る
-          </M3eButton>
-        ) : null}
-        {post.platform === "instagram" && post.format !== "story" ? (
-          <M3eSegmentedButton aria-label="表示">
-            {(
-              [
-                ["post", "投稿"],
-                ["grid", "プロフィール"],
-              ] as const
-            ).map(([v, l]) => (
-              <M3eButtonSegment key={v} checked={view === v} onClick={() => setView(v)}>
-                {l}
-              </M3eButtonSegment>
-            ))}
-          </M3eSegmentedButton>
-        ) : null}
-        {post.platform === "instagram" && post.format === "story" ? (
-          <label className="row small">
-            <M3eSwitch
-              checked={safeArea}
-              onChange={(e) => setSafeArea((e.target as unknown as { checked: boolean }).checked)}
-            />
-            安全領域を表示
-          </label>
-        ) : null}
-      </div>
       <PostPreview
         post={post}
         {...(profile ? { profile } : {})}
@@ -623,6 +590,20 @@ function PostSurface({
           onClose={() => setFull(false)}
         />
       ) : null}
+      {/* 機種・表示の設定は FAB menu にしまう（上に選択欄を並べない） */}
+      <PreviewSettings
+        device={device.device}
+        color={device.color}
+        onDevice={device.set}
+        {...(post.platform === "instagram" && post.format !== "story"
+          ? { view, onView: setView }
+          : {})}
+        {...(post.platform === "instagram" && post.format === "story"
+          ? { safeArea, onSafeArea: setSafeArea }
+          : {})}
+        {...(compact ? { onFullscreen: () => setFull(true) } : {})}
+        compact={compact}
+      />
     </div>
   );
 

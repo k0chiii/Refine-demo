@@ -3100,15 +3100,13 @@ m3e-icon.icon--on {
   font-weight: 500;
 }
 
-/* スナックバー（注意・警告の通知。lib/toast.ts）: セーフエリアと下部ナビの上に出す。
-   M3E は top を「画面の高さ − 開いたときに測った高さ」で決めるため、2 行に折り返すと下にずれてセーフエリアにかかる。
+/* スナックバー（注意・警告の通知。lib/toast.ts）: セーフエリアの上に出す。
+   下部ナビ・浮遊ツールバー・FAB がある画面は、開く直前にその上へ合わせる（--mf-snackbar-bottom。installSnackbarPlacement）。
+   M3E は top を「画面の高さ − 開いたときに測った高さ」で決めるため、2 行に折り返すと下にずれてセーフエリアにかかった。
    bottom で置き直す */
 m3e-snackbar {
   top: auto;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-}
-:root:has(.shell__bar) m3e-snackbar {
-  bottom: calc(16px + var(--mf-nav-bar-height, 68px) + env(safe-area-inset-bottom, 0px));
+  bottom: var(--mf-snackbar-bottom, calc(16px + env(safe-area-inset-bottom, 0px)));
 }
 /* SNS アカウント（管理） */
 .profile-avatar {
@@ -3118,19 +3116,27 @@ m3e-snackbar {
   object-fit: cover;
   display: block;
 }
-/* SNS プレビューの端末選択（機種と本体の色） */
-.device-picker {
+/* SNS プレビューの設定（機種・表示）。preview/PreviewSettings.tsx
+   FAB は窓の右下（compact 16、それより広い画面 24。M3 FAB menu › Adaptive layout）。セーフエリアの上に置く */
+.preview-fab {
+  position: fixed;
+  right: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+@media (max-width: 599px) {
+  .preview-fab {
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  /* 最後まで送ったとき、プレビューの下の説明が FAB に隠れないように */
+  .post-preview:has(> .preview-fab) {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+}
+/* 校正画面: 浮遊ツールバーがあるので FAB にせず、プレビューの右上のボタン */
+.post-preview__bar {
   display: flex;
-  gap: 8px;
-  max-width: 100%;
-}
-.device-picker__device {
-  width: 240px;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-.device-picker__color {
-  width: 168px;
-  min-width: 0;
-  flex: 0 1 auto;
+  justify-content: flex-end;
+  align-self: stretch;
 }

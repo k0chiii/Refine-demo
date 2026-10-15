@@ -72,4 +72,5 @@ export { M3eSplitButton } from "@m3e/react/split-button";
 export { M3eSegmentedButton, M3eButtonSegment } from "@m3e/react/segmented-button";
 export { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 export { M3eFab } from "@m3e/react/fab";
+export { M3eFabMenu, M3eFabMenuItem, M3eFabMenuTrigger } from "@m3e/react/fab-menu";
 export { M3eButtonGroup } from "@m3e/react/button-group";

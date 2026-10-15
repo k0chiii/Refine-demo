@@ -6,15 +6,7 @@ import { useEffect, useState } from "react";
 import { fetchArtifactBlob } from "@/integrations/api";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
-import {
-  M3eButton,
-  M3eButtonSegment,
-  M3eIcon,
-  M3eList,
-  M3eListItem,
-  M3eSegmentedButton,
-  M3eSnackbar,
-} from "@/ui/m3e";
+import { M3eButton, M3eIcon, M3eList, M3eListItem, M3eSnackbar } from "@/ui/m3e";
 import {
   FullscreenPreview,
   PostPreview,
@@ -22,7 +14,8 @@ import {
   type PreviewView,
 } from "./preview/PostPreview";
 import { useWindowClass } from "@/lib/useMedia";
-import { DevicePicker, usePreviewDevice } from "./preview/DevicePicker";
+import { usePreviewDevice } from "./preview/DevicePicker";
+import { PreviewSettings } from "./preview/PreviewSettings";
 import { makeZip } from "./zip";
 
 interface ArtifactLike {
@@ -151,28 +144,19 @@ export function PostReview({
   return (
     <div className="post-review">
       <div className="post-preview stack">
-        <div className="row">
-          <DevicePicker device={device.device} color={device.color} onChange={device.set} />
-          {compact ? (
-            <M3eButton variant="tonal" onClick={() => setFull(true)}>
-              <M3eIcon slot="icon" name="fullscreen" />
-              全画面で見る
-            </M3eButton>
-          ) : null}
-          {post.platform === "instagram" && post.format !== "story" ? (
-            <M3eSegmentedButton aria-label="表示">
-              {(
-                [
-                  ["post", "投稿"],
-                  ["grid", "プロフィール"],
-                ] as const
-              ).map(([v, l]) => (
-                <M3eButtonSegment key={v} checked={view === v} onClick={() => setView(v)}>
-                  {l}
-                </M3eButtonSegment>
-              ))}
-            </M3eSegmentedButton>
-          ) : null}
+        {/* 機種・表示の設定: 校正画面は浮遊ツールバーがあるので FAB menu ではなく、右上のボタンから menu */}
+        <div className="post-preview__bar">
+          <PreviewSettings
+            device={device.device}
+            color={device.color}
+            onDevice={device.set}
+            {...(post.platform === "instagram" && post.format !== "story"
+              ? { view, onView: setView }
+              : {})}
+            {...(compact ? { onFullscreen: () => setFull(true) } : {})}
+            compact={compact}
+            placement="inline"
+          />
         </div>
         <PostPreview
           post={post}

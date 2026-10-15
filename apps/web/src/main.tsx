@@ -2,6 +2,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerServiceWorker } from "./lib/pwa";
+import { installSnackbarPlacement } from "./lib/toast";
 import { routeTree } from "./routeTree.gen";
 import "./theme";
 import "./fonts";
@@ -18,6 +19,9 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
+
+// スナックバーは下部ナビ・浮遊ツールバー・FAB の上に出す
+installSnackbarPlacement();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

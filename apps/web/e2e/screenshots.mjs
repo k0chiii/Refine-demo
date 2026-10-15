@@ -1075,7 +1075,9 @@ async function v2Scenes() {
     (await page.locator(".sp-caption").innerText()).includes("iPhone 17（画面 402×874"),
     "端末の機種と画面の大きさが出ない",
   );
-  await page.locator("m3e-button-segment", { hasText: "プロフィール" }).click();
+  // 機種・表示の設定は右下の FAB から開く menu（M3 FAB menu。web では menu を使う）
+  await page.locator(".preview-fab m3e-fab").click();
+  await page.locator("m3e-menu-item-radio", { hasText: "プロフィールで見る" }).click();
   await page.waitForTimeout(300);
   await shot("57-sns-preview-grid", ".post-preview");
   await btn("版として提出").click();
