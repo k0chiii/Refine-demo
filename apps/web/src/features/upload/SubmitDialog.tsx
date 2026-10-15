@@ -7,6 +7,7 @@ import {
   checkTypes,
   pickReviewArtifact,
   type CheckType,
+  POST_MANIFEST_NAME,
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -162,6 +163,9 @@ export function SubmitDialog({
         label: checkTypeLabels[t],
         ...(checks[t]?.assignee[0] ? { assigneeId: checks[t]!.assignee[0]! } : {}),
       }));
+    // SNS 投稿の版: 添付する内容の記録と同じものを渡し、サーバーで添付との対応を確かめる
+    const manifest = files.find((x) => x.name === POST_MANIFEST_NAME);
+    const postSnapshot = manifest ? await manifest.text() : undefined;
     const requestId = crypto.randomUUID();
     const f = new SubmissionFlow(
       {
@@ -179,6 +183,7 @@ export function SubmitDialog({
             focusNotes: form.focusNotes,
             items,
             ...(requiredChecks.length > 0 ? { requiredChecks } : {}),
+            ...(postSnapshot !== undefined ? { postSnapshot } : {}),
             requestId,
           }).then((r) => ({ sessionId: r.sessionId, items: r.items })),
         upload: (itemId, file, onProgress) => uploadItem(token, itemId, file, onProgress),

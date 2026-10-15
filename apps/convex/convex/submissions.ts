@@ -48,6 +48,7 @@ export const prepare = mutation({
         v.object({ type: vCheckType, label: v.string(), assigneeId: v.optional(v.string()) }),
       ),
     ),
+    postSnapshot: v.optional(v.string()),
     requestId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

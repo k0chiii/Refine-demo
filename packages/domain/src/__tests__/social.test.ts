@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  byteLength,
   charLength,
   checkPost,
   cropRect,
@@ -12,6 +13,7 @@ import {
   missingPostImagesMessage,
   parsePostManifest,
   postSnapshotProblems,
+  postSubmissionProblems,
   postManifest,
   xWeightedLength,
   type SocialPost,
@@ -139,5 +141,45 @@ describe("SNS 投稿の提出（画像の実体）", () => {
     expect(postSnapshotProblems({ images: [img("x"), img("x")] }, ["x.jpg"])).toEqual([
       "2 枚目の画像のファイル名が重複しています",
     ]);
+  });
+
+  it("提出の準備で、内容の記録と添付の対応をサーバー側でも確かめる", () => {
+    const post: SocialPost = { ...emptyPost("instagram"), images: [img("01-a"), img("02-b")] };
+    const json = postManifest(post);
+    const size = byteLength(json);
+    const items = (names: string[], manifestSize = size) => [
+      { fileName: "post-body.txt", declaredSize: 3 },
+      ...names.map((fileName) => ({ fileName, declaredSize: 10 })),
+      { fileName: "mf100-post.json", declaredSize: manifestSize },
+    ];
+    expect(postSubmissionProblems(json, items(["01-a.jpg", "02-b.jpg"]))).toEqual([]);
+    // 画像が 1 枚欠けた版は作らない
+    expect(postSubmissionProblems(json, items(["01-a.jpg"]))).toEqual([
+      "2 枚目の画像のファイルがありません",
+    ]);
+    // 記録を渡さずに添付だけ、記録だけで添付なし
+    expect(postSubmissionProblems(undefined, items(["01-a.jpg", "02-b.jpg"]))).toEqual([
+      "内容の記録が渡されていません",
+    ]);
+    expect(postSubmissionProblems(json, [{ fileName: "a.pdf" }])).toEqual([
+      "内容の記録の添付がありません",
+    ]);
+    // 渡した記録と添付する記録が別物（サイズが違う）
+    expect(postSubmissionProblems(json, items(["01-a.jpg", "02-b.jpg"], size + 1))).toEqual([
+      "内容の記録が添付と一致しません",
+    ]);
+    // 読むときに除かれる画像（ファイル名なし）も見逃さない
+    const broken = JSON.stringify({ ...JSON.parse(json), images: [img("01-a"), { key: "x" }] });
+    const brokenItems = [
+      { fileName: "post-body.txt" },
+      { fileName: "01-a.jpg" },
+      { fileName: "mf100-post.json", declaredSize: byteLength(broken) },
+    ];
+    expect(postSubmissionProblems(broken, brokenItems)).toEqual([
+      "内容の記録に読めない画像があります",
+    ]);
+    expect(postSubmissionProblems("{", items([]))).toEqual(["内容の記録を読めません"]);
+    // 投稿でない版は対象外
+    expect(postSubmissionProblems(undefined, [{ fileName: "a.pdf" }])).toEqual([]);
   });
 });

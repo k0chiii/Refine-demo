@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { UPLOAD_ATTEMPT_TTL_MS, type Principal } from "@mf100/domain";
+import {
+  byteLength,
+  emptyPost,
+  postManifest,
+  UPLOAD_ATTEMPT_TTL_MS,
+  type Principal,
+} from "@mf100/domain";
 import {
   beginItemUpload,
   completeItemUpload,
@@ -431,5 +437,68 @@ describe("同時提出の競合（P2: §5.2-11 競合する同時提出を一件
     expect((await ctx.uploads.findById(b.session.id))?.state).toBe("open");
     ctx.clock.advance(HOUR);
     expect((await submitRevision(ctx, work.id)).sequence).toBe(2);
+  });
+});
+
+describe("版提出: SNS 投稿の内容の記録と添付の対応（PR #1 レビュー）", () => {
+  it("記録にある画像が添付に無い版は準備の時点で拒否する。そろっていれば準備できる", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const image = (k: string) => ({
+      key: k,
+      fileName: `${k}.jpg`,
+      alt: "説明",
+      aspect: "1:1" as const,
+    });
+    const postSnapshot = postManifest({
+      ...emptyPost("instagram"),
+      images: [image("01-a"), image("02-b")],
+    });
+    const file = (fileName: string, declaredSize = 10) => ({
+      fileName,
+      mimeType: "image/jpeg",
+      type: "image" as const,
+      role: "source" as const,
+      declaredSize,
+    });
+    const items = (images: string[]) => [
+      { ...file("post-body.txt", 3), mimeType: "text/plain", type: "document" as const },
+      ...images.map((n) => file(n)),
+      {
+        ...file("mf100-post.json", byteLength(postSnapshot)),
+        mimeType: "application/json",
+        type: "document" as const,
+      },
+    ];
+    const input = {
+      workId: work.id,
+      kind: "standard" as const,
+      reviewType: "general",
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+    };
+    await expect(
+      prepareSubmission(ctx, principals.creator, {
+        ...input,
+        items: items(["01-a.jpg"]),
+        postSnapshot,
+      }),
+    ).rejects.toThrow(code("post_snapshot_mismatch"));
+    // 記録を添付するのに、準備で記録を渡さない（検査の迂回）も拒否する
+    await expect(
+      prepareSubmission(ctx, principals.creator, { ...input, items: items(["01-a.jpg"]) }),
+    ).rejects.toThrow(code("post_snapshot_mismatch"));
+    const ok = await prepareSubmission(ctx, principals.creator, {
+      ...input,
+      items: items(["01-a.jpg", "02-b.jpg"]),
+      postSnapshot,
+    });
+    expect(ok.items.map((i) => i.fileName)).toEqual([
+      "post-body.txt",
+      "01-a.jpg",
+      "02-b.jpg",
+      "mf100-post.json",
+    ]);
   });
 });

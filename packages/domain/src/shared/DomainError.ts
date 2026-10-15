@@ -79,6 +79,8 @@ export const domainErrorCodes = [
   "document_invalid",
   "document_too_large",
   "document_format_mismatch",
+  // SNS 投稿の版
+  "post_snapshot_mismatch",
   // 表記統一
   "notation_rule_invalid",
   "notation_not_manager",

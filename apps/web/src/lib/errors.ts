@@ -78,6 +78,8 @@ const messages: Record<string, string> = {
   document_invalid: "文章を保存できません。大きすぎるか、形式が壊れています。",
   document_too_large:
     "下書きが大きすぎて保存できません。文章と書式を合わせて約 900KB までです。文章を分けるか、長い部分を減らしてください。",
+  post_snapshot_mismatch:
+    "投稿の内容と添付する画像が対応していません。画像をそろえ直してから提出してください。",
   document_format_mismatch:
     "この制作物の下書きとは形式が違うため保存できません。制作物に合ったエディタで開いてください。",
   notation_rule_invalid: "ルールの内容を確かめてください",
@@ -109,6 +111,7 @@ function withDetails(code: string, details: unknown): string | null {
     errors?: unknown;
     reason?: unknown;
     max?: unknown;
+    problems?: unknown;
   };
   if (code === "feedback_invalid") {
     const field = (details as { field?: unknown } | null)?.field;
@@ -140,6 +143,10 @@ function withDetails(code: string, details: unknown): string | null {
   }
   if (code === "document_format_mismatch" && d.reason === "existing_draft")
     return "この制作物には別の形式の下書きがあります。そのまま保存すると原稿が消えるため保存しませんでした。置き換える場合は、エディタの案内から明示的に置き換えてください。";
+  if (code === "post_snapshot_mismatch" && Array.isArray(d.problems)) {
+    const first = d.problems.find((p): p is string => typeof p === "string");
+    if (first) return `提出できません: ${first}。画像をそろえ直してから提出してください。`;
+  }
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {

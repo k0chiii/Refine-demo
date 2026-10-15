@@ -12,6 +12,7 @@ import {
   markItemFailed,
   markItemVerified,
   planRevision,
+  postSubmissionProblems,
   type Principal,
   type Revision,
   type RevisionKind,
@@ -54,6 +55,8 @@ export interface PrepareSubmissionInput {
   }>;
   /** この版で必要な専門確認（§2.2-4）。確定時に RequiredCheck として作られる。 */
   requiredChecks?: Array<{ type: CheckType; label?: string; assigneeId?: string }>;
+  /** SNS 投稿の版: 添付する内容の記録（mf100-post.json）と同じ JSON。添付との対応をここで確かめる */
+  postSnapshot?: string;
   requestId?: string;
 }
 
@@ -81,6 +84,10 @@ export async function prepareSubmission(
   const baseRevisions = await ctx.revisions.listByWork(work.id);
   planRevision(baseRevisions, input.kind);
   if (input.items.length === 0) throw new DomainError("revision_no_artifacts");
+  // SNS 投稿: 記録にある画像がすべて添付にあること（画像の欠けた版を作らない）
+  const postProblems = postSubmissionProblems(input.postSnapshot, input.items);
+  if (postProblems.length > 0)
+    throw new DomainError("post_snapshot_mismatch", { problems: postProblems });
 
   return idempotent(
     ctx,

@@ -4,6 +4,7 @@
  * - プレビューは各サービスの見た目の近似（実際の表示とは異なることがある。画面で明示する）
  * - 文字数の数え方・上限は各サービスの公開情報に基づく近似。運用で変わるので定数にまとめる
  */
+import { byteLength } from "../document/DocumentDraft.ts";
 export const socialPlatforms = ["instagram", "x"] as const;
 export type SocialPlatform = (typeof socialPlatforms)[number];
 export const socialPlatformLabels: Record<SocialPlatform, string> = {
@@ -357,6 +358,46 @@ export function postSnapshotProblems(
     seen.add(im.fileName);
     if (!files.has(im.fileName)) problems.push(`${i + 1} 枚目の画像のファイルがありません`);
   }
+  return problems;
+}
+
+/**
+ * SNS 投稿の版の提出で、内容の記録（mf100-post.json）と添付の対応を確かめる（サーバー側の検査）。
+ * - 内容の記録を添付する版は、同じ記録（JSON 文字列）を準備時に渡す。片方だけは不可
+ * - 記録は投稿として読めること、本文（post-body.txt）があること
+ * - 記録にある画像がすべて添付にあり、重複が無いこと（postSnapshotProblems）
+ * - 添付する記録の申告サイズが、渡した記録のバイト数と一致すること（実体のサイズは転送時に検証される）
+ * 投稿でない版（記録も添付も無い）は空を返す。
+ */
+export function postSubmissionProblems(
+  snapshotJson: string | undefined,
+  items: ReadonlyArray<{ fileName: string; declaredSize?: number }>,
+): string[] {
+  const manifest = items.find((it) => it.fileName === POST_MANIFEST_NAME);
+  if (snapshotJson === undefined) return manifest ? ["内容の記録が渡されていません"] : [];
+  if (!manifest) return ["内容の記録の添付がありません"];
+  let raw: unknown = null;
+  try {
+    raw = JSON.parse(snapshotJson);
+  } catch {
+    raw = null;
+  }
+  const snapshot = parsePostManifest(raw);
+  if (!snapshot) return ["内容の記録を読めません"];
+  const problems: string[] = [];
+  // 読むときに除かれる画像（ファイル名の無いもの・上限を超えたもの）があれば、記録と版が食い違う
+  const rawImages = (raw as { images?: unknown }).images;
+  if (Array.isArray(rawImages) && rawImages.length !== snapshot.images.length)
+    problems.push("内容の記録に読めない画像があります");
+  if (!items.some((it) => it.fileName === POST_BODY_NAME)) problems.push("本文の添付がありません");
+  problems.push(
+    ...postSnapshotProblems(
+      snapshot,
+      items.map((it) => it.fileName),
+    ),
+  );
+  if (manifest.declaredSize !== byteLength(snapshotJson))
+    problems.push("内容の記録が添付と一致しません");
   return problems;
 }
 
