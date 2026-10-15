@@ -36,11 +36,11 @@ jobs:
       - name: Cloudflare の設定が無ければ飛ばす
         if: env.HAS_CLOUDFLARE != 'true'
         run: echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID が未設定なので、デモ版は配りません"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: env.HAS_CLOUDFLARE == 'true'
       - uses: pnpm/action-setup@v4
         if: env.HAS_CLOUDFLARE == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: env.HAS_CLOUDFLARE == 'true'
         with:
           node-version: 22
@@ -66,16 +66,18 @@ jobs:
     # 承認者を付けた Environment。Secrets（CONVEX_DEPLOY_KEY・CLOUDFLARE_*）と Variables（VITE_API_URL）もここに置く
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: 確認（型・単体テスト）
         run: |
+          pnpm build
           pnpm typecheck
+          pnpm --filter @mf100/web typecheck
           pnpm test
       - name: Convex を配り、その URL で Web をビルド
         working-directory: apps/convex
