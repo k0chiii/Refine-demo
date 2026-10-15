@@ -14,6 +14,7 @@ export const domainErrorCodes = [
   "work_not_finalized",
   "work_invalid_lifecycle_transition",
   "work_import_invalid",
+  "work_invalid",
   // 版
   "revision_rough_after_standard",
   "revision_sequence_conflict",
@@ -69,6 +70,8 @@ export const domainErrorCodes = [
   "approval_exception_reason_required",
   "approval_exception_not_permitted",
   "approval_reopen_reason_required",
+  "approval_confirmer_not_independent",
+  "approval_confirmation_not_needed",
   // 文章の下書き
   "document_invalid",
   // 表記統一

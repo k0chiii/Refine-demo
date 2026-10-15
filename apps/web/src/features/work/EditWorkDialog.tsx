@@ -1,4 +1,5 @@
 import { api } from "@mf100/convex/api";
+import { WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "@mf100/domain";
 import type { Id } from "@mf100/convex/dataModel";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -78,14 +79,24 @@ export function EditWorkDialog({
       <span slot="header">制作物を編集</span>
       <div className="dialog-body">
         <Field label="名称" required>
-          <TextInput required value={form.title} onChange={set("title")} />
+          <TextInput
+            required
+            maxLength={WORK_TITLE_MAX}
+            value={form.title}
+            onChange={set("title")}
+          />
         </Field>
         <Field label="目的・対象者">
           <TextArea value={form.purpose} onChange={set("purpose")} />
         </Field>
         <div className="form">
           <Field label="区分" required>
-            <TextInput required value={form.category} onChange={set("category")} />
+            <TextInput
+              required
+              maxLength={WORK_CATEGORY_MAX}
+              value={form.category}
+              onChange={set("category")}
+            />
           </Field>
           <Field label="媒体" required>
             <Select value={form.mediaType} onChange={set("mediaType")}>

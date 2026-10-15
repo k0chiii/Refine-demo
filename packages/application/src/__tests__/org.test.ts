@@ -24,8 +24,8 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
       category: "印刷物",
       mediaType: "pdf" as const,
       year: 100,
-      creatorIds: ["c"],
-      approverId: "a",
+      creatorIds: [principals.creator.userId],
+      approverId: principals.approver.userId,
     };
     await expect(createWork(ctx, nobody, input)).rejects.toThrow(code("forbidden"));
     await expect(createWork(ctx, registrar, input)).resolves.toMatchObject({

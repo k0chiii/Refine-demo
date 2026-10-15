@@ -6,7 +6,13 @@ import { latestStandardRevision } from "../revision/Revision.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
-import type { Work } from "../work/Work.ts";
+import type { WorkPermissionGrant } from "../acl/Permission.ts";
+import { assertWorkActive, type Work } from "../work/Work.ts";
+import {
+  type ApprovalConfirmation,
+  findValidConfirmation,
+  isIndependentOf,
+} from "./ApprovalConfirmation.ts";
 
 /**
  * 校了ポリシー（C3 / C6 / D2 / D6）。
@@ -15,7 +21,11 @@ import type { Work } from "../work/Work.ts";
  */
 export interface ApprovalPolicy {
   blockingSeverities: readonly Severity[];
-  /** D2: 制作者本人による校了を独立承認なしに許すか。承認まで false。 */
+  /**
+   * D2: 制作者本人による校了を独立確認なしに許すか。承認まで false。
+   * false のとき、制作者＝校了権限者の制作物は、制作者・校了権限者以外の人が自分の操作で記録した
+   * 独立確認（ApprovalConfirmation）が対象版に無ければ校了できない。
+   */
   allowSelfApproval: boolean;
   /** 例外校了（重大未解決を残して校了）を許すか。 */
   allowException: boolean;
@@ -40,8 +50,15 @@ export interface FinalizationRequest {
   checks?: readonly RequiredCheck[];
   actorId: UserId;
   exceptionReason?: string;
-  /** D2 暫定: 自己校了時に独立した確認者の証跡（ユーザー ID）があれば許容する余地を残す。 */
-  independentConfirmerId?: UserId;
+  /**
+   * D2: 対象版に記録された独立確認（確認者本人の操作で保存されたもの）。
+   * 呼び出し側が申告した確認者 ID は受け取らない。有効性は {@link findValidConfirmation} で確かめ直す。
+   */
+  confirmations?: readonly ApprovalConfirmation[];
+  /** 制作物の ACL（確認者がいまも確認できる人かを判定する） */
+  grants?: readonly WorkPermissionGrant[];
+  /** これより前の独立確認は無効（再開した後は確認し直す） */
+  confirmationsNotBefore?: Instant;
   policy?: ApprovalPolicy;
 }
 
@@ -65,26 +82,27 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
   if (work.approverId !== req.actorId)
     throw new DomainError("approval_not_approver", { actorId: req.actorId });
 
-  const candidate = latestStandardRevision(req.revisions);
-  const target = req.revisions.find((r) => r.id === req.revisionId);
-  if (!target)
-    throw new DomainError("approval_revision_not_candidate", { revisionId: req.revisionId });
-  if (target.kind === "rough")
-    throw new DomainError("approval_rough_revision", { revisionId: target.id });
-  if (!candidate || candidate.id !== target.id) {
-    throw new DomainError("approval_revision_not_candidate", {
-      revisionId: target.id,
-      latest: candidate?.id ?? null,
-    });
-  }
+  const target = assertFinalCandidate(req.revisions, req.revisionId);
 
   const isSelf = work.creatorIds.includes(req.actorId);
+  let confirmation: ApprovalConfirmation | null = null;
   if (isSelf && !policy.allowSelfApproval) {
-    const confirmer = req.independentConfirmerId;
-    const independent =
-      confirmer !== undefined && confirmer !== req.actorId && !work.creatorIds.includes(confirmer);
-    if (!independent)
-      throw new DomainError("approval_self_approval_not_allowed", { actorId: req.actorId });
+    const validity = {
+      work,
+      revisionId: target.id,
+      grants: req.grants ?? [],
+      actorId: req.actorId,
+      ...(req.confirmationsNotBefore !== undefined
+        ? { notBefore: req.confirmationsNotBefore }
+        : {}),
+    };
+    confirmation = findValidConfirmation(req.confirmations ?? [], validity);
+    if (!confirmation)
+      throw new DomainError("approval_self_approval_not_allowed", {
+        actorId: req.actorId,
+        revisionId: target.id,
+        hint: "independent_confirmation_required",
+      });
   }
 
   const blocking = req.threads
@@ -134,10 +152,71 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
         .filter((c) => c.revisionId === target.id)
         .map((c) => ({ id: c.id, type: c.type, state: c.state, doneBy: c.doneBy ?? null })),
       selfApproval: isSelf,
-      independentConfirmerId: req.independentConfirmerId ?? null,
+      independentConfirmation: confirmation
+        ? {
+            id: confirmation.id,
+            confirmerId: confirmation.confirmerId,
+            confirmedAt: confirmation.confirmedAt,
+          }
+        : null,
       revisionSequence: target.sequence,
     },
   };
+}
+
+/**
+ * 校了できる版（最新の通常版）かを確かめて、その版を返す。0版（ラフ）・古い版・知らない版は拒否。
+ * 校了と独立確認で共用する。
+ */
+export function assertFinalCandidate(
+  revisions: readonly Revision[],
+  revisionId: RevisionId,
+): Revision {
+  const candidate = latestStandardRevision(revisions);
+  const target = revisions.find((r) => r.id === revisionId);
+  if (!target) throw new DomainError("approval_revision_not_candidate", { revisionId });
+  if (target.kind === "rough")
+    throw new DomainError("approval_rough_revision", { revisionId: target.id });
+  if (!candidate || candidate.id !== target.id) {
+    throw new DomainError("approval_revision_not_candidate", {
+      revisionId: target.id,
+      latest: candidate?.id ?? null,
+    });
+  }
+  return target;
+}
+
+/** 自己校了（制作者＝校了権限者）のため、校了の前に独立確認が要る制作物か（D2。ポリシー値で切り替える） */
+export function requiresIndependentConfirmation(
+  work: Pick<Work, "creatorIds" | "approverId">,
+  policy: ApprovalPolicy = defaultApprovalPolicy,
+): boolean {
+  return !policy.allowSelfApproval && work.creatorIds.includes(work.approverId);
+}
+
+export interface IndependentConfirmationRequest {
+  work: Work;
+  revisions: readonly Revision[];
+  revisionId: RevisionId;
+  confirmerId: UserId;
+  policy?: ApprovalPolicy;
+}
+
+/**
+ * 独立確認を記録してよいかを評価し、対象版を返す（D2）。
+ * 認可（制作物の確認に参加できる人か = `approval.confirm`）は呼び出し側で先に通す。
+ * - 進行中の制作物で、自己校了のため独立確認が要ること
+ * - 確認者が制作者・校了権限者でないこと
+ * - 対象版がいまの校了候補（最新の通常版）であること
+ */
+export function evaluateIndependentConfirmation(req: IndependentConfirmationRequest): Revision {
+  const policy = req.policy ?? defaultApprovalPolicy;
+  assertWorkActive(req.work);
+  if (!requiresIndependentConfirmation(req.work, policy))
+    throw new DomainError("approval_confirmation_not_needed", { workId: req.work.id });
+  if (!isIndependentOf(req.work, req.confirmerId))
+    throw new DomainError("approval_confirmer_not_independent", { confirmerId: req.confirmerId });
+  return assertFinalCandidate(req.revisions, req.revisionId);
 }
 
 export type ApprovalAction = "finalized" | "reopened" | "exception_finalized";

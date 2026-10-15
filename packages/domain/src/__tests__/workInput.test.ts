@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vite-plus/test";
+import {
+  applyWorkPatch,
+  newlyReferencedPeople,
+  normalizeWorkEssentials,
+  WORK_TITLE_MAX,
+} from "../work/workInput.ts";
+import { makeWork } from "./fixtures.ts";
+
+const invalid = (field: string, reason: string) =>
+  expect.objectContaining({
+    code: "work_invalid",
+    details: expect.objectContaining({ field, reason }),
+  });
+
+const essentials = {
+  title: " パンフレット ",
+  category: " 印刷物 ",
+  creatorIds: ["c1", "c1", "c2"],
+  approverId: " a ",
+  managerIds: ["m"],
+};
+
+describe("制作物の不変条件（生成・変更で共通。PR #1 レビュー P2）", () => {
+  it("名称・区分は trim、制作者・主管は重複をまとめる", () => {
+    expect(normalizeWorkEssentials(essentials)).toEqual({
+      title: "パンフレット",
+      category: "印刷物",
+      creatorIds: ["c1", "c2"],
+      approverId: "a",
+      managerIds: ["m"],
+    });
+  });
+
+  it("空の名称・区分、長すぎる名称、制作者なし・空の ID、空の校了権限者は拒否", () => {
+    expect(() => normalizeWorkEssentials({ ...essentials, title: "   " })).toThrowError(
+      invalid("title", "required"),
+    );
+    expect(() =>
+      normalizeWorkEssentials({ ...essentials, title: "あ".repeat(WORK_TITLE_MAX + 1) }),
+    ).toThrowError(invalid("title", "too_long"));
+    expect(() => normalizeWorkEssentials({ ...essentials, category: "" })).toThrowError(
+      invalid("category", "required"),
+    );
+    expect(() => normalizeWorkEssentials({ ...essentials, creatorIds: [] })).toThrowError(
+      invalid("creatorIds", "required"),
+    );
+    expect(() => normalizeWorkEssentials({ ...essentials, creatorIds: [""] })).toThrowError(
+      invalid("creatorIds", "blank_id"),
+    );
+    expect(() => normalizeWorkEssentials({ ...essentials, approverId: "" })).toThrowError(
+      invalid("approverId", "required"),
+    );
+    expect(() => normalizeWorkEssentials({ ...essentials, managerIds: [" "] })).toThrowError(
+      invalid("managerIds", "blank_id"),
+    );
+  });
+
+  it("変更でも同じ条件を確かめる（空の名称・制作者・校了権限者で保存できない）", () => {
+    const work = makeWork();
+    expect(() => applyWorkPatch(work, { title: "   " })).toThrowError(invalid("title", "required"));
+    expect(() => applyWorkPatch(work, { creatorIds: [] })).toThrowError(
+      invalid("creatorIds", "required"),
+    );
+    expect(() => applyWorkPatch(work, { approverId: "" })).toThrowError(
+      invalid("approverId", "required"),
+    );
+    expect(() => applyWorkPatch(work, { mediaType: "fax" as never })).toThrowError(
+      invalid("mediaType", "unknown"),
+    );
+    const next = applyWorkPatch(work, { title: " 新しい名称 ", deadlineAt: undefined });
+    expect(next).toMatchObject({ title: "新しい名称", version: work.version + 1 });
+    expect(next.deadlineAt).toBe(work.deadlineAt);
+  });
+
+  it("名簿で確かめるのは新しく職責に入る人だけ", () => {
+    const work = makeWork();
+    expect(newlyReferencedPeople(null, work).sort()).toEqual(["approver", "creator", "manager"]);
+    expect(
+      newlyReferencedPeople(work, { ...work, creatorIds: ["creator", "new"], approverId: "x" }),
+    ).toEqual(["new", "x"]);
+  });
+});

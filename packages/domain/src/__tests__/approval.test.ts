@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vite-plus/test";
-import { evaluateFinalization } from "../approval/ApprovalPolicy.ts";
-import { makeRevision, makeThread, makeWork } from "./fixtures.ts";
+import type { ApprovalConfirmation } from "../approval/ApprovalConfirmation.ts";
+import {
+  defaultApprovalPolicy,
+  evaluateFinalization,
+  evaluateIndependentConfirmation,
+  requiresIndependentConfirmation,
+} from "../approval/ApprovalPolicy.ts";
+import { HOUR, makeRevision, makeThread, makeWork, T0 } from "./fixtures.ts";
+
+const confirmation = (over: Partial<ApprovalConfirmation> = {}): ApprovalConfirmation => ({
+  id: "c1",
+  workId: "work1",
+  revisionId: "rev1",
+  confirmerId: "manager",
+  confirmedAt: T0 + HOUR,
+  ...over,
+});
 
 const base = () => ({
   work: makeWork(),
@@ -76,13 +91,102 @@ describe("evaluateFinalization（校了ガード / C3, C6, D2, A-08）", () => {
     expect(() => evaluateFinalization({ ...base(), work })).toThrowError(
       expect.objectContaining({ code: "approval_self_approval_not_allowed" }),
     );
-    expect(
-      evaluateFinalization({ ...base(), work, independentConfirmerId: "reviewer2" })
-        .requiredChecksSnapshot.selfApproval,
-    ).toBe(true);
+  });
+  it("D2: 独立確認は保存された確認の記録だけを数える（申告された ID は受け取らない）", () => {
+    const work = makeWork({ creatorIds: ["approver"] });
+    // 以前の入口: 存在しない人の ID を申告すれば通っていた（PR #1 レビュー P1）
     expect(() =>
-      evaluateFinalization({ ...base(), work, independentConfirmerId: "approver" }),
+      evaluateFinalization({
+        ...base(),
+        work,
+        ...({ independentConfirmerId: "nonexistent-user" } as object),
+      }),
+    ).toThrowError(expect.objectContaining({ code: "approval_self_approval_not_allowed" }));
+    const out = evaluateFinalization({ ...base(), work, confirmations: [confirmation()] });
+    expect(out.requiredChecksSnapshot).toMatchObject({
+      selfApproval: true,
+      independentConfirmation: { id: "c1", confirmerId: "manager" },
+    });
+  });
+  it("D2: 別の版・別の制作物・本人・制作者・権限を失った人・再開前の確認は無効", () => {
+    const work = makeWork({ creatorIds: ["approver"] });
+    const reject = (c: ApprovalConfirmation, over: object = {}) =>
+      expect(() =>
+        evaluateFinalization({ ...base(), work, confirmations: [c], ...over }),
+      ).toThrowError(expect.objectContaining({ code: "approval_self_approval_not_allowed" }));
+    reject(confirmation({ revisionId: "rev0" }));
+    reject(confirmation({ workId: "work2" }));
+    reject(confirmation({ confirmerId: "approver" }));
+    // 確認の後で制作者に加わった人
+    expect(() =>
+      evaluateFinalization({
+        ...base(),
+        work: makeWork({ creatorIds: ["approver", "manager"] }),
+        confirmations: [confirmation()],
+      }),
     ).toThrow();
+    // 制作物に関与していない人（ACL も職責も無い）
+    reject(confirmation({ confirmerId: "stranger" }));
+    // ACL の review があれば確認者になれる。取り消されたら無効
+    const grant = {
+      workId: "work1",
+      principalType: "user" as const,
+      principalId: "reviewer",
+      permission: "review" as const,
+      grantedBy: "admin",
+      grantedAt: T0,
+    };
+    expect(() =>
+      evaluateFinalization({
+        ...base(),
+        work,
+        confirmations: [confirmation({ confirmerId: "reviewer" })],
+        grants: [grant],
+      }),
+    ).not.toThrow();
+    reject(confirmation({ confirmerId: "reviewer" }), {
+      grants: [{ ...grant, revokedAt: T0 + HOUR, revokedBy: "admin" }],
+    });
+    // 再開より前の確認
+    reject(confirmation(), { confirmationsNotBefore: T0 + 2 * HOUR });
+  });
+  it("D2: ポリシーで自己校了を許すと独立確認は要らない", () => {
+    const work = makeWork({ creatorIds: ["approver"] });
+    expect(() =>
+      evaluateFinalization({
+        ...base(),
+        work,
+        policy: { ...defaultApprovalPolicy, allowSelfApproval: true },
+      }),
+    ).not.toThrow();
+    expect(requiresIndependentConfirmation(work)).toBe(true);
+    expect(
+      requiresIndependentConfirmation(work, { ...defaultApprovalPolicy, allowSelfApproval: true }),
+    ).toBe(false);
+    expect(requiresIndependentConfirmation(makeWork())).toBe(false);
+  });
+  it("D2: 独立確認を記録できるのは、要る制作物の最新の通常版に、制作者・校了権限者以外が", () => {
+    const work = makeWork({ creatorIds: ["approver"] });
+    const req = { work, revisions: [makeRevision()], revisionId: "rev1", confirmerId: "manager" };
+    expect(evaluateIndependentConfirmation(req).id).toBe("rev1");
+    expect(() => evaluateIndependentConfirmation({ ...req, confirmerId: "approver" })).toThrowError(
+      expect.objectContaining({ code: "approval_confirmer_not_independent" }),
+    );
+    expect(() => evaluateIndependentConfirmation({ ...req, work: makeWork() })).toThrowError(
+      expect.objectContaining({ code: "approval_confirmation_not_needed" }),
+    );
+    expect(() =>
+      evaluateIndependentConfirmation({
+        ...req,
+        revisions: [makeRevision(), makeRevision({ id: "rev2", sequence: 2 })],
+      }),
+    ).toThrowError(expect.objectContaining({ code: "approval_revision_not_candidate" }));
+    expect(() =>
+      evaluateIndependentConfirmation({
+        ...req,
+        work: { ...work, lifecycle: "finalized" },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "work_already_finalized" }));
   });
   it("校了済み作品は再校了できない（A-09）", () => {
     expect(() =>

@@ -1,4 +1,5 @@
 import type {
+  ApprovalConfirmation,
   ApprovalEvent,
   Artifact,
   CommentEvent,
@@ -155,6 +156,10 @@ export interface AclRepository {
 export interface ApprovalRepository {
   append(event: ApprovalEvent): Promise<void>;
   listByWork(workId: WorkId): Promise<ApprovalEvent[]>;
+  /** 独立確認（D2）の記録。確認者本人の操作でだけ追加する。消さない（取り消しは新しい記録で表す） */
+  insertConfirmation(confirmation: Omit<ApprovalConfirmation, "id">): Promise<ApprovalConfirmation>;
+  /** その版に記録された独立確認（古い順） */
+  listConfirmationsByRevision(revisionId: RevisionId): Promise<ApprovalConfirmation[]>;
 }
 
 export interface AuditEntry {
@@ -239,7 +244,10 @@ export interface PeopleDirectory {
   displayName(userId: UserId): Promise<string | null>;
   /** 委員の一覧（上限つき。並びは問わない） */
   listMembers(limit: number): Promise<PersonProfile[]>;
-  /** 指定した人のうち委員である人（知らない ID は返さない） */
+  /**
+   * 指定した人のうち委員である人（知らない ID は返さない）。
+   * 制作物の職責（制作者・校了権限者・主管）に知らない人を入れない確認にも使う。
+   */
   profiles(userIds: readonly UserId[]): Promise<PersonProfile[]>;
 }
 

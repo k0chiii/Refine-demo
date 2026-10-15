@@ -27,7 +27,7 @@ import type { WorkData } from "./VersionsTab";
 type RevisionData = FunctionReturnType<typeof api.revisions.get>;
 
 /**
- * エディタの引き出し「情報」: 基本情報、専門確認、校了履歴と、制作物に対する操作
+ * エディタの引き出し「情報」: 基本情報、専門確認、独立確認、校了履歴と、制作物に対する操作
  * （校了を宣言、理由付きで再開、校正者の割り当て、編集、閲覧権限、保留／中止）。
  */
 export function InfoTab({
@@ -50,6 +50,7 @@ export function InfoTab({
   const completeCheck = useMutation(api.checks.complete);
   const waiveCheck = useMutation(api.checks.waive);
   const addCheck = useMutation(api.checks.add);
+  const confirmIndependently = useMutation(api.approvals.confirm);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -57,7 +58,8 @@ export function InfoTab({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState("");
   const [autoNote, setAutoNote] = useState("");
-  const [confirmer, setConfirmer] = useState<string[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmNote, setConfirmNote] = useState("");
   const [reopenReason, setReopenReason] = useState("");
   const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const [waiveDraft, setWaiveDraft] = useState<{ checkId: string; reason: string } | null>(null);
@@ -67,6 +69,13 @@ export function InfoTab({
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
   const { work: w, people, approvals, can } = work;
+  // 独立確認（D2）: 制作者本人が校了する制作物では、ほかの人の確認の記録が校了の前に要る（判定はサーバー）
+  const confirmation = useQuery(api.approvals.confirmationStatus, {
+    workId: w.id as Id<"works">,
+  });
+  const confirmationTarget =
+    work.revisions.find((r) => r.id === confirmation?.candidateRevisionId) ?? null;
+  const needsConfirmation = confirmation?.required === true && confirmation.valid === null;
   const candidate = work.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
   const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
   const checks = revision?.checks ?? [];
@@ -104,10 +113,18 @@ export function InfoTab({
       requestId,
       expectedVersion: w.version,
       ...(exceptionReason.trim() ? { exceptionReason: exceptionReason.trim() } : {}),
-      ...(confirmer[0] ? { independentConfirmerId: confirmer[0] } : {}),
       ...(autoNote.trim() ? { autoProofreadNote: autoNote.trim() } : {}),
     });
     setFinalizeOpen(false);
+  });
+  const doConfirm = useAction(async () => {
+    if (!confirmation?.candidateRevisionId) return;
+    await confirmIndependently({
+      revisionId: confirmation.candidateRevisionId as Id<"revisions">,
+      ...(confirmNote.trim() ? { note: confirmNote.trim() } : {}),
+    });
+    setConfirmOpen(false);
+    setConfirmNote("");
   });
   const doReopen = useAction(async () => {
     await reopen({ workId: w.id as Id<"works">, reason: reopenReason, expectedVersion: w.version });
@@ -408,6 +425,41 @@ export function InfoTab({
         </section>
       ) : null}
 
+      {confirmation?.required && w.lifecycle === "active" ? (
+        <section className="info-tab__section" aria-label="独立確認">
+          <h2 className="info-tab__h">
+            独立確認
+            <StatusText tone={confirmation.valid ? "success" : "warning"} className="ml">
+              {confirmation.valid ? "確認済み" : "未確認"}
+            </StatusText>
+            <span className="spacer" />
+            {confirmation.canConfirm ? (
+              <M3eButton variant="tonal" onClick={() => setConfirmOpen(true)}>
+                <M3eIcon slot="icon" name="fact_check" />
+                独立確認をする
+              </M3eButton>
+            ) : null}
+          </h2>
+          <p className="small muted" style={{ margin: 0 }}>
+            制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）が
+            {confirmationTarget ? `${confirmationTarget.label}を` : "最新の版を"}
+            確認した記録が要ります。
+          </p>
+          {confirmation.valid ? (
+            <div className="small">
+              {confirmation.valid.confirmer?.name ?? "（不明なユーザー）"}・
+              {formatJstShort(confirmation.valid.confirmedAt)}
+              {confirmation.valid.note ? `・${confirmation.valid.note}` : ""}
+            </div>
+          ) : null}
+          {confirmation.confirmedByMe && !confirmation.valid ? (
+            <div className="small muted">
+              あなたの確認は記録されていますが、いまは有効ではありません（職責・閲覧権限が変わったため）。
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {approvals.length > 0 ? (
         <section className="info-tab__section" aria-label="校了履歴">
           <h2 className="info-tab__h">校了履歴</h2>
@@ -482,14 +534,21 @@ export function InfoTab({
               onChange={(e) => setExceptionReason(e.target.value)}
             />
           </Field>
-          <UserPicker
-            label="独立確認者"
-            hint="制作者本人が校了するときだけ選びます"
-            single
-            value={confirmer}
-            onChange={setConfirmer}
-            exclude={[w.approverId, ...w.creatorIds]}
-          />
+          {confirmation?.required ? (
+            confirmation.valid ? (
+              <p className="small" style={{ margin: 0 }}>
+                <StatusText tone="success">独立確認済み</StatusText>{" "}
+                {confirmation.valid.confirmer?.name ?? "（不明なユーザー）"}・
+                {formatJstShort(confirmation.valid.confirmedAt)}
+              </p>
+            ) : (
+              <div className="alert--warn alert">
+                <span>
+                  制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）がこの版の独立確認をするまで校了できません。確認する人は、引き出し「情報」の「独立確認をする」から記録します。
+                </span>
+              </div>
+            )
+          ) : null}
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setFinalizeOpen(false)}>
@@ -497,10 +556,40 @@ export function InfoTab({
           </M3eButton>
           <M3eButton
             variant="filled"
-            disabled={doFinalize.pending || !candidate}
+            disabled={doFinalize.pending || !candidate || needsConfirmation}
             onClick={() => void doFinalize.run()}
           >
             校了を確定する
+          </M3eButton>
+        </div>
+      </M3eDialog>
+
+      {/* 独立確認（D2）: 確認者本人の操作で記録する。校了する人が確認者を選ぶのではない */}
+      <M3eDialog open={confirmOpen} onClosed={() => setConfirmOpen(false)} closeLabel="閉じる">
+        <span slot="header">独立確認をする</span>
+        <div className="dialog-body">
+          <p style={{ margin: 0 }}>
+            対象版: <strong>{confirmationTarget?.label ?? "（通常版がありません）"}</strong>
+            。制作者・校了権限者とは別の立場で、この版の内容を確認したことを記録します。記録はあなたの名前で残り、校了の証跡になります。
+          </p>
+          <Field label="確認のメモ（任意）" hint="確認した範囲など。500 文字まで">
+            <TextArea
+              value={confirmNote}
+              maxLength={500}
+              onChange={(e) => setConfirmNote(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setConfirmOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doConfirm.pending || !confirmation?.candidateRevisionId}
+            onClick={() => void doConfirm.run()}
+          >
+            確認したことを記録
           </M3eButton>
         </div>
       </M3eDialog>
