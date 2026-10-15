@@ -179,6 +179,7 @@ describe("制作物の一括登録", () => {
     approverId: principals.approver.userId,
     confidentiality: "normal" as const,
     notationCategories: ["A1"],
+    productionTeamIds: [],
   });
 
   it("まとめて登録し、1 件ずつの登録と同じ監査に加えて一括の記録を残す", async () => {

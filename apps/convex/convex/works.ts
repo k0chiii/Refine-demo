@@ -94,6 +94,9 @@ export const importBatch = mutation({
         legacyId: v.optional(v.string()),
         confidentiality: vConfidentiality,
         notationCategories: v.array(v.string()),
+        /** 主管担当・制作担当（teams の ID） */
+        ownerTeamId: v.optional(v.string()),
+        productionTeamIds: v.optional(v.array(v.string())),
       }),
     ),
     source: v.optional(v.string()),
@@ -101,7 +104,10 @@ export const importBatch = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const works = await importWorks(createAppContext(ctx.db), principal, args);
+      const works = await importWorks(createAppContext(ctx.db), principal, {
+        ...args,
+        rows: args.rows.map((r) => ({ ...r, productionTeamIds: r.productionTeamIds ?? [] })),
+      });
       return works.map((w) => w.id);
     });
   },
@@ -270,7 +276,7 @@ export const listMine = query({
     const app = createReadContext(ctx.db);
     const mine = await listMyWorks(ctx.db, principal);
     const text = args.text?.trim().toLowerCase() ?? "";
-    const out = [];
+    const picked = [];
     for (const work of mine) {
       if (args.year !== undefined && work.year !== args.year) continue;
       if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
@@ -287,8 +293,21 @@ export const listMine = query({
         revisions
           .filter((r) => r.reviewState !== "void")
           .sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
-      out.push(summarize(work, latest, accepting));
+      picked.push({ work, latest, accepting });
     }
+    // 制作者の表示名（一覧で「担当別」に並べたとき、誰の制作物か分かるように）
+    const users = await resolveUsers(
+      ctx.db,
+      picked.flatMap((p) => p.work.creatorIds),
+    );
+    const out = picked.map(({ work, latest, accepting }) =>
+      summarize(
+        work,
+        latest,
+        accepting,
+        work.creatorIds.map((id) => users.get(id)?.name ?? "（不明なユーザー）"),
+      ),
+    );
     return out.sort(
       (a, b) =>
         (a.acceptingDeadlineAt ?? Infinity) - (b.acceptingDeadlineAt ?? Infinity) ||
@@ -331,6 +350,7 @@ function summarize(
   work: Work,
   latest: { kind: "rough" | "standard"; sequence: number } | null,
   accepting: { id: string; deadlineAt: number } | null,
+  creators: string[],
 ) {
   return {
     id: work.id as Id<"works">,
@@ -345,5 +365,10 @@ function summarize(
     latestRevisionLabel: latest ? revisionLabel(latest) : null,
     acceptingRevisionId: accepting?.id ?? null,
     acceptingDeadlineAt: accepting?.deadlineAt ?? null,
+    /** 主管担当・制作担当（teams の ID。担当別の表示に使う） */
+    ownerTeamId: work.ownerTeamId ?? null,
+    productionTeamIds: [...work.productionTeamIds],
+    /** 制作者の表示名 */
+    creators,
   };
 }

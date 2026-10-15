@@ -6,6 +6,7 @@ import type {
   CommentThread,
   DocumentDraft,
   SocialProfile,
+  Team,
   NotationRule,
   ProofreadingRun,
   RequiredCheck,
@@ -580,6 +581,37 @@ export function createAppContext(
             .withIndex("by_social_profile", (q) => q.eq("socialProfileId", id))
             .take(1000)
         ).length;
+      },
+    },
+    teams: {
+      async list() {
+        return (await db.query("teams").take(1000)).map((d) => fromDoc(d) as Team);
+      },
+      async findById(id) {
+        const doc = await db.get("teams", id as Id<"teams">).catch(() => null);
+        return doc ? (fromDoc(doc) as Team) : null;
+      },
+      async insert(team) {
+        const id = await db.insert("teams", compact(team));
+        return { ...team, id } as Team;
+      },
+      async update(team) {
+        await db.replace(team.id as Id<"teams">, compact(toFields(team)));
+      },
+      async remove(id) {
+        await db.delete(id as Id<"teams">);
+      },
+      async countWorksUsing(id) {
+        const owned = await db
+          .query("works")
+          .withIndex("by_owner_team", (q) => q.eq("ownerTeamId", id))
+          .take(1000);
+        // 制作担当は配列なので索引で引けない。制作物の数は多くない（年度で数百）ので上限つきで走査する
+        const ownedIds = new Set(owned.map((w) => w._id));
+        let production = 0;
+        for (const w of await db.query("works").take(5000))
+          if (!ownedIds.has(w._id) && w.productionTeamIds.includes(id)) production++;
+        return owned.length + production;
       },
     },
     documents: {

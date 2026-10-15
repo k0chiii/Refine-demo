@@ -61,13 +61,16 @@ export async function createWork(
       ...(input.addRegistrantAsManager === false ? [] : [principal.userId]),
     ]),
   );
+  const ownerTeamId = input.ownerTeamId?.trim() || undefined;
+  const productionTeamIds = cleanTeamIds(input.productionTeamIds ?? []);
+  await assertTeamsExist(ctx, ownerTeamId, productionTeamIds);
   const data: Omit<Work, "id"> = {
     year: input.year,
     title: input.title.trim(),
     purpose: input.purpose,
     category: input.category,
     mediaType: input.mediaType,
-    productionTeamIds: input.productionTeamIds ?? [],
+    productionTeamIds,
     relatedTeamIds: input.relatedTeamIds ?? [],
     managerIds,
     creatorIds: Array.from(new Set(input.creatorIds)),
@@ -77,7 +80,7 @@ export async function createWork(
     version: 1,
   };
   if (input.legacyId !== undefined) data.legacyId = input.legacyId;
-  if (input.ownerTeamId !== undefined) data.ownerTeamId = input.ownerTeamId;
+  if (ownerTeamId !== undefined) data.ownerTeamId = ownerTeamId;
   if (input.deadlineAt !== undefined) data.deadlineAt = input.deadlineAt;
   if (input.notationCategories !== undefined)
     data.notationCategories = cleanCategories(input.notationCategories);
@@ -175,11 +178,18 @@ export async function updateWork(
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  const { socialProfileId, ...rest } = input.patch;
+  const { socialProfileId, ownerTeamId, ...rest } = input.patch;
   const patch = stripUndefined(rest);
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
+  // 制作担当は全体の置き換え（重複・空を除く）
+  if (patch.productionTeamIds) patch.productionTeamIds = cleanTeamIds(patch.productionTeamIds);
+  const owner = ownerTeamId === undefined ? undefined : ownerTeamId.trim();
+  await assertTeamsExist(ctx, owner || undefined, patch.productionTeamIds ?? []);
   const next: Work = { ...work, ...patch, version: work.version + 1 };
+  // 主管担当: 空文字は「主管担当なし」（外す）
+  if (owner === "") delete next.ownerTeamId;
+  else if (owner !== undefined) next.ownerTeamId = owner;
   if (socialProfileId === null) delete next.socialProfileId;
   else if (socialProfileId !== undefined) {
     if (!(await ctx.socialProfiles.findById(socialProfileId)))
@@ -221,6 +231,25 @@ export async function changeWorkLifecycle(
     at: ctx.clock.now(),
   });
   return next;
+}
+
+function cleanTeamIds(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids.map((id) => id.trim()).filter((id) => id !== "")));
+}
+
+/** 主管担当・制作担当が組織（局 › 担当）にあるか。空なら確かめない */
+async function assertTeamsExist(
+  ctx: AppContext,
+  ownerTeamId: string | undefined,
+  productionTeamIds: readonly string[],
+): Promise<void> {
+  const ids = [...(ownerTeamId ? [ownerTeamId] : []), ...productionTeamIds];
+  for (const id of new Set(ids))
+    if (!(await ctx.teams.findById(id)))
+      throw new DomainError("team_not_found", {
+        teamId: id,
+        field: id === ownerTeamId ? "ownerTeamId" : "productionTeamIds",
+      });
 }
 
 function stripUndefined<T extends object>(obj: T): Partial<T> {

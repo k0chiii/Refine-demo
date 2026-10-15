@@ -54,6 +54,11 @@ export const domainErrorCodes = [
   "social_profile_invalid",
   "social_profile_limit",
   "social_profile_in_use",
+  // 組織（局 › 担当）
+  "team_invalid",
+  "team_duplicate",
+  "team_in_use",
+  "team_not_found",
   // 校了
   "approval_not_approver",
   "approval_revision_not_candidate",
