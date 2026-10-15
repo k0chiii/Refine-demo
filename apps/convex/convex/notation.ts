@@ -83,7 +83,7 @@ export const save = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => saveRule(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => saveRule(createAppContext(ctx), principal, args));
   },
 });
 
@@ -91,7 +91,7 @@ export const setEnabled = mutation({
   args: { ruleId: v.string(), enabled: v.boolean(), reason: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => setRuleEnabled(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => setRuleEnabled(createAppContext(ctx), principal, args));
   },
 });
 
@@ -100,7 +100,7 @@ export const upsertCategory = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await saveCategory(createAppContext(ctx.db), principal, args);
+      await saveCategory(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -111,7 +111,7 @@ export const setManager = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await setCategoryManager(createAppContext(ctx.db), principal, args);
+      await setCategoryManager(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -126,7 +126,7 @@ export const importBatch = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => importRules(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => importRules(createAppContext(ctx), principal, args));
   },
 });
 
@@ -146,7 +146,7 @@ export const propose = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const r = await proposeRule(createAppContext(ctx.db), principal, args);
+      const r = await proposeRule(createAppContext(ctx), principal, args);
       return { proposalId: r.proposal.id, merged: r.merged };
     });
   },
@@ -181,7 +181,7 @@ export const decide = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const p = await decideRuleProposal(createAppContext(ctx.db), principal, args);
+      const p = await decideRuleProposal(createAppContext(ctx), principal, args);
       return { status: p.status, ruleId: p.resultRuleId ?? null };
     });
   },
@@ -195,6 +195,6 @@ export const decideMany = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => decideRuleProposals(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => decideRuleProposals(createAppContext(ctx), principal, args));
   },
 });

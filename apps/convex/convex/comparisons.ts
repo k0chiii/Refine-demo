@@ -32,7 +32,7 @@ export const saveOverride = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await saveAlignmentOverride(createAppContext(ctx.db), principal, args);
+      await saveAlignmentOverride(createAppContext(ctx), principal, args);
       return null;
     });
   },

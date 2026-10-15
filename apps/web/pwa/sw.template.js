@@ -89,3 +89,53 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+/*
+ * 端末への通知（Web Push。利用者決定 2026-10-15）。
+ * 本文は Convex（pushNode.deliver）が端末の鍵で暗号化して送り、ブラウザが復号して渡す。
+ * 中身は題名・制作物名・開く画面・未読の数だけ（コメントの抜粋などは載せない）。
+ */
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === "string" && data.title ? data.title : "MF100 校正システム";
+  const url = typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/";
+  const tasks = [
+    self.registration.showNotification(title, {
+      body: typeof data.body === "string" ? data.body : "",
+      tag: typeof data.tag === "string" ? data.tag : undefined,
+      icon: "/icons/icon-192.png",
+      lang: "ja",
+      data: { url, id: typeof data.tag === "string" ? data.tag : null },
+    }),
+  ];
+  // アプリのアイコンの数（iOS 16.4+・Chrome/Edge のインストール済みアプリ）
+  if (typeof data.badge === "number" && "setAppBadge" in self.navigator)
+    tasks.push(
+      (data.badge > 0
+        ? self.navigator.setAppBadge(data.badge)
+        : self.navigator.clearAppBadge()
+      ).catch(() => {}),
+    );
+  event.waitUntil(Promise.all(tasks));
+});
+
+/** 通知を押したら、開いている画面があればそこで、無ければ新しく開く（押した通知は既読にする: ?from_notification=） */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const target = new URL(typeof data.url === "string" ? data.url : "/", self.location.origin);
+  if (data.id) target.searchParams.set("from_notification", data.id);
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => new URL(c.url).origin === self.location.origin);
+      if (open && "navigate" in open)
+        return open.navigate(target.href).then((c) => (c || open).focus());
+      return self.clients.openWindow(target.href);
+    }),
+  );
+});

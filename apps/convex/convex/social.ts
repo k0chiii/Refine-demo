@@ -37,7 +37,7 @@ export const save = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const p = await saveSocialProfile(createAppContext(ctx.db), principal, args);
+      const p = await saveSocialProfile(createAppContext(ctx), principal, args);
       return p.id;
     });
   },
@@ -48,7 +48,7 @@ export const remove = mutation({
   handler: async (ctx, { id }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await deleteSocialProfile(createAppContext(ctx.db), principal, id);
+      await deleteSocialProfile(createAppContext(ctx), principal, id);
       return null;
     });
   },

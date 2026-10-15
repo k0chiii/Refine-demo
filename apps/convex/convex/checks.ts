@@ -17,7 +17,7 @@ export const add = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const c = await addRequiredCheck(createAppContext(ctx.db), principal, args);
+      const c = await addRequiredCheck(createAppContext(ctx), principal, args);
       return c.id;
     });
   },
@@ -29,7 +29,7 @@ export const complete = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const c = await completeRequiredCheck(createAppContext(ctx.db), principal, args);
+      const c = await completeRequiredCheck(createAppContext(ctx), principal, args);
       return c.state;
     });
   },
@@ -41,7 +41,7 @@ export const waive = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const c = await waiveRequiredCheck(createAppContext(ctx.db), principal, args);
+      const c = await waiveRequiredCheck(createAppContext(ctx), principal, args);
       return c.state;
     });
   },

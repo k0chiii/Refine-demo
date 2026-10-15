@@ -28,7 +28,7 @@ export const claim = mutation({
   args: { runId: v.string(), artifactId: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => claimProofreadArtifact(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => claimProofreadArtifact(createAppContext(ctx), principal, args));
   },
 });
 
@@ -41,7 +41,7 @@ export const submit = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => submitProofreadSegments(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => submitProofreadSegments(createAppContext(ctx), principal, args));
   },
 });
 
@@ -50,7 +50,7 @@ export const fail = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await failProofreadArtifact(createAppContext(ctx.db), principal, args);
+      await failProofreadArtifact(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -61,7 +61,7 @@ export const retry = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await retryProofreadingRun(createAppContext(ctx.db), principal, args);
+      await retryProofreadingRun(createAppContext(ctx), principal, args);
       return null;
     });
   },

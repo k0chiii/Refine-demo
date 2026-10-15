@@ -101,7 +101,7 @@ export const createThread = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => createFeedbackThread(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => createFeedbackThread(createAppContext(ctx), principal, args));
   },
 });
 
@@ -110,7 +110,7 @@ export const post = mutation({
   args: { threadId: v.string(), ...postFields },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => postFeedback(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => postFeedback(createAppContext(ctx), principal, args));
   },
 });
 
@@ -119,7 +119,7 @@ export const editPost = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await editFeedbackPost(createAppContext(ctx.db), principal, args);
+      await editFeedbackPost(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -130,7 +130,7 @@ export const deletePost = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await deleteFeedbackPost(createAppContext(ctx.db), principal, args);
+      await deleteFeedbackPost(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -141,7 +141,7 @@ export const toggleReaction = mutation({
   args: { postId: v.string(), emoji: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => toggleFeedbackReaction(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => toggleFeedbackReaction(createAppContext(ctx), principal, args));
   },
 });
 
@@ -150,7 +150,7 @@ export const renameThread = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await renameFeedbackThread(createAppContext(ctx.db), principal, args);
+      await renameFeedbackThread(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -161,7 +161,7 @@ export const markRead = mutation({
   handler: async (ctx, { threadId }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await markFeedbackRead(createAppContext(ctx.db), principal, threadId);
+      await markFeedbackRead(createAppContext(ctx), principal, threadId);
       return null;
     });
   },
@@ -175,7 +175,7 @@ export const prepareFiles = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => prepareFeedbackFiles(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => prepareFeedbackFiles(createAppContext(ctx), principal, args));
   },
 });
 
@@ -192,7 +192,7 @@ export const beginFileUpload = internalMutation({
   args: { fileId: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => beginFeedbackFileUpload(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => beginFeedbackFileUpload(createAppContext(ctx), principal, args));
   },
 });
 
@@ -201,7 +201,7 @@ export const completeFileUpload = internalMutation({
   args: { attemptId: v.string(), size: v.number(), sha256: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => completeFeedbackFileUpload(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => completeFeedbackFileUpload(createAppContext(ctx), principal, args));
   },
 });
 
@@ -211,7 +211,7 @@ export const failFileUpload = internalMutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await failFeedbackFileUpload(createAppContext(ctx.db), principal, args);
+      await failFeedbackFileUpload(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -229,5 +229,5 @@ export const authorizeFile = query({
 /** cron: 投稿に付けないまま 24 時間たった添付を放置扱いにする（R2 の削除は Hono の清掃） */
 export const expireFiles = internalMutation({
   args: {},
-  handler: async (ctx) => (await expireFeedbackFiles(createAppContext(ctx.db), 200)).length,
+  handler: async (ctx) => (await expireFeedbackFiles(createAppContext(ctx), 200)).length,
 });

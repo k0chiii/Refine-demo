@@ -174,6 +174,30 @@ export interface NotificationRepository {
   countUnread(userId: UserId): Promise<number>;
 }
 
+/** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意 */
+export interface PushSubscriptionRecord {
+  id: string;
+  userId: UserId;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  /** 設定画面で端末を見分けるための短い説明（ブラウザ名など）。任意 */
+  device?: string;
+  createdAt: Instant;
+  lastSuccessAt?: Instant;
+  /** 続けて失敗した回数（成功で 0 に戻る） */
+  failureCount: number;
+}
+
+export interface PushSubscriptionRepository {
+  findById(id: string): Promise<PushSubscriptionRecord | null>;
+  findByEndpoint(endpoint: string): Promise<PushSubscriptionRecord | null>;
+  listByUser(userId: UserId): Promise<PushSubscriptionRecord[]>;
+  insert(sub: Omit<PushSubscriptionRecord, "id">): Promise<PushSubscriptionRecord>;
+  update(sub: PushSubscriptionRecord): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface AclRepository {
   /** 取消済みを含む全履歴。認可判定では isGrantActive で絞る。 */
   listByWork(workId: WorkId): Promise<WorkPermissionGrant[]>;
@@ -355,6 +379,7 @@ export interface AppContext {
   approvals: ApprovalRepository;
   checks: RequiredCheckRepository;
   notifications: NotificationRepository;
+  pushSubscriptions: PushSubscriptionRepository;
   documents: DocumentDraftRepository;
   socialProfiles: SocialProfileRepository;
   teams: TeamRepository;

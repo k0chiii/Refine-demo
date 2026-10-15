@@ -33,7 +33,7 @@ export const post = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const thread = await postComment(createAppContext(ctx.db), principal, args);
+      const thread = await postComment(createAppContext(ctx), principal, args);
       return thread.id;
     });
   },
@@ -48,7 +48,7 @@ export const reply = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await replyToThread(createAppContext(ctx.db), principal, args);
+      await replyToThread(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -60,7 +60,7 @@ export const decide = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const t = await decideThread(createAppContext(ctx.db), principal, args);
+      const t = await decideThread(createAppContext(ctx), principal, args);
       return t.resolution;
     });
   },
@@ -117,7 +117,7 @@ export const assign = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await assignThread(createAppContext(ctx.db), principal, args);
+      await assignThread(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -129,7 +129,7 @@ export const edit = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await editThread(createAppContext(ctx.db), principal, args);
+      await editThread(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -171,7 +171,7 @@ export const carryForward = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const created = await carryForwardThread(createAppContext(ctx.db), principal, args);
+      const created = await carryForwardThread(createAppContext(ctx), principal, args);
       return created.id;
     });
   },

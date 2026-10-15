@@ -1,11 +1,12 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
+import { disablePush } from "@/lib/push";
 import { useWindowClass } from "@/lib/useMedia";
 import {
   M3eAppBar,
@@ -50,6 +51,11 @@ function AppLayout() {
   const navigate = useNavigate();
   const install = useInstallPrompt();
   const { signOut } = useAuthActions();
+  const unsubscribePush = useMutation(api.push.unsubscribe);
+  const stopPushOnThisDevice = async () => {
+    const endpoint = await disablePush().catch(() => null);
+    if (endpoint) await unsubscribePush({ endpoint }).catch(() => undefined);
+  };
   const path = useRouterState({ select: (s) => s.location.pathname });
   const cls = useWindowClass();
   const [railPref, setRailPref] = useState(readRailPref);
@@ -183,7 +189,7 @@ function AppLayout() {
   );
   const modal = cls !== "large" && cls !== "compact" && modalOpen;
   // compact のエディタは詳細画面: 下部バーを隠す（M3 list-detail の compact）
-  // compact の FB スレッドも詳細画面（Slack のスレッドと同じく下部バーを出さない。返信欄を一番下に置く。利用者指示 2026-10-15）
+  // compact の FB スレッドは詳細画面（ベル・アバターを出さず戻るボタン）。下部ナビは残し、返信欄はその上に置く（利用者指示 2026-10-15）
   const chatRoute = cls === "compact" && /^\/feedback\/[^/]+$/.test(path);
   const immersive = (cls === "compact" && editorRoute) || chatRoute;
   // compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16。M3 FAB › Placement）
@@ -223,10 +229,13 @@ function AppLayout() {
       icon: "logout",
       label: "サインアウト",
       onSelect: () =>
-        void signOut().then(() => {
-          setAppBadge(0); // 別の人がサインインしたときに前の人の件数を残さない
-          return navigate({ to: "/signin" });
-        }),
+        // 共用の端末で次の人に前の人の通知を出さないよう、この端末への通知をやめてからサインアウトする
+        void stopPushOnThisDevice()
+          .then(() => signOut())
+          .then(() => {
+            setAppBadge(0); // 別の人がサインインしたときに前の人の件数を残さない
+            return navigate({ to: "/signin" });
+          }),
     },
   ];
 
@@ -334,7 +343,8 @@ function AppLayout() {
         ) : null}
         {launcher.element}
       </div>
-      {cls === "compact" && !immersive ? (
+      {/* FB のスレッドでも下部ナビは残す（利用者指示 2026-10-15「ナビゲーションバーを消して欲しいわけじゃない」） */}
+      {cls === "compact" && (!immersive || chatRoute) ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
           {/* 下部ナビは 5 項目まで（M3 Navigation bar）。管理はアカウントのシートへ */}
           {navItems(

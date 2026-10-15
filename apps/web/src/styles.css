@@ -3644,8 +3644,9 @@ m3e-snackbar {
 }
 /*
  * スマホの FB スレッド（Slack のスレッドと同じ形。利用者指示 2026-10-15「Slack に近い UI に」）:
- * 下部ナビを出さず、画面を見えている範囲（visual viewport。useVisualViewportBox）に固定する。投稿の欄だけがスクロールし、
- * 返信欄は一番下。キーボードが出ると投稿の欄が縮み、返信欄はキーボードのすぐ上に留まる（アプリバーもナビも動かない）。
+ * 画面を見えている範囲（visual viewport。useVisualViewportBox）に固定し、上からアプリバー・投稿（ここだけスクロール）・
+ * 返信欄・下部ナビの順に縦に並べる。キーボードが出ている間は下部ナビをキーボードの下に隠し、返信欄をキーボードのすぐ上に置く
+ * （ナビがキーボードと一緒に持ち上がらない。利用者指示「ナビゲーションバーまで動くのは嫌」「ナビは消さない」）。
  */
 .shell--chat {
   position: fixed;
@@ -3654,10 +3655,20 @@ m3e-snackbar {
   height: var(--mf-vvh, 100dvh);
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .shell--chat .shell__main {
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
   min-height: 0;
+}
+.shell--chat .shell__bar {
+  position: static;
+  flex: none;
+}
+:root.mf-kb-open .shell--chat .shell__bar {
+  display: none;
 }
 .shell--chat .shell__content {
   flex: 1 1 auto;
@@ -3684,15 +3695,12 @@ m3e-snackbar {
   overscroll-behavior: contain;
   padding: 8px 16px;
 }
+/* 下部ナビの上（セーフエリアはナビが持つ）。キーボードが出ている間はキーボードのすぐ上 */
 .shell--chat .fb-thread__composer {
   position: static;
   margin: 0;
   border-radius: 0;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
-}
-/* キーボードが出ているあいだはホームインジケーターが隠れるので、セーフエリアの余白を取らない */
-:root.mf-kb-open .shell--chat .fb-thread__composer {
-  padding-bottom: 8px;
+  padding: 8px 12px;
 }
 /* 詰めた返信欄（Slack の返信欄）: 1 行から伸びる欄と、アイコンだけの行 */
 .fb-composer--dense {
@@ -4020,4 +4028,28 @@ m3e-snackbar {
   height: 8px;
   border-radius: 50%;
   background: var(--mf-primary);
+}
+
+/* 通知パネルの一番上:「この端末にも通知を送る」（Web Push。§45）。行の形は M3 の list item（先頭アイコン・2 行・末尾スイッチ） */
+.notif-push {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px 12px;
+}
+.notif-push__icon {
+  flex: none;
+  color: var(--mf-on-surface-variant);
+}
+.notif-push__text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.notif-push__label {
+  font: var(--mf-type-body-large);
+}
+.notif-push__hint {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
 }

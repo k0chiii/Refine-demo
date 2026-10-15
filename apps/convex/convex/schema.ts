@@ -605,6 +605,20 @@ export default defineSchema({
     // 未読の数・「すべて既読」は未読（readAt なし）だけをこの索引で読む。createdAt で「押した時刻まで」に区切る
     .index("by_recipient_read_created", ["recipientId", "readAt", "createdAt"]),
 
+  /** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意（利用者決定 2026-10-15） */
+  pushSubscriptions: defineTable({
+    userId: v.string(),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    device: v.optional(v.string()),
+    createdAt: v.number(),
+    lastSuccessAt: v.optional(v.number()),
+    failureCount: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_endpoint", ["endpoint"]),
+
   approvalEvents: defineTable({
     workId: v.id("works"),
     revisionId: v.string(),

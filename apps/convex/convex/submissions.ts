@@ -54,7 +54,7 @@ export const prepare = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const { session, items } = await prepareSubmission(createAppContext(ctx.db), principal, args);
+      const { session, items } = await prepareSubmission(createAppContext(ctx), principal, args);
       return {
         sessionId: session.id,
         expiresAt: session.expiresAt,
@@ -81,7 +81,7 @@ export const beginUpload = internalMutation({
   args: { itemId: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => beginItemUpload(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => beginItemUpload(createAppContext(ctx), principal, args));
   },
 });
 
@@ -96,7 +96,7 @@ export const completeUpload = internalMutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const item = await completeItemUpload(createAppContext(ctx.db), principal, args);
+      const item = await completeItemUpload(createAppContext(ctx), principal, args);
       return { status: item.status, failureMessage: item.failureMessage ?? null };
     });
   },
@@ -108,7 +108,7 @@ export const failUpload = internalMutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await failItemUpload(createAppContext(ctx.db), principal, args);
+      await failItemUpload(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -119,7 +119,7 @@ export const reset = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await resetItem(createAppContext(ctx.db), principal, args);
+      await resetItem(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -136,7 +136,7 @@ export const confirm = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       const { revision, supersededRevisionId } = await confirmSubmission(
-        createAppContext(ctx.db),
+        createAppContext(ctx),
         principal,
         args,
       );
@@ -174,7 +174,7 @@ export const voidRevision = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const r = await voidRevisionUseCase(createAppContext(ctx.db), principal, args);
+      const r = await voidRevisionUseCase(createAppContext(ctx), principal, args);
       return { reviewState: r.reviewState };
     });
   },
@@ -184,7 +184,7 @@ export const voidRevision = mutation({
 export const expireSessions = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const ids = await expireUploadSessions(createAppContext(ctx.db), 100);
+    const ids = await expireUploadSessions(createAppContext(ctx), 100);
     return ids.length;
   },
 });
@@ -197,7 +197,7 @@ export const expireSessions = internalMutation({
 export const listOrphanObjects = internalMutation({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
-    const app = createAppContext(ctx.db);
+    const app = createAppContext(ctx);
     const max = Math.min(limit ?? 100, 500);
     const out = await listOrphanUploadObjects(app, max);
     if (out.length < max) out.push(...(await listOrphanFeedbackObjects(app, max - out.length)));
@@ -213,7 +213,7 @@ export const listOrphanObjects = internalMutation({
 export const markObjectsPurged = internalMutation({
   args: { itemIds: v.array(v.string()) },
   handler: async (ctx, { itemIds }) => {
-    const app = createAppContext(ctx.db);
+    const app = createAppContext(ctx);
     const ids = itemIds.slice(0, 500);
     const withPrefix = (prefix: string) =>
       ids.filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length));

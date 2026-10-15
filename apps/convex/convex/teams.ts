@@ -28,7 +28,7 @@ export const save = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const team = await saveTeam(createAppContext(ctx.db), principal, args);
+      const team = await saveTeam(createAppContext(ctx), principal, args);
       return team.id;
     });
   },
@@ -39,7 +39,7 @@ export const remove = mutation({
   handler: async (ctx, { id }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await deleteTeam(createAppContext(ctx.db), principal, id);
+      await deleteTeam(createAppContext(ctx), principal, id);
       return null;
     });
   },
@@ -62,7 +62,7 @@ export const importBatch = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(() =>
       importTeams(
-        createAppContext(ctx.db),
+        createAppContext(ctx),
         principal,
         rows.map(({ bureau, team, order }) => ({
           bureau,

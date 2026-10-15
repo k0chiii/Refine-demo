@@ -143,7 +143,7 @@ export const markViewed = mutation({
   handler: async (ctx, { revisionId }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const app = createAppContext(ctx.db);
+      const app = createAppContext(ctx);
       const revision = await app.revisions.findById(revisionId);
       if (!revision) throw new DomainError("forbidden", { revisionId });
       await loadAuthorizedWork(app, principal, revision.workId, "work.view");
@@ -157,7 +157,7 @@ export const markViewed = mutation({
 export const closeExpired = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const closed = await closeExpiredReviews(createAppContext(ctx.db), 200);
+    const closed = await closeExpiredReviews(createAppContext(ctx), 200);
     return closed.length;
   },
 });
@@ -172,7 +172,7 @@ export const remindDeadlines = internalMutation({
   handler: async (ctx, args): Promise<number> => {
     const batch: { cursor: string | null; asOf?: number } = { cursor: args.cursor ?? null };
     if (args.asOf !== undefined) batch.asOf = args.asOf;
-    const r = await remindUpcomingDeadlinesBatch(createAppContext(ctx.db), batch);
+    const r = await remindUpcomingDeadlinesBatch(createAppContext(ctx), batch);
     if (r.continueCursor !== null)
       await ctx.scheduler.runAfter(0, internal.revisions.remindDeadlines, {
         cursor: r.continueCursor,

@@ -30,6 +30,7 @@ import type {
   AppContext,
   AuditEntry,
   Notification,
+  PushSubscriptionRecord,
   RecentWork,
   StoredDashboardLayout,
   WorkPin,
@@ -94,6 +95,7 @@ export interface InMemoryContext extends AppContext {
     confirmations: Table<ApprovalConfirmation>;
     checks: Table<RequiredCheck>;
     notifications: Table<Notification>;
+    pushSubscriptions: Table<PushSubscriptionRecord>;
     documents: Table<DocumentDraft>;
     socialProfiles: Table<SocialProfile>;
     teams: Table<Team>;
@@ -140,6 +142,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     confirmations: new Table<ApprovalConfirmation>("cnf"),
     checks: new Table<RequiredCheck>("chk"),
     notifications: new Table<Notification>("ntf"),
+    pushSubscriptions: new Table<PushSubscriptionRecord>("push"),
     documents: new Table<DocumentDraft>("doc"),
     socialProfiles: new Table<SocialProfile>("sp"),
     teams: new Table<Team>("team"),
@@ -325,6 +328,18 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         state.checks.all().filter((c) => c.revisionId === revisionId),
       insert: async (c) => state.checks.insert(c),
       update: async (c) => state.checks.put(c),
+    },
+    pushSubscriptions: {
+      findById: async (id) => state.pushSubscriptions.get(id),
+      findByEndpoint: async (endpoint) =>
+        state.pushSubscriptions.all().find((s) => s.endpoint === endpoint) ?? null,
+      listByUser: async (userId) =>
+        state.pushSubscriptions.all().filter((s) => s.userId === userId),
+      insert: async (sub) => state.pushSubscriptions.insert(sub),
+      update: async (sub) => state.pushSubscriptions.put(sub),
+      delete: async (id) => {
+        state.pushSubscriptions.rows.delete(id);
+      },
     },
     notifications: {
       insert: async (n) => state.notifications.insert(n),

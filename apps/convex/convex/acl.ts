@@ -18,7 +18,7 @@ export const grant = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await grantWorkPermission(createAppContext(ctx.db), principal, args);
+      await grantWorkPermission(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -28,7 +28,7 @@ export const revoke = mutation({
   args: { workId: v.id("works"), principalType: vPrincipalType, principalId: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => revokeWorkPermission(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => revokeWorkPermission(createAppContext(ctx), principal, args));
   },
 });
 

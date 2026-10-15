@@ -69,7 +69,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const work = await createWork(createAppContext(ctx.db), principal, args);
+      const work = await createWork(createAppContext(ctx), principal, args);
       return work.id;
     });
   },
@@ -105,7 +105,7 @@ export const importBatch = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const works = await importWorks(createAppContext(ctx.db), principal, {
+      const works = await importWorks(createAppContext(ctx), principal, {
         ...args,
         rows: args.rows.map((r) => ({ ...r, productionTeamIds: r.productionTeamIds ?? [] })),
       });
@@ -148,7 +148,7 @@ export const update = mutation({
     return runUseCase(async () => {
       const input: Parameters<typeof updateWork>[2] = { workId: args.workId, patch: args.patch };
       if (args.expectedVersion !== undefined) input.expectedVersion = args.expectedVersion;
-      const work = await updateWork(createAppContext(ctx.db), principal, input);
+      const work = await updateWork(createAppContext(ctx), principal, input);
       return work.version;
     });
   },
@@ -161,7 +161,7 @@ export const changeLifecycle = mutation({
     return runUseCase(async () => {
       const input: Parameters<typeof changeWorkLifecycle>[2] = { workId: args.workId, to: args.to };
       if (args.expectedVersion !== undefined) input.expectedVersion = args.expectedVersion;
-      await changeWorkLifecycle(createAppContext(ctx.db), principal, input);
+      await changeWorkLifecycle(createAppContext(ctx), principal, input);
       return null;
     });
   },

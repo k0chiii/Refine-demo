@@ -91,6 +91,8 @@ const messages: Record<string, string> = {
   feedback_invalid:
     "投稿の内容を確かめてください。題名は 80 文字まで、本文は 5000 文字まで、添付は 10 件までです。",
   feedback_not_found: "このスレッドや投稿は見つかりません。削除されたか、閲覧の権限がありません。",
+  push_subscription_invalid:
+    "この端末への通知を設定できませんでした。ブラウザを更新してやり直してください。",
   feedback_file_not_ready:
     "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
 };

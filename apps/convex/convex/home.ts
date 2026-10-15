@@ -37,7 +37,7 @@ export const saveLayout = mutation({
   handler: async (ctx, { widgets }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await saveDashboardLayout(createAppContext(ctx.db), principal, widgets.slice(0, 50));
+      await saveDashboardLayout(createAppContext(ctx), principal, widgets.slice(0, 50));
       return null;
     });
   },
@@ -49,7 +49,7 @@ export const resetLayout = mutation({
   handler: async (ctx) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await resetDashboardLayout(createAppContext(ctx.db), principal);
+      await resetDashboardLayout(createAppContext(ctx), principal);
       return null;
     });
   },
@@ -60,7 +60,7 @@ export const setPinned = mutation({
   args: { workId: v.string(), pinned: v.boolean() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => setWorkPinned(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => setWorkPinned(createAppContext(ctx), principal, args));
   },
 });
 
@@ -78,7 +78,7 @@ export const recordOpened = mutation({
   handler: async (ctx, { workId }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await recordWorkOpened(createAppContext(ctx.db), principal, workId);
+      await recordWorkOpened(createAppContext(ctx), principal, workId);
       return null;
     });
   },

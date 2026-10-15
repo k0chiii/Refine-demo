@@ -27,7 +27,7 @@ export const finalize = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const { event } = await finalizeWork(createAppContext(ctx.db), principal, args);
+      const { event } = await finalizeWork(createAppContext(ctx), principal, args);
       return { action: event.action, createdAt: event.createdAt };
     });
   },
@@ -39,7 +39,7 @@ export const reopen = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const { event } = await reopenWork(createAppContext(ctx.db), principal, args);
+      const { event } = await reopenWork(createAppContext(ctx), principal, args);
       return { action: event.action, createdAt: event.createdAt };
     });
   },
@@ -54,7 +54,7 @@ export const confirm = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const c = await confirmIndependently(createAppContext(ctx.db), principal, args);
+      const c = await confirmIndependently(createAppContext(ctx), principal, args);
       return { id: c.id, revisionId: c.revisionId, confirmedAt: c.confirmedAt };
     });
   },

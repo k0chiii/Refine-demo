@@ -5,6 +5,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef } from "react";
 import { formatJstShort } from "@/lib/format";
 import { setAppBadge } from "@/lib/pwa";
+import { PushSetting } from "./PushSetting";
 import { useAction } from "@/lib/useAction";
 import {
   M3eActionList,
@@ -129,6 +130,7 @@ function Menu({ id }: { id: string }) {
       <div className="notif-menu__header">
         <span className="label-large">通知</span>
       </div>
+      <PushSetting />
       {unread > 0 ? (
         <M3eMenuItem disabled={doMarkAll.pending} onClick={() => void doMarkAll.run()}>
           <M3eIcon slot="icon" name="done_all" />
@@ -203,6 +205,7 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
           </M3eButton>
         ) : null}
       </div>
+      <PushSetting />
       {!list || list.length === 0 ? (
         <p className="muted notif-sheet__empty">通知はありません</p>
       ) : (
@@ -233,9 +236,22 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-/** アプリアイコンの件数を未読の通知の数に合わせる（描画はしない。シェルに 1 つだけ置く） */
+/**
+ * アプリアイコンの件数を未読の通知の数に合わせる。端末の通知（Web Push）を押して開いたとき（?from_notification=）は
+ * その通知を既読にして、印を URL から消す。描画はしない。シェルに 1 つだけ置く
+ */
 function AppBadge() {
   const { isAuthenticated } = useConvexAuth();
+  const markRead = useMutation(api.notifications.markRead);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get("from_notification");
+    if (!id) return;
+    url.searchParams.delete("from_notification");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    void markRead({ notificationId: id as Id<"notifications"> }).catch(() => undefined);
+  }, [isAuthenticated]);
   // サインアウトの途中（認証が外れた直後）に問い合わせない
   const unread = useQuery(api.notifications.unreadCount, isAuthenticated ? {} : "skip") ?? 0;
   useEffect(() => setAppBadge(unread), [unread]);

@@ -18,3 +18,4 @@ export * from "./usecases/comparisons.ts";
 export * from "./usecases/notation.ts";
 export * from "./usecases/autoProofread.ts";
 export * from "./usecases/feedback.ts";
+export * from "./usecases/push.ts";

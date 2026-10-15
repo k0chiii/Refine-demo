@@ -80,7 +80,7 @@ export const recordUse = internalMutation({
     candidates: v.number(),
   },
   handler: async (ctx, args) => {
-    await createAppContext(ctx.db).audit.record({
+    await createAppContext(ctx).audit.record({
       entityType: "work",
       entityId: args.workId,
       operation: "ai_proofread",

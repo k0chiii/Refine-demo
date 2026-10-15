@@ -157,6 +157,8 @@
   "note_add",
   "notes",
   "notifications",
+  "notifications_active",
+  "notifications_off",
   "opacity",
   "open_in_full",
   "open_in_new",

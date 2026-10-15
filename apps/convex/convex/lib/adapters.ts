@@ -1,4 +1,9 @@
-import type { AlignmentOverride, AppContext, Notification } from "@mf100/application";
+import type {
+  AlignmentOverride,
+  AppContext,
+  Notification,
+  PushSubscriptionRecord,
+} from "@mf100/application";
 import type {
   ApprovalConfirmation,
   ApprovalEvent,
@@ -27,7 +32,10 @@ import type {
   WorkPermissionGrant,
 } from "@mf100/domain";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
+import type { Scheduler } from "convex/server";
+import { vapidKeysFromEnv } from "./webpush.ts";
 
 /**
  * application 層のポートを Convex の ctx.db で実装するアダプタ。
@@ -72,10 +80,21 @@ export class ConvexClock {
   }
 }
 
+/** Web Push の鍵が環境変数に揃っているか（デモ・テストでは揃っていない） */
+export function pushConfigured(): boolean {
+  return typeof process !== "undefined" && vapidKeysFromEnv(process.env) !== null;
+}
+
+/**
+ * mutation の ctx（または db だけ）から業務の文脈を作る。ctx を渡すと、通知を作ったときに
+ * 受信者の端末への送信（Web Push）を予約する。db だけ（テスト・読取）なら予約しない。
+ */
 export function createAppContext(
-  db: DatabaseWriter,
+  dbOrCtx: DatabaseWriter | { db: DatabaseWriter; scheduler?: Scheduler },
   clock: { now(): number } = new ConvexClock(),
 ): AppContext {
+  const db: DatabaseWriter = "db" in dbOrCtx ? dbOrCtx.db : dbOrCtx;
+  const scheduler = "db" in dbOrCtx ? dbOrCtx.scheduler : undefined;
   const syncRoles = async (work: Work) => {
     const workId = work.id as Id<"works">;
     const existing = await db
@@ -398,9 +417,50 @@ export function createAppContext(
         );
       },
     },
+    pushSubscriptions: {
+      async findById(id) {
+        const doc = await db
+          .get("pushSubscriptions", id as Id<"pushSubscriptions">)
+          .catch(() => null);
+        return doc ? (fromDoc(doc) as PushSubscriptionRecord) : null;
+      },
+      async findByEndpoint(endpoint) {
+        const doc = await db
+          .query("pushSubscriptions")
+          .withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
+          .first();
+        return doc ? (fromDoc(doc) as PushSubscriptionRecord) : null;
+      },
+      async listByUser(userId) {
+        const docs = await db
+          .query("pushSubscriptions")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .take(20);
+        return docs.map((d) => fromDoc(d) as PushSubscriptionRecord);
+      },
+      async insert(sub) {
+        const id = await db.insert("pushSubscriptions", compact(sub));
+        return { ...sub, id } as PushSubscriptionRecord;
+      },
+      async update(sub) {
+        await db.replace(sub.id as Id<"pushSubscriptions">, compact(toFields(sub)));
+      },
+      async delete(id) {
+        await db.delete(id as Id<"pushSubscriptions">);
+      },
+    },
     notifications: {
       async insert(n) {
         const id = await db.insert("notifications", compact(n));
+        // 端末への通知: 受信者が端末を登録していれば、送信を予約する（送る内容は送る時点で作り直す）
+        if (scheduler && pushConfigured()) {
+          const hasDevice = await db
+            .query("pushSubscriptions")
+            .withIndex("by_user", (q) => q.eq("userId", n.recipientId))
+            .first();
+          if (hasDevice)
+            await scheduler.runAfter(0, internal.pushNode.deliver, { notificationId: id });
+        }
         return { ...n, id } as Notification;
       },
       async listForUser(userId, limit) {

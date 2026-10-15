@@ -38,7 +38,7 @@ export const markRead = mutation({
   handler: async (ctx, { notificationId }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await markNotificationRead(createAppContext(ctx.db), principal, notificationId);
+      await markNotificationRead(createAppContext(ctx), principal, notificationId);
       return null;
     });
   },
@@ -52,7 +52,7 @@ export const markAllRead = mutation({
   args: {},
   handler: async (ctx): Promise<number> => {
     const { principal } = await requireUser(ctx);
-    const r = await runUseCase(() => markAllNotificationsRead(createAppContext(ctx.db), principal));
+    const r = await runUseCase(() => markAllNotificationsRead(createAppContext(ctx), principal));
     if (r.hasMore)
       await ctx.scheduler.runAfter(0, internal.notifications.continueMarkAllRead, {
         userId: principal.userId,
@@ -66,7 +66,7 @@ export const markAllRead = mutation({
 export const continueMarkAllRead = internalMutation({
   args: { userId: v.string(), asOf: v.number() },
   handler: async (ctx, { userId, asOf }): Promise<number> => {
-    const r = await markUnreadNotificationsRead(createAppContext(ctx.db), userId, asOf);
+    const r = await markUnreadNotificationsRead(createAppContext(ctx), userId, asOf);
     if (r.hasMore)
       await ctx.scheduler.runAfter(0, internal.notifications.continueMarkAllRead, {
         userId,

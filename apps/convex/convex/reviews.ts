@@ -11,7 +11,7 @@ export const assign = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const out = await assignReviewers(createAppContext(ctx.db), principal, args);
+      const out = await assignReviewers(createAppContext(ctx), principal, args);
       return out.length;
     });
   },
@@ -23,7 +23,7 @@ export const complete = mutation({
   handler: async (ctx, { revisionId }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const a = await completeMyReview(createAppContext(ctx.db), principal, revisionId);
+      const a = await completeMyReview(createAppContext(ctx), principal, revisionId);
       return a.state;
     });
   },

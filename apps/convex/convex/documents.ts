@@ -54,7 +54,7 @@ export const save = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => saveDocumentDraft(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => saveDocumentDraft(createAppContext(ctx), principal, args));
   },
 });
 
