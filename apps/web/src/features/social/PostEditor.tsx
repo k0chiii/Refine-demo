@@ -50,7 +50,12 @@ import {
   M3eSwitch,
 } from "@/ui/m3e";
 import { PaneTabs } from "@/ui/PaneTabs";
-import { PostPreview, type PreviewImage, type PreviewView } from "./preview/PostPreview";
+import {
+  FullscreenPreview,
+  PostPreview,
+  type PreviewImage,
+  type PreviewView,
+} from "./preview/PostPreview";
 import { DevicePicker, usePreviewDevice } from "./preview/DevicePicker";
 
 /** 画像の実体（URL と大きさ）。前の版の画像は添付から、新しい画像は端末のファイルから */
@@ -104,6 +109,7 @@ function PostSurface({
   const win = useWindowClass();
   const wide = win === "expanded" || win === "large";
   const compact = win === "compact";
+  const [full, setFull] = useState(false);
   const canEdit = doc.canEdit;
   const canSubmit = work.can.submit && work.work.lifecycle === "active";
 
@@ -577,6 +583,13 @@ function PostSurface({
     <div className="post-preview stack">
       <div className="row">
         <DevicePicker device={device.device} color={device.color} onChange={device.set} />
+        {compact ? (
+          // スマホ: 自分の端末の画面いっぱいに出す（そのアプリが入っているように見える）
+          <M3eButton variant="tonal" onClick={() => setFull(true)}>
+            <M3eIcon slot="icon" name="fullscreen" />
+            全画面で見る
+          </M3eButton>
+        ) : null}
         {post.platform === "instagram" && post.format !== "story" ? (
           <M3eSegmentedButton aria-label="表示">
             {(
@@ -610,6 +623,16 @@ function PostSurface({
         view={view}
         safeArea={safeArea}
       />
+      {full ? (
+        <FullscreenPreview
+          post={post}
+          {...(profile ? { profile } : {})}
+          images={previewImages}
+          view={view}
+          safeArea={safeArea}
+          onClose={() => setFull(false)}
+        />
+      ) : null}
     </div>
   );
 

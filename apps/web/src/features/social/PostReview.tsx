@@ -15,7 +15,13 @@ import {
   M3eSegmentedButton,
   M3eSnackbar,
 } from "@/ui/m3e";
-import { PostPreview, type PreviewImage, type PreviewView } from "./preview/PostPreview";
+import {
+  FullscreenPreview,
+  PostPreview,
+  type PreviewImage,
+  type PreviewView,
+} from "./preview/PostPreview";
+import { useWindowClass } from "@/lib/useMedia";
 import { DevicePicker, usePreviewDevice } from "./preview/DevicePicker";
 import { makeZip } from "./zip";
 
@@ -53,6 +59,9 @@ export function PostReview({
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<Array<PreviewImage & { blob: Blob; fileName: string }>>([]);
   const device = usePreviewDevice();
+  // スマホでは自分の端末の画面いっぱいに出す全画面のプレビューも選べる
+  const compact = useWindowClass() === "compact";
+  const [full, setFull] = useState(false);
   const [view, setView] = useState<PreviewView>("post");
 
   useEffect(() => {
@@ -144,6 +153,12 @@ export function PostReview({
       <div className="post-preview stack">
         <div className="row">
           <DevicePicker device={device.device} color={device.color} onChange={device.set} />
+          {compact ? (
+            <M3eButton variant="tonal" onClick={() => setFull(true)}>
+              <M3eIcon slot="icon" name="fullscreen" />
+              全画面で見る
+            </M3eButton>
+          ) : null}
           {post.platform === "instagram" && post.format !== "story" ? (
             <M3eSegmentedButton aria-label="表示">
               {(
@@ -168,6 +183,16 @@ export function PostReview({
           safeArea
           {...(profile ? { profile } : {})}
         />
+        {full ? (
+          <FullscreenPreview
+            post={post}
+            images={images}
+            view={view}
+            safeArea
+            {...(profile ? { profile } : {})}
+            onClose={() => setFull(false)}
+          />
+        ) : null}
         <p className="small muted">
           本文への指摘は添付「{POST_BODY_NAME}」、画像への指摘は各画像の添付で行います。
         </p>

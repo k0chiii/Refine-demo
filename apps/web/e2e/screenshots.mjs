@@ -896,6 +896,10 @@ async function v2Scenes() {
   await go("/notation?view=proposals");
   await page.waitForSelector("m3e-card.proposal");
   await shot("52-notation-proposals");
+  // 52a カテゴリは表（名前・説明・継承はセルでその場で直す）
+  await go("/notation?view=categories");
+  await page.waitForSelector('.data-table[aria-label="カテゴリ"] .cell-edit');
+  await shot("52a-notation-categories");
 
   // 53 文章エディタの表記の検査（800ms 後に波線、表記パネル）
   await signInAs("mock-nogiku-creator");

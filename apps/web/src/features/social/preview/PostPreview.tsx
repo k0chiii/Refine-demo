@@ -6,7 +6,15 @@ import {
   type SocialAspect,
   type SocialPost,
 } from "@mf100/domain";
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { bezelUrl, deviceById, outerSize, type DeviceSpec } from "./devices";
 import { Icon, StatusIcons } from "./icons";
 import "./preview.css";
@@ -695,6 +703,133 @@ function useFitScale(outer: { w: number; h: number }) {
   return { ref, scale };
 }
 
+const isStory = (post: SocialPost, view: PreviewView) =>
+  post.platform === "instagram" && (post.format === "story" || view === "story");
+
+/** 画面の中身（サービス・形式・表示に応じた模擬画面） */
+function PreviewContent({
+  post,
+  images,
+  view,
+  safeArea,
+  profile,
+  width,
+  pc,
+}: {
+  post: SocialPost;
+  images: PreviewImage[];
+  view: PreviewView;
+  safeArea: boolean;
+  profile?: PreviewProfile | undefined;
+  width: number;
+  pc: boolean;
+}) {
+  if (post.platform === "x") return <XPost post={post} images={images} pc={pc} />;
+  if (isStory(post, view))
+    return <InstagramStory post={post} images={images} safeArea={safeArea} />;
+  if (view === "grid") return <InstagramProfile post={post} images={images} profile={profile} />;
+  return <InstagramPost post={post} images={images} width={width} />;
+}
+
+/**
+ * 全画面のプレビュー（スマホ向け。利用者指示 2026-10-15）: 枠を描かず、見ている端末の画面いっぱいに模擬画面を出す。
+ * 端末のステータスバー・ホームインジケーターは本物をそのまま使い、その分（セーフエリア）だけ中身を内側に置くので、
+ * 自分のスマホにそのアプリが入っているように見える。使えるときは Fullscreen API でブラウザのバーも隠す。
+ * 閉じる: 右上の ✕・Esc・戻る操作（履歴を 1 つ積む）。
+ */
+export function FullscreenPreview({
+  post,
+  images,
+  view,
+  safeArea = false,
+  profile,
+  onClose,
+}: {
+  post: SocialPost;
+  images: PreviewImage[];
+  view: PreviewView;
+  safeArea?: boolean;
+  profile?: PreviewProfile;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(() => (typeof window === "undefined" ? 393 : innerWidth));
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const el = ref.current;
+    // 使える環境（Android の Chrome など）ではブラウザのバーも隠す。iPhone の Safari は要素の全画面に対応しない
+    void el?.requestFullscreen?.({ navigationUI: "hide" }).catch(() => undefined);
+    // 戻る操作で閉じる
+    history.pushState({ mf100Preview: true }, "");
+    let closedByBack = false;
+    const onPop = () => {
+      closedByBack = true;
+      closeRef.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeRef.current();
+    };
+    const onResize = () => setWidth(innerWidth);
+    addEventListener("popstate", onPop);
+    addEventListener("keydown", onKey);
+    addEventListener("resize", onResize);
+    const prevOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      removeEventListener("popstate", onPop);
+      removeEventListener("keydown", onKey);
+      removeEventListener("resize", onResize);
+      document.documentElement.style.overflow = prevOverflow;
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      if (!closedByBack && history.state?.mf100Preview) history.back();
+    };
+  }, []);
+  const story = isStory(post, view);
+  return createPortal(
+    <div
+      ref={ref}
+      className="sp-full"
+      role="dialog"
+      aria-modal="true"
+      aria-label="投稿のプレビュー（全画面）"
+    >
+      <div
+        className={`sp-device sp-device--iphone sp-full__screen ${story ? "sp-device--dark" : ""}`}
+        style={
+          {
+            "--sp-top": "env(safe-area-inset-top, 0px)",
+            "--sp-bottom": "env(safe-area-inset-bottom, 0px)",
+          } as CSSProperties
+        }
+      >
+        {/* 本物のステータスバーの分だけ空ける（時計・電波は端末のものが見える） */}
+        <div className="sp-full__status" aria-hidden="true" />
+        <div className="sp-device__screen">
+          <PreviewContent
+            post={post}
+            images={images}
+            view={view}
+            safeArea={safeArea}
+            profile={profile}
+            width={width}
+            pc={false}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        className="sp-full__close"
+        aria-label="全画面のプレビューを閉じる"
+        onClick={onClose}
+      >
+        <Icon name="igClose" size={18} />
+      </button>
+    </div>,
+    document.body,
+  );
+}
+
 export function PostPreview({
   post,
   images,
@@ -716,20 +851,20 @@ export function PostPreview({
   const spec = deviceById(device);
   const outer = outerSize(spec);
   const { ref, scale } = useFitScale(outer);
-  const story = post.platform === "instagram" && (post.format === "story" || view === "story");
+  const story = isStory(post, view);
   return (
     <figure className="sp-figure" aria-label="投稿のプレビュー">
       <div className="sp-frame-fit" ref={ref} style={scale < 1 ? { zoom: scale } : undefined}>
         <DeviceFrame spec={spec} color={color} dark={story}>
-          {post.platform === "x" ? (
-            <XPost post={post} images={images} pc={spec.kind === "pc"} />
-          ) : story ? (
-            <InstagramStory post={post} images={images} safeArea={safeArea} />
-          ) : view === "grid" ? (
-            <InstagramProfile post={post} images={images} profile={profile} />
-          ) : (
-            <InstagramPost post={post} images={images} width={spec.w} />
-          )}
+          <PreviewContent
+            post={post}
+            images={images}
+            view={view}
+            safeArea={safeArea}
+            profile={profile}
+            width={spec.w}
+            pc={spec.kind === "pc"}
+          />
         </DeviceFrame>
       </div>
       <figcaption className="sp-caption">

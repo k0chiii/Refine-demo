@@ -228,7 +228,8 @@ export function ImportDialog({
                 <span slot="header">取り込むルール {preview.rules.length}</span>
                 <DataTable
                   label="取り込むルール"
-                  rows={preview.rules.slice(0, 300)}
+                  rows={preview.rules}
+                  defaultSort={{ key: "id", dir: 1 }}
                   rowKey={(r) => r.ruleId}
                   columns={[
                     {
@@ -248,6 +249,7 @@ export function ImportDialog({
                     {
                       key: "wrong",
                       header: "誤表記・正規表現",
+                      truncate: "32ch",
                       cell: (r) => (
                         <span className="small">{[...r.incorrect, ...r.patterns].join(" / ")}</span>
                       ),
@@ -273,9 +275,6 @@ export function ImportDialog({
                     },
                   ]}
                 />
-                {preview.rules.length > 300 ? (
-                  <p className="small muted">ほか {preview.rules.length - 300} 件</p>
-                ) : null}
               </M3eExpansionPanel>
             </M3eAccordion>
             <Checkbox

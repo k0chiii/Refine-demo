@@ -104,6 +104,7 @@ export function ProfilesAdmin() {
       <DataTable
         label="SNS アカウント"
         rows={list ?? []}
+        loading={list === undefined}
         rowKey={(p) => p.id}
         empty={list === undefined ? "読み込み中…" : "まだありません"}
         columns={[
@@ -164,6 +165,7 @@ export function ProfilesAdmin() {
           {
             key: "bio",
             header: "自己紹介",
+            truncate: "28ch",
             cell: (p) => (
               <EditableText
                 label={`@${p.username} の自己紹介`}

@@ -87,6 +87,7 @@ export function RuleTable({
     {
       key: "correct",
       header: "統一表記",
+      truncate: "24ch",
       sort: (a, b) => (a.correct[0] ?? "").localeCompare(b.correct[0] ?? "", "ja"),
       cell: (r) => (
         <EditableText
@@ -101,6 +102,7 @@ export function RuleTable({
     {
       key: "incorrect",
       header: "誤表記",
+      truncate: "28ch",
       cell: (r) => (
         <>
           <EditableText
@@ -140,6 +142,8 @@ export function RuleTable({
       key: "years",
       header: "年度",
       width: "96px",
+      // 年度（MF の回）は数字なので右寄せ（data table の仕様: 数値は右寄せ）
+      numeric: true,
       cell: (r) => (
         <EditableText
           label={`${r.ruleId} の年度`}
@@ -193,6 +197,7 @@ export function RuleTable({
       label="表記ルール"
       columns={columns}
       rows={rules}
+      defaultSort={{ key: "id", dir: 1 }}
       rowKey={(r) => r.ruleId}
       selectedKey={selected}
       empty="ルールがありません"

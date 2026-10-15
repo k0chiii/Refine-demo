@@ -79,7 +79,8 @@ function Admin() {
             label="作品ごとの閲覧権限"
             rows={works ?? []}
             rowKey={(w) => w.id}
-            empty={works === undefined ? "読み込み中…" : "作品がありません"}
+            loading={works === undefined}
+            empty="作品がありません"
             columns={[
               {
                 key: "title",
@@ -144,6 +145,7 @@ function Admin() {
             <DataTable
               label="ユーザー"
               rows={users ?? []}
+              loading={users === undefined}
               rowKey={(u) => u.id}
               columns={[
                 {
@@ -185,6 +187,9 @@ function Admin() {
           <DataTable
             label="監査ログ"
             rows={audit ?? []}
+            loading={audit === undefined}
+            // 新しい順で届く（直近 100 件）
+            defaultSort={{ key: "at", dir: -1 }}
             rowKey={(e) => e._id}
             columns={[
               {

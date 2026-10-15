@@ -35,6 +35,7 @@ export { M3eExpansionPanel, M3eAccordion } from "@m3e/react/expansion-panel";
 export { M3eTabs, M3eTab, M3eTabPanel } from "@m3e/react/tabs";
 export { M3eBadge } from "@m3e/react/badge";
 export { M3eTooltip } from "@m3e/react/tooltip";
+export { M3ePaginator } from "@m3e/react/paginator";
 export {
   M3eLinearProgressIndicator,
   M3eCircularProgressIndicator,

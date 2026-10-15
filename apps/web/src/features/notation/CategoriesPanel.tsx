@@ -3,34 +3,150 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { useAction } from "@/lib/useAction";
-import { Card } from "@/ui/Card";
+import { DataTable, EditableText, type Column } from "@/ui/DataTable";
 import { Field, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon, M3eSnackbar } from "@/ui/m3e";
+import { M3eButton, M3eDialog, M3eIcon, M3eIconButton, M3eSnackbar } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 type Category = Book["categories"][number];
 
+const splitCodes = (v: string) =>
+  v
+    .split(/[,、\s]+/)
+    .map((x) => x.trim().toUpperCase())
+    .filter(Boolean);
+
 /**
- * カテゴリ（継承・運用メモ）とカテゴリ管理者。
- * 運用メモ: スプレッドシートの説明行・管理メモなど、ルールにできない運用の説明を残す場所。
- * カテゴリ管理者の設定はシステム管理者だけ（Nogiku の組織権限 notation:category:<code> でも付く）。
+ * カテゴリ（継承・運用メモ）とカテゴリ管理者。表のセルでその場で直す（ルールの表と同じ。利用者指示 2026-10-15）。
+ * - 名前・説明・継承はセルで直す。継承の変更はシステム管理者だけ
+ * - 運用メモ（スプレッドシートの説明行・管理メモなど、ルールにできない運用の説明）とカテゴリ管理者は複数行・複数人なので、
+ *   行の「詳細」から開くダイアログで直す
+ * - カテゴリ管理者の設定はシステム管理者だけ（Nogiku の組織権限 notation:category:<code> でも付く）
  */
 export function CategoriesPanel({ book }: { book: Book }) {
+  const upsert = useMutation(api.notation.upsertCategory);
   const [adding, setAdding] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
+  const canEdit = (c: Category) => (book.roles[c.code] ?? "member") !== "member";
+  const save = (c: Category, patch: Partial<Category>) => async () => {
+    await upsert({ ...c, ...patch });
+  };
+  const managersOf = (code: string) => book.managers.filter((m) => m.categoryCode === code);
+  const countOf = (code: string) => book.rules.filter((r) => r.categoryCode === code).length;
+
+  const columns: Column<Category>[] = [
+    {
+      key: "code",
+      header: "コード",
+      rowHeader: true,
+      width: "96px",
+      sort: (a, b) => a.code.localeCompare(b.code),
+      cell: (c) => c.code,
+    },
+    {
+      key: "name",
+      header: "名前",
+      sort: (a, b) => a.name.localeCompare(b.name, "ja"),
+      cell: (c) => (
+        <EditableText
+          label={`${c.code} の名前`}
+          value={c.name}
+          disabled={!canEdit(c)}
+          validate={(v) => (v.trim() ? null : "名前を入力してください")}
+          onSave={(v) => save(c, { name: v.trim() })()}
+        />
+      ),
+    },
+    {
+      key: "description",
+      header: "説明",
+      truncate: "32ch",
+      cell: (c) => (
+        <EditableText
+          label={`${c.code} の説明`}
+          value={c.description}
+          placeholder="なし"
+          disabled={!canEdit(c)}
+          onSave={(v) => save(c, { description: v })()}
+        />
+      ),
+    },
+    {
+      key: "parents",
+      header: "継承",
+      width: "140px",
+      cell: (c) => (
+        <EditableText
+          label={`${c.code} が継承するカテゴリ`}
+          value={c.parents.join(", ")}
+          placeholder="なし"
+          disabled={!book.canAssignManagers}
+          validate={(v) => {
+            const codes = splitCodes(v);
+            if (codes.includes(c.code)) return "自分自身は継承できません";
+            const unknown = codes.filter((x) => !book.categories.some((k) => k.code === x));
+            return unknown.length ? `存在しないカテゴリ: ${unknown.join(", ")}` : null;
+          }}
+          onSave={(v) => save(c, { parents: splitCodes(v) })()}
+        />
+      ),
+    },
+    {
+      key: "rules",
+      header: "ルール",
+      numeric: true,
+      width: "88px",
+      sort: (a, b) => countOf(a.code) - countOf(b.code),
+      cell: (c) => countOf(c.code),
+    },
+    {
+      key: "managers",
+      header: "管理者",
+      truncate: "20ch",
+      cell: (c) => {
+        const m = managersOf(c.code);
+        return m.length ? m.map((x) => x.user.name).join("、") : <span className="muted">—</span>;
+      },
+    },
+    {
+      key: "open",
+      header: <span className="sr-only">詳細</span>,
+      width: "56px",
+      cell: (c) => (
+        <M3eIconButton
+          aria-label={`${c.code} の詳細（運用メモ・管理者）`}
+          onClick={() => setDetail(c.code)}
+        >
+          <M3eIcon name="open_in_full" />
+        </M3eIconButton>
+      ),
+    },
+  ];
+
+  const current = book.categories.find((c) => c.code === detail) ?? null;
   return (
     <div className="stack">
-      {book.canAssignManagers ? (
-        <div className="row">
-          <span className="spacer" />
+      <div className="row">
+        <span className="small muted">{book.categories.length} 件</span>
+        <span className="spacer" />
+        {book.canAssignManagers ? (
           <M3eButton variant="tonal" onClick={() => setAdding(true)}>
             <M3eIcon slot="icon" name="add" />
             カテゴリを追加
           </M3eButton>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+      <DataTable
+        label="カテゴリ"
+        rows={book.categories}
+        rowKey={(c) => c.code}
+        columns={columns}
+        defaultSort={{ key: "code", dir: 1 }}
+        empty="カテゴリがありません"
+      />
       {adding ? (
-        <CategoryCard
+        <CategoryDialog
           book={book}
           category={{
             code: "",
@@ -41,40 +157,44 @@ export function CategoriesPanel({ book }: { book: Book }) {
             order: book.categories.length + 1,
           }}
           isNew
-          onDone={() => setAdding(false)}
+          onClose={() => setAdding(false)}
         />
       ) : null}
-      {book.categories.map((c) => (
-        <CategoryCard key={c.code} book={book} category={c} />
-      ))}
+      {current ? (
+        <CategoryDialog
+          key={current.code}
+          book={book}
+          category={current}
+          readOnly={!canEdit(current)}
+          onClose={() => setDetail(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function CategoryCard({
+/** カテゴリの追加・詳細（運用メモ・管理者）。Google フォーム風の質問で並べる */
+function CategoryDialog({
   book,
   category,
   isNew,
-  onDone,
+  readOnly,
+  onClose,
 }: {
   book: Book;
   category: Category;
   isNew?: boolean;
-  onDone?: () => void;
+  readOnly?: boolean;
+  onClose: () => void;
 }) {
   const upsert = useMutation(api.notation.upsertCategory);
   const setManager = useMutation(api.notation.setManager);
   const [form, setForm] = useState(category);
-  const [editing, setEditing] = useState(!!isNew);
-  const canEdit = isNew
-    ? book.canAssignManagers
-    : (book.roles[category.code] ?? "member") !== "member";
   const managers = book.managers.filter((m) => m.categoryCode === category.code);
   const save = useAction(async () => {
     await upsert(form);
-    setEditing(false);
     M3eSnackbar.open("カテゴリを保存しました", { duration: 3000 });
-    onDone?.();
+    onClose();
   });
   const assign = useAction(async (ids: string[]) => {
     const now = new Set(managers.map((m) => m.userId));
@@ -85,16 +205,15 @@ function CategoryCard({
       if (!ids.includes(id))
         await setManager({ userId: id, categoryCode: category.code, assigned: false });
   });
-  const count = book.rules.filter((r) => r.categoryCode === category.code).length;
   return (
-    <Card title={isNew ? "新しいカテゴリ" : `${category.code} ${category.name}`}>
-      {editing ? (
-        <div className="stack">
-          <div className="rule-editor__grid">
-            <Field label="コード" required hint={isNew ? "例: F" : "変更できません"}>
+    <M3eDialog open onClosed={onClose} closeLabel="閉じる" className="dialog--full">
+      <span slot="header">{isNew ? "カテゴリを追加" : `${category.code} ${category.name}`}</span>
+      <div className="dialog-body">
+        {isNew ? (
+          <>
+            <Field label="コード" required hint="例: F（英字と数字。あとから変えられません）">
               <TextInput
                 value={form.code}
-                disabled={!isNew}
                 onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
               />
             </Field>
@@ -104,98 +223,67 @@ function CategoryCard({
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
             </Field>
-          </div>
-          <Field label="説明">
-            <TextInput
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
-          </Field>
-          <Field
-            label="継承するカテゴリ"
-            hint={
-              book.canAssignManagers
-                ? "カンマ区切り。例: A1, A2, A3"
-                : "継承の変更はシステム管理者だけ"
-            }
-          >
-            <TextInput
-              value={form.parents.join(", ")}
-              disabled={!book.canAssignManagers}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  parents: e.target.value
-                    .split(/[,、\s]+/)
-                    .map((x) => x.trim())
-                    .filter(Boolean),
-                }))
-              }
-            />
-          </Field>
-          <Field label="運用メモ（ルールにできない説明・方針）">
-            <TextArea
-              rows={5}
-              value={form.policyNotes}
-              onChange={(e) => setForm((f) => ({ ...f, policyNotes: e.target.value }))}
-            />
-          </Field>
-          <div className="row">
-            <span className="spacer" />
-            <M3eButton
-              variant="text"
-              onClick={() => {
-                setForm(category);
-                setEditing(false);
-                onDone?.();
-              }}
-            >
-              キャンセル
-            </M3eButton>
-            <M3eButton
-              variant="filled"
-              disabled={save.pending || !form.code || !form.name}
-              onClick={() => void save.run()}
-            >
-              保存
-            </M3eButton>
-          </div>
-        </div>
-      ) : (
-        <div className="stack">
-          <p className="small">{category.description}</p>
+            <Field label="説明">
+              <TextInput
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </Field>
+            <Field label="継承するカテゴリ" hint="カンマ区切り。例: A1, A2, A3">
+              <TextInput
+                value={form.parents.join(", ")}
+                onChange={(e) => setForm((f) => ({ ...f, parents: splitCodes(e.target.value) }))}
+              />
+            </Field>
+          </>
+        ) : (
           <p className="small muted">
-            ルール {count} 件
+            ルール {book.rules.filter((r) => r.categoryCode === category.code).length} 件
             {category.parents.length ? `・継承: ${category.parents.join("・")}` : ""}
           </p>
-          {category.policyNotes ? (
-            <pre className="policy-notes small">{category.policyNotes}</pre>
-          ) : null}
-          {book.canAssignManagers ? (
-            <UserPicker
-              label="カテゴリ管理者"
-              value={managers.map((m) => m.userId)}
-              onChange={(ids) => void assign.run(ids)}
-            />
-          ) : (
-            <p className="small muted">
-              管理者:{" "}
-              {managers.length
-                ? managers.map((m) => m.user.name).join("、")
-                : "未設定（システム管理者が管理）"}
-            </p>
-          )}
-          {canEdit ? (
-            <div className="row">
-              <span className="spacer" />
-              <M3eButton variant="text" onClick={() => setEditing(true)}>
-                <M3eIcon slot="icon" name="edit" />
-                編集
-              </M3eButton>
-            </div>
-          ) : null}
-        </div>
-      )}
-    </Card>
+        )}
+        <Field
+          label="運用メモ"
+          hint="ルールにできない説明・方針（スプレッドシートの説明行・管理メモなど）"
+        >
+          <TextArea
+            rows={6}
+            value={form.policyNotes}
+            disabled={readOnly}
+            onChange={(e) => setForm((f) => ({ ...f, policyNotes: e.target.value }))}
+          />
+        </Field>
+        {isNew ? null : book.canAssignManagers ? (
+          <UserPicker
+            label="カテゴリ管理者"
+            hint="このカテゴリのルールを直せる人"
+            value={managers.map((m) => m.userId)}
+            onChange={(ids) => void assign.run(ids)}
+          />
+        ) : (
+          <p className="small muted">
+            管理者:{" "}
+            {managers.length
+              ? managers.map((m) => m.user.name).join("、")
+              : "未設定（システム管理者が管理）"}
+          </p>
+        )}
+      </div>
+      <div slot="actions" className="row">
+        <span className="spacer" />
+        <M3eButton variant="text" onClick={onClose}>
+          {readOnly ? "閉じる" : "キャンセル"}
+        </M3eButton>
+        {readOnly ? null : (
+          <M3eButton
+            variant="filled"
+            disabled={save.pending || !form.code || !form.name}
+            onClick={() => void save.run()}
+          >
+            保存
+          </M3eButton>
+        )}
+      </div>
+    </M3eDialog>
   );
 }

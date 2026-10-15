@@ -797,3 +797,48 @@
     rgb(101 119 134 / 0.2) 0 0 8px,
     rgb(101 119 134 / 0.25) 0 1px 3px 1px;
 }
+
+/* ---------- 全画面のプレビュー（スマホ）: 端末の画面いっぱい。上下は本物のステータスバー・ホームインジケーターの分だけ空ける */
+.sp-full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #fff;
+  display: flex;
+}
+.sp-full__screen {
+  flex: 1;
+  width: 100%;
+  height: 100dvh;
+}
+.sp-full__status {
+  flex: none;
+  height: var(--sp-top);
+  background: var(--sp-bg);
+}
+/* 閉じるボタン: アプリの上のバー（ハート・ロゴなど）と重ならないよう、画面の左下（タブバーの上）に小さく置く */
+.sp-full__close {
+  position: absolute;
+  left: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 49px + 12px);
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0.8;
+}
+.sp-full__close::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.sp-full__close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
