@@ -1219,6 +1219,93 @@ m3e-dialog [slot="actions"] {
   padding: 0 0 16px;
 }
 
+/* ---------- 制作物一覧の入れ子（局 › 担当。PC は表、スマホはリスト。利用者決定 2026-10-15） */
+.works__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+/* 見出しの行（局・担当）: data table の行と同じ高さで、押すと開閉する。局は surface-container-low の地、担当は字下げ */
+.data-table__group > th {
+  height: 48px;
+  padding: 0 8px;
+  text-align: start;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.data-table__group--bureau > th {
+  background: var(--mf-surface-container-low);
+  font: var(--mf-type-title-small);
+}
+.data-table__group--team > th {
+  padding-inline-start: 32px;
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+}
+.data-table__group-toggle {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding-inline-end: 12px;
+  border-radius: var(--mf-shape-full);
+  cursor: pointer;
+}
+.data-table__group-toggle:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.data-table__group-count {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+/* 制作物の行は見出しの深さに合わせて字下げ（局の直下 1 段、担当の下 2 段）。セルの既定の左右 16 より後に効くよう 2 クラスで */
+.data-table__rowhead.data-table__indent-1 {
+  padding-inline-start: 48px;
+}
+.data-table__rowhead.data-table__indent-2 {
+  padding-inline-start: 72px;
+}
+/* 行の題名: 行全体を押せるが、キーボード・読み上げのためにボタンにしておく（見た目は文字のまま） */
+.data-table__link {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+}
+.data-table__link:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+  border-radius: var(--mf-shape-xs);
+}
+.data-table__row--done > * {
+  color: var(--mf-on-surface-variant);
+}
+/* 担当ごとに tbody を分けているので、区切り線を消すのは表の最後の行だけ（担当の最後の行と次の見出しの間には線を引く） */
+.works-team-table .data-table__row:last-child > * {
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.works-team-table tbody:last-child > tr:last-child > * {
+  border-bottom: 0;
+}
+/* スマホ: 担当の項目と、その下の制作物を字下げ（M3E list item の先頭余白） */
+.works-team-list__team {
+  --m3e-list-item-leading-space: 32px;
+}
+.works-team-list__team [slot="items"] > m3e-list-action,
+.works-team-list__bureau > [slot="items"] > m3e-list-action {
+  --m3e-list-item-leading-space: 32px;
+}
+.works-team-list__team [slot="items"] > m3e-list-action {
+  --m3e-list-item-leading-space: 56px;
+}
+
+/* ---------- 管理 › 担当 */
+.teams-admin__team {
+  --m3e-list-item-leading-space: 48px;
+}
+
 /* ---------- 制作物の一括登録（管理） */
 .admin-works__actions {
   flex-wrap: wrap;

@@ -10,6 +10,7 @@ import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eExpansionPanel } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
+import { TeamSelect } from "./TeamSelect";
 
 type Work = FunctionReturnType<typeof api.works.get>["work"];
 
@@ -36,6 +37,8 @@ export function EditWorkDialog({
     approverIds: [work.approverId],
     managerIds: [...work.managerIds],
     notationCategories: [...(work.notationCategories ?? [])],
+    ownerTeam: work.ownerTeamId ? [work.ownerTeamId] : ([] as string[]),
+    productionTeamIds: [...work.productionTeamIds],
   });
   const [form, setForm] = useState(initial);
   useEffect(() => {
@@ -56,6 +59,9 @@ export function EditWorkDialog({
         approverId: form.approverIds[0] ?? work.approverId,
         managerIds: form.managerIds,
         notationCategories: form.notationCategories,
+        // 主管担当を外すときは空文字（application で「なし」に戻す）
+        ownerTeamId: form.ownerTeam[0] ?? "",
+        productionTeamIds: form.productionTeamIds,
         ...(form.legacyId ? { legacyId: form.legacyId } : {}),
         ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       },
@@ -94,6 +100,19 @@ export function EditWorkDialog({
             label="納期"
             value={form.deadlineAt}
             onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
+          />
+        </div>
+        <div className="form">
+          <TeamSelect
+            label="主管担当"
+            value={form.ownerTeam}
+            onChange={(ids) => setForm((f) => ({ ...f, ownerTeam: ids }))}
+          />
+          <TeamSelect
+            label="制作担当"
+            multi
+            value={form.productionTeamIds}
+            onChange={(ids) => setForm((f) => ({ ...f, productionTeamIds: ids }))}
           />
         </div>
         <UserPicker

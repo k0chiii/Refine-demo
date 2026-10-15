@@ -9,6 +9,7 @@ import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eExpansionPanel } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
+import { TeamSelect } from "./TeamSelect";
 
 /** 制作物登録（UC-01）のダイアログ。登録者は主管担当として自動的に含まれる。登録後はそのままエディタへ。 */
 export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -26,6 +27,8 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [creatorIds, setCreatorIds] = useState<string[]>([]);
   const [approverIds, setApproverIds] = useState<string[]>([]);
+  const [ownerTeam, setOwnerTeam] = useState<string[]>([]);
+  const [productionTeamIds, setProductionTeamIds] = useState<string[]>([]);
   const { run, pending } = useAction(async () => {
     const id = await create({
       title: form.title,
@@ -39,6 +42,8 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
       ...(deadlineAt ? { deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
       notationCategories: form.notationCategories,
+      ...(ownerTeam[0] ? { ownerTeamId: ownerTeam[0] } : {}),
+      productionTeamIds,
     });
     onClose();
     void navigate({ to: "/works/$workId", params: { workId: id } });
@@ -69,6 +74,15 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
             </Select>
           </Field>
           <DateField label="納期" value={deadlineAt} onChange={setDeadlineAt} />
+        </div>
+        <div className="form">
+          <TeamSelect label="主管担当" value={ownerTeam} onChange={setOwnerTeam} />
+          <TeamSelect
+            label="制作担当"
+            multi
+            value={productionTeamIds}
+            onChange={setProductionTeamIds}
+          />
         </div>
         <UserPicker label="制作者" required value={creatorIds} onChange={setCreatorIds} />
         <UserPicker

@@ -99,11 +99,11 @@ export function Field({
   );
 }
 
-function useFieldId(explicit: string | undefined) {
+export function useFieldId(explicit: string | undefined) {
   const ctx = useContext(FieldContext);
   return explicit ?? ctx?.id ?? undefined;
 }
-function useFieldLabelId() {
+export function useFieldLabelId() {
   return useContext(FieldContext)?.labelId;
 }
 function useFieldHintId() {

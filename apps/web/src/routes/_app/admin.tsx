@@ -14,17 +14,21 @@ import { DataTable, EditableSwitch } from "@/ui/DataTable";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { ProfilesAdmin } from "@/features/social/ProfilesAdmin";
+import { TeamsAdmin } from "@/features/team/TeamsAdmin";
 
-type Tab = "works" | "users" | "sns" | "audit";
+type Tab = "works" | "teams" | "users" | "sns" | "audit";
 
 export const Route = createFileRoute("/_app/admin")({
   component: Admin,
   validateSearch: (s: Record<string, unknown>): { view?: Tab } =>
-    s.view === "users" || s.view === "sns" || s.view === "audit" ? { view: s.view } : {},
+    s.view === "teams" || s.view === "users" || s.view === "sns" || s.view === "audit"
+      ? { view: s.view }
+      : {},
 });
 
 /**
- * U-08 管理: 制作物（一括登録・1 件ずつの登録・制作物ごとの閲覧権限の入口）、ユーザー（システム管理者の付与）、監査ログ（F-13）。
+ * U-08 管理: 制作物（一括登録・1 件ずつの登録・制作物ごとの閲覧権限の入口）、担当（局 › 担当）、ユーザー（システム管理者の付与）、
+ * 監査ログ（F-13）。
  * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、制作物のタブに CSV の一括登録を置く。
  * 1 画面に詰め込まず、M3E tabs で切り替える（選んだタブは URL の view に残す）。
  */
@@ -70,6 +74,7 @@ function Admin() {
         onChange={setTab}
         items={[
           { id: "works", label: "制作物" },
+          { id: "teams", label: "担当" },
           { id: "users", label: "ユーザー" },
           { id: "sns", label: "SNS アカウント" },
           { id: "audit", label: "監査ログ" },
@@ -203,6 +208,8 @@ function Admin() {
             />
           </div>
         </section>
+      ) : tab === "teams" ? (
+        <TeamsAdmin />
       ) : tab === "sns" ? (
         <ProfilesAdmin />
       ) : (

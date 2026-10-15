@@ -97,6 +97,8 @@ const signInAs = async (sub) => {
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
+/** 制作物一覧の行（広い画面は入れ子の表の題名ボタン、compact は入れ子のリスト） */
+const WORKS_ENTRY = ".works-team-table .data-table__link, .works m3e-list-action";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
   const input = scope.locator(".picker__search input").first();
@@ -167,11 +169,22 @@ async function main() {
   await page.locator(`m3e-expansion-panel [slot="header"]`).first().click();
   await shot("01-signin");
 
-  // 02 制作物（制作者）: 探して開くだけの一覧
+  // 02 制作物一覧（制作者）: 「局 › 担当」の入れ子の表（主管担当ごと）。02b は制作担当ごと（同じ制作物が複数の担当の下に出る）
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
-  await page.waitForSelector("m3e-list-action");
+  await page.waitForSelector(".works-team-table .data-table__group--bureau");
   await shot("02-works-list");
+  const siteRows = () => page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).count();
+  expectTrue((await siteRows()) === 1, "主管担当ごとの一覧で、制作物が 1 か所にない");
+  await page.locator(".works__axis m3e-button-segment", { hasText: "制作担当" }).click();
+  await page.waitForURL(/by=production/);
+  await page.waitForTimeout(400);
+  expectTrue(
+    (await siteRows()) === 2,
+    "制作担当ごとの一覧で、制作担当 2 つの制作物が 2 か所に出ない",
+  );
+  await shot("02b-works-production");
+  await page.locator(".works__axis m3e-button-segment", { hasText: "主管担当" }).click();
   // 22 アカウントメニュー（右上のアバター）
   await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
   await page.waitForTimeout(500);
@@ -202,7 +215,7 @@ async function main() {
   await page.waitForTimeout(300);
 
   // 03 エディタ（版なし）
-  await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).click();
+  await page.locator(WORKS_ENTRY, { hasText: "MF100 公式パンフレット" }).first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
   const workUrl = page.url();
   await page.waitForSelector(".editor__empty");
@@ -552,6 +565,10 @@ async function main() {
   await page.locator("m3e-tab", { hasText: "SNS アカウント" }).click();
   await page.waitForSelector(".data-table .profile-avatar");
   await shot("13c-admin-sns");
+  // 13d 担当（局 › 担当）: 局ごとのリスト。各行の ⋮ から追加・名前・並べ替え・削除
+  await page.locator("m3e-tab", { hasText: "担当" }).click();
+  await page.waitForSelector(".teams-admin__team");
+  await shot("13d-admin-teams");
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
@@ -564,7 +581,7 @@ async function main() {
     "制作物を開いた画面でレールが隠れていない",
   );
   await go(`${BASE}/works`);
-  await page.waitForSelector("m3e-list-action");
+  await page.waitForSelector(WORKS_ENTRY);
   await railToggle.click();
   await page.waitForSelector(".shell__scrim");
   await page.waitForTimeout(600);
@@ -628,8 +645,8 @@ async function main() {
   // 39 書く（制作者）: 版のない制作物の「文章を書く」→ 上端の浮遊ツールバー＋紙面＋補助ペイン「概要」
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
-  await page.waitForSelector("m3e-list-action");
-  await page.locator("m3e-list-action", { hasText: "公式サイト トップページ" }).click();
+  await page.waitForSelector(WORKS_ENTRY);
+  await page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
   const writeWorkUrl = page.url();
   await page.waitForSelector(".editor__empty");
@@ -874,8 +891,10 @@ async function main() {
 /** 制作物一覧から名前で開き、その URL を返す */
 const openWork = async (title) => {
   await go("/works");
-  await page.waitForSelector("m3e-list-action");
-  await page.locator("m3e-list-action", { hasText: title }).first().click();
+  // 制作物一覧は広い画面では入れ子の表（題名がボタン）、compact では入れ子のリスト
+  const entry = page.locator(WORKS_ENTRY, { hasText: title });
+  await entry.first().waitFor();
+  await entry.first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
   await page.waitForTimeout(500);
   return new URL(page.url()).pathname;
