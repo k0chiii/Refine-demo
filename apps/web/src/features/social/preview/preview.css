@@ -1,5 +1,6 @@
 /*
- * SNS 投稿のプレビュー（Instagram / X のスマホアプリの見た目に寄せた再現）。アプリの UI ではなく、他サービスの画面を模したもの。
+ * SNS 投稿のプレビュー（Instagram / X のスマホアプリの見た目に寄せた再現）。アプリの UI ではなく、他サービスの画面を写したもの
+ * （ロゴ・アイコンは各サービスの Web 版の SVG。団体内でだけ使う）。
  * 文字・色・寸法は公開ページ（埋め込み表示）の実測値:
  *   Instagram: system フォント、ユーザー名 600 14/18 #000、補足 12/14 #737373、本文 14/18、ハッシュタグ #00376B、アイコン 24
  *   X: system フォント、名前 700 15/20 #0F1419、@・時刻 15/20 #536471、本文 15/20、リンク #1D9BF0、認証 #1D9BF0
@@ -188,11 +189,24 @@
   color: #1d9bf0;
   margin-left: 2px;
 }
-.sp-rot90 {
-  transform: rotate(90deg);
+.sp-rot180 {
+  transform: rotate(180deg);
 }
-.sp-rot-90 {
-  transform: rotate(-90deg);
+
+/* ---------- Instagram: フィードの上のバー（新規投稿・ロゴ・お知らせ） */
+.sp-ig-top {
+  flex: none;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+.sp-ig-top__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 /* ---------- Instagram: フィードの投稿 */
@@ -330,24 +344,37 @@
 .sp-device--android .sp-ig-tabs {
   padding-bottom: 8px;
 }
+.sp-ig-tabs__me {
+  display: grid;
+  border-radius: 50%;
+  padding: 1px;
+}
+.sp-ig-tabs__me.on {
+  box-shadow: 0 0 0 1.5px currentColor;
+}
 
 /* ---------- Instagram: プロフィール */
 .sp-prof__bar {
   height: 44px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 16px;
   font-size: 20px;
   line-height: 24px;
 }
+.sp-prof__bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
 .sp-prof__bar b {
   font-weight: 700;
-}
-.sp-prof__bar-icons {
-  margin-left: auto;
-  display: flex;
-  gap: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sp-prof {
   padding: 8px 16px 12px;
@@ -424,6 +451,16 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
+}
+.sp-grid__cell {
+  position: relative;
+}
+.sp-grid__mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #fff;
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.4));
 }
 .sp-grid__tile--empty {
   aspect-ratio: 3 / 4;
@@ -614,6 +651,20 @@
   height: 80px;
   border-bottom: 1px solid #eff3f4;
 }
+.sp-x-top {
+  flex: none;
+  height: 53px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  position: relative;
+  color: #0f1419;
+}
+.sp-x-top__logo {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
 .sp-x-tabs {
   flex: none;
   height: 53px;
@@ -654,4 +705,23 @@
 }
 .sp-device--android .sp-x-nav {
   padding-bottom: 8px;
+}
+/* 投稿ボタン（右下の青い丸） */
+.sp-x-fab {
+  position: absolute;
+  right: 16px;
+  bottom: 92px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1d9bf0;
+  color: #fff;
+  box-shadow:
+    rgb(101 119 134 / 0.2) 0 0 8px,
+    rgb(101 119 134 / 0.25) 0 1px 3px 1px;
+}
+.sp-device--android .sp-x-fab {
+  bottom: 78px;
 }

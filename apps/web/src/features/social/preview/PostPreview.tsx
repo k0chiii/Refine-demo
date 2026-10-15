@@ -13,7 +13,8 @@ import "./preview.css";
 /**
  * SNS 投稿のプレビュー（編集画面・校正画面・書き出しで共用）。
  * 実物の画面（2026 年時点のスマホアプリ）の並び・文字の大きさ・色に寄せた再現。寸法と色は各サービスの公開ページ
- * （埋め込み表示）を実測した値を使う（docs/UI_M3E.md §28）。ロゴ・公式アイコンの画像は使わず、線画はこのアプリで描いたもの。
+ * （埋め込み表示）を実測した値を使う（docs/UI_M3E.md §28）。ロゴとアイコンは各サービスの Web 版の SVG を写したもの
+ * （団体内でだけ使う前提。icons.tsx）。
  * 文字の折り返し・切り詰めは端末やアプリの版で変わるので、確定の表示は実機で確認する（画面に注記を出す）。
  */
 export interface PreviewImage {
@@ -198,15 +199,32 @@ const fmtCount = (n: number | undefined) => {
   return n.toLocaleString("ja-JP");
 };
 
-function IgTabBar({ account }: { account: SocialPost["account"] }) {
+/** 下のタブ（2025 年以降の並び: ホーム・リール・メッセージ・検索・プロフィール） */
+function IgTabBar({ account, on }: { account: SocialPost["account"]; on: "home" | "profile" }) {
   return (
     <nav className="sp-ig-tabs" aria-hidden="true">
-      <Icon name="home" size={26} fill="currentColor" />
-      <Icon name="search" size={26} />
-      <Icon name="plusSquare" size={26} />
-      <Icon name="reels" size={26} />
-      <Avatar account={account} size={26} />
+      <Icon name={on === "home" ? "igHome" : "igHomeOutline"} size={24} />
+      <Icon name="igReels" size={24} />
+      <Icon name="igShare" size={24} />
+      <Icon name="igSearch" size={24} />
+      <span className={on === "profile" ? "sp-ig-tabs__me on" : "sp-ig-tabs__me"}>
+        <Avatar account={account} size={24} />
+      </span>
     </nav>
+  );
+}
+
+/** フィードの上のバー（新規投稿・ロゴ・お知らせ） */
+function IgTopBar() {
+  return (
+    <header className="sp-ig-top" aria-hidden="true">
+      <Icon name="igNewPost" size={24} />
+      <span className="sp-ig-top__logo">
+        <Icon name="igWordmark" size={29} width={103} />
+        <Icon name="igChevronUp" size={12} className="sp-rot180" />
+      </span>
+      <Icon name="igLike" size={24} />
+    </header>
   );
 }
 
@@ -217,6 +235,7 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
   const user = post.account.username || "username";
   return (
     <div className="sp-screen">
+      <IgTopBar />
       <div className="sp-scroll" tabIndex={0} aria-label="プレビューの画面">
         <article className="sp-ig">
           <header className="sp-ig__head">
@@ -226,10 +245,15 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
             <span className="sp-ig__user">
               {user}
               {post.account.verified ? (
-                <Icon name="verified" size={12} className="sp-badge sp-badge--ig" />
+                <Icon
+                  name="igVerified"
+                  size={12}
+                  label="認証済み"
+                  className="sp-badge sp-badge--ig"
+                />
               ) : null}
             </span>
-            <Icon name="more" size={24} className="sp-ig__more" />
+            <Icon name="igMore" size={24} className="sp-ig__more" />
           </header>
           <div className="sp-ig__media">
             <CroppedImage
@@ -250,7 +274,7 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
                     aria-label="前の画像"
                     onClick={() => setIndex(index - 1)}
                   >
-                    <Icon name="chevronDown" size={16} className="sp-rot90" />
+                    <Icon name="igChevronLeft" size={12} />
                   </button>
                 ) : null}
                 {index < list.length - 1 ? (
@@ -260,17 +284,17 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
                     aria-label="次の画像"
                     onClick={() => setIndex(index + 1)}
                   >
-                    <Icon name="chevronDown" size={16} className="sp-rot-90" />
+                    <Icon name="igChevronRight" size={12} />
                   </button>
                 ) : null}
               </>
             ) : null}
           </div>
           <div className="sp-ig__actions" aria-hidden="true">
-            <Icon name="heart" />
-            <Icon name="bubble" />
-            <Icon name="repost" />
-            <Icon name="send" />
+            <Icon name="igLike" />
+            <Icon name="igComment" />
+            <Icon name="igRepost" />
+            <Icon name="igShare" />
             {list.length > 1 ? (
               <span className="sp-ig__pager">
                 {list.map((im, i) => (
@@ -278,7 +302,7 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
                 ))}
               </span>
             ) : null}
-            <Icon name="bookmark" className="sp-ig__save" />
+            <Icon name="igSave" className="sp-ig__save" />
           </div>
           <p className="sp-ig__caption">
             <b>{user}</b>{" "}
@@ -295,7 +319,7 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
           <span />
         </div>
       </div>
-      <IgTabBar account={post.account} />
+      <IgTabBar account={post.account} on="home" />
     </div>
   );
 }
@@ -328,15 +352,15 @@ function InstagramStory({
           <b>{user}</b>
           <span className="sp-story__time">1時間</span>
           <span className="sp-story__icons">
-            <Icon name="more" size={24} />
-            <Icon name="close" size={24} />
+            <Icon name="igMore" size={24} />
+            <Icon name="igClose" size={24} />
           </span>
         </div>
       </div>
       <div className="sp-story__bottom" aria-hidden="true">
         <span className="sp-story__reply">メッセージを送信</span>
-        <Icon name="heart" size={26} />
-        <Icon name="send" size={26} />
+        <Icon name="igLike" size={24} />
+        <Icon name="igShare" size={24} />
       </div>
       {safeArea ? (
         <div className="sp-story__safe" aria-label="安全領域（上 14%・下 20% は UI と重なる目安）">
@@ -364,23 +388,26 @@ function InstagramProfile({
     <div className="sp-screen">
       <div className="sp-scroll" tabIndex={0} aria-label="プレビューの画面">
         <header className="sp-prof__bar">
-          <b>{user}</b>
-          <Icon name="chevronDown" size={18} />
-          <span className="sp-prof__bar-icons">
-            <Icon name="plusSquare" size={24} />
-            <Icon name="menu" size={24} />
+          <Icon name="igNewPost" size={24} />
+          <span className="sp-prof__bar-title">
+            <b>{user}</b>
+            {post.account.verified ? (
+              <Icon
+                name="igVerified"
+                size={14}
+                label="認証済み"
+                className="sp-badge sp-badge--ig"
+              />
+            ) : null}
+            <Icon name="igChevronUp" size={12} className="sp-rot180" />
           </span>
+          <Icon name="igMenu" size={24} />
         </header>
         <section className="sp-prof">
           <div className="sp-prof__top">
             <Avatar account={account} size={86} />
             <div className="sp-prof__side">
-              <b className="sp-prof__name">
-                {post.account.displayName || user}
-                {post.account.verified ? (
-                  <Icon name="verified" size={14} className="sp-badge sp-badge--ig" />
-                ) : null}
-              </b>
+              <b className="sp-prof__name">{post.account.displayName || user}</b>
               <dl className="sp-prof__stats">
                 <div>
                   <dt>{fmtCount(profile?.stats?.posts)}</dt>
@@ -405,33 +432,37 @@ function InstagramProfile({
         </section>
         <div className="sp-prof__tabs" aria-hidden="true">
           <span className="on">
-            <Icon name="grid" size={22} />
+            <Icon name="igGrid" size={24} />
           </span>
           <span>
-            <Icon name="reels" size={22} />
+            <Icon name="igReels" size={24} />
           </span>
           <span>
-            <Icon name="tagged" size={22} />
+            <Icon name="igTagged" size={24} />
           </span>
         </div>
         <div className="sp-grid">
           {tiles.map((t, i) =>
             t ? (
-              <CroppedImage
-                key={i}
-                image={images.find((x) => x.key === t.key)}
-                aspect={"3:4" as SocialAspect}
-                focus={t.focus}
-                alt={t.alt}
-                className="sp-grid__tile"
-              />
+              <div key={i} className="sp-grid__cell">
+                <CroppedImage
+                  image={images.find((x) => x.key === t.key)}
+                  aspect={"3:4" as SocialAspect}
+                  focus={t.focus}
+                  alt={t.alt}
+                  className="sp-grid__tile"
+                />
+                {post.images.length > 1 ? (
+                  <Icon name="igCarousel" size={20} label="カルーセル" className="sp-grid__mark" />
+                ) : null}
+              </div>
             ) : (
               <div key={i} className="sp-grid__tile sp-grid__tile--empty" aria-hidden="true" />
             ),
           )}
         </div>
       </div>
-      <IgTabBar account={account} />
+      <IgTabBar account={account} on="profile" />
     </div>
   );
 }
@@ -454,11 +485,16 @@ function XPost({
         <div className="sp-x__head">
           <b className="sp-x__name">{post.account.displayName || "表示名"}</b>
           {post.account.verified ? (
-            <Icon name="verified" size={18} className="sp-badge sp-badge--x" />
+            <Icon
+              name="xVerified"
+              size={18}
+              label="認証済みアカウント"
+              className="sp-badge sp-badge--x"
+            />
           ) : null}
           <span className="sp-x__meta">@{user}</span>
           <span className="sp-x__time">· 1分</span>
-          <Icon name="more" size={18} className="sp-x__more" />
+          <Icon name="xMore" size={18} className="sp-x__more" />
         </div>
         <p className="sp-x__text">
           <PostText text={post.body} platform="x" />
@@ -483,13 +519,13 @@ function XPost({
           </div>
         ) : null}
         <div className="sp-x__actions" aria-hidden="true">
-          <Icon name="reply" size={19} stroke={1.8} />
-          <Icon name="repost" size={19} stroke={1.8} />
-          <Icon name="heart" size={19} stroke={1.8} />
-          <Icon name="views" size={19} stroke={1.8} />
+          <Icon name="xReply" size={18} />
+          <Icon name="xRepost" size={18} />
+          <Icon name="xLike" size={18} />
+          <Icon name="xViews" size={18} />
           <span className="sp-x__end">
-            <Icon name="bookmark" size={19} stroke={1.8} />
-            <Icon name="share" size={19} stroke={1.8} />
+            <Icon name="xBookmark" size={18} />
+            <Icon name="xShare" size={18} />
           </span>
         </div>
       </div>
@@ -498,6 +534,10 @@ function XPost({
   if (device === "pc") return <div className="sp-x-pc">{card}</div>;
   return (
     <div className="sp-screen">
+      <header className="sp-x-top" aria-hidden="true">
+        <Avatar account={post.account} size={32} />
+        <Icon name="xLogo" size={24} className="sp-x-top__logo" />
+      </header>
       <div className="sp-x-tabs" aria-hidden="true">
         <span className="on">おすすめ</span>
         <span>フォロー中</span>
@@ -507,11 +547,15 @@ function XPost({
         <div className="sp-x__next" aria-hidden="true" />
       </div>
       <nav className="sp-x-nav" aria-hidden="true">
-        <Icon name="home" size={26} fill="currentColor" />
-        <Icon name="search" size={26} />
-        <Icon name="bell" size={26} />
-        <Icon name="mail" size={26} />
+        <Icon name="xHome" size={26} />
+        <Icon name="xSearch" size={26} />
+        <Icon name="xGrok" size={26} />
+        <Icon name="xBell" size={26} />
+        <Icon name="xMail" size={26} />
       </nav>
+      <span className="sp-x-fab" aria-hidden="true">
+        <Icon name="xCompose" size={24} />
+      </span>
     </div>
   );
 }
