@@ -6,8 +6,12 @@ import {
   diffHighlights,
   diffText,
   interpolate,
+  alignShift,
+  focalPoint,
   lineAnchors,
+  mapImagePosition,
   mapPosition,
+  relAt,
   textSimilarity,
   type PageFeature,
 } from "../comparison/index.ts";
@@ -143,6 +147,58 @@ describe("スクロール同期の写像", () => {
       () => anchors,
     );
     expect(mapped!.rel).toBeCloseTo(0.5);
+  });
+});
+
+describe("拡大縮小・同期の視点（縦・横）", () => {
+  const pairs = alignPages(
+    pages([1, 2, 3]),
+    pages([1, "追加ページ。協賛のお礼と連絡先の案内をまとめています。", 2, 3]),
+  );
+  it("横の割合 relX も対応ページへそのまま写し、0..1 に収める", () => {
+    expect(mapPosition({ page: 2, rel: 0.4, relX: 0.7 }, "left", pairs)).toEqual({
+      page: 3,
+      rel: 0.4,
+      relX: 0.7,
+    });
+    expect(mapPosition({ page: 3, rel: 0.2, relX: 1.3 }, "right", pairs)).toEqual({
+      page: 2,
+      rel: 0.2,
+      relX: 1,
+    });
+  });
+  it("画像どうしは画像内の割合をそのまま写す", () => {
+    expect(mapImagePosition({ page: 1, rel: 0.25, relX: -0.1 })).toEqual({
+      page: 1,
+      rel: 0.25,
+      relX: 0,
+    });
+    expect(mapImagePosition({ page: 1, rel: 0.5 })).toEqual({ page: 1, rel: 0.5 });
+  });
+  it("拡大の前に控えた割合を描き直した後のページに当てると、焦点の下の箇所が同じ画面位置に残る", () => {
+    // 舞台は画面の x=100 から幅 600。焦点は舞台の中央（x=400）
+    const point = focalPoint(100, 600, 0.5);
+    expect(point).toBe(400);
+    // 拡大前: ページは x=250 から幅 400（焦点はページの 37.5%）
+    const rel = relAt(250, 400, point);
+    expect(rel).toBeCloseTo(0.375);
+    // 2 倍にした直後（スクロールはまだ）: ページは x=200 から幅 800。焦点の下は 25% の箇所にずれている
+    expect(relAt(200, 800, point)).toBeCloseTo(0.25);
+    // scrollLeft を alignShift だけ足すとページは左へ動き、焦点の下が 37.5% に戻る
+    const shift = alignShift(200, 800, rel, point);
+    expect(shift).toBe(100);
+    expect(relAt(200 - shift, 800, point)).toBeCloseTo(rel);
+  });
+  it("左右の舞台で同じ割合の点に同じ箇所を合わせる（ピンチの焦点が中央でなくても）", () => {
+    // 右（操作した側）: 焦点は舞台の左から 20%・ページの 60% の箇所
+    const at = 0.2;
+    const rightRel = relAt(80, 1200, focalPoint(700, 500, at));
+    expect(rightRel).toBeCloseTo(0.6);
+    const mapped = mapImagePosition({ page: 1, rel: 0.5, relX: rightRel });
+    // 左: 同じ割合の点（舞台は x=100 から幅 500）に、同じ箇所が来るよう動かす
+    const leftPoint = focalPoint(100, 500, at);
+    const shift = alignShift(-900, 1200, mapped.relX!, leftPoint);
+    expect(relAt(-900 - shift, 1200, leftPoint)).toBeCloseTo(rightRel);
   });
 });
 

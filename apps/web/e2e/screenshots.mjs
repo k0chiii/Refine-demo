@@ -443,6 +443,36 @@ async function main() {
     { timeout: 30_000 },
   );
   await shot("25-compare");
+  // ズームでの視点の同期: 拡大して右をスクロールしても、左右の舞台の中央に紙面の同じ箇所（ページ内の縦・横の割合）が来る
+  for (let i = 0; i < 2; i++) {
+    await page.locator('m3e-icon-button[aria-label="拡大"]').click();
+    await page.waitForTimeout(300);
+  }
+  await page.evaluate(() =>
+    [...document.querySelectorAll(".compare__pane .viewer__stage")].at(-1).scrollBy(120, 240),
+  );
+  await page.waitForTimeout(500);
+  const views = await page.evaluate(() =>
+    [...document.querySelectorAll(".compare__pane .viewer__stage")].map((s) => {
+      const sr = s.getBoundingClientRect();
+      const x = sr.left + s.clientWidth / 2;
+      const y = sr.top + s.clientHeight / 2;
+      const pages = [...s.querySelectorAll(".viewer__page")];
+      const i = Math.max(
+        0,
+        pages.findIndex((p) => p.getBoundingClientRect().bottom > y),
+      );
+      const r = pages[i].getBoundingClientRect();
+      return { page: i, rx: (x - r.left) / r.width, ry: (y - r.top) / r.height };
+    }),
+  );
+  expectTrue(
+    views.length === 2 &&
+      views[0].page === views[1].page &&
+      Math.abs(views[0].rx - views[1].rx) < 0.02 &&
+      Math.abs(views[0].ry - views[1].ry) < 0.02,
+    `拡大・スクロール後に左右の視点がずれている: ${JSON.stringify(views)}`,
+  );
   await page.locator('m3e-icon-button[aria-label="比較を終了"]').click();
   await page.waitForTimeout(300);
 

@@ -69,10 +69,17 @@ export function interpolate(
   return points[points.length - 1]![to];
 }
 
+/**
+ * 表示位置。page はページ（画像は 1）、rel はページ上端からの割合、relX はページ左端からの割合（0..1）。
+ * relX は倍率を変えたときと版比較で横の位置も合わせるために使う（無ければ横は合わせない）
+ */
 export interface PagePosition {
   page: number;
   rel: number;
+  relX?: number;
 }
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /**
  * 一方の表示位置 → もう一方の表示位置。対応ページが無い（追加・削除ページ）なら null を返し、呼び出し側は同期を止める。
@@ -89,5 +96,45 @@ export function mapPosition(
   const [lp, rp] = from === "left" ? [pos.page, other] : [other, pos.page];
   const anchors = anchorsFor?.(lp, rp);
   const rel = anchors && anchors.length > 2 ? interpolate(anchors, pos.rel, from) : pos.rel;
-  return { page: other, rel: Math.min(1, Math.max(0, rel)) };
+  // 横はページ内の割合をそのまま写す（対応ページは同じ版面の前提。大きさが違っても同じ箇所を指す）
+  return {
+    page: other,
+    rel: clamp01(rel),
+    ...(pos.relX !== undefined ? { relX: clamp01(pos.relX) } : {}),
+  };
+}
+
+/** 画像どうしの比較: 画像は 1 枚なので、画像内の割合（縦・横）をそのまま写す */
+export function mapImagePosition(pos: PagePosition): PagePosition {
+  return {
+    page: 1,
+    rel: clamp01(pos.rel),
+    ...(pos.relX !== undefined ? { relX: clamp01(pos.relX) } : {}),
+  };
+}
+
+/**
+ * 拡大縮小・同期で「視点」を合わせるための一次元の計算（縦・横で同じ式を使う）。
+ * 舞台（スクロールする枠）の中の焦点は、枠の始点 viewStart から大きさ viewSize の at（0..1）の割合の点。
+ */
+export function focalPoint(viewStart: number, viewSize: number, at: number): number {
+  return viewStart + viewSize * at;
+}
+
+/** 焦点がページ（始点 itemStart・大きさ itemSize、画面座標）のどの割合にあるか。範囲外は 0..1 を超える */
+export function relAt(itemStart: number, itemSize: number, point: number): number {
+  return (point - itemStart) / Math.max(1, itemSize);
+}
+
+/**
+ * ページ内の割合 rel の箇所を画面座標 point に持ってくるためのスクロール量の変化（scrollTop / scrollLeft に足す）。
+ * 拡大縮小の前に relAt で控えた割合を、描き直した後のページに当てれば、焦点の下の箇所が同じ画面位置に残る
+ */
+export function alignShift(
+  itemStart: number,
+  itemSize: number,
+  rel: number,
+  point: number,
+): number {
+  return itemStart + rel * itemSize - point;
 }

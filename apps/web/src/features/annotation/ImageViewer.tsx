@@ -1,9 +1,10 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { useStageWidth } from "./useStageWidth";
+import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
 
-interface Props {
+interface Props extends ViewerSyncProps {
   url: string;
   artifactId: string;
   /** 画像の代替テキスト（どの版のどの添付か。例: 第2版の添付「poster.png」） */
@@ -24,7 +25,10 @@ interface Props {
   renderGutter?: (vp: Viewport) => ReactNode;
 }
 
-/** 画像ビューア。座標は原画像基準の 0..1（表示幅に依存しない）。 */
+/**
+ * 画像ビューア。座標は原画像基準の 0..1（表示幅に依存しない）。
+ * 倍率を変えても焦点の下の箇所を保ち、版比較では PDF と同じ操作（controller・onUserScroll）で縦・横を同期する。
+ */
 export function ImageViewer({
   url,
   artifactId,
@@ -40,6 +44,7 @@ export function ImageViewer({
   onZoom,
   renderInPage,
   renderGutter,
+  ...sync
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(true);
@@ -53,6 +58,13 @@ export function ImageViewer({
   useEffect(() => {
     if (fit > 0) onZoom?.(fit * scale);
   }, [fit, scale]);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const { onScroll } = useViewerSync(
+    stageRef,
+    viewport ? fit * scale : 0,
+    () => [imgRef.current],
+    sync,
+  );
   const mine = threads.filter(
     (t) =>
       (t.anchor.type === "image_rect" || t.anchor.type === "image_pin") &&
@@ -60,9 +72,10 @@ export function ImageViewer({
   );
   return (
     <div className="viewer">
-      <div className="viewer__stage" tabIndex={0} ref={stageRef}>
+      <div className="viewer__stage" tabIndex={0} ref={stageRef} onScroll={onScroll}>
         <div className="viewer__page">
           <img
+            ref={imgRef}
             src={url}
             alt={alt}
             style={viewport ? { width: viewport.width, height: viewport.height } : undefined}
