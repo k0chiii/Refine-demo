@@ -75,7 +75,8 @@ export function ComposePopover({
         ref={ref}
         className="compose-pop__input"
         aria-label={label}
-        placeholder={`${label}（@ でメンション）`}
+        // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
+        placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
         rows={docked ? 2 : 3}
         value={value}
         onValue={onChange}

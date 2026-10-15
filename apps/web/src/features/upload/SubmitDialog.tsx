@@ -66,8 +66,13 @@ export function SubmitDialog({
     kind: "standard",
     changeSummary: "",
     focusNotes: "",
+    notes: "",
     externalUrl: "",
   });
+  // 初めての版か、版の更新か（説明の項目を FB テンプレに合わせて変える。利用者決定 2026-10-15 A-1）
+  const isFirst = !(data?.revisions ?? []).some(
+    (r) => r.kind === "standard" && r.reviewState !== "void",
+  );
   const [files, setFiles] = useState<File[]>([]);
   // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章）
   const shownFile =
@@ -166,7 +171,11 @@ export function SubmitDialog({
             kind: form.kind as "standard",
             reviewType: "general",
             deadlineAt,
-            changeSummary: form.changeSummary,
+            // 初回の「補足」は版の説明（changeSummary）の後ろに添える（データの持ち方は変えない）
+            changeSummary:
+              isFirst && form.notes.trim()
+                ? `${form.changeSummary.trim()}\n\n【補足】\n${form.notes.trim()}`.trim()
+                : form.changeSummary,
             focusNotes: form.focusNotes,
             items,
             ...(requiredChecks.length > 0 ? { requiredChecks } : {}),
@@ -276,12 +285,37 @@ export function SubmitDialog({
                 min={Date.now()}
               />
             </div>
-            <Field label="変更点">
-              <TextArea value={form.changeSummary} onChange={set("changeSummary")} />
+            <Field label={isFirst ? "この案の意図" : "変更した点とその理由"}>
+              <TextArea
+                value={form.changeSummary}
+                onChange={set("changeSummary")}
+                placeholder={
+                  isFirst
+                    ? "意識したこと・この表現にした理由など"
+                    : "どこを変えたか・なぜ変えたか・この表現にした理由など"
+                }
+              />
             </Field>
-            <Field label="見てほしい観点">
-              <TextArea value={form.focusNotes} onChange={set("focusNotes")} />
+            <Field label={isFirst ? "今回見てほしい点" : "まだ見てほしい点"}>
+              <TextArea
+                value={form.focusNotes}
+                onChange={set("focusNotes")}
+                placeholder={
+                  isFirst
+                    ? "迷っていること・判断したいことなど"
+                    : "変更で生まれた新たな迷い・まだ見てほしい点など"
+                }
+              />
             </Field>
+            {isFirst ? (
+              <Field label="補足（必要な場合のみ）">
+                <TextArea
+                  value={form.notes}
+                  onChange={set("notes")}
+                  placeholder="リファレンス・未確定や未調整の部分・変更できない条件など"
+                />
+              </Field>
+            ) : null}
             <M3eExpansionPanel className="expansion checks-details">
               <span slot="header">専門確認を依頼する</span>
               <div className="checks">
