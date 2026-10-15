@@ -1,0 +1,79 @@
+# CI: 変更ごとに、手元で回しているのと同じ確認を走らせる（CLAUDE.md: pnpm check / pnpm test / pnpm typecheck）。
+# - verify: 整形・lint（vp check）、型、単体テスト（domain・application・Convex・api・web）、全パッケージのビルド
+# - e2e: デモ版（ブラウザ内の Convex）を建てて、画面の撮影・操作の検証・a11y（axe）と PWA の検証を回す。
+#   撮影した画面はリポジトリには入れず、Actions の成果物として残す（利用者方針: スクリーンショットはコミットしない）
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 整形と lint
+        run: pnpm check
+      - name: 型
+        run: pnpm typecheck
+      - name: 単体テスト
+        run: pnpm test
+      - name: ビルド
+        run: pnpm build
+      - name: Convex の _generated がコミットと一致するか
+        run: |
+          pnpm codegen
+          git diff --exit-code -- apps/convex/convex/_generated
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: デモ版をビルド
+        run: pnpm --filter @mf100/web build:demo
+      - name: 画面の検証（撮影・操作・a11y）と PWA
+        working-directory: apps/web
+        env:
+          BASE_URL: http://127.0.0.1:4173
+          # ubuntu-latest に入っている Chrome を使う（playwright のブラウザは落とさない）
+          CHROMIUM_PATH: /usr/bin/google-chrome
+          TZ: Asia/Tokyo
+        run: |
+          pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 > preview.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null "$BASE_URL/" && break; sleep 1; done
+          A11Y=1 node e2e/screenshots.mjs
+          node e2e/pwa.mjs
+      - name: 撮影した画面と a11y の結果を残す
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: |
+            apps/web/e2e/out
+            docs/a11y-report.json
+            apps/web/preview.log
+          retention-days: 14
