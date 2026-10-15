@@ -103,6 +103,7 @@ function PostSurface({
   const save = useMutation(api.documents.save);
   const win = useWindowClass();
   const wide = win === "expanded" || win === "large";
+  const compact = win === "compact";
   const canEdit = doc.canEdit;
   const canSubmit = work.can.submit && work.work.lifecycle === "active";
 
@@ -361,7 +362,8 @@ function PostSurface({
                   disabled={!canEdit}
                   onClick={() => update({ format: f })}
                 >
-                  {socialFormatLabels[f]}
+                  {/* 狭い画面では「（1 枚）」などの補足を外す（3 つ並べると画面からはみ出していた） */}
+                  {compact ? socialFormatLabels[f].replace(/（.*）$/, "") : socialFormatLabels[f]}
                 </M3eButtonSegment>
               ))}
             </M3eSegmentedButton>
@@ -629,10 +631,21 @@ function PostSurface({
       </AppBarSlot>
       <AppBarSlot slot="actions">
         {canEdit && canSubmit ? (
-          <M3eButton variant="filled" onClick={() => void startSubmit()}>
-            <M3eIcon slot="icon" name="upload_file" />
-            版として提出
-          </M3eButton>
+          compact ? (
+            // 狭い画面は文章エディタと同じアイコンのボタン（文字のボタンだと題名が「公…」まで潰れていた）
+            <M3eIconButton
+              variant="tonal"
+              aria-label="版として提出"
+              onClick={() => void startSubmit()}
+            >
+              <M3eIcon name="upload_file" />
+            </M3eIconButton>
+          ) : (
+            <M3eButton variant="filled" onClick={() => void startSubmit()}>
+              <M3eIcon slot="icon" name="upload_file" />
+              版として提出
+            </M3eButton>
+          )
         ) : null}
       </AppBarSlot>
       {wide ? (

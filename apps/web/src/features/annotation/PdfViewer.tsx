@@ -13,6 +13,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: number; y: number } };
 
+/** 1 枚の canvas の画素数の上限 */
+const MAX_CANVAS_PIXELS = 16_000_000;
 /** 表示位置: ページと、ページ上端からの割合（舞台の上から 40% の線） */
 export interface ViewPosition {
   page: number;
@@ -321,7 +323,11 @@ function PdfCanvas({
     void doc.getPage(n).then(async (p) => {
       if (cancelled) return;
       const vp = p.getViewport({ scale, rotation: (p.rotate + rotation) % 360 });
-      const dpr = window.devicePixelRatio || 1;
+      // 大きく拡大したとき canvas が端末の上限（iOS は 1 枚 1,600 万画素前後）を超えないよう、画素密度を下げる
+      const dpr = Math.min(
+        window.devicePixelRatio || 1,
+        Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, vp.width * vp.height)),
+      );
       canvas.width = Math.floor(vp.width * dpr);
       canvas.height = Math.floor(vp.height * dpr);
       const ctx = canvas.getContext("2d")!;

@@ -51,6 +51,8 @@ export function DateField({
         floatLabel="always"
         className="field"
         {...(!hint ? { hideSubscript: "always" } : {})}
+        // 必須の印は自前の赤い「*」だけ（M3E の印と二重にしない）
+        hideRequiredMarker
       >
         <label slot="label" htmlFor={inputId} id={`${id}-label`}>
           {label}

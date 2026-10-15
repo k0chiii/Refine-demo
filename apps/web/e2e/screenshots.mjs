@@ -992,6 +992,40 @@ async function v2Scenes() {
   await shot("26a-mobile-long-press");
   await page.locator('.compose-pop m3e-icon-button[aria-label="取消"]').click();
   await page.waitForTimeout(300);
+  // ピンチ（2 本指）で校正物だけが拡大する（アプリ全体は拡大しない）。指を離すと倍率が確定する
+  const zoomBefore = await page.locator(".ws__zoom").first().innerText();
+  await page.evaluate(() => {
+    const stage = [...document.querySelectorAll(".viewer__stage")].at(-1);
+    const r = stage.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + 200;
+    const fire = (type, d) => {
+      const touches =
+        d === null
+          ? []
+          : [-1, 1].map(
+              (s, i) =>
+                new Touch({
+                  identifier: i,
+                  target: stage,
+                  clientX: cx + s * d,
+                  clientY: cy + s * d,
+                }),
+            );
+      stage.dispatchEvent(
+        new TouchEvent(type, { touches, changedTouches: touches, bubbles: true, cancelable: true }),
+      );
+    };
+    fire("touchstart", 30);
+    for (let d = 40; d <= 90; d += 10) fire("touchmove", d);
+    fire("touchend", null);
+  });
+  await page.waitForTimeout(800);
+  const zoomAfter = await page.locator(".ws__zoom").first().innerText();
+  expectTrue(
+    parseInt(zoomAfter, 10) > parseInt(zoomBefore, 10) * 2,
+    `ピンチで拡大しない（${zoomBefore} → ${zoomAfter}）`,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(400);
   void poster;

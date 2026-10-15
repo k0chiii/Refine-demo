@@ -46,6 +46,8 @@ export function Field({
         className={`field ${className ?? ""}`}
         {...(error ? { error: true } : {})}
         {...(required === undefined && !hint && !error ? { hideSubscript: "always" } : {})}
+        // 必須の印は自前の赤い「*」だけにする（入力に required があると M3E も黒い「*」を足し、二重になっていた）
+        hideRequiredMarker
       >
         <label slot="label" htmlFor={id} id={labelId}>
           {label}

@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { formatJstDate, formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
+import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eActionList, M3eIcon, M3eListAction } from "@/ui/m3e";
 
@@ -15,11 +16,15 @@ export const Route = createFileRoute("/_app/write")({ component: WritePicker });
 function WritePicker() {
   const navigate = useNavigate();
   const works = useQuery(api.documents.writable, {});
+  // 狭い画面では種類・納期を右に置くと題名が 1 文字ずつ折れるので、説明の行にまとめる
+  const compact = useWindowClass() === "compact";
   const open = (w: { workId: string; mediaType: string }) =>
     void navigate({
       to: w.mediaType === "sns" ? "/works/$workId/post" : "/works/$workId/write",
       params: { workId: w.workId },
     });
+  const meta = (w: { mediaType: string; deadlineAt?: number | null }) =>
+    `${mediaLabel[w.mediaType] ?? w.mediaType}${w.deadlineAt ? `・納期 ${formatJstDate(w.deadlineAt)}` : ""}`;
   return (
     <div className="write-picker">
       <AppBarSlot slot="title">エディタ</AppBarSlot>
@@ -44,14 +49,21 @@ function WritePicker() {
               />
               <span className="list__headline">{w.title}</span>
               <span slot="supporting-text">
+                {compact ? (
+                  <>
+                    {meta(w)}
+                    <br />
+                  </>
+                ) : null}
                 {w.draft
                   ? `下書き「${w.draft.title || "無題"}」・${w.draft.chars.toLocaleString("ja-JP")} 文字・${formatJstShort(w.draft.updatedAt)}${w.draft.updatedBy ? ` ${w.draft.updatedBy.name}` : ""}`
                   : "まだ下書きはありません"}
               </span>
-              <span slot="trailing" className="meta">
-                {mediaLabel[w.mediaType] ?? w.mediaType}
-                {w.deadlineAt ? `・納期 ${formatJstDate(w.deadlineAt)}` : ""}
-              </span>
+              {compact ? null : (
+                <span slot="trailing" className="meta">
+                  {meta(w)}
+                </span>
+              )}
             </M3eListAction>
           ))}
         </M3eActionList>

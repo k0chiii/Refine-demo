@@ -41,6 +41,7 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
+import { safeAreaBottom } from "@/lib/safeArea";
 import { usePinchZoom } from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -229,8 +230,13 @@ export function Editor({
   const [scale, setScale] = useState(1);
   const [zoom, setZoom] = useState<number | null>(null);
   // 校正物はピンチでも拡大縮小できる（アプリ全体は拡大しない）
-  const viewerRef = useRef<HTMLDivElement | null>(null);
-  usePinchZoom(viewerRef, scale, setScale);
+  // 要素は読み込みが終わってから描かれるので、ref ではなく state で受ける（最初の描画時にはまだ無い）
+  const [viewerEl, setViewerEl] = useState<HTMLDivElement | null>(null);
+  usePinchZoom(viewerEl, scale, setScale);
+  // 添付を切り替えたら倍率は幅に合わせた大きさに戻す（画像で拡大した倍率が文章に持ち越されて 220% から始まっていた）
+  useEffect(() => {
+    setScale(1);
+  }, [artifactId]);
 
   // 回転ボタンは利用者判断で外した（2026-10-14）。原稿は正位置で校正する。ビューアの回転機能自体は残す
   const rotation = 0 as const;
@@ -303,8 +309,9 @@ export function Editor({
   useEffect(() => {
     const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
     if (!el) return;
-    // 覗き見（タブだけ 64px ＝ 8 ＋ 48 ＋ 8）→ 半分 → 全部。最初は覗き見にして紙面を見せる
-    el.setAttribute("detents", "64px half full");
+    // 覗き見（タブだけ 64px ＝ 8 ＋ 48 ＋ 8）→ 半分 → 全部。最初は覗き見にして紙面を見せる。
+    // iPhone のホームインジケーターの帯（セーフエリア）の分だけ覗き見を高くしないと、タブがその下に潜る
+    el.setAttribute("detents", `${64 + safeAreaBottom()}px half full`);
     const id = requestAnimationFrame(() => el.show?.(0));
     return () => cancelAnimationFrame(id);
   }, [mobile, data === undefined]);
@@ -1057,7 +1064,7 @@ export function Editor({
               : undefined
           }
         >
-          <div className="ws__viewer" ref={viewerRef}>
+          <div className="ws__viewer" ref={setViewerEl}>
             {compareWith ? (
               <div className="compare-wrap">
                 <CompareStatus cmp={cmp} />
@@ -1324,7 +1331,14 @@ export function Editor({
             className="ws__sheet"
           >
             <div className="drawer drawer--sheet">
-              {drawerTabs(sheetTab, (d) => setDrawer(d))}
+              {drawerTabs(sheetTab, (d) => {
+                setDrawer(d);
+                // 覗き見のままタブを押したら、中身が見える高さ（半分）まで上げる
+                const el = sheetRef.current as
+                  | (HTMLElement & { detent?: number; show?: (detent?: number) => void })
+                  | null;
+                if (el && (el.detent ?? 0) === 0) el.show?.(1);
+              })}
               <div className="drawer__body">{drawerBody(sheetTab)}</div>
             </div>
           </M3eBottomSheet>

@@ -74,7 +74,7 @@ function AppLayout() {
   if (isLoading || !isAuthenticated || !me) return null;
 
   const items = [
-    { to: "/", icon: "space_dashboard", label: "ダッシュボード" },
+    { to: "/", icon: "space_dashboard", label: "ダッシュボード", short: "ホーム" },
     { to: "/works", icon: "folder", label: "制作物" },
     { to: "/write", icon: "edit_document", label: "エディタ" },
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
@@ -90,7 +90,8 @@ function AppLayout() {
         : to === "/works"
           ? !writing && (path === to || path.startsWith(`${to}/`))
           : path === to || path.startsWith(`${to}/`);
-  const navItems = (list = items) =>
+  // 下部ナビ（compact）は 1 項目 75px 前後しかなく「ダッシュボード」が 2 行に折れて下に切れるので、短い名前を出す
+  const navItems = (list: typeof items = items, short = false) =>
     list.map((it) => (
       <Link key={it.to} to={it.to} className="nav-link">
         <M3eNavItem
@@ -100,7 +101,7 @@ function AppLayout() {
           title={it.label}
         >
           <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
-          <span className="nav-label">{it.label}</span>
+          <span className="nav-label">{short && "short" in it ? it.short : it.label}</span>
         </M3eNavItem>
       </Link>
     ));
@@ -230,7 +231,7 @@ function AppLayout() {
       </div>
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
-          {navItems()}
+          {navItems(items, true)}
         </M3eNavBar>
       ) : null}
     </div>
