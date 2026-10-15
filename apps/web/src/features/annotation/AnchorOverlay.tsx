@@ -172,8 +172,9 @@ export function AnchorOverlay({
       className="viewer__overlay"
       width={viewport.width}
       height={viewport.height}
-      role="img"
-      aria-label="コメント位置レイヤー"
+      // 中に押せるピン・範囲があるので img ではなく group（img の子は支援技術から見えない。§35 I-08）
+      role="group"
+      aria-label="コメントの位置"
       style={{ cursor: selecting ? "crosshair" : "default" }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -193,9 +194,14 @@ export function AnchorOverlay({
               key={t.id}
               data-anchor={t.id}
               onClick={() => onSelectThread(t.id)}
+              role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && onSelectThread(t.id)}
-              aria-label={`指摘 ${t.index}`}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                onSelectThread(t.id);
+              }}
+              aria-label={`コメント ${t.index}`}
             >
               <rect
                 className={`anchor-rect ${cls}`}
@@ -205,6 +211,8 @@ export function AnchorOverlay({
                 height={px.h}
                 rx={2}
               />
+              {/* 見た目は小さいピンでも、押せる範囲は 48×48（M3 Accessibility › Target sizes。§35 I-09） */}
+              <circle cx={px.x} cy={px.y} r={24} className="anchor-hit" />
               <circle
                 cx={px.x}
                 cy={px.y}
@@ -224,10 +232,16 @@ export function AnchorOverlay({
               key={t.id}
               data-anchor={t.id}
               onClick={() => onSelectThread(t.id)}
+              role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && onSelectThread(t.id)}
-              aria-label={`指摘 ${t.index}`}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                onSelectThread(t.id);
+              }}
+              aria-label={`コメント ${t.index}`}
             >
+              <circle cx={px.x} cy={px.y} r={24} className="anchor-hit" />
               <circle
                 cx={px.x}
                 cy={px.y}

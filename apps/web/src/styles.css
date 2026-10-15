@@ -1208,6 +1208,10 @@ m3e-dialog [slot="actions"] {
 .appbar-slot {
   display: contents;
 }
+/* 画面を移ったときにスクリプトでフォーカスする先（押せる部品ではないので枠は出さない。§35 A-05） */
+.appbar-slot--title:focus {
+  outline: none;
+}
 .appbar-slot--title {
   display: block;
   white-space: nowrap;
@@ -1404,6 +1408,19 @@ m3e-dialog [slot="actions"] {
 .anchor-rect--critical {
   stroke: var(--mf-error);
   fill: color-mix(in srgb, var(--mf-error) 14%, transparent);
+}
+/* ピンの押せる範囲（見えない円 r=24）。キーボードで選んだときは枠を出す */
+.anchor-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+[data-anchor] {
+  outline: none;
+}
+[data-anchor]:focus-visible .anchor-pin,
+[data-anchor]:focus-visible .anchor-rect {
+  stroke: var(--mf-secondary);
+  stroke-width: 3;
 }
 .anchor-pin {
   fill: var(--mf-primary);
