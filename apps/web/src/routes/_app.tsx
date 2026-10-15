@@ -220,13 +220,15 @@ function AppLayout() {
             className="appbar-slot appbar-slot--subtitle"
           />
           <span slot="trailing" id="appbar-actions" className="appbar-slot appbar-slot--actions" />
-          {/* 通知はアカウントの隣（全サイズ共通。利用者指示 2026-10-14「アイコンの横が相場」）。compact はボトムシート */}
-          {cls === "compact" ? (
+          {/* 通知はアカウントの隣（利用者指示 2026-10-14「アイコンの横が相場」）。compact はボトムシート。
+              ただしスマホの詳細画面（制作物を開いた画面）では、Google ドキュメント・Chat などと同じくベルとアバターを出さず、
+              見出し（制作物名）と画面の操作に幅を譲る（§35 L-14。利用者決定 2026-10-15） */}
+          {immersive ? null : cls === "compact" ? (
             <NotificationsBell.Bell onOpen={() => setNotifOpen(true)} />
           ) : (
             <NotificationsBell.Bell menuId="notif-menu" />
           )}
-          {account(32, "shell__account")}
+          {immersive ? null : account(32, "shell__account")}
         </M3eAppBar>
         {cls === "compact" ? (
           <NotificationsBell.Sheet open={notifOpen} onClose={() => setNotifOpen(false)} />
