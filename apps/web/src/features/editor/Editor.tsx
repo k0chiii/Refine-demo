@@ -537,6 +537,7 @@ export function Editor({
     <ThreadCard
       key={t.id}
       thread={t}
+      index={t.index}
       active={t.id === activeThreadId}
       meId={me?.id ?? null}
       canDecide={can?.decide ?? false}
@@ -1069,16 +1070,17 @@ export function Editor({
           </AppBarSlot>
         ) : null}
         <AppBarSlot slot="actions">
+          {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
           {can?.completeReview ? (
-            <M3eIconButton
-              variant="tonal"
-              aria-label="確認を完了"
-              title="確認を完了"
+            <M3eButton
+              variant="filled"
+              className="appbar-primary"
               disabled={doComplete.pending}
               onClick={() => void doComplete.run()}
             >
-              <M3eIcon name="task_alt" />
-            </M3eIconButton>
+              <M3eIcon slot="icon" name="task_alt" />
+              確認を完了
+            </M3eButton>
           ) : data?.myAssignment?.state === "responded" ? (
             <span className="ws__done" role="img" title="確認完了" aria-label="確認完了">
               <M3eIcon name="check_circle" className="icon--filled" />

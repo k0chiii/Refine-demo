@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { diffKindAt, type TextCompareProps } from "@/features/compare/textSync";
 import type { OverlayThread } from "./AnchorOverlay";
 import { scrollBehavior } from "@/lib/motion";
+import { useMedia } from "@/lib/useMedia";
 
 export interface TextRangeDraft {
   start: number;
@@ -170,6 +171,8 @@ export function TextViewer({
   }, [selecting]);
 
   const touchSel = useTouchSelection(selecting, computeSelection);
+  /** マウス・キーボードの端末（文字カーソルを置いて Shift＋矢印で選べるようにする） */
+  const finePointer = useMedia("(pointer: fine)") && selecting;
   const readSelection = () => {
     // 指の操作では選び終えた合図が取れないので、ボタン（TouchCommentButton）で確定する
     if (touchSel.touch) return;
@@ -199,7 +202,24 @@ export function TextViewer({
             ref={bodyRef}
             className="text-viewer__body"
             style={{ zoom: scale }}
-            aria-label="校正対象の文章"
+            aria-label="校正対象の文章（Shift＋矢印キーで範囲を選んでコメント）"
+            // キーボードでも範囲を選べるように、マウス・キーボードの端末では文字カーソルを置けるようにする（編集はさせない）。
+            // タッチの端末は長押しで選ぶ（編集の振る舞いを持ち込まない）（M3 Designing › Flow。§35 I-16。利用者決定 2026-10-15）
+            {...(finePointer
+              ? {
+                  contentEditable: true,
+                  suppressContentEditableWarning: true,
+                  spellCheck: false,
+                  inputMode: "none" as const,
+                  role: "textbox",
+                  "aria-multiline": true,
+                  "aria-readonly": true,
+                  onBeforeInput: (e: React.FormEvent) => e.preventDefault(),
+                  onPaste: (e: React.ClipboardEvent) => e.preventDefault(),
+                  onDrop: (e: React.DragEvent) => e.preventDefault(),
+                  onCut: (e: React.ClipboardEvent) => e.preventDefault(),
+                }
+              : {})}
             onMouseUp={readSelection}
             onKeyUp={readSelection}
           >

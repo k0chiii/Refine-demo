@@ -54,7 +54,10 @@ export function ThreadCard({
   onEdit,
   pending,
   className,
+  index,
 }: {
+  /** 紙面のピンと同じ番号（ピンの名前「コメント N」と対応させる） */
+  index?: number;
   thread: Thread;
   active: boolean;
   meId: string | null;
@@ -116,7 +119,7 @@ export function ThreadCard({
       <M3eCard
         variant={active ? "elevated" : "outlined"}
         className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${className ?? ""}`}
-        aria-label={`コメント ${t.author?.name ?? ""}`}
+        aria-label={`コメント${index ? ` ${index}` : ""} ${t.author?.name ?? ""}`}
         onClick={onSelect}
       >
         <div slot="content" className="thread__content">
@@ -133,6 +136,22 @@ export function ThreadCard({
               <span className="thread__time">{formatJstShort(t.createdAt)}</span>
             </div>
             <span className="spacer" />
+            {/* 位置のあるコメントは、紙面のピンと同じ番号のボタンから位置へ飛べる（カードを押すのはマウスだけの操作なので、
+                キーボード・支援技術でも同じことができるようにする。§35 A-07） */}
+            {index && t.anchor ? (
+              <M3eButton
+                variant="text"
+                className="thread__index"
+                aria-label={`コメント ${index} の位置を表示`}
+                onClick={(e: Event) => {
+                  stop(e);
+                  onSelect();
+                }}
+              >
+                <M3eIcon slot="icon" name="location_on" />
+                {index}
+              </M3eButton>
+            ) : null}
             {canDecide && !closed ? (
               <M3eIconButton
                 aria-label="解決済みにする"

@@ -263,16 +263,7 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await page.waitForSelector("m3e-list-action");
   await shot("07-dashboard-reviewer");
-  // 36 RTL（Bidirectionality）: レールは先頭端（右）、アプリバー・バッジ・リストが鏡映
-  await page.evaluate(() => {
-    document.documentElement.dir = "rtl";
-  });
-  await page.waitForTimeout(500);
-  await shot("36-rtl-dashboard");
-  await page.evaluate(() => {
-    document.documentElement.dir = "ltr";
-  });
-  await page.waitForTimeout(300);
+  // （36 RTL は外した。日本語だけのアプリなので RTL には対応しない。利用者決定 2026-10-15・UI_M3E §35 L-16）
   // 29 large（1200 以上）: メニューで標準の展開レール（220）。内容を押す。状態は保存され、既定は折りたたみ
   await railToggle.click();
   await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "expanded");

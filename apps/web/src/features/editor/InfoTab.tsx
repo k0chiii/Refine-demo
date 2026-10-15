@@ -245,7 +245,8 @@ export function InfoTab({
 
       <div className="info-tab__actions">
         {can.finalize && w.lifecycle === "active" ? (
-          <M3eButton variant="tonal" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
+          // 校了権限者の「いまやる 1 つ」なので filled（M3 Usability。§35 A-20。利用者決定 2026-10-15）
+          <M3eButton variant="filled" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
             <M3eIcon slot="icon" name="verified" />
             校了を宣言
           </M3eButton>
@@ -282,7 +283,7 @@ export function InfoTab({
 
       {revision && (checks.length > 0 || revision.can.addCheck) ? (
         <section className="info-tab__section" aria-label="専門確認">
-          <h3 className="info-tab__h">
+          <h2 className="info-tab__h">
             専門確認
             {checks.length > 0 ? (
               <StatusText tone={pendingChecks > 0 ? "warning" : "success"} className="ml">
@@ -298,7 +299,7 @@ export function InfoTab({
                 追加
               </M3eButton>
             ) : null}
-          </h3>
+          </h2>
           <div className="checks">
             {checks.map((c) => (
               <div key={c.id} className={`check ${c.state !== "pending" ? "check--done" : ""}`}>
@@ -404,7 +405,7 @@ export function InfoTab({
 
       {approvals.length > 0 ? (
         <section className="info-tab__section" aria-label="校了履歴">
-          <h3 className="info-tab__h">校了履歴</h3>
+          <h2 className="info-tab__h">校了履歴</h2>
           <ul className="info__history">
             {approvals.map((a, i) => (
               <li key={i}>
@@ -426,7 +427,7 @@ export function InfoTab({
 
       {isAdmin ? (
         <section className="info-tab__section" aria-label="閲覧権限">
-          <h3 className="info-tab__h">閲覧権限</h3>
+          <h2 className="info-tab__h">閲覧権限</h2>
           <AclPanel workId={w.id} />
         </section>
       ) : null}

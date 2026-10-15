@@ -688,18 +688,9 @@ m3e-dialog [slot="actions"] {
   align-items: center;
   gap: 4px;
 }
+/* 添付を外すボタン（M3E のアイコンボタン。押せる範囲 48。§35 I-06・I-09） */
 .file-drop__remove {
-  border: 0;
-  background: transparent;
-  color: var(--mf-on-surface-variant);
-  cursor: pointer;
-  display: inline-flex;
-  padding: 4px;
-  border-radius: 50%;
   margin-inline-start: auto;
-}
-.file-drop__remove m3e-icon {
-  font-size: 18px;
 }
 .search {
   min-width: min(360px, 100%);
@@ -909,6 +900,15 @@ m3e-dialog [slot="actions"] {
   font: 400 0.9375rem / 1.9 var(--mf-font);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* 範囲を選ぶための文字カーソル（編集はさせない。§35 I-16） */
+.text-viewer__body[contenteditable="true"] {
+  caret-color: var(--mf-primary);
+  outline: none;
+}
+.text-viewer__body[contenteditable="true"]:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
 }
 .text-anchor {
   background: color-mix(in srgb, var(--mf-primary) 14%, transparent);
@@ -1600,6 +1600,10 @@ m3e-dialog [slot="actions"] {
   line-height: 1.2;
   min-width: 0;
 }
+.thread__index {
+  --m3e-text-button-label-text-color: var(--mf-on-surface-variant);
+  --m3e-button-icon-color: var(--mf-on-surface-variant);
+}
 .thread__name {
   font: var(--mf-type-label-large);
   line-height: 1.125rem;
@@ -2134,21 +2138,12 @@ m3e-icon.icon--on {
 .search-hit--current {
   background: color-mix(in srgb, var(--mf-warning) 45%, var(--mf-warning-container));
 }
-/* 入力中の文字カウント（Google ドキュメントの左下のボックス） */
+/* 入力中の文字カウント（Google ドキュメントの左下のボックス）。M3E の elevated ボタン（状態は M3E が描く。§35 I-06） */
 .write__count {
   position: absolute;
   inset-inline-start: 16px;
   bottom: 16px;
   z-index: 5;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: var(--mf-shape-full);
-  border: 0;
-  background: var(--mf-surface-container-high);
-  color: var(--mf-on-surface);
-  font: var(--mf-type-label-large);
-  box-shadow: var(--mf-elevation-1);
-  cursor: pointer;
 }
 .write__side-item {
   display: contents;
@@ -2927,6 +2922,14 @@ m3e-icon.icon--on {
 .data-table__row--selected > * {
   background: var(--mf-secondary-container);
   color: var(--mf-on-secondary-container);
+}
+/* 選択中の行のホバー: 選択の地の上に on-secondary-container 8% を重ねる（選択とホバーは組み合わせる。M3 States。§35 I-05） */
+.data-table__row--selected:hover > * {
+  background: color-mix(
+    in srgb,
+    var(--mf-on-secondary-container) 8%,
+    var(--mf-secondary-container)
+  );
 }
 .data-table__row--action {
   cursor: pointer;

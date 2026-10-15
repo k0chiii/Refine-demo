@@ -13,7 +13,10 @@ export function Card({
   className,
   ariaLabel,
   style,
+  level = 2,
 }: {
+  /** 見出しの階層（h1 はアプリバー。画面の節は 2、その下は 3。§35 I-11） */
+  level?: 2 | 3 | 4;
   title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
@@ -31,7 +34,7 @@ export function Card({
     >
       {title ? (
         <div slot="header" className="card__header">
-          <M3eHeading variant="title" size="medium" level={3} className="card__title">
+          <M3eHeading variant="title" size="medium" level={level} className="card__title">
             {title}
           </M3eHeading>
           {actions ? <div className="card__actions">{actions}</div> : null}

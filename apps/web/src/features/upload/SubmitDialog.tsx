@@ -13,6 +13,7 @@ import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
 import {
   M3eButton,
+  M3eIconButton,
   M3eDialog,
   M3eExpansionPanel,
   M3eIcon,
@@ -222,14 +223,13 @@ export function SubmitDialog({
                     <li key={f.name}>
                       {f.name}
                       <span className="muted">　{formatBytes(f.size)}</span>
-                      <button
-                        type="button"
+                      <M3eIconButton
                         className="file-drop__remove"
                         aria-label={`${f.name} を外す`}
                         onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
                       >
                         <M3eIcon name="close" />
-                      </button>
+                      </M3eIconButton>
                     </li>
                   ))}
                 </ul>

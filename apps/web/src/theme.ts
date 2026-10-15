@@ -26,4 +26,9 @@ if (theme) {
   theme.setAttribute("scheme", THEME.scheme);
   theme.setAttribute("motion", THEME.motion);
   theme.setAttribute("strong-focus", "");
+  // OS の「コントラストを上げる」を使う人には M3 の高コントラスト配色を当てる（M3 Design tokens。§35 I-19。利用者決定 2026-10-15）
+  const more = matchMedia("(prefers-contrast: more)");
+  const applyContrast = () => theme.setAttribute("contrast", more.matches ? "high" : "standard");
+  applyContrast();
+  more.addEventListener("change", applyContrast);
 }

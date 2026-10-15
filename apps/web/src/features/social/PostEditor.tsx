@@ -252,6 +252,8 @@ function PostSurface({
   // 編集の手が止まって 1.5 秒たったら、新しく出た問題だけを 1 回知らせる（打つたびに出さない）。
   // 開いたときから残っている問題（空の下書きの「画像が必要」など）は知らせず、提出のときに止める
   const told = useRef(new Set<string>());
+  /** 提出を押したか（押した後は、直すべき欄を M3 のエラー表示にする。§35 A-17） */
+  const [triedSubmit, setTriedSubmit] = useState(false);
   useEffect(() => {
     if (!canEdit) return;
     const t = window.setTimeout(() => {
@@ -311,6 +313,7 @@ function PostSurface({
     update({ images: post.images.map((im, k) => (k === i ? { ...im, ...patch } : im)) });
 
   const startSubmit = async () => {
+    setTriedSubmit(true);
     // 直さないと出せない問題（error）があれば、提出の前にスナックバーで知らせて止める
     const errors = issues.filter((x) => x.level === "error");
     const firstError = errors[0];
@@ -516,6 +519,10 @@ function PostSurface({
                   <span slot="supporting-text" className="post-image__fields">
                     <Field
                       label="代替テキスト"
+                      // 編集した後・提出を押した後に空なら、欄を M3 のエラー表示に（スナックバーは消えるので欄にも残す。§35 A-17）
+                      {...((edited.current || triedSubmit) && !im.alt.trim()
+                        ? { error: "代替テキストを入力してください" }
+                        : {})}
                       hint={`画像の内容を短く書きます。画像の中の文字（日時・場所など）も書き、「〜の画像」で始めません（${Array.from(im.alt).length} / ${ALT_TEXT_GUIDE_MAX}）`}
                     >
                       <TextInput

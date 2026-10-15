@@ -524,9 +524,13 @@ function WriteSurface({
             </div>
           </div>
           {counts ? (
-            <button type="button" className="write__count" onClick={() => setCountOpen(true)}>
+            <M3eButton
+              variant="elevated"
+              className="write__count"
+              onClick={() => setCountOpen(true)}
+            >
               {counts.characters.toLocaleString("ja-JP")} 文字
-            </button>
+            </M3eButton>
           ) : null}
           {!mobile ? (
             <M3eToolbar
