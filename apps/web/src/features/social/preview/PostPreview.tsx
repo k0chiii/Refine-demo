@@ -52,6 +52,154 @@ const ratio = (a: SocialAspect, w: number, h: number) => {
   return x / y;
 };
 
+/**
+ * Instagram のカルーセル: 横に並べてスクロールスナップで 1 枚ずつ送る（実機と同じく指で払える）。
+ * - 枠の比率は 1 枚目に合わせる（Instagram はカルーセル全体を 1 枚目の比率で切り抜く）。各画像は自分の焦点で切り抜く
+ * - 矢印は PC の Instagram と同じ。マウスはドラッグでも送れる（タッチ・トラックパッドはブラウザのスクロールに任せる）
+ */
+function IgCarousel({
+  post,
+  images,
+  index,
+  onIndex,
+}: {
+  post: SocialPost;
+  images: PreviewImage[];
+  index: number;
+  onIndex: (i: number) => void;
+}) {
+  const list = post.images;
+  const track = useRef<HTMLDivElement>(null);
+  const first = list[0];
+  const firstImage = images.find((i) => i.key === first?.key);
+  // 1 枚目が「元の比率」なら、その画像の縦横を比率として残りにも使う
+  const frame = (
+    first?.aspect === "original" && firstImage
+      ? `${firstImage.w}:${firstImage.h}`
+      : (first?.aspect ?? "1:1")
+  ) as SocialAspect;
+  const go = (i: number) => {
+    const el = track.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  };
+  // 画像が減ったとき・並べ替えたときに、今の位置が範囲外にならないように
+  useEffect(() => {
+    if (index > list.length - 1) {
+      onIndex(Math.max(0, list.length - 1));
+      const el = track.current;
+      if (el) el.scrollLeft = 0;
+    }
+  }, [list.length]);
+  // マウスのドラッグで送る（離したら近い 1 枚にスナップ）
+  const drag = useRef<{ x: number; left: number; id: number } | null>(null);
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse" || e.button !== 0 || list.length < 2) return;
+    const el = e.currentTarget;
+    drag.current = { x: e.clientX, left: el.scrollLeft, id: e.pointerId };
+    el.setPointerCapture(e.pointerId);
+    el.classList.add("is-dragging");
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    // 端末の枠は transform で縮めて表示しているので、画面上の移動量を枠の中の量に直す
+    const el = e.currentTarget;
+    const k = el.getBoundingClientRect().width / el.clientWidth || 1;
+    el.scrollLeft = d.left - (e.clientX - d.x) / k;
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    const el = e.currentTarget;
+    const moved = el.scrollLeft - d.left;
+    const w = el.clientWidth;
+    // 少し動かしただけでも、動かした向きに 1 枚送る（Instagram の払い方に近づける）
+    const target =
+      Math.abs(moved) > w * 0.15
+        ? Math.round(d.left / w) + Math.sign(moved)
+        : Math.round(d.left / w);
+    go(Math.min(list.length - 1, Math.max(0, target)));
+    // スナップを先に戻すと、なめらかに送る前に近い 1 枚へ引き戻されるので、送り終えてから戻す
+    const done = () => el.classList.remove("is-dragging");
+    if ("onscrollend" in el) el.addEventListener("scrollend", done, { once: true });
+    window.setTimeout(done, 600);
+  };
+  return (
+    <>
+      <div
+        ref={track}
+        className="sp-ig__track"
+        // キーボードでも送れるように（フォーカスして左右の矢印キー）
+        tabIndex={0}
+        role="region"
+        aria-roledescription="カルーセル"
+        aria-label="投稿の画像（左右に送る）"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+          if (i !== index) onIndex(i);
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        {list.length ? (
+          list.map((im, i) => (
+            <div
+              key={im.key}
+              className="sp-ig__slide"
+              role="group"
+              aria-roledescription="スライド"
+              aria-label={`${i + 1} / ${list.length}`}
+            >
+              <CroppedImage
+                image={images.find((x) => x.key === im.key)}
+                aspect={frame}
+                focus={im.focus}
+                alt={im.alt}
+              />
+            </div>
+          ))
+        ) : (
+          <div className="sp-ig__slide">
+            <CroppedImage image={undefined} aspect={frame} alt="" />
+          </div>
+        )}
+      </div>
+      {list.length > 1 ? (
+        <>
+          <span className="sp-ig__count">
+            {index + 1}/{list.length}
+          </span>
+          {index > 0 ? (
+            <button
+              type="button"
+              className="sp-nav sp-nav--prev"
+              aria-label="前の画像"
+              onClick={() => go(index - 1)}
+            >
+              <Icon name="igChevronLeft" size={12} />
+            </button>
+          ) : null}
+          {index < list.length - 1 ? (
+            <button
+              type="button"
+              className="sp-nav sp-nav--next"
+              aria-label="次の画像"
+              onClick={() => go(index + 1)}
+            >
+              <Icon name="igChevronRight" size={12} />
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
 /** 比率と焦点で切り抜いて表示する（元画像は変えない） */
 export function CroppedImage({
   image,
@@ -253,7 +401,6 @@ function InstagramPost({
 }) {
   const [index, setIndex] = useState(0);
   const list = post.images;
-  const cur = list[Math.min(index, Math.max(0, list.length - 1))];
   const user = post.account.username || "username";
   return (
     <div className="sp-screen">
@@ -278,39 +425,7 @@ function InstagramPost({
             <Icon name="igMore" size={24} className="sp-ig__more" />
           </header>
           <div className="sp-ig__media">
-            <CroppedImage
-              image={images.find((i) => i.key === cur?.key)}
-              aspect={cur?.aspect ?? "1:1"}
-              focus={cur?.focus}
-              alt={cur?.alt ?? ""}
-            />
-            {list.length > 1 ? (
-              <>
-                <span className="sp-ig__count">
-                  {index + 1}/{list.length}
-                </span>
-                {index > 0 ? (
-                  <button
-                    type="button"
-                    className="sp-nav sp-nav--prev"
-                    aria-label="前の画像"
-                    onClick={() => setIndex(index - 1)}
-                  >
-                    <Icon name="igChevronLeft" size={12} />
-                  </button>
-                ) : null}
-                {index < list.length - 1 ? (
-                  <button
-                    type="button"
-                    className="sp-nav sp-nav--next"
-                    aria-label="次の画像"
-                    onClick={() => setIndex(index + 1)}
-                  >
-                    <Icon name="igChevronRight" size={12} />
-                  </button>
-                ) : null}
-              </>
-            ) : null}
+            <IgCarousel post={post} images={images} index={index} onIndex={setIndex} />
           </div>
           <div className="sp-ig__actions" aria-hidden="true">
             <Icon name="igLike" />
