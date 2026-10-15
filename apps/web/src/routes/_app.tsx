@@ -35,7 +35,7 @@ const readRailPref = () => {
 
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
- * - compact（<600）: アプリバーは見出し・通知・アカウント。下部ナビゲーションバー（ダッシュボード・制作物・表記ルール（・管理））。
+ * - compact（<600）: アプリバーは見出し・通知・アカウント。下部ナビゲーションバー（ホーム・制作物・表記ルール（・管理））。
  *   エディタ（`/works/:id`）では下部バーを隠す（詳細画面）。アプリバーはどの幅でも 1 本で、エディタが戻る・題名・操作を差し込む。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
@@ -85,7 +85,7 @@ function AppLayout() {
   if (isLoading || !isAuthenticated || !me) return null;
 
   const items = [
-    { to: "/", icon: "space_dashboard", label: "ダッシュボード", short: "ホーム" },
+    { to: "/", icon: "space_dashboard", label: "ホーム" },
     { to: "/works", icon: "folder", label: "制作物" },
     { to: "/write", icon: "edit_document", label: "エディタ" },
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
@@ -101,10 +101,10 @@ function AppLayout() {
         : to === "/works"
           ? !writing && (path === to || path.startsWith(`${to}/`))
           : path === to || path.startsWith(`${to}/`);
-  // 下部ナビ（compact）は 1 項目 75px 前後しかなく「ダッシュボード」が 2 行に折れて下に切れるので、短い名前を出す
+  // 先頭の項目は「ホーム」（画面の見出し・「ホームを編集」と揃える。以前の「ダッシュボード」は下部ナビで 2 行に折れていた）
   // 項目は M3eNavItem だけ（ボタン）にし、押したらルーターで移る。外側に <a> を重ねると 1 項目に 2 回止まり、
   // 読み上げも「リンク › ボタン」と入れ子になる。M3eNavItem の href は中に <a> を作り、同じく入れ子になる（§35 A-10）
-  const navItems = (list: typeof items = items, short = false) =>
+  const navItems = (list: typeof items = items) =>
     list.map((it) => (
       <M3eNavItem
         key={it.to}
@@ -115,7 +115,7 @@ function AppLayout() {
         onClick={() => void navigate({ to: it.to })}
       >
         <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
-        <span className="nav-label">{short && "short" in it ? it.short : it.label}</span>
+        <span className="nav-label">{it.label}</span>
       </M3eNavItem>
     ));
   /** M3E は押した項目を自動で選択状態にするため、経路に基づく選択へ戻す */
@@ -295,7 +295,7 @@ function AppLayout() {
       </div>
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
-          {navItems(items, true)}
+          {navItems()}
         </M3eNavBar>
       ) : null}
     </div>

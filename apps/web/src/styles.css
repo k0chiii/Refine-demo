@@ -1081,8 +1081,10 @@ m3e-dialog [slot="actions"] {
   display: grid;
   gap: 24px;
 }
+/* 列の間: 行（リスト）は文字を見出しに揃えるため左右に 16 はみ出す（.list）。行の背景どうしの間を 24 空けるため、24 + 16 × 2 */
 .dash--columns {
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  column-gap: calc(24px + 2 * 16px);
   align-items: start;
 }
 .dash__column {

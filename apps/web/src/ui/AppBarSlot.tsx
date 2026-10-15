@@ -6,6 +6,9 @@ export type AppBarSlotName = "leading" | "title" | "subtitle" | "actions";
 const APP_NAME = "MF100 校正システム";
 /** 見出しへフォーカスを移した最後の画面（同じ画面の再描画では動かさない。文字の選択などを邪魔しない） */
 let focusedPath: string | null = null;
+/** インストールした PWA として独立した窓で開いているか（ブラウザのタブではない） */
+const installed = () =>
+  matchMedia("(display-mode: standalone), (display-mode: window-controls-overlay)").matches;
 
 /**
  * 共通アプリバー（`_app.tsx`）のスロットへ、いまの画面の見出し・戻る・操作を差し込む（M3 App bars: 「アプリバーは現在のページの
@@ -33,7 +36,8 @@ export function AppBarSlot({
     if (slot !== "title" || !host) return;
     const id = requestAnimationFrame(() => {
       const text = host.textContent?.trim();
-      document.title = text ? `${text} – ${APP_NAME}` : APP_NAME;
+      // インストールした PWA は、窓のタイトルにアプリ名を自分で前に付ける（「MF100 校正システム - ホーム」）。二重にしない
+      document.title = !text ? APP_NAME : installed() ? text : `${text} – ${APP_NAME}`;
       // 長い見出しは切り詰めて表示するので、全文をツールチップでも読めるようにする
       host.title = title ?? text ?? "";
       host.tabIndex = -1;
