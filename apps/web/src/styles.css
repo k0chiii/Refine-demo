@@ -1749,8 +1749,11 @@ m3e-dialog [slot="actions"] {
   display: flex;
   flex-direction: column;
 }
-.drawer--sheet .drawer__body {
-  max-height: 60vh;
+/* ボトムシートの中はシート自身（M3E の body）だけをスクロールさせる。中にもスクロール域を作ると、
+   半分の高さで中の域の下端がシートの外に隠れ、連鎖も止めているため下まで届かなくなる（利用者報告 2026-10-15） */
+.drawer--sheet .drawer__body,
+.drawer--sheet .comments__list {
+  overflow: visible;
 }
 .comments {
   display: flex;

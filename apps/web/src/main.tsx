@@ -2,6 +2,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerServiceWorker } from "./lib/pwa";
+import { installScrollLockGuard } from "./lib/scrollLockGuard";
 import { installSnackbarPlacement } from "./lib/toast";
 import { routeTree } from "./routeTree.gen";
 import "./theme";
@@ -30,6 +31,7 @@ createRoot(document.getElementById("root")!).render(
 );
 
 registerServiceWorker();
+installScrollLockGuard();
 
 // iOS Safari はピンチで画面全体を拡大する（touch-action を見ない場面がある）。拡大はビューアの中だけで行うので、全体の拡大を止める
 for (const type of ["gesturestart", "gesturechange"])

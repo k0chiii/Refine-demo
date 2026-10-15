@@ -692,6 +692,14 @@ async function main() {
     await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").open),
     "ツールバーのコメントでシートが開かない",
   );
+  // ハンドルと止まる高さが付いている（属性が無いとハンドルが出ず、上下に動かせない）
+  expectTrue(
+    await page.evaluate(() => {
+      const s = document.querySelector("m3e-bottom-sheet.ws__sheet");
+      return s.hasAttribute("handle") && s.getAttribute("detents") === "half full";
+    }),
+    "引き出しのシートにハンドル・止まる高さが無い",
+  );
   await shot("34-mobile-sheet-half");
   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());

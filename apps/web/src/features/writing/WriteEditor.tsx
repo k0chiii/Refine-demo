@@ -14,6 +14,7 @@ import { formatJstShort } from "@/lib/format";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
+import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import {
   M3eBottomSheet,
@@ -173,6 +174,11 @@ function WriteSurface({
   const [bodyW, setBodyW] = useState(0);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLElement | null>(null);
+  // 狭い画面の補助ペイン（ボトムシート）: 半分で開き、ハンドルで全部まで上げ下げできる
+  const attachSheet = useCallback((el: HTMLElement | null) => {
+    sheetRef.current = el;
+    if (el) prepareBottomSheet(el);
+  }, []);
   useEffect(() => {
     if (!bodyEl) return;
     const ro = new ResizeObserver(() => {
@@ -312,7 +318,7 @@ function WriteSurface({
     if (mobile) {
       setPanel(p);
       requestAnimationFrame(() =>
-        (sheetRef.current as { show?: (d?: number) => void } | null)?.show?.(1),
+        (sheetRef.current as { show?: (d?: number) => void } | null)?.show?.(0),
       );
     } else setPanel((cur) => (cur === p ? null : p));
   };
@@ -321,7 +327,7 @@ function WriteSurface({
     setPanel("find");
     if (mobile)
       requestAnimationFrame(() =>
-        (sheetRef.current as { show?: (d?: number) => void } | null)?.show?.(1),
+        (sheetRef.current as { show?: (d?: number) => void } | null)?.show?.(0),
       );
     setFindFocus((n) => n + 1);
   };
@@ -624,7 +630,7 @@ function WriteSurface({
       </div>
       {mobile ? (
         <M3eBottomSheet
-          ref={sheetRef as never}
+          ref={attachSheet as never}
           modal
           hideable
           handle

@@ -14,7 +14,15 @@ import {
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { AlignedGutter, type GutterItem } from "@/features/annotation/AlignedGutter";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
@@ -47,6 +55,8 @@ import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
 import { usePinchZoom } from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
+import { prepareBottomSheet } from "@/ui/bottomSheet";
+import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Field, TextArea } from "@/ui/Field";
 import {
@@ -64,17 +74,7 @@ import {
 import { InfoTab } from "./InfoTab";
 import { VersionsTab } from "./VersionsTab";
 
-export type Drawer = "comments" | "versions" | "info";
-/** `compare`: 開いた直後に並べる相手の版（新しい版から比較を始めるため、古い版を見ている時に新しい版を選ぶとここ経由で入れ替える） */
-/** thread: 通知（メンションなど）から開いたとき、そのコメントを選んだ状態で開く */
-export type EditorSearch = { tab?: Drawer; compare?: string; thread?: string };
-export function validateEditorSearch(s: Record<string, unknown>): EditorSearch {
-  return {
-    ...(s.tab === "comments" || s.tab === "versions" || s.tab === "info" ? { tab: s.tab } : {}),
-    ...(typeof s.compare === "string" && s.compare ? { compare: s.compare } : {}),
-    ...(typeof s.thread === "string" && s.thread ? { thread: s.thread } : {}),
-  };
-}
+export type { Drawer, EditorSearch } from "./search";
 
 type Layout = "panel" | "aligned" | "pins";
 const LAYOUT_KEY = "mf100.workspace.layout";
@@ -330,11 +330,12 @@ export function Editor({
   }, [data, artifactId]);
   // ボトムシート（狭い画面）: 普段は閉じて紙面を画面いっぱいに使い、ツールバーの「コメント・版・情報」で開く
   // （利用者指示 2026-10-15。以前は下にタブだけの覗き見を常に出していた）。半分 → 全部、下に払うと閉じる。
-  // detents は属性でしか渡せないので ref で設定する
-  useEffect(() => {
-    const el = sheetRef.current;
+  // 止まる高さとハンドルは属性でしか渡せないので、シートが DOM に入った時点で ref で設定する
+  // （以前は effect で detents だけ設定していた。シートが後から現れると設定されず、ハンドルも出ず上下に動かせなかった）
+  const attachSheet = useCallback((el: HTMLElement | null) => {
+    sheetRef.current = el;
     if (!el) return;
-    el.setAttribute("detents", "half full");
+    prepareBottomSheet(el);
     const onOpened = () => setSheetOpen(true);
     const onClosed = () => setSheetOpen(false);
     el.addEventListener("opened", onOpened);
@@ -342,8 +343,9 @@ export function Editor({
     return () => {
       el.removeEventListener("opened", onOpened);
       el.removeEventListener("closed", onClosed);
+      sheetRef.current = null;
     };
-  }, [mobile, data === undefined]);
+  }, []);
   // 紙面で範囲を選んだだけ（まだ書いていない）なら Esc で選択をやめる。書きかけのコメントは消さない（§35 I-07）。
   // メニュー・ダイアログを閉じる Esc（defaultPrevented）と IME の変換中は何もしない
   const bodyRef = useRef(body);
@@ -1059,6 +1061,21 @@ export function Editor({
   const zoomStep = (dir: 1 | -1) =>
     setScale((s) => Math.min(5, Math.max(0.25, +(dir > 0 ? s * 1.25 : s / 1.25).toFixed(3))));
   const sheetTab: Drawer = drawer ?? "comments";
+  /** 狭い画面: 引き出し（コメント・版・情報）をシートで開くボタン。紙面のツールバーが無いとき（まだ版が無い・外部リンク）も出す */
+  const sheetButtons = (
+    [
+      ["comments", `コメント（${openCount}）`, "comment"],
+      ["versions", "版", "history"],
+      ["info", "情報", "info"],
+    ] as const
+  ).map(([d, label, icon]) => {
+    const on = sheetOpen && drawer === d;
+    return (
+      <M3eIconButton key={d} aria-label={label} toggle selected={on} onClick={() => toggleSheet(d)}>
+        <M3eIcon name={icon} className={on ? "icon--filled" : ""} />
+      </M3eIconButton>
+    );
+  });
 
   return (
     <MentionProvider value={mentionCandidates ?? []}>
@@ -1314,26 +1331,7 @@ export function Editor({
                   {mobile ? (
                     <>
                       <span className="ws__toolbar-sep" />
-                      {(
-                        [
-                          ["comments", `コメント（${openCount}）`, "comment"],
-                          ["versions", "版", "history"],
-                          ["info", "情報", "info"],
-                        ] as const
-                      ).map(([d, label, icon]) => {
-                        const on = sheetOpen && drawer === d;
-                        return (
-                          <M3eIconButton
-                            key={d}
-                            aria-label={label}
-                            toggle
-                            selected={on}
-                            onClick={() => toggleSheet(d)}
-                          >
-                            <M3eIcon name={icon} className={on ? "icon--filled" : ""} />
-                          </M3eIconButton>
-                        );
-                      })}
+                      {sheetButtons}
                     </>
                   ) : null}
                   {switchable.length > 1 ? (
@@ -1365,6 +1363,15 @@ export function Editor({
                     </>
                   ) : null}
                 </div>
+              </M3eToolbar>
+            ) : mobile ? (
+              <M3eToolbar
+                className="ws__toolbar"
+                shape="rounded"
+                elevated
+                aria-label="引き出しの操作"
+              >
+                <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
             ) : null}
             {mobile ? (
@@ -1458,7 +1465,7 @@ export function Editor({
         </div>
         {mobile ? (
           <M3eBottomSheet
-            ref={sheetRef as never}
+            ref={attachSheet as never}
             handle
             hideable
             handleLabel="引き出し"

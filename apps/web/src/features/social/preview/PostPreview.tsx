@@ -933,7 +933,10 @@ export function FullscreenPreview({
     addEventListener("resize", onResize);
     const prevOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
+    // 自前で止めている間は、止めっぱなし対策（scrollLockGuard）に外させない
+    document.documentElement.setAttribute("data-mf-scroll-lock", "preview");
     return () => {
+      document.documentElement.removeAttribute("data-mf-scroll-lock");
       removeEventListener("popstate", onPop);
       removeEventListener("keydown", onKey);
       removeEventListener("resize", onResize);
