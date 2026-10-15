@@ -7,7 +7,14 @@ import { formatDeadlineUntil } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import { M3eActionList, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eListAction } from "@/ui/m3e";
+import {
+  M3eActionList,
+  M3eFilterChip,
+  M3eFilterChipSet,
+  M3eIcon,
+  M3eIconButton,
+  M3eListAction,
+} from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (s: Record<string, unknown>): { q?: string; new?: boolean } => ({
@@ -18,12 +25,15 @@ export const Route = createFileRoute("/_app/works/")({
 });
 
 /**
- * U-02 制作物。探して開くだけの入口。行を押すとエディタ（最新版）が開く。登録はレールの FAB「制作物を登録」が開くダイアログ（`?new=1`）。
+ * U-02 制作物。探して開くだけの入口。行を押すとエディタ（最新版）が開く。
+ * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、FAB は「版を提出」に譲り、1 件ずつの登録は
+ * 登録の権限（Nogiku の組織権限 works:create）のある人にだけ、アプリバーの操作として出す（ダイアログは `?new=1`）。
  * 検索語は `q` で渡る（検索バーは一旦外している）。見出し「制作物」は共通アプリバーに差し込む（M3 App bars）。
  */
 function Works() {
   const { q, new: creating } = Route.useSearch();
   const navigate = useNavigate();
+  const me = useQuery(api.me.me, {});
   const [lifecycle, setLifecycle] = useState<string>("");
   // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
   const canRegister = useWindowClass() !== "compact";
@@ -44,6 +54,17 @@ function Works() {
   return (
     <div className="works">
       <AppBarSlot slot="title">制作物</AppBarSlot>
+      {me?.canCreateWorks ? (
+        <AppBarSlot slot="actions">
+          <M3eIconButton
+            aria-label="制作物を登録"
+            title="制作物を登録"
+            onClick={() => setCreating(true)}
+          >
+            <M3eIcon name="note_add" />
+          </M3eIconButton>
+        </AppBarSlot>
+      ) : null}
       <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
         {(["active", "on_hold", "finalized"] as const).map((k) => (
           <M3eFilterChip
@@ -100,7 +121,10 @@ function Works() {
           ))}
         </M3eActionList>
       )}
-      <NewWorkDialog open={creating === true} onClose={() => setCreating(false)} />
+      <NewWorkDialog
+        open={creating === true && me?.canCreateWorks === true}
+        onClose={() => setCreating(false)}
+      />
     </div>
   );
 }

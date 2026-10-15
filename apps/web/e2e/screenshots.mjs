@@ -178,11 +178,23 @@ async function main() {
   await shot("22-account-menu");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
-  // 31 レールの FAB「制作物を登録」→ 登録ダイアログ（一覧には登録ボタンを置かない）
-  await page.locator("m3e-nav-rail m3e-fab").click();
+  // 31b レールの FAB「版を提出」→ 版を提出する制作物を選ぶ（自分が制作者の進行中の制作物を納期順。§36 L-15）
+  await page.locator('m3e-nav-rail m3e-fab[aria-label="版を提出"]').click();
+  await page.waitForSelector("m3e-dialog.submit-picker[open] m3e-list-action");
+  await page.waitForTimeout(400);
+  await shot("31b-submit-picker");
+  await page
+    .locator('m3e-dialog.submit-picker[open] [slot="actions"] m3e-button', {
+      hasText: "キャンセル",
+    })
+    .click();
+  await page.waitForSelector("m3e-dialog.submit-picker[open]", { state: "detached" });
+  await page.waitForTimeout(300);
+  // 31 制作物の登録は登録権限のある人だけ、制作物の一覧のアプリバーの操作から（FAB は「版を提出」に譲った）
+  await page.locator('.shell__appbar m3e-icon-button[aria-label="制作物を登録"]').click();
   await page.waitForSelector("m3e-dialog[open] input");
   await page.waitForTimeout(400);
-  await shot("31-new-work-fab");
+  await shot("31-new-work");
   await page
     .locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
     .click();
@@ -273,8 +285,8 @@ async function main() {
   await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "compact");
   await page.waitForTimeout(400);
 
-  // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る
-  await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).click();
+  // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る（ダッシュボードの「校正する」の行から。同じ制作物は「次の締切」にも出る）
+  await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).first().click();
   await page.waitForURL(/\/works\//);
   await pdfReady();
   await page.locator(".viewer__overlay").first().waitFor();
@@ -367,10 +379,20 @@ async function main() {
   await shot("19-text-range");
   await pickArtifact("sample.pdf");
 
-  // 27 ダッシュボード（制作者）: 「返事をする」に未対応が出る
+  // 27 ダッシュボード（制作者）: 「提出する」（各行に「版を提出」）・「返事をする」に未対応が出る。広い画面は 2 列（左がやること）
   await signInAs("mock-nogiku-creator");
   await page.waitForSelector("m3e-list-action");
   await shot("27-dashboard-creator");
+  // 61 ホームを編集（全画面のダイアログ。節ごとのスイッチと上下のボタン。§36 W-26）
+  await page.locator('.shell__appbar m3e-icon-button[aria-label="ホームを編集"]').click();
+  await page.waitForSelector("m3e-dialog.home-edit[open] m3e-switch");
+  await page.waitForTimeout(500);
+  await shot("61-home-edit");
+  await page
+    .locator('m3e-dialog.home-edit[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
+    .click();
+  await page.waitForSelector("m3e-dialog.home-edit[open]", { state: "detached" });
+  await page.waitForTimeout(300);
 
   // 09 採否判断（制作者）: ⋮ → 不採用（理由）
   await go(revisionUrl);
@@ -550,10 +572,13 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
 
-  // 20 compact（<600）: ダッシュボード（下部ナビ: ダッシュボード・制作物・表記ルール）/ 32 アプリバーのベル（アカウントの隣）→ ボトムシート
+  // 20 compact（<600）: ダッシュボード（1 列のリスト。下部ナビ: ダッシュボード・制作物・エディタ・表記ルール）。
+  // 制作者で撮り、右下（下部ナビの上 16）の FAB「版を提出」も写す / 32 アプリバーのベル（アカウントの隣）→ ボトムシート
   await page.setViewportSize({ width: 412, height: 915 });
+  await signInAs("mock-nogiku-creator");
   await go(`${BASE}/`);
   await page.waitForSelector("m3e-nav-bar");
+  await page.waitForSelector(".submit-fab m3e-fab");
   await page.waitForTimeout(400);
   await shot("20-mobile-dashboard");
   await page.locator(".shell__appbar .bell m3e-icon-button").click();
@@ -562,10 +587,11 @@ async function main() {
   await shot("32-mobile-notifications");
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.notif-sheet").hide());
   await page.waitForTimeout(600);
-  // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う）
+  // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う。右下に FAB「版を提出」）
   await go(`${BASE}/works`);
   await page.waitForSelector("m3e-list-action");
   await shot("33-mobile-works");
+  await signInAs("mock-nogiku-reviewer");
   // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は画面いっぱいで、引き出し（コメント・版・情報）はツールバーから開くボトムシート
   await go(revision2Url);
   await pdfReady();

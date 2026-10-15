@@ -13,6 +13,7 @@ export const domainErrorCodes = [
   "work_already_finalized",
   "work_not_finalized",
   "work_invalid_lifecycle_transition",
+  "work_import_invalid",
   // 版
   "revision_rough_after_standard",
   "revision_sequence_conflict",

@@ -3,6 +3,7 @@ import { api } from "@mf100/convex/api";
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
+import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { useInstallPrompt } from "@/lib/pwa";
 import { useWindowClass } from "@/lib/useMedia";
@@ -38,7 +39,9 @@ const readRailPref = () => {
  *   エディタ（`/works/:id`）では下部バーを隠す（詳細画面）。アプリバーはどの幅でも 1 本で、エディタが戻る・題名・操作を差し込む。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
- * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「制作物を登録」、その下に行き先。アカウントは右上に残す。
+ * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「版を提出」、その下に行き先。アカウントは右上に残す。
+ * FAB は普段のメンバーの主な操作「版の提出」（§36 L-15。利用者決定 2026-10-15）。compact はレールが無いので、ホームと制作物の一覧の
+ * 右下（下部ナビの上 16）に同じ FAB を出す。提出できる制作物が無い人には出さない。制作物の登録は制作物の一覧のアプリバー（登録権限のある人だけ）。
  * 通知は独立した画面を持たず、アカウントの隣のベルのパネル（compact はボトムシート）から対象へ飛ぶ。
  */
 function AppLayout() {
@@ -55,6 +58,9 @@ function AppLayout() {
   /** large の下の階層で、一時的にレールを広げたか（画面を移ると折りたたみに戻る） */
   const [subOpen, setSubOpen] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
+  const submitTargets = useSubmitTargets();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const launcher = useSubmitLauncher();
 
   useEffect(() => {
     if (isLoading) return;
@@ -137,10 +143,24 @@ function AppLayout() {
       } catch {}
     } else setModalOpen((o) => !o);
   };
-  const register = () => void navigate({ to: "/works", search: { new: true } });
+  const canSubmit = (submitTargets?.length ?? 0) > 0;
+  const submitFab = (className?: string) => (
+    <M3eFab
+      size="small"
+      aria-label="版を提出"
+      title="版を提出"
+      className={className ?? ""}
+      onClick={() => setPickerOpen(true)}
+    >
+      <M3eIcon name="upload_file" />
+      <span slot="label">版を提出</span>
+    </M3eFab>
+  );
   const modal = cls !== "large" && cls !== "compact" && modalOpen;
   // compact のエディタは詳細画面: 下部バーを隠す（M3 list-detail の compact）
   const immersive = cls === "compact" && editorRoute;
+  // compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16。M3 FAB › Placement）
+  const mobileFab = cls === "compact" && canSubmit && (path === "/" || path === "/works");
   // compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints › Overview の表。§35 L-09）
   const account = (size: number, className?: string) => (
     <M3eIconButton
@@ -172,7 +192,7 @@ function AppLayout() {
 
   return (
     <div
-      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${editorRoute ? "shell--editor" : ""} ${hideRail ? "shell--norail" : ""}`}
+      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${editorRoute ? "shell--editor" : ""} ${hideRail ? "shell--norail" : ""} ${mobileFab ? "shell--fab" : ""}`}
     >
       <div className="shell__nav" hidden={hideRail}>
         {modal ? (
@@ -195,10 +215,7 @@ function AppLayout() {
               <M3eIcon name={railExpanded ? "menu_open" : "menu"} />
             </M3eIconButton>
           ) : null}
-          <M3eFab size="small" aria-label="制作物を登録" onClick={register}>
-            <M3eIcon name="add" />
-            <span slot="label">制作物を登録</span>
-          </M3eFab>
+          {canSubmit ? submitFab() : null}
           {navItems()}
         </M3eNavRail>
       </div>
@@ -265,6 +282,16 @@ function AppLayout() {
         <main className="shell__content">
           <Outlet />
         </main>
+        {mobileFab ? <div className="submit-fab">{submitFab()}</div> : null}
+        {canSubmit || pickerOpen ? (
+          <SubmitPicker
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            targets={submitTargets ?? []}
+            onPick={launcher.start}
+          />
+        ) : null}
+        {launcher.element}
       </div>
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>

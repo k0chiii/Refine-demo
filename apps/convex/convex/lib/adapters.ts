@@ -353,6 +353,76 @@ export function createAppContext(
         return docs.length;
       },
     },
+    home: {
+      async findLayout(userId) {
+        const doc = await db
+          .query("dashboardLayouts")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+        return doc ? strip(doc) : null;
+      },
+      async saveLayout(layout) {
+        const doc = await db
+          .query("dashboardLayouts")
+          .withIndex("by_userId", (q) => q.eq("userId", layout.userId))
+          .unique();
+        if (doc) await db.replace("dashboardLayouts", doc._id, layout);
+        else await db.insert("dashboardLayouts", layout);
+      },
+      async removeLayout(userId) {
+        const doc = await db
+          .query("dashboardLayouts")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+        if (doc) await db.delete("dashboardLayouts", doc._id);
+      },
+      async listPins(userId) {
+        const docs = await db
+          .query("workPins")
+          .withIndex("by_userId_and_pinnedAt", (q) => q.eq("userId", userId))
+          .order("desc")
+          .take(100);
+        return docs.map((d) => strip(d));
+      },
+      async addPin(pin) {
+        await db.insert("workPins", { ...pin, workId: pin.workId as Id<"works"> });
+      },
+      async removePin(userId, workId) {
+        const docs = await db
+          .query("workPins")
+          .withIndex("by_userId_and_workId", (q) =>
+            q.eq("userId", userId).eq("workId", workId as Id<"works">),
+          )
+          .collect();
+        for (const d of docs) await db.delete("workPins", d._id);
+      },
+      async listRecent(userId) {
+        const docs = await db
+          .query("recentWorks")
+          .withIndex("by_userId_and_openedAt", (q) => q.eq("userId", userId))
+          .order("desc")
+          .take(100);
+        return docs.map((d) => strip(d));
+      },
+      async putRecent(row) {
+        const workId = row.workId as Id<"works">;
+        const doc = await db
+          .query("recentWorks")
+          .withIndex("by_userId_and_workId", (q) => q.eq("userId", row.userId).eq("workId", workId))
+          .first();
+        if (doc) await db.patch("recentWorks", doc._id, { openedAt: row.openedAt });
+        else await db.insert("recentWorks", { ...row, workId });
+      },
+      async removeRecent(userId, workId) {
+        const docs = await db
+          .query("recentWorks")
+          .withIndex("by_userId_and_workId", (q) =>
+            q.eq("userId", userId).eq("workId", workId as Id<"works">),
+          )
+          .collect();
+        for (const d of docs) await db.delete("recentWorks", d._id);
+      },
+    },
     proofreadingRuns: {
       async findById(id) {
         const d = await db.get("proofreadingRuns", id as Id<"proofreadingRuns">).catch(() => null);

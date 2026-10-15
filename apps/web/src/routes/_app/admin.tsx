@@ -7,6 +7,8 @@ import { formatJst } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { AclPanel } from "@/features/work/AclPanel";
+import { downloadWorkCsvTemplate, ImportWorksDialog } from "@/features/work/ImportWorksDialog";
+import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { M3eButton, M3eChip, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
 import { DataTable, EditableSwitch } from "@/ui/DataTable";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -22,7 +24,8 @@ export const Route = createFileRoute("/_app/admin")({
 });
 
 /**
- * U-08 管理: 作品ごとの ACL 入口、ユーザー（システム管理者の付与）、監査ログ（F-13）。
+ * U-08 管理: 制作物（一括登録・1 件ずつの登録・制作物ごとの閲覧権限の入口）、ユーザー（システム管理者の付与）、監査ログ（F-13）。
+ * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、制作物のタブに CSV の一括登録を置く。
  * 1 画面に詰め込まず、M3E tabs で切り替える（選んだタブは URL の view に残す）。
  */
 function Admin() {
@@ -43,6 +46,8 @@ function Admin() {
   const works = useQuery(api.acl.adminWorks, me?.isSystemAdmin && tab === "works" ? {} : "skip");
   const setAdmin = useMutation(api.admin.setSystemAdmin);
   const [aclFor, setAclFor] = useState<{ id: string; title: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const toggle = useAction(async (userId: string, value: boolean) => {
     await setAdmin({ userId: userId as Id<"users">, value });
   });
@@ -64,7 +69,7 @@ function Admin() {
         value={tab}
         onChange={setTab}
         items={[
-          { id: "works", label: "閲覧権限" },
+          { id: "works", label: "制作物" },
           { id: "users", label: "ユーザー" },
           { id: "sns", label: "SNS アカウント" },
           { id: "audit", label: "監査ログ" },
@@ -72,6 +77,21 @@ function Admin() {
       />
       {tab === "works" ? (
         <section className="stack">
+          {me.canCreateWorks ? (
+            <div className="row admin-works__actions">
+              <M3eButton variant="filled" onClick={() => setImporting(true)}>
+                <M3eIcon slot="icon" name="upload_file" />
+                CSV で一括登録
+              </M3eButton>
+              <M3eButton variant="outlined" onClick={() => setCreating(true)}>
+                <M3eIcon slot="icon" name="note_add" />1 件ずつ登録
+              </M3eButton>
+              <M3eButton variant="text" onClick={downloadWorkCsvTemplate}>
+                <M3eIcon slot="icon" name="download" />
+                雛形を書き出す
+              </M3eButton>
+            </div>
+          ) : null}
           <p className="muted small">制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます</p>
           <DataTable
             label="制作物ごとの閲覧権限"
@@ -219,6 +239,16 @@ function Admin() {
           />
         </section>
       )}
+      {me.canCreateWorks ? (
+        <>
+          <ImportWorksDialog
+            open={importing}
+            onClose={() => setImporting(false)}
+            existingLegacyIds={(works ?? []).flatMap((w) => (w.legacyId ? [w.legacyId] : []))}
+          />
+          <NewWorkDialog open={creating} onClose={() => setCreating(false)} />
+        </>
+      ) : null}
       <M3eDialog open={aclFor !== null} onClosed={() => setAclFor(null)} closeLabel="閉じる">
         <span slot="header">閲覧権限: {aclFor?.title}</span>
         <div className="dialog-body">{aclFor ? <AclPanel workId={aclFor.id} /> : null}</div>

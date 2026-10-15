@@ -71,7 +71,7 @@ export function toast(
 }
 
 /** 画面の下に固定された部品（下部ナビ・浮遊ツールバー・FAB）。スナックバーはこの上に出す */
-const BOTTOM_OBSTACLES = ".shell__bar, .ws__toolbar, .preview-fab";
+const BOTTOM_OBSTACLES = ".shell__bar, .ws__toolbar, .preview-fab, .submit-fab";
 
 /**
  * スナックバーの位置を、開く直前に画面の下の部品の上（16px 空ける）に合わせる（M3 Snackbar: FAB・下部の部品と重ねない）。

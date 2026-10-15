@@ -29,6 +29,7 @@ const messages: Record<string, string> = {
   social_profile_invalid:
     "SNS アカウントの内容を確かめてください。ユーザー名は各サービスの規則に合わせ、アイコンは画像を選びます。",
   social_profile_limit: "SNS アカウントはこれ以上登録できません",
+  work_import_invalid: "取り込めない行があります。確認の表で理由を見て、CSV を直してください。",
   social_profile_in_use:
     "この SNS アカウントは制作物に割り当てられているため削除できません。先に割り当てを外してください。",
   mention_too_many: "一度にメンションできるのは 10 人までです",
