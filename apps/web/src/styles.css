@@ -1041,6 +1041,16 @@ m3e-dialog [slot="actions"] {
   white-space: nowrap;
 }
 
+/*
+ * M3 リストの行は置かれた面の色に溶け込む（M3E の既定は surface 固定なので、ダイアログ（surface-container-high）や
+ * ボトムシート・引き出しの上では白い箱が並んで見えた。2026-10-15 利用者指摘「色、なんかおかしくね？」）。
+ * 地の色は透明にし、選択中などの色は個別のクラスで付ける。リストに付けて中の行（list-action・option の shadow の中も）へ継ぐ。
+ * :where で詳細度 0（M3E の segmented リストは使っていない）
+ */
+:where(m3e-list, m3e-action-list, m3e-selection-list) {
+  --m3e-list-item-container-color: transparent;
+}
+
 /* ---------- M3 リスト（校正待ち・制作物・版履歴）: 1 件 2 行、押せるのは行全体 */
 /* 行の内側余白（16）の分だけ外へ出し、行の文字の左端を見出し・チップと同じルーラーに揃える（M3 Grids › Rulers。§35 L-05） */
 .list {

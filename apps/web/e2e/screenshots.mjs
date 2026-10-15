@@ -1071,6 +1071,14 @@ async function v2Scenes() {
   await page.waitForSelector(".post-edit");
   // アカウントは制作物に割り当てた SNS アカウント（本体の設定）から写る。編集欄は本文と画像だけ
   await page.waitForSelector(".sp-figure");
+  // プレビューは先に仮の名前（username）で出て、アカウントの設定を読み終えると差し替わる
+  await page
+    .waitForFunction(
+      () => document.querySelector(".post-preview")?.textContent?.includes("mayfes_official"),
+      null,
+      { timeout: 5000 },
+    )
+    .catch(() => {});
   expectTrue(
     (await page.locator(".post-preview").innerText()).includes("mayfes_official"),
     "割り当てた SNS アカウントがプレビューに出ない",
