@@ -7,6 +7,7 @@ import {
   DomainError,
   isAccepting,
   isAllowed,
+  isBeforeDeadline,
   type Principal,
   type Severity,
   type ThreadKind,
@@ -160,7 +161,7 @@ export async function replyToThread(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   const now = ctx.clock.now();
-  const open = isAccepting(revision) && now < revision.deadlineAt;
+  const open = isAccepting(revision) && isBeforeDeadline(now, revision.deadlineAt);
   if (!open && !isAllowed("comment.decide", { work, grants, principal })) {
     throw new DomainError("comment_reply_not_allowed", { threadId: thread.id });
   }

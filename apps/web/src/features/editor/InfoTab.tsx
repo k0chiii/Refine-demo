@@ -6,7 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
 import { EditWorkDialog } from "@/features/work/EditWorkDialog";
-import { formatJstDate, formatJstShort } from "@/lib/format";
+import { formatDeadline, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
   checkStateLabel,
@@ -181,7 +181,7 @@ export function InfoTab({
           </tr>
           <tr>
             <th scope="row">納期</th>
-            <td>{formatJstDate(w.deadlineAt)}</td>
+            <td>{w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)}</td>
           </tr>
           {revision?.revision.focusNotes ? (
             <tr>

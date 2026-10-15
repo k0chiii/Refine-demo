@@ -1,3 +1,4 @@
+import { endOfJstDay } from "@mf100/domain";
 import { internalMutation } from "./_generated/server";
 
 /**
@@ -146,7 +147,8 @@ export const demo = internalMutation({
         managerIds: [ids["mock-nogiku-manager"]!],
         creatorIds: [ids["mock-nogiku-creator"]!],
         approverId: ids["mock-nogiku-approver"]!,
-        deadlineAt: now + 30 * day,
+        // 納期は日付だけ（その日の終わり＝翌日 0:00 JST）。30 日後の 23:59 まで
+        deadlineAt: endOfJstDay(now + 30 * day),
         lifecycle: "active",
         confidentiality: "normal",
         version: 1,

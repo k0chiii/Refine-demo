@@ -2,6 +2,7 @@ import { documentView } from "@/features/writing/documentView";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
+  isBeforeDeadline,
   textRangeAnchor,
   toViewportRect,
   type Anchor,
@@ -509,7 +510,9 @@ export function Editor({
   const overlayThreads: OverlayThread[] = threads
     .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
     .filter((t) => t.anchor);
-  const open = revision ? revision.reviewState === "open" && now < revision.deadlineAt : false;
+  const open = revision
+    ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
+    : false;
   const canComment = can?.comment ?? false;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
   const selecting = canComment;

@@ -24,14 +24,7 @@ export function formatJstShort(ms: number): string {
   return fmtShort.format(new Date(ms));
 }
 
-/** datetime-local の値（JST として解釈）→ epoch ms。ブラウザのタイムゾーンに依存しない。 */
-export function jstLocalToEpoch(value: string): number | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
-  if (!m) return null;
-  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, Number(m[5]));
-}
-
-/** 日付だけの表示（締切・納期は日付単位。時刻は常に 0:00 JST） */
+/** 日付だけの表示（「最後の動き」など、締切ではない日付。締切・納期は formatDeadline を使う） */
 const fmtDate = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
   year: "numeric",
@@ -42,22 +35,19 @@ export function formatJstDate(ms: number | null | undefined): string {
   return ms === null || ms === undefined ? "—" : fmtDate.format(new Date(ms));
 }
 
-/** YYYY-MM-DD（JST の暦日）→ その日の 0:00 JST の epoch ms */
-export function jstDateToEpoch(value: string): number | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!m) return null;
-  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), -9, 0);
-}
-
-/** epoch ms → その JST 暦日の 0:00 JST */
-export function startOfJstDay(ms: number): number {
-  return jstDateToEpoch(epochToJstLocal(ms)) ?? ms;
-}
-
-export function epochToJstLocal(ms: number): string {
-  const d = new Date(ms + 9 * 3_600_000);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}T${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-}
+/**
+ * 締切・納期の意味と表示は domain が正本（日付だけ＝その日の終わり。表示は「11/14（土）23:59」）。
+ * 通知の文言（application）と画面で同じ書式にするため、実装は 1 か所にしてここから再 export する。
+ */
+export {
+  deadlineFromJst,
+  deadlineToJst,
+  endOfJstDay,
+  formatDeadline,
+  formatDeadlineUntil,
+  startOfJstDay,
+  toJstDate,
+} from "@mf100/domain";
 
 export function remaining(deadlineAt: number, now = Date.now()): string {
   const diff = deadlineAt - now;

@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
-import { formatJstDate } from "@/lib/format";
+import { formatDeadlineUntil } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eActionList, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eListAction } from "@/ui/m3e";
@@ -74,7 +74,9 @@ function Works() {
               </span>
               <span slot="supporting-text">
                 {w.latestRevisionLabel ?? "未提出"}
-                {w.acceptingDeadlineAt ? `・締切 ${formatJstDate(w.acceptingDeadlineAt)}` : ""}
+                {w.acceptingDeadlineAt
+                  ? `・締切 ${formatDeadlineUntil(w.acceptingDeadlineAt)}`
+                  : ""}
               </span>
               {w.lifecycle !== "active" ? (
                 <span slot="trailing" className="meta">

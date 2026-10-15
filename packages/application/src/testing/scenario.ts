@@ -42,6 +42,8 @@ export async function submitRevision(
   opts: {
     kind?: "rough" | "standard";
     deadlineInHours?: number;
+    /** 締切の時刻を直接指定する（deadlineInHours より優先） */
+    deadlineAt?: number;
     files?: number;
     requestId?: string;
     principal?: Principal;
@@ -53,7 +55,7 @@ export async function submitRevision(
     workId,
     kind: opts.kind ?? "standard",
     reviewType: "general",
-    deadlineAt: ctx.clock.now() + (opts.deadlineInHours ?? 24) * HOUR,
+    deadlineAt: opts.deadlineAt ?? ctx.clock.now() + (opts.deadlineInHours ?? 24) * HOUR,
     changeSummary: "初稿",
     focusNotes: "表紙の配色",
     items: Array.from({ length: files }, (_, i) => ({
