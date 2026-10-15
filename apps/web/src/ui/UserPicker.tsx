@@ -1,3 +1,4 @@
+import { QuestionHead } from "./Field";
 import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
 import { useId, useState } from "react";
@@ -19,7 +20,7 @@ export interface UserPickerProps {
 
 /**
  * ユーザー選択 UI（v1）。一度でもログインした Nogiku ユーザーを名前・メールで検索して選ぶ。
- * 外観: 選択済みは M3E input chip（removable）、検索は M3E form-field（outlined）内の native input、
+ * 外観: 質問文（Google フォーム風）の下に、選択済みは M3E input chip（removable）、検索は下線だけの M3E form-field 内の native input、
  * 候補は listbox（キーボード: Enter で先頭候補、Esc で閉じる）。
  * Nogiku Access のユーザー一覧連携後も `users.search` の差し替えだけで済むようにここに閉じる。
  */
@@ -51,7 +52,15 @@ export function UserPicker({
 
   // <label> で全体を包まない: label 内の最初の labelable 要素（チップの「外す」ボタン）にクリックが転送されるため。
   return (
-    <div className="picker" role="group" aria-labelledby={`${listId}-label`}>
+    <div className="picker q" role="group" aria-labelledby={`${listId}-label`}>
+      <QuestionHead
+        htmlFor={inputId}
+        labelId={`${listId}-label`}
+        label={label}
+        required={required}
+        hint={hint}
+        hintId={`${listId}-hint`}
+      />
       {value.length > 0 ? (
         <div className="picker__chips" role="grid" aria-label={`${label}の選択済み`}>
           {value.map((id) => {
@@ -71,16 +80,7 @@ export function UserPicker({
       ) : null}
       {canAdd ? (
         <div className="picker__search">
-          <M3eFormField
-            variant="outlined"
-            floatLabel="always"
-            className="field"
-            {...(!hint ? { hideSubscript: "always" } : {})}
-          >
-            <label slot="label" htmlFor={inputId} id={`${listId}-label`}>
-              {label}
-              {required ? <span className="field__required"> *</span> : null}
-            </label>
+          <M3eFormField variant="filled" className="field q__field" hideSubscript="always">
             <M3eIcon slot="prefix" name="person_search" />
             <input
               id={inputId}
@@ -93,7 +93,6 @@ export function UserPicker({
                 setOpen(true);
               }}
             />
-            {hint ? <span slot="hint">{hint}</span> : null}
           </M3eFormField>
           {/* 候補は M3E autocomplete（キーボード操作・読み上げは M3E 側）。絞り込みはサーバーの検索に任せる */}
           <M3eAutocomplete

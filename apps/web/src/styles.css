@@ -388,15 +388,21 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- カード（m3e-card） */
+/*
+ * カード（Google フォームのカードに合わせる。利用者指示 2026-10-15）: 白地・1px の枠・角 8px・内側の余白 24px。
+ * 実測（docs.google.com/forms）: 背景 #fff、枠 1px #dadada、角 8px、padding 24px、カードの間 12px
+ */
 .card {
-  --m3e-card-shape: var(--mf-shape-md);
+  --m3e-card-shape: 8px;
+  --m3e-card-padding: 24px;
+  --m3e-outlined-card-container-color: var(--mf-surface-container-lowest);
+  --m3e-outlined-card-outline-color: var(--mf-outline-variant);
   display: block;
 }
 .card__header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 0 0;
 }
 .card__title {
   margin: 0;
@@ -406,9 +412,30 @@ m3e-dialog [slot="actions"] {
   display: grid;
   gap: 8px;
 }
-/* 見出しの直後に outlined のフィールドが来ると、浮いたラベル（枠の上に 8px はみ出す）が見出しに重なるので空ける */
 .card__header + .card__content {
   padding-top: 8px;
+}
+/* フォームの画面（Google フォーム風）: カードを 12px 間隔で縦に並べ、先頭のカードの上にテーマ色の帯（10px） */
+.gform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gform > .card:first-child {
+  position: relative;
+}
+.gform > .card:first-child::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 10px;
+  border-radius: 8px 8px 0 0;
+  background: var(--mf-primary);
+  z-index: 2;
+  pointer-events: none;
+}
+.gform .card__content {
+  gap: 24px;
 }
 .card dl {
   margin: 0;
@@ -496,6 +523,35 @@ m3e-dialog [slot="actions"] {
 }
 .field__required {
   color: var(--mf-error);
+}
+/*
+ * 質問（Google フォーム風。利用者指示 2026-10-15）: 質問文を上に普通の文字で、説明をその下に、入力は下線だけ。
+ * 実測（docs.google.com/forms の回答画面）: 質問文 16/24・#1f1f1f、説明 14/20 の補足色、回答欄は下線 1px、選択中は 2px のテーマ色。
+ * 入力の文字は iOS の自動拡大を避けるため 16px のまま（Google フォームは 14px）
+ */
+.q {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.q__title {
+  font: var(--mf-type-body-large);
+  color: var(--mf-on-surface);
+}
+.q__help {
+  margin: 2px 0 0;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+}
+/* M3E の filled を、背景なし・角なしにして下線（active indicator）だけを残す */
+.q__field {
+  /* filled は浮くラベルの分だけ上を空けているので、質問文との間を少し詰める */
+  margin-top: -6px;
+  --m3e-form-field-disabled-container-opacity: 0;
+  --m3e-form-field-container-color: transparent;
+  --m3e-form-field-hover-container-color: transparent;
+  --m3e-form-field-hover-container-opacity: 0;
+  --m3e-form-field-container-shape: 0;
 }
 .field__hint,
 .field__label {
@@ -1449,6 +1505,7 @@ m3e-dialog [slot="actions"] {
 .comments__header {
   padding: 8px 12px 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }

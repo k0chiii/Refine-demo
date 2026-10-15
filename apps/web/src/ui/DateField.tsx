@@ -1,3 +1,4 @@
+import { QuestionHead } from "./Field";
 import { useId } from "react";
 import { epochToJstLocal, jstDateToEpoch } from "@/lib/format";
 import {
@@ -46,36 +47,40 @@ export function DateField({
     onChange(fromLocalDate((e.target as unknown as { value: Date | null }).value));
   return (
     <>
-      <M3eFormField
-        variant="outlined"
-        floatLabel="always"
-        className="field"
-        {...(!hint ? { hideSubscript: "always" } : {})}
-        // 必須の印は自前の赤い「*」だけ（M3E の印と二重にしない）
-        hideRequiredMarker
-      >
-        <label slot="label" htmlFor={inputId} id={`${id}-label`}>
-          {label}
-          {required ? <span className="field__required"> *</span> : null}
-        </label>
-        <M3eDateInput
-          id={inputId}
-          type="date"
-          aria-labelledby={`${id}-label`}
-          value={toLocalDate(value)}
-          {...(required ? { required: true } : {})}
-          {...(min !== undefined ? { minDate: toLocalDate(min) } : {})}
-          yearLabel="年"
-          monthLabel="月"
-          dayLabel="日"
-          onChange={emit}
+      <div className="q">
+        <QuestionHead
+          htmlFor={inputId}
+          labelId={`${id}-label`}
+          label={label}
+          required={required}
+          hint={hint}
+          hintId={`${id}-hint`}
         />
-        <M3eIconButton slot="suffix" aria-label="カレンダーから選ぶ">
-          <M3eIcon name="calendar_today" />
-          <M3eDatepickerToggle htmlFor={pickerId} />
-        </M3eIconButton>
-        {hint ? <span slot="hint">{hint}</span> : null}
-      </M3eFormField>
+        <M3eFormField
+          variant="filled"
+          className="field q__field"
+          hideSubscript="always"
+          // 必須の印は質問文の赤い「*」だけ（M3E の印と二重にしない）
+          hideRequiredMarker
+        >
+          <M3eDateInput
+            id={inputId}
+            type="date"
+            aria-labelledby={`${id}-label`}
+            value={toLocalDate(value)}
+            {...(required ? { required: true } : {})}
+            {...(min !== undefined ? { minDate: toLocalDate(min) } : {})}
+            yearLabel="年"
+            monthLabel="月"
+            dayLabel="日"
+            onChange={emit}
+          />
+          <M3eIconButton slot="suffix" aria-label="カレンダーから選ぶ">
+            <M3eIcon name="calendar_today" />
+            <M3eDatepickerToggle htmlFor={pickerId} />
+          </M3eIconButton>
+        </M3eFormField>
+      </div>
       <M3eDatepicker
         id={pickerId}
         htmlFor={inputId}

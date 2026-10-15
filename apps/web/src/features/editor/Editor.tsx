@@ -41,7 +41,6 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
-import { safeAreaBottom } from "@/lib/safeArea";
 import { usePinchZoom } from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -245,6 +244,8 @@ export function Editor({
   const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
   const sheetRef = useRef<HTMLElement | null>(null);
+  // 狭い画面の引き出し（ボトムシート）が開いているか。ツールバーのボタンの選択状態に使う
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const setLayout = (l: Layout) => {
     setLayoutPref(l);
@@ -258,6 +259,21 @@ export function Editor({
     if (drawer === null) setPaneW(null);
     else setLastDrawer(drawer);
   }, [drawer]);
+  /** 狭い画面: 引き出しのシートを開く（同じものが開いていれば閉じる） */
+  const toggleSheet = (d: Drawer) => {
+    const el = sheetRef.current as
+      | (HTMLElement & { show?: (detent?: number) => void; hide?: () => void })
+      | null;
+    if (!el) return;
+    if (sheetOpen && drawer === d) {
+      el.hide?.();
+      setSheetOpen(false);
+      return;
+    }
+    setDrawer(d);
+    if (!sheetOpen) el.show?.(0);
+    setSheetOpen(true);
+  };
   const openDrawer = (d: Drawer) => {
     if (drawer === d) setDrawer(null);
     else {
@@ -305,15 +321,21 @@ export function Editor({
           null,
       );
   }, [data, artifactId]);
-  // ボトムシート（狭い画面）: detents は属性でしか渡せないので ref で設定する
+  // ボトムシート（狭い画面）: 普段は閉じて紙面を画面いっぱいに使い、ツールバーの「コメント・版・情報」で開く
+  // （利用者指示 2026-10-15。以前は下にタブだけの覗き見を常に出していた）。半分 → 全部、下に払うと閉じる。
+  // detents は属性でしか渡せないので ref で設定する
   useEffect(() => {
-    const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
+    const el = sheetRef.current;
     if (!el) return;
-    // 覗き見（タブだけ 64px ＝ 8 ＋ 48 ＋ 8）→ 半分 → 全部。最初は覗き見にして紙面を見せる。
-    // iPhone のホームインジケーターの帯（セーフエリア）の分だけ覗き見を高くしないと、タブがその下に潜る
-    el.setAttribute("detents", `${64 + safeAreaBottom()}px half full`);
-    const id = requestAnimationFrame(() => el.show?.(0));
-    return () => cancelAnimationFrame(id);
+    el.setAttribute("detents", "half full");
+    const onOpened = () => setSheetOpen(true);
+    const onClosed = () => setSheetOpen(false);
+    el.addEventListener("opened", onOpened);
+    el.addEventListener("closed", onClosed);
+    return () => {
+      el.removeEventListener("opened", onOpened);
+      el.removeEventListener("closed", onClosed);
+    };
   }, [mobile, data === undefined]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -636,7 +658,10 @@ export function Editor({
     activeThreadId,
     onSelectThread: (id: string) => {
       const t = threads.find((x) => x.id === id);
-      if (t) jumpTo(t);
+      if (!t) return;
+      jumpTo(t);
+      // 狭い画面: 紙面のピン・範囲を押したら、そのコメントが見えるようにシートを開く
+      if (mobile && !(sheetOpen && drawer === "comments")) toggleSheet("comments");
     },
     selecting,
   };
@@ -876,6 +901,20 @@ export function Editor({
     <div className="comments">
       <AutoProofreadStatus auto={auto} />
       <div className="comments__header">
+        {/* 狭い画面: 「位置なしでコメント」はツールバーからこちらへ（ツールバーは引き出しのボタンに場所を譲る） */}
+        {mobile && canComment ? (
+          <M3eButton
+            variant="tonal"
+            className="comments__free"
+            onClick={() => {
+              setDraft({ free: true });
+              setActiveThreadId(null);
+            }}
+          >
+            <M3eIcon slot="icon" name="add_comment" />
+            位置なしでコメント
+          </M3eButton>
+        ) : null}
         <M3eFilterChipSet aria-label="コメントの絞り込み">
           {botCount > 0 ? (
             <>
@@ -1118,9 +1157,12 @@ export function Editor({
                           <M3eIcon name="chevron_left" />
                         </M3eIconButton>
                       )}
-                      <span className="ws__toolbar-text">
-                        {pageCount ? `${page} / ${pageCount}` : "…"}
-                      </span>
+                      {/* 狭い画面はページの位置をスクロールで見るので省き、引き出しのボタンに場所を譲る */}
+                      {mobile ? null : (
+                        <span className="ws__toolbar-text">
+                          {pageCount ? `${page} / ${pageCount}` : "…"}
+                        </span>
+                      )}
                       {compact ? null : (
                         <M3eIconButton
                           aria-label="次のページ"
@@ -1134,9 +1176,12 @@ export function Editor({
                   ) : null}
                   {isPdf || isImage || artifact.type === "document" ? (
                     <>
-                      <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
-                        <M3eIcon name="zoom_out" />
-                      </M3eIconButton>
+                      {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる） */}
+                      {mobile ? null : (
+                        <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
+                          <M3eIcon name="zoom_out" />
+                        </M3eIconButton>
+                      )}
                       {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す */}
                       <button
                         type="button"
@@ -1147,12 +1192,14 @@ export function Editor({
                       >
                         {zoom ? `${Math.round(zoom * 100)}%` : "…"}
                       </button>
-                      <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
-                        <M3eIcon name="zoom_in" />
-                      </M3eIconButton>
+                      {mobile ? null : (
+                        <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
+                          <M3eIcon name="zoom_in" />
+                        </M3eIconButton>
+                      )}
                     </>
                   ) : null}
-                  {canComment ? (
+                  {canComment && !mobile ? (
                     <M3eIconButton
                       aria-label="位置なしでコメント"
                       onClick={() => {
@@ -1218,6 +1265,31 @@ export function Editor({
                     >
                       <M3eIcon name="compare" className="icon--filled" />
                     </M3eIconButton>
+                  ) : null}
+                  {mobile ? (
+                    <>
+                      <span className="ws__toolbar-sep" />
+                      {(
+                        [
+                          ["comments", `コメント（${openCount}）`, "comment"],
+                          ["versions", "版", "history"],
+                          ["info", "情報", "info"],
+                        ] as const
+                      ).map(([d, label, icon]) => {
+                        const on = sheetOpen && drawer === d;
+                        return (
+                          <M3eIconButton
+                            key={d}
+                            aria-label={label}
+                            toggle
+                            selected={on}
+                            onClick={() => toggleSheet(d)}
+                          >
+                            <M3eIcon name={icon} className={on ? "icon--filled" : ""} />
+                          </M3eIconButton>
+                        );
+                      })}
+                    </>
                   ) : null}
                   {data && data.artifacts.length > 1 ? (
                     <M3eIconButton
@@ -1327,18 +1399,12 @@ export function Editor({
           <M3eBottomSheet
             ref={sheetRef as never}
             handle
+            hideable
             handleLabel="引き出し"
             className="ws__sheet"
           >
             <div className="drawer drawer--sheet">
-              {drawerTabs(sheetTab, (d) => {
-                setDrawer(d);
-                // 覗き見のままタブを押したら、中身が見える高さ（半分）まで上げる
-                const el = sheetRef.current as
-                  | (HTMLElement & { detent?: number; show?: (detent?: number) => void })
-                  | null;
-                if (el && (el.detent ?? 0) === 0) el.show?.(1);
-              })}
+              {drawerTabs(sheetTab, (d) => setDrawer(d))}
               <div className="drawer__body">{drawerBody(sheetTab)}</div>
             </div>
           </M3eBottomSheet>

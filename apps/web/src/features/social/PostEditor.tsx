@@ -309,7 +309,7 @@ function PostSurface({
               : "まだ保存していません";
 
   const editPane = (
-    <div className="post-edit stack">
+    <div className="post-edit gform">
       <Card title="投稿先">
         <div className="stack">
           {profile ? (

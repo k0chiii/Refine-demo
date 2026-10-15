@@ -568,7 +568,7 @@ async function main() {
   await go(`${BASE}/works`);
   await page.waitForSelector("m3e-list-action");
   await shot("33-mobile-works");
-  // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
+  // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は画面いっぱいで、引き出し（コメント・版・情報）はツールバーから開くボトムシート
   await go(revision2Url);
   await pdfReady();
   await page.waitForSelector("m3e-bottom-sheet.ws__sheet"); // 通知のシート（非表示）と区別する
@@ -587,10 +587,17 @@ async function main() {
   await go(revision2Url);
   await pdfReady();
   await page.waitForTimeout(600);
-  // 34 シートを半分まで上げる（タブを押しても上がる）
-  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").show(1));
+  // 34 引き出しは普段は閉じていて、ツールバーの「コメント」で半分まで開く
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
   await page.waitForTimeout(700);
+  expectTrue(
+    await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").open),
+    "ツールバーのコメントでシートが開かない",
+  );
   await shot("34-mobile-sheet-half");
+  // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await page.waitForTimeout(500);
   await page.setViewportSize({ width: 1440, height: 900 });
 
   // ---------- 文章エディタ（Google ドキュメント相当。docs/EDITOR_RESEARCH.md）

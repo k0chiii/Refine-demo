@@ -12,13 +12,47 @@ import {
 import { M3eCheckbox, M3eFormField, M3eOption, M3eSelect } from "./m3e";
 
 /**
- * フォーム部品。外観は M3E の form-field（outlined）に任せ、入力そのものは native の
- * input / textarea を使う（日本語 IME・キーボード操作・ブラウザ標準の検証を優先: §4 デザイン）。
+ * フォーム部品。入力そのものは native の input / textarea を使う（日本語 IME・キーボード操作・ブラウザ標準の検証を優先: §4 デザイン）。
  * 選択は m3e-select + m3e-option、真偽は m3e-checkbox。
  *
- * `Field` が label / hint を slot に置き、`useId` で生成した id を子の入力に渡す（label[for] と対応）。
+ * 見た目は Google フォームの「質問」に合わせる（利用者指示 2026-10-15「入力欄や editor in card が多く見える」）:
+ * 質問文（ラベル）を上に普通の文字で置き、説明（hint）をその下に、入力は枠のない下線だけ（M3E form-field の filled を
+ * 背景なし・角なしにしたもの）。枠の中に枠が並ばないようにする。
+ *
+ * `Field` が `useId` で生成した id を子の入力に渡す（label[for] と対応。説明は aria-describedby）。
  */
-const FieldContext = createContext<{ id: string; labelId: string } | null>(null);
+const FieldContext = createContext<{ id: string; labelId: string; hintId?: string } | null>(null);
+
+/** 質問文と説明（Field・DateField・UserPicker で共通） */
+export function QuestionHead({
+  htmlFor,
+  labelId,
+  label,
+  required,
+  hint,
+  hintId,
+}: {
+  htmlFor: string;
+  labelId: string;
+  label: ReactNode;
+  required?: boolean | undefined;
+  hint?: string | undefined;
+  hintId?: string | undefined;
+}) {
+  return (
+    <>
+      <label className="q__title" htmlFor={htmlFor} id={labelId}>
+        {label}
+        {required ? <span className="field__required"> *</span> : null}
+      </label>
+      {hint ? (
+        <p className="q__help" id={hintId}>
+          {hint}
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 export function Field({
   label,
@@ -38,25 +72,29 @@ export function Field({
 }) {
   const id = useId();
   const labelId = `${id}-label`;
+  const hintId = `${id}-hint`;
   return (
-    <FieldContext.Provider value={{ id, labelId }}>
-      <M3eFormField
-        variant="outlined"
-        floatLabel="always"
-        className={`field ${className ?? ""}`}
-        {...(error ? { error: true } : {})}
-        {...(required === undefined && !hint && !error ? { hideSubscript: "always" } : {})}
-        // 必須の印は自前の赤い「*」だけにする（入力に required があると M3E も黒い「*」を足し、二重になっていた）
-        hideRequiredMarker
-      >
-        <label slot="label" htmlFor={id} id={labelId}>
-          {label}
-          {required ? <span className="field__required"> *</span> : null}
-        </label>
-        {children}
-        {hint ? <span slot="hint">{hint}</span> : null}
-        {error ? <span slot="error">{error}</span> : null}
-      </M3eFormField>
+    <FieldContext.Provider value={{ id, labelId, ...(hint ? { hintId } : {}) }}>
+      <div className={`q ${className ?? ""}`}>
+        <QuestionHead
+          htmlFor={id}
+          labelId={labelId}
+          label={label}
+          required={required}
+          hint={hint}
+          hintId={hintId}
+        />
+        <M3eFormField
+          variant="filled"
+          className="field q__field"
+          {...(error ? { error: true } : { hideSubscript: "always" })}
+          // 必須の印は質問文の赤い「*」だけ（M3E の印と二重にしない）
+          hideRequiredMarker
+        >
+          {children}
+          {error ? <span slot="error">{error}</span> : null}
+        </M3eFormField>
+      </div>
     </FieldContext.Provider>
   );
 }
@@ -68,17 +106,30 @@ function useFieldId(explicit: string | undefined) {
 function useFieldLabelId() {
   return useContext(FieldContext)?.labelId;
 }
+function useFieldHintId() {
+  return useContext(FieldContext)?.hintId;
+}
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   const id = useFieldId(props.id);
-  return <input {...props} {...(id ? { id } : {})} className={`input ${props.className ?? ""}`} />;
+  const hintId = useFieldHintId();
+  return (
+    <input
+      {...(hintId ? { "aria-describedby": hintId } : {})}
+      {...props}
+      {...(id ? { id } : {})}
+      className={`input ${props.className ?? ""}`}
+    />
+  );
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const id = useFieldId(props.id);
+  const hintId = useFieldHintId();
   return (
     <textarea
       rows={3}
+      {...(hintId ? { "aria-describedby": hintId } : {})}
       {...props}
       {...(id ? { id } : {})}
       className={`input input--area ${props.className ?? ""}`}
