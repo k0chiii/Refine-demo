@@ -33,7 +33,12 @@ export function NewThreadDialog({
   }, [open, fixedWorkId]);
 
   return (
-    <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
+    <M3eDialog
+      open={open}
+      onClosed={onClose}
+      closeLabel="閉じる"
+      className="dialog--full dialog--narrow"
+    >
       <span slot="header">スレッドを立てる</span>
       <div className="dialog-body">
         {fixedWorkId ? null : (
@@ -61,7 +66,7 @@ export function NewThreadDialog({
             key={workId}
             workId={workId}
             label="最初の投稿"
-            placeholder="何のために誰に向けて作っているか、この案の意図、迷っている点など（「テンプレ」から書き出しを入れられます）"
+            placeholder="何のために誰に向けて作っているか、この案の意図、迷っている点など（「テンプレート」から書き出しを入れられます）"
             submitLabel="スレッドを立てる"
             extraValid={title.trim() !== ""}
             onSubmit={async (r) => {

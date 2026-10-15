@@ -95,11 +95,18 @@ export function mapPosition(
   if (other === null) return null;
   const [lp, rp] = from === "left" ? [pos.page, other] : [other, pos.page];
   const anchors = anchorsFor?.(lp, rp);
-  const rel = anchors && anchors.length > 2 ? interpolate(anchors, pos.rel, from) : pos.rel;
+  // 焦点がページの外（ページの間の余白・最初のページの上）にあるときは、はみ出した分をそのまま写す。
+  // 0..1 に丸めるとページの端に寄り、余白の分（16px）だけ左右の視点がずれる（版比較の同期）
+  const inside = pos.rel >= 0 && pos.rel <= 1;
+  const rel = !inside
+    ? pos.rel
+    : anchors && anchors.length > 2
+      ? clamp01(interpolate(anchors, pos.rel, from))
+      : pos.rel;
   // 横はページ内の割合をそのまま写す（対応ページは同じ版面の前提。大きさが違っても同じ箇所を指す）
   return {
     page: other,
-    rel: clamp01(rel),
+    rel,
     ...(pos.relX !== undefined ? { relX: clamp01(pos.relX) } : {}),
   };
 }

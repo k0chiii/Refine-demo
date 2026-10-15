@@ -56,6 +56,7 @@ import { useMedia, useWindowClass } from "@/lib/useMedia";
 import { usePinchZoom } from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
+import { FeedbackPane } from "@/features/feedback/FeedbackPane";
 import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Field, TextArea } from "@/ui/Field";
@@ -185,6 +186,9 @@ export function Editor({
   const assignThread = useMutation(api.comments.assign);
   const editThread = useMutation(api.comments.edit);
   const carryForward = useMutation(api.comments.carryForward);
+  const createFeedback = useMutation(api.feedback.createThread);
+  // 相談（FB）: 解決しない話し合い。この制作物の相談を引き出し「FB」と紙面の印に使う
+  const fbThreads = useQuery(api.feedback.listThreads, { workId });
 
   // M3 の compact/medium（839 以下）: 補助ペインは置けないので、引き出しはツールバーから開くボトムシート（普段は閉じて紙面を全面に）
   const mobile = useMedia("(max-width: 839px)");
@@ -215,6 +219,10 @@ export function Editor({
     return () => ro.disconnect();
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  /** 引き出し「FB」で開いている相談 */
+  const [fbOpenId, setFbOpenId] = useState<string | null>(search.fb ?? null);
+  /** 紙面の範囲から書くのはコメント（解決する指摘）か相談（FB） */
+  const [composeKind, setComposeKind] = useState<"comment" | "feedback">("comment");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [proposeFrom, setProposeFrom] = useState<{
     quote: string;
@@ -291,6 +299,10 @@ export function Editor({
   useEffect(() => {
     if (search.tab) setDrawer(search.tab);
   }, [search.tab]);
+  // フィードバックの画面・通知から来たとき: 引き出し「FB」でその相談を開く
+  useEffect(() => {
+    if (search.fb) setFbOpenId(search.fb);
+  }, [search.fb]);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -434,6 +446,19 @@ export function Editor({
       else if (artifact.type === "document" && draft.range && text?.artifactId === artifact.id)
         anchor = textRangeAnchor(artifact.id, text.body, draft.range.start, draft.range.end);
     }
+    if (draftKind === "feedback") {
+      // 相談（FB）: 解決しない話し合いとして、この版の場所に立てる。立てたら引き出し「FB」でそのやり取りを開く
+      const id = await createFeedback({
+        workId,
+        revisionId,
+        ...(anchor ? { anchor } : {}),
+        body,
+        mentions: activeMentions(body, mentions, mentionCandidates ?? []),
+      });
+      resetCompose();
+      openFeedback(id);
+      return;
+    }
     // 投稿者は分類しない。内部では「修正提案・重要」で保存し、未解決が残れば理由なしの校了を拒否する（安全側）
     await post({
       revisionId: revisionId as Id<"revisions">,
@@ -519,15 +544,35 @@ export function Editor({
   const resolvedCount = allThreads.filter(isClosed).length;
   const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
   const openCount = allThreads.length - resolvedCount;
-  const overlayThreads: OverlayThread[] = threads
-    .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
-    .filter((t) => t.anchor);
+  // 表示中の版の紙面にある相談（立てた順に 1, 2, …。コメントの番号とは別に数える）
+  const fbPlaced = (fbThreads ?? [])
+    .filter((t) => t.anchor && t.revision?.id === revisionId)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  const fbIndex = new Map(fbPlaced.map((t, i) => [t.id, i + 1] as const));
+  const fbUnread = (fbThreads ?? []).filter((t) => t.unread).length;
+  const overlayThreads: OverlayThread[] = [
+    ...threads
+      .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
+      .filter((t) => t.anchor),
+    ...fbPlaced.map((t) => ({
+      id: t.id,
+      anchor: t.anchor as Anchor,
+      severity: "",
+      index: fbIndex.get(t.id)!,
+      kind: "feedback" as const,
+    })),
+  ];
   const open = revision
     ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
     : false;
   const canComment = can?.comment ?? false;
+  // 相談（FB）は解決しない話し合いなので、受付が終わった版・校了した版の上でも範囲を選んで立てられる
+  const canFeedback = revisionId !== null;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  const selecting = canComment;
+  const selecting = canComment || canFeedback;
+  /** 範囲から書くもの: コメントできない版では相談だけ */
+  const draftKind: "comment" | "feedback" =
+    !canComment || (composeKind === "feedback" && !draft?.free) ? "feedback" : "comment";
   const busy =
     doPost.pending ||
     doDecide.pending ||
@@ -542,6 +587,36 @@ export function Editor({
     if (t.anchor) {
       if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor as Anchor);
+      if (p) setPage(p);
+    }
+  };
+  /** 引き出し「FB」でその相談を開く（狭い画面はシートを FB で開く） */
+  const openFeedback = (id: string | null) => {
+    setFbOpenId(id);
+    if (mobile) {
+      if (!(sheetOpen && drawer === "feedback")) toggleSheet("feedback");
+    } else setDrawer("feedback");
+  };
+  /** 相談の紙面の場所を表示する。別の版の相談ならその版を開く */
+  const showFeedbackPlace = (t: {
+    id: string;
+    anchor: Anchor | null;
+    revisionId: string | null;
+  }) => {
+    if (t.revisionId && t.revisionId !== revisionId) {
+      const rev = workData.revisions.find((r) => r.id === t.revisionId);
+      if (rev)
+        void navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId, n: String(versionOf(rev)) },
+          search: { tab: "feedback", fb: t.id },
+        });
+      return;
+    }
+    setActiveThreadId(t.id);
+    if (t.anchor) {
+      if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
+      const p = anchorPage(t.anchor);
       if (p) setPage(p);
     }
   };
@@ -568,7 +643,7 @@ export function Editor({
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || !canComment) return null;
+    if (!draft || !(canComment || canFeedback)) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     if (draft.free && vp) pos = { x: Math.max(8, vp.width - COMPOSE_W - 8), y: 8 };
@@ -597,6 +672,9 @@ export function Editor({
         onSubmit={() => void doPost.run()}
         onCancel={resetCompose}
         pending={doPost.pending}
+        kind={draftKind}
+        // 位置なしのコメント（ツールバーから）とコメントできない版では切り替えない
+        {...(canComment && !draft.free ? { onKind: setComposeKind } : {})}
         {...(draft.range && text && artifact && revisionId
           ? {
               extra: (
@@ -677,6 +755,12 @@ export function Editor({
     threads: overlayThreads,
     activeThreadId,
     onSelectThread: (id: string) => {
+      if (fbIndex.has(id)) {
+        // 紙面の相談の印: 引き出し「FB」でそのやり取りを開く
+        setActiveThreadId(id);
+        openFeedback(id);
+        return;
+      }
       const t = threads.find((x) => x.id === id);
       if (!t) return;
       jumpTo(t);
@@ -1012,10 +1096,12 @@ export function Editor({
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
     <PaneTabs
       label="引き出し"
+      stretch
       value={current ?? "comments"}
       onChange={onPick}
       items={[
         { id: "comments", label: "コメント", count: openCount },
+        { id: "feedback", label: "FB", count: fbUnread || null },
         { id: "versions", label: "版" },
         { id: "info", label: "情報" },
       ]}
@@ -1024,6 +1110,16 @@ export function Editor({
   const drawerBody = (d: Drawer | null) =>
     d === "comments" ? (
       commentsPanel
+    ) : d === "feedback" ? (
+      <FeedbackPane
+        workId={workId}
+        revisionId={revisionId}
+        threads={fbThreads}
+        indexOf={fbIndex}
+        openId={fbOpenId}
+        onOpen={setFbOpenId}
+        onShowPlace={showFeedbackPlace}
+      />
     ) : d === "versions" ? (
       <VersionsTab
         work={workData}
@@ -1065,6 +1161,7 @@ export function Editor({
   const sheetButtons = (
     [
       ["comments", `コメント（${openCount}）`, "comment"],
+      ["feedback", fbUnread ? `FB（未読 ${fbUnread}）` : "FB", "forum"],
       ["versions", "版", "history"],
       ["info", "情報", "info"],
     ] as const
@@ -1104,14 +1201,6 @@ export function Editor({
           </AppBarSlot>
         ) : null}
         <AppBarSlot slot="actions">
-          {/* この制作物のフィードバック（表現の議論のスレッド） */}
-          <M3eIconButton
-            aria-label="この制作物のフィードバック"
-            title="フィードバック"
-            onClick={() => void navigate({ to: "/feedback", search: { work: workId } })}
-          >
-            <M3eIcon name="forum" />
-          </M3eIconButton>
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
           {can?.completeReview ? (
@@ -1424,6 +1513,14 @@ export function Editor({
                   onClick={() => openDrawer("comments")}
                 >
                   <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
+                </M3eIconButton>
+                <M3eIconButton
+                  aria-label={fbUnread ? `FB（未読 ${fbUnread}）` : "FB"}
+                  toggle
+                  selected={drawer === "feedback"}
+                  onClick={() => openDrawer("feedback")}
+                >
+                  <M3eIcon name="forum" className={drawer === "feedback" ? "icon--filled" : ""} />
                 </M3eIconButton>
                 <M3eIconButton
                   aria-label="版"

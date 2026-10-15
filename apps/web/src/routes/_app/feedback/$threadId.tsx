@@ -1,105 +1,108 @@
 import { api } from "@mf100/convex/api";
+import type { Anchor } from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useRef } from "react";
-import { FeedbackComposer } from "@/features/feedback/FeedbackComposer";
-import { FeedbackPost } from "@/features/feedback/FeedbackPost";
+import { useQuery } from "convex/react";
+import { FeedbackConversation } from "@/features/feedback/FeedbackConversation";
+import { FeedbackListPane, validateFeedbackListSearch } from "@/features/feedback/FeedbackListPane";
+import { anchorPlace } from "@/features/feedback/FeedbackPane";
+import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
 
-export const Route = createFileRoute("/_app/feedback/$threadId")({ component: FeedbackThread });
+export const Route = createFileRoute("/_app/feedback/$threadId")({
+  validateSearch: validateFeedbackListSearch,
+  component: FeedbackThread,
+});
 
 /**
- * フィードバックのスレッド（Slack のスレッドに当たる）。投稿が古い順に並び、下の欄から返信する。
- * 開いたら既読にする（新しい投稿が来たときも）。制作物を見られる人には、制作物を開くボタン。
+ * フィードバック（FB）のスレッド（Slack のスレッドに当たる）。投稿が古い順に並び、下の欄から返信する。
+ * 広い画面は一覧・詳細（左に一覧を残す。M3 list-detail の例そのもの「メッセージと会話」）。
+ * 上に何の制作物の相談かを示すカードを置き、「制作物で見る」で制作物の中の同じ相談（版・場所）へ移る。
  */
 function FeedbackThread() {
   const { threadId } = Route.useParams();
+  const search = Route.useSearch();
   const navigate = useNavigate();
+  const wc = useWindowClass();
+  const wide = wc === "expanded" || wc === "large";
   const data = useQuery(api.feedback.getThread, { threadId: threadId });
-  const post = useMutation(api.feedback.post);
-  const markRead = useMutation(api.feedback.markRead);
-  const endRef = useRef<HTMLDivElement>(null);
-  const count = data?.posts.length ?? 0;
-  useEffect(() => {
-    if (!data) return;
-    void markRead({ threadId: threadId }).catch(() => undefined);
-  }, [threadId, count]);
-  // 新しい投稿が来たら一番下へ（最初に開いたときも）
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [count]);
 
-  const back = (
+  const back = wide ? null : (
     <AppBarSlot slot="leading">
       <M3eIconButton
         aria-label="フィードバックへ戻る"
-        onClick={() => void navigate({ to: "/feedback" })}
+        onClick={() => void navigate({ to: "/feedback", search })}
       >
         <M3eIcon name="arrow_back" className="icon--mirror" />
       </M3eIconButton>
     </AppBarSlot>
   );
-  if (data === undefined)
-    return (
-      <>
-        {back}
-        <p className="muted">読み込み中…</p>
-      </>
-    );
-  if (data === null)
-    return (
-      <>
-        {back}
-        <AppBarSlot slot="title">フィードバック</AppBarSlot>
-        <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
-      </>
-    );
-  const people = data.posts.filter((p) => !p.deleted).map((p) => p.author);
-  return (
-    <div className="fb-thread">
-      {back}
-      <AppBarSlot slot="title" title={data.thread.title}>
-        {data.thread.title}
-      </AppBarSlot>
-      <AppBarSlot slot="subtitle">{data.work.title}</AppBarSlot>
-      {data.work.canOpen ? (
-        <AppBarSlot slot="actions">
-          <M3eButton
-            variant="text"
-            onClick={() =>
-              void navigate({ to: "/works/$workId", params: { workId: data.work.id } })
-            }
-          >
-            <M3eIcon slot="icon" name="open_in_new" />
-            制作物を開く
-          </M3eButton>
-        </AppBarSlot>
-      ) : null}
-      <div className="fb-thread__posts" role="feed" aria-label={`「${data.thread.title}」の投稿`}>
-        {data.posts.map((p) => (
-          <FeedbackPost key={p.id} post={p} people={people} />
-        ))}
-        <div ref={endRef} />
-      </div>
-      {data.can.post ? (
-        <div className="fb-thread__composer">
-          <FeedbackComposer
-            workId={data.work.id}
-            label="返信"
-            submitLabel="送信"
-            onSubmit={async (r) => {
-              await post({
-                threadId: threadId,
-                body: r.body,
-                mentions: r.mentions,
-                fileIds: r.fileIds,
-                ...(r.template ? { template: r.template } : {}),
-              });
-            }}
+  const openInWork = () => {
+    if (!data) return;
+    const s = { tab: "feedback" as const, fb: threadId };
+    const rev = data.thread.revision;
+    void (rev
+      ? navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId: data.work.id, n: String(rev.number) },
+          search: s,
+        })
+      : navigate({ to: "/works/$workId", params: { workId: data.work.id }, search: s }));
+  };
+
+  const detail =
+    data === undefined ? (
+      <p className="muted">読み込み中…</p>
+    ) : data === null ? (
+      <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
+    ) : (
+      <div className="fb-thread">
+        <section className="fb-context" aria-label="相談している制作物">
+          <M3eIcon
+            name={data.thread.anchor ? "my_location" : "description"}
+            className="fb-context__icon"
           />
+          <div className="fb-context__text">
+            <span className="fb-context__work">
+              {data.work.title}
+              {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
+            </span>
+            <span className="fb-context__where">
+              {[data.thread.revision?.label, anchorPlace(data.thread.anchor as Anchor | null)]
+                .filter(Boolean)
+                .join("・") || "制作物について"}
+              ・参加 {data.thread.participants.length} 人
+            </span>
+          </div>
+          {data.work.canOpen ? (
+            <M3eButton variant="tonal" onClick={openInWork}>
+              <M3eIcon slot="icon" name="open_in_new" />
+              {data.thread.anchor ? "紙面で見る" : "制作物で見る"}
+            </M3eButton>
+          ) : null}
+        </section>
+        {wide ? <h2 className="fb-thread__title">{data.thread.title}</h2> : null}
+        <FeedbackConversation threadId={threadId} data={data} />
+      </div>
+    );
+
+  return (
+    <>
+      {back}
+      <AppBarSlot slot="title" {...(data && !wide ? { title: data.thread.title } : {})}>
+        {data && !wide ? data.thread.title : "フィードバック"}
+      </AppBarSlot>
+      {data && !wide ? <AppBarSlot slot="subtitle">{data.work.title}</AppBarSlot> : null}
+      {wide ? (
+        <div className="fb-layout">
+          <div className="fb-layout__list">
+            <FeedbackListPane search={search} selectedId={threadId} />
+          </div>
+          <div className="fb-layout__detail">{detail}</div>
         </div>
-      ) : null}
-    </div>
+      ) : (
+        detail
+      )}
+    </>
   );
 }

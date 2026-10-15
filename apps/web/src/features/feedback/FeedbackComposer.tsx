@@ -21,7 +21,7 @@ export interface ComposerResult {
 /**
  * FB スレッドの投稿欄（新しいスレッドの最初の投稿と返信で共通）。
  * - 本文は @ でメンション（その制作物の FB でメンションできる人。api.feedback.mentionCandidates）
- * - 「テンプレ」から FB テンプレ（制作者・初回／制作者・版更新／校正er）を書き出しに入れる（利用者の FB 制度案）
+ * - 「テンプレート」から FB テンプレート（制作者・初回／制作者・版更新／校正er）を書き出しに入れる（利用者の FB 制度案）
  * - 作業中の案（PDF・画像・.ai など）を添付。送るときに R2 へ上げ、検証済みになってから投稿する
  * - Ctrl（⌘）＋Enter で送る
  */
@@ -122,10 +122,11 @@ export function FeedbackComposer({
     <MentionProvider value={candidates ?? []}>
       <div className="fb-composer">
         <MentionTextarea
-          className="input input--area fb-composer__input"
+          className="fb-composer__input"
           aria-label={label}
-          placeholder={placeholder ?? `${label}（@ でメンション。Ctrl＋Enter で送信）`}
-          rows={3}
+          aria-describedby={`${id}-hint`}
+          placeholder={placeholder ?? `${label}を書く`}
+          rows={2}
           autoFocus={autoFocus}
           value={body}
           onValue={setBody}
@@ -139,6 +140,9 @@ export function FeedbackComposer({
             }
           }}
         />
+        <p className="fb-composer__hint" id={`${id}-hint`}>
+          @ で名前を呼ぶ（メンション）・{isMac ? "⌘" : "Ctrl"}＋Enter で{submitLabel}
+        </p>
         {files.length ? (
           <ul className="fb-composer__files" aria-label="添付するファイル">
             {files.map((f) => (
@@ -175,7 +179,7 @@ export function FeedbackComposer({
           </M3eIconButton>
           <M3eButton variant="text" disabled={sending !== null}>
             <M3eIcon slot="icon" name="article" />
-            テンプレ
+            テンプレート
             <M3eMenuTrigger htmlFor={`${id}-tpl`} />
           </M3eButton>
           <M3eMenu id={`${id}-tpl`} positionY="above">
@@ -201,6 +205,8 @@ export function FeedbackComposer({
     </MentionProvider>
   );
 }
+
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const iconFor = (type: string) =>
   type === "pdf"

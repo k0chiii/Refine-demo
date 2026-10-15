@@ -532,6 +532,9 @@ export default defineSchema({
     lastPostAt: v.number(),
     postCount: v.number(),
     participantIds: v.array(v.string()),
+    /** 版の上の場所についての相談（エディタで範囲を選んで立てたもの） */
+    revisionId: v.optional(v.string()),
+    anchor: v.optional(anchorValidator),
   })
     .index("by_work", ["workId", "lastPostAt"])
     .index("by_last_post", ["lastPostAt"]),

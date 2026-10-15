@@ -125,7 +125,13 @@ function Works() {
           teams={teams}
           axis={axis}
           compact={compact}
-          onOpen={(workId) => void navigate({ to: "/works/$workId", params: { workId } })}
+          onOpen={(workId, tab) =>
+            void navigate({
+              to: "/works/$workId",
+              params: { workId },
+              ...(tab ? { search: { tab } } : {}),
+            })
+          }
         />
       )}
       <NewWorkDialog

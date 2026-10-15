@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
-import { M3eButton, M3eIconButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton, M3eButtonSegment, M3eIconButton, M3eIcon, M3eSegmentedButton } from "@/ui/m3e";
 import { MentionTextarea } from "./mentions";
 
 /**
@@ -27,6 +27,8 @@ export function ComposePopover({
   extra,
   docked,
   quote,
+  kind = "comment",
+  onKind,
 }: {
   x: number;
   y: number;
@@ -44,7 +46,13 @@ export function ComposePopover({
   docked?: boolean;
   /** docked のとき、何に対するコメントかを示す引用（選んだ文字など） */
   quote?: string;
+  /** 書くもの: コメント（指摘して解決する）か FB（解決しない相談）。利用者決定 2026-10-15 */
+  kind?: "comment" | "feedback";
+  /** 渡すと「コメント／FB」を切り替えられる（コメントできない版では渡さず FB だけ） */
+  onKind?: (k: "comment" | "feedback") => void;
 }) {
+  const fb = kind === "feedback";
+  const what = fb ? "FB" : label;
   const ref = useRef<HTMLTextAreaElement>(null);
   const kb = useKeyboardInset(docked === true);
   useEffect(() => {
@@ -59,9 +67,9 @@ export function ComposePopover({
   }, []);
   const panel = (
     <div
-      className={`compose-pop ${docked ? "compose-pop--docked" : ""}`}
+      className={`compose-pop ${docked ? "compose-pop--docked" : ""} ${fb ? "compose-pop--fb" : ""}`}
       role="dialog"
-      aria-label={label}
+      aria-label={what}
       style={
         docked
           ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
@@ -70,13 +78,30 @@ export function ComposePopover({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
+      {onKind ? (
+        <M3eSegmentedButton aria-label="書くもの" className="compose-pop__kind">
+          <M3eButtonSegment checked={!fb} onClick={() => onKind("comment")}>
+            {label}
+          </M3eButtonSegment>
+          <M3eButtonSegment checked={fb} onClick={() => onKind("feedback")}>
+            FB
+          </M3eButtonSegment>
+        </M3eSegmentedButton>
+      ) : fb ? (
+        <div className="compose-pop__note">FB（相談）として書きます</div>
+      ) : null}
       {docked && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}
       <MentionTextarea
         ref={ref}
         className="compose-pop__input"
-        aria-label={label}
-        // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
-        placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
+        aria-label={what}
+        // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）。
+        // FB は解決しない相談・意見（迷っていること、ほかの案など）
+        placeholder={
+          fb
+            ? "FB（相談・意見。解決はしません。@ でメンション）"
+            : `${label}（改善案には理由も添えて。@ でメンション）`
+        }
         rows={docked ? 2 : 3}
         value={value}
         onValue={onChange}
@@ -100,7 +125,7 @@ export function ComposePopover({
         <span className="spacer" />
         {extra}
         <M3eButton variant="filled" disabled={pending || !value.trim()} onClick={onSubmit}>
-          投稿
+          {fb ? "FB で相談" : "投稿"}
         </M3eButton>
       </div>
     </div>

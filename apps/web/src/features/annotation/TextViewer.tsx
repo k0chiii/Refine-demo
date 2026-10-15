@@ -3,7 +3,7 @@ import { TouchCommentButton, useTouchSelection } from "./touchSelection";
 import type { Anchor } from "@mf100/domain";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { diffKindAt, type TextCompareProps } from "@/features/compare/textSync";
-import type { OverlayThread } from "./AnchorOverlay";
+import { overlayLabel, type OverlayThread } from "./AnchorOverlay";
 import { scrollBehavior } from "@/lib/motion";
 import { useMedia } from "@/lib/useMedia";
 
@@ -227,11 +227,14 @@ export function TextViewer({
               const first = seg.threads.filter((t) => t.anchor.start === seg.start);
               const active = seg.threads.some((t) => t.id === activeThreadId);
               const severity = seg.threads.find((t) => t.severity === "critical") ? "critical" : "";
+              const fbOnly =
+                seg.threads.length > 0 && seg.threads.every((t) => t.kind === "feedback");
               const label = first.map((t) => t.index).join(",");
               const cls = [
                 seg.threads.length > 0 ? "text-anchor" : "",
                 active ? "text-anchor--active" : "",
                 severity ? `text-anchor--${severity}` : "",
+                fbOnly ? "text-anchor--fb" : "",
                 seg.draft ? "text-anchor--draft" : "",
                 diffKindAt(diff, seg.start, seg.end)
                   ? `diff-hl diff-hl--${diffKindAt(diff, seg.start, seg.end)}`
@@ -258,7 +261,7 @@ export function TextViewer({
                     ? {
                         role: "button",
                         tabIndex: 0,
-                        title: `コメント ${seg.threads.map((t) => `#${t.index}`).join(" ")}`,
+                        title: seg.threads.map((t) => overlayLabel(t)).join("・"),
                         // 同じ箇所に複数あれば押すたびに次のコメントへ
                         onClick: (e: { stopPropagation: () => void }) => {
                           e.stopPropagation();

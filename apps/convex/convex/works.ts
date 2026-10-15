@@ -1,4 +1,5 @@
 import {
+  summarizeFeedbackActivity,
   changeWorkLifecycle,
   createWork,
   importWorks,
@@ -300,14 +301,21 @@ export const listMine = query({
       ctx.db,
       picked.flatMap((p) => p.work.creatorIds),
     );
-    const out = picked.map(({ work, latest, accepting }) =>
-      summarize(
+    // 制作物ごとの FB（相談）の数と未読（一覧から制作物の FB へ直接入れるように）
+    const fb = await summarizeFeedbackActivity(
+      app,
+      principal,
+      picked.map((p) => p.work.id),
+    );
+    const out = picked.map(({ work, latest, accepting }) => ({
+      ...summarize(
         work,
         latest,
         accepting,
         work.creatorIds.map((id) => users.get(id)?.name ?? "（不明なユーザー）"),
       ),
-    );
+      fb: fb.get(work.id) ?? { threads: 0, unread: 0 },
+    }));
     return out.sort(
       (a, b) =>
         (a.acceptingDeadlineAt ?? Infinity) - (b.acceptingDeadlineAt ?? Infinity) ||

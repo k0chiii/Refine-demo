@@ -2,7 +2,8 @@ import { canViewWork, type AuthorizationContext } from "../acl/authorize.ts";
 import type { Principal } from "../acl/Permission.ts";
 import { MENTION_MAX } from "../comment/mentions.ts";
 import { DomainError } from "../shared/DomainError.ts";
-import type { UserId, WorkId } from "../shared/ids.ts";
+import type { Anchor } from "../comment/Anchor.ts";
+import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 
 /**
@@ -41,6 +42,12 @@ export interface FeedbackThread {
   postCount: number;
   /** 投稿したことのある人（通知の宛先） */
   participantIds: UserId[];
+  /**
+   * 版の上の場所についての相談（利用者決定 2026-10-15: コメントは指摘して解決するもの、FB は解決しない話し合い。
+   * FB もコメントと同じように範囲を指定して立てられる）。revisionId だけなら「この版について」、anchor があれば紙面の場所
+   */
+  revisionId?: RevisionId;
+  anchor?: Anchor;
 }
 
 export interface FeedbackReactionEntry {
@@ -139,6 +146,37 @@ export function validateFeedbackThreadTitle(title: string): string {
   if (Array.from(t).length > FEEDBACK_TITLE_MAX)
     invalid("title", "too_long", { max: FEEDBACK_TITLE_MAX });
   return t;
+}
+
+/**
+ * 一覧の抜粋に使う本文: テンプレの見出し（【…】）と箇条の「・」を除き、空白をまとめる。
+ * 一覧で「【初見の印象】・パッと見た時に…」のような枠だけが見えないようにする。
+ */
+export function feedbackExcerptSource(body: string): string {
+  return body
+    .replace(/【[^】\n]{0,30}】/g, " ")
+    .replace(/^[ \t]*[・•\-*][ \t]*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** 題名を省いて立てるとき（紙面の場所からの相談）の題名: 本文の 1 行目、無ければ引用・ファイル */
+export const FEEDBACK_DERIVED_TITLE_MAX = 40;
+export function deriveFeedbackThreadTitle(input: {
+  body: string;
+  quote?: string;
+  fileCount?: number;
+}): string {
+  const clip = (s: string) => {
+    const chars = Array.from(s.replace(/\s+/g, " ").trim());
+    return chars.length > FEEDBACK_DERIVED_TITLE_MAX
+      ? `${chars.slice(0, FEEDBACK_DERIVED_TITLE_MAX - 1).join("")}…`
+      : chars.join("");
+  };
+  const first = input.body.split("\n").find((l) => l.trim() !== "");
+  if (first) return clip(first);
+  if (input.quote?.trim()) return clip(`「${input.quote.trim()}」について`);
+  return input.fileCount ? `ファイル ${input.fileCount} 件` : "相談";
 }
 
 /** 本文: 前後の空白を除く。空はファイルを付けた投稿だけ許す。5000 文字まで */

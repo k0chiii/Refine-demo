@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { downloadFeedbackFile, fetchFeedbackFileBlob } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eDialog, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { M3eDialog, M3eIcon, M3eIconButton } from "@/ui/m3e";
 import { iconFor } from "./FeedbackComposer";
 
 export interface FeedbackFileView {
@@ -49,7 +49,7 @@ function ImageThumb({ file, onOpen }: { file: FeedbackFileView; onOpen: (url: st
       disabled={!url}
       onClick={() => url && onOpen(url)}
     >
-      {url ? <img src={url} alt={file.fileName} /> : <span className="fb-thumb__loading" />}
+      {url ? <img src={url} alt="" /> : <span className="fb-thumb__loading" />}
     </button>
   );
 }
@@ -115,12 +115,6 @@ export function FeedbackFiles({ files }: { files: readonly FeedbackFileView[] })
       >
         <span slot="header">{big?.name}</span>
         <div className="dialog-body">{big ? <img src={big.url} alt={big.name} /> : null}</div>
-        <div slot="actions" className="row">
-          <span className="spacer" />
-          <M3eButton variant="text" onClick={() => setBig(null)}>
-            閉じる
-          </M3eButton>
-        </div>
       </M3eDialog>
     </div>
   );

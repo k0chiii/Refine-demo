@@ -16,7 +16,13 @@ export interface OverlayThread {
   anchor: Anchor;
   severity: string;
   index: number;
+  /** 相談（FB）。解決するコメントと見分けるため、色（tertiary）と形（角丸の四角）を変える */
+  kind?: "comment" | "feedback";
 }
+
+/** 支援技術向けの名前（コメント 3 / 相談 2） */
+export const overlayLabel = (t: Pick<OverlayThread, "kind" | "index">) =>
+  `${t.kind === "feedback" ? "FB" : "コメント"} ${t.index}`;
 
 interface Props {
   viewport: Viewport;
@@ -174,7 +180,7 @@ export function AnchorOverlay({
       height={viewport.height}
       // 中に押せるピン・範囲があるので img ではなく group（img の子は支援技術から見えない。§35 I-08）
       role="group"
-      aria-label="コメントの位置"
+      aria-label="コメント・相談の位置"
       style={{ cursor: selecting ? "crosshair" : "default" }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -186,7 +192,23 @@ export function AnchorOverlay({
       {visible.map((t) => {
         const a = t.anchor;
         const active = t.id === activeThreadId;
-        const cls = `${active ? "anchor-rect--active" : ""} ${t.severity === "critical" ? "anchor-rect--critical" : ""}`;
+        const fb = t.kind === "feedback";
+        const cls = `${active ? "anchor-rect--active" : ""} ${t.severity === "critical" ? "anchor-rect--critical" : ""} ${fb ? "anchor-rect--fb" : ""}`;
+        const pinCls = `anchor-pin ${active ? "anchor-pin--active" : ""} ${fb ? "anchor-pin--fb" : ""}`;
+        // 相談の印は角丸の四角（コメントは丸）。色だけに頼らず形でも見分けられるように
+        const pin = (cx: number, cy: number, r: number) =>
+          fb ? (
+            <rect
+              x={cx - r}
+              y={cy - r}
+              width={r * 2}
+              height={r * 2}
+              rx={r * 0.45}
+              className={pinCls}
+            />
+          ) : (
+            <circle cx={cx} cy={cy} r={r} className={pinCls} />
+          );
         if (a.type === "pdf_rect" || a.type === "image_rect") {
           const px = toViewportRect(a.rect, viewport);
           return (
@@ -201,7 +223,7 @@ export function AnchorOverlay({
                 e.preventDefault();
                 onSelectThread(t.id);
               }}
-              aria-label={`コメント ${t.index}`}
+              aria-label={overlayLabel(t)}
             >
               <rect
                 className={`anchor-rect ${cls}`}
@@ -213,12 +235,7 @@ export function AnchorOverlay({
               />
               {/* 見た目は小さいピンでも、押せる範囲は 48×48（M3 Accessibility › Target sizes。§35 I-09） */}
               <circle cx={px.x} cy={px.y} r={24} className="anchor-hit" />
-              <circle
-                cx={px.x}
-                cy={px.y}
-                r={10}
-                className={`anchor-pin ${active ? "anchor-pin--active" : ""}`}
-              />
+              {pin(px.x, px.y, 10)}
               <text className="anchor-label" x={px.x} y={px.y + 4} textAnchor="middle">
                 {t.index}
               </text>
@@ -239,15 +256,10 @@ export function AnchorOverlay({
                 e.preventDefault();
                 onSelectThread(t.id);
               }}
-              aria-label={`コメント ${t.index}`}
+              aria-label={overlayLabel(t)}
             >
               <circle cx={px.x} cy={px.y} r={24} className="anchor-hit" />
-              <circle
-                cx={px.x}
-                cy={px.y}
-                r={active ? 13 : 10}
-                className={`anchor-pin ${active ? "anchor-pin--active" : ""}`}
-              />
+              {pin(px.x, px.y, active ? 13 : 10)}
               <text className="anchor-label" x={px.x} y={px.y + 4} textAnchor="middle">
                 {t.index}
               </text>

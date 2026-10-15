@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Principal, WorkPermissionGrant } from "../acl/Permission.ts";
 import {
+  deriveFeedbackThreadTitle,
+  feedbackExcerptSource,
   assertFeedbackFileAttachable,
   canModifyFeedbackPost,
   canPostFeedback,
@@ -330,5 +332,26 @@ describe("制作物ごとの集計（A-4）", () => {
     const csv = workStatsToCsv([row]);
     expect(csv.split("\r\n")[0]).toContain("制作物名");
     expect(csv).toContain("2026-11-01");
+  });
+});
+
+describe("相談の題名を省いたとき", () => {
+  it("本文の 1 行目（長ければ 40 文字で切る）、無ければ引用・ファイルの数", () => {
+    expect(deriveFeedbackThreadTitle({ body: "\n  余白について \n続き" })).toBe("余白について");
+    expect(deriveFeedbackThreadTitle({ body: "あ".repeat(50) })).toBe(`${"あ".repeat(39)}…`);
+    expect(deriveFeedbackThreadTitle({ body: "", quote: "第100回" })).toBe("「第100回」について");
+    expect(deriveFeedbackThreadTitle({ body: " ", fileCount: 2 })).toBe("ファイル 2 件");
+    expect(deriveFeedbackThreadTitle({ body: "" })).toBe("相談");
+  });
+});
+
+describe("一覧の抜粋", () => {
+  it("テンプレの見出しと箇条の印を除く", () => {
+    expect(
+      feedbackExcerptSource(
+        "【初見の印象】\n・パッと見た時: 夜の高揚感\n\n【改善案】\n- 余白を詰める",
+      ),
+    ).toBe("パッと見た時: 夜の高揚感 余白を詰める");
+    expect(feedbackExcerptSource("  ")).toBe("");
   });
 });

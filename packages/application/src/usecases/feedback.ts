@@ -10,6 +10,8 @@ import {
   canViewFeedback,
   canViewWork,
   computeWorkStats,
+  deriveFeedbackThreadTitle,
+  feedbackExcerptSource,
   DomainError,
   failFeedbackFile,
   FEEDBACK_FILE_TTL_MS,
@@ -17,6 +19,7 @@ import {
   feedbackFileType,
   feedbackObjectKey,
   mentionableUserIds,
+  revisionLabel,
   summarizeFeedbackReactions,
   toggleFeedbackReaction as toggleReaction,
   validateFeedbackBody,
@@ -25,6 +28,7 @@ import {
   validateFeedbackMentions,
   validateFeedbackReaction,
   validateFeedbackTemplate,
+  validateAnchor,
   validateFeedbackThreadTitle,
   verifyFeedbackFile,
   workMatchesTeam,
@@ -35,6 +39,7 @@ import {
   type FeedbackPost,
   type FeedbackReaction,
   type FeedbackTemplateId,
+  type Anchor,
   type FeedbackThread,
   type MediaType,
   type Principal,
@@ -175,6 +180,19 @@ export async function searchFeedbackPeople(
 
 // ---------------------------------------------------------------- 一覧・詳細
 
+/** スレッドが指す版（無効化・削除で無くなっていれば null） */
+async function revisionRef(
+  ctx: AppContext,
+  thread: FeedbackThread,
+): Promise<{ id: string; label: string; number: number } | null> {
+  if (thread.revisionId === undefined) return null;
+  const r = await ctx.revisions.findById(thread.revisionId);
+  // number: URL の版番号（0版は 0）。/works/:id/v/:n で開く
+  return r
+    ? { id: r.id, label: revisionLabel(r), number: r.kind === "rough" ? 0 : r.sequence }
+    : null;
+}
+
 export interface FeedbackThreadSummary {
   id: string;
   workId: string;
@@ -185,6 +203,9 @@ export interface FeedbackThreadSummary {
   createdAt: number;
   lastPostAt: number;
   postCount: number;
+  /** 版の上の場所についての相談なら、その版と場所（紙面に印を出し、押すとその場所を開く） */
+  revision: { id: string; label: string; number: number } | null;
+  anchor: Anchor | null;
   /** 最後の（削除されていない）投稿。本文が空ならファイルの数を書く */
   lastPost: {
     author: { id: string; name: string };
@@ -202,7 +223,7 @@ export interface FeedbackThreadSummary {
 export async function listFeedbackThreads(
   ctx: AppContext,
   principal: Principal,
-  input: { workId?: string; mine?: boolean; limit?: number } = {},
+  input: { workId?: string; revisionId?: string; mine?: boolean; limit?: number } = {},
 ): Promise<FeedbackThreadSummary[]> {
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
   if (input.workId !== undefined) await loadFeedbackWork(ctx, principal, input.workId);
@@ -216,6 +237,7 @@ export async function listFeedbackThreads(
   for (const thread of candidates) {
     if (out.length >= limit) break;
     if (input.mine && !thread.participantIds.includes(principal.userId)) continue;
+    if (input.revisionId !== undefined && thread.revisionId !== input.revisionId) continue;
     if (!works.has(thread.workId)) {
       const work = await ctx.works.findById(thread.workId);
       const visible =
@@ -237,18 +259,42 @@ export async function listFeedbackThreads(
       createdAt: thread.createdAt,
       lastPostAt: thread.lastPostAt,
       postCount: thread.postCount,
+      revision: await revisionRef(ctx, thread),
+      anchor: thread.anchor ?? null,
       lastPost: last
         ? {
             author: { id: last.authorId, name: await name(last.authorId) },
             authorName: await name(last.authorId),
-            excerpt: last.body.trim()
-              ? excerpt(last.body, 80)
+            excerpt: feedbackExcerptSource(last.body)
+              ? excerpt(feedbackExcerptSource(last.body), 80)
               : `ファイル ${last.fileIds.length} 件`,
             createdAt: last.createdAt,
           }
         : null,
       unread: readAt === null || readAt < thread.lastPostAt,
     });
+  }
+  return out;
+}
+
+/**
+ * 制作物ごとの FB（相談）の数と未読の数（制作物一覧で、FB がある制作物と新しい投稿を示す）。
+ * 呼び出し側が見られる制作物だけを渡す（自分が関わる制作物の一覧）。
+ */
+export async function summarizeFeedbackActivity(
+  ctx: AppContext,
+  principal: Principal,
+  workIds: readonly string[],
+): Promise<Map<string, { threads: number; unread: number }>> {
+  const out = new Map<string, { threads: number; unread: number }>();
+  for (const workId of workIds) {
+    const threads = await ctx.feedback.listThreads({ workId, limit: 200 });
+    let unread = 0;
+    for (const t of threads) {
+      const readAt = await ctx.feedback.readAt(principal.userId, t.id);
+      if (readAt === null || readAt < t.lastPostAt) unread++;
+    }
+    out.set(workId, { threads: threads.length, unread });
   }
   return out;
 }
@@ -287,6 +333,8 @@ export interface FeedbackThreadView {
     lastPostAt: number;
     postCount: number;
     participants: Array<{ id: string; name: string }>;
+    revision: { id: string; label: string; number: number } | null;
+    anchor: Anchor | null;
   };
   work: {
     id: string;
@@ -367,6 +415,8 @@ export async function getFeedbackThread(
       lastPostAt: thread.lastPostAt,
       postCount: thread.postCount,
       participants,
+      revision: await revisionRef(ctx, thread),
+      anchor: thread.anchor ?? null,
     },
     work: {
       id: work.id,
@@ -506,15 +556,32 @@ async function notifyFeedback(
     });
 }
 
-/** スレッドを立てる（最初の投稿も作る）。スレッドの ID を返す */
+/**
+ * スレッドを立てる（最初の投稿も作る）。スレッドの ID を返す。
+ * 版の上の場所から立てるとき（エディタで範囲を選んで「相談」）は revisionId と anchor を付ける。
+ * 相談は解決しない話し合いなので、受付が終わった版・校了した版にも立てられる。
+ * 題名は省ける（本文の 1 行目・引用から作る）。
+ */
 export async function createFeedbackThread(
   ctx: AppContext,
   principal: Principal,
-  input: FeedbackPostInput & { workId: string; title: string },
+  input: FeedbackPostInput & {
+    workId: string;
+    title?: string;
+    revisionId?: string;
+    anchor?: Anchor;
+  },
 ): Promise<string> {
   const loaded = await loadFeedbackWork(ctx, principal, input.workId);
-  const title = validateFeedbackThreadTitle(input.title);
+  const place = await checkPlace(ctx, loaded.work.id, input);
   const checked = await checkPost(ctx, principal, loaded, input);
+  const title = input.title?.trim()
+    ? validateFeedbackThreadTitle(input.title)
+    : deriveFeedbackThreadTitle({
+        body: checked.body,
+        ...(place.anchor?.type === "text_range" ? { quote: place.anchor.quote } : {}),
+        fileCount: checked.files.length,
+      });
   const now = ctx.clock.now();
   const thread = await ctx.feedback.insertThread({
     workId: loaded.work.id,
@@ -524,9 +591,34 @@ export async function createFeedbackThread(
     lastPostAt: now,
     postCount: 1,
     participantIds: [],
+    ...place,
   });
   await writePost(ctx, principal, loaded, thread, checked, { isNewThread: true });
   return thread.id;
+}
+
+/** 相談の場所: 版はその制作物のもの、場所の添付はその版のもの（コメントと同じ検査） */
+async function checkPlace(
+  ctx: AppContext,
+  workId: string,
+  input: { revisionId?: string; anchor?: Anchor },
+): Promise<{ revisionId?: string; anchor?: Anchor }> {
+  if (input.revisionId === undefined) {
+    if (input.anchor) throw new DomainError("anchor_invalid", { reason: "revision_required" });
+    return {};
+  }
+  const revision = await ctx.revisions.findById(input.revisionId);
+  if (!revision || revision.workId !== workId)
+    throw new DomainError("forbidden", { revisionId: input.revisionId });
+  if (!input.anchor) return { revisionId: revision.id };
+  validateAnchor(input.anchor);
+  const artifact = await ctx.artifacts.findById(input.anchor.artifactId);
+  if (!artifact || artifact.revisionId !== revision.id)
+    throw new DomainError("anchor_artifact_mismatch", {
+      artifactId: input.anchor.artifactId,
+      revisionId: revision.id,
+    });
+  return { revisionId: revision.id, anchor: input.anchor };
 }
 
 /** スレッドに投稿する。投稿の ID を返す */

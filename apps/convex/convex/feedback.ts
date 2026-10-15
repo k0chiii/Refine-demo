@@ -24,6 +24,7 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { vFeedbackTemplateId } from "./lib/validators.ts";
+import { anchorValidator } from "./schema.ts";
 
 /**
  * 制作のフィードバック（表現の議論）。業務ルールは application / domain、ここは薄いアダプタ。
@@ -42,6 +43,7 @@ const postFields = {
 export const listThreads = query({
   args: {
     workId: v.optional(v.string()),
+    revisionId: v.optional(v.string()),
     mine: v.optional(v.boolean()),
     limit: v.optional(v.number()),
   },
@@ -90,7 +92,13 @@ export const searchPeople = query({
 
 /** スレッドを立てる（最初の投稿も作る）。スレッドの ID を返す */
 export const createThread = mutation({
-  args: { workId: v.string(), title: v.string(), ...postFields },
+  args: {
+    workId: v.string(),
+    title: v.optional(v.string()),
+    revisionId: v.optional(v.string()),
+    anchor: v.optional(anchorValidator),
+    ...postFields,
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() => createFeedbackThread(createAppContext(ctx.db), principal, args));

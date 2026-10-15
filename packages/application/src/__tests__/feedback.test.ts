@@ -214,8 +214,15 @@ describe("フィードバックのスレッドと投稿", () => {
     await expect(postFeedback(ctx, creator, { threadId: t, body: "  " })).rejects.toThrow(
       code("feedback_invalid"),
     );
+    // 題名が空なら本文の 1 行目から作る（範囲から立てる相談と同じ）
+    const untitled = await createFeedbackThread(ctx, creator, {
+      workId: work.id,
+      title: "",
+      body: "a",
+    });
+    expect((await getFeedbackThread(ctx, creator, untitled)).thread.title).toBe("a");
     await expect(
-      createFeedbackThread(ctx, creator, { workId: work.id, title: "", body: "a" }),
+      createFeedbackThread(ctx, creator, { workId: work.id, title: "あ".repeat(81), body: "a" }),
     ).rejects.toThrow(code("feedback_invalid"));
   });
 });
@@ -549,5 +556,86 @@ describe("添付の転送: 試行ごとのキーと原子的な採用（版の�
     expect(await listOrphanAttemptObjects(ctx)).toEqual([
       { itemId: `attempt:${b.attemptId}`, objectKey: b.objectKey },
     ]);
+  });
+});
+
+describe("フィードバック: 版の上の場所についての相談（コメントと分ける。利用者決定 2026-10-15）", () => {
+  it("範囲を付けて立てられ、題名は本文から作られる。版で絞って一覧でき、場所が返る", async () => {
+    const { ctx, work } = await setup();
+    const rev = await submitRevision(ctx, work.id);
+    const [artifact] = await ctx.artifacts.listByRevision(rev.id);
+    const anchor = {
+      type: "pdf_rect" as const,
+      artifactId: artifact!.id,
+      page: 1,
+      rect: { x: 0.1, y: 0.1, w: 0.2, h: 0.1 },
+    };
+    const id = await createFeedbackThread(ctx, reviewer, {
+      workId: work.id,
+      revisionId: rev.id,
+      anchor,
+      body: "ここの余白、もう少し詰めてもいいかも？\n迷っています",
+    });
+    await createFeedbackThread(ctx, creator, { workId: work.id, title: "全体の方向性", body: "x" });
+    const onRev = await listFeedbackThreads(ctx, creator, { workId: work.id, revisionId: rev.id });
+    expect(onRev.map((t) => t.id)).toEqual([id]);
+    expect(onRev[0]).toMatchObject({
+      title: "ここの余白、もう少し詰めてもいいかも？",
+      revision: { id: rev.id, label: "第1版" },
+      anchor,
+    });
+    const view = await getFeedbackThread(ctx, creator, id);
+    expect(view.thread).toMatchObject({ revision: { id: rev.id }, anchor });
+    // 版に付かない相談は場所が無い
+    const all = await listFeedbackThreads(ctx, creator, { workId: work.id });
+    expect(all.find((t) => t.title === "全体の方向性")).toMatchObject({
+      revision: null,
+      anchor: null,
+    });
+  });
+
+  it("相談は解決しない話し合いなので、校了した版にも立てられる", async () => {
+    const { ctx, work } = await setup();
+    const rev = await submitRevision(ctx, work.id);
+    await finalizeWork(ctx, approver, { workId: work.id, revisionId: rev.id });
+    await expect(
+      createFeedbackThread(ctx, reviewer, {
+        workId: work.id,
+        revisionId: rev.id,
+        body: "次回への相談",
+      }),
+    ).resolves.toEqual(expect.any(String));
+  });
+
+  it("他の制作物の版・他の版の添付・版の無い場所は拒否する", async () => {
+    const { ctx, work } = await setup();
+    const other = await seedWork(ctx, { title: "別の制作物" });
+    const rev = await submitRevision(ctx, work.id);
+    const otherRev = await submitRevision(ctx, other.id);
+    const [otherArtifact] = await ctx.artifacts.listByRevision(otherRev.id);
+    const pin = (artifactId: string) => ({
+      type: "pdf_pin" as const,
+      artifactId,
+      page: 1,
+      point: { x: 0.5, y: 0.5 },
+    });
+    await expect(
+      createFeedbackThread(ctx, reviewer, { workId: work.id, revisionId: otherRev.id, body: "x" }),
+    ).rejects.toThrow(code("forbidden"));
+    await expect(
+      createFeedbackThread(ctx, reviewer, {
+        workId: work.id,
+        revisionId: rev.id,
+        anchor: pin(otherArtifact!.id),
+        body: "x",
+      }),
+    ).rejects.toThrow(code("anchor_artifact_mismatch"));
+    await expect(
+      createFeedbackThread(ctx, reviewer, {
+        workId: work.id,
+        anchor: pin(otherArtifact!.id),
+        body: "x",
+      }),
+    ).rejects.toThrow(code("anchor_invalid"));
   });
 });

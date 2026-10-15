@@ -121,6 +121,9 @@ describe("スクロール同期の写像", () => {
   });
   it("追加ページ（対応なし）では null を返して同期を止める", () => {
     expect(mapPosition({ page: 2, rel: 0.5 }, "right", pairs)).toBeNull();
+    // 焦点がページの間の余白（ページの外）にあるときは、はみ出した分をそのまま写す（丸めると余白の分ずれる）
+    expect(mapPosition({ page: 2, rel: 1.02 }, "left", pairs)).toEqual({ page: 3, rel: 1.02 });
+    expect(mapPosition({ page: 3, rel: -0.01 }, "right", pairs)).toEqual({ page: 2, rel: -0.01 });
   });
   it("同じ行のアンカーの間を補間する（行が下にずれた分だけずらす）", () => {
     const anchors = lineAnchors(

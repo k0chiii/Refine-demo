@@ -143,8 +143,13 @@ export function useViewerSync(
     const stage = stageRef.current;
     if (!stage || !onUserScroll) return;
     if (performance.now() - programmatic.current <= PROGRAMMATIC_MS) return;
-    const pos = locate(stage, items(), SYNC_AT, true);
-    if (pos) onUserScroll(pos);
+    // 縦の割合は 0..1 に丸めない: 焦点がページの間の余白にあるとき、丸めるとページの端に寄って余白の分ずれる
+    const pos = locate(stage, items(), SYNC_AT, false);
+    if (pos)
+      onUserScroll({
+        ...pos,
+        ...(pos.relX !== undefined ? { relX: Math.min(1, Math.max(0, pos.relX)) } : {}),
+      });
   };
 
   // 倍率が変わる描画で、描き直す前の焦点の下の箇所を控える（StrictMode の 2 回目の render では控え直さない）

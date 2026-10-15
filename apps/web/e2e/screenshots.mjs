@@ -601,9 +601,9 @@ async function main() {
   await shot("13d-admin-teams");
   // 62・63 フィードバック（制作の議論のスレッド。委員なら誰でも見て書ける）: 一覧 → スレッド → テンプレと画像を付けて返信 → リアクション
   await page.locator("m3e-nav-item", { hasText: "フィードバック" }).first().click();
-  await page.waitForSelector(".feedback m3e-list-action");
+  await page.waitForSelector(".fb-list m3e-list-action");
   await shot("62-feedback-list");
-  await page.locator(".feedback m3e-list-action", { hasText: "配色の方向性" }).click();
+  await page.locator(".fb-list m3e-list-action", { hasText: "配色の方向性" }).click();
   await page.waitForSelector(".fb-post");
   const before = await page.locator(".fb-post").count();
   await page.locator(".fb-composer m3e-button", { hasText: "テンプレ" }).click();
@@ -626,6 +626,27 @@ async function main() {
       ?.querySelector(".fb-post__reactions m3e-filter-chip[selected]"),
   );
   await shot("63-feedback-thread");
+  // 64 制作物の中の FB（相談。解決しない話し合い）: 紙面の範囲を選び「FB」に切り替えて立てる →
+  // 引き出し「FB」でそのやり取りが開き、紙面には四角い印（コメントの丸い印と見分ける）
+  await signInAs("mock-nogiku-reviewer");
+  await go(revisionUrl);
+  await pdfReady();
+  await page.waitForTimeout(500);
+  {
+    const box = await page.locator(".viewer__overlay").first().boundingBox();
+    await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.4, { steps: 8 });
+    await page.mouse.up();
+  }
+  await page.waitForSelector(".compose-pop textarea");
+  const fbSegment = page.locator(".compose-pop m3e-button-segment", { hasText: "FB" });
+  if (await fbSegment.count()) await fbSegment.click();
+  await page.fill(".compose-pop textarea", "ここの余白、もう少し詰めても良さそう？ 迷っています");
+  await page.locator(".compose-pop m3e-button", { hasText: "FB で相談" }).click();
+  await page.waitForSelector(".fb-pane--thread .fb-post");
+  await page.waitForSelector(".anchor-pin--fb");
+  await shot("64-editor-fb");
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
@@ -701,6 +722,11 @@ async function main() {
     "引き出しのシートにハンドル・止まる高さが無い",
   );
   await shot("34-mobile-sheet-half");
+  // 65 狭い画面の FB: シートのタブで「FB」に切り替える（制作物の相談の一覧）
+  await page.locator("m3e-bottom-sheet.ws__sheet m3e-tab", { hasText: "FB" }).click();
+  await page.waitForSelector("m3e-bottom-sheet.ws__sheet .fb-pane");
+  await page.waitForTimeout(500);
+  await shot("65-mobile-editor-fb");
   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
   await page.waitForTimeout(500);

@@ -17,7 +17,7 @@ import { documentExtensions } from "@/features/writing/extensions";
 import { buildPlainText, offsetToPos, posToOffset } from "@/features/writing/plainText";
 import { RangeHighlight, setHighlights, type HighlightRange } from "@/features/writing/plugins";
 import type { TextCompareProps } from "@/features/compare/textSync";
-import type { OverlayThread } from "./AnchorOverlay";
+import { overlayLabel, type OverlayThread } from "./AnchorOverlay";
 import type { TextRangeDraft } from "./TextViewer";
 import { scrollBehavior } from "@/lib/motion";
 
@@ -95,7 +95,7 @@ export function RichTextViewer({
   );
 
   // 指摘の範囲と下書き範囲を強調する
-  const key = `${mine.map((t) => `${t.id}:${t.anchor.start}-${t.anchor.end}:${t.severity}`).join("|")}|${activeThreadId}|${draft?.start}-${draft?.end}|${(diff ?? []).map((d) => `${d.kind}${d.start}-${d.end}`).join(",")}`;
+  const key = `${mine.map((t) => `${t.id}:${t.anchor.start}-${t.anchor.end}:${t.severity}:${t.kind ?? ""}`).join("|")}|${activeThreadId}|${draft?.start}-${draft?.end}|${(diff ?? []).map((d) => `${d.kind}${d.start}-${d.end}`).join(",")}`;
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const doc = editor.state.doc;
@@ -108,10 +108,11 @@ export function RichTextViewer({
         "text-anchor",
         t.id === activeThreadId ? "text-anchor--active" : "",
         t.severity === "critical" ? "text-anchor--critical" : "",
+        t.kind === "feedback" ? "text-anchor--fb" : "",
       ]
         .filter(Boolean)
         .join(" "),
-      attrs: { "data-thread": t.id, title: `コメント #${t.index}` },
+      attrs: { "data-thread": t.id, title: overlayLabel(t) },
       badge: String(t.index),
     }));
     if (draft)

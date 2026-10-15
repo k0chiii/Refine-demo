@@ -6,7 +6,9 @@
  * - 独自実装が残るのは、密度の高いテーブル・PDF／画像ビューア・座標指定だけ（§4 / §13）。
  */
 :root {
-  --mf-font: "Noto Sans JP", "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mf-font:
+    "Noto Sans JP Variable", "Noto Sans JP", "Roboto", system-ui, -apple-system, "Segoe UI",
+    sans-serif;
 
   /* 色役割（M3 color roles）。フォールバックはいまの配色（seed #1b5fb4・vibrant。m3e-theme が無いときだけ使う） */
   --mf-surface: var(--md-sys-color-surface, #f6f5ff);
@@ -86,8 +88,34 @@
   --mf-elevation-2: var(--md-sys-elevation-level2, 0 2px 6px rgb(0 0 0 / 0.2));
   --mf-elevation-3: var(--md-sys-elevation-level3, 0 4px 12px rgb(0 0 0 / 0.2));
 
-  /* 動き（M3 motion: standard easing） */
-  --mf-motion: 200ms cubic-bezier(0.2, 0, 0, 1);
+  /* 動き（M3 Expressive motion。ばね由来の web の曲線。standard の組。docs/UI_M3E.md §43） */
+  --mf-motion-effects-fast: 150ms cubic-bezier(0.31, 0.94, 0.34, 1);
+  --mf-motion-effects: 200ms cubic-bezier(0.34, 0.8, 0.34, 1);
+  --mf-motion-spatial-fast: 350ms cubic-bezier(0.27, 1.06, 0.18, 1);
+  --mf-motion-spatial: 500ms cubic-bezier(0.27, 1.06, 0.18, 1);
+  --mf-motion: var(--mf-motion-effects);
+
+  /*
+   * 文字の太さ（利用者指示 2026-10-15「フォントウエイトが重そうに見える」。M3 Typography）。
+   * 日本語は同じ太さでも欧文より黒く見える（画数が多く字面が詰まる）。M3 は「小さい文字に太さを使いすぎない」・
+   * 太さは役割の印（label / title・強調・未読）として使う。そこで:
+   * - 12/11px の label（時刻・件数・ナビの名前・上の小見出し）は 500 → 400。区別は色（on-surface-variant）で
+   * - title-medium / small・label-large は 500 のまま（本当の見出し・ボタン）。強調（emphasized）の 700 は 600
+   * M3E の部品も同じ値を読むよう --md-sys-typescale-* を :root で上書きする（部品の影 DOM にも継承される）
+   */
+  --md-sys-typescale-label-medium-font-weight: 400;
+  --md-sys-typescale-label-small-font-weight: 400;
+  --md-sys-typescale-emphasized-title-medium-font-weight: 600;
+  --md-sys-typescale-emphasized-title-small-font-weight: 600;
+  --md-sys-typescale-emphasized-label-large-font-weight: 600;
+  --md-sys-typescale-emphasized-label-medium-font-weight: 500;
+  --md-sys-typescale-emphasized-label-small-font-weight: 500;
+  /* @m3e 2.9.2 の既定（3.5rem）は誤り */
+  --md-sys-typescale-emphasized-title-medium-line-height: 1.5rem;
+  /* 日本語の行の高さ（M3: 日本語は「高さ Medium」で欧文より約 7% 高く）。本文を 28/22/18 に */
+  --md-sys-typescale-body-large-line-height: 1.75rem;
+  --md-sys-typescale-body-medium-line-height: 1.375rem;
+  --md-sys-typescale-body-small-line-height: 1.125rem;
 
   /* 文字（M3 type scale。M3E の --md-sys-typescale-* を経由し rem で持つ。ブラウザ・OS の文字サイズに追従する） */
   --mf-type-body-large: var(--md-sys-typescale-body-large-font-weight, 400)
@@ -99,12 +127,17 @@
   --mf-type-body-small: var(--md-sys-typescale-body-small-font-weight, 400)
     var(--md-sys-typescale-body-small-font-size, 0.75rem) /
     var(--md-sys-typescale-body-small-line-height, 1rem) var(--mf-font);
-  --mf-type-label-large: 500 0.875rem / 1.25rem var(--mf-font);
-  --mf-type-label-medium: 500 0.75rem / 1rem var(--mf-font);
-  --mf-type-label-small: 500 0.6875rem / 1rem var(--mf-font);
-  --mf-type-title-large: 400 1.375rem / 1.75rem var(--mf-font);
-  --mf-type-title-medium: 500 1rem / 1.5rem var(--mf-font);
-  --mf-type-title-small: 500 0.875rem / 1.25rem var(--mf-font);
+  --mf-type-label-large: var(--md-sys-typescale-label-large-font-weight, 500) 0.875rem / 1.25rem
+    var(--mf-font);
+  --mf-type-label-medium: var(--md-sys-typescale-label-medium-font-weight, 400) 0.75rem / 1.125rem
+    var(--mf-font);
+  --mf-type-label-small: var(--md-sys-typescale-label-small-font-weight, 400) 0.6875rem / 1rem
+    var(--mf-font);
+  --mf-type-title-large: 400 1.375rem / 1.875rem var(--mf-font);
+  --mf-type-title-medium: var(--md-sys-typescale-title-medium-font-weight, 500) 1rem / 1.625rem
+    var(--mf-font);
+  --mf-type-title-small: var(--md-sys-typescale-title-small-font-weight, 500) 0.875rem / 1.375rem
+    var(--mf-font);
 }
 
 * {
@@ -226,12 +259,13 @@ m3e-icon {
     "wght" 400,
     "GRAD" 0,
     "opsz" 24;
-  transition: font-variation-settings 350ms cubic-bezier(0.2, 0, 0, 1);
+  transition: font-variation-settings var(--mf-motion-effects);
 }
+/* 選択は塗り（FILL）で示し、太さは本文と揃えて 400。ホバーは少しだけ太く（500。利用者の希望で残す動き。§43） */
 m3e-icon.icon--filled {
   font-variation-settings:
     "FILL" 1,
-    "wght" 500,
+    "wght" 400,
     "GRAD" 0,
     "opsz" 24;
 }
@@ -240,7 +274,7 @@ m3e-icon-button:hover m3e-icon,
 m3e-button:hover m3e-icon {
   font-variation-settings:
     "FILL" 0,
-    "wght" 600,
+    "wght" 500,
     "GRAD" 0,
     "opsz" 24;
 }
@@ -248,7 +282,7 @@ m3e-nav-item:hover m3e-icon.icon--filled,
 m3e-icon-button:hover m3e-icon.icon--filled {
   font-variation-settings:
     "FILL" 1,
-    "wght" 600,
+    "wght" 500,
     "GRAD" 0,
     "opsz" 24;
 }
@@ -260,6 +294,11 @@ m3e-icon-button:hover m3e-icon.icon--filled {
 /* RTL では方向を持つアイコン（戻る・進む）を鏡映する（Bidirectionality › Icons & symbols） */
 [dir="rtl"] m3e-icon.icon--mirror {
   transform: scaleX(-1);
+}
+/* 強調は 600（ブラウザの既定 700 は日本語では黒すぎる。§43） */
+strong,
+b {
+  font-weight: 600;
 }
 /* 画面上の M3E 部品に書体を揃える（shadow 内は継承） */
 m3e-heading,
@@ -535,13 +574,12 @@ m3e-dialog [slot="actions"] {
   white-space: nowrap;
   vertical-align: middle;
 }
+/* 状態は色（と前のアイコン）で示し、太さは使わない（§43） */
 .meta--error {
   color: var(--mf-error);
-  font-weight: 500;
 }
 .meta--warning {
   color: var(--mf-warning);
-  font-weight: 500;
 }
 .meta--success {
   color: var(--mf-success);
@@ -784,6 +822,13 @@ m3e-dialog [slot="actions"] {
 .dialog--full .form {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
+/* 文字を書くだけの短いダイアログ（新しいスレッドなど）: 広い画面では M3 の基本ダイアログの幅（560 まで） */
+.dialog--narrow {
+  --m3e-dialog-max-width: 560px;
+}
+.dialog--narrow .dialog-body {
+  min-width: min(480px, 90vw);
+}
 @media (max-width: 599px) {
   .dialog--full {
     --m3e-dialog-max-width: 100vw;
@@ -908,9 +953,6 @@ m3e-dialog [slot="actions"] {
   cursor: pointer;
   border-bottom: 1px solid var(--mf-outline-variant);
 }
-.notification--unread {
-  font-weight: 500;
-}
 .notification__icon {
   color: var(--mf-primary);
 }
@@ -961,6 +1003,14 @@ m3e-dialog [slot="actions"] {
 }
 .text-anchor--critical.text-anchor--active {
   background: color-mix(in srgb, var(--mf-error) 30%, transparent);
+}
+/* FB（相談）の範囲: secondary・点線の下線（コメントは primary・実線） */
+.text-anchor--fb {
+  background: color-mix(in srgb, var(--mf-secondary) 10%, transparent);
+  border-bottom: 2px dashed var(--mf-secondary);
+}
+.text-anchor--fb.text-anchor--active {
+  background: color-mix(in srgb, var(--mf-secondary) 24%, transparent);
 }
 .text-anchor--draft {
   background: color-mix(in srgb, var(--mf-primary) 28%, transparent);
@@ -1666,6 +1716,30 @@ m3e-dialog [slot="actions"] {
 .anchor-pin--active {
   fill: var(--mf-on-primary-container);
 }
+/* FB（相談）の位置: 解決するコメント（primary・丸・実線）と、形と線で見分ける（M3: 色だけに頼らない。利用者は配色の
+   追加を望まないので青系の secondary を使い、四角い印・点線にする。§43） */
+.anchor-rect--fb {
+  fill: color-mix(in srgb, var(--mf-secondary) 10%, transparent);
+  stroke: var(--mf-secondary);
+  stroke-dasharray: 6 4;
+}
+.anchor-rect--fb.anchor-rect--active {
+  fill: color-mix(in srgb, var(--mf-secondary) 24%, transparent);
+}
+.anchor-pin--fb {
+  fill: var(--mf-secondary-container);
+  stroke: var(--mf-on-secondary-container);
+  stroke-width: 1.5;
+}
+.anchor-pin--fb.anchor-pin--active {
+  fill: var(--mf-secondary);
+}
+[data-anchor]:has(.anchor-pin--fb) .anchor-label {
+  fill: var(--mf-on-secondary-container);
+}
+[data-anchor]:has(.anchor-pin--fb.anchor-pin--active) .anchor-label {
+  fill: var(--mf-on-secondary, #fff);
+}
 .anchor-draft {
   fill: color-mix(in srgb, var(--mf-primary) 18%, transparent);
   stroke: var(--mf-primary);
@@ -1673,7 +1747,7 @@ m3e-dialog [slot="actions"] {
   stroke-width: 2;
 }
 .anchor-label {
-  font: 700 11px var(--mf-font); /* 紙面の座標で描く（紙面と一緒に拡大縮小する）ので px のまま */
+  font: 500 11px var(--mf-font); /* 紙面の座標で描く（紙面と一緒に拡大縮小する）ので px のまま */
   fill: var(--mf-on-primary);
   pointer-events: none;
 }
@@ -2351,7 +2425,7 @@ m3e-icon.icon--on {
 }
 .doc th {
   background: var(--mf-surface-container);
-  font-weight: 600;
+  font-weight: 500;
   text-align: start;
 }
 .doc .selectedCell {
@@ -2520,7 +2594,7 @@ m3e-icon.icon--on {
   --m3e-list-item-label-text-color: var(--mf-on-secondary-container);
   --m3e-list-item-container-shape: 28px;
   --m3e-list-item-hover-container-shape: 28px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .outline {
   padding-inline: 8px;
@@ -2838,7 +2912,7 @@ m3e-icon.icon--on {
   min-width: 1040px;
 }
 .rule-row__correct {
-  font-weight: 600;
+  font-weight: 500;
 }
 .rule-row__wrong {
   color: var(--mf-on-surface-variant);
@@ -2909,7 +2983,7 @@ m3e-icon.icon--on {
   text-decoration-color: var(--mf-error);
 }
 .finding__sugg {
-  font-weight: 600;
+  font-weight: 500;
 }
 /* フォームの先頭の浮きラベルがダイアログ本文のスクロール境界で切れないように */
 .dialog-body > .rule-editor {
@@ -2967,9 +3041,12 @@ m3e-icon.icon--on {
 .chip--error {
   --m3e-chip-label-text-color: var(--mf-error);
 }
+/* 件数のバッジは secondary（エラーの赤は通知のベルだけ。件数は誤りではない。M3 Badges・Color roles。§43） */
 .pane-tabs__badge {
   margin-inline-start: 4px;
   vertical-align: middle;
+  --m3e-badge-container-color: var(--mf-secondary-container);
+  --m3e-badge-color: var(--mf-on-secondary-container);
 }
 .thread__bot {
   --m3e-avatar-size: 28px;
@@ -3099,8 +3176,9 @@ m3e-icon.icon--on {
   font: var(--mf-type-body-medium);
   border-bottom: 1px solid var(--mf-outline-variant);
 }
+/* 行見出しは本文の太さ（M3 の表のセルは body-medium。局・担当の見出し行が階層を担う。§43） */
 .data-table__rowhead {
-  font-weight: 500;
+  font-weight: 400;
 }
 /* 長い文字は省略記号で切る（全文は hover・長押しでツールチップ） */
 .data-table__clip {
@@ -3393,51 +3471,168 @@ m3e-snackbar {
   align-self: stretch;
 }
 
-/* ---------- フィードバック（制作の議論のスレッド。利用者決定 2026-10-15）
- * 一覧は M3 リスト（上に制作物、題名、最後の投稿）。スレッドは Slack のメッセージ列のように
- * アバター・名前・時刻・本文・添付・リアクションを古い順に並べ、下に返信の欄を置く */
-.feedback {
+/* ---------- フィードバック（FB。制作の相談・話し合い。解決はしない。利用者決定 2026-10-15。§43）
+ * 受信箱 /feedback: 広い画面（840 以上）は一覧・詳細（M3 list-detail: 一覧 360–412、間 24、詳細は残り全部）。
+ * スレッドは Slack のメッセージ列（アバター・名前・時刻・本文・添付・リアクション）。下に返信の欄（面で囲う）。
+ * 一覧の行は M3 リスト（3 行: 制作物・題名・最後の投稿）。先頭はアバターで頭を揃え、未読は題名の強調＋末尾の点 */
+.fb-layout {
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(320px, 412px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
 }
-.feedback__controls {
+/* 一覧は自分でスクロールし、詳細を読む間も見えたまま（アプリバーの下に止める） */
+.fb-layout__list {
+  position: sticky;
+  top: calc(var(--mf-appbar-h, 64px) + 16px);
+  max-height: calc(100dvh - var(--mf-appbar-h, 64px) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-low);
+  padding: 8px 0;
+}
+.fb-layout__detail {
+  min-width: 0;
+}
+.fb-layout__detail--empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 50vh;
+  text-align: center;
+  color: var(--mf-on-surface-variant);
+}
+.fb-layout__detail--empty m3e-icon {
+  font-size: 48px;
+}
+.fb-list-pane {
+  display: grid;
+  gap: 8px;
+}
+.fb-list-pane__controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  padding: 0 16px;
+}
+.fb-layout__list .fb-list-pane__controls {
+  padding: 4px 16px 0;
+}
+.fb-list__empty {
+  padding: 24px 16px;
+}
+/* 一覧ペイン（角丸の面）の中では端まで広げない（.list の -16px で頭と時刻が切れていた） */
+.fb-layout__list .list,
+.fb-pane .fb-pane__list {
+  margin-inline: 0;
+}
+.fb-list__item {
+  --m3e-list-item-three-line-top-offset: 12px;
+}
+/* 最後の投稿は 2 行まで（一覧は見分けるためのもの。全文はスレッドで） */
+.fb-list__item [slot="supporting-text"],
+.fb-pane__list [slot="supporting-text"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.fb-pane__list [slot="trailing"] {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* 選んでいるスレッド（一覧・詳細）: secondary-container の地（M3 Lists: selected） */
+.fb-list__item--selected {
+  --m3e-list-item-container-color: var(--mf-secondary-container);
+  border-radius: var(--mf-shape-lg);
+}
+.fb-list__avatar {
+  display: grid;
+  place-items: center;
+}
+.fb-list__trailing {
+  white-space: nowrap;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  font: var(--mf-type-body-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+}
+.fb-list__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mf-primary);
+}
+/* 何の制作物の相談か（スレッドの上。outlined card。「紙面で見る」で制作物の中の同じ相談へ） */
+.fb-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface);
+}
+.fb-context__icon {
+  color: var(--mf-secondary);
+}
+.fb-context__text {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.fb-context__work {
+  font: var(--mf-type-title-small);
+}
+.fb-context__where {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
 }
 .fb-thread {
   display: grid;
   gap: 16px;
-  max-width: 840px;
+  max-width: 960px;
 }
+.fb-thread__title {
+  margin: 0;
+  font: var(--mf-type-title-large);
+  font-feature-settings: "palt" 1;
+  letter-spacing: 0.02em;
+}
+/* 最後の投稿（リアクション）が返信の欄に隠れないよう下に余白 */
 .fb-thread__posts {
   display: grid;
   gap: 4px;
+  padding-bottom: 8px;
 }
+/* 返信の欄: 面（surface-container）で囲い、上の角を丸める（線 1 本で区切らない。M3: 区切りは色の面で） */
 .fb-thread__composer {
   position: sticky;
   bottom: 0;
-  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
-  background: var(--mf-surface);
-  border-top: 1px solid var(--mf-outline-variant);
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--mf-surface-container);
+  border-radius: var(--mf-shape-xl) var(--mf-shape-xl) 0 0;
 }
 /* compact: 下部ナビ（固定）の上に止める（セーフエリアはナビが持つ） */
 @media (max-width: 599px) {
   .fb-thread__composer {
     bottom: calc(var(--mf-navbar-h) + env(safe-area-inset-bottom, 0px));
     padding-bottom: 12px;
+    margin-inline: -16px;
   }
 }
 .fb-post {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   padding: 12px 8px;
-  border-radius: var(--mf-shape-md);
-}
-.fb-post:hover {
-  background: color-mix(in srgb, var(--mf-on-surface) 4%, transparent);
 }
 .fb-post--deleted {
   align-items: center;
@@ -3445,8 +3640,8 @@ m3e-snackbar {
 .fb-post__avatar {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   color: var(--mf-on-surface-variant);
 }
 .fb-post__main {
@@ -3464,21 +3659,25 @@ m3e-snackbar {
 .fb-post__name {
   font: var(--mf-type-title-small);
 }
+/* 時刻・テンプレは本文の太さ（400）。区別は色と大きさで */
 .fb-post__time {
-  font: var(--mf-type-label-medium);
+  font: var(--mf-type-body-small);
+  font-variant-numeric: tabular-nums;
   color: var(--mf-on-surface-variant);
 }
 .fb-post__tpl {
   font: var(--mf-type-label-small);
   color: var(--mf-on-secondary-container);
   background: var(--mf-secondary-container);
-  border-radius: var(--mf-shape-sm);
-  padding: 2px 8px;
+  border-radius: var(--mf-shape-xs);
+  padding: 1px 6px;
 }
 .fb-post__body {
   white-space: pre-wrap;
   word-break: break-word;
   font: var(--mf-type-body-large);
+  line-height: 1.75;
+  letter-spacing: 0.02em;
 }
 .fb-post__reactions {
   display: flex;
@@ -3486,12 +3685,19 @@ m3e-snackbar {
   align-items: center;
   gap: 4px 8px;
 }
+/* リアクションを足すボタンは、ポインタで重ねたとき・キーボードで中に入ったときにはっきり出す */
 .fb-post__add-reaction {
-  opacity: 0.7;
+  opacity: 0.6;
+  transition: opacity var(--mf-motion-effects-fast);
 }
 .fb-post:hover .fb-post__add-reaction,
-.fb-post__add-reaction:focus-visible {
+.fb-post:focus-within .fb-post__add-reaction {
   opacity: 1;
+}
+@media (hover: none) {
+  .fb-post__add-reaction {
+    opacity: 1;
+  }
 }
 .fb-files {
   display: grid;
@@ -3549,6 +3755,32 @@ m3e-snackbar {
   display: grid;
   gap: 8px;
 }
+/* 書く欄: M3 の filled テキストフィールドの面（surface-container-highest・角丸）。書いた分だけ伸びる。
+   使い方（メンション・送信のキー）は欄の下の補助の文に出す（プレースホルダーだけに頼らない） */
+.fb-composer__input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  field-sizing: content;
+  min-height: 3.5rem;
+  max-height: 40vh;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-highest);
+  color: var(--mf-on-surface);
+  font: var(--mf-type-body-large);
+  line-height: 1.6;
+}
+.fb-composer__input:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 0;
+}
+.fb-composer__hint {
+  margin: 0 16px;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
 .fb-composer__files {
   display: grid;
   gap: 4px;
@@ -3560,4 +3792,138 @@ m3e-snackbar {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ---------- エディタの引き出し「FB」（制作物の中の相談。§43） */
+.fb-pane {
+  display: grid;
+  gap: 12px;
+  padding: 12px 12px 16px;
+  align-content: start;
+}
+.fb-pane__intro {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 0 4px;
+}
+.fb-pane__lead {
+  margin: 0;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+}
+.fb-pane__new {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container);
+}
+.fb-pane__empty {
+  padding: 8px 4px;
+}
+.fb-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -4px -4px 0;
+}
+.fb-pane__heading {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.fb-pane__title {
+  font: var(--mf-type-title-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-pane__sub {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
+.fb-pane__expand {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: var(--mf-on-surface-variant);
+}
+.fb-pane__expand:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.fb-pane__expand:focus-visible {
+  outline: var(--mf-focus-ring);
+}
+.fb-pane__place {
+  justify-self: start;
+}
+.fb-pane .fb-thread__composer {
+  margin: 0 -12px -16px;
+  bottom: 0;
+}
+.fb-pane .fb-post {
+  padding-inline: 0;
+}
+/* 紙面の FB の番号（紙面の印と同じ: secondary-container の角丸の四角） */
+.fb-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+  font: var(--mf-type-label-medium);
+  font-variant-numeric: tabular-nums;
+}
+/* 範囲から書く欄の「コメント／FB」切り替え */
+.compose-pop__kind {
+  width: 100%;
+  margin-bottom: 4px;
+}
+.compose-pop__note {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  padding: 0 4px 4px;
+}
+.compose-pop--fb {
+  outline: 2px dashed var(--mf-secondary);
+  outline-offset: -2px;
+}
+
+/* 制作物一覧の FB（相談）の数。押すと制作物の FB を開く */
+.works-fb {
+  all: unset;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: var(--mf-shape-full, 999px);
+  cursor: pointer;
+  color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-medium);
+  font-variant-numeric: tabular-nums;
+}
+.works-fb m3e-icon {
+  font-size: 20px;
+}
+.works-fb:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.works-fb:focus-visible {
+  outline: var(--mf-focus-ring);
+}
+.works-fb--unread {
+  color: var(--mf-on-surface);
+}
+.works-fb__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mf-primary);
 }

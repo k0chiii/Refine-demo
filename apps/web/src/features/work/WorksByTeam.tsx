@@ -29,7 +29,8 @@ export function WorksByTeam({
   teams: readonly Team[];
   axis: WorkTeamAxis;
   compact: boolean;
-  onOpen: (workId: string) => void;
+  /** tab: "feedback" で制作物の FB（相談）を開く */
+  onOpen: (workId: string, tab?: "feedback") => void;
 }) {
   const groups = groupWorksByTeam(works, teams, axis);
   return compact ? (
@@ -111,7 +112,7 @@ function TeamTable({
 }: {
   groups: WorkTeamGroup<WorkRow>[];
   axis: WorkTeamAxis;
-  onOpen: (workId: string) => void;
+  onOpen: (workId: string, tab?: "feedback") => void;
 }) {
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const toggle = (k: string) =>
@@ -123,7 +124,7 @@ function TeamTable({
     });
   // 担当がまだ無い（全部が「担当未設定」）ときは見出しの行を出さず、ふつうの表にする
   const flat = groups.length === 1 && groups[0]!.bureau === null;
-  const span = COLUMNS.length + 1;
+  const span = COLUMNS.length + 2;
   const label = `制作物一覧（${axis === "owner" ? "主管担当" : "制作担当"}ごと）`;
 
   const head = (k: string, level: 1 | 2, name: string, count: number) => {
@@ -173,6 +174,9 @@ function TeamTable({
             {c.cell(w)}
           </td>
         ))}
+        <td className="data-table__td">
+          <FbCount w={w} onOpen={onOpen} />
+        </td>
       </tr>
     ));
 
@@ -194,6 +198,9 @@ function TeamTable({
                 {c.header}
               </th>
             ))}
+            <th scope="col" className="data-table__th" style={{ width: "88px" }}>
+              FB
+            </th>
           </tr>
         </thead>
         {flat ? (
@@ -236,7 +243,7 @@ function TeamList({
   onOpen,
 }: {
   groups: WorkTeamGroup<WorkRow>[];
-  onOpen: (workId: string) => void;
+  onOpen: (workId: string, tab?: "feedback") => void;
 }) {
   const item = (w: WorkRow, k: string) => (
     <M3eListAction
@@ -250,6 +257,7 @@ function TeamList({
       <span slot="supporting-text">
         {w.latestRevisionLabel ?? "未提出"}
         {w.acceptingDeadlineAt ? `・締切 ${formatDeadlineUntil(w.acceptingDeadlineAt)}` : ""}
+        {w.fb.threads ? `・FB ${w.fb.threads}${w.fb.unread ? `（未読 ${w.fb.unread}）` : ""}` : ""}
       </span>
       {w.lifecycle !== "active" ? (
         <span slot="trailing" className="meta">
@@ -291,5 +299,31 @@ function TeamList({
         );
       })}
     </M3eActionList>
+  );
+}
+
+/** FB（相談）の数と未読。押すと制作物の FB を開く（制作物一覧から相談へ直接入る。§43） */
+export function FbCount({
+  w,
+  onOpen,
+}: {
+  w: WorkRow;
+  onOpen: (workId: string, tab?: "feedback") => void;
+}) {
+  if (w.fb.threads === 0) return <span className="muted">—</span>;
+  return (
+    <button
+      type="button"
+      className={`works-fb ${w.fb.unread ? "works-fb--unread" : ""}`}
+      aria-label={`FB ${w.fb.threads} 件${w.fb.unread ? `（未読 ${w.fb.unread}）` : ""}を開く`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(w.id, "feedback");
+      }}
+    >
+      <M3eIcon name="forum" />
+      {w.fb.threads}
+      {w.fb.unread ? <span className="works-fb__dot" aria-hidden="true" /> : null}
+    </button>
   );
 }

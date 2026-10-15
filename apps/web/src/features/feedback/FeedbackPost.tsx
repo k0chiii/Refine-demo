@@ -28,6 +28,16 @@ export type PostData = NonNullable<ThreadData>["posts"][number];
  * ⋮ から自分の投稿を直す・消す（消した投稿は「削除された投稿」として残す）。
  * リアクションは決まった絵文字だけ（FEEDBACK_REACTIONS）。自分が付けたものは選択中のチップ。
  */
+/** リアクションの名前（メニューの項目と読み上げ） */
+const reactionNames: Record<string, string> = {
+  "👍": "いいね",
+  "🙏": "ありがとう",
+  "👀": "見ました",
+  "🎉": "おめでとう",
+  "💡": "ひらめき",
+  "❤️": "好き",
+};
+
 export function FeedbackPost({ post, people }: { post: PostData; people: readonly MentionUser[] }) {
   const toggle = useMutation(api.feedback.toggleReaction);
   const edit = useMutation(api.feedback.editPost);
@@ -85,7 +95,7 @@ export function FeedbackPost({ post, people }: { post: PostData; people: readonl
                 {post.can.edit ? (
                   <M3eMenuItem onClick={() => setEditing(post.body)}>
                     <M3eIcon slot="icon" name="edit" />
-                    直す
+                    編集
                   </M3eMenuItem>
                 ) : null}
                 {post.can.delete ? (
@@ -101,7 +111,7 @@ export function FeedbackPost({ post, people }: { post: PostData; people: readonl
         {editing !== null ? (
           <div className="fb-post__edit">
             <TextArea
-              aria-label="投稿を直す"
+              aria-label="投稿を編集"
               value={editing}
               onChange={(e) => setEditing(e.target.value)}
               rows={4}
@@ -139,29 +149,30 @@ export function FeedbackPost({ post, people }: { post: PostData; people: readonl
             <M3eMenuTrigger htmlFor={reactId} />
           </M3eIconButton>
           <M3eMenu id={reactId} className="fb-react-menu">
-            {FEEDBACK_REACTIONS.map((e) => (
-              <M3eMenuItem key={e} onClick={() => void react.run(e)}>
-                {e}
-              </M3eMenuItem>
-            ))}
+            {FEEDBACK_REACTIONS.map((e) => {
+              // 項目に名前を添え、自分が付けたものに印（M3 Menus: 選択は色以外でも示す）
+              const mine = post.reactions.some((r) => r.emoji === e && r.mine);
+              return (
+                <M3eMenuItem key={e} onClick={() => void react.run(e)}>
+                  {mine ? <M3eIcon slot="icon" name="check" /> : null}
+                  {e} {reactionNames[e] ?? ""}
+                </M3eMenuItem>
+              );
+            })}
           </M3eMenu>
         </div>
       </div>
       <M3eDialog open={confirmDelete} onClosed={() => setConfirmDelete(false)} closeLabel="閉じる">
         <span slot="header">投稿を削除しますか？</span>
         <div className="dialog-body">
-          <p>「削除された投稿」として残り、本文と添付は見えなくなります。</p>
+          <p>「削除された投稿」として残り、本文と添付は見えなくなります。元に戻せません</p>
         </div>
         <div slot="actions" className="row">
           <span className="spacer" />
           <M3eButton variant="text" onClick={() => setConfirmDelete(false)}>
             キャンセル
           </M3eButton>
-          <M3eButton
-            variant="filled"
-            disabled={doDelete.pending}
-            onClick={() => void doDelete.run()}
-          >
+          <M3eButton variant="text" disabled={doDelete.pending} onClick={() => void doDelete.run()}>
             削除
           </M3eButton>
         </div>

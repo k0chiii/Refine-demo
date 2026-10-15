@@ -24,6 +24,25 @@ export function formatJstShort(ms: number): string {
   return fmtShort.format(new Date(ms));
 }
 
+/**
+ * 一覧の行の末尾に置く短い時刻（メッセージの一覧の慣習）: 今日なら「23:11」、それ以外は「10/15」。
+ * 詳しい時刻は開いた先（スレッド）に出す
+ */
+const fmtHm = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const fmtMd = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  month: "numeric",
+  day: "numeric",
+});
+export function formatJstCompact(ms: number, now = Date.now()): string {
+  const day = (t: number) => fmtMd.format(new Date(t));
+  return day(ms) === day(now) ? fmtHm.format(new Date(ms)) : day(ms);
+}
+
 /** 日付だけの表示（「最後の動き」など、締切ではない日付。締切・納期は formatDeadline を使う） */
 const fmtDate = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
