@@ -120,7 +120,7 @@ export function useNotationCheck(
   };
 }
 
-/** 文書の [from, to) がまだ指摘の文字のままなら置き換える（1 回の取り消しで戻せる） */
+/** 文書の [from, to) がまだ確認箇所の文字のままなら置き換える（1 回の取り消しで戻せる） */
 function applyOne(editor: Editor, f: PlacedFinding, tr = editor.state.tr) {
   if (editor.state.doc.textBetween(f.from, f.to) !== f.original) return false;
   if (f.suggestion) tr.insertText(f.suggestion, tr.mapping.map(f.from), tr.mapping.map(f.to));
@@ -169,33 +169,33 @@ export function NotationPanel({
     return (
       <div className="panel-pad stack">
         <p className="small">
-          この制作物は表記統一のカテゴリが未設定のため、表記の検査をしていません。
+          この制作物は表記統一のカテゴリが未設定のため、表記の検査をしていません
         </p>
         <p className="small muted">
-          制作物の「編集」でカテゴリ（一般・企画対応・文書 など）を選ぶと検査します。
+          制作物の「編集」でカテゴリ（一般・企画対応・文書 など）を選ぶと検査します
         </p>
       </div>
     );
   return (
     <div className="panel-pad stack notation-panel">
       <div className="row small muted" role="status">
-        {check.state === "checking" ? "検査しています…" : `指摘 ${check.findings.length} 件`}
+        {check.state === "checking" ? "検査しています…" : `確認箇所 ${check.findings.length} 件`}
         <span>
           ・カテゴリ {check.categories.join("・")}・ルール {check.ruleCount} 件
         </span>
       </div>
       {check.truncated ? (
-        <p className="small warn-text">文章が長いため、一部だけを検査しました。</p>
+        <p className="small warn-text">文章が長いため、一部だけを検査しました</p>
       ) : null}
       {check.skipped.length ? (
         <p className="small muted">
-          使えないルール {check.skipped.length} 件（正規表現の誤り）を除いて検査しています。
+          使えないルール {check.skipped.length} 件（正規表現の誤り）を除いて検査しています
         </p>
       ) : null}
       {!readOnly && fixable.length > 1 ? (
         <M3eButton variant="tonal" onClick={fixAll}>
           <M3eIcon slot="icon" name="auto_fix_high" />
-          必須・推奨の {fixable.length} 件をまとめて修正
+          まとめて修正（{fixable.length} 件）
         </M3eButton>
       ) : null}
       {lastFix ? (
@@ -213,10 +213,10 @@ export function NotationPanel({
         </div>
       ) : null}
       {check.findings.length === 0 && check.state === "ready" ? (
-        <p className="small muted">表記の指摘はありません。</p>
+        <p className="small muted">表記の確認箇所はありません</p>
       ) : (
         <FindingList
-          label="表記の指摘"
+          label="表記の確認箇所"
           findings={check.findings}
           actions={(f) => (
             <>
@@ -237,7 +237,7 @@ export function NotationPanel({
                 </M3eIconButton>
               ) : null}
               <M3eIconButton
-                aria-label="この指摘を無視"
+                aria-label="この確認箇所を無視"
                 title="無視（この画面を開いている間）"
                 onClick={() => check.ignore(f)}
               >
@@ -247,7 +247,7 @@ export function NotationPanel({
           )}
         />
       )}
-      <p className="small muted">検査はこの端末の中で行い、文章を外部に送りません。</p>
+      <p className="small muted">検査はこの端末の中で行い、文章を外部に送りません</p>
       <AiAssist
         workId={workId}
         readOnly={readOnly}

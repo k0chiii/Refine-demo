@@ -1,5 +1,6 @@
 import {
   DomainError,
+  revisionLabel,
   isAccepting,
   isAllowed,
   planBotThreads,
@@ -19,7 +20,7 @@ import {
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 import { rulesOfSnapshot } from "./notation.ts";
-import { notify } from "./notifications.ts";
+import { about, notify } from "./notifications.ts";
 
 /**
  * 提出時の自動校正。
@@ -252,8 +253,8 @@ export async function submitProofreadSegments(
     if (total > 0)
       await notify(ctx, work.creatorIds, null, {
         kind: "auto_proofread_done",
-        title: `自動校正: ${total} 件の表記の指摘（${work.title}）`,
-        body: "校正画面の「自動校正」で確認できます。自動で解決済みにはなりません。",
+        title: "自動校正が終わりました",
+        body: `${about(work.title, revisionLabel(revision))}: 表記のコメント ${total} 件。校正画面の「自動校正」で確かめてください（自動では解決済みになりません）。`,
         workId: work.id,
         revisionId: revision.id,
       });

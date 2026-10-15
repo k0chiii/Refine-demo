@@ -27,7 +27,7 @@ type RevisionData = FunctionReturnType<typeof api.revisions.get>;
 
 /**
  * エディタの引き出し「情報」: 基本情報、専門確認、校了履歴と、制作物に対する操作
- * （校了を宣言、理由付きで再開、校正者を割当、編集、閲覧権限、保留／中止）。
+ * （校了を宣言、理由付きで再開、校正者の割り当て、編集、閲覧権限、保留／中止）。
  */
 export function InfoTab({
   work,
@@ -50,6 +50,7 @@ export function InfoTab({
   const [reopenOpen, setReopenOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState("");
   const [autoNote, setAutoNote] = useState("");
   const [confirmer, setConfirmer] = useState<string[]>([]);
@@ -66,7 +67,7 @@ export function InfoTab({
   const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
   const checks = revision?.checks ?? [];
   const pendingChecks = checks.filter((c) => c.state === "pending").length;
-  // 人の未対応の指摘（自動校正は校了を止めないので別に数える）
+  // 人の未対応のコメント（自動校正は校了を止めないので別に数える）
   const blocking = Math.max(0, (candidate?.unresolvedCount ?? 0) - (candidate?.openBotCount ?? 0));
   const lifecycleTargets: Array<"active" | "on_hold" | "cancelled"> =
     w.lifecycle === "active"
@@ -116,12 +117,8 @@ export function InfoTab({
     setReviewerIds([]);
   });
   const doLifecycle = useAction(async (to: "active" | "on_hold" | "cancelled") => {
-    if (
-      to === "cancelled" &&
-      !window.confirm("この制作物を中止します。元に戻せません。よろしいですか？")
-    )
-      return;
     await changeLifecycle({ workId: w.id as Id<"works">, to, expectedVersion: w.version });
+    if (to === "cancelled") setCancelOpen(false);
   });
   const doCompleteCheck = useAction(async (checkId: string) => {
     await completeCheck({ checkId: checkId as Id<"requiredChecks"> });
@@ -154,6 +151,10 @@ export function InfoTab({
       {/* 基本情報の表。目的・区分・旧ID はその場で直せる（編集できる人だけ。版番号で競合を検出） */}
       <table className="prop-table">
         <tbody>
+          <tr>
+            <th scope="row">名称</th>
+            <td>{w.title}</td>
+          </tr>
           <tr>
             <th scope="row">目的</th>
             <td>
@@ -190,11 +191,11 @@ export function InfoTab({
             </tr>
           ) : null}
           <tr>
-            <th scope="row">制作</th>
+            <th scope="row">制作者</th>
             <td>{people.creators.map((p) => p?.name).join("、") || "—"}</td>
           </tr>
           <tr>
-            <th scope="row">校了</th>
+            <th scope="row">校了権限者</th>
             <td>{people.approver?.name}</td>
           </tr>
           <tr>
@@ -256,7 +257,7 @@ export function InfoTab({
         ) : null}
         {can.assign && (revision || accepting) && w.lifecycle === "active" ? (
           <M3eButton variant="outlined" onClick={() => setAssignOpen(true)}>
-            校正者を割当
+            校正者を割り当てる
           </M3eButton>
         ) : null}
         {can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
@@ -266,7 +267,13 @@ export function InfoTab({
         ) : null}
         {can.edit
           ? lifecycleTargets.map((to) => (
-              <M3eButton key={to} variant="text" onClick={() => void doLifecycle.run(to)}>
+              <M3eButton
+                key={to}
+                variant="text"
+                onClick={() =>
+                  to === "cancelled" ? setCancelOpen(true) : void doLifecycle.run(to)
+                }
+              >
                 {lifecycleActionLabel[to]}
               </M3eButton>
             ))
@@ -319,7 +326,7 @@ export function InfoTab({
                       disabled={doCompleteCheck.pending}
                       onClick={() => void doCompleteCheck.run(c.id)}
                     >
-                      確認完了
+                      確認を完了
                     </M3eButton>
                   ) : null}
                   {c.canWaive ? (
@@ -327,7 +334,7 @@ export function InfoTab({
                       variant="text"
                       onClick={() => setWaiveDraft({ checkId: c.id, reason: "" })}
                     >
-                      免除
+                      免除する
                     </M3eButton>
                   ) : null}
                 </div>
@@ -336,7 +343,7 @@ export function InfoTab({
           </div>
           {waiveDraft ? (
             <div className="stack">
-              <Field label="免除の理由（必須・監査に残ります）" required>
+              <Field label="免除の理由" hint="監査の記録に残ります" required>
                 <TextArea
                   value={waiveDraft.reason}
                   onChange={(e) => setWaiveDraft({ ...waiveDraft, reason: e.target.value })}
@@ -345,7 +352,7 @@ export function InfoTab({
               <div className="row">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setWaiveDraft(null)}>
-                  取消
+                  キャンセル
                 </M3eButton>
                 <M3eButton
                   variant="filled"
@@ -380,7 +387,7 @@ export function InfoTab({
               <div className="row">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setAddCheckDraft(null)}>
-                  取消
+                  キャンセル
                 </M3eButton>
                 <M3eButton
                   variant="filled"
@@ -444,14 +451,14 @@ export function InfoTab({
           ) : null}
           {blocking > 0 ? (
             <div className="alert--warn alert">
-              <span>未対応の指摘が {blocking} 件あります。理由なしでは校了できません。</span>
+              <span>未対応のコメントが {blocking} 件あります。理由なしでは校了できません。</span>
             </div>
           ) : null}
           {candidate && candidate.openBotCount > 0 ? (
             <>
               <div className="alert--warn alert">
                 <span>
-                  自動校正の指摘が {candidate.openBotCount}{" "}
+                  自動校正のコメントが {candidate.openBotCount}{" "}
                   件、まだ確認されていません。校了はできますが、件数とメモが校了の記録に残ります。
                 </span>
               </div>
@@ -460,14 +467,18 @@ export function InfoTab({
               </Field>
             </>
           ) : null}
-          <Field label="例外校了の理由（未解決を残す場合のみ）">
+          <Field
+            label="例外校了の理由"
+            hint="未解決のコメントや専門確認を残して校了するときだけ書きます"
+          >
             <TextArea
               value={exceptionReason}
               onChange={(e) => setExceptionReason(e.target.value)}
             />
           </Field>
           <UserPicker
-            label="独立確認者（制作者本人が校了する場合のみ）"
+            label="独立確認者"
+            hint="制作者本人が校了するときだけ選びます"
             single
             value={confirmer}
             onChange={setConfirmer}
@@ -509,6 +520,27 @@ export function InfoTab({
             onClick={() => void doReopen.run()}
           >
             再開する
+          </M3eButton>
+        </div>
+      </M3eDialog>
+
+      <M3eDialog open={cancelOpen} onClosed={() => setCancelOpen(false)} closeLabel="閉じる">
+        <span slot="header">この制作物を中止しますか？</span>
+        <div className="dialog-body">
+          <p style={{ margin: 0 }}>
+            中止すると、版の提出・校正・校了ができなくなります。中止は取り消せません。
+          </p>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setCancelOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doLifecycle.pending}
+            onClick={() => void doLifecycle.run("cancelled")}
+          >
+            中止する
           </M3eButton>
         </div>
       </M3eDialog>

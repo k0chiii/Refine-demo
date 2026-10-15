@@ -110,7 +110,7 @@ export function RichTextViewer({
       ]
         .filter(Boolean)
         .join(" "),
-      attrs: { "data-thread": t.id, title: `指摘 #${t.index}` },
+      attrs: { "data-thread": t.id, title: `コメント #${t.index}` },
       badge: String(t.index),
     }));
     if (draft)

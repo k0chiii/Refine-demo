@@ -272,7 +272,7 @@ function AddProfileDialog({
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>
-          取消
+          キャンセル
         </M3eButton>
         <M3eButton
           variant="filled"

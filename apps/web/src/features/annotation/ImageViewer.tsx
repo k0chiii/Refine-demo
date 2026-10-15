@@ -6,6 +6,8 @@ import { useStageWidth } from "./useStageWidth";
 interface Props {
   url: string;
   artifactId: string;
+  /** 画像の代替テキスト（どの版のどの添付か。例: 第2版の添付「poster.png」） */
+  alt: string;
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
@@ -26,6 +28,7 @@ interface Props {
 export function ImageViewer({
   url,
   artifactId,
+  alt,
   threads,
   activeThreadId,
   onSelectThread,
@@ -61,7 +64,7 @@ export function ImageViewer({
         <div className="viewer__page">
           <img
             src={url}
-            alt="校正対象の画像"
+            alt={alt}
             style={viewport ? { width: viewport.width, height: viewport.height } : undefined}
             onLoad={(e) => {
               const img = e.currentTarget;

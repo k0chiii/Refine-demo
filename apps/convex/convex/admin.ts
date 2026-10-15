@@ -11,7 +11,7 @@ export const setSystemAdmin = mutation({
     if (!principal.isSystemAdmin) unauthenticated();
     if (!value && userId === principal.userId) {
       const admins = (await ctx.db.query("users").take(1000)).filter((u) => u.isSystemAdmin);
-      if (admins.length <= 1) throw new Error("最後の管理者は剥奪できません");
+      if (admins.length <= 1) throw new Error("最後のシステム管理者は外せません");
     }
     const before = await ctx.db.get("users", userId);
     await ctx.db.patch("users", userId, { isSystemAdmin: value });

@@ -10,6 +10,7 @@ import {
   pdfSegments,
   type ArtifactRef,
 } from "./extract";
+import { describeError } from "@/lib/errors";
 
 export interface AutoProofreadProgress {
   artifactId: string;
@@ -66,7 +67,7 @@ export function useAutoProofread(revisionId: string | null, artifacts: readonly 
               ...(await pdfOcrSegments(blob, r.textless, (d, t) =>
                 setProgress({
                   artifactId: artifact.id,
-                  label: `${name} の文字の無いページを OCR で読み取っています（${d}/${t}）`,
+                  label: `${name} の文字の無いページを画像から読み取っています（${d}/${t}）`,
                 }),
               )),
             ];
@@ -74,7 +75,7 @@ export function useAutoProofread(revisionId: string | null, artifacts: readonly 
           segments = await imageSegments(blob, (p) =>
             setProgress({
               artifactId: artifact.id,
-              label: `${name} を OCR で読み取っています（${Math.round(p * 100)}%）`,
+              label: `${name} の文字を画像から読み取っています（${Math.round(p * 100)}%）`,
             }),
           );
         }
@@ -102,7 +103,7 @@ export function useAutoProofread(revisionId: string | null, artifacts: readonly 
         await fail({
           runId: run.id,
           artifactId: artifact.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: describeError(e).message,
         }).catch(() => undefined);
       }
     };

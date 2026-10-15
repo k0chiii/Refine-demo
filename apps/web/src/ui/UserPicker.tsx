@@ -102,7 +102,7 @@ export function UserPicker({
             hideSelectionIndicator
             loading={open && rawCandidates === undefined}
             loadingLabel="検索しています…"
-            noDataLabel={text ? "該当する委員がいません" : "候補を表示するには文字を入力"}
+            noDataLabel={text ? "該当するユーザーがいません" : "候補を表示するには文字を入力"}
             onChange={(e) => {
               const id = (e.target as unknown as { value: string | null }).value;
               if (id) pick(id);

@@ -194,7 +194,7 @@ export function Editor({
     search.tab ?? (readLayout() === "panel" ? "comments" : null),
   );
   const [showResolved, setShowResolved] = useState(false);
-  /** コメントの絞り込み: 人の指摘だけ / 自動校正だけ */
+  /** コメントの絞り込み: 人のコメントだけ / 自動校正だけ */
   const [who, setWho] = useState<"all" | "human" | "bot">("all");
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [artifactSheet, setArtifactSheet] = useState(false);
@@ -670,7 +670,7 @@ export function Editor({
       return (
         <div className="empty editor__empty">
           <M3eIcon name="upload_file" />
-          まだ版がありません。
+          まだ版がありません
           {workData.can.submit && work.lifecycle === "active" ? (
             <div className="row">
               <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
@@ -711,7 +711,7 @@ export function Editor({
           </p>
           {canComment ? (
             <>
-              <Field label="外部での議論結果（合意事項として記録）">
+              <Field label="外部での議論の結果" hint="合意事項としてコメントに残ります">
                 <TextArea value={externalNote} onChange={(e) => setExternalNote(e.target.value)} />
               </Field>
               <div className="row">
@@ -721,7 +721,7 @@ export function Editor({
                   disabled={doRecordExternal.pending || !externalNote.trim()}
                   onClick={() => void doRecordExternal.run()}
                 >
-                  記録
+                  合意事項として記録
                 </M3eButton>
               </div>
             </>
@@ -807,6 +807,7 @@ export function Editor({
         <ImageViewer
           url={blob.url}
           artifactId={artifact.id}
+          alt={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
           draft={draft?.rect || draft?.point ? draft : null}
           onDraft={(d) => {
@@ -822,7 +823,7 @@ export function Editor({
       );
     return (
       <div className="empty">
-        この形式はブラウザ内でプレビューできません。
+        この形式はブラウザ内でプレビューできません
         {blob.url ? (
           <a href={blob.url} download={artifact.fileName}>
             ダウンロード
@@ -885,6 +886,7 @@ export function Editor({
         <ImageViewer
           url={otherBlob.url}
           artifactId={otherArtifact.id}
+          alt={`${other?.revision.label ?? "比べる版"}の添付「${otherArtifact.fileName}」`}
           {...none}
           draft={null}
           onDraft={() => undefined}
@@ -922,7 +924,7 @@ export function Editor({
                 selected={who === "human"}
                 onClick={() => setWho((v) => (v === "human" ? "all" : "human"))}
               >
-                人の指摘
+                人のコメント
               </M3eFilterChip>
               <M3eFilterChip
                 selected={who === "bot"}
@@ -942,8 +944,8 @@ export function Editor({
       </div>
       <div className="comments__list">
         {carryCandidates && carryCandidates.length > 0 ? (
-          <div className="carry-box" aria-label="前版の未解決指摘">
-            <div className="label-large">前版の未解決指摘 {carryCandidates.length}</div>
+          <div className="carry-box" aria-label="前版の未解決コメント">
+            <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
             {carryCandidates.map((c) => (
               <div key={c.id} className="carry">
                 <div className="small muted">
@@ -957,7 +959,7 @@ export function Editor({
                     disabled={doCarry.pending}
                     onClick={() => void doCarry.run(c.id)}
                   >
-                    この版へ引き継ぐ
+                    この版へ持ち越す
                   </M3eButton>
                 </div>
               </div>
@@ -965,14 +967,14 @@ export function Editor({
           </div>
         ) : null}
         {!target ? (
-          <p className="muted small comments__empty">版を提出するとコメントできます。</p>
+          <p className="muted small comments__empty">版を提出するとコメントできます</p>
         ) : threads.length === 0 ? (
           <p className="muted small comments__empty">
             {canComment
               ? touch
-                ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます。"
-                : "ファイルの上でドラッグすると、その場にコメントできます。"
-              : "コメントはありません。"}
+                ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                : "ファイルの上でドラッグすると、その場にコメントできます"
+              : "コメントはありません"}
           </p>
         ) : (
           threads.map((t) => card(t))
@@ -1047,7 +1049,9 @@ export function Editor({
             <M3eIcon name="arrow_back" className="icon--mirror" />
           </M3eIconButton>
         </AppBarSlot>
-        <AppBarSlot slot="title">{work.title}</AppBarSlot>
+        <AppBarSlot slot="title" title={work.title}>
+          {work.title}
+        </AppBarSlot>
         {revision ? (
           <AppBarSlot slot="subtitle">
             {revision.label}・
@@ -1071,7 +1075,7 @@ export function Editor({
               <M3eIcon name="task_alt" />
             </M3eIconButton>
           ) : data?.myAssignment?.state === "responded" ? (
-            <span className="ws__done" title="確認完了" aria-label="確認完了">
+            <span className="ws__done" role="img" title="確認完了" aria-label="確認完了">
               <M3eIcon name="check_circle" className="icon--filled" />
             </span>
           ) : null}

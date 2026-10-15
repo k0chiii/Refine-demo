@@ -31,15 +31,15 @@ export const severityLabel: Record<string, string> = {
 };
 export const resolutionLabel: Record<string, string> = {
   open: "未対応",
-  acknowledged: "確認済",
+  acknowledged: "確認済み",
   accepted: "採用",
   rejected: "不採用",
-  deferred: "次版へ持越",
-  resolved: "反映済",
+  deferred: "次版へ持ち越し",
+  resolved: "反映済み",
 };
 export const assignmentLabel: Record<string, string> = {
   pending: "未確認",
-  viewed: "閲覧済",
+  viewed: "閲覧済み",
   responded: "確認完了",
   excused: "免除",
 };
@@ -65,23 +65,23 @@ export const approvalActionLabel: Record<string, string> = {
   reopened: "再開",
 };
 export const blockedReasonLabel: Record<string, string> = {
-  finalized: "この制作物は校了済みのため新規指摘はできません",
+  finalized: "この制作物は校了済みのため、新しいコメントはできません",
   superseded: "新版が提出されたため、この版の受付は終了しました",
   deadline: "校正期限を過ぎたため、この版の受付は終了しました",
   closed: "この版の受付は終了しています",
   void: "この版は無効化されています",
   not_latest: "最新の受付対象版ではありません",
-  forbidden: "この制作物に指摘を投稿する権限がありません",
+  forbidden: "この制作物にコメントする権限がありません",
 };
 export const checkStateLabel: Record<string, string> = {
-  pending: "未確認",
-  done: "確認済",
+  pending: "未完了",
+  done: "確認済み",
   waived: "免除",
 };
 export const notificationKindLabel: Record<string, string> = {
   revision_submitted: "版の提出",
-  review_assigned: "校正の割当",
-  comment_posted: "指摘",
+  review_assigned: "校正の割り当て",
+  comment_posted: "コメント",
   comment_decided: "採否",
   comment_assigned: "対応担当",
   check_requested: "専門確認の依頼",

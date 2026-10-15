@@ -48,7 +48,7 @@ export function OutlinePanel({ editor }: { editor: Editor }) {
   if (headings.length === 0)
     return (
       <p className="small muted write-panel__empty">
-        見出し（見出し 1〜3）を付けると、ここに表示されます。
+        見出し（見出し 1〜3）を付けると、ここに表示されます
       </p>
     );
   return (
@@ -189,8 +189,8 @@ export interface ReferenceThread {
 }
 
 /**
- * 直近の版に付いた指摘（読むだけ）。押すと引用している文字列を下書きの中から探して選ぶ。
- * 「指摘を見ながら直す」ための補助ペイン（M3 Supporting pane: 主の内容に対してだけ意味を持つ副の内容）。
+ * 直近の版に付いたコメント（読むだけ）。押すと引用している文字列を下書きの中から探して選ぶ。
+ * 「コメントを見ながら直す」ための補助ペイン（M3 Supporting pane: 主の内容に対してだけ意味を持つ副の内容）。
  */
 export function ReferencePanel({
   editor,
@@ -203,9 +203,9 @@ export function ReferencePanel({
 }) {
   const [missing, setMissing] = useState<string | null>(null);
   if (threads === null)
-    return <p className="small muted write-panel__empty">まだ提出した版がありません。</p>;
+    return <p className="small muted write-panel__empty">まだ提出した版がありません</p>;
   if (threads.length === 0)
-    return <p className="small muted write-panel__empty">{label} に未対応の指摘はありません。</p>;
+    return <p className="small muted write-panel__empty">{label} に未対応のコメントはありません</p>;
   const find = (t: ReferenceThread) => {
     if (!t.quote) return setMissing(t.id);
     const index = buildPlainText(editor.state.doc);
@@ -218,9 +218,9 @@ export function ReferencePanel({
   return (
     <div className="refs">
       <p className="small muted refs__head">
-        {label} の未対応の指摘（押すと本文の該当箇所を選びます）
+        {label} の未対応のコメント（押すと本文の該当箇所を選びます）
       </p>
-      <M3eActionList className="list" aria-label="直近の版の指摘">
+      <M3eActionList className="list" aria-label="直近の版のコメント">
         {threads.map((t) => (
           <M3eListAction key={t.id} className="list__item refs__item" onClick={() => find(t)}>
             <span className="list__headline">

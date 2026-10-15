@@ -226,7 +226,7 @@ export function RuleEditor({
           onChange={(e) => setText((t) => ({ ...t, patterns: e.target.value }))}
         />
       </Field>
-      <Field label="説明（指摘の理由として表示）">
+      <Field label="説明" hint="確認箇所の理由として表示します">
         <TextArea
           rows={2}
           value={d.description}
@@ -340,8 +340,8 @@ export function RuleEditor({
           </Field>
         </div>
         <Field
-          label="適用範囲（カテゴリ。空なら所属カテゴリが選ばれていれば適用）"
-          hint="カンマ区切り。例: B, C"
+          label="適用範囲"
+          hint="カテゴリをカンマ区切りで書きます（例: B, C）。空なら、このルールのカテゴリを選んだ制作物に適用します"
         >
           <TextInput
             value={d.scopes.join(", ")}
@@ -357,7 +357,10 @@ export function RuleEditor({
           />
         </Field>
       </M3eExpansionPanel>
-      <Field label={canEdit || onDecide ? "変更の理由（履歴に残ります）" : "提案の理由"}>
+      <Field
+        label={canEdit || onDecide ? "変更の理由" : "提案の理由"}
+        {...(canEdit || onDecide ? { hint: "履歴に残ります" } : {})}
+      >
         <TextInput value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
       {errors.length ? (
@@ -416,7 +419,7 @@ function RuleHistory({ ruleId }: { ruleId: string }) {
         {hist.map((h) => (
           <M3eListItem key={h.revision}>
             <span slot="overline">
-              版 {h.revision}・{opLabel[h.operation] ?? h.operation}
+              改訂 {h.revision}・{opLabel[h.operation] ?? h.operation}
             </span>
             {h.rule.correct[0]} ← {[...h.rule.incorrect, ...h.rule.patterns].join(" / ")}
             <span slot="supporting-text">

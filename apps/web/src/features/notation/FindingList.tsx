@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
 
 /**
- * 表記の指摘の一覧（M3E list）。1 件 = 3 行のリスト項目:
+ * 表記の確認箇所の一覧（M3E list）。1 件 = 3 行のリスト項目:
  * overline に厳格さとルール、見出しに「誤 → 正」、補足に理由と例外。操作は trailing に置く。
  */
 export function FindingList<F extends Finding>({
@@ -29,7 +29,7 @@ export function FindingList<F extends Finding>({
             aria-hidden="true"
           />
           <span slot="overline">
-            {f.needsReview ? "要確認" : ruleStrictnessLabels[f.strictness]}・{f.ruleId} 版{" "}
+            {f.needsReview ? "要確認" : ruleStrictnessLabels[f.strictness]}・{f.ruleId} 改訂{" "}
             {f.ruleRevision}
           </span>
           <span>

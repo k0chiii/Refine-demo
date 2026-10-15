@@ -1,4 +1,5 @@
 import {
+  revisionLabel,
   type ApprovalEvent,
   assertExpectedVersion,
   assertReopenReason,
@@ -10,7 +11,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
-import { notify, workStakeholders } from "./notifications.ts";
+import { excerpt, notify, personName, workStakeholders } from "./notifications.ts";
 
 export interface FinalizeWorkInput {
   workId: string;
@@ -85,7 +86,7 @@ export async function finalizeWork(
         t.origin?.kind === "bot" && (t.resolution === "open" || t.resolution === "acknowledged"),
     ).length;
     if (openBot > 0)
-      event.reason = `自動校正の未確認の指摘 ${openBot} 件を残して校了${
+      event.reason = `自動校正の未確認のコメント ${openBot} 件を残して校了${
         input.autoProofreadNote?.trim() ? `: ${input.autoProofreadNote.trim().slice(0, 500)}` : ""
       }`;
     await ctx.approvals.append(event);
@@ -102,10 +103,14 @@ export async function finalizeWork(
     const reviewers = (await ctx.assignments.listByRevision(outcome.revision.id)).map(
       (a) => a.reviewerId,
     );
+    const who = (await personName(ctx, principal.userId)) ?? "校了権限者";
+    const exception = event.action === "exception_finalized";
     await notify(ctx, [...workStakeholders(work), ...reviewers], principal.userId, {
       kind: "work_finalized",
-      title: `校了: ${work.title}`,
-      body: `${event.action === "exception_finalized" ? "例外校了（理由付き）" : "校了"}が宣言されました。`,
+      title: exception ? "制作物が例外校了しました" : "制作物が校了しました",
+      body: `「${work.title}」${revisionLabel(outcome.revision)}を${who}が${exception ? "例外校了" : "校了"}しました${
+        exception && event.exceptionReason ? `（理由: ${excerpt(event.exceptionReason, 80)}）` : ""
+      }`,
       workId: work.id,
       revisionId: outcome.revision.id,
     });
@@ -147,10 +152,11 @@ export async function reopenWork(
     after: { lifecycle: "active" },
     at: now,
   });
+  const who = (await personName(ctx, principal.userId)) ?? "校了権限者";
   await notify(ctx, workStakeholders(work), principal.userId, {
     kind: "work_reopened",
-    title: `校了を解除して再開: ${work.title}`,
-    body: `理由: ${reason}`,
+    title: "校了が解除されました",
+    body: `「${work.title}」を${who}が再開しました（理由: ${excerpt(reason, 80)}）`,
     workId: work.id,
   });
   return { work: next, event };

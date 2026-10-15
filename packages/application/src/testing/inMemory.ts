@@ -89,6 +89,8 @@ export interface InMemoryContext extends AppContext {
     runs: Table<ProofreadingRun>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
+    /** 表示名（テストで通知の文面を確かめるときに入れる） */
+    names: Map<string, string>;
   };
 }
 
@@ -117,11 +119,15 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     runs: new Table<ProofreadingRun>("run"),
     audit: [],
     idempotency: new Map(),
+    names: new Map(),
   };
   const clock = new FakeClock(now);
   return {
     clock,
     state,
+    people: {
+      displayName: async (id) => state.names.get(id) ?? null,
+    },
     works: {
       findById: async (id) => state.works.get(id),
       insert: async (w) => state.works.insert(w),

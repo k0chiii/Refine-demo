@@ -61,7 +61,7 @@ export function VersionsTab({
         </div>
       ) : null}
       {work.revisions.length === 0 ? (
-        <p className="muted small">まだ版がありません。</p>
+        <p className="muted small">まだ版がありません</p>
       ) : (
         <ul className="versions__list">
           {work.revisions.map((r) => {
@@ -119,7 +119,7 @@ export function VersionsTab({
       )}
       {current && canVoid ? (
         <M3eButton variant="text" className="versions__void" onClick={() => setVoidDraft("")}>
-          {current.label} を誤提出として無効化
+          この版を無効化
         </M3eButton>
       ) : null}
 
@@ -128,7 +128,7 @@ export function VersionsTab({
         <div className="dialog-body">
           <p className="small muted" style={{ margin: 0 }}>
             {current?.label}
-            の受付を終了して「無効」にします。添付と指摘は履歴に残り、版番号は欠番になります。
+            の受付を終了して「無効」にします。添付とコメントは履歴に残り、版番号は欠番になります。
           </p>
           <Field label="理由" required>
             <TextArea

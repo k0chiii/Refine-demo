@@ -30,9 +30,13 @@ export const isClosed = (t: { resolution: string }) => closedResolutions.include
 
 type Mode = null | "reply" | "rejected" | "deferred" | "assign" | "edit";
 
+/** 採否の確定ボタン（動詞）と理由欄の見出し */
+const decisionAction = { rejected: "不採用にする", deferred: "次版へ持ち越す" } as const;
+const decisionLabel = { rejected: "不採用の", deferred: "持ち越しの" } as const;
+
 /**
  * コメント 1 件（Google ドキュメント式）。
- * アバター・名前・日時・本文だけを見せ、操作は「✓ 解決」と「⋮」（不採用・持越・担当者・訂正）に絞る。
+ * アバター・名前・日時・本文だけを見せ、操作は「✓ 解決」と「⋮」（不採用・持ち越し・担当者・訂正）に絞る。
  * 開いているときだけ返信欄と履歴を出す。
  */
 export function ThreadCard({
@@ -95,11 +99,13 @@ export function ThreadCard({
   const actions: ActionSheetItem[] = [
     ...(canDecide && !closed
       ? [
-          { icon: "block", label: "不採用（理由を書く）", onSelect: () => open("rejected") },
-          { icon: "move_down", label: "次版へ持越", onSelect: () => open("deferred") },
+          { icon: "block", label: "不採用にする", onSelect: () => open("rejected") },
+          { icon: "move_down", label: "次版へ持ち越す", onSelect: () => open("deferred") },
         ]
       : []),
-    ...(canDecide ? [{ icon: "person_pin", label: "担当者", onSelect: () => open("assign") }] : []),
+    ...(canDecide
+      ? [{ icon: "person_pin", label: "担当者を指定", onSelect: () => open("assign") }]
+      : []),
     ...(canEdit && t.authorId === meId
       ? [{ icon: "edit", label: "訂正", onSelect: () => open("edit", t.body) }]
       : []),
@@ -129,7 +135,7 @@ export function ThreadCard({
             <span className="spacer" />
             {canDecide && !closed ? (
               <M3eIconButton
-                aria-label="解決（反映済にする）"
+                aria-label="解決済みにする"
                 size="extra-small"
                 className="thread__resolve"
                 disabled={pending === true}
@@ -174,7 +180,7 @@ export function ThreadCard({
               {t.origin && (t.origin.needsReview || t.origin.textSource === "ocr") ? (
                 <M3eChipSet aria-label="自動校正の根拠" className="thread__bot-chips">
                   {t.origin.needsReview ? <M3eChip>要確認</M3eChip> : null}
-                  {t.origin.textSource === "ocr" ? <M3eChip>OCR</M3eChip> : null}
+                  {t.origin.textSource === "ocr" ? <M3eChip>画像から読み取り</M3eChip> : null}
                 </M3eChipSet>
               ) : null}
               {closed || t.severity === "critical" || t.carriedFromThreadId || t.assignee ? (
@@ -194,7 +200,7 @@ export function ThreadCard({
                       {severityLabel[t.severity]}
                     </M3eChip>
                   ) : null}
-                  {t.carriedFromThreadId ? <M3eChip>前版から持越</M3eChip> : null}
+                  {t.carriedFromThreadId ? <M3eChip>前版から持ち越し</M3eChip> : null}
                   {t.assignee ? (
                     <M3eChip>
                       <M3eIcon slot="icon" name="person" />
@@ -224,7 +230,7 @@ export function ThreadCard({
                     ? "返信"
                     : mode === "edit"
                       ? "本文の訂正"
-                      : `${resolutionLabel[mode]} の理由`
+                      : `${decisionLabel[mode]}理由`
                 }
               >
                 {mode === "reply" ? (
@@ -247,11 +253,11 @@ export function ThreadCard({
                 ) : (
                   <TextArea
                     autoFocus
-                    aria-label={mode === "edit" ? "本文の訂正" : `${resolutionLabel[mode]} の理由`}
+                    aria-label={mode === "edit" ? "本文の訂正" : `${decisionLabel[mode]}理由`}
                     placeholder={
                       mode === "edit"
-                        ? "本文の訂正（原文は履歴に残ります）"
-                        : `${resolutionLabel[mode]} の理由（必須）`
+                        ? "原文は履歴に残ります"
+                        : `${decisionLabel[mode]}理由を書きます（必須）`
                     }
                     value={text}
                     onChange={(e) => setText(e.target.value)}
@@ -266,14 +272,18 @@ export function ThreadCard({
               <div className="row">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setMode(null)}>
-                  取消
+                  キャンセル
                 </M3eButton>
                 <M3eButton
                   variant="filled"
                   disabled={pending === true || !text.trim()}
                   onClick={() => void submit()}
                 >
-                  {mode === "reply" ? "返信" : mode === "edit" ? "保存" : resolutionLabel[mode]}
+                  {mode === "reply"
+                    ? "返信"
+                    : mode === "edit"
+                      ? "訂正を保存"
+                      : decisionAction[mode]}
                 </M3eButton>
               </div>
             </div>
@@ -281,7 +291,8 @@ export function ThreadCard({
           {mode === "assign" ? (
             <div className="thread__form" onClick={stop}>
               <UserPicker
-                label="対応担当者（空にすると解除）"
+                label="対応担当者"
+                hint="空にすると担当者を外します"
                 single
                 value={ids}
                 onChange={setIds}
@@ -289,14 +300,14 @@ export function ThreadCard({
               <div className="row">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setMode(null)}>
-                  取消
+                  キャンセル
                 </M3eButton>
                 <M3eButton
                   variant="filled"
                   disabled={pending === true}
                   onClick={() => void submit()}
                 >
-                  記録
+                  担当者を設定
                 </M3eButton>
               </div>
             </div>
@@ -316,19 +327,19 @@ export function ThreadCard({
           {canDecide && !closed ? (
             <M3eMenuItem onClick={() => open("rejected")}>
               <M3eIcon slot="icon" name="block" />
-              不採用（理由を書く）
+              不採用にする
             </M3eMenuItem>
           ) : null}
           {canDecide && !closed ? (
             <M3eMenuItem onClick={() => open("deferred")}>
               <M3eIcon slot="icon" name="move_down" />
-              次版へ持越
+              次版へ持ち越す
             </M3eMenuItem>
           ) : null}
           {canDecide ? (
             <M3eMenuItem onClick={() => open("assign")}>
               <M3eIcon slot="icon" name="person_pin" />
-              担当者
+              担当者を指定
             </M3eMenuItem>
           ) : null}
           {canEdit && t.authorId === meId ? (

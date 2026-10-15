@@ -15,7 +15,7 @@ import {
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
-import { notify } from "./notifications.ts";
+import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
   editThreadBody,
   isCarryCandidate,
@@ -27,11 +27,11 @@ import {
 
 /** 通知文面用の採否ラベル（表示名は UI 側と同じ日本語。状態名自体は設計提案）。 */
 const resolutionLabels: Record<string, string> = {
-  acknowledged: "確認済",
+  acknowledged: "確認済み",
   accepted: "採用",
   rejected: "不採用",
-  deferred: "次版へ持越",
-  resolved: "反映済",
+  deferred: "次版へ持ち越し",
+  resolved: "反映済み",
 };
 
 export interface PostCommentInput {
@@ -46,7 +46,7 @@ export interface PostCommentInput {
 }
 
 /**
- * 新規指摘（F-06 / F-07 / A-04 / A-06）。
+ * 新しいコメント（要件の「指摘」。F-06 / F-07 / A-04 / A-06）。
  * - 対象版が受付中・期限前・最新の受付対象版であることをサーバーで強制する。
  * - 校了済みの作品には投稿できない（§5.2-5）。
  * - 投稿しても校正者の確認状態・指摘の解決・校了には影響しない。
@@ -112,15 +112,16 @@ export async function postComment(
         createdAt: now,
       });
       await markRevisionViewed(ctx, principal, revision.id);
-      // メンションされた人には「メンション」だけを送る（制作者がメンションされたら新しい指摘の通知と重ねない）
+      // メンションされた人には「メンション」だけを送る（制作者がメンションされたら新しいコメントの通知と重ねない）
+      const who = await personName(ctx, principal.userId);
       await notify(
         ctx,
         work.creatorIds.filter((id) => !mentions.includes(id)),
         principal.userId,
         {
           kind: "comment_posted",
-          title: `新しい指摘: ${work.title} ${revisionLabel(revision)}`,
-          body: input.body.slice(0, 120),
+          title: "新しいコメント",
+          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(input.body)}`,
           workId: work.id,
           revisionId: revision.id,
           threadId: thread.id,
@@ -190,10 +191,11 @@ async function notifyMentions(
   at: { body: string; workId: string; revisionId: string; threadId: string },
 ) {
   if (!mentions.length) return;
+  const who = await personName(ctx, actorId);
   await notify(ctx, mentions, actorId, {
     kind: "mentioned",
-    title: `メンションされました: ${workTitle} ${label}`,
-    body: at.body.slice(0, 120),
+    title: "メンションされました",
+    body: `${about(workTitle, label, who)}: ${excerpt(at.body)}`,
     workId: at.workId,
     revisionId: at.revisionId,
     threadId: at.threadId,
@@ -207,7 +209,7 @@ export interface DecideThreadInput {
 }
 
 /**
- * 指摘の採否判断（C4 / F-07 / A-07）。制作者または明示委任（edit）のみ。
+ * コメントの採否判断（C4 / F-07 / A-07）。制作者または明示委任（edit）のみ。
  * 旧版の受付終了後でも処置記録は可能（D5 暫定）。校了済み作品では不可（A-09）。
  */
 export async function decideThread(
@@ -235,14 +237,18 @@ export async function decideThread(
     ...(input.reason !== undefined ? { reason: input.reason } : {}),
   };
   await ctx.threads.appendEvent(event);
+  const who = await personName(ctx, principal.userId);
+  const label = resolutionLabels[input.action] ?? input.action;
   await notify(
     ctx,
     [thread.authorId, ...(thread.assigneeId ? [thread.assigneeId] : [])],
     principal.userId,
     {
       kind: "comment_decided",
-      title: `指摘の判断: ${resolutionLabels[input.action] ?? input.action}`,
-      body: `「${work.title}」の指摘が「${resolutionLabels[input.action] ?? input.action}」になりました。${input.reason ? `理由: ${input.reason}` : ""}`,
+      title: "コメントの採否が決まりました",
+      body: `${about(work.title, revisionLabel(revision), who)}が「${label}」にしました${
+        input.reason?.trim() ? `（理由: ${excerpt(input.reason, 60)}）` : ""
+      }: ${excerpt(thread.body, 60)}`,
       workId: work.id,
       revisionId: revision.id,
       threadId: thread.id,
@@ -251,7 +257,7 @@ export async function decideThread(
   return next;
 }
 
-/** 指摘の担当者を割り当てる（F-07）。採否判断者（制作者・edit 委任者）のみ。 */
+/** コメントの担当者を割り当てる（F-07）。採否判断者（制作者・edit 委任者）のみ。 */
 export async function assignThread(
   ctx: AppContext,
   principal: Principal,
@@ -277,10 +283,11 @@ export async function assignThread(
     createdAt: now,
   });
   if (input.assigneeId) {
+    const who = await personName(ctx, principal.userId);
     await notify(ctx, [input.assigneeId], principal.userId, {
       kind: "comment_assigned",
-      title: `指摘の対応担当に指定されました: ${work.title}`,
-      body: thread.body.slice(0, 120),
+      title: "コメントの対応担当になりました",
+      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${excerpt(thread.body)}`,
       workId: work.id,
       revisionId: revision.id,
       threadId: thread.id,
@@ -289,7 +296,7 @@ export async function assignThread(
   return next;
 }
 
-/** 指摘本文の訂正（§5.2-9）。投稿者本人・未判断の間のみ。訂正前の本文をイベントに残す。 */
+/** コメント本文の訂正（§5.2-9）。投稿者本人・未判断の間のみ。訂正前の本文をイベントに残す。 */
 export async function editThread(
   ctx: AppContext,
   principal: Principal,
@@ -314,7 +321,7 @@ export async function editThread(
   return next;
 }
 
-/** 次版へ持ち越す候補（前版の未解決指摘）。対象版より前に提出され、受付中でない版のもの。 */
+/** 次版へ持ち越す候補（前版の未解決コメント）。対象版より前に提出され、受付中でない版のもの。 */
 export async function listCarryCandidates(
   ctx: AppContext,
   principal: Principal,
@@ -332,7 +339,7 @@ export async function listCarryCandidates(
   return out;
 }
 
-/** 前版の指摘を次版へ引き継ぐ（F-07）。採否判断者のみ。原指摘は deferred にし、新スレッドを作る。 */
+/** 前版のコメントを次版へ持ち越す（F-07）。採否判断者のみ。元のコメントは deferred にし、新スレッドを作る。 */
 export async function carryForwardThread(
   ctx: AppContext,
   principal: Principal,
@@ -367,10 +374,11 @@ export async function carryForwardThread(
     payload: { carriedFromThreadId: source.id },
     createdAt: now,
   });
+  const who = await personName(ctx, principal.userId);
   await notify(ctx, [source.authorId], principal.userId, {
     kind: "comment_posted",
-    title: `指摘が次版へ引き継がれました: ${work.title} ${revisionLabel(target)}`,
-    body: source.body.slice(0, 120),
+    title: "コメントが次の版へ持ち越されました",
+    body: `${about(work.title, revisionLabel(target), who)}: ${excerpt(source.body)}`,
     workId: work.id,
     revisionId: target.id,
     threadId: created.id,

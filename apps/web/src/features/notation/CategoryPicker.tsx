@@ -51,7 +51,7 @@ export function CategoryPicker({
       </div>
       <p className="small muted">
         {value.length === 0
-          ? "未選択のときは表記の検査をしません。"
+          ? "未選択のときは表記の検査をしません"
           : "B・C・D は A1〜A3 の一般ルールも継承します。用途に近いカテゴリのルールが優先されます。"}
       </p>
     </Card>

@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vite-plus/test";
+import { grantWorkPermission } from "../usecases/acl.ts";
+import { postComment } from "../usecases/comments.ts";
+import { excerpt, jstMonthDay, listMyNotifications } from "../usecases/notifications.ts";
+import { assignReviewers, remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { createInMemoryContext } from "../testing/inMemory.ts";
+import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
+
+describe("通知の文面（UI_M3E §35 W-14）", () => {
+  it("抜粋は改行をつめ、切ったときだけ「…」を付ける", () => {
+    expect(excerpt("一行目\n\n二行目")).toBe("一行目 二行目");
+    expect(excerpt("あ".repeat(5), 5)).toBe("あああああ");
+    expect(excerpt("あ".repeat(6), 5)).toBe("あああああ…");
+  });
+
+  it("締切は JST の月日と曜日", () => {
+    // 2026-11-14 0:00 JST（土）
+    expect(jstMonthDay(Date.UTC(2026, 10, 13, 15, 0))).toBe("11/14（土）");
+  });
+
+  it("題名は決まった文言、本文は制作物・版・誰が・抜粋", async () => {
+    const ctx = createInMemoryContext();
+    ctx.state.names.set(principals.reviewer.userId, "査読 太郎");
+    ctx.state.names.set(principals.manager.userId, "主管 花子");
+    const work = await seedWork(ctx);
+    const revision = await submitRevision(ctx, work.id, { deadlineInHours: 20 });
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      principalType: "user",
+      principalId: principals.reviewer.userId,
+      permission: "review",
+    });
+    await assignReviewers(ctx, principals.manager, {
+      revisionId: revision.id,
+      reviewerIds: [principals.reviewer.userId],
+      reviewType: "general",
+    });
+    const assigned = (await listMyNotifications(ctx, principals.reviewer)).find(
+      (n) => n.kind === "review_assigned",
+    );
+    expect(assigned).toMatchObject({
+      title: "校正を割り当てられました",
+      body: "「MF100 パンフレット」第1版・主管 花子さんから。締切 11/2（月）。見てほしい観点: 表紙の配色",
+    });
+
+    await postComment(ctx, principals.reviewer, {
+      revisionId: revision.id,
+      body: `表紙の${"誤字".repeat(100)}`,
+      kind: "correction",
+      severity: "major",
+    });
+    const posted = (await listMyNotifications(ctx, principals.creator)).find(
+      (n) => n.kind === "comment_posted",
+    );
+    expect(posted?.title).toBe("新しいコメント");
+    expect(posted?.body.startsWith("「MF100 パンフレット」第1版・査読 太郎さん: 表紙の誤字")).toBe(
+      true,
+    );
+    expect(posted?.body.endsWith("…")).toBe(true);
+
+    expect(await remindUpcomingDeadlines(ctx)).toBe(1);
+    const reminder = (await listMyNotifications(ctx, principals.reviewer)).find(
+      (n) => n.kind === "deadline_approaching",
+    );
+    expect(reminder?.title).toBe("校正の締切が近づいています");
+    expect(reminder?.body).toContain("締切 11/2（月）");
+    expect(reminder?.body).toContain("「確認を完了」");
+  });
+});

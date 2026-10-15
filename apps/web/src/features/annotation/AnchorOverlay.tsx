@@ -195,7 +195,7 @@ export function AnchorOverlay({
               onClick={() => onSelectThread(t.id)}
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && onSelectThread(t.id)}
-              aria-label={`指摘 ${t.index}`}
+              aria-label={`コメント ${t.index}`}
             >
               <rect
                 className={`anchor-rect ${cls}`}
@@ -226,7 +226,7 @@ export function AnchorOverlay({
               onClick={() => onSelectThread(t.id)}
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && onSelectThread(t.id)}
-              aria-label={`指摘 ${t.index}`}
+              aria-label={`コメント ${t.index}`}
             >
               <circle
                 cx={px.x}

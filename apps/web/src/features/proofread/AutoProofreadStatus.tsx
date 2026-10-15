@@ -29,7 +29,7 @@ export function AutoProofreadStatus({ auto }: { auto: ReturnType<typeof useAutoP
                 : "自動校正を待っています（提出者などの端末で検査します）"))
             : run.status === "failed"
               ? `自動校正に失敗したファイルがあります（${failed.length} 件）`
-              : `自動校正: 表記の指摘 ${findings} 件`}
+              : `自動校正: 表記のコメント ${findings} 件`}
         </span>
         <span className="spacer" />
         {run.status === "failed" && auto.canRun ? (

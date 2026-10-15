@@ -17,6 +17,7 @@ import { useWindowClass } from "@/lib/useMedia";
 import { usePreviewDevice } from "./preview/DevicePicker";
 import { PreviewSettings } from "./preview/PreviewSettings";
 import { makeZip } from "./zip";
+import { describeError } from "@/lib/errors";
 
 interface ArtifactLike {
   id: string;
@@ -87,7 +88,7 @@ export function PostReview({
         }
         if (!cancelled) setImages(out);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(describeError(e).message);
       }
     })();
     return () => {
@@ -178,7 +179,7 @@ export function PostReview({
           />
         ) : null}
         <p className="small muted">
-          本文への指摘は添付「{POST_BODY_NAME}」、画像への指摘は各画像の添付で行います。
+          本文へのコメントは添付「{POST_BODY_NAME}」に、画像へのコメントは各画像の添付に付けます
         </p>
       </div>
       <Card title="投稿用に書き出す">
@@ -199,9 +200,10 @@ export function PostReview({
               </M3eButton>
               <M3eButton variant="filled" disabled={zip.pending} onClick={() => void zip.run()}>
                 <M3eIcon slot="icon" name="folder_zip" />
-                まとめて ZIP（本文・画像・ALT・記録）
+                ZIP で保存
               </M3eButton>
             </div>
+            <p className="small muted">ZIP には本文・画像・代替テキスト・記録をまとめます</p>
             <M3eList aria-label="画像（投稿の順）">
               {post.images.map((im, i) => {
                 const a = images.find((x) => x.key === im.key);
@@ -212,14 +214,14 @@ export function PostReview({
                     ) : null}
                     <span slot="overline">{i + 1} 枚目</span>
                     {im.fileName}
-                    <span slot="supporting-text">ALT: {im.alt || "（未設定）"}</span>
+                    <span slot="supporting-text">代替テキスト: {im.alt || "未設定"}</span>
                     {a ? (
                       <M3eButton
                         slot="trailing"
                         variant="text"
                         onClick={() => save(im.fileName, a.blob)}
                       >
-                        保存
+                        画像を保存
                       </M3eButton>
                     ) : null}
                   </M3eListItem>
@@ -229,7 +231,7 @@ export function PostReview({
           </div>
         ) : (
           <p className="small muted">
-            書き出しは校了した版だけでできます（校了前の版を投稿用と取り違えないため）。
+            書き出しは校了した版だけでできます（校了前の版を投稿用と取り違えないため）
           </p>
         )}
       </Card>

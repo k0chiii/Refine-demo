@@ -7,11 +7,25 @@ export type AppBarSlotName = "leading" | "title" | "subtitle" | "actions";
  * 共通アプリバー（`_app.tsx`）のスロットへ、いまの画面の見出し・戻る・操作を差し込む（M3 App bars: 「アプリバーは現在のページの
  * 見出し・ナビゲーション・1–2 の必須操作を置き、通知などの全体の操作も含められる」）。
  * 受け皿は `#appbar-<slot>`。描画後に探すので、最初の描画では何も出さない。
+ * `title` を渡すと受け皿に title 属性を付ける（見出しが省略記号で切れても、ポインタを載せれば全文を読める）。
  */
-export function AppBarSlot({ slot, children }: { slot: AppBarSlotName; children: ReactNode }) {
+export function AppBarSlot({
+  slot,
+  title,
+  children,
+}: {
+  slot: AppBarSlotName;
+  title?: string;
+  children: ReactNode;
+}) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setHost(document.getElementById(`appbar-${slot}`));
   }, [slot]);
+  useEffect(() => {
+    if (!host || title === undefined) return;
+    host.title = title;
+    return () => host.removeAttribute("title");
+  }, [host, title]);
   return host ? createPortal(children, host) : null;
 }

@@ -127,7 +127,7 @@ function Menu({ id }: { id: string }) {
         </M3eMenuItem>
       ) : null}
       {!list || list.length === 0 ? (
-        <p className="muted small notif-menu__empty">通知はありません。</p>
+        <p className="muted small notif-menu__empty">通知はありません</p>
       ) : (
         list.map((n) => (
           <M3eMenuItem
@@ -192,7 +192,7 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
         ) : null}
       </div>
       {!list || list.length === 0 ? (
-        <p className="muted notif-sheet__empty">通知はありません。</p>
+        <p className="muted notif-sheet__empty">通知はありません</p>
       ) : (
         <M3eActionList className="list notif-list" aria-label="通知">
           {list.map((n) => (

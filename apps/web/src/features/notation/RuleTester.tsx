@@ -34,7 +34,7 @@ export function RuleTester({ book }: { book: Book }) {
         </p>
       ) : null}
       {result.findings.length === 0 ? (
-        <p className="small muted">指摘はありません。</p>
+        <p className="small muted">確認箇所はありません</p>
       ) : (
         <FindingList label="試した結果" findings={result.findings} />
       )}
