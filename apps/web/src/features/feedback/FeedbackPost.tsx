@@ -11,6 +11,7 @@ import {
   M3eButton,
   M3eDialog,
   M3eFilterChip,
+  M3eFilterChipSet,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
@@ -29,6 +30,15 @@ export type PostData = NonNullable<ThreadData>["posts"][number];
  * リアクションは決まった絵文字だけ（FEEDBACK_REACTIONS）。自分が付けたものは選択中のチップ。
  */
 /** リアクションの名前（メニューの項目と読み上げ） */
+/**
+ * M3E の複数選択のチップの組は role="group" に aria-orientation を付ける（group には付けられない属性。axe の aria-allowed-attr）。
+ * 最初の描画が済んだら外す（向きは vertical を変えたときにしか付け直されない）。
+ */
+const dropGroupOrientation = (el: HTMLElement | null) => {
+  const set = el as (HTMLElement & { updateComplete?: Promise<unknown> }) | null;
+  void set?.updateComplete?.then(() => set.removeAttribute("aria-orientation"));
+};
+
 const reactionNames: Record<string, string> = {
   "👍": "いいね",
   "🙏": "ありがとう",
@@ -134,16 +144,24 @@ export function FeedbackPost({ post, people }: { post: PostData; people: readonl
         ) : null}
         <FeedbackFiles files={post.files} />
         <div className="fb-post__reactions" role="group" aria-label="リアクション">
-          {post.reactions.map((r) => (
-            <M3eFilterChip
-              key={r.emoji}
-              selected={r.mine}
-              aria-label={`${r.emoji} ${r.count} 人${r.mine ? "（自分も）" : ""}`}
-              onClick={() => void react.run(r.emoji)}
-            >
-              {r.emoji} {r.count}
-            </M3eFilterChip>
-          ))}
+          {/* 自分が付けたものは色（選択の面）で示す。チェックの印は出さない（Slack と同じ。利用者指示 2026-10-15） */}
+          <M3eFilterChipSet
+            multi
+            hideSelectionIndicator
+            className="fb-post__reaction-set"
+            ref={dropGroupOrientation}
+          >
+            {post.reactions.map((r) => (
+              <M3eFilterChip
+                key={r.emoji}
+                selected={r.mine}
+                aria-label={`${r.emoji} ${r.count} 人${r.mine ? "（自分も）" : ""}`}
+                onClick={() => void react.run(r.emoji)}
+              >
+                {r.emoji} {r.count}
+              </M3eFilterChip>
+            ))}
+          </M3eFilterChipSet>
           <M3eIconButton aria-label="リアクションを付ける" className="fb-post__add-reaction">
             <M3eIcon name="add_reaction" />
             <M3eMenuTrigger htmlFor={reactId} />

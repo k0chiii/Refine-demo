@@ -24,6 +24,7 @@ export interface ComposerResult {
  * - 「テンプレート」から FB テンプレート（制作者・初回／制作者・版更新／校正er）を書き出しに入れる（利用者の FB 制度案）
  * - 作業中の案（PDF・画像・.ai など）を添付。送るときに R2 へ上げ、検証済みになってから投稿する
  * - Ctrl（⌘）＋Enter で送る
+ * - dense（スマホのスレッド）: Slack の返信欄と同じく 1 行から伸びる欄と、アイコンだけの行（添付・テンプレート・送信）
  */
 export function FeedbackComposer({
   workId,
@@ -34,6 +35,7 @@ export function FeedbackComposer({
   autoFocus,
   disabled,
   extraValid = true,
+  dense = false,
 }: {
   workId: string;
   label: string;
@@ -45,6 +47,8 @@ export function FeedbackComposer({
   disabled?: boolean;
   /** 題名などほかの欄が揃っているか */
   extraValid?: boolean;
+  /** 詰めた形（スマホのスレッドの下に固定する返信欄） */
+  dense?: boolean;
 }) {
   const token = useAuthToken();
   const id = useId().replace(/:/g, "");
@@ -120,13 +124,13 @@ export function FeedbackComposer({
 
   return (
     <MentionProvider value={candidates ?? []}>
-      <div className="fb-composer">
+      <div className={`fb-composer ${dense ? "fb-composer--dense" : ""}`}>
         <MentionTextarea
           className="fb-composer__input"
           aria-label={label}
           aria-describedby={`${id}-hint`}
           placeholder={placeholder ?? `${label}を書く`}
-          rows={2}
+          rows={dense ? 1 : 2}
           autoFocus={autoFocus}
           value={body}
           onValue={setBody}
@@ -140,7 +144,7 @@ export function FeedbackComposer({
             }
           }}
         />
-        <p className="fb-composer__hint" id={`${id}-hint`}>
+        <p className={dense ? "sr-only" : "fb-composer__hint"} id={`${id}-hint`}>
           @ で名前を呼ぶ（メンション）・{isMac ? "⌘" : "Ctrl"}＋Enter で{submitLabel}
         </p>
         {files.length ? (
@@ -177,11 +181,22 @@ export function FeedbackComposer({
           >
             <M3eIcon name="attach_file" />
           </M3eIconButton>
-          <M3eButton variant="text" disabled={sending !== null}>
-            <M3eIcon slot="icon" name="article" />
-            テンプレート
-            <M3eMenuTrigger htmlFor={`${id}-tpl`} />
-          </M3eButton>
+          {dense ? (
+            <M3eIconButton
+              aria-label="テンプレート"
+              title="テンプレート"
+              disabled={sending !== null}
+            >
+              <M3eIcon name="article" />
+              <M3eMenuTrigger htmlFor={`${id}-tpl`} />
+            </M3eIconButton>
+          ) : (
+            <M3eButton variant="text" disabled={sending !== null}>
+              <M3eIcon slot="icon" name="article" />
+              テンプレート
+              <M3eMenuTrigger htmlFor={`${id}-tpl`} />
+            </M3eButton>
+          )}
           <M3eMenu id={`${id}-tpl`} positionY="above">
             {feedbackTemplates.map((t) => (
               <M3eMenuItem key={t.id} onClick={() => insertTemplate(t.id)}>
@@ -196,10 +211,21 @@ export function FeedbackComposer({
               {sending}
             </span>
           ) : null}
-          <M3eButton variant="filled" disabled={!canSend} onClick={() => void send()}>
-            <M3eIcon slot="icon" name="send" />
-            {submitLabel}
-          </M3eButton>
+          {dense ? (
+            <M3eIconButton
+              variant="filled"
+              aria-label={submitLabel}
+              disabled={!canSend}
+              onClick={() => void send()}
+            >
+              <M3eIcon name="send" />
+            </M3eIconButton>
+          ) : (
+            <M3eButton variant="filled" disabled={!canSend} onClick={() => void send()}>
+              <M3eIcon slot="icon" name="send" />
+              {submitLabel}
+            </M3eButton>
+          )}
         </div>
       </div>
     </MentionProvider>

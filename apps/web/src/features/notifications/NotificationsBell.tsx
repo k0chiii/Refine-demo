@@ -1,9 +1,10 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef } from "react";
 import { formatJstShort } from "@/lib/format";
+import { setAppBadge } from "@/lib/pwa";
 import { useAction } from "@/lib/useAction";
 import {
   M3eActionList,
@@ -232,4 +233,13 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-export const NotificationsBell = { Icon, Bell, Menu, Sheet };
+/** アプリアイコンの件数を未読の通知の数に合わせる（描画はしない。シェルに 1 つだけ置く） */
+function AppBadge() {
+  const { isAuthenticated } = useConvexAuth();
+  // サインアウトの途中（認証が外れた直後）に問い合わせない
+  const unread = useQuery(api.notifications.unreadCount, isAuthenticated ? {} : "skip") ?? 0;
+  useEffect(() => setAppBadge(unread), [unread]);
+  return null;
+}
+
+export const NotificationsBell = { Icon, Bell, Menu, Sheet, AppBadge };

@@ -5,7 +5,7 @@ import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
-import { useInstallPrompt } from "@/lib/pwa";
+import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
 import { useWindowClass } from "@/lib/useMedia";
 import {
   M3eAppBar,
@@ -183,7 +183,9 @@ function AppLayout() {
   );
   const modal = cls !== "large" && cls !== "compact" && modalOpen;
   // compact のエディタは詳細画面: 下部バーを隠す（M3 list-detail の compact）
-  const immersive = cls === "compact" && editorRoute;
+  // compact の FB スレッドも詳細画面（Slack のスレッドと同じく下部バーを出さない。返信欄を一番下に置く。利用者指示 2026-10-15）
+  const chatRoute = cls === "compact" && /^\/feedback\/[^/]+$/.test(path);
+  const immersive = (cls === "compact" && editorRoute) || chatRoute;
   // compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16。M3 FAB › Placement）
   const mobileFab = cls === "compact" && canSubmit && (path === "/" || path === "/works");
   // compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints › Overview の表。§35 L-09）
@@ -220,13 +222,17 @@ function AppLayout() {
     {
       icon: "logout",
       label: "サインアウト",
-      onSelect: () => void signOut().then(() => navigate({ to: "/signin" })),
+      onSelect: () =>
+        void signOut().then(() => {
+          setAppBadge(0); // 別の人がサインインしたときに前の人の件数を残さない
+          return navigate({ to: "/signin" });
+        }),
     },
   ];
 
   return (
     <div
-      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${editorRoute ? "shell--editor" : ""} ${hideRail ? "shell--norail" : ""} ${mobileFab ? "shell--fab" : ""}`}
+      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${chatRoute ? "shell--chat" : ""} ${editorRoute ? "shell--editor" : ""} ${hideRail ? "shell--norail" : ""} ${mobileFab ? "shell--fab" : ""}`}
     >
       <div className="shell__nav" hidden={hideRail}>
         {modal ? (
@@ -281,6 +287,7 @@ function AppLayout() {
           )}
           {immersive ? null : account(32, "shell__account")}
         </M3eAppBar>
+        <NotificationsBell.AppBadge />
         {cls === "compact" ? (
           <NotificationsBell.Sheet open={notifOpen} onClose={() => setNotifOpen(false)} />
         ) : (

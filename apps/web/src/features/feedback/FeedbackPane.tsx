@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { formatJstCompact } from "@/lib/format";
+import { useWindowClass } from "@/lib/useMedia";
 import { Field, TextInput } from "@/ui/Field";
 import { M3eActionList, M3eButton, M3eIcon, M3eIconButton, M3eListAction } from "@/ui/m3e";
 import { FeedbackComposer } from "./FeedbackComposer";
@@ -203,6 +204,7 @@ function FeedbackPaneThread({
   onShowPlace: (t: { id: string; anchor: Anchor | null; revisionId: string | null }) => void;
 }) {
   const data = useQuery(api.feedback.getThread, { threadId });
+  const compact = useWindowClass() === "compact";
   const place = data ? anchorPlace(data.thread.anchor as Anchor | null) : null;
   return (
     <div className="fb-pane fb-pane--thread">
@@ -247,7 +249,7 @@ function FeedbackPaneThread({
       {data === undefined ? null : data === null ? (
         <p className="muted fb-pane__empty">この相談は見つからないか、見る権限がありません</p>
       ) : (
-        <FeedbackConversation threadId={threadId} data={data} />
+        <FeedbackConversation threadId={threadId} data={data} dense={compact} />
       )}
     </div>
   );

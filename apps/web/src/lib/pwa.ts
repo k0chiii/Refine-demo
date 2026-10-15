@@ -39,6 +39,20 @@ function watch(reg: ServiceWorkerRegistration) {
   });
 }
 
+/**
+ * アプリアイコンの件数（Badging API）。ホーム画面に追加したアプリで、未読の通知の数をアイコンに出す。
+ * 対応: iOS/iPadOS 16.4+（ホーム画面のアプリ・通知の許可が必要）、Chrome/Edge のインストール済みアプリ。
+ * 非対応の環境では何もしない。アプリを開いている間の数で、閉じている間には増えない（それには Web Push が要る）。
+ */
+export function setAppBadge(count: number) {
+  const nav = navigator as Navigator & {
+    setAppBadge?: (n?: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  if (!nav.setAppBadge || !nav.clearAppBadge) return;
+  void (count > 0 ? nav.setAppBadge(count) : nav.clearAppBadge()).catch(() => {});
+}
+
 export function registerServiceWorker() {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
