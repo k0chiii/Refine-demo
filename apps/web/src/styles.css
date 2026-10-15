@@ -147,6 +147,21 @@ body {
     font: -apple-system-body;
   }
 }
+/*
+ * iOS の Safari は、文字が 16px 未満の入力欄にフォーカスすると画面を自動で拡大する（利用者指摘 2026-10-15「iOS のエディタで拡大される」。
+ * 校正画面のコメント欄が 14px だった）。iOS だけ、入力欄の文字を 16px 以上にする。Dynamic Type を小さくして 1rem が 16px を
+ * 下回るときも同じ。PC・Android は拡大しないので、見た目は変えない。:is の詳細度で各入力欄のクラスの指定より優先する
+ */
+@supports (-webkit-touch-callout: none) {
+  :is(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]),
+    textarea,
+    select,
+    [contenteditable]:not([contenteditable="false"])
+  ) {
+    font-size: max(16px, 1rem);
+  }
+}
 :root {
   /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
   --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));

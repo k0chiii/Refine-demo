@@ -53,7 +53,7 @@ function Works() {
 
   return (
     <div className="works">
-      <AppBarSlot slot="title">制作物</AppBarSlot>
+      <AppBarSlot slot="title">制作物一覧</AppBarSlot>
       {me?.canCreateWorks ? (
         <AppBarSlot slot="actions">
           <M3eIconButton
@@ -87,7 +87,7 @@ function Works() {
               : "制作物がありません"}
         </div>
       ) : (
-        <M3eActionList className="list" aria-label="制作物">
+        <M3eActionList className="list" aria-label="制作物一覧">
           {works.map((w) => (
             <M3eListAction
               key={w.id}

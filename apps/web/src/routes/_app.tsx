@@ -86,7 +86,7 @@ function AppLayout() {
 
   const items = [
     { to: "/", icon: "space_dashboard", label: "ホーム" },
-    { to: "/works", icon: "folder", label: "制作物" },
+    { to: "/works", icon: "folder", label: "制作物一覧" },
     { to: "/write", icon: "edit_document", label: "エディタ" },
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
     ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
