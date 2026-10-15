@@ -40,6 +40,7 @@ import type * as revisions from "../revisions.js";
 import type * as seed from "../seed.js";
 import type * as social from "../social.js";
 import type * as submissions from "../submissions.js";
+import type * as teams from "../teams.js";
 import type * as users from "../users.js";
 import type * as works from "../works.js";
 
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   social: typeof social;
   submissions: typeof submissions;
+  teams: typeof teams;
   users: typeof users;
   works: typeof works;
 }>;

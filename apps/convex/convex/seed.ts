@@ -96,6 +96,50 @@ export const demo = internalMutation({
         stats: { posts: 2048, followers: 31200, following: 40 },
       });
     }
+    // 組織（局 › 担当）のサンプル。1 件も無いときだけ入れる。企画局は担当の無い局の例
+    const teamIds: Record<string, string> = {};
+    const existingTeams = await ctx.db.query("teams").take(1000);
+    if (existingTeams.length === 0) {
+      const admin = ids["mock-nogiku-admin"]!;
+      const tree: Array<[string, string[]]> = [
+        ["広報局", ["デザイン担当", "SNS担当", "Web担当"]],
+        ["総務局", ["渉外担当"]],
+        ["企画局", []],
+      ];
+      for (const [bi, [bureau, children]] of tree.entries()) {
+        const bureauId = await ctx.db.insert("teams", {
+          name: bureau,
+          kind: "bureau",
+          order: bi + 1,
+          updatedAt: now,
+          updatedBy: admin,
+        });
+        teamIds[bureau] = bureauId;
+        for (const [ti, name] of children.entries())
+          teamIds[`${bureau}/${name}`] = await ctx.db.insert("teams", {
+            name,
+            kind: "team",
+            parentId: bureauId,
+            order: ti + 1,
+            updatedAt: now,
+            updatedBy: admin,
+          });
+      }
+    } else {
+      const byId = new Map(existingTeams.map((t) => [t._id as string, t]));
+      for (const t of existingTeams) {
+        const parent = t.parentId ? byId.get(t.parentId) : undefined;
+        teamIds[parent ? `${parent.name}/${t.name}` : t.name] = t._id;
+      }
+    }
+    /** 主管担当・制作担当（サンプルの組織が無いときは付けない） */
+    const teamsOf = (owner: string | null, production: string[]) => {
+      const ownerTeamId = owner ? teamIds[owner] : undefined;
+      return {
+        ...(ownerTeamId ? { ownerTeamId } : {}),
+        productionTeamIds: production.flatMap((p) => (teamIds[p] ? [teamIds[p]] : [])),
+      };
+    };
     const samples = [
       {
         title: "MF100 公式パンフレット",
@@ -104,6 +148,7 @@ export const demo = internalMutation({
         mediaType: "pdf" as const,
         legacyId: "PR-001",
         notationCategories: ["A1", "A2", "A3"],
+        ...teamsOf("広報局/デザイン担当", ["広報局/デザイン担当"]),
       },
       {
         title: "公式サイト トップページ",
@@ -112,6 +157,8 @@ export const demo = internalMutation({
         mediaType: "web" as const,
         legacyId: "WEB-003",
         notationCategories: ["B"],
+        // 制作担当が 2 つ（制作担当で並べると両方に出る）
+        ...teamsOf("広報局/Web担当", ["広報局/Web担当", "広報局/デザイン担当"]),
       },
       {
         title: "EVE 企画ポスター",
@@ -120,6 +167,8 @@ export const demo = internalMutation({
         mediaType: "image" as const,
         legacyId: "EVE-012",
         notationCategories: ["D"],
+        // 担当を決めていない例（担当別の表示で「担当未設定」に出る）
+        ...teamsOf(null, []),
       },
       {
         title: "公式 Instagram 開催告知",
@@ -129,6 +178,7 @@ export const demo = internalMutation({
         legacyId: "SNS-021",
         notationCategories: ["A1", "A2", "A3"],
         ...(igProfile ? { socialProfileId: igProfile } : {}),
+        ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
       },
     ];
     const created: string[] = [];
@@ -142,7 +192,6 @@ export const demo = internalMutation({
       const workId = await ctx.db.insert("works", {
         ...s,
         year: 100,
-        productionTeamIds: [],
         relatedTeamIds: [],
         managerIds: [ids["mock-nogiku-manager"]!],
         creatorIds: [ids["mock-nogiku-creator"]!],

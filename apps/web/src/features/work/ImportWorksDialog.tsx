@@ -3,9 +3,12 @@ import type { Id } from "@mf100/convex/dataModel";
 import {
   parseWorkCsv,
   resolveWorkImport,
+  teamPath,
   workCsvColumns,
   workCsvTemplate,
   type PersonMatch,
+  type Team,
+  type TeamRefMatch,
   type WorkCsvParseResult,
   type WorkImportRow,
 } from "@mf100/domain";
@@ -64,10 +67,37 @@ const people = (list: PersonMatch[]) =>
     <span className="muted">—</span>
   );
 
+const teamRef = (m: TeamRefMatch, teams: readonly Team[]) =>
+  m.match.kind === "ok" ? (
+    <span>{teamPath(m.match.team.id, teams) ?? m.match.team.name}</span>
+  ) : (
+    <span className="import-miss">
+      <M3eIcon name="error" className="import-miss__icon" aria-hidden="true" />
+      {m.key}
+      <span className="sr-only">
+        （{m.match.kind === "ambiguous" ? "同名の担当が複数" : "見つからない"}）
+      </span>
+    </span>
+  );
+const teamRefs = (list: TeamRefMatch[], teams: readonly Team[]) =>
+  list.length ? (
+    <>
+      {list.map((m, i) => (
+        <span key={i}>
+          {i > 0 ? "、" : ""}
+          {teamRef(m, teams)}
+        </span>
+      ))}
+    </>
+  ) : (
+    <span className="muted">—</span>
+  );
+
 /**
  * 制作物の一括登録（CSV。§36。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」）。
  * 表記ルールの取り込み（features/notation/ImportDialog）と同じく、読み込んだらまず確認の表を出し、確かめてから登録する。
  * - 解析・検証・担当者の照合は domain（parseWorkCsv / resolveWorkImport）。担当者はメールアドレスかユーザー名で書く
+ * - 主管担当・制作担当（組織）は管理画面の組織（局 › 担当）と照合する（「広報局 › デザイン担当」など）
  * - 見つからない担当者・読めない値のある行は、表の「確認」に理由を出し、登録しない
  * - 登録は application の importWorks（権限 works:create・監査）。登録できる行をまとめて 1 回で登録する
  */
@@ -99,12 +129,13 @@ export function ImportWorksDialog({
     [parsed],
   );
   const directory = useQuery(api.works.importDirectory, keys.length ? { keys } : "skip");
+  const teams = useQuery(api.teams.list, open ? {} : "skip");
   const preview = useMemo(
     () =>
-      parsed && (keys.length === 0 || directory !== undefined)
-        ? resolveWorkImport(parsed, directory ?? [], { existingLegacyIds })
+      parsed && (keys.length === 0 || directory !== undefined) && teams !== undefined
+        ? resolveWorkImport(parsed, directory ?? [], { existingLegacyIds }, teams)
         : null,
-    [parsed, directory, keys.length, existingLegacyIds],
+    [parsed, directory, keys.length, existingLegacyIds, teams],
   );
 
   const onFile = async (f: File | undefined) => {
@@ -164,7 +195,9 @@ export function ImportWorksDialog({
         <p className="small muted">
           1 行に 1 つの制作物を書いた CSV を選びます。列は{" "}
           {workCsvColumns.map((c) => `${c.header}${c.required ? "（必須）" : ""}`).join("・")}。
-          担当者はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」で区切ります。登録する前に、内容と担当者の対応をこの表で確かめられます。
+          担当者はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」で区切ります。主管担当・制作担当は組織の局・担当を「広報局
+          ›
+          デザイン担当」のように書きます。登録する前に、内容と担当者の対応をこの表で確かめられます。
         </p>
         <div className="row">
           <input
@@ -185,7 +218,10 @@ export function ImportWorksDialog({
           <span className="small">{fileName}</span>
         </div>
         {parsed && !preview ? (
-          <M3eLinearProgressIndicator mode="indeterminate" aria-label="担当者を照合しています" />
+          <M3eLinearProgressIndicator
+            mode="indeterminate"
+            aria-label="担当者と担当を照合しています"
+          />
         ) : null}
         {preview ? (
           <>
@@ -232,6 +268,21 @@ export function ImportWorksDialog({
                 },
                 { key: "creators", header: "制作者", cell: (r) => people(r.creators) },
                 { key: "managers", header: "主管", cell: (r) => people(r.managers) },
+                {
+                  key: "ownerTeam",
+                  header: "主管担当",
+                  cell: (r) =>
+                    r.ownerTeam ? (
+                      teamRef(r.ownerTeam, teams ?? [])
+                    ) : (
+                      <span className="muted">—</span>
+                    ),
+                },
+                {
+                  key: "productionTeams",
+                  header: "制作担当",
+                  cell: (r) => teamRefs(r.productionTeams, teams ?? []),
+                },
                 {
                   key: "approver",
                   header: "校了権限者",

@@ -24,6 +24,7 @@ import type {
   WorkId,
   WorkPermissionGrant,
   SocialProfile,
+  Team,
 } from "@mf100/domain";
 
 /**
@@ -183,6 +184,17 @@ export interface SocialProfileRepository {
   countWorksUsing(id: string): Promise<number>;
 }
 
+/** 組織（局 › 担当）。管理画面で管理する（Nogiku との同期は後続） */
+export interface TeamRepository {
+  list(): Promise<Team[]>;
+  findById(id: string): Promise<Team | null>;
+  insert(t: Omit<Team, "id">): Promise<Team>;
+  update(t: Team): Promise<void>;
+  remove(id: string): Promise<void>;
+  /** この局・担当を主管担当か制作担当にしている制作物の数（使っているものは消せない） */
+  countWorksUsing(id: string): Promise<number>;
+}
+
 /** 文章の下書き（1 制作物に 1 つ） */
 export interface DocumentDraftRepository {
   findByWork(workId: WorkId): Promise<DocumentDraft | null>;
@@ -261,6 +273,7 @@ export interface AppContext {
   notifications: NotificationRepository;
   documents: DocumentDraftRepository;
   socialProfiles: SocialProfileRepository;
+  teams: TeamRepository;
   alignments: AlignmentOverrideRepository;
   notation: NotationRepository;
   proofreadingRuns: ProofreadingRunRepository;

@@ -8,6 +8,7 @@ export * from "./acl/OrgPermission.ts";
 export * from "./work/Work.ts";
 export * from "./work/submitTarget.ts";
 export * from "./work/bulkImport.ts";
+export * from "./org/team.ts";
 export * from "./dashboard/layout.ts";
 export * from "./revision/Revision.ts";
 export * from "./revision/Artifact.ts";

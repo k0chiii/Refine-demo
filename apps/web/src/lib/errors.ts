@@ -32,6 +32,11 @@ const messages: Record<string, string> = {
   work_import_invalid: "取り込めない行があります。確認の表で理由を見て、CSV を直してください。",
   social_profile_in_use:
     "この SNS アカウントは制作物に割り当てられているため削除できません。先に割り当てを外してください。",
+  team_invalid:
+    "局・担当の内容を確かめてください。名前は 40 文字まで、担当は局の下に作ります。使われている局・担当は種類を変えられません。",
+  team_duplicate: "同じ局の中に同じ名前があります。別の名前にしてください",
+  team_in_use: "制作物が使っている、または担当がある局は削除できません",
+  team_not_found: "選んだ局・担当が見つかりません。画面を更新してから選び直してください",
   mention_too_many: "一度にメンションできるのは 10 人までです",
   mention_not_allowed: "この制作物を見られない人はメンションできません",
   anchor_invalid:
@@ -77,7 +82,15 @@ const japanese = /[\u3040-\u30ff\u3400-\u9fff]/;
 
 /** 詳細（details）が分かるときは、いまの状態やどの欄かを文言に入れる */
 function withDetails(code: string, details: unknown): string | null {
-  const d = (details ?? {}) as { from?: unknown; to?: unknown; errors?: unknown };
+  const d = (details ?? {}) as {
+    from?: unknown;
+    to?: unknown;
+    errors?: unknown;
+    reason?: unknown;
+    max?: unknown;
+  };
+  if (code === "team_invalid" && d.reason === "limit")
+    return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {
     const from = resolutionLabel[d.from] ?? d.from;
     if (d.to === "edited") return `このコメントは今「${from}」なので、訂正できません`;

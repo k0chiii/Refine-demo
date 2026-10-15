@@ -165,6 +165,7 @@ export default defineSchema({
   })
     .index("by_year", ["year"])
     .index("by_social_profile", ["socialProfileId"])
+    .index("by_owner_team", ["ownerTeamId"])
     .index("by_lifecycle", ["lifecycle"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
@@ -361,6 +362,19 @@ export default defineSchema({
     updatedAt: v.number(),
     updatedBy: v.string(),
   }),
+
+  /**
+   * 組織（局 › 担当 の 2 階層。利用者決定 2026-10-15。管理画面で管理し、Nogiku との同期は後続）。
+   * 局は parentId を持たず、担当は局の ID を parentId に持つ。制作物の ownerTeamId・productionTeamIds が指す。
+   */
+  teams: defineTable({
+    name: v.string(),
+    kind: v.union(v.literal("bureau"), v.literal("team")),
+    parentId: v.optional(v.string()),
+    order: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_parent", ["parentId"]),
 
   documentDrafts: defineTable({
     workId: v.id("works"),

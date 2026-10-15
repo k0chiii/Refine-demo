@@ -18,6 +18,7 @@ import type {
   Work,
   WorkPermissionGrant,
   SocialProfile,
+  Team,
 } from "@mf100/domain";
 import type {
   AlignmentOverride,
@@ -88,6 +89,7 @@ export interface InMemoryContext extends AppContext {
     notifications: Table<Notification>;
     documents: Table<DocumentDraft>;
     socialProfiles: Table<SocialProfile>;
+    teams: Table<Team>;
     alignments: Table<AlignmentOverride>;
     categories: Map<string, RuleCategory>;
     rules: Map<string, NotationRule>;
@@ -121,6 +123,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     notifications: new Table<Notification>("ntf"),
     documents: new Table<DocumentDraft>("doc"),
     socialProfiles: new Table<SocialProfile>("sp"),
+    teams: new Table<Team>("team"),
     alignments: new Table<AlignmentOverride>("aln"),
     categories: new Map(),
     rules: new Map(),
@@ -288,6 +291,18 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       },
       countWorksUsing: async (id) =>
         state.works.all().filter((w) => w.socialProfileId === id).length,
+    },
+    teams: {
+      list: async () => state.teams.all(),
+      findById: async (id) => state.teams.get(id),
+      insert: async (t) => state.teams.insert(t),
+      update: async (t) => state.teams.put(t),
+      remove: async (id) => {
+        state.teams.rows.delete(id);
+      },
+      countWorksUsing: async (id) =>
+        state.works.all().filter((w) => w.ownerTeamId === id || w.productionTeamIds.includes(id))
+          .length,
     },
     home: {
       findLayout: async (userId) => clone(state.layouts.get(userId) ?? null),

@@ -1,4 +1,5 @@
 import { parseCsv } from "../notation/importer.ts";
+import { matchTeam, type Team, type TeamMatch } from "../org/team.ts";
 import { deadlineFromJst, toJstDate } from "../shared/deadline.ts";
 import type { Instant } from "../shared/time.ts";
 import { confidentialities, mediaTypes, type Confidentiality, type MediaType } from "./Work.ts";
@@ -9,8 +10,10 @@ import { confidentialities, mediaTypes, type Confidentiality, type MediaType } f
  * ここは CSV の解析・検証と担当者の照合だけを持つ純粋関数。登録はアプリケーション層の `importWorks`。
  *
  * 列（見出しの名前で探す。並び順は自由・知らない列は無視）:
- *   題名*・年度・用途・区分*・媒体*・制作者*・主管・校了権限者*・納期・旧ID・機密区分・表記カテゴリ（* は必須）
- * - 制作者・主管・表記カテゴリは複数を「;」「、」「,」（全角も可）か改行で区切る
+ *   題名*・年度・用途・区分*・媒体*・制作者*・主管・校了権限者*・納期・旧ID・機密区分・表記カテゴリ・主管担当・制作担当（* は必須）
+ * - 制作者・主管・表記カテゴリ・制作担当は複数を「;」「、」「,」（全角も可）か改行で区切る
+ * - 主管担当（1 つ）・制作担当は組織（局 › 担当）を「広報局 › デザイン担当」「広報局/デザイン担当」、担当の名前だけ（同名が無いとき）、局の名前で書く。
+ *   「主管」（人）と「主管担当」（組織）は別の列
  * - 担当者はメールアドレス（@ を含む）かユーザー名（一度サインインした利用者）で書く。同名が複数いるときはメールで書く
  * - 納期は 2026-11-14 か 2026/11/14（その日の終わりまで）。時刻を付けるなら「2026-11-14 18:00」
  * - 媒体は PDF・画像・文章・SNS 投稿・動画・Web・Figma・その他（内部の英字の値でもよい）
@@ -35,7 +38,7 @@ export const workCsvColumns = [
   {
     key: "managers",
     header: "主管",
-    aliases: ["主管", "主管担当", "managers", "manager"],
+    aliases: ["主管", "managers", "manager"],
     required: false,
   },
   {
@@ -56,6 +59,18 @@ export const workCsvColumns = [
     key: "notation",
     header: "表記カテゴリ",
     aliases: ["表記カテゴリ", "表記ルールのカテゴリ", "notationCategories"],
+    required: false,
+  },
+  {
+    key: "ownerTeam",
+    header: "主管担当",
+    aliases: ["主管担当", "主管の担当", "ownerTeam"],
+    required: false,
+  },
+  {
+    key: "productionTeams",
+    header: "制作担当",
+    aliases: ["制作担当", "productionTeams"],
     required: false,
   },
 ] as const;
@@ -116,6 +131,10 @@ export interface WorkCsvRow {
   legacyId: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
+  /** 主管担当（組織）の書き方のまま。無ければ null（照合は {@link resolveWorkImport}） */
+  ownerTeam: string | null;
+  /** 制作担当（組織）の書き方のまま */
+  productionTeams: string[];
   /** 取り込めない理由（担当者の照合は別。{@link resolveWorkImport} で足す） */
   problems: string[];
 }
@@ -226,6 +245,9 @@ export function parseWorkCsv(
     if (confidentiality === null)
       problems.push(`機密区分「${confText}」が分かりません（通常・非公開）`);
 
+    const ownerTeams = splitList(get("ownerTeam"));
+    if (ownerTeams.length > 1) problems.push("主管担当は 1 つだけ書いてください");
+
     rows.push({
       line: i + 1,
       title,
@@ -240,6 +262,8 @@ export function parseWorkCsv(
       legacyId: get("legacyId"),
       confidentiality: confidentiality ?? "normal",
       notationCategories: splitList(get("notation")),
+      ownerTeam: ownerTeams[0] ?? null,
+      productionTeams: Array.from(new Set(splitList(get("productionTeams")))),
       problems,
     });
   }
@@ -292,6 +316,16 @@ export interface WorkImportInput {
   legacyId?: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
+  /** 主管担当（組織の ID） */
+  ownerTeamId?: string;
+  /** 制作担当（組織の ID） */
+  productionTeamIds: string[];
+}
+
+/** CSV に書かれた局・担当と、その照合の結果 */
+export interface TeamRefMatch {
+  key: string;
+  match: TeamMatch;
 }
 
 export interface WorkImportRow {
@@ -299,6 +333,10 @@ export interface WorkImportRow {
   creators: PersonMatch[];
   managers: PersonMatch[];
   approver: PersonMatch | null;
+  /** 主管担当の照合（列が空なら null） */
+  ownerTeam: TeamRefMatch | null;
+  /** 制作担当の照合 */
+  productionTeams: TeamRefMatch[];
   /** 取り込めない理由（行の内容と担当者の照合） */
   problems: string[];
   /** 問題が無い行だけ登録の内容が入る */
@@ -319,14 +357,24 @@ function describeMiss(label: string, m: PersonMatch): string | null {
     : `${label}「${m.key}」が見つかりません（一度サインインした人だけ指定できます）`;
 }
 
+function describeTeamMiss(label: string, m: TeamRefMatch): string | null {
+  if (m.match.kind === "ok") return null;
+  return m.match.kind === "ambiguous"
+    ? `${label}「${m.key}」に当たる担当が ${m.match.candidates.length} つあります。「局 › 担当」の形で書いてください`
+    : `${label}「${m.key}」が見つかりません（管理画面の組織に登録した局・担当を「局 › 担当」の形で書いてください）`;
+}
+
+const teamIdOf = (m: TeamRefMatch) => (m.match.kind === "ok" ? m.match.team.id : "");
+
 /**
- * 解析結果と利用者の一覧から、取り込みの確認表を作る。
+ * 解析結果と利用者の一覧・組織（局 › 担当）から、取り込みの確認表を作る。
  * 旧ID が CSV の中や既存の制作物と重なる行は、二重登録を避けるため取り込まない。
  */
 export function resolveWorkImport(
   parsed: WorkCsvParseResult,
   directory: readonly DirectoryUser[],
   opts: { existingLegacyIds?: Iterable<string> } = {},
+  teams: readonly Team[] = [],
 ): WorkImportPreview {
   const existing = new Set(Array.from(opts.existingLegacyIds ?? [], (s) => s.trim()));
   const seenLegacy = new Set<string>();
@@ -334,6 +382,13 @@ export function resolveWorkImport(
     const creators = row.creators.map((k) => matchPerson(k, directory));
     const managers = row.managers.map((k) => matchPerson(k, directory));
     const approver = row.approver ? matchPerson(row.approver, directory) : null;
+    const ownerTeam: TeamRefMatch | null = row.ownerTeam
+      ? { key: row.ownerTeam, match: matchTeam(row.ownerTeam, teams) }
+      : null;
+    const productionTeams = row.productionTeams.map((key): TeamRefMatch => ({
+      key,
+      match: matchTeam(key, teams),
+    }));
     const problems = [...row.problems];
     for (const m of creators) {
       const p = describeMiss("制作者", m);
@@ -345,6 +400,14 @@ export function resolveWorkImport(
     }
     if (approver) {
       const p = describeMiss("校了権限者", approver);
+      if (p) problems.push(p);
+    }
+    if (ownerTeam) {
+      const p = describeTeamMiss("主管担当", ownerTeam);
+      if (p) problems.push(p);
+    }
+    for (const m of productionTeams) {
+      const p = describeTeamMiss("制作担当", m);
       if (p) problems.push(p);
     }
     if (row.legacyId) {
@@ -369,9 +432,11 @@ export function resolveWorkImport(
           ...(row.legacyId ? { legacyId: row.legacyId } : {}),
           confidentiality: row.confidentiality,
           notationCategories: row.notationCategories,
+          ...(ownerTeam ? { ownerTeamId: teamIdOf(ownerTeam) } : {}),
+          productionTeamIds: Array.from(new Set(productionTeams.map(teamIdOf))),
         }
       : null;
-    return { row, creators, managers, approver, problems, input };
+    return { row, creators, managers, approver, ownerTeam, productionTeams, problems, input };
   });
   return { rows, errors: parsed.errors, ready: rows.filter((r) => r.input).length };
 }
@@ -396,6 +461,8 @@ export function workCsvTemplate(now: Instant = Date.now()): string {
     "PR-001",
     "通常",
     "A1;A2",
+    "広報局 › デザイン担当",
+    "広報局 › デザイン担当;広報局 › SNS担当",
   ];
   return `${[header, example].map((r) => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }
