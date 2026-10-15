@@ -201,12 +201,41 @@ describe("制作物のルールの組と版の記録", () => {
     await expect(resolveRulesForWork(ctx, stranger, work.id)).rejects.toEqual(code("forbidden"));
 
     const rev = await submitRevision(ctx, work.id);
-    expect(rev.notationSnapshot?.rules).toEqual([{ ruleId: "A1-0001", revision: 1 }]);
+    expect(rev.notationSnapshot?.rules).toEqual([{ ruleId: "A1-0001", revision: 1, depth: 1 }]);
     // あとでルールを変えても、版のルールは提出時の内容
     await saveRule(ctx, sysadmin, { rule: draft({ correct: ["MF100"] }) });
     const restored = await rulesOfSnapshot(ctx, rev.notationSnapshot!);
     expect(restored[0]!.correct).toEqual(["五月祭"]);
     expect(restored[0]!.revision).toBe(1);
+  });
+
+  it("版のルールの組は、提出後にカテゴリの継承を変えても変わらない（適用と深さを記録から復元する）", async () => {
+    const ctx = createInMemoryContext();
+    await saveRule(ctx, sysadmin, { rule: draft({ ruleId: "A1-1" }) });
+    const work = await seedWork(ctx, { notationCategories: ["B"] });
+    const rev = await submitRevision(ctx, work.id);
+    const before = await rulesOfSnapshot(ctx, rev.notationSnapshot!);
+    expect(before.map((r) => [r.ruleId, r.depth])).toEqual([["A1-1", 1]]);
+    // 提出後に B の継承（A1〜A3）を外す
+    const b = (await getRuleBook(ctx, sysadmin)).categories.find((c) => c.code === "B")!;
+    await saveCategory(ctx, sysadmin, { ...b, parents: [] });
+    expect((await resolveRulesForWork(ctx, creator, work.id)).rules).toEqual([]);
+    const after = await rulesOfSnapshot(ctx, rev.notationSnapshot!);
+    expect(after.map((r) => [r.ruleId, r.depth])).toEqual([["A1-1", 1]]);
+  });
+
+  it("深さを記録していない古い版も、記録したルールは今の継承に関係なく復元する", async () => {
+    const ctx = createInMemoryContext();
+    await saveRule(ctx, sysadmin, { rule: draft({ ruleId: "A1-1" }) });
+    const b = (await getRuleBook(ctx, sysadmin)).categories.find((c) => c.code === "B")!;
+    await saveCategory(ctx, sysadmin, { ...b, parents: [] });
+    const restored = await rulesOfSnapshot(ctx, {
+      categories: ["B"],
+      year: 100,
+      rules: [{ ruleId: "A1-1", revision: 1 }],
+      hash: "legacy",
+    });
+    expect(restored.map((r) => r.ruleId)).toEqual(["A1-1"]);
   });
 
   it("カテゴリ未選択の制作物は検査しない。編集で選び直せる", async () => {
@@ -367,5 +396,58 @@ describe("ルールの変更提案", () => {
     expect(seenByCreator[0]!.canDecide).toBe(false);
     // 関係のない一般ユーザーには見えない
     expect(await listRuleProposals(ctx, reviewer, { status: null })).toEqual([]);
+  });
+
+  it("保護された引用は公開される題名・通知・承認で作るルールへ写さない", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    await setCategoryManager(ctx, sysadmin, {
+      userId: stranger.userId,
+      categoryCode: "A1",
+      assigned: true,
+    });
+    // 題名・統一表記・誤表記を空にして引用だけで報告する
+    const { proposal } = await proposeRule(ctx, creator, {
+      kind: "report",
+      categoryCode: "A1",
+      title: "",
+      correct: [],
+      incorrect: [],
+      reason: "",
+      context: { workId: work.id, quote: "機密の新企画名" },
+    });
+    expect(proposal.title).not.toContain("機密の新企画名");
+    expect(proposal.title).toBe("誤表記の報告");
+    // 担当者（元の制作物を見られない）への通知にも引用は入らない
+    const sent = ctx.state.notifications.all().filter((n) => n.kind === "rule_proposed");
+    expect(sent.map((n) => n.recipientId)).toEqual([stranger.userId]);
+    expect(sent.every((n) => !`${n.title}${n.body}`.includes("機密の新企画名"))).toBe(true);
+    const seen = (await listRuleProposals(ctx, stranger, { status: "open" }))[0]!;
+    expect(seen.contextHidden).toBe(true);
+    expect(seen.context).toEqual({});
+    expect(seen.title).not.toContain("機密の新企画名");
+
+    // 提案者が引用をそのまま題名に書いた場合も、文脈を隠す相手には中立的な題名にする
+    await proposeRule(ctx, creator, {
+      kind: "new",
+      categoryCode: "A1",
+      title: "機密の新企画名",
+      correct: ["新企画"],
+      incorrect: ["しんきかく"],
+      reason: "",
+      context: { workId: work.id, quote: "機密の新企画名" },
+    });
+    const list = await listRuleProposals(ctx, stranger, { status: "open" });
+    expect(list.every((p) => !p.title.includes("機密の新企画名"))).toBe(true);
+    const all = ctx.state.notifications.all();
+    expect(all.every((n) => !`${n.title}${n.body}`.includes("機密の新企画名"))).toBe(true);
+    // 見られる提案者には自分の題名のまま
+    const mine = await listRuleProposals(ctx, creator, { status: "open" });
+    expect(mine.some((p) => p.title === "機密の新企画名")).toBe(true);
+    // 承認でできるルール（誰でも読める）の題名にも写さない
+    const target = list.find((p) => p.kind === "new")!;
+    await decideRuleProposal(ctx, stranger, { proposalId: target.id, decision: "approve" });
+    const rules = (await getRuleBook(ctx, reviewer)).rules;
+    expect(rules.every((r) => !r.title.includes("機密の新企画名"))).toBe(true);
   });
 });

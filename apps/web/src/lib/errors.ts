@@ -64,6 +64,10 @@ const messages: Record<string, string> = {
     "未完了の専門確認があります。確認を完了するか免除するか、理由を書いて例外校了してください。",
   version_conflict: "ほかの人が先に変更しました。画面を更新してから、もう一度お試しください。",
   document_invalid: "文章を保存できません。大きすぎるか、形式が壊れています。",
+  document_too_large:
+    "下書きが大きすぎて保存できません。文章と書式を合わせて約 900KB までです。文章を分けるか、長い部分を減らしてください。",
+  document_format_mismatch:
+    "この制作物の下書きとは形式が違うため保存できません。制作物に合ったエディタで開いてください。",
   notation_rule_invalid: "ルールの内容を確かめてください",
   notation_not_manager: "このカテゴリのルールを編集・承認する権限がありません",
   notation_category_invalid:
@@ -107,6 +111,8 @@ function withDetails(code: string, details: unknown): string | null {
     if (field === "files" && d.reason === "too_many")
       return `添付は 1 つの投稿に ${typeof d.max === "number" ? d.max : 10} 件までです`;
   }
+  if (code === "document_format_mismatch" && d.reason === "existing_draft")
+    return "この制作物には別の形式の下書きがあります。そのまま保存すると原稿が消えるため保存しませんでした。置き換える場合は、エディタの案内から明示的に置き換えてください。";
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {

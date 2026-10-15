@@ -3,8 +3,11 @@ import {
   defaultRuleCategories,
   DomainError,
   notationRole,
+  neutralProposalTitle,
   proposalDedupeKey,
+  publicProposalTitle,
   resolveRuleSet,
+  restoreRuleSet,
   ruleStrictness,
   snapshotOf,
   validateRuleDraft,
@@ -494,7 +497,6 @@ export async function rulesOfSnapshot(
   ctx: AppContext,
   snapshot: RuleSetSnapshot,
 ): Promise<EffectiveRule[]> {
-  const categories = await loadCategories(ctx);
   const current = new Map((await ctx.notation.listRules()).map((r) => [r.ruleId, r]));
   const rules: NotationRule[] = [];
   for (const ref of snapshot.rules) {
@@ -508,13 +510,10 @@ export async function rulesOfSnapshot(
     );
     if (hist) rules.push(hist.rule);
   }
-  // スナップショットの時点で有効だったものなので、年度・有効フラグはそのまま当てはまる
-  return resolveRuleSet(
-    categories,
-    snapshot.categories,
-    rules.map((r) => ({ ...r, enabled: true })),
-    { year: snapshot.year },
-  );
+  // 当てるルールと深さは提出時の記録に従う（今のカテゴリの継承で選び直さない）。
+  // 深さを記録していない古い版だけ、今の継承から深さを推定する
+  const legacy = snapshot.rules.some((r) => r.depth === undefined) ? await loadCategories(ctx) : [];
+  return restoreRuleSet(snapshot, rules, legacy);
 }
 
 // ---------------------------------------------------------------- 変更提案
@@ -602,8 +601,9 @@ export async function proposeRule(
   }
   const proposal = await ctx.notation.insertProposal({
     ...base,
+    // 引用（context.quote）は元の制作物を見られる人だけのもの。公開される題名へは写さない
     title: short(
-      input.title.trim() || correct[0] || incorrect[0] || context.quote || "誤表記の報告",
+      input.title.trim() || correct[0] || incorrect[0] || neutralProposalTitle(input.kind),
       200,
     ),
     exceptions: (input.exceptions ?? []).slice(0, 20),
@@ -630,7 +630,8 @@ export async function proposeRule(
   await notify(ctx, managers, principal.userId, {
     kind: "rule_proposed",
     title: "表記ルールの提案が届きました",
-    body: `${who ? `${who}から・` : ""}カテゴリ ${input.categoryCode}「${proposal.title}」: ${
+    // 担当者が元の制作物を見られるとは限らないので、文脈と重なる題名は出さない（一覧と同じ保護）
+    body: `${who ? `${who}から・` : ""}カテゴリ ${input.categoryCode}「${publicProposalTitle(proposal)}」: ${
       proposal.reason?.trim() ? excerpt(proposal.reason) : "理由の記載なし"
     }`,
   });
@@ -666,6 +667,8 @@ export async function listRuleProposals(
     }
     out.push({
       ...p,
+      // 文脈を隠すときは、文脈と重なる題名も中立的な題名にする（引用が題名として残らないように）
+      title: hidden ? publicProposalTitle(p) : p.title,
       context: hidden ? {} : p.context,
       contextHidden: hidden,
       canDecide: role !== "member" && p.status === "open",
@@ -713,7 +716,8 @@ async function draftFromProposal(ctx: AppContext, p: RuleProposal): Promise<Rule
   return {
     ruleId: id,
     categoryCode: p.categoryCode,
-    title: p.title,
+    // ルールは誰でも読めるので、文脈と重なる題名は使わない
+    title: publicProposalTitle(p),
     description: p.reason,
     correct: p.correct,
     incorrect: p.incorrect,
@@ -778,7 +782,7 @@ export async function decideRuleProposal(
       input.decision === "approve"
         ? "表記ルールの提案が承認されました"
         : "表記ルールの提案が却下されました",
-    body: `「${p.title}」${who ? `・${who}` : ""}${
+    body: `「${publicProposalTitle(p)}」${who ? `・${who}` : ""}${
       next.decisionNote?.trim() ? `: ${excerpt(next.decisionNote)}` : ""
     }`,
   });

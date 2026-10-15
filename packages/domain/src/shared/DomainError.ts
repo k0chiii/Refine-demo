@@ -71,6 +71,8 @@ export const domainErrorCodes = [
   "approval_reopen_reason_required",
   // 文章の下書き
   "document_invalid",
+  "document_too_large",
+  "document_format_mismatch",
   // 表記統一
   "notation_rule_invalid",
   "notation_not_manager",

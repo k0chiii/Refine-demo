@@ -1,6 +1,6 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { countText } from "@mf100/domain";
+import { countText, draftFormatFor, draftFormatOf } from "@mf100/domain";
 import { Extension, type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useNavigate } from "@tanstack/react-router";
@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { DraftFormatMismatch, EditorMediaMismatch } from "./EditorMismatch";
 import { describeError } from "@/lib/errors";
 import { formatJstShort } from "@/lib/format";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
@@ -62,6 +63,24 @@ export function WriteEditor({ workId }: { workId: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   if (workData === undefined || docData === undefined)
     return <p className="muted write-loading">読み込み中…</p>;
+  // 媒体に合わないエディタでは編集させない（SNS 投稿の下書きを文章で上書きしないため）
+  const expected = draftFormatFor(workData.work.mediaType);
+  if (expected !== "document")
+    return (
+      <EditorMediaMismatch workId={workId} workTitle={workData.work.title} expected={expected} />
+    );
+  const stored = docData.draft ? draftFormatOf(docData.draft.content) : null;
+  if (docData.draft && stored && stored !== "document")
+    return (
+      <DraftFormatMismatch
+        workId={workId}
+        workTitle={workData.work.title}
+        expected="document"
+        stored={stored}
+        draftVersion={docData.draft.version}
+        canEdit={docData.canEdit}
+      />
+    );
   return (
     <WriteSurface
       key={`${reloadKey}`}

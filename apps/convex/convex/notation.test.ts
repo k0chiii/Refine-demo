@@ -54,7 +54,7 @@ describe("Convex 統合: 表記統一", () => {
       { fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" },
     ]);
     const rev = await t.run((ctx) => ctx.db.get(revisionId));
-    expect(rev!.notationSnapshot!.rules).toEqual([{ ruleId: "A1-0001", revision: 1 }]);
+    expect(rev!.notationSnapshot!.rules).toEqual([{ ruleId: "A1-0001", revision: 1, depth: 1 }]);
 
     // 校正画面からの提案（制作物の閲覧権限が要る）→ 担当者が承認
     await expect(

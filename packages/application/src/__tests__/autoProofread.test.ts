@@ -175,4 +175,49 @@ describe("提出時の自動校正", () => {
     expect(res.skipped).toBe("not_accepting");
     expect(await ctx.threads.listByRevision(r2.id)).toEqual([]);
   });
+
+  it("締切を過ぎたら、締切のジョブが版を閉じる前でも自動の指摘を作らない（人と同じ受付判定）", async () => {
+    const ctx = createInMemoryContext();
+    await saveRule(ctx, sysadmin, { rule });
+    const work = await seedWork(ctx, { notationCategories: ["A1"] });
+    const rev = await submitRevision(ctx, work.id, { deadlineInHours: 1 });
+    const run = (await getProofreadingRun(ctx, creator, rev.id)).run!;
+    ctx.clock.advance(2 * HOUR);
+    // 版はまだ open のまま（締切のジョブが未実行）
+    expect((await ctx.revisions.findById(rev.id))!.reviewState).toBe("open");
+    const res = await submitProofreadSegments(ctx, creator, {
+      runId: run.id,
+      artifactId: run.artifacts[0]!.artifactId,
+      segments: [page("5月祭")],
+    });
+    expect(res.skipped).toBe("not_accepting");
+    expect(await ctx.threads.listByRevision(rev.id)).toEqual([]);
+    const after = await getProofreadingRun(ctx, creator, rev.id);
+    expect(after.run!.artifacts[0]!.status).toBe("skipped");
+  });
+
+  it("添付ごとの上限は分割送信の合計で数える（保存済みの数を差し引く）", async () => {
+    const { BOT_THREADS_PER_ARTIFACT } = await import("@mf100/domain");
+    const { ctx, rev, run } = await setup();
+    const artifactId = run.artifacts[0]!.artifactId;
+    const many = (n: number) => page(Array.from({ length: n }, () => "5月祭").join("、"));
+    const first = await submitProofreadSegments(ctx, creator, {
+      runId: run.id,
+      artifactId,
+      segments: [{ ...many(BOT_THREADS_PER_ARTIFACT), page: 1 }],
+      partial: true,
+    });
+    expect(first.created).toBe(BOT_THREADS_PER_ARTIFACT);
+    const second = await submitProofreadSegments(ctx, creator, {
+      runId: run.id,
+      artifactId,
+      segments: [{ ...many(BOT_THREADS_PER_ARTIFACT), page: 2 }],
+    });
+    expect(second.created).toBe(0);
+    expect(second.truncated).toBe(true);
+    const bots = (await ctx.threads.listByRevision(rev.id)).filter(
+      (t) => t.origin?.kind === "bot" && t.artifactId === artifactId,
+    );
+    expect(bots).toHaveLength(BOT_THREADS_PER_ARTIFACT);
+  });
 });

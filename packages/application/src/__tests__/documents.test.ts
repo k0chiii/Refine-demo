@@ -114,6 +114,47 @@ describe("SNS 投稿の下書き", () => {
   });
 });
 
+describe("下書きの形式（原稿の消失を防ぐ）", () => {
+  it("文章の制作物の下書きを SNS 投稿で上書きできない（document_format_mismatch）", async () => {
+    const { emptyPost, postManifest } = await import("@mf100/domain");
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { mediaType: "document" });
+    await saveDocumentDraft(ctx, principals.creator, {
+      workId: work.id,
+      title: "あいさつ",
+      content: doc("大切な原稿"),
+      text: "大切な原稿",
+      baseVersion: 0,
+    });
+    await expect(
+      saveDocumentDraft(ctx, principals.creator, {
+        workId: work.id,
+        title: "あいさつ",
+        content: postManifest(emptyPost()),
+        text: "",
+        baseVersion: 1,
+      }),
+    ).rejects.toEqual(code("document_format_mismatch"));
+    const view = await getDocumentDraft(ctx, principals.creator, work.id);
+    expect(view.draft).toMatchObject({ version: 1, text: "大切な原稿" });
+  });
+
+  it("本文と平文の合計が大きすぎる下書きは document_too_large", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { mediaType: "document" });
+    const text = "あ".repeat(180_000);
+    await expect(
+      saveDocumentDraft(ctx, principals.creator, {
+        workId: work.id,
+        title: "長文",
+        content: doc(text),
+        text,
+        baseVersion: 0,
+      }),
+    ).rejects.toEqual(code("document_too_large"));
+  });
+});
+
 describe("エディタの入口（書ける担当の制作物）", () => {
   it("版を提出できる人の、進行中の制作物だけ。最近書いた下書きが上", async () => {
     const ctx = createInMemoryContext();

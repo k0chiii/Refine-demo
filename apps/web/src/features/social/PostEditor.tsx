@@ -7,12 +7,17 @@ import {
   charLength,
   checkPost,
   defaultAspect,
+  draftFormatFor,
+  draftFormatOf,
   emptyPost,
   extractHashtags,
+  missingPostImages,
+  missingPostImagesMessage,
   parsePostManifest,
   POST_BODY_NAME,
   POST_MANIFEST_NAME,
   postManifest,
+  postSnapshotProblems,
   ALT_TEXT_GUIDE_MAX,
   socialAspects,
   socialFormatLabels,
@@ -33,7 +38,9 @@ import { AiAssist } from "@/features/notation/AiAssist";
 import { FindingList } from "@/features/notation/FindingList";
 import { useProofreader } from "@/features/notation/useProofreader";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { DraftFormatMismatch, EditorMediaMismatch } from "@/features/writing/EditorMismatch";
 import { fetchArtifactBlob } from "@/integrations/api";
+import { describeError } from "@/lib/errors";
 import { formatJstShort } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import { useWindowClass } from "@/lib/useMedia";
@@ -84,6 +91,24 @@ export function PostEditor({ workId }: { workId: string }) {
   );
   if (workData === undefined || docData === undefined || (latest && latestRev === undefined))
     return <p className="muted write-loading">読み込み中…</p>;
+  // 媒体に合わないエディタでは編集させない（文章の原稿を投稿で上書きしないため）
+  const expected = draftFormatFor(workData.work.mediaType);
+  if (expected !== "post")
+    return (
+      <EditorMediaMismatch workId={workId} workTitle={workData.work.title} expected={expected} />
+    );
+  const stored = docData.draft ? draftFormatOf(docData.draft.content) : null;
+  if (docData.draft && stored && stored !== "post")
+    return (
+      <DraftFormatMismatch
+        workId={workId}
+        workTitle={workData.work.title}
+        expected="post"
+        stored={stored}
+        draftVersion={docData.draft.version}
+        canEdit={docData.canEdit}
+      />
+    );
   return (
     <PostSurface workId={workId} work={workData} doc={docData} latestRev={latestRev ?? null} />
   );
@@ -224,12 +249,14 @@ function PostSurface({
           baseVersion.current = r.version;
           setStatus({ kind: "saved", at: r.updatedAt });
         })
-        .catch((e: unknown) =>
-          setStatus((s) => ({
-            ...s,
-            kind: String(e).includes("version_conflict") ? "conflict" : "error",
-          })),
-        );
+        .catch((e: unknown) => {
+          const err = describeError(e);
+          const conflict =
+            err.code === "version_conflict" || String(e).includes("version_conflict");
+          setStatus((s) => ({ ...s, kind: conflict ? "conflict" : "error" }));
+          // 大きすぎる・形式が違うなど、直し方のある失敗は理由を知らせる
+          if (!conflict) toast(err.message, { kind: "error" });
+        });
     }, SAVE_DELAY);
     return () => window.clearTimeout(t);
   }, [post]);
@@ -326,13 +353,24 @@ function PostSurface({
       );
       return;
     }
+    // 画像の実体がすべてそろうまで提出しない（黙って除くと、画像の欠けた版ができる）
+    const missingMessage = missingPostImagesMessage(
+      missingPostImages(post, (key) => {
+        const a = assets.get(key);
+        return !!(a?.file ?? a?.blob);
+      }),
+    );
+    if (missingMessage) {
+      toast(missingMessage, { kind: "error" });
+      return;
+    }
     // 並び順が分かるファイル名にする（01-xxx.jpg）。内容の記録もその名前で書く
     const files: File[] = [];
     const images = [];
     for (const [i, im] of post.images.entries()) {
       const a = assets.get(im.key);
       const src = a?.file ?? a?.blob;
-      if (!src) continue;
+      if (!src) return; // 上で確かめたので来ない（念のため、欠けたまま提出しない）
       const base = im.fileName.replace(/^\d{2}-/, "");
       const name = `${String(i + 1).padStart(2, "0")}-${base}`;
       files.push(new File([src], name, { type: src.type || "image/png" }));
@@ -340,6 +378,15 @@ function PostSurface({
       images.push({ ...rest, fileName: name });
     }
     const snapshot: SocialPost = { ...post, images };
+    // 内容の記録と添付の対応を確かめる（記録にある画像がすべて添付にあること）
+    const problems = postSnapshotProblems(
+      snapshot,
+      files.map((f) => f.name),
+    );
+    if (problems[0]) {
+      toast(problems[0], { kind: "error" });
+      return;
+    }
     files.unshift(new File([post.body], POST_BODY_NAME, { type: "text/plain" }));
     files.push(
       new File([postManifest(snapshot)], POST_MANIFEST_NAME, { type: "application/json" }),

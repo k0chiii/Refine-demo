@@ -8,7 +8,10 @@ import {
   extractMentions,
   extractUrls,
   isPostDraftContent,
+  missingPostImages,
+  missingPostImagesMessage,
   parsePostManifest,
+  postSnapshotProblems,
   postManifest,
   xWeightedLength,
   type SocialPost,
@@ -106,5 +109,35 @@ describe("SNS 投稿", () => {
       { key: "img0", fileName: "a.png", alt: "", aspect: "original", focus: { x: 1, y: 0 } },
     ]);
     expect(isPostDraftContent('{"type":"doc"}')).toBe(false);
+  });
+});
+
+describe("SNS 投稿の提出（画像の実体）", () => {
+  it("実体の無い画像があれば提出を止める（黙って除かない）", () => {
+    const post = {
+      images: [{ ...img("a"), artifactId: "art-a" }, img("b"), img("c")],
+    };
+    const ready = new Set(["c"]);
+    const missing = missingPostImages(post, (k) => ready.has(k));
+    expect(missing.map((m) => [m.index, m.reason])).toEqual([
+      [0, "loading"],
+      [1, "lost"],
+    ]);
+    expect(missingPostImagesMessage(missing)).toContain(
+      "1 枚目の画像を読み込んでいます（ほか 1 枚）",
+    );
+    expect(missingPostImagesMessage(missingPostImages(post, () => true))).toBeNull();
+    expect(missingPostImagesMessage(missing.slice(1))).toContain("「b.jpg」がこの端末にありません");
+  });
+
+  it("内容の記録の画像はすべて添付に 1 対 1 で対応する", () => {
+    const snapshot = { images: [img("01-a"), img("02-b")] };
+    expect(postSnapshotProblems(snapshot, ["post-body.txt", "01-a.jpg", "02-b.jpg"])).toEqual([]);
+    expect(postSnapshotProblems(snapshot, ["01-a.jpg"])).toEqual([
+      "2 枚目の画像のファイルがありません",
+    ]);
+    expect(postSnapshotProblems({ images: [img("x"), img("x")] }, ["x.jpg"])).toEqual([
+      "2 枚目の画像のファイル名が重複しています",
+    ]);
   });
 });

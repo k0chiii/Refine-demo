@@ -70,3 +70,34 @@ export function proposalDedupeKey(
     ].join("\u0002"),
   );
 }
+
+const neutralTitles: Record<ProposalKind, string> = {
+  new: "新しい表記ルールの提案",
+  change: "表記ルールの変更の提案",
+  report: "誤表記の報告",
+};
+
+/** 題名が空のときや、保護された文脈から題名を作れないときの中立的な題名 */
+export function neutralProposalTitle(kind: ProposalKind): string {
+  return neutralTitles[kind];
+}
+
+/**
+ * 元の制作物を見られない人にも出してよい題名（一覧・通知・承認で作るルールの題名に使う）。
+ * 題名が保護された文脈（引用・前後の文）と重なるときは中立的な題名にする。
+ * 統一表記・誤表記と同じ題名は提案の内容そのもの（文脈を隠しても見える）なので、そのまま出す。
+ */
+export function publicProposalTitle(
+  p: Pick<RuleProposal, "kind" | "title" | "correct" | "incorrect" | "context">,
+): string {
+  const title = p.title.trim();
+  if (!title) return neutralProposalTitle(p.kind);
+  const secrets = [p.context.quote, p.context.surrounding]
+    .map((s) => s?.trim() ?? "")
+    .filter(Boolean);
+  if (!secrets.length) return title;
+  if ([...p.correct, ...p.incorrect].includes(title)) return title;
+  if (secrets.some((s) => s.includes(title) || title.includes(s)))
+    return neutralProposalTitle(p.kind);
+  return title;
+}

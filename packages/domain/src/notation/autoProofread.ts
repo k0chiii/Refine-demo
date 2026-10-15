@@ -126,8 +126,11 @@ export function planBotThreads(
   artifactId: string,
   segments: readonly ProofreadSegment[],
   rules: readonly EffectiveRule[],
+  /** 作ってよい数（添付ごとの上限から保存済みの数を引いた残り）。既定は上限そのもの */
+  limit: number = BOT_THREADS_PER_ARTIFACT,
 ): { planned: PlannedBotThread[]; truncated: boolean } {
   const planned: PlannedBotThread[] = [];
+  if (limit <= 0) return { planned, truncated: segments.length > 0 };
   let truncated = false;
   for (const seg of segments.slice(0, SEGMENTS_MAX)) {
     const text = seg.text.slice(0, SEGMENT_TEXT_MAX);
@@ -180,10 +183,18 @@ export function planBotThreads(
           textSource: seg.kind === "text" ? "document" : isOcr ? "ocr" : "pdf_text",
         },
       });
-      if (planned.length >= BOT_THREADS_PER_ARTIFACT) return { planned, truncated: true };
+      if (planned.length >= limit) return { planned, truncated: true };
     }
   }
   return { planned, truncated };
+}
+
+/**
+ * 添付ごとの上限（BOT_THREADS_PER_ARTIFACT）のうち、まだ作れる数。
+ * 分割送信（partial）や再送でも合計が上限を超えないよう、保存済みの数（同じ実行・同じ添付）を差し引く。
+ */
+export function remainingBotThreadQuota(storedForArtifact: number): number {
+  return Math.max(0, BOT_THREADS_PER_ARTIFACT - storedForArtifact);
 }
 
 /** 自動校正の実行（版ごとに 1 件。重い処理はブラウザ、記録と照合はサーバー） */
