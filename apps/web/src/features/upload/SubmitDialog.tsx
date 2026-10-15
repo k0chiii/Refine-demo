@@ -1,7 +1,13 @@
 import { useAuthToken } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { checkTypeLabels, checkTypes, type CheckType } from "@mf100/domain";
+import {
+  artifactFormatLabel,
+  checkTypeLabels,
+  checkTypes,
+  pickReviewArtifact,
+  type CheckType,
+} from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
@@ -63,6 +69,11 @@ export function SubmitDialog({
     externalUrl: "",
   });
   const [files, setFiles] = useState<File[]>([]);
+  // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章）
+  const shownFile =
+    pickReviewArtifact(
+      files.map((f) => ({ type: guessArtifactType(f.name, f.type), role: "source" as const, f })),
+    )?.f ?? null;
   const [dragging, setDragging] = useState(false);
   /** 専門確認（§2.2-4）。種別ごとに要否・担当者を宣言する。校了時に未完了ならブロック（D6）。 */
   const [checks, setChecks] = useState<Record<string, { on: boolean; assignee: string[] }>>(
@@ -222,7 +233,12 @@ export function SubmitDialog({
                   {files.map((f) => (
                     <li key={f.name}>
                       {f.name}
-                      <span className="muted">　{formatBytes(f.size)}</span>
+                      <span className="muted">
+                        　{formatBytes(f.size)}・
+                        {f === shownFile
+                          ? "紙面に表示（コメントはこのファイルに）"
+                          : `${artifactFormatLabel({ type: guessArtifactType(f.name, f.type), fileName: f.name })}（ダウンロード用）`}
+                      </span>
                       <M3eIconButton
                         className="file-drop__remove"
                         aria-label={`${f.name} を外す`}
@@ -235,6 +251,12 @@ export function SubmitDialog({
                 </ul>
               ) : null}
             </div>
+            <p className="small muted">
+              PDF と .ai
+              のように、同じ制作物のファイルをまとめて出せます。紙面に出してコメントを付けるのは
+              PDF（無ければ画像・文章）で、ほかのファイルはエディタの「情報 ›
+              この版のファイル」からダウンロードできます。
+            </p>
             <div className="form">
               <Field label="版の種別" required>
                 <Select value={form.kind} onChange={set("kind")}>

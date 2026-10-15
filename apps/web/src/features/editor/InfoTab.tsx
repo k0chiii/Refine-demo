@@ -21,6 +21,7 @@ import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
+import { RevisionFiles } from "./RevisionFiles";
 import type { WorkData } from "./VersionsTab";
 
 type RevisionData = FunctionReturnType<typeof api.revisions.get>;
@@ -33,11 +34,14 @@ export function InfoTab({
   work,
   revision,
   isAdmin,
+  shownArtifactId = null,
 }: {
   work: WorkData;
   /** 表示中の版（無ければ null） */
   revision: RevisionData | null;
   isAdmin: boolean;
+  /** 紙面に出している添付（この版のファイルの一覧で印を付ける） */
+  shownArtifactId?: string | null;
 }) {
   const finalize = useMutation(api.approvals.finalize);
   const reopen = useMutation(api.approvals.reopen);
@@ -242,6 +246,7 @@ export function InfoTab({
           ) : null}
         </tbody>
       </table>
+      {revision ? <RevisionFiles artifacts={revision.artifacts} shownId={shownArtifactId} /> : null}
 
       <div className="info-tab__actions">
         {can.finalize && w.lifecycle === "active" ? (

@@ -3,6 +3,8 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
   isBeforeDeadline,
+  isReviewableArtifact,
+  pickReviewArtifact,
   textRangeAnchor,
   toViewportRect,
   type Anchor,
@@ -318,9 +320,10 @@ export function Editor({
   useEffect(() => {
     if (!data) return;
     if (!artifactId || !data.artifacts.some((a) => a.id === artifactId))
+      // 紙面に出すのは提出の順番によらず PDF → 画像 → 文章（.ai などの原本は 情報 › この版のファイル から落とす）
       setArtifactId(
         data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
-          data.artifacts.find((a) => a.role !== "external")?.id ??
+          pickReviewArtifact(data.artifacts)?.id ??
           data.artifacts[0]?.id ??
           null,
       );
@@ -382,12 +385,16 @@ export function Editor({
     api.comments.carryCandidates,
     data?.can.carryForward && revisionId ? { revisionId: revisionId as Id<"revisions"> } : "skip",
   );
+  // 「添付を切り替え」には紙面に出せる添付（と外部リンク）だけを並べる。.ai などは 情報 › この版のファイル から落とす
+  const switchable = (data?.artifacts ?? []).filter(
+    (a) => isReviewableArtifact(a) || a.role === "external",
+  );
   // 版比較: 同じ制作物の他の版
   const other = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
   const otherArtifact =
     other?.artifacts.find((a) => a.role !== "external" && a.fileName === artifact?.fileName) ??
     other?.artifacts.find((a) => a.role !== "external" && a.type === artifact?.type) ??
-    other?.artifacts.find((a) => a.role !== "external") ??
+    (other ? pickReviewArtifact(other.artifacts) : null) ??
     null;
   const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null);
   // 高度な版比較: ページの自動対応・スクロール同期・文章差分（features/compare）
@@ -1037,7 +1044,12 @@ export function Editor({
         onWrite={openAuthoring}
       />
     ) : d === "info" ? (
-      <InfoTab work={workData} revision={data ?? null} isAdmin={me?.isSystemAdmin ?? false} />
+      <InfoTab
+        work={workData}
+        revision={data ?? null}
+        isAdmin={me?.isSystemAdmin ?? false}
+        shownArtifactId={artifactId}
+      />
     ) : null;
   const desktopDrawer = drawer !== null && !mobile;
   // 「ピンの高さに並べる」では紙面の横にコメントの列（補助ペインと同じ 360 / 412）＋間隔 24 が並ぶので、幅合わせから除く
@@ -1091,12 +1103,12 @@ export function Editor({
             </span>
           ) : null}
         </AppBarSlot>
-        {data && data.artifacts.length > 1 && compact ? (
+        {switchable.length > 1 && compact ? (
           <ActionSheet
             open={artifactSheet}
             onClose={() => setArtifactSheet(false)}
             title="添付"
-            items={data.artifacts.map((a) => ({
+            items={switchable.map((a) => ({
               icon: "draft",
               label: `${a.role === "external" ? "外部: " : ""}${a.fileName}`,
               selected: a.id === artifactId,
@@ -1308,7 +1320,7 @@ export function Editor({
                       })}
                     </>
                   ) : null}
-                  {data && data.artifacts.length > 1 ? (
+                  {switchable.length > 1 ? (
                     <M3eIconButton
                       aria-label="添付を切り替え"
                       {...(compact ? { onClick: () => setArtifactSheet(true) } : {})}
@@ -1355,9 +1367,9 @@ export function Editor({
                 </M3eMenuItem>
               </M3eMenu>
             ) : null}
-            {data && data.artifacts.length > 1 && !compact ? (
+            {switchable.length > 1 && !compact ? (
               <M3eMenu id="artifact-menu" positionY="above">
-                {data.artifacts.map((a) => (
+                {switchable.map((a) => (
                   <M3eMenuItem
                     key={a.id}
                     onClick={() => {

@@ -58,3 +58,14 @@ export async function fetchArtifactBlob(token: string, artifactId: string): Prom
     );
   return res.blob();
 }
+
+/** 添付を手元に保存する（.ai など紙面に出さない原本も）。認可付きで取得してから、元のファイル名で保存させる */
+export async function downloadArtifact(token: string, artifactId: string, fileName: string) {
+  const blob = await fetchArtifactBlob(token, artifactId);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

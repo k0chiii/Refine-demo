@@ -32,3 +32,13 @@ export async function uploadItem(
 export async function fetchArtifactBlob(_token: string, artifactId: string): Promise<Blob> {
   return demo.fetchArtifact(artifactId);
 }
+
+export async function downloadArtifact(token: string, artifactId: string, fileName: string) {
+  const blob = await fetchArtifactBlob(token, artifactId);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
