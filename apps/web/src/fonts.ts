@@ -5,7 +5,9 @@
 import "@fontsource/noto-sans-jp/400.css";
 import "@fontsource/noto-sans-jp/500.css";
 import "@fontsource/noto-sans-jp/700.css";
-import symbolsUrl from "@fontsource-variable/material-symbols-outlined/files/material-symbols-outlined-latin-full-normal.woff2?url";
+// 全アイコン入りの可変フォント（約 4MB）ではなく、使うアイコンだけに絞ったもの（約 36KB）。
+// アイコンを増やしたら `pnpm --filter @mf100/web icons` で作り直す（scripts/subset-icons.py）
+import symbolsUrl from "./assets/material-symbols-subset.woff2?url";
 
 const style = document.createElement("style");
 style.textContent = `
@@ -13,7 +15,7 @@ style.textContent = `
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-display: block;
-  font-weight: 100 700;
+  font-weight: 400 600;
   src: url(${symbolsUrl}) format("woff2-variations");
 }`;
 document.head.appendChild(style);

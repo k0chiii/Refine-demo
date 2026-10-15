@@ -12,7 +12,7 @@ export { M3eAppBar } from "@m3e/react/app-bar";
 export { M3eNavRail } from "@m3e/react/nav-rail";
 export { M3eNavBar, M3eNavItem } from "@m3e/react/nav-bar";
 export { M3eCard } from "@m3e/react/card";
-export { M3eDialog } from "@m3e/react/dialog";
+export { M3eDialog } from "./LazyDialog";
 export {
   M3eFilterChip,
   M3eFilterChipSet,

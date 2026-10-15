@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Editor, validateEditorSearch } from "@/features/editor/Editor";
+import { Editor } from "@/features/editor/Editor";
+import { validateEditorSearch } from "@/features/editor/search";
 
 export const Route = createFileRoute("/_app/works/$workId/")({
   validateSearch: validateEditorSearch,

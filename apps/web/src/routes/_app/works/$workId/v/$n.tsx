@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Editor, validateEditorSearch } from "@/features/editor/Editor";
+import { Editor } from "@/features/editor/Editor";
+import { validateEditorSearch } from "@/features/editor/search";
 
 /** 版を指定して開く。`n` は 0 がラフ、1 以上が通常版の番号。 */
 export const Route = createFileRoute("/_app/works/$workId/v/$n")({

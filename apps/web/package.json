@@ -15,7 +15,8 @@
     "screenshots": "node e2e/screenshots.mjs",
     "a11y": "A11Y=1 node e2e/screenshots.mjs",
     "e2e:pwa": "node e2e/pwa.mjs",
-    "pwa:icons": "node scripts/pwa-icons.mjs"
+    "pwa:icons": "node scripts/pwa-icons.mjs",
+    "icons": "python3 scripts/subset-icons.py"
   },
   "dependencies": {
     "@convex-dev/auth": "0.0.96",
