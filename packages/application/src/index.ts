@@ -9,6 +9,7 @@ export * from "./usecases/approvals.ts";
 export * from "./usecases/checks.ts";
 export * from "./usecases/notifications.ts";
 export * from "./usecases/dashboard.ts";
+export * from "./usecases/home.ts";
 export * from "./usecases/documents.ts";
 export * from "./usecases/social.ts";
 export * from "./usecases/comparisons.ts";

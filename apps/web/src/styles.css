@@ -139,6 +139,8 @@ body {
 :root {
   /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
   --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));
+  /* compact の下部ナビゲーションバーの高さ（M3 Navigation bar 80） */
+  --mf-navbar-h: 80px;
 }
 /*
  * 画面の上下の縁（ステータスバー・ホームインジケーターの下）までバーの色で塗る。
@@ -263,6 +265,9 @@ m3e-search-bar {
 }
 .title-small {
   font: var(--mf-type-title-small);
+}
+.title-medium {
+  font: var(--mf-type-title-medium);
 }
 .muted {
   color: var(--mf-on-surface-variant);
@@ -1058,22 +1063,45 @@ m3e-dialog [slot="actions"] {
   margin-bottom: 8px;
 }
 
-/* ---------- ダッシュボード */
+/* ---------- ダッシュボード（自分だけのダッシュボード。§36 W-26）
+ * compact・medium は 1 列のリスト（M3 Cards: compact ではリスト）。expanded 以上は 2 列で、左が「やること」、右が補助
+ * （M3 Canonical layouts › Feed。列の間はペインのスペーサーと同じ 24）。主目的の見出しを強く、補助の見出しは控えめに */
 .dash {
   display: grid;
-  gap: 40px;
+  gap: 24px;
+}
+.dash--columns {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+}
+.dash__column {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
 }
 .dash__section {
   display: grid;
-  gap: 16px;
+  gap: 8px;
+  min-width: 0;
 }
-.dash__group {
-  display: grid;
-  gap: 4px;
+.dash__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
 }
 .dash__title {
-  font: var(--mf-type-title-medium);
   margin: 0;
+}
+/* 補助の節の見出し: title-small・on-surface-variant（主目的の title-large emphasized より控えめに） */
+.dash__title--side {
+  font: var(--mf-type-title-small);
+  color: var(--mf-on-surface-variant);
+}
+.dash__subtitle {
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+  margin: 8px 0 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1082,8 +1110,89 @@ m3e-dialog [slot="actions"] {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
 }
+.dash__group {
+  display: grid;
+  gap: 4px;
+}
+.dash__more {
+  justify-self: start;
+}
+.dash__divider {
+  margin: 0;
+}
+.dash__none {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+.dash__none > p {
+  margin: 0;
+}
 .dash__empty {
   font: var(--mf-type-body-large);
+}
+.dash__empty > m3e-icon {
+  font-size: 48px;
+  color: var(--mf-primary);
+}
+/* 未読の印（通知のパネルと同じ点。色だけに頼らず「未読」と読み上げる） */
+.dash__unread {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+}
+.list__item--unread .list__headline {
+  font-weight: 500;
+}
+/* 「ホームを編集」: 節ごとのスイッチと上下のボタン */
+.home-edit__group {
+  display: grid;
+  gap: 4px;
+}
+.home-edit__moves {
+  display: flex;
+  gap: 4px;
+}
+
+/* ---------- 版を提出（§36 L-15）
+ * compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16・右 16・セーフエリアを避ける。M3 FAB › Placement）。
+ * 内容の最後の行が FAB に隠れないよう、下の余白に FAB の高さ（56）と間（16）を足す */
+.submit-fab {
+  position: fixed;
+  inset-inline-end: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--mf-navbar-h) + 16px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+@media (max-width: 599px) {
+  .shell--fab .shell__content {
+    padding-bottom: calc(
+      var(--mf-navbar-h) + 16px + 56px + 16px + env(safe-area-inset-bottom, 0px)
+    );
+  }
+}
+.submit-picker .dialog-body {
+  min-width: min(480px, 90vw);
+}
+.submit-picker__list {
+  margin: 0 -24px;
+}
+.action-sheet__empty {
+  padding: 0 0 16px;
+}
+
+/* ---------- 制作物の一括登録（管理） */
+.admin-works__actions {
+  flex-wrap: wrap;
+}
+.import-miss {
+  color: var(--mf-error);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.import-miss__icon {
+  font-size: 1rem;
 }
 
 /* ---------- 通知のパネル（アプリバーのベル） */

@@ -19,7 +19,15 @@ import type {
   WorkPermissionGrant,
   SocialProfile,
 } from "@mf100/domain";
-import type { AlignmentOverride, AppContext, AuditEntry, Notification } from "../ports.ts";
+import type {
+  AlignmentOverride,
+  AppContext,
+  AuditEntry,
+  Notification,
+  RecentWork,
+  StoredDashboardLayout,
+  WorkPin,
+} from "../ports.ts";
 
 /**
  * インメモリのポート実装。ユースケースの単体テストと、将来の UI プロトタイプ用。
@@ -87,6 +95,9 @@ export interface InMemoryContext extends AppContext {
     managers: RuleCategoryManager[];
     proposals: Table<RuleProposal>;
     runs: Table<ProofreadingRun>;
+    layouts: Map<string, StoredDashboardLayout>;
+    pins: WorkPin[];
+    recent: RecentWork[];
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
   };
@@ -115,6 +126,9 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     managers: [],
     proposals: new Table<RuleProposal>("prp"),
     runs: new Table<ProofreadingRun>("run"),
+    layouts: new Map(),
+    pins: [],
+    recent: [],
     audit: [],
     idempotency: new Map(),
   };
@@ -268,6 +282,40 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       },
       countWorksUsing: async (id) =>
         state.works.all().filter((w) => w.socialProfileId === id).length,
+    },
+    home: {
+      findLayout: async (userId) => clone(state.layouts.get(userId) ?? null),
+      saveLayout: async (layout) => {
+        state.layouts.set(layout.userId, clone(layout));
+      },
+      removeLayout: async (userId) => {
+        state.layouts.delete(userId);
+      },
+      listPins: async (userId) =>
+        state.pins
+          .filter((p) => p.userId === userId)
+          .sort((a, b) => b.pinnedAt - a.pinnedAt)
+          .map(clone),
+      addPin: async (pin) => {
+        state.pins.push(clone(pin));
+      },
+      removePin: async (userId, workId) => {
+        state.pins = state.pins.filter((p) => !(p.userId === userId && p.workId === workId));
+      },
+      listRecent: async (userId) =>
+        state.recent
+          .filter((r) => r.userId === userId)
+          .sort((a, b) => b.openedAt - a.openedAt)
+          .map(clone),
+      putRecent: async (row) => {
+        state.recent = [
+          ...state.recent.filter((r) => !(r.userId === row.userId && r.workId === row.workId)),
+          clone(row),
+        ];
+      },
+      removeRecent: async (userId, workId) => {
+        state.recent = state.recent.filter((r) => !(r.userId === userId && r.workId === workId));
+      },
     },
     alignments: {
       find: async (l, r) =>

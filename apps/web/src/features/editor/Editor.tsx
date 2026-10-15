@@ -23,6 +23,7 @@ import { ComposePopover } from "@/features/review/ComposePopover";
 import { activeMentions, MentionProvider } from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { PinButton, useRecordOpened } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { PostReview } from "@/features/social/PostReview";
@@ -242,6 +243,8 @@ export function Editor({
   const rotation = 0 as const;
   const [compareWith, setCompareWith] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
+  // 開いた制作物を「最近開いた制作物」（ホーム）に記録する
+  useRecordOpened(workId);
   const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -1065,6 +1068,7 @@ export function Editor({
           </AppBarSlot>
         ) : null}
         <AppBarSlot slot="actions">
+          <PinButton workId={workId} />
           {can?.completeReview ? (
             <M3eIconButton
               variant="tonal"

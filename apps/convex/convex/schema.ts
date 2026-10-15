@@ -447,6 +447,41 @@ export default defineSchema({
     .index("by_status", ["status", "proposedAt"])
     .index("by_key", ["dedupeKey", "status"]),
 
+  /**
+   * 自分だけのダッシュボード（W-26）の節の構成。アカウントごとに 1 行（PC とスマホで共通）。
+   * 知らない節の ID は読むときに捨て、あとから足した節は既定で末尾に足す（domain の normalizeDashboardLayout）。
+   */
+  dashboardLayouts: defineTable({
+    userId: v.string(),
+    widgets: v.array(
+      v.object({
+        id: v.string(),
+        visible: v.boolean(),
+        /** 表示件数: 3・5・null（すべて） */
+        limit: v.union(v.number(), v.null()),
+      }),
+    ),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  /** ホームにピン留めした制作物（アカウントごと） */
+  workPins: defineTable({
+    userId: v.string(),
+    workId: v.id("works"),
+    pinnedAt: v.number(),
+  })
+    .index("by_userId_and_pinnedAt", ["userId", "pinnedAt"])
+    .index("by_userId_and_workId", ["userId", "workId"]),
+
+  /** 最近開いた制作物（エディタを開いたら記録。同じ制作物は 1 行。アカウントごとに上限まで） */
+  recentWorks: defineTable({
+    userId: v.string(),
+    workId: v.id("works"),
+    openedAt: v.number(),
+  })
+    .index("by_userId_and_openedAt", ["userId", "openedAt"])
+    .index("by_userId_and_workId", ["userId", "workId"]),
+
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({
     recipientId: v.string(),

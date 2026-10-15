@@ -6,6 +6,9 @@ export interface ActionSheetItem {
   label: ReactNode;
   onSelect: () => void;
   selected?: boolean;
+  /** 2 行目（補助テキスト） */
+  supporting?: ReactNode;
+  disabled?: boolean;
 }
 
 /**
@@ -17,11 +20,14 @@ export function ActionSheet({
   onClose,
   title,
   items,
+  empty,
 }: {
   open: boolean;
   onClose: () => void;
   title?: string;
   items: ActionSheetItem[];
+  /** 項目が無いときに出す内容（M3 の空状態） */
+  empty?: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -53,21 +59,27 @@ export function ActionSheet({
           <span className="title-small">{title}</span>
         </div>
       ) : null}
-      <M3eActionList className="list action-sheet__list" aria-label={title ?? "操作"}>
-        {items.map((it, i) => (
-          <M3eListAction
-            key={i}
-            className="list__item"
-            onClick={() => {
-              onClose();
-              it.onSelect();
-            }}
-          >
-            <M3eIcon slot="leading" name={it.selected ? "check" : it.icon} />
-            <span className="list__headline">{it.label}</span>
-          </M3eListAction>
-        ))}
-      </M3eActionList>
+      {items.length === 0 && empty ? (
+        <div className="action-sheet__empty">{empty}</div>
+      ) : (
+        <M3eActionList className="list action-sheet__list" aria-label={title ?? "操作"}>
+          {items.map((it, i) => (
+            <M3eListAction
+              key={i}
+              className="list__item"
+              disabled={it.disabled === true}
+              onClick={() => {
+                onClose();
+                it.onSelect();
+              }}
+            >
+              <M3eIcon slot="leading" name={it.selected ? "check" : it.icon} />
+              <span className="list__headline">{it.label}</span>
+              {it.supporting ? <span slot="supporting-text">{it.supporting}</span> : null}
+            </M3eListAction>
+          ))}
+        </M3eActionList>
+      )}
     </M3eBottomSheet>
   );
 }

@@ -8,7 +8,9 @@ import {
   requireOrgPermission,
   transitionLifecycle,
   type Work,
+  type WorkImportInput,
   type WorkLifecycle,
+  WORK_IMPORT_MAX_ROWS,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
@@ -79,6 +81,51 @@ export async function createWork(
     at: ctx.clock.now(),
   });
   return work;
+}
+
+/**
+ * 制作物の一括登録（CSV。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」）。
+ * 画面で CSV を解析・照合（domain の parseWorkCsv / resolveWorkImport）して確認した行だけを受け取り、
+ * 1 件ずつの登録と同じ {@link createWork}（権限 `works:create`・検証・監査）を通して、まとめて（1 トランザクションで）登録する。
+ * どれか 1 行でも登録できなければ、何も登録しない。
+ */
+export async function importWorks(
+  ctx: AppContext,
+  principal: Principal,
+  input: { rows: readonly WorkImportInput[]; source?: string },
+): Promise<Work[]> {
+  requireOrgPermission(principal, orgPermissions.worksCreate);
+  if (input.rows.length === 0 || input.rows.length > WORK_IMPORT_MAX_ROWS)
+    throw new DomainError("work_import_invalid", {
+      reason: "row_count",
+      count: input.rows.length,
+      max: WORK_IMPORT_MAX_ROWS,
+    });
+  const created: Work[] = [];
+  for (const [index, row] of input.rows.entries()) {
+    if (row.approverId.trim() === "" || row.creatorIds.length === 0 || row.title.trim() === "")
+      throw new DomainError("work_import_invalid", { reason: "row_incomplete", index });
+    created.push(
+      await createWork(ctx, principal, {
+        ...row,
+        managerIds: row.managerIds,
+        notationCategories: row.notationCategories,
+      }),
+    );
+  }
+  await ctx.audit.record({
+    entityType: "work",
+    entityId: "bulk",
+    operation: "bulk_import",
+    actorId: principal.userId,
+    after: {
+      count: created.length,
+      workIds: created.map((w) => w.id),
+      ...(input.source ? { source: input.source } : {}),
+    },
+    at: ctx.clock.now(),
+  });
+  return created;
 }
 
 export interface UpdateWorkInput {

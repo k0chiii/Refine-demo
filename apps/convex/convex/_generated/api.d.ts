@@ -20,6 +20,7 @@ import type * as comparisons from "../comparisons.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as documents from "../documents.js";
+import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as lib_adapters from "../lib/adapters.js";
 import type * as lib_ai_anthropic from "../lib/ai/anthropic.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dashboard: typeof dashboard;
   documents: typeof documents;
+  home: typeof home;
   http: typeof http;
   "lib/adapters": typeof lib_adapters;
   "lib/ai/anthropic": typeof lib_ai_anthropic;

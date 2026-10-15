@@ -1,11 +1,16 @@
 import {
   changeWorkLifecycle,
   createWork,
+  importWorks,
   loadAuthorizedWork,
   updateWork,
 } from "@mf100/application";
 import {
   canViewWork,
+  hasOrgPermission,
+  normalizePersonKey,
+  orgPermissions,
+  type DirectoryUser,
   isAccepting,
   isAllowed,
   isGrantActive,
@@ -66,6 +71,62 @@ export const create = mutation({
       const work = await createWork(createAppContext(ctx.db), principal, args);
       return work.id;
     });
+  },
+});
+
+/**
+ * 制作物の一括登録（CSV）。画面が CSV を解析し、担当者を照合して確認した行だけを送る。
+ * 登録は application の importWorks（権限 `works:create`・1 件ずつの登録と同じ検証と監査・まとめて 1 トランザクション）。
+ */
+export const importBatch = mutation({
+  args: {
+    rows: v.array(
+      v.object({
+        title: v.string(),
+        year: v.number(),
+        purpose: v.string(),
+        category: v.string(),
+        mediaType: vMediaType,
+        creatorIds: v.array(v.id("users")),
+        managerIds: v.array(v.id("users")),
+        approverId: v.id("users"),
+        deadlineAt: v.optional(v.number()),
+        legacyId: v.optional(v.string()),
+        confidentiality: vConfidentiality,
+        notationCategories: v.array(v.string()),
+      }),
+    ),
+    source: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      const works = await importWorks(createAppContext(ctx.db), principal, args);
+      return works.map((w) => w.id);
+    });
+  },
+});
+
+/**
+ * 一括登録の担当者の照合に使う利用者（CSV に書かれたメールアドレス・名前に当たる人だけ）。
+ * 一度でもサインインした委員が対象（UserPicker と同じ）。登録の権限（works:create）がある人だけが引ける。
+ */
+export const importDirectory = query({
+  args: { keys: v.array(v.string()) },
+  handler: async (ctx, { keys }): Promise<DirectoryUser[]> => {
+    const { principal } = await requireUser(ctx);
+    if (!hasOrgPermission(principal, orgPermissions.worksCreate)) return [];
+    const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
+    if (wanted.size === 0) return [];
+    const users = await ctx.db.query("users").take(5000);
+    return users
+      .filter((u) => u.nogikuSubject !== undefined)
+      .filter(
+        (u) =>
+          wanted.has(normalizePersonKey(u.name ?? "")) ||
+          (u.email !== undefined && wanted.has(normalizePersonKey(u.email))),
+      )
+      .map((u) => ({ id: u._id, name: u.name ?? "", email: u.email ?? null }));
   },
 });
 
