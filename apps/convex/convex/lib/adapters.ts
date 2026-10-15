@@ -1,5 +1,6 @@
 import type { AlignmentOverride, AppContext, Notification } from "@mf100/application";
 import type {
+  ApprovalConfirmation,
   ApprovalEvent,
   Artifact,
   CommentEvent,
@@ -731,6 +732,24 @@ export function createAppContext(
           void _creationTime;
           return rest as ApprovalEvent;
         });
+      },
+      async insertConfirmation(confirmation) {
+        const id = await db.insert("approvalConfirmations", {
+          ...compact(confirmation),
+          workId: confirmation.workId as Id<"works">,
+          revisionId: confirmation.revisionId as Id<"revisions">,
+          confirmerId: confirmation.confirmerId as Id<"users">,
+        });
+        return { ...confirmation, id };
+      },
+      async listConfirmationsByRevision(revisionId) {
+        const docs = await db
+          .query("approvalConfirmations")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId as Id<"revisions">))
+          .take(200);
+        return docs
+          .map((d) => fromDoc(d) as ApprovalConfirmation)
+          .sort((a, b) => a.confirmedAt - b.confirmedAt);
       },
     },
     audit: {

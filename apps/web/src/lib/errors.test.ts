@@ -50,4 +50,30 @@ describe("describeError（UI_M3E §35 W-02）", () => {
       ).message,
     ).toBe("ルールの内容を確かめてください: 統一表記が空です");
   });
+
+  it("制作物の内容の誤りは欄と理由を出す（一括登録では何件目かも）", () => {
+    const err = (code: string, details: unknown) =>
+      describeError(new ConvexError({ code, details: details as never })).message;
+    expect(err("work_invalid", { field: "title", reason: "required" })).toBe(
+      "名称を入力してください",
+    );
+    expect(err("work_invalid", { field: "creatorIds", reason: "required" })).toBe(
+      "制作者を 1 人以上選んでください",
+    );
+    expect(err("work_invalid", { field: "approverId", reason: "unknown_user" })).toBe(
+      "校了権限者に名簿にいない人が含まれています。一度サインインした人から選び直してください",
+    );
+    expect(err("work_invalid", { field: "title", reason: "too_long", max: 200 })).toBe(
+      "名称は 200 文字までです",
+    );
+    expect(
+      err("work_import_invalid", {
+        reason: "row_invalid",
+        index: 2,
+        cause: "work_invalid",
+        field: "creatorIds",
+        causeReason: "required",
+      }),
+    ).toBe("3 件目を登録できません: 制作者を 1 人以上選んでください");
+  });
 });

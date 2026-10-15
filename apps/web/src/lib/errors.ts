@@ -30,6 +30,8 @@ const messages: Record<string, string> = {
     "SNS アカウントの内容を確かめてください。ユーザー名は各サービスの規則に合わせ、アイコンは画像を選びます。",
   social_profile_limit: "SNS アカウントはこれ以上登録できません",
   work_import_invalid: "取り込めない行があります。確認の表で理由を見て、CSV を直してください。",
+  work_invalid:
+    "制作物の内容を確かめてください。名称・区分・制作者・校了権限者（1 人）は必須です。",
   social_profile_in_use:
     "この SNS アカウントは制作物に割り当てられているため削除できません。先に割り当てを外してください。",
   team_invalid:
@@ -47,7 +49,11 @@ const messages: Record<string, string> = {
   approval_rough_revision: "0版（ラフ）からは校了できません",
   approval_blocking_threads_remain:
     "未対応のコメントが残っています。採否を決めるか、理由を書いて例外校了してください。",
-  approval_self_approval_not_allowed: "制作者本人が校了するには、独立確認者を選んでください",
+  approval_self_approval_not_allowed:
+    "制作者本人が校了するには、制作者・校了権限者以外の人（主管・校正者など）が、この版の独立確認をしておく必要があります",
+  approval_confirmer_not_independent: "制作者・校了権限者は独立確認をできません",
+  approval_confirmation_not_needed:
+    "この制作物は独立確認なしで校了できます（独立確認は、制作者本人が校了するときだけ必要です）",
   approval_reopen_reason_required: "再開の理由を書いてください",
   work_invalid_lifecycle_transition: "この制作物の状態からは変更できません",
   comment_edit_not_author: "コメントを訂正できるのは投稿した本人だけです",
@@ -107,6 +113,21 @@ function withDetails(code: string, details: unknown): string | null {
     if (field === "files" && d.reason === "too_many")
       return `添付は 1 つの投稿に ${typeof d.max === "number" ? d.max : 10} 件までです`;
   }
+  if (code === "work_invalid") return workInvalidMessage(details);
+  if (code === "work_import_invalid" && d.reason === "row_invalid") {
+    const index = (details as { index?: unknown } | null)?.index;
+    const cause = (details as { cause?: unknown } | null)?.cause;
+    const why =
+      cause === "work_invalid"
+        ? workInvalidMessage({
+            ...(details as object),
+            reason: (details as { causeReason?: unknown }).causeReason,
+          })
+        : typeof cause === "string"
+          ? (messages[cause] ?? null)
+          : null;
+    if (typeof index === "number" && why) return `${index + 1} 件目を登録できません: ${why}`;
+  }
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {
@@ -128,6 +149,35 @@ function withDetails(code: string, details: unknown): string | null {
     const list = d.errors.filter((e): e is string => typeof e === "string").slice(0, 3);
     if (list.length) return `ルールの内容を確かめてください: ${list.join("、")}`;
   }
+  return null;
+}
+
+/** 制作物の内容の誤り（domain の normalizeWorkEssentials / applyWorkPatch・名簿の確認）を欄ごとの文言にする */
+function workInvalidMessage(details: unknown): string | null {
+  const d = (details ?? {}) as { field?: unknown; reason?: unknown; max?: unknown };
+  const max = typeof d.max === "number" ? d.max : null;
+  const label: Record<string, string> = {
+    title: "名称",
+    category: "区分",
+    creatorIds: "制作者",
+    approverId: "校了権限者",
+    managerIds: "主管・制作統括",
+    mediaType: "媒体",
+    confidentiality: "機密区分",
+  };
+  const name = typeof d.field === "string" ? label[d.field] : undefined;
+  if (!name) return null;
+  if (d.reason === "required")
+    return d.field === "creatorIds"
+      ? "制作者を 1 人以上選んでください"
+      : d.field === "approverId"
+        ? "校了権限者を 1 人選んでください"
+        : `${name}を入力してください`;
+  if (d.reason === "too_long") return `${name}は ${max ?? "決められた"} 文字までです`;
+  if (d.reason === "blank_id") return `${name}に空の値があります。選び直してください`;
+  if (d.reason === "unknown_user")
+    return `${name}に名簿にいない人が含まれています。一度サインインした人から選び直してください`;
+  if (d.reason === "unknown") return `${name}の値が正しくありません`;
   return null;
 }
 

@@ -1,4 +1,5 @@
 import type {
+  ApprovalConfirmation,
   ApprovalEvent,
   Artifact,
   CommentEvent,
@@ -32,6 +33,7 @@ import type {
   StoredDashboardLayout,
   WorkPin,
 } from "../ports.ts";
+import { principals } from "./principals.ts";
 
 /**
  * インメモリのポート実装。ユースケースの単体テストと、将来の UI プロトタイプ用。
@@ -88,6 +90,7 @@ export interface InMemoryContext extends AppContext {
     assignments: ReviewAssignment[];
     grants: WorkPermissionGrant[];
     approvals: ApprovalEvent[];
+    confirmations: Table<ApprovalConfirmation>;
     checks: Table<RequiredCheck>;
     notifications: Table<Notification>;
     documents: Table<DocumentDraft>;
@@ -112,6 +115,11 @@ export interface InMemoryContext extends AppContext {
     idempotency: Map<string, unknown>;
     /** 表示名（テストで通知の文面を確かめるときに入れる）。ここに居る人を委員（名簿）とみなす */
     names: Map<string, string>;
+    /**
+     * 表示名の無い委員（実在する利用者）。既定で scenario の主体が入っている。
+     * profiles（存在確認）はここと names を見る。listMembers（名簿の一覧）は names だけ。
+     */
+    members: Set<string>;
   };
 }
 
@@ -127,6 +135,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     assignments: [],
     grants: [],
     approvals: [],
+    confirmations: new Table<ApprovalConfirmation>("cnf"),
     checks: new Table<RequiredCheck>("chk"),
     notifications: new Table<Notification>("ntf"),
     documents: new Table<DocumentDraft>("doc"),
@@ -149,6 +158,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     audit: [],
     idempotency: new Map(),
     names: new Map(),
+    members: new Set(Object.values(principals).map((p) => p.userId)),
   };
   const clock = new FakeClock(now);
   return {
@@ -159,8 +169,10 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       listMembers: async (limit) =>
         [...state.names].slice(0, limit).map(([id, name]) => ({ id, name, email: null })),
       profiles: async (ids) =>
-        ids.flatMap((id) =>
-          state.names.has(id) ? [{ id, name: state.names.get(id)!, email: null }] : [],
+        [...new Set(ids)].flatMap((id) =>
+          state.names.has(id) || state.members.has(id)
+            ? [{ id, name: state.names.get(id) ?? "", email: null }]
+            : [],
         ),
     },
     works: {
@@ -275,6 +287,12 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       },
       listByWork: async (workId) =>
         state.approvals.filter((e) => e.workId === workId).map((e) => clone(e)),
+      insertConfirmation: async (c) => state.confirmations.insert(c),
+      listConfirmationsByRevision: async (revisionId) =>
+        state.confirmations
+          .all()
+          .filter((c) => c.revisionId === revisionId)
+          .sort((a, b) => a.confirmedAt - b.confirmedAt),
     },
     audit: {
       record: async (e) => {

@@ -1,8 +1,11 @@
 import {
+  applyWorkPatch,
   assertExpectedVersion,
   type Confidentiality,
   DomainError,
   type MediaType,
+  newlyReferencedPeople,
+  normalizeWorkEssentials,
   orgPermissions,
   type Principal,
   requireOrgPermission,
@@ -11,6 +14,8 @@ import {
   type WorkImportInput,
   type WorkLifecycle,
   WORK_IMPORT_MAX_ROWS,
+  type WorkPatch,
+  type UserId,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
@@ -52,29 +57,36 @@ export async function createWork(
   input: CreateWorkInput,
 ): Promise<Work> {
   requireOrgPermission(principal, orgPermissions.worksCreate);
-  if (input.title.trim() === "") throw new DomainError("forbidden", { reason: "title_required" });
-  if (input.creatorIds.length === 0)
-    throw new DomainError("forbidden", { reason: "creator_required" });
+  // 名称・区分・制作者・校了権限者・主管の不変条件は変更と同じドメイン関数で確かめる
+  const essentials = normalizeWorkEssentials({
+    title: input.title,
+    category: input.category,
+    creatorIds: input.creatorIds,
+    approverId: input.approverId,
+    managerIds: input.managerIds ?? [],
+  });
   const managerIds = Array.from(
     new Set([
-      ...(input.managerIds ?? []),
+      ...essentials.managerIds,
       ...(input.addRegistrantAsManager === false ? [] : [principal.userId]),
     ]),
   );
+  // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責の人は委員の名簿にいること
+  await assertPeopleExist(ctx, essentials);
   const ownerTeamId = input.ownerTeamId?.trim() || undefined;
   const productionTeamIds = cleanTeamIds(input.productionTeamIds ?? []);
   await assertTeamsExist(ctx, ownerTeamId, productionTeamIds);
   const data: Omit<Work, "id"> = {
     year: input.year,
-    title: input.title.trim(),
+    title: essentials.title,
     purpose: input.purpose,
-    category: input.category,
+    category: essentials.category,
     mediaType: input.mediaType,
     productionTeamIds,
     relatedTeamIds: input.relatedTeamIds ?? [],
     managerIds,
-    creatorIds: Array.from(new Set(input.creatorIds)),
-    approverId: input.approverId,
+    creatorIds: essentials.creatorIds,
+    approverId: essentials.approverId,
     lifecycle: input.activate === false ? "draft" : "active",
     confidentiality: input.confidentiality ?? "normal",
     version: 1,
@@ -116,16 +128,27 @@ export async function importWorks(
     });
   const created: Work[] = [];
   for (const [index, row] of input.rows.entries()) {
-    if (row.approverId.trim() === "" || row.creatorIds.length === 0 || row.title.trim() === "")
-      throw new DomainError("work_import_invalid", { reason: "row_incomplete", index });
-    created.push(
-      await createWork(ctx, principal, {
-        ...row,
-        managerIds: row.managerIds,
-        notationCategories: row.notationCategories,
-        addRegistrantAsManager: false,
-      }),
-    );
+    try {
+      created.push(
+        await createWork(ctx, principal, {
+          ...row,
+          managerIds: row.managerIds,
+          notationCategories: row.notationCategories,
+          addRegistrantAsManager: false,
+        }),
+      );
+    } catch (e) {
+      // 1 件ずつの登録と同じ検証（createWork）で落ちた行は、何行目かを添えて返す
+      if (e instanceof DomainError && e.code === "work_invalid")
+        throw new DomainError("work_import_invalid", {
+          ...e.details,
+          reason: "row_invalid",
+          index,
+          cause: e.code,
+          causeReason: e.details.reason ?? null,
+        });
+      throw e;
+    }
   }
   await ctx.audit.record({
     entityType: "work",
@@ -145,25 +168,9 @@ export async function importWorks(
 export interface UpdateWorkInput {
   workId: string;
   expectedVersion?: number;
-  patch: Partial<
-    Pick<
-      Work,
-      | "title"
-      | "purpose"
-      | "category"
-      | "mediaType"
-      | "deadlineAt"
-      | "creatorIds"
-      | "approverId"
-      | "managerIds"
-      | "confidentiality"
-      | "legacyId"
-      | "ownerTeamId"
-      | "productionTeamIds"
-      | "relatedTeamIds"
-      | "notationCategories"
-    >
-  > & {
+  patch: WorkPatch & {
+    /** 主管担当（空文字で外す） */
+    ownerTeamId?: string;
     /** SNS のアカウント（本体の設定）の割り当て。null で外す */
     socialProfileId?: string | null;
   };
@@ -179,14 +186,17 @@ export async function updateWork(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   const { socialProfileId, ownerTeamId, ...rest } = input.patch;
-  const patch = stripUndefined(rest);
+  const patch: WorkPatch = stripUndefined(rest);
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
   // 制作担当は全体の置き換え（重複・空を除く）
   if (patch.productionTeamIds) patch.productionTeamIds = cleanTeamIds(patch.productionTeamIds);
   const owner = ownerTeamId === undefined ? undefined : ownerTeamId.trim();
   await assertTeamsExist(ctx, owner || undefined, patch.productionTeamIds ?? []);
-  const next: Work = { ...work, ...patch, version: work.version + 1 };
+  // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人の校了権限者）をドメインで確かめる
+  const next = applyWorkPatch(work, patch);
+  // 新しく職責に入った人は委員の名簿にいること
+  await assertPeopleExist(ctx, next, work);
   // 主管担当: 空文字は「主管担当なし」（外す）
   if (owner === "") delete next.ownerTeamId;
   else if (owner !== undefined) next.ownerTeamId = owner;
@@ -231,6 +241,28 @@ export async function changeWorkLifecycle(
     at: ctx.clock.now(),
   });
   return next;
+}
+
+/**
+ * 職責（制作者・校了権限者・主管）に入る人が委員の名簿（PeopleDirectory）にいるか。
+ * before を渡すと、既に職責にいた人は確かめ直さない。知らない人は `work_invalid`（unknown_user）。
+ */
+async function assertPeopleExist(
+  ctx: AppContext,
+  after: { creatorIds: readonly UserId[]; approverId: UserId; managerIds: readonly UserId[] },
+  before: Work | null = null,
+): Promise<void> {
+  const ids = newlyReferencedPeople(before, after);
+  if (ids.length === 0) return;
+  const known = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
+  const missing = ids.filter((id) => !known.has(id));
+  if (missing.length === 0) return;
+  const field = after.creatorIds.includes(missing[0]!)
+    ? "creatorIds"
+    : after.approverId === missing[0]
+      ? "approverId"
+      : "managerIds";
+  throw new DomainError("work_invalid", { field, reason: "unknown_user", userIds: missing });
 }
 
 function cleanTeamIds(ids: readonly string[]): string[] {

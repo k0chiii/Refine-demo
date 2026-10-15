@@ -22,6 +22,7 @@ export type WorkAction =
   | "review.assign"
   | "work.finalize"
   | "work.reopen"
+  | "approval.confirm"
   | "acl.manage"
   | "audit.view";
 
@@ -77,6 +78,10 @@ export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolea
     case "work.reopen":
       // 校了は制作物の校了権限者のみ。システム管理者であっても自動的には持たない。
       return roles.isApprover;
+    case "approval.confirm":
+      // 独立確認（D2）を記録できるのは、制作物の議論に参加できる人（主管・review 以上の ACL など）。
+      // 制作者・校了権限者は認可は通るが、独立していないのでドメイン（evaluateIndependentConfirmation）で拒否する。
+      return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "review");
     case "acl.manage":
       // 閲覧 ACL の作成・変更・取消は校正システム管理者のみ（§5.2-12）。
       return ctx.principal.isSystemAdmin;

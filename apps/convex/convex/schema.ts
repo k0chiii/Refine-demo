@@ -588,6 +588,18 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_work", ["workId"]),
 
+  /**
+   * 独立確認（D2）。制作者＝校了権限者の制作物で、制作者・校了権限者以外の人が
+   * 自分の操作で「この版を確認した」と記録したもの。校了はこの記録を版ごとに確かめる（申告の ID は使わない）。
+   */
+  approvalConfirmations: defineTable({
+    workId: v.id("works"),
+    revisionId: v.id("revisions"),
+    confirmerId: v.id("users"),
+    confirmedAt: v.number(),
+    note: v.optional(v.string()),
+  }).index("by_revision", ["revisionId"]),
+
   auditEvents: defineTable({
     entityType: v.string(),
     entityId: v.string(),

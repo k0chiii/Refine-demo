@@ -3,6 +3,7 @@ import { matchTeam, type Team, type TeamMatch } from "../org/team.ts";
 import { deadlineFromJst, toJstDate } from "../shared/deadline.ts";
 import type { Instant } from "../shared/time.ts";
 import { confidentialities, mediaTypes, type Confidentiality, type MediaType } from "./Work.ts";
+import { WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "./workInput.ts";
 
 /**
  * 制作物の一括登録（CSV）。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」。
@@ -204,8 +205,12 @@ export function parseWorkCsv(
     const problems: string[] = [];
     const title = get("title");
     if (title === "") problems.push("題名がありません");
+    else if (title.length > WORK_TITLE_MAX)
+      problems.push(`題名は ${WORK_TITLE_MAX} 文字までです（${title.length} 文字あります）`);
     const category = get("category");
     if (category === "") problems.push("区分がありません");
+    else if (category.length > WORK_CATEGORY_MAX)
+      problems.push(`区分は ${WORK_CATEGORY_MAX} 文字までです（${category.length} 文字あります）`);
 
     const yearText = get("year").normalize("NFKC");
     let year = opts.defaultYear;
