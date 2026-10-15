@@ -8,32 +8,40 @@
 :root {
   --mf-font: "Noto Sans JP", "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* 色役割（M3 color roles） */
-  --mf-surface: var(--md-sys-color-surface, #f9f9ff);
-  --mf-surface-dim: var(--md-sys-color-surface-dim, #d9dae3);
+  /* 色役割（M3 color roles）。フォールバックはいまの配色（seed #1b5fb4・vibrant。m3e-theme が無いときだけ使う） */
+  --mf-surface: var(--md-sys-color-surface, #f6f5ff);
+  --mf-surface-dim: var(--md-sys-color-surface-dim, #c8d3ff);
   --mf-surface-container-lowest: var(--md-sys-color-surface-container-lowest, #ffffff);
-  --mf-surface-container-low: var(--md-sys-color-surface-container-low, #f3f3fa);
-  --mf-surface-container: var(--md-sys-color-surface-container, #eeedf4);
-  --mf-surface-container-high: var(--md-sys-color-surface-container-high, #e8e7ef);
-  --mf-surface-container-highest: var(--md-sys-color-surface-container-highest, #e2e2e9);
-  --mf-on-surface: var(--md-sys-color-on-surface, #191c20);
-  --mf-on-surface-variant: var(--md-sys-color-on-surface-variant, #44474e);
-  --mf-outline: var(--md-sys-color-outline, #74777f);
-  --mf-outline-variant: var(--md-sys-color-outline-variant, #c4c6cf);
-  --mf-primary: var(--md-sys-color-primary, #2b5ea8);
+  --mf-surface-container-low: var(--md-sys-color-surface-container-low, #eff0ff);
+  --mf-surface-container: var(--md-sys-color-surface-container, #e3e7ff);
+  --mf-surface-container-high: var(--md-sys-color-surface-container-high, #dbe1ff);
+  --mf-surface-container-highest: var(--md-sys-color-surface-container-highest, #d4dbff);
+  --mf-on-surface: var(--md-sys-color-on-surface, #212d51);
+  --mf-on-surface-variant: var(--md-sys-color-on-surface-variant, #4f5a81);
+  --mf-outline: var(--md-sys-color-outline, #6a759e);
+  --mf-outline-variant: var(--md-sys-color-outline-variant, #a0acd7);
+  --mf-primary: var(--md-sys-color-primary, #005ab3);
   --mf-on-primary: var(--md-sys-color-on-primary, #ffffff);
-  --mf-primary-container: var(--md-sys-color-primary-container, #d6e3ff);
-  --mf-on-primary-container: var(--md-sys-color-on-primary-container, #001b3e);
-  --mf-secondary-container: var(--md-sys-color-secondary-container, #dae2f9);
-  --mf-on-secondary-container: var(--md-sys-color-on-secondary-container, #131c2b);
-  --mf-tertiary: var(--md-sys-color-tertiary, #6f5675);
-  --mf-tertiary-container: var(--md-sys-color-tertiary-container, #f9d8fd);
-  --mf-on-tertiary-container: var(--md-sys-color-on-tertiary-container, #28132f);
-  --mf-error: var(--md-sys-color-error, #ba1a1a);
-  --mf-error-container: var(--md-sys-color-error-container, #ffdad6);
-  --mf-on-error-container: var(--md-sys-color-on-error-container, #410002);
-  --mf-inverse-surface: var(--md-sys-color-inverse-surface, #2e3036);
-  --mf-inverse-on-surface: var(--md-sys-color-inverse-on-surface, #f0f0f7);
+  --mf-primary-container: var(--md-sys-color-primary-container, #65a0ff);
+  --mf-on-primary-container: var(--md-sys-color-on-primary-container, #00224b);
+  --mf-secondary: var(--md-sys-color-secondary, #3155b7);
+  --mf-secondary-container: var(--md-sys-color-secondary-container, #c4d0ff);
+  --mf-on-secondary-container: var(--md-sys-color-on-secondary-container, #153fa2);
+  --mf-tertiary: var(--md-sys-color-tertiary, #863d96);
+  --mf-tertiary-container: var(--md-sys-color-tertiary-container, #f09dff);
+  --mf-on-tertiary-container: var(--md-sys-color-on-tertiary-container, #5e1470);
+  --mf-error: var(--md-sys-color-error, #b31b25);
+  --mf-on-error: var(--md-sys-color-on-error, #ffefee);
+  --mf-error-container: var(--md-sys-color-error-container, #fb5151);
+  --mf-on-error-container: var(--md-sys-color-on-error-container, #570008);
+  --mf-inverse-surface: var(--md-sys-color-inverse-surface, #000b2f);
+  --mf-inverse-on-surface: var(--md-sys-color-inverse-on-surface, #909bc6);
+  /* 紙面（PDF・画像・文章の下地）。M3 の surface-container-lowest と on-surface */
+  --mf-paper: var(--mf-surface-container-lowest);
+  --mf-on-paper: var(--mf-on-surface);
+  /* キーボードのフォーカスリング（M3E の strong-focus と同じ: secondary・3px・外側 2px）。独自部品もこれに揃える */
+  --mf-focus-ring: 3px solid var(--mf-secondary);
+  --mf-focus-offset: 2px;
   /* M3E は選択肢・メニューの選択中とカレンダーの特別な日を tertiary で塗る。vibrant ではこの種の tertiary が
      ピンク（#f09dff）になるので、青系の secondary に寄せる（利用者指摘「青なのに別の色が混じる」の続き） */
   --m3e-option-selected-container-color: var(--md-sys-color-secondary-container);
@@ -52,34 +60,51 @@
   --m3e-calendar-item-special-focus-color: var(--md-sys-color-on-secondary-container);
   --m3e-calendar-item-special-ripple-color: var(--md-sys-color-on-secondary-container);
   /* M3 の色役割に無い「成功」「注意」。動的カラーの tertiary/secondary は seed 次第で緑にもなり
-     意味を担保できないため、固定の補助色にし、ライト／ダークで切り替える（下の @media）。
+     意味を担保できないため固定の補助色にする（M3 Glossary › Extended color）。
+     色は種の青に harmonize 済み（material-color-utilities の Blend.harmonize。M3 Customization。利用者決定 2026-10-15）。
      重大（critical）だけは M3 の error を使う。 */
-  --mf-success-container: #c6efc8;
-  --mf-on-success-container: #0a2e12;
-  --mf-success: #1f6b2d;
-  --mf-warning-container: #ffe08c;
-  --mf-on-warning-container: #3e2e00;
-  --mf-warning: #7a5a00;
+  --mf-success-container: #bef0d6;
+  --mf-on-success-container: #002e1d;
+  --mf-success: #006b46;
+  --mf-warning-container: #ede692;
+  --mf-on-warning-container: #363102;
+  --mf-warning: #6d5f05;
 
-  /* 形（M3 shape scale） */
-  --mf-shape-xs: 4px;
-  --mf-shape-sm: 8px;
-  --mf-shape-md: 12px;
-  --mf-shape-lg: 16px;
-  --mf-shape-xl: 28px;
+  /* 形（M3 shape scale。M3E の --md-sys-shape-corner-* を経由する） */
+  --mf-shape-xs: var(--md-sys-shape-corner-extra-small, 4px);
+  --mf-shape-sm: var(--md-sys-shape-corner-small, 8px);
+  --mf-shape-md: var(--md-sys-shape-corner-medium, 12px);
+  --mf-shape-lg: var(--md-sys-shape-corner-large, 16px);
+  --mf-shape-xl: var(--md-sys-shape-corner-extra-large, 28px);
+  --mf-shape-full: var(--md-sys-shape-corner-full, 9999px);
+  /* 紙面（印刷物の見立て）の角は M3 の尺度の外。名前を付けて 1 か所にする */
+  --mf-shape-paper: 2px;
   --mf-radius: var(--mf-shape-md);
+
+  /* 高さ（M3 elevation。M3E の --md-sys-elevation-level* を経由する） */
+  --mf-elevation-1: var(--md-sys-elevation-level1, 0 1px 3px rgb(0 0 0 / 0.2));
+  --mf-elevation-2: var(--md-sys-elevation-level2, 0 2px 6px rgb(0 0 0 / 0.2));
+  --mf-elevation-3: var(--md-sys-elevation-level3, 0 4px 12px rgb(0 0 0 / 0.2));
 
   /* 動き（M3 motion: standard easing） */
   --mf-motion: 200ms cubic-bezier(0.2, 0, 0, 1);
 
-  /* 文字（M3 type scale。フォント指定は body に集約） */
-  --mf-type-body-large: 400 16px/24px var(--mf-font);
-  --mf-type-body-medium: 400 14px/20px var(--mf-font);
-  --mf-type-body-small: 400 12px/16px var(--mf-font);
-  --mf-type-label-large: 500 14px/20px var(--mf-font);
-  --mf-type-label-medium: 500 12px/16px var(--mf-font);
-  --mf-type-title-medium: 500 16px/24px var(--mf-font);
-  --mf-type-title-small: 500 14px/20px var(--mf-font);
+  /* 文字（M3 type scale。M3E の --md-sys-typescale-* を経由し rem で持つ。ブラウザ・OS の文字サイズに追従する） */
+  --mf-type-body-large: var(--md-sys-typescale-body-large-font-weight, 400)
+    var(--md-sys-typescale-body-large-font-size, 1rem) /
+    var(--md-sys-typescale-body-large-line-height, 1.5rem) var(--mf-font);
+  --mf-type-body-medium: var(--md-sys-typescale-body-medium-font-weight, 400)
+    var(--md-sys-typescale-body-medium-font-size, 0.875rem) /
+    var(--md-sys-typescale-body-medium-line-height, 1.25rem) var(--mf-font);
+  --mf-type-body-small: var(--md-sys-typescale-body-small-font-weight, 400)
+    var(--md-sys-typescale-body-small-font-size, 0.75rem) /
+    var(--md-sys-typescale-body-small-line-height, 1rem) var(--mf-font);
+  --mf-type-label-large: 500 0.875rem / 1.25rem var(--mf-font);
+  --mf-type-label-medium: 500 0.75rem / 1rem var(--mf-font);
+  --mf-type-label-small: 500 0.6875rem / 1rem var(--mf-font);
+  --mf-type-title-large: 400 1.375rem / 1.75rem var(--mf-font);
+  --mf-type-title-medium: 500 1rem / 1.5rem var(--mf-font);
+  --mf-type-title-small: 500 0.875rem / 1.25rem var(--mf-font);
 }
 
 * {
@@ -100,6 +125,17 @@ html,
 body {
   touch-action: pan-x pan-y;
 }
+/*
+ * 文字の大きさ: 文字は rem で持つ（M3 Text resizing: 文字を 200% まで大きくできること）。
+ * iOS の Safari はブラウザの文字サイズ設定を持たず、px でも rem でも OS の文字サイズ（Dynamic Type）を反映しないので、
+ * iOS だけ html の文字を -apple-system-body にして OS の設定に追従させる（利用者決定 2026-10-15）。
+ * iOS の本文の標準は 17pt なので、iOS では基準が 16 → 17 になる。デスクトップの Safari は対象外（13px になってしまう）
+ */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+  html {
+    font: -apple-system-body;
+  }
+}
 :root {
   /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
   --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));
@@ -115,8 +151,14 @@ body {
   top: 0;
   z-index: 29;
   padding-top: env(safe-area-inset-top, 0px);
-  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+  /* 左のセーフエリアは、レールがある幅（600 以上）ではレールが受け持つ（§35 L-06） */
+  padding-inline: 0 env(safe-area-inset-right, 0px);
   background-color: var(--m3e-app-bar-container-color, var(--mf-surface));
+}
+@media (max-width: 599px) {
+  .shell__appbar {
+    padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+  }
 }
 html,
 body,
@@ -138,11 +180,11 @@ a {
   border-radius: var(--mf-shape-xs);
 }
 a:focus-visible {
-  outline: 2px solid var(--mf-primary);
+  outline: var(--mf-focus-ring);
   outline-offset: 2px;
 }
 code {
-  font-size: 12px;
+  font-size: 0.75rem;
   background: var(--mf-surface-container-high);
   padding: 1px 4px;
   border-radius: var(--mf-shape-xs);
@@ -256,6 +298,9 @@ m3e-search-bar {
   --m3e-nav-rail-expanded-width: 220px; /* M3 展開レール（最小） */
   /* M3 の「上端からヘッダーまで 44」は Android のステータスバーを含む値。web ではアプリバー（64）のアイコン中心 32 に揃える: 12 ＋ 40 / 2 ＝ 32 */
   --m3e-nav-rail-top-space: 12px;
+  /* 横向きのスマホの切り欠き・iPad の縁（M3 Scaffold › Safety region。§35 L-06） */
+  padding-inline-start: env(safe-area-inset-left, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 /* 設計原則（利用者決定 2026-10-14）: ナビのアイコンの高さは一切動かさない（Gmail と同じ）。
    静止位置を両状態で同じにしたうえで、M3E が入れる縦方向の一瞬の動き（選択時の 4px スライド = short-2、向き変更時の margin の遷移 = short-1）だけを 0 にする。
@@ -284,11 +329,9 @@ m3e-search-bar {
   inset-inline-start: 0;
   z-index: 40;
   background: var(--mf-surface-container);
-  border-start-end-radius: 16px;
-  border-end-end-radius: 16px;
-  box-shadow:
-    0 4px 8px 3px rgba(0, 0, 0, 0.15),
-    0 1px 3px rgba(0, 0, 0, 0.3); /* elevation level 3 */
+  border-start-end-radius: var(--mf-shape-lg);
+  border-end-end-radius: var(--mf-shape-lg);
+  box-shadow: var(--mf-elevation-3);
 }
 .shell__scrim {
   position: fixed;
@@ -302,14 +345,17 @@ m3e-search-bar {
   min-width: 0;
 }
 .shell__content {
-  padding: 16px 24px 64px; /* M3 のペイン余白 24（medium 以上。Breakpoints › Medium / Expanded / Large）。見出しはアプリバーにあるので内容は 16 から始める */
+  /* M3 のペイン余白 24（medium 以上。Breakpoints › Medium / Expanded / Large）。見出しはアプリバーにあるので内容は 16 から始める。
+     末尾側と下は横向きのスマホ・iPad のセーフエリアも避ける */
+  padding: 16px max(24px, env(safe-area-inset-right, 0px))
+    calc(64px + env(safe-area-inset-bottom, 0px)) 24px;
   width: 100%;
   box-sizing: border-box;
 }
 .shell__bar {
   display: none;
 }
-/* compact（<600）: レールを隠し、下部ナビゲーションバー（3 件: ダッシュボード・通知・制作物） */
+/* compact（<600）: レールを隠し、下部ナビゲーションバー（ダッシュボード・制作物・エディタ・表記ルール、管理者は管理も） */
 @media (max-width: 599px) {
   .shell {
     grid-template-columns: 1fr;
@@ -338,21 +384,18 @@ m3e-search-bar {
     background-color: var(--m3e-nav-bar-container-color, var(--mf-surface-container));
   }
 }
-.nav-link {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-/* 下部バー: リンクで包んだ項目も素の項目（通知）も同じ幅に並べる */
-.shell__bar .nav-link,
+/* 下部バー: 項目を同じ幅に並べる */
 .shell__bar > m3e-nav-item {
   flex: 1 1 0;
-  min-width: 0;
-}
-.shell__bar .nav-link > m3e-nav-item,
-.shell__bar > m3e-nav-item {
   width: 100%;
   min-width: 0;
+}
+/* 下の階層（制作物を開いた画面）の medium・expanded はレールを隠す（§35 L-13）。左のセーフエリアはアプリバーが受け持つ */
+.shell--norail {
+  grid-template-columns: 1fr;
+}
+.shell--norail .shell__appbar {
+  padding-inline-start: env(safe-area-inset-left, 0px);
 }
 
 /* ---------- 画面見出し: 内容側には置かない。各画面が AppBarSlot で共通アプリバーの見出しに差し込む（M3 App bars） */
@@ -455,7 +498,7 @@ m3e-dialog [slot="actions"] {
 .meta {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
   white-space: nowrap;
@@ -526,7 +569,7 @@ m3e-dialog [slot="actions"] {
   color: var(--mf-on-surface);
 }
 .q__help {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font: var(--mf-type-body-medium);
   color: var(--mf-on-surface-variant);
 }
@@ -626,7 +669,7 @@ m3e-dialog [slot="actions"] {
   cursor: pointer;
 }
 .file-drop__pick:focus-within {
-  outline: 2px solid var(--mf-primary);
+  outline: var(--mf-focus-ring);
   outline-offset: 2px;
   border-radius: var(--mf-shape-xs);
 }
@@ -784,7 +827,7 @@ m3e-dialog [slot="actions"] {
   text-align: center;
 }
 .signin__logo {
-  border-radius: 16px;
+  border-radius: var(--mf-shape-lg);
 }
 .signin__lead {
   margin: 0;
@@ -859,31 +902,37 @@ m3e-dialog [slot="actions"] {
   padding: 24px 28px;
   width: 100%;
   min-height: 300px;
-  background: #fff;
-  color: #191c20;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.3),
-    0 4px 8px 3px rgb(0 0 0 / 0.15);
-  border-radius: 2px;
-  font: 15px/1.9 var(--mf-font);
+  background: var(--mf-paper);
+  color: var(--mf-on-paper);
+  box-shadow: var(--mf-elevation-2);
+  border-radius: var(--mf-shape-paper);
+  font: 400 0.9375rem / 1.9 var(--mf-font);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .text-anchor {
-  background: color-mix(in srgb, #2b5ea8 14%, transparent);
-  border-bottom: 2px solid #2b5ea8;
+  background: color-mix(in srgb, var(--mf-primary) 14%, transparent);
+  border-bottom: 2px solid var(--mf-primary);
   cursor: pointer;
 }
-.text-anchor--critical {
-  background: color-mix(in srgb, #ba1a1a 16%, transparent);
-  border-bottom-color: #ba1a1a;
+/* M3 State layers: hover は +8% */
+.text-anchor:hover {
+  background: color-mix(in srgb, var(--mf-primary) 22%, transparent);
 }
+.text-anchor--critical {
+  background: color-mix(in srgb, var(--mf-error) 16%, transparent);
+  border-bottom-color: var(--mf-error);
+}
+/* 選択中は 2 つの手がかり（濃い地＋太い下線）で示す。フォーカスのリングとは別（M3 States） */
 .text-anchor--active {
-  outline: 2px solid #2b5ea8;
-  outline-offset: 1px;
+  background: color-mix(in srgb, var(--mf-primary) 30%, transparent);
+  border-bottom-width: 4px;
+}
+.text-anchor--critical.text-anchor--active {
+  background: color-mix(in srgb, var(--mf-error) 30%, transparent);
 }
 .text-anchor--draft {
-  background: color-mix(in srgb, #2b5ea8 28%, transparent);
+  background: color-mix(in srgb, var(--mf-primary) 28%, transparent);
 }
 .text-anchor[data-index]::before {
   content: attr(data-index);
@@ -891,17 +940,16 @@ m3e-dialog [slot="actions"] {
   min-width: 16px;
   padding: 0 4px;
   margin-inline-end: 4px;
-  border-radius: 8px;
-  background: #2b5ea8;
-  color: #fff;
-  font-size: 10px;
-  line-height: 16px;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+  font: var(--mf-type-label-small);
   text-align: center;
   vertical-align: top;
   user-select: none;
 }
 .text-anchor:focus-visible {
-  outline: 2px solid #2b5ea8;
+  outline: 2px solid var(--mf-primary);
 }
 .nav-icon {
   position: relative;
@@ -918,10 +966,10 @@ m3e-dialog [slot="actions"] {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 8px;
+  border-radius: var(--mf-shape-sm);
   background: var(--mf-error);
-  color: var(--md-sys-color-on-error, #ffffff);
-  font: 500 11px/16px var(--mf-font);
+  color: var(--mf-on-error);
+  font: var(--mf-type-label-small);
   letter-spacing: 0.5px;
   pointer-events: none;
   white-space: nowrap;
@@ -978,9 +1026,10 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- M3 リスト（校正待ち・制作物・版履歴）: 1 件 2 行、押せるのは行全体 */
+/* 行の内側余白（16）の分だけ外へ出し、行の文字の左端を見出し・チップと同じルーラーに揃える（M3 Grids › Rulers。§35 L-05） */
 .list {
   display: block;
-  margin: 0 -8px;
+  margin: 0 -16px;
 }
 .list__item {
   --m3e-list-item-container-shape: var(--mf-shape-md);
@@ -1096,8 +1145,19 @@ m3e-dialog [slot="actions"] {
 .notif__title {
   font: var(--mf-type-body-medium);
 }
+/* 未読は太さに加えて点でも示す（見た目の差 1 つだけに頼らない。読み上げは「未読」。§35 A-12） */
 .notif--unread .notif__title {
   font-weight: 500;
+}
+.notif--unread .notif__title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 8px;
+  border-radius: 50%;
+  background: var(--mf-primary);
+  vertical-align: middle;
 }
 .notif__sub,
 .notif__time {
@@ -1154,9 +1214,15 @@ m3e-dialog [slot="actions"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 先頭ボタンが無い画面: 見出しはバーの端から 16（M3 App bars。バー自体の内側余白 8 ＋ 8） */
+/* 先頭ボタンが無い画面: 見出しはバーの端から 16（M3 App bars。バー自体の内側余白 8 ＋ 8）。
+   600 以上は内容の余白 24 と同じルーラーに揃える（8 ＋ 16。M3 Grids › Rulers「title ruler」。§35 L-05） */
 #appbar-leading:empty + .appbar-slot--title {
   padding-inline-start: 8px;
+}
+@media (min-width: 600px) {
+  #appbar-leading:empty + .appbar-slot--title {
+    padding-inline-start: 16px;
+  }
 }
 .appbar-slot--actions {
   display: inline-flex;
@@ -1213,8 +1279,9 @@ m3e-dialog [slot="actions"] {
   position: relative;
   width: 4px;
   height: 48px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--mf-on-surface-variant) 40%, transparent);
+  border-radius: var(--mf-shape-xs);
+  /* 普段から outline 色（背景に対して 3:1 以上。M3 Color contrast。利用者決定 2026-10-15） */
+  background: var(--mf-outline);
   cursor: col-resize;
   outline: none;
   touch-action: none;
@@ -1230,7 +1297,8 @@ m3e-dialog [slot="actions"] {
   background: var(--mf-on-surface-variant);
 }
 .ws__handle:focus-visible {
-  box-shadow: 0 0 0 3px var(--mf-secondary);
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
 }
 .ws__handle--collapsed {
   cursor: pointer;
@@ -1278,11 +1346,9 @@ m3e-dialog [slot="actions"] {
 }
 .viewer__page {
   position: relative;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.3),
-    0 4px 8px 3px rgb(0 0 0 / 0.15);
-  background: #fff;
-  border-radius: 2px;
+  box-shadow: var(--mf-elevation-2);
+  background: var(--mf-paper);
+  border-radius: var(--mf-shape-paper);
   flex: none;
 }
 .viewer__page canvas,
@@ -1341,7 +1407,7 @@ m3e-dialog [slot="actions"] {
 }
 .anchor-pin {
   fill: var(--mf-primary);
-  stroke: #fff;
+  stroke: var(--mf-on-primary);
   stroke-width: 2;
   cursor: pointer;
   transition: r var(--mf-motion);
@@ -1356,8 +1422,8 @@ m3e-dialog [slot="actions"] {
   stroke-width: 2;
 }
 .anchor-label {
-  font: 700 11px var(--mf-font);
-  fill: #fff;
+  font: 700 11px var(--mf-font); /* 紙面の座標で描く（紙面と一緒に拡大縮小する）ので px のまま */
+  fill: var(--mf-on-primary);
   pointer-events: none;
 }
 .external {
@@ -1371,7 +1437,8 @@ m3e-dialog [slot="actions"] {
 .ws__toolbar {
   position: absolute;
   left: 50%;
-  bottom: 16px;
+  /* 横向きのスマホ・iPad はホームインジケーターがあるので、下のセーフエリアの上に置く（§35 L-06） */
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   max-width: calc(100% - 32px);
   z-index: 20;
@@ -1392,7 +1459,7 @@ m3e-dialog [slot="actions"] {
   display: none;
 }
 .ws__toolbar-items:focus-visible {
-  outline: 2px solid var(--mf-primary);
+  outline: var(--mf-focus-ring);
   outline-offset: 2px;
 }
 .ws__toolbar-text {
@@ -1404,25 +1471,10 @@ m3e-dialog [slot="actions"] {
   font-variant-numeric: tabular-nums;
 }
 /* 倍率の数値: 押すと幅に合わせる。48 の押せる高さ（M3 の最小タッチ領域） */
+/* 倍率の数値は M3E の text ボタン（押下・ホバー・フォーカスの状態は M3E が描く。§35 I-06） */
 .ws__zoom {
-  min-height: 40px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 20px;
-  background: transparent;
-  cursor: pointer;
-}
-.ws__zoom::before {
-  content: "";
-  position: absolute;
-  inset: -4px 0;
-}
-.ws__zoom:hover {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-.ws__zoom:focus-visible {
-  outline: 3px solid var(--mf-secondary);
-  outline-offset: 2px;
+  --m3e-text-button-label-text-color: var(--mf-on-surface);
+  min-width: 3.5em;
 }
 .ws__toolbar-sep {
   width: 1px;
@@ -1438,40 +1490,6 @@ m3e-dialog [slot="actions"] {
   min-height: 0;
   background: var(--mf-surface-container-low);
   border-radius: var(--mf-shape-lg);
-}
-.drawer__tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 8px 0;
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
-.drawer__tab {
-  font: var(--mf-type-label-large);
-  font-family: var(--mf-font);
-  color: var(--mf-on-surface-variant);
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 0 12px;
-  min-height: 48px; /* タッチ領域 48 */
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: -1px;
-}
-.drawer__tab--on {
-  color: var(--mf-primary);
-  border-bottom-color: var(--mf-primary);
-}
-.drawer__tab:focus-visible {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: -2px;
-  border-radius: var(--mf-shape-xs);
-}
-.drawer__n {
-  font: var(--mf-type-label-medium);
-  color: var(--mf-on-surface-variant);
 }
 .drawer__body {
   flex: 1;
@@ -1567,7 +1585,7 @@ m3e-dialog [slot="actions"] {
 }
 .thread__name {
   font: var(--mf-type-label-large);
-  line-height: 18px;
+  line-height: 1.125rem;
 }
 .thread__time {
   font: var(--mf-type-body-small);
@@ -1669,9 +1687,7 @@ m3e-dialog [slot="actions"] {
   z-index: 25; /* 書いているあいだはビューアの浮遊ツールバー（20）より手前 */
   background: var(--mf-surface-container-lowest);
   border-radius: var(--mf-shape-md);
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.3),
-    0 4px 8px 3px rgb(0 0 0 / 0.15);
+  box-shadow: var(--mf-elevation-2);
   padding: 12px 12px 8px;
   display: grid;
   gap: 4px;
@@ -1824,62 +1840,39 @@ m3e-dialog [slot="actions"] {
   flex: none;
 }
 
-/* compact / medium（839 以下）: 補助ペインは置けない。引き出しはボトムシート */
+/* compact / medium（839 以下）: 補助ペインは置けない。引き出しはツールバーから開くボトムシート（§30）。
+   普段はシートを閉じて紙面をアプリバーの下いっぱいに使い、浮遊ツールバーは下端から 16（M3 Toolbars。§35 L-01・L-02） */
 @media (max-width: 839px) {
   .ws {
-    height: auto;
+    height: calc(100dvh - var(--mf-appbar-h));
+    padding: 0;
   }
   .ws__body {
+    flex: 1;
+    min-height: 0;
     height: auto;
     grid-template-columns: 1fr;
   }
   .ws__viewer > .viewer {
-    height: 60vh;
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    border-radius: 0;
   }
-  /* 狭い画面ではコメントのシートが下から出るので、ツールバーはビューアの上端に置く */
-  .ws__toolbar {
-    top: 12px;
-    bottom: auto;
-  }
+  /* 下端はツールバー（64）＋上下の 16 ＋セーフエリア */
   .viewer__stage {
-    padding: 80px 16px 24px;
+    padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+  .ws__toolbar {
+    top: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
   .compare {
     grid-template-columns: 1fr;
   }
 }
-/* compact（<600）のエディタ: トップアプリバー（64）＋紙面（残り全部）＋覗き見のボトムシート（60 ＝ 8 ＋タブ 46 ＋ 6） */
-.ws--compact {
-  height: calc(
-    100dvh - var(--mf-appbar-h)
-  ); /* 839 以下の height: auto を打ち消す。アプリバー 64 の下を全部使う */
-  padding: 0;
-}
-.ws--compact .ws__body {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-}
-.ws--compact .ws__viewer > .viewer {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-  border-radius: 0;
-}
-.ws--compact .viewer__stage {
-  padding: 16px 16px 160px; /* 下端はシートの覗き見（64）＋ 16 ＋ツールバー（64）＋ 16 */
-}
-.ws--compact .ws__toolbar {
-  top: auto;
-  bottom: calc(
-    80px + env(safe-area-inset-bottom, 0px)
-  ); /* 覗き見 64 ＋ 16。セーフエリア（M3 Scaffold › Safety region）を避ける */
-}
-/* compact のリストは端から端まで（本文の左端 16 が題名と揃う）。.list の後に置く */
+/* compact のリストは端から端まで（行の角を取る）。.list の後に置く */
 @media (max-width: 599px) {
-  .list {
-    margin: 0 -16px;
-  }
   .list__item {
     --m3e-list-item-container-shape: 0;
   }
@@ -1979,13 +1972,13 @@ m3e-icon.icon--on {
 }
 /* 段落スタイルのメニューは各スタイルの見た目で示す（Google ドキュメントと同じ） */
 .wtb-menu__style--h1 {
-  font: 400 22px/28px var(--mf-font);
+  font: 400 1.375rem / 1.75rem var(--mf-font);
 }
 .wtb-menu__style--h2 {
-  font: 400 18px/24px var(--mf-font);
+  font: 400 1.125rem / 1.5rem var(--mf-font);
 }
 .wtb-menu__style--h3 {
-  font: 500 16px/24px var(--mf-font);
+  font: 500 1rem / 1.5rem var(--mf-font);
 }
 /* 紙面（Google ドキュメントの「ページ分けあり」に相当する見た目。幅は A4 の 794px、余白 72） */
 .write__canvas {
@@ -1997,12 +1990,10 @@ m3e-icon.icon--on {
   max-width: 794px;
   min-height: 1123px;
   margin-inline: auto;
-  background: #fff;
-  color: #1f1f1f;
-  border-radius: 2px;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.3),
-    0 4px 8px 3px rgb(0 0 0 / 0.15);
+  background: var(--mf-paper);
+  color: var(--mf-on-paper);
+  border-radius: var(--mf-shape-paper);
+  box-shadow: var(--mf-elevation-2);
   padding: 72px 80px;
 }
 @media (max-width: 839px) {
@@ -2020,7 +2011,7 @@ m3e-icon.icon--on {
 /* 本文の文字。段落スタイルを M3 のタイプスケールに対応させる（body-large / headline-medium / headline-small / title-large） */
 .doc {
   outline: none;
-  font: 400 16px/1.75 var(--mf-font);
+  font: 400 1rem / 1.75 var(--mf-font);
   min-height: 60vh;
   word-break: break-word;
   caret-color: var(--mf-primary);
@@ -2032,22 +2023,22 @@ m3e-icon.icon--on {
   margin: 0;
 }
 .doc h1 {
-  font: 400 28px/36px var(--mf-font);
+  font: 400 1.75rem / 2.25rem var(--mf-font);
   margin: 1.2em 0 0.4em;
 }
 .doc h2 {
-  font: 400 24px/32px var(--mf-font);
+  font: 400 1.5rem / 2rem var(--mf-font);
   margin: 1.1em 0 0.3em;
 }
 .doc h3 {
-  font: 500 22px/28px var(--mf-font);
+  font: var(--mf-type-title-large);
   margin: 1em 0 0.3em;
 }
 .doc > :first-child {
   margin-top: 0;
 }
 .doc a {
-  color: #1a73e8;
+  color: var(--mf-primary);
   text-decoration: underline;
 }
 .doc ul,
@@ -2059,11 +2050,11 @@ m3e-icon.icon--on {
   margin: 0.6em 0;
   padding-inline-start: 16px;
   border-inline-start: 3px solid var(--mf-outline-variant);
-  color: #474747;
+  color: var(--mf-on-surface-variant);
 }
 .doc hr {
   border: 0;
-  border-top: 1px solid #c4c6cf;
+  border-top: 1px solid var(--mf-outline-variant);
   margin: 1.2em 0;
 }
 .doc ul[data-type="taskList"] {
@@ -2086,7 +2077,7 @@ m3e-icon.icon--on {
 }
 .doc ul[data-type="taskList"] li[data-checked="true"] > div {
   text-decoration: line-through;
-  color: #6b6b6b;
+  color: var(--mf-on-surface-variant);
 }
 .doc table {
   border-collapse: collapse;
@@ -2096,12 +2087,12 @@ m3e-icon.icon--on {
 }
 .doc th,
 .doc td {
-  border: 1px solid #c4c6cf;
+  border: 1px solid var(--mf-outline-variant);
   padding: 6px 8px;
   vertical-align: top;
 }
 .doc th {
-  background: #f1f3f4;
+  background: var(--mf-surface-container);
   font-weight: 600;
   text-align: start;
 }
@@ -2110,21 +2101,21 @@ m3e-icon.icon--on {
 }
 .doc p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: #8a8a8a;
+  color: var(--mf-on-surface-variant);
   float: left;
   height: 0;
   pointer-events: none;
 }
 .doc mark {
-  border-radius: 2px;
+  border-radius: var(--mf-shape-xs);
   padding: 0 1px;
 }
 .search-hit {
-  background: #fde293;
-  border-radius: 2px;
+  background: var(--mf-warning-container);
+  border-radius: var(--mf-shape-xs);
 }
 .search-hit--current {
-  background: #f9ab00;
+  background: color-mix(in srgb, var(--mf-warning) 45%, var(--mf-warning-container));
 }
 /* 入力中の文字カウント（Google ドキュメントの左下のボックス） */
 .write__count {
@@ -2134,12 +2125,12 @@ m3e-icon.icon--on {
   z-index: 5;
   min-height: 40px;
   padding: 0 16px;
-  border-radius: 20px;
+  border-radius: var(--mf-shape-full);
   border: 0;
   background: var(--mf-surface-container-high);
   color: var(--mf-on-surface);
   font: var(--mf-type-label-large);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  box-shadow: var(--mf-elevation-1);
   cursor: pointer;
 }
 .write__side-item {
@@ -2335,7 +2326,7 @@ m3e-icon.icon--on {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding: 6px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--mf-outline-variant);
 }
 .shortcuts__row dd {
@@ -2394,18 +2385,18 @@ m3e-icon.icon--on {
   display: inline-block;
   min-width: 16px;
   padding: 0 4px;
-  margin-inline-end: 2px;
-  border-radius: 8px;
-  background: #2b5ea8;
-  color: #fff;
-  font: 500 10px/16px var(--mf-font);
+  margin-inline-end: 4px;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+  font: var(--mf-type-label-small);
   text-align: center;
   vertical-align: top;
   user-select: none;
   cursor: pointer;
 }
 .write--compact .write__canvas {
-  background: #fff;
+  background: var(--mf-paper);
 }
 .write--compact .write__page {
   min-height: 100%;
@@ -2442,28 +2433,28 @@ m3e-icon.icon--on {
 }
 .diff-box {
   position: absolute;
-  border-radius: 2px;
+  border-radius: var(--mf-shape-xs);
   mix-blend-mode: multiply;
 }
 .diff-box--insert {
-  background: rgb(52 168 83 / 0.28);
+  background: color-mix(in srgb, var(--mf-success) 28%, transparent);
 }
 .diff-box--delete {
-  background: rgb(234 67 53 / 0.28);
+  background: color-mix(in srgb, var(--mf-error) 28%, transparent);
 }
 .diff-box--move {
-  background: rgb(66 133 244 / 0.25);
+  background: color-mix(in srgb, var(--mf-primary) 25%, transparent);
 }
 .diff-hl--insert {
-  background: rgb(52 168 83 / 0.22);
-  text-decoration: underline 2px rgb(30 142 62);
+  background: color-mix(in srgb, var(--mf-success) 22%, transparent);
+  text-decoration: underline 2px var(--mf-success);
 }
 .diff-hl--delete {
-  background: rgb(234 67 53 / 0.18);
-  text-decoration: line-through rgb(197 34 31);
+  background: color-mix(in srgb, var(--mf-error) 18%, transparent);
+  text-decoration: line-through var(--mf-error);
 }
 .diff-hl--move {
-  background: rgb(66 133 244 / 0.18);
+  background: color-mix(in srgb, var(--mf-primary) 18%, transparent);
 }
 /* 対応なし・移動・推定のページに付く札 */
 .page-pair-chip {
@@ -2471,8 +2462,8 @@ m3e-icon.icon--on {
   top: 8px;
   inset-inline-start: 8px;
   z-index: 3;
-  padding: 2px 10px;
-  border-radius: 8px;
+  padding: 2px 12px;
+  border-radius: var(--mf-shape-sm);
   background: var(--mf-secondary-container);
   color: var(--mf-on-secondary-container);
   font: var(--mf-type-label-medium);
@@ -2503,7 +2494,7 @@ m3e-icon.icon--on {
 }
 .mapping__page {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   font: var(--mf-type-body-medium);
 }
 .error-text {
@@ -2550,9 +2541,9 @@ m3e-icon.icon--on {
   position: absolute;
   top: 8px;
   padding: 2px 8px;
-  border-radius: 8px;
-  background: rgb(0 0 0 / 0.6);
-  color: #fff;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-inverse-surface);
+  color: var(--mf-inverse-on-surface);
   font: var(--mf-type-label-medium);
 }
 .swipe__tag--left {
@@ -2575,7 +2566,7 @@ m3e-icon.icon--on {
 /* ---------- 表記ルール（表記統一）: 広い画面は編集できる表、狭い画面はリスト。詳細はダイアログ */
 .notation__tabs,
 .page-tabs {
-  margin: 0 -8px 12px;
+  margin: 0 0 12px;
   padding-top: 0;
 }
 .notation__toolbar {
@@ -2728,7 +2719,7 @@ m3e-icon.icon--on {
   --m3e-chip-label-text-color: var(--mf-error);
 }
 .pane-tabs__badge {
-  margin-inline-start: 6px;
+  margin-inline-start: 4px;
   vertical-align: middle;
 }
 .thread__bot {
@@ -2757,13 +2748,14 @@ m3e-icon.icon--on {
    下はホームインジケーターの帯（セーフエリア）の分も空け、最後のカードが帯の下に潜らないようにする */
 @media (max-width: 599px) {
   .post {
-    padding: 0 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: 0 16px calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
 /* ---------- SNS 投稿の編集: 左に編集、右にプレビュー（expanded 以上） */
 .post__split {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
+  /* 最小幅を持たせると 840〜948 で横にはみ出すので 0 から（§35 L-04） */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -2790,7 +2782,8 @@ m3e-icon.icon--on {
 .post-review-wrap {
   height: 100%;
   overflow: auto;
-  padding: 24px;
+  /* 下は浮遊ツールバー（64）＋ 16 ＋ 24 の分を空け、プレビューの説明が隠れないようにする（§35 L-03） */
+  padding: 24px 24px calc(104px + env(safe-area-inset-bottom, 0px));
 }
 .post-review {
   display: grid;
@@ -2807,7 +2800,7 @@ m3e-icon.icon--on {
 
 /* 状態の chip（M3E chip）。色は意味（成功・注意）だけを変える */
 .chip--success {
-  --m3e-chip-icon-color: var(--mf-success, #1b6c35);
+  --m3e-chip-icon-color: var(--mf-success);
 }
 .chip--error {
   --m3e-chip-icon-color: var(--mf-error);
@@ -2819,13 +2812,13 @@ m3e-icon.icon--on {
   overflow: auto;
   border: 1px solid var(--mf-outline-variant);
   /* data table の仕様: 角は 4dp（M3 の shape extra-small）、影なし、外枠 1dp */
-  border-radius: 4px;
+  border-radius: var(--mf-shape-xs);
   position: relative;
   background: var(--mf-surface);
   max-width: 100%;
 }
 .data-table:focus-visible {
-  outline: 2px solid var(--mf-primary);
+  outline: var(--mf-focus-ring);
   outline-offset: 2px;
 }
 .data-table__table {
@@ -2935,7 +2928,7 @@ m3e-icon.icon--on {
   border-radius: var(--mf-shape-xs);
 }
 .data-table__sort:focus-visible {
-  outline: 2px solid var(--mf-primary);
+  outline: var(--mf-focus-ring);
 }
 .data-table__sort-icon {
   font-size: 18px;
@@ -2943,6 +2936,7 @@ m3e-icon.icon--on {
   color: var(--mf-on-surface-variant);
 }
 .data-table__sort:hover .data-table__sort-icon,
+.data-table__sort:focus-visible .data-table__sort-icon,
 .data-table__sort-icon--on {
   opacity: 1;
 }
@@ -2965,12 +2959,15 @@ m3e-icon.icon--on {
   border-radius: var(--mf-shape-xs);
   cursor: text;
 }
-.cell-edit:hover,
-.cell-edit:focus-visible {
+.cell-edit:hover {
   background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
 }
+/* M3 State layers: focus は 10% */
 .cell-edit:focus-visible {
-  outline: 2px solid var(--mf-primary);
+  background: color-mix(in srgb, var(--mf-on-surface) 10%, transparent);
+}
+.cell-edit:focus-visible {
+  outline: var(--mf-focus-ring);
 }
 .cell-edit__icon {
   font-size: 16px;
@@ -2984,14 +2981,14 @@ m3e-icon.icon--on {
 .cell-editing {
   display: inline-flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   width: 100%;
 }
 .cell-input {
   box-sizing: border-box;
   width: 100%;
   min-width: 120px;
-  height: 36px;
+  min-height: 36px;
   padding: 0 8px;
   margin: 0 -8px;
   font: inherit;
@@ -3048,7 +3045,7 @@ m3e-icon.icon--on {
 /* ---------- 投稿欄（compact は画面下・キーボードの上に全幅で出す。ComposePopover docked） */
 .compose-pop--docked {
   position: fixed;
-  inset-inline: 8px;
+  inset-inline: 16px;
   width: auto;
   max-width: 640px;
   margin-inline: auto;
@@ -3088,9 +3085,7 @@ m3e-icon.icon--on {
   overflow: auto;
   border-radius: var(--mf-shape-sm);
   background: var(--mf-surface-container);
-  box-shadow:
-    0 2px 6px 2px rgb(0 0 0 / 0.15),
-    0 1px 2px rgb(0 0 0 / 0.3);
+  box-shadow: var(--mf-elevation-2);
 }
 .mention-list__item--active {
   --m3e-list-item-container-color: var(--mf-secondary-container);

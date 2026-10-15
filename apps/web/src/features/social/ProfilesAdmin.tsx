@@ -18,8 +18,8 @@ import {
   M3eIcon,
   M3eIconButton,
   M3eSegmentedButton,
-  M3eSnackbar,
 } from "@/ui/m3e";
+import { toast } from "@/lib/toast";
 
 type Profile = FunctionReturnType<typeof api.social.list>[number];
 
@@ -97,7 +97,7 @@ export function ProfilesAdmin() {
           try {
             await put(avatarFor, { avatar: await toAvatarDataUrl(f) });
           } catch (err) {
-            M3eSnackbar.open(err instanceof Error ? err.message : String(err), { duration: 5000 });
+            toast(err instanceof Error ? err.message : String(err), { kind: "error" });
           }
         }}
       />
@@ -217,7 +217,7 @@ export function ProfilesAdmin() {
                   try {
                     await remove({ id: p.id });
                   } catch (e) {
-                    M3eSnackbar.open(describeError(e).message, { duration: 5000 });
+                    toast(describeError(e).message, { kind: "error" });
                   }
                 }}
               >

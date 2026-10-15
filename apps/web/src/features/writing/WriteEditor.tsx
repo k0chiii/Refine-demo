@@ -474,7 +474,11 @@ function WriteSurface({
       </AppBarSlot>
       <AppBarSlot slot="title">{workTitle}</AppBarSlot>
       <AppBarSlot slot="subtitle">
-        <span className={`write__status write__status--${status.kind}`} role="status">
+        {/* 保存の状態は打つたびに変わるので読み上げない。失敗・競合だけ知らせる（§35 A-13） */}
+        <span
+          className={`write__status write__status--${status.kind}`}
+          {...(status.kind === "error" || status.kind === "conflict" ? { role: "alert" } : {})}
+        >
           {canEdit ? statusText : "閲覧のみ（書けるのは版を提出できる人です）"}
         </span>
       </AppBarSlot>

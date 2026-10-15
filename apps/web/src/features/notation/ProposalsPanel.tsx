@@ -15,9 +15,9 @@ import {
   M3eFilterChipSet,
   M3eHeading,
   M3eIcon,
-  M3eSnackbar,
 } from "@/ui/m3e";
 import { draftOf, RuleEditor } from "./RuleEditor";
+import { toast } from "@/lib/toast";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 type Proposal = FunctionReturnType<typeof api.notation.proposals>[number];
@@ -39,16 +39,13 @@ export function ProposalsPanel({ book }: { book: Book }) {
   const [editing, setEditing] = useState<Proposal | null>(null);
   const one = useAction(async (id: string, decision: "approve" | "reject") => {
     await decide({ proposalId: id, decision, ...(note ? { note } : {}) });
-    M3eSnackbar.open(decision === "approve" ? "承認してルールに反映しました" : "却下しました", {
-      duration: 3000,
-    });
+    toast(decision === "approve" ? "承認してルールに反映しました" : "却下しました");
   });
   const many = useAction(async (decision: "approve" | "reject") => {
     const r = await decideMany({ proposalIds: picked, decision, ...(note ? { note } : {}) });
     setPicked([]);
-    M3eSnackbar.open(
+    toast(
       `${r.done.length} 件を${decision === "approve" ? "承認" : "却下"}しました${r.failed.length ? `（${r.failed.length} 件は処理できませんでした）` : ""}`,
-      { duration: 5000 },
     );
   });
   const decidable = (list ?? []).filter((p) => p.canDecide);
@@ -199,7 +196,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
                   edited: draft,
                   ...(note ? { note } : {}),
                 });
-                M3eSnackbar.open("編集した内容で承認しました", { duration: 3000 });
+                toast("編集した内容で承認しました");
               }}
             />
           ) : null}

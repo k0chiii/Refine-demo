@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { describeError } from "./errors";
-import { M3eSnackbar } from "@/ui/m3e";
+import { toast } from "./toast";
 
 /** mutation 実行の共通ラッパ。失敗は利用者向けメッセージで通知し、二重送信を防ぐ。 */
 export function useAction<Args extends unknown[], R>(fn: (...args: Args) => Promise<R>) {
@@ -16,7 +16,7 @@ export function useAction<Args extends unknown[], R>(fn: (...args: Args) => Prom
       } catch (e) {
         const described = describeError(e);
         setError(described);
-        M3eSnackbar.open(described.message, { duration: 6000 });
+        toast(described.message, { kind: "error" });
         return undefined;
       } finally {
         setPending(false);

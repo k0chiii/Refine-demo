@@ -1,6 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
@@ -18,6 +18,7 @@ import {
   M3eNavItem,
   M3eNavRail,
 } from "@/ui/m3e";
+import { ActionSheet } from "@/ui/ActionSheet";
 import { UserAvatar } from "@/ui/UserAvatar";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
@@ -51,6 +52,9 @@ function AppLayout() {
   const [railPref, setRailPref] = useState(readRailPref);
   const [modalOpen, setModalOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  /** large の下の階層で、一時的にレールを広げたか（画面を移ると折りたたみに戻る） */
+  const [subOpen, setSubOpen] = useState(false);
+  const [accountSheet, setAccountSheet] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -61,6 +65,7 @@ function AppLayout() {
   useEffect(() => {
     setModalOpen(false);
     setNotifOpen(false);
+    setSubOpen(false);
   }, [path, cls]);
   useEffect(() => {
     if (!modalOpen) return;
@@ -91,19 +96,21 @@ function AppLayout() {
           ? !writing && (path === to || path.startsWith(`${to}/`))
           : path === to || path.startsWith(`${to}/`);
   // 下部ナビ（compact）は 1 項目 75px 前後しかなく「ダッシュボード」が 2 行に折れて下に切れるので、短い名前を出す
+  // 項目は M3eNavItem だけ（ボタン）にし、押したらルーターで移る。外側に <a> を重ねると 1 項目に 2 回止まり、
+  // 読み上げも「リンク › ボタン」と入れ子になる。M3eNavItem の href は中に <a> を作り、同じく入れ子になる（§35 A-10）
   const navItems = (list: typeof items = items, short = false) =>
     list.map((it) => (
-      <Link key={it.to} to={it.to} className="nav-link">
-        <M3eNavItem
-          selected={selected(it.to)}
-          data-to={it.to}
-          aria-label={it.label}
-          title={it.label}
-        >
-          <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
-          <span className="nav-label">{short && "short" in it ? it.short : it.label}</span>
-        </M3eNavItem>
-      </Link>
+      <M3eNavItem
+        key={it.to}
+        selected={selected(it.to)}
+        data-to={it.to}
+        aria-label={it.label}
+        title={it.label}
+        onClick={() => void navigate({ to: it.to })}
+      >
+        <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
+        <span className="nav-label">{short && "short" in it ? it.short : it.label}</span>
+      </M3eNavItem>
     ));
   /** M3E は押した項目を自動で選択状態にするため、経路に基づく選択へ戻す */
   const resync = (e: { currentTarget: EventTarget | null }) => {
@@ -113,11 +120,16 @@ function AppLayout() {
     });
   };
 
+  // 下の階層（制作物を開いた画面: 校正画面・文章エディタ・SNS 投稿の編集）。戻る矢印で上へ戻れるので、
+  // M3 Breakpoints「下の階層ではレールを隠してよい／large では折りたたむ」に従い紙面を広くする（§35 L-13。利用者決定 2026-10-15）
+  const editorRoute = /^\/works\/[^/]+/.test(path);
+  const hideRail = editorRoute && (cls === "medium" || cls === "expanded");
   // M3 Breakpoints「置き換えられる部品」: compact/medium/expanded はモーダル展開レール、large 以上は標準展開レール
   const expandable = cls !== "compact";
-  const railExpanded = cls === "large" ? railPref : modalOpen;
+  const railExpanded = cls === "large" ? (editorRoute ? subOpen : railPref) : modalOpen;
   const toggleRail = () => {
-    if (cls === "large") {
+    if (cls === "large" && editorRoute) setSubOpen((o) => !o);
+    else if (cls === "large") {
       const next = !railPref;
       setRailPref(next);
       try {
@@ -127,25 +139,42 @@ function AppLayout() {
   };
   const register = () => void navigate({ to: "/works", search: { new: true } });
   const modal = cls !== "large" && cls !== "compact" && modalOpen;
-  // compact のエディタは詳細画面: 共通のアプリバーと下部バーを隠し、エディタ自身のトップアプリバー（戻る・題名）に譲る（M3 list-detail の compact）
-  const editorRoute = /^\/works\/[^/]+/.test(path);
+  // compact のエディタは詳細画面: 下部バーを隠す（M3 list-detail の compact）
   const immersive = cls === "compact" && editorRoute;
+  // compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints › Overview の表。§35 L-09）
   const account = (size: number, className?: string) => (
     <M3eIconButton
       slot="trailing"
       aria-label={`アカウント: ${me.name}`}
       className={className ?? ""}
+      {...(cls === "compact" ? { onClick: () => setAccountSheet(true) } : {})}
     >
       <UserAvatar seed={me.email ?? me.id} size={size} />
-      <M3eMenuTrigger htmlFor="account-menu" />
+      {cls === "compact" ? null : <M3eMenuTrigger htmlFor="account-menu" />}
     </M3eIconButton>
   );
+  const accountActions = [
+    ...(install
+      ? [
+          {
+            icon: "install_desktop",
+            label: "アプリとしてインストール",
+            onSelect: () => void install(),
+          },
+        ]
+      : []),
+    {
+      icon: "logout",
+      label: "サインアウト",
+      onSelect: () => void signOut().then(() => navigate({ to: "/signin" })),
+    },
+  ];
 
   return (
     <div
-      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${editorRoute ? "shell--editor" : ""}`}
+      className={`shell ${modal ? "shell--modal" : ""} ${immersive ? "shell--immersive" : ""} ${editorRoute ? "shell--editor" : ""} ${hideRail ? "shell--norail" : ""}`}
     >
-      <div className="shell__nav">
+      <div className="shell__nav" hidden={hideRail}>
         {modal ? (
           <div className="shell__scrim" onClick={() => setModalOpen(false)} aria-hidden="true" />
         ) : null}
@@ -173,7 +202,8 @@ function AppLayout() {
           {navItems()}
         </M3eNavRail>
       </div>
-      <div className="shell__main">
+      {/* モーダルの展開レールを開いている間は、後ろを Tab で選べないようにする（§35 A-06） */}
+      <div className="shell__main" inert={modal}>
         {/* アプリバーは 1 本。画面ごとの見出し・戻る・操作は AppBarSlot で差し込む（M3 App bars）。全体の操作（通知・アカウント）は末尾 */}
         <M3eAppBar size="small" className="shell__appbar">
           <span slot="leading" id="appbar-leading" className="appbar-slot" />
@@ -203,27 +233,32 @@ function AppLayout() {
         ) : (
           <NotificationsBell.Menu id="notif-menu" />
         )}
-        <M3eMenu id="account-menu" positionX="before">
-          <div className="account-menu__header">
-            <span aria-hidden="true">
-              <UserAvatar seed={me.email ?? me.id} size={40} />
-            </span>
-            <div>
-              <div className="label-large">{me.name}</div>
-              {me.email ? <div className="small muted">{me.email}</div> : null}
+        {cls === "compact" ? (
+          <ActionSheet
+            open={accountSheet}
+            onClose={() => setAccountSheet(false)}
+            title={me.email ? `${me.name}（${me.email}）` : me.name}
+            items={accountActions}
+          />
+        ) : (
+          <M3eMenu id="account-menu" positionX="before">
+            <div className="account-menu__header">
+              <span aria-hidden="true">
+                <UserAvatar seed={me.email ?? me.id} size={40} />
+              </span>
+              <div>
+                <div className="label-large">{me.name}</div>
+                {me.email ? <div className="small muted">{me.email}</div> : null}
+              </div>
             </div>
-          </div>
-          {install ? (
-            <M3eMenuItem onClick={() => void install()}>
-              <M3eIcon slot="icon" name="install_desktop" />
-              アプリとしてインストール
-            </M3eMenuItem>
-          ) : null}
-          <M3eMenuItem onClick={() => signOut().then(() => navigate({ to: "/signin" }))}>
-            <M3eIcon slot="icon" name="logout" />
-            サインアウト
-          </M3eMenuItem>
-        </M3eMenu>
+            {accountActions.map((a) => (
+              <M3eMenuItem key={a.label} onClick={a.onSelect}>
+                <M3eIcon slot="icon" name={a.icon} />
+                {a.label}
+              </M3eMenuItem>
+            ))}
+          </M3eMenu>
+        )}
 
         <main className="shell__content">
           <Outlet />

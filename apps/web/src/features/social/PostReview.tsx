@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { fetchArtifactBlob } from "@/integrations/api";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
-import { M3eButton, M3eIcon, M3eList, M3eListItem, M3eSnackbar } from "@/ui/m3e";
+import { M3eButton, M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
 import {
   FullscreenPreview,
   PostPreview,
@@ -17,6 +17,7 @@ import { useWindowClass } from "@/lib/useMedia";
 import { usePreviewDevice } from "./preview/DevicePicker";
 import { PreviewSettings } from "./preview/PreviewSettings";
 import { makeZip } from "./zip";
+import { toast } from "@/lib/toast";
 
 interface ArtifactLike {
   id: string;
@@ -191,7 +192,7 @@ export function PostReview({
                 onClick={() =>
                   void navigator.clipboard
                     .writeText(post.body)
-                    .then(() => M3eSnackbar.open("本文をコピーしました", { duration: 3000 }))
+                    .then(() => toast("本文をコピーしました"))
                 }
               >
                 <M3eIcon slot="icon" name="content_copy" />

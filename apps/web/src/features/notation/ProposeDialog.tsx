@@ -4,7 +4,8 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eButtonSegment, M3eDialog, M3eSegmentedButton, M3eSnackbar } from "@/ui/m3e";
+import { M3eButton, M3eButtonSegment, M3eDialog, M3eSegmentedButton } from "@/ui/m3e";
+import { toast } from "@/lib/toast";
 
 /**
  * 校正画面で選んだ文字から、表記ルールの追加を提案する（または誤表記として報告する）。
@@ -54,11 +55,10 @@ export function ProposeDialog({
       reason,
       context: { workId, revisionId, artifactId, quote, surrounding },
     });
-    M3eSnackbar.open(
+    toast(
       r.merged
         ? "同じ内容の提案があったので、賛同として追加しました"
         : "提案を送りました。担当者が承認すると反映されます",
-      { duration: 5000 },
     );
     onClose();
   });

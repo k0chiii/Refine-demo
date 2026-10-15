@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { bezelUrl, deviceById, outerSize, type DeviceSpec } from "./devices";
 import { Icon, StatusIcons } from "./icons";
 import "./preview.css";
+import { scrollBehavior } from "@/lib/motion";
 
 /**
  * SNS 投稿のプレビュー（編集画面・校正画面・書き出しで共用）。
@@ -64,7 +65,10 @@ function useSnapTrack(count: number, index: number, onIndex: (i: number) => void
   const go = (i: number) => {
     const el = ref.current;
     if (!el) return;
-    el.scrollTo({ left: Math.min(count - 1, Math.max(0, i)) * el.clientWidth, behavior: "smooth" });
+    el.scrollTo({
+      left: Math.min(count - 1, Math.max(0, i)) * el.clientWidth,
+      behavior: scrollBehavior(),
+    });
   };
   useEffect(() => {
     if (index > count - 1) {

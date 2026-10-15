@@ -4,6 +4,7 @@ import type { Anchor } from "@mf100/domain";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { diffKindAt, type TextCompareProps } from "@/features/compare/textSync";
 import type { OverlayThread } from "./AnchorOverlay";
+import { scrollBehavior } from "@/lib/motion";
 
 export interface TextRangeDraft {
   start: number;
@@ -119,7 +120,7 @@ export function TextViewer({
     if (!activeThreadId || !bodyRef.current) return;
     bodyRef.current
       .querySelector(`[data-thread~="${CSS.escape(activeThreadId)}"]`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+      ?.scrollIntoView({ block: "center", behavior: scrollBehavior() });
   }, [activeThreadId]);
 
   // 各スレッドの先頭セグメントの縦位置を測る（整列レイアウト用）

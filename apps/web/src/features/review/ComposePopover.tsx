@@ -48,7 +48,14 @@ export function ComposePopover({
   const ref = useRef<HTMLTextAreaElement>(null);
   const kb = useKeyboardInset(docked === true);
   useEffect(() => {
+    // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
+    const opener = document.activeElement as HTMLElement | null;
     ref.current?.focus({ preventScroll: true });
+    return () => {
+      const now = document.activeElement;
+      if ((!now || now === document.body) && opener?.isConnected)
+        opener.focus({ preventScroll: true });
+    };
   }, []);
   const panel = (
     <div
@@ -75,7 +82,13 @@ export function ComposePopover({
         mentions={mentions}
         onMentions={onMentions}
         onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
+          // Esc は書いた文字を消さない（M3 Inputs › Escape key。§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ。
+          // IME の変換を取り消す Esc では何もしない
+          if (e.key === "Escape" && !e.nativeEvent.isComposing) {
+            e.stopPropagation();
+            if (value.trim()) ref.current?.blur();
+            else onCancel();
+          }
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && value.trim()) onSubmit();
         }}
       />

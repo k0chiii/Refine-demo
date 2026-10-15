@@ -182,11 +182,11 @@ export function Editor({
   const editThread = useMutation(api.comments.edit);
   const carryForward = useMutation(api.comments.carryForward);
 
-  // M3 の compact/medium（839 以下）: 補助ペインは置けないので引き出しはボトムシート
+  // M3 の compact/medium（839 以下）: 補助ペインは置けないので、引き出しはツールバーから開くボトムシート（普段は閉じて紙面を全面に）
   const mobile = useMedia("(max-width: 839px)");
   /** 指で操作する端末（長押しで範囲選択。AnchorOverlay） */
   const touch = useMedia("(pointer: coarse)");
-  // compact（<600）: 共通バーは無く、エディタ自身のトップアプリバー。紙面は幅に合わせ、引き出しは覗き見のボトムシート
+  // compact（<600）: 添付の切り替えはボトムシート、ツールバーの文字（ページ・倍率の −／＋）を省く
   const compact = useWindowClass() === "compact";
   const [layoutPref, setLayoutPref] = useState<Layout>(readLayout);
   const layout: Layout = mobile ? "panel" : layoutPref;
@@ -337,12 +337,16 @@ export function Editor({
       el.removeEventListener("closed", onClosed);
     };
   }, [mobile, data === undefined]);
+  // 紙面で範囲を選んだだけ（まだ書いていない）なら Esc で選択をやめる。書きかけのコメントは消さない（§35 I-07）。
+  // メニュー・ダイアログを閉じる Esc（defaultPrevented）と IME の変換中は何もしない
+  const bodyRef = useRef(body);
+  bodyRef.current = body;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setDraft(null);
-        setBody("");
-      }
+      if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
+      if (bodyRef.current.trim()) return;
+      setDraft(null);
+      setBody("");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1035,9 +1039,7 @@ export function Editor({
 
   return (
     <MentionProvider value={mentionCandidates ?? []}>
-      <div
-        className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""} ${compact ? "ws--compact" : ""}`}
-      >
+      <div className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""}`}>
         {/* 見出し・戻る・主要操作は共通アプリバーへ（M3 App bars: ページの見出し＋戻る＋ 1–2 の必須操作。多い操作はツールバーへ） */}
         <AppBarSlot slot="leading">
           <M3eIconButton
@@ -1182,16 +1184,18 @@ export function Editor({
                           <M3eIcon name="zoom_out" />
                         </M3eIconButton>
                       )}
-                      {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す */}
-                      <button
-                        type="button"
+                      {/* 実寸比の数値。広い画面は押すと幅に合わせた大きさ（左右の余白が同じ）に戻す。
+                          狭い画面は − ＋ を置かないので、押すと「拡大／縮小／幅に合わせる」のメニュー
+                          （ピンチだけに頼らない。M3 Gestures・WCAG 2.5.1。§35 I-15。利用者決定 2026-10-15） */}
+                      <M3eButton
+                        variant="text"
                         className="ws__toolbar-text ws__zoom"
-                        title="幅に合わせる"
-                        aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと幅に合わせる）`}
-                        onClick={() => setScale(1)}
+                        aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（${mobile ? "押すと拡大・縮小" : "押すと幅に合わせる"}）`}
+                        {...(mobile ? {} : { onClick: () => setScale(1), title: "幅に合わせる" })}
                       >
                         {zoom ? `${Math.round(zoom * 100)}%` : "…"}
-                      </button>
+                        {mobile ? <M3eMenuTrigger htmlFor="zoom-menu" /> : null}
+                      </M3eButton>
                       {mobile ? null : (
                         <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
                           <M3eIcon name="zoom_in" />
@@ -1321,6 +1325,22 @@ export function Editor({
                   ) : null}
                 </div>
               </M3eToolbar>
+            ) : null}
+            {mobile ? (
+              <M3eMenu id="zoom-menu" positionY="above">
+                <M3eMenuItem onClick={() => zoomStep(1)}>
+                  <M3eIcon slot="icon" name="zoom_in" />
+                  拡大
+                </M3eMenuItem>
+                <M3eMenuItem onClick={() => zoomStep(-1)}>
+                  <M3eIcon slot="icon" name="zoom_out" />
+                  縮小
+                </M3eMenuItem>
+                <M3eMenuItem onClick={() => setScale(1)}>
+                  <M3eIcon slot="icon" name="fit_width" />
+                  幅に合わせる
+                </M3eMenuItem>
+              </M3eMenu>
             ) : null}
             {data && data.artifacts.length > 1 && !compact ? (
               <M3eMenu id="artifact-menu" positionY="above">

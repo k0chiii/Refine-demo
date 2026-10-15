@@ -19,6 +19,7 @@ import { RangeHighlight, setHighlights, type HighlightRange } from "@/features/w
 import type { TextCompareProps } from "@/features/compare/textSync";
 import type { OverlayThread } from "./AnchorOverlay";
 import type { TextRangeDraft } from "./TextViewer";
+import { scrollBehavior } from "@/lib/motion";
 
 type TextThread = OverlayThread & { anchor: Extract<Anchor, { type: "text_range" }> };
 
@@ -134,7 +135,7 @@ export function RichTextViewer({
     if (!activeThreadId || !wrapRef.current) return;
     wrapRef.current
       .querySelector(`[data-thread~="${CSS.escape(activeThreadId)}"]`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+      ?.scrollIntoView({ block: "center", behavior: scrollBehavior() });
   }, [activeThreadId]);
 
   // 各指摘の先頭の縦位置（「ピンの高さに並べる」用）

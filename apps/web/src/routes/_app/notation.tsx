@@ -10,6 +10,7 @@ import { draftOf, emptyDraft, RuleEditor } from "@/features/notation/RuleEditor"
 import { RuleTable } from "@/features/notation/RuleTable";
 import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
+import { ActionSheet } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { Field, Select } from "@/ui/Field";
@@ -54,6 +55,7 @@ function Notation() {
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState<RuleDraft | null>(null);
   const [importing, setImporting] = useState(false);
+  const [moreSheet, setMoreSheet] = useState(false);
 
   const rules = useMemo(() => {
     if (!book) return [];
@@ -96,6 +98,32 @@ function Notation() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const exportList = rules.map(draftOf);
+  const moreActions = [
+    ...(canEditAny
+      ? [
+          {
+            icon: "upload_file",
+            label: "取り込み（CSV・JSON）",
+            onSelect: () => setImporting(true),
+          },
+        ]
+      : []),
+    {
+      icon: "download",
+      label: "表示中のルールを CSV で書き出す",
+      onSelect: () => download("notation-rules.csv", "\ufeff" + rulesToCsv(exportList), "text/csv"),
+    },
+    {
+      icon: "data_object",
+      label: "JSON で書き出す（完全）",
+      onSelect: () =>
+        download(
+          "notation-rules.json",
+          rulesToJson(exportList, book.categories),
+          "application/json",
+        ),
+    },
+  ];
   const openCount = (open ?? []).filter((p) => p.canDecide).length;
 
   const detail = creating ? (
@@ -153,39 +181,33 @@ function Notation() {
                 <M3eIcon slot="icon" name="add" />
                 {canEditAny ? "追加" : "追加を提案"}
               </M3eButton>
-              <M3eButton variant="text" aria-label="取り込み・書き出し">
+              {/* compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints。§35 L-09） */}
+              <M3eButton
+                variant="text"
+                aria-label="取り込み・書き出し"
+                {...(win === "compact" ? { onClick: () => setMoreSheet(true) } : {})}
+              >
                 <M3eIcon slot="icon" name="more_vert" />
                 その他
-                <M3eMenuTrigger htmlFor="notation-more" />
+                {win === "compact" ? null : <M3eMenuTrigger htmlFor="notation-more" />}
               </M3eButton>
-              <M3eMenu id="notation-more">
-                {canEditAny ? (
-                  <M3eMenuItem onClick={() => setImporting(true)}>
-                    <M3eIcon slot="icon" name="upload_file" />
-                    取り込み（CSV・JSON）
-                  </M3eMenuItem>
-                ) : null}
-                <M3eMenuItem
-                  onClick={() =>
-                    download("notation-rules.csv", "﻿" + rulesToCsv(exportList), "text/csv")
-                  }
-                >
-                  <M3eIcon slot="icon" name="download" />
-                  表示中のルールを CSV で書き出す
-                </M3eMenuItem>
-                <M3eMenuItem
-                  onClick={() =>
-                    download(
-                      "notation-rules.json",
-                      rulesToJson(exportList, book.categories),
-                      "application/json",
-                    )
-                  }
-                >
-                  <M3eIcon slot="icon" name="data_object" />
-                  JSON で書き出す（完全）
-                </M3eMenuItem>
-              </M3eMenu>
+              {win === "compact" ? (
+                <ActionSheet
+                  open={moreSheet}
+                  onClose={() => setMoreSheet(false)}
+                  title="取り込み・書き出し"
+                  items={moreActions}
+                />
+              ) : (
+                <M3eMenu id="notation-more">
+                  {moreActions.map((a) => (
+                    <M3eMenuItem key={a.label} onClick={a.onSelect}>
+                      <M3eIcon slot="icon" name={a.icon} />
+                      {a.label}
+                    </M3eMenuItem>
+                  ))}
+                </M3eMenu>
+              )}
             </div>
             <div className="row notation__filters">
               <Field label="カテゴリ" className="notation__cat">

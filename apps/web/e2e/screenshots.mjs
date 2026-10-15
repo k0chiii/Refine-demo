@@ -540,11 +540,18 @@ async function main() {
   await page.waitForSelector(".data-table .profile-avatar");
   await shot("13c-admin-sns");
 
-  // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）
+  // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
+  // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
   await signInAs("mock-nogiku-reviewer");
   await page.setViewportSize({ width: 1024, height: 800 });
   await go(revision2Url);
   await pdfReady();
+  expectTrue(
+    await page.locator(".shell__nav").evaluate((el) => el.hidden),
+    "制作物を開いた画面でレールが隠れていない",
+  );
+  await go(`${BASE}/works`);
+  await page.waitForSelector("m3e-list-action");
   await railToggle.click();
   await page.waitForSelector(".shell__scrim");
   await page.waitForTimeout(600);

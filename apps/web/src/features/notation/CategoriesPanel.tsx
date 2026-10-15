@@ -5,8 +5,9 @@ import { useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { DataTable, EditableText, type Column } from "@/ui/DataTable";
 import { Field, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eIcon, M3eIconButton, M3eSnackbar } from "@/ui/m3e";
+import { M3eButton, M3eDialog, M3eIcon, M3eIconButton } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
+import { toast } from "@/lib/toast";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 type Category = Book["categories"][number];
@@ -193,7 +194,7 @@ function CategoryDialog({
   const managers = book.managers.filter((m) => m.categoryCode === category.code);
   const save = useAction(async () => {
     await upsert(form);
-    M3eSnackbar.open("カテゴリを保存しました", { duration: 3000 });
+    toast("カテゴリを保存しました");
     onClose();
   });
   const assign = useAction(async (ids: string[]) => {

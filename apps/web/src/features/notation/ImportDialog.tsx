@@ -21,8 +21,8 @@ import {
   M3eIcon,
   M3eList,
   M3eListItem,
-  M3eSnackbar,
 } from "@/ui/m3e";
+import { toast } from "@/lib/toast";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 
@@ -73,7 +73,7 @@ export function ImportDialog({
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 5_000_000) {
-      M3eSnackbar.open("5MB までのファイルを選んでください", { duration: 5000 });
+      toast("5MB までのファイルを選んでください", { kind: "warning" });
       return;
     }
     const text = await f.text();
@@ -111,9 +111,8 @@ export function ImportDialog({
       skipped += res.skipped;
       errors.push(...res.errors.map((e) => `${e.ruleId}: ${e.errors.join("、")}`));
     }
-    M3eSnackbar.open(
+    toast(
       `追加 ${created}・更新 ${updated}・既存のため除外 ${skipped}${errors.length ? `・失敗 ${errors.length}` : ""}`,
-      { duration: 8000 },
     );
     if (!errors.length) close();
   });

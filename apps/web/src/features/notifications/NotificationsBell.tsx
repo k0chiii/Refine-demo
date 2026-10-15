@@ -137,7 +137,10 @@ function Menu({ id }: { id: string }) {
           >
             <M3eIcon slot="icon" name={icon[n.kind] ?? "notifications"} />
             <span className="notif__body">
-              <span className="notif__title">{n.title}</span>
+              <span className="notif__title">
+                {n.readAt === undefined ? <span className="sr-only">未読 </span> : null}
+                {n.title}
+              </span>
               <span className="notif__sub">{n.body}</span>
               <span className="notif__time">{formatJstShort(n.createdAt)}</span>
             </span>
@@ -205,7 +208,10 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
               }}
             >
               <M3eIcon slot="leading" name={icon[n.kind] ?? "notifications"} />
-              <span className="list__headline notif__title">{n.title}</span>
+              <span className="list__headline notif__title">
+                {n.readAt === undefined ? <span className="sr-only">未読 </span> : null}
+                {n.title}
+              </span>
               <span slot="supporting-text">
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>

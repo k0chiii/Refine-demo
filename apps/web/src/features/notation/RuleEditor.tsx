@@ -17,12 +17,12 @@ import {
   M3eButton,
   M3eIcon,
   M3eIconButton,
-  M3eSnackbar,
   M3eExpansionPanel,
   M3eList,
   M3eListItem,
 } from "@/ui/m3e";
 import { Card } from "@/ui/Card";
+import { toast } from "@/lib/toast";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 type Rule = Book["rules"][number];
@@ -146,7 +146,7 @@ export function RuleEditor({
     }
     if (canEdit) {
       await save({ rule: draft, expectedRevision: rule?.revision ?? 0, reason });
-      M3eSnackbar.open(rule ? "ルールを更新しました" : "ルールを追加しました", { duration: 3000 });
+      toast(rule ? "ルールを更新しました" : "ルールを追加しました");
     } else {
       const r = await propose({
         kind: rule ? "change" : "new",
@@ -159,11 +159,10 @@ export function RuleEditor({
         exceptions: draft.exceptions,
         reason,
       });
-      M3eSnackbar.open(
+      toast(
         r.merged
           ? "同じ内容の提案があったので、賛同として追加しました"
           : "提案を送りました。カテゴリの担当者が承認すると反映されます",
-        { duration: 5000 },
       );
     }
     onDone();
