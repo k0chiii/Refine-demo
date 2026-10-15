@@ -35,3 +35,6 @@ apps/web/public/ocr/
 
 # 撮影の出力（画像はリポジトリに置かない）
 apps/web/e2e/out/
+
+# Claude Code の作業用ワークツリー
+.claude/worktrees/

@@ -18,6 +18,8 @@ export default defineConfig({
       // `npx convex ai-files install` が置くベンダー文書。プロジェクトの整形規則で書き換えない
       "apps/convex/.agents/**",
       "apps/convex/.claude/**",
+      // Claude Code の作業用ワークツリー（リポジトリの複製）
+      ".claude/**",
     ],
   },
   lint: {
@@ -28,6 +30,7 @@ export default defineConfig({
       "apps/convex/convex/_generated/**",
       "apps/web/src/routeTree.gen.ts",
       ".wrangler/**",
+      ".claude/**",
     ],
     options: {
       typeAware: true,
