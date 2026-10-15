@@ -71,7 +71,7 @@ Convex Auth は `JWT_PRIVATE_KEY` / `JWKS` も必要とする。初回は `npx @
 
 サンプルデータ（モック時のみ）: `npx convex run seed:demo`
 
-デプロイメント無しでも型チェック・テストは動く: `pnpm codegen`（`apps/convex/scripts/codegen.mjs`）が `convex/_generated` を公式テンプレートと同形式で生成し、コミットしている。`npx convex dev` を実行すると公式生成物で上書きされる。
+デプロイメント無しでも型チェック・テストは動く: `pnpm codegen`（`apps/convex/scripts/codegen.mjs`）が `convex/_generated` を、`npx convex dev` と同じ文面で生成し、コミットしている。モジュールを追加・削除したときは、その結果をコミットする。
 
 ### Hono API（ファイル）
 
