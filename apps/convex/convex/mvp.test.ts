@@ -1,7 +1,14 @@
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { createCast, createHarness, HOUR, type Harness } from "../test/harness";
+import {
+  createCast,
+  createHarness,
+  HOUR,
+  uploadFailed,
+  uploadVerified,
+  type Harness,
+} from "../test/harness";
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
@@ -43,22 +50,10 @@ async function submit(
     ],
   });
   const [a, b] = prepared.items;
-  await cast.creator.as.mutation(api.submissions.markVerified, {
-    itemId: a!.id as Id<"uploadItems">,
-    size: 10,
-    sha256: "a",
-  });
+  await uploadVerified(cast.creator, a!.id, { size: 10, sha256: "a" });
   if (opts.verifyAll !== false)
-    await cast.creator.as.mutation(api.submissions.markVerified, {
-      itemId: b!.id as Id<"uploadItems">,
-      size: 10,
-      sha256: "b",
-    });
-  else
-    await cast.creator.as.mutation(api.submissions.markFailed, {
-      itemId: b!.id as Id<"uploadItems">,
-      message: "通信断",
-    });
+    await uploadVerified(cast.creator, b!.id, { size: 10, sha256: "b" });
+  else await uploadFailed(cast.creator, b!.id, "通信断");
   return { sessionId: prepared.sessionId as Id<"uploadSessions">, items: prepared.items };
 }
 
@@ -175,11 +170,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await cast.creator.as.mutation(api.submissions.reset, {
       itemId: failed.id as Id<"uploadItems">,
     });
-    await cast.creator.as.mutation(api.submissions.markVerified, {
-      itemId: failed.id as Id<"uploadItems">,
-      size: 10,
-      sha256: "b2",
-    });
+    await uploadVerified(cast.creator, failed.id, { size: 10, sha256: "b2" });
     const r2 = await cast.creator.as.mutation(api.submissions.confirm, {
       sessionId: s2.sessionId,
       requestId: "confirm-2",
@@ -367,11 +358,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
       items: [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf", role: "source" }],
       requiredChecks: [{ type: "photo", label: "写真の権利確認", assigneeId: cast.reviewer.id }],
     });
-    await cast.creator.as.mutation(api.submissions.markVerified, {
-      itemId: prepared.items[0]!.id as Id<"uploadItems">,
-      size: 1,
-      sha256: "a",
-    });
+    await uploadVerified(cast.creator, prepared.items[0]!.id, { size: 1, sha256: "a" });
     const { revisionId: rid1 } = await cast.creator.as.mutation(api.submissions.confirm, {
       sessionId: prepared.sessionId as Id<"uploadSessions">,
     });
@@ -598,5 +585,161 @@ describe("Convex 統合: 認可と状態遷移", () => {
     expect(rev.threads[0]!.mentionUsers.map((u) => u.id)).toEqual([cast.approver.id]);
     const notes = await cast.approver.as.query(api.notifications.list, {});
     expect(notes.some((n) => n.kind === "mentioned")).toBe(true);
+  });
+
+  it("P1: 実体の検証完了はサービス境界からだけ。共有秘密と利用者の JWT の両方が要り、他人の項目は動かせない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const prepared = await cast.creator.as.mutation(api.submissions.prepare, {
+      workId,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: Date.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+      items: [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf", role: "source" }],
+    });
+    const itemId = prepared.items[0]!.id;
+    const sha = "a".repeat(64);
+    const post = (
+      who: { fetch: Harness["fetch"] },
+      path: string,
+      body: unknown,
+      key: string | null,
+    ) =>
+      who.fetch(path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(key !== null ? { "X-MF100-Service-Key": key } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+
+    const prev = process.env.MF100_UPLOAD_SECRET;
+    try {
+      // 秘密が未設定・短すぎる間は機能ごと無効
+      delete process.env.MF100_UPLOAD_SECRET;
+      expect(
+        (await post(cast.creator.as, "/internal/uploads/items/begin", { itemId }, "x")).status,
+      ).toBe(404);
+      process.env.MF100_UPLOAD_SECRET = "short";
+      expect(
+        (await post(cast.creator.as, "/internal/uploads/items/begin", { itemId }, "short")).status,
+      ).toBe(404);
+      const secret = "test-upload-secret-0123456789";
+      process.env.MF100_UPLOAD_SECRET = secret;
+
+      // 利用者がサービスの秘密を持たずに呼んでも 404（自己申告で検証済みにできない）
+      expect(
+        (await post(cast.creator.as, "/internal/uploads/items/begin", { itemId }, null)).status,
+      ).toBe(404);
+      expect(
+        (await post(cast.creator.as, "/internal/uploads/items/begin", { itemId }, `${secret}x`))
+          .status,
+      ).toBe(404);
+      // 秘密だけで利用者が居なければ 401。他人の項目は存在を漏らさない
+      expect((await post(t, "/internal/uploads/items/begin", { itemId }, secret)).status).toBe(401);
+      const foreign = await post(
+        cast.stranger.as,
+        "/internal/uploads/items/begin",
+        { itemId },
+        secret,
+      );
+      expect(foreign.status).toBe(409);
+      expect(await foreign.json()).toMatchObject({ code: "upload_item_not_found" });
+
+      // A と B が両方とも開始できる（別のキー）。A の検証完了だけが採用され、B は採用されない
+      const a = (await (
+        await post(cast.creator.as, "/internal/uploads/items/begin", { itemId }, secret)
+      ).json()) as { attemptId: string; objectKey: string };
+      const b = (await (
+        await post(cast.creator.as, "/internal/uploads/items/begin", { itemId }, secret)
+      ).json()) as { attemptId: string; objectKey: string };
+      expect(a.objectKey).not.toBe(b.objectKey);
+      expect(
+        (
+          await post(
+            cast.creator.as,
+            "/internal/uploads/items/complete",
+            { attemptId: a.attemptId, size: 1, sha256: "zz" },
+            secret,
+          )
+        ).status,
+      ).toBe(400);
+      // 他人は A の試行を完了できない
+      expect(
+        (
+          await post(
+            cast.stranger.as,
+            "/internal/uploads/items/complete",
+            { attemptId: a.attemptId, size: 1, sha256: sha },
+            secret,
+          )
+        ).status,
+      ).toBe(409);
+      const done = await post(
+        cast.creator.as,
+        "/internal/uploads/items/complete",
+        { attemptId: a.attemptId, size: 1, sha256: sha },
+        secret,
+      );
+      expect(await done.json()).toEqual({ status: "verified", failureMessage: null });
+      const late = await post(
+        cast.creator.as,
+        "/internal/uploads/items/complete",
+        { attemptId: b.attemptId, size: 1, sha256: sha },
+        secret,
+      );
+      expect(late.status).toBe(409);
+      expect(await late.json()).toMatchObject({ code: "upload_item_invalid_state" });
+      expect(
+        (
+          await post(
+            cast.creator.as,
+            "/internal/uploads/items/fail",
+            { attemptId: b.attemptId, message: "lost" },
+            secret,
+          )
+        ).status,
+      ).toBe(200);
+
+      // 確定した提出物は A のキーを参照する
+      const confirmed = await cast.creator.as.mutation(api.submissions.confirm, {
+        sessionId: prepared.sessionId as Id<"uploadSessions">,
+      });
+      const rev = await cast.creator.as.query(api.revisions.get, {
+        revisionId: confirmed.revisionId as Id<"revisions">,
+      });
+      const access = await cast.creator.as.query(api.artifacts.authorizeAccess, {
+        artifactId: rev.artifacts[0]!.id as Id<"artifacts">,
+      });
+      expect(access.objectKey).toBe(a.objectKey);
+      // 負けた B のキーだけが清掃の対象
+      expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([
+        { itemId: `attempt:${b.attemptId}`, objectKey: b.objectKey },
+      ]);
+    } finally {
+      if (prev === undefined) delete process.env.MF100_UPLOAD_SECRET;
+      else process.env.MF100_UPLOAD_SECRET = prev;
+    }
+  });
+
+  it("P2: 同じ状態から準備した 2 つの提出は、比較条件を渡さなくても先に確定した 1 件だけが成功する", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const a = await submit(t, cast, workId);
+    const b = await submit(t, cast, workId);
+    const first = await cast.creator.as.mutation(api.submissions.confirm, {
+      sessionId: a.sessionId,
+    });
+    await expect(
+      cast.creator.as.mutation(api.submissions.confirm, { sessionId: b.sessionId }),
+    ).rejects.toThrow(code("revision_submission_conflict"));
+    const detail = await cast.creator.as.query(api.works.get, { workId });
+    expect(detail.revisions).toHaveLength(1);
+    expect(detail.acceptingRevisionId).toBe(first.revisionId);
   });
 });

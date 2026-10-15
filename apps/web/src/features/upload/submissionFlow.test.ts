@@ -15,9 +15,9 @@ function makeDeps(behaviour: Record<string, "ok" | "fail" | "throw">) {
       return {
         sessionId: "ses1",
         items: [
-          { id: "a", fileName: "a.pdf", objectKey: "k/a" },
-          { id: "b", fileName: "b.pdf", objectKey: "k/b" },
-          { id: "ext", fileName: "figma", objectKey: null },
+          { id: "a", fileName: "a.pdf", keyPrefix: "k/a" },
+          { id: "b", fileName: "b.pdf", keyPrefix: "k/b" },
+          { id: "ext", fileName: "figma", keyPrefix: null },
         ],
       };
     },

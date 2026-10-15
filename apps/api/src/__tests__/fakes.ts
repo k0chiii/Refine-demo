@@ -3,7 +3,7 @@ import type {
   BackendGateway,
   ObjectStore,
   TokenVerifier,
-  UploadTarget,
+  UploadOps,
 } from "../ports.ts";
 import { GatewayError } from "../ports.ts";
 
@@ -20,12 +20,15 @@ async function sha256Hex(buf: ArrayBuffer): Promise<string> {
 
 export class MemoryStore implements ObjectStore {
   readonly objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
+  /** 書込み直前のフック（遅れて届く PUT の再現に使う） */
+  beforeWrite: ((key: string) => Promise<void>) | null = null;
   async put(
     key: string,
     body: ReadableStream | ArrayBuffer,
     opts: { contentType: string; sha256Hex: string },
   ) {
     const buf = body instanceof ArrayBuffer ? body : await new Response(body).arrayBuffer();
+    if (this.beforeWrite) await this.beforeWrite(key);
     const actual = await sha256Hex(buf);
     if (actual !== opts.sha256Hex)
       throw new Error("The SHA-256 checksum you specified did not match what we received.");
@@ -50,34 +53,128 @@ export class MemoryStore implements ObjectStore {
   }
 }
 
-export class FakeGateway implements BackendGateway {
-  items = new Map<
+/**
+ * Convex の転送の試行（開始・採用・破棄）をまねるインメモリ実装。
+ * 版の提出物・フィードバックの添付で同じ形。試行ごとに別キーを払い出し、検証が済んだ 1 つだけを採用する。
+ */
+export interface FakeUploadTarget {
+  keyPrefix: string;
+  mimeType: string;
+  declaredSize: number | null;
+  fileName: string;
+  owner: string;
+  status: string;
+  failureMessage: string | null;
+  /** 採用された試行のキー */
+  objectKey: string | null;
+  /** false: 提出が確定した・投稿に付けた等で、もう受け付けない */
+  open: boolean;
+  size: number | null;
+}
+
+export class FakeUploads implements UploadOps {
+  readonly targets = new Map<string, FakeUploadTarget>();
+  readonly attempts = new Map<
     string,
-    UploadTarget & { owner: string; status: string; failureMessage: string | null }
+    { id: string; targetId: string; objectKey: string; state: "reserved" | "adopted" | "discarded" }
   >();
-  artifacts = new Map<string, ArtifactAccess & { viewers: string[] }>();
   calls: string[] = [];
+  /** 次の complete を「通信断（採否不明）」にする */
+  failNextCompleteWithNetworkError = false;
+  private seq = 0;
+  constructor(
+    private readonly codes: { notFound: string; invalid: string; closed: string },
+    private readonly label: string,
+  ) {}
   private subjectOf(token: string) {
     return token.slice(6);
   }
-  async itemForUpload(token: string, itemId: string) {
-    const item = this.items.get(itemId);
-    if (!item || item.owner !== this.subjectOf(token))
-      throw new GatewayError("upload_item_not_found", { itemId });
-    if (item.status === "verified") throw new GatewayError("upload_item_invalid_state", { itemId });
-    return item;
+  private own(token: string, id: string) {
+    const t = this.targets.get(id);
+    if (!t || t.owner !== this.subjectOf(token))
+      throw new GatewayError(this.codes.notFound, { id });
+    return t;
   }
-  async markVerified(_token: string, itemId: string, meta: { size: number; sha256: string }) {
-    this.calls.push(`verified:${itemId}:${meta.size}:${meta.sha256}`);
-    const item = this.items.get(itemId)!;
-    item.status = "verified";
+  async begin(token: string, id: string) {
+    const t = this.own(token, id);
+    if (!t.open) throw new GatewayError(this.codes.closed, { id });
+    if (t.status === "verified") throw new GatewayError(this.codes.invalid, { id });
+    const attemptId = `att${++this.seq}`;
+    const objectKey = `${t.keyPrefix}/attempts/${attemptId}`;
+    this.attempts.set(attemptId, { id: attemptId, targetId: id, objectKey, state: "reserved" });
+    this.calls.push(`${this.label}begin:${id}:${attemptId}`);
+    return {
+      attemptId,
+      objectKey,
+      mimeType: t.mimeType,
+      declaredSize: t.declaredSize,
+      fileName: t.fileName,
+    };
+  }
+  async complete(token: string, attemptId: string, meta: { size: number; sha256: string }) {
+    this.calls.push(`${this.label}complete:${attemptId}:${meta.size}:${meta.sha256}`);
+    if (this.failNextCompleteWithNetworkError) {
+      this.failNextCompleteWithNetworkError = false;
+      throw new Error("network down");
+    }
+    const a = this.attempts.get(attemptId);
+    if (!a) throw new GatewayError("upload_attempt_not_found", { attemptId });
+    const t = this.own(token, a.targetId);
+    if (!t.open) throw new GatewayError(this.codes.closed, { id: a.targetId });
+    if (t.status === "verified") throw new GatewayError(this.codes.invalid, { id: a.targetId });
+    if (a.state !== "reserved") throw new GatewayError("upload_attempt_closed", { attemptId });
+    // 採用（項目の状態と試行の状態を同時に変える）
+    t.status = "verified";
+    t.objectKey = a.objectKey;
+    t.size = meta.size;
+    t.failureMessage = null;
+    a.state = "adopted";
     return { status: "verified", failureMessage: null };
   }
-  async markFailed(_token: string, itemId: string, message: string) {
-    this.calls.push(`failed:${itemId}:${message}`);
-    const item = this.items.get(itemId)!;
-    item.status = "failed";
-    item.failureMessage = message;
+  async fail(token: string, attemptId: string, message: string) {
+    this.calls.push(`${this.label}fail:${attemptId}:${message}`);
+    const a = this.attempts.get(attemptId);
+    if (!a) throw new GatewayError("upload_attempt_not_found", { attemptId });
+    const t = this.own(token, a.targetId);
+    if (a.state === "reserved") a.state = "discarded";
+    if (t.open && t.status !== "verified") {
+      t.status = "failed";
+      t.failureMessage = message;
+    }
+  }
+}
+
+export class FakeGateway implements BackendGateway {
+  readonly itemUploads = new FakeUploads(
+    {
+      notFound: "upload_item_not_found",
+      invalid: "upload_item_invalid_state",
+      closed: "upload_session_not_open",
+    },
+    "",
+  );
+  readonly feedbackUploads = new FakeUploads(
+    { notFound: "feedback_not_found", invalid: "feedback_invalid", closed: "feedback_invalid" },
+    "feedback-",
+  );
+  artifacts = new Map<string, ArtifactAccess & { viewers: string[] }>();
+  /** フィードバックの添付を見られる人 */
+  feedbackViewers = new Map<string, string[]>();
+  private subjectOf(token: string) {
+    return token.slice(6);
+  }
+  /** 提出の確定: 採用された実体を参照する Artifact を作り、セッションの受付を終える */
+  confirm(itemId: string, artifactId: string, viewers: string[]) {
+    const t = this.itemUploads.targets.get(itemId)!;
+    if (t.status !== "verified" || !t.objectKey) throw new Error("not verified");
+    t.open = false;
+    this.artifacts.set(artifactId, {
+      objectKey: t.objectKey,
+      mimeType: t.mimeType,
+      fileName: t.fileName,
+      size: t.size,
+      viewers,
+    });
   }
   async authorizeArtifact(token: string, artifactId: string) {
     const a = this.artifacts.get(artifactId);
@@ -85,44 +182,10 @@ export class FakeGateway implements BackendGateway {
       throw new GatewayError("forbidden", { artifactId });
     return a;
   }
-  /** フィードバックの添付（版の提出と同じ形。ID の頭で区別しない別の表） */
-  feedbackFiles = new Map<
-    string,
-    UploadTarget & {
-      owner: string;
-      status: string;
-      failureMessage: string | null;
-      viewers: string[];
-      size: number | null;
-    }
-  >();
-  async feedbackFileForUpload(token: string, fileId: string) {
-    const f = this.feedbackFiles.get(fileId);
-    if (!f || f.owner !== this.subjectOf(token))
-      throw new GatewayError("feedback_not_found", { fileId });
-    if (f.status === "verified") throw new GatewayError("feedback_invalid", { fileId });
-    return f;
-  }
-  async markFeedbackFileVerified(
-    _token: string,
-    fileId: string,
-    meta: { size: number; sha256: string },
-  ) {
-    this.calls.push(`feedback-verified:${fileId}:${meta.size}:${meta.sha256}`);
-    const f = this.feedbackFiles.get(fileId)!;
-    f.status = "verified";
-    f.size = meta.size;
-    return { status: "verified", failureMessage: null };
-  }
-  async markFeedbackFileFailed(_token: string, fileId: string, message: string) {
-    this.calls.push(`feedback-failed:${fileId}:${message}`);
-    const f = this.feedbackFiles.get(fileId)!;
-    f.status = "failed";
-    f.failureMessage = message;
-  }
   async authorizeFeedbackFile(token: string, fileId: string) {
-    const f = this.feedbackFiles.get(fileId);
-    if (!f || f.status !== "verified" || !f.viewers.includes(this.subjectOf(token)))
+    const f = this.feedbackUploads.targets.get(fileId);
+    const viewers = this.feedbackViewers.get(fileId) ?? [];
+    if (!f || f.status !== "verified" || !f.objectKey || !viewers.includes(this.subjectOf(token)))
       throw new GatewayError("forbidden", { fileId });
     return { objectKey: f.objectKey, mimeType: f.mimeType, fileName: f.fileName, size: f.size };
   }

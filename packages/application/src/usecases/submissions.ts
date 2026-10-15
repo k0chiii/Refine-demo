@@ -1,6 +1,11 @@
 import {
+  adoptAttempt,
+  assertAttemptAdoptable,
+  assertItemUploadable,
   assertItemsReadyForConfirm,
   assertSessionOpen,
+  assertSubmissionBaseCurrent,
+  discardAttempt,
   assertWorkActive,
   createRevision,
   DomainError,
@@ -21,12 +26,14 @@ import {
   checkTypeLabels,
   revisionLabel,
   voidRevision,
+  releaseAdoptedAttempt,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { about, excerpt, notify, personName, workStakeholders } from "./notifications.ts";
 import { currentRuleSet } from "./notation.ts";
 import { createProofreadingRun } from "./autoProofread.ts";
+import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -71,7 +78,8 @@ export async function prepareSubmission(
   if (input.deadlineAt <= now)
     throw new DomainError("revision_deadline_in_past", { now, deadlineAt: input.deadlineAt });
   // 0版の重複・通常版の後の0版は準備段階で早期に弾く（確定時にも再検証する）
-  planRevision(await ctx.revisions.listByWork(work.id), input.kind);
+  const baseRevisions = await ctx.revisions.listByWork(work.id);
+  planRevision(baseRevisions, input.kind);
   if (input.items.length === 0) throw new DomainError("revision_no_artifacts");
 
   return idempotent(
@@ -90,6 +98,8 @@ export async function prepareSubmission(
         state: "open",
         createdAt: now,
         expiresAt: now + SESSION_TTL_MS,
+        // 確定時の競合比較の基準。クライアントからは受け取らない（§5.2-11）
+        baseRevisionCount: baseRevisions.length,
         ...(input.requiredChecks && input.requiredChecks.length > 0
           ? {
               requiredChecks: input.requiredChecks.map((c) => ({
@@ -116,8 +126,9 @@ export async function prepareSubmission(
             throw new DomainError("anchor_invalid", { reason: "external_url_required" });
           base.externalUrl = it.externalUrl;
         } else {
-          // オブジェクトキーは推測困難かつ作品/セッションで名前空間を分ける。公開バケットには置かない。
-          base.objectKey = `works/${work.id}/sessions/${session.id}/${index}-${sanitizeFileName(it.fileName)}`;
+          // キーの名前空間は推測困難かつ作品/セッションで分ける。公開バケットには置かない。
+          // 実体は試行ごとにこの下の別キーへ置き、検証の済んだ 1 つだけを採用する（objectKey）。
+          base.keyPrefix = `works/${work.id}/sessions/${session.id}/${index}-${sanitizeFileName(it.fileName)}`;
         }
         items.push(await ctx.uploads.insertItem(base));
       }
@@ -134,34 +145,88 @@ export async function prepareSubmission(
   );
 }
 
-/** Hono（R2 実体確認後）から呼ばれる。サイズ・ハッシュを記録し verified にする。 */
-export async function recordItemVerified(
+/**
+ * 実体の転送の開始（Hono が PUT を受ける前に、サービス認証付きの境界から呼ぶ）。
+ * 利用者が持ち主で、作品に提出でき、セッションが受付中で、未検証の項目に限り、この試行だけのキーを払い出す。
+ * 他人の項目は存在を漏らさない。
+ */
+export async function beginItemUpload(
   ctx: AppContext,
   principal: Principal,
-  input: { itemId: string; size: number; sha256: string; pageCount?: number },
-): Promise<UploadItem> {
+  input: { itemId: string },
+): Promise<{
+  attemptId: string;
+  objectKey: string;
+  mimeType: string;
+  declaredSize: number | null;
+  fileName: string;
+}> {
   const { item, session } = await loadOwnItem(ctx, principal, input.itemId);
+  await loadAuthorizedWork(ctx, principal, session.workId, "revision.submit");
   assertSessionOpen(session, ctx.clock.now());
-  const meta: { size: number; sha256: string; pageCount?: number } = {
+  assertItemUploadable(item);
+  const attempt = await reserveUploadAttempt(ctx, {
+    target: "uploadItem",
+    targetId: item.id,
+    uploaderId: principal.userId,
+    keyPrefix: item.keyPrefix!,
+  });
+  return {
+    attemptId: attempt.id,
+    objectKey: attempt.objectKey,
+    mimeType: item.mimeType,
+    declaredSize: item.declaredSize ?? null,
+    fileName: item.fileName,
+  };
+}
+
+/**
+ * 実体の検証完了（Hono が R2 で sha256 を確かめた後に、サービス認証付きの境界から呼ぶ）。
+ * 項目がまだ受付中・未検証で、試行が予約中・期限内のときだけ、この試行を原子的に採用する。
+ * 先に別の試行が採用された・提出が確定した・期限が過ぎた場合は例外（何も変わらない）。呼出し側は自分の試行のキーだけを消す。
+ */
+export async function completeItemUpload(
+  ctx: AppContext,
+  principal: Principal,
+  input: { attemptId: string; size: number; sha256: string; pageCount?: number },
+): Promise<UploadItem> {
+  const now = ctx.clock.now();
+  const attempt = await loadOwnUploadAttempt(ctx, principal, input.attemptId, "uploadItem");
+  const { item, session } = await loadOwnItem(ctx, principal, attempt.targetId);
+  await loadAuthorizedWork(ctx, principal, session.workId, "revision.submit");
+  assertSessionOpen(session, now);
+  assertItemUploadable(item);
+  assertAttemptAdoptable(attempt, now);
+  const meta: { size: number; sha256: string; objectKey: string; pageCount?: number } = {
     size: input.size,
     sha256: input.sha256,
+    objectKey: attempt.objectKey,
   };
   if (input.pageCount !== undefined) meta.pageCount = input.pageCount;
   const next = markItemVerified(item, meta);
+  await ctx.attempts.update(
+    next.status === "verified" ? adoptAttempt(attempt, now) : discardAttempt(attempt, now),
+  );
   await ctx.uploads.updateItem(next);
   return next;
 }
 
-export async function recordItemFailed(
+/**
+ * 転送の失敗（Hono の補償。自分の試行のキーを消した後に呼ぶ）。試行を破棄し、清掃の対象にする。
+ * 項目は受付中・未検証のときだけ failed にする（採用済みの実体や確定済みの提出には触れない）。
+ */
+export async function failItemUpload(
   ctx: AppContext,
   principal: Principal,
-  input: { itemId: string; message: string },
-): Promise<UploadItem> {
-  const { item, session } = await loadOwnItem(ctx, principal, input.itemId);
-  assertSessionOpen(session, ctx.clock.now());
+  input: { attemptId: string; message: string },
+): Promise<void> {
+  const now = ctx.clock.now();
+  const attempt = await loadOwnUploadAttempt(ctx, principal, input.attemptId, "uploadItem");
+  await ctx.attempts.update(discardAttempt(attempt, now));
+  const { item, session } = await loadOwnItem(ctx, principal, attempt.targetId);
+  if (session.state !== "open" || now >= session.expiresAt) return;
   const next = markItemFailed(item, input.message);
-  await ctx.uploads.updateItem(next);
-  return next;
+  if (next !== item) await ctx.uploads.updateItem(next);
 }
 
 /** 失敗したファイルの再アップロードに備え pending に戻す（A-02 の復旧手順）。 */
@@ -171,11 +236,17 @@ export async function resetItem(
   input: { itemId: string },
 ): Promise<UploadItem> {
   const { item, session } = await loadOwnItem(ctx, principal, input.itemId);
-  assertSessionOpen(session, ctx.clock.now());
+  const now = ctx.clock.now();
+  assertSessionOpen(session, now);
+  // 採用済みの実体を手放す（確定前なので、どの提出物からも参照されていない）。実体は清掃が消す
+  for (const attempt of await ctx.attempts.listByTarget("uploadItem", item.id))
+    if (attempt.state === "adopted") await ctx.attempts.update(releaseAdoptedAttempt(attempt, now));
   const next: UploadItem = { ...item, status: "pending" };
   delete next.failureMessage;
   delete next.sha256;
   delete next.size;
+  delete next.objectKey;
+  delete next.pageCount;
   await ctx.uploads.updateItem(next);
   return next;
 }
@@ -183,6 +254,7 @@ export async function resetItem(
 export interface ConfirmSubmissionInput {
   sessionId: string;
   requestId?: string;
+  /** 画面が見ていた作品の版数（任意の追加確認）。同時提出の競合比較は準備時の記録で必ず行う */
   expectedWorkVersion?: number;
 }
 
@@ -193,7 +265,7 @@ export interface ConfirmedSubmission {
 
 /**
  * 版の提出確定（D1 / F-08 / A-16 / A-17 / A-10）。
- * 1 トランザクションで: 全ファイル検証済みを確認 → Revision 作成 → Artifact 作成 → 旧受付版を superseded で閉じる。
+ * 1 トランザクションで: 準備時から版が増えていないことを確認 → 全ファイル検証済みを確認 → Revision 作成 → Artifact 作成 → 旧受付版を superseded で閉じる。
  * いずれかに失敗すれば何も変わらない（旧版の受付は維持される）。
  */
 export async function confirmSubmission(
@@ -226,6 +298,8 @@ export async function confirmSubmission(
     assertItemsReadyForConfirm(items);
 
     const existingRevisions = await ctx.revisions.listByWork(work.id);
+    // 準備した後に別の提出が確定していれば確定しない（同時提出は一件だけ確定する: §5.2-11）
+    assertSubmissionBaseCurrent(session, existingRevisions);
     const plan = planRevision(existingRevisions, session.kind);
     const newRevision = createRevision(
       {

@@ -59,13 +59,15 @@ npx convex dev            # Convex アカウントでログイン → dev deploy
 
 Convex ダッシュボード（または `npx convex env set KEY VALUE`）で設定する環境変数:
 
-| 変数                                                          | 用途                                                                                                                                                                         |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONVEX_SITE_ORIGIN`                                          | Convex Auth の issuer。`https://<deployment>.convex.site`                                                                                                                    |
-| `FRONTEND_URL`                                                | ログイン後のリダイレクト先（例 `http://localhost:5173`）                                                                                                                     |
-| `NOGIKU_MOCK_ENABLED`                                         | `true` で Nogiku OIDC を呼ばずにモック委員でサインイン（開発・E2E 用）                                                                                                       |
-| `NOGIKU_ISSUER` / `NOGIKU_CLIENT_ID` / `NOGIKU_CLIENT_SECRET` | 本物の Nogiku Auth。issuer は `https://<nogiku-auth>/api`。コールバック `https://<deployment>.convex.site/api/auth/callback/nogiku` を Nogiku 側クライアントに登録してもらう |
-| `MF100_SYSTEM_ADMIN_SUBJECTS`                                 | 初期の校正システム管理者（Nogiku sub をカンマ区切り）。以後は管理画面で変更                                                                                                  |
+| 変数                                                          | 用途                                                                                                                                                                                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONVEX_SITE_ORIGIN`                                          | Convex Auth の issuer。`https://<deployment>.convex.site`                                                                                                                                               |
+| `FRONTEND_URL`                                                | ログイン後のリダイレクト先（例 `http://localhost:5173`）                                                                                                                                                |
+| `NOGIKU_MOCK_ENABLED`                                         | `true` で Nogiku OIDC を呼ばずにモック委員でサインイン（開発・E2E 用）                                                                                                                                  |
+| `NOGIKU_ISSUER` / `NOGIKU_CLIENT_ID` / `NOGIKU_CLIENT_SECRET` | 本物の Nogiku Auth。issuer は `https://<nogiku-auth>/api`。コールバック `https://<deployment>.convex.site/api/auth/callback/nogiku` を Nogiku 側クライアントに登録してもらう                            |
+| `MF100_SYSTEM_ADMIN_SUBJECTS`                                 | 初期の校正システム管理者（Nogiku sub をカンマ区切り）。以後は管理画面で変更                                                                                                                             |
+| `MF100_UPLOAD_SECRET`                                         | Hono だけが実体の転送（試行の開始・検証完了の採用・破棄）を記録できる共有秘密（16 文字以上。Workers にも同じ値）。未設定なら `/internal/uploads`・`/internal/feedback/files` は無効（アップロード不可） |
+| `MF100_CLEANUP_SECRET`                                        | Hono の R2 清掃 cron が `/internal/upload-orphans` を呼ぶ共有秘密（16 文字以上。Workers にも同じ値）。未設定なら清掃は無効                                                                              |
 
 Convex Auth は `JWT_PRIVATE_KEY` / `JWKS` も必要とする。初回は `npx @convex-dev/auth` で生成できる（UniQ と同じ手順）。
 
@@ -81,6 +83,13 @@ pnpm dev                  # wrangler dev → http://127.0.0.1:8787（R2 はロ�
 ```
 
 `wrangler.jsonc` の `vars` に `CONVEX_URL`（`https://xxx.convex.cloud`）と `CONVEX_SITE_URL`（`https://xxx.convex.site`）、`ALLOWED_ORIGINS` を設定。R2 バケットは `mf100-assets`（非公開）。
+
+秘密は `wrangler secret put`（ローカルは `.dev.vars`）で設定し、Convex 側と同じ値にする:
+
+| 秘密                   | 用途                                                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `MF100_UPLOAD_SECRET`  | 実体を R2 で検証した後、Convex に試行の採用を求めるサービス認証（利用者の JWT と一緒に送る）。未設定ならアップロードは 503 |
+| `MF100_CLEANUP_SECRET` | R2 清掃 cron が孤立オブジェクト（放置セッション・未採用の試行）を取りに行くサービス認証。未設定なら清掃は走らない          |
 
 ### Web
 

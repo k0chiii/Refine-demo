@@ -135,7 +135,8 @@ class DemoBackend {
     );
   }
 
-  async mutation<M extends FunctionReference<"mutation">>(
+  /** internal 関数も呼べる（Hono のサービス境界の代わり。デモでは Worker が無いため） */
+  async mutation<M extends FunctionReference<"mutation", "public" | "internal">>(
     ref: M,
     args: Record<string, unknown>,
   ): Promise<unknown> {
@@ -150,25 +151,35 @@ class DemoBackend {
     }
   }
 
-  /** Hono PUT /uploads/items/:id 相当: Blob を保持し、実体検証済みとして Convex に記録する。 */
+  /**
+   * Hono PUT /uploads/items/:itemId 相当: 本番の Hono と同じ手順をサービス境界の internal 関数で踏む
+   * （試行の開始 → この試行のキーに Blob を保持 → 検証完了で採用）。
+   */
   async uploadItem(
     itemId: string,
     file: File,
     sha256: string,
   ): Promise<{ status: string; failureMessage: string | null }> {
-    const objectKey = await this.enqueue(() =>
-      this.t.run(async (ctx) => {
-        const item = await ctx.db.get("uploadItems", itemId as never);
-        return item?.objectKey ?? null;
-      }),
-    );
-    if (!objectKey) throw new Error("upload item not found");
-    this.blobs.set(objectKey, file);
-    return (await this.mutation(api.submissions.markVerified, {
-      itemId,
-      size: file.size,
-      sha256,
-    })) as { status: string; failureMessage: string | null };
+    const target = (await this.mutation(internal.submissions.beginUpload, { itemId })) as {
+      attemptId: string;
+      objectKey: string;
+    };
+    this.blobs.set(target.objectKey, file);
+    try {
+      return (await this.mutation(internal.submissions.completeUpload, {
+        attemptId: target.attemptId,
+        size: file.size,
+        sha256,
+      })) as { status: string; failureMessage: string | null };
+    } catch (error) {
+      // 採用されなかった試行の実体は自分で消す（本番の Hono の補償と同じ）
+      this.blobs.delete(target.objectKey);
+      await this.mutation(internal.submissions.failUpload, {
+        attemptId: target.attemptId,
+        message: error instanceof Error ? error.message : "upload failed",
+      }).catch(() => undefined);
+      throw error;
+    }
   }
 
   /** Hono GET /files/:artifactId 相当: 認可は Convex の authorizeAccess をそのまま使う。 */
@@ -181,21 +192,31 @@ class DemoBackend {
     return blob;
   }
 
-  /** Hono PUT /feedback/files/:id 相当: 受付可否は Convex の fileForUpload、記録は markFileVerified */
+  /** Hono PUT /feedback/files/:id 相当: 版の提出と同じく、試行の開始 → 保持 → 検証完了で採用 */
   async uploadFeedbackFile(
     fileId: string,
     file: File,
     sha256: string,
   ): Promise<{ status: string; failureMessage: string | null }> {
-    const target = (await this.query(api.feedback.fileForUpload, { fileId })) as {
+    const target = (await this.mutation(internal.feedback.beginFileUpload, { fileId })) as {
+      attemptId: string;
       objectKey: string;
     };
     this.blobs.set(target.objectKey, file);
-    return (await this.mutation(api.feedback.markFileVerified, {
-      fileId,
-      size: file.size,
-      sha256,
-    })) as { status: string; failureMessage: string | null };
+    try {
+      return (await this.mutation(internal.feedback.completeFileUpload, {
+        attemptId: target.attemptId,
+        size: file.size,
+        sha256,
+      })) as { status: string; failureMessage: string | null };
+    } catch (error) {
+      this.blobs.delete(target.objectKey);
+      await this.mutation(internal.feedback.failFileUpload, {
+        attemptId: target.attemptId,
+        message: error instanceof Error ? error.message : "upload failed",
+      }).catch(() => undefined);
+      throw error;
+    }
   }
 
   /** Hono GET /feedback/files/:id 相当: 認可は Convex の authorizeFile */

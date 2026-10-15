@@ -1,22 +1,22 @@
-import { feedbackTemplate } from "@mf100/domain";
+import { feedbackTemplate, type Principal } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { decideThread, postComment } from "../usecases/comments.ts";
 import { finalizeWork } from "../usecases/approvals.ts";
 import {
   authorizeFeedbackFile,
+  beginFeedbackFileUpload,
+  completeFeedbackFileUpload,
   createFeedbackThread,
   deleteFeedbackPost,
   editFeedbackPost,
   expireFeedbackFiles,
   exportWorkStats,
-  feedbackFileForUpload,
+  failFeedbackFileUpload,
   getFeedbackThread,
   listFeedbackMentionCandidates,
   listFeedbackThreads,
   listOrphanFeedbackObjects,
-  markFeedbackFileFailed,
-  markFeedbackFileVerified,
   markFeedbackObjectsPurged,
   markFeedbackRead,
   postFeedback,
@@ -25,6 +25,7 @@ import {
   searchFeedbackPeople,
   toggleFeedbackReaction,
 } from "../usecases/feedback.ts";
+import { listOrphanAttemptObjects } from "../usecases/uploadAttempts.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -45,12 +46,26 @@ async function setup() {
   return { ctx, work };
 }
 
+/** Hono が実体を検証して記録するのと同じ手順（試行の開始 → 検証完了） */
+async function verifyFile(
+  ctx: InMemoryContext,
+  by: Principal,
+  input: { fileId: string; size: number; sha256: string },
+) {
+  const { attemptId } = await beginFeedbackFileUpload(ctx, by, { fileId: input.fileId });
+  return completeFeedbackFileUpload(ctx, by, {
+    attemptId,
+    size: input.size,
+    sha256: input.sha256,
+  });
+}
+
 async function uploadVerified(ctx: InMemoryContext, workId: string, by = creator) {
   const [prepared] = await prepareFeedbackFiles(ctx, by, {
     workId,
     files: [{ fileName: "案A.pdf", mimeType: "application/pdf", size: 10 }],
   });
-  await markFeedbackFileVerified(ctx, by, { fileId: prepared!.fileId, size: 10, sha256: "abc" });
+  await verifyFile(ctx, by, { fileId: prepared!.fileId, size: 10, sha256: "abc" });
   return prepared!.fileId;
 }
 
@@ -285,33 +300,39 @@ describe("添付", () => {
       ],
     });
     const [pdf, ai] = prepared.map((p) => p.fileId) as [string, string];
-    const target = await feedbackFileForUpload(ctx, creator, pdf);
+    const target = await beginFeedbackFileUpload(ctx, creator, { fileId: pdf });
     expect(target).toMatchObject({
       declaredSize: 10,
       fileName: "案A.pdf",
       mimeType: "application/pdf",
     });
-    expect(target.objectKey).toBe(`feedback/${work.id}/${pdf}/案A.pdf`);
-    await expect(feedbackFileForUpload(ctx, reviewer, pdf)).rejects.toThrow(
+    // 実体は添付の名前空間の下の、この試行だけのキーに置く
+    expect(target.objectKey).toBe(
+      `feedback/${work.id}/${pdf}/案A.pdf/attempts/${target.attemptId}`,
+    );
+    await expect(beginFeedbackFileUpload(ctx, reviewer, { fileId: pdf })).rejects.toThrow(
       code("feedback_not_found"),
     );
     // 申告サイズと違えば failed
-    expect(
-      await markFeedbackFileVerified(ctx, creator, { fileId: ai, size: 19, sha256: "x" }),
-    ).toMatchObject({
+    expect(await verifyFile(ctx, creator, { fileId: ai, size: 19, sha256: "x" })).toMatchObject({
       status: "failed",
     });
-    await markFeedbackFileFailed(ctx, creator, { fileId: ai, message: "破損" });
+    const retry = await beginFeedbackFileUpload(ctx, creator, { fileId: ai });
+    await failFeedbackFileUpload(ctx, creator, { attemptId: retry.attemptId, message: "破損" });
     await expect(
       createFeedbackThread(ctx, creator, { workId: work.id, title: "案", body: "", fileIds: [ai] }),
     ).rejects.toThrow(code("feedback_file_not_ready"));
     expect(
-      await markFeedbackFileVerified(ctx, creator, { fileId: pdf, size: 10, sha256: "x" }),
+      await completeFeedbackFileUpload(ctx, creator, {
+        attemptId: target.attemptId,
+        size: 10,
+        sha256: "x",
+      }),
     ).toEqual({
       status: "verified",
       failureMessage: null,
     });
-    await expect(feedbackFileForUpload(ctx, creator, pdf)).rejects.toThrow(
+    await expect(beginFeedbackFileUpload(ctx, creator, { fileId: pdf })).rejects.toThrow(
       code("feedback_invalid"),
     );
     // 投稿前は本人だけが読める
@@ -388,7 +409,10 @@ describe("添付", () => {
     expect(await expireFeedbackFiles(ctx)).toEqual([stale]);
     const orphans = await listOrphanFeedbackObjects(ctx);
     expect(orphans).toEqual([
-      { itemId: `feedback:${stale}`, objectKey: `feedback/${work.id}/${stale}/案A.pdf` },
+      {
+        itemId: `feedback:${stale}`,
+        objectKey: expect.stringContaining(`feedback/${work.id}/${stale}/案A.pdf/attempts/`),
+      },
     ]);
     // 放置扱いの添付はもう付けられない
     await expect(
@@ -477,5 +501,53 @@ describe("制作物ごとの集計（A-4）", () => {
       feedbackPostCount: 1,
     });
     void work;
+  });
+});
+
+describe("添付の転送: 試行ごとのキーと原子的な採用（版の提出と同じ構造）", () => {
+  it("2 つの試行は別のキーに書き、先に検証された 1 つだけが採用される。負けた試行は採用済みの実体を変えず、清掃の対象になる", async () => {
+    const { ctx, work } = await setup();
+    const [prepared] = await prepareFeedbackFiles(ctx, creator, {
+      workId: work.id,
+      files: [{ fileName: "案A.pdf", mimeType: "application/pdf", size: 10 }],
+    });
+    const fileId = prepared!.fileId;
+    const a = await beginFeedbackFileUpload(ctx, creator, { fileId });
+    const b = await beginFeedbackFileUpload(ctx, creator, { fileId });
+    expect(a.objectKey).not.toBe(b.objectKey);
+
+    await completeFeedbackFileUpload(ctx, creator, {
+      attemptId: a.attemptId,
+      size: 10,
+      sha256: "a01",
+    });
+    await expect(
+      completeFeedbackFileUpload(ctx, creator, { attemptId: b.attemptId, size: 10, sha256: "b02" }),
+    ).rejects.toThrow(code("feedback_invalid"));
+    await failFeedbackFileUpload(ctx, creator, { attemptId: b.attemptId, message: "lost" });
+    // 他人は試行を進められない（存在を漏らさない）
+    await expect(
+      failFeedbackFileUpload(ctx, reviewer, { attemptId: a.attemptId, message: "x" }),
+    ).rejects.toThrow(code("upload_attempt_not_found"));
+
+    // 投稿に付けた後も、読めるのは採用した A の実体
+    await createFeedbackThread(ctx, creator, {
+      workId: work.id,
+      title: "案",
+      body: "",
+      fileIds: [fileId],
+    });
+    expect(await authorizeFeedbackFile(ctx, creator, fileId)).toMatchObject({
+      objectKey: a.objectKey,
+    });
+    expect(await ctx.feedback.findFile(fileId)).toMatchObject({
+      status: "verified",
+      sha256: "a01",
+      objectKey: a.objectKey,
+    });
+    // 清掃は B のキーだけ
+    expect(await listOrphanAttemptObjects(ctx)).toEqual([
+      { itemId: `attempt:${b.attemptId}`, objectKey: b.objectKey },
+    ]);
   });
 });

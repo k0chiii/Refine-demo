@@ -3,13 +3,13 @@ import {
   createFeedbackThread,
   deleteFeedbackPost,
   editFeedbackPost,
+  beginFeedbackFileUpload,
+  completeFeedbackFileUpload,
   expireFeedbackFiles,
-  feedbackFileForUpload,
+  failFeedbackFileUpload,
   getFeedbackThread,
   listFeedbackMentionCandidates,
   listFeedbackThreads,
-  markFeedbackFileFailed,
-  markFeedbackFileVerified,
   markFeedbackRead,
   postFeedback,
   prepareFeedbackFiles,
@@ -171,31 +171,39 @@ export const prepareFiles = mutation({
   },
 });
 
-// ---------------------------------------------------------------- Hono から利用者のトークンで呼ばれる
+// ---------------------------------------------------------------- 実体の転送（Hono 専用）
 
-/** PUT 受付前: 本人の、投稿に付ける前の、未検証の添付だけ */
-export const fileForUpload = query({
+/*
+ * 公開関数にしない: 利用者が自分で「検証済み」を申告できないようにする。
+ * http.ts のサービス認証付きエンドポイント（MF100_UPLOAD_SECRET）からだけ呼ばれ、
+ * 利用者の JWT の主体で、添付の持ち主かを use case が確かめる。
+ */
+
+/** 転送の開始: 本人の、投稿に付ける前の、未検証の添付に、この試行だけの R2 キーを払い出す */
+export const beginFileUpload = internalMutation({
   args: { fileId: v.string() },
-  handler: async (ctx, { fileId }) => {
-    const { principal } = await requireUser(ctx);
-    return runUseCase(() => feedbackFileForUpload(createReadContext(ctx.db), principal, fileId));
-  },
-});
-
-export const markFileVerified = mutation({
-  args: { fileId: v.string(), size: v.number(), sha256: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() => markFeedbackFileVerified(createAppContext(ctx.db), principal, args));
+    return runUseCase(() => beginFeedbackFileUpload(createAppContext(ctx.db), principal, args));
   },
 });
 
-export const markFileFailed = mutation({
-  args: { fileId: v.string(), message: v.string() },
+/** 検証完了: 添付がまだ受付中・未検証なら、この試行を原子的に採用する */
+export const completeFileUpload = internalMutation({
+  args: { attemptId: v.string(), size: v.number(), sha256: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() => completeFeedbackFileUpload(createAppContext(ctx.db), principal, args));
+  },
+});
+
+/** 転送の失敗（Hono の補償）: 試行を破棄する */
+export const failFileUpload = internalMutation({
+  args: { attemptId: v.string(), message: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await markFeedbackFileFailed(createAppContext(ctx.db), principal, args);
+      await failFeedbackFileUpload(createAppContext(ctx.db), principal, args);
       return null;
     });
   },

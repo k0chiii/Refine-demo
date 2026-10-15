@@ -3,6 +3,7 @@ export * from "./shared.ts";
 export * from "./usecases/works.ts";
 export * from "./usecases/acl.ts";
 export * from "./usecases/submissions.ts";
+export * from "./usecases/uploadAttempts.ts";
 export * from "./usecases/reviews.ts";
 export * from "./usecases/comments.ts";
 export * from "./usecases/approvals.ts";

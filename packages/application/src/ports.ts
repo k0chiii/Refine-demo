@@ -20,6 +20,8 @@ import type {
   RuleProposal,
   RuleRevision,
   RevisionId,
+  UploadAttempt,
+  UploadAttemptTarget,
   UploadItem,
   UploadSession,
   UserId,
@@ -74,6 +76,20 @@ export interface UploadSessionRepository {
   listOpenExpired(now: Instant, limit: number): Promise<UploadSession[]>;
   /** abandoned で、R2 の孤立オブジェクト清掃がまだ終わっていないセッション */
   listAbandonedUnpurged(limit: number): Promise<UploadSession[]>;
+}
+
+/**
+ * R2 への転送の試行（版の提出物・フィードバックの添付で共通）。採用・破棄・清掃の記録。
+ * 試行ごとに別のキーを使うので、採用された実体を他の試行が変更することはない。
+ */
+export interface UploadAttemptRepository {
+  findById(id: string): Promise<UploadAttempt | null>;
+  insert(attempt: Omit<UploadAttempt, "id">): Promise<UploadAttempt>;
+  update(attempt: UploadAttempt): Promise<void>;
+  /** その項目（添付）の試行 */
+  listByTarget(target: UploadAttemptTarget, targetId: string): Promise<UploadAttempt[]>;
+  /** 清掃の候補: R2 から未削除で、破棄済みのもの、または createdAt <= reservedBefore の予約のまま */
+  listOrphanCandidates(reservedBefore: Instant, limit: number): Promise<UploadAttempt[]>;
 }
 
 export interface ThreadRepository {
@@ -312,6 +328,7 @@ export interface AppContext {
   revisions: RevisionRepository;
   artifacts: ArtifactRepository;
   uploads: UploadSessionRepository;
+  attempts: UploadAttemptRepository;
   threads: ThreadRepository;
   assignments: ReviewAssignmentRepository;
   acl: AclRepository;

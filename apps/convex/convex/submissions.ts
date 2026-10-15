@@ -1,14 +1,18 @@
 import {
+  ATTEMPT_ORPHAN_PREFIX,
   FEEDBACK_ORPHAN_PREFIX,
-  listOrphanFeedbackObjects,
-  markFeedbackObjectsPurged,
+  beginItemUpload,
+  completeItemUpload,
   confirmSubmission,
   expireUploadSessions,
+  failItemUpload,
+  listOrphanAttemptObjects,
+  listOrphanFeedbackObjects,
   listOrphanUploadObjects,
+  markAttemptObjectsPurged,
+  markFeedbackObjectsPurged,
   markUploadObjectsPurged,
   prepareSubmission,
-  recordItemFailed,
-  recordItemVerified,
   resetItem,
   voidRevisionUseCase,
 } from "@mf100/application";
@@ -56,7 +60,8 @@ export const prepare = mutation({
         items: items.map((i) => ({
           id: i.id,
           fileName: i.fileName,
-          objectKey: i.objectKey ?? null,
+          // 実体を送る項目か（外部リンクは null）。実際のキーは転送の試行ごとに Hono へ払い出す
+          keyPrefix: i.keyPrefix ?? null,
           status: i.status,
         })),
       };
@@ -64,10 +69,25 @@ export const prepare = mutation({
   },
 });
 
-/** Hono（R2 実体検証後）から利用者のトークンで呼ばれる。 */
-export const markVerified = mutation({
+/*
+ * 実体の転送（Hono 専用）。公開関数にしない: 利用者が自分で「検証済み」を申告して版を確定させられないようにする。
+ * http.ts のサービス認証付きエンドポイント（MF100_UPLOAD_SECRET）からだけ呼ばれ、
+ * 利用者の JWT（Hono も検証済み）の主体で、項目の持ち主・提出権限を use case が確かめる。
+ */
+
+/** 転送の開始: この試行だけが書き込む R2 キーを払い出す（PUT の前） */
+export const beginUpload = internalMutation({
+  args: { itemId: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() => beginItemUpload(createAppContext(ctx.db), principal, args));
+  },
+});
+
+/** 検証完了: R2 が sha256 を確かめた試行を、項目がまだ受付中・未検証なら原子的に採用する */
+export const completeUpload = internalMutation({
   args: {
-    itemId: v.id("uploadItems"),
+    attemptId: v.string(),
     size: v.number(),
     sha256: v.string(),
     pageCount: v.optional(v.number()),
@@ -75,18 +95,19 @@ export const markVerified = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const item = await recordItemVerified(createAppContext(ctx.db), principal, args);
+      const item = await completeItemUpload(createAppContext(ctx.db), principal, args);
       return { status: item.status, failureMessage: item.failureMessage ?? null };
     });
   },
 });
 
-export const markFailed = mutation({
-  args: { itemId: v.id("uploadItems"), message: v.string() },
+/** 転送の失敗（Hono の補償）: 試行を破棄する。項目は受付中・未検証のときだけ failed */
+export const failUpload = internalMutation({
+  args: { attemptId: v.string(), message: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      await recordItemFailed(createAppContext(ctx.db), principal, args);
+      await failItemUpload(createAppContext(ctx.db), principal, args);
       return null;
     });
   },
@@ -146,41 +167,6 @@ export const get = query({
   },
 });
 
-/**
- * Hono が PUT 受付前に呼ぶ: 呼出し主体が所有する open なセッションの、まだ検証されていない項目だけを返す。
- * 他人の項目・確定済みセッションは存在を漏らさず forbidden。
- */
-export const itemForUpload = query({
-  args: { itemId: v.id("uploadItems") },
-  handler: async (ctx, { itemId }) => {
-    const { principal } = await requireUser(ctx);
-    return runUseCase(async () => {
-      const item = await ctx.db.get("uploadItems", itemId);
-      if (!item) throw new DomainError("upload_item_not_found", { itemId });
-      const session = await ctx.db.get("uploadSessions", item.sessionId);
-      if (!session || session.submittedBy !== principal.userId)
-        throw new DomainError("upload_item_not_found", { itemId });
-      if (session.state !== "open")
-        throw new DomainError("upload_session_not_open", {
-          sessionId: session._id,
-          state: session.state,
-        });
-      if (Date.now() >= session.expiresAt)
-        throw new DomainError("upload_session_expired", { sessionId: session._id });
-      if (!item.objectKey)
-        throw new DomainError("upload_item_invalid_state", { itemId, reason: "external_link" });
-      if (item.status === "verified")
-        throw new DomainError("upload_item_invalid_state", { itemId, reason: "already_verified" });
-      return {
-        objectKey: item.objectKey,
-        mimeType: item.mimeType,
-        declaredSize: item.declaredSize ?? null,
-        fileName: item.fileName,
-      };
-    });
-  },
-});
-
 /** 誤提出した版の無効化（v1）。受付中の版のみ。理由必須。以後の版番号は欠番にならない。 */
 export const voidRevision = mutation({
   args: { revisionId: v.id("revisions"), reason: v.string() },
@@ -204,32 +190,39 @@ export const expireSessions = internalMutation({
 
 /**
  * 清掃: abandoned セッションの未削除オブジェクト一覧（Hono の cron が http.ts 経由で取得）。
- * 放置されたフィードバックの添付も同じ一覧に載せる（itemId は "feedback:{添付 ID}"。Hono には不透明な ID）。
+ * 放置されたフィードバックの添付（itemId は "feedback:{添付 ID}"）と、採用されなかった転送の試行
+ * （itemId は "attempt:{試行 ID}"）も同じ一覧に載せる。Hono には不透明な ID。
  */
 export const listOrphanObjects = internalMutation({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     const app = createAppContext(ctx.db);
     const max = Math.min(limit ?? 100, 500);
-    const uploads = await listOrphanUploadObjects(app, max);
-    if (uploads.length >= max) return uploads;
-    return [...uploads, ...(await listOrphanFeedbackObjects(app, max - uploads.length))];
+    const out = await listOrphanUploadObjects(app, max);
+    if (out.length < max) out.push(...(await listOrphanFeedbackObjects(app, max - out.length)));
+    if (out.length < max) out.push(...(await listOrphanAttemptObjects(app, max - out.length)));
+    return out;
   },
 });
 
-/** 清掃: R2 から削除済みの項目を記録（冪等）。"feedback:" で始まるものはフィードバックの添付。 */
+/**
+ * 清掃: R2 から削除済みの項目を記録（冪等）。"feedback:" で始まるものはフィードバックの添付、
+ * "attempt:" で始まるものは採用されなかった転送の試行。
+ */
 export const markObjectsPurged = internalMutation({
   args: { itemIds: v.array(v.string()) },
   handler: async (ctx, { itemIds }) => {
     const app = createAppContext(ctx.db);
     const ids = itemIds.slice(0, 500);
-    const feedback = ids
-      .filter((id) => id.startsWith(FEEDBACK_ORPHAN_PREFIX))
-      .map((id) => id.slice(FEEDBACK_ORPHAN_PREFIX.length));
-    const uploads = ids.filter((id) => !id.startsWith(FEEDBACK_ORPHAN_PREFIX));
+    const withPrefix = (prefix: string) =>
+      ids.filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length));
+    const uploads = ids.filter(
+      (id) => !id.startsWith(FEEDBACK_ORPHAN_PREFIX) && !id.startsWith(ATTEMPT_ORPHAN_PREFIX),
+    );
     return (
       (await markUploadObjectsPurged(app, uploads)) +
-      (await markFeedbackObjectsPurged(app, feedback))
+      (await markFeedbackObjectsPurged(app, withPrefix(FEEDBACK_ORPHAN_PREFIX))) +
+      (await markAttemptObjectsPurged(app, withPrefix(ATTEMPT_ORPHAN_PREFIX)))
     );
   },
 });

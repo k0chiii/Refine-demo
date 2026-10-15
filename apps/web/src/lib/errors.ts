@@ -23,6 +23,12 @@ const messages: Record<string, string> = {
   upload_session_expired: "この提出の準備は期限が切れました。もう一度提出し直してください。",
   upload_item_not_found: "アップロードするファイルが見つかりません",
   upload_item_invalid_state: "このファイルは今はアップロードできません",
+  upload_attempt_not_found:
+    "アップロードを確認できませんでした。もう一度アップロードしてください。",
+  upload_attempt_closed: "アップロードに時間がかかりすぎました。もう一度アップロードしてください。",
+  upload_service_unavailable: "ファイルを受け付けられません。時間をおいてもう一度お試しください。",
+  revision_submission_conflict:
+    "準備している間に別の版が提出されました。最新の版を確認してから、もう一度提出し直してください。",
   comment_reason_required: "不採用・持ち越しには理由を書いてください",
   comment_invalid_resolution_transition: "このコメントの状態からは変更できません",
   comment_reply_not_allowed: "受付が終わった版には返信できません。制作者は採否だけ記録できます。",

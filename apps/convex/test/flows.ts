@@ -1,6 +1,6 @@
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { HOUR, type createCast, type Harness } from "./harness";
+import { HOUR, uploadVerified, type createCast, type Harness } from "./harness";
 
 type Cast = Awaited<ReturnType<typeof createCast>>;
 
@@ -53,11 +53,7 @@ export async function submitFiles(
     items: items.map((i) => ({ ...i, role: "source" as const })),
   });
   for (const [k, it] of prepared.items.entries())
-    await cast.creator.as.mutation(api.submissions.markVerified, {
-      itemId: it.id as Id<"uploadItems">,
-      size: 10 + k,
-      sha256: `sha-${k}`,
-    });
+    await uploadVerified(cast.creator, it.id, { size: 10 + k, sha256: `sha-${k}` });
   const confirmed = await cast.creator.as.mutation(api.submissions.confirm, {
     sessionId: prepared.sessionId as Id<"uploadSessions">,
   });
