@@ -61,11 +61,77 @@ export async function fetchArtifactBlob(token: string, artifactId: string): Prom
 
 /** 添付を手元に保存する（.ai など紙面に出さない原本も）。認可付きで取得してから、元のファイル名で保存させる */
 export async function downloadArtifact(token: string, artifactId: string, fileName: string) {
-  const blob = await fetchArtifactBlob(token, artifactId);
+  saveBlob(await fetchArtifactBlob(token, artifactId), fileName);
+}
+
+function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+// ---------------------------------------------------------------- フィードバック（表現の議論）の添付
+
+export interface FeedbackUploadResult {
+  fileId: string;
+  status: string;
+  failureMessage: string | null;
+  size: number;
+}
+
+/**
+ * フィードバックの添付を送る（Convex の feedback.prepareFiles で受け取った fileId ごと）。
+ * 版の提出と同じく sha256 を添え、Hono が R2 で確かめてから検証済みにする。
+ */
+export async function uploadFeedbackFile(
+  token: string,
+  fileId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<FeedbackUploadResult> {
+  const buffer = await file.arrayBuffer();
+  const sha = await sha256Hex(buffer);
+  onProgress?.(0.1);
+  const res = await fetch(`${API_URL}/feedback/files/${encodeURIComponent(fileId)}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type || "application/octet-stream",
+      "X-MF100-Sha256": sha,
+    },
+    body: buffer,
+  });
+  onProgress?.(1);
+  const json = (await res.json().catch(() => ({}))) as Partial<FeedbackUploadResult> & {
+    code?: string;
+  };
+  if (!res.ok)
+    throw new Error(
+      json.code === "size_mismatch"
+        ? "ファイルが途中で欠けました。もう一度添付してください。"
+        : "ファイルを添付できませんでした。もう一度お試しください。",
+    );
+  return json as FeedbackUploadResult;
+}
+
+/** フィードバックの添付を認可付きで取得する（PDF・画像を投稿の中に出す） */
+export async function fetchFeedbackFileBlob(token: string, fileId: string): Promise<Blob> {
+  const res = await fetch(`${API_URL}/feedback/files/${encodeURIComponent(fileId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok)
+    throw new Error(
+      res.status === 403
+        ? "このファイルを閲覧する権限がありません"
+        : "ファイルを読み込めませんでした。もう一度お試しください。",
+    );
+  return res.blob();
+}
+
+/** フィードバックの添付を手元に保存する（.ai など） */
+export async function downloadFeedbackFile(token: string, fileId: string, fileName: string) {
+  saveBlob(await fetchFeedbackFileBlob(token, fileId), fileName);
 }

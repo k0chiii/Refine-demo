@@ -4,6 +4,9 @@ import type {
   CommentEvent,
   CommentThread,
   DocumentDraft,
+  FeedbackFile,
+  FeedbackPost,
+  FeedbackThread,
   NotationRule,
   ProofreadingRun,
   RequiredCheck,
@@ -100,9 +103,14 @@ export interface InMemoryContext extends AppContext {
     layouts: Map<string, StoredDashboardLayout>;
     pins: WorkPin[];
     recent: RecentWork[];
+    feedbackThreads: Table<FeedbackThread>;
+    feedbackPosts: Table<FeedbackPost>;
+    feedbackFiles: Table<FeedbackFile>;
+    /** `${userId}|${threadId}` → 最後に読んだ時刻 */
+    feedbackReads: Map<string, number>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
-    /** 表示名（テストで通知の文面を確かめるときに入れる） */
+    /** 表示名（テストで通知の文面を確かめるときに入れる）。ここに居る人を委員（名簿）とみなす */
     names: Map<string, string>;
   };
 }
@@ -134,6 +142,10 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     layouts: new Map(),
     pins: [],
     recent: [],
+    feedbackThreads: new Table<FeedbackThread>("fbt"),
+    feedbackPosts: new Table<FeedbackPost>("fbp"),
+    feedbackFiles: new Table<FeedbackFile>("fbf"),
+    feedbackReads: new Map(),
     audit: [],
     idempotency: new Map(),
     names: new Map(),
@@ -144,11 +156,18 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     state,
     people: {
       displayName: async (id) => state.names.get(id) ?? null,
+      listMembers: async (limit) =>
+        [...state.names].slice(0, limit).map(([id, name]) => ({ id, name, email: null })),
+      profiles: async (ids) =>
+        ids.flatMap((id) =>
+          state.names.has(id) ? [{ id, name: state.names.get(id)!, email: null }] : [],
+        ),
     },
     works: {
       findById: async (id) => state.works.get(id),
       insert: async (w) => state.works.insert(w),
       update: async (w) => state.works.put(w),
+      list: async (limit) => state.works.all().slice(0, limit),
     },
     revisions: {
       findById: async (id) => state.revisions.get(id),
@@ -386,6 +405,45 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       findByRevision: async (rid) => state.runs.all().find((r) => r.revisionId === rid) ?? null,
       insert: async (r) => state.runs.insert(r),
       update: async (r) => state.runs.put(r),
+    },
+    feedback: {
+      findThread: async (id) => state.feedbackThreads.get(id),
+      listThreads: async ({ workId, limit }) =>
+        state.feedbackThreads
+          .all()
+          .filter((t) => workId === undefined || t.workId === workId)
+          .sort((a, b) => b.lastPostAt - a.lastPostAt)
+          .slice(0, limit),
+      insertThread: async (t) => state.feedbackThreads.insert(t),
+      updateThread: async (t) => state.feedbackThreads.put(t),
+      findPost: async (id) => state.feedbackPosts.get(id),
+      listPosts: async (threadId) =>
+        state.feedbackPosts
+          .all()
+          .filter((p) => p.threadId === threadId)
+          .sort((a, b) => a.createdAt - b.createdAt),
+      insertPost: async (p) => state.feedbackPosts.insert(p),
+      updatePost: async (p) => state.feedbackPosts.put(p),
+      findFile: async (id) => state.feedbackFiles.get(id),
+      insertFile: async (f) => state.feedbackFiles.insert(f),
+      updateFile: async (f) => state.feedbackFiles.put(f),
+      listUnattachedFilesBefore: async (before, limit) =>
+        state.feedbackFiles
+          .all()
+          .filter(
+            (f) => f.postId === undefined && f.abandonedAt === undefined && f.createdAt <= before,
+          )
+          .slice(0, limit),
+      listAbandonedUnpurgedFiles: async (limit) =>
+        state.feedbackFiles
+          .all()
+          .filter((f) => f.abandonedAt !== undefined && f.purgedAt === undefined)
+          .slice(0, limit),
+      readAt: async (userId, threadId) => state.feedbackReads.get(`${userId}|${threadId}`) ?? null,
+      markRead: async (userId, threadId, at) => {
+        const key = `${userId}|${threadId}`;
+        state.feedbackReads.set(key, Math.max(at, state.feedbackReads.get(key) ?? 0));
+      },
     },
     idempotency: {
       get: async (scope, key) =>

@@ -85,6 +85,47 @@ export class FakeGateway implements BackendGateway {
       throw new GatewayError("forbidden", { artifactId });
     return a;
   }
+  /** フィードバックの添付（版の提出と同じ形。ID の頭で区別しない別の表） */
+  feedbackFiles = new Map<
+    string,
+    UploadTarget & {
+      owner: string;
+      status: string;
+      failureMessage: string | null;
+      viewers: string[];
+      size: number | null;
+    }
+  >();
+  async feedbackFileForUpload(token: string, fileId: string) {
+    const f = this.feedbackFiles.get(fileId);
+    if (!f || f.owner !== this.subjectOf(token))
+      throw new GatewayError("feedback_not_found", { fileId });
+    if (f.status === "verified") throw new GatewayError("feedback_invalid", { fileId });
+    return f;
+  }
+  async markFeedbackFileVerified(
+    _token: string,
+    fileId: string,
+    meta: { size: number; sha256: string },
+  ) {
+    this.calls.push(`feedback-verified:${fileId}:${meta.size}:${meta.sha256}`);
+    const f = this.feedbackFiles.get(fileId)!;
+    f.status = "verified";
+    f.size = meta.size;
+    return { status: "verified", failureMessage: null };
+  }
+  async markFeedbackFileFailed(_token: string, fileId: string, message: string) {
+    this.calls.push(`feedback-failed:${fileId}:${message}`);
+    const f = this.feedbackFiles.get(fileId)!;
+    f.status = "failed";
+    f.failureMessage = message;
+  }
+  async authorizeFeedbackFile(token: string, fileId: string) {
+    const f = this.feedbackFiles.get(fileId);
+    if (!f || f.status !== "verified" || !f.viewers.includes(this.subjectOf(token)))
+      throw new GatewayError("forbidden", { fileId });
+    return { objectKey: f.objectKey, mimeType: f.mimeType, fileName: f.fileName, size: f.size };
+  }
 }
 
 export { sha256Hex };

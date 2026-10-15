@@ -1,6 +1,8 @@
+import { exportWorkStats } from "@mf100/application";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { unauthenticated } from "./lib/errors.ts";
+import { createReadContext } from "./lib/adapters.ts";
+import { runUseCase, unauthenticated } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 
 /** 校正システム管理者の付与・剥奪。管理者のみ。自分自身の剥奪は最後の一人なら拒否する。 */
@@ -49,5 +51,18 @@ export const auditLog = query({
         .take(limit);
     }
     return ctx.db.query("auditEvents").withIndex("by_at").order("desc").take(limit);
+  },
+});
+
+/**
+ * 制作物ごとの集計（A-4 の CSV 書き出し）。システム管理者のみ。
+ * teamId に局を渡すとその局と配下の担当、担当を渡すとその担当を主管・制作担当にしている制作物に絞る。
+ * CSV にするのは画面（domain の workStatsToCsv）。
+ */
+export const workStats = query({
+  args: { teamId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() => exportWorkStats(createReadContext(ctx.db), principal, args));
   },
 });

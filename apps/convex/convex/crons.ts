@@ -11,4 +11,6 @@ crons.interval("close expired review windows", { minutes: 1 }, internal.revision
 crons.interval("remind upcoming deadlines", { hours: 1 }, internal.revisions.remindDeadlines, {});
 /** 放置アップロードセッションの清掃（D14）。R2 の孤立オブジェクト削除は Hono 側の後続。 */
 crons.interval("expire upload sessions", { hours: 1 }, internal.submissions.expireSessions, {});
+/** 投稿に付けないまま 24 時間たったフィードバックの添付を放置扱いにする（R2 の削除は上と同じ Hono の清掃）。 */
+crons.interval("expire feedback files", { hours: 1 }, internal.feedback.expireFiles, {});
 export default crons;

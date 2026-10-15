@@ -180,6 +180,33 @@ class DemoBackend {
     if (!blob) throw new Error("object missing");
     return blob;
   }
+
+  /** Hono PUT /feedback/files/:id 相当: 受付可否は Convex の fileForUpload、記録は markFileVerified */
+  async uploadFeedbackFile(
+    fileId: string,
+    file: File,
+    sha256: string,
+  ): Promise<{ status: string; failureMessage: string | null }> {
+    const target = (await this.query(api.feedback.fileForUpload, { fileId })) as {
+      objectKey: string;
+    };
+    this.blobs.set(target.objectKey, file);
+    return (await this.mutation(api.feedback.markFileVerified, {
+      fileId,
+      size: file.size,
+      sha256,
+    })) as { status: string; failureMessage: string | null };
+  }
+
+  /** Hono GET /feedback/files/:id 相当: 認可は Convex の authorizeFile */
+  async fetchFeedbackFile(fileId: string): Promise<Blob> {
+    const access = (await this.query(api.feedback.authorizeFile, { fileId })) as {
+      objectKey: string;
+    };
+    const blob = this.blobs.get(access.objectKey);
+    if (!blob) throw new Error("object missing");
+    return blob;
+  }
 }
 
 export const demo = new DemoBackend();

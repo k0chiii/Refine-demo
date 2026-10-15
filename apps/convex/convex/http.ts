@@ -40,7 +40,7 @@ http.route({
       ? body.itemIds.filter((x): x is string => typeof x === "string")
       : [];
     const purged = await ctx.runMutation(internal.submissions.markObjectsPurged, {
-      itemIds: itemIds as never,
+      itemIds,
     });
     return Response.json({ purged });
   }),

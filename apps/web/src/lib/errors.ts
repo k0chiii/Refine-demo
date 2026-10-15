@@ -70,6 +70,11 @@ const messages: Record<string, string> = {
     "カテゴリの設定を確かめてください。存在しない継承元や、継承の循環があります。",
   notation_proposal_closed: "この提案はもう処理されています",
   idempotency_conflict: "同じ操作はもう処理されています",
+  feedback_invalid:
+    "投稿の内容を確かめてください。題名は 80 文字まで、本文は 5000 文字まで、添付は 10 件までです。",
+  feedback_not_found: "このスレッドや投稿は見つかりません。削除されたか、閲覧の権限がありません。",
+  feedback_file_not_ready:
+    "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
 };
 
 /** 失敗の理由が分からないときの文言（内部のコードは問い合わせ用に添える） */
@@ -89,6 +94,19 @@ function withDetails(code: string, details: unknown): string | null {
     reason?: unknown;
     max?: unknown;
   };
+  if (code === "feedback_invalid") {
+    const field = (details as { field?: unknown } | null)?.field;
+    if (field === "title")
+      return d.reason === "required"
+        ? "スレッドの題名を書いてください"
+        : `スレッドの題名は ${typeof d.max === "number" ? d.max : 80} 文字までです`;
+    if (field === "body")
+      return d.reason === "required"
+        ? "本文を書くか、ファイルを添付してください"
+        : `本文は ${typeof d.max === "number" ? d.max : 5000} 文字までです`;
+    if (field === "files" && d.reason === "too_many")
+      return `添付は 1 つの投稿に ${typeof d.max === "number" ? d.max : 10} 件までです`;
+  }
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {

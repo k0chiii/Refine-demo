@@ -140,3 +140,69 @@ describe("GET /files/:artifactId（§9.1 / A-11）", () => {
     expect(ng.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 });
+
+describe("フィードバックの添付 PUT / GET /feedback/files/:fileId", () => {
+  beforeEach(() => {
+    gateway.feedbackFiles.set("fb1", {
+      objectKey: "feedback/w1/fb1/案.pdf",
+      mimeType: "application/pdf",
+      declaredSize: null,
+      fileName: "案.pdf",
+      owner: "creator",
+      status: "pending",
+      failureMessage: null,
+      viewers: ["creator", "member"],
+      size: null,
+    });
+  });
+  const putFeedback = async (token: string, data: ArrayBuffer, sha?: string) =>
+    app.request("/feedback/files/fb1", {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/pdf",
+        "X-MF100-Sha256": sha ?? (await sha256Hex(data)),
+      },
+      body: data,
+    });
+
+  it("未認証は 401、他人の添付は 404、sha256 が合えば保存して verified", async () => {
+    expect((await app.request("/feedback/files/fb1", { method: "PUT", body })).status).toBe(401);
+    expect((await putFeedback("valid:member", body)).status).toBe(404);
+    const res = await putFeedback("valid:creator", body);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ fileId: "fb1", status: "verified" });
+    expect(store.objects.has("feedback/w1/fb1/案.pdf")).toBe(true);
+    expect(gateway.calls).toEqual([
+      `feedback-verified:fb1:${body.byteLength}:${await sha256Hex(body)}`,
+    ]);
+    // 検証済みには上書きできない
+    expect((await putFeedback("valid:creator", body)).status).toBe(409);
+  });
+
+  it("sha256 不一致は保存せず failed を記録する", async () => {
+    const res = await putFeedback("valid:creator", body, "0".repeat(64));
+    expect(res.status).toBe(400);
+    expect(store.objects.size).toBe(0);
+    expect(gateway.feedbackFiles.get("fb1")?.status).toBe("failed");
+  });
+
+  it("見られる人にだけ配信し、/files と同じヘッダーを付ける", async () => {
+    await putFeedback("valid:creator", body);
+    const res = await app.request("/feedback/files/fb1", {
+      headers: { Authorization: "Bearer valid:member" },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Content-Disposition")).toContain(encodeURIComponent("案.pdf"));
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body));
+    expect(
+      (
+        await app.request("/feedback/files/fb1", {
+          headers: { Authorization: "Bearer valid:stranger" },
+        })
+      ).status,
+    ).toBe(403);
+  });
+});

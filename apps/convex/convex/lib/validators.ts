@@ -192,3 +192,10 @@ export const vProofreadingRunFields = {
   updatedAt: v.number(),
   note: v.optional(v.string()),
 };
+
+/** フィードバックの投稿テンプレート（domain の feedbackTemplateIds） */
+export const vFeedbackTemplateId = v.union(
+  v.literal("creator_first"),
+  v.literal("creator_update"),
+  v.literal("reviewer"),
+);
