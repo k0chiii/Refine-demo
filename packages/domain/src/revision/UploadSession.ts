@@ -2,7 +2,7 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { Artifact, ArtifactRole, ArtifactType } from "./Artifact.ts";
-import type { RevisionKind } from "./Revision.ts";
+import type { Revision, RevisionKind } from "./Revision.ts";
 
 /**
  * 版提出の「準備」と「確定」を分離する（F-04 / §8.1 / A-02 / A-16）。
@@ -26,6 +26,12 @@ export interface UploadSession {
   /** 放置されたセッションの清掃期限 */
   expiresAt: Instant;
   confirmedRevisionId?: string;
+  /**
+   * 準備した時点の作品の版の数（無効化した版を含む。版は削除しない）。サーバーが準備時に記録する。
+   * 確定時に必ず今の版の数と比べ、間に別の提出が確定していれば競合として確定しない（§5.2-11）。
+   * クライアントは省略も変更もできない。
+   */
+  baseRevisionCount: number;
   /** 確定時に作る専門確認（§2.2-4）。 */
   requiredChecks?: Array<{ type: string; label: string; assigneeId?: string }>;
   /** abandoned 後に R2 の孤立オブジェクトを全て削除し終えた時刻（D14 清掃） */
@@ -41,7 +47,12 @@ export interface UploadItem {
   mimeType: string;
   type: ArtifactType;
   role: ArtifactRole;
-  /** 外部リンクの場合は objectKey を持たない */
+  /** R2 キーの名前空間（準備時に予約）。試行ごとのキーはこの下に作る。外部リンクの場合は持たない */
+  keyPrefix?: string;
+  /**
+   * 採用された試行のキー（実体の検証が済んだときだけ）。確定時に Artifact がこのキーを参照する。
+   * 外部リンク・未検証の項目は持たない。
+   */
   objectKey?: string;
   externalUrl?: string;
   declaredSize?: number;
@@ -64,10 +75,43 @@ export function assertSessionOpen(session: UploadSession, now: Instant): void {
     throw new DomainError("upload_session_expired", { sessionId: session.id });
 }
 
-/** R2 上の実体確認が済んだことを記録する。失敗は failed として理由を残し、再実行（再アップロード）を許す。 */
+/**
+ * 確定時の競合比較（§5.2-11 競合する同時提出を一件だけ確定する）。
+ * 準備した後に同じ作品で別の版が確定していれば、この提出は確定しない（準備し直してもらう）。
+ */
+export function assertSubmissionBaseCurrent(
+  session: UploadSession,
+  revisions: readonly Revision[],
+): void {
+  if (session.baseRevisionCount !== revisions.length)
+    throw new DomainError("revision_submission_conflict", {
+      sessionId: session.id,
+      expected: session.baseRevisionCount ?? null,
+      actual: revisions.length,
+    });
+}
+
+/** 実体を受け付けられる項目か（ファイルの項目で、まだ検証が済んでいないもの） */
+export function assertItemUploadable(item: UploadItem): void {
+  if (item.role === "external" || item.keyPrefix === undefined)
+    throw new DomainError("upload_item_invalid_state", {
+      itemId: item.id,
+      reason: "external_link",
+    });
+  if (item.status === "verified")
+    throw new DomainError("upload_item_invalid_state", {
+      itemId: item.id,
+      reason: "already_verified",
+    });
+}
+
+/**
+ * R2 上の実体確認が済んだことを記録する。失敗は failed として理由を残し、再実行（再アップロード）を許す。
+ * objectKey は検証した試行のキー。成功したときだけ項目が参照する（採用）。
+ */
 export function markItemVerified(
   item: UploadItem,
-  meta: { size: number; sha256: string; pageCount?: number },
+  meta: { size: number; sha256: string; objectKey: string; pageCount?: number },
 ): UploadItem {
   if (item.role === "external")
     throw new DomainError("upload_item_invalid_state", {
@@ -81,20 +125,30 @@ export function markItemVerified(
       failureMessage: `サイズ不一致: 申告 ${item.declaredSize} / 実体 ${meta.size}`,
     };
   }
-  const next: UploadItem = { ...item, status: "verified", size: meta.size, sha256: meta.sha256 };
+  const next: UploadItem = {
+    ...item,
+    status: "verified",
+    size: meta.size,
+    sha256: meta.sha256,
+    objectKey: meta.objectKey,
+  };
   delete next.failureMessage;
   if (meta.pageCount !== undefined) next.pageCount = meta.pageCount;
   return next;
 }
 
+/** 失敗を記録する。検証済み（採用済み）の項目は、別の試行の失敗や遅れた補償で failed に戻さない */
 export function markItemFailed(item: UploadItem, message: string): UploadItem {
+  if (item.status === "verified") return item;
   return { ...item, status: "failed", failureMessage: message };
 }
 
 /** 確定可能条件: 1 件以上あり、外部リンク以外はすべて verified。満たさない場合は原因と対象ファイルを返す。 */
 export function assertItemsReadyForConfirm(items: readonly UploadItem[]): void {
   if (items.length === 0) throw new DomainError("revision_no_artifacts");
-  const notReady = items.filter((i) => i.role !== "external" && i.status !== "verified");
+  const notReady = items.filter(
+    (i) => i.role !== "external" && (i.status !== "verified" || i.objectKey === undefined),
+  );
   if (notReady.length > 0) {
     throw new DomainError("revision_artifacts_not_verified", {
       items: notReady.map((i) => ({

@@ -17,6 +17,7 @@ import type {
   RuleCategoryManager,
   RuleProposal,
   RuleRevision,
+  UploadAttempt,
   UploadItem,
   UploadSession,
   Work,
@@ -109,6 +110,7 @@ export interface InMemoryContext extends AppContext {
     feedbackThreads: Table<FeedbackThread>;
     feedbackPosts: Table<FeedbackPost>;
     feedbackFiles: Table<FeedbackFile>;
+    attempts: Table<UploadAttempt>;
     /** `${userId}|${threadId}` → 最後に読んだ時刻 */
     feedbackReads: Map<string, number>;
     audit: AuditEntry[];
@@ -154,6 +156,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     feedbackThreads: new Table<FeedbackThread>("fbt"),
     feedbackPosts: new Table<FeedbackPost>("fbp"),
     feedbackFiles: new Table<FeedbackFile>("fbf"),
+    attempts: new Table<UploadAttempt>("att"),
     feedbackReads: new Map(),
     audit: [],
     idempotency: new Map(),
@@ -227,6 +230,23 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         state.sessions
           .all()
           .filter((s) => s.state === "abandoned" && s.purgedAt === undefined)
+          .slice(0, limit),
+    },
+    attempts: {
+      findById: async (id) => state.attempts.get(id),
+      insert: async (a) => state.attempts.insert(a),
+      update: async (a) => state.attempts.put(a),
+      listByTarget: async (target, targetId) =>
+        state.attempts.all().filter((a) => a.target === target && a.targetId === targetId),
+      listOrphanCandidates: async (reservedBefore, limit) =>
+        state.attempts
+          .all()
+          .filter(
+            (a) =>
+              a.purgedAt === undefined &&
+              (a.state === "discarded" ||
+                (a.state === "reserved" && a.createdAt <= reservedBefore)),
+          )
           .slice(0, limit),
     },
     threads: {

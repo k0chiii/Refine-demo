@@ -20,6 +20,7 @@ import type {
   RuleCategoryManager,
   RuleProposal,
   RuleRevision,
+  UploadAttempt,
   UploadItem,
   UploadSession,
   Work,
@@ -246,6 +247,51 @@ export function createAppContext(
           .filter((q) => q.eq(q.field("purgedAt"), undefined))
           .take(limit);
         return docs.map((d) => fromDoc(d) as UploadSession);
+      },
+    },
+    attempts: {
+      async findById(id) {
+        const doc = await db.get("uploadAttempts", id as Id<"uploadAttempts">).catch(() => null);
+        return doc ? (fromDoc(doc) as UploadAttempt) : null;
+      },
+      async insert(attempt) {
+        const id = await db.insert("uploadAttempts", compact(attempt));
+        return { ...attempt, id } as UploadAttempt;
+      },
+      async update(attempt) {
+        await db.replace(
+          "uploadAttempts",
+          attempt.id as Id<"uploadAttempts">,
+          compact(toFields(attempt)),
+        );
+      },
+      async listByTarget(target, targetId) {
+        const docs = await db
+          .query("uploadAttempts")
+          .withIndex("by_target", (q) => q.eq("target", target).eq("targetId", targetId))
+          .take(100);
+        return docs.map((d) => fromDoc(d) as UploadAttempt);
+      },
+      async listOrphanCandidates(reservedBefore, limit) {
+        const discarded = await db
+          .query("uploadAttempts")
+          .withIndex("by_purged_and_state_and_created", (q) =>
+            q.eq("purgedAt", undefined).eq("state", "discarded"),
+          )
+          .take(limit);
+        const expired =
+          discarded.length >= limit
+            ? []
+            : await db
+                .query("uploadAttempts")
+                .withIndex("by_purged_and_state_and_created", (q) =>
+                  q
+                    .eq("purgedAt", undefined)
+                    .eq("state", "reserved")
+                    .lte("createdAt", reservedBefore),
+                )
+                .take(limit - discarded.length);
+        return [...discarded, ...expired].map((d) => fromDoc(d) as UploadAttempt);
       },
     },
     threads: {

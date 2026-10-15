@@ -1,9 +1,10 @@
 import type { Principal, Revision } from "@mf100/domain";
 import { createWork } from "../usecases/works.ts";
 import {
+  beginItemUpload,
+  completeItemUpload,
   confirmSubmission,
   prepareSubmission,
-  recordItemVerified,
 } from "../usecases/submissions.ts";
 import type { InMemoryContext } from "./inMemory.ts";
 import { principals } from "./principals.ts";
@@ -26,6 +27,21 @@ export async function seedWork(
     approverId: principals.approver.userId,
     ...over,
   });
+}
+
+/**
+ * Hono が実体を検証して記録するのと同じ手順（試行の開始 → 検証完了）。テスト・サンプルデータ用。
+ * 本番ではサービス認証付きの境界からしか呼ばれない。
+ */
+export async function uploadVerifiedItem(
+  ctx: InMemoryContext,
+  principal: Principal,
+  input: { itemId: string; size: number; sha256: string; pageCount?: number },
+) {
+  const { attemptId } = await beginItemUpload(ctx, principal, { itemId: input.itemId });
+  const { itemId, ...meta } = input;
+  void itemId;
+  return completeItemUpload(ctx, principal, { attemptId, ...meta });
 }
 
 /** 準備 → 全ファイル検証済み → 確定、を一気に行うヘルパ。 */
@@ -59,7 +75,7 @@ export async function submitRevision(
     })),
   });
   for (const item of prepared.items) {
-    await recordItemVerified(ctx, principal, {
+    await uploadVerifiedItem(ctx, principal, {
       itemId: item.id,
       size: 1234,
       sha256: "abc",

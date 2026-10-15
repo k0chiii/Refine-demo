@@ -77,6 +77,9 @@ export interface FeedbackFile {
   declaredSize?: number;
   size?: number;
   sha256?: string;
+  /** R2 キーの名前空間（準備時に予約）。試行ごとのキーはこの下に作る */
+  keyPrefix?: string;
+  /** 採用された試行のキー（実体の検証が済んだときだけ。それまでは空文字） */
   objectKey: string;
   status: FeedbackFileStatus;
   /** 付けた投稿（付けるまでは未設定。付けた後は他の投稿に付け替えない） */
@@ -251,16 +254,22 @@ export function validateFeedbackFileName(fileName: string): string {
   return n;
 }
 
-/** R2 のオブジェクトキー: feedback/{制作物}/{添付 ID}/{ファイル名}。推測困難な ID で名前空間を分ける */
+/**
+ * R2 キーの名前空間: feedback/{制作物}/{添付 ID}/{ファイル名}。推測困難な ID で名前空間を分ける。
+ * 実体はこの下の試行ごとのキー（uploadAttemptObjectKey）に置く。
+ */
 export function feedbackObjectKey(workId: WorkId, fileId: string, fileName: string): string {
   const safe = fileName.replace(/[^\w.\-぀-ヿ一-龯]+/g, "_").slice(0, 120) || "file";
   return `${FEEDBACK_OBJECT_PREFIX}${workId}/${fileId}/${safe}`;
 }
 
-/** R2 上の実体確認が済んだことを記録する（版の提出の markItemVerified と同じ意味）。申告サイズと違えば failed */
+/**
+ * R2 上の実体確認が済んだことを記録する（版の提出の markItemVerified と同じ意味）。申告サイズと違えば failed。
+ * objectKey は検証した試行のキー。成功したときだけ添付が参照する（採用）。
+ */
 export function verifyFeedbackFile(
   file: FeedbackFile,
-  meta: { size: number; sha256: string },
+  meta: { size: number; sha256: string; objectKey: string },
 ): FeedbackFile {
   if (file.declaredSize !== undefined && file.declaredSize !== meta.size) {
     return {
@@ -269,12 +278,20 @@ export function verifyFeedbackFile(
       failureMessage: `サイズ不一致: 申告 ${file.declaredSize} / 実体 ${meta.size}`,
     };
   }
-  const next: FeedbackFile = { ...file, status: "verified", size: meta.size, sha256: meta.sha256 };
+  const next: FeedbackFile = {
+    ...file,
+    status: "verified",
+    size: meta.size,
+    sha256: meta.sha256,
+    objectKey: meta.objectKey,
+  };
   delete next.failureMessage;
   return next;
 }
 
+/** 失敗を記録する。検証済み（採用済み）の添付は、別の試行の失敗や遅れた補償で failed に戻さない */
 export function failFeedbackFile(file: FeedbackFile, message: string): FeedbackFile {
+  if (file.status === "verified") return file;
   return { ...file, status: "failed", failureMessage: message };
 }
 
@@ -282,7 +299,7 @@ export function failFeedbackFile(file: FeedbackFile, message: string): FeedbackF
 export function assertFeedbackFileUploadable(file: FeedbackFile, uploaderId: UserId): void {
   if (file.uploaderId !== uploaderId)
     throw new DomainError("feedback_not_found", { fileId: file.id });
-  if (file.postId !== undefined || file.abandonedAt !== undefined)
+  if (file.postId !== undefined || file.abandonedAt !== undefined || file.keyPrefix === undefined)
     throw new DomainError("feedback_invalid", { fileId: file.id, reason: "closed" });
   if (file.status === "verified")
     throw new DomainError("feedback_invalid", { fileId: file.id, reason: "already_verified" });

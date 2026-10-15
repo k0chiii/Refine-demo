@@ -24,12 +24,17 @@ import {
   listOrphanUploadObjects,
   markUploadObjectsPurged,
   prepareSubmission,
-  recordItemVerified,
   voidRevisionUseCase,
 } from "../usecases/submissions.ts";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
-import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
+import {
+  HOUR,
+  principals,
+  seedWork,
+  submitRevision,
+  uploadVerifiedItem,
+} from "../testing/scenario.ts";
 
 const code = (c: string) => expect.objectContaining({ code: c });
 
@@ -50,7 +55,7 @@ describe("専門確認（§2.2-4 / C3）", () => {
         { type: "photo", label: "肖像権の確認" },
       ],
     });
-    await recordItemVerified(ctx, principals.creator, {
+    await uploadVerifiedItem(ctx, principals.creator, {
       itemId: prepared.items[0]!.id,
       size: 1,
       sha256: "x",
@@ -324,16 +329,15 @@ describe("誤提出の無効化・提出準備の清掃", () => {
         },
       ],
     });
+    // 2 件とも実体を採用まで進めて放置する（未採用の試行は試行の清掃が扱う）
+    const files = stale.items.filter((i) => i.keyPrefix);
+    for (const i of files)
+      await uploadVerifiedItem(ctx, principals.creator, { itemId: i.id, size: 1, sha256: "x" });
     expect(await listOrphanUploadObjects(ctx)).toEqual([]);
     ctx.clock.advance(25 * HOUR);
     await expireUploadSessions(ctx);
     const orphans = await listOrphanUploadObjects(ctx);
-    expect(orphans.map((o) => o.itemId).sort()).toEqual(
-      stale.items
-        .filter((i) => i.objectKey)
-        .map((i) => i.id)
-        .sort(),
-    );
+    expect(orphans.map((o) => o.itemId).sort()).toEqual(files.map((i) => i.id).sort());
     // 確定済み版の項目を混ぜても無視される（まだ open/confirmed の実体は消さない）
     const confirmedItemIds = (await ctx.uploads.listItems(stale.session.id)).map((i) => i.id);
     void confirmedItemIds;

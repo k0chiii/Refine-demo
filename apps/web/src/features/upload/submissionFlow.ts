@@ -32,7 +32,8 @@ export interface FlowState {
 export interface FlowDeps {
   prepare(): Promise<{
     sessionId: string;
-    items: Array<{ id: string; fileName: string; objectKey: string | null }>;
+    /** keyPrefix が null の項目は外部リンク（実体を送らない） */
+    items: Array<{ id: string; fileName: string; keyPrefix: string | null }>;
   }>;
   upload(
     itemId: string,
@@ -108,9 +109,9 @@ export class SubmissionFlow {
     const items: FlowItem[] = prepared.items.map((it, index) => ({
       itemId: it.id,
       fileName: it.fileName,
-      file: it.objectKey === null ? null : (this.files[index] ?? null),
-      status: it.objectKey === null ? "verified" : "pending",
-      progress: it.objectKey === null ? 1 : 0,
+      file: it.keyPrefix === null ? null : (this.files[index] ?? null),
+      status: it.keyPrefix === null ? "verified" : "pending",
+      progress: it.keyPrefix === null ? 1 : 0,
       error: null,
     }));
     this.set({ sessionId: prepared.sessionId, items });

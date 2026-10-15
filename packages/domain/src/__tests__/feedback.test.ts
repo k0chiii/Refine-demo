@@ -23,6 +23,7 @@ import {
   validateFeedbackTemplate,
   validateFeedbackThreadTitle,
   verifyFeedbackFile,
+  failFeedbackFile,
   type FeedbackFile,
   type FeedbackPost,
 } from "../feedback/feedback.ts";
@@ -177,13 +178,24 @@ describe("添付", () => {
   it("オブジェクトキーは feedback/ の下で制作物・添付ごとに分ける", () => {
     expect(feedbackObjectKey("w1", "f1", "案 1.pdf")).toBe("feedback/w1/f1/案_1.pdf");
   });
-  it("申告サイズと違えば failed、合えば verified", () => {
-    const pending = makeFile({ status: "pending", declaredSize: 10 });
-    expect(verifyFeedbackFile(pending, { size: 9, sha256: "x" }).status).toBe("failed");
-    expect(verifyFeedbackFile(pending, { size: 10, sha256: "x" })).toMatchObject({
+  it("申告サイズと違えば failed（試行のキーは採用しない）、合えば verified で試行のキーを採用する", () => {
+    const pending = makeFile({ status: "pending", declaredSize: 10, objectKey: "" });
+    const key = "feedback/work1/f1/案.pdf/attempts/a1";
+    const failed = verifyFeedbackFile(pending, { size: 9, sha256: "x", objectKey: key });
+    expect(failed).toMatchObject({ status: "failed", objectKey: "" });
+    expect(verifyFeedbackFile(pending, { size: 10, sha256: "x", objectKey: key })).toMatchObject({
       status: "verified",
       size: 10,
       sha256: "x",
+      objectKey: key,
+    });
+  });
+  it("検証済み（採用済み）の添付は、別の試行の失敗で failed に戻らない", () => {
+    const verified = makeFile();
+    expect(failFeedbackFile(verified, "遅れた失敗")).toBe(verified);
+    expect(failFeedbackFile(makeFile({ status: "pending" }), "破損")).toMatchObject({
+      status: "failed",
+      failureMessage: "破損",
     });
   });
   it("付けられるのは本人が同じ制作物に上げた検証済みの、まだ付けていない添付だけ", () => {

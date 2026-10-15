@@ -11,7 +11,11 @@ export default {
   async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
     const app = createApp({
       verifier: createJoseVerifier(env.CONVEX_SITE_URL),
-      gateway: createConvexGateway(env.CONVEX_URL),
+      gateway: createConvexGateway({
+        convexUrl: env.CONVEX_URL,
+        siteUrl: env.CONVEX_SITE_URL,
+        uploadSecret: env.MF100_UPLOAD_SECRET,
+      }),
       store: createR2Store(env.ASSETS),
       allowedOrigins: env.ALLOWED_ORIGINS.split(",")
         .map((s) => s.trim())

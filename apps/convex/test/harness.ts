@@ -1,4 +1,5 @@
 import { convexTest, type TestConvex } from "convex-test";
+import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 
@@ -53,4 +54,33 @@ export async function createCast(t: Harness) {
     createUser(t, "stranger"),
   ]);
   return { admin, manager, creator, reviewer, approver, stranger };
+}
+
+/**
+ * Hono が R2 で実体を検証して記録するのと同じ手順（試行の開始 → 検証完了）を、利用者の主体で internal 関数に対して行う。
+ * 本番ではサービス認証付きの http.ts からだけ呼ばれる（利用者が直接呼べる公開関数は無い）。
+ */
+export async function uploadVerified(
+  user: TestUser,
+  itemId: string,
+  meta: { size: number; sha256: string; pageCount?: number },
+) {
+  const { attemptId } = await user.as.mutation(internal.submissions.beginUpload, { itemId });
+  return user.as.mutation(internal.submissions.completeUpload, { attemptId, ...meta });
+}
+
+/** Hono が転送に失敗したときと同じ手順（試行の開始 → 失敗の記録） */
+export async function uploadFailed(user: TestUser, itemId: string, message: string) {
+  const { attemptId } = await user.as.mutation(internal.submissions.beginUpload, { itemId });
+  await user.as.mutation(internal.submissions.failUpload, { attemptId, message });
+}
+
+/** フィードバックの添付で同じ手順（試行の開始 → 検証完了） */
+export async function uploadFeedbackVerified(
+  user: TestUser,
+  fileId: string,
+  meta: { size: number; sha256: string },
+) {
+  const { attemptId } = await user.as.mutation(internal.feedback.beginFileUpload, { fileId });
+  return user.as.mutation(internal.feedback.completeFileUpload, { attemptId, ...meta });
 }

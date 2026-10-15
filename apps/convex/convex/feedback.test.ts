@@ -2,7 +2,7 @@ import { feedbackTemplate } from "@mf100/domain";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { createCast, createHarness, HOUR } from "../test/harness";
+import { createCast, createHarness, HOUR, uploadFeedbackVerified } from "../test/harness";
 import { setupWork, submitFiles } from "../test/flows";
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
@@ -149,25 +149,33 @@ describe("Convex 統合: 制作のフィードバック", () => {
         { fileName: "ポスター.ai", mimeType: "application/postscript", size: 20 },
       ],
     });
-    const target = await cast.creator.as.query(api.feedback.fileForUpload, {
+    // 転送はサービス境界（internal）からだけ。試行ごとのキーは添付の名前空間の下
+    const target = await cast.creator.as.mutation(internal.feedback.beginFileUpload, {
       fileId: pdf!.fileId,
     });
     expect(target).toMatchObject({ declaredSize: 10, fileName: "案A.pdf" });
-    expect(target.objectKey.startsWith(`feedback/${workId}/`)).toBe(true);
+    expect(target.objectKey.startsWith(`feedback/${workId}/${pdf!.fileId}/`)).toBe(true);
     await expect(
-      cast.reviewer.as.query(api.feedback.fileForUpload, { fileId: pdf!.fileId }),
+      cast.reviewer.as.mutation(internal.feedback.beginFileUpload, { fileId: pdf!.fileId }),
     ).rejects.toThrow(code("feedback_not_found"));
     expect(
-      await cast.creator.as.mutation(api.feedback.markFileVerified, {
-        fileId: pdf!.fileId,
+      await cast.creator.as.mutation(internal.feedback.completeFileUpload, {
+        attemptId: target.attemptId,
         size: 10,
         sha256: "abc",
       }),
     ).toEqual({ status: "verified", failureMessage: null });
-    await cast.creator.as.mutation(api.feedback.markFileFailed, {
+    // 申告と違うサイズ: 採用されず failed（試行は清掃の対象）
+    const broken = await cast.creator.as.mutation(internal.feedback.beginFileUpload, {
       fileId: stale!.fileId,
-      message: "破損",
     });
+    expect(
+      await cast.creator.as.mutation(internal.feedback.completeFileUpload, {
+        attemptId: broken.attemptId,
+        size: 19,
+        sha256: "x",
+      }),
+    ).toMatchObject({ status: "failed" });
     await expect(
       cast.creator.as.mutation(api.feedback.createThread, {
         workId,
@@ -199,20 +207,24 @@ describe("Convex 統合: 制作のフィードバック", () => {
     await expect(
       cast.stranger.as.query(api.feedback.authorizeFile, { fileId: stale!.fileId }),
     ).rejects.toThrow(code("forbidden"));
+    // 放置する添付も、送り直して検証まで済ませておく（投稿には付けない）
+    await uploadFeedbackVerified(cast.creator, stale!.fileId, { size: 20, sha256: "def" });
 
     // 24 時間後: 投稿に付けなかった添付だけ放置扱い → 清掃の一覧に "feedback:" 付きで載る
     expect(await t.mutation(internal.feedback.expireFiles, {})).toBe(0);
     vi.setSystemTime(Date.now() + 25 * HOUR);
     expect(await t.mutation(internal.feedback.expireFiles, {})).toBe(1);
     const orphans = await t.mutation(internal.submissions.listOrphanObjects, {});
+    // 放置した添付の採用済みの実体と、採用されなかった試行の実体
     expect(orphans).toEqual([
       { itemId: `feedback:${stale!.fileId}`, objectKey: expect.stringContaining("feedback/") },
+      { itemId: `attempt:${broken.attemptId}`, objectKey: broken.objectKey },
     ]);
     expect(
       await t.mutation(internal.submissions.markObjectsPurged, {
         itemIds: orphans.map((o) => o.itemId),
       }),
-    ).toBe(1);
+    ).toBe(2);
     expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([]);
   });
 

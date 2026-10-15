@@ -37,6 +37,9 @@ export const domainErrorCodes = [
   "upload_item_not_found",
   "upload_item_invalid_state",
   "upload_session_expired",
+  "upload_attempt_not_found",
+  "upload_attempt_closed",
+  "revision_submission_conflict",
   // 指摘
   "comment_reason_required",
   "comment_invalid_resolution_transition",

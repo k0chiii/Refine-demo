@@ -22,6 +22,7 @@ export * from "./review/RequiredCheck.ts";
 export * from "./approval/ApprovalPolicy.ts";
 export * from "./approval/ApprovalConfirmation.ts";
 export * from "./revision/UploadSession.ts";
+export * from "./storage/UploadAttempt.ts";
 export * from "./document/DocumentDraft.ts";
 export * from "./comparison/index.ts";
 export * from "./notation/index.ts";

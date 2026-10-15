@@ -242,6 +242,8 @@ export default defineSchema({
     createdAt: v.number(),
     expiresAt: v.number(),
     confirmedRevisionId: v.optional(v.string()),
+    /** 準備時点の作品の版の数（確定時の競合比較の基準。サーバーが記録する）。無い古い行は確定できない */
+    baseRevisionCount: v.optional(v.number()),
     requiredChecks: v.optional(
       v.array(
         v.object({ type: v.string(), label: v.string(), assigneeId: v.optional(v.string()) }),
@@ -259,6 +261,9 @@ export default defineSchema({
     mimeType: v.string(),
     type: artifactType,
     role: artifactRole,
+    /** R2 キーの名前空間（試行ごとのキーはこの下） */
+    keyPrefix: v.optional(v.string()),
+    /** 採用された試行のキー（検証済みのときだけ） */
     objectKey: v.optional(v.string()),
     externalUrl: v.optional(v.string()),
     declaredSize: v.optional(v.number()),
@@ -269,6 +274,23 @@ export default defineSchema({
     failureMessage: v.optional(v.string()),
     purgedAt: v.optional(v.number()),
   }).index("by_session", ["sessionId"]),
+
+  /**
+   * R2 への転送の試行（版の提出物・フィードバックの添付で共通）。試行ごとに別キーへ書き、検証の済んだ 1 つだけを採用する。
+   * 採用・破棄はサービス認証付きの境界（http.ts）からだけ行う。未採用の試行のキーは清掃が消す。
+   */
+  uploadAttempts: defineTable({
+    target: v.union(v.literal("uploadItem"), v.literal("feedbackFile")),
+    targetId: v.string(),
+    uploaderId: v.string(),
+    objectKey: v.string(),
+    state: v.union(v.literal("reserved"), v.literal("adopted"), v.literal("discarded")),
+    createdAt: v.number(),
+    settledAt: v.optional(v.number()),
+    purgedAt: v.optional(v.number()),
+  })
+    .index("by_target", ["target", "targetId"])
+    .index("by_purged_and_state_and_created", ["purgedAt", "state", "createdAt"]),
 
   commentThreads: defineTable({
     revisionId: v.id("revisions"),
@@ -542,6 +564,9 @@ export default defineSchema({
     declaredSize: v.optional(v.number()),
     size: v.optional(v.number()),
     sha256: v.optional(v.string()),
+    /** R2 キーの名前空間（試行ごとのキーはこの下） */
+    keyPrefix: v.optional(v.string()),
+    /** 採用された試行のキー（検証済みのときだけ。それまでは空文字） */
     objectKey: v.string(),
     status: artifactStatus,
     postId: v.optional(v.string()),

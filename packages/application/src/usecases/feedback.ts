@@ -1,4 +1,7 @@
 import {
+  adoptAttempt,
+  assertAttemptAdoptable,
+  discardAttempt,
   assertFeedbackFileAttachable,
   assertFeedbackFileUploadable,
   canModifyFeedbackPost,
@@ -42,6 +45,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
+import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
 
 /*
  * 制作のフィードバック（表現の議論）。利用者決定 2026-10-15。
@@ -670,10 +674,10 @@ export async function prepareFeedbackFiles(
       status: "pending",
       createdAt: now,
     });
-    // キーは払い出された ID で名前空間を分ける（推測困難・重複しない）
+    // キーの名前空間は払い出された ID で分ける（推測困難・重複しない）。実体は試行ごとにこの下へ置く
     await ctx.feedback.updateFile({
       ...created,
-      objectKey: feedbackObjectKey(work.id, created.id, fileName),
+      keyPrefix: feedbackObjectKey(work.id, created.id, fileName),
     });
     out.push({ fileId: created.id });
   }
@@ -690,40 +694,78 @@ async function loadOwnFile(ctx: AppContext, principal: Principal, fileId: string
   return file;
 }
 
-/** Hono が PUT を受け付ける前に呼ぶ: 本人の、投稿に付ける前の、未検証の添付だけ */
-export async function feedbackFileForUpload(
+/**
+ * 実体の転送の開始（Hono が PUT を受ける前に、サービス認証付きの境界から呼ぶ）。
+ * 本人の、投稿に付ける前の、未検証の添付に限り、この試行だけのキーを払い出す。
+ */
+export async function beginFeedbackFileUpload(
   ctx: AppContext,
   principal: Principal,
-  fileId: string,
-): Promise<{ objectKey: string; mimeType: string; declaredSize: number | null; fileName: string }> {
-  const file = await loadOwnFile(ctx, principal, fileId);
+  input: { fileId: string },
+): Promise<{
+  attemptId: string;
+  objectKey: string;
+  mimeType: string;
+  declaredSize: number | null;
+  fileName: string;
+}> {
+  const file = await loadOwnFile(ctx, principal, input.fileId);
+  const attempt = await reserveUploadAttempt(ctx, {
+    target: "feedbackFile",
+    targetId: file.id,
+    uploaderId: principal.userId,
+    keyPrefix: file.keyPrefix!,
+  });
   return {
-    objectKey: file.objectKey,
+    attemptId: attempt.id,
+    objectKey: attempt.objectKey,
     mimeType: file.mimeType,
     declaredSize: file.declaredSize ?? null,
     fileName: file.fileName,
   };
 }
 
-/** Hono（R2 で sha256 を確かめた後）から呼ばれる。申告サイズと違えば failed */
-export async function markFeedbackFileVerified(
+/**
+ * 実体の検証完了（Hono が R2 で sha256 を確かめた後に、サービス認証付きの境界から呼ぶ）。申告サイズと違えば failed。
+ * 添付がまだ受付中・未検証で、試行が予約中・期限内のときだけ、この試行を原子的に採用する。
+ */
+export async function completeFeedbackFileUpload(
   ctx: AppContext,
   principal: Principal,
-  input: { fileId: string; size: number; sha256: string },
+  input: { attemptId: string; size: number; sha256: string },
 ): Promise<{ status: FeedbackFileStatus; failureMessage: string | null }> {
-  const file = await loadOwnFile(ctx, principal, input.fileId);
-  const next = verifyFeedbackFile(file, { size: input.size, sha256: input.sha256 });
+  const now = ctx.clock.now();
+  const attempt = await loadOwnUploadAttempt(ctx, principal, input.attemptId, "feedbackFile");
+  const file = await loadOwnFile(ctx, principal, attempt.targetId);
+  assertAttemptAdoptable(attempt, now);
+  const next = verifyFeedbackFile(file, {
+    size: input.size,
+    sha256: input.sha256,
+    objectKey: attempt.objectKey,
+  });
+  await ctx.attempts.update(
+    next.status === "verified" ? adoptAttempt(attempt, now) : discardAttempt(attempt, now),
+  );
   await ctx.feedback.updateFile(next);
   return { status: next.status, failureMessage: next.failureMessage ?? null };
 }
 
-export async function markFeedbackFileFailed(
+/**
+ * 転送の失敗（Hono の補償。自分の試行のキーを消した後に呼ぶ）。試行を破棄し、清掃の対象にする。
+ * 添付は受付中・未検証のときだけ failed にする（採用済みの実体・投稿に付いた添付には触れない）。
+ */
+export async function failFeedbackFileUpload(
   ctx: AppContext,
   principal: Principal,
-  input: { fileId: string; message: string },
+  input: { attemptId: string; message: string },
 ): Promise<void> {
-  const file = await loadOwnFile(ctx, principal, input.fileId);
-  await ctx.feedback.updateFile(failFeedbackFile(file, input.message));
+  const now = ctx.clock.now();
+  const attempt = await loadOwnUploadAttempt(ctx, principal, input.attemptId, "feedbackFile");
+  await ctx.attempts.update(discardAttempt(attempt, now));
+  const file = await ctx.feedback.findFile(attempt.targetId);
+  if (!file || file.postId !== undefined || file.abandonedAt !== undefined) return;
+  const next = failFeedbackFile(file, input.message);
+  if (next !== file) await ctx.feedback.updateFile(next);
 }
 
 /**
