@@ -22,6 +22,27 @@ export function anchorShift(u: number, k: number, left: number, target: number):
 type Pt = { x: number; y: number };
 
 /**
+ * ピンチ・Ctrl＋ホイールの焦点（画面座標）。from は拡大前に指（ポインタ）の下にあった点、to はそれを置きたい点。
+ * 倍率を確定する直前に舞台ごとに置き、焦点を自分で保てるビューア（PDF・画像）が描き直しのときに受け取る。
+ * 受け取られなければ、このフックが従来どおりスクロールを合わせる（文章のビューア）
+ */
+export interface ZoomFocus {
+  from: Pt;
+  to: Pt;
+}
+const zoomFocus = new WeakMap<HTMLElement, ZoomFocus>();
+/** この舞台に置かれた焦点を見る（取り除かない） */
+export function peekZoomFocus(stage: HTMLElement): ZoomFocus | null {
+  return zoomFocus.get(stage) ?? null;
+}
+/** この舞台に置かれた焦点を受け取る（以後このフックはスクロールを合わせない） */
+export function takeZoomFocus(stage: HTMLElement): ZoomFocus | null {
+  const f = zoomFocus.get(stage) ?? null;
+  zoomFocus.delete(stage);
+  return f;
+}
+
+/**
  * 校正物（ビューアの中）だけのピンチ拡大縮小。アプリ全体は拡大しない（styles.css の touch-action と main.tsx）。
  *
  * - タッチイベントで受ける（passive: false）。2 本指になったら既定の動作（スクロール・ページの拡大）を止めるので、
@@ -71,9 +92,15 @@ export function usePinchZoom(el: HTMLElement | null, scale: number, setScale: (s
       const kk = next / prev;
       if (Math.abs(kk - 1) < 0.005) return;
       scaleRef.current = next;
+      const r0 = content.getBoundingClientRect();
+      const focus: ZoomFocus = { from: { x: r0.left + u.x, y: r0.top + u.y }, to: target };
+      zoomFocus.set(stage, focus);
       setScale(next);
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
+          // ビューアが焦点を受け取って自分で合わせた
+          if (zoomFocus.get(stage) !== focus) return;
+          zoomFocus.delete(stage);
           const r = content.getBoundingClientRect();
           stage.scrollBy({
             left: anchorShift(u.x, kk, r.left, target.x),

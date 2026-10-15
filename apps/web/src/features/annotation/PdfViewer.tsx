@@ -1,9 +1,10 @@
 import type { Anchor, NormalizedRect, Viewport } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { useStageWidth } from "./useStageWidth";
+import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
 
 // Vite がワーカーを別チャンクとして配信する
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -15,23 +16,11 @@ export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: numbe
 
 /** 1 枚の canvas の画素数の上限 */
 const MAX_CANVAS_PIXELS = 16_000_000;
-/** 表示位置: ページと、ページ上端からの割合（舞台の上から 40% の線） */
-export interface ViewPosition {
-  page: number;
-  rel: number;
-}
-
-/** 版比較のスクロール同期で親が使う操作 */
-export interface PdfViewerController {
-  getPosition: () => ViewPosition | null;
-  /** その位置を舞台の 40% の線に合わせる。このスクロールは onUserScroll に通知しない */
-  scrollToPosition: (pos: ViewPosition) => void;
-}
 
 /** PDF.js の倍率 1 は 1pt = 1px。Acrobat などの「100%」（実寸）は 96 / 72 倍 */
 export const PDF_ACTUAL_SIZE = 96 / 72;
 
-interface Props {
+interface Props extends ViewerSyncProps {
   blob: Blob;
   artifactId: string;
   threads: OverlayThread[];
@@ -58,10 +47,6 @@ interface Props {
   renderGutter?: (vp: Viewport, page: number) => ReactNode;
   /** 読み込んだ PDF を親と共有する（版比較の特徴抽出で同じ文書を使い、二重に読まない） */
   onDoc?: (doc: PDFDocumentProxy) => void;
-  /** 版比較: 親がスクロール位置を読み書きする */
-  controller?: { current: PdfViewerController | null };
-  /** 版比較: 利用者がスクロールしたとき（プログラムからのスクロールでは呼ばない） */
-  onUserScroll?: (pos: ViewPosition) => void;
 }
 
 type Size = { w: number; h: number };
@@ -90,8 +75,7 @@ export function PdfViewer({
   renderInPage,
   renderGutter,
   onDoc,
-  controller,
-  onUserScroll,
+  ...sync
 }: Props) {
   const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(true);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
@@ -160,47 +144,23 @@ export function PdfViewer({
     if (renderScale > 0) onZoom?.(renderScale / PDF_ACTUAL_SIZE);
   }, [renderScale]);
 
-  // プログラムからのスクロール（同期）の間は利用者のスクロールとして扱わない（同期のループを防ぐ）
-  const programmatic = useRef(0);
-  const position = (): ViewPosition | null => {
-    const stage = stageRef.current;
-    if (!stage) return null;
-    const line = stage.getBoundingClientRect().top + stage.clientHeight * 0.4;
-    for (let i = 0; i < pageEls.current.length; i++) {
-      const el = pageEls.current[i];
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      const next = pageEls.current[i + 1]?.getBoundingClientRect();
-      if (line < r.bottom || !next || line < next.top)
-        return {
-          page: i + 1,
-          rel: Math.min(1, Math.max(0, (line - r.top) / Math.max(1, r.height))),
-        };
-    }
-    return null;
-  };
-  if (controller)
-    controller.current = {
-      getPosition: position,
-      scrollToPosition: (pos) => {
-        const stage = stageRef.current;
-        const el = pageEls.current[pos.page - 1];
-        if (!stage || !el) return;
-        const r = el.getBoundingClientRect();
-        const line = stage.getBoundingClientRect().top + stage.clientHeight * 0.4;
-        programmatic.current = performance.now();
-        stage.scrollTop += r.top + pos.rel * r.height - line;
-      },
-    };
+  // 倍率が変わったら焦点（ピンチの指・ポインタ、ボタンは舞台の中央）の下の箇所を縦・横とも同じ画面位置に保つ。
+  // 版比較の同期（縦・横）もここ。初回の描画など焦点を保てないときは、読んでいた縦の割合を保つ
+  const { onScroll: onSyncScroll } = useViewerSync(
+    stageRef,
+    renderScale,
+    () => pageEls.current,
+    sync,
+    () => {
+      const stage = stageRef.current;
+      if (stage && renderScale > 0) stage.scrollTop = ratio.current * stage.scrollHeight;
+    },
+  );
 
-  // 倍率が変わっても読んでいた位置（縦の割合）を保つ
   const onScroll = () => {
     const stage = stageRef.current;
     if (!stage) return;
-    if (onUserScroll && performance.now() - programmatic.current > 120) {
-      const pos = position();
-      if (pos) onUserScroll(pos);
-    }
+    onSyncScroll();
     ratio.current = stage.scrollHeight > 0 ? stage.scrollTop / stage.scrollHeight : 0;
     // 舞台の上から 40% の線にかかっているページを「表示中」とする
     const line = stage.getBoundingClientRect().top + stage.clientHeight * 0.4;
@@ -213,11 +173,6 @@ export function PdfViewer({
       onPageChange?.(n);
     }
   };
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (stage && renderScale > 0) stage.scrollTop = ratio.current * stage.scrollHeight;
-  }, [renderScale]);
-
   // 親がページを変えた（ページ送り・コメントへの移動・比較の相手）ときだけ、そのページまで送る
   useEffect(() => {
     const stage = stageRef.current;

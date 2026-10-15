@@ -3,6 +3,7 @@ import {
   diffHighlights,
   diffText,
   interpolate,
+  mapImagePosition,
   mapPosition,
   paragraphAnchors,
   type DiffHighlight,
@@ -11,11 +12,21 @@ import {
 } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { PdfViewerController, ViewPosition } from "@/features/annotation/PdfViewer";
+import {
+  SYNC_AT,
+  type StagePoint,
+  type ViewerController,
+  type ViewPosition,
+} from "@/features/annotation/viewerSync";
 import type { TextViewerController } from "./textSync";
 import { usePdfComparison, type PdfComparison } from "./useComparison";
 
 type Side = "left" | "right";
+interface ViewSyncProps {
+  controller: { current: ViewerController | null };
+  onUserScroll: (pos: ViewPosition) => void;
+  onZoomKept: (at: StagePoint, gesture: boolean) => void;
+}
 interface ArtifactLike {
   id: string;
   type: string;
@@ -34,11 +45,9 @@ export interface CompareSession {
   syncNote: string | null;
   pdf: PdfComparison;
   /** PDF ビューアに渡すもの（side ごと） */
-  pdfProps: (side: Side) => {
-    onDoc: (d: PDFDocumentProxy) => void;
-    controller: { current: PdfViewerController | null };
-    onUserScroll: (pos: ViewPosition) => void;
-  };
+  pdfProps: (side: Side) => ViewSyncProps & { onDoc: (d: PDFDocumentProxy) => void };
+  /** 画像ビューアに渡すもの（side ごと） */
+  imageProps: (side: Side) => ViewSyncProps;
   /** ページの上に重ねる比較用の表示（差分の塗り、対応なしの札） */
   pageOverlay: (side: Side, vp: Viewport, page: number) => ReactNode;
   /** 文章の比較（差分の強調・同期） */
@@ -57,6 +66,8 @@ export interface CompareSession {
  * - 同期は「対応する行 → ページ内の位置 → ページ対応」の順に写し、対応ページが無ければ止めて理由を出す
  * - プログラムからのスクロールは各ビューアが利用者の操作として通知しないので、往復のループにならない
  * - 同期を入れたときは、最後に操作していた側の位置を保ち、もう一方だけを動かす
+ * - PDF・画像は縦に加えて横の位置も合わせる。倍率は左右で共通で、拡大縮小したら操作した側（ピンチ・Ctrl＋ホイールの側、
+ *   ボタンなら最後に操作していた側）の焦点の下の箇所に、もう一方の同じ点を合わせる（ズームでの視点の同期）
  */
 export function useCompareSession(opts: {
   active: boolean;
@@ -74,9 +85,10 @@ export function useCompareSession(opts: {
     left: PDFDocumentProxy | null;
     right: PDFDocumentProxy | null;
   }>({ left: null, right: null });
-  const pdfCtl = {
-    left: useRef<PdfViewerController | null>(null),
-    right: useRef<PdfViewerController | null>(null),
+  // PDF・画像のビューア（左右とも同じ種類）
+  const viewCtl = {
+    left: useRef<ViewerController | null>(null),
+    right: useRef<ViewerController | null>(null),
   };
   const textCtl = {
     left: useRef<TextViewerController | null>(null),
@@ -84,6 +96,8 @@ export function useCompareSession(opts: {
   };
   const lastSide = useRef<Side>("right");
   const frame = useRef(0);
+  /** 拡大縮小で基準にする側と焦点（同じ描画で左右から届くので、まとめて 1 回だけ合わせる） */
+  const zoomLead = useRef<{ side: Side; at: StagePoint } | null>(null);
 
   const kind: CompareSession["kind"] =
     !left || !right
@@ -128,7 +142,7 @@ export function useCompareSession(opts: {
   );
 
   // ---------- 同期
-  const syncPdf = (from: Side, pos: ViewPosition) => {
+  const syncPdf = (from: Side, pos: ViewPosition, at: StagePoint = SYNC_AT) => {
     const mapped = mapPosition(pos, from, pdf.pairs, pdf.anchorsFor);
     if (!mapped) {
       setSyncNote(
@@ -139,7 +153,20 @@ export function useCompareSession(opts: {
       return;
     }
     setSyncNote(null);
-    pdfCtl[from === "left" ? "right" : "left"].current?.scrollToPosition(mapped);
+    viewCtl[from === "left" ? "right" : "left"].current?.scrollToPosition(mapped, at);
+  };
+  const syncImage = (from: Side, pos: ViewPosition, at: StagePoint = SYNC_AT) => {
+    viewCtl[from === "left" ? "right" : "left"].current?.scrollToPosition(
+      mapImagePosition(pos),
+      at,
+    );
+  };
+  /** 一方の舞台の at の点にある箇所を、もう一方の同じ点に合わせる */
+  const syncView = (from: Side, at: StagePoint = SYNC_AT) => {
+    const pos = viewCtl[from].current?.getPosition(at);
+    if (!pos) return;
+    if (kind === "pdf") syncPdf(from, pos, at);
+    else if (kind === "image") syncImage(from, pos, at);
   };
   const syncText = (from: Side) => {
     if (!textDiff) return;
@@ -167,7 +194,24 @@ export function useCompareSession(opts: {
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
       if (kind === "pdf" && pos) syncPdf(from, pos);
+      else if (kind === "image" && pos) syncImage(from, pos);
       else if (kind === "document") syncText(from);
+    });
+  };
+  // 倍率が変わった: 両方のビューアがそれぞれ焦点を保った後（同じ描画の layout effect）に、基準の側へもう一方を合わせる。
+  // マイクロタスクで待つので画面に出る前に揃い、プログラムからのスクロールなので往復しない
+  const onZoomKept = (side: Side, at: StagePoint, gesture: boolean) => {
+    const first = zoomLead.current === null;
+    if (gesture) zoomLead.current = { side, at };
+    else if (first) zoomLead.current = { side: lastSide.current, at };
+    if (gesture) lastSide.current = side;
+    if (!first) return;
+    queueMicrotask(() => {
+      const lead = zoomLead.current;
+      zoomLead.current = null;
+      if (!lead || !syncOn || (kind !== "pdf" && kind !== "image")) return;
+      cancelAnimationFrame(frame.current);
+      syncView(lead.side, lead.at);
     });
   };
   const setSyncOn = useCallback(
@@ -178,10 +222,8 @@ export function useCompareSession(opts: {
       // 最後に操作していた側を基準に、もう一方だけを合わせる（閲覧位置が飛ばない）
       const from = lastSide.current;
       requestAnimationFrame(() => {
-        if (kind === "pdf") {
-          const pos = pdfCtl[from].current?.getPosition();
-          if (pos) syncPdf(from, pos);
-        } else if (kind === "document") syncText(from);
+        if (kind === "pdf" || kind === "image") syncView(from);
+        else if (kind === "document") syncText(from);
       });
     },
     [kind, pdf.pairs, textDiff],
@@ -242,8 +284,14 @@ export function useCompareSession(opts: {
     pdf,
     pdfProps: (side) => ({
       onDoc: (d) => setDocs((cur) => (cur[side] === d ? cur : { ...cur, [side]: d })),
-      controller: pdfCtl[side],
+      controller: viewCtl[side],
       onUserScroll: (pos) => onScroll(side, pos),
+      onZoomKept: (at, gesture) => onZoomKept(side, at, gesture),
+    }),
+    imageProps: (side) => ({
+      controller: viewCtl[side],
+      onUserScroll: (pos) => onScroll(side, pos),
+      onZoomKept: (at, gesture) => onZoomKept(side, at, gesture),
     }),
     pageOverlay,
     textProps: (side) => ({

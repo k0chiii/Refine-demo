@@ -835,6 +835,7 @@ export function Editor({
           scale={scale}
           besideWidth={besideWidth}
           onZoom={setZoom}
+          {...(compareWith ? cmp.imageProps("right") : {})}
           renderInPage={inPage}
           renderGutter={gutter}
         />
@@ -909,6 +910,7 @@ export function Editor({
           draft={null}
           onDraft={() => undefined}
           scale={scale}
+          {...cmp.imageProps("left")}
         />
       );
     return <div className="empty">この形式は比較できません</div>;
@@ -1239,19 +1241,25 @@ export function Editor({
                       <M3eIcon name="add_comment" />
                     </M3eIconButton>
                   ) : null}
+                  {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
+                  {compareWith &&
+                  (cmp.kind === "pdf" ||
+                    cmp.kind === "document" ||
+                    (cmp.kind === "image" && !swipe)) ? (
+                    <M3eIconButton
+                      aria-label={cmp.syncOn ? "スクロール同期をやめる" : "スクロールを同期する"}
+                      toggle
+                      selected={cmp.syncOn}
+                      onClick={() => cmp.setSyncOn(!cmp.syncOn)}
+                    >
+                      <M3eIcon
+                        name={cmp.syncOn ? "sync" : "sync_disabled"}
+                        className={cmp.syncOn ? "icon--filled" : ""}
+                      />
+                    </M3eIconButton>
+                  ) : null}
                   {compareWith && (cmp.kind === "pdf" || cmp.kind === "document") ? (
                     <>
-                      <M3eIconButton
-                        aria-label={cmp.syncOn ? "スクロール同期をやめる" : "スクロールを同期する"}
-                        toggle
-                        selected={cmp.syncOn}
-                        onClick={() => cmp.setSyncOn(!cmp.syncOn)}
-                      >
-                        <M3eIcon
-                          name={cmp.syncOn ? "sync" : "sync_disabled"}
-                          className={cmp.syncOn ? "icon--filled" : ""}
-                        />
-                      </M3eIconButton>
                       <M3eIconButton
                         aria-label={cmp.diffOn ? "文章の差分を隠す" : "文章の差分を表示"}
                         toggle
