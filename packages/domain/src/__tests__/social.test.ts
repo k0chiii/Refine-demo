@@ -54,6 +54,13 @@ describe("SNS 投稿", () => {
     expect(codes).toContain("hashtags");
     expect(codes).toContain("alt_missing");
     expect(checkPost({ ...ig, format: "feed" }).map((i) => i.code)).toContain("images_many");
+    // ストーリーズは 10 枚まで（1 枚ずつ別のストーリー）
+    const frames = (n: number) => Array.from({ length: n }, (_, i) => img(`s${i}`));
+    const story = { ...ig, body: "", format: "story" as const };
+    expect(checkPost({ ...story, images: frames(10) }).map((i) => i.code)).not.toContain(
+      "images_many",
+    );
+    expect(checkPost({ ...story, images: frames(11) }).map((i) => i.code)).toContain("images_many");
     const x: SocialPost = {
       ...emptyPost("x"),
       account: { displayName: "", username: "u" },

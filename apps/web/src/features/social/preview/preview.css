@@ -577,10 +577,41 @@
   color: #fff;
   overflow: hidden;
 }
-.sp-story > .sp-img {
+/* ストーリーズ: 1 枚ずつ横に並べてスクロールスナップで送る */
+.sp-story__track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.sp-story__track::-webkit-scrollbar {
+  display: none;
+}
+.sp-story__track.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+.sp-story__slide {
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.sp-story__slide > .sp-img {
   height: 100%;
   aspect-ratio: auto !important;
   border-radius: 8px;
+}
+/* 上下の飾りは押せない（押すと下の枠で送る） */
+.sp-story__top,
+.sp-story__bottom {
+  pointer-events: none;
 }
 .sp-story__top {
   position: absolute;
@@ -596,6 +627,10 @@
   flex: 1;
   height: 2px;
   border-radius: 1px;
+  background: rgb(255 255 255 / 0.35);
+}
+/* 見たもの・見ているものは白（見ているものは本物では時間で伸びるが、プレビューでは満たして見せる） */
+.sp-story__bars i.on {
   background: rgb(255 255 255 / 0.95);
 }
 .sp-story__user {

@@ -52,9 +52,9 @@ export interface SocialPost {
   scheduledAt?: number;
 }
 
-/** 各サービスの上限（近似）。変わったらここだけ直す */
+/** 各サービスの上限（近似）。変わったらここだけ直す。ストーリーズは一度に選べる 10 枚（1 枚ずつ別のストーリーになる） */
 export const socialLimits = {
-  instagram: { bodyMax: 2200, hashtagsMax: 30, imagesMax: { feed: 1, carousel: 20, story: 1 } },
+  instagram: { bodyMax: 2200, hashtagsMax: 30, imagesMax: { feed: 1, carousel: 20, story: 10 } },
   x: { weightedMax: 280, imagesMax: 4, urlWeight: 23 },
 } as const;
 
