@@ -42,7 +42,7 @@ export function EditWorkDialog({
     if (open) setForm(initial());
   }, [open, work.version]);
 
-  const { run, pending, error } = useAction(async () => {
+  const { run, pending } = useAction(async () => {
     await update({
       workId: work.id as Id<"works">,
       expectedVersion: work.version,
@@ -132,7 +132,6 @@ export function EditWorkDialog({
             </Field>
           </div>
         </M3eExpansionPanel>
-        {error ? <div className="alert">{error.message}</div> : null}
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>

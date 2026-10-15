@@ -34,10 +34,10 @@ import { useProofreader } from "@/features/notation/useProofreader";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { fetchArtifactBlob } from "@/integrations/api";
 import { formatJstShort } from "@/lib/format";
+import { toast } from "@/lib/toast";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Card } from "@/ui/Card";
-import { DateField } from "@/ui/DateField";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
 import {
   M3eButton,
@@ -123,6 +123,8 @@ function PostSurface({
   const [assets, setAssets] = useState<Map<string, ImageAsset>>(new Map());
   const baseVersion = useRef(doc.draft?.version ?? 0);
   const dirty = useRef(false);
+  /** この画面で一度でも編集したか（注意のスナックバーは編集してから出す） */
+  const edited = useRef(false);
   const [status, setStatus] = useState<{
     kind: "saved" | "dirty" | "saving" | "error" | "conflict";
     at: number | null;
@@ -141,12 +143,15 @@ function PostSurface({
       JSON.stringify(post.account) === JSON.stringify(account)
     )
       return;
+    // 自動で写すのは利用者の編集ではない（注意のスナックバーを出す条件に数えない）
+    const wasEdited = edited.current;
     update({
       account,
       ...(post.platform !== profile.platform
         ? { platform: profile.platform, format: socialFormats[profile.platform][0] as SocialFormat }
         : {}),
     });
+    edited.current = wasEdited;
     // 割り当てたアカウントが変わったときだけ写す
   }, [profile?.id, profile?.updatedAt, canEdit]);
   const device = usePreviewDevice();
@@ -196,14 +201,10 @@ function PostSurface({
   }, [post.images, token]);
 
   // 自動保存
-  const replace = (next: SocialPost) => {
-    setPost(next);
-    dirty.current = true;
-    setStatus((s) => ({ ...s, kind: "dirty" }));
-  };
   const update = (patch: Partial<SocialPost>) => {
     setPost((p) => ({ ...p, ...patch }));
     dirty.current = true;
+    edited.current = true;
     setStatus((s) => ({ ...s, kind: "dirty" }));
   };
   useEffect(() => {
@@ -246,6 +247,39 @@ function PostSurface({
   }, [post.body, rules]);
 
   const issues = useMemo(() => checkPost(post), [post]);
+  // 注意・警告はカードに並べず、スナックバーで知らせる（利用者指示 2026-10-15）。
+  // 編集の手が止まって 1.5 秒たったら、新しく出た問題だけを 1 回知らせる（打つたびに出さない）。
+  // 開いたときから残っている問題（空の下書きの「画像が必要」など）は知らせず、提出のときに止める
+  const told = useRef(new Set<string>());
+  useEffect(() => {
+    if (!canEdit) return;
+    const t = window.setTimeout(() => {
+      const fresh = issues.filter((x) => !told.current.has(x.message));
+      for (const x of issues) told.current.add(x.message);
+      // 解消した問題は、また出たときに知らせる
+      for (const m of told.current)
+        if (!issues.some((x) => x.message === m)) told.current.delete(m);
+      const first = fresh[0];
+      if (first && edited.current)
+        toast(
+          fresh.length > 1 ? `${first.message}（ほか ${fresh.length - 1} 件）` : first.message,
+          {
+            kind: first.level === "error" ? "error" : "warning",
+          },
+        );
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [issues, canEdit]);
+  // 開いたときの案内（1 回だけ）: アカウント未割り当て、または表記統一のカテゴリ未設定
+  const hinted = useRef(false);
+  useEffect(() => {
+    if (hinted.current || !canEdit || rules === undefined || profiles === undefined) return;
+    hinted.current = true;
+    if (!profile)
+      toast("SNS アカウントが割り当てられていません。制作物の「情報」で選ぶと見た目がそろいます");
+    else if (rules && !rules.categories.length)
+      toast("表記統一のカテゴリが未設定のため、表記の検査はしていません（制作物の編集で選べます）");
+  }, [rules, profiles, profile, canEdit]);
   const previewImages = post.images
     .map((im) => assets.get(im.key))
     .filter((x): x is ImageAsset => !!x);
@@ -276,6 +310,18 @@ function PostSurface({
     update({ images: post.images.map((im, k) => (k === i ? { ...im, ...patch } : im)) });
 
   const startSubmit = async () => {
+    // 直さないと出せない問題（error）があれば、提出の前にスナックバーで知らせて止める
+    const errors = issues.filter((x) => x.level === "error");
+    const firstError = errors[0];
+    if (firstError) {
+      toast(
+        errors.length > 1
+          ? `${firstError.message}（ほか ${errors.length - 1} 件）`
+          : firstError.message,
+        { kind: "error" },
+      );
+      return;
+    }
     // 並び順が分かるファイル名にする（01-xxx.jpg）。内容の記録もその名前で書く
     const files: File[] = [];
     const images = [];
@@ -316,65 +362,26 @@ function PostSurface({
 
   const editPane = (
     <div className="post-edit gform">
-      <Card title="投稿先">
-        <div className="stack">
-          {profile ? (
-            <div className="post-account">
-              <span className="post-account__avatar" aria-hidden="true">
-                {profile.avatar ? (
-                  <img src={profile.avatar} alt="" />
-                ) : (
-                  Array.from(profile.displayName)[0]
-                )}
-              </span>
-              <div className="post-account__name">
-                <div className="label-large">{profile.displayName}</div>
-                <div className="small muted">
-                  {socialPlatformLabels[profile.platform]}・@{profile.username}
-                </div>
-              </div>
-              <span className="small muted">制作物の「情報」で変更</span>
-            </div>
-          ) : (
-            <>
-              <div className="alert alert--info small">
-                SNS
-                アカウントが割り当てられていません。制作物の「情報」で選ぶと、サービスとアカウントの見た目がそろいます。
-              </div>
-              <M3eSegmentedButton aria-label="サービス">
-                {socialPlatforms.map((p) => (
-                  <M3eButtonSegment
-                    key={p}
-                    checked={post.platform === p}
-                    disabled={!canEdit}
-                    onClick={() => {
-                      if (post.platform === p) return;
-                      const format = socialFormats[p][0] as SocialFormat;
-                      update({ platform: p as SocialPlatform, format });
-                    }}
-                  >
-                    {socialPlatformLabels[p]}
-                  </M3eButtonSegment>
-                ))}
-              </M3eSegmentedButton>
-            </>
-          )}
-          {post.platform === "instagram" ? (
-            <M3eSegmentedButton aria-label="形式">
-              {socialFormats.instagram.map((f) => (
+      {/* 投稿先: SNS アカウントを割り当てていない（古い）制作物だけ。割り当て済みならアカウントはプレビューに出る */}
+      {profile ? null : (
+        <Card title="投稿先">
+          <div className="stack">
+            <M3eSegmentedButton aria-label="サービス">
+              {socialPlatforms.map((p) => (
                 <M3eButtonSegment
-                  key={f}
-                  checked={post.format === f}
+                  key={p}
+                  checked={post.platform === p}
                   disabled={!canEdit}
-                  onClick={() => update({ format: f })}
+                  onClick={() => {
+                    if (post.platform === p) return;
+                    const format = socialFormats[p][0] as SocialFormat;
+                    update({ platform: p as SocialPlatform, format });
+                  }}
                 >
-                  {/* 狭い画面では「（1 枚）」などの補足を外す（3 つ並べると画面からはみ出していた） */}
-                  {compact ? socialFormatLabels[f].replace(/（.*）$/, "") : socialFormatLabels[f]}
+                  {socialPlatformLabels[p]}
                 </M3eButtonSegment>
               ))}
             </M3eSegmentedButton>
-          ) : null}
-          {profile ? null : (
             <div className="rule-editor__grid">
               <Field label="表示名">
                 <TextInput
@@ -397,20 +404,9 @@ function PostSurface({
                 />
               </Field>
             </div>
-          )}
-          <DateField
-            label="予定日（任意。予約投稿はしません）"
-            value={post.scheduledAt ?? null}
-            onChange={(v) => {
-              if (v) update({ scheduledAt: v });
-              else {
-                const { scheduledAt: _s, ...rest } = post;
-                replace(rest);
-              }
-            }}
-          />
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
       <Card title="本文">
         <div className="stack">
           <Field label="投稿する文章（ハッシュタグ・URL を含む）" hint={count}>
@@ -454,11 +450,6 @@ function PostSurface({
               });
             }}
           />
-          {!findings.length && rules && !rules.categories.length ? (
-            <p className="small muted">
-              表記統一のカテゴリが未設定のため、表記の検査はしていません（制作物の編集で選べます）。
-            </p>
-          ) : null}
         </div>
       </Card>
       <Card
@@ -482,6 +473,21 @@ function PostSurface({
           ) : null
         }
       >
+        {post.platform === "instagram" ? (
+          <M3eSegmentedButton aria-label="形式">
+            {socialFormats.instagram.map((f) => (
+              <M3eButtonSegment
+                key={f}
+                checked={post.format === f}
+                disabled={!canEdit}
+                onClick={() => update({ format: f })}
+              >
+                {/* 狭い画面では「（1 枚）」などの補足を外す（3 つ並べると画面からはみ出していた） */}
+                {compact ? socialFormatLabels[f].replace(/（.*）$/, "") : socialFormatLabels[f]}
+              </M3eButtonSegment>
+            ))}
+          </M3eSegmentedButton>
+        ) : null}
         {post.images.length === 0 ? (
           <p className="small muted">
             画像を追加すると、並び順・代替テキスト・切り抜きを設定できます。
@@ -560,22 +566,6 @@ function PostSurface({
           </M3eList>
         )}
       </Card>
-      {issues.length ? (
-        <Card title="確認事項">
-          <M3eList aria-label="確認事項">
-            {issues.map((x, i) => (
-              <M3eListItem key={i}>
-                <M3eIcon
-                  slot="leading"
-                  name={x.level === "error" ? "error" : "warning"}
-                  className={x.level === "error" ? "finding__icon" : ""}
-                />
-                {x.message}
-              </M3eListItem>
-            ))}
-          </M3eList>
-        </Card>
-      ) : null}
     </div>
   );
 

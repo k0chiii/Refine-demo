@@ -473,7 +473,6 @@ export function InfoTab({
             onChange={setConfirmer}
             exclude={[w.approverId, ...w.creatorIds]}
           />
-          {doFinalize.error ? <div className="alert">{doFinalize.error.message}</div> : null}
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setFinalizeOpen(false)}>

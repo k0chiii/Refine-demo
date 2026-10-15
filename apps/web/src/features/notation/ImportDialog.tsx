@@ -171,13 +171,15 @@ export function ImportDialog({
               <M3eChip className={preview.conflicts.length ? "chip--error" : ""}>
                 矛盾 {preview.conflicts.length}
               </M3eChip>
+              {blocked.length ? (
+                <M3eChip
+                  className="chip--error"
+                  title={`権限の無いカテゴリ（${Array.from(new Set(blocked.map((r) => r.categoryCode))).join("・")}）のルールは取り込みません`}
+                >
+                  権限なしで除外 {blocked.length}
+                </M3eChip>
+              ) : null}
             </M3eChipSet>
-            {blocked.length ? (
-              <div className="alert">
-                権限の無いカテゴリのルール {blocked.length} 件は取り込みません（
-                {Array.from(new Set(blocked.map((r) => r.categoryCode))).join("・")}）。
-              </div>
-            ) : null}
             <M3eAccordion multi className="import-details">
               {preview.conflicts.length ? (
                 <M3eExpansionPanel open>

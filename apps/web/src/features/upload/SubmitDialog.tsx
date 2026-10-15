@@ -27,6 +27,7 @@ import {
   type FlowState,
 } from "./submissionFlow";
 import { guessArtifactType, guessMimeType } from "./fileKind";
+import { toast } from "@/lib/toast";
 
 /**
  * U-04 版提出（ダイアログ。狭い画面では全画面）。制作物の画面を離れずに提出し、確定後はその版の校正画面へ移る。
@@ -68,9 +69,24 @@ export function SubmitDialog({
   );
   const [flow, setFlow] = useState<SubmissionFlow | null>(null);
   const [state, setState] = useState<FlowState>(initialState);
-  const [error, setError] = useState<string | null>(null);
+  // 入力の不足・転送の失敗はスナックバーで知らせる（ダイアログの中に赤い箱を出さない）
+  const setError = (m: string | null) => {
+    if (m) toast(m, { kind: "error" });
+  };
 
   useEffect(() => (flow ? flow.subscribe(setState) : undefined), [flow]);
+  // 転送・確定の失敗、失敗したファイルの件数はスナックバーで（各ファイルの行にも「失敗」と再アップロードが出る）
+  useEffect(() => {
+    if (state.error) toast(state.error, { kind: "error" });
+  }, [state.error]);
+  const failed = failedItems(state).length;
+  useEffect(() => {
+    if (failed > 0)
+      toast(
+        `${failed} 件が失敗しました。失敗したファイルだけ再アップロードしてから確定してください（旧版の受付は維持されています）`,
+        { kind: "error" },
+      );
+  }, [failed]);
   useEffect(() => {
     if (open && initialFiles && initialFiles.length > 0) setFiles(initialFiles);
   }, [open, initialFiles]);
@@ -284,7 +300,6 @@ export function SubmitDialog({
                 </Field>
               </div>
             </M3eExpansionPanel>
-            {error ? <div className="alert">{error}</div> : null}
           </>
         ) : (
           <div className="stack">
@@ -344,16 +359,7 @@ export function SubmitDialog({
                 ) : null}
               </div>
             ))}
-            {failedItems(state).length > 0 ? (
-              <div className="alert">
-                <span>
-                  {failedItems(state).length}{" "}
-                  件が失敗しました。失敗したファイルだけ再アップロードしてから確定してください。旧版の受付は維持されています。
-                </span>
-              </div>
-            ) : null}
             {state.confirming ? <M3eLinearProgressIndicator aria-label="確定処理中" /> : null}
-            {state.error || error ? <div className="alert">{state.error ?? error}</div> : null}
           </div>
         )}
       </div>

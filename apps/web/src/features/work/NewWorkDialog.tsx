@@ -26,7 +26,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [creatorIds, setCreatorIds] = useState<string[]>([]);
   const [approverIds, setApproverIds] = useState<string[]>([]);
-  const { run, pending, error } = useAction(async () => {
+  const { run, pending } = useAction(async () => {
     const id = await create({
       title: form.title,
       purpose: form.purpose,
@@ -96,7 +96,6 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
             </Field>
           </div>
         </M3eExpansionPanel>
-        {error ? <div className="alert">{error.message}</div> : null}
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>

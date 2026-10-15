@@ -415,24 +415,11 @@ m3e-dialog [slot="actions"] {
 .card__header + .card__content {
   padding-top: 8px;
 }
-/* フォームの画面（Google フォーム風）: カードを 12px 間隔で縦に並べ、先頭のカードの上にテーマ色の帯（10px） */
+/* フォームの画面（Google フォーム風）: カードを 12px 間隔で縦に並べる（ヘッダーの色帯はやりすぎなので付けない） */
 .gform {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.gform > .card:first-child {
-  position: relative;
-}
-.gform > .card:first-child::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 10px;
-  border-radius: 8px 8px 0 0;
-  background: var(--mf-primary);
-  z-index: 2;
-  pointer-events: none;
 }
 .gform .card__content {
   gap: 24px;
@@ -3113,40 +3100,23 @@ m3e-icon.icon--on {
   font-weight: 500;
 }
 
-/* SNS アカウント（管理・投稿の編集） */
-.profile-avatar,
-.post-account__avatar img {
+/* スナックバー（注意・警告の通知。lib/toast.ts）: セーフエリアと下部ナビの上に出す。
+   M3E は top を「画面の高さ − 開いたときに測った高さ」で決めるため、2 行に折り返すと下にずれてセーフエリアにかかる。
+   bottom で置き直す */
+m3e-snackbar {
+  top: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+:root:has(.shell__bar) m3e-snackbar {
+  bottom: calc(16px + var(--mf-nav-bar-height, 68px) + env(safe-area-inset-bottom, 0px));
+}
+/* SNS アカウント（管理） */
+.profile-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
-}
-.post-account {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-}
-.post-account__avatar {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  background: var(--mf-primary-container);
-  color: var(--mf-on-primary-container);
-  font: var(--mf-type-title-medium);
-}
-.post-account__avatar img {
-  width: 40px;
-  height: 40px;
-}
-.post-account__name {
-  flex: 1;
-  min-width: 0;
 }
 /* SNS プレビューの端末選択（機種と本体の色） */
 .device-picker {

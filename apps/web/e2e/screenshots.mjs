@@ -1045,11 +1045,15 @@ async function v2Scenes() {
   const sns = await openWork("公式 Instagram 開催告知");
   await btn("投稿を作る").click();
   await page.waitForSelector(".post-edit");
-  // アカウントは制作物に割り当てた SNS アカウント（本体の設定）から写る
-  await page.waitForSelector(".post-account");
+  // アカウントは制作物に割り当てた SNS アカウント（本体の設定）から写る。編集欄は本文と画像だけ
+  await page.waitForSelector(".sp-figure");
   expectTrue(
-    (await page.locator(".post-account").innerText()).includes("mayfes_official"),
-    "割り当てた SNS アカウントが出ない",
+    (await page.locator(".post-preview").innerText()).includes("mayfes_official"),
+    "割り当てた SNS アカウントがプレビューに出ない",
+  );
+  expectTrue(
+    (await page.locator(".post-edit .card").count()) === 2,
+    "編集欄が本文と画像だけでない",
   );
   await page.locator("m3e-button-segment", { hasText: "カルーセル" }).click();
   await page

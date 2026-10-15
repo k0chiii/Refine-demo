@@ -35,7 +35,8 @@ export function AiAssist({
     setResult({ candidates: r.candidates, provider: r.provider, note: r.blocked });
   });
   if (!status) return null;
-  if (!status.available) return <p className="small muted">AI 校正: {status.reason}</p>;
+  // 使えないとき（API キー未設定など）は何も出さない（地の文で状態を並べない）
+  if (!status.available) return null;
   const chars = getText().length;
   return (
     <div className="stack ai-assist">

@@ -7,6 +7,7 @@ import { describeError } from "@/lib/errors";
 import { Card } from "@/ui/Card";
 import { Field, Select, TextInput } from "@/ui/Field";
 import { M3eButton, M3eExpansionPanel, M3eHeading } from "@/ui/m3e";
+import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/signin")({ component: SignIn });
 
@@ -24,7 +25,6 @@ function SignIn() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
-  const [error, setError] = useState<string | null>(null);
   const [mockSub, setMockSub] = useState(MOCK_USERS[2]!.sub);
   const [customSub, setCustomSub] = useState("");
 
@@ -36,12 +36,11 @@ function SignIn() {
   const showMock = import.meta.env.DEV || import.meta.env.MODE === "demo";
 
   const start = async (params: Record<string, string>) => {
-    setError(null);
     try {
       const result = await signIn("nogiku", params);
       if (!result.redirect) void navigate({ to: "/", replace: true });
     } catch (e) {
-      setError(describeError(e).message);
+      toast(describeError(e).message, { kind: "error" });
     }
   };
 
@@ -58,7 +57,6 @@ function SignIn() {
         <M3eButton variant="filled" size="medium" onClick={() => start({ redirectTo: "/" })}>
           Nogiku でサインイン
         </M3eButton>
-        {error ? <div className="alert">{error}</div> : null}
         {showMock ? (
           <M3eExpansionPanel className="expansion">
             <span slot="header">モック委員でサインイン</span>
