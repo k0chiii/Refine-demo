@@ -115,7 +115,10 @@ export const vRuleCategoryFields = {
 export const vRuleSetSnapshot = v.object({
   categories: v.array(v.string()),
   year: v.number(),
-  rules: v.array(v.object({ ruleId: v.string(), revision: v.number() })),
+  // depth: 提出時の継承の深さ（古い版の記録には無い）
+  rules: v.array(
+    v.object({ ruleId: v.string(), revision: v.number(), depth: v.optional(v.number()) }),
+  ),
   hash: v.string(),
 });
 export const vProposalKind = v.union(v.literal("new"), v.literal("change"), v.literal("report"));

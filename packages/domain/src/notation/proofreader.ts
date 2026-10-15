@@ -1,6 +1,6 @@
 import type { RuleStrictness } from "./rule.ts";
 import type { EffectiveRule } from "./ruleset.ts";
-import { compileRulePattern, escapeRegex } from "./safeRegex.ts";
+import { advancePastEmptyMatch, compileRulePattern, escapeRegex } from "./safeRegex.ts";
 import { fnv1a } from "./ruleset.ts";
 
 /**
@@ -100,7 +100,9 @@ function isException(rule: EffectiveRule, line: string, s: number, e: number): b
         at = line.indexOf(ex.value, at + 1);
       }
     } else if (ex.kind === "before" || ex.kind === "after") {
-      const c = compileRulePattern(ex.kind === "before" ? `(?:${ex.value})$` : `^(?:${ex.value})`);
+      const c = compileRulePattern(ex.kind === "before" ? `(?:${ex.value})$` : `^(?:${ex.value})`, {
+        allowEmptyMatch: true,
+      });
       if (!c.ok) continue;
       c.regex.lastIndex = 0;
       const ctx = ex.kind === "before" ? line.slice(Math.max(0, s - 40), s) : line.slice(e, e + 40);
@@ -144,8 +146,14 @@ export function proofread(
         re.lastIndex = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(seg.text)) !== null) {
+          // 一致のたびに時間と件数の上限を確かめる（空一致が続いても、この while の中で止められるように）
+          if (now() - started > budget || raw.length >= maxFindings) {
+            truncated = true;
+            break outer;
+          }
           if (m[0].length === 0) {
-            re.lastIndex++;
+            // 空一致（(?=…)・\b など登録時に見分けられないもの）は指摘にせず、1 コードポイント進める
+            advancePastEmptyMatch(re, seg.text);
             continue;
           }
           const s = m.index;

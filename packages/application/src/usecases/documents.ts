@@ -37,6 +37,7 @@ export interface SaveDocumentDraftInput extends DraftSaveInput {
  * 下書きを保存する（自動保存から数秒おきに呼ばれる）。
  * - 書けるのは版を提出できる人だけ。進行中でない制作物には書けない
  * - 他の人が先に保存していたら version_conflict（共同編集は後続。§3.2）
+ * - 媒体に合わない形式・保存済みと違う形式は document_format_mismatch（置き換えは replaceFormat の明示操作だけ）
  * 自動保存のたびに監査ログを残すと量が多すぎるので、監査は「版として提出」の側（提出のユースケース）で残す。
  */
 export async function saveDocumentDraft(
@@ -47,7 +48,15 @@ export async function saveDocumentDraft(
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "revision.submit");
   if (work.lifecycle !== "active") throw new DomainError("work_not_active", { workId: work.id });
   const current = await ctx.documents.findByWork(work.id);
-  const next = nextDraft(current, input, principal.userId, ctx.clock.now(), work.id);
+  // 形式は制作物の媒体と保存済みの下書きに合わせる（文章の原稿を投稿で上書きしない）
+  const next = nextDraft(
+    current,
+    input,
+    principal.userId,
+    ctx.clock.now(),
+    work.id,
+    work.mediaType,
+  );
   if (current) await ctx.documents.update({ ...next, id: current.id });
   else await ctx.documents.insert(next);
   return { version: next.version, updatedAt: next.updatedAt };

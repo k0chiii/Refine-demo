@@ -1,9 +1,11 @@
 import {
+  assertCanPostComment,
   DomainError,
   revisionLabel,
   isAccepting,
   isAllowed,
   planBotThreads,
+  remainingBotThreadQuota,
   proofreadableType,
   PROOFREADER_ID,
   runStatusOf,
@@ -171,8 +173,10 @@ export async function submitProofreadSegments(
     return { before: fresh.status, after: status, artifacts };
   };
 
-  // 受付が終わった版・校了済みの制作物には自動の指摘も作らない（人と同じ条件）
-  if (work.lifecycle === "finalized" || !isAccepting(revision)) {
+  // 受付が終わった版・校了済みの制作物には自動の指摘も作らない。
+  // 人のコメントと同じドメインの判定（受付中・締切前・最新の受付中の版）を使う。
+  // 締切を過ぎていれば、締切のジョブが版を閉じる前でも作らない
+  if (work.lifecycle === "finalized" || !(await acceptsComments(ctx, revision, now))) {
     await finish({ status: "skipped", error: "受付が終わったため検査しませんでした" });
     return { created: 0, duplicates: 0, truncated: false, skipped: "not_accepting" };
   }
@@ -181,18 +185,28 @@ export async function submitProofreadSegments(
     return { created: 0, duplicates: 0, truncated: false, skipped: "no_rules" };
   }
   const rules = await rulesOfSnapshot(ctx, revision.notationSnapshot);
-  const { planned, truncated } = planBotThreads(artifact.id, input.segments, rules);
+  const threads = await ctx.threads.listByRevision(revision.id);
   const existing = new Set(
-    (await ctx.threads.listByRevision(revision.id))
-      .map((t) => t.origin?.fingerprint)
-      .filter((x): x is string => !!x),
+    threads.map((t) => t.origin?.fingerprint).filter((x): x is string => !!x),
   );
+  // 添付ごとの上限は、この実行・この添付で保存済みの数を差し引いた残りだけ作る（分割送信の合計で上限を超えない）
+  const stored = threads.filter(
+    (t) => t.origin?.kind === "bot" && t.origin.runId === run.id && t.artifactId === artifact.id,
+  ).length;
+  let quota = remainingBotThreadQuota(stored);
+  // 重複（保存済み）を除いた後で残りの枠に収めるので、計画は上限いっぱいまで作る
+  const plan = planBotThreads(artifact.id, input.segments, rules);
+  let truncated = plan.truncated;
   let created = 0;
   let duplicates = 0;
-  for (const p of planned) {
+  for (const p of plan.planned) {
     if (existing.has(p.fingerprint)) {
       duplicates++;
       continue;
+    }
+    if (quota <= 0) {
+      truncated = true;
+      break;
     }
     try {
       validateAnchor(p.anchor);
@@ -221,6 +235,7 @@ export async function submitProofreadSegments(
     });
     existing.add(p.fingerprint);
     created++;
+    quota--;
   }
   const source: TextSource = kind === "text" ? "document" : kind === "page" ? "pdf_text" : "ocr";
   // この添付の自動校正の指摘の数（分割送信・再試行でも数え直す）
@@ -260,6 +275,19 @@ export async function submitProofreadSegments(
       });
   }
   return { created, duplicates, truncated };
+}
+
+/** 人のコメントと同じ受付の判定（assertCanPostComment）で、自動の指摘を作ってよいか */
+async function acceptsComments(ctx: AppContext, revision: Revision, now: number): Promise<boolean> {
+  const siblings = await ctx.revisions.listByWork(revision.workId);
+  const latest = siblings.find(isAccepting) ?? null;
+  try {
+    assertCanPostComment(revision, now, latest?.id ?? null);
+    return true;
+  } catch (e) {
+    if (e instanceof DomainError) return false;
+    throw e;
+  }
 }
 
 /** 端末で処理できなかった（読み込めない・OCR の失敗など）。提出は取り消さない */

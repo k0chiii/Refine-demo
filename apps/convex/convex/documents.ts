@@ -38,7 +38,10 @@ export const get = query({
   },
 });
 
-/** 自動保存。版番号が食い違えば version_conflict（他の人の保存を上書きしない） */
+/**
+ * 自動保存。版番号が食い違えば version_conflict（他の人の保存を上書きしない）。
+ * 制作物の媒体・保存済みの下書きと形式が違えば document_format_mismatch（原稿を別の形式で上書きしない）
+ */
 export const save = mutation({
   args: {
     workId: v.id("works"),
@@ -46,6 +49,8 @@ export const save = mutation({
     content: v.string(),
     text: v.string(),
     baseVersion: v.number(),
+    /** 別の形式の下書きを置き換える明示的な操作（媒体を変えた制作物など） */
+    replaceFormat: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);

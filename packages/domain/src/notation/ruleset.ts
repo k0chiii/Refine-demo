@@ -42,16 +42,24 @@ export function resolveRuleSet(
     if (r.exceptions.some((e) => e.kind === "category" && depth.has(e.value))) continue;
     out.push({ ...r, depth: d });
   }
-  return out.sort(
+  return sortEffective(out);
+}
+
+function sortEffective(rules: EffectiveRule[]): EffectiveRule[] {
+  return rules.sort(
     (a, b) => a.depth - b.depth || b.priority - a.priority || a.ruleId.localeCompare(b.ruleId),
   );
 }
 
-/** 版に記録するルールの組（どのルールのどの版で検査したか）。後からルールを変えても過去の結果は変わらない */
+/**
+ * 版に記録するルールの組（どのルールのどの版で、どの深さで検査したか）。
+ * 後からルールやカテゴリの継承を変えても過去の結果は変わらない。
+ * depth は提出時の継承の深さ（競合の優先に使う）。この項目を足す前に記録した版には無い。
+ */
 export interface RuleSetSnapshot {
   categories: string[];
   year: number;
-  rules: Array<{ ruleId: string; revision: number }>;
+  rules: Array<{ ruleId: string; revision: number; depth?: number }>;
   hash: string;
 }
 
@@ -61,7 +69,7 @@ export function snapshotOf(
   rules: readonly EffectiveRule[],
 ): RuleSetSnapshot {
   const list = rules
-    .map((r) => ({ ruleId: r.ruleId, revision: r.revision }))
+    .map((r) => ({ ruleId: r.ruleId, revision: r.revision, depth: r.depth }))
     .sort((a, b) => a.ruleId.localeCompare(b.ruleId));
   return {
     categories: [...selected].sort(),
@@ -69,6 +77,35 @@ export function snapshotOf(
     rules: list,
     hash: fnv1a(JSON.stringify([selected, year, list])),
   };
+}
+
+/**
+ * 版に記録したルールの組を復元する。
+ * どのルールを当てるか（カテゴリの継承・適用範囲・年度・例外）は提出時に決まっているので、今のカテゴリでは選び直さない。
+ * - rules: 記録した版の内容（ruleId と revision が一致するものだけを使う）
+ * - legacyCategories: depth を記録していない古い版のときだけ、深さを今の継承から推定するのに使う
+ */
+export function restoreRuleSet(
+  snapshot: RuleSetSnapshot,
+  rules: readonly NotationRule[],
+  legacyCategories: readonly RuleCategory[] = [],
+): EffectiveRule[] {
+  const byId = new Map(rules.map((r) => [`${r.ruleId}@${r.revision}`, r]));
+  const legacy = snapshot.rules.some((r) => r.depth === undefined)
+    ? expandCategories(legacyCategories, snapshot.categories)
+    : new Map<string, number>();
+  const out: EffectiveRule[] = [];
+  for (const ref of snapshot.rules) {
+    const r = byId.get(`${ref.ruleId}@${ref.revision}`);
+    if (!r) continue;
+    const depth =
+      ref.depth ??
+      legacy.get(r.categoryCode) ??
+      (snapshot.categories.includes(r.categoryCode) ? 0 : 1);
+    // 記録の時点で有効だったものなので、有効フラグはそのまま当てはまる
+    out.push({ ...r, enabled: true, depth });
+  }
+  return sortEffective(out);
 }
 
 /** 依存のない短いハッシュ（重複防止の指紋などに使う。暗号用途ではない） */

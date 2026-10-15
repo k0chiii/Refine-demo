@@ -330,7 +330,11 @@ export function validateRuleDraft(r: RuleDraft): string[] {
     if (!c.ok) errors.push(`正規表現: ${c.reason}`);
   }
   for (const e of r.exceptions)
-    if ((e.kind === "before" || e.kind === "after") && e.value && !compileRulePattern(e.value).ok)
+    if (
+      (e.kind === "before" || e.kind === "after") &&
+      e.value &&
+      !compileRulePattern(e.value, { allowEmptyMatch: true }).ok
+    )
       errors.push(`例外の正規表現が不正です: ${e.value}`);
   if (!ruleLanguages.includes(r.language)) errors.push("言語が不正です");
   if (!ruleStrictness.includes(r.strictness)) errors.push("厳格さが不正です");

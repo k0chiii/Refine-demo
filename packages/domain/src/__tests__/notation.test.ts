@@ -21,7 +21,11 @@ import {
   previewCsvImport,
   previewJsonImport,
   proofread,
+  publicProposalTitle,
+  remainingBotThreadQuota,
+  BOT_THREADS_PER_ARTIFACT,
   resolveRuleSet,
+  restoreRuleSet,
   snapshotOf,
   validateRuleDraft,
   type NotationRule,
@@ -145,7 +149,7 @@ describe("表記統一: ルールの組", () => {
     const rules = resolveRuleSet(cats, ["A1", "A2"], seed, { year: 100 });
     const a = snapshotOf(["A2", "A1"], 100, rules);
     const b = snapshotOf(["A1", "A2"], 100, [...rules].reverse());
-    expect(a.rules).toContainEqual({ ruleId: "A2-0001", revision: 1 });
+    expect(a.rules).toContainEqual({ ruleId: "A2-0001", revision: 1, depth: 0 });
     expect(a.categories).toEqual(["A1", "A2"]);
     expect(b.rules).toEqual(a.rules);
     const changed = snapshotOf(
@@ -305,6 +309,86 @@ describe("表記統一: 正規表現の安全性", () => {
     expect(compileRulePattern("/abc/x").ok).toBe(false);
     const ok = compileRulePattern("/ABC/i");
     expect(ok.ok && ok.regex.flags).toContain("i");
+  });
+});
+
+describe("表記統一: 空一致する正規表現", () => {
+  it("空の文字列に一致できる正規表現は登録の時点で拒否する", () => {
+    expect(compileRulePattern("(?:)").ok).toBe(false);
+    expect(compileRulePattern("a*").ok).toBe(false);
+    expect(compileRulePattern("/x?/i").ok).toBe(false);
+    expect(compileRulePattern("^").ok).toBe(false);
+    expect(compileRulePattern("[5５]月祭").ok).toBe(true);
+    expect(validateRuleDraft({ ...seed[0]!, patterns: ["(?:)"] })).toEqual([
+      expect.stringContaining("空の文字列"),
+    ]);
+    // 例外条件（直前・直後の文脈）は従来どおり受け入れる
+    expect(compileRulePattern("\\s*", { allowEmptyMatch: true }).ok).toBe(true);
+  });
+
+  it("文中で空一致するもの（先読みなど）は絵文字の本文でも止まり、指摘にしない", () => {
+    const r = rule({ ruleId: "look", correct: ["x"], patterns: ["(?=😀)", "(?=五)"] });
+    const res = proofread("😀五月祭😀\n😀😀", [{ ...r, depth: 0 }]);
+    expect(res.findings).toEqual([]);
+    expect(res.truncated).toBe(false);
+  });
+
+  it("時間の上限は一致のたびに確かめる（1 行の中でも打ち切れる）", () => {
+    let t = 0;
+    const r = rule({ ruleId: "a", correct: ["い"], incorrect: ["あ"] });
+    const res = proofread("あ".repeat(100), [{ ...r, depth: 0 }], {
+      now: () => t++,
+      timeBudgetMs: 10,
+    });
+    expect(res.truncated).toBe(true);
+    expect(res.findings.length).toBeLessThan(100);
+  });
+});
+
+describe("表記統一: 版のルールの組の復元", () => {
+  it("記録した深さで復元し、今のカテゴリの継承では選び直さない", () => {
+    const rules = resolveRuleSet(cats, ["B"], seed, { year: 100 });
+    const snap = snapshotOf(["B"], 100, rules);
+    expect(snap.rules.every((r) => r.depth === 1)).toBe(true);
+    const noInherit = cats.map((c) => (c.code === "B" ? { ...c, parents: [] } : c));
+    const restored = restoreRuleSet(snap, seed, noInherit);
+    expect(restored.map((r) => [r.ruleId, r.depth])).toEqual(rules.map((r) => [r.ruleId, r.depth]));
+    // 版の一致しないルールは使わない
+    expect(
+      restoreRuleSet(
+        snap,
+        seed.map((r) => ({ ...r, revision: 2 })),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("表記統一: 提案の公開題名", () => {
+  const base = {
+    kind: "report" as const,
+    correct: [] as string[],
+    incorrect: [] as string[],
+    context: { quote: "機密の文", surrounding: "前後の機密の文です" },
+  };
+  it("文脈と重なる題名は中立的な題名にし、表記そのものの題名は残す", () => {
+    expect(publicProposalTitle({ ...base, title: "機密の文" })).toBe("誤表記の報告");
+    expect(publicProposalTitle({ ...base, title: "機密" })).toBe("誤表記の報告");
+    expect(publicProposalTitle({ ...base, title: "" })).toBe("誤表記の報告");
+    expect(publicProposalTitle({ ...base, title: "機密", incorrect: ["機密"] })).toBe("機密");
+    expect(publicProposalTitle({ ...base, title: "送り仮名の揺れ" })).toBe("送り仮名の揺れ");
+    expect(publicProposalTitle({ ...base, context: {}, title: "機密の文" })).toBe("機密の文");
+  });
+});
+
+describe("自動校正: 添付ごとの上限", () => {
+  it("保存済みの数を差し引いた残りだけ計画する", () => {
+    expect(remainingBotThreadQuota(0)).toBe(BOT_THREADS_PER_ARTIFACT);
+    expect(remainingBotThreadQuota(BOT_THREADS_PER_ARTIFACT + 5)).toBe(0);
+    const rules = resolveRuleSet(cats, ["A1"], seed, { year: 100 });
+    const seg = { kind: "text" as const, text: "5月祭と5月祭と5月祭" };
+    expect(planBotThreads("a", [seg], rules, 2)).toMatchObject({ truncated: true });
+    expect(planBotThreads("a", [seg], rules, 2).planned).toHaveLength(2);
+    expect(planBotThreads("a", [seg], rules, 0)).toEqual({ planned: [], truncated: true });
   });
 });
 

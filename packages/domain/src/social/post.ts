@@ -310,6 +310,56 @@ export function parsePostManifest(json: unknown): SocialPost | null {
   };
 }
 
+/**
+ * 提出の前に、投稿の画像すべてに実体（ファイル）がそろっているかを確かめる。
+ * 1 枚でも欠けていれば提出しない（黙って除くと、画像の欠けた版や Instagram で 0 枚の版ができてしまう）。
+ * - loading: 前の版の画像（添付）を取得中。待てばそろう
+ * - lost: 端末で選んだ画像で、この端末に実体が無い（下書きを開き直した等）。選び直しが必要
+ */
+export interface MissingPostImage {
+  index: number;
+  image: SocialImage;
+  reason: "loading" | "lost";
+}
+
+export function missingPostImages(
+  post: Pick<SocialPost, "images">,
+  hasFile: (key: string) => boolean,
+): MissingPostImage[] {
+  return post.images.flatMap((image, index) =>
+    hasFile(image.key) ? [] : [{ index, image, reason: image.artifactId ? "loading" : "lost" }],
+  );
+}
+
+/** 欠けた画像の案内（利用者向け。提出を止めるときに出す） */
+export function missingPostImagesMessage(missing: readonly MissingPostImage[]): string | null {
+  const first = missing[0];
+  if (!first) return null;
+  const more = missing.length > 1 ? `（ほか ${missing.length - 1} 枚）` : "";
+  return first.reason === "loading"
+    ? `${first.index + 1} 枚目の画像を読み込んでいます${more}。読み込みが終わってから提出してください。`
+    : `${first.index + 1} 枚目の画像「${first.image.fileName}」がこの端末にありません${more}。選び直してから提出してください。`;
+}
+
+/**
+ * 版にする内容の記録（スナップショット）と添付するファイルが 1 対 1 に対応しているか。
+ * 記録にある画像のファイル名がすべて添付にあり、重複が無いこと。問題の説明を返す（無ければ空）。
+ */
+export function postSnapshotProblems(
+  snapshot: Pick<SocialPost, "images">,
+  fileNames: readonly string[],
+): string[] {
+  const problems: string[] = [];
+  const files = new Set(fileNames);
+  const seen = new Set<string>();
+  for (const [i, im] of snapshot.images.entries()) {
+    if (seen.has(im.fileName)) problems.push(`${i + 1} 枚目の画像のファイル名が重複しています`);
+    seen.add(im.fileName);
+    if (!files.has(im.fileName)) problems.push(`${i + 1} 枚目の画像のファイルがありません`);
+  }
+  return problems;
+}
+
 /** 下書きとして保存できる投稿か（文章の下書きと同じ保存先を使う） */
 export function isPostDraftContent(content: string): boolean {
   try {
