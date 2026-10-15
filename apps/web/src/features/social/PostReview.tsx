@@ -15,12 +15,8 @@ import {
   M3eSegmentedButton,
   M3eSnackbar,
 } from "@/ui/m3e";
-import {
-  PostPreview,
-  type PreviewDevice,
-  type PreviewImage,
-  type PreviewView,
-} from "./preview/PostPreview";
+import { PostPreview, type PreviewImage, type PreviewView } from "./preview/PostPreview";
+import { DevicePicker, usePreviewDevice } from "./preview/DevicePicker";
 import { makeZip } from "./zip";
 
 interface ArtifactLike {
@@ -56,7 +52,7 @@ export function PostReview({
   const [post, setPost] = useState<SocialPost | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<Array<PreviewImage & { blob: Blob; fileName: string }>>([]);
-  const [device, setDevice] = useState<PreviewDevice>("iphone");
+  const device = usePreviewDevice();
   const [view, setView] = useState<PreviewView>("post");
 
   useEffect(() => {
@@ -147,19 +143,7 @@ export function PostReview({
     <div className="post-review">
       <div className="post-preview stack">
         <div className="row">
-          <M3eSegmentedButton aria-label="端末">
-            {(
-              [
-                ["iphone", "iPhone"],
-                ["android", "Android"],
-                ["pc", "PC"],
-              ] as const
-            ).map(([d, l]) => (
-              <M3eButtonSegment key={d} checked={device === d} onClick={() => setDevice(d)}>
-                {l}
-              </M3eButtonSegment>
-            ))}
-          </M3eSegmentedButton>
+          <DevicePicker device={device.device} color={device.color} onChange={device.set} />
           {post.platform === "instagram" && post.format !== "story" ? (
             <M3eSegmentedButton aria-label="表示">
               {(
@@ -178,7 +162,8 @@ export function PostReview({
         <PostPreview
           post={post}
           images={images}
-          device={device}
+          device={device.device}
+          {...(device.color ? { color: device.color } : {})}
           view={view}
           safeArea
           {...(profile ? { profile } : {})}

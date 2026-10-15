@@ -43,7 +43,7 @@ export { M3eDivider } from "@m3e/react/divider";
 export { M3eHeading } from "@m3e/react/heading";
 export { M3eFormField } from "@m3e/react/form-field";
 export { M3eSelect } from "@m3e/react/select";
-export { M3eOption } from "@m3e/react/option";
+export { M3eOptGroup, M3eOption } from "@m3e/react/option";
 export { M3eAutocomplete } from "@m3e/react/autocomplete";
 export { M3eCheckbox } from "@m3e/react/checkbox";
 export { M3eSwitch } from "@m3e/react/switch";

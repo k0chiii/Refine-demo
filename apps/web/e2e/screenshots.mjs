@@ -1021,6 +1021,11 @@ async function v2Scenes() {
   await page.locator(".post-image input").first().fill("五月祭のポスター");
   await page.waitForTimeout(600);
   await shot("56-sns-editor");
+  // 端末は機種で選ぶ（既定は iPhone 17。画面は実機の CSS ピクセルで組む）
+  expectTrue(
+    (await page.locator(".sp-caption").innerText()).includes("iPhone 17（画面 402×874"),
+    "端末の機種と画面の大きさが出ない",
+  );
   await page.locator("m3e-button-segment", { hasText: "プロフィール" }).click();
   await page.waitForTimeout(300);
   await shot("57-sns-preview-grid", ".post-preview");

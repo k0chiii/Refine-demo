@@ -666,6 +666,15 @@ ax で M3E の `toolbar`・`fab`・`fab-menu`・`button-group`・`icon-button` �
   - 外部に公開・配布する画面には使わない（団体内の校正用の再現に限る）。各サービスの画面が変わったら、Web 版から取り直して差し替える
 - 文字の切り詰め（2 行・続きを読む）は文字幅の近似。確定の表示は実機で確認する（画面に注記）
 
+### 端末を機種で選ぶ（Figma の端末プリセットのように）
+
+- プレビューの「端末」は機種の一覧（M3E の select、iPhone / Android / PC のグループは `m3e-optgroup`。ax で確認）。iPhone は本体の色も選べる。選んだ端末は見る人ごとにブラウザに覚える（保存できない環境では既定の iPhone 17）
+- 画面は**実機と同じ CSS ピクセル**（iOS の pt・Android の dp）で組む。文字の折り返し・Instagram の 2 行の切り詰めは画面の幅から計算するので、機種を変えると実機と同じように変わる。置き場所に収まらないときは表示だけ縮め（CSS の `zoom`）、「実寸の 72% で表示」のように注記する
+- **iPhone の枠は Apple の公式ベゼル**（[Apple Design Resources › Product Bezels](https://developer.apple.com/design/resources/#product-bezels) の PNG。iPhone 16 / 17 / 18 の各機種・各色）を 2/3 に縮めた WebP（`public/devices/`、1 枚 20〜30KB、全 41 枚で約 1MB）。画面の位置と大きさは PNG の透明な部分を実測（例: iPhone 17 Pro はベゼル 450×920 の中の 24,23 から 402×874）。ダイナミックアイランドもベゼルに描かれている。オフライン用の先読み（Service Worker）には入れない
+- ベゼルが配られていない機種（iPhone 16e・iPhone SE（第 3 世代）・Pixel 10 / 10 Pro / 10 Pro XL・Galaxy S24・Galaxy Z Flip7）は CSS で枠・切り欠き（ノッチ・パンチホール・ホームボタン）を描く。画面の大きさは Playwright の端末定義（Chrome DevTools と同じ値）
+- 上下の安全領域（ステータスバー 62 / 59 / 47 / 20pt、ホームインジケーター 34pt、Android のジェスチャーバー 24dp）は機種ごとに持ち、Instagram のタブバー・X のナビと投稿ボタンはその分だけ上に置く
+- M3E の選択肢（option・menu-item）の選択中とカレンダーの特別な日は既定で tertiary（この配色ではピンク）なので、アプリ全体で青系の secondary-container に寄せた
+
 ### 校正画面のツールバー
 
 - 影がおかしかった: 前回、狭い画面で項目を横スクロールさせるためにツールバー自体に `overflow` を付けたため、M3E が host の中に描く影（elevation）が四角く切れていた。スクロールは内側の要素だけで行い、ツールバー自体は切らないようにした

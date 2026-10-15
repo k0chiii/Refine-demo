@@ -34,6 +34,23 @@
   --mf-on-error-container: var(--md-sys-color-on-error-container, #410002);
   --mf-inverse-surface: var(--md-sys-color-inverse-surface, #2e3036);
   --mf-inverse-on-surface: var(--md-sys-color-inverse-on-surface, #f0f0f7);
+  /* M3E は選択肢・メニューの選択中とカレンダーの特別な日を tertiary で塗る。vibrant ではこの種の tertiary が
+     ピンク（#f09dff）になるので、青系の secondary に寄せる（利用者指摘「青なのに別の色が混じる」の続き） */
+  --m3e-option-selected-container-color: var(--md-sys-color-secondary-container);
+  --m3e-option-selected-color: var(--md-sys-color-on-secondary-container);
+  --m3e-option-selected-container-hover-color: var(--md-sys-color-on-secondary-container);
+  --m3e-option-selected-container-focus-color: var(--md-sys-color-on-secondary-container);
+  --m3e-option-selected-ripple-color: var(--md-sys-color-on-secondary-container);
+  --m3e-menu-item-selected-container-color: var(--md-sys-color-secondary-container);
+  --m3e-menu-item-selected-color: var(--md-sys-color-on-secondary-container);
+  --m3e-menu-item-selected-container-hover-color: var(--md-sys-color-on-secondary-container);
+  --m3e-menu-item-selected-container-focus-color: var(--md-sys-color-on-secondary-container);
+  --m3e-menu-item-selected-ripple-color: var(--md-sys-color-on-secondary-container);
+  --m3e-calendar-item-special-container-color: var(--md-sys-color-secondary-container);
+  --m3e-calendar-item-special-color: var(--md-sys-color-on-secondary-container);
+  --m3e-calendar-item-special-hover-color: var(--md-sys-color-on-secondary-container);
+  --m3e-calendar-item-special-focus-color: var(--md-sys-color-on-secondary-container);
+  --m3e-calendar-item-special-ripple-color: var(--md-sys-color-on-secondary-container);
   /* M3 の色役割に無い「成功」「注意」。動的カラーの tertiary/secondary は seed 次第で緑にもなり
      意味を担保できないため、固定の補助色にし、ライト／ダークで切り替える（下の @media）。
      重大（critical）だけは M3 の error を使う。 */
@@ -3021,4 +3038,20 @@ m3e-icon.icon--on {
 .post-account__name {
   flex: 1;
   min-width: 0;
+}
+/* SNS プレビューの端末選択（機種と本体の色） */
+.device-picker {
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+}
+.device-picker__device {
+  width: 240px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.device-picker__color {
+  width: 168px;
+  min-width: 0;
+  flex: 0 1 auto;
 }

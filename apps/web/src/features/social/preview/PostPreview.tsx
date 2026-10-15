@@ -6,7 +6,8 @@ import {
   type SocialAspect,
   type SocialPost,
 } from "@mf100/domain";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { bezelUrl, deviceById, outerSize, type DeviceSpec } from "./devices";
 import { Icon, StatusIcons } from "./icons";
 import "./preview.css";
 
@@ -24,7 +25,8 @@ export interface PreviewImage {
   w: number;
   h: number;
 }
-export type PreviewDevice = "iphone" | "android" | "pc";
+/** 端末の ID（devices.ts の DEVICES） */
+export type PreviewDevice = string;
 export type PreviewView = "post" | "grid" | "story";
 /** プロフィール画面に出す見た目（本体の設定の SNS アカウント） */
 export interface PreviewProfile {
@@ -89,7 +91,7 @@ function xUrlLabel(url: string): string {
 
 /**
  * Instagram のキャプションの切り詰め: 2 行に収まる分だけ残す（「… 続きを読む」の分を空ける）。
- * 幅は全角 1・半角 0.55 で数え、1 行は全角 26 字（393px の端末・14px の文字）。改行は行を進める。
+ * 幅は全角 1・半角 0.55 で数え、1 行は（画面の幅 − 左右の余白 24px）÷ 14px の字数（393px の端末で 26 字）。改行は行を進める。
  * 実物は文字ごとの実際の幅で切るので、ここは近似（数文字ずれることがある）。
  */
 export function igTruncate(text: string, lead: number, lines = 2, perLine = 26): string | null {
@@ -125,14 +127,17 @@ export function PostText({
   text: full,
   platform,
   clamp,
+  perLine,
 }: {
   text: string;
   platform: "instagram" | "x";
   /** Instagram: 2 行で切る。数値は 1 行目の先頭に並ぶユーザー名の幅（全角換算） */
   clamp?: number;
+  /** 1 行に入る全角の字数（画面の幅から計算） */
+  perLine?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const cut = clamp !== undefined && !open ? igTruncate(full, clamp) : null;
+  const cut = clamp !== undefined && !open ? igTruncate(full, clamp, 2, perLine) : null;
   const text = cut ?? full;
   const marks = [
     ...extractHashtags(text).map((m) => ({ ...m, kind: "tag" as const })),
@@ -228,7 +233,16 @@ function IgTopBar() {
   );
 }
 
-function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImage[] }) {
+function InstagramPost({
+  post,
+  images,
+  width,
+}: {
+  post: SocialPost;
+  images: PreviewImage[];
+  /** 画面の幅（キャプションの切り詰めに使う） */
+  width: number;
+}) {
   const [index, setIndex] = useState(0);
   const list = post.images;
   const cur = list[Math.min(index, Math.max(0, list.length - 1))];
@@ -310,6 +324,7 @@ function InstagramPost({ post, images }: { post: SocialPost; images: PreviewImag
               text={post.body}
               platform="instagram"
               clamp={Array.from(user).length * 0.6 + 1}
+              perLine={Math.floor((width - 24) / 14)}
             />
           </p>
           <p className="sp-ig__time">1分前</p>
@@ -467,15 +482,7 @@ function InstagramProfile({
   );
 }
 
-function XPost({
-  post,
-  images,
-  device,
-}: {
-  post: SocialPost;
-  images: PreviewImage[];
-  device: PreviewDevice;
-}) {
+function XPost({ post, images, pc }: { post: SocialPost; images: PreviewImage[]; pc: boolean }) {
   const user = post.account.username || "username";
   const list = post.images.slice(0, 4);
   const card = (
@@ -531,7 +538,7 @@ function XPost({
       </div>
     </article>
   );
-  if (device === "pc") return <div className="sp-x-pc">{card}</div>;
+  if (pc) return <div className="sp-x-pc">{card}</div>;
   return (
     <div className="sp-screen">
       <header className="sp-x-top" aria-hidden="true">
@@ -560,40 +567,139 @@ function XPost({
   );
 }
 
-/** 端末の枠（iPhone / Android / PC）。幅は各端末の CSS ピクセルの代表値（iPhone 16: 393、Pixel: 412） */
+/** 画面（実機の CSS ピクセルの大きさ）。ステータスバー・切り欠き・ホームインジケーターを含む */
+function DeviceScreen({
+  spec,
+  dark,
+  drawCutout,
+  children,
+}: {
+  spec: DeviceSpec;
+  dark: boolean;
+  drawCutout: boolean;
+  children: ReactNode;
+}) {
+  const pc = spec.kind === "pc";
+  const style = pc
+    ? undefined
+    : ({
+        width: spec.w,
+        height: spec.h,
+        borderRadius: spec.radius,
+        "--sp-top": `${spec.top}px`,
+        "--sp-bottom": `${spec.bottom}px`,
+      } as CSSProperties);
+  return (
+    <div
+      className={`sp-device sp-device--${spec.kind} sp-cut--${spec.cutout} ${dark ? "sp-device--dark" : ""}`}
+      style={style}
+    >
+      {pc ? null : (
+        <div className="sp-device__status" aria-hidden="true">
+          <b>9:41</b>
+          <StatusIcons />
+        </div>
+      )}
+      {drawCutout && spec.cutout === "island" ? (
+        <i className="sp-device__island" aria-hidden="true" />
+      ) : null}
+      {spec.cutout === "notch" ? <i className="sp-device__notch" aria-hidden="true" /> : null}
+      {spec.cutout === "punch" ? <i className="sp-device__punch" aria-hidden="true" /> : null}
+      <div className="sp-device__screen">{children}</div>
+      {spec.bottom > 0 ? <i className="sp-device__home" aria-hidden="true" /> : null}
+    </div>
+  );
+}
+
+/**
+ * 端末の外形。iPhone は Apple の公式ベゼル画像を画面の上に重ね、それ以外は CSS で枠を描く。
+ * 中の画面は実機と同じ CSS ピクセルで組むので、文字の折り返しは実機と同じになる（表示だけ縮める）。
+ */
 function DeviceFrame({
-  device,
+  spec,
+  color,
   dark,
   children,
 }: {
-  device: PreviewDevice;
-  dark?: boolean;
+  spec: DeviceSpec;
+  color?: string | undefined;
+  dark: boolean;
   children: ReactNode;
 }) {
+  const bezel = bezelUrl(spec, color);
+  if (spec.kind === "pc")
+    return (
+      <DeviceScreen spec={spec} dark={dark} drawCutout={false}>
+        {children}
+      </DeviceScreen>
+    );
+  const outer = outerSize(spec);
+  const home = spec.cutout === "home-button";
+  const at = spec.bezel
+    ? { left: spec.bezel.x, top: spec.bezel.y }
+    : { left: 12, top: home ? 72 : 12 };
   return (
-    <div className={`sp-device sp-device--${device} ${dark ? "sp-device--dark" : ""}`}>
-      {device === "iphone" ? (
-        <div className="sp-device__status" aria-hidden="true">
-          <b>9:41</b>
-          <i className="sp-device__island" />
-          <StatusIcons />
-        </div>
-      ) : device === "android" ? (
-        <div className="sp-device__status sp-device__status--android" aria-hidden="true">
-          <b>9:41</b>
-          <StatusIcons />
-        </div>
-      ) : null}
-      <div className="sp-device__screen">{children}</div>
-      {device !== "pc" ? <i className="sp-device__home" aria-hidden="true" /> : null}
+    <div
+      className={`sp-frame sp-frame--${spec.kind} ${bezel ? "sp-frame--bezel" : ""}`}
+      style={{ width: outer.w, height: outer.h }}
+    >
+      {bezel ? null : (
+        <i
+          className="sp-frame__body"
+          style={{ borderRadius: home ? 56 : spec.radius + 12 }}
+          aria-hidden="true"
+        >
+          {home ? (
+            <>
+              <i className="sp-frame__speaker" />
+              <i className="sp-frame__button" />
+            </>
+          ) : null}
+        </i>
+      )}
+      <div className="sp-frame__screen" style={at}>
+        <DeviceScreen spec={spec} dark={dark} drawCutout={!bezel}>
+          {children}
+        </DeviceScreen>
+      </div>
+      {bezel ? <img className="sp-frame__bezel" src={bezel} alt="" draggable={false} /> : null}
     </div>
   );
+}
+
+/** 置き場所の幅と画面の高さに収まるように縮める倍率（拡大はしない） */
+function useFitScale(outer: { w: number; h: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || outer.h === 0) {
+      setScale(1);
+      return;
+    }
+    const fit = () => {
+      const w = el.parentElement?.clientWidth ?? el.clientWidth;
+      // 上のツールバー（端末の選択など）とアプリバーの分を引いた高さに収める
+      const h = Math.max(520, window.innerHeight - 240);
+      setScale(Math.min(1, w / outer.w, h / outer.h));
+    };
+    fit();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    if (ro && el.parentElement) ro.observe(el.parentElement);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [outer.w, outer.h]);
+  return { ref, scale };
 }
 
 export function PostPreview({
   post,
   images,
   device,
+  color,
   view,
   safeArea = false,
   profile,
@@ -601,25 +707,35 @@ export function PostPreview({
   post: SocialPost;
   images: PreviewImage[];
   device: PreviewDevice;
+  /** ベゼルの色（iPhone） */
+  color?: string;
   view: PreviewView;
   safeArea?: boolean;
   profile?: PreviewProfile;
 }) {
+  const spec = deviceById(device);
+  const outer = outerSize(spec);
+  const { ref, scale } = useFitScale(outer);
   const story = post.platform === "instagram" && (post.format === "story" || view === "story");
   return (
     <figure className="sp-figure" aria-label="投稿のプレビュー">
-      <DeviceFrame device={device} dark={story}>
-        {post.platform === "x" ? (
-          <XPost post={post} images={images} device={device} />
-        ) : story ? (
-          <InstagramStory post={post} images={images} safeArea={safeArea} />
-        ) : view === "grid" ? (
-          <InstagramProfile post={post} images={images} profile={profile} />
-        ) : (
-          <InstagramPost post={post} images={images} />
-        )}
-      </DeviceFrame>
+      <div className="sp-frame-fit" ref={ref} style={scale < 1 ? { zoom: scale } : undefined}>
+        <DeviceFrame spec={spec} color={color} dark={story}>
+          {post.platform === "x" ? (
+            <XPost post={post} images={images} pc={spec.kind === "pc"} />
+          ) : story ? (
+            <InstagramStory post={post} images={images} safeArea={safeArea} />
+          ) : view === "grid" ? (
+            <InstagramProfile post={post} images={images} profile={profile} />
+          ) : (
+            <InstagramPost post={post} images={images} width={spec.w} />
+          )}
+        </DeviceFrame>
+      </div>
       <figcaption className="sp-caption">
+        {spec.kind === "pc"
+          ? null
+          : `${spec.label}（画面 ${spec.w}×${spec.h}${scale < 1 ? `、実寸の ${Math.round(scale * 100)}% で表示` : ""}）。`}
         実際の画面に寄せた再現です。折り返し・切り詰め・余白は端末やアプリの版で変わるので、確定の表示は実機で確認してください。
       </figcaption>
     </figure>

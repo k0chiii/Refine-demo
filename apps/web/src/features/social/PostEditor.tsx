@@ -50,12 +50,8 @@ import {
   M3eSwitch,
 } from "@/ui/m3e";
 import { PaneTabs } from "@/ui/PaneTabs";
-import {
-  PostPreview,
-  type PreviewDevice,
-  type PreviewImage,
-  type PreviewView,
-} from "./preview/PostPreview";
+import { PostPreview, type PreviewImage, type PreviewView } from "./preview/PostPreview";
+import { DevicePicker, usePreviewDevice } from "./preview/DevicePicker";
 
 /** 画像の実体（URL と大きさ）。前の版の画像は添付から、新しい画像は端末のファイルから */
 interface ImageAsset extends PreviewImage {
@@ -146,7 +142,7 @@ function PostSurface({
     });
     // 割り当てたアカウントが変わったときだけ写す
   }, [profile?.id, profile?.updatedAt, canEdit]);
-  const [device, setDevice] = useState<PreviewDevice>("iphone");
+  const device = usePreviewDevice();
   const [view, setView] = useState<PreviewView>("post");
   const [safeArea, setSafeArea] = useState(true);
   const [pane, setPane] = useState<"edit" | "preview">("edit");
@@ -578,19 +574,7 @@ function PostSurface({
   const previewPane = (
     <div className="post-preview stack">
       <div className="row">
-        <M3eSegmentedButton aria-label="端末">
-          {(
-            [
-              ["iphone", "iPhone"],
-              ["android", "Android"],
-              ["pc", "PC"],
-            ] as const
-          ).map(([d, l]) => (
-            <M3eButtonSegment key={d} checked={device === d} onClick={() => setDevice(d)}>
-              {l}
-            </M3eButtonSegment>
-          ))}
-        </M3eSegmentedButton>
+        <DevicePicker device={device.device} color={device.color} onChange={device.set} />
         {post.platform === "instagram" && post.format !== "story" ? (
           <M3eSegmentedButton aria-label="表示">
             {(
@@ -619,7 +603,8 @@ function PostSurface({
         post={post}
         {...(profile ? { profile } : {})}
         images={previewImages}
-        device={device}
+        device={device.device}
+        {...(device.color ? { color: device.color } : {})}
         view={view}
         safeArea={safeArea}
       />
