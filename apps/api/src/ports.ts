@@ -45,6 +45,15 @@ export interface BackendGateway {
   ): Promise<{ status: string; failureMessage: string | null }>;
   markFailed(token: string, itemId: string, message: string): Promise<void>;
   authorizeArtifact(token: string, artifactId: string): Promise<ArtifactAccess>;
+  /** フィードバックの添付（PUT /feedback/files/:fileId）。版の提出と同じ流れ */
+  feedbackFileForUpload(token: string, fileId: string): Promise<UploadTarget>;
+  markFeedbackFileVerified(
+    token: string,
+    fileId: string,
+    meta: { size: number; sha256: string },
+  ): Promise<{ status: string; failureMessage: string | null }>;
+  markFeedbackFileFailed(token: string, fileId: string, message: string): Promise<void>;
+  authorizeFeedbackFile(token: string, fileId: string): Promise<ArtifactAccess>;
 }
 
 /** 清掃（D14）: Convex から孤立オブジェクトを受け取り、R2 から削除して記録する。共有秘密で認証。 */

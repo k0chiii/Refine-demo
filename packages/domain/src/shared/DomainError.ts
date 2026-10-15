@@ -76,6 +76,10 @@ export const domainErrorCodes = [
   "notation_not_manager",
   "notation_category_invalid",
   "notation_proposal_closed",
+  // 制作のフィードバック（表現の議論）
+  "feedback_invalid",
+  "feedback_not_found",
+  "feedback_file_not_ready",
   // 冪等性 / 競合
   "idempotency_conflict",
   "version_conflict",

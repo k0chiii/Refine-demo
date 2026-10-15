@@ -1,4 +1,5 @@
 import { endOfJstDay } from "@mf100/domain";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 
 /**
@@ -218,6 +219,103 @@ export const demo = internalMutation({
         grantedAt: now,
       });
       created.push(workId);
+    }
+    // 制作のフィードバック（表現の議論）のサンプル。スレッドが 1 件も無いときだけ入れる
+    if (!(await ctx.db.query("feedbackThreads").first())) {
+      const workOf = async (legacyId: string) =>
+        ctx.db
+          .query("works")
+          .withIndex("by_year", (q) => q.eq("year", 100))
+          .filter((q) => q.eq(q.field("legacyId"), legacyId))
+          .first();
+      const creator = ids["mock-nogiku-creator"]!;
+      const reviewer = ids["mock-nogiku-reviewer"]!;
+      const manager = ids["mock-nogiku-manager"]!;
+      const addThread = async (
+        workId: Id<"works">,
+        title: string,
+        posts: Array<{
+          authorId: string;
+          body: string;
+          template?: "creator_first" | "creator_update" | "reviewer";
+          reactions?: Array<{ emoji: string; userIds: string[] }>;
+          at: number;
+        }>,
+      ) => {
+        const threadId = await ctx.db.insert("feedbackThreads", {
+          workId,
+          title,
+          createdBy: posts[0]!.authorId,
+          createdAt: posts[0]!.at,
+          lastPostAt: posts[posts.length - 1]!.at,
+          postCount: posts.length,
+          participantIds: [...new Set(posts.map((p) => p.authorId))],
+        });
+        for (const p of posts)
+          await ctx.db.insert("feedbackPosts", {
+            threadId,
+            workId,
+            authorId: p.authorId,
+            body: p.body,
+            mentions: [],
+            fileIds: [],
+            ...(p.template ? { template: p.template } : {}),
+            reactions: p.reactions ?? [],
+            createdAt: p.at,
+          });
+      };
+      const eve = await workOf("EVE-012");
+      if (eve)
+        await addThread(eve._id, "配色の方向性", [
+          {
+            authorId: creator,
+            template: "creator_first",
+            at: now - 2 * day,
+            body: [
+              "【この案の意図】",
+              "・意識したこと: 前夜祭らしい夜の空気と、にぎやかさの両立",
+              "・この表現にした理由: 紺の地に暖色の差し色で、遠くからでも目に留まるようにした",
+              "",
+              "【今回見てほしい点】",
+              "・迷っていること: 差し色のオレンジが強すぎないか",
+              "・判断したいこと: 日付の文字を白にするか黄色にするか",
+              "",
+              "【補足〈必要な場合のみ〉】",
+              "・変更できない条件: ロゴの色は指定どおり",
+            ].join("\n"),
+          },
+          {
+            authorId: reviewer,
+            template: "reviewer",
+            at: now - day,
+            reactions: [{ emoji: "👍", userIds: [creator] }],
+            body: [
+              "【初見の印象】",
+              "・パッと見た時に感じた全体のイメージ: 夜のお祭りの高揚感が伝わります",
+              "",
+              "【よく機能しているところ】",
+              "・目的に沿っている箇所: 紺と暖色の対比で、掲示板の中でも目立ちます",
+              "",
+              "【改善できそうなところ】",
+              "・意図を確認する質問: 日付は一番先に読ませたい情報でしょうか？",
+              "・具体的な提案: 日付を白にすると、オレンジとの競合が減りそうです",
+            ].join("\n"),
+          },
+        ]);
+      const pamphlet = await workOf("PR-001");
+      if (pamphlet)
+        await addThread(pamphlet._id, "表紙の写真の候補", [
+          {
+            authorId: manager,
+            at: now - 3 * day,
+            body: "表紙の写真を 2 案で迷っています。安田講堂の正面と、模擬店の人波のどちらがよいでしょうか。",
+          },
+          {
+            authorId: creator,
+            at: now - 3 * day + 3_600_000,
+            body: "来場者向けの案内なので、にぎわいが伝わる人波の写真に一票です。",
+          },
+        ]);
     }
     // 表記統一のサンプル（notation2 の初期データ＋α）。ルールが 1 件も無いときだけ入れる
     if (!(await ctx.db.query("notationRules").first())) {

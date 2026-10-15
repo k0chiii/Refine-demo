@@ -40,5 +40,21 @@ export function createConvexGateway(convexUrl: string): BackendGateway {
         .query(api.artifacts.authorizeAccess, { artifactId: artifactId as Id<"artifacts"> })
         .catch(translate);
     },
+    async feedbackFileForUpload(token, fileId) {
+      return withAuth(token).query(api.feedback.fileForUpload, { fileId }).catch(translate);
+    },
+    async markFeedbackFileVerified(token, fileId, meta) {
+      return withAuth(token)
+        .mutation(api.feedback.markFileVerified, { fileId, ...meta })
+        .catch(translate);
+    },
+    async markFeedbackFileFailed(token, fileId, message) {
+      await withAuth(token)
+        .mutation(api.feedback.markFileFailed, { fileId, message })
+        .catch(translate);
+    },
+    async authorizeFeedbackFile(token, fileId) {
+      return withAuth(token).query(api.feedback.authorizeFile, { fileId }).catch(translate);
+    },
   };
 }

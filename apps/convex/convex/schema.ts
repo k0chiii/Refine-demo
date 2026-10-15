@@ -11,6 +11,7 @@ import {
   vRuleSetSnapshot,
   vBotOrigin,
   vProofreadingRunFields,
+  vFeedbackTemplateId,
 } from "./lib/validators.ts";
 
 /**
@@ -495,6 +496,70 @@ export default defineSchema({
   })
     .index("by_userId_and_openedAt", ["userId", "openedAt"])
     .index("by_userId_and_workId", ["userId", "workId"]),
+
+  // ---------------------------------------------------------------- 制作のフィードバック（表現の議論）
+  /**
+   * スレッド（制作物ごとに複数）。正式な校正（版・コメント）とは別の表。
+   * 参加者（投稿したことのある人）は通知の宛先。人数は限られるので配列で持つ。
+   */
+  feedbackThreads: defineTable({
+    workId: v.id("works"),
+    title: v.string(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    lastPostAt: v.number(),
+    postCount: v.number(),
+    participantIds: v.array(v.string()),
+  })
+    .index("by_work", ["workId", "lastPostAt"])
+    .index("by_last_post", ["lastPostAt"]),
+
+  /** 投稿。削除は deletedAt（論理削除）。リアクションは絵文字ごとに押した人 */
+  feedbackPosts: defineTable({
+    threadId: v.id("feedbackThreads"),
+    workId: v.id("works"),
+    authorId: v.string(),
+    body: v.string(),
+    mentions: v.array(v.string()),
+    fileIds: v.array(v.string()),
+    template: v.optional(vFeedbackTemplateId),
+    reactions: v.array(v.object({ emoji: v.string(), userIds: v.array(v.string()) })),
+    createdAt: v.number(),
+    editedAt: v.optional(v.number()),
+    deletedAt: v.optional(v.number()),
+  }).index("by_thread", ["threadId", "createdAt"]),
+
+  /**
+   * 投稿の添付（R2 の feedback/ の下）。準備 → Hono で実体検証 → 投稿に付ける。
+   * 付けないまま 24 時間たったものは abandonedAt を付け、Hono の清掃で R2 から消す（purgedAt）。
+   */
+  feedbackFiles: defineTable({
+    workId: v.id("works"),
+    uploaderId: v.string(),
+    fileName: v.string(),
+    mimeType: v.string(),
+    type: v.union(v.literal("pdf"), v.literal("image"), v.literal("document"), v.literal("other")),
+    declaredSize: v.optional(v.number()),
+    size: v.optional(v.number()),
+    sha256: v.optional(v.string()),
+    objectKey: v.string(),
+    status: artifactStatus,
+    postId: v.optional(v.string()),
+    createdAt: v.number(),
+    failureMessage: v.optional(v.string()),
+    abandonedAt: v.optional(v.number()),
+    purgedAt: v.optional(v.number()),
+  })
+    .index("by_post", ["postId", "createdAt"])
+    .index("by_uploader", ["uploaderId", "createdAt"])
+    .index("by_purged_and_abandoned", ["purgedAt", "abandonedAt"]),
+
+  /** 既読の印（人 × スレッドで 1 行） */
+  feedbackReads: defineTable({
+    userId: v.string(),
+    threadId: v.id("feedbackThreads"),
+    readAt: v.number(),
+  }).index("by_user_thread", ["userId", "threadId"]),
 
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({

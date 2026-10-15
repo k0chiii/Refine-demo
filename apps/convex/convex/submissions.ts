@@ -1,4 +1,7 @@
 import {
+  FEEDBACK_ORPHAN_PREFIX,
+  listOrphanFeedbackObjects,
+  markFeedbackObjectsPurged,
   confirmSubmission,
   expireUploadSessions,
   listOrphanUploadObjects,
@@ -199,16 +202,34 @@ export const expireSessions = internalMutation({
   },
 });
 
-/** 清掃: abandoned セッションの未削除オブジェクト一覧（Hono の cron が http.ts 経由で取得）。 */
+/**
+ * 清掃: abandoned セッションの未削除オブジェクト一覧（Hono の cron が http.ts 経由で取得）。
+ * 放置されたフィードバックの添付も同じ一覧に載せる（itemId は "feedback:{添付 ID}"。Hono には不透明な ID）。
+ */
 export const listOrphanObjects = internalMutation({
   args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) =>
-    listOrphanUploadObjects(createAppContext(ctx.db), Math.min(limit ?? 100, 500)),
+  handler: async (ctx, { limit }) => {
+    const app = createAppContext(ctx.db);
+    const max = Math.min(limit ?? 100, 500);
+    const uploads = await listOrphanUploadObjects(app, max);
+    if (uploads.length >= max) return uploads;
+    return [...uploads, ...(await listOrphanFeedbackObjects(app, max - uploads.length))];
+  },
 });
 
-/** 清掃: R2 から削除済みの項目を記録（冪等）。 */
+/** 清掃: R2 から削除済みの項目を記録（冪等）。"feedback:" で始まるものはフィードバックの添付。 */
 export const markObjectsPurged = internalMutation({
-  args: { itemIds: v.array(v.id("uploadItems")) },
-  handler: async (ctx, { itemIds }) =>
-    markUploadObjectsPurged(createAppContext(ctx.db), itemIds.slice(0, 500)),
+  args: { itemIds: v.array(v.string()) },
+  handler: async (ctx, { itemIds }) => {
+    const app = createAppContext(ctx.db);
+    const ids = itemIds.slice(0, 500);
+    const feedback = ids
+      .filter((id) => id.startsWith(FEEDBACK_ORPHAN_PREFIX))
+      .map((id) => id.slice(FEEDBACK_ORPHAN_PREFIX.length));
+    const uploads = ids.filter((id) => !id.startsWith(FEEDBACK_ORPHAN_PREFIX));
+    return (
+      (await markUploadObjectsPurged(app, uploads)) +
+      (await markFeedbackObjectsPurged(app, feedback))
+    );
+  },
 });

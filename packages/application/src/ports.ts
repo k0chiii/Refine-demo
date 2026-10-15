@@ -4,6 +4,9 @@ import type {
   CommentEvent,
   CommentThread,
   DocumentDraft,
+  FeedbackFile,
+  FeedbackPost,
+  FeedbackThread,
   Instant,
   ManualPair,
   NotationRule,
@@ -40,6 +43,8 @@ export interface WorkRepository {
   findById(id: WorkId): Promise<Work | null>;
   insert(work: Omit<Work, "id">): Promise<Work>;
   update(work: Work): Promise<void>;
+  /** 全ての制作物（管理者の集計用。上限つき） */
+  list(limit: number): Promise<Work[]>;
 }
 
 export interface RevisionRepository {
@@ -114,7 +119,9 @@ export type NotificationKind =
   | "auto_proofread_done"
   | "rule_proposed"
   | "rule_proposal_decided"
-  | "mentioned";
+  | "mentioned"
+  | "feedback_posted"
+  | "feedback_mentioned";
 
 export interface Notification {
   id: string;
@@ -124,6 +131,7 @@ export interface Notification {
   body: string;
   workId?: WorkId;
   revisionId?: RevisionId;
+  /** コメントのスレッド。feedback_* の通知ではフィードバックのスレッド */
   threadId?: string;
   createdAt: Instant;
   readAt?: Instant;
@@ -218,9 +226,21 @@ export interface AlignmentOverrideRepository {
   update(row: AlignmentOverride): Promise<void>;
 }
 
-/** 人の表示名（通知の本文に「誰が」を書くため）。分からなければ null */
+/** 委員（一度でもサインインした人）の名簿の行 */
+export interface PersonProfile {
+  id: UserId;
+  name: string;
+  email: string | null;
+}
+
+/** 人の表示名（通知の本文に「誰が」を書くため）と、委員の名簿（メンションの候補） */
 export interface PeopleDirectory {
+  /** 分からなければ null */
   displayName(userId: UserId): Promise<string | null>;
+  /** 委員の一覧（上限つき。並びは問わない） */
+  listMembers(limit: number): Promise<PersonProfile[]>;
+  /** 指定した人のうち委員である人（知らない ID は返さない） */
+  profiles(userIds: readonly UserId[]): Promise<PersonProfile[]>;
 }
 
 /**
@@ -258,6 +278,33 @@ export interface HomeRepository {
   removeRecent(userId: UserId, workId: WorkId): Promise<void>;
 }
 
+/**
+ * 制作のフィードバック（表現の議論）。スレッド・投稿・添付・既読の印。
+ * 正式な校正（版・コメント）とは別の表で持つ。
+ */
+export interface FeedbackRepository {
+  findThread(id: string): Promise<FeedbackThread | null>;
+  /** 最後の投稿が新しい順。workId を渡すとその制作物のスレッドだけ */
+  listThreads(opts: { workId?: string; limit: number }): Promise<FeedbackThread[]>;
+  insertThread(thread: Omit<FeedbackThread, "id">): Promise<FeedbackThread>;
+  updateThread(thread: FeedbackThread): Promise<void>;
+  findPost(id: string): Promise<FeedbackPost | null>;
+  /** 古い順 */
+  listPosts(threadId: string): Promise<FeedbackPost[]>;
+  insertPost(post: Omit<FeedbackPost, "id">): Promise<FeedbackPost>;
+  updatePost(post: FeedbackPost): Promise<void>;
+  findFile(id: string): Promise<FeedbackFile | null>;
+  insertFile(file: Omit<FeedbackFile, "id">): Promise<FeedbackFile>;
+  updateFile(file: FeedbackFile): Promise<void>;
+  /** 投稿に付いていない・放置扱いでない・createdAt <= before の添付 */
+  listUnattachedFilesBefore(before: Instant, limit: number): Promise<FeedbackFile[]>;
+  /** 放置扱いで、R2 の実体の削除がまだ終わっていない添付 */
+  listAbandonedUnpurgedFiles(limit: number): Promise<FeedbackFile[]>;
+  /** その人がそのスレッドを最後に読んだ時刻（未読の判定） */
+  readAt(userId: UserId, threadId: string): Promise<Instant | null>;
+  markRead(userId: UserId, threadId: string, at: Instant): Promise<void>;
+}
+
 export interface AppContext {
   clock: Clock;
   people: PeopleDirectory;
@@ -278,6 +325,7 @@ export interface AppContext {
   notation: NotationRepository;
   proofreadingRuns: ProofreadingRunRepository;
   home: HomeRepository;
+  feedback: FeedbackRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
 }

@@ -33,6 +33,8 @@ const icon: Record<string, string> = {
   rule_proposed: "spellcheck",
   rule_proposal_decided: "rule",
   mentioned: "alternate_email",
+  feedback_posted: "forum",
+  feedback_mentioned: "alternate_email",
 };
 
 function useUnread() {
@@ -50,7 +52,13 @@ function useNotifications() {
   });
   const openOne = useAction(async (n: NonNullable<typeof list>[number]) => {
     if (n.readAt === undefined) await markRead({ notificationId: n.id as Id<"notifications"> });
-    if (n.revisionId)
+    // フィードバック（表現の議論）の通知: threadId はフィードバックのスレッド
+    if ((n.kind === "feedback_posted" || n.kind === "feedback_mentioned") && n.threadId)
+      // /feedback/$threadId は画面側で追加中のルート。型付きのルート一覧に載るまでは文字列のパスで渡す
+      void navigate({
+        to: `/feedback/${encodeURIComponent(n.threadId)}`,
+      } as unknown as Parameters<typeof navigate>[0]);
+    else if (n.revisionId)
       void navigate({
         to: "/revisions/$revisionId",
         params: { revisionId: n.revisionId },

@@ -5,6 +5,9 @@ import type {
   CommentEvent,
   CommentThread,
   DocumentDraft,
+  FeedbackFile,
+  FeedbackPost,
+  FeedbackThread,
   SocialProfile,
   Team,
   NotationRule,
@@ -93,6 +96,22 @@ export function createAppContext(
         const doc = await db.get("users", id as Id<"users">).catch(() => null);
         return doc?.name?.trim() || null;
       },
+      // 委員 = 一度でもサインインした Nogiku ユーザー（users.search と同じ範囲）
+      async listMembers(limit) {
+        const users = await db.query("users").take(Math.min(limit, 5000));
+        return users
+          .filter((u) => u.nogikuSubject !== undefined)
+          .map((u) => ({ id: u._id as string, name: u.name ?? "", email: u.email ?? null }));
+      },
+      async profiles(ids) {
+        const out = [];
+        for (const id of new Set(ids)) {
+          const u = await db.get("users", id as Id<"users">).catch(() => null);
+          if (u && u.nogikuSubject !== undefined)
+            out.push({ id: u._id as string, name: u.name ?? "", email: u.email ?? null });
+        }
+        return out;
+      },
     },
     works: {
       async findById(id) {
@@ -108,6 +127,10 @@ export function createAppContext(
       async update(work) {
         await db.replace(work.id as Id<"works">, compact(toFields(work) as Strip<Doc<"works">>));
         await syncRoles(work);
+      },
+      async list(limit) {
+        const docs = await db.query("works").take(limit);
+        return docs.map((d) => fromDoc(d) as Work);
       },
     },
     revisions: {
@@ -700,6 +723,125 @@ export function createAppContext(
     audit: {
       async record(entry) {
         await db.insert("auditEvents", compact(entry));
+      },
+    },
+    feedback: {
+      async findThread(id) {
+        const doc = await db.get("feedbackThreads", id as Id<"feedbackThreads">).catch(() => null);
+        return doc ? (fromDoc(doc) as FeedbackThread) : null;
+      },
+      async listThreads({ workId, limit }) {
+        const docs =
+          workId === undefined
+            ? await db.query("feedbackThreads").withIndex("by_last_post").order("desc").take(limit)
+            : await db
+                .query("feedbackThreads")
+                .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+                .order("desc")
+                .take(limit);
+        return docs.map((d) => fromDoc(d) as FeedbackThread);
+      },
+      async insertThread(thread) {
+        const id = await db.insert("feedbackThreads", {
+          ...thread,
+          workId: thread.workId as Id<"works">,
+        });
+        return { ...thread, id } as FeedbackThread;
+      },
+      async updateThread(thread) {
+        const { id, ...fields } = thread;
+        await db.replace("feedbackThreads", id as Id<"feedbackThreads">, {
+          ...fields,
+          workId: fields.workId as Id<"works">,
+        });
+      },
+      async findPost(id) {
+        const doc = await db.get("feedbackPosts", id as Id<"feedbackPosts">).catch(() => null);
+        return doc ? (fromDoc(doc) as FeedbackPost) : null;
+      },
+      async listPosts(threadId) {
+        const docs = await db
+          .query("feedbackPosts")
+          .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"feedbackThreads">))
+          .take(2000);
+        return docs.map((d) => fromDoc(d) as FeedbackPost);
+      },
+      async insertPost(post) {
+        const id = await db.insert(
+          "feedbackPosts",
+          compact({
+            ...post,
+            threadId: post.threadId as Id<"feedbackThreads">,
+            workId: post.workId as Id<"works">,
+          }),
+        );
+        return { ...post, id } as FeedbackPost;
+      },
+      async updatePost(post) {
+        const { id, ...fields } = post;
+        await db.replace(
+          "feedbackPosts",
+          id as Id<"feedbackPosts">,
+          compact({
+            ...fields,
+            threadId: fields.threadId as Id<"feedbackThreads">,
+            workId: fields.workId as Id<"works">,
+          }),
+        );
+      },
+      async findFile(id) {
+        const doc = await db.get("feedbackFiles", id as Id<"feedbackFiles">).catch(() => null);
+        return doc ? (fromDoc(doc) as FeedbackFile) : null;
+      },
+      async insertFile(file) {
+        const id = await db.insert(
+          "feedbackFiles",
+          compact({ ...file, workId: file.workId as Id<"works"> }),
+        );
+        return { ...file, id } as FeedbackFile;
+      },
+      async updateFile(file) {
+        const { id, ...fields } = file;
+        await db.replace(
+          "feedbackFiles",
+          id as Id<"feedbackFiles">,
+          compact({ ...fields, workId: fields.workId as Id<"works"> }),
+        );
+      },
+      async listUnattachedFilesBefore(before, limit) {
+        const docs = await db
+          .query("feedbackFiles")
+          .withIndex("by_post", (q) => q.eq("postId", undefined).lte("createdAt", before))
+          .filter((q) => q.eq(q.field("abandonedAt"), undefined))
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as FeedbackFile);
+      },
+      async listAbandonedUnpurgedFiles(limit) {
+        const docs = await db
+          .query("feedbackFiles")
+          .withIndex("by_purged_and_abandoned", (q) =>
+            q.eq("purgedAt", undefined).gte("abandonedAt", 0),
+          )
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as FeedbackFile);
+      },
+      async readAt(userId, threadId) {
+        const doc = await db
+          .query("feedbackReads")
+          .withIndex("by_user_thread", (q) =>
+            q.eq("userId", userId).eq("threadId", threadId as Id<"feedbackThreads">),
+          )
+          .first();
+        return doc?.readAt ?? null;
+      },
+      async markRead(userId, threadId, at) {
+        const tid = threadId as Id<"feedbackThreads">;
+        const doc = await db
+          .query("feedbackReads")
+          .withIndex("by_user_thread", (q) => q.eq("userId", userId).eq("threadId", tid))
+          .first();
+        if (!doc) await db.insert("feedbackReads", { userId, threadId: tid, readAt: at });
+        else if (doc.readAt < at) await db.patch("feedbackReads", doc._id, { readAt: at });
       },
     },
     idempotency: {
