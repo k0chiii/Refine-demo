@@ -2,7 +2,7 @@ import { api } from "@mf100/convex/api";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { formatJstDate, remaining } from "@/lib/format";
+import { formatDeadline, formatDeadlineUntil, formatJstDate, remaining } from "@/lib/format";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eActionList, M3eHeading, M3eListAction } from "@/ui/m3e";
 
@@ -15,7 +15,7 @@ const mineGroups: Array<[keyof Dashboard["mine"], string, (i: Item) => string]> 
   [
     "review",
     "校正する",
-    (i) => `締切 ${formatJstDate(i.deadlineAt ?? 0)}（${remaining(i.deadlineAt ?? 0)}）`,
+    (i) => `締切 ${formatDeadlineUntil(i.deadlineAt ?? 0)}（${remaining(i.deadlineAt ?? 0)}）`,
   ],
   ["respond", "返事をする", (i) => `未対応 ${i.count}`],
   ["finalize", "校了する", () => "未対応なし・専門確認済み"],
@@ -25,14 +25,14 @@ const backlogGroups: Array<[keyof Dashboard["backlog"], string, (i: Item) => str
   [
     "overdue",
     "期限超過",
-    (i) => `締切 ${formatJstDate(i.deadlineAt ?? 0)}${i.count ? `・未対応 ${i.count}` : ""}`,
+    (i) => `締切 ${formatDeadline(i.deadlineAt ?? 0)}${i.count ? `・未対応 ${i.count}` : ""}`,
   ],
-  ["unassigned", "校正者が未割当", (i) => `締切 ${formatJstDate(i.deadlineAt ?? 0)}`],
+  ["unassigned", "校正者が未割当", (i) => `締切 ${formatDeadlineUntil(i.deadlineAt ?? 0)}`],
   ["stale", "動きがない", (i) => `最後の動き ${formatJstDate(i.deadlineAt ?? 0)}`],
   [
     "dueSoon",
     "納期が近い",
-    (i) => `納期 ${formatJstDate(i.deadlineAt ?? 0)}（${remaining(i.deadlineAt ?? 0)}）`,
+    (i) => `納期 ${formatDeadline(i.deadlineAt ?? 0)}（${remaining(i.deadlineAt ?? 0)}）`,
   ],
 ];
 

@@ -1,5 +1,6 @@
 export * from "./shared/DomainError.ts";
 export * from "./shared/time.ts";
+export * from "./shared/deadline.ts";
 export * from "./shared/ids.ts";
 export * from "./acl/Permission.ts";
 export * from "./acl/authorize.ts";

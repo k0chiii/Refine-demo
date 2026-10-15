@@ -1,8 +1,10 @@
 import {
   closeByDeadline,
   DomainError,
+  formatDeadlineUntil,
   hasOrgPermission,
   isAllowed,
+  isDeadlineReached,
   markResponded,
   markViewed,
   orgPermissions,
@@ -70,6 +72,7 @@ export async function assignReviewers(
 /**
  * 期限接近リマインド（F-11 / §10-3）: 受付中で期限が windowMs 以内、かつ未確認の割当に 1 回だけ通知する。
  * 同じ内容を何度も送らない（冪等キーで版×校正者につき 1 回）。
+ * 判定は締切の時刻どうしの比較なので、日付だけの締切（その日の終わり＝翌日 0:00 JST）なら当日の 0:00 JST から届く。
  */
 export async function remindUpcomingDeadlines(
   ctx: AppContext,
@@ -81,7 +84,8 @@ export async function remindUpcomingDeadlines(
   for (const a of await ctx.assignments.listUnresponded(limit)) {
     const revision = await ctx.revisions.findById(a.revisionId);
     if (!revision || revision.reviewState !== "open") continue;
-    if (revision.deadlineAt <= now || revision.deadlineAt - now > windowMs) continue;
+    if (isDeadlineReached(now, revision.deadlineAt) || revision.deadlineAt - now > windowMs)
+      continue;
     const key = `${revision.id}:${a.reviewerId}`;
     if (await ctx.idempotency.get("deadlineReminder", key)) continue;
     const work = await ctx.works.findById(revision.workId);
@@ -89,7 +93,7 @@ export async function remindUpcomingDeadlines(
     await notify(ctx, [a.reviewerId], null, {
       kind: "deadline_approaching",
       title: `校正期限が近づいています: ${work.title} ${revisionLabel(revision)}`,
-      body: "未確認の校正があります。期限を過ぎると新規の指摘はできません。",
+      body: `締切は ${formatDeadlineUntil(revision.deadlineAt, now)}。未確認の校正があります。期限を過ぎると新規の指摘はできません。`,
       workId: work.id,
       revisionId: revision.id,
     });

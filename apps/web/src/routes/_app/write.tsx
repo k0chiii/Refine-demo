@@ -1,7 +1,7 @@
 import { api } from "@mf100/convex/api";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { formatJstDate, formatJstShort } from "@/lib/format";
+import { formatDeadline, formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -24,7 +24,7 @@ function WritePicker() {
       params: { workId: w.workId },
     });
   const meta = (w: { mediaType: string; deadlineAt?: number | null }) =>
-    `${mediaLabel[w.mediaType] ?? w.mediaType}${w.deadlineAt ? `・納期 ${formatJstDate(w.deadlineAt)}` : ""}`;
+    `${mediaLabel[w.mediaType] ?? w.mediaType}${w.deadlineAt ? `・納期 ${formatDeadline(w.deadlineAt)}` : ""}`;
   return (
     <div className="write-picker">
       <AppBarSlot slot="title">エディタ</AppBarSlot>

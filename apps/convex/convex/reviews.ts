@@ -1,5 +1,5 @@
 import { assignReviewers, completeMyReview } from "@mf100/application";
-import { revisionLabel } from "@mf100/domain";
+import { isBeforeDeadline, isDeadlineReached, revisionLabel } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
@@ -96,8 +96,8 @@ export const myQueue = query({
         focusNotes: revision.focusNotes,
         deadlineAt: revision.deadlineAt,
         reviewState: revision.reviewState,
-        isOpen: revision.reviewState === "open" && now < revision.deadlineAt,
-        overdue: revision.reviewState !== "open" || now >= revision.deadlineAt,
+        isOpen: revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt),
+        overdue: revision.reviewState !== "open" || isDeadlineReached(now, revision.deadlineAt),
         assignmentState: a.state,
         myCommentCount: myThreads.filter((t) => t.authorId === principal.userId).length,
         totalCommentCount: myThreads.length,

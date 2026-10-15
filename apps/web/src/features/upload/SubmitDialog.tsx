@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
-import { formatBytes, formatJstDate, startOfJstDay } from "@/lib/format";
+import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
@@ -52,8 +52,8 @@ export function SubmitDialog({
   const reset = useMutation(api.submissions.reset);
   const confirm = useMutation(api.submissions.confirm);
 
-  // 既定は 3 日後。締切は暦日単位（その日の 0:00 JST）なので、最短は翌日
-  const defaultDeadline = useMemo(() => startOfJstDay(Date.now() + 3 * 86_400_000), []);
+  // 既定は 3 日後の終わり（日付だけの締切＝その日の 23:59 まで）。当日の終わりも選べる
+  const defaultDeadline = useMemo(() => endOfJstDay(Date.now() + 3 * 86_400_000), []);
   const [deadlineAt, setDeadlineAt] = useState<number | null>(defaultDeadline);
   const [form, setForm] = useState({
     kind: "standard",
@@ -114,6 +114,8 @@ export function SubmitDialog({
     setError(null);
     if (!work) return;
     if (!deadlineAt) return setError("校正期限を入力してください");
+    if (deadlineAt <= Date.now())
+      return setError("校正期限が過ぎています。今より後の日時にしてください");
     if (!token) return setError("認証トークンがありません。再度サインインしてください");
     const items = [
       ...files.map((f) => ({
@@ -183,8 +185,8 @@ export function SubmitDialog({
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>
-            {accepting.label} が受付中（締切 {formatJstDate(accepting.deadlineAt)}
-            ）。確定した時点で受付が終了します。
+            {`${accepting.label} が ${formatDeadlineUntil(accepting.deadlineAt)}受付中。`}
+            確定した時点で受付が終了します。
           </p>
         ) : null}
         {!flow ? (
@@ -248,7 +250,7 @@ export function SubmitDialog({
                 required
                 value={deadlineAt}
                 onChange={setDeadlineAt}
-                min={startOfJstDay(Date.now() + 86_400_000)}
+                min={Date.now()}
               />
             </div>
             <Field label="変更点">

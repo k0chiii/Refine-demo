@@ -4,7 +4,14 @@ import {
   markRevisionViewed,
   remindUpcomingDeadlines,
 } from "@mf100/application";
-import { DomainError, isAccepting, isAllowed, revisionLabel } from "@mf100/domain";
+import {
+  DomainError,
+  isAccepting,
+  isAllowed,
+  isBeforeDeadline,
+  isDeadlineReached,
+  revisionLabel,
+} from "@mf100/domain";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
@@ -55,7 +62,7 @@ export const get = query({
         isAllowed("comment.post", authz) &&
         work.lifecycle !== "finalized" &&
         accepting?.id === revision.id &&
-        now < revision.deadlineAt;
+        isBeforeDeadline(now, revision.deadlineAt);
       return {
         revision: {
           ...revision,
@@ -119,7 +126,7 @@ export const get = query({
             ? "finalized"
             : revision.reviewState !== "open"
               ? (revision.reviewClosedReason ?? "closed")
-              : now >= revision.deadlineAt
+              : isDeadlineReached(now, revision.deadlineAt)
                 ? "deadline"
                 : accepting?.id !== revision.id
                   ? "not_latest"

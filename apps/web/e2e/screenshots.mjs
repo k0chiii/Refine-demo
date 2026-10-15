@@ -209,7 +209,7 @@ async function main() {
     "初稿。表紙と地図ページ。",
     async () => {
       await page.fill("m3e-dialog[open] textarea >> nth=1", "表紙の配色と団体名の表記");
-      // 21 日付ピッカー（校正期限は日付のみ・0:00 JST）
+      // 21 日付ピッカー（校正期限は日付と任意の時刻。日付だけならその日の 23:59 まで）
       await page
         .locator('m3e-dialog[open] m3e-icon-button[aria-label="カレンダーから選ぶ"]')
         .first()
