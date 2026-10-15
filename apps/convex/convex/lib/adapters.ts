@@ -162,6 +162,18 @@ export function createAppContext(
           .take(limit);
         return docs.map((d) => fromDoc(d) as Revision);
       },
+      async listOpenDueWithin({ after, upTo }, { cursor, limit }) {
+        const result = await db
+          .query("revisions")
+          .withIndex("by_state_deadline", (q) =>
+            q.eq("reviewState", "open").gt("deadlineAt", after).lte("deadlineAt", upTo),
+          )
+          .paginate({ numItems: limit, cursor });
+        return {
+          page: result.page.map((d) => fromDoc(d) as Revision),
+          continueCursor: result.isDone ? null : result.continueCursor,
+        };
+      },
     },
     artifacts: {
       async findById(id) {
@@ -312,14 +324,6 @@ export function createAppContext(
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
       },
-      async listUnresponded(limit) {
-        const pending = await db
-          .query("reviewAssignments")
-          .withIndex("by_reviewer_state")
-          .filter((q) => q.or(q.eq(q.field("state"), "pending"), q.eq(q.field("state"), "viewed")))
-          .take(limit);
-        return pending.map(stripAssignment);
-      },
     },
     checks: {
       async findById(id) {
@@ -360,6 +364,15 @@ export function createAppContext(
           .take(limit);
         return docs.map((d) => fromDoc(d) as Notification);
       },
+      async listUnreadForUser(userId, { createdAtOrBefore, limit }) {
+        const docs = await db
+          .query("notifications")
+          .withIndex("by_recipient_read_created", (q) =>
+            q.eq("recipientId", userId).eq("readAt", undefined).lte("createdAt", createdAtOrBefore),
+          )
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as Notification);
+      },
       async findById(id) {
         const doc = await db.get("notifications", id as Id<"notifications">).catch(() => null);
         return doc ? (fromDoc(doc) as Notification) : null;
@@ -370,7 +383,7 @@ export function createAppContext(
       async countUnread(userId) {
         const docs = await db
           .query("notifications")
-          .withIndex("by_recipient_read", (q) =>
+          .withIndex("by_recipient_read_created", (q) =>
             q.eq("recipientId", userId).eq("readAt", undefined),
           )
           .take(100);

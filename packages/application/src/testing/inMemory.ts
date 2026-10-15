@@ -179,6 +179,18 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
           .all()
           .filter((r) => r.reviewState === "open" && r.deadlineAt <= t)
           .slice(0, limit),
+      listOpenDueWithin: async ({ after, upTo }, { cursor, limit }) => {
+        const all = state.revisions
+          .all()
+          .filter((r) => r.reviewState === "open" && r.deadlineAt > after && r.deadlineAt <= upTo)
+          .sort((a, b) => a.deadlineAt - b.deadlineAt);
+        const start = cursor === null ? 0 : Number(cursor);
+        const end = start + limit;
+        return {
+          page: all.slice(start, end),
+          continueCursor: end < all.length ? String(end) : null,
+        };
+      },
     },
     artifacts: {
       findById: async (id) => state.artifacts.get(id),
@@ -233,11 +245,6 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         if (i >= 0) state.assignments[i] = clone(a);
         else state.assignments.push(clone(a));
       },
-      listUnresponded: async (limit) =>
-        state.assignments
-          .filter((a) => a.state === "pending" || a.state === "viewed")
-          .map((a) => clone(a))
-          .slice(0, limit),
     },
     acl: {
       listByWork: async (workId) =>
@@ -288,6 +295,17 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
           .all()
           .filter((n) => n.recipientId === userId)
           .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, limit),
+      listUnreadForUser: async (userId, { createdAtOrBefore, limit }) =>
+        state.notifications
+          .all()
+          .filter(
+            (n) =>
+              n.recipientId === userId &&
+              n.readAt === undefined &&
+              n.createdAt <= createdAtOrBefore,
+          )
+          .sort((a, b) => a.createdAt - b.createdAt)
           .slice(0, limit),
       findById: async (id) => state.notifications.get(id),
       update: async (n) => state.notifications.put(n),

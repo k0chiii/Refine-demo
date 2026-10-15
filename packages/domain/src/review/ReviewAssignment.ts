@@ -25,3 +25,8 @@ export function markResponded(a: ReviewAssignment, now: Instant): ReviewAssignme
   const viewedAt = a.viewedAt ?? now;
   return { ...a, state: "responded", viewedAt, respondedAt: now };
 }
+
+/** まだ確認を終えていない割当（期限接近リマインドの対象）: pending か viewed */
+export function isUnresponded(a: Pick<ReviewAssignment, "state">): boolean {
+  return a.state === "pending" || a.state === "viewed";
+}

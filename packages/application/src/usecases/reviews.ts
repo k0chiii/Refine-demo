@@ -5,6 +5,7 @@ import {
   hasOrgPermission,
   isAllowed,
   isDeadlineReached,
+  isUnresponded,
   markResponded,
   markViewed,
   orgPermissions,
@@ -74,40 +75,88 @@ export async function assignReviewers(
   return out;
 }
 
+/** 期限接近リマインドの 1 回分の範囲 */
+export interface DeadlineReminderBatch {
+  /** 締切まで windowMs 以内の版を対象にする（既定 24 時間） */
+  windowMs?: number;
+  /** 1 回で読む版の数 */
+  limit?: number;
+  /** 前回の continueCursor。最初は null */
+  cursor?: string | null;
+  /** 続きを読むときは最初の回の時刻をそのまま渡す（範囲を変えないため） */
+  asOf?: number;
+}
+
+export interface DeadlineReminderBatchResult {
+  sent: number;
+  /** 続きがあれば次の回に渡すカーソル。無ければ null */
+  continueCursor: string | null;
+  asOf: number;
+}
+
 /**
- * 期限接近リマインド（F-11 / §10-3）: 受付中で期限が windowMs 以内、かつ未確認の割当に 1 回だけ通知する。
- * 同じ内容を何度も送らない（冪等キーで版×校正者につき 1 回）。
+ * 期限接近リマインド（F-11 / §10-3）の 1 回分: 受付中で締切が windowMs 以内の版を締切順に limit 件読み、
+ * その版の未確認（pending/viewed）の割当に 1 回だけ通知する（冪等キーで版×校正者につき 1 回）。
+ * 対象は「期限内の受付中の版」から引く。未確認の割当を先頭から読む方式だと、受付終了・期限切れの古い割当が
+ * 先頭に溜まって現行の割当に届かなくなる（レビュー指摘）。版が多いときは continueCursor で続きを読む。
  * 判定は締切の時刻どうしの比較なので、日付だけの締切（その日の終わり＝翌日 0:00 JST）なら当日の 0:00 JST から届く。
+ */
+export async function remindUpcomingDeadlinesBatch(
+  ctx: AppContext,
+  opts: DeadlineReminderBatch = {},
+): Promise<DeadlineReminderBatchResult> {
+  const now = opts.asOf ?? ctx.clock.now();
+  const windowMs = opts.windowMs ?? 24 * 3_600_000;
+  const { page, continueCursor } = await ctx.revisions.listOpenDueWithin(
+    { after: now, upTo: now + windowMs },
+    { cursor: opts.cursor ?? null, limit: opts.limit ?? 100 },
+  );
+  let sent = 0;
+  for (const revision of page) {
+    // 索引の範囲で絞っているが、判定はドメインの規則でも確かめる
+    if (revision.reviewState !== "open" || isDeadlineReached(now, revision.deadlineAt)) continue;
+    if (revision.deadlineAt - now > windowMs) continue;
+    const unresponded = (await ctx.assignments.listByRevision(revision.id)).filter(isUnresponded);
+    if (unresponded.length === 0) continue;
+    const work = await ctx.works.findById(revision.workId);
+    if (!work) continue;
+    for (const a of unresponded) {
+      const key = `${revision.id}:${a.reviewerId}`;
+      if (await ctx.idempotency.get("deadlineReminder", key)) continue;
+      await notify(ctx, [a.reviewerId], null, {
+        kind: "deadline_approaching",
+        title: "校正の締切が近づいています",
+        body: `${about(work.title, revisionLabel(revision))}・締切は ${formatDeadlineUntil(
+          revision.deadlineAt,
+          now,
+        )}。それまでに校正画面で確かめ、「確認を完了」を押してください。締切を過ぎるとコメントできません。`,
+        workId: work.id,
+        revisionId: revision.id,
+      });
+      await ctx.idempotency.put("deadlineReminder", key, { sentAt: now });
+      sent++;
+    }
+  }
+  return { sent, continueCursor, asOf: now };
+}
+
+/**
+ * 期限接近リマインドを最後のページまで続けて行う（インメモリ・テスト用。Convex では 1 回分ずつスケジューラで続ける）。
+ * 送った件数を返す。
  */
 export async function remindUpcomingDeadlines(
   ctx: AppContext,
   windowMs = 24 * 3_600_000,
-  limit = 500,
+  limit = 100,
 ): Promise<number> {
-  const now = ctx.clock.now();
   let sent = 0;
-  for (const a of await ctx.assignments.listUnresponded(limit)) {
-    const revision = await ctx.revisions.findById(a.revisionId);
-    if (!revision || revision.reviewState !== "open") continue;
-    if (isDeadlineReached(now, revision.deadlineAt) || revision.deadlineAt - now > windowMs)
-      continue;
-    const key = `${revision.id}:${a.reviewerId}`;
-    if (await ctx.idempotency.get("deadlineReminder", key)) continue;
-    const work = await ctx.works.findById(revision.workId);
-    if (!work) continue;
-    await notify(ctx, [a.reviewerId], null, {
-      kind: "deadline_approaching",
-      title: "校正の締切が近づいています",
-      body: `${about(work.title, revisionLabel(revision))}・締切は ${formatDeadlineUntil(
-        revision.deadlineAt,
-        now,
-      )}。それまでに校正画面で確かめ、「確認を完了」を押してください。締切を過ぎるとコメントできません。`,
-      workId: work.id,
-      revisionId: revision.id,
-    });
-    await ctx.idempotency.put("deadlineReminder", key, { sentAt: now });
-    sent++;
-  }
+  let cursor: string | null = null;
+  const asOf = ctx.clock.now();
+  do {
+    const r = await remindUpcomingDeadlinesBatch(ctx, { windowMs, limit, cursor, asOf });
+    sent += r.sent;
+    cursor = r.continueCursor;
+  } while (cursor !== null);
   return sent;
 }
 

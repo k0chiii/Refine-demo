@@ -2,7 +2,7 @@ import {
   closeExpiredReviews,
   loadAuthorizedWork,
   markRevisionViewed,
-  remindUpcomingDeadlines,
+  remindUpcomingDeadlinesBatch,
 } from "@mf100/application";
 import {
   DomainError,
@@ -13,6 +13,7 @@ import {
   revisionLabel,
 } from "@mf100/domain";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
@@ -161,8 +162,22 @@ export const closeExpired = internalMutation({
   },
 });
 
-/** cron: 期限 24 時間前の未確認校正者へリマインド（F-11 最小通知）。同一版×校正者に 1 回。 */
+/**
+ * cron: 期限 24 時間前の未確認校正者へリマインド（F-11 最小通知）。同一版×校正者に 1 回。
+ * 1 回の mutation では期限内の受付中の版を 1 ページだけ処理し、続きがあれば同じ時刻（asOf）とカーソルで
+ * 自分を続けて予約する（1 トランザクションの読取上限に収め、後ろの版にも必ず届かせる）。この回で送った件数を返す。
+ */
 export const remindDeadlines = internalMutation({
-  args: {},
-  handler: async (ctx) => remindUpcomingDeadlines(createAppContext(ctx.db)),
+  args: { cursor: v.optional(v.union(v.string(), v.null())), asOf: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<number> => {
+    const batch: { cursor: string | null; asOf?: number } = { cursor: args.cursor ?? null };
+    if (args.asOf !== undefined) batch.asOf = args.asOf;
+    const r = await remindUpcomingDeadlinesBatch(createAppContext(ctx.db), batch);
+    if (r.continueCursor !== null)
+      await ctx.scheduler.runAfter(0, internal.revisions.remindDeadlines, {
+        cursor: r.continueCursor,
+        asOf: r.asOf,
+      });
+    return r.sent;
+  },
 });

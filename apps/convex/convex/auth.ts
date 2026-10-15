@@ -1,5 +1,6 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import type { DatabaseWriter } from "./_generated/server";
+import { resolveRedirectTo } from "./lib/redirect.ts";
 import Nogiku from "./providers/nogiku.ts";
 import NogikuMock from "./providers/nogikuMock.ts";
 
@@ -89,11 +90,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
       return ctx.db.insert("users", { ...fields, isSystemAdmin: bootstrapAdmin });
     },
-    redirect: async ({ redirectTo }) => {
-      const base = frontendBaseUrl();
-      if (redirectTo.startsWith("/")) return `${base}${redirectTo}`;
-      if (redirectTo.startsWith(base)) return redirectTo;
-      throw new Error(`Invalid redirectTo: ${redirectTo}`);
-    },
+    // 前方一致ではなく URL を解析して origin・パスの境界を厳密に比べる（lib/redirect.ts）
+    redirect: async ({ redirectTo }) => resolveRedirectTo(redirectTo, frontendBaseUrl()),
   },
 });

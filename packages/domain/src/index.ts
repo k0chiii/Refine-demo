@@ -25,3 +25,4 @@ export * from "./comparison/index.ts";
 export * from "./notation/index.ts";
 export * from "./social/index.ts";
 export * from "./feedback/feedback.ts";
+export * from "./notification/access.ts";

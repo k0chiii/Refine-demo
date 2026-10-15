@@ -404,7 +404,10 @@ describe("アプリ内通知（F-11）", () => {
     );
     await markNotificationRead(ctx, principals.reviewer, first.id);
     expect(await ctx.notifications.countUnread(principals.reviewer.userId)).toBe(2);
-    expect(await markAllNotificationsRead(ctx, principals.reviewer)).toBe(2);
+    expect(await markAllNotificationsRead(ctx, principals.reviewer)).toMatchObject({
+      marked: 2,
+      hasMore: false,
+    });
   });
 
   it("期限接近リマインドは未確認の校正者に 1 回だけ届く", async () => {

@@ -1,4 +1,12 @@
-import { DomainError, type Principal } from "@mf100/domain";
+import {
+  canSeeNotificationSubject,
+  DomainError,
+  type NotificationSubject,
+  type Principal,
+  recipientPrincipal,
+  type Work,
+  type WorkPermissionGrant,
+} from "@mf100/domain";
 import type { AppContext, Notification, NotificationKind } from "../ports.ts";
 
 export interface NotifyInput {
@@ -42,7 +50,52 @@ export function about(workTitle: string, revision?: string | null, who?: string 
 }
 
 /**
+ * 見られない制作物の通知に出す文面（§5.2-10）。題名・本文とも作品名・版・締切・確認観点などを含めない。
+ * 種類（kind）だけは残す（何の知らせかは分かるが、どの制作物かは分からない）。
+ */
+export const REDACTED_NOTIFICATION = {
+  title: "閲覧できない制作物の通知です",
+  body: "この制作物を見る権限がありません。必要なら管理者に閲覧権限を依頼してください。",
+} as const;
+
+/** 通知の種類 → 守る保護情報の種類。feedback_* はフィードバックの閲覧権限、それ以外は制作物の閲覧権限 */
+export function notificationSubjectOf(kind: NotificationKind): NotificationSubject {
+  return kind === "feedback_posted" || kind === "feedback_mentioned" ? "feedback" : "work";
+}
+
+/** 見られない人に返す形: 文面を伏せ、制作物・版・スレッドへの手がかり（ID）も返さない */
+function redact(n: Notification): Notification {
+  const { workId, revisionId, threadId, ...rest } = n;
+  void workId;
+  void revisionId;
+  void threadId;
+  return { ...rest, ...REDACTED_NOTIFICATION };
+}
+
+type LoadedSubject = { work: Work; grants: WorkPermissionGrant[] } | null;
+
+/** 通知の対象の制作物と ACL を読む（同じ制作物は 1 回だけ）。消えた制作物は null（見られない扱い） */
+function subjectLoader(ctx: AppContext) {
+  const cache = new Map<string, Promise<LoadedSubject>>();
+  return (workId: string): Promise<LoadedSubject> => {
+    let hit = cache.get(workId);
+    if (!hit) {
+      hit = (async () => {
+        const work = await ctx.works.findById(workId).catch(() => null);
+        if (!work) return null;
+        return { work, grants: await ctx.acl.listByWork(work.id) };
+      })();
+      cache.set(workId, hit);
+    }
+    return hit;
+  };
+}
+
+/**
  * 複数の受信者にアプリ内通知を作る。本人（actor）には送らない。重複受信者は 1 回。
+ * 制作物に関する通知は、受信者がその制作物（feedback_* はフィードバック）を今見られるかを確かめ、
+ * 見られない人には文面を伏せた通知（REDACTED_NOTIFICATION）を作る（§5.2-10）。
+ * 例: 閲覧 ACL の無い人を校正者に割り当てた（割当は ACL を自動で付与しない・D3）。
  * 通知の失敗は業務更新を失敗させない（§10-4）ため、呼び出し側は await しても例外を業務に伝播させない。
  */
 export async function notify(
@@ -52,17 +105,30 @@ export async function notify(
   input: NotifyInput,
 ): Promise<number> {
   const now = ctx.clock.now();
+  const subject = notificationSubjectOf(input.kind);
+  let loaded: LoadedSubject | undefined;
   let count = 0;
   for (const recipientId of new Set(recipients)) {
     if (!recipientId || recipientId === actorId) continue;
     try {
+      let visible = true;
+      if (input.workId !== undefined) {
+        if (loaded === undefined) loaded = await subjectLoader(ctx)(input.workId);
+        visible =
+          loaded !== null &&
+          canSeeNotificationSubject(subject, {
+            ...loaded,
+            principal: recipientPrincipal(recipientId),
+          });
+      }
       const n: Omit<Notification, "id"> = {
         recipientId,
         kind: input.kind,
-        title: input.title,
-        body: input.body,
+        title: visible ? input.title : REDACTED_NOTIFICATION.title,
+        body: visible ? input.body : REDACTED_NOTIFICATION.body,
         createdAt: now,
       };
+      // ID は保存しておく（後で閲覧権限が付けば読取時に辿れる）。見られない間は読取時に返さない
       if (input.workId !== undefined) n.workId = input.workId;
       if (input.revisionId !== undefined) n.revisionId = input.revisionId;
       if (input.threadId !== undefined) n.threadId = input.threadId;
@@ -75,12 +141,41 @@ export async function notify(
   return count;
 }
 
+/**
+ * 通知を読む人に返す形にする。作った後に ACL が取り消された・制作物が消えた等で今は見られない通知は、
+ * 文面と ID を伏せて返す（§5.2-10。作成時の判定だけに頼らない）。
+ */
+export async function presentNotifications(
+  ctx: AppContext,
+  principal: Principal,
+  notifications: readonly Notification[],
+): Promise<Notification[]> {
+  const load = subjectLoader(ctx);
+  const out: Notification[] = [];
+  for (const n of notifications) {
+    if (n.workId === undefined) {
+      out.push(n);
+      continue;
+    }
+    const loaded = await load(n.workId);
+    const visible =
+      loaded !== null &&
+      canSeeNotificationSubject(notificationSubjectOf(n.kind), { ...loaded, principal });
+    out.push(visible ? n : redact(n));
+  }
+  return out;
+}
+
 export async function listMyNotifications(
   ctx: AppContext,
   principal: Principal,
   limit = 50,
 ): Promise<Notification[]> {
-  return ctx.notifications.listForUser(principal.userId, limit);
+  return presentNotifications(
+    ctx,
+    principal,
+    await ctx.notifications.listForUser(principal.userId, limit),
+  );
 }
 
 export async function markNotificationRead(
@@ -95,18 +190,47 @@ export async function markNotificationRead(
   await ctx.notifications.update({ ...n, readAt: ctx.clock.now() });
 }
 
+/** 「すべて既読」の 1 回分の結果。hasMore なら asOf を渡して続きを呼ぶ */
+export interface MarkAllReadResult {
+  marked: number;
+  hasMore: boolean;
+  /** 押した時刻。これより後に届いた通知は既読にしない */
+  asOf: number;
+}
+
+/** 1 回（1 トランザクション）で既読にする上限。Convex の書込み上限に収めるため */
+export const MARK_ALL_READ_BATCH = 200;
+
+/**
+ * 未読の索引から asOf 以前の未読を最大 batchSize 件だけ既読にする。
+ * 既読を含む最新 N 件を読む方式だと、N 件より古い未読に永久に届かない（レビュー指摘）ため未読だけを読む。
+ * 続きがあれば hasMore=true（呼出側が同じ asOf で再度呼ぶ。Convex ではスケジューラで続ける）。
+ */
+export async function markUnreadNotificationsRead(
+  ctx: AppContext,
+  recipientId: string,
+  asOf: number,
+  batchSize = MARK_ALL_READ_BATCH,
+): Promise<MarkAllReadResult> {
+  const now = ctx.clock.now();
+  const unread = await ctx.notifications.listUnreadForUser(recipientId, {
+    createdAtOrBefore: asOf,
+    limit: batchSize + 1,
+  });
+  let marked = 0;
+  for (const n of unread.slice(0, batchSize)) {
+    await ctx.notifications.update({ ...n, readAt: now });
+    marked++;
+  }
+  return { marked, hasMore: unread.length > batchSize, asOf };
+}
+
 export async function markAllNotificationsRead(
   ctx: AppContext,
   principal: Principal,
-): Promise<number> {
-  const now = ctx.clock.now();
-  let count = 0;
-  for (const n of await ctx.notifications.listForUser(principal.userId, 200)) {
-    if (n.readAt !== undefined) continue;
-    await ctx.notifications.update({ ...n, readAt: now });
-    count++;
-  }
-  return count;
+  batchSize = MARK_ALL_READ_BATCH,
+): Promise<MarkAllReadResult> {
+  return markUnreadNotificationsRead(ctx, principal.userId, ctx.clock.now(), batchSize);
 }
 
 /** 作品の職責者（制作者・主管・校了者）。通知の既定の宛先。 */

@@ -54,6 +54,14 @@ export interface RevisionRepository {
   update(revision: Revision): Promise<void>;
   /** 期限到来で閉じる候補（受付中かつ deadlineAt <= now）。 */
   listOpenExpired(now: Instant, limit: number): Promise<Revision[]>;
+  /**
+   * 期限接近リマインドの候補: 受付中かつ after < deadlineAt <= upTo の版を締切の早い順に 1 ページ。
+   * cursor は前のページの continueCursor（最初は null）。同じ after/upTo で続きを読む。
+   */
+  listOpenDueWithin(
+    range: { after: Instant; upTo: Instant },
+    page: { cursor: string | null; limit: number },
+  ): Promise<{ page: Revision[]; continueCursor: string | null }>;
 }
 
 export interface ArtifactRepository {
@@ -89,8 +97,6 @@ export interface ReviewAssignmentRepository {
   listByRevision(revisionId: RevisionId): Promise<ReviewAssignment[]>;
   find(revisionId: RevisionId, reviewerId: UserId): Promise<ReviewAssignment | null>;
   upsert(assignment: ReviewAssignment): Promise<void>;
-  /** 期限接近リマインド用: 未確認（pending/viewed）の割当 */
-  listUnresponded(limit: number): Promise<ReviewAssignment[]>;
 }
 
 export interface RequiredCheckRepository {
@@ -139,7 +145,13 @@ export interface Notification {
 
 export interface NotificationRepository {
   insert(notification: Omit<Notification, "id">): Promise<Notification>;
+  /** 既読を含む新しい順 */
   listForUser(userId: UserId, limit: number): Promise<Notification[]>;
+  /** 未読（readAt なし）で createdAt <= createdAtOrBefore のものを古い順に最大 limit 件（未読の索引で読む） */
+  listUnreadForUser(
+    userId: UserId,
+    opts: { createdAtOrBefore: Instant; limit: number },
+  ): Promise<Notification[]>;
   findById(id: string): Promise<Notification | null>;
   update(notification: Notification): Promise<void>;
   countUnread(userId: UserId): Promise<number>;

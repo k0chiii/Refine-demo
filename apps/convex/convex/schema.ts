@@ -574,7 +574,8 @@ export default defineSchema({
     readAt: v.optional(v.number()),
   })
     .index("by_recipient", ["recipientId", "createdAt"])
-    .index("by_recipient_read", ["recipientId", "readAt"]),
+    // 未読の数・「すべて既読」は未読（readAt なし）だけをこの索引で読む。createdAt で「押した時刻まで」に区切る
+    .index("by_recipient_read_created", ["recipientId", "readAt", "createdAt"]),
 
   approvalEvents: defineTable({
     workId: v.id("works"),
