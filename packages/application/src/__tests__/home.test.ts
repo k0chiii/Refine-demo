@@ -192,15 +192,15 @@ describe("制作物の一括登録", () => {
     expect(created[1]).toMatchObject({ deadlineAt, legacyId: "X-2", lifecycle: "active" });
     // 一括登録では登録した管理者を主管に含めない（主管は CSV の「主管」列だけ。利用者決定 2026-10-15）
     expect(created[0]!.managerIds).not.toContain(principals.sysadmin.userId);
-    const withManager = await importWorks(ctx, principals.sysadmin, {
-      rows: [{ ...row("三"), managerIds: [principals.creator.userId] }],
-    });
-    expect(withManager[0]!.managerIds).toEqual([principals.creator.userId]);
     expect(ctx.state.audit.filter((a) => a.operation === "create")).toHaveLength(2);
     expect(ctx.state.audit.find((a) => a.operation === "bulk_import")?.after).toMatchObject({
       count: 2,
       source: "works.csv",
     });
+    const withManager = await importWorks(ctx, principals.sysadmin, {
+      rows: [{ ...row("三"), managerIds: [principals.creator.userId] }],
+    });
+    expect(withManager[0]!.managerIds).toEqual([principals.creator.userId]);
   });
 
   it("登録の権限（works:create）が無い人・空の行は拒否する", async () => {
