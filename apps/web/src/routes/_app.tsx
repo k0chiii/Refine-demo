@@ -62,6 +62,28 @@ function AppLayout() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const launcher = useSubmitLauncher();
 
+  // 下部ナビの実際の高さ（セーフエリアを除く）を --mf-navbar-h に入れる。決め打ちの 80 だと、文字の大きさ（iOS の Dynamic Type）で
+  // 変わる高さとずれ、ナビの上に置くもの（版を提出の FAB・フィードバックの返信欄）との間に隙間や重なりができる
+  useEffect(() => {
+    if (cls !== "compact") return;
+    const bar = document.querySelector<HTMLElement>(".shell__bar");
+    if (!bar) return;
+    const root = document.documentElement;
+    const sync = () => {
+      const pad = parseFloat(getComputedStyle(bar).paddingBottom) || 0;
+      root.style.setProperty(
+        "--mf-navbar-h",
+        `${Math.round(bar.getBoundingClientRect().height - pad)}px`,
+      );
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(bar);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--mf-navbar-h");
+    };
+  }, [cls, me?.id, path]);
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated || me === null) void navigate({ to: "/signin", replace: true });
@@ -87,6 +109,8 @@ function AppLayout() {
   const items = [
     { to: "/", icon: "space_dashboard", label: "ホーム" },
     { to: "/works", icon: "folder", label: "制作物一覧" },
+    // 制作の議論（表現の FB）。Slack の代わりに MF100 の中でスレッド型で話す（利用者決定 2026-10-15）
+    { to: "/feedback", icon: "forum", label: "フィードバック", short: "FB" },
     { to: "/write", icon: "edit_document", label: "エディタ" },
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
     ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
@@ -101,10 +125,11 @@ function AppLayout() {
         : to === "/works"
           ? !writing && (path === to || path.startsWith(`${to}/`))
           : path === to || path.startsWith(`${to}/`);
-  // 先頭の項目は「ホーム」（画面の見出し・「ホームを編集」と揃える。以前の「ダッシュボード」は下部ナビで 2 行に折れていた）
+  // 先頭の項目は「ホーム」（画面の見出し・「ホームを編集」と揃える。以前の「ダッシュボード」は下部ナビで 2 行に折れていた）。
+  // 下部ナビ（1 項目 75px 前後）では「フィードバック」も 2 行に折れるので、短い名前「FB」を出す（読み上げ・ツールチップは正式名）
   // 項目は M3eNavItem だけ（ボタン）にし、押したらルーターで移る。外側に <a> を重ねると 1 項目に 2 回止まり、
   // 読み上げも「リンク › ボタン」と入れ子になる。M3eNavItem の href は中に <a> を作り、同じく入れ子になる（§35 A-10）
-  const navItems = (list: typeof items = items) =>
+  const navItems = (list: typeof items = items, short = false) =>
     list.map((it) => (
       <M3eNavItem
         key={it.to}
@@ -115,7 +140,7 @@ function AppLayout() {
         onClick={() => void navigate({ to: it.to })}
       >
         <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
-        <span className="nav-label">{it.label}</span>
+        <span className="nav-label">{short && "short" in it ? it.short : it.label}</span>
       </M3eNavItem>
     ));
   /** M3E は押した項目を自動で選択状態にするため、経路に基づく選択へ戻す */
@@ -174,6 +199,15 @@ function AppLayout() {
     </M3eIconButton>
   );
   const accountActions = [
+    ...(cls === "compact" && me.isSystemAdmin
+      ? [
+          {
+            icon: "admin_panel_settings",
+            label: "管理",
+            onSelect: () => void navigate({ to: "/admin" }),
+          },
+        ]
+      : []),
     ...(install
       ? [
           {
@@ -295,7 +329,11 @@ function AppLayout() {
       </div>
       {cls === "compact" && !immersive ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
-          {navItems()}
+          {/* 下部ナビは 5 項目まで（M3 Navigation bar）。管理はアカウントのシートへ */}
+          {navItems(
+            items.filter((it) => it.to !== "/admin"),
+            true,
+          )}
         </M3eNavBar>
       ) : null}
     </div>

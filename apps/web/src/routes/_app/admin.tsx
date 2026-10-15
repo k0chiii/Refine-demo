@@ -8,6 +8,7 @@ import { lifecycleLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { AclPanel } from "@/features/work/AclPanel";
 import { downloadWorkCsvTemplate, ImportWorksDialog } from "@/features/work/ImportWorksDialog";
+import { ExportStatsDialog } from "@/features/work/ExportStatsDialog";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { M3eButton, M3eChip, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
 import { DataTable, EditableSwitch } from "@/ui/DataTable";
@@ -52,6 +53,7 @@ function Admin() {
   const [aclFor, setAclFor] = useState<{ id: string; title: string } | null>(null);
   const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const toggle = useAction(async (userId: string, value: boolean) => {
     await setAdmin({ userId: userId as Id<"users">, value });
   });
@@ -97,6 +99,12 @@ function Admin() {
               </M3eButton>
             </div>
           ) : null}
+          <div className="row">
+            <M3eButton variant="outlined" onClick={() => setExporting(true)}>
+              <M3eIcon slot="icon" name="query_stats" />
+              集計を書き出す
+            </M3eButton>
+          </div>
           <p className="muted small">制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます</p>
           <DataTable
             label="制作物ごとの閲覧権限"
@@ -256,6 +264,7 @@ function Admin() {
           <NewWorkDialog open={creating} onClose={() => setCreating(false)} />
         </>
       ) : null}
+      <ExportStatsDialog open={exporting} onClose={() => setExporting(false)} />
       <M3eDialog open={aclFor !== null} onClosed={() => setAclFor(null)} closeLabel="閉じる">
         <span slot="header">閲覧権限: {aclFor?.title}</span>
         <div className="dialog-body">{aclFor ? <AclPanel workId={aclFor.id} /> : null}</div>

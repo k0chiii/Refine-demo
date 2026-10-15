@@ -3389,3 +3389,172 @@ m3e-snackbar {
   justify-content: flex-end;
   align-self: stretch;
 }
+
+/* ---------- フィードバック（制作の議論のスレッド。利用者決定 2026-10-15）
+ * 一覧は M3 リスト（上に制作物、題名、最後の投稿）。スレッドは Slack のメッセージ列のように
+ * アバター・名前・時刻・本文・添付・リアクションを古い順に並べ、下に返信の欄を置く */
+.feedback {
+  display: grid;
+  gap: 16px;
+}
+.feedback__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.fb-thread {
+  display: grid;
+  gap: 16px;
+  max-width: 840px;
+}
+.fb-thread__posts {
+  display: grid;
+  gap: 4px;
+}
+.fb-thread__composer {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--mf-surface);
+  border-top: 1px solid var(--mf-outline-variant);
+}
+/* compact: 下部ナビ（固定）の上に止める（セーフエリアはナビが持つ） */
+@media (max-width: 599px) {
+  .fb-thread__composer {
+    bottom: calc(var(--mf-navbar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 12px;
+  }
+}
+.fb-post {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 8px;
+  border-radius: var(--mf-shape-md);
+}
+.fb-post:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 4%, transparent);
+}
+.fb-post--deleted {
+  align-items: center;
+}
+.fb-post__avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--mf-on-surface-variant);
+}
+.fb-post__main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.fb-post__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 32px;
+}
+.fb-post__name {
+  font: var(--mf-type-title-small);
+}
+.fb-post__time {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.fb-post__tpl {
+  font: var(--mf-type-label-small);
+  color: var(--mf-on-secondary-container);
+  background: var(--mf-secondary-container);
+  border-radius: var(--mf-shape-sm);
+  padding: 2px 8px;
+}
+.fb-post__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: var(--mf-type-body-large);
+}
+.fb-post__reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.fb-post__add-reaction {
+  opacity: 0.7;
+}
+.fb-post:hover .fb-post__add-reaction,
+.fb-post__add-reaction:focus-visible {
+  opacity: 1;
+}
+.fb-files {
+  display: grid;
+  gap: 8px;
+}
+.fb-files__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fb-thumb {
+  all: unset;
+  cursor: zoom-in;
+  width: 160px;
+  height: 120px;
+  border-radius: var(--mf-shape-sm);
+  overflow: hidden;
+  background: var(--mf-surface-container);
+  border: 1px solid var(--mf-outline-variant);
+}
+.fb-thumb:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.fb-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fb-image-dialog img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+.fb-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-sm);
+  max-width: 480px;
+}
+.fb-file-chip__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-composer {
+  display: grid;
+  gap: 8px;
+}
+.fb-composer__files {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fb-composer__bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

@@ -599,6 +599,33 @@ async function main() {
   await page.locator("m3e-tab", { hasText: "担当" }).click();
   await page.waitForSelector(".teams-admin__team");
   await shot("13d-admin-teams");
+  // 62・63 フィードバック（制作の議論のスレッド。委員なら誰でも見て書ける）: 一覧 → スレッド → テンプレと画像を付けて返信 → リアクション
+  await page.locator("m3e-nav-item", { hasText: "フィードバック" }).first().click();
+  await page.waitForSelector(".feedback m3e-list-action");
+  await shot("62-feedback-list");
+  await page.locator(".feedback m3e-list-action", { hasText: "配色の方向性" }).click();
+  await page.waitForSelector(".fb-post");
+  const before = await page.locator(".fb-post").count();
+  await page.locator(".fb-composer m3e-button", { hasText: "テンプレ" }).click();
+  await page.locator("m3e-menu-item:visible", { hasText: "校正er" }).click();
+  await page.setInputFiles('.fb-composer input[type="file"]', [resolve(FIXTURES, "poster.png")]);
+  await page.locator(".fb-composer m3e-button", { hasText: "送信" }).click();
+  await page.waitForFunction((n) => document.querySelectorAll(".fb-post").length > n, before, {
+    timeout: 20_000,
+  });
+  await page.waitForSelector(".fb-post:last-of-type .fb-thumb img");
+  await page
+    .locator(".fb-post")
+    .last()
+    .locator('m3e-icon-button[aria-label="リアクションを付ける"]')
+    .click();
+  await page.locator("m3e-menu-item:visible", { hasText: "👍" }).click();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll(".fb-post")]
+      .at(-1)
+      ?.querySelector(".fb-post__reactions m3e-filter-chip[selected]"),
+  );
+  await shot("63-feedback-thread");
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる

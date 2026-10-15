@@ -1087,6 +1087,14 @@ export function Editor({
           </AppBarSlot>
         ) : null}
         <AppBarSlot slot="actions">
+          {/* この制作物のフィードバック（表現の議論のスレッド） */}
+          <M3eIconButton
+            aria-label="この制作物のフィードバック"
+            title="フィードバック"
+            onClick={() => void navigate({ to: "/feedback", search: { work: workId } })}
+          >
+            <M3eIcon name="forum" />
+          </M3eIconButton>
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
           {can?.completeReview ? (

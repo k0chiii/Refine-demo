@@ -186,6 +186,14 @@
     "violations": []
   },
   {
+    "screen": "62-feedback-list",
+    "violations": []
+  },
+  {
+    "screen": "63-feedback-thread",
+    "violations": []
+  },
+  {
     "screen": "30-rail-modal",
     "violations": []
   },
