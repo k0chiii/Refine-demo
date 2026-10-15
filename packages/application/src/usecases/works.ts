@@ -34,6 +34,11 @@ export interface CreateWorkInput {
   notationCategories?: string[];
   /** 登録と有効化を分ける案（§7.2）に備え、既定は即時 active。 */
   activate?: boolean;
+  /**
+   * 登録した人を主管に含めるか（既定 true）。一括登録では含めない: 管理者が全件の主管になってしまうため。
+   * 主管は CSV の「主管」列だけ（利用者決定 2026-10-15・UI_M3E §36）
+   */
+  addRegistrantAsManager?: boolean;
 }
 
 /**
@@ -50,7 +55,12 @@ export async function createWork(
   if (input.title.trim() === "") throw new DomainError("forbidden", { reason: "title_required" });
   if (input.creatorIds.length === 0)
     throw new DomainError("forbidden", { reason: "creator_required" });
-  const managerIds = Array.from(new Set([...(input.managerIds ?? []), principal.userId]));
+  const managerIds = Array.from(
+    new Set([
+      ...(input.managerIds ?? []),
+      ...(input.addRegistrantAsManager === false ? [] : [principal.userId]),
+    ]),
+  );
   const data: Omit<Work, "id"> = {
     year: input.year,
     title: input.title.trim(),
@@ -110,6 +120,7 @@ export async function importWorks(
         ...row,
         managerIds: row.managerIds,
         notationCategories: row.notationCategories,
+        addRegistrantAsManager: false,
       }),
     );
   }
