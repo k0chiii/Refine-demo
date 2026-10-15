@@ -24,7 +24,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
-import { notify } from "./notifications.ts";
+import { excerpt, notify, personName } from "./notifications.ts";
 
 /**
  * 表記統一ルールの管理（閲覧・編集・無効化・履歴・カテゴリ・カテゴリ管理者・取り込み・変更提案）。
@@ -626,10 +626,13 @@ export async function proposeRule(
   const managers = (await ctx.notation.listManagers())
     .filter((m) => m.categoryCode === input.categoryCode)
     .map((m) => m.userId);
+  const who = await personName(ctx, principal.userId);
   await notify(ctx, managers, principal.userId, {
     kind: "rule_proposed",
-    title: `表記ルールの提案（${input.categoryCode}）: ${proposal.title}`,
-    body: proposal.reason || "理由の記載なし",
+    title: "表記ルールの提案が届きました",
+    body: `${who ? `${who}から・` : ""}カテゴリ ${input.categoryCode}「${proposal.title}」: ${
+      proposal.reason?.trim() ? excerpt(proposal.reason) : "理由の記載なし"
+    }`,
   });
   return { proposal, merged: false };
 }
@@ -768,10 +771,16 @@ export async function decideRuleProposal(
     after: next,
     at: now,
   });
+  const who = await personName(ctx, principal.userId);
   await notify(ctx, [p.proposedBy, ...p.supporters], principal.userId, {
     kind: "rule_proposal_decided",
-    title: `表記ルールの提案が${input.decision === "approve" ? "承認" : "却下"}されました: ${p.title}`,
-    body: next.decisionNote ?? "",
+    title:
+      input.decision === "approve"
+        ? "表記ルールの提案が承認されました"
+        : "表記ルールの提案が却下されました",
+    body: `「${p.title}」${who ? `・${who}` : ""}${
+      next.decisionNote?.trim() ? `: ${excerpt(next.decisionNote)}` : ""
+    }`,
   });
   return next;
 }

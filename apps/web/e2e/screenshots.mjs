@@ -238,12 +238,12 @@ async function main() {
   await pdfReady();
   await shot("05-submit-confirmed");
 
-  // 06 校正者を割当（主管）: 引き出し「情報」から
+  // 06 校正者を割り当てる（主管）: 引き出し「情報」から
   await signInAs("mock-nogiku-manager");
   await go(workUrl);
   await pdfReady();
   await drawer("情報");
-  await btn("校正者を割当").click();
+  await btn("校正者を割り当てる").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
@@ -259,7 +259,7 @@ async function main() {
     .click();
   await page.waitForTimeout(300);
 
-  // 07 ダッシュボード（校正者）: 「校正する」に割当が出る
+  // 07 ダッシュボード（校正者）: 「校正する」に割り当てが出る
   await signInAs("mock-nogiku-reviewer");
   await page.waitForSelector("m3e-list-action");
   await shot("07-dashboard-reviewer");
@@ -297,7 +297,7 @@ async function main() {
     "団体名の表記が「五月祭常任委員会」ではなく「五月祭実行委員会」になっています。全ページ要確認。",
   );
   await page.waitForSelector(".thread");
-  // 2 件目（位置なし）は未対応のまま残し、次版への持越候補にする
+  // 2 件目（位置なし）は未対応のまま残し、次版への持ち越し候補にする
   await page.locator('m3e-icon-button[aria-label="位置なしでコメント"]').click();
   await page.fill(
     ".compose-pop textarea",
@@ -334,12 +334,12 @@ async function main() {
   await page.waitForSelector(".comments .thread");
   // 16 専門確認を完了（担当の校正者）: 引き出し「情報」
   await drawer("情報");
-  await page.locator('[aria-label="専門確認"] m3e-button', { hasText: "確認完了" }).click();
+  await page.locator('[aria-label="専門確認"] m3e-button', { hasText: "確認を完了" }).click();
   await page.waitForSelector("text=すべて完了");
   await shot("16-required-check-done");
   await drawer("コメント");
 
-  // 19 文章の範囲指摘（F-12 前倒し分）: 本文を選択するとその場に投稿欄が出る
+  // 19 文章の範囲へのコメント（F-12 前倒し分）: 本文を選択するとその場に投稿欄が出る
   await pickArtifact("greeting.txt");
   await page.waitForSelector(".text-viewer__body");
   await page.evaluate(() => {
@@ -395,7 +395,7 @@ async function main() {
   await page.waitForSelector("text=不採用:");
   await shot("09-decision");
 
-  // 17 第 2 版を提出（引き出し「版」）し、前版の未解決指摘を持ち越す（制作者）
+  // 17 第 2 版を提出（引き出し「版」）し、前版の未解決コメントを持ち越す（制作者）
   await drawer("版");
   await submitRevision(
     "新しい版を提出",
@@ -407,13 +407,13 @@ async function main() {
   const revision2Url = page.url();
   await pdfReady();
   await drawer("コメント");
-  await page.waitForSelector('[aria-label="前版の未解決指摘"]');
+  await page.waitForSelector('[aria-label="前版の未解決コメント"]');
   await shot("17-carry-forward");
   await page
-    .locator('[aria-label="前版の未解決指摘"] m3e-button', { hasText: "この版へ引き継ぐ" })
+    .locator('[aria-label="前版の未解決コメント"] m3e-button', { hasText: "この版へ持ち越す" })
     .first()
     .click();
-  await page.waitForSelector("text=前版から持越");
+  await page.waitForSelector("text=前版から持ち越し");
   // 25 版の比較（引き出し「版」の「比較」）
   await drawer("版");
   await shot("28-versions");
@@ -522,7 +522,7 @@ async function main() {
   await go(`${BASE}/admin`);
   await page.waitForSelector(".data-table m3e-button");
   await shot("13-admin-works");
-  await page.locator(".data-table m3e-button", { hasText: "閲覧権限" }).first().click();
+  await page.locator(".data-table m3e-button", { hasText: "権限を設定" }).first().click();
   await page.waitForSelector("m3e-dialog[open] .acl");
   await page.waitForTimeout(400);
   await shot("12-acl");
@@ -694,7 +694,7 @@ async function main() {
   await go(writeWorkUrl);
   await page.waitForSelector(".rich-viewer__page .doc");
   await drawer("情報");
-  await btn("校正者を割当").click();
+  await btn("校正者を割り当てる").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
@@ -733,7 +733,7 @@ async function main() {
   await page.waitForSelector(".rich-viewer__page .text-anchor");
   await page.waitForTimeout(500);
   const quote = await page.locator(".rich-viewer__page .text-anchor").first().innerText();
-  if (!quote.includes("百花繚乱")) throw new Error(`範囲指摘の位置がずれている: ${quote}`);
+  if (!quote.includes("百花繚乱")) throw new Error(`範囲へのコメントの位置がずれている: ${quote}`);
   await shot("44-write-review-comment");
   // 44a スマホ（指の操作）: 文字を選ぶと「選んだ文字にコメント」ボタン → 投稿欄は画面下に全幅（引用つき）
   await page.evaluate(() => {
@@ -784,22 +784,22 @@ async function main() {
     "投稿欄に選んだ文字の引用が出ない",
   );
   await shot("44a-mobile-text-comment");
-  await page.locator('.compose-pop m3e-icon-button[aria-label="取消"]').click();
+  await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
   await page.evaluate(() => {
     window.matchMedia = window.__origMatchMedia;
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(400);
-  // 45 指摘を見ながら直す（制作者）: 補助ペイン「指摘」→ 押すと本文の該当箇所を選ぶ
+  // 45 コメントを見ながら直す（制作者）: 補助ペイン「コメント」→ 押すと本文の該当箇所を選ぶ
   await signInAs("mock-nogiku-creator");
   await go(`${writeWorkUrl}/write`);
   await page.waitForSelector(".doc[contenteditable=true]");
-  await page.locator('.write__side m3e-icon-button[aria-label="指摘"]').click();
+  await page.locator('.write__side m3e-icon-button[aria-label="コメント"]').click();
   await page.waitForSelector(".refs__item");
   await page.locator(".refs__item").first().click();
   await page.waitForTimeout(400);
   const picked = await page.evaluate(() => getSelection()?.toString() ?? "");
-  if (!picked.includes("百花繚乱")) throw new Error(`指摘から本文を選べない: ${picked}`);
+  if (!picked.includes("百花繚乱")) throw new Error(`コメントから本文を選べない: ${picked}`);
   await shot("45-write-refs");
   // 46 compact の文章エディタ: 画面下に浮かぶ vibrant のツールバー
   await page.setViewportSize({ width: 412, height: 915 });
@@ -886,7 +886,7 @@ async function v2Scenes() {
   await shot("50b-notation-rule-detail");
   await go("/notation?view=try");
   await page.waitForSelector("m3e-list-item.finding");
-  expectTrue((await page.locator("m3e-list-item.finding").count()) >= 3, "試す: 指摘が出ない");
+  expectTrue((await page.locator("m3e-list-item.finding").count()) >= 3, "試す: 確認箇所が出ない");
   await shot("51-notation-try");
   await signInAs("mock-nogiku-reviewer");
   await go("/notation");
@@ -941,13 +941,13 @@ async function v2Scenes() {
   await pdfReady();
   await drawer("コメント");
   await page.waitForFunction(
-    () => /表記の指摘 \d+ 件/.test(document.querySelector(".auto-status")?.textContent ?? ""),
+    () => /表記のコメント \d+ 件/.test(document.querySelector(".auto-status")?.textContent ?? ""),
     null,
     {
       timeout: 90_000,
     },
   );
-  expectTrue((await page.locator(".thread .thread__bot").count()) > 0, "自動校正の指摘が無い");
+  expectTrue((await page.locator(".thread .thread__bot").count()) > 0, "自動校正のコメントが無い");
   await shot("54-auto-proofread");
   await drawer("版");
   await page
@@ -1008,7 +1008,7 @@ async function v2Scenes() {
   );
   await page.waitForTimeout(300);
   await shot("26a-mobile-long-press");
-  await page.locator('.compose-pop m3e-icon-button[aria-label="取消"]').click();
+  await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
   await page.waitForTimeout(300);
   // ピンチ（2 本指）で校正物だけが拡大する（アプリ全体は拡大しない）。指を離すと倍率が確定する
   const zoomBefore = await page.locator(".ws__zoom").first().innerText();
@@ -1113,7 +1113,7 @@ async function v2Scenes() {
   await btn("校了を宣言").click();
   await page.waitForSelector("m3e-dialog[open]");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "校了を確定する" }).click();
-  await page.waitForSelector('m3e-button:has-text("まとめて ZIP")', { timeout: 20_000 });
+  await page.waitForSelector('m3e-button:has-text("ZIP で保存")', { timeout: 20_000 });
   await page.waitForTimeout(1500);
   await shot("59-sns-export");
 

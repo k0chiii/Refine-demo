@@ -93,7 +93,7 @@ export function ComposePopover({
         }}
       />
       <div className="compose-pop__actions">
-        <M3eIconButton aria-label="取消" onClick={onCancel}>
+        <M3eIconButton aria-label="キャンセル" onClick={onCancel}>
           <M3eIcon name="close" />
         </M3eIconButton>
         <span className="spacer" />

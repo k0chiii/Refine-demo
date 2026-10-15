@@ -29,7 +29,7 @@ function WritePicker() {
     <div className="write-picker">
       <AppBarSlot slot="title">エディタ</AppBarSlot>
       <p className="muted small write-picker__lead">
-        書く制作物を選んでください（あなたが版を提出できる、進行中の制作物）。
+        書く制作物を選んでください（あなたが版を提出できる、進行中の制作物）
       </p>
       {works === undefined ? (
         <p className="muted">読み込み中…</p>

@@ -105,10 +105,10 @@ export function PageMappingDialog({
         </ul>
         {unmatchedLeft.length > 0 ? (
           <p className="small muted" style={{ margin: 0 }}>
-            {leftLabel} の {unmatchedLeft.join("・")} ページは新版に対応なし（削除）として扱います。
+            {leftLabel} の {unmatchedLeft.join("・")} ページは新版に対応なし（削除）として扱います
           </p>
         ) : null}
-        {dup ? <p className="small error-text">同じページを 2 回選んでいます。</p> : null}
+        {dup ? <p className="small error-text">同じページを 2 回選んでいます</p> : null}
         {error ? <p className="small error-text">{error}</p> : null}
         {pdf.manual.length > 0 ? (
           <M3eButton variant="text" disabled={saving} onClick={() => void save([])}>

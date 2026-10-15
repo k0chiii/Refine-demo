@@ -58,12 +58,16 @@ export function ImportDialog({
           ? previewCsvImport(r.text, { defaultYear: y, existing })
           : previewJsonImport(JSON.parse(r.text), { defaultYear: y, existing }),
       );
-    } catch (e) {
+    } catch {
       setPreview({
         rules: [],
         notes: [],
         warnings: [
-          { line: 0, message: `読み込めません: ${e instanceof Error ? e.message : String(e)}` },
+          {
+            line: 0,
+            message:
+              "ファイルを読み込めませんでした。CSV か、この画面で書き出した JSON かを確かめてください。",
+          },
         ],
         duplicates: [],
         conflicts: [],
@@ -73,7 +77,7 @@ export function ImportDialog({
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 5_000_000) {
-      toast("5MB までのファイルを選んでください", { kind: "warning" });
+      toast("5 MB までのファイルを選んでください", { kind: "warning" });
       return;
     }
     const text = await f.text();
@@ -128,9 +132,8 @@ export function ImportDialog({
       <span slot="header">ルールを取り込む</span>
       <div className="dialog-body stack">
         <p className="small muted">
-          CSV（表記統一スプレッドシート）か
-          JSON（この画面の書き出し・notation2）を選びます。取り込む前に内容を確認できます。MF100
-          が正本なので、旧年度のルールには年度を付けて取り込み、MF100 に無条件では当てません。
+          CSV（表記統一のスプレッドシート）か、この画面で書き出した JSON
+          を選びます。年度の無い行には下で選んだ年度を付けます。取り込む前に内容を確認できます。
         </p>
         <div className="row">
           <input
@@ -281,7 +284,7 @@ export function ImportDialog({
             <Checkbox
               checked={overwrite}
               onChange={setOverwrite}
-              label="同じ ID のルールがあれば上書きする（版が上がり、履歴に残ります）"
+              label="同じ ID のルールがあれば上書きする（改訂として履歴に残ります）"
             />
           </>
         ) : null}

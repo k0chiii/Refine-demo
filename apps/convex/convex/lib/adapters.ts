@@ -87,6 +87,12 @@ export function createAppContext(
 
   return {
     clock,
+    people: {
+      async displayName(id) {
+        const doc = await db.get("users", id as Id<"users">).catch(() => null);
+        return doc?.name?.trim() || null;
+      },
+    },
     works: {
       async findById(id) {
         const doc = await db.get("works", id as Id<"works">).catch(() => null);

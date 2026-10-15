@@ -5,6 +5,7 @@ import { useState } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { formatDeadlineUntil } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
+import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eActionList, M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eListAction } from "@/ui/m3e";
 
@@ -24,6 +25,8 @@ function Works() {
   const { q, new: creating } = Route.useSearch();
   const navigate = useNavigate();
   const [lifecycle, setLifecycle] = useState<string>("");
+  // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
+  const canRegister = useWindowClass() !== "compact";
   const works = useQuery(api.works.listMine, {
     ...(q ? { text: q } : {}),
     ...(lifecycle ? { lifecycle: lifecycle as "active" } : {}),
@@ -56,7 +59,11 @@ function Works() {
         <p className="muted">読み込み中…</p>
       ) : works.length === 0 ? (
         <div className="empty">
-          {q ? `「${q}」に一致する制作物はありません。` : "制作物がありません。"}
+          {q
+            ? `「${q}」に一致する制作物はありません`
+            : canRegister && !lifecycle
+              ? "制作物がありません。「制作物を登録」から登録できます。"
+              : "制作物がありません"}
         </div>
       ) : (
         <M3eActionList className="list" aria-label="制作物">
@@ -69,7 +76,13 @@ function Works() {
               <span className="list__headline">
                 {w.title}
                 {w.confidentiality === "restricted" ? (
-                  <M3eIcon name="lock" className="ml list__lock" title="非公開" />
+                  <M3eIcon
+                    name="lock"
+                    className="ml list__lock"
+                    role="img"
+                    aria-label="非公開"
+                    title="非公開"
+                  />
                 ) : null}
               </span>
               <span slot="supporting-text">

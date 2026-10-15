@@ -15,7 +15,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
-import { notify } from "./notifications.ts";
+import { about, excerpt, notify, personName } from "./notifications.ts";
 
 /**
  * 校正者の割当（F-05）。割当できる人は Nogiku の組織権限 `reviews:assign`、または作品の制作者・edit 委任者
@@ -59,10 +59,15 @@ export async function assignReviewers(
     after: input.reviewerIds,
     at: ctx.clock.now(),
   });
+  const who = await personName(ctx, principal.userId);
   await notify(ctx, newlyAssigned, principal.userId, {
     kind: "review_assigned",
-    title: `校正の割当: ${work.title} ${revisionLabel(revision)}`,
-    body: revision.focusNotes ? `見てほしい観点: ${revision.focusNotes}` : "校正をお願いします。",
+    title: "校正を割り当てられました",
+    body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}。締切は ${formatDeadlineUntil(revision.deadlineAt, ctx.clock.now())}。${
+      revision.focusNotes?.trim()
+        ? `見てほしい観点: ${excerpt(revision.focusNotes, 80)}`
+        : "校正画面で内容を確かめ、終わったら「確認を完了」を押してください。"
+    }`,
     workId: work.id,
     revisionId: revision.id,
   });
@@ -92,8 +97,11 @@ export async function remindUpcomingDeadlines(
     if (!work) continue;
     await notify(ctx, [a.reviewerId], null, {
       kind: "deadline_approaching",
-      title: `校正期限が近づいています: ${work.title} ${revisionLabel(revision)}`,
-      body: `締切は ${formatDeadlineUntil(revision.deadlineAt, now)}。未確認の校正があります。期限を過ぎると新規の指摘はできません。`,
+      title: "校正の締切が近づいています",
+      body: `${about(work.title, revisionLabel(revision))}・締切は ${formatDeadlineUntil(
+        revision.deadlineAt,
+        now,
+      )}。それまでに校正画面で確かめ、「確認を完了」を押してください。締切を過ぎるとコメントできません。`,
       workId: work.id,
       revisionId: revision.id,
     });
@@ -130,8 +138,8 @@ export async function completeMyReview(
 
 /**
  * 期限到来による受付終了ジョブ（F-08 / A-05）。
- * 受付だけを閉じる。未読・指摘・校了状態は変更しない。
- * このジョブが遅延しても assertCanPostComment が時刻比較で新規指摘を拒否する。
+ * 受付だけを閉じる。未読・コメント・校了状態は変更しない。
+ * このジョブが遅延しても assertCanPostComment が時刻比較で新しいコメントを拒否する。
  */
 export async function closeExpiredReviews(ctx: AppContext, limit = 100): Promise<Revision[]> {
   const now = ctx.clock.now();

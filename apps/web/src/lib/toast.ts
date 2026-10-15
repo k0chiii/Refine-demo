@@ -76,7 +76,7 @@ const BOTTOM_OBSTACLES = ".shell__bar, .ws__toolbar, .preview-fab";
 /**
  * スナックバーの位置を、開く直前に画面の下の部品の上（16px 空ける）に合わせる（M3 Snackbar: FAB・下部の部品と重ねない）。
  * M3E の snackbar は body に足される popover なので、文書で toggle を捕まえる（toggle は泡立たないが捕捉段階では届く）。
- * M3eSnackbar.open を直接呼ぶ箇所（useAction など）にも効く
+ * PWA の知らせ（lib/pwa.ts が M3eSnackbar.open で出す）にも効く
  */
 export function installSnackbarPlacement() {
   const root = document.documentElement;

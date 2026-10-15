@@ -1,6 +1,6 @@
 /**
  * SNS 投稿（Instagram / X）の制作物。版ごとに投稿の内容を固定して校正し、校了後に書き出す（実際の投稿はしない）。
- * - 版の添付: 本文（post-body.txt。範囲指摘・自動校正の対象）・画像（並び順どおり）・内容の記録（mf100-post.json）
+ * - 版の添付: 本文（post-body.txt。範囲へのコメント・自動校正の対象）・画像（並び順どおり）・内容の記録（mf100-post.json）
  * - プレビューは各サービスの見た目の近似（実際の表示とは異なることがある。画面で明示する）
  * - 文字数の数え方・上限は各サービスの公開情報に基づく近似。運用で変わるので定数にまとめる
  */
@@ -57,6 +57,9 @@ export const socialLimits = {
   instagram: { bodyMax: 2200, hashtagsMax: 30, imagesMax: { feed: 1, carousel: 20, story: 10 } },
   x: { weightedMax: 280, imagesMax: 4, urlWeight: 23 },
 } as const;
+
+/** 代替テキストの目安の文字数（短く書く。超えても止めない。入力欄に「N / 140」で示す） */
+export const ALT_TEXT_GUIDE_MAX = 140;
 
 /** 推奨の比率（プレビューの既定） */
 export const defaultAspect: Record<SocialFormat, SocialAspect> = {
@@ -139,12 +142,26 @@ export interface PostIssue {
   imageKey?: string;
 }
 
-/** 投稿の内容を確かめる（上限は近似。error でも提出は止めず、校正者が判断できるように示す） */
+/** 形式の短い名前（「フィード（1 枚）」→「フィード」） */
+function formatName(format: string): string {
+  return (socialFormatLabels[format as SocialFormat] ?? format).replace(/（.*）$/, "");
+}
+
+/**
+ * 投稿の内容を確かめる（上限は近似。error でも提出は止めず、校正者が判断できるように示す）。
+ * 文言は「何をどう直すか」を 1 文で書く（スナックバーに出すので句点は付けない）。
+ */
 export function checkPost(post: SocialPost): PostIssue[] {
   const issues: PostIssue[] = [];
   const formats = socialFormats[post.platform] as readonly string[];
   if (!formats.includes(post.format))
-    issues.push({ level: "error", code: "format", message: "このサービスでは使えない形式です" });
+    issues.push({
+      level: "error",
+      code: "format",
+      message: `${socialPlatformLabels[post.platform]} では${formats
+        .map((f) => `「${formatName(f)}」`)
+        .join("・")}から形式を選んでください（「${formatName(post.format)}」は使えません）`,
+    });
   if (post.platform === "instagram") {
     const lim = socialLimits.instagram;
     const len = charLength(post.body);
@@ -152,33 +169,33 @@ export function checkPost(post: SocialPost): PostIssue[] {
       issues.push({
         level: "error",
         code: "body_long",
-        message: `本文が ${lim.bodyMax} 文字を超えています（${len} 文字）`,
+        message: `本文を ${len - lim.bodyMax} 文字減らしてください（上限 ${lim.bodyMax} 文字）`,
       });
     const tags = extractHashtags(post.body).length;
     if (tags > lim.hashtagsMax)
       issues.push({
         level: "error",
         code: "hashtags",
-        message: `ハッシュタグが ${lim.hashtagsMax} 個を超えています（${tags} 個）`,
+        message: `ハッシュタグを ${tags - lim.hashtagsMax} 個減らしてください（上限 ${lim.hashtagsMax} 個）`,
       });
     const max = lim.imagesMax[post.format as "feed" | "carousel" | "story"] ?? 1;
     if (post.images.length > max)
       issues.push({
         level: "error",
         code: "images_many",
-        message: `画像は ${max} 枚までです（${post.images.length} 枚）`,
+        message: `画像を ${post.images.length - max} 枚減らしてください（${formatName(post.format)}は ${max} 枚まで）`,
       });
     if (post.format === "carousel" && post.images.length < 2)
       issues.push({
         level: "warning",
         code: "carousel_few",
-        message: "カルーセルは 2 枚以上で使います",
+        message: "カルーセルにするには画像を 2 枚以上追加してください",
       });
     if (post.images.length === 0)
       issues.push({
         level: "error",
         code: "images_none",
-        message: "Instagram の投稿には画像が必要です",
+        message: "Instagram の投稿には画像を 1 枚以上追加してください",
       });
   } else {
     const len = xWeightedLength(post.body);
@@ -186,28 +203,28 @@ export function checkPost(post: SocialPost): PostIssue[] {
       issues.push({
         level: "error",
         code: "body_long",
-        message: `本文が ${socialLimits.x.weightedMax} を超えています（${len}。日本語は 1 文字 2、URL は 23 で数える近似）`,
+        message: `本文を ${len - socialLimits.x.weightedMax} 減らしてください（上限 ${socialLimits.x.weightedMax}。日本語は 1 文字を 2、URL は 23 と数える近似）`,
       });
     if (post.images.length > socialLimits.x.imagesMax)
       issues.push({
         level: "error",
         code: "images_many",
-        message: `画像は ${socialLimits.x.imagesMax} 枚までです`,
+        message: `画像を ${post.images.length - socialLimits.x.imagesMax} 枚減らしてください（X は ${socialLimits.x.imagesMax} 枚まで）`,
       });
   }
-  for (const img of post.images)
+  for (const [i, img] of post.images.entries())
     if (!img.alt.trim())
       issues.push({
         level: "warning",
         code: "alt_missing",
-        message: `${img.fileName} の代替テキスト（ALT）がありません`,
+        message: `${i + 1} 枚目（${img.fileName}）の代替テキストを入力してください`,
         imageKey: img.key,
       });
   if (!post.account.username.trim())
     issues.push({
       level: "warning",
       code: "username",
-      message: "アカウントのユーザー名がありません",
+      message: "SNS アカウントのユーザー名を入力してください",
     });
   return issues;
 }

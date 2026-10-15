@@ -109,13 +109,13 @@ function clampRect(r: NormalizedRect): NormalizedRect {
 const severityOf = (f: Finding): Severity =>
   f.strictness === "required" && !f.needsReview ? "minor" : "info";
 
-/** 指摘の本文（ルールと理由。人が読む文） */
+/** 自動校正のコメントの本文（ルールと理由。人が読む文） */
 export function botBody(f: Finding): string {
   const head = f.suggestion ? `「${f.original}」→「${f.suggestion}」` : `「${f.original}」`;
   const lead = f.needsReview ? "【要確認】" : "";
   const reason = f.reason || f.title;
   const ex = f.exceptionNote ? `\n例外: ${f.exceptionNote}` : "";
-  return `${lead}${head}\n${reason}${ex}\n（表記ルール ${f.ruleId} 版 ${f.ruleRevision}）`;
+  return `${lead}${head}\n${reason}${ex}\n（表記ルール ${f.ruleId} 改訂 ${f.ruleRevision}）`;
 }
 
 /**

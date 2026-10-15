@@ -3,6 +3,8 @@
  * 準備 → 各ファイルをハッシュ付きで転送 → 失敗ファイルの個別再送 → 確定、を UI 非依存の状態機械として実装し、単体テストする。
  * 旧版の受付は「確定」が成功するまで変わらない（サーバー側の保証。ここでは UI が誤って確定を促さないことを担保する）。
  */
+import { describeError } from "../../lib/errors";
+
 export type ItemStatus = "pending" | "uploading" | "verified" | "failed";
 
 export interface FlowItem {
@@ -127,12 +129,12 @@ export class SubmissionFlow {
       else
         this.patchItem(itemId, {
           status: "failed",
-          error: res.failureMessage ?? "検証に失敗しました",
+          error: res.failureMessage ?? "ファイルを確認できませんでした",
         });
     } catch (error) {
       this.patchItem(itemId, {
         status: "failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error).message,
       });
     }
   }
@@ -146,7 +148,7 @@ export class SubmissionFlow {
   /** 確定。再送時も同じ requestId を使い、二重版を作らない（A-10）。 */
   async confirm(): Promise<void> {
     if (!canConfirm(this.state) || this.state.sessionId === null)
-      throw new Error("すべてのファイルの検証が完了していません");
+      throw new Error("まだ確認できていないファイルがあります");
     this.confirmRequestId ??= this.deps.randomId();
     this.set({ confirming: true, error: null });
     try {
@@ -155,7 +157,7 @@ export class SubmissionFlow {
     } catch (error) {
       this.set({
         confirming: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error).message,
       });
       throw error;
     }

@@ -1,4 +1,5 @@
 import {
+  revisionLabel,
   checkTypeLabels,
   completeCheck,
   DomainError,
@@ -10,7 +11,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
-import { notify, workStakeholders } from "./notifications.ts";
+import { about, notify, personName, workStakeholders } from "./notifications.ts";
 
 /**
  * 専門確認（必須チェック）（§2.2-4 / C3 / D6）。
@@ -44,10 +45,11 @@ export async function addRequiredCheck(
     at: ctx.clock.now(),
   });
   if (check.assigneeId) {
+    const who = await personName(ctx, principal.userId);
     await notify(ctx, [check.assigneeId], principal.userId, {
       kind: "check_requested",
-      title: `専門確認の依頼: ${check.label}`,
-      body: `「${work.title}」の版で ${check.label} の確認が割り当てられました。`,
+      title: "専門確認を依頼されました",
+      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${check.label}`,
       workId: work.id,
       revisionId: revision.id,
     });
@@ -86,10 +88,11 @@ export async function completeRequiredCheck(
     after: next.state,
     at: ctx.clock.now(),
   });
+  const who = await personName(ctx, principal.userId);
   await notify(ctx, workStakeholders(work), principal.userId, {
     kind: "check_completed",
-    title: `専門確認が完了: ${check.label}`,
-    body: `「${work.title}」の ${check.label} が確認済みになりました。`,
+    title: "専門確認が完了しました",
+    body: `${about(work.title, revisionLabel(revision), who)}が「${check.label}」を完了しました`,
     workId: work.id,
     revisionId: revision.id,
   });

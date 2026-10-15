@@ -470,7 +470,7 @@ describe("自動校正: スレッドの計画", () => {
     const text = planBotThreads("art1", [{ kind: "text", text: "5月祭に来て頂き" }], rules);
     expect(text.planned.map((p) => p.anchor.type)).toEqual(["text_range", "text_range"]);
     expect(text.planned[0]!.body).toContain("「5月祭」→「五月祭」");
-    expect(text.planned[0]!.body).toContain("A1-0001 版 1");
+    expect(text.planned[0]!.body).toContain("A1-0001 改訂 1");
     expect(text.planned[0]!.severity).toBe("minor");
     expect(text.planned[1]!.body.startsWith("【要確認】")).toBe(true);
     expect(text.planned[1]!.severity).toBe("info");

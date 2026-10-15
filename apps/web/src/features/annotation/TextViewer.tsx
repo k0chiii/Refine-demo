@@ -238,7 +238,7 @@ export function TextViewer({
                     ? {
                         role: "button",
                         tabIndex: 0,
-                        title: `指摘 ${seg.threads.map((t) => `#${t.index}`).join(" ")}`,
+                        title: `コメント ${seg.threads.map((t) => `#${t.index}`).join(" ")}`,
                         // 同じ箇所に複数あれば押すたびに次のコメントへ
                         onClick: (e: { stopPropagation: () => void }) => {
                           e.stopPropagation();

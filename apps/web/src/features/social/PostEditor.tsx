@@ -13,6 +13,7 @@ import {
   POST_BODY_NAME,
   POST_MANIFEST_NAME,
   postManifest,
+  ALT_TEXT_GUIDE_MAX,
   socialAspects,
   socialFormatLabels,
   socialFormats,
@@ -276,9 +277,9 @@ function PostSurface({
     if (hinted.current || !canEdit || rules === undefined || profiles === undefined) return;
     hinted.current = true;
     if (!profile)
-      toast("SNS アカウントが割り当てられていません。制作物の「情報」で選ぶと見た目がそろいます");
+      toast("SNS アカウントが割り当てられていません。制作物の「情報」で選ぶと見た目がそろいます。");
     else if (rules && !rules.categories.length)
-      toast("表記統一のカテゴリが未設定のため、表記の検査はしていません（制作物の編集で選べます）");
+      toast("表記の検査をしていません。制作物の「編集」で表記統一のカテゴリを選んでください。");
   }, [rules, profiles, profile, canEdit]);
   const previewImages = post.images
     .map((im) => assets.get(im.key))
@@ -419,7 +420,7 @@ function PostSurface({
           </Field>
           {findings.length ? (
             <FindingList
-              label="本文の表記の指摘"
+              label="本文の表記の確認箇所"
               findings={findings}
               actions={(f) =>
                 canEdit && f.suggestion ? (
@@ -490,7 +491,7 @@ function PostSurface({
         ) : null}
         {post.images.length === 0 ? (
           <p className="small muted">
-            画像を追加すると、並び順・代替テキスト・切り抜きを設定できます。
+            画像を追加すると、並び順・代替テキスト・切り抜きを設定できます
           </p>
         ) : (
           <M3eList aria-label="画像" className="post-images">
@@ -513,7 +514,10 @@ function PostSurface({
                   </span>
                   {im.fileName.replace(/^\d{2}-/, "")}
                   <span slot="supporting-text" className="post-image__fields">
-                    <Field label="代替テキスト（ALT）">
+                    <Field
+                      label="代替テキスト"
+                      hint={`画像の内容を短く書きます。画像の中の文字（日時・場所など）も書き、「〜の画像」で始めません（${Array.from(im.alt).length} / ${ALT_TEXT_GUIDE_MAX}）`}
+                    >
                       <TextInput
                         value={im.alt}
                         disabled={!canEdit}
@@ -539,21 +543,21 @@ function PostSurface({
                   {canEdit ? (
                     <span slot="trailing" className="post-image__actions">
                       <M3eIconButton
-                        aria-label="前へ"
+                        aria-label={`${i + 1} 枚目を前へ移動`}
                         disabled={i === 0}
                         onClick={() => move(i, -1)}
                       >
                         <M3eIcon name="arrow_upward" />
                       </M3eIconButton>
                       <M3eIconButton
-                        aria-label="後ろへ"
+                        aria-label={`${i + 1} 枚目を後ろへ移動`}
                         disabled={i === post.images.length - 1}
                         onClick={() => move(i, 1)}
                       >
                         <M3eIcon name="arrow_downward" />
                       </M3eIconButton>
                       <M3eIconButton
-                        aria-label="この画像を外す"
+                        aria-label={`${i + 1} 枚目を外す`}
                         onClick={() => update({ images: post.images.filter((_, k) => k !== i) })}
                       >
                         <M3eIcon name="delete" />
@@ -617,7 +621,9 @@ function PostSurface({
           <M3eIcon name="arrow_back" className="icon--mirror" />
         </M3eIconButton>
       </AppBarSlot>
-      <AppBarSlot slot="title">{work.work.title}</AppBarSlot>
+      <AppBarSlot slot="title" title={work.work.title}>
+        {work.work.title}
+      </AppBarSlot>
       <AppBarSlot slot="subtitle">
         {/* 保存の状態は打つたびに変わるので読み上げない。失敗・競合だけ知らせる（§35 A-13） */}
         <span

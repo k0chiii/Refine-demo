@@ -1,6 +1,7 @@
 import { useAuthToken } from "@convex-dev/auth/react";
 import { useEffect, useState } from "react";
 import { fetchArtifactBlob } from "@/integrations/api";
+import { describeError } from "@/lib/errors";
 
 /** 添付を認可付きで取得し、Blob URL を返す。権限剥奪後は再取得が失敗する（署名 URL を残さない）。 */
 export function useArtifactBlob(artifactId: string | null) {
@@ -28,7 +29,7 @@ export function useArtifactBlob(artifactId: string | null) {
           setState({
             url: null,
             blob: null,
-            error: e instanceof Error ? e.message : String(e),
+            error: describeError(e).message,
             loading: false,
           });
       });

@@ -37,7 +37,11 @@ export async function uploadItem(
     message?: string;
   };
   if (!res.ok)
-    throw new Error(json.message ?? json.code ?? `アップロードに失敗しました (${res.status})`);
+    throw new Error(
+      json.code === "size_mismatch"
+        ? "ファイルが途中で欠けました。もう一度アップロードしてください。"
+        : "ファイルをアップロードできませんでした。もう一度お試しください。",
+    );
   return json as UploadResult;
 }
 
@@ -50,7 +54,7 @@ export async function fetchArtifactBlob(token: string, artifactId: string): Prom
     throw new Error(
       res.status === 403
         ? "このファイルを閲覧する権限がありません"
-        : `ファイルを取得できません (${res.status})`,
+        : "ファイルを読み込めませんでした。もう一度お試しください。",
     );
   return res.blob();
 }

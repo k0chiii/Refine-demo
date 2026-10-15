@@ -125,7 +125,9 @@ export function PdfViewer({
           onDoc?.(d);
           onPageCount?.(d.numPages);
         })
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : "PDF を読み込めません")),
+        .catch(() =>
+          setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。"),
+        ),
     );
     return () => {
       cancelled = true;
@@ -346,7 +348,7 @@ function PdfCanvas({
     };
   }, [doc, n, scale, rotation, near]);
 
-  return <canvas ref={ref} aria-label={`PDF ${n} ページ目`} />;
+  return <canvas ref={ref} role="img" aria-label={`PDF の ${n} ページ目`} />;
 }
 
 export function anchorPage(anchor: Anchor): number | null {

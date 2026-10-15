@@ -59,7 +59,7 @@ function SignIn() {
         </M3eButton>
         {showMock ? (
           <M3eExpansionPanel className="expansion">
-            <span slot="header">モック委員でサインイン</span>
+            <span slot="header">モックのユーザーでサインイン</span>
             <div className="stack">
               <Field label="役割">
                 <Select value={mockSub} onChange={(e) => setMockSub(e.target.value)}>

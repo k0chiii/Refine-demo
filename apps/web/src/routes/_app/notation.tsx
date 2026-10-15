@@ -236,7 +236,7 @@ function Notation() {
             </div>
             {rules.length === 0 ? (
               <div className="empty">
-                {text ? `「${text}」に一致するルールはありません。` : "ルールがありません。"}
+                {text ? `「${text}」に一致するルールはありません` : "ルールがありません"}
               </div>
             ) : wide ? (
               <RuleTable

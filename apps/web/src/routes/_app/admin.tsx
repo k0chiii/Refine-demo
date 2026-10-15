@@ -52,7 +52,7 @@ function Admin() {
     return (
       <>
         {title}
-        <div className="alert">管理画面は校正システム管理者のみ利用できます。</div>
+        <div className="alert">管理画面はシステム管理者だけが使えます</div>
       </>
     );
   return (
@@ -72,15 +72,13 @@ function Admin() {
       />
       {tab === "works" ? (
         <section className="stack">
-          <p className="muted small">
-            作品ごとに、個人へ閲覧・校正・編集・管理の権限を付与します（個人 ACL）。
-          </p>
+          <p className="muted small">制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます</p>
           <DataTable
-            label="作品ごとの閲覧権限"
+            label="制作物ごとの閲覧権限"
             rows={works ?? []}
             rowKey={(w) => w.id}
             loading={works === undefined}
-            empty="作品がありません"
+            empty="制作物がありません"
             columns={[
               {
                 key: "title",
@@ -91,7 +89,13 @@ function Admin() {
                   <>
                     {w.title}
                     {w.confidentiality === "restricted" ? (
-                      <M3eIcon name="lock" className="ml list__lock" title="非公開" />
+                      <M3eIcon
+                        name="lock"
+                        className="ml list__lock"
+                        role="img"
+                        aria-label="非公開"
+                        title="非公開"
+                      />
                     ) : null}
                   </>
                 ),
@@ -122,7 +126,7 @@ function Admin() {
                 cell: (w) => (
                   <M3eButton variant="text" onClick={() => setAclFor(w)}>
                     <M3eIcon slot="icon" name="lock_person" />
-                    閲覧権限
+                    権限を設定
                   </M3eButton>
                 ),
               },
@@ -183,7 +187,7 @@ function Admin() {
         <ProfilesAdmin />
       ) : (
         <section className="stack">
-          <p className="muted small">直近 100 件の操作。</p>
+          <p className="muted small">直近 100 件の操作</p>
           <DataTable
             label="監査ログ"
             rows={audit ?? []}

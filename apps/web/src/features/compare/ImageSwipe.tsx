@@ -21,10 +21,10 @@ export function ImageSwipe({
     <div className="swipe">
       <div className="swipe__stage">
         <div className="swipe__frame">
-          <img src={leftUrl} alt={`${leftLabel}の画像`} className="swipe__img" />
+          <img src={leftUrl} alt={`${leftLabel}（左）`} className="swipe__img" />
           <img
             src={rightUrl}
-            alt={`${rightLabel}の画像`}
+            alt={`${rightLabel}（右）`}
             className="swipe__img swipe__img--top"
             style={{ clipPath: `inset(0 0 0 ${pos}%)` }}
           />

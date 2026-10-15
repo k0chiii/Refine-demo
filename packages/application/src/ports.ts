@@ -206,8 +206,14 @@ export interface AlignmentOverrideRepository {
   update(row: AlignmentOverride): Promise<void>;
 }
 
+/** 人の表示名（通知の本文に「誰が」を書くため）。分からなければ null */
+export interface PeopleDirectory {
+  displayName(userId: UserId): Promise<string | null>;
+}
+
 export interface AppContext {
   clock: Clock;
+  people: PeopleDirectory;
   works: WorkRepository;
   revisions: RevisionRepository;
   artifacts: ArtifactRepository;

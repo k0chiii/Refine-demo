@@ -14,8 +14,17 @@ let focusedPath: string | null = null;
  *
  * 見出し（title）は画面ごとのページタイトル（document.title）にもする。画面を移ったときに、フォーカスが行き場を失って
  * body にあるなら見出しへ移し、スクリーンリーダーに画面の切り替わりを伝える（WCAG 2.4.2・M3 Accessibility。§35 A-05）
+ * `title` を渡すと受け皿に title 属性を付ける（見出しが省略記号で切れても、ポインタを載せれば全文を読める）。
  */
-export function AppBarSlot({ slot, children }: { slot: AppBarSlotName; children: ReactNode }) {
+export function AppBarSlot({
+  slot,
+  title,
+  children,
+}: {
+  slot: AppBarSlotName;
+  title?: string;
+  children: ReactNode;
+}) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setHost(document.getElementById(`appbar-${slot}`));
@@ -26,7 +35,7 @@ export function AppBarSlot({ slot, children }: { slot: AppBarSlotName; children:
       const text = host.textContent?.trim();
       document.title = text ? `${text} – ${APP_NAME}` : APP_NAME;
       // 長い見出しは切り詰めて表示するので、全文をツールチップでも読めるようにする
-      host.title = text ?? "";
+      host.title = title ?? text ?? "";
       host.tabIndex = -1;
       const path = location.pathname;
       if (focusedPath === path) return;
@@ -36,5 +45,10 @@ export function AppBarSlot({ slot, children }: { slot: AppBarSlotName; children:
     });
     return () => cancelAnimationFrame(id);
   });
+  useEffect(() => {
+    if (!host || title === undefined || slot === "title") return;
+    host.title = title;
+    return () => host.removeAttribute("title");
+  }, [host, title, slot]);
   return host ? createPortal(children, host) : null;
 }

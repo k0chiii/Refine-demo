@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { M3eIcon, M3eLinearProgressIndicator, M3ePaginator, M3eSwitch, M3eTooltip } from "./m3e";
 import { Select } from "./Field";
+import { describeError } from "@/lib/errors";
 
 /**
  * データ表。M3（2026 年の部品一覧 37 種）にも M3E にも data table が無いため、Material の data table の仕様
@@ -210,7 +211,7 @@ export function DataTable<T>({
           rangeLabelFormatter={(index: number, size: number | "all", length: number) => {
             if (size === "all" || length === 0) return `${length} 件`;
             const start = index * size + 1;
-            return `${start}–${Math.min(length, start + size - 1)} / ${length} 件`;
+            return `${start}〜${Math.min(length, start + size - 1)} 件 / 全 ${length} 件`;
           }}
           onPage={(e) => {
             const d = (e as unknown as CustomEvent<{ pageIndex: number; pageSize: number | "all" }>)
@@ -239,7 +240,7 @@ function useSave<V>(onSave: (v: V) => Promise<void>) {
       setState({ saving: false, error: null });
       return true;
     } catch (e) {
-      setState({ saving: false, error: e instanceof Error ? e.message : String(e) });
+      setState({ saving: false, error: describeError(e).message });
       return false;
     }
   };

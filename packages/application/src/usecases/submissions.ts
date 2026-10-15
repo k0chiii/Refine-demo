@@ -24,7 +24,7 @@ import {
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
-import { notify, workStakeholders } from "./notifications.ts";
+import { about, excerpt, notify, personName, workStakeholders } from "./notifications.ts";
 import { currentRuleSet } from "./notation.ts";
 import { createProofreadingRun } from "./autoProofread.ts";
 
@@ -279,10 +279,13 @@ export async function confirmSubmission(
       after: { sequence: revision.sequence, kind: revision.kind, supersededRevisionId },
       at: now,
     });
+    const who = await personName(ctx, principal.userId);
     await notify(ctx, workStakeholders(work), principal.userId, {
       kind: "revision_submitted",
-      title: `${revisionLabel(revision)}が提出されました: ${work.title}`,
-      body: revision.changeSummary || "変更点の記載なし",
+      title: "新しい版が提出されました",
+      body: `${about(work.title, revisionLabel(revision), who)}: ${
+        revision.changeSummary?.trim() ? excerpt(revision.changeSummary) : "変更点の記載なし"
+      }`,
       workId: work.id,
       revisionId: revision.id,
     });
@@ -290,8 +293,8 @@ export async function confirmSubmission(
       if (c.assigneeId) {
         await notify(ctx, [c.assigneeId], principal.userId, {
           kind: "check_requested",
-          title: `専門確認の依頼: ${c.label}`,
-          body: `「${work.title}」${revisionLabel(revision)}で ${c.label} の確認が必要です。`,
+          title: "専門確認を依頼されました",
+          body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${c.label}`,
           workId: work.id,
           revisionId: revision.id,
         });
@@ -302,7 +305,7 @@ export async function confirmSubmission(
 }
 
 /**
- * 誤提出の無効化（§5.2-6）。受付中の最新版を理由付きで void にする。指摘・添付・監査は残す。
+ * 誤提出の無効化（§5.2-6）。受付中の最新版を理由付きで void にする。コメント・添付・監査は残す。
  * 無効化後は受付中の版が無くなる。正しい版を再提出する（番号は進む）。
  */
 export async function voidRevisionUseCase(
@@ -326,10 +329,14 @@ export async function voidRevisionUseCase(
     at: now,
   });
   const reviewers = (await ctx.assignments.listByRevision(revision.id)).map((a) => a.reviewerId);
+  const who = await personName(ctx, principal.userId);
   await notify(ctx, [...workStakeholders(work), ...reviewers], principal.userId, {
     kind: "revision_voided",
-    title: `${revisionLabel(revision)}が無効化されました: ${work.title}`,
-    body: `理由: ${input.reason.trim()}`,
+    title: "版が無効になりました",
+    body: `${about(work.title, revisionLabel(revision), who)}が無効にしました（理由: ${excerpt(
+      input.reason,
+      80,
+    )}）`,
     workId: work.id,
     revisionId: revision.id,
   });

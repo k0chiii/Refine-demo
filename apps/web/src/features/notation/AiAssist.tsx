@@ -3,7 +3,13 @@ import type { Finding } from "@mf100/domain";
 import { useAction as useConvexAction, useQuery } from "convex/react";
 import { useState } from "react";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eDialog, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import {
+  M3eButton,
+  M3eCircularProgressIndicator,
+  M3eDialog,
+  M3eIcon,
+  M3eIconButton,
+} from "@/ui/m3e";
 import { FindingList } from "./FindingList";
 
 /**
@@ -40,19 +46,28 @@ export function AiAssist({
   const chars = getText().length;
   return (
     <div className="stack ai-assist">
-      <M3eButton
-        variant="outlined"
-        disabled={run.pending || chars === 0}
-        onClick={() => setConfirm(true)}
-      >
-        <M3eIcon slot="icon" name="auto_awesome" />
-        {run.pending ? "AI が確認しています…" : "AI に校正の候補を出してもらう"}
-      </M3eButton>
+      {/* 処理中はボタンの文言を変えず、無効にして横に進捗と状態を出す（M3 Content design: ボタンは操作の名前のまま） */}
+      <div className="row">
+        <M3eButton
+          variant="outlined"
+          disabled={run.pending || chars === 0}
+          onClick={() => setConfirm(true)}
+        >
+          <M3eIcon slot="icon" name="auto_awesome" />
+          AI に校正の候補を出してもらう
+        </M3eButton>
+        {run.pending ? (
+          <span className="row small muted" role="status">
+            <M3eCircularProgressIndicator indeterminate aria-label="AI が確認しています" />
+            AI が確認しています
+          </span>
+        ) : null}
+      </div>
       {result ? (
         result.note ? (
           <p className="small error-text">{result.note}</p>
         ) : result.candidates.length === 0 ? (
-          <p className="small muted">AI（{result.provider}）の候補はありません。</p>
+          <p className="small muted">AI（{result.provider}）の候補はありません</p>
         ) : (
           <>
             <p className="small muted">

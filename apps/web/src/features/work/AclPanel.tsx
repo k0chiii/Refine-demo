@@ -11,7 +11,7 @@ import { Field, Select } from "@/ui/Field";
 import { M3eButton, M3eExpansionPanel } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 
-/** U-08 作品ごとの閲覧許可（Nogiku ユーザー単位）。エディタの「情報」に置く。付与・剥奪と履歴（F-14 / A-19）。 */
+/** U-08 作品ごとの閲覧許可（Nogiku ユーザー単位）。エディタの「情報」に置く。追加・外すと履歴（F-14 / A-19）。 */
 export function AclPanel({ workId }: { workId: string }) {
   const grants = useQuery(api.acl.list, { workId });
   const grant = useMutation(api.acl.grant);
@@ -37,7 +37,7 @@ export function AclPanel({ workId }: { workId: string }) {
   return (
     <div className="acl">
       {active.length === 0 ? (
-        <p className="muted small">個人の許可はありません。</p>
+        <p className="muted small">個人の許可はありません</p>
       ) : (
         <DataTable
           label="個人の許可"
@@ -89,7 +89,7 @@ export function AclPanel({ workId }: { workId: string }) {
                   disabled={doRevoke.pending}
                   onClick={() => void doRevoke.run(g.principalId)}
                 >
-                  剥奪
+                  外す
                 </M3eButton>
               ),
             },
@@ -120,7 +120,7 @@ export function AclPanel({ workId }: { workId: string }) {
             disabled={principal.length === 0 || doGrant.pending}
             onClick={() => void doGrant.run()}
           >
-            付与
+            追加
           </M3eButton>
         </div>
       </div>
@@ -141,7 +141,7 @@ export function AclPanel({ workId }: { workId: string }) {
               { key: "perm", header: "権限", cell: (g) => permissionLabel[g.permission] },
               {
                 key: "granted",
-                header: "付与",
+                header: "追加した日時",
                 sort: (a, b) => a.grantedAt - b.grantedAt,
                 cell: (g) => (
                   <span className="small">
@@ -151,7 +151,7 @@ export function AclPanel({ workId }: { workId: string }) {
               },
               {
                 key: "revoked",
-                header: "剥奪",
+                header: "外した日時",
                 cell: (g) =>
                   g.revokedAt ? (
                     <span className="small">

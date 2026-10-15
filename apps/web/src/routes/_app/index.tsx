@@ -27,8 +27,8 @@ const backlogGroups: Array<[keyof Dashboard["backlog"], string, (i: Item) => str
     "期限超過",
     (i) => `締切 ${formatDeadline(i.deadlineAt ?? 0)}${i.count ? `・未対応 ${i.count}` : ""}`,
   ],
-  ["unassigned", "校正者が未割当", (i) => `締切 ${formatDeadlineUntil(i.deadlineAt ?? 0)}`],
-  ["stale", "動きがない", (i) => `最後の動き ${formatJstDate(i.deadlineAt ?? 0)}`],
+  ["unassigned", "校正者が未割り当て", (i) => `締切 ${formatDeadlineUntil(i.deadlineAt ?? 0)}`],
+  ["stale", "14 日間更新なし", (i) => `最終更新 ${formatJstDate(i.deadlineAt ?? 0)}`],
   [
     "dueSoon",
     "納期が近い",
@@ -72,7 +72,7 @@ function Dashboard() {
       <div className="dash">
         <section className="dash__section">
           {mine.length === 0 ? (
-            <p className="muted dash__empty">いま やることはありません。</p>
+            <p className="muted dash__empty">いまやることはありません</p>
           ) : (
             mine.map(([k, title, sub]) => (
               <div key={k} className="dash__group">

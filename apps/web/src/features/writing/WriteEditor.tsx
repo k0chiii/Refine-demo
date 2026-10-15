@@ -46,13 +46,13 @@ const panels: Array<{ id: Panel; label: string; icon: string }> = [
   { id: "outline", label: "概要", icon: "toc" },
   { id: "find", label: "検索と置換", icon: "find_replace" },
   { id: "notation", label: "表記", icon: "spellcheck" },
-  { id: "refs", label: "指摘", icon: "rate_review" },
+  { id: "refs", label: "コメント", icon: "rate_review" },
 ];
 const LIVE_COUNT_KEY = "mf100.write.liveCount";
 
 /**
  * 文章エディタ（`/works/:id/write`）。Google ドキュメントの「書く」体験を M3 Expressive の部品で組む。
- * - 骨格は M3 の supporting pane: 主＝紙面、副＝概要／検索と置換／指摘（expanded 以上は固定 360 / 412、839 以下はボトムシート）
+ * - 骨格は M3 の supporting pane: 主＝紙面、副＝概要／検索と置換／コメント（expanded 以上は固定 360 / 412、839 以下はボトムシート）
  * - 書式は上端の浮遊ツールバー（compact はキーボードの上に浮かぶ vibrant のツールバー。丸いボタンで系統ごとに展開。補助ペインはボトムシート）
  * - 下書きは数秒ごとに自動保存（版番号で競合を検出）。「版として提出」で HTML の版スナップショットを作り、校正に回す
  */
@@ -385,7 +385,7 @@ function WriteSurface({
     };
   }
 
-  // 直近の版の指摘（読むだけ）
+  // 直近の版のコメント（読むだけ）
   const refRevision = useQuery(
     api.revisions.get,
     acceptingRevisionId ? { revisionId: acceptingRevisionId as Id<"revisions"> } : "skip",
@@ -472,7 +472,9 @@ function WriteSurface({
           <M3eIcon name="arrow_back" className="icon--mirror" />
         </M3eIconButton>
       </AppBarSlot>
-      <AppBarSlot slot="title">{workTitle}</AppBarSlot>
+      <AppBarSlot slot="title" title={workTitle}>
+        {workTitle}
+      </AppBarSlot>
       <AppBarSlot slot="subtitle">
         {/* 保存の状態は打つたびに変わるので読み上げない。失敗・競合だけ知らせる（§35 A-13） */}
         <span
@@ -656,10 +658,10 @@ function WriteSurface({
           <p style={{ margin: 0 }}>
             {doc.draft?.updatedBy?.name ?? "別の人"} さんが{" "}
             {doc.draft ? formatJstShort(doc.draft.updatedAt) : ""} に保存した内容があります。
-            同時に書くことはまだできません（共同編集は今後の機能です）。
+            同時に書くことはまだできません。
           </p>
           <p className="small muted" style={{ margin: 0 }}>
-            最新を読み込むと、この画面でまだ保存していない変更は消えます。残したい文章は先にコピーしてください。
+            最新を読み込むまで、この画面の変更は保存されません。読み込むと、まだ保存していない変更は消えます。残したい文章は先にコピーしてください。
           </p>
         </div>
         <div slot="actions" className="row">
@@ -667,7 +669,7 @@ function WriteSurface({
             variant="text"
             onClick={() => setStatus({ kind: "error", message: "他の人の変更があります" })}
           >
-            あとで
+            今は読み込まない
           </M3eButton>
           <M3eButton variant="filled" onClick={onReload}>
             最新を読み込む
@@ -739,7 +741,7 @@ function moreSheet(editor: Editor, actions: ToolbarActions, openPanel: (p: Panel
     { icon: "toc", label: "概要", onSelect: () => openPanel("outline") },
     { icon: "find_replace", label: "検索と置換", onSelect: () => actions.openFind(true) },
     { icon: "spellcheck", label: "表記", onSelect: () => openPanel("notation") },
-    { icon: "rate_review", label: "指摘", onSelect: () => openPanel("refs") },
+    { icon: "rate_review", label: "コメント", onSelect: () => openPanel("refs") },
     { icon: "match_word", label: "文字カウント", onSelect: actions.openCount },
     { icon: "markdown", label: "Markdown でダウンロード", onSelect: () => actions.download("md") },
   ];

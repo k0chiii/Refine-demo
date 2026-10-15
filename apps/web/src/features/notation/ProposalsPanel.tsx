@@ -91,7 +91,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
         <p className="muted">読み込み中…</p>
       ) : list.length === 0 ? (
         <div className="empty">
-          {status === "open" ? "未処理の提案はありません。" : "該当する提案はありません。"}
+          {status === "open" ? "未処理の提案はありません" : "該当する提案はありません"}
         </div>
       ) : (
         <div className="proposal-list">
@@ -127,7 +127,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
                 ) : null}
                 {p.reason ? <p className="small">{p.reason}</p> : null}
                 {p.contextHidden ? (
-                  <p className="small muted">元の制作物を閲覧できないため、文脈は表示しません。</p>
+                  <p className="small muted">元の制作物を閲覧できないため、文脈は表示しません</p>
                 ) : p.context.quote ? (
                   <p className="small proposal__quote">
                     「{p.context.quote}」
@@ -141,7 +141,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
                   {p.supporters.length ? `・賛同 ${p.supporters.length}` : ""}
                   {p.decider ? `・${statusLabel[p.status]}: ${p.decider.name}` : ""}
                   {p.decisionNote ? `（${p.decisionNote}）` : ""}
-                  {p.resultRuleId ? `・ルール ${p.resultRuleId} 版 ${p.resultRevision}` : ""}
+                  {p.resultRuleId ? `・ルール ${p.resultRuleId} 改訂 ${p.resultRevision}` : ""}
                 </p>
               </div>
               {p.canDecide ? (

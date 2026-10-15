@@ -116,7 +116,8 @@ export function SubmitDialog({
     if (!deadlineAt) return setError("校正期限を入力してください");
     if (deadlineAt <= Date.now())
       return setError("校正期限が過ぎています。今より後の日時にしてください");
-    if (!token) return setError("認証トークンがありません。再度サインインしてください");
+    if (!token)
+      return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
     const items = [
       ...files.map((f) => ({
         fileName: f.name,
@@ -333,7 +334,7 @@ export function SubmitDialog({
                       {
                         pending: "待機",
                         uploading: "転送中",
-                        verified: "検証済み",
+                        verified: "確認済み",
                         failed: "失敗",
                       }[it.status]
                     }
