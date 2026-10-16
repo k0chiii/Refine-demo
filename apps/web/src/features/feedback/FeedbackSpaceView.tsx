@@ -2,7 +2,8 @@ import { api } from "@mf100/convex/api";
 import type { Anchor } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { PaneHandle } from "@/features/editor/PaneHandle";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
@@ -16,7 +17,10 @@ import { FeedbackStage, feedbackMarks } from "./FeedbackStage";
  * - 広い画面（1200 以上）: 縦に 3 列。左に FB スペース（制作物）の一覧、中央に紙面、右にスレッド（一覧 → やり取り）
  * - 840–1199: スペースを開くと 紙面 と スレッド の 2 列（スペースの一覧へは戻るボタン）
  * - 839 以下: スペースの一覧 → スレッドの一覧 → やり取り（全画面）。紙面は「制作物を開く」から
- * 紙面ではコメント（校正の指摘）は出さず、FB の印だけ。範囲を選ぶとその場所の FB スレッドを立てられる。
+ * 紙面ではコメント（校正の指摘）は出さず、FB の印だけ。紙面は見るだけで、ここでは範囲を選んで新しい FB を立てない
+ * （利用者指示 2026-10-16。範囲の FB は制作物を開いて立てる）。
+ * 広い画面の左（FB スペースの一覧）と右（スレッド）は、間のドラッグハンドルで幅を変えられ、押すと折りたためる
+ * （M3 Scaffold › Panes: 固定ペインのサイズ変更。幅と開閉は端末に覚える: persistent resizing）
  */
 export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threadId?: string }) {
   const navigate = useNavigate();
@@ -49,6 +53,8 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
       });
   }, [opened?.id]);
   const revisionId = revChoice ?? space?.latestRevision?.id ?? null;
+  const spacesPane = usePane("mf100.fbSpaces", 300);
+  const threadsPane2 = usePane("mf100.fbThreads", 400);
   const marks = feedbackMarks(threads, revisionId);
 
   const openSpace = (id: string) =>
@@ -83,7 +89,7 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
       intro={
         narrow
           ? "この制作物についての相談・話し合い（解決はしません）。紙面の範囲についての FB は、制作物を開いて範囲を選ぶと立てられます"
-          : "この制作物についての相談・話し合い（解決はしません）。紙面で範囲を選ぶと、その場所について立てられます"
+          : "この制作物についての相談・話し合い（解決はしません）。紙面の印を押すと、その場所の FB が開きます。範囲の FB は制作物を開いて立てます"
       }
     />
   ) : null;
@@ -97,7 +103,6 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
           threads={threads}
           activeId={threadId ?? null}
           onSelectThread={(id) => openThread(id)}
-          onCreated={(id) => openThread(id)}
           focus={focus}
         />
       ) : (
@@ -161,14 +166,45 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
         </div>
       </>
     );
+  const showSpaces = large && !spacesPane.collapsed;
+  const showThreads = !threadsPane2.collapsed;
+  const handle = (side: "start" | "end") => {
+    const pane = side === "start" ? spacesPane : threadsPane2;
+    return (
+      <div className="fb-space__spacer">
+        <PaneHandle
+          side={side}
+          label={side === "start" ? "FB スペースの一覧" : "スレッド"}
+          width={pane.width}
+          defaultWidth={pane.defaultWidth}
+          maxWidth={side === "start" ? 480 : 640}
+          collapsed={pane.collapsed}
+          onResize={(w) => pane.setWidth(w ?? pane.defaultWidth)}
+          onToggle={pane.toggle}
+        />
+      </div>
+    );
+  };
+  const columns = [
+    ...(large ? [showSpaces ? `${spacesPane.width}px` : "0px", "24px"] : []),
+    "minmax(360px, 1fr)",
+    "24px",
+    showThreads ? `${threadsPane2.width}px` : "0px",
+  ].join(" ");
   return (
     <>
       {appBar}
-      <div className={`fb-space ${large ? "fb-space--three" : "fb-space--two"}`}>
-        {large ? <div className="fb-space__pane fb-space__spaces">{list}</div> : null}
+      <div className="fb-space" style={{ gridTemplateColumns: columns } as CSSProperties}>
+        {large ? (
+          <div className="fb-space__pane fb-space__spaces" hidden={!showSpaces}>
+            {showSpaces ? list : null}
+          </div>
+        ) : null}
+        {large ? handle("start") : null}
         <div className="fb-space__pane fb-space__stage">{stage}</div>
-        <div className="fb-space__pane fb-space__threads">
-          {workId ? (
+        {handle("end")}
+        <div className="fb-space__pane fb-space__threads" hidden={!showThreads}>
+          {!showThreads ? null : workId ? (
             <>
               <header className="fb-space__head">
                 <span className="fb-space__title">{title}</span>
@@ -191,4 +227,37 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
       </div>
     </>
   );
+}
+
+/** 固定ペインの幅と開閉（端末に覚える。M3 Scaffold › Panes の persistent resizing） */
+function usePane(key: string, defaultWidth: number) {
+  const read = (): { width: number; collapsed: boolean } => {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) ?? "null") as {
+        width?: number;
+        collapsed?: boolean;
+      } | null;
+      return {
+        width: typeof v?.width === "number" ? v.width : defaultWidth,
+        collapsed: v?.collapsed === true,
+      };
+    } catch {
+      return { width: defaultWidth, collapsed: false };
+    }
+  };
+  const [state, setState] = useState(read);
+  const save = (next: { width: number; collapsed: boolean }) => {
+    setState(next);
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      /* 覚えられなくても、その場では効く */
+    }
+  };
+  return {
+    ...state,
+    defaultWidth,
+    setWidth: (width: number) => save({ ...state, width }),
+    toggle: () => save({ ...state, collapsed: !state.collapsed }),
+  };
 }

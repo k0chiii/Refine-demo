@@ -1,14 +1,7 @@
 import { api } from "@mf100/convex/api";
-import {
-  pickReviewArtifact,
-  textRangeAnchor,
-  toViewportRect,
-  type Anchor,
-  type NormalizedRect,
-  type Viewport,
-} from "@mf100/domain";
+import { pickReviewArtifact, type Anchor } from "@mf100/domain";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
@@ -16,30 +9,9 @@ import { anchorPage, PdfViewer } from "@/features/annotation/PdfViewer";
 import { RichTextViewer } from "@/features/annotation/RichTextViewer";
 import { TextViewer } from "@/features/annotation/TextViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
-import { ComposePopover } from "@/features/review/ComposePopover";
-import { activeMentions, MentionProvider } from "@/features/review/mentions";
 import { documentView } from "@/features/writing/documentView";
-import { useAction } from "@/lib/useAction";
 import { M3eButton, M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
 import type { FeedbackThreadSummary } from "./FeedbackPane";
-
-type Draft = {
-  page?: number;
-  rect?: NormalizedRect;
-  point?: { x: number; y: number };
-  range?: { start: number; end: number };
-  box?: { x: number; y: number; w: number; h: number };
-};
-
-const COMPOSE_W = 300;
-/** 範囲・ピンの右に投稿欄を置く。入らなければ左、左にも入らなければ下 */
-function popoverPos(box: { x: number; y: number; w: number; h: number }, vp: Viewport) {
-  const right = box.x + box.w + 10;
-  if (right + COMPOSE_W <= vp.width) return { x: right, y: box.y };
-  const left = box.x - COMPOSE_W - 10;
-  if (left >= 0) return { x: left, y: box.y };
-  return { x: Math.max(0, Math.min(box.x, vp.width - COMPOSE_W)), y: box.y + box.h + 10 };
-}
 
 /** 紙面の FB の番号（その版の紙面に印がある相談を、立てた順に 1, 2, …。エディタの引き出し「FB」と同じ数え方） */
 export function feedbackMarks(
@@ -55,7 +27,7 @@ export function feedbackMarks(
 /**
  * FB スペースの紙面（利用者決定 2026-10-16「当該制作物をみながらスレッドで議論」）。
  * コメント（校正の指摘）は出さず、FB の印だけを重ねる。印を押すとそのスレッドを開き、
- * 紙面で範囲を選ぶ（ドラッグ・クリック・文字の選択）と、その場所の FB スレッドを立てられる。
+ * 紙面は見るだけで、範囲を選んで新しい FB は立てない（利用者指示 2026-10-16。範囲の FB は制作物を開いて立てる）。
  * 見る版は親が決める（開いたスレッドの版、無ければ最新の版）。版・添付・ページ・倍率は上の細い操作の行で変える。
  */
 export function FeedbackStage({
@@ -65,7 +37,6 @@ export function FeedbackStage({
   threads,
   activeId,
   onSelectThread,
-  onCreated,
   focus,
 }: {
   workId: string;
@@ -74,7 +45,6 @@ export function FeedbackStage({
   threads: FeedbackThreadSummary[] | undefined;
   activeId: string | null;
   onSelectThread: (id: string) => void;
-  onCreated: (threadId: string) => void;
   /** 見せたい場所（スレッドの「紙面の場所を表示」）。変わるたびにその添付・ページへ送る */
   focus: { anchor: Anchor; at: number } | null;
 }) {
@@ -90,15 +60,9 @@ export function FeedbackStage({
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [scale, setScale] = useState(1);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [body, setBody] = useState("");
-  const [mentions, setMentions] = useState<string[]>([]);
-  const create = useMutation(api.feedback.createThread);
-  const candidates = useQuery(api.feedback.mentionCandidates, { workId });
 
   // 版が変わったら、紙面に出す添付を選び直す（PDF → 画像 → 文章）
   useEffect(() => {
-    setDraft(null);
     setPage(1);
     setArtifactId(data ? (pickReviewArtifact(data.artifacts)?.id ?? null) : null);
   }, [data?.revision.id]);
@@ -137,76 +101,14 @@ export function FeedbackStage({
       kind: "feedback" as const,
     }));
 
-  const reset = () => {
-    setDraft(null);
-    setBody("");
-    setMentions([]);
-  };
-  const post = useAction(async () => {
-    if (!draft || !shownId || !artifact) return;
-    let anchor: Anchor | undefined;
-    if (artifact.type === "pdf" && draft.page)
-      anchor = draft.rect
-        ? { type: "pdf_rect", artifactId: artifact.id, page: draft.page, rect: draft.rect }
-        : draft.point
-          ? { type: "pdf_pin", artifactId: artifact.id, page: draft.page, point: draft.point }
-          : undefined;
-    else if (artifact.type === "image")
-      anchor = draft.rect
-        ? { type: "image_rect", artifactId: artifact.id, rect: draft.rect }
-        : draft.point
-          ? { type: "image_pin", artifactId: artifact.id, point: draft.point }
-          : undefined;
-    else if (artifact.type === "document" && draft.range && text?.artifactId === artifact.id)
-      anchor = textRangeAnchor(artifact.id, text.body, draft.range.start, draft.range.end);
-    const id = await create({
-      workId,
-      revisionId: shownId,
-      ...(anchor ? { anchor } : {}),
-      body,
-      mentions: activeMentions(body, mentions, candidates ?? []),
-    });
-    reset();
-    onCreated(id);
-  });
-
-  const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number): ReactNode => {
-    if (!draft) return null;
-    if (n !== undefined && draft.page !== n) return null;
-    let pos = { x: 8, y: 8 };
-    if (vp && (draft.rect || draft.point)) {
-      const b = draft.rect
-        ? toViewportRect(draft.rect, vp)
-        : {
-            ...toViewportRect({ x: draft.point!.x, y: draft.point!.y, w: 0.0001, h: 0.0001 }, vp),
-            w: 0,
-            h: 0,
-          };
-      pos = popoverPos(b, vp);
-    } else if (box) pos = { x: Math.max(0, box.x), y: box.y + box.h + 6 };
-    return (
-      <ComposePopover
-        x={pos.x}
-        y={pos.y}
-        value={body}
-        onChange={setBody}
-        mentions={mentions}
-        onMentions={setMentions}
-        {...(draft.range && text
-          ? { quote: text.body.slice(draft.range.start, draft.range.end).slice(0, 80) }
-          : {})}
-        onSubmit={() => void post.run()}
-        onCancel={reset}
-        pending={post.pending}
-        kind="feedback"
-      />
-    );
-  };
+  // FB タブの紙面は見るだけ（範囲を選んで新しい FB は立てない。利用者指示 2026-10-16）。印を押すとそのスレッドを開く
   const viewerProps = {
     threads: overlay,
     activeThreadId: activeId,
     onSelectThread,
-    selecting: true,
+    selecting: false,
+    draft: null,
+    onDraft: () => undefined,
   };
 
   const viewer = (): ReactNode => {
@@ -229,14 +131,11 @@ export function FeedbackStage({
           blob={blob.blob}
           artifactId={artifact.id}
           {...viewerProps}
-          draft={draft?.page ? (draft as Draft & { page: number }) : null}
-          onDraft={(d) => setDraft(d)}
           page={page}
           onPageChange={setPage}
           scale={scale}
           rotation={0}
           onPageCount={setPageCount}
-          renderInPage={(vp, n) => compose(vp, null, n)}
         />
       );
     if (artifact.type === "image" && blob.url)
@@ -246,40 +145,14 @@ export function FeedbackStage({
           artifactId={artifact.id}
           alt={`${data.revision.label}の添付「${artifact.fileName}」`}
           {...viewerProps}
-          draft={draft?.rect || draft?.point ? draft : null}
-          onDraft={(d) => setDraft(d)}
           scale={scale}
-          renderInPage={(vp) => compose(vp, null)}
         />
       );
     if (artifact.type === "document" && text?.artifactId === artifact.id) {
-      const textDraft = draft?.range
-        ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) }
-        : null;
-      const onTextDraft = (r: { start: number; end: number; box?: Draft["box"] } | null) =>
-        setDraft(
-          r ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) } : null,
-        );
       return text.html !== undefined ? (
-        <RichTextViewer
-          html={text.html}
-          scale={scale}
-          artifactId={artifact.id}
-          {...viewerProps}
-          draft={textDraft}
-          onDraft={onTextDraft}
-          inPage={compose(null, draft?.box ?? null)}
-        />
+        <RichTextViewer html={text.html} scale={scale} artifactId={artifact.id} {...viewerProps} />
       ) : (
-        <TextViewer
-          text={text.body}
-          scale={scale}
-          artifactId={artifact.id}
-          {...viewerProps}
-          draft={textDraft}
-          onDraft={onTextDraft}
-          inPage={compose(null, draft?.box ?? null)}
-        />
+        <TextViewer text={text.body} scale={scale} artifactId={artifact.id} {...viewerProps} />
       );
     }
     if (artifact.type === "document") return <p className="muted fb-stage__empty">読み込み中…</p>;
@@ -293,7 +166,7 @@ export function FeedbackStage({
   const shown = revisions.find((r) => r.id === shownId) ?? null;
   const reviewable = (data?.artifacts ?? []).filter((a) => a.role !== "external");
   return (
-    <MentionProvider value={candidates ?? []}>
+    <>
       <section className="fb-stage" aria-label="紙面">
         <div className="fb-stage__bar" role="toolbar" aria-label="紙面の操作">
           {revisions.length ? (
@@ -376,10 +249,12 @@ export function FeedbackStage({
           </Link>
         </div>
         {artifact ? (
-          <p className="fb-stage__hint">紙面で範囲を選ぶと、その場所について FB を立てられます</p>
+          <p className="fb-stage__hint">
+            印を押すとその FB を開きます。範囲の FB は「制作物を開く」から立てます
+          </p>
         ) : null}
         <div className="fb-stage__viewer">{viewer()}</div>
       </section>
-    </MentionProvider>
+    </>
   );
 }

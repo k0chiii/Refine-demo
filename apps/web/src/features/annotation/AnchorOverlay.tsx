@@ -116,10 +116,17 @@ export function AnchorOverlay({
     }
   };
 
+  /** 既存の範囲の面の上から選び始めたときの、その範囲のスレッド（動かさずに離したら、そのスレッドを開く） */
+  const startedOn = useRef<string | null>(null);
+  /** 選び終えた直後（その直後の click でスレッドを開かない） */
+  const drewAt = useRef(0);
   const onPointerDown = (e: PointerEvent<SVGSVGElement>) => {
     if (!selecting || e.button !== 0) return;
-    // 既存のピン・範囲の上では選択を始めない（クリックはそのスレッドを開く）
-    if ((e.target as Element).closest("[data-anchor]")) return;
+    // ピン・番号（押せる印）の上では選択を始めない（押すとそのスレッドを開く）。
+    // 範囲の面の上からは重ねて選べる（同じ場所に別のコメント。利用者指示 2026-10-16）
+    const onAnchor = (e.target as Element).closest("[data-anchor]");
+    if (onAnchor && !(e.target as Element).classList.contains("anchor-rect")) return;
+    startedOn.current = onAnchor?.getAttribute("data-anchor") ?? null;
     const p = toLocal(e);
     if (e.pointerType === "touch") {
       // 2 本目の指（ピンチ）: 長押しの選択はやめる
@@ -177,12 +184,32 @@ export function AnchorOverlay({
       haptic(); // 位置を置いた手応え（指を離す操作の中なので iPhone でも震えやすい）
     }
     if (!drag) return;
+    // 範囲の面の上で、動かさずに離した（マウスのクリック）: 新しく作らず、その範囲のスレッドを開く
+    if (
+      startedOn.current &&
+      e.pointerType !== "touch" &&
+      Math.abs(drag.x1 - drag.x0) < 6 &&
+      Math.abs(drag.y1 - drag.y0) < 6
+    ) {
+      onSelectThread(startedOn.current);
+      startedOn.current = null;
+      setDrag(null);
+      return;
+    }
+    startedOn.current = null;
+    drewAt.current = Date.now();
     finish(drag);
     setDrag(null);
   };
   const onPointerCancel = () => {
     clearPress();
+    startedOn.current = null;
     setDrag(null);
+  };
+  /** 印を押してスレッドを開く（範囲を選び終えた直後の click では開かない） */
+  const openThread = (id: string) => {
+    if (Date.now() - drewAt.current < 400) return;
+    onSelectThread(id);
   };
 
   const visible = threads.filter((t) => (filterPage ? filterPage(t.anchor) : true));
@@ -230,7 +257,7 @@ export function AnchorOverlay({
             <g
               key={t.id}
               data-anchor={t.id}
-              onClick={() => onSelectThread(t.id)}
+              onClick={() => openThread(t.id)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -263,7 +290,7 @@ export function AnchorOverlay({
             <g
               key={t.id}
               data-anchor={t.id}
-              onClick={() => onSelectThread(t.id)}
+              onClick={() => openThread(t.id)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {

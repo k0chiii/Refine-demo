@@ -1908,13 +1908,26 @@ m3e-dialog [slot="actions"] {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
-.thread__reply-open {
-  align-self: flex-start;
-}
+/* 返信・理由の欄（M3 の outlined text field。M3E form-field。ラベルは欄の中に浮かぶ） */
 .thread__form {
   display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.thread__field {
+  width: 100%;
+}
+.thread__input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  resize: none;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface);
+}
+.thread__form-actions {
   gap: 8px;
-  margin-top: 4px;
 }
 .carry-box {
   display: grid;
@@ -4013,7 +4026,7 @@ m3e-snackbar {
 }
 .fb-space {
   display: grid;
-  gap: 16px;
+  gap: 0;
   height: calc(100dvh - var(--mf-appbar-h, 64px) - 40px);
   min-height: 480px;
 }
@@ -4025,6 +4038,15 @@ m3e-snackbar {
 }
 .fb-space--list {
   grid-template-columns: 360px minmax(0, 1fr);
+  gap: 24px;
+}
+/* ペインの間のスペーサー（24）。中のドラッグハンドルで左右のペインの幅を変え、押すと折りたたむ */
+.fb-space__spacer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
 }
 .fb-space__pane {
   display: flex;

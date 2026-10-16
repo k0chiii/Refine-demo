@@ -8,11 +8,11 @@ import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { formatJstShort } from "@/lib/format";
 import { resolutionLabel, severityLabel } from "@/lib/labels";
-import { Field, TextArea, TextInput } from "@/ui/Field";
 import {
   M3eAvatar,
   M3eButton,
   M3eCard,
+  M3eFormField,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
@@ -218,64 +218,86 @@ export function ThreadCard({
             </div>
           ) : null}
           {active ? <ThreadEvents threadId={t.id} /> : null}
-          {active && mode === null && canReply ? (
-            <Field label="返信" className="thread__reply-open">
-              <TextInput
-                readOnly
-                placeholder="返信を書く"
-                onFocus={() => open("reply")}
-                onClick={stop}
-              />
-            </Field>
-          ) : null}
-          {mode === "reply" || mode === "rejected" || mode === "deferred" || mode === "edit" ? (
+          {/* 返信（Google ドキュメントのコメントと同じ流れ）: 開いているカードの下に M3 の outlined text field を 1 つ。
+              書き始める（フォーカスする）と「キャンセル」「返信」が出る。ラベルは欄の中（浮かぶラベル） */}
+          {active && canReply && (mode === null || mode === "reply") ? (
             <div className="thread__form" onClick={stop}>
-              <Field
-                label={
-                  mode === "reply"
-                    ? "返信"
-                    : mode === "edit"
-                      ? "本文の訂正"
-                      : `${decisionLabel[mode]}理由`
-                }
-              >
-                {mode === "reply" ? (
-                  <MentionTextarea
-                    autoFocus
-                    rows={3}
-                    className="input input--area"
-                    aria-label="返信"
-                    placeholder="返信（@ でメンション）"
-                    value={text}
-                    onValue={setText}
-                    mentions={mentions}
-                    onMentions={setMentions}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") setMode(null);
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim())
-                        void submit();
-                    }}
-                  />
-                ) : (
-                  <TextArea
-                    autoFocus
-                    aria-label={mode === "edit" ? "本文の訂正" : `${decisionLabel[mode]}理由`}
-                    placeholder={
-                      mode === "edit"
-                        ? "原文は履歴に残ります"
-                        : `${decisionLabel[mode]}理由を書きます（必須）`
+              <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
+                <label slot="label" htmlFor={`${t.id}-reply`}>
+                  返信
+                </label>
+                <MentionTextarea
+                  id={`${t.id}-reply`}
+                  rows={mode === "reply" ? 3 : 1}
+                  className="thread__input"
+                  placeholder="@ でメンション"
+                  value={mode === "reply" ? text : ""}
+                  onValue={(v) => {
+                    if (mode !== "reply") setMode("reply");
+                    setText(v);
+                  }}
+                  mentions={mentions}
+                  onMentions={setMentions}
+                  onFocus={() => {
+                    if (mode !== "reply") {
+                      setMode("reply");
+                      setText("");
                     }
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") setMode(null);
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim())
-                        void submit();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setMode(null);
+                      setText("");
+                      (e.currentTarget as HTMLTextAreaElement).blur();
+                    }
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
+                  }}
+                />
+              </M3eFormField>
+              {mode === "reply" ? (
+                <div className="row thread__form-actions">
+                  <span className="spacer" />
+                  <M3eButton
+                    variant="text"
+                    onClick={() => {
+                      setMode(null);
+                      setText("");
                     }}
-                  />
-                )}
-              </Field>
-              <div className="row">
+                  >
+                    キャンセル
+                  </M3eButton>
+                  <M3eButton
+                    variant="filled"
+                    disabled={pending === true || !text.trim()}
+                    onClick={() => void submit()}
+                  >
+                    返信
+                  </M3eButton>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {mode === "rejected" || mode === "deferred" || mode === "edit" ? (
+            <div className="thread__form" onClick={stop}>
+              <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
+                <label slot="label" htmlFor={`${t.id}-${mode}`}>
+                  {mode === "edit" ? "本文の訂正" : `${decisionLabel[mode]}理由（必須）`}
+                </label>
+                <textarea
+                  id={`${t.id}-${mode}`}
+                  autoFocus
+                  rows={3}
+                  className="thread__input"
+                  placeholder={mode === "edit" ? "原文は履歴に残ります" : ""}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setMode(null);
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
+                  }}
+                />
+              </M3eFormField>
+              <div className="row thread__form-actions">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setMode(null)}>
                   キャンセル
@@ -285,11 +307,7 @@ export function ThreadCard({
                   disabled={pending === true || !text.trim()}
                   onClick={() => void submit()}
                 >
-                  {mode === "reply"
-                    ? "返信"
-                    : mode === "edit"
-                      ? "訂正を保存"
-                      : decisionAction[mode]}
+                  {mode === "edit" ? "訂正を保存" : decisionAction[mode]}
                 </M3eButton>
               </div>
             </div>

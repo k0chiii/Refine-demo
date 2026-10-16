@@ -16,6 +16,7 @@ const STEP = 16;
  * - 選択（タップ・Enter・Space）: 折りたたみ ⇄ 展開
  * - 矢印キー: 16 ずつ。Home: 既定幅。End: 折りたたむ
  * supporting pane なので temporary resizing（閉じたら既定に戻す）は親が担う。
+ * side: どちら側の固定ペインの幅を変えるか（end = 右のペイン（既定）、start = 左のペイン）。label: 読み上げの名前に使うペインの名前
  */
 export function PaneHandle({
   width,
@@ -24,7 +25,11 @@ export function PaneHandle({
   collapsed,
   onResize,
   onToggle,
+  side = "end",
+  label = "引き出し",
 }: {
+  side?: "start" | "end";
+  label?: string;
   width: number;
   defaultWidth: number;
   maxWidth: number;
@@ -34,7 +39,9 @@ export function PaneHandle({
 }) {
   const drag = useRef<{ x: number; w: number; moved: boolean } | null>(null);
   const skipClick = useRef(false); // ドラッグの直後の click を選択扱いにしない
-  const rtl = () => getComputedStyle(document.documentElement).direction === "rtl";
+  // 右のペインは内側（左）へ、左のペインは内側（右）へ動かすと広がる。RTL では逆
+  const rtl = () =>
+    (getComputedStyle(document.documentElement).direction === "rtl") !== (side === "start");
   const clamp = (w: number) => Math.min(maxWidth, Math.max(MIN_PANE, w));
   const snap = (w: number) => {
     const center = centeredPaneWidth(window.innerWidth);
@@ -48,7 +55,7 @@ export function PaneHandle({
       className={`ws__handle ${collapsed ? "ws__handle--collapsed" : ""}`}
       role="separator"
       aria-orientation="vertical"
-      aria-label={collapsed ? "引き出しを開く" : "引き出しの幅を変える（Enter で折りたたむ）"}
+      aria-label={collapsed ? `${label}を開く` : `${label}の幅を変える（Enter で折りたたむ）`}
       aria-valuemin={0}
       aria-valuemax={maxWidth}
       aria-valuenow={collapsed ? 0 : width}
