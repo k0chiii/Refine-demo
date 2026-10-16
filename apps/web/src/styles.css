@@ -1152,9 +1152,6 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- 制作物一覧 */
-.works__filters {
-  margin-bottom: 8px;
-}
 
 /* ---------- ダッシュボード（自分だけのダッシュボード。§36 W-26）
  * compact・medium は 1 列のリスト（M3 Cards: compact ではリスト）。expanded 以上は 2 列で、左が「やること」、右が補助
@@ -1284,6 +1281,8 @@ m3e-dialog [slot="actions"] {
   align-items: center;
   gap: 8px 16px;
   justify-content: space-between;
+  /* 表（リスト）を操作する部品は表の直上に置き、表とは 16dp 空ける（data table の仕様・M3 の余白の刻み） */
+  margin-bottom: 16px;
 }
 /* 見出しの行（局・担当）: data table の行と同じ高さで、押すと開閉する。局は surface-container-low の地、担当は字下げ */
 .data-table__group > th {

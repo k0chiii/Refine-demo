@@ -1231,3 +1231,11 @@ m3.material.io の sitemap にある**ドキュメント 262 ページ全部**�
 - **URL**: `/feedback`（一覧）、`/feedback/w/:workId?thread=:id`（スペース）。通知などの `/feedback/:threadId` は、広い画面ではそのスペースで開き直す
 - **作ったもの**: application `listFeedbackSpaces`（FB を見られる制作物ごとのスレッド数・未読・最後の投稿・最新の版・紙面を見られるか）、Convex `feedback.listSpaces`、Web `FeedbackSpaceView`・`FeedbackSpaceList`・`FeedbackStage`（エディタのビューアを選択だけ有効にして使う）。前の「全制作物のスレッドの受信箱」（FeedbackListPane・FeedbackThreadList）と新規スレッドのダイアログは、スペースの中の「相談を始める」に置き換えて削除
 - **見送り**: スペースの一覧の幅の変更、紙面の比較・コメント表示（FB タブではしない）、スペースごとの通知の設定、スペースのピン留め
+
+## 48. 制作物一覧の絞り込みと表の間・「M3 に表は無いのか」（2026-10-16・利用者指摘）
+
+- **余白**: 状態のフィルタチップと「主管担当／制作担当」の行と、表との間が 8dp しかなかった（チップの下の余白だけ）。操作の行（`.works__controls`）の下を **16dp** にした（M3 の 4dp 刻みで、関連する部品のまとまりの間。data table の仕様の「表を操作する部品は表の直上」はそのまま）。スマホのリストも同じ間隔
+- **M3 に表はあるか**: 無い。§31 で確かめたとおり m3.material.io の部品一覧に data table は無く、M3E（@m3e/web 2.10.1 の custom-elements も確認）にも table・data grid は無い。表の正式な仕様は Material 2 の data tables だけ
+- **どうするのが正しいか**: M3 で表が要る画面は「M2 の data table の寸法・振る舞いを、M3 のトークン（色・文字・形）で組む」のが Google 自身の実装と同じやり方（Angular Material の mat-table と Flutter の DataTable は、M3 テーマでこの形になる。M3E の paginator なども Angular Material と同じ作り）。ただし表を使うのは「行どうしを列で見比べる」ときだけで、1 件ずつ探して開く一覧は M3 の Lists を使う
+  - 制作物一覧は PC では締切・納期・状態を行どうしで見比べるので表（§31・§38 の data table）、スマホは見比べるより開く用途なので M3E のリスト（expandable list item の入れ子）。この分け方は変えない
+  - 表の中で M3E を使える所は M3E にしている: 絞り込みは filter chip、切り替えは segmented button、ページ送りは paginator、切れた文字は tooltip、読み込みは linear progress、セルの選択肢は select
