@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { keyboardInset } from "./useKeyboardInset";
+import { isKeyboardOpen, keyboardInset } from "./useKeyboardInset";
 
 describe("keyboardInset", () => {
   it("キーボードが出ていなければ 0", () => {
@@ -13,5 +13,20 @@ describe("keyboardInset", () => {
   });
   it("ページがずれて見えている（offsetTop）分は差し引く", () => {
     expect(keyboardInset(844, 508, 40)).toBe(296);
+  });
+});
+
+describe("isKeyboardOpen（iPhone のホーム画面アプリはレイアウトの高さも縮む）", () => {
+  const base = { baselineHeight: 844, layoutHeight: 844, visualTop: 0 };
+  it("レイアウトと見えている高さが一緒に縮んでも、いつもの高さより低ければ出ている", () => {
+    expect(isKeyboardOpen({ ...base, editing: true, visualHeight: 480, layoutHeight: 480 })).toBe(
+      true,
+    );
+  });
+  it("入力中でなければ出ていない（ブラウザのツールバーの出入りなど）", () => {
+    expect(isKeyboardOpen({ ...base, editing: false, visualHeight: 480 })).toBe(false);
+  });
+  it("差が小さいときは出ていない（外付けキーボードの候補バーなど）", () => {
+    expect(isKeyboardOpen({ ...base, editing: true, visualHeight: 800 })).toBe(false);
   });
 });
