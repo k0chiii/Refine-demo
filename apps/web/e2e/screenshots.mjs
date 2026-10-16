@@ -176,7 +176,7 @@ async function main() {
   await shot("02-works-list");
   const siteRows = () => page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).count();
   expectTrue((await siteRows()) === 1, "主管担当ごとの一覧で、制作物が 1 か所にない");
-  await page.locator(".works__axis m3e-button-segment", { hasText: "制作担当" }).click();
+  await page.locator(".works__axis m3e-button", { hasText: "制作担当" }).click();
   await page.waitForURL(/by=production/);
   await page.waitForTimeout(400);
   expectTrue(
@@ -184,7 +184,7 @@ async function main() {
     "制作担当ごとの一覧で、制作担当 2 つの制作物が 2 か所に出ない",
   );
   await shot("02b-works-production");
-  await page.locator(".works__axis m3e-button-segment", { hasText: "主管担当" }).click();
+  await page.locator(".works__axis m3e-button", { hasText: "主管担当" }).click();
   // 22 アカウントメニュー（右上のアバター）
   await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
   await page.waitForTimeout(500);
@@ -576,9 +576,10 @@ async function main() {
   // 13 管理画面 / 12 閲覧権限（管理者）: 管理画面のダイアログ（管理者は内容を閲覧しない: D3）
   await signInAs("mock-nogiku-admin");
   await go(`${BASE}/admin`);
-  await page.waitForSelector(".data-table m3e-button");
+  const adminWorks = 'm3e-action-list[aria-label="制作物ごとの閲覧権限"] m3e-list-action';
+  await page.waitForSelector(adminWorks);
   await shot("13-admin-works");
-  await page.locator(".data-table m3e-button", { hasText: "権限を設定" }).first().click();
+  await page.locator(adminWorks).first().click();
   await page.waitForSelector("m3e-dialog[open] .acl");
   await page.waitForTimeout(400);
   await shot("12-acl");
@@ -586,14 +587,14 @@ async function main() {
   await page.waitForTimeout(300);
   // 13a・13b 管理のタブ（ユーザー・監査ログ）
   await page.locator("m3e-tab", { hasText: "ユーザー" }).click();
-  await page.waitForSelector(".data-table m3e-switch");
+  await page.waitForSelector('m3e-list[aria-label="ユーザー"] m3e-switch');
   await shot("13a-admin-users");
   await page.locator("m3e-tab", { hasText: "監査ログ" }).click();
-  await page.waitForSelector(".data-table .mono");
+  await page.waitForSelector('m3e-list[aria-label="監査ログ"] .mono');
   await shot("13b-admin-audit");
-  // 13c SNS アカウント（本体の設定）: 表で直せる。制作物ごとにどれを使うか割り当てる
+  // 13c SNS アカウント（本体の設定）: リストの行を押すとダイアログで直す。制作物ごとにどれを使うか割り当てる
   await page.locator("m3e-tab", { hasText: "SNS アカウント" }).click();
-  await page.waitForSelector(".data-table .profile-avatar");
+  await page.waitForSelector('m3e-action-list[aria-label="SNS アカウント"] m3e-list-action');
   await shot("13c-admin-sns");
   // 13d 担当（局 › 担当）: 局ごとのリスト。各行の ⋮ から追加・名前・並べ替え・削除
   await page.locator("m3e-tab", { hasText: "担当" }).click();
@@ -651,7 +652,7 @@ async function main() {
     await page.mouse.up();
   }
   await page.waitForSelector(".compose-pop textarea");
-  const fbSegment = page.locator(".compose-pop m3e-button-segment", { hasText: "FB" });
+  const fbSegment = page.locator(".compose-pop__kind m3e-button", { hasText: "FB" });
   if (await fbSegment.count()) await fbSegment.click();
   await page.fill(".compose-pop textarea", "ここの余白、もう少し詰めても良さそう？ 迷っています");
   await page.locator(".compose-pop m3e-button", { hasText: "FB で相談" }).click();
@@ -819,7 +820,7 @@ async function main() {
   await page.locator("#wt-more").click();
   await page.waitForTimeout(300);
   await page.locator("#wt-more-menu m3e-menu-item", { hasText: "文字カウント" }).click();
-  await page.waitForSelector("m3e-dialog[open] .count-table");
+  await page.waitForSelector("m3e-dialog[open] .count-list");
   await page.waitForTimeout(300);
   await shot("42-write-word-count");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "完了" }).click();
@@ -1021,16 +1022,11 @@ async function v2Scenes() {
   // 50–52 表記ルール（システム管理者）: 一覧と詳細・試す・提案
   await signInAs("mock-nogiku-admin");
   await go("/notation");
-  await page.waitForSelector(".rule-table .data-table__row");
+  await page.waitForSelector(".notation__rules m3e-list-action");
   await shot("50-notation-rules");
-  // 50a 表のセルをその場で編集（統一表記）
-  await page.getByRole("button", { name: /A2-0001 の統一表記/ }).click();
-  await page.waitForSelector(".rule-table .cell-input");
-  await shot("50a-notation-cell-edit");
-  await page.keyboard.press("Escape");
-  // 50b 行の詳細（説明・例外・履歴）はダイアログ
-  await page.locator('m3e-icon-button[aria-label="A2-0001 の詳細（説明・例外・履歴）"]').click();
-  await page.waitForSelector("m3e-dialog[open] .rule-editor");
+  // 50b 行を押すと右のペインに詳細（M3 list-detail。説明・例外・厳格さ・有効／無効・履歴）
+  await page.locator(".notation__rules m3e-list-action", { hasText: "A2-0001" }).click();
+  await page.waitForSelector(".notation__detail .rule-editor");
   await page.waitForTimeout(400);
   await shot("50b-notation-rule-detail");
   await go("/notation?view=try");
@@ -1039,10 +1035,10 @@ async function v2Scenes() {
   await shot("51-notation-try");
   await signInAs("mock-nogiku-reviewer");
   await go("/notation");
-  await page.waitForSelector(".rule-table .data-table__row");
+  await page.waitForSelector(".notation__rules m3e-list-action");
   await btn("追加を提案").click();
-  await page.waitForSelector("m3e-dialog[open] .rule-editor");
-  const ed = page.locator("m3e-dialog[open]");
+  await page.waitForSelector(".notation__detail .rule-editor");
+  const ed = page.locator(".notation__detail");
   await ed.locator("input").nth(1).fill("ウェブ");
   await ed.locator("textarea").nth(0).fill("Web");
   await ed.locator("textarea").nth(1).fill("ウェッブ");
@@ -1052,9 +1048,9 @@ async function v2Scenes() {
   await go("/notation?view=proposals");
   await page.waitForSelector("m3e-card.proposal");
   await shot("52-notation-proposals");
-  // 52a カテゴリは表（名前・説明・継承はセルでその場で直す）
+  // 52a カテゴリはリスト（行を押すとダイアログで名前・説明・継承・運用メモ・管理者を直す）
   await go("/notation?view=categories");
-  await page.waitForSelector('.data-table[aria-label="カテゴリ"] .cell-edit');
+  await page.waitForSelector('m3e-action-list[aria-label="カテゴリ"] m3e-list-action');
   await shot("52a-notation-categories");
 
   // 53 文章エディタの表記の検査（800ms 後に波線、表記パネル）
@@ -1219,7 +1215,7 @@ async function v2Scenes() {
     (await page.locator(".post-edit .card").count()) === 2,
     "編集欄が本文と画像だけでない",
   );
-  await page.locator("m3e-button-segment", { hasText: "カルーセル" }).click();
+  await page.locator(".choice-group m3e-button", { hasText: "カルーセル" }).click();
   await page
     .locator(".post-edit textarea")
     .first()

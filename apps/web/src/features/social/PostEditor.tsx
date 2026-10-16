@@ -47,15 +47,8 @@ import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Card } from "@/ui/Card";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eButtonSegment,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListItem,
-  M3eSegmentedButton,
-} from "@/ui/m3e";
+import { M3eButton, M3eIcon, M3eIconButton, M3eList, M3eListItem } from "@/ui/m3e";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { PaneTabs } from "@/ui/PaneTabs";
 import {
   FullscreenPreview,
@@ -417,22 +410,16 @@ function PostSurface({
       {profile ? null : (
         <Card title="投稿先">
           <div className="stack">
-            <M3eSegmentedButton aria-label="サービス">
-              {socialPlatforms.map((p) => (
-                <M3eButtonSegment
-                  key={p}
-                  checked={post.platform === p}
-                  disabled={!canEdit}
-                  onClick={() => {
-                    if (post.platform === p) return;
-                    const format = socialFormats[p][0] as SocialFormat;
-                    update({ platform: p as SocialPlatform, format });
-                  }}
-                >
-                  {socialPlatformLabels[p]}
-                </M3eButtonSegment>
-              ))}
-            </M3eSegmentedButton>
+            <ChoiceGroup
+              label="サービス"
+              value={post.platform}
+              disabled={!canEdit}
+              onChange={(p) => {
+                const format = socialFormats[p][0] as SocialFormat;
+                update({ platform: p as SocialPlatform, format });
+              }}
+              choices={socialPlatforms.map((p) => ({ value: p, label: socialPlatformLabels[p] }))}
+            />
             <div className="rule-editor__grid">
               <Field label="表示名">
                 <TextInput
@@ -525,19 +512,17 @@ function PostSurface({
         }
       >
         {post.platform === "instagram" ? (
-          <M3eSegmentedButton aria-label="形式">
-            {socialFormats.instagram.map((f) => (
-              <M3eButtonSegment
-                key={f}
-                checked={post.format === f}
-                disabled={!canEdit}
-                onClick={() => update({ format: f })}
-              >
-                {/* 狭い画面では「（1 枚）」などの補足を外す（3 つ並べると画面からはみ出していた） */}
-                {compact ? socialFormatLabels[f].replace(/（.*）$/, "") : socialFormatLabels[f]}
-              </M3eButtonSegment>
-            ))}
-          </M3eSegmentedButton>
+          <ChoiceGroup
+            label="形式"
+            value={post.format}
+            disabled={!canEdit}
+            onChange={(f) => update({ format: f })}
+            choices={socialFormats.instagram.map((f) => ({
+              value: f,
+              // 狭い画面では「（1 枚）」などの補足を外す（3 つ並べると画面からはみ出していた）
+              label: compact ? socialFormatLabels[f].replace(/（.*）$/, "") : socialFormatLabels[f],
+            }))}
+          />
         ) : null}
         {post.images.length === 0 ? (
           <p className="small muted">

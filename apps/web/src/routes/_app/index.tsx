@@ -140,7 +140,8 @@ const limitLabel = (l: DashboardLimit) => (l === null ? "すべて" : `${l} 件`
  * - 持っている役割から節を自動で組み（application の dashboardLayoutPolicy）、空の節は出さない。全部が空なら理由を出す（要件 U-01）
  * - 節の見出しの ⋮（compact はボトムシート）で上へ・下へ・隠す・表示件数。アプリバーの「ホームを編集」で全部の節をまとめて直す。
  *   並べ替えはドラッグを使わず上下の操作（WCAG 2.5.7）。設定はアカウントに保存（PC とスマホで共通）
- * - compact は 1 列のリスト（M3 Cards: compact ではリスト）。expanded 以上は 2 列で、左が「やること」、右が補助（M3 Canonical layouts › Feed）
+ * - compact は 1 列のリスト（M3 Cards: compact ではリスト）。expanded 以上は M3 Canonical layouts › Supporting pane:
+ *   左が「やること」（残り全部）、右が補助の固定幅のペイン（360、1200 以上は 412）
  * - 主目的（やること）の見出しを最も強く、補助の見出しは控えめに（M3 Usability。§35 A-16）
  */
 function Dashboard() {
@@ -313,7 +314,14 @@ function Dashboard() {
               {info.title}
             </M3eHeading>
           ) : (
-            <h2 className="dash__title dash__title--side">{info.title}</h2>
+            <M3eHeading
+              variant="title"
+              size="small"
+              level={2}
+              className="dash__title dash__title--side"
+            >
+              {info.title}
+            </M3eHeading>
           )}
           <span className="dash__count" aria-label={`${all.length} 件`}>
             {all.length}
@@ -435,9 +443,10 @@ function Dashboard() {
               </div>
             )}
           </div>
-          <div className="dash__column dash__column--side" role="region" aria-label="予定と記録">
+          {/* 補助のペイン（M3 Supporting pane。読み上げでは complementary） */}
+          <aside className="dash__column dash__column--side" aria-label="予定と記録">
             {side.map(section)}
-          </div>
+          </aside>
         </div>
       ) : (
         <div className="dash">

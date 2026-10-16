@@ -7,14 +7,8 @@ import { WorksByTeam } from "@/features/work/WorksByTeam";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import {
-  M3eButtonSegment,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eIconButton,
-  M3eSegmentedButton,
-} from "@/ui/m3e";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
+import { M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eIconButton } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (
@@ -95,18 +89,16 @@ function Works() {
           ))}
         </M3eFilterChipSet>
         {teams && teams.length > 0 ? (
-          <M3eSegmentedButton aria-label="並べる担当" className="works__axis">
-            {(
-              [
-                ["owner", "主管担当"],
-                ["production", "制作担当"],
-              ] as const
-            ).map(([k, l]) => (
-              <M3eButtonSegment key={k} checked={axis === k} onClick={() => setAxis(k)}>
-                {l}
-              </M3eButtonSegment>
-            ))}
-          </M3eSegmentedButton>
+          <ChoiceGroup
+            label="並べる担当"
+            className="works__axis"
+            value={axis}
+            onChange={setAxis}
+            choices={[
+              { value: "owner", label: "主管担当" },
+              { value: "production", label: "制作担当" },
+            ]}
+          />
         ) : null}
       </div>
       {works === undefined || teams === undefined ? (

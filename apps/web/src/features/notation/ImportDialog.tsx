@@ -9,13 +9,10 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { useAction } from "@/lib/useAction";
-import { DataTable } from "@/ui/DataTable";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
 import {
   M3eAccordion,
   M3eButton,
-  M3eChip,
-  M3eChipSet,
   M3eDialog,
   M3eExpansionPanel,
   M3eIcon,
@@ -162,26 +159,25 @@ export function ImportDialog({
         </div>
         {preview ? (
           <>
-            <M3eChipSet aria-label="取り込みの内容" className="import-summary">
-              <M3eChip>ルール {preview.rules.length}</M3eChip>
-              <M3eChip>
-                既存の ID {preview.rules.filter((r) => existingIds.has(r.ruleId)).length}
-              </M3eChip>
-              <M3eChip>説明行 {preview.notes.length}</M3eChip>
-              <M3eChip>警告 {preview.warnings.length}</M3eChip>
-              <M3eChip>重複 {preview.duplicates.length}</M3eChip>
-              <M3eChip className={preview.conflicts.length ? "chip--error" : ""}>
-                矛盾 {preview.conflicts.length}
-              </M3eChip>
+            {/* 件数の要約は文字で（M3 の chip は操作の部品なので、ただの表示には使わない） */}
+            <p className="import-summary" aria-label="取り込みの内容">
+              <span>ルール {preview.rules.length}</span>
+              <span>既存の ID {preview.rules.filter((r) => existingIds.has(r.ruleId)).length}</span>
+              <span>説明行 {preview.notes.length}</span>
+              <span>警告 {preview.warnings.length}</span>
+              <span>重複 {preview.duplicates.length}</span>
+              <span className={preview.conflicts.length ? "import-summary__bad" : ""}>
+                {preview.conflicts.length ? <M3eIcon name="error" /> : null}矛盾{" "}
+                {preview.conflicts.length}
+              </span>
               {blocked.length ? (
-                <M3eChip
-                  className="chip--error"
-                  title={`権限の無いカテゴリ（${Array.from(new Set(blocked.map((r) => r.categoryCode))).join("・")}）のルールは取り込みません`}
-                >
-                  権限なしで除外 {blocked.length}
-                </M3eChip>
+                <span className="import-summary__bad">
+                  <M3eIcon name="lock" />
+                  権限なしで除外 {blocked.length}（
+                  {Array.from(new Set(blocked.map((r) => r.categoryCode))).join("・")}）
+                </span>
               ) : null}
-            </M3eChipSet>
+            </p>
             <M3eAccordion multi className="import-details">
               {preview.conflicts.length ? (
                 <M3eExpansionPanel open>
@@ -230,55 +226,39 @@ export function ImportDialog({
               ) : null}
               <M3eExpansionPanel open>
                 <span slot="header">取り込むルール {preview.rules.length}</span>
-                <DataTable
-                  label="取り込むルール"
-                  rows={preview.rules}
-                  defaultSort={{ key: "id", dir: 1 }}
-                  rowKey={(r) => r.ruleId}
-                  columns={[
-                    {
-                      key: "id",
-                      header: "ID",
-                      rowHeader: true,
-                      sort: (a, b) => a.ruleId.localeCompare(b.ruleId),
-                      cell: (r) => <span className="small">{r.ruleId}</span>,
-                    },
-                    {
-                      key: "cat",
-                      header: "カテゴリ",
-                      sort: (a, b) => a.categoryCode.localeCompare(b.categoryCode),
-                      cell: (r) => r.categoryCode,
-                    },
-                    { key: "correct", header: "統一表記", cell: (r) => r.correct.join(" / ") },
-                    {
-                      key: "wrong",
-                      header: "誤表記・正規表現",
-                      truncate: "32ch",
-                      cell: (r) => (
-                        <span className="small">{[...r.incorrect, ...r.patterns].join(" / ")}</span>
-                      ),
-                    },
-                    {
-                      key: "years",
-                      header: "年度",
-                      cell: (r) => (r.years.length ? `MF${r.years.join(",")}` : "全年度"),
-                    },
-                    {
-                      key: "state",
-                      header: "取り込み",
-                      sort: (a, b) =>
-                        Number(existingIds.has(a.ruleId)) - Number(existingIds.has(b.ruleId)),
-                      cell: (r) =>
-                        !editable(r.categoryCode) ? (
-                          <M3eChip className="chip--error">権限なし</M3eChip>
-                        ) : existingIds.has(r.ruleId) ? (
-                          <M3eChip>{overwrite ? "上書き" : "既存のため除外"}</M3eChip>
-                        ) : (
-                          <M3eChip className="chip--success">追加</M3eChip>
-                        ),
-                    },
-                  ]}
-                />
+                {/* 1 件ずつの取り込みの扱いは、先頭のアイコンと末尾の文字で（色だけに頼らない） */}
+                <M3eList className="list import-list" aria-label="取り込むルール">
+                  {[...preview.rules]
+                    .sort((a, b) => a.ruleId.localeCompare(b.ruleId))
+                    .map((r) => {
+                      const state = !editable(r.categoryCode)
+                        ? (["lock", "権限なし", "import-list__item--bad"] as const)
+                        : existingIds.has(r.ruleId)
+                          ? overwrite
+                            ? (["sync", "上書き", ""] as const)
+                            : (["block", "既存のため除外", "list__item--done"] as const)
+                          : (["add_circle", "追加", ""] as const);
+                      return (
+                        <M3eListItem key={r.ruleId} className={`list__item ${state[2]}`}>
+                          <M3eIcon slot="leading" name={state[0]} />
+                          <span className="list__headline">
+                            {r.correct.join(" / ")}
+                            <span className="muted">
+                              {" "}
+                              ← {[...r.incorrect, ...r.patterns].join(" / ")}
+                            </span>
+                          </span>
+                          <span slot="supporting-text">
+                            {r.ruleId}・{r.categoryCode}・
+                            {r.years.length ? `MF${r.years.join(",")}` : "全年度"}
+                          </span>
+                          <span slot="trailing" className="meta">
+                            {state[1]}
+                          </span>
+                        </M3eListItem>
+                      );
+                    })}
+                </M3eList>
               </M3eExpansionPanel>
             </M3eAccordion>
             <Checkbox

@@ -9,13 +9,13 @@ import { Checkbox, Field, TextInput } from "@/ui/Field";
 import {
   M3eButton,
   M3eCard,
-  M3eChip,
   M3eDialog,
   M3eFilterChip,
   M3eFilterChipSet,
   M3eHeading,
   M3eIcon,
 } from "@/ui/m3e";
+import { StatusText } from "@/ui/Chip";
 import { draftOf, RuleEditor } from "./RuleEditor";
 import { toast } from "@/lib/toast";
 
@@ -107,7 +107,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
                     label={<span className="sr-only">「{p.title}」を選ぶ</span>}
                   />
                 ) : null}
-                <M3eChip className="proposal__kind">{kindLabel[p.kind]}</M3eChip>
+                <StatusText className="proposal__kind">{kindLabel[p.kind]}</StatusText>
                 <M3eHeading variant="title" size="small" level={3} className="proposal__title">
                   {p.categoryCode} {p.title}
                   {p.ruleId ? <span className="small muted">（{p.ruleId}）</span> : null}

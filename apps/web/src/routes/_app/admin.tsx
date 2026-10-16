@@ -10,8 +10,19 @@ import { AclPanel } from "@/features/work/AclPanel";
 import { downloadWorkCsvTemplate, ImportWorksDialog } from "@/features/work/ImportWorksDialog";
 import { ExportStatsDialog } from "@/features/work/ExportStatsDialog";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
-import { M3eButton, M3eChip, M3eDialog, M3eIcon, M3eSearchBar } from "@/ui/m3e";
-import { DataTable, EditableSwitch } from "@/ui/DataTable";
+import {
+  M3eActionList,
+  M3eButton,
+  M3eDialog,
+  M3eIcon,
+  M3eLinearProgressIndicator,
+  M3eList,
+  M3eListAction,
+  M3eListItem,
+  M3eSearchBar,
+  M3eSwitch,
+} from "@/ui/m3e";
+import { UserAvatar } from "@/ui/UserAvatar";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { ProfilesAdmin } from "@/features/social/ProfilesAdmin";
@@ -106,65 +117,41 @@ function Admin() {
             </M3eButton>
           </div>
           <p className="muted small">制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます</p>
-          <DataTable
-            label="制作物ごとの閲覧権限"
-            rows={works ?? []}
-            rowKey={(w) => w.id}
-            loading={works === undefined}
-            empty="制作物がありません"
-            columns={[
-              {
-                key: "title",
-                header: "名称",
-                rowHeader: true,
-                sort: (a, b) => a.title.localeCompare(b.title, "ja"),
-                cell: (w) => (
-                  <>
-                    {w.title}
-                    {w.confidentiality === "restricted" ? (
-                      <M3eIcon
-                        name="lock"
-                        className="ml list__lock"
-                        role="img"
-                        aria-label="非公開"
-                        title="非公開"
-                      />
-                    ) : null}
-                  </>
-                ),
-              },
-              {
-                key: "state",
-                header: "状態",
-                width: "140px",
-                sort: (a, b) => a.lifecycle.localeCompare(b.lifecycle),
-                cell: (w) => (
-                  <M3eChip className={w.lifecycle === "finalized" ? "chip--success" : ""}>
-                    {lifecycleLabel[w.lifecycle] ?? w.lifecycle}
-                  </M3eChip>
-                ),
-              },
-              {
-                key: "grants",
-                header: "許可",
-                numeric: true,
-                width: "96px",
-                sort: (a, b) => a.activeGrantCount - b.activeGrantCount,
-                cell: (w) => `${w.activeGrantCount} 件`,
-              },
-              {
-                key: "acl",
-                header: <span className="sr-only">操作</span>,
-                width: "160px",
-                cell: (w) => (
-                  <M3eButton variant="text" onClick={() => setAclFor(w)}>
-                    <M3eIcon slot="icon" name="lock_person" />
-                    権限を設定
-                  </M3eButton>
-                ),
-              },
-            ]}
-          />
+          {works === undefined ? (
+            <M3eLinearProgressIndicator mode="indeterminate" aria-label="制作物を読み込み中" />
+          ) : works.length === 0 ? (
+            <div className="empty">制作物がありません</div>
+          ) : (
+            <M3eActionList className="list" aria-label="制作物ごとの閲覧権限">
+              {[...works]
+                .sort((a, b) => a.title.localeCompare(b.title, "ja"))
+                .map((w) => (
+                  <M3eListAction
+                    key={w.id}
+                    className={`list__item ${w.lifecycle === "finalized" || w.lifecycle === "cancelled" ? "list__item--done" : ""}`}
+                    onClick={() => setAclFor(w)}
+                  >
+                    <M3eIcon slot="leading" name="lock_person" />
+                    <span className="list__headline">
+                      {w.title}
+                      {w.confidentiality === "restricted" ? (
+                        <M3eIcon
+                          name="lock"
+                          className="ml list__lock"
+                          role="img"
+                          aria-label="非公開"
+                          title="非公開"
+                        />
+                      ) : null}
+                    </span>
+                    <span slot="supporting-text">{lifecycleLabel[w.lifecycle] ?? w.lifecycle}</span>
+                    <span slot="trailing" className="meta num">
+                      個人の許可 {w.activeGrantCount}
+                    </span>
+                  </M3eListAction>
+                ))}
+            </M3eActionList>
+          )}
         </section>
       ) : tab === "users" ? (
         <section>
@@ -179,41 +166,41 @@ function Admin() {
                 aria-label="ユーザー検索"
               />
             </M3eSearchBar>
-            <DataTable
-              label="ユーザー"
-              rows={users ?? []}
-              loading={users === undefined}
-              rowKey={(u) => u.id}
-              columns={[
-                {
-                  key: "name",
-                  header: "名前",
-                  rowHeader: true,
-                  sort: (a, b) => a.name.localeCompare(b.name, "ja"),
-                  cell: (u) => (
-                    <>
-                      {u.name}
-                      <div className="small muted">{u.email}</div>
-                    </>
-                  ),
-                },
-                {
-                  key: "admin",
-                  header: "システム管理者",
-                  width: "152px",
-                  cell: (u) => (
-                    <EditableSwitch
-                      label={`${u.name} をシステム管理者にする`}
-                      checked={u.isSystemAdmin}
-                      disabled={u.id === me.id}
-                      onSave={async (on) => {
-                        await toggle.run(u.id, on);
-                      }}
-                    />
-                  ),
-                },
-              ]}
-            />
+            {/* 行の末尾のスイッチはその場で効く（M3 Switch: 保存の操作なしで切り替わる設定） */}
+            {users === undefined ? (
+              <M3eLinearProgressIndicator mode="indeterminate" aria-label="ユーザーを読み込み中" />
+            ) : users.length === 0 ? (
+              <div className="empty">一致するユーザーはいません</div>
+            ) : (
+              <M3eList className="list" aria-label="ユーザー">
+                {[...users]
+                  .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+                  .map((u) => (
+                    <M3eListItem key={u.id} className="list__item">
+                      <span slot="leading">
+                        <UserAvatar seed={u.email ?? u.id} size={40} />
+                      </span>
+                      <span className="list__headline">{u.name}</span>
+                      <span slot="supporting-text">
+                        {u.email}
+                        {u.isSystemAdmin ? "・システム管理者" : ""}
+                      </span>
+                      <M3eSwitch
+                        slot="trailing"
+                        checked={u.isSystemAdmin}
+                        disabled={u.id === me.id || toggle.pending}
+                        aria-label={`${u.name} をシステム管理者にする`}
+                        onChange={(e: Event) =>
+                          void toggle.run(
+                            u.id,
+                            (e.target as HTMLInputElement & { checked: boolean }).checked,
+                          )
+                        }
+                      />
+                    </M3eListItem>
+                  ))}
+              </M3eList>
+            )}
           </div>
         </section>
       ) : tab === "teams" ? (
@@ -223,35 +210,24 @@ function Admin() {
       ) : (
         <section className="stack">
           <p className="muted small">直近 100 件の操作</p>
-          <DataTable
-            label="監査ログ"
-            rows={audit ?? []}
-            loading={audit === undefined}
-            // 新しい順で届く（直近 100 件）
-            defaultSort={{ key: "at", dir: -1 }}
-            rowKey={(e) => e._id}
-            columns={[
-              {
-                key: "at",
-                header: "時刻",
-                width: "176px",
-                sort: (a, b) => a.at - b.at,
-                cell: (e) => <span className="small">{formatJst(e.at)}</span>,
-              },
-              {
-                key: "op",
-                header: "操作",
-                sort: (a, b) => a.operation.localeCompare(b.operation),
-                cell: (e) => <span className="mono">{e.operation}</span>,
-              },
-              {
-                key: "entity",
-                header: "対象",
-                sort: (a, b) => a.entityType.localeCompare(b.entityType),
-                cell: (e) => <span className="small muted">{e.entityType}</span>,
-              },
-            ]}
-          />
+          {/* 記録を読むだけのリスト（M3 Lists: non-interactive）。新しい順で届く */}
+          {audit === undefined ? (
+            <M3eLinearProgressIndicator mode="indeterminate" aria-label="監査ログを読み込み中" />
+          ) : audit.length === 0 ? (
+            <div className="empty">操作の記録はありません</div>
+          ) : (
+            <M3eList className="list" aria-label="監査ログ">
+              {audit.map((e) => (
+                <M3eListItem key={e._id} className="list__item">
+                  <span className="list__headline mono">{e.operation}</span>
+                  <span slot="supporting-text">{e.entityType}</span>
+                  <span slot="trailing" className="meta num">
+                    {formatJst(e.at)}
+                  </span>
+                </M3eListItem>
+              ))}
+            </M3eList>
+          )}
         </section>
       )}
       {me.canCreateWorks ? (

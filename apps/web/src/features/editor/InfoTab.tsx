@@ -14,12 +14,10 @@ import {
   lifecycleLabel,
   mediaLabel,
 } from "@/lib/labels";
-import { describeError } from "@/lib/errors";
 import { newRequestId, useAction } from "@/lib/useAction";
-import { EditableSelect, EditableText } from "@/ui/DataTable";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { M3eButton, M3eDialog, M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
 import { UserPicker } from "@/ui/UserPicker";
 import { RevisionFiles } from "./RevisionFiles";
 import type { WorkData } from "./VersionsTab";
@@ -89,22 +87,8 @@ export function InfoTab({
         ? ["active", "cancelled"]
         : [];
 
-  const update = useMutation(api.works.update);
   // SNS 投稿の制作物: どのアカウント（本体の設定）で投稿するか
   const profiles = useQuery(api.social.list, w.mediaType === "sns" ? {} : "skip");
-  const editable = can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled";
-  const patch = async (p: {
-    purpose?: string;
-    category?: string;
-    legacyId?: string;
-    socialProfileId?: string | null;
-  }) => {
-    try {
-      await update({ workId: w.id as Id<"works">, expectedVersion: w.version, patch: p });
-    } catch (e) {
-      throw new Error(describeError(e).message);
-    }
-  };
   const doFinalize = useAction(async () => {
     if (!candidate) return;
     await finalize({
@@ -169,100 +153,43 @@ export function InfoTab({
           {lifecycleLabel[w.lifecycle]}
         </StatusText>
       ) : null}
-      {/* 基本情報の表。目的・区分・旧ID はその場で直せる（編集できる人だけ。版番号で競合を検出） */}
-      <table className="prop-table">
-        <tbody>
-          <tr>
-            <th scope="row">名称</th>
-            <td>{w.title}</td>
-          </tr>
-          <tr>
-            <th scope="row">目的</th>
-            <td>
-              <EditableText
-                label="目的"
-                value={w.purpose}
-                disabled={!editable}
-                placeholder="未入力"
-                onSave={(v) => patch({ purpose: v })}
-              />
-            </td>
-          </tr>
-          <tr>
-            <th scope="row">区分</th>
-            <td>
-              <EditableText
-                label="区分"
-                value={w.category}
-                disabled={!editable}
-                validate={(v) => (v.trim() ? null : "区分を入力してください")}
-                onSave={(v) => patch({ category: v })}
-              />
-              <span className="small muted"> / {mediaLabel[w.mediaType]}</span>
-            </td>
-          </tr>
-          <tr>
-            <th scope="row">納期</th>
-            <td>{w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)}</td>
-          </tr>
-          {revision?.revision.focusNotes ? (
-            <tr>
-              <th scope="row">観点</th>
-              <td>{revision.revision.focusNotes}</td>
-            </tr>
-          ) : null}
-          <tr>
-            <th scope="row">制作者</th>
-            <td>{people.creators.map((p) => p?.name).join("、") || "—"}</td>
-          </tr>
-          <tr>
-            <th scope="row">校了権限者</th>
-            <td>{people.approver?.name}</td>
-          </tr>
-          <tr>
-            <th scope="row">主管</th>
-            <td>{people.managers.map((p) => p?.name).join("、") || "—"}</td>
-          </tr>
-          <tr>
-            <th scope="row">旧ID</th>
-            <td>
-              <EditableText
-                label="旧ID"
-                value={w.legacyId ?? ""}
-                disabled={!editable}
-                placeholder="なし"
-                onSave={(v) => patch({ legacyId: v })}
-              />
-            </td>
-          </tr>
-          {w.mediaType === "sns" ? (
-            <tr>
-              <th scope="row">SNS</th>
-              <td>
-                <EditableSelect
-                  label="SNS アカウント"
-                  value={w.socialProfileId ?? ""}
-                  disabled={!editable || profiles === undefined}
-                  options={[
-                    { value: "", label: "未設定" },
-                    ...(profiles ?? []).map((p) => ({
-                      value: p.id,
-                      label: `${socialPlatformLabels[p.platform]} @${p.username}`,
-                    })),
-                  ]}
-                  onSave={(v) => patch({ socialProfileId: v || null })}
-                />
-              </td>
-            </tr>
-          ) : null}
-          {w.confidentiality === "restricted" ? (
-            <tr>
-              <th scope="row">機密</th>
-              <td>非公開・取扱注意</td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+      {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは「編集」のダイアログ */}
+      <M3eList className="list prop-list" aria-label="基本情報">
+        {(
+          [
+            ["名称", w.title],
+            ["目的", w.purpose || "未入力"],
+            ["区分", `${w.category} / ${mediaLabel[w.mediaType]}`],
+            ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)],
+            ...(revision?.revision.focusNotes
+              ? ([["観点", revision.revision.focusNotes]] as const)
+              : []),
+            ["制作者", people.creators.map((p) => p?.name).join("、") || "—"],
+            ["校了権限者", people.approver?.name ?? "—"],
+            ["主管", people.managers.map((p) => p?.name).join("、") || "—"],
+            ["旧ID", w.legacyId || "なし"],
+            ...(w.mediaType === "sns"
+              ? ([
+                  [
+                    "SNS",
+                    (() => {
+                      const p = profiles?.find((x) => x.id === w.socialProfileId);
+                      return p ? `${socialPlatformLabels[p.platform]} @${p.username}` : "未設定";
+                    })(),
+                  ],
+                ] as const)
+              : []),
+            ...(w.confidentiality === "restricted"
+              ? ([["機密", "非公開・取扱注意"]] as const)
+              : []),
+          ] as ReadonlyArray<readonly [string, string]>
+        ).map(([label, value]) => (
+          <M3eListItem key={label} className="list__item">
+            <span slot="overline">{label}</span>
+            <span className="prop-list__value">{value}</span>
+          </M3eListItem>
+        ))}
+      </M3eList>
       {revision ? <RevisionFiles artifacts={revision.artifacts} shownId={shownArtifactId} /> : null}
 
       <div className="info-tab__actions">

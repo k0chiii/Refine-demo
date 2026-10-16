@@ -4,8 +4,9 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eButtonSegment, M3eDialog, M3eSegmentedButton } from "@/ui/m3e";
+import { M3eButton, M3eDialog } from "@/ui/m3e";
 import { toast } from "@/lib/toast";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
 
 /**
  * 校正画面で選んだ文字から、表記ルールの追加を提案する（または誤表記として報告する）。
@@ -70,14 +71,15 @@ export function ProposeDialog({
         <p className="small muted">
           「{quote}」{surrounding ? `（${surrounding}）` : ""}
         </p>
-        <M3eSegmentedButton aria-label="提案の種類">
-          <M3eButtonSegment checked={kind === "new"} onClick={() => setKind("new")}>
-            ルールの追加
-          </M3eButtonSegment>
-          <M3eButtonSegment checked={kind === "report"} onClick={() => setKind("report")}>
-            誤表記の報告
-          </M3eButtonSegment>
-        </M3eSegmentedButton>
+        <ChoiceGroup
+          label="提案の種類"
+          value={kind}
+          onChange={setKind}
+          choices={[
+            { value: "new", label: "ルールの追加" },
+            { value: "report", label: "誤表記の報告" },
+          ]}
+        />
         <Field label="カテゴリ">
           <Select value={category} onChange={(e) => setCategory(e.target.value)}>
             {categories.map((c) => (

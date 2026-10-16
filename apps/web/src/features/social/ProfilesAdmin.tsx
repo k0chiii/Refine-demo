@@ -9,17 +9,17 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { describeError } from "@/lib/errors";
-import { DataTable, EditableSwitch, EditableText } from "@/ui/DataTable";
-import { Field, TextInput } from "@/ui/Field";
+import { Checkbox, Field, TextArea, TextInput } from "@/ui/Field";
 import {
+  M3eActionList,
   M3eButton,
-  M3eButtonSegment,
   M3eDialog,
   M3eIcon,
-  M3eIconButton,
-  M3eSegmentedButton,
+  M3eLinearProgressIndicator,
+  M3eListAction,
 } from "@/ui/m3e";
 import { toast } from "@/lib/toast";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
 
 type Profile = FunctionReturnType<typeof api.social.list>[number];
 
@@ -37,37 +37,11 @@ async function toAvatarDataUrl(file: File): Promise<string> {
 
 /**
  * 管理 › SNS アカウント（本体の設定）。投稿のプレビューに出すアカウントの見た目を登録し、制作物ごとに割り当てる（制作物の「情報」）。
- * 表のセルでその場で直せる。アイコンは画像を選ぶと 160px に縮めて保存する。
+ * M3E のリストで並べ、行を押すとダイアログで直す（M3 に表は無い。§49）。アイコンは画像を選ぶと 160px に縮めて保存する。
  */
 export function ProfilesAdmin() {
   const list = useQuery(api.social.list, {});
-  const save = useMutation(api.social.save);
-  const remove = useMutation(api.social.remove);
-  const [adding, setAdding] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [avatarFor, setAvatarFor] = useState<Profile | null>(null);
-
-  const put = async (p: Profile, patch: Partial<Profile>) => {
-    const next = { ...p, ...patch };
-    try {
-      await save({
-        id: next.id,
-        platform: next.platform,
-        displayName: next.displayName,
-        username: next.username,
-        verified: next.verified,
-        ...(next.avatar ? { avatar: next.avatar } : {}),
-        ...(next.bio ? { bio: next.bio } : {}),
-        ...(next.stats ? { stats: next.stats } : {}),
-      });
-    } catch (e) {
-      throw new Error(describeError(e).message);
-    }
-  };
-  const num = (v: string) => (v.trim() === "" ? undefined : Number(v.replace(/[,，]/g, "")));
-  const numOk = (v: string) =>
-    v.trim() === "" || /^\d[\d,，]*$/.test(v.trim()) ? null : "0 以上の整数";
-
+  const [editing, setEditing] = useState<Profile | "new" | null>(null);
   return (
     <section className="stack">
       <p className="muted small">
@@ -79,196 +53,187 @@ export function ProfilesAdmin() {
         <M3eButton
           variant="filled"
           disabled={(list?.length ?? 0) >= SOCIAL_PROFILE_MAX}
-          onClick={() => setAdding(true)}
+          onClick={() => setEditing("new")}
         >
           <M3eIcon slot="icon" name="add" />
           アカウントを追加
         </M3eButton>
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (!f || !avatarFor) return;
-          try {
-            await put(avatarFor, { avatar: await toAvatarDataUrl(f) });
-          } catch (err) {
-            toast(err instanceof Error ? err.message : String(err), { kind: "error" });
-          }
-        }}
-      />
-      <DataTable
-        label="SNS アカウント"
-        rows={list ?? []}
-        loading={list === undefined}
-        rowKey={(p) => p.id}
-        empty={list === undefined ? "読み込み中…" : "まだありません"}
-        columns={[
-          {
-            key: "avatar",
-            header: <span className="sr-only">アイコン</span>,
-            width: "72px",
-            cell: (p) => (
-              <M3eIconButton
-                aria-label={`@${p.username} のアイコンを変える`}
-                className="profile-avatar-btn"
-                onClick={() => {
-                  setAvatarFor(p);
-                  fileRef.current?.click();
-                }}
-              >
-                {p.avatar ? (
-                  <img src={p.avatar} alt="" className="profile-avatar" />
-                ) : (
-                  <M3eIcon name="add_a_photo" />
-                )}
-              </M3eIconButton>
-            ),
-          },
-          {
-            key: "platform",
-            header: "サービス",
-            width: "112px",
-            sort: (a, b) => a.platform.localeCompare(b.platform),
-            cell: (p) => socialPlatformLabels[p.platform],
-          },
-          {
-            key: "name",
-            header: "表示名",
-            rowHeader: true,
-            width: "200px",
-            cell: (p) => (
-              <EditableText
-                label={`@${p.username} の表示名`}
-                value={p.displayName}
-                onSave={(v) => put(p, { displayName: v })}
-              />
-            ),
-          },
-          {
-            key: "username",
-            header: "ユーザー名",
-            width: "200px",
-            cell: (p) => (
-              <EditableText
-                label={`@${p.username} のユーザー名`}
-                value={p.username}
-                mono
-                onSave={(v) => put(p, { username: v })}
-              />
-            ),
-          },
-          {
-            key: "bio",
-            header: "自己紹介",
-            truncate: "28ch",
-            cell: (p) => (
-              <EditableText
-                label={`@${p.username} の自己紹介`}
-                value={p.bio ?? ""}
-                placeholder="なし"
-                onSave={(v) => put(p, { bio: v })}
-              />
-            ),
-          },
-          {
-            key: "followers",
-            header: "フォロワー",
-            numeric: true,
-            width: "120px",
-            cell: (p) => (
-              <EditableText
-                label={`@${p.username} のフォロワー数`}
-                value={p.stats?.followers?.toLocaleString("ja-JP") ?? ""}
-                placeholder="—"
-                validate={numOk}
-                onSave={(v) => {
-                  const n = num(v);
-                  const { followers: _f, ...rest } = p.stats ?? {};
-                  return put(p, { stats: n === undefined ? rest : { ...rest, followers: n } });
-                }}
-              />
-            ),
-          },
-          {
-            key: "verified",
-            header: "認証バッジ",
-            width: "112px",
-            cell: (p) => (
-              <EditableSwitch
-                label={`@${p.username} に認証バッジを付ける`}
-                checked={p.verified}
-                onSave={(on) => put(p, { verified: on })}
-              />
-            ),
-          },
-          {
-            key: "delete",
-            header: <span className="sr-only">削除</span>,
-            width: "56px",
-            cell: (p) => (
-              <M3eIconButton
-                aria-label={`@${p.username} を削除`}
-                onClick={async () => {
-                  try {
-                    await remove({ id: p.id });
-                  } catch (e) {
-                    toast(describeError(e).message, { kind: "error" });
-                  }
-                }}
-              >
-                <M3eIcon name="delete" />
-              </M3eIconButton>
-            ),
-          },
-        ]}
-      />
-      <AddProfileDialog
-        open={adding}
-        onClose={() => setAdding(false)}
-        onAdd={async (platform, displayName, username) => {
-          await save({ platform, displayName, username, verified: false });
-        }}
-      />
+      {list === undefined ? (
+        <M3eLinearProgressIndicator mode="indeterminate" aria-label="SNS アカウントを読み込み中" />
+      ) : list.length === 0 ? (
+        <div className="empty">まだありません</div>
+      ) : (
+        <M3eActionList className="list" aria-label="SNS アカウント">
+          {list.map((p) => (
+            <M3eListAction key={p.id} className="list__item" onClick={() => setEditing(p)}>
+              {p.avatar ? (
+                <img slot="leading" src={p.avatar} alt="" className="profile-avatar" />
+              ) : (
+                <M3eIcon slot="leading" name="account_circle" />
+              )}
+              <span className="list__headline">
+                {p.displayName}
+                {p.verified ? (
+                  <M3eIcon
+                    name="verified"
+                    className="ml list__lock"
+                    role="img"
+                    aria-label="認証バッジ"
+                    title="認証バッジ"
+                  />
+                ) : null}
+              </span>
+              <span slot="supporting-text">
+                {[
+                  `@${p.username}`,
+                  socialPlatformLabels[p.platform],
+                  p.stats?.followers !== undefined
+                    ? `フォロワー ${p.stats.followers.toLocaleString("ja-JP")}`
+                    : null,
+                  p.bio || null,
+                ]
+                  .filter(Boolean)
+                  .join("・")}
+              </span>
+            </M3eListAction>
+          ))}
+        </M3eActionList>
+      )}
+      {editing ? (
+        <ProfileDialog
+          key={editing === "new" ? "new" : editing.id}
+          profile={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </section>
   );
 }
 
-function AddProfileDialog({
-  open,
-  onClose,
-  onAdd,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onAdd: (platform: SocialPlatform, displayName: string, username: string) => Promise<void>;
-}) {
-  const [platform, setPlatform] = useState<SocialPlatform>("instagram");
-  const [displayName, setDisplayName] = useState("");
-  const [username, setUsername] = useState("");
+/** アカウントの追加・編集（M3 Dialogs: 操作は保存とキャンセルの 2 つ。削除は本文の下） */
+function ProfileDialog({ profile, onClose }: { profile: Profile | null; onClose: () => void }) {
+  const save = useMutation(api.social.save);
+  const remove = useMutation(api.social.remove);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [platform, setPlatform] = useState<SocialPlatform>(profile?.platform ?? "instagram");
+  const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
+  const [username, setUsername] = useState(profile?.username ?? "");
+  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [followers, setFollowers] = useState(
+    profile?.stats?.followers !== undefined ? profile.stats.followers.toLocaleString("ja-JP") : "",
+  );
+  const [verified, setVerified] = useState(profile?.verified ?? false);
+  const [avatar, setAvatar] = useState(profile?.avatar ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const followersOk = followers.trim() === "" || /^\d[\d,，]*$/.test(followers.trim());
+  const submit = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      const n = followers.trim() === "" ? undefined : Number(followers.replace(/[,，]/g, ""));
+      const { followers: _f, ...rest } = profile?.stats ?? {};
+      const stats = n === undefined ? rest : { ...rest, followers: n };
+      await save({
+        ...(profile ? { id: profile.id } : {}),
+        platform,
+        displayName: displayName.trim(),
+        username: username.trim(),
+        verified,
+        ...(avatar ? { avatar } : {}),
+        ...(bio.trim() ? { bio: bio.trim() } : {}),
+        ...(Object.keys(stats).length ? { stats } : {}),
+      });
+      toast(profile ? "アカウントを保存しました" : "アカウントを追加しました");
+      onClose();
+    } catch (e) {
+      setError(describeError(e).message);
+    } finally {
+      setPending(false);
+    }
+  };
   return (
-    <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる">
-      <span slot="header">SNS アカウントを追加</span>
+    <M3eDialog open onClosed={onClose} closeLabel="閉じる" className="dialog--narrow">
+      <span slot="header">{profile ? `@${profile.username}` : "SNS アカウントを追加"}</span>
       <div className="dialog-body stack">
-        <M3eSegmentedButton aria-label="サービス">
-          {socialPlatforms.map((p) => (
-            <M3eButtonSegment key={p} checked={platform === p} onClick={() => setPlatform(p)}>
-              {socialPlatformLabels[p]}
-            </M3eButtonSegment>
-          ))}
-        </M3eSegmentedButton>
+        {profile ? (
+          <p className="small muted">{socialPlatformLabels[profile.platform]}</p>
+        ) : (
+          <ChoiceGroup
+            label="サービス"
+            value={platform}
+            onChange={setPlatform}
+            choices={socialPlatforms.map((p) => ({ value: p, label: socialPlatformLabels[p] }))}
+          />
+        )}
+        <div className="row profile-dialog__avatar">
+          {avatar ? (
+            <img src={avatar} alt="アイコン" className="profile-avatar profile-avatar--large" />
+          ) : (
+            <M3eIcon name="account_circle" className="profile-avatar--empty" />
+          )}
+          <M3eButton variant="tonal" onClick={() => fileRef.current?.click()}>
+            <M3eIcon slot="icon" name="add_a_photo" />
+            アイコンの画像を選ぶ
+          </M3eButton>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              try {
+                setAvatar(await toAvatarDataUrl(f));
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), { kind: "error" });
+              }
+            }}
+          />
+        </div>
         <Field label="表示名" required>
           <TextInput value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </Field>
         <Field label="ユーザー名（@ なし）" required {...(error ? { error } : {})}>
-          <TextInput value={username} onChange={(e) => setUsername(e.target.value)} />
+          <TextInput
+            className="mono"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
         </Field>
+        <Field label="自己紹介">
+          <TextArea rows={3} value={bio} onChange={(e) => setBio(e.target.value)} />
+        </Field>
+        <Field label="フォロワー数" {...(followersOk ? {} : { error: "0 以上の整数" })}>
+          <TextInput
+            inputMode="numeric"
+            value={followers}
+            onChange={(e) => setFollowers(e.target.value)}
+          />
+        </Field>
+        <Checkbox checked={verified} onChange={setVerified} label="認証バッジを付ける" />
+        {profile ? (
+          <div className="row">
+            <M3eButton
+              variant="text"
+              onClick={async () => {
+                try {
+                  await remove({ id: profile.id });
+                  toast("アカウントを削除しました");
+                  onClose();
+                } catch (e) {
+                  toast(describeError(e).message, { kind: "error" });
+                }
+              }}
+            >
+              <M3eIcon slot="icon" name="delete" />
+              このアカウントを削除
+            </M3eButton>
+          </div>
+        ) : null}
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>
@@ -276,23 +241,10 @@ function AddProfileDialog({
         </M3eButton>
         <M3eButton
           variant="filled"
-          disabled={pending || !displayName.trim() || !username.trim()}
-          onClick={async () => {
-            setPending(true);
-            setError(null);
-            try {
-              await onAdd(platform, displayName, username);
-              setDisplayName("");
-              setUsername("");
-              onClose();
-            } catch (e) {
-              setError(describeError(e).message);
-            } finally {
-              setPending(false);
-            }
-          }}
+          disabled={pending || !displayName.trim() || !username.trim() || !followersOk}
+          onClick={() => void submit()}
         >
-          追加
+          {profile ? "保存" : "追加"}
         </M3eButton>
       </div>
     </M3eDialog>

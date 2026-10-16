@@ -1,7 +1,8 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
-import { M3eButton, M3eButtonSegment, M3eIconButton, M3eIcon, M3eSegmentedButton } from "@/ui/m3e";
+import { M3eButton, M3eIconButton, M3eIcon } from "@/ui/m3e";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { MentionTextarea } from "./mentions";
 
 /**
@@ -79,14 +80,16 @@ export function ComposePopover({
       onClick={(e) => e.stopPropagation()}
     >
       {onKind ? (
-        <M3eSegmentedButton aria-label="書くもの" className="compose-pop__kind">
-          <M3eButtonSegment checked={!fb} onClick={() => onKind("comment")}>
-            {label}
-          </M3eButtonSegment>
-          <M3eButtonSegment checked={fb} onClick={() => onKind("feedback")}>
-            FB
-          </M3eButtonSegment>
-        </M3eSegmentedButton>
+        <ChoiceGroup
+          label="書くもの"
+          className="compose-pop__kind"
+          value={fb ? "feedback" : "comment"}
+          onChange={onKind}
+          choices={[
+            { value: "comment", label },
+            { value: "feedback", label: "FB" },
+          ]}
+        />
       ) : fb ? (
         <div className="compose-pop__note">FB（相談）として書きます</div>
       ) : null}

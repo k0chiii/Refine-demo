@@ -550,20 +550,7 @@ m3e-dialog [slot="actions"] {
   margin: 0;
 }
 
-/* ---------- 状態チップ（読み取り専用。M3 color roles で意味を固定） */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: var(--mf-shape-sm);
-  font: var(--mf-type-label-medium);
-  background: var(--mf-surface-container-highest);
-  color: var(--mf-on-surface-variant);
-  white-space: nowrap;
-  vertical-align: middle;
-}
+/* ---------- 状態の文字（ui/Chip.tsx の StatusText。M3 に状態ラベルの部品は無いので、文字＋アイコン＋色。§49） */
 /* 属性・補足は塗らない */
 .meta {
   display: inline-flex;
@@ -589,29 +576,6 @@ m3e-dialog [slot="actions"] {
 }
 .chip__icon {
   font-size: 16px;
-}
-.chip--neutral {
-  background: var(--mf-surface-container-highest);
-  color: var(--mf-on-surface-variant);
-}
-.chip--primary {
-  background: transparent;
-  border: 1px solid var(--mf-outline-variant);
-  color: var(--mf-on-surface);
-}
-.chip--error {
-  background: var(--mf-error-container);
-  color: var(--mf-on-error-container);
-}
-.chip--warn,
-.chip--warning {
-  background: var(--mf-warning-container);
-  color: var(--mf-on-warning-container);
-}
-.chip--ok,
-.chip--success {
-  background: var(--mf-success-container);
-  color: var(--mf-on-success-container);
 }
 
 /* ---------- フォーム（m3e-form-field + native 入力） */
@@ -1154,22 +1118,38 @@ m3e-dialog [slot="actions"] {
 /* ---------- 制作物一覧 */
 
 /* ---------- ダッシュボード（自分だけのダッシュボード。§36 W-26）
- * compact・medium は 1 列のリスト（M3 Cards: compact ではリスト）。expanded 以上は 2 列で、左が「やること」、右が補助
- * （M3 Canonical layouts › Feed。列の間はペインのスペーサーと同じ 24）。主目的の見出しを強く、補助の見出しは控えめに */
+ * compact・medium は 1 列のリスト（M3 Cards: compact ではリスト。節の間だけ全幅の区切り線）。
+ * expanded 以上は M3 Canonical layouts › Supporting pane: 主（やること）は残り全部、補助（予定と記録）は右に
+ * 360（1200 以上は 412）の固定幅のペイン。補助のペインは surface-container-low の面で囲う（§49）。
+ * 主目的の見出しを強く、補助の見出しは控えめに */
 .dash {
   display: grid;
   gap: 24px;
 }
-/* 列の間: 行（リスト）は文字を見出しに揃えるため左右に 16 はみ出す（.list）。行の背景どうしの間を 24 空けるため、24 + 16 × 2 */
 .dash--columns {
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  column-gap: calc(24px + 2 * 16px);
+  grid-template-columns: minmax(0, 1fr) 360px;
+  column-gap: 24px;
   align-items: start;
+}
+@media (min-width: 1200px) {
+  .dash--columns {
+    grid-template-columns: minmax(0, 1fr) 412px;
+  }
 }
 .dash__column {
   display: grid;
   gap: 32px;
   min-width: 0;
+}
+/* 主の列の行は左右に 16 はみ出す（.list）ので、補助のペインとの間が 24 になるよう右だけ 16 内側に */
+.dash--columns > .dash__column:first-child {
+  padding-inline-end: 16px;
+}
+.dash__column--side {
+  gap: 16px;
+  padding: 8px 16px 16px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-low);
 }
 .dash__section {
   display: grid;
@@ -1201,6 +1181,7 @@ m3e-dialog [slot="actions"] {
 .dash__count {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
+  font-variant-numeric: tabular-nums;
 }
 .dash__group {
   display: grid;
@@ -2570,12 +2551,9 @@ m3e-icon.icon--on {
   padding: 12px 16px 0;
   margin: 0;
 }
-.switch-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  cursor: pointer;
+.count-list__value {
+  font: var(--mf-type-body-large);
+  font-variant-numeric: tabular-nums;
 }
 .shortcuts {
   display: grid;
@@ -2831,7 +2809,7 @@ m3e-icon.icon--on {
   }
 }
 
-/* ---------- 表記ルール（表記統一）: 広い画面は編集できる表、狭い画面はリスト。詳細はダイアログ */
+/* ---------- 表記ルール（表記統一）: M3 list-detail。一覧は M3E のリスト、840 以上は詳細を右のペインに（839 以下はダイアログ） */
 .notation__tabs,
 .page-tabs {
   margin: 0 0 12px;
@@ -2841,8 +2819,11 @@ m3e-icon.icon--on {
   margin-bottom: 8px;
 }
 .notation__search {
-  flex: 1 1 240px;
+  flex: 1 1 160px;
   min-width: 0;
+}
+.notation__toolbar {
+  flex-wrap: nowrap;
 }
 .notation__filters {
   margin-bottom: 4px;
@@ -2851,10 +2832,60 @@ m3e-icon.icon--on {
   width: 240px;
   flex: none;
 }
-/* 編集でセルの中身が変わっても列幅が動かないように（幅は列ごとに指定） */
-.rule-table .data-table__table {
-  table-layout: fixed;
-  min-width: 1040px;
+/* 2 ペイン: 一覧 360（1200 以上は 412）・間 24・詳細は残り全部（M3 list-detail）。ペインは surface-container-low の面で囲う */
+.notation__ld--two {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (min-width: 1200px) {
+  .notation__ld--two {
+    grid-template-columns: 412px minmax(0, 1fr);
+  }
+}
+.notation__ld--two > .notation__list,
+.notation__detail {
+  min-width: 0;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-low);
+  padding: 16px;
+}
+/* 一覧の行の左右の余白（16）をペインの内側の余白に重ねる（.list は -16 外へ出す） */
+.notation__ld--two .notation__rules {
+  margin: 0 -8px;
+}
+/* 詳細は画面の高さに収め、一覧をスクロールしても見えたままにする（中だけスクロール） */
+.notation__detail {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100dvh - var(--mf-appbar-h, 64px) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 24px 24px;
+}
+.notation__detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+}
+.notation__detail-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: var(--mf-type-title-large);
+}
+.notation__detail-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 64px 16px;
+  text-align: center;
+}
+.notation__detail-empty m3e-icon {
+  font-size: 40px;
+  color: var(--mf-on-surface-variant);
 }
 .rule-row__correct {
   font-weight: 500;
@@ -2983,9 +3014,6 @@ m3e-icon.icon--on {
 .finding__actions {
   display: inline-flex;
 }
-.chip--error {
-  --m3e-chip-label-text-color: var(--mf-error);
-}
 /* 件数のバッジは secondary（エラーの赤は通知のベルだけ。件数は誤りではない。M3 Badges・Color roles。§43） */
 .pane-tabs__badge {
   margin-inline-start: 4px;
@@ -2996,9 +3024,6 @@ m3e-icon.icon--on {
 .thread__bot {
   --m3e-avatar-size: 28px;
   flex: none;
-}
-.thread__bot-chips {
-  display: inline-flex;
 }
 .auto-status {
   padding: 4px 16px 8px;
@@ -3070,251 +3095,11 @@ m3e-icon.icon--on {
 }
 
 /* 状態の chip（M3E chip）。色は意味（成功・注意）だけを変える */
-.chip--success {
-  --m3e-chip-icon-color: var(--mf-success);
-}
-.chip--error {
-  --m3e-chip-icon-color: var(--mf-error);
-  --m3e-chip-label-text-color: var(--mf-error);
-}
 
-/* ---------- データ表（Material data table の寸法を M3 のトークンで。ui/DataTable.tsx） */
-.data-table {
-  overflow: auto;
-  border: 1px solid var(--mf-outline-variant);
-  /* data table の仕様: 角は 4dp（M3 の shape extra-small）、影なし、外枠 1dp */
-  border-radius: var(--mf-shape-xs);
-  position: relative;
-  background: var(--mf-surface);
-  max-width: 100%;
-}
-.data-table:focus-visible {
-  outline: var(--mf-focus-ring);
-  outline-offset: 2px;
-}
-.data-table__table {
-  width: 100%;
-  border-collapse: collapse;
-  font: var(--mf-type-body-medium);
-  color: var(--mf-on-surface);
-}
-.data-table__th {
-  height: 56px;
-  padding: 0 16px;
-  text-align: start;
-  vertical-align: middle;
-  font: var(--mf-type-title-small);
-  color: var(--mf-on-surface);
-  border-bottom: 1px solid var(--mf-outline-variant);
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  background: var(--mf-surface);
-  z-index: 1;
-}
-.data-table__td,
-.data-table__rowhead {
-  height: 52px;
-  padding: 0 16px;
-  vertical-align: middle;
-  text-align: start;
-  font: var(--mf-type-body-medium);
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
-/* 行見出しは本文の太さ（M3 の表のセルは body-medium。局・担当の見出し行が階層を担う。§43） */
-.data-table__rowhead {
-  font-weight: 400;
-}
-/* 長い文字は省略記号で切る（全文は hover・長押しでツールチップ） */
-.data-table__clip {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.data-table__clip .cell-edit {
-  display: flex;
-  flex-wrap: nowrap;
-  max-width: 100%;
-}
-.data-table__clip .cell-edit__value {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.data-table__clip .cell-edit__icon {
-  flex: none;
-}
-/* 読み込み中: 見出しの下に線の進捗 */
-.data-table__progress {
-  position: absolute;
-  inset: 56px 0 auto;
-  z-index: 2;
-}
-/* ページ送りは表の下（data table の仕様）。区切り線で表と分ける */
-.data-table__paginator {
-  display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid var(--mf-outline-variant);
-  padding: 4px 8px;
-  position: sticky;
-  left: 0;
-}
-/* 狭い画面: 列を潰して 1 文字ずつ折り返す代わりに、表を横にスクロールさせる */
-@media (max-width: 599px) {
-  .data-table__td,
-  .data-table__rowhead {
-    white-space: nowrap;
-  }
-}
-.data-table__row:last-child > * {
-  border-bottom: 0;
-}
-.data-table__num {
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-}
-.data-table__row:hover > * {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-.data-table__row--selected > * {
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-}
-/* 選択中の行のホバー: 選択の地の上に on-secondary-container 8% を重ねる（選択とホバーは組み合わせる。M3 States。§35 I-05） */
-.data-table__row--selected:hover > * {
-  background: color-mix(
-    in srgb,
-    var(--mf-on-secondary-container) 8%,
-    var(--mf-secondary-container)
-  );
-}
-.data-table__row--action {
-  cursor: pointer;
-}
-.data-table__empty {
-  height: 52px;
-  padding: 0 16px;
-  color: var(--mf-on-surface-variant);
-}
-.data-table__sort {
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  border-radius: var(--mf-shape-xs);
-}
-.data-table__sort:focus-visible {
-  outline: var(--mf-focus-ring);
-}
-.data-table__sort-icon {
-  font-size: 18px;
-  opacity: 0;
-  color: var(--mf-on-surface-variant);
-}
-.data-table__sort:hover .data-table__sort-icon,
-.data-table__sort:focus-visible .data-table__sort-icon,
-.data-table__sort-icon--on {
-  opacity: 1;
-}
-.data-table__sort-icon--on {
-  color: var(--mf-on-surface);
-}
-/* 編集できるセル: 普段は値だけ（hover・フォーカスで鉛筆）。編集中は入力欄（フォーカス時のテキストフィールドの見た目） */
-.cell-edit {
-  all: unset;
-  box-sizing: border-box;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  min-height: 36px;
-  min-width: 48px;
-  max-width: 100%;
-  padding: 4px 8px;
-  margin: 0 -8px;
-  border-radius: var(--mf-shape-xs);
-  cursor: text;
-}
-.cell-edit:hover {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-/* M3 State layers: focus は 10% */
-.cell-edit:focus-visible {
-  background: color-mix(in srgb, var(--mf-on-surface) 10%, transparent);
-}
-.cell-edit:focus-visible {
-  outline: var(--mf-focus-ring);
-}
-.cell-edit__icon {
-  font-size: 16px;
-  color: var(--mf-on-surface-variant);
-  opacity: 0;
-}
-.cell-edit:hover .cell-edit__icon,
-.cell-edit:focus-visible .cell-edit__icon {
-  opacity: 1;
-}
-.cell-editing {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-.cell-input {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 120px;
-  min-height: 36px;
-  padding: 0 8px;
-  margin: 0 -8px;
-  font: inherit;
-  color: var(--mf-on-surface);
-  background: var(--mf-surface-container-lowest);
-  border: 2px solid var(--mf-primary);
-  border-radius: var(--mf-shape-xs);
-  outline: none;
-}
-.cell-input--error {
-  border-color: var(--mf-error);
-}
-.cell-error {
-  flex-basis: 100%;
-  font: var(--mf-type-body-small);
-  color: var(--mf-error);
-}
-.cell-select .select {
-  min-width: 120px;
-}
-.cell-text {
+/* 基本情報（制作物の「情報」）: 項目名を overline、値を本文にした M3 リスト（読むだけ。M3 に表は無い。§49） */
+.prop-list .prop-list__value {
   overflow-wrap: anywhere;
-}
-/* 基本情報の表（見出し列 + 値。値は編集できるセル） */
-.prop-table {
-  width: 100%;
-  border-collapse: collapse;
-  font: var(--mf-type-body-medium);
-}
-.prop-table th {
-  width: 64px;
-  padding: 0 12px 0 0;
-  text-align: start;
-  vertical-align: middle;
-  font: var(--mf-type-label-medium);
-  color: var(--mf-on-surface-variant);
-  white-space: nowrap;
-}
-.prop-table td {
-  height: 44px;
-  padding: 0 8px;
-  vertical-align: middle;
-  overflow-wrap: anywhere;
-}
-.prop-table tr + tr > * {
-  border-top: 1px solid var(--mf-outline-variant);
+  white-space: normal;
 }
 
 /* エディタの入口（書く制作物を選ぶ） */
@@ -4363,4 +4148,60 @@ m3e-snackbar {
   .fb-post__quick {
     display: none;
   }
+}
+
+/* ---------- 取り込みのプレビュー（表記ルール・制作物の CSV）: 件数の要約は文字、行は M3 リスト（§49） */
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+.import-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.import-summary m3e-icon {
+  font-size: 18px;
+}
+.import-summary__bad {
+  color: var(--mf-error);
+}
+.import-summary__ok {
+  color: var(--mf-on-surface);
+}
+.import-list__item--bad {
+  --m3e-list-item-leading-icon-color: var(--mf-error);
+}
+.import-list__problems {
+  color: var(--mf-error);
+}
+/* 取り込みの行は情報が多いので、2 行目を省略せずに折り返す（M3 Text truncation: 切ったら全文を見る手段が要る） */
+.import-list .import-list__detail {
+  display: block;
+  white-space: normal;
+  overflow: visible;
+}
+.import-list__problems {
+  display: block;
+}
+/* 1 つを選ぶ切り替え（ui/ChoiceGroup。M3 の connected ボタングループ）: 幅いっぱいに置くときはボタンを等分 */
+.compose-pop__kind > m3e-button {
+  flex: 1 1 0;
+}
+/* SNS アカウントのダイアログ: アイコンの見本と画像を選ぶボタン */
+.profile-dialog__avatar {
+  gap: 16px;
+}
+.profile-avatar--large {
+  width: 64px;
+  height: 64px;
+}
+.profile-avatar--empty {
+  font-size: 64px;
+  color: var(--mf-on-surface-variant);
 }

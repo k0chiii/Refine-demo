@@ -13,14 +13,13 @@ import {
   M3eAvatar,
   M3eButton,
   M3eCard,
-  M3eChip,
-  M3eChipSet,
   M3eIcon,
   M3eIconButton,
   M3eMenu,
   M3eMenuItem,
   M3eMenuTrigger,
 } from "@/ui/m3e";
+import { StatusText } from "@/ui/Chip";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { UserPicker } from "@/ui/UserPicker";
 
@@ -196,38 +195,26 @@ export function ThreadCard({
           t.origin?.needsReview ||
           t.origin?.textSource === "ocr" ? (
             <div className="thread__meta">
-              {t.origin && (t.origin.needsReview || t.origin.textSource === "ocr") ? (
-                <M3eChipSet aria-label="自動校正の根拠" className="thread__bot-chips">
-                  {t.origin.needsReview ? <M3eChip>要確認</M3eChip> : null}
-                  {t.origin.textSource === "ocr" ? <M3eChip>画像から読み取り</M3eChip> : null}
-                </M3eChipSet>
+              {/* 状態は文字＋アイコン（M3 の chip は操作の部品なので、ただの表示には使わない。§49） */}
+              {t.origin?.needsReview ? <StatusText icon="help">要確認</StatusText> : null}
+              {t.origin?.textSource === "ocr" ? (
+                <StatusText icon="document_scanner">画像から読み取り</StatusText>
               ) : null}
-              {closed || t.severity === "critical" || t.carriedFromThreadId || t.assignee ? (
-                <M3eChipSet aria-label="コメントの状態">
-                  {closed ? (
-                    <M3eChip className={t.resolution === "resolved" ? "chip--success" : ""}>
-                      <M3eIcon
-                        slot="icon"
-                        name={t.resolution === "resolved" ? "check_circle" : "do_not_disturb_on"}
-                      />
-                      {resolutionLabel[t.resolution]}
-                    </M3eChip>
-                  ) : null}
-                  {t.severity === "critical" ? (
-                    <M3eChip className="chip--error">
-                      <M3eIcon slot="icon" name="priority_high" />
-                      {severityLabel[t.severity]}
-                    </M3eChip>
-                  ) : null}
-                  {t.carriedFromThreadId ? <M3eChip>前版から持ち越し</M3eChip> : null}
-                  {t.assignee ? (
-                    <M3eChip>
-                      <M3eIcon slot="icon" name="person" />
-                      担当 {t.assignee.name}
-                    </M3eChip>
-                  ) : null}
-                </M3eChipSet>
+              {closed ? (
+                <StatusText
+                  tone={t.resolution === "resolved" ? "success" : "neutral"}
+                  icon={t.resolution === "resolved" ? "check_circle" : "do_not_disturb_on"}
+                >
+                  {resolutionLabel[t.resolution]}
+                </StatusText>
               ) : null}
+              {t.severity === "critical" ? (
+                <StatusText tone="error" icon="priority_high">
+                  {severityLabel[t.severity]}
+                </StatusText>
+              ) : null}
+              {t.carriedFromThreadId ? <StatusText icon="redo">前版から持ち越し</StatusText> : null}
+              {t.assignee ? <StatusText icon="person">担当 {t.assignee.name}</StatusText> : null}
             </div>
           ) : null}
           {active ? <ThreadEvents threadId={t.id} /> : null}

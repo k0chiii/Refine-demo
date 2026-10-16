@@ -10,7 +10,6 @@ import {
   type Team,
   type TeamRefMatch,
   type WorkCsvParseResult,
-  type WorkImportRow,
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
@@ -18,11 +17,8 @@ import { describeError } from "@/lib/errors";
 import { formatDeadline } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { toast } from "@/lib/toast";
-import { DataTable } from "@/ui/DataTable";
 import {
   M3eButton,
-  M3eChip,
-  M3eChipSet,
   M3eDialog,
   M3eIcon,
   M3eLinearProgressIndicator,
@@ -225,11 +221,16 @@ export function ImportWorksDialog({
         ) : null}
         {preview ? (
           <>
-            <M3eChipSet aria-label="読み込んだ内容" className="import-summary">
-              <M3eChip>行 {preview.rows.length}</M3eChip>
-              <M3eChip className="chip--success">登録できる {ready.length}</M3eChip>
-              <M3eChip className={blocked ? "chip--error" : ""}>確認が必要 {blocked}</M3eChip>
-            </M3eChipSet>
+            <p className="import-summary" aria-label="読み込んだ内容">
+              <span>行 {preview.rows.length}</span>
+              <span className="import-summary__ok">
+                <M3eIcon name="check_circle" />
+                登録できる {ready.length}
+              </span>
+              <span className={blocked ? "import-summary__bad" : ""}>
+                {blocked ? <M3eIcon name="error" /> : null}確認が必要 {blocked}
+              </span>
+            </p>
             {preview.errors.length ? (
               <M3eList aria-label="ファイルの問題">
                 {preview.errors.map((e) => (
@@ -240,74 +241,39 @@ export function ImportWorksDialog({
                 ))}
               </M3eList>
             ) : null}
-            <DataTable<WorkImportRow>
-              label="登録する制作物"
-              rows={preview.rows}
-              rowKey={(r) => String(r.row.line)}
-              defaultSort={{ key: "line", dir: 1 }}
-              columns={[
-                {
-                  key: "line",
-                  header: "行",
-                  numeric: true,
-                  width: "64px",
-                  sort: (a, b) => a.row.line - b.row.line,
-                  cell: (r) => r.row.line,
-                },
-                {
-                  key: "title",
-                  header: "題名",
-                  rowHeader: true,
-                  truncate: "24ch",
-                  cell: (r) => r.row.title || <span className="muted">（なし）</span>,
-                },
-                {
-                  key: "media",
-                  header: "媒体",
-                  cell: (r) => (r.row.mediaType ? mediaLabel[r.row.mediaType] : "—"),
-                },
-                { key: "creators", header: "制作者", cell: (r) => people(r.creators) },
-                { key: "managers", header: "主管", cell: (r) => people(r.managers) },
-                {
-                  key: "ownerTeam",
-                  header: "主管担当",
-                  cell: (r) =>
-                    r.ownerTeam ? (
-                      teamRef(r.ownerTeam, teams ?? [])
-                    ) : (
-                      <span className="muted">—</span>
-                    ),
-                },
-                {
-                  key: "productionTeams",
-                  header: "制作担当",
-                  cell: (r) => teamRefs(r.productionTeams, teams ?? []),
-                },
-                {
-                  key: "approver",
-                  header: "校了権限者",
-                  cell: (r) => (r.approver ? person(r.approver) : <span className="muted">—</span>),
-                },
-                {
-                  key: "deadline",
-                  header: "納期",
-                  cell: (r) => (r.row.deadlineAt ? formatDeadline(r.row.deadlineAt) : "—"),
-                },
-                {
-                  key: "state",
-                  header: "確認",
-                  sort: (a, b) => Number(a.input !== null) - Number(b.input !== null),
-                  cell: (r) =>
-                    r.input ? (
-                      <M3eChip className="chip--success">登録する</M3eChip>
-                    ) : (
-                      <span className="small import-problems">
-                        {r.problems.join("。") || "ファイルの問題（表の上）を直してください"}
-                      </span>
-                    ),
-                },
-              ]}
-            />
+            {/* 1 行ずつ: 先頭のアイコンと末尾の文字で登録できるかを示し、問題はその行の中に全部出す（M3 Dialogs: エラーはその場に） */}
+            <M3eList className="list import-list" aria-label="登録する制作物">
+              {[...preview.rows]
+                .sort((a, b) => a.row.line - b.row.line)
+                .map((r) => (
+                  <M3eListItem
+                    key={r.row.line}
+                    className={`list__item ${r.input ? "" : "import-list__item--bad"}`}
+                  >
+                    <M3eIcon slot="leading" name={r.input ? "check_circle" : "error"} />
+                    <span slot="overline">{r.row.line} 行目</span>
+                    <span className="list__headline">
+                      {r.row.title || <span className="muted">（題名なし）</span>}
+                    </span>
+                    <span slot="supporting-text" className="import-list__detail">
+                      {r.row.mediaType ? mediaLabel[r.row.mediaType] : "媒体なし"}・制作者{" "}
+                      {people(r.creators)}・主管 {people(r.managers)}・主管担当{" "}
+                      {r.ownerTeam ? teamRef(r.ownerTeam, teams ?? []) : "—"}・制作担当{" "}
+                      {teamRefs(r.productionTeams, teams ?? [])}・校了権限者{" "}
+                      {r.approver ? person(r.approver) : "—"}・納期{" "}
+                      {r.row.deadlineAt ? formatDeadline(r.row.deadlineAt) : "—"}
+                      {r.input ? null : (
+                        <span className="import-list__problems">
+                          {r.problems.join("。") || "ファイルの問題（上）を直してください"}
+                        </span>
+                      )}
+                    </span>
+                    <span slot="trailing" className="meta">
+                      {r.input ? "登録する" : "確認が必要"}
+                    </span>
+                  </M3eListItem>
+                ))}
+            </M3eList>
           </>
         ) : null}
       </div>

@@ -7,7 +7,6 @@ import { CategoriesPanel } from "@/features/notation/CategoriesPanel";
 import { ImportDialog } from "@/features/notation/ImportDialog";
 import { ProposalsPanel } from "@/features/notation/ProposalsPanel";
 import { draftOf, emptyDraft, RuleEditor } from "@/features/notation/RuleEditor";
-import { RuleTable } from "@/features/notation/RuleTable";
 import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
@@ -21,6 +20,7 @@ import {
   M3eFilterChip,
   M3eFilterChipSet,
   M3eIcon,
+  M3eIconButton,
   M3eListAction,
   M3eMenu,
   M3eMenuItem,
@@ -39,7 +39,10 @@ export const Route = createFileRoute("/_app/notation")({
 /**
  * 表記ルール（表記統一）。ルールの一覧・検索・編集・無効化・履歴・取り込み・書き出し、変更提案、カテゴリ。
  * 誰でも閲覧・提案でき、編集と承認はカテゴリ管理者（権限はサーバーが判定。画面の出し分けは補助）。
- * 一覧と詳細（list-detail）。狭い画面では詳細を全画面のダイアログで開く。
+ * 一覧と詳細（M3 list-detail。利用者指示 2026-10-16「UI はマテリアルデザインにあるものだけで」）。
+ * - 一覧は M3E のリスト（M3 に表は無い）。行は押すと詳細を開くだけ（行の中に選択欄やスイッチを置かない: M3 Lists の
+ *   single-action・Cards の「押せる面の上に操作を置かない」）。カテゴリ・厳格さ・有効／無効は詳細で直す
+ * - 840 以上は一覧（360、1200 以上は 412）と詳細を並べる。839 以下は詳細をダイアログで開く（599 以下は全画面）
  */
 function Notation() {
   const { view: tab = "rules" } = Route.useSearch();
@@ -47,7 +50,8 @@ function Notation() {
   const book = useQuery(api.notation.ruleBook, {});
   const open = useQuery(api.notation.proposals, { status: "open" });
   const win = useWindowClass();
-  const wide = win === "expanded" || win === "large";
+  // 一覧と詳細を並べる幅（M3 Window size classes: expanded 以上は 2 ペイン）
+  const twoPane = win === "expanded" || win === "large";
   const [text, setText] = useState("");
   const [cat, setCat] = useState("");
   const [showDisabled, setShowDisabled] = useState(false);
@@ -154,7 +158,7 @@ function Notation() {
       ) : tab === "try" ? (
         <RuleTester book={book} />
       ) : (
-        <div className="notation__ld">
+        <div className={`notation__ld ${twoPane ? "notation__ld--two" : ""}`}>
           <div className="notation__list">
             <div className="row notation__toolbar">
               <M3eSearchBar
@@ -182,15 +186,14 @@ function Notation() {
                 {canEditAny ? "追加" : "追加を提案"}
               </M3eButton>
               {/* compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints。§35 L-09） */}
-              <M3eButton
-                variant="text"
+              <M3eIconButton
                 aria-label="取り込み・書き出し"
+                title="取り込み・書き出し"
                 {...(win === "compact" ? { onClick: () => setMoreSheet(true) } : {})}
               >
-                <M3eIcon slot="icon" name="more_vert" />
-                その他
+                <M3eIcon name="more_vert" />
                 {win === "compact" ? null : <M3eMenuTrigger htmlFor="notation-more" />}
-              </M3eButton>
+              </M3eIconButton>
               {win === "compact" ? (
                 <ActionSheet
                   open={moreSheet}
@@ -238,22 +241,13 @@ function Notation() {
               <div className="empty">
                 {text ? `「${text}」に一致するルールはありません` : "ルールがありません"}
               </div>
-            ) : wide ? (
-              <RuleTable
-                book={book}
-                rules={rules}
-                selected={selected}
-                onOpen={(id) => {
-                  setCreating(null);
-                  setSelected(id);
-                }}
-              />
             ) : (
-              <M3eActionList className="list" aria-label="ルール">
+              <M3eActionList className="list notation__rules" aria-label="ルール">
                 {rules.map((r) => (
                   <M3eListAction
                     key={r.ruleId}
                     className={`list__item ${r.ruleId === selected ? "list__item--selected" : ""} ${r.enabled ? "" : "list__item--done"}`}
+                    {...(r.ruleId === selected ? { "aria-current": "true" } : {})}
                     onClick={() => {
                       setCreating(null);
                       setSelected(r.ruleId);
@@ -267,7 +261,7 @@ function Notation() {
                       </span>
                     </span>
                     <span slot="supporting-text">
-                      {r.ruleId}・{r.title}
+                      {r.ruleId}・{r.categoryCode}・{r.title}
                       {r.years.length ? `・MF${r.years.join(",")}` : ""}
                     </span>
                     <span slot="trailing" className="meta">
@@ -278,11 +272,40 @@ function Notation() {
               </M3eActionList>
             )}
           </div>
+          {twoPane ? (
+            <section className="notation__detail" aria-label="ルールの詳細">
+              {detail ? (
+                <>
+                  <header className="notation__detail-head">
+                    <h2 className="notation__detail-title">
+                      {creating ? "ルールを追加" : (current?.title ?? "ルール")}
+                    </h2>
+                    <M3eIconButton
+                      aria-label="詳細を閉じる"
+                      onClick={() => {
+                        setSelected(null);
+                        setCreating(null);
+                      }}
+                    >
+                      <M3eIcon name="close" />
+                    </M3eIconButton>
+                  </header>
+                  {detail}
+                </>
+              ) : (
+                <div className="empty notation__detail-empty">
+                  <M3eIcon name="rule" />
+                  <span className="title-medium">ルールを選ぶと、ここで確かめて直せます</span>
+                  <span className="muted">説明・例外・厳格さ・有効／無効・変更履歴</span>
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
       )}
-      {/* 詳細（説明・例外・履歴）はダイアログ。広い画面では表の上で直接直せるので、詳細は必要なときだけ開く */}
+      {/* 839 以下の詳細はダイアログ（M3 Dialogs: 599 以下は全画面、それより広いと基本のダイアログ） */}
       <M3eDialog
-        open={tab === "rules" && detail !== null}
+        open={tab === "rules" && !twoPane && detail !== null}
         onClosed={() => {
           setSelected(null);
           setCreating(null);

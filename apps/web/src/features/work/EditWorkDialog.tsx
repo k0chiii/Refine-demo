@@ -1,7 +1,7 @@
 import { api } from "@mf100/convex/api";
-import { WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "@mf100/domain";
+import { socialPlatformLabels, WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "@mf100/domain";
 import type { Id } from "@mf100/convex/dataModel";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { mediaLabel } from "@/lib/labels";
@@ -40,8 +40,11 @@ export function EditWorkDialog({
     notationCategories: [...(work.notationCategories ?? [])],
     ownerTeam: work.ownerTeamId ? [work.ownerTeamId] : ([] as string[]),
     productionTeamIds: [...work.productionTeamIds],
+    socialProfileId: work.socialProfileId ?? "",
   });
   const [form, setForm] = useState(initial);
+  // SNS 投稿の制作物: どのアカウント（本体の設定）で投稿するか
+  const profiles = useQuery(api.social.list, open && form.mediaType === "sns" ? {} : "skip");
   useEffect(() => {
     if (open) setForm(initial());
   }, [open, work.version]);
@@ -63,6 +66,7 @@ export function EditWorkDialog({
         // 主管担当を外すときは空文字（application で「なし」に戻す）
         ownerTeamId: form.ownerTeam[0] ?? "",
         productionTeamIds: form.productionTeamIds,
+        ...(form.mediaType === "sns" ? { socialProfileId: form.socialProfileId || null } : {}),
         ...(form.legacyId ? { legacyId: form.legacyId } : {}),
         ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       },
@@ -112,6 +116,18 @@ export function EditWorkDialog({
             value={form.deadlineAt}
             onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
           />
+          {form.mediaType === "sns" ? (
+            <Field label="SNS アカウント" hint="管理 › SNS アカウントで登録したもの">
+              <Select value={form.socialProfileId} onChange={set("socialProfileId")}>
+                <option value="">未設定</option>
+                {(profiles ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {socialPlatformLabels[p.platform]} @{p.username}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
         </div>
         <div className="form">
           <TeamSelect

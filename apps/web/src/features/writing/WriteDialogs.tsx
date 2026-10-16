@@ -1,8 +1,7 @@
 import { countText } from "@mf100/domain";
 import { useEffect, useState } from "react";
-import { DataTable } from "@/ui/DataTable";
 import { Field, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eSwitch } from "@/ui/m3e";
+import { M3eButton, M3eDialog, M3eList, M3eListItem, M3eSwitch } from "@/ui/m3e";
 
 /** リンクの挿入・編集（Ctrl+K）。M3 Dialogs: 操作は 2 つまで。URL を空にして適用するとリンクを外す */
 export function LinkDialog({
@@ -107,46 +106,31 @@ export function WordCountDialog({
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる">
       <span slot="header">文字カウント</span>
       <div className="dialog-body">
-        <DataTable
-          label="文字カウント"
-          className="count-table"
-          rows={rows}
-          rowKey={([, k]) => k}
-          columns={[
-            {
-              key: "label",
-              header: <span className="sr-only">項目</span>,
-              rowHeader: true,
-              cell: ([label]) => label,
-            },
-            ...(sel
-              ? [
-                  {
-                    key: "sel",
-                    header: "選択範囲",
-                    numeric: true,
-                    cell: ([, k]: (typeof rows)[number]) => sel[k].toLocaleString("ja-JP"),
-                  },
-                ]
-              : []),
-            {
-              key: "all",
-              header: "文書全体",
-              numeric: true,
-              cell: ([, k]) => all[k].toLocaleString("ja-JP"),
-            },
-          ]}
-        />
-        <label className="switch-row">
-          <M3eSwitch
-            checked={live}
-            onChange={(e: Event) =>
-              onLive((e.target as HTMLInputElement & { checked: boolean }).checked)
-            }
-            aria-label="入力中に文字カウントを表示"
-          />
-          <span>入力中に文字カウントを表示</span>
-        </label>
+        {/* M3 に表は無いので、項目と数を M3 のリストで並べる（数は行の末尾。選択中は 2 行目に選択範囲の数） */}
+        <M3eList className="list count-list" aria-label="文字カウント">
+          {rows.map(([label, k]) => (
+            <M3eListItem key={k} className="list__item">
+              {label}
+              {sel ? (
+                <span slot="supporting-text">選択範囲 {sel[k].toLocaleString("ja-JP")}</span>
+              ) : null}
+              <span slot="trailing" className="count-list__value">
+                {all[k].toLocaleString("ja-JP")}
+              </span>
+            </M3eListItem>
+          ))}
+          <M3eListItem className="list__item">
+            入力中に文字カウントを表示
+            <M3eSwitch
+              slot="trailing"
+              checked={live}
+              onChange={(e: Event) =>
+                onLive((e.target as HTMLInputElement & { checked: boolean }).checked)
+              }
+              aria-label="入力中に文字カウントを表示"
+            />
+          </M3eListItem>
+        </M3eList>
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="filled" onClick={onClose}>
