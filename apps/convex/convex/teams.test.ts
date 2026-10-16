@@ -1,4 +1,4 @@
-import { groupWorksByTeam, parseTeamCsv, teamCsvTemplate } from "@mf100/domain";
+import { parseTeamCsv, teamCsvTemplate, workBelongsToTeam, workTeamIds } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -108,8 +108,11 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
       productionTeamIds: [id("デザイン担当"), id("SNS担当")],
       creators: ["creator"],
     });
-    const groups = groupWorksByTeam([row!], list, "production");
-    expect(groups[0]!.teams.map((g) => g.team?.name)).toEqual(["デザイン担当", "SNS担当"]);
+    // 制作担当のどちらで絞っても出る（主管担当はデザイン担当だけ）
+    expect(
+      ["デザイン担当", "SNS担当"].map((n) => workBelongsToTeam(row!, list, "production", id(n))),
+    ).toEqual([true, true]);
+    expect(workBelongsToTeam(row!, list, "owner", id("SNS担当"))).toBe(false);
     // 主管担当を外す（空文字）
     await cast.manager.as.mutation(api.works.update, {
       workId,
@@ -158,18 +161,13 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
     expect(teams.map((x) => x.name).sort(byText)).toEqual(
       ["広報局", "デザイン担当", "SNS担当", "Web担当", "総務局", "渉外担当", "企画局"].sort(byText),
     );
-    const owner = groupWorksByTeam(
-      works,
-      teams.map((x) => ({ ...x, id: x._id as string })),
-      "owner",
-    );
-    expect(owner.map((g) => g.bureau?.name ?? null)).toEqual(["広報局", null]);
-    const production = groupWorksByTeam(
-      works,
-      teams.map((x) => ({ ...x, id: x._id as string })),
-      "production",
-    );
-    const design = production[0]!.teams.find((g) => g.team?.name === "デザイン担当")!;
-    expect(design.works.map((w) => w.legacyId ?? "").sort(byText)).toEqual(["PR-001", "WEB-003"]);
+    const list = teams.map((x) => ({ ...x, id: x._id as string }));
+    const pr = list.find((x) => x.name === "広報局")!;
+    // 主管担当が広報局（の担当）の制作物と、担当未設定の制作物がある
+    expect(works.some((w) => workBelongsToTeam(w, list, "owner", pr.id))).toBe(true);
+    expect(works.some((w) => workTeamIds(w, "owner").length === 0)).toBe(true);
+    const designTeam = list.find((x) => x.name === "デザイン担当" && x.parentId === pr.id)!;
+    const design = works.filter((w) => workBelongsToTeam(w, list, "production", designTeam.id));
+    expect(design.map((w) => w.legacyId ?? "").sort(byText)).toEqual(["PR-001", "WEB-003"]);
   });
 });

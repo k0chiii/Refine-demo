@@ -162,80 +162,74 @@ export function matchTeam(ref: string, teams: readonly Team[]): TeamMatch {
 
 export type WorkTeamAxis = "owner" | "production";
 
-export interface WorkTeamGroup<W> {
-  /** null = 担当未設定（担当が無い、またはもう無い ID を指している） */
-  bureau: Team | null;
-  /** team が null = 局そのもの（局の直下）に割り当てた制作物。未設定のまとまりでは {team: null} が 1 つだけ */
-  teams: { team: Team | null; works: W[] }[];
-  /** このまとまりの制作物の数（同じ制作物は 1 つと数える） */
-  count: number;
+interface WorkTeams {
+  ownerTeamId?: string | null;
+  productionTeamIds: readonly string[];
+}
+
+/** 制作物の主管担当（1 つ）か制作担当（複数）の ID。重なりは除く */
+export function workTeamIds(work: WorkTeams, axis: WorkTeamAxis): string[] {
+  return axis === "owner"
+    ? work.ownerTeamId
+      ? [work.ownerTeamId]
+      : []
+    : Array.from(new Set(work.productionTeamIds));
 }
 
 /**
- * 制作物を局 › 担当で入れ子にまとめる（制作物一覧の「担当別」表示）。
- * - 局は sortTeams の順、局の中は「局の直下」→ 担当（並び順）の順。制作物の無いまとまりは出さない。未設定は最後
- * - axis "owner": 主管担当（ownerTeamId）で。制作物はどこか 1 か所に出る
- * - axis "production": 制作担当（productionTeamIds）で。複数の担当の制作物はそれぞれに出る。1 つも無ければ未設定
- * - 担当の中の並びは入力の順のまま
+ * 制作物一覧の担当での絞り込み（利用者決定 2026-10-16: 一覧は入れ子にせずに並べ、絞り込み・並べ替えで担当を使う）。
+ * 担当を選ぶとその担当の制作物、局を選ぶとその局そのもの（局の直下）とその局の担当の制作物。
+ * 主管担当は 1 つ、制作担当はどれか 1 つが当たればよい。知らない ID を選んだら何も当たらない。
  */
-export function groupWorksByTeam<
-  W extends { ownerTeamId?: string | null; productionTeamIds: readonly string[] },
->(works: readonly W[], teams: readonly Team[], axis: WorkTeamAxis): WorkTeamGroup<W>[] {
+export function workBelongsToTeam(
+  work: WorkTeams,
+  teams: readonly Team[],
+  axis: WorkTeamAxis,
+  teamId: string,
+): boolean {
   const byId = new Map(teams.map((t) => [t.id, t]));
-  /** 局の ID → （担当の ID か局の直下 "" → 制作物） */
-  const buckets = new Map<string, Map<string, W[]>>();
-  const unassigned: W[] = [];
-  const put = (bureauId: string, slot: string, work: W) => {
-    let slots = buckets.get(bureauId);
-    if (!slots) buckets.set(bureauId, (slots = new Map()));
-    const list = slots.get(slot) ?? [];
-    if (!list.includes(work)) list.push(work);
-    slots.set(slot, list);
+  const picked = byId.get(teamId);
+  if (!picked) return false;
+  return workTeamIds(work, axis).some((id) => {
+    if (id === teamId) return true;
+    return picked.kind === "bureau" && byId.get(id)?.parentId === teamId;
+  });
+}
+
+/** 制作物一覧の並べ替え: 校正の締切・納期（近い順。無いものは後ろ）・題名・主管担当・制作担当（組織の並び順。未設定は後ろ） */
+export type WorkSortKey = "accepting" | "deadline" | "title" | "owner" | "production";
+
+/**
+ * 制作物一覧を並べ替える（新しい配列を返す）。同じ順位のものは 校正の締切 → 題名 の順。
+ * 担当での並べ替えは sortTeams の順（局 → その局の担当）。制作担当が複数あれば、いちばん上の担当の位置で並べる。
+ */
+export function sortWorks<
+  W extends WorkTeams & {
+    title: string;
+    acceptingDeadlineAt?: number | null;
+    deadlineAt?: number | null;
+  },
+>(works: readonly W[], teams: readonly Team[], key: WorkSortKey): W[] {
+  const rank = new Map(sortTeams(teams).map((t, i) => [t.id, i]));
+  const teamRank = (w: W, axis: WorkTeamAxis) =>
+    Math.min(Infinity, ...workTeamIds(w, axis).map((id) => rank.get(id) ?? Infinity));
+  const near = (a?: number | null, b?: number | null) => (a ?? Infinity) - (b ?? Infinity) || 0;
+  const tie = (a: W, b: W) =>
+    near(a.acceptingDeadlineAt, b.acceptingDeadlineAt) || a.title.localeCompare(b.title, "ja");
+  const primary = (a: W, b: W): number => {
+    switch (key) {
+      case "deadline":
+        return near(a.deadlineAt, b.deadlineAt);
+      case "title":
+        return a.title.localeCompare(b.title, "ja");
+      case "owner":
+      case "production":
+        return teamRank(a, key) - teamRank(b, key) || 0;
+      default:
+        return 0;
+    }
   };
-  for (const work of works) {
-    const ids =
-      axis === "owner"
-        ? work.ownerTeamId
-          ? [work.ownerTeamId]
-          : []
-        : Array.from(new Set(work.productionTeamIds));
-    let placed = false;
-    for (const id of ids) {
-      const team = byId.get(id);
-      if (!team) continue;
-      if (team.kind === "bureau") {
-        put(team.id, "", work);
-        placed = true;
-      } else if (team.parentId !== undefined && byId.get(team.parentId)?.kind === "bureau") {
-        put(team.parentId, team.id, work);
-        placed = true;
-      }
-    }
-    if (!placed) unassigned.push(work);
-  }
-  const out: WorkTeamGroup<W>[] = [];
-  for (const bureau of sortTeams(teams)) {
-    if (bureau.kind !== "bureau") continue;
-    const slots = buckets.get(bureau.id);
-    if (!slots) continue;
-    const entries: { team: Team | null; works: W[] }[] = [];
-    const direct = slots.get("");
-    if (direct?.length) entries.push({ team: null, works: direct });
-    for (const team of sortTeams(teams)) {
-      if (team.kind !== "team" || team.parentId !== bureau.id) continue;
-      const list = slots.get(team.id);
-      if (list?.length) entries.push({ team, works: list });
-    }
-    if (!entries.length) continue;
-    out.push({ bureau, teams: entries, count: new Set(entries.flatMap((e) => e.works)).size });
-  }
-  if (unassigned.length)
-    out.push({
-      bureau: null,
-      teams: [{ team: null, works: unassigned }],
-      count: unassigned.length,
-    });
-  return out;
+  return [...works].sort((a, b) => primary(a, b) || tie(a, b));
 }
 
 // ---- CSV での取り込み ----

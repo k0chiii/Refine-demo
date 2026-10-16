@@ -1255,41 +1255,42 @@ m3e-dialog [slot="actions"] {
   padding: 0 0 16px;
 }
 
-/* ---------- 制作物一覧の入れ子（局 › 担当。PC もスマホも M3E のリスト。利用者決定 2026-10-15・16） */
+/* ---------- 制作物一覧（入れ子にせず 1 本のリスト。絞り込み・並べ替えはチップ＋メニュー。利用者決定 2026-10-16） */
 .works__controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
-  justify-content: space-between;
+  gap: 8px;
   /* 一覧を操作する部品は一覧の直上に置き、一覧とは 16dp 空ける（M3 の余白の刻み） */
   margin-bottom: 16px;
 }
-/* スマホ: 状態のチップと「主管担当 ▾」を 1 行に。収まらない幅では折り返さず横にスクロールする（M3 Chips） */
+.works__teams {
+  display: flex;
+  gap: 8px;
+}
+/* 並べ替えは右端（PC） */
+.works__sort {
+  margin-inline-start: auto;
+}
+/* スマホ: チップを 1 行に。収まらない幅では折り返さず横にスクロールする（M3 Chips） */
 @media (max-width: 599px) {
   .works__controls {
     flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 8px;
     overflow-x: auto;
     scrollbar-width: none;
     margin-inline: -16px;
     padding-inline: 16px;
   }
-  .works__controls > * {
+  .works__controls > *,
+  .works__filters {
     flex: none;
+    flex-wrap: nowrap;
   }
-}
-/* 担当の項目と、その下の制作物を字下げ（M3E list item の先頭余白） */
-.works-team-list__team {
-  --m3e-list-item-leading-space: 32px;
-}
-.works-team-list__team [slot="items"] > m3e-list-action,
-.works-team-list__bureau > [slot="items"] > m3e-list-action {
-  --m3e-list-item-leading-space: 32px;
-}
-.works-team-list__team [slot="items"] > m3e-list-action {
-  --m3e-list-item-leading-space: 56px;
+  /* 並べ替えは横スクロールで隠れないよう先頭に */
+  .works__sort {
+    order: -1;
+    margin-inline-start: 0;
+  }
 }
 
 /* ---------- 管理 › 担当 */

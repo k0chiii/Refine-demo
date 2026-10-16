@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  groupWorksByTeam,
   matchTeam,
   parseTeamCsv,
   parseWorkCsv,
   planTeamImport,
   resolveWorkImport,
   sortTeams,
+  sortWorks,
   TEAM_NAME_MAX,
   teamCsvTemplate,
   teamPath,
   validateTeam,
+  workBelongsToTeam,
   workCsvTemplate,
   type Team,
 } from "../index.ts";
@@ -142,66 +143,79 @@ describe("並び・経路・照合", () => {
   });
 });
 
-describe("制作物を担当別にまとめる", () => {
-  const w = (title: string, ownerTeamId: string | null, productionTeamIds: string[]) => ({
-    title,
-    ownerTeamId,
-    productionTeamIds,
-  });
+describe("制作物一覧の担当での絞り込み・並べ替え", () => {
+  const w = (
+    title: string,
+    ownerTeamId: string | null,
+    productionTeamIds: string[],
+    acceptingDeadlineAt: number | null = null,
+    deadlineAt: number | null = null,
+  ) => ({ title, ownerTeamId, productionTeamIds, acceptingDeadlineAt, deadlineAt });
   const works = [
-    w("パンフレット", "design", ["design"]),
-    w("公式サイト", "web", ["web", "design"]),
-    w("ポスター", null, []),
-    w("局の案内", "pr", []),
-    w("Instagram", "sns", ["sns"]),
-    w("消えた担当", "deleted", ["deleted"]),
-    w("渉外資料", "shogai", ["shogai", "deleted"]),
+    w("パンフレット", "design", ["design"], 30, 300),
+    w("公式サイト", "web", ["web", "design"], 10, null),
+    w("ポスター", null, [], null, 100),
+    w("局の案内", "pr", [], 20, 200),
+    w("Instagram", "sns", ["sns"], null, null),
+    w("消えた担当", "deleted", ["deleted"], 40, 50),
+    w("渉外資料", "shogai", ["shogai", "deleted"], null, 400),
   ];
-  const shape = (groups: ReturnType<typeof groupWorksByTeam<(typeof works)[number]>>) =>
-    groups.map((g) => ({
-      bureau: g.bureau?.name ?? null,
-      count: g.count,
-      teams: g.teams.map((x) => [x.team?.name ?? null, x.works.map((y) => y.title)]),
-    }));
+  const titles = (list: readonly { title: string }[]) => list.map((x) => x.title);
+  const only = (axis: "owner" | "production", id: string) =>
+    titles(works.filter((x) => workBelongsToTeam(x, teams, axis, id)));
 
-  it("主管担当で: 局の直下が先、担当は並び順、未設定（もう無い ID を含む）は最後", () => {
-    expect(shape(groupWorksByTeam(works, teams, "owner"))).toEqual([
-      {
-        bureau: "広報局",
-        count: 4,
-        teams: [
-          [null, ["局の案内"]],
-          ["デザイン担当", ["パンフレット"]],
-          ["SNS担当", ["Instagram"]],
-          ["Web担当", ["公式サイト"]],
-        ],
-      },
-      { bureau: "総務局", count: 1, teams: [["渉外担当", ["渉外資料"]]] },
-      { bureau: null, count: 2, teams: [[null, ["ポスター", "消えた担当"]]] },
-    ]);
+  it("担当を選ぶとその担当、局を選ぶと局の直下とその局の担当の制作物", () => {
+    expect(only("owner", "design")).toEqual(["パンフレット"]);
+    expect(only("owner", "pr")).toEqual(["パンフレット", "公式サイト", "局の案内", "Instagram"]);
+    expect(only("production", "design")).toEqual(["パンフレット", "公式サイト"]);
+    expect(only("production", "soumu")).toEqual(["渉外資料"]);
+    expect(only("owner", "kikaku")).toEqual([]);
+    expect(only("owner", "deleted")).toEqual([]);
   });
 
-  it("制作担当で: 複数の担当の制作物はそれぞれに出て、局の数は重ねて数えない", () => {
-    expect(shape(groupWorksByTeam(works, teams, "production"))).toEqual([
-      {
-        bureau: "広報局",
-        count: 3,
-        teams: [
-          ["デザイン担当", ["パンフレット", "公式サイト"]],
-          ["SNS担当", ["Instagram"]],
-          ["Web担当", ["公式サイト"]],
-        ],
-      },
-      { bureau: "総務局", count: 1, teams: [["渉外担当", ["渉外資料"]]] },
-      { bureau: null, count: 3, teams: [[null, ["ポスター", "局の案内", "消えた担当"]]] },
+  it("校正の締切・納期は近い順で無いものは後ろ、同じなら 校正の締切 → 題名", () => {
+    expect(titles(sortWorks(works, teams, "accepting"))).toEqual([
+      "公式サイト",
+      "局の案内",
+      "パンフレット",
+      "消えた担当",
+      "Instagram",
+      "ポスター",
+      "渉外資料",
     ]);
+    expect(titles(sortWorks(works, teams, "deadline"))).toEqual([
+      "消えた担当",
+      "ポスター",
+      "局の案内",
+      "パンフレット",
+      "渉外資料",
+      "公式サイト",
+      "Instagram",
+    ]);
+    expect(titles(sortWorks(works, teams, "title"))).toEqual(
+      titles(works).sort((a, b) => a.localeCompare(b, "ja")),
+    );
   });
 
-  it("組織が無ければ全部が未設定、制作物が無ければ空", () => {
-    expect(shape(groupWorksByTeam(works, [], "owner"))).toEqual([
-      { bureau: null, count: works.length, teams: [[null, works.map((x) => x.title)]] },
+  it("担当で並べると組織の並び順（局 → その局の担当）。制作担当はいちばん上の担当、未設定は後ろ", () => {
+    expect(titles(sortWorks(works, teams, "owner"))).toEqual([
+      "局の案内",
+      "パンフレット",
+      "Instagram",
+      "公式サイト",
+      "渉外資料",
+      "消えた担当",
+      "ポスター",
     ]);
-    expect(groupWorksByTeam([], teams, "production")).toEqual([]);
+    expect(titles(sortWorks(works, teams, "production"))).toEqual([
+      "公式サイト",
+      "パンフレット",
+      "Instagram",
+      "渉外資料",
+      "局の案内",
+      "消えた担当",
+      "ポスター",
+    ]);
   });
 });
 

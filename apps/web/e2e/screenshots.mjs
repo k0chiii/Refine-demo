@@ -169,22 +169,34 @@ async function main() {
   await page.locator(`m3e-expansion-panel [slot="header"]`).first().click();
   await shot("01-signin");
 
-  // 02 制作物一覧（制作者）: 「局 › 担当」の入れ子のリスト（主管担当ごと）。02b は制作担当ごと（同じ制作物が複数の担当の下に出る）
+  // 02 制作物一覧（制作者）: 入れ子にせず 1 本のリスト。02b は制作担当で絞り込み、主管担当順に並べ替えたところ
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
-  await page.waitForSelector(".works-team-list__bureau");
+  await page.waitForSelector(WORKS_ENTRY);
   await shot("02-works-list");
   const siteRows = () => page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).count();
-  expectTrue((await siteRows()) === 1, "主管担当ごとの一覧で、制作物が 1 か所にない");
-  await page.locator(".works__axis m3e-button", { hasText: "制作担当" }).click();
-  await page.waitForURL(/by=production/);
+  expectTrue((await siteRows()) === 1, "制作物一覧で、制作物が 1 か所にない");
+  const allRows = await page.locator(WORKS_ENTRY).count();
+  await page.locator(".works__team--production").click();
   await page.waitForTimeout(400);
+  await page
+    .locator("#works-production-menu m3e-menu-item-radio", { hasText: "広報局 › デザイン担当" })
+    .click();
+  await page.waitForURL(/production=/);
+  await page.waitForTimeout(400);
+  const designRows = await page.locator(WORKS_ENTRY).count();
   expectTrue(
-    (await siteRows()) === 2,
-    "制作担当ごとの一覧で、制作担当 2 つの制作物が 2 か所に出ない",
+    (await siteRows()) === 1 && designRows < allRows,
+    "制作担当で絞り込んでも、その担当の制作物だけにならない",
   );
-  await shot("02b-works-production");
-  await page.locator(".works__axis m3e-button", { hasText: "主管担当" }).click();
+  await page.locator(".works__sort").click();
+  await page.waitForTimeout(400);
+  await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "主管担当順" }).click();
+  await page.waitForURL(/sort=owner/);
+  await page.waitForTimeout(400);
+  await shot("02b-works-filtered");
+  await go(`${BASE}/works`);
+  await page.waitForSelector(WORKS_ENTRY);
   // 22 アカウントメニュー（右上のアバター）
   await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
   await page.waitForTimeout(500);

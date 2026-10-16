@@ -1,14 +1,20 @@
 import { api } from "@mf100/convex/api";
+import {
+  sortTeams,
+  sortWorks,
+  workBelongsToTeam,
+  type Team,
+  type WorkSortKey,
+} from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { M3eFilterChipElement } from "@m3e/web/chips";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
-import { WorksByTeam } from "@/features/work/WorksByTeam";
+import { WorksList } from "@/features/work/WorksList";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import {
   M3eFilterChip,
   M3eFilterChipSet,
@@ -20,28 +26,45 @@ import {
   M3eMenuTrigger,
 } from "@/ui/m3e";
 
+type TeamAxis = "owner" | "production";
+const SORT_KEYS = ["accepting", "deadline", "title", "owner", "production"] as const;
+const sortLabel: Record<WorkSortKey, string> = {
+  accepting: "校正の締切順",
+  deadline: "納期順",
+  title: "題名順",
+  owner: "主管担当順",
+  production: "制作担当順",
+};
+const axisLabel: Record<TeamAxis, string> = { owner: "主管担当", production: "制作担当" };
+
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (
     s: Record<string, unknown>,
-  ): { q?: string; new?: boolean; by?: "production" } => ({
+  ): { q?: string; new?: boolean; owner?: string; production?: string; sort?: WorkSortKey } => ({
     ...(typeof s.q === "string" && s.q ? { q: s.q } : {}),
     ...(s.new === true || s.new === "true" ? { new: true } : {}),
-    ...(s.by === "production" ? { by: "production" as const } : {}),
+    ...(typeof s.owner === "string" && s.owner ? { owner: s.owner } : {}),
+    ...(typeof s.production === "string" && s.production ? { production: s.production } : {}),
+    ...(SORT_KEYS.includes(s.sort as WorkSortKey) && s.sort !== "accepting"
+      ? { sort: s.sort as WorkSortKey }
+      : {}),
   }),
   component: Works,
 });
 
 /**
  * U-02 制作物一覧。探して開くだけの入口。行を押すとエディタ（最新版）が開く。
- * 「局 › 担当」の入れ子で出し、主管担当／制作担当のどちらの下に並べるかを切り替える（`by`。既定は主管担当。
- * 利用者決定 2026-10-15）。PC もスマホも M3E の入れ子のリスト（WorksByTeam。M3 に表の部品が無いので揃えた。利用者決定 2026-10-16）。
+ * 入れ子にせずに 1 本のリストで並べ、主管担当・制作担当は絞り込み（`owner`・`production`）と並べ替え（`sort`）で使う
+ * （利用者決定 2026-10-16。既定は校正の締切が近い順）。絞り込み・並べ替えは M3 のチップ＋メニュー（M3 Chips）。
+ * PC もスマホも M3E のリスト（M3 に表の部品が無いので揃えた。利用者決定 2026-10-16）。
  * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、FAB は「版を提出」に譲り、1 件ずつの登録は
  * 登録の権限（Nogiku の組織権限 works:create）のある人にだけ、アプリバーの操作として出す（ダイアログは `?new=1`）。
  * 検索語は `q` で渡る（検索バーは一旦外している）。見出し「制作物一覧」は共通アプリバーに差し込む（M3 App bars）。
  */
 function Works() {
-  const { q, new: creating, by } = Route.useSearch();
-  const axis = by ?? "owner";
+  const search = Route.useSearch();
+  const { q, new: creating } = search;
+  const sort = search.sort ?? "accepting";
   const navigate = useNavigate();
   const me = useQuery(api.me.me, {});
   const teams = useQuery(api.teams.list, {});
@@ -49,12 +72,14 @@ function Works() {
   const compact = useWindowClass() === "compact";
   // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
   const canRegister = !compact;
-  const setAxis = (next: "owner" | "production") =>
+  const setSearch = (patch: { owner?: string; production?: string; sort?: WorkSortKey }) =>
     void navigate({
       to: "/works",
       search: (s) => {
-        const { by: _drop, ...rest } = s;
-        return next === "production" ? { ...rest, by: "production" as const } : rest;
+        const next: Record<string, unknown> = { ...s, ...patch };
+        for (const k of Object.keys(patch))
+          if (!next[k] || (k === "sort" && next[k] === "accepting")) delete next[k];
+        return next as typeof s;
       },
       replace: true,
     });
@@ -62,6 +87,21 @@ function Works() {
     ...(q ? { text: q } : {}),
     ...(lifecycle ? { lifecycle: lifecycle as "active" } : {}),
   });
+  const hasTeams = teams !== undefined && teams.length > 0;
+  const owner = hasTeams ? search.owner : undefined;
+  const production = hasTeams ? search.production : undefined;
+  const effectiveSort: WorkSortKey =
+    !hasTeams && (sort === "owner" || sort === "production") ? "accepting" : sort;
+  const shown = useMemo(() => {
+    if (!works || !teams) return undefined;
+    const picked = works.filter(
+      (w) =>
+        (!owner || workBelongsToTeam(w, teams, "owner", owner)) &&
+        (!production || workBelongsToTeam(w, teams, "production", production)),
+    );
+    return sortWorks(picked, teams, effectiveSort);
+  }, [works, teams, owner, production, effectiveSort]);
+  const filtered = Boolean(lifecycle || owner || production);
   const setCreating = (on: boolean) =>
     void navigate({
       to: "/works",
@@ -98,36 +138,60 @@ function Works() {
             </M3eFilterChip>
           ))}
         </M3eFilterChipSet>
-        {teams && teams.length > 0 && compact ? (
-          <AxisChip axis={axis} onChange={setAxis} />
-        ) : teams && teams.length > 0 ? (
-          <ChoiceGroup
-            label="並べる担当"
-            className="works__axis"
-            value={axis}
-            onChange={setAxis}
-            choices={[
-              { value: "owner", label: "主管担当" },
-              { value: "production", label: "制作担当" },
-            ]}
-          />
+        {hasTeams ? (
+          // 状態のチップとは別のまとまり。M3E の filter chip set は 1 つしか選べないか（radiogroup）、multi にすると
+          // 持てない属性（aria-allowed-attr）が付くので、ただの group にする（チップはメニューを開くボタン）
+          <div role="group" aria-label="担当で絞り込み" className="works__filters works__teams">
+            {(["owner", "production"] as const).map((axis) => (
+              <TeamFilterChip
+                key={axis}
+                axis={axis}
+                teams={teams}
+                value={axis === "owner" ? owner : production}
+                onChange={(id) => setSearch({ [axis]: id })}
+              />
+            ))}
+          </div>
         ) : null}
+        <MenuChip
+          id="works-sort-menu"
+          className="works__sort"
+          icon="sort"
+          label={sortLabel[effectiveSort]}
+          ariaLabel={`並べ替え: ${sortLabel[effectiveSort]}（変える）`}
+          active={false}
+        >
+          <M3eMenuItemGroup aria-label="並べ替え">
+            {SORT_KEYS.filter((k) => hasTeams || (k !== "owner" && k !== "production")).map((k) => (
+              <M3eMenuItemRadio
+                key={k}
+                checked={effectiveSort === k}
+                onClick={() => setSearch({ sort: k })}
+              >
+                {sortLabel[k]}
+              </M3eMenuItemRadio>
+            ))}
+          </M3eMenuItemGroup>
+        </MenuChip>
       </div>
-      {works === undefined || teams === undefined ? (
+      {shown === undefined || teams === undefined ? (
         <p className="muted">読み込み中…</p>
-      ) : works.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="empty">
           {q
             ? `「${q}」に一致する制作物はありません`
-            : canRegister && !lifecycle
-              ? "制作物がありません。「制作物を登録」から登録できます。"
-              : "制作物がありません"}
+            : filtered
+              ? "条件に合う制作物はありません"
+              : canRegister
+                ? "制作物がありません。「制作物を登録」から登録できます。"
+                : "制作物がありません"}
         </div>
       ) : (
-        <WorksByTeam
-          works={works}
+        <WorksList
+          works={shown}
           teams={teams}
-          axis={axis}
+          sort={effectiveSort}
+          teamAxis={production ? "production" : owner ? "owner" : null}
           compact={compact}
           onOpen={(workId) => void navigate({ to: "/works/$workId", params: { workId } })}
         />
@@ -140,20 +204,68 @@ function Works() {
   );
 }
 
-const axisLabel = { owner: "主管担当", production: "制作担当" } as const;
-
 /**
- * スマホの「主管担当／制作担当」: 状態のチップと 1 行に収めるため、選んでいる方を名前にしたチップを押すとメニューで選ぶ
- * （M3 Chips: 絞り込みのチップは末尾のアイコンからメニューを開ける。compact はチップ全体で開く）。
- * M3E の filter chip は押すと選択が反転するので、押した後に戻す（並べ方の切り替えで、絞り込みのオン・オフではない）。
- * 読み上げでは「メニューを開くボタン」にする（M3E は radio にするが、radio には aria-expanded を付けられない）
+ * 主管担当・制作担当での絞り込み: チップを押すとメニューで局・担当を選ぶ（M3 Chips: 絞り込みのチップからメニューを開ける）。
+ * 選んでいる間はチップを選択中にし、名前をチップに出す。局を選ぶと、その局の担当の制作物も出る（domain の workBelongsToTeam）
  */
-function AxisChip({
+function TeamFilterChip({
   axis,
+  teams,
+  value,
   onChange,
 }: {
-  axis: "owner" | "production";
-  onChange: (next: "owner" | "production") => void;
+  axis: TeamAxis;
+  teams: readonly Team[];
+  value: string | undefined;
+  onChange: (teamId: string | undefined) => void;
+}) {
+  const picked = value ? teams.find((t) => t.id === value) : undefined;
+  const short = axis === "owner" ? "主管" : "制作";
+  return (
+    <MenuChip
+      id={`works-${axis}-menu`}
+      className={`works__team works__team--${axis}`}
+      label={picked ? `${short}: ${picked.name}` : axisLabel[axis]}
+      ariaLabel={`${axisLabel[axis]}で絞り込み: ${picked ? picked.name : "指定なし"}（変える）`}
+      active={picked !== undefined}
+    >
+      <M3eMenuItemGroup aria-label={axisLabel[axis]}>
+        <M3eMenuItemRadio checked={!picked} onClick={() => onChange(undefined)}>
+          指定しない
+        </M3eMenuItemRadio>
+        {sortTeams(teams).map((t) => (
+          <M3eMenuItemRadio key={t.id} checked={picked?.id === t.id} onClick={() => onChange(t.id)}>
+            {t.kind === "bureau"
+              ? `${t.name}（局全体）`
+              : `${teams.find((b) => b.id === t.parentId)?.name ?? ""} › ${t.name}`}
+          </M3eMenuItemRadio>
+        ))}
+      </M3eMenuItemGroup>
+    </MenuChip>
+  );
+}
+
+/**
+ * メニューを開くチップ（並べ替え・担当での絞り込み）。末尾に ▾ を付け、チップ全体でメニューを開く（M3 Chips）。
+ * M3E の filter chip は押すと選択が反転するので、押した後に `active`（絞り込み中か）へ戻す。
+ * 読み上げでは「メニューを開くボタン」にする（M3E は radio にするが、radio には aria-expanded を付けられない）
+ */
+function MenuChip({
+  id,
+  className,
+  icon,
+  label,
+  ariaLabel,
+  active,
+  children,
+}: {
+  id: string;
+  className: string;
+  icon?: string;
+  label: string;
+  ariaLabel: string;
+  active: boolean;
+  children: ReactNode;
 }) {
   const ref = useRef<M3eFilterChipElement>(null);
   useEffect(() => {
@@ -168,31 +280,28 @@ function AxisChip({
     mo.observe(chip, { attributes: true, attributeFilter: ["role", "aria-checked"] });
     return () => mo.disconnect();
   }, []);
+  useEffect(() => {
+    if (ref.current) ref.current.selected = active;
+  }, [active]);
   return (
     <>
       <M3eFilterChip
         ref={ref}
-        className="works__axis-chip"
-        aria-label={`並べる担当: ${axisLabel[axis]}（変える）`}
+        className={className}
+        selected={active}
+        aria-label={ariaLabel}
         onClick={() =>
           requestAnimationFrame(() => {
-            if (ref.current) ref.current.selected = false;
+            if (ref.current) ref.current.selected = active;
           })
         }
       >
-        {axisLabel[axis]}
+        {icon ? <M3eIcon slot="icon" name={icon} /> : null}
+        {label}
         <M3eIcon slot="trailing-icon" name="arrow_drop_down" />
-        <M3eMenuTrigger htmlFor="works-axis-menu" />
+        <M3eMenuTrigger htmlFor={id} />
       </M3eFilterChip>
-      <M3eMenu id="works-axis-menu">
-        <M3eMenuItemGroup aria-label="並べる担当">
-          {(["owner", "production"] as const).map((k) => (
-            <M3eMenuItemRadio key={k} checked={axis === k} onClick={() => onChange(k)}>
-              {axisLabel[k]}
-            </M3eMenuItemRadio>
-          ))}
-        </M3eMenuItemGroup>
-      </M3eMenu>
+      <M3eMenu id={id}>{children}</M3eMenu>
     </>
   );
 }
