@@ -6,13 +6,14 @@ import {
   type Viewport,
 } from "@mf100/domain";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { haptic } from "@/lib/haptics";
 
 /** タッチで範囲選択を始めるまでの長押しの時間と、長押しとみなす指のぶれの上限 */
-export const LONG_PRESS_MS = 450;
+export const LONG_PRESS_MS = 320;
 const LONG_PRESS_SLOP = 10;
 /** 長押しの手応え: 指が触れてからこの時間だけ待って、指の周りの輪を満たし始める（スクロールのたびに輪が出ないように） */
-const CHARGE_DELAY_MS = 100;
+const CHARGE_DELAY_MS = 80;
 /** 指の周りの輪の半径（指先に隠れず、外にはみ出して見える大きさ） */
 const CHARGE_R = 56;
 
@@ -80,7 +81,10 @@ export function AnchorOverlay({
     timer: number;
     armed: boolean;
   } | null>(null);
-  /** 長押しの輪（満ちていく途中）と、満ちた瞬間に弾ける輪。key で描き直してアニメーションを始めからにする */
+  /**
+   * 長押しの輪（満ちていく途中）と、満ちた瞬間に弾ける輪。key で描き直してアニメーションを始めからにする。
+   * 位置は画面の座標（clientX/Y）。紙面の枠で切れないよう、紙面の外の画面全体の層に描く（下の createPortal）
+   */
   const [charge, setCharge] = useState<{ x: number; y: number; key: number } | null>(null);
   const [pop, setPop] = useState<{ x: number; y: number; key: number } | null>(null);
   const clearPress = () => {
@@ -137,7 +141,7 @@ export function AnchorOverlay({
       }
       clearPress();
       const id = e.pointerId;
-      setCharge({ ...p, key: e.timeStamp });
+      setCharge({ x: e.clientX, y: e.clientY, key: e.timeStamp });
       press.current = {
         id,
         cx: e.clientX,
@@ -155,7 +159,7 @@ export function AnchorOverlay({
           }
           haptic();
           setCharge(null);
-          setPop({ x: cur.x, y: cur.y, key: Date.now() });
+          setPop({ x: cur.cx, y: cur.cy, key: Date.now() });
           setDrag({ x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y });
         }, LONG_PRESS_MS),
       };
@@ -214,7 +218,7 @@ export function AnchorOverlay({
 
   const visible = threads.filter((t) => (filterPage ? filterPage(t.anchor) : true));
 
-  return (
+  const overlay = (
     <svg
       ref={svgRef}
       className="viewer__overlay"
@@ -334,34 +338,48 @@ export function AnchorOverlay({
           height={Math.abs(drag.y1 - drag.y0)}
         />
       ) : null}
-      {charge ? (
-        <g
-          key={charge.key}
-          className="press-charge"
-          transform={`translate(${charge.x} ${charge.y})`}
-          style={
-            {
-              "--press-delay": `${CHARGE_DELAY_MS}ms`,
-              "--press-ms": `${LONG_PRESS_MS - CHARGE_DELAY_MS}ms`,
-            } as CSSProperties
-          }
-          aria-hidden="true"
-        >
-          <circle r={CHARGE_R} className="press-charge__track" />
-          <circle r={CHARGE_R} pathLength={100} className="press-charge__ring" />
-        </g>
-      ) : null}
-      {pop ? (
-        <circle
-          key={pop.key}
-          cx={pop.x}
-          cy={pop.y}
-          r={CHARGE_R}
-          className="press-pop"
-          aria-hidden="true"
-          onAnimationEnd={() => setPop(null)}
-        />
-      ) : null}
     </svg>
+  );
+  const pressLayer =
+    charge || pop
+      ? createPortal(
+          <svg className="press-layer" aria-hidden="true">
+            {charge ? (
+              <g
+                key={charge.key}
+                className="press-charge"
+                transform={`translate(${charge.x} ${charge.y})`}
+                style={
+                  {
+                    "--press-delay": `${CHARGE_DELAY_MS}ms`,
+                    "--press-ms": `${LONG_PRESS_MS - CHARGE_DELAY_MS}ms`,
+                  } as CSSProperties
+                }
+                aria-hidden="true"
+              >
+                <circle r={CHARGE_R} className="press-charge__track" />
+                <circle r={CHARGE_R} pathLength={100} className="press-charge__ring" />
+              </g>
+            ) : null}
+            {pop ? (
+              <circle
+                key={pop.key}
+                cx={pop.x}
+                cy={pop.y}
+                r={CHARGE_R}
+                className="press-pop"
+                aria-hidden="true"
+                onAnimationEnd={() => setPop(null)}
+              />
+            ) : null}
+          </svg>,
+          document.body,
+        )
+      : null;
+  return (
+    <>
+      {overlay}
+      {pressLayer}
+    </>
   );
 }

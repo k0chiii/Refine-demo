@@ -4263,6 +4263,16 @@ m3e-snackbar {
 /* ---------- 長押しの手応え（紙面の上の長押しでコメントの位置を選ぶ。AnchorOverlay。利用者指示 2026-10-16）
  * 押している間は指の周りの輪が満ちる（M3 の円形の進捗表示: 太さ 4・primary の線・secondary-container の溝）。
  * 満ちて選択が始まると、輪が広がって消える（M3 の押したときの状態の層と同じ primary の薄い面） */
+/* 長押しの輪を描く画面全体の層（紙面の枠で切れないよう body の直下。押せる部品の邪魔をしない） */
+.press-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 30;
+}
 .press-charge circle {
   fill: none;
   stroke-width: 6;
