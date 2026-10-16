@@ -4265,7 +4265,7 @@ m3e-snackbar {
  * 満ちて選択が始まると、輪が広がって消える（M3 の押したときの状態の層と同じ primary の薄い面） */
 .press-charge circle {
   fill: none;
-  stroke-width: 4;
+  stroke-width: 6;
   pointer-events: none;
 }
 .press-charge__track {
@@ -4310,7 +4310,7 @@ m3e-snackbar {
   }
   to {
     opacity: 0;
-    transform: scale(1.5);
+    transform: scale(1.4);
   }
 }
 @media (prefers-reduced-motion: reduce) {

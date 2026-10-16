@@ -14,7 +14,7 @@ const LONG_PRESS_SLOP = 10;
 /** 長押しの手応え: 指が触れてからこの時間だけ待って、指の周りの輪を満たし始める（スクロールのたびに輪が出ないように） */
 const CHARGE_DELAY_MS = 100;
 /** 指の周りの輪の半径（指先に隠れず、外にはみ出して見える大きさ） */
-const CHARGE_R = 36;
+const CHARGE_R = 56;
 
 export interface OverlayThread {
   id: string;
