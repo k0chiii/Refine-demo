@@ -347,6 +347,8 @@ export interface FeedbackThreadView {
   };
   posts: FeedbackPostView[];
   can: { post: boolean; editOwn: true; rename: boolean };
+  /** 開いた人がこのスレッドを最後に読んだ時刻（未読の区切りを引く。読んだことが無ければ null） */
+  readAt: number | null;
 }
 
 /** スレッドを開く（投稿は古い順）。既読の印は markFeedbackRead で別に付ける */
@@ -432,6 +434,7 @@ export async function getFeedbackThread(
       editOwn: true,
       rename: canRenameFeedbackThread(thread, principal),
     },
+    readAt: await ctx.feedback.readAt(principal.userId, thread.id),
   };
 }
 

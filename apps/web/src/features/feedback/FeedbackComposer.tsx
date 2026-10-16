@@ -9,7 +9,7 @@ import { uploadFeedbackFile } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import { describeError } from "@/lib/errors";
-import { M3eButton, M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
+import { M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
 
 export interface ComposerResult {
   body: string;
@@ -24,7 +24,8 @@ export interface ComposerResult {
  * - 「テンプレート」から FB テンプレート（制作者・初回／制作者・版更新／校正er）を書き出しに入れる（利用者の FB 制度案）
  * - 作業中の案（PDF・画像・.ai など）を添付。送るときに R2 へ上げ、検証済みになってから投稿する
  * - Ctrl（⌘）＋Enter で送る
- * - dense（スマホのスレッド）: Slack の返信欄と同じく 1 行から伸びる欄と、アイコンだけの行（添付・テンプレート・送信）
+ * - 形は Slack の返信欄と同じ: 欄と操作の行（添付・テンプレート・送信のアイコン）を 1 つの枠にまとめる。
+ *   dense（スマホ）は 1 行から伸び、使い方の文は読み上げだけにする
  */
 export function FeedbackComposer({
   workId,
@@ -144,9 +145,6 @@ export function FeedbackComposer({
             }
           }}
         />
-        <p className={dense ? "sr-only" : "fb-composer__hint"} id={`${id}-hint`}>
-          @ で名前を呼ぶ（メンション）・{isMac ? "⌘" : "Ctrl"}＋Enter で{submitLabel}
-        </p>
         {files.length ? (
           <ul className="fb-composer__files" aria-label="添付するファイル">
             {files.map((f) => (
@@ -181,22 +179,10 @@ export function FeedbackComposer({
           >
             <M3eIcon name="attach_file" />
           </M3eIconButton>
-          {dense ? (
-            <M3eIconButton
-              aria-label="テンプレート"
-              title="テンプレート"
-              disabled={sending !== null}
-            >
-              <M3eIcon name="article" />
-              <M3eMenuTrigger htmlFor={`${id}-tpl`} />
-            </M3eIconButton>
-          ) : (
-            <M3eButton variant="text" disabled={sending !== null}>
-              <M3eIcon slot="icon" name="article" />
-              テンプレート
-              <M3eMenuTrigger htmlFor={`${id}-tpl`} />
-            </M3eButton>
-          )}
+          <M3eIconButton aria-label="テンプレート" title="テンプレート" disabled={sending !== null}>
+            <M3eIcon name="article" />
+            <M3eMenuTrigger htmlFor={`${id}-tpl`} />
+          </M3eIconButton>
           <M3eMenu id={`${id}-tpl`} positionY="above">
             {feedbackTemplates.map((t) => (
               <M3eMenuItem key={t.id} onClick={() => insertTemplate(t.id)}>
@@ -205,27 +191,25 @@ export function FeedbackComposer({
               </M3eMenuItem>
             ))}
           </M3eMenu>
+          {/* 使い方（メンション・送るキー）。プレースホルダーだけに頼らず操作の行に出す（スマホは読み上げだけ） */}
+          <span className={dense ? "sr-only" : "fb-composer__hint"} id={`${id}-hint`}>
+            @ で名前を呼ぶ・{isMac ? "⌘" : "Ctrl"}＋Enter で{submitLabel}
+          </span>
           <span className="spacer" />
           {sending ? (
             <span className="small muted" role="status">
               {sending}
             </span>
           ) : null}
-          {dense ? (
-            <M3eIconButton
-              variant="filled"
-              aria-label={submitLabel}
-              disabled={!canSend}
-              onClick={() => void send()}
-            >
-              <M3eIcon name="send" />
-            </M3eIconButton>
-          ) : (
-            <M3eButton variant="filled" disabled={!canSend} onClick={() => void send()}>
-              <M3eIcon slot="icon" name="send" />
-              {submitLabel}
-            </M3eButton>
-          )}
+          <M3eIconButton
+            variant="filled"
+            aria-label={submitLabel}
+            title={`${submitLabel}（${isMac ? "⌘" : "Ctrl"}＋Enter）`}
+            disabled={!canSend}
+            onClick={() => void send()}
+          >
+            <M3eIcon name="send" />
+          </M3eIconButton>
         </div>
       </div>
     </MentionProvider>

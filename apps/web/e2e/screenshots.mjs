@@ -606,14 +606,23 @@ async function main() {
   await page.locator(".fb-list m3e-list-action", { hasText: "配色の方向性" }).click();
   await page.waitForSelector(".fb-post");
   const before = await page.locator(".fb-post").count();
-  await page.locator(".fb-composer m3e-button", { hasText: "テンプレ" }).click();
+  await page.locator('.fb-composer m3e-icon-button[aria-label="テンプレート"]').click();
   await page.locator("m3e-menu-item:visible", { hasText: "校正er" }).click();
   await page.setInputFiles('.fb-composer input[type="file"]', [resolve(FIXTURES, "poster.png")]);
-  await page.locator(".fb-composer m3e-button", { hasText: "送信" }).click();
+  await page.locator('.fb-composer m3e-icon-button[aria-label="送信"]').click();
   await page.waitForFunction((n) => document.querySelectorAll(".fb-post").length > n, before, {
     timeout: 20_000,
   });
   await page.waitForSelector(".fb-post:last-of-type .fb-thumb img");
+  // 投稿の操作はマウスを乗せたときに出る（Slack の操作バー）。投稿の頭を見える位置に送ってから
+  await page
+    .locator(".fb-post")
+    .last()
+    .evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page
+    .locator(".fb-post")
+    .last()
+    .hover({ position: { x: 40, y: 20 } });
   await page
     .locator(".fb-post")
     .last()

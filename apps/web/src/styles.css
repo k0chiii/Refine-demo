@@ -3483,28 +3483,49 @@ m3e-snackbar {
  * 受信箱 /feedback: 広い画面（840 以上）は一覧・詳細（M3 list-detail: 一覧 360–412、間 24、詳細は残り全部）。
  * スレッドは Slack のメッセージ列（アバター・名前・時刻・本文・添付・リアクション）。下に返信の欄（面で囲う）。
  * 一覧の行は M3 リスト（3 行: 制作物・題名・最後の投稿）。先頭はアバターで頭を揃え、未読は題名の強調＋末尾の点 */
+/*
+ * 広い画面の一覧・詳細（M3 list-detail: 一覧は 360、1200 以上は 412。間は 24。§46）。
+ * 2 つのペインを画面の高さに収め、ページ全体はスクロールしない（Gmail の読む欄・Slack と同じ）。
+ * 一覧は自分でスクロールし、詳細は見出しと返信欄を止めて投稿だけがスクロールする
+ */
+.shell__content:has(> .fb-layout) {
+  padding-bottom: 24px;
+}
 .fb-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 412px) minmax(0, 1fr);
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 24px;
-  align-items: start;
+  height: calc(100dvh - var(--mf-appbar-h, 64px) - 40px);
+  min-height: 420px;
 }
-/* 一覧は自分でスクロールし、詳細を読む間も見えたまま（アプリバーの下に止める） */
-.fb-layout__list {
-  position: sticky;
-  top: calc(var(--mf-appbar-h, 64px) + 16px);
-  max-height: calc(100dvh - var(--mf-appbar-h, 64px) - 32px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-surface-container-low);
-  padding: 8px 0;
+@media (min-width: 1200px) {
+  .fb-layout {
+    grid-template-columns: 412px minmax(0, 1fr);
+  }
 }
+.fb-layout__list,
 .fb-layout__detail {
   min-width: 0;
+  min-height: 0;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-low);
+}
+.fb-layout__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 0 8px;
+}
+.fb-layout__detail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.fb-layout__loading {
+  padding: 24px;
 }
 .fb-layout__detail--empty {
   display: grid;
+  flex-direction: unset;
   justify-items: center;
   align-content: center;
   gap: 8px;
@@ -3677,7 +3698,8 @@ m3e-snackbar {
   flex-direction: column;
   padding: 0;
 }
-.shell--chat .fb-thread {
+.shell--chat .fb-thread,
+.fb-thread--fill {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -3685,7 +3707,8 @@ m3e-snackbar {
   gap: 0;
   max-width: none;
 }
-.shell--chat .fb-thread__scroll {
+.shell--chat .fb-thread__scroll,
+.fb-thread--fill .fb-thread__scroll {
   display: grid;
   align-content: start;
   gap: 8px;
@@ -3787,20 +3810,6 @@ m3e-snackbar {
   align-items: center;
   gap: 4px 8px;
 }
-/* リアクションを足すボタンは、ポインタで重ねたとき・キーボードで中に入ったときにはっきり出す */
-.fb-post__add-reaction {
-  opacity: 0.6;
-  transition: opacity var(--mf-motion-effects-fast);
-}
-.fb-post:hover .fb-post__add-reaction,
-.fb-post:focus-within .fb-post__add-reaction {
-  opacity: 1;
-}
-@media (hover: none) {
-  .fb-post__add-reaction {
-    opacity: 1;
-  }
-}
 .fb-files {
   display: grid;
   gap: 8px;
@@ -3877,11 +3886,6 @@ m3e-snackbar {
 .fb-composer__input:focus-visible {
   outline: 2px solid var(--mf-primary);
   outline-offset: 0;
-}
-.fb-composer__hint {
-  margin: 0 16px;
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
 }
 .fb-composer__files {
   display: grid;
@@ -4052,4 +4056,236 @@ m3e-snackbar {
 .notif-push__hint {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
+}
+
+/* ---------- 広い画面の FB スレッド（Slack・Gmail・M3E を調べた見直し。UI_M3E §46） */
+/* 見出し: 題名・制作物と版・場所・参加者・紙面で見る（スクロールしても上に残る） */
+.fb-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.fb-head__text {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fb-head__title {
+  margin: 0;
+  font: var(--mf-type-title-large);
+  font-feature-settings: "palt" 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-head__sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fb-head__icon {
+  --m3e-icon-size: 18px;
+  flex: none;
+  color: var(--mf-secondary);
+}
+.fb-head__work {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 参加者: 重ねたアバター（ペインの色の縁で区切る） */
+.fb-head__people {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.fb-head__person {
+  display: grid;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--mf-surface-container-low);
+}
+.fb-head__person + .fb-head__person {
+  margin-inline-start: -8px;
+}
+.fb-head__more {
+  margin-inline-start: 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.fb-thread--fill {
+  max-width: none;
+}
+.fb-thread--fill .fb-thread__scroll {
+  padding: 8px 16px 16px;
+  gap: 0;
+}
+.fb-thread--fill .fb-thread__composer {
+  position: static;
+  margin: 0;
+  padding: 0 16px 16px;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* 日付の区切り（中央の札と細い線。スクロール中も上に残る） */
+.fb-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  pointer-events: none; /* 見た目の手がかり。上に止まっている間も下の投稿を押せるように */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.fb-day::before,
+.fb-day::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--mf-outline-variant);
+}
+.fb-day__label {
+  padding: 4px 12px;
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-surface);
+}
+/* 「ここから未読」（Slack の New の線。色と文言の両方で示す） */
+.fb-unread {
+  scroll-margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-error);
+}
+.fb-unread::before {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--mf-error);
+}
+
+/* 投稿: 続きの投稿は名前・アバターを省き、左の余白に時刻（マウスを乗せたときだけ） */
+.fb-post {
+  position: relative;
+  border-radius: var(--mf-shape-md);
+  scroll-margin-top: 40px; /* 上に止まる日付の札の分 */
+}
+.fb-post--continued {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.fb-post__gutter-time {
+  align-self: start;
+  padding-top: 0.45em;
+  text-align: center;
+  font: var(--mf-type-label-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+  opacity: 0;
+}
+.fb-post:hover .fb-post__gutter-time,
+.fb-post:focus-within .fb-post__gutter-time {
+  opacity: 1;
+}
+.fb-post__reactions--empty {
+  display: contents;
+}
+/* 操作（すぐ付けるリアクション・リアクション・⋮）: マウスを乗せたとき・キーボードで中に入ったときに右上に浮かぶ */
+@media (hover: hover) {
+  .fb-post:hover {
+    background: var(--mf-surface-container);
+  }
+  .fb-post__actions {
+    /* 投稿の内側の右上（上にはみ出すと、スクロールの端や日付の札に隠れる） */
+    position: absolute;
+    top: 4px;
+    inset-inline-end: 8px;
+    z-index: 2;
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--mf-outline-variant);
+    border-radius: var(--mf-shape-full);
+    background: var(--mf-surface);
+    box-shadow: var(--mf-elevation-1, 0 1px 2px rgb(0 0 0 / 0.15));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--mf-motion-effects-fast);
+  }
+  .fb-post:hover .fb-post__actions,
+  .fb-post:focus-within .fb-post__actions,
+  .fb-post:has([aria-expanded="true"]) .fb-post__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+/* タッチの端末: リアクションの行の末尾に常に出す（すぐ付けるリアクションは出さない） */
+@media (hover: none) {
+  .fb-post__actions {
+    display: flex;
+    margin-inline-start: auto;
+  }
+  .fb-post__quick {
+    display: none;
+  }
+  .fb-post__reactions--empty {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+.fb-post__emoji {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* 返信欄（Slack の形）: 欄と操作の行を 1 つの枠に。枠に入ったら枠を強調する */
+.fb-composer:not(.fb-composer--dense) {
+  gap: 0;
+  padding: 4px 8px 4px;
+  border: 1px solid var(--mf-outline);
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface);
+}
+.fb-composer:not(.fb-composer--dense):focus-within {
+  border-color: var(--mf-primary);
+  box-shadow: 0 0 0 1px var(--mf-primary);
+}
+.fb-composer:not(.fb-composer--dense) .fb-composer__input {
+  min-height: 2.75rem;
+  padding: 10px 8px 4px;
+  border-radius: 0;
+  background: transparent;
+}
+.fb-composer:not(.fb-composer--dense) .fb-composer__input:focus-visible {
+  outline: none;
+}
+.fb-composer:not(.fb-composer--dense) .fb-composer__bar {
+  gap: 0;
+}
+.fb-composer__hint {
+  margin-inline-start: 8px;
+  font: var(--mf-type-label-small);
+  color: var(--mf-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.fb-list-pane__search {
+  margin: 0 16px;
+}
+.fb-layout__list .fb-list-pane {
+  gap: 12px;
 }

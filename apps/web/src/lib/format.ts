@@ -38,6 +38,11 @@ const fmtMd = new Intl.DateTimeFormat("ja-JP", {
   month: "numeric",
   day: "numeric",
 });
+/** 時刻だけ（「23:11」）。日付は区切り（FB スレッドの日付の区切りなど）で示すときに使う */
+export function formatJstTime(ms: number): string {
+  return fmtHm.format(new Date(ms));
+}
+
 export function formatJstCompact(ms: number, now = Date.now()): string {
   const day = (t: number) => fmtMd.format(new Date(t));
   return day(ms) === day(now) ? fmtHm.format(new Date(ms)) : day(ms);

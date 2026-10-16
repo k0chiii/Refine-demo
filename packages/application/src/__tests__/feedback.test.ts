@@ -118,6 +118,9 @@ describe("フィードバックのスレッドと投稿", () => {
     expect(view.work).toMatchObject({ title: "EVE 企画ポスター", canOpen: false });
     expect(view.posts.map((p) => p.template)).toEqual(["creator_first", "reviewer"]);
     expect(view.can).toEqual({ post: true, editOwn: true, rename: false });
+    // 未読の区切りのため、開いた人が最後に読んだ時刻を返す（読んでいなければ null）
+    expect(view.readAt).toBeNull();
+    expect((await getFeedbackThread(ctx, creator, t1)).readAt).toBe(ctx.clock.now());
     expect((await getFeedbackThread(ctx, creator, t1)).work.canOpen).toBe(true);
   });
 

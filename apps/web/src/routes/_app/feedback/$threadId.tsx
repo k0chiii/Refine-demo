@@ -8,6 +8,7 @@ import { anchorPlace } from "@/features/feedback/FeedbackPane";
 import { useVisualViewportBox } from "@/lib/useKeyboardInset";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { UserAvatar } from "@/ui/UserAvatar";
 import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/feedback/$threadId")({
@@ -54,11 +55,50 @@ function FeedbackThread() {
       : navigate({ to: "/works/$workId", params: { workId: data.work.id }, search: s }));
   };
 
+  const where = data
+    ? [data.thread.revision?.label, anchorPlace(data.thread.anchor as Anchor | null)]
+        .filter(Boolean)
+        .join("・") || "制作物について"
+    : "";
+  const openButton =
+    data && data.work.canOpen ? (
+      <M3eButton variant="tonal" onClick={openInWork}>
+        <M3eIcon slot="icon" name="open_in_new" />
+        {data.thread.anchor ? "紙面で見る" : "制作物で見る"}
+      </M3eButton>
+    ) : null;
+
   const detail =
     data === undefined ? (
-      <p className="muted">読み込み中…</p>
+      <p className="muted fb-layout__loading">読み込み中…</p>
     ) : data === null ? (
       <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
+    ) : wide ? (
+      // 広い画面: 見出し（題名・制作物・参加者・紙面で見る）を上に止め、投稿だけがスクロールし、返信欄は下に止める（Slack・Gmail の読む欄）
+      <>
+        <header className="fb-head">
+          <div className="fb-head__text">
+            <h2 className="fb-head__title">{data.thread.title}</h2>
+            <p className="fb-head__sub">
+              <M3eIcon
+                name={data.thread.anchor ? "my_location" : "description"}
+                className="fb-head__icon"
+              />
+              <span className="fb-head__work">
+                {data.work.title}
+                {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
+              </span>
+              <span aria-hidden="true">・</span>
+              <span>{where}</span>
+            </p>
+          </div>
+          <Participants people={data.thread.participants} />
+          {openButton}
+        </header>
+        <div className="fb-thread fb-thread--fill">
+          <FeedbackConversation threadId={threadId} data={data} />
+        </div>
+      </>
     ) : (
       <div className="fb-thread">
         <FeedbackConversation
@@ -66,33 +106,22 @@ function FeedbackThread() {
           data={data}
           dense={compact}
           header={
-            <>
-              <section className="fb-context" aria-label="相談している制作物">
-                <M3eIcon
-                  name={data.thread.anchor ? "my_location" : "description"}
-                  className="fb-context__icon"
-                />
-                <div className="fb-context__text">
-                  <span className="fb-context__work">
-                    {data.work.title}
-                    {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
-                  </span>
-                  <span className="fb-context__where">
-                    {[data.thread.revision?.label, anchorPlace(data.thread.anchor as Anchor | null)]
-                      .filter(Boolean)
-                      .join("・") || "制作物について"}
-                    ・参加 {data.thread.participants.length} 人
-                  </span>
-                </div>
-                {data.work.canOpen ? (
-                  <M3eButton variant="tonal" onClick={openInWork}>
-                    <M3eIcon slot="icon" name="open_in_new" />
-                    {data.thread.anchor ? "紙面で見る" : "制作物で見る"}
-                  </M3eButton>
-                ) : null}
-              </section>
-              {wide ? <h2 className="fb-thread__title">{data.thread.title}</h2> : null}
-            </>
+            <section className="fb-context" aria-label="相談している制作物">
+              <M3eIcon
+                name={data.thread.anchor ? "my_location" : "description"}
+                className="fb-context__icon"
+              />
+              <div className="fb-context__text">
+                <span className="fb-context__work">
+                  {data.work.title}
+                  {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
+                </span>
+                <span className="fb-context__where">
+                  {where}・参加 {data.thread.participants.length} 人
+                </span>
+              </div>
+              {openButton}
+            </section>
           }
         />
       </div>
@@ -116,5 +145,26 @@ function FeedbackThread() {
         detail
       )}
     </>
+  );
+}
+
+/** 参加者の顔ぶれ（重ねたアバター。4 人まで、それ以上は「+n」） */
+function Participants({ people }: { people: Array<{ id: string; name: string }> }) {
+  const shown = people.slice(0, 4);
+  const rest = people.length - shown.length;
+  return (
+    <div
+      className="fb-head__people"
+      role="img"
+      aria-label={`参加 ${people.length} 人: ${people.map((p) => p.name).join("、")}`}
+      title={people.map((p) => p.name).join("、")}
+    >
+      {shown.map((p) => (
+        <span key={p.id} className="fb-head__person">
+          <UserAvatar seed={p.id} size={28} />
+        </span>
+      ))}
+      {rest > 0 ? <span className="fb-head__more">+{rest}</span> : null}
+    </div>
   );
 }

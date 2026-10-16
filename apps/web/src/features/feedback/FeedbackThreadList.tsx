@@ -15,12 +15,15 @@ export function FeedbackThreadList({
   work,
   mine,
   unreadOnly,
+  query = "",
   selectedId,
   onOpen,
 }: {
   work?: string;
   mine: boolean;
   unreadOnly: boolean;
+  /** 題名・制作物名・最後の投稿で絞る（大文字小文字・全角半角の英数を区別しない） */
+  query?: string;
   selectedId?: string;
   onOpen: (id: string) => void;
 }) {
@@ -28,16 +31,28 @@ export function FeedbackThreadList({
     ...(work ? { workId: work } : {}),
     ...(mine ? { mine: true } : {}),
   });
-  const threads = unreadOnly ? all?.filter((t) => t.unread) : all;
+  const q = normalize(query.trim());
+  const threads = all?.filter(
+    (t) =>
+      (!unreadOnly || t.unread) &&
+      (!q ||
+        normalize(
+          `${t.title} ${t.workTitle} ${t.lastPost?.authorName ?? ""} ${t.lastPost?.excerpt ?? ""}`,
+        ).includes(q)),
+  );
   if (threads === undefined) return <p className="muted fb-list__empty">読み込み中…</p>;
   if (threads.length === 0)
     return (
       <div className="empty fb-list__empty">
         <M3eIcon name="forum" />
         <span className="title-medium">
-          {unreadOnly ? "未読のスレッドはありません" : "まだスレッドがありません"}
+          {q
+            ? `「${query.trim()}」に合うスレッドはありません`
+            : unreadOnly
+              ? "未読のスレッドはありません"
+              : "まだスレッドがありません"}
         </span>
-        {unreadOnly ? null : (
+        {unreadOnly || q ? null : (
           <span className="muted">
             制作物を開いて「FB」から、または紙面の範囲を選んで「FB」を選ぶと始められます
           </span>
@@ -80,3 +95,5 @@ export function FeedbackThreadList({
     </M3eActionList>
   );
 }
+
+const normalize = (s: string) => s.normalize("NFKC").toLowerCase();

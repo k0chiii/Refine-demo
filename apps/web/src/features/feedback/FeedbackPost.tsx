@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { renderWithMentions, type MentionUser } from "@/features/review/mentions";
-import { formatJstShort } from "@/lib/format";
+import { formatJstShort, formatJstTime } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { TextArea } from "@/ui/Field";
 import {
@@ -48,7 +48,19 @@ const reactionNames: Record<string, string> = {
   "❤️": "好き",
 };
 
-export function FeedbackPost({ post, people }: { post: PostData; people: readonly MentionUser[] }) {
+/** マウスを乗せたときに出す、すぐ付けられるリアクション（Slack の操作バーと同じ） */
+const QUICK_REACTIONS = ["👍", "🙏", "👀"] as const;
+
+export function FeedbackPost({
+  post,
+  people,
+  continued = false,
+}: {
+  post: PostData;
+  people: readonly MentionUser[];
+  /** 同じ人の続きの投稿（名前・アバター・時刻を省き、時刻は左の余白にマウスを乗せたときだけ出す） */
+  continued?: boolean;
+}) {
   const toggle = useMutation(api.feedback.toggleReaction);
   const edit = useMutation(api.feedback.editPost);
   const remove = useMutation(api.feedback.deletePost);
@@ -82,41 +94,36 @@ export function FeedbackPost({ post, people }: { post: PostData; people: readonl
     );
 
   return (
-    <article className="fb-post" aria-label={`${post.author.name} の投稿`}>
-      <span className="fb-post__avatar" aria-hidden="true">
-        <UserAvatar seed={post.author.id} size={36} />
-      </span>
+    <article
+      className={`fb-post ${continued ? "fb-post--continued" : ""}`}
+      aria-label={`${post.author.name} の投稿`}
+    >
+      {continued ? (
+        <time
+          className="fb-post__gutter-time"
+          dateTime={new Date(post.createdAt).toISOString()}
+          aria-hidden="true"
+        >
+          {formatJstTime(post.createdAt)}
+        </time>
+      ) : (
+        <span className="fb-post__avatar" aria-hidden="true">
+          <UserAvatar seed={post.author.id} size={36} />
+        </span>
+      )}
       <div className="fb-post__main">
-        <header className="fb-post__head">
+        <header className={continued ? "sr-only" : "fb-post__head"}>
           <span className="fb-post__name">{post.author.name}</span>
-          <time className="fb-post__time" dateTime={new Date(post.createdAt).toISOString()}>
-            {formatJstShort(post.createdAt)}
+          {/* 日付は区切りに出すので、ここは時刻だけ（日時の全体は title に） */}
+          <time
+            className="fb-post__time"
+            dateTime={new Date(post.createdAt).toISOString()}
+            title={formatJstShort(post.createdAt)}
+          >
+            {formatJstTime(post.createdAt)}
             {post.editedAt ? "（編集済み）" : ""}
           </time>
           {template ? <span className="fb-post__tpl">{template.label}</span> : null}
-          <span className="spacer" />
-          {post.can.edit || post.can.delete ? (
-            <>
-              <M3eIconButton aria-label="投稿の操作" className="fb-post__more">
-                <M3eIcon name="more_vert" />
-                <M3eMenuTrigger htmlFor={menuId} />
-              </M3eIconButton>
-              <M3eMenu id={menuId} positionX="before">
-                {post.can.edit ? (
-                  <M3eMenuItem onClick={() => setEditing(post.body)}>
-                    <M3eIcon slot="icon" name="edit" />
-                    編集
-                  </M3eMenuItem>
-                ) : null}
-                {post.can.delete ? (
-                  <M3eMenuItem onClick={() => setConfirmDelete(true)}>
-                    <M3eIcon slot="icon" name="delete" />
-                    削除
-                  </M3eMenuItem>
-                ) : null}
-              </M3eMenu>
-            </>
-          ) : null}
         </header>
         {editing !== null ? (
           <div className="fb-post__edit">
@@ -143,43 +150,88 @@ export function FeedbackPost({ post, people }: { post: PostData; people: readonl
           </div>
         ) : null}
         <FeedbackFiles files={post.files} />
-        <div className="fb-post__reactions" role="group" aria-label="リアクション">
-          {/* 自分が付けたものは色（選択の面）で示す。チェックの印は出さない（Slack と同じ。利用者指示 2026-10-15） */}
-          <M3eFilterChipSet
-            multi
-            hideSelectionIndicator
-            className="fb-post__reaction-set"
-            ref={dropGroupOrientation}
-          >
-            {post.reactions.map((r) => (
-              <M3eFilterChip
-                key={r.emoji}
-                selected={r.mine}
-                aria-label={`${r.emoji} ${r.count} 人${r.mine ? "（自分も）" : ""}`}
-                onClick={() => void react.run(r.emoji)}
+        <div
+          className={`fb-post__reactions ${post.reactions.length ? "" : "fb-post__reactions--empty"}`}
+        >
+          {post.reactions.length ? (
+            // 自分が付けたものは色（選択の面）で示す。チェックの印は出さない（Slack と同じ。利用者指示 2026-10-15）
+            <M3eFilterChipSet
+              multi
+              hideSelectionIndicator
+              aria-label="リアクション"
+              className="fb-post__reaction-set"
+              ref={dropGroupOrientation}
+            >
+              {post.reactions.map((r) => (
+                <M3eFilterChip
+                  key={r.emoji}
+                  selected={r.mine}
+                  aria-label={`${r.emoji} ${reactionNames[r.emoji] ?? ""} ${r.count} 人${r.mine ? "（自分も）" : ""}`}
+                  onClick={() => void react.run(r.emoji)}
+                >
+                  {r.emoji} {r.count}
+                </M3eFilterChip>
+              ))}
+            </M3eFilterChipSet>
+          ) : null}
+          {/* 投稿の操作: マウスを乗せたとき・キーボードで入ったときに右上に出す（Slack の操作バー）。
+              タッチの端末ではリアクションの行の末尾に常に出す */}
+          <div className="fb-post__actions" role="toolbar" aria-label="投稿の操作">
+            {QUICK_REACTIONS.map((e) => (
+              <M3eIconButton
+                key={e}
+                className="fb-post__quick"
+                aria-label={`${e} ${reactionNames[e] ?? ""}を付ける`}
+                title={reactionNames[e] ?? e}
+                onClick={() => void react.run(e)}
               >
-                {r.emoji} {r.count}
-              </M3eFilterChip>
+                <span className="fb-post__emoji" aria-hidden="true">
+                  {e}
+                </span>
+              </M3eIconButton>
             ))}
-          </M3eFilterChipSet>
-          <M3eIconButton aria-label="リアクションを付ける" className="fb-post__add-reaction">
-            <M3eIcon name="add_reaction" />
-            <M3eMenuTrigger htmlFor={reactId} />
-          </M3eIconButton>
-          <M3eMenu id={reactId} className="fb-react-menu">
-            {FEEDBACK_REACTIONS.map((e) => {
-              // 項目に名前を添え、自分が付けたものに印（M3 Menus: 選択は色以外でも示す）
-              const mine = post.reactions.some((r) => r.emoji === e && r.mine);
-              return (
-                <M3eMenuItem key={e} onClick={() => void react.run(e)}>
-                  {mine ? <M3eIcon slot="icon" name="check" /> : null}
-                  {e} {reactionNames[e] ?? ""}
-                </M3eMenuItem>
-              );
-            })}
-          </M3eMenu>
+            <M3eIconButton aria-label="リアクションを付ける" title="リアクション">
+              <M3eIcon name="add_reaction" />
+              <M3eMenuTrigger htmlFor={reactId} />
+            </M3eIconButton>
+            {post.can.edit || post.can.delete ? (
+              <M3eIconButton aria-label="ほかの操作" title="ほかの操作">
+                <M3eIcon name="more_vert" />
+                <M3eMenuTrigger htmlFor={menuId} />
+              </M3eIconButton>
+            ) : null}
+          </div>
         </div>
       </div>
+      {/* メニューは操作バーの外に置く（バーはマウスが離れると押せなくなるため。開いている間はバーを出したまま） */}
+      <M3eMenu id={reactId} className="fb-react-menu">
+        {FEEDBACK_REACTIONS.map((e) => {
+          // 項目に名前を添え、自分が付けたものに印（M3 Menus: 選択は色以外でも示す）
+          const mine = post.reactions.some((r) => r.emoji === e && r.mine);
+          return (
+            <M3eMenuItem key={e} onClick={() => void react.run(e)}>
+              {mine ? <M3eIcon slot="icon" name="check" /> : null}
+              {e} {reactionNames[e] ?? ""}
+            </M3eMenuItem>
+          );
+        })}
+      </M3eMenu>
+      {post.can.edit || post.can.delete ? (
+        <M3eMenu id={menuId} positionX="before">
+          {post.can.edit ? (
+            <M3eMenuItem onClick={() => setEditing(post.body)}>
+              <M3eIcon slot="icon" name="edit" />
+              編集
+            </M3eMenuItem>
+          ) : null}
+          {post.can.delete ? (
+            <M3eMenuItem onClick={() => setConfirmDelete(true)}>
+              <M3eIcon slot="icon" name="delete" />
+              削除
+            </M3eMenuItem>
+          ) : null}
+        </M3eMenu>
+      ) : null}
       <M3eDialog open={confirmDelete} onClosed={() => setConfirmDelete(false)} closeLabel="閉じる">
         <span slot="header">投稿を削除しますか？</span>
         <div className="dialog-body">
