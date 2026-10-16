@@ -10,8 +10,13 @@ onlyBuiltDependencies:
   - workerd
   - sharp
 
+# Vite+ の推奨（docs/guide/local-cli.md）: プラグイン（@vitejs/plugin-react・@tanstack/router-plugin など）や依存が
+# 直接 import する vite・vitest を Vite+ のものにそろえる。別の vite が入ると Plugin の型が二重になり、型を使う lint が
+# 型の比較で止まる（1.2.0）。vite-plus を上げたら、ここの版も一緒に上げる（vitest は `vp toolchain vitest` の版）
 # 文章エディタ（TipTap）は公開から十分に日の経った版に固定し、内部依存（@tiptap/*）も同じ版にそろえる
 overrides:
+  "vite@*": npm:@voidzero-dev/vite-plus-core@1.2.0
+  "vitest@*": 5.0.4
   "@tiptap/core": 3.31.3
   "@tiptap/pm": 3.31.3
   "@tiptap/extensions": 3.31.3

@@ -63,6 +63,7 @@
     "convex-test": "0.0.61",
     "playwright-core": "^1.58.0",
     "typescript": "5.9.3",
-    "vite-plus": "1.1.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
+    "vite-plus": "1.2.0"
   }
 }

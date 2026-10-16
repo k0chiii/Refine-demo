@@ -36,10 +36,11 @@
 - 無いもの: **データテーブル、テキスト入力の React 向け簡易 API**。校正用テーブルとフォーム入力は M3 トークン（`--md-sys-color-*` フォールバック付き）で補完した（`apps/web/src/styles.css`, `ui/Field.tsx`）。
 - リスク: コミュニティ実装でリリース頻度が高い（3 日前に 2.9.2）。バージョンは固定し、`ui/m3e.ts` に import を集約して差し替え点を 1 箇所にした。
 
-## 4. VoidZero / Vite+（`vite-plus` 1.1.0）
+## 4. VoidZero / Vite+（`vite-plus` 1.2.0）
 
-- 単一 devDependency で Vite 8.3 / Rolldown 1.2 / Vitest 5.0 / Oxlint 1.87 / Oxfmt 0.72 / tsdown 0.23 / Vite Task を提供。`vp check`（fmt+lint+型）、`vp test`、`vp build`、`vp run -r`（ワークスペース・キャッシュ）を使用。
+- 単一 devDependency で Vite 8.3 / Rolldown 1.2 / Vitest 5.0 / Oxlint 1.88 / Oxfmt 0.73 / tsdown 0.23 / Vite Task を提供（1.2.0 は 2026-10-16 に 1.1.0 から更新）。`vp check`（fmt+lint+型）、`vp test`、`vp build`、`vp run -r`（ワークスペース・キャッシュ）を使用。
 - Vitest API は `vite-plus/test` から import（各パッケージが `vite-plus` を devDependency に持つ）。
+- プラグインや依存が直接読む `vite`・`vitest` は Vite+ のものにそろえる（Vite+ の docs/guide/local-cli.md の推奨）: `pnpm-workspace.yaml` の overrides に `vite@*: npm:@voidzero-dev/vite-plus-core@<vite-plus の版>` と `vitest@*: <vp toolchain vitest の版>`、`apps/web` の devDependencies にも `vite` の同じ別名（プラグインの peer がこれで解決する）。別の vite が入ると Plugin の型が二重になり、1.2.0 の型を使う lint が vite.config.ts で「型の比較が深すぎる」（TS2321）で止まった。**vite-plus を上げるときは、この 3 か所の版も一緒に上げる**
 - 注意: 型チェックは tsgolint（TypeScript Go）。Convex の `convex codegen --typecheck` は `tsc` を使うため `typescript@5.9.3` も併置。
 
 ## 5. Convex 1.46
