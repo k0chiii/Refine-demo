@@ -1252,7 +1252,8 @@ m3.material.io の sitemap にある**ドキュメント 262 ページ全部**�
 
 ### 読んだもの
 
-- サイトマップ（https://m3.material.io/sitemap.xml）の 375 ページを Playwright で描画して本文を取り、374 ページを読んだ（ブログの一覧ページ 1 つだけ読み込みが時間切れ。各記事は読んだ）。内訳: Components 146（37 部品 × overview / specs / guidelines / accessibility）、Foundations 68、Styles 38、Blog 113、その他 10（うち 4 ページは 404）
+- サイトマップ（https://m3.material.io/sitemap.xml）の 375 ページを Playwright で描画して本文を取り、すべて読んだ。内訳: Components 146（37 部品 × overview / specs / guidelines / accessibility）、Foundations 68、Styles 38、Blog 113（一覧のページを含む）、その他 10
+- サイトマップの 4 ページ（whats-new-at-io26・material-is-compose-first・building-with-m3-expressive・m3-expressive-motion-theming）は直下の URL だと 404 で、実体は /blog/ の下にあった。ブログの一覧から辿って読み直した（I/O 2026 の Expressive layout・spacing・Expressive lists & menus、Material Android は Compose が先、M3 Expressive の 14 部品と 7 つの手法、motion の Standard / Expressive）。手直しの方針は変わらない（業務の道具なので motion は Standard、まとまりは余白と面で分ける）
 - 8 つの担当に分けて全文を読み、表・リスト・ダッシュボード・編集の置き場所・見出しと件数・禁止されていることを抜き出した
 
 ### 分かったこと（要点）
