@@ -1,4 +1,11 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { M3eButton, M3eIconButton, M3eIcon } from "@/ui/m3e";
@@ -12,6 +19,10 @@ import { MentionTextarea } from "./mentions";
  *
  * docked（compact）: 選んだ位置のそばではなく、画面下（キーボードが出ていればそのすぐ上）に全幅で出す。
  * 小さい画面では位置のそばの欄がキーボードや指に隠れるため。何に対するコメントかは引用で示す。
+ *
+ * そばに出す欄が見えている範囲（ビューアのスクロール枠・画面）や浮遊ツールバーからはみ出しそうなら、内側へずらす
+ * （利用者指示 2026-10-16「はみ出そうならスライドする形で調整」）。紙面を拡大して横にスクロールしているときも、
+ * スクロールに合わせて追いかける。縦は欄の高さまでしかずらさない（選んだ場所が遠く離れたら一緒に流れていく）
  */
 export function ComposePopover({
   x,
@@ -56,6 +67,8 @@ export function ComposePopover({
   const what = fb ? "FB" : label;
   const ref = useRef<HTMLTextAreaElement>(null);
   const kb = useKeyboardInset(docked === true);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
     // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
     const opener = document.activeElement as HTMLElement | null;
@@ -68,13 +81,19 @@ export function ComposePopover({
   }, []);
   const panel = (
     <div
+      ref={panelRef}
       className={`compose-pop ${docked ? "compose-pop--docked" : ""} ${fb ? "compose-pop--fb" : ""}`}
       role="dialog"
       aria-label={what}
       style={
         docked
           ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
-          : { left: x, top: y, ...style }
+          : {
+              left: x,
+              top: y,
+              ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
+              ...style,
+            }
       }
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -135,4 +154,91 @@ export function ComposePopover({
   );
   // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す
   return docked ? createPortal(panel, document.body) : panel;
+}
+
+/** スクロールする一番近い親（無ければ null = 画面） */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const st = getComputedStyle(p);
+    if (
+      /(auto|scroll)/.test(st.overflowX + st.overflowY) &&
+      (p.scrollWidth > p.clientWidth || p.scrollHeight > p.clientHeight)
+    )
+      return p;
+  }
+  return null;
+}
+
+const GAP = 8;
+
+/**
+ * 欄を、見えている範囲（スクロール枠と画面の重なり）と浮遊ツールバー（下の .ws__toolbar・右の縦の .ws__side-toolbar）の
+ * 内側に収めるためのずらし量。
+ * 置いた位置（x, y）が変わるたびと、スクロール・画面の大きさ・欄の大きさが変わるたびに測り直す
+ */
+function useFitInside(
+  ref: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  x: number,
+  y: number,
+) {
+  const [shift, setShift] = useState({ x: 0, y: 0 });
+  const current = useRef(shift);
+  current.current = shift;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el) return;
+    const parent = scrollParent(el);
+    const fit = () => {
+      const r = el.getBoundingClientRect();
+      // いまのずらしを除いた、本来の位置
+      const base = {
+        left: r.left - current.current.x,
+        right: r.right - current.current.x,
+        top: r.top - current.current.y,
+        bottom: r.bottom - current.current.y,
+      };
+      const area = parent?.getBoundingClientRect();
+      let left = Math.max(area?.left ?? 0, 0) + GAP;
+      let right = Math.min(area?.right ?? window.innerWidth, window.innerWidth) - GAP;
+      const top = Math.max(area?.top ?? 0, 0) + GAP;
+      let bottom = Math.min(area?.bottom ?? window.innerHeight, window.innerHeight) - GAP;
+      // 浮遊ツールバー: 縦長（右の縦のツールバー）は左へ、横長（下のツールバー）は上へよける
+      const mid = { x: (left + right) / 2, y: (top + bottom) / 2 };
+      for (const t of document.querySelectorAll<HTMLElement>(".ws__toolbar, .ws__side-toolbar")) {
+        const tr = t.getBoundingClientRect();
+        if (tr.width === 0 || tr.height === 0) continue;
+        const overlapsV = tr.top < base.bottom && tr.bottom > base.top;
+        const overlapsH = tr.left < base.right && tr.right > base.left;
+        if (tr.height > tr.width && tr.left > mid.x && overlapsV)
+          right = Math.min(right, tr.left - GAP);
+        else if (tr.width >= tr.height && tr.top > mid.y && overlapsH)
+          bottom = Math.min(bottom, tr.top - GAP);
+        else if (tr.height > tr.width && tr.right < mid.x && overlapsV)
+          left = Math.max(left, tr.right + GAP);
+      }
+      let dx = 0;
+      if (base.right > right) dx = right - base.right;
+      if (base.left + dx < left) dx = left - base.left;
+      let dy = 0;
+      if (base.bottom > bottom) dy = bottom - base.bottom;
+      if (base.top + dy < top) dy = top - base.top;
+      // 縦は欄の高さまで（選んだ場所から離れすぎない）
+      const h = base.bottom - base.top;
+      dy = Math.max(-h, Math.min(h, dy));
+      if (dx !== current.current.x || dy !== current.current.y) setShift({ x: dx, y: dy });
+    };
+    fit();
+    const target: HTMLElement | Window = parent ?? window;
+    target.addEventListener("scroll", fit, { passive: true });
+    window.addEventListener("resize", fit);
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => {
+      target.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", fit);
+      ro.disconnect();
+    };
+  }, [enabled, x, y]);
+  return enabled ? shift : { x: 0, y: 0 };
 }
