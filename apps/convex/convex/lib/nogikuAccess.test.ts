@@ -79,6 +79,16 @@ describe("組織権限の取得（permission/check）", () => {
       expect(await run(async () => new Response("not json"))).toBeUndefined();
     });
 
+    it("valid と missing が食い違う応答（権限を付けすぎない）", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      for (const body of [
+        { valid: false, missing: [] },
+        { valid: false, missing: ["unknown:permission"] },
+        { valid: true, missing: [names[0]] },
+      ])
+        expect(await run(async () => json(body)), JSON.stringify(body)).toBeUndefined();
+    });
+
     it("タイムアウト（応答が来ない API でログインを止めない）", async () => {
       vi.spyOn(console, "warn").mockImplementation(() => {});
       const hang = (_url: unknown, init?: RequestInit) =>

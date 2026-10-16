@@ -42,7 +42,7 @@ export async function fetchOrgPermissions(
   fetchImpl: typeof fetch = fetch,
   timeoutMs: number = TIMEOUT_MS,
 ): Promise<string[] | undefined> {
-  const requested = orgPermissionCatalog.map((p) => p.name);
+  const requested: string[] = orgPermissionCatalog.map((p) => p.name);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -62,10 +62,12 @@ export async function fetchOrgPermissions(
     }
     const body: unknown = await res.json();
     const { valid, missing } = (body ?? {}) as { valid?: unknown; missing?: unknown };
+    // valid と missing が食い違う応答から権限を導くと、全権限を付けてしまうことがある
     if (
       typeof valid !== "boolean" ||
       !Array.isArray(missing) ||
-      !missing.every((m) => typeof m === "string")
+      !missing.every((m) => typeof m === "string" && requested.includes(m)) ||
+      valid !== (missing.length === 0)
     ) {
       console.warn("Nogiku Access permission/check returned an unexpected body");
       return undefined;
