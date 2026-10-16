@@ -4289,3 +4289,161 @@ m3e-snackbar {
 .fb-layout__list .fb-list-pane {
   gap: 12px;
 }
+
+/* ---------- FB スペース（制作物ごと。縦に 3 列: スペース・紙面・スレッド。§47） */
+.shell__content:has(> .fb-space) {
+  padding-bottom: 24px;
+}
+.fb-space {
+  display: grid;
+  gap: 16px;
+  height: calc(100dvh - var(--mf-appbar-h, 64px) - 40px);
+  min-height: 480px;
+}
+.fb-space--three {
+  grid-template-columns: 300px minmax(360px, 1fr) 400px;
+}
+.fb-space--two {
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+.fb-space--list {
+  grid-template-columns: 360px minmax(0, 1fr);
+}
+.fb-space__pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container-low);
+}
+.fb-space__spaces,
+.fb-space__threads {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.fb-space__head {
+  display: grid;
+  gap: 2px;
+  padding: 16px 16px 4px;
+}
+.fb-space__title {
+  font: var(--mf-type-title-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-space__sub {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
+.fb-space__threads .fb-pane {
+  padding: 4px 12px 0;
+}
+.fb-space-narrow .fb-pane {
+  padding: 0;
+}
+/* スペースの一覧 */
+.fb-spaces {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 8px;
+}
+.fb-spaces__search,
+.fb-spaces__filters {
+  width: auto;
+  margin: 0 16px;
+  min-width: 0;
+}
+.fb-spaces__empty {
+  padding: 8px 16px;
+}
+.fb-spaces .list {
+  margin-inline: 0;
+}
+.fb-space-narrow .fb-spaces .list,
+.shell__content > .fb-spaces .list {
+  margin-inline: -16px;
+}
+.shell__content > .fb-spaces {
+  padding-top: 0;
+}
+.shell__content > .fb-spaces .fb-spaces__search,
+.shell__content > .fb-spaces .fb-spaces__filters {
+  margin: 0;
+}
+.fb-spaces__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.fb-spaces__badge {
+  --m3e-badge-container-color: var(--mf-secondary);
+  --m3e-badge-label-text-color: var(--mf-on-secondary);
+}
+/* 紙面（FB の印だけ。範囲を選ぶとその場所の FB を立てる） */
+.fb-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.fb-stage__bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 0 12px;
+}
+.fb-stage__page {
+  min-width: 4em;
+  text-align: center;
+  font: var(--mf-type-label-large);
+  font-variant-numeric: tabular-nums;
+}
+.fb-stage__open {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mf-shape-full);
+  color: var(--mf-on-surface-variant);
+}
+.fb-stage__open:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.fb-stage__hint {
+  margin: 0;
+  padding: 0 16px 8px;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
+.fb-stage__viewer {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.fb-stage__empty {
+  flex: 1 1 auto;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+/* 狭い列（FB スペースのスレッドの列・エディタの引き出し）では、すぐ付けるリアクションを省いて操作バーを短くする */
+.fb-post {
+  container-type: inline-size;
+}
+@container (max-width: 440px) {
+  .fb-post__quick {
+    display: none;
+  }
+}

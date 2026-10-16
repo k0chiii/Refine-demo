@@ -45,6 +45,8 @@ export function FeedbackPane({
   openId,
   onOpen,
   onShowPlace,
+  intro = "解決しない相談・話し合いの場所です。紙面の範囲を選んで「FB」に切り替えても始められます",
+  expandable = true,
 }: {
   workId: string;
   /** 表示中の版（新しい相談はこの版についてのものとして立てる） */
@@ -55,6 +57,10 @@ export function FeedbackPane({
   openId: string | null;
   onOpen: (id: string | null) => void;
   onShowPlace: (t: { id: string; anchor: Anchor | null; revisionId: string | null }) => void;
+  /** 一覧の上の説明 */
+  intro?: string;
+  /** スレッドの見出しに「大きく開く」を出す（FB スペースの中では出さない） */
+  expandable?: boolean;
 }) {
   const [starting, setStarting] = useState(false);
   if (openId)
@@ -64,14 +70,13 @@ export function FeedbackPane({
         index={indexOf.get(openId) ?? null}
         onBack={() => onOpen(null)}
         onShowPlace={onShowPlace}
+        expandable={expandable}
       />
     );
   return (
     <div className="fb-pane">
       <div className="fb-pane__intro">
-        <p className="fb-pane__lead">
-          解決しない相談・話し合いの場所です。紙面の範囲を選んで「FB」に切り替えても始められます
-        </p>
+        <p className="fb-pane__lead">{intro}</p>
         {starting ? null : (
           <M3eButton variant="tonal" onClick={() => setStarting(true)}>
             <M3eIcon slot="icon" name="add_comment" />
@@ -197,9 +202,11 @@ function FeedbackPaneThread({
   index,
   onBack,
   onShowPlace,
+  expandable,
 }: {
   threadId: string;
   index: number | null;
+  expandable: boolean;
   onBack: () => void;
   onShowPlace: (t: { id: string; anchor: Anchor | null; revisionId: string | null }) => void;
 }) {
@@ -220,15 +227,17 @@ function FeedbackPaneThread({
             </span>
           ) : null}
         </div>
-        <Link
-          to="/feedback/$threadId"
-          params={{ threadId }}
-          className="fb-pane__expand"
-          aria-label="大きく開く"
-          title="大きく開く"
-        >
-          <M3eIcon name="open_in_full" />
-        </Link>
+        {expandable ? (
+          <Link
+            to="/feedback/$threadId"
+            params={{ threadId }}
+            className="fb-pane__expand"
+            aria-label="大きく開く"
+            title="大きく開く"
+          >
+            <M3eIcon name="open_in_full" />
+          </Link>
+        ) : null}
       </div>
       {data?.thread.anchor ? (
         <M3eButton

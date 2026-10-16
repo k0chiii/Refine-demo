@@ -8,6 +8,7 @@ import {
   beginFeedbackFileUpload,
   completeFeedbackFileUpload,
   createFeedbackThread,
+  listFeedbackSpaces,
   deleteFeedbackPost,
   editFeedbackPost,
   expireFeedbackFiles,
@@ -640,5 +641,29 @@ describe("フィードバック: 版の上の場所についての相談（コ�
         body: "x",
       }),
     ).rejects.toThrow(code("anchor_invalid"));
+  });
+});
+
+describe("FB スペース（制作物ごと）", () => {
+  it("FB を見られる制作物ぜんぶを、新しい投稿のあった順に、スレッド数・未読・最新の版つきで返す", async () => {
+    const ctx = createInMemoryContext();
+    const a = await seedWork(ctx, { title: "A ポスター" });
+    const b = await seedWork(ctx, { title: "B パンフレット" });
+    await submitRevision(ctx, b.id);
+    const t = await createFeedbackThread(ctx, principals.creator, {
+      workId: b.id,
+      body: "表紙の写真どうしましょう",
+    });
+    const spaces = await listFeedbackSpaces(ctx, principals.reviewer);
+    expect(spaces.map((s) => s.workId)).toEqual([b.id, a.id]);
+    expect(spaces[0]).toMatchObject({ threads: 1, unread: 1, latestRevision: { number: 1 } });
+    expect(spaces[1]).toMatchObject({
+      threads: 0,
+      unread: 0,
+      lastPostAt: null,
+      latestRevision: null,
+    });
+    await markFeedbackRead(ctx, principals.reviewer, t);
+    expect((await listFeedbackSpaces(ctx, principals.reviewer))[0]!.unread).toBe(0);
   });
 });

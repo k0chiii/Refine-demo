@@ -9,6 +9,7 @@ import {
   failFeedbackFileUpload,
   getFeedbackThread,
   listFeedbackMentionCandidates,
+  listFeedbackSpaces,
   listFeedbackThreads,
   markFeedbackRead,
   postFeedback,
@@ -38,6 +39,15 @@ const postFields = {
   fileIds: v.optional(v.array(v.string())),
   template: v.optional(vFeedbackTemplateId),
 };
+
+/** FB スペース（制作物ごと）の一覧。新しい投稿のあった順、スレッドの無いものは題名順で下 */
+export const listSpaces = query({
+  args: {},
+  handler: async (ctx) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() => listFeedbackSpaces(createReadContext(ctx.db), principal));
+  },
+});
 
 /** スレッドの一覧（最後の投稿が新しい順。見られる制作物のものだけ） */
 export const listThreads = query({

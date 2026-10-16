@@ -299,6 +299,76 @@ export async function summarizeFeedbackActivity(
   return out;
 }
 
+/**
+ * 制作物ごとの FB スペース（Slack のチャンネルに当たる。利用者決定 2026-10-16「制作物ごとに一つの FB スペース」）。
+ * スペースの中に、紙面の範囲についてのスレッドと、制作物全体についてのスレッドが立つ。
+ */
+export interface FeedbackSpaceSummary {
+  workId: string;
+  title: string;
+  confidentiality: Confidentiality;
+  mediaType: MediaType;
+  lifecycle: WorkLifecycle;
+  /** 制作物そのもの（紙面）を見られるか。見られなくても FB は読み書きできる（委員なら誰でも） */
+  canOpen: boolean;
+  threads: number;
+  unread: number;
+  /** いちばん新しい投稿の時刻（スレッドが無ければ null） */
+  lastPostAt: number | null;
+  /** いちばん新しい版（無効にした版を除く。まだ版が無ければ null） */
+  latestRevision: { id: string; label: string; number: number } | null;
+}
+
+/**
+ * FB スペースの一覧: その人が FB を見られる制作物ぜんぶ（非公開は閲覧権限のある人だけ）。
+ * 新しい投稿のあったスペースが上、スレッドの無いスペースは題名順で下。
+ */
+export async function listFeedbackSpaces(
+  ctx: AppContext,
+  principal: Principal,
+  input: { limit?: number } = {},
+): Promise<FeedbackSpaceSummary[]> {
+  const limit = Math.min(Math.max(input.limit ?? 300, 1), 500);
+  const out: FeedbackSpaceSummary[] = [];
+  for (const work of await ctx.works.list(500)) {
+    const grants = await ctx.acl.listByWork(work.id);
+    if (!canViewFeedback({ work, grants, principal })) continue;
+    const threads = await ctx.feedback.listThreads({ workId: work.id, limit: 200 });
+    let unread = 0;
+    let lastPostAt: number | null = null;
+    for (const t of threads) {
+      const readAt = await ctx.feedback.readAt(principal.userId, t.id);
+      if (readAt === null || readAt < t.lastPostAt) unread++;
+      if (lastPostAt === null || t.lastPostAt > lastPostAt) lastPostAt = t.lastPostAt;
+    }
+    const latest = (await ctx.revisions.listByWork(work.id))
+      .filter((r) => r.reviewState !== "void")
+      .sort((a, b) => b.submittedAt - a.submittedAt)[0];
+    out.push({
+      workId: work.id,
+      title: work.title,
+      confidentiality: work.confidentiality,
+      mediaType: work.mediaType,
+      lifecycle: work.lifecycle,
+      canOpen: canViewWork({ work, grants, principal }),
+      threads: threads.length,
+      unread,
+      lastPostAt,
+      latestRevision: latest
+        ? {
+            id: latest.id,
+            label: revisionLabel(latest),
+            number: latest.kind === "rough" ? 0 : latest.sequence,
+          }
+        : null,
+    });
+  }
+  out.sort(
+    (a, b) => (b.lastPostAt ?? -1) - (a.lastPostAt ?? -1) || a.title.localeCompare(b.title, "ja"),
+  );
+  return out.slice(0, limit);
+}
+
 export interface FeedbackFileView {
   id: string;
   fileName: string;

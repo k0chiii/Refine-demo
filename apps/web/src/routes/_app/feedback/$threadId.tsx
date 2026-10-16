@@ -2,28 +2,25 @@ import { api } from "@mf100/convex/api";
 import type { Anchor } from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { useEffect } from "react";
 import { FeedbackConversation } from "@/features/feedback/FeedbackConversation";
-import { FeedbackListPane, validateFeedbackListSearch } from "@/features/feedback/FeedbackListPane";
 import { anchorPlace } from "@/features/feedback/FeedbackPane";
 import { useVisualViewportBox } from "@/lib/useKeyboardInset";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import { UserAvatar } from "@/ui/UserAvatar";
 import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/feedback/$threadId")({
-  validateSearch: validateFeedbackListSearch,
   component: FeedbackThread,
 });
 
 /**
- * フィードバック（FB）のスレッド（Slack のスレッドに当たる）。投稿が古い順に並び、下の欄から返信する。
- * 広い画面は一覧・詳細（左に一覧を残す。M3 list-detail の例そのもの「メッセージと会話」）。
- * 上に何の制作物の相談かを示すカードを置き、「制作物で見る」で制作物の中の同じ相談（版・場所）へ移る。
+ * フィードバック（FB）のスレッド（Slack のスレッドに当たる）。通知・リンクから開く入口。
+ * 840 以上は、その制作物の FB スペース（紙面とスレッドを並べる画面）でこのスレッドを開き直す。
+ * 839 以下はここで全画面のやり取りを出す（返信欄を下に止める。Slack と同じ）。
  */
 function FeedbackThread() {
   const { threadId } = Route.useParams();
-  const search = Route.useSearch();
   const navigate = useNavigate();
   const wc = useWindowClass();
   const wide = wc === "expanded" || wc === "large";
@@ -32,11 +29,26 @@ function FeedbackThread() {
   useVisualViewportBox(compact);
   const data = useQuery(api.feedback.getThread, { threadId: threadId });
 
-  const back = wide ? null : (
+  // 広い画面: その制作物の FB スペースで開き直す（紙面を見ながら話せる画面）
+  useEffect(() => {
+    if (wide && data)
+      void navigate({
+        to: "/feedback/w/$workId",
+        params: { workId: data.work.id },
+        search: { thread: threadId },
+        replace: true,
+      });
+  }, [wide, data?.work.id, threadId]);
+
+  const back = (
     <AppBarSlot slot="leading">
       <M3eIconButton
-        aria-label="フィードバックへ戻る"
-        onClick={() => void navigate({ to: "/feedback", search })}
+        aria-label="この制作物の FB へ戻る"
+        onClick={() =>
+          void (data
+            ? navigate({ to: "/feedback/w/$workId", params: { workId: data.work.id }, search: {} })
+            : navigate({ to: "/feedback" }))
+        }
       >
         <M3eIcon name="arrow_back" className="icon--mirror" />
       </M3eIconButton>
@@ -55,116 +67,66 @@ function FeedbackThread() {
       : navigate({ to: "/works/$workId", params: { workId: data.work.id }, search: s }));
   };
 
+  if (wide)
+    return (
+      <>
+        <AppBarSlot slot="title">フィードバック</AppBarSlot>
+        {data === null ? (
+          <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
+        ) : (
+          <p className="muted">開いています…</p>
+        )}
+      </>
+    );
+
   const where = data
     ? [data.thread.revision?.label, anchorPlace(data.thread.anchor as Anchor | null)]
         .filter(Boolean)
         .join("・") || "制作物について"
     : "";
-  const openButton =
-    data && data.work.canOpen ? (
-      <M3eButton variant="tonal" onClick={openInWork}>
-        <M3eIcon slot="icon" name="open_in_new" />
-        {data.thread.anchor ? "紙面で見る" : "制作物で見る"}
-      </M3eButton>
-    ) : null;
-
-  const detail =
-    data === undefined ? (
-      <p className="muted fb-layout__loading">読み込み中…</p>
-    ) : data === null ? (
-      <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
-    ) : wide ? (
-      // 広い画面: 見出し（題名・制作物・参加者・紙面で見る）を上に止め、投稿だけがスクロールし、返信欄は下に止める（Slack・Gmail の読む欄）
-      <>
-        <header className="fb-head">
-          <div className="fb-head__text">
-            <h2 className="fb-head__title">{data.thread.title}</h2>
-            <p className="fb-head__sub">
-              <M3eIcon
-                name={data.thread.anchor ? "my_location" : "description"}
-                className="fb-head__icon"
-              />
-              <span className="fb-head__work">
-                {data.work.title}
-                {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
-              </span>
-              <span aria-hidden="true">・</span>
-              <span>{where}</span>
-            </p>
-          </div>
-          <Participants people={data.thread.participants} />
-          {openButton}
-        </header>
-        <div className="fb-thread fb-thread--fill">
-          <FeedbackConversation threadId={threadId} data={data} />
-        </div>
-      </>
-    ) : (
-      <div className="fb-thread">
-        <FeedbackConversation
-          threadId={threadId}
-          data={data}
-          dense={compact}
-          header={
-            <section className="fb-context" aria-label="相談している制作物">
-              <M3eIcon
-                name={data.thread.anchor ? "my_location" : "description"}
-                className="fb-context__icon"
-              />
-              <div className="fb-context__text">
-                <span className="fb-context__work">
-                  {data.work.title}
-                  {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
-                </span>
-                <span className="fb-context__where">
-                  {where}・参加 {data.thread.participants.length} 人
-                </span>
-              </div>
-              {openButton}
-            </section>
-          }
-        />
-      </div>
-    );
-
   return (
     <>
       {back}
-      <AppBarSlot slot="title" {...(data && !wide ? { title: data.thread.title } : {})}>
-        {data && !wide ? data.thread.title : "フィードバック"}
+      <AppBarSlot slot="title" {...(data ? { title: data.thread.title } : {})}>
+        {data ? data.thread.title : "フィードバック"}
       </AppBarSlot>
-      {data && !wide ? <AppBarSlot slot="subtitle">{data.work.title}</AppBarSlot> : null}
-      {wide ? (
-        <div className="fb-layout">
-          <div className="fb-layout__list">
-            <FeedbackListPane search={search} selectedId={threadId} />
-          </div>
-          <div className="fb-layout__detail">{detail}</div>
-        </div>
+      {data ? <AppBarSlot slot="subtitle">{data.work.title}</AppBarSlot> : null}
+      {data === undefined ? (
+        <p className="muted">読み込み中…</p>
+      ) : data === null ? (
+        <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
       ) : (
-        detail
+        <div className="fb-thread">
+          <FeedbackConversation
+            threadId={threadId}
+            data={data}
+            dense={compact}
+            header={
+              <section className="fb-context" aria-label="相談している制作物">
+                <M3eIcon
+                  name={data.thread.anchor ? "my_location" : "description"}
+                  className="fb-context__icon"
+                />
+                <div className="fb-context__text">
+                  <span className="fb-context__work">
+                    {data.work.title}
+                    {data.work.confidentiality === "restricted" ? "（非公開）" : ""}
+                  </span>
+                  <span className="fb-context__where">
+                    {where}・参加 {data.thread.participants.length} 人
+                  </span>
+                </div>
+                {data.work.canOpen ? (
+                  <M3eButton variant="tonal" onClick={openInWork}>
+                    <M3eIcon slot="icon" name="open_in_new" />
+                    {data.thread.anchor ? "紙面で見る" : "制作物で見る"}
+                  </M3eButton>
+                ) : null}
+              </section>
+            }
+          />
+        </div>
       )}
     </>
-  );
-}
-
-/** 参加者の顔ぶれ（重ねたアバター。4 人まで、それ以上は「+n」） */
-function Participants({ people }: { people: Array<{ id: string; name: string }> }) {
-  const shown = people.slice(0, 4);
-  const rest = people.length - shown.length;
-  return (
-    <div
-      className="fb-head__people"
-      role="img"
-      aria-label={`参加 ${people.length} 人: ${people.map((p) => p.name).join("、")}`}
-      title={people.map((p) => p.name).join("、")}
-    >
-      {shown.map((p) => (
-        <span key={p.id} className="fb-head__person">
-          <UserAvatar seed={p.id} size={28} />
-        </span>
-      ))}
-      {rest > 0 ? <span className="fb-head__more">+{rest}</span> : null}
-    </div>
   );
 }

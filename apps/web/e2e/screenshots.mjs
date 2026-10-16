@@ -599,11 +599,13 @@ async function main() {
   await page.locator("m3e-tab", { hasText: "担当" }).click();
   await page.waitForSelector(".teams-admin__team");
   await shot("13d-admin-teams");
-  // 62・63 フィードバック（制作の議論のスレッド。委員なら誰でも見て書ける）: 一覧 → スレッド → テンプレと画像を付けて返信 → リアクション
+  // 62・63 フィードバック（制作物ごとの FB スペース。委員なら誰でも見て書ける）: スペースの一覧 → スペース（紙面・スレッド）→
+  // スレッド → テンプレと画像を付けて返信 → リアクション
   await page.locator("m3e-nav-item", { hasText: "フィードバック" }).first().click();
-  await page.waitForSelector(".fb-list m3e-list-action");
+  await page.waitForSelector(".fb-spaces__list m3e-list-action");
   await shot("62-feedback-list");
-  await page.locator(".fb-list m3e-list-action", { hasText: "配色の方向性" }).click();
+  await page.locator(".fb-spaces__list m3e-list-action", { hasText: "EVE 企画ポスター" }).click();
+  await page.locator(".fb-pane__list m3e-list-action", { hasText: "配色の方向性" }).click();
   await page.waitForSelector(".fb-post");
   const before = await page.locator(".fb-post").count();
   await page.locator('.fb-composer m3e-icon-button[aria-label="テンプレート"]').click();
@@ -656,6 +658,17 @@ async function main() {
   await page.waitForSelector(".fb-pane--thread .fb-post");
   await page.waitForSelector(".anchor-pin--fb");
   await shot("64-editor-fb");
+  // 64b FB スペース（縦に 3 列: スペース・紙面・スレッド）。紙面の FB の印から、そのスレッドを開いて話す
+  {
+    const workId = new URL(revisionUrl).pathname.split("/")[2];
+    await go(`${BASE}/feedback/w/${workId}`);
+    await pdfReady();
+    // 紙面は最新の版（第2版）。第1版の範囲についての FB を開くと、紙面がその版・場所へ移り印が出る
+    await page.locator(".fb-pane__list m3e-list-action", { hasText: "余白" }).click();
+    await page.waitForSelector(".fb-space__threads .fb-pane--thread .fb-post");
+    await page.waitForSelector(".fb-stage .anchor-pin--fb");
+    await shot("64b-feedback-space");
+  }
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
