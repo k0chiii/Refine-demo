@@ -97,8 +97,8 @@ const signInAs = async (sub) => {
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
-/** 制作物一覧の行（広い画面は入れ子の表の題名ボタン、compact は入れ子のリスト） */
-const WORKS_ENTRY = ".works-team-table .data-table__link, .works m3e-list-action";
+/** 制作物一覧の行（「局 › 担当」の入れ子のリストの項目） */
+const WORKS_ENTRY = ".works m3e-list-action";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
   const input = scope.locator(".picker__search input").first();
@@ -169,10 +169,10 @@ async function main() {
   await page.locator(`m3e-expansion-panel [slot="header"]`).first().click();
   await shot("01-signin");
 
-  // 02 制作物一覧（制作者）: 「局 › 担当」の入れ子の表（主管担当ごと）。02b は制作担当ごと（同じ制作物が複数の担当の下に出る）
+  // 02 制作物一覧（制作者）: 「局 › 担当」の入れ子のリスト（主管担当ごと）。02b は制作担当ごと（同じ制作物が複数の担当の下に出る）
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
-  await page.waitForSelector(".works-team-table .data-table__group--bureau");
+  await page.waitForSelector(".works-team-list__bureau");
   await shot("02-works-list");
   const siteRows = () => page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).count();
   expectTrue((await siteRows()) === 1, "主管担当ごとの一覧で、制作物が 1 か所にない");

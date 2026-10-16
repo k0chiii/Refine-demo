@@ -1237,5 +1237,11 @@ m3.material.io の sitemap にある**ドキュメント 262 ページ全部**�
 - **余白**: 状態のフィルタチップと「主管担当／制作担当」の行と、表との間が 8dp しかなかった（チップの下の余白だけ）。操作の行（`.works__controls`）の下を **16dp** にした（M3 の 4dp 刻みで、関連する部品のまとまりの間。data table の仕様の「表を操作する部品は表の直上」はそのまま）。スマホのリストも同じ間隔
 - **M3 に表はあるか**: 無い。§31 で確かめたとおり m3.material.io の部品一覧に data table は無く、M3E（@m3e/web 2.10.1 の custom-elements も確認）にも table・data grid は無い。表の正式な仕様は Material 2 の data tables だけ
 - **どうするのが正しいか**: M3 で表が要る画面は「M2 の data table の寸法・振る舞いを、M3 のトークン（色・文字・形）で組む」のが Google 自身の実装と同じやり方（Angular Material の mat-table と Flutter の DataTable は、M3 テーマでこの形になる。M3E の paginator なども Angular Material と同じ作り）。ただし表を使うのは「行どうしを列で見比べる」ときだけで、1 件ずつ探して開く一覧は M3 の Lists を使う
-  - 制作物一覧は PC では締切・納期・状態を行どうしで見比べるので表（§31・§38 の data table）、スマホは見比べるより開く用途なので M3E のリスト（expandable list item の入れ子）。この分け方は変えない
   - 表の中で M3E を使える所は M3E にしている: 絞り込みは filter chip、切り替えは segmented button、ページ送りは paginator、切れた文字は tooltip、読み込みは linear progress、セルの選択肢は select
+
+### PC の制作物一覧も M3E のリストに（利用者決定 2026-10-16「リストに揃えよう」）
+
+- 見比べやすさ（表）より、M3E の部品に揃えることを取った。PC もスマホも同じ `TeamList`（M3E の action list と expandable list item の入れ子。局 › 担当、既定はすべて開く）
+- 行は 1 件 2 行: 題名（FB に未読があれば太字）と、版・校正の締切。PC は 2 行目に納期・制作者も足す（スマホは 2 行に収めるため版と締切まで）。行の末尾に状態（進行中以外）と FB の数（未読は点）
+- FB の列のボタン（押すと制作物の FB を開く）は無くした。行の中にボタンを入れると押せる部品の入れ子になる（M3E の list action は行全体が 1 つのボタン）ため。制作物の FB は FB タブの FB スペースから開く
+- 消したもの: 入れ子の表（`TeamTable`）、FB の数のボタン（`FbCount`）、見出しの行・字下げ・FB ボタンの CSS。ほかの画面の表（`ui/DataTable`）は管理画面などの見比べる一覧なので残す

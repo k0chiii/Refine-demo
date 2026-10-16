@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_app/works/")({
 /**
  * U-02 制作物一覧。探して開くだけの入口。行を押すとエディタ（最新版）が開く。
  * 「局 › 担当」の入れ子で出し、主管担当／制作担当のどちらの下に並べるかを切り替える（`by`。既定は主管担当。
- * 利用者決定 2026-10-15）。PC は入れ子の表、スマホは入れ子のリスト（WorksByTeam）。
+ * 利用者決定 2026-10-15）。PC もスマホも M3E の入れ子のリスト（WorksByTeam。M3 に表の部品が無いので揃えた。利用者決定 2026-10-16）。
  * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、FAB は「版を提出」に譲り、1 件ずつの登録は
  * 登録の権限（Nogiku の組織権限 works:create）のある人にだけ、アプリバーの操作として出す（ダイアログは `?new=1`）。
  * 検索語は `q` で渡る（検索バーは一旦外している）。見出し「制作物一覧」は共通アプリバーに差し込む（M3 App bars）。
@@ -125,13 +125,7 @@ function Works() {
           teams={teams}
           axis={axis}
           compact={compact}
-          onOpen={(workId, tab) =>
-            void navigate({
-              to: "/works/$workId",
-              params: { workId },
-              ...(tab ? { search: { tab } } : {}),
-            })
-          }
+          onOpen={(workId) => void navigate({ to: "/works/$workId", params: { workId } })}
         />
       )}
       <NewWorkDialog
