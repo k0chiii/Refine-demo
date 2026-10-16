@@ -1,14 +1,24 @@
 import { api } from "@mf100/convex/api";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import type { M3eFilterChipElement } from "@m3e/web/chips";
+import { useEffect, useRef, useState } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { WorksByTeam } from "@/features/work/WorksByTeam";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
-import { M3eFilterChip, M3eFilterChipSet, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import {
+  M3eFilterChip,
+  M3eFilterChipSet,
+  M3eIcon,
+  M3eIconButton,
+  M3eMenu,
+  M3eMenuItemGroup,
+  M3eMenuItemRadio,
+  M3eMenuTrigger,
+} from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (
@@ -88,7 +98,9 @@ function Works() {
             </M3eFilterChip>
           ))}
         </M3eFilterChipSet>
-        {teams && teams.length > 0 ? (
+        {teams && teams.length > 0 && compact ? (
+          <AxisChip axis={axis} onChange={setAxis} />
+        ) : teams && teams.length > 0 ? (
           <ChoiceGroup
             label="並べる担当"
             className="works__axis"
@@ -125,5 +137,62 @@ function Works() {
         onClose={() => setCreating(false)}
       />
     </div>
+  );
+}
+
+const axisLabel = { owner: "主管担当", production: "制作担当" } as const;
+
+/**
+ * スマホの「主管担当／制作担当」: 状態のチップと 1 行に収めるため、選んでいる方を名前にしたチップを押すとメニューで選ぶ
+ * （M3 Chips: 絞り込みのチップは末尾のアイコンからメニューを開ける。compact はチップ全体で開く）。
+ * M3E の filter chip は押すと選択が反転するので、押した後に戻す（並べ方の切り替えで、絞り込みのオン・オフではない）。
+ * 読み上げでは「メニューを開くボタン」にする（M3E は radio にするが、radio には aria-expanded を付けられない）
+ */
+function AxisChip({
+  axis,
+  onChange,
+}: {
+  axis: "owner" | "production";
+  onChange: (next: "owner" | "production") => void;
+}) {
+  const ref = useRef<M3eFilterChipElement>(null);
+  useEffect(() => {
+    const chip = ref.current;
+    if (!chip) return;
+    const fix = () => {
+      if (chip.getAttribute("role") !== "button") chip.setAttribute("role", "button");
+      if (chip.hasAttribute("aria-checked")) chip.removeAttribute("aria-checked");
+    };
+    fix();
+    const mo = new MutationObserver(fix);
+    mo.observe(chip, { attributes: true, attributeFilter: ["role", "aria-checked"] });
+    return () => mo.disconnect();
+  }, []);
+  return (
+    <>
+      <M3eFilterChip
+        ref={ref}
+        className="works__axis-chip"
+        aria-label={`並べる担当: ${axisLabel[axis]}（変える）`}
+        onClick={() =>
+          requestAnimationFrame(() => {
+            if (ref.current) ref.current.selected = false;
+          })
+        }
+      >
+        {axisLabel[axis]}
+        <M3eIcon slot="trailing-icon" name="arrow_drop_down" />
+        <M3eMenuTrigger htmlFor="works-axis-menu" />
+      </M3eFilterChip>
+      <M3eMenu id="works-axis-menu">
+        <M3eMenuItemGroup aria-label="並べる担当">
+          {(["owner", "production"] as const).map((k) => (
+            <M3eMenuItemRadio key={k} checked={axis === k} onClick={() => onChange(k)}>
+              {axisLabel[k]}
+            </M3eMenuItemRadio>
+          ))}
+        </M3eMenuItemGroup>
+      </M3eMenu>
+    </>
   );
 }

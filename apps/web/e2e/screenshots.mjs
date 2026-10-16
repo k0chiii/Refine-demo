@@ -1142,7 +1142,16 @@ async function v2Scenes() {
   await page.waitForTimeout(700);
   expectTrue((await page.locator(".compose-pop").count()) === 0, "なぞっただけで投稿欄が出た");
   await touchOn("pointerdown", 60, 120);
-  await page.waitForTimeout(650); // 長押し（450ms）
+  // 26b 長押しの途中: 指の周りの輪が満ちていく（長押しの手応え）
+  await page.waitForTimeout(330);
+  expectTrue(
+    (await page.locator(".viewer__overlay .press-charge").count()) === 1,
+    "長押しの輪が出ない",
+  );
+  // shot() は撮る前に待つので、長押しが満ちる前のこの瞬間はそのまま撮る
+  await page.screenshot({ path: resolve(OUT, "26b-mobile-press-charge.png") });
+  console.log("saved 26b-mobile-press-charge");
+  await page.waitForTimeout(320); // 長押し（450ms）が満ちるまで
   await touchOn("pointermove", 140, 170);
   await touchOn("pointermove", 220, 230);
   await touchOn("pointerup", 220, 230);

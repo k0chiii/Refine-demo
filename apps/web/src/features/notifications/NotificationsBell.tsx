@@ -1,11 +1,14 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { useNavigate } from "@tanstack/react-router";
+import { notificationPath } from "@mf100/domain";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef } from "react";
 import { formatJstShort } from "@/lib/format";
 import { setAppBadge } from "@/lib/pwa";
+import { showDeviceNotification } from "@/lib/push";
 import { PushSetting } from "./PushSetting";
+import { useDevicePush } from "./useDevicePush";
 import { useAction } from "@/lib/useAction";
 import {
   M3eActionList,
@@ -130,7 +133,7 @@ function Menu({ id }: { id: string }) {
       <div className="notif-menu__header">
         <span className="label-large">通知</span>
       </div>
-      <PushSetting />
+      <PushSetting inMenu />
       {unread > 0 ? (
         <M3eMenuItem disabled={doMarkAll.pending} onClick={() => void doMarkAll.run()}>
           <M3eIcon slot="icon" name="done_all" />
@@ -255,6 +258,50 @@ function AppBadge() {
   // サインアウトの途中（認証が外れた直後）に問い合わせない
   const unread = useQuery(api.notifications.unreadCount, isAuthenticated ? {} : "skip") ?? 0;
   useEffect(() => setAppBadge(unread), [unread]);
+
+  // 端末の通知（この端末から出したもの）を押したとき: 開いているアプリの中で画面を移す（読み込み直さない。デモの中身を保つ）
+  const router = useRouter();
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data as { type?: string; url?: string; id?: string | null } | null;
+      if (d?.type !== "mf100-notification-open" || typeof d.url !== "string") return;
+      if (d.id && isAuthenticated)
+        void markRead({ notificationId: d.id as Id<"notifications"> }).catch(() => undefined);
+      router.history.push(d.url);
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [isAuthenticated]);
+
+  // デモ（サーバー無し）: 通知をオンにしていれば、新しく届いた通知をこの端末のバナーで出す（Web Push の代わり）
+  const local = useDevicePush();
+  const list = useQuery(
+    api.notifications.list,
+    isAuthenticated && local.local && local.on ? { limit: 20 } : "skip",
+  );
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!list) return;
+    if (seen.current === null) {
+      // 開いた時点で届いていたものは出さない（新しく来たものだけ）
+      seen.current = new Set(list.map((n) => n.id));
+      return;
+    }
+    for (const n of list) {
+      if (seen.current.has(n.id)) continue;
+      seen.current.add(n.id);
+      if (n.readAt !== undefined) continue;
+      void showDeviceNotification({
+        title: n.title,
+        body: n.body ?? "",
+        url: notificationPath(n),
+        tag: n.id,
+        notificationId: n.id,
+        inApp: true,
+      });
+    }
+  }, [list]);
   return null;
 }
 

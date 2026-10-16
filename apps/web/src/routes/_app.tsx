@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
+import { NotificationPrompt } from "@/features/notifications/NotificationPrompt";
 import { disablePush } from "@/lib/push";
 import { useWindowClass } from "@/lib/useMedia";
 import {
@@ -297,6 +298,7 @@ function AppLayout() {
           {immersive ? null : account(32, "shell__account")}
         </M3eAppBar>
         <NotificationsBell.AppBadge />
+        <NotificationPrompt />
         {cls === "compact" ? (
           <NotificationsBell.Sheet open={notifOpen} onClose={() => setNotifOpen(false)} />
         ) : (

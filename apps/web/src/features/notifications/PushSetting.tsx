@@ -1,88 +1,71 @@
-import { api } from "@mf100/convex/api";
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
 import { describeError } from "@/lib/errors";
-import {
-  currentPushSubscription,
-  disablePush,
-  enablePush,
-  pushSupport,
-  type PushSupport,
-} from "@/lib/push";
 import { toast } from "@/lib/toast";
-import { M3eIcon, M3eSwitch } from "@/ui/m3e";
+import { M3eIcon, M3eMenuItemCheckbox, M3eSwitch } from "@/ui/m3e";
+import { useDevicePush } from "./useDevicePush";
 
 /**
  * 通知パネルの一番上:「この端末にも通知を送る」スイッチ（Web Push）。
- * サーバーに鍵が無い（Web Push を使わない環境・デモ）ときは出さない。
+ * 端末への通知が使えない環境（鍵の無い本番）では出さない。デモはサーバーが無いので「この端末の中だけ」で通知する。
  * iPhone の Safari ではスイッチの代わりに「ホーム画面に追加すると受け取れる」と案内する。
+ * 通知パネル（M3E menu）の中ではスイッチを置かず、チェックの付くメニュー項目にする（M3 Menus: メニューの項目に
+ * スイッチやボタンを入れない。選ぶ項目はチェック）。スマホのボトムシートでは行末のスイッチ
  */
-export function PushSetting() {
-  const config = useQuery(api.push.config, {});
-  const [support, setSupport] = useState<PushSupport>(() => pushSupport());
-  const [endpoint, setEndpoint] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const subscribed = useQuery(api.push.status, endpoint ? { endpoint } : "skip");
-  const subscribe = useMutation(api.push.subscribe);
-  const unsubscribe = useMutation(api.push.unsubscribe);
-
-  useEffect(() => {
-    if (support !== "available") return;
-    void currentPushSubscription().then((s) => setEndpoint(s?.endpoint ?? null));
-  }, [support]);
-
-  if (!config) return null;
-  if (support === "unsupported") return null;
-  const on = endpoint !== null && subscribed === true;
+export function PushSetting({ inMenu = false }: { inMenu?: boolean }) {
+  const push = useDevicePush();
+  if (!push.usable || push.support === "unsupported") return null;
 
   const toggle = async (next: boolean) => {
-    setBusy(true);
     try {
       if (next) {
-        const sub = await enablePush(config.publicKey);
-        if (!sub) {
-          setSupport(pushSupport());
-          toast("通知が許可されませんでした", { kind: "warning" });
-          return;
-        }
-        await subscribe(sub);
-        setEndpoint(sub.endpoint);
-      } else {
-        const gone = await disablePush();
-        if (gone) await unsubscribe({ endpoint: gone });
-        setEndpoint(null);
-      }
+        if (!(await push.enable())) toast("通知が許可されませんでした", { kind: "warning" });
+      } else await push.disable();
     } catch (e) {
       toast(describeError(e).message, { kind: "error" });
-    } finally {
-      setBusy(false);
     }
   };
+
+  const hint =
+    push.support === "needs_install"
+      ? "iPhone・iPad は「ホーム画面に追加」したアプリで受け取れます"
+      : push.support === "denied"
+        ? "端末の設定で通知が拒否されています（設定 › 通知 から変えられます）"
+        : push.local
+          ? "デモ: この端末の中で起きた通知をバナーとアイコンの数字で知らせます"
+          : "アプリを閉じていても、題名と制作物名を知らせます";
+
+  if (inMenu)
+    return (
+      <M3eMenuItemCheckbox
+        className="notif-push-item"
+        checked={push.on}
+        disabled={push.support !== "available" || push.pending}
+        onClick={() => void toggle(!push.on)}
+      >
+        <span className="notif-push-item__text">
+          この端末にも通知を送る
+          <span className="notif-push-item__hint">{hint}</span>
+        </span>
+      </M3eMenuItemCheckbox>
+    );
 
   return (
     <div className="notif-push">
       <M3eIcon
-        name={on ? "notifications_active" : "notifications_off"}
+        name={push.on ? "notifications_active" : "notifications_off"}
         className="notif-push__icon"
       />
       <div className="notif-push__text">
         <span className="notif-push__label" id="notif-push-label">
           この端末にも通知を送る
         </span>
-        <span className="notif-push__hint">
-          {support === "needs_install"
-            ? "iPhone・iPad は「ホーム画面に追加」したアプリで受け取れます"
-            : support === "denied"
-              ? "ブラウザの設定で通知が拒否されています"
-              : "アプリを閉じていても、題名と制作物名を知らせます"}
-        </span>
+        <span className="notif-push__hint">{hint}</span>
       </div>
-      {support === "available" ? (
+      {push.support === "available" ? (
         <M3eSwitch
           aria-labelledby="notif-push-label"
-          checked={on}
+          checked={push.on}
           icons="selected"
-          {...(busy || (endpoint !== null && subscribed === undefined) ? { disabled: true } : {})}
+          {...(push.pending ? { disabled: true } : {})}
           onChange={(e) => void toggle((e.target as unknown as { checked: boolean }).checked)}
         />
       ) : null}

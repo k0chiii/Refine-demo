@@ -5,11 +5,16 @@ import {
   type NormalizedRect,
   type Viewport,
 } from "@mf100/domain";
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { haptic } from "@/lib/haptics";
 
 /** タッチで範囲選択を始めるまでの長押しの時間と、長押しとみなす指のぶれの上限 */
 export const LONG_PRESS_MS = 450;
 const LONG_PRESS_SLOP = 10;
+/** 長押しの手応え: 指が触れてからこの時間だけ待って、指の周りの輪を満たし始める（スクロールのたびに輪が出ないように） */
+const CHARGE_DELAY_MS = 100;
+/** 指の周りの輪の半径（指先に隠れず、外にはみ出して見える大きさ） */
+const CHARGE_R = 36;
 
 export interface OverlayThread {
   id: string;
@@ -41,6 +46,8 @@ interface Props {
  * - マウス・ペン: ドラッグで範囲、クリックでピン（従来どおり）
  * - タッチ: なぞるとふつうにスクロールする。**長押しすると選択が始まり**、そのまま指を動かすと範囲、離すとその場にピン。
  *   長押しの前に指が動いたらスクロールとして扱い、選択は始めない。短いタップでは何も作らない（ピン・範囲を押すとそのスレッドを開く）
+ * - 長押しの手応え（利用者指示 2026-10-16）: 押している間は指の周りの輪が満ちていき（M3 の円形の進捗表示の見た目）、
+ *   満ちて選択が始まると輪が弾けて、端末が軽く震える（震えられる端末だけ）。離してコメントの位置を置いたときも軽く震える
  */
 export function AnchorOverlay({
   viewport,
@@ -73,9 +80,13 @@ export function AnchorOverlay({
     timer: number;
     armed: boolean;
   } | null>(null);
+  /** 長押しの輪（満ちていく途中）と、満ちた瞬間に弾ける輪。key で描き直してアニメーションを始めからにする */
+  const [charge, setCharge] = useState<{ x: number; y: number; key: number } | null>(null);
+  const [pop, setPop] = useState<{ x: number; y: number; key: number } | null>(null);
   const clearPress = () => {
     if (press.current) window.clearTimeout(press.current.timer);
     press.current = null;
+    setCharge(null);
   };
   useEffect(() => clearPress, []);
   // 長押しで選択が始まったら、指を動かしてもページがスクロールしないようにする（touchmove の既定動作を止める）
@@ -119,6 +130,7 @@ export function AnchorOverlay({
       }
       clearPress();
       const id = e.pointerId;
+      setCharge({ ...p, key: e.timeStamp });
       press.current = {
         id,
         cx: e.clientX,
@@ -134,7 +146,9 @@ export function AnchorOverlay({
           } catch {
             // 指がもう離れている
           }
-          navigator.vibrate?.(10);
+          haptic();
+          setCharge(null);
+          setPop({ x: cur.x, y: cur.y, key: Date.now() });
           setDrag({ x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y });
         }, LONG_PRESS_MS),
       };
@@ -160,6 +174,7 @@ export function AnchorOverlay({
       const armed = cur.armed;
       clearPress();
       if (!armed) return; // 短いタップ: 何も作らない
+      haptic(); // 位置を置いた手応え（指を離す操作の中なので iPhone でも震えやすい）
     }
     if (!drag) return;
     finish(drag);
@@ -290,6 +305,34 @@ export function AnchorOverlay({
           y={Math.min(drag.y0, drag.y1)}
           width={Math.abs(drag.x1 - drag.x0)}
           height={Math.abs(drag.y1 - drag.y0)}
+        />
+      ) : null}
+      {charge ? (
+        <g
+          key={charge.key}
+          className="press-charge"
+          transform={`translate(${charge.x} ${charge.y})`}
+          style={
+            {
+              "--press-delay": `${CHARGE_DELAY_MS}ms`,
+              "--press-ms": `${LONG_PRESS_MS - CHARGE_DELAY_MS}ms`,
+            } as CSSProperties
+          }
+          aria-hidden="true"
+        >
+          <circle r={CHARGE_R} className="press-charge__track" />
+          <circle r={CHARGE_R} pathLength={100} className="press-charge__ring" />
+        </g>
+      ) : null}
+      {pop ? (
+        <circle
+          key={pop.key}
+          cx={pop.x}
+          cy={pop.y}
+          r={CHARGE_R}
+          className="press-pop"
+          aria-hidden="true"
+          onAnimationEnd={() => setPop(null)}
         />
       ) : null}
     </svg>

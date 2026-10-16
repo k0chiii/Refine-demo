@@ -1262,8 +1262,23 @@ m3e-dialog [slot="actions"] {
   align-items: center;
   gap: 8px 16px;
   justify-content: space-between;
-  /* 表（リスト）を操作する部品は表の直上に置き、表とは 16dp 空ける（data table の仕様・M3 の余白の刻み） */
+  /* 一覧を操作する部品は一覧の直上に置き、一覧とは 16dp 空ける（M3 の余白の刻み） */
   margin-bottom: 16px;
+}
+/* スマホ: 状態のチップと「主管担当 ▾」を 1 行に。収まらない幅では折り返さず横にスクロールする（M3 Chips） */
+@media (max-width: 599px) {
+  .works__controls {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+  .works__controls > * {
+    flex: none;
+  }
 }
 /* 担当の項目と、その下の制作物を字下げ（M3E list item の先頭余白） */
 .works-team-list__team {
@@ -4204,4 +4219,98 @@ m3e-snackbar {
 .profile-avatar--empty {
   font-size: 64px;
   color: var(--mf-on-surface-variant);
+}
+
+/* 開いたときの「通知をオンにしますか？」（M3 の基本のダイアログ。見出しの上のアイコンと見出しは中央揃え） */
+.notify-prompt__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.notify-prompt__icon {
+  font-size: 24px;
+  color: var(--mf-secondary);
+}
+.notify-prompt__lead {
+  margin: 0 0 8px;
+}
+
+/* ---------- 長押しの手応え（紙面の上の長押しでコメントの位置を選ぶ。AnchorOverlay。利用者指示 2026-10-16）
+ * 押している間は指の周りの輪が満ちる（M3 の円形の進捗表示: 太さ 4・primary の線・secondary-container の溝）。
+ * 満ちて選択が始まると、輪が広がって消える（M3 の押したときの状態の層と同じ primary の薄い面） */
+.press-charge circle {
+  fill: none;
+  stroke-width: 4;
+  pointer-events: none;
+}
+.press-charge__track {
+  stroke: var(--mf-secondary-container);
+  animation: press-appear 120ms var(--press-delay, 100ms) both;
+}
+.press-charge__ring {
+  stroke: var(--mf-primary);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  /* 12 時の位置から時計回りに満ちる */
+  transform: rotate(-90deg);
+  animation:
+    press-appear 120ms var(--press-delay, 100ms) both,
+    press-fill var(--press-ms, 350ms) linear var(--press-delay, 100ms) forwards;
+}
+@keyframes press-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes press-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.press-pop {
+  fill: var(--mf-primary);
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: press-pop 320ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+@keyframes press-pop {
+  from {
+    opacity: 0.32;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 動きを減らす設定: 輪は満ちる途中を出さず、満ちたら一度だけ出す。弾ける動きはしない */
+  .press-charge__ring {
+    animation: press-fill 1ms linear var(--press-ms, 350ms) forwards;
+  }
+  .press-pop {
+    animation: press-appear 160ms reverse forwards;
+    opacity: 0.24;
+  }
+}
+/* 通知パネル（メニュー）の「この端末にも通知を送る」: チェックの付くメニュー項目。2 行目に説明 */
+.notif-push-item__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: 8px;
+  white-space: normal;
+}
+.notif-push-item__hint {
+  display: block;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  white-space: normal;
 }

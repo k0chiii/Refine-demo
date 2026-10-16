@@ -18,7 +18,8 @@ const isIos = () =>
   (/iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
-const isStandalone = () =>
+/** ホーム画面に追加したアプリ（PWA）として開いている */
+export const isStandalone = () =>
   typeof window !== "undefined" &&
   (window.matchMedia?.("(display-mode: standalone)").matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true);
@@ -117,4 +118,47 @@ export async function disablePush(): Promise<string | null> {
   const endpoint = sub.endpoint;
   await sub.unsubscribe().catch(() => false);
   return endpoint;
+}
+
+/**
+ * この端末に通知（バナー）を出す。サーバーを通さず、Service Worker から直接出す（通知をオンにした確認と、
+ * サーバーの無いデモでの通知に使う）。inApp: 押したとき、開いているアプリの中で画面を移す（ページを読み込み直さない）
+ */
+export async function showDeviceNotification(n: {
+  title: string;
+  body: string;
+  url?: string;
+  tag?: string;
+  /** アプリの通知の ID（押したら既読にする） */
+  notificationId?: string;
+  inApp?: boolean;
+}): Promise<void> {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const reg = await registration();
+  if (!reg) return;
+  await reg.showNotification(n.title, {
+    body: n.body,
+    icon: "/icons/icon-192.png",
+    lang: "ja",
+    ...(n.tag ? { tag: n.tag } : {}),
+    data: { url: n.url ?? "/", id: n.notificationId ?? null, inApp: n.inApp === true },
+  });
+}
+
+const LOCAL_KEY = "mf100.localNotify";
+/** サーバーの無いデモで、この端末の中だけで通知を出すか（Web Push の代わり。端末に覚えておく） */
+export function localNotifyEnabled(): boolean {
+  try {
+    return localStorage.getItem(LOCAL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+export function setLocalNotify(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(LOCAL_KEY, "1");
+    else localStorage.removeItem(LOCAL_KEY);
+  } catch {
+    /* 保存できなくても、その場では動く */
+  }
 }

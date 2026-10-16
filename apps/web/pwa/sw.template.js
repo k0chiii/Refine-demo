@@ -129,10 +129,19 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
   const target = new URL(typeof data.url === "string" ? data.url : "/", self.location.origin);
-  if (data.id) target.searchParams.set("from_notification", data.id);
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       const open = list.find((c) => new URL(c.url).origin === self.location.origin);
+      // アプリが端末から出した通知（確認・デモ）: 開いているアプリに画面の移動を頼む（読み込み直さない）
+      if (data.inApp && open) {
+        open.postMessage({
+          type: "mf100-notification-open",
+          url: target.pathname + target.search,
+          id: data.id ?? null,
+        });
+        return open.focus();
+      }
+      if (data.id) target.searchParams.set("from_notification", data.id);
       if (open && "navigate" in open)
         return open.navigate(target.href).then((c) => (c || open).focus());
       return self.clients.openWindow(target.href);
