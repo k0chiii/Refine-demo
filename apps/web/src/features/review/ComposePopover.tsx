@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { portalHost } from "@/lib/portalHost";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
@@ -190,8 +191,8 @@ export function ComposePopover({
       </div>
     </div>
   );
-  // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す
-  return docked ? createPortal(panel, document.body) : panel;
+  // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す（要素の全画面の間はその要素の中）
+  return docked ? createPortal(panel, portalHost()) : panel;
 }
 
 /** スクロールする一番近い親（無ければ null = 画面） */

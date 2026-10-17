@@ -901,3 +901,276 @@
   outline: 2px solid #fff;
   outline-offset: 2px;
 }
+
+/*
+ * ---------- 校正画面: コメントの印と位置の入力（postMarks.tsx / PostText）
+ * 印は % で画像の切り抜きに置く。--sp-k は、端末の枠を縮めて見せているときに印を実際の大きさに保つ倍率（縮め率の逆数。全画面は 1）。
+ * 色はアプリ側のコメントと同じ（primary・相談は secondary で点線と四角・重大は error）
+ */
+.sp-marks {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  /* タッチはスクロールに任せ、長押ししてから範囲選択（AnchorOverlay と同じ） */
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+}
+.sp-marks.is-drawable {
+  cursor: crosshair;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.sp-marks:focus-visible {
+  outline: 3px solid var(--mf-primary);
+  outline-offset: -3px;
+}
+.sp-mark {
+  --mk: var(--mf-primary);
+  --mk-on: var(--mf-on-primary);
+  position: absolute;
+  pointer-events: none;
+}
+.sp-mark.is-fb {
+  --mk: var(--mf-secondary);
+  --mk-on: var(--mf-on-secondary, #fff);
+}
+.sp-mark.is-critical {
+  --mk: var(--mf-error);
+  --mk-on: var(--mf-on-error, #fff);
+}
+.sp-mark--rect {
+  box-sizing: border-box;
+  border: 2px solid var(--mk);
+  border-radius: 2px;
+}
+.sp-mark--rect.is-fb {
+  border-style: dashed;
+}
+.sp-mark--rect.is-active {
+  border-width: 3px;
+}
+.sp-mark--rect.is-clipped {
+  /* 切り抜きで欠けている範囲 */
+  border-style: dotted;
+}
+.sp-mark__fill {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--mk) 14%, transparent);
+}
+.sp-mark.is-active .sp-mark__fill {
+  background: color-mix(in srgb, var(--mk) 30%, transparent);
+}
+.sp-mark.is-draft {
+  --mk: var(--mf-primary);
+  border-style: dashed;
+}
+.sp-mark.is-draft .sp-mark__fill {
+  background: color-mix(in srgb, var(--mk) 18%, transparent);
+}
+.sp-mark--point {
+  width: 0;
+  height: 0;
+}
+/* 番号の印（ボタン）: 範囲は左上の角、ピンは点の上。見た目 22 の周りに 48 の押せる範囲 */
+.sp-mark__pin {
+  --sz: calc(22px * var(--sp-k, 1));
+  position: absolute;
+  left: calc(var(--sz) / -2);
+  top: calc(var(--sz) / -2);
+  width: var(--sz);
+  height: var(--sz);
+  box-sizing: border-box;
+  padding: 0;
+  border: calc(2px * var(--sp-k, 1)) solid var(--mk-on);
+  border-radius: 50%;
+  background: var(--mk);
+  color: var(--mk-on);
+  display: grid;
+  place-items: center;
+  font: 600 calc(11px * var(--sp-k, 1)) / 1 var(--mf-font, sans-serif);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 120ms;
+}
+.sp-mark--rect > .sp-mark__pin {
+  left: calc(var(--sz) / -2 - 1px);
+  top: calc(var(--sz) / -2 - 1px);
+}
+.sp-mark.is-fb .sp-mark__pin {
+  border-radius: calc(7px * var(--sp-k, 1));
+}
+.sp-mark.is-draft .sp-mark__pin {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--mk) 40%, transparent);
+  pointer-events: none;
+}
+.sp-mark__pin::before {
+  content: "";
+  position: absolute;
+  inset: calc(-13px * var(--sp-k, 1));
+}
+.sp-mark.is-active .sp-mark__pin {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 calc(3px * var(--sp-k, 1)) color-mix(in srgb, var(--mk) 35%, transparent);
+}
+.sp-mark__pin:focus-visible {
+  outline: calc(3px * var(--sp-k, 1)) solid var(--mf-secondary);
+  outline-offset: calc(2px * var(--sp-k, 1));
+}
+.sp-mark__num {
+  pointer-events: none;
+}
+/* 開いたコメントの位置を知らせる波紋（一度だけ） */
+.sp-mark__flash {
+  position: absolute;
+  inset: calc(-3px * var(--sp-k, 1));
+  border-radius: inherit;
+  border: calc(3px * var(--sp-k, 1)) solid var(--mk);
+  opacity: 0;
+  pointer-events: none;
+}
+.sp-mark.is-active .sp-mark__flash {
+  animation: sp-mark-flash 900ms ease-out 1;
+}
+@keyframes sp-mark-flash {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+/* キーボードで位置を選ぶ十字 */
+.sp-marks__cursor {
+  position: absolute;
+  width: calc(20px * var(--sp-k, 1));
+  height: calc(20px * var(--sp-k, 1));
+  margin: calc(-10px * var(--sp-k, 1)) 0 0 calc(-10px * var(--sp-k, 1));
+  border: calc(2px * var(--sp-k, 1)) solid var(--mf-primary);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mf-primary) 20%, transparent);
+  pointer-events: none;
+}
+.sp-marks__off {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgb(18 18 18 / 0.82);
+  color: #fff;
+  font-size: calc(12px * var(--sp-k, 1));
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+/* 矢印（前後の画像）は印の上に */
+.sp-nav {
+  z-index: 3;
+}
+
+/* 本文のコメントの範囲 */
+.sp-text[contenteditable="true"] {
+  caret-color: var(--mf-primary);
+  outline: none;
+  cursor: text;
+}
+.sp-text[contenteditable="true"]:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.sp-mark-text {
+  position: relative;
+  background: color-mix(in srgb, var(--mf-primary) 18%, transparent);
+  border-bottom: 2px solid var(--mf-primary);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.sp-mark-text:hover {
+  background: color-mix(in srgb, var(--mf-primary) 26%, transparent);
+}
+.sp-mark-text.is-critical {
+  background: color-mix(in srgb, var(--mf-error) 18%, transparent);
+  border-bottom-color: var(--mf-error);
+}
+.sp-mark-text.is-fb {
+  background: color-mix(in srgb, var(--mf-secondary) 12%, transparent);
+  border-bottom: 2px dashed var(--mf-secondary);
+}
+.sp-mark-text.is-active {
+  background: color-mix(in srgb, var(--mf-primary) 34%, transparent);
+  border-bottom-width: 4px;
+  animation: sp-mark-text-flash 1000ms ease-out 1;
+}
+.sp-mark-text.is-active.is-critical {
+  background: color-mix(in srgb, var(--mf-error) 34%, transparent);
+}
+.sp-mark-text.is-active.is-fb {
+  background: color-mix(in srgb, var(--mf-secondary) 28%, transparent);
+}
+@keyframes sp-mark-text-flash {
+  from {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--mf-primary) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.sp-text .is-draft {
+  background: color-mix(in srgb, var(--mf-primary) 28%, transparent);
+  border-radius: 2px;
+}
+.sp-mark-text:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: 1px;
+}
+/* 番号は行の流れを動かさないよう、範囲の頭の上に重ねる */
+.sp-mark-text[data-index]::before {
+  content: attr(data-index);
+  position: absolute;
+  left: 0;
+  top: -0.85em;
+  min-width: calc(12px * var(--sp-k, 1));
+  padding: 1px calc(3px * var(--sp-k, 1));
+  border-radius: calc(6px * var(--sp-k, 1));
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+  font: 600 calc(10px * var(--sp-k, 1)) / 1.2 var(--mf-font, sans-serif);
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+.sp-mark-text.is-fb[data-index]::before {
+  background: var(--mf-secondary);
+  color: var(--mf-on-secondary, #fff);
+}
+.sp-mark-text.is-critical[data-index]::before {
+  background: var(--mf-error);
+  color: var(--mf-on-error, #fff);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-mark.is-active .sp-mark__flash,
+  .sp-mark-text.is-active {
+    animation: none;
+  }
+}
+/* 全画面のプレビューの上でも、コメントの投稿欄・「選んだ文字にコメント」を手前に */
+body:has(.sp-full) .compose-pop--docked,
+body:has(.sp-full) .touch-comment {
+  z-index: 1100;
+}
+
+/* 校正画面: 投稿欄を置く基準（端末の枠のそば）と、見えていないコメントの案内 */
+.post-annotate {
+  position: relative;
+  width: 100%;
+}
+.post-annotate__note {
+  margin: 0;
+  text-align: center;
+}

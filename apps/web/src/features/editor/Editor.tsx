@@ -135,6 +135,10 @@ type Draft = {
   figma?: FigmaDraft;
   /** 位置なしのコメント（ツールバーから） */
   free?: boolean;
+  /** SNS 投稿のプレビューで選んだ位置（本文の添付の text_range・画像の添付の image_rect / image_pin）。そのままコメントの位置にする */
+  anchor?: Anchor;
+  /** 上の位置の呼び名（投稿欄に出す。「本文」「2 枚目の画像」）と、本文の引用文 */
+  postPlace?: { label: string; quote?: string };
 };
 
 const COMPOSE_W = 300;
@@ -264,6 +268,8 @@ export function Editor({
   /** 紙面の範囲から書くのはコメント（解決する指摘）か相談（FB） */
   const [composeKind, setComposeKind] = useState<"comment" | "feedback">("comment");
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** SNS のプレビューでコメントの位置へ移して強調する合図（カード・印を押すたびに増える） */
+  const [postReveal, setPostReveal] = useState(0);
   /** 動画の再生位置を移す（コメントのカードを押したとき）。key が変わるたびに移す */
   const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
   /** Web のライブ表示でその要素へ移す（カードを押したとき。端末も合わせる） */
@@ -296,6 +302,8 @@ export function Editor({
   // 添付を切り替えたら倍率は幅に合わせた大きさに戻す（画像で拡大した倍率が文章に持ち越されて 220% から始まっていた）
   useEffect(() => {
     setScale(1);
+    // SNS のプレビューで選んだ位置は、他の添付に切り替えたら破棄する（その添付の紙面には投稿欄が出ないため）
+    setDraft((d) => (d?.anchor ? null : d));
   }, [artifactId]);
 
   // 回転ボタンは利用者判断で外した（2026-10-14）。原稿は正位置で校正する。ビューアの回転機能自体は残す
@@ -492,7 +500,8 @@ export function Editor({
     if (!data || !draft || !revisionId) return;
     const { body, mentions } = composeStore.get();
     let anchor: Anchor | undefined;
-    if (artifact && !draft.free) {
+    if (draft.anchor && !draft.free) anchor = draft.anchor;
+    else if (artifact && !draft.free) {
       if (artifact.type === "pdf" && draft.page)
         anchor = draft.rect
           ? { type: "pdf_rect", artifactId: artifact.id, page: draft.page, rect: draft.rect }
@@ -656,10 +665,20 @@ export function Editor({
   const goVersion = (r: { kind: string; sequence: number }) =>
     void navigate({ to: "/works/$workId/v/$n", params: { workId, n: String(versionOf(r)) } });
 
+  /**
+   * SNS 投稿のプレビューを見ているとき、本文・画像の位置のコメントは添付を切り替えず、プレビューの上でその位置を開く
+   * （本文の添付の text_range・画像の添付の image_rect / image_pin）
+   */
+  const staysInPostPreview = (a: Anchor) =>
+    artifact?.fileName === POST_MANIFEST_NAME &&
+    (a.type === "text_range" || a.type === "image_rect" || a.type === "image_pin") &&
+    (data?.artifacts ?? []).some((x) => x.id === a.artifactId);
   const jumpTo = (t: Thread) => {
     setActiveThreadId(t.id);
+    setPostReveal((n) => n + 1);
     if (t.anchor) {
-      if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
+      if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor as Anchor))
+        setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor as Anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
@@ -690,8 +709,10 @@ export function Editor({
       return;
     }
     setActiveThreadId(t.id);
+    setPostReveal((n) => n + 1);
     if (t.anchor) {
-      if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
+      if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor))
+        setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
@@ -722,7 +743,7 @@ export function Editor({
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || draft.marking || !(canComment || canFeedback)) return null;
+    if (!draft || draft.marking || draft.anchor || !(canComment || canFeedback)) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     // 位置なし・動画の時刻だけ（画面の位置なし）・Figma のフレーム単位は、紙面（映像・画面）の右上
@@ -796,6 +817,34 @@ export function Editor({
               ),
             }
           : {})}
+      />
+    );
+  };
+  /** SNS 投稿のプレビューで選んだ位置の投稿欄（PostReview が置く座標を受ける。狭い画面は画面下） */
+  const composePost = (at: { x: number; y: number }) => {
+    if (!draft?.anchor || !(canComment || canFeedback)) return null;
+    const place = draft.postPlace;
+    return (
+      <StoredComposePopover
+        store={composeStore}
+        x={at.x}
+        y={at.y}
+        docked={compact}
+        // 狭い画面の投稿欄は引用を別の行で出す。広い画面は場所の行に引用も添える
+        {...(place?.quote && compact ? { quote: place.quote.slice(0, 80) } : {})}
+        place={
+          place
+            ? place.quote && !compact
+              ? `${place.label}「${place.quote.slice(0, 30)}${place.quote.length > 30 ? "…" : ""}」`
+              : place.label
+            : "SNS 投稿"
+        }
+        placeIcon={draft.anchor.type === "text_range" ? "format_quote" : "image"}
+        onSubmit={() => void doPost.run()}
+        onCancel={resetCompose}
+        pending={doPost.pending}
+        kind={draftKind}
+        {...(canComment ? { onKind: setComposeKind } : {})}
       />
     );
   };
@@ -899,6 +948,32 @@ export function Editor({
             workTitle={work.title}
             socialProfileId={workData.work.socialProfileId}
             revisionLabel={data.revision.label}
+            annotate={{
+              threads: overlayThreads,
+              activeThreadId,
+              revealKey: postReveal,
+              selecting,
+              draftAnchor: draft?.anchor ?? null,
+              onSelectThread: (id) => {
+                viewerProps.onSelectThread(id);
+                setPostReveal((n) => n + 1);
+                // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
+                if (!mobile && fbIndex.has(id) === false && drawer !== "comments")
+                  openDrawer("comments");
+              },
+              onDraft: (d) => {
+                if (!d) {
+                  resetCompose();
+                  return;
+                }
+                setDraft({
+                  anchor: d.anchor,
+                  postPlace: { label: d.label, ...(d.quote ? { quote: d.quote } : {}) },
+                });
+                setActiveThreadId(null);
+              },
+              renderCompose: composePost,
+            }}
           />
         </div>
       );
