@@ -1524,14 +1524,15 @@ async function webFigmaScenes() {
   // 19・55 でこの制作物には版があるので、引き出し「版」から新しい版として出す
   await drawer("版");
   await btn("新しい版を提出").click();
-  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  // Web の制作物はファイルを出さず、サイトの URL だけ（リンクだけの提出は「提出する」でそのまま確定する）
+  await page.waitForSelector('m3e-dialog[open] input[type="url"]');
+  expectTrue(
+    (await page.locator('m3e-dialog[open] input[type="file"]').count()) === 0,
+    "Web の提出画面にファイル欄がある",
+  );
   await page.fill("m3e-dialog[open] textarea >> nth=0", "公式サイトの初稿（ライブ表示で確認）");
-  await page
-    .locator('m3e-dialog[open] m3e-expansion-panel [slot="header"]', { hasText: "外部リンク" })
-    .click();
   await page.fill('m3e-dialog[open] input[type="url"]', `${BASE}/demo-site/index.html`);
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/\d+$/, { timeout: 15_000 });
   await signInAs("mock-nogiku-reviewer");
   await go(siteWork);
@@ -1600,20 +1601,19 @@ async function webFigmaScenes() {
   await signInAs("mock-nogiku-creator");
   const figmaWork = await openWork("公式サイト 画面デザイン（Figma）");
   await btn("最初の版を提出").click();
-  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
-  await page.fill("m3e-dialog[open] textarea >> nth=0", "ホームのスマホ・PC の画面案");
+  // Figma の制作物もファイルは出さず、フレームの URL が主な入力（取り込みまで済んだらそのまま確定する）
+  await page.waitForSelector('m3e-dialog[open] textarea[placeholder^="https://www.figma.com"]');
+  expectTrue(
+    (await page.locator('m3e-dialog[open] input[type="file"]').count()) === 0,
+    "Figma の提出画面にファイル欄がある",
+  );
+  await page.fill("m3e-dialog[open] textarea >> nth=1", "ホームのスマホ・PC の画面案");
   await page.fill(
     'm3e-dialog[open] textarea[placeholder^="https://www.figma.com"]',
     "https://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=12-34\nhttps://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=56-78",
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
-  await page.waitForFunction(
-    () => document.querySelectorAll(".upload-item__state--verified").length >= 4,
-    null,
-    { timeout: 30_000 },
-  );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
-  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 30_000 });
   await signInAs("mock-nogiku-reviewer");
   await go(figmaWork);
   await page.waitForSelector(".origin-bar", { timeout: 15_000 });
