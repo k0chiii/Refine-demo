@@ -17,7 +17,10 @@ import {
 import { newRequestId, useAction } from "@/lib/useAction";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import { UserPicker } from "@/ui/UserPicker";
 import { RevisionFiles } from "./RevisionFiles";
 import type { WorkData } from "./VersionsTab";

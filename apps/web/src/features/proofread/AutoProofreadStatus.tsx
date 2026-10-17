@@ -1,5 +1,7 @@
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eIcon, M3eLinearProgressIndicator } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 import type { useAutoProofread } from "./useAutoProofread";
 
 /**

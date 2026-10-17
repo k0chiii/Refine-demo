@@ -3,7 +3,8 @@ import { teamPath, type Team, type WorkSortKey } from "@mf100/domain";
 import type { FunctionReturnType } from "convex/server";
 import { formatDeadline, formatDeadlineUntil } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
-import { M3eActionList, M3eIcon, M3eListAction } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
 export type WorkRow = FunctionReturnType<typeof api.works.listMine>[number];
 

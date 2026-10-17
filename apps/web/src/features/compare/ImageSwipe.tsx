@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { M3eSlider, M3eSliderThumb } from "@/ui/m3e";
+import { M3eSlider, M3eSliderThumb } from "@m3e/react/slider";
 
 /**
  * 画像の重ね比較（版比較 §2.3: ピクセル差分の自動強調は必須でないが、比べやすい表示を用意する）。

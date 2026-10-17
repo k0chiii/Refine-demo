@@ -8,7 +8,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { UserAvatar } from "@/ui/UserAvatar";
-import { M3eActionList, M3eListAction } from "@/ui/m3e";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
 export interface MentionUser {
   id: string;

@@ -9,16 +9,13 @@ import { useMutation } from "convex/react";
 import { useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
-import {
-  M3eButton,
-  M3eDialog,
-  M3eHeading,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListItem,
-  M3eSwitch,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eHeading } from "@m3e/react/heading";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
+import { M3eSwitch } from "@m3e/react/switch";
 import { widgetInfo } from "./widgets";
 
 const COLUMNS = [

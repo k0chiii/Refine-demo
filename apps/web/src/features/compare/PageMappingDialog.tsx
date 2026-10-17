@@ -2,7 +2,8 @@ import type { ManualPair } from "@mf100/domain";
 import { useEffect, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { Field, Select } from "@/ui/Field";
-import { M3eButton, M3eDialog } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
 import type { PdfComparison } from "./useComparison";
 
 const confidenceLabel = { high: "高", medium: "中", low: "低" } as const;

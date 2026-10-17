@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { M3eSnackbar } from "@/ui/m3e";
+import { M3eSnackbar } from "@m3e/web/snackbar";
 
 /**
  * PWA（Service Worker の登録・更新・オフラインの知らせ・インストール）。

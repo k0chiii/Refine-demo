@@ -9,7 +9,9 @@ import { uploadFeedbackFile } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import { describeError } from "@/lib/errors";
-import { M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 
 export interface ComposerResult {
   body: string;

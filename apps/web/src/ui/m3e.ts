@@ -1,9 +1,15 @@
 /**
- * Material 3 Expressive（@m3e/react 2.9.2）の採用コンポーネントを 1 箇所に集約する。
+ * Material 3 Expressive（@m3e/react 2.9.2）の採用コンポーネントの目録。
  * - Lit ベースの Web Components。slot 名（icon / label / hint / header / content / actions など）は文字列属性で指定する。
  * - フォーム入力は M3eFormField の中に native input / textarea（IME・キーボード操作を優先）、
  *   選択は M3eSelect + M3eOption、真偽は M3eCheckbox を使う（ui/Field.tsx が包む）。
  * - テーマ（<m3e-theme>）は index.html の body 直下（src/theme.ts）。
+ *
+ * **画面のコードはここからではなく、部品ごとに `@m3e/react/<name>` から直接 import する**（docs/UI_M3E.md §60）。
+ * Web Components は読み込んだ時点で要素を登録する（副作用）ので、この束ねたファイルを 1 つ import すると
+ * 全部品（圧縮前 2.5MB・圧縮後約 270KB）が最初の画面に入り、サインイン画面を開くだけで全部を読み込んでいた。
+ * 部品ごとに import すれば、ビルドがその画面で使う部品だけを束ねる。このファイルは目録と移行中のコードのために残す
+ * （`M3eDialog` は初めて開くまで描かない `ui/LazyDialog` を使う。`M3eSnackbar` は `@m3e/web/snackbar`）。
  */
 export { M3eButton } from "@m3e/react/button";
 export { M3eIconButton } from "@m3e/react/icon-button";

@@ -1,20 +1,18 @@
 import { useId, useState } from "react";
 import { ActionSheet } from "@/ui/ActionSheet";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eFab } from "@m3e/react/fab";
+import { M3eFabMenu, M3eFabMenuItem, M3eFabMenuTrigger } from "@m3e/react/fab-menu";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
 import {
-  M3eDivider,
-  M3eFab,
-  M3eFabMenu,
-  M3eFabMenuItem,
-  M3eFabMenuTrigger,
-  M3eIcon,
-  M3eIconButton,
   M3eMenu,
   M3eMenuItem,
   M3eMenuItemCheckbox,
   M3eMenuItemGroup,
   M3eMenuItemRadio,
   M3eMenuTrigger,
-} from "@/ui/m3e";
+} from "@m3e/react/menu";
 import { DEVICES, deviceById, type DeviceKind } from "./devices";
 import type { PreviewView } from "./PostPreview";
 

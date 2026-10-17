@@ -6,15 +6,12 @@ import { useMemo, useState } from "react";
 import { formatJst } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eCard,
-  M3eDialog,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eHeading,
-  M3eIcon,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eCard } from "@m3e/react/card";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eHeading } from "@m3e/react/heading";
+import { M3eIcon } from "@m3e/react/icon";
 import { StatusText } from "@/ui/Chip";
 import { draftOf, RuleEditor } from "./RuleEditor";
 import { toast } from "@/lib/toast";

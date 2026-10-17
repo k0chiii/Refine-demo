@@ -1,16 +1,12 @@
 import { QuestionHead } from "./Field";
 import { useId, useState } from "react";
 import { deadlineFromJst, deadlineToJst, formatDeadlineUntil, toJstDate } from "@/lib/format";
-import {
-  M3eDateInput,
-  M3eDatepicker,
-  M3eDatepickerToggle,
-  M3eFormField,
-  M3eIcon,
-  M3eIconButton,
-  M3eTimepicker,
-  M3eTimepickerToggle,
-} from "./m3e";
+import { M3eDateInput } from "@m3e/react/date-input";
+import { M3eDatepicker, M3eDatepickerToggle } from "@m3e/react/datepicker";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 

@@ -3,14 +3,11 @@ import { useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatJstShort } from "@/lib/format";
 import { lifecycleLabel, mediaLabel, reviewStateLabel } from "@/lib/labels";
-import {
-  M3eActionList,
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eListAction,
-  M3eSearchBar,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eSearchBar } from "@m3e/react/search";
 
 const mediaIcon: Record<string, string> = {
   pdf: "picture_as_pdf",

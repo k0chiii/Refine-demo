@@ -7,17 +7,12 @@ import { renderWithMentions, type MentionUser } from "@/features/review/mentions
 import { formatJstShort, formatJstTime } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { TextArea } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eDialog,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { FeedbackFiles } from "./FeedbackFiles";
 

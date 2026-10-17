@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { M3eCard, M3eHeading } from "./m3e";
+import { M3eCard } from "@m3e/react/card";
+import { M3eHeading } from "@m3e/react/heading";
 
 /**
  * 情報カード（M3E card）。見出しは title-medium、本文は content slot（余白あり）。

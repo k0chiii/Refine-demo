@@ -10,17 +10,12 @@ import { showDeviceNotification } from "@/lib/push";
 import { PushSetting } from "./PushSetting";
 import { useDevicePush } from "./useDevicePush";
 import { useAction } from "@/lib/useAction";
-import {
-  M3eActionList,
-  M3eBottomSheet,
-  M3eButton,
-  M3eIcon,
-  M3eIconButton,
-  M3eListAction,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 
 const icon: Record<string, string> = {
   revision_submitted: "upload_file",

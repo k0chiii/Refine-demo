@@ -17,14 +17,11 @@ import { describeError } from "@/lib/errors";
 import { formatDeadline } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { toast } from "@/lib/toast";
-import {
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eLinearProgressIndicator,
-  M3eList,
-  M3eListItem,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eList, M3eListItem } from "@m3e/react/list";
+import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 
 /** 雛形の CSV を書き出す（Excel で文字化けしないよう BOM 付きの UTF-8） */
 export function downloadWorkCsvTemplate() {

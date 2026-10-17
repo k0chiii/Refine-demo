@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { fetchArtifactBlob } from "@/integrations/api";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
-import { M3eButton, M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import {
   FullscreenPreview,
   PostPreview,

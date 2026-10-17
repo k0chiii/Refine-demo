@@ -8,7 +8,9 @@ import { anchorPlace } from "@/features/feedback/FeedbackPane";
 import { useVisualViewportBox } from "@/lib/useKeyboardInset";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
 
 export const Route = createFileRoute("/_app/feedback/$threadId")({
   component: FeedbackThread,

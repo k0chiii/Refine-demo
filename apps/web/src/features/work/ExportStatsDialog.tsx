@@ -3,7 +3,9 @@ import { workStatsToCsv } from "@mf100/domain";
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
-import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
 import { TeamSelect } from "./TeamSelect";
 
 // 押したときだけ読む（null の間は読まない。"" はすべて）

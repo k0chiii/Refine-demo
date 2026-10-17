@@ -1,6 +1,7 @@
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { M3eIcon, M3eSearchBar } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eSearchBar } from "@m3e/react/search";
 
 /**
  * アプリバーの検索（Google ドライブ式）。入力は制作物一覧の `q` に反映し、一覧以外の画面からは一覧へ移動する。

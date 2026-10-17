@@ -10,14 +10,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { Checkbox, Field, TextArea, TextInput } from "@/ui/Field";
-import {
-  M3eActionList,
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eLinearProgressIndicator,
-  M3eListAction,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 import { toast } from "@/lib/toast";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 

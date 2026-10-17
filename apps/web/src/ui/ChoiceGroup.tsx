@@ -1,6 +1,8 @@
 import type { M3eButtonGroupElement } from "@m3e/web/button-group";
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
-import { M3eButton, M3eButtonGroup, M3eIcon } from "./m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eButtonGroup } from "@m3e/react/button-group";
+import { M3eIcon } from "@m3e/react/icon";
 
 export interface Choice<T extends string> {
   value: T;
