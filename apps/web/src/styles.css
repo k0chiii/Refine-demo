@@ -1504,9 +1504,15 @@ m3e-dialog [slot="actions"] {
   .works__controls {
     flex-wrap: nowrap;
     overflow-x: auto;
+    /* 横だけに動かす。overflow-x だけだと縦も auto になり、チップのタッチ領域のはみ出しで行が上下に動いていた（利用者指摘 2026-10-17） */
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     margin-inline: -16px;
     padding-inline: 16px;
+    /* チップのタッチ領域が行の下へ 8px はみ出すので、その分を内側に取ってはみ出しを無くす（見た目の位置は変えない） */
+    padding-block-end: 8px;
+    margin-block-end: -8px;
   }
   .works__controls > *,
   .works__filters {
@@ -1947,6 +1953,8 @@ m3e-dialog [slot="actions"] {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden; /* 横だけに動かす（.works__controls と同じ） */
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   border-radius: inherit;
 }
