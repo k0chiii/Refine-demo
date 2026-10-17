@@ -300,6 +300,12 @@ async function main() {
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   const revisionUrl = page.url();
   await pdfReady();
+  // 自動校正（OCR）が終わってから撮る。固定 sleep が減ると「読み込んでいます」の途中を撮ってしまう
+  await page.waitForFunction(
+    () => /表記のコメント \d+ 件/.test(document.querySelector(".auto-status")?.textContent ?? ""),
+    null,
+    { timeout: 90_000 },
+  );
   await shot("05-submit-confirmed");
 
   // 06 校正者を割り当てる（主管）: 引き出し「情報」から
@@ -420,6 +426,7 @@ async function main() {
   // 「@」で制作物を見られる人をメンション（候補から選ぶ）
   await page.fill(".compose-pop textarea", "@五月");
   await page.locator(".mention-list m3e-list-action", { hasText: "五月 めい" }).click();
+  await settle(); // 選択後のキャレット移動（requestAnimationFrame）が済む前に打つと文字が前に入り込む
   await page.locator(".compose-pop textarea").press("End");
   await page.keyboard.type(
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
@@ -1090,6 +1097,7 @@ async function v2Scenes() {
   // 52a カテゴリはリスト（行を押すとダイアログで名前・説明・継承・運用メモ・管理者を直す）
   await go("/notation?view=categories");
   await page.waitForSelector('m3e-action-list[aria-label="カテゴリ"] m3e-list-action');
+  await page.waitForSelector("m3e-snackbar", { state: "detached" }); // 52 の知らせ（4 秒）が消えてから撮る
   await shot("52a-notation-categories");
 
   // 53 文章エディタの表記の検査（800ms 後に波線、表記パネル）
@@ -1386,6 +1394,7 @@ async function v2Scenes() {
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "校了を確定する" }).click();
   await page.waitForSelector('m3e-button:has-text("ZIP で保存")', { timeout: 20_000 });
   await page.waitForTimeout(1500);
+  await page.waitForSelector("m3e-snackbar", { state: "detached" }); // 57 の知らせ（8 秒）が消えてから撮る
   await shot("59-sns-export");
 
   // 60 表記ルール（compact）
