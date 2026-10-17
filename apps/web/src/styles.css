@@ -2058,6 +2058,21 @@ m3e-dialog [slot="actions"] {
 .action-sheet__header {
   padding: 0 16px 4px;
 }
+/* アプリバーの「比べる」（features/compare/CompareButton）: 何と比べるかの選択（広い画面は Menu、compact は Bottom sheet）。
+   見出し（この制作物の版・ほかの制作物）は選べない小さな文字 */
+.compare-menu__label,
+.compare-sheet__label {
+  padding: 8px 16px 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.compare-menu__empty {
+  font: var(--mf-type-body-small);
+}
+.compare-sheet__empty {
+  margin: 0;
+  padding: 4px 16px 12px;
+}
 .action-sheet__list {
   margin: 0 -16px;
 }
@@ -2263,7 +2278,7 @@ m3e-dialog [slot="actions"] {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
   padding: 0 4px 4px;
-  /* 左の見出しには「別の制作物と比べる」のアイコンボタン（40）が並ぶので、右も同じ高さにして紙面の上端を揃える */
+  /* 左右の見出しの高さを揃えて紙面の上端を揃える */
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2273,9 +2288,6 @@ m3e-dialog [slot="actions"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.compare__swap {
-  flex: none;
 }
 .compare__hint {
   margin-inline-start: 8px;
@@ -2325,32 +2337,8 @@ m3e-dialog [slot="actions"] {
 .version__label {
   font: var(--mf-type-title-small);
 }
-.versions__void,
-.versions__cross-pick {
+.versions__void {
   justify-self: start;
-}
-/* 別の制作物と比較中（利用者指示 2026-10-17）: 相手の題名・版と「変える」「終了」。色は選択中と同じ secondary container */
-.versions__cross {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 8px 8px 12px;
-  border-radius: var(--mf-shape-medium, 12px);
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-}
-.versions__cross-text {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-.versions__cross-text > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.versions__cross .meta {
-  color: inherit;
 }
 
 /* 引き出し「情報」 */

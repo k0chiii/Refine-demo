@@ -189,6 +189,34 @@ const drawer = async (label) => {
   await settle();
 };
 
+/**
+ * アプリバーの「比べる」（比べる入口はここ 1 つ。利用者指示 2026-10-17）。広い画面は Menu、compact は Bottom sheet。
+ * 「この制作物の版」から版を選ぶ（label は「第1版」など）。比べているときは「比べるのをやめる」も同じところ
+ */
+const compareButton = () => page.locator('.shell__appbar m3e-icon-button[aria-label^="比べる"]');
+const isCompact = () => (page.viewportSize()?.width ?? 1440) < 600;
+const openComparePicker = async () => {
+  await compareButton().click();
+  if (isCompact()) await page.waitForSelector("m3e-bottom-sheet.compare-sheet[open]");
+  else await page.waitForSelector("#compare-menu m3e-menu-item:visible");
+  await settle();
+};
+const comparePickItem = async (text) => {
+  const item = isCompact()
+    ? page.locator("m3e-bottom-sheet.compare-sheet m3e-list-action", { hasText: text }).first()
+    : page.locator("#compare-menu m3e-menu-item:visible", { hasText: text }).first();
+  await item.click();
+  await settle();
+};
+const compareWithRevision = async (label) => {
+  await openComparePicker();
+  await comparePickItem(label);
+};
+const stopCompare = async () => {
+  await openComparePicker();
+  await comparePickItem("比べるのをやめる");
+};
+
 async function main() {
   // 01 サインイン
   await page.goto(`${BASE}/signin`);
@@ -505,13 +533,12 @@ async function main() {
     .first()
     .click();
   await page.waitForSelector("text=前版から持ち越し");
-  // 25 版の比較（引き出し「版」の「比較」）
+  // 25 版の比較（アプリバーの「比べる」→「この制作物の版」）
   await drawer("版");
   await shot("28-versions");
-  await page
-    .locator(".version", { hasText: "第1版" })
-    .locator("m3e-button", { hasText: "比較" })
-    .click();
+  await openComparePicker();
+  await shot("25a-compare-picker");
+  await comparePickItem("第1版");
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll(".compare__pane")].every(
@@ -551,18 +578,23 @@ async function main() {
       Math.abs(views[0].ry - views[1].ry) < 0.02,
     `拡大・スクロール後に左右の視点がずれている: ${JSON.stringify(views)}`,
   );
-  await page.locator('m3e-icon-button[aria-label="比較を終了"]').click();
-  await settle();
+  // 比べているあいだはボタンが選択状態で、同じところに「比べるのをやめる」
+  expectTrue(
+    (await compareButton().getAttribute("selected")) !== null,
+    "比べている間、比べるボタンが選択状態にならない",
+  );
+  await stopCompare();
+  await page.waitForFunction(() => document.querySelectorAll(".compare__pane").length === 0);
+  expectTrue(
+    (await compareButton().getAttribute("selected")) === null,
+    "比べるのをやめても、比べるボタンが選択状態のまま",
+  );
 
   // 38 比較しながら新しい版にコメント（校正者）: 第1版を開いて第2版と比較 → 第2版が右（操作できる側）に入れ替わる
   await signInAs("mock-nogiku-reviewer");
   await go(revision2Url.replace(/\/v\/2$/, "/v/1"));
   await pdfReady();
-  await drawer("版");
-  await page
-    .locator(".version", { hasText: "第2版" })
-    .locator("m3e-button", { hasText: "比較" })
-    .click();
+  await compareWithRevision("第2版");
   await page.waitForURL(/\/v\/2(\?|$)/, { timeout: 15_000 });
   await page.waitForFunction(
     () =>
@@ -1160,11 +1192,7 @@ async function v2Scenes() {
   );
   expectTrue((await page.locator(".thread .thread__bot").count()) > 0, "自動校正のコメントが無い");
   await shot("54-auto-proofread");
-  await drawer("版");
-  await page
-    .locator(".version", { hasText: "第1版" })
-    .locator("m3e-button", { hasText: "比較" })
-    .click();
+  await compareWithRevision("第1版");
   await page.waitForFunction(
     () => document.querySelector(".compare-status")?.textContent?.includes("追加 1"),
     null,
@@ -1174,11 +1202,11 @@ async function v2Scenes() {
   );
   await settle();
   await shot("55-compare-pdf");
-  // 67 別の制作物と比べる（利用者指示 2026-10-17）: 左の見出しのボタン → 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
-  //    左の見出しは「題名・版」、比較の状況に「別の制作物」、引き出し「版」に「別の制作物と比較中」
-  await page
-    .locator('.compare__label--other m3e-icon-button[aria-label="別の制作物と比べる"]')
-    .click();
+  // 67 別の制作物と比べる（利用者指示 2026-10-17）: アプリバーの「比べる」→「ほかの制作物」→ 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
+  //    左の見出しは「題名・版」、比較の状況に「別の制作物」、比べるボタンは選択状態
+  await openComparePicker();
+  await shot("67a-compare-picker-menu");
+  await comparePickItem("制作物を探して比べる");
   await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
   await page.fill(".cross-picker[open] input", "パンフレット");
   await page.waitForTimeout(500);
@@ -1224,8 +1252,10 @@ async function v2Scenes() {
     ),
     "比較の状況に別の制作物と出ない",
   );
-  await drawer("版");
-  await page.waitForSelector(".versions__cross");
+  expectTrue(
+    (await compareButton().getAttribute("selected")) !== null,
+    "別の制作物と比べている間、比べるボタンが選択状態にならない",
+  );
   await page.waitForTimeout(800);
   await shot("67-compare-cross-work");
   // 26a タッチ（compact・受付中の版）: なぞるだけではコメントを作らない（スクロール）。長押ししてからなぞると範囲が選べ、投稿欄が出る
@@ -1234,16 +1264,10 @@ async function v2Scenes() {
   await go(posterV2);
   await pdfReady();
   await settle();
-  // 67b compact: シート「版」の「別の制作物と比べる」→ 相手を選ぶダイアログは全画面（M3 Dialogs）
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label="版"]').click();
-  await page.waitForSelector(".drawer--sheet .versions");
-  // 67 の比較が続いていれば札の「変える」、そうでなければ「別の制作物と比べる」
-  await page
-    .locator(
-      '.drawer--sheet m3e-button:has-text("変える"), .drawer--sheet m3e-button:has-text("別の制作物と比べる")',
-    )
-    .first()
-    .click();
+  // 67b compact: アプリバーの「比べる」はピンの横。押すと Bottom sheet（この制作物の版・ほかの制作物）→ 相手を選ぶダイアログは全画面（M3 Dialogs）
+  await openComparePicker();
+  await shot("67c-compare-sheet-compact");
+  await comparePickItem("制作物を探して比べる");
   await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
   await shot("67b-compare-cross-picker-compact");
   await page.locator(".cross-picker[open] m3e-button", { hasText: "キャンセル" }).click();

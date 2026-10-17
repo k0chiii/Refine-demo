@@ -72,6 +72,7 @@ import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
+import { CompareButton } from "@/features/compare/CompareButton";
 import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
 import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
@@ -1410,6 +1411,26 @@ export function Editor({
       ]}
     />
   );
+  /** この制作物の別の版と比べる（比べる入口はアプリバーの「比べる」。利用者指示 2026-10-17） */
+  const compareRevision = (id: string) => {
+    if (!workData) return;
+    setScale(1);
+    // 新しい版を常に末尾（右）の操作できる側に置く。古い版を見ている時に新しい版を選んだら、新しい版を開いて今の版と並べる
+    const cur = workData.revisions.find((r) => r.id === revisionId);
+    const next = workData.revisions.find((r) => r.id === id);
+    if (cur && next && next.submittedAt > cur.submittedAt)
+      void navigate({
+        to: "/works/$workId/v/$n",
+        params: { workId, n: String(versionOf(next)) },
+        search: { compare: cur.id },
+      });
+    else setCompareWith(id);
+  };
+  const stopCompare = () => {
+    setCompareWith(null);
+    setScale(1);
+    resetCompose();
+  };
   const drawerBody = (d: Drawer | null) =>
     d === "comments" ? (
       commentsPanel
@@ -1427,24 +1448,8 @@ export function Editor({
       <VersionsTab
         work={workData}
         currentId={revisionId}
-        compareWith={compareWith}
-        compareTarget={crossWork ? otherLabel : null}
         canVoid={can?.void ?? false}
         onOpen={goVersion}
-        onPickOther={() => setPickerOpen(true)}
-        onCompare={(id) => {
-          setScale(1);
-          // 新しい版を常に末尾（右）の操作できる側に置く。古い版を見ている時に新しい版を選んだら、新しい版を開いて今の版と並べる
-          const cur = workData.revisions.find((r) => r.id === revisionId);
-          const next = id ? workData.revisions.find((r) => r.id === id) : undefined;
-          if (cur && next && next.submittedAt > cur.submittedAt)
-            void navigate({
-              to: "/works/$workId/v/$n",
-              params: { workId, n: String(versionOf(next)) },
-              search: { tab: "versions", compare: cur.id },
-            });
-          else setCompareWith(id);
-        }}
         onSubmit={() => setSubmitOpen(true)}
         onWrite={openAuthoring}
       />
@@ -1512,6 +1517,21 @@ export function Editor({
           )}
         </AppBarSlot>
         <AppBarSlot slot="actions">
+          {/* 比べる入口はここ 1 つ（紙面と一緒に現れる。ピンの左に置き、ピンの位置は動かさない） */}
+          {!initial && workData && revisionId ? (
+            <CompareButton
+              revisions={workData.revisions}
+              currentId={revisionId}
+              compareWith={compareWith}
+              target={
+                otherLabel ?? workData.revisions.find((r) => r.id === compareWith)?.label ?? null
+              }
+              compact={compact}
+              onCompareRevision={compareRevision}
+              onPickOther={() => setPickerOpen(true)}
+              onStop={stopCompare}
+            />
+          ) : null}
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
           {initial ? null : can?.completeReview ? (
@@ -1580,14 +1600,6 @@ export function Editor({
                         <span className="compare__label-text" title={otherLabel ?? undefined}>
                           {otherLabel ?? "…"}
                         </span>
-                        {/* 比べる相手を替える（別の制作物の版を選ぶ）。同じ制作物の版は引き出し「版」から */}
-                        <M3eIconButton
-                          aria-label="別の制作物と比べる"
-                          className="compare__swap"
-                          onClick={() => setPickerOpen(true)}
-                        >
-                          <M3eIcon name="swap_horiz" />
-                        </M3eIconButton>
                       </div>
                       <Suspense fallback={<ViewerLoading />}>{renderOther()}</Suspense>
                     </div>
@@ -1737,20 +1749,6 @@ export function Editor({
                       onClick={() => setSwipe((v) => !v)}
                     >
                       <M3eIcon name="vertical_split" className={swipe ? "icon--filled" : ""} />
-                    </M3eIconButton>
-                  ) : null}
-                  {compareWith ? (
-                    <M3eIconButton
-                      aria-label="比較を終了"
-                      toggle
-                      selected
-                      onClick={() => {
-                        setCompareWith(null);
-                        setScale(1);
-                        resetCompose();
-                      }}
-                    >
-                      <M3eIcon name="compare" className="icon--filled" />
                     </M3eIconButton>
                   ) : null}
                   {mobile ? (
