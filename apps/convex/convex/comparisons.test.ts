@@ -11,7 +11,8 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 9), toFake: ["Date"] });
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast);
+    // 非公開の制作物（通常の制作物は委員なら誰でも見られるので、権限の境目はこちらで確かめる）
+    const workId = await setupWork(t, cast, { confidentiality: "restricted" });
     const r1 = await submitFiles(cast, workId, [
       { fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" },
     ]);
@@ -52,8 +53,14 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 9), toFake: ["Date"] });
     const t = createHarness();
     const cast = await createCast(t);
-    const current = await setupWork(t, cast, { title: "今年のポスター" });
-    const otherWork = await setupWork(t, cast, { title: "去年のポスター" });
+    const current = await setupWork(t, cast, {
+      title: "今年のポスター",
+      confidentiality: "restricted",
+    });
+    const otherWork = await setupWork(t, cast, {
+      title: "去年のポスター",
+      confidentiality: "restricted",
+    });
     const cur = await submitFiles(cast, current, [
       { fileName: "poster.pdf", mimeType: "application/pdf", type: "pdf" },
     ]);

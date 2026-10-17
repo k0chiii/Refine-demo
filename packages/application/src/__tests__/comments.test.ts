@@ -14,7 +14,8 @@ const code = (c: string) => expect.objectContaining({ code: c });
 
 async function setup() {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx);
+  // 非公開の制作物（通常の制作物は委員の誰でも見られるので、閲覧権限の境目はこちらで確かめる）
+  const work = await seedWork(ctx, { confidentiality: "restricted" });
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,

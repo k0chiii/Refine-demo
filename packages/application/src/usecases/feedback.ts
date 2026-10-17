@@ -50,6 +50,7 @@ import {
   type WorkStatsRow,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
+import { principalOf } from "../shared.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
 
@@ -128,7 +129,7 @@ async function mentionPolicy(
   ids: readonly string[],
 ): Promise<(userId: string) => boolean> {
   if (work.confidentiality === "restricted") {
-    const allowed = new Set(mentionableUserIds(work, grants));
+    const allowed = new Set(mentionableUserIds(work, grants, await ctx.teams.list()));
     return (id) => allowed.has(id);
   }
   const members = new Set((await ctx.people.profiles([...new Set(ids)])).map((p) => p.id));
@@ -158,7 +159,7 @@ export async function listFeedbackMentionCandidates(
   const { work, grants } = await loadFeedbackWork(ctx, principal, workId);
   const people =
     work.confidentiality === "restricted"
-      ? await ctx.people.profiles(mentionableUserIds(work, grants))
+      ? await ctx.people.profiles(mentionableUserIds(work, grants, await ctx.teams.list()))
       : await ctx.people.listMembers(500);
   return people
     .filter((p) => p.id !== principal.userId)
@@ -605,12 +606,10 @@ async function notifyFeedback(
   thread: FeedbackThread,
   msg: { recipients: string[]; mentions: string[]; text: string; title: string | null },
 ): Promise<void> {
+  // 非公開の制作物は見られる人だけに知らせる（担当の所属も数える）
+  const teams = work.confidentiality === "restricted" ? await ctx.teams.list() : [];
   const canSee = (userId: string) =>
-    canViewFeedback({
-      work,
-      grants,
-      principal: { userId, isSystemAdmin: false, groupIds: [], orgPermissions: [] },
-    });
+    canViewFeedback({ work, grants, principal: principalOf(userId, teams) });
   const who = await personName(ctx, principal.userId);
   const head = about(work.title, `のスレッド「${excerpt(thread.title, 40)}」`, who);
   const at = { workId: work.id, threadId: thread.id };

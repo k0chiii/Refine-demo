@@ -23,6 +23,19 @@ import { confidentialities, mediaTypes, type Work } from "./Work.ts";
 export const WORK_TITLE_MAX = 200;
 export const WORK_CATEGORY_MAX = 100;
 
+/**
+ * 制作物に付ける担当の数のポリシー値。
+ * 利用者決定 2026-10-17「制作担当は基本 1 つ。あとから変更される場合はある」（2026-10-15 の「複数」を置き換える）。
+ * 保存の形は配列のまま（古い行に 2 つ以上あっても読める。確かめるのは書き込みで、しかも項目を変えるときだけ）。
+ * 複数に戻すなら `maxProductionTeams` を上げる。
+ */
+export interface WorkTeamPolicy {
+  /** 制作担当（productionTeamIds）に選べる数の上限 */
+  maxProductionTeams: number;
+}
+
+export const defaultWorkTeamPolicy: WorkTeamPolicy = { maxProductionTeams: 1 };
+
 /** 検証の対象になる項目 */
 export interface WorkEssentials {
   title: string;
@@ -38,7 +51,8 @@ type WorkInvalidField =
   | "creatorIds"
   | "approverId"
   | "managerIds"
-  | "stakeholderIds";
+  | "stakeholderIds"
+  | "productionTeamIds";
 
 function invalid(field: string, reason: string, extra = {}) {
   return new DomainError("work_invalid", { field, reason, ...extra });
@@ -51,6 +65,21 @@ function cleanIds(ids: readonly string[], field: WorkInvalidField): UserId[] {
     if (id === "") throw invalid(field, "blank_id");
     if (!out.includes(id)) out.push(id);
   }
+  return out;
+}
+
+/**
+ * 制作担当の ID を整える（前後の空白・空・重なりを除く。画面の「なし」は空文字で届く）。
+ * ポリシーの上限（既定 1 つ）を超えると `work_invalid`（field productionTeamIds・reason too_many・max）。
+ * 担当が組織にあるかは、アプリケーション層が確かめる。
+ */
+export function normalizeProductionTeamIds(
+  ids: readonly string[],
+  policy: WorkTeamPolicy = defaultWorkTeamPolicy,
+): string[] {
+  const out = Array.from(new Set(ids.map((id) => id.trim()).filter((id) => id !== "")));
+  if (out.length > policy.maxProductionTeams)
+    throw invalid("productionTeamIds", "too_many", { max: policy.maxProductionTeams });
   return out;
 }
 
@@ -196,8 +225,13 @@ export type WorkPatch = {
 /**
  * Work に変更を当てた結果を返す（version を 1 進める）。生成時と同じ不変条件を検証する。
  * undefined の項目は「変えない」。Notion に揃えた任意の項目は null で消せる。
+ * 制作担当は変えるときだけ上限（{@link WorkTeamPolicy}）を確かめる（古い行に 2 つ以上あっても、ほかの変更は止めない）。
  */
-export function applyWorkPatch(work: Work, patch: WorkPatch): Work {
+export function applyWorkPatch(
+  work: Work,
+  patch: WorkPatch,
+  teamPolicy: WorkTeamPolicy = defaultWorkTeamPolicy,
+): Work {
   const defined: Record<string, unknown> = {};
   const meta: WorkMetadataInput = {};
   for (const [k, v] of Object.entries(patch)) {
@@ -206,6 +240,8 @@ export function applyWorkPatch(work: Work, patch: WorkPatch): Work {
       (meta as Record<string, unknown>)[k] = v;
     else defined[k] = v;
   }
+  if (patch.productionTeamIds !== undefined)
+    defined.productionTeamIds = normalizeProductionTeamIds(patch.productionTeamIds, teamPolicy);
   const next = { ...work, ...(defined as WorkPatch), version: work.version + 1 } as Work;
   if (!(mediaTypes as readonly string[]).includes(next.mediaType))
     throw invalid("mediaType", "unknown");

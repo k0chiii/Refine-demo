@@ -70,9 +70,8 @@ export const importBatch = mutation({
         driveFolderUrl: v.optional(v.string()),
         /** 照合済みの所属する人の ID */
         memberIds: v.optional(v.array(v.string())),
-        /** parseTeamCsv の行をそのまま送れるように受け取るだけ（照合前の書き方と知らせ。使わない） */
+        /** parseTeamCsv の行をそのまま送れるように受け取るだけ（照合前の書き方。使わない） */
         members: v.optional(v.array(v.string())),
-        notes: v.optional(v.array(v.string())),
       }),
     ),
   },
@@ -91,7 +90,6 @@ export const importBatch = mutation({
           ...(r.emoji ? { emoji: r.emoji } : {}),
           ...(r.driveFolderUrl ? { driveFolderUrl: r.driveFolderUrl } : {}),
           members: [],
-          notes: [],
         };
       });
       return importTeams(createAppContext(ctx), principal, lines, members);

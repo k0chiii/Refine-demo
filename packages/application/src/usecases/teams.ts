@@ -142,7 +142,7 @@ export async function deleteTeam(ctx: AppContext, principal: Principal, id: stri
 export async function importTeams(
   ctx: AppContext,
   principal: Principal,
-  rows: TeamCsvRow[] | Array<Omit<TeamCsvRow, "line" | "members" | "notes"> & Partial<TeamCsvRow>>,
+  rows: TeamCsvRow[] | Array<Omit<TeamCsvRow, "line" | "members"> & Partial<TeamCsvRow>>,
   /** 行番号 → 照合済みの所属する人の ID（画面が照合する。無ければ所属は入れない） */
   memberIds: ReadonlyMap<number, readonly string[]> = new Map(),
 ): Promise<{ created: number; existing: number }> {
@@ -155,7 +155,7 @@ export async function importTeams(
     });
   const all = await ctx.teams.list();
   const plan = planTeamImport(
-    rows.map((r, i) => ({ members: [], notes: [], ...r, line: r.line ?? i + 1 })),
+    rows.map((r, i) => ({ members: [], ...r, line: r.line ?? i + 1 })),
     all,
     memberIds,
   );

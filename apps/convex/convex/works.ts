@@ -111,9 +111,8 @@ export const importBatch = mutation({
         ownerTeamId: v.optional(v.string()),
         productionTeamIds: v.optional(v.array(v.string())),
         relatedTeamIds: v.optional(v.array(v.string())),
-        /** Notion の制作物 DB に揃えた項目。有効性 No は中止として登録 */
+        /** 制作物 DB に揃えた項目（docs/NOTION_ALIGNMENT.md） */
         ...vWorkMetadataFields,
-        lifecycle: v.optional(v.literal("cancelled")),
       }),
     ),
     source: v.optional(v.string()),
@@ -282,7 +281,7 @@ export const get = query({
 });
 
 /**
- * 制作物一覧（U-02）。自分が職責または ACL で関与する作品だけを返す。全件購読はしない。
+ * 制作物一覧（U-02）。自分が見られる制作物を返す（通常の制作物は委員なら誰でも。非公開は関わる人だけ。listMyWorks）。
  */
 export const listMine = query({
   args: {
@@ -353,30 +352,18 @@ export const listMine = query({
   },
 });
 
+/** 一覧で読む制作物の上限（委員会の制作物は年度あたり高々数百件） */
+const WORKS_SCAN_LIMIT = 2000;
+
 /**
- * 自分が関わる制作物（職責または有効な ACL）。閲覧可否はドメインで最終判定する（取消直後の整合）。
- * 一覧とダッシュボードで共用。
+ * 自分が見られる制作物。通常の制作物は委員なら誰でも（WorkViewPolicy。利用者決定 2026-10-17「閲覧は基本全員できて良い」）、
+ * 非公開・取扱注意は職責・有効な ACL・関係者・担当の所属がある人。
+ * 制作物を読んでドメインの canViewWork で最終判定する（取消直後の整合）。一覧・ダッシュボード・版提出の候補で共用。
  */
 export async function listMyWorks(db: DatabaseReader, principal: Principal): Promise<Work[]> {
   const app = createReadContext(db);
-  const ids = new Set<string>();
-  for (const r of await db
-    .query("workRoles")
-    .withIndex("by_user", (q) => q.eq("userId", principal.userId))
-    .collect())
-    ids.add(r.workId);
-  for (const g of await db
-    .query("workPermissions")
-    .withIndex("by_principal", (q) =>
-      q.eq("principalType", "user").eq("principalId", principal.userId),
-    )
-    .collect()) {
-    if (g.revokedAt === undefined) ids.add(g.workId);
-  }
   const out: Work[] = [];
-  for (const id of ids) {
-    const work = await app.works.findById(id);
-    if (!work) continue;
+  for (const work of await app.works.list(WORKS_SCAN_LIMIT)) {
     const grants = await app.acl.listByWork(work.id);
     if (canViewWork({ work, grants, principal })) out.push(work);
   }

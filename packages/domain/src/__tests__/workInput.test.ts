@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   applyWorkPatch,
+  defaultWorkTeamPolicy,
   newlyReferencedPeople,
+  normalizeProductionTeamIds,
   normalizeWorkEssentials,
   WORK_TITLE_MAX,
 } from "../work/workInput.ts";
@@ -71,6 +73,34 @@ describe("制作物の不変条件（生成・変更で共通。PR #1 レビュ�
     const next = applyWorkPatch(work, { title: " 新しい名称 ", deadlineAt: undefined });
     expect(next).toMatchObject({ title: "新しい名称", version: work.version + 1 });
     expect(next.deadlineAt).toBe(work.deadlineAt);
+  });
+
+  it("制作担当は 1 つまで（ポリシー値。利用者決定 2026-10-17）。変えない限り古い行の 2 つは残せる", () => {
+    expect(defaultWorkTeamPolicy.maxProductionTeams).toBe(1);
+    expect(normalizeProductionTeamIds([" design ", "design"])).toEqual(["design"]);
+    expect(normalizeProductionTeamIds([])).toEqual([]);
+    expect(normalizeProductionTeamIds(["", " "])).toEqual([]);
+    expect(() => normalizeProductionTeamIds(["design", "web"])).toThrowError(
+      invalid("productionTeamIds", "too_many"),
+    );
+    // ポリシー値を上げれば複数に戻せる
+    expect(normalizeProductionTeamIds(["design", "web"], { maxProductionTeams: 2 })).toEqual([
+      "design",
+      "web",
+    ]);
+    const legacy = makeWork({ productionTeamIds: ["design", "web"] });
+    // 触らない変更は通る（読み・表示は壊さない）
+    expect(applyWorkPatch(legacy, { title: "新しい名称" }).productionTeamIds).toEqual([
+      "design",
+      "web",
+    ]);
+    expect(() => applyWorkPatch(legacy, { productionTeamIds: ["design", "web"] })).toThrowError(
+      invalid("productionTeamIds", "too_many"),
+    );
+    expect(applyWorkPatch(legacy, { productionTeamIds: ["web"] }).productionTeamIds).toEqual([
+      "web",
+    ]);
+    expect(applyWorkPatch(legacy, { productionTeamIds: [] }).productionTeamIds).toEqual([]);
   });
 
   it("名簿で確かめるのは新しく職責に入る人だけ", () => {

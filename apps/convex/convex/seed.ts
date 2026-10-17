@@ -194,8 +194,8 @@ export const demo = internalMutation({
         subGenre: "web_copy" as const,
         tags: ["1次公開"],
         driveFolderUrl: "https://drive.google.com/drive/folders/demo-website",
-        // 制作担当が 2 つ（制作担当で並べると両方に出る）
-        ...teamsOf("広報局/Web担当", ["広報局/Web担当", "広報局/デザイン担当"]),
+        // 主管担当は Web担当、制作担当はデザイン担当（制作担当は 1 つ。利用者決定 2026-10-17）
+        ...teamsOf("広報局/Web担当", ["広報局/デザイン担当"]),
       },
       {
         title: "EVE 企画ポスター",

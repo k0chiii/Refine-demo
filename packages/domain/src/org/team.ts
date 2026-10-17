@@ -2,8 +2,8 @@ import { parseCsv } from "../notation/importer.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
+import { splitCsvList } from "../shared/csvValues.ts";
 import { isDriveUrl } from "../work/metadata.ts";
-import { splitNotionList, stripNotionLink } from "../work/notionCsv.ts";
 
 /**
  * 局のコード（Notion の担当 DB「局」の multi_select の選択肢。利用者決定 2026-10-17）。
@@ -43,7 +43,10 @@ export interface Team {
   emoji?: string;
   /** Google Drive のフォルダ */
   driveFolderUrl?: string;
-  /** 所属する人（Notion の「ユーザ」）。閲覧権限は付かない */
+  /**
+   * 所属する人（Notion の「ユーザ」）。所属する人は、その担当が主管担当・制作担当・関係担当の制作物を
+   * （非公開・取扱注意でも）見られる（利用者決定 2026-10-17。acl/authorize.ts の isInvolvedInWork）
+   */
   memberIds?: UserId[];
   updatedAt: Instant;
   updatedBy: UserId;
@@ -161,6 +164,14 @@ export function findBureauByCode(code: string, teams: readonly Team[]): Team | n
   const c = parseBureauCode(code);
   if (!c) return null;
   return teams.find((t) => t.kind === "bureau" && t.code === c) ?? null;
+}
+
+/** その人が所属する局・担当の ID（Principal.teamIds を組むとき・通知の受信者の所属を添えるときに使う） */
+export function memberTeamIds(
+  teams: readonly Pick<Team, "id" | "memberIds">[],
+  userId: UserId,
+): string[] {
+  return teams.filter((t) => t.memberIds?.includes(userId)).map((t) => t.id);
 }
 
 /** 局の表示名「PR 広報局」（絵文字があれば先頭に）。担当は名前だけ */
@@ -326,7 +337,7 @@ export function sortWorks<
 export interface TeamCsvRow {
   /** CSV の行番号（1 始まり。見出しの行を含む） */
   line: number;
-  /** 局（名前かコード）。Notion の「局」（multi_select）に複数あれば先頭。残りは notes に書く */
+  /** 局（名前かコード）。1 行に 1 つ */
   bureau: string;
   /** null = 局だけを定める行 */
   team: string | null;
@@ -338,8 +349,6 @@ export interface TeamCsvRow {
   driveFolderUrl?: string;
   /** 所属する人の書き方のまま（メールアドレスかユーザー名。照合は取り込む側） */
   members: string[];
-  /** 取り込めるが知らせておくこと（局が複数書かれていた等） */
-  notes: string[];
 }
 
 export interface TeamCsvParseResult {
@@ -348,7 +357,7 @@ export interface TeamCsvParseResult {
   errors: { line: number; message: string }[];
 }
 
-/** 列の見出し（Notion の担当 DB の書き出しの列名も読む: 担当名・局・付番・絵文字・Google Drive フォルダ・ユーザ） */
+/** 列の見出し（委員会の担当 DB と同じ列名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ。以前の列名も読む） */
 export const teamCsvColumns = {
   bureau: ["局", "局名", "bureau"],
   team: ["担当", "担当名", "team"],
@@ -379,8 +388,7 @@ function findTeamHeader(
  * 組織の CSV を読む。列は見出しの名前で探す: 局（必須。名前かコード。局名・bureau でも可）・担当（担当名・team）・
  * 順（付番。整数）・絵文字・Google Drive フォルダ・ユーザ（所属する人。「;」「,」区切り）。
  * 担当が空の行は局だけを定める。空の行・見出しより前の行は読まない。
- * Notion の「局」は multi_select なので複数書かれていることがある。アプリの担当はちょうど 1 つの局に属するので
- * 先頭の局に入れ、残りは notes に残す（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。
+ * アプリの担当はちょうど 1 つの局に属するので、局が複数書かれた行は問題として返す（取り込まない）。
  */
 export function parseTeamCsv(text: string): TeamCsvParseResult {
   const table = parseCsv(text);
@@ -405,17 +413,18 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
       const k = header.map[col];
       return k === undefined ? "" : (cells[k] ?? "").trim();
     };
-    const bureaus = splitNotionList(get("bureau"));
+    const bureaus = splitCsvList(get("bureau"));
     const bureau = bureaus[0] ?? "";
-    const team = stripNotionLink(get("team"));
+    const team = get("team");
     const orderText = get("order").normalize("NFKC");
     const emoji = get("emoji");
     const drive = get("drive");
     const problems: string[] = [];
-    const notes: string[] = [];
     if (bureau === "") problems.push("局がありません");
     if (bureaus.length > 1)
-      notes.push(`局が ${bureaus.length} つ書かれています。先頭の「${bureau}」に入れます`);
+      problems.push(
+        `局が ${bureaus.length} つ書かれています。担当が属する局は 1 つだけ書いてください`,
+      );
     for (const [label, name] of [
       ["局", bureau],
       ["担当", team],
@@ -443,8 +452,7 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
       ...(order !== undefined ? { order } : {}),
       ...(emoji !== "" ? { emoji } : {}),
       ...(drive !== "" ? { driveFolderUrl: drive } : {}),
-      members: splitNotionList(get("members")),
-      notes,
+      members: splitCsvList(get("members")),
     });
   }
   if (rows.length > TEAM_MAX)
@@ -557,7 +565,7 @@ export function planTeamImport(
 }
 
 /**
- * 組織の CSV の雛形（見出しと記入例 3 行。Notion の担当 DB の列名に合わせる）。
+ * 組織の CSV の雛形（見出しと記入例 3 行。委員会の担当 DB と同じ列名）。
  * Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側
  */
 export function teamCsvTemplate(): string {

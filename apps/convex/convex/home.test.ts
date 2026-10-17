@@ -22,7 +22,7 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
   it("構成・ピン留め・最近開いた制作物はアカウントごとに保存される", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast);
+    const workId = await setupWork(t, cast, { confidentiality: "restricted" });
     await cast.reviewer.as.mutation(api.home.saveLayout, {
       widgets: [
         { id: "recent", visible: true, limit: 3 },

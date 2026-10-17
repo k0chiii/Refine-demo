@@ -19,6 +19,17 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       code: "PR",
       emoji: "📣",
     });
+    const design = await cast.admin.as.mutation(api.teams.save, {
+      name: "デザイン担当",
+      kind: "team",
+      parentId: bureau,
+      memberIds: [cast.stranger.id],
+    });
+    const web = await cast.admin.as.mutation(api.teams.save, {
+      name: "Web担当",
+      kind: "team",
+      parentId: bureau,
+    });
     const base = {
       title: "公式パンフレット",
       purpose: "来場者向け",
@@ -33,6 +44,7 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       genre: "graphic",
       subGenre: "print_booklet",
       stakeholderIds: [cast.reviewer.id],
+      productionTeamIds: [design],
       relatedTeamIds: [bureau],
       requiresPrinterSubmission: true,
       printQuantity: 3000,
@@ -58,10 +70,45 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
     });
     expect(detail.people.stakeholders.map((p) => p?.name)).toEqual(["reviewer"]);
     expect(detail.currentDeclarations).toBeNull();
-    // 関係者は職責ではないので、制作物を見られない
-    await expect(cast.reviewer.as.query(api.works.get, { workId })).rejects.toThrow(
+    // 制作担当は 1 つまで（利用者決定 2026-10-17。ポリシー値）
+    await expect(
+      cast.manager.as.mutation(api.works.create, { ...base, productionTeamIds: [design, web] }),
+    ).rejects.toThrow(code("work_invalid"));
+    await expect(
+      cast.manager.as.mutation(api.works.update, {
+        workId,
+        patch: { productionTeamIds: [design, web] },
+      }),
+    ).rejects.toThrow(code("work_invalid"));
+    // 通常の制作物は委員なら誰でも見られる（利用者決定 2026-10-17）。見るだけ
+    const seen = await cast.reviewer.as.query(api.works.get, { workId });
+    expect(seen.can).toMatchObject({ edit: false, comment: false, submit: false });
+    expect((await cast.stranger.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([
+      workId,
+    ]);
+    // 非公開にすると、関係者（reviewer）と制作担当に所属する人（stranger）は自動で見られ、ほかの人は見られない
+    await cast.manager.as.mutation(api.works.update, {
+      workId,
+      patch: { confidentiality: "restricted" },
+    });
+    await expect(cast.reviewer.as.query(api.works.get, { workId })).resolves.toBeTruthy();
+    await expect(cast.stranger.as.query(api.works.get, { workId })).resolves.toBeTruthy();
+    await expect(cast.admin.as.query(api.works.get, { workId })).rejects.toThrow(code("forbidden"));
+    // 所属を外すと見られなくなる
+    await cast.admin.as.mutation(api.teams.save, {
+      id: design,
+      name: "デザイン担当",
+      kind: "team",
+      parentId: bureau,
+      memberIds: [],
+    });
+    await expect(cast.stranger.as.query(api.works.get, { workId })).rejects.toThrow(
       code("forbidden"),
     );
+    await cast.manager.as.mutation(api.works.update, {
+      workId,
+      patch: { confidentiality: "normal" },
+    });
 
     // 変更: null で消す。一覧は大ジャンルで絞れる
     await cast.manager.as.mutation(api.works.update, {

@@ -39,7 +39,8 @@ import { UserPicker } from "@/ui/UserPicker";
  * 局ごとに担当を並べ、各行の ⋮ から 編集（名前・絵文字・Drive・所属。局はコードも）・上へ・下へ・削除（compact はボトムシート。M3 Breakpoints）。
  * 項目は Notion の担当 DB に揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）: 局（コード JIM・ZAI・SSK・EVE・PR・SYS・WG・CAP）・
  * 付番（並び順）・絵文字・Google Drive フォルダ・ユーザ（所属する人）。
- * まとめて作るときは CSV（Notion の担当 DB の列名）。取り込みは何度やっても同じ（既にある局・担当は作らない）。
+ * まとめて作るときは CSV（委員会の担当 DB の項目名）。取り込みは何度やっても同じ（既にある局・担当は作らない）。
+ * 所属する人は、その担当の制作物を（非公開でも）見られる（利用者決定 2026-10-17。acl/authorize.ts）。
  * 制作物が使っている担当と、担当のある局は消せない（domain の team_in_use）。
  */
 export function TeamsAdmin() {
@@ -214,7 +215,7 @@ export function TeamsAdmin() {
         </M3eButton>
       </div>
       <p className="muted small">
-        制作物には主管担当と制作担当・関係担当を選べます。項目は Notion の「担当」DB
+        制作物には主管担当と制作担当（1 つずつ）・関係担当を選べます。項目は委員会の「担当」DB
         と同じ（局のコード・絵文字・Google Drive フォルダ・所属する人）
       </p>
       {teams === undefined ? (
@@ -316,7 +317,7 @@ export function TeamsAdmin() {
           </Field>
           <UserPicker
             label="所属する人（ユーザ）"
-            hint="名簿の代わり。これだけでは制作物の閲覧権限は付きません"
+            hint="所属する人は、この担当が主管担当・制作担当・関係担当の制作物を（非公開でも）見られます"
             value={form.memberIds}
             onChange={(ids) => setForm((f) => ({ ...f, memberIds: ids }))}
           />
@@ -374,13 +375,13 @@ export function downloadTeamCsvTemplate() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "局と担当（Notion の列名）.csv";
+  a.download = "局と担当.csv";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
- * CSV（Notion の担当 DB の列名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ）の取り込み。
+ * CSV（委員会の担当 DB の項目名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ）の取り込み。
  * 作る局・担当と、既にあるものの数、所属する人の照合（メールアドレスかユーザー名）を確かめてから取り込む。
  * 見つからない人がいる行も取り込めるが、その人は所属に入れない（行ごとに知らせる）
  */
@@ -467,10 +468,9 @@ function ImportTeamsDialog({
       <span slot="header">CSV で局と担当を取り込む</span>
       <div className="dialog-body stack">
         <p className="small muted">
-          列は Notion の「担当」DB の書き出しと同じ（局・担当名・付番・絵文字・Google Drive
-          フォルダ・ユーザ）。局は名前かコード（PR・JIM
-          など）で書き、担当を空にすると局だけを作ります。Notion
-          の「局」に複数あれば先頭の局に入れます。既にある局・担当は作りません。
+          列は委員会の担当 DB の項目名と同じ（局・担当名・付番・絵文字・Google Drive
+          フォルダ・ユーザ）。局は名前かコード（PR・JIM など）で 1
+          つ書き、担当を空にすると局だけを作ります。既にある局・担当は作りません。
         </p>
         <div className="row">
           <input
@@ -530,11 +530,11 @@ function ImportTeamsDialog({
                 ))}
               </M3eList>
             ) : null}
-            {/* 行ごとの知らせ: 局が複数・見つからない人 */}
-            {parsed.rows.some((r) => r.notes.length || misses(matches?.get(r.line)).length) ? (
+            {/* 行ごとの知らせ: 見つからない人 */}
+            {parsed.rows.some((r) => misses(matches?.get(r.line)).length) ? (
               <M3eList className="list" aria-label="確認してほしいこと">
                 {parsed.rows
-                  .filter((r) => r.notes.length || misses(matches?.get(r.line)).length)
+                  .filter((r) => misses(matches?.get(r.line)).length)
                   .map((r) => (
                     <M3eListItem key={r.line} className="list__item">
                       <M3eIcon slot="leading" name="info" />
@@ -543,13 +543,12 @@ function ImportTeamsDialog({
                         {r.team ? `${r.bureau} › ${r.team}` : r.bureau}
                       </span>
                       <span slot="supporting-text">
-                        {[
-                          ...r.notes,
-                          ...misses(matches?.get(r.line)).map(
+                        {misses(matches?.get(r.line))
+                          .map(
                             (m) =>
                               `「${m.key}」${m.reason === "ambiguous" ? "に当たる人が複数います" : "が見つかりません"}（所属に入れません）`,
-                          ),
-                        ].join("。")}
+                          )
+                          .join("。")}
                       </span>
                     </M3eListItem>
                   ))}

@@ -127,7 +127,9 @@ function Admin() {
               集計を書き出す
             </M3eButton>
           </div>
-          <p className="muted small">制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます</p>
+          <p className="muted small">
+            制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます。通常の制作物は委員なら誰でも見られるので、閲覧の権限が要るのは非公開・取扱注意の制作物だけです（関係者と担当の所属する人には自動で付きます）
+          </p>
           {works === undefined ? (
             <Loading label="制作物を読み込んでいます" />
           ) : works.length === 0 ? (

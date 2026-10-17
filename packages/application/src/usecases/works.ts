@@ -6,6 +6,7 @@ import {
   DomainError,
   type MediaType,
   newlyReferencedPeople,
+  normalizeProductionTeamIds,
   normalizeWorkEssentials,
   normalizeWorkMetadata,
   orgPermissions,
@@ -32,6 +33,7 @@ export interface CreateWorkInput extends WorkMetadataInput {
   year: number;
   legacyId?: string;
   ownerTeamId?: string;
+  /** 制作担当。数の上限はドメインの WorkTeamPolicy（既定 1 つ。利用者決定 2026-10-17） */
   productionTeamIds?: string[];
   relatedTeamIds?: string[];
   managerIds?: string[];
@@ -43,11 +45,6 @@ export interface CreateWorkInput extends WorkMetadataInput {
   notationCategories?: string[];
   /** 登録と有効化を分ける案（§7.2）に備え、既定は即時 active。 */
   activate?: boolean;
-  /**
-   * 最初の状態を直接指定する（CSV の「有効性」が No の制作物を中止として登録する等）。activate より優先。
-   * 校了（finalized）は版の校了でしか入らないので指定できない
-   */
-  initialLifecycle?: Exclude<WorkLifecycle, "finalized">;
   /**
    * 登録した人を主管に含めるか（既定 true）。一括登録では含めない: 管理者が全件の主管になってしまうため。
    * 主管は CSV の「主管」列だけ（利用者決定 2026-10-15・UI_M3E §36）
@@ -85,7 +82,8 @@ export async function createWork(
   // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責・関係者の人は委員の名簿にいること
   await assertPeopleExist(ctx, { ...essentials, stakeholderIds: meta.stakeholderIds ?? [] });
   const ownerTeamId = input.ownerTeamId?.trim() || undefined;
-  const productionTeamIds = cleanTeamIds(input.productionTeamIds ?? []);
+  // 制作担当は 1 つまで（ポリシー値 WorkTeamPolicy）。関係担当は複数
+  const productionTeamIds = normalizeProductionTeamIds(input.productionTeamIds ?? []);
   const relatedTeamIds = cleanTeamIds(input.relatedTeamIds ?? []);
   await assertTeamsExist(ctx, ownerTeamId, productionTeamIds, relatedTeamIds);
   const data: Omit<Work, "id"> = {
@@ -99,7 +97,7 @@ export async function createWork(
     managerIds,
     creatorIds: essentials.creatorIds,
     approverId: essentials.approverId,
-    lifecycle: input.initialLifecycle ?? (input.activate === false ? "draft" : "active"),
+    lifecycle: input.activate === false ? "draft" : "active",
     confidentiality: input.confidentiality ?? "normal",
     version: 1,
   };
@@ -142,15 +140,12 @@ export async function importWorks(
   const created: Work[] = [];
   for (const [index, row] of input.rows.entries()) {
     try {
-      const { lifecycle, ...rest } = row;
       created.push(
         await createWork(ctx, principal, {
-          ...rest,
+          ...row,
           managerIds: row.managerIds,
           notationCategories: row.notationCategories,
           addRegistrantAsManager: false,
-          // Notion の「有効性」が No の制作物は中止として登録する（docs/NOTION_ALIGNMENT.md）
-          ...(lifecycle ? { initialLifecycle: lifecycle } : {}),
         }),
       );
     } catch (e) {
@@ -205,8 +200,9 @@ export async function updateWork(
   const patch: WorkPatch = stripUndefined(rest);
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
-  // 制作担当・関係担当は全体の置き換え（重複・空を除く）
-  if (patch.productionTeamIds) patch.productionTeamIds = cleanTeamIds(patch.productionTeamIds);
+  // 制作担当・関係担当は全体の置き換え（重複・空を除く）。制作担当の数の上限は applyWorkPatch（WorkTeamPolicy）で確かめる
+  if (patch.productionTeamIds)
+    patch.productionTeamIds = normalizeProductionTeamIds(patch.productionTeamIds);
   if (patch.relatedTeamIds) patch.relatedTeamIds = cleanTeamIds(patch.relatedTeamIds);
   const owner = ownerTeamId === undefined ? undefined : ownerTeamId.trim();
   await assertTeamsExist(

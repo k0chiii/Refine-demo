@@ -15,16 +15,16 @@ import {
   validateAnchor,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
-import { idempotent, loadAuthorizedWork } from "../shared.ts";
+import { checkMentions, idempotent, loadAuthorizedWork } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
+  allMembersCanView,
   editThreadBody,
   isCarryCandidate,
   mentionableUserIds,
   planCarryForward,
   revisionLabel,
-  validateMentions,
 } from "@mf100/domain";
 
 /** 通知文面用の採否ラベル（表示名は UI 側と同じ日本語。状態名自体は設計提案）。 */
@@ -69,7 +69,7 @@ export async function postComment(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
-  const mentions = validateMentions(input.mentions, work, grants);
+  const mentions = await checkMentions(ctx, work, grants, input.mentions);
 
   const now = ctx.clock.now();
   const siblings = await ctx.revisions.listByWork(work.id);
@@ -172,7 +172,7 @@ export async function replyToThread(
   if (!open && !isAllowed("comment.decide", { work, grants, principal })) {
     throw new DomainError("comment_reply_not_allowed", { threadId: thread.id });
   }
-  const mentions = validateMentions(input.mentions, work, grants);
+  const mentions = await checkMentions(ctx, work, grants, input.mentions);
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "replied",
@@ -393,12 +393,17 @@ export async function carryForwardThread(
   return created;
 }
 
-/** メンションの候補: その制作物を見られる人（見られる人だけが候補を取れる） */
+/**
+ * メンションの候補: その制作物を見られる人（見られる人だけが候補を取れる）。
+ * 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）ので名簿の全員（500 人まで）、
+ * 非公開は職責・ACL・関係者・担当の所属がある人（利用者決定 2026-10-17）。
+ */
 export async function listMentionCandidates(
   ctx: AppContext,
   principal: Principal,
   workId: string,
 ): Promise<string[]> {
   const { work, grants } = await loadAuthorizedWork(ctx, principal, workId, "work.view");
-  return mentionableUserIds(work, grants);
+  if (allMembersCanView(work)) return (await ctx.people.listMembers(500)).map((p) => p.id);
+  return mentionableUserIds(work, grants, await ctx.teams.list());
 }

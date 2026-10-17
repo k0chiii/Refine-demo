@@ -1,9 +1,11 @@
 import {
   canSeeNotificationSubject,
   DomainError,
+  memberTeamIds,
   type NotificationSubject,
   type Principal,
   recipientPrincipal,
+  type Team,
   type Work,
   type WorkPermissionGrant,
 } from "@mf100/domain";
@@ -72,18 +74,25 @@ function redact(n: Notification): Notification {
   return { ...rest, ...REDACTED_NOTIFICATION };
 }
 
-type LoadedSubject = { work: Work; grants: WorkPermissionGrant[] } | null;
+type LoadedSubject = { work: Work; grants: WorkPermissionGrant[]; teams: Team[] } | null;
 
-/** 通知の対象の制作物と ACL を読む（同じ制作物は 1 回だけ）。消えた制作物は null（見られない扱い） */
+/**
+ * 通知の対象の制作物と ACL を読む（同じ制作物は 1 回だけ）。消えた制作物は null（見られない扱い）。
+ * 非公開の制作物は、受信者の担当の所属で見られるかを判定するために担当の一覧も読む（1 回だけ）
+ */
 function subjectLoader(ctx: AppContext) {
   const cache = new Map<string, Promise<LoadedSubject>>();
+  let teams: Promise<Team[]> | undefined;
   return (workId: string): Promise<LoadedSubject> => {
     let hit = cache.get(workId);
     if (!hit) {
       hit = (async () => {
         const work = await ctx.works.findById(workId).catch(() => null);
         if (!work) return null;
-        return { work, grants: await ctx.acl.listByWork(work.id) };
+        const grants = await ctx.acl.listByWork(work.id);
+        if (work.confidentiality !== "restricted") return { work, grants, teams: [] };
+        teams ??= ctx.teams.list();
+        return { work, grants, teams: await teams };
       })();
       cache.set(workId, hit);
     }
@@ -95,7 +104,8 @@ function subjectLoader(ctx: AppContext) {
  * 複数の受信者にアプリ内通知を作る。本人（actor）には送らない。重複受信者は 1 回。
  * 制作物に関する通知は、受信者がその制作物（feedback_* はフィードバック）を今見られるかを確かめ、
  * 見られない人には文面を伏せた通知（REDACTED_NOTIFICATION）を作る（§5.2-10）。
- * 例: 閲覧 ACL の無い人を校正者に割り当てた（割当は ACL を自動で付与しない・D3）。
+ * 例: 非公開の制作物に、職責・閲覧 ACL・関係者・担当の所属の無い人を校正者に割り当てた（割当は ACL を自動で付与しない・D3）。
+ * 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）ので伏せない。
  * 通知の失敗は業務更新を失敗させない（§10-4）ため、呼び出し側は await しても例外を業務に伝播させない。
  */
 export async function notify(
@@ -117,8 +127,9 @@ export async function notify(
         visible =
           loaded !== null &&
           canSeeNotificationSubject(subject, {
-            ...loaded,
-            principal: recipientPrincipal(recipientId),
+            work: loaded.work,
+            grants: loaded.grants,
+            principal: recipientPrincipal(recipientId, memberTeamIds(loaded.teams, recipientId)),
           });
       }
       const n: Omit<Notification, "id"> = {
@@ -160,7 +171,11 @@ export async function presentNotifications(
     const loaded = await load(n.workId);
     const visible =
       loaded !== null &&
-      canSeeNotificationSubject(notificationSubjectOf(n.kind), { ...loaded, principal });
+      canSeeNotificationSubject(notificationSubjectOf(n.kind), {
+        work: loaded.work,
+        grants: loaded.grants,
+        principal,
+      });
     out.push(visible ? n : redact(n));
   }
   return out;

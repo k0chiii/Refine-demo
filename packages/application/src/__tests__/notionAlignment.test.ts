@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { confirmSubmission, prepareSubmission } from "../usecases/submissions.ts";
 import { saveTeam } from "../usecases/teams.ts";
-import { createWork, importWorks, updateWork } from "../usecases/works.ts";
+import { importWorks, updateWork } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, uploadVerifiedItem } from "../testing/scenario.ts";
 
@@ -45,9 +45,64 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
     await expect(seedWork(ctx, { slackChannelId: "#general" })).rejects.toThrow(
       invalid("slackChannelId", "format"),
     );
-    // 関係者は職責ではないので、制作物を見られない（閲覧は管理者の閲覧権限で）
+    // 関係者は職責ではない（主管に入らない）。閲覧は自動で付く（acl.test.ts）
     const roles = ctx.state.works.get(work.id)!;
     expect(roles.managerIds).not.toContain(principals.reviewer.userId);
+  });
+
+  it("制作担当は 1 つまで（ポリシー値。利用者決定 2026-10-17）。登録・変更・一括登録のどこでも", async () => {
+    const ctx = createInMemoryContext();
+    const pr = await saveTeam(ctx, principals.sysadmin, { name: "広報局", kind: "bureau" });
+    const design = await saveTeam(ctx, principals.sysadmin, {
+      name: "デザイン担当",
+      kind: "team",
+      parentId: pr.id,
+    });
+    const web = await saveTeam(ctx, principals.sysadmin, {
+      name: "Web担当",
+      kind: "team",
+      parentId: pr.id,
+    });
+    await expect(seedWork(ctx, { productionTeamIds: [design.id, web.id] })).rejects.toThrow(
+      invalid("productionTeamIds", "too_many"),
+    );
+    const work = await seedWork(ctx, { productionTeamIds: [design.id] });
+    expect(work.productionTeamIds).toEqual([design.id]);
+    // あとから変えられる（置き換え・外す）
+    const changed = await updateWork(ctx, principals.manager, {
+      workId: work.id,
+      patch: { productionTeamIds: [web.id] },
+    });
+    expect(changed.productionTeamIds).toEqual([web.id]);
+    await expect(
+      updateWork(ctx, principals.manager, {
+        workId: work.id,
+        patch: { productionTeamIds: [design.id, web.id] },
+      }),
+    ).rejects.toThrow(invalid("productionTeamIds", "too_many"));
+    // 古い行に 2 つあっても、制作担当を触らない変更は通る
+    await ctx.works.update({ ...changed, productionTeamIds: [design.id, web.id] });
+    const renamed = await updateWork(ctx, principals.manager, {
+      workId: work.id,
+      patch: { title: "新しい名称" },
+    });
+    expect(renamed.productionTeamIds).toEqual([design.id, web.id]);
+    const row = {
+      title: "A",
+      year: 100,
+      purpose: "",
+      category: "映像",
+      mediaType: "video" as const,
+      creatorIds: [principals.creator.userId],
+      managerIds: [],
+      approverId: principals.approver.userId,
+      confidentiality: "normal" as const,
+      notationCategories: [],
+      productionTeamIds: [design.id, web.id],
+    };
+    await expect(importWorks(ctx, principals.sysadmin, { rows: [row] })).rejects.toThrow(
+      expect.objectContaining({ code: "work_import_invalid" }),
+    );
   });
 
   it("変更では null で消し、省略した項目は触らない。関係担当も組織にある担当だけ", async () => {
@@ -69,7 +124,7 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
     ).rejects.toThrow(expect.objectContaining({ code: "team_not_found" }));
   });
 
-  it("一括登録: 有効性 No の行は中止として登録する", async () => {
+  it("一括登録: 揃えた項目をそのまま登録する（有効性・校了済みは取り込まない。状態は登録してから操作で入れる）", async () => {
     const ctx = createInMemoryContext();
     const [a, b] = await importWorks(ctx, principals.sysadmin, {
       rows: [
@@ -87,7 +142,6 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
           confidentiality: "normal",
           notationCategories: [],
           productionTeamIds: [],
-          lifecycle: "cancelled",
         },
         {
           title: "B",
@@ -105,7 +159,7 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
         },
       ],
     });
-    expect(a!.lifecycle).toBe("cancelled");
+    expect(a).toMatchObject({ lifecycle: "active", genre: "video", subGenre: "video" });
     expect(b).toMatchObject({ lifecycle: "active", tags: ["1次公開"] });
   });
 });

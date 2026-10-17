@@ -33,7 +33,7 @@ export function downloadWorkCsvTemplate() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "制作物の一括登録（Notion の列名）.csv";
+  a.download = "制作物の一括登録.csv";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -191,15 +191,16 @@ export function ImportWorksDialog({
       <span slot="header">CSV で制作物を一括登録</span>
       <div className="dialog-body stack">
         <p className="small muted">
-          1 行に 1 つの制作物を書いた CSV を選びます。列の名前は Notion の「制作物」DB
-          の書き出しと同じです（そのまま読めます）:{" "}
+          1 行に 1 つの制作物を書いた CSV を選びます（雛形を書き出せます）。列の名前は委員会の制作物
+          DB の項目名と同じです:{" "}
           {workCsvTemplateColumns
             .map((c) => `${c.header}${c.required ? "（必須）" : ""}`)
             .join("・")}
           。
-          区分と媒体は小ジャンルから自動で入ります。人はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」か「,」で区切ります（Notion
-          のリンク付きの書き方もそのまま読めます）。担当・制作担当・関係担当は組織の局・担当を「PR ›
-          デザイン担当」のように、局はコードでも書けます。登録する前に、内容と人の対応をこの表で確かめられます。
+          区分と媒体は小ジャンルから自動で入ります。人はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」か「,」で区切ります。担当（主管担当）・制作担当は
+          1 つ、関係担当は複数を、組織の局・担当を「PR ›
+          デザイン担当」のように（局はコードでも）書けます。校了者は 1
+          人です。登録する前に、内容と人の対応をこの表で確かめられます。
         </p>
         <div className="row">
           <input
@@ -280,9 +281,6 @@ export function ImportWorksDialog({
                           {r.problems.join("。") || "ファイルの問題（上）を直してください"}
                         </span>
                       )}
-                      {r.notes.length ? (
-                        <span className="import-list__notes">{r.notes.join("。")}</span>
-                      ) : null}
                     </span>
                     <span slot="trailing" className="meta">
                       {r.input ? "登録する" : "確認が必要"}

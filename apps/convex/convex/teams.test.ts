@@ -95,7 +95,7 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
     const workId = (await cast.manager.as.mutation(api.works.create, {
       ...base,
       ownerTeamId: id("デザイン担当"),
-      productionTeamIds: [id("デザイン担当"), id("SNS担当")],
+      productionTeamIds: [id("SNS担当")],
     })) as Id<"works">;
     await expect(cast.admin.as.mutation(api.teams.remove, { id: id("SNS担当") })).rejects.toThrow(
       code("team_in_use"),
@@ -104,13 +104,13 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
     expect(row).toMatchObject({
       id: workId,
       ownerTeamId: id("デザイン担当"),
-      productionTeamIds: [id("デザイン担当"), id("SNS担当")],
+      productionTeamIds: [id("SNS担当")],
       creators: ["creator"],
     });
-    // 制作担当のどちらで絞っても出る（主管担当はデザイン担当だけ）
+    // 主管担当（デザイン担当）と制作担当（SNS担当。1 つ）は別の軸で絞る
     expect(
       ["デザイン担当", "SNS担当"].map((n) => workBelongsToTeam(row!, list, "production", id(n))),
-    ).toEqual([true, true]);
+    ).toEqual([false, true]);
     expect(workBelongsToTeam(row!, list, "owner", id("SNS担当"))).toBe(false);
     // 主管担当を外す（空文字）
     await cast.manager.as.mutation(api.works.update, {

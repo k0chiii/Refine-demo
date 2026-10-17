@@ -1,5 +1,6 @@
 import { parseCsv } from "../notation/importer.ts";
 import { matchTeam, type Team, type TeamMatch } from "../org/team.ts";
+import { parseCsvBoolean, parseCsvDateTime, splitCsvList } from "../shared/csvValues.ts";
 import { toJstDate } from "../shared/deadline.ts";
 import type { Instant } from "../shared/time.ts";
 import {
@@ -17,13 +18,18 @@ import {
   type WorkGenre,
   type WorkSubGenre,
 } from "./metadata.ts";
-import { parseNotionCheckbox, parseNotionDate, splitNotionList } from "./notionCsv.ts";
 import { confidentialities, mediaTypes, type Confidentiality, type MediaType } from "./Work.ts";
-import { WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "./workInput.ts";
+import {
+  defaultWorkTeamPolicy,
+  WORK_CATEGORY_MAX,
+  WORK_TITLE_MAX,
+  type WorkTeamPolicy,
+} from "./workInput.ts";
 
 /**
  * 制作物の一括登録（CSV）。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」。
- * 列の名前は委員会の Notion「校正システム」の制作物 DB の書き出しに揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。
+ * 列の名前は委員会の制作物 DB の項目名（docs/NOTION_ALIGNMENT.md。利用者決定 2026-10-17）。読むのはこのアプリの雛形で、
+ * 外部ツールの書き出しをそのまま取り込む仕組みではない（実データの連携はしない。利用者決定 2026-10-17）。
  * 以前の列名（題名・用途・旧ID・校了権限者・主管担当）もそのまま読める。
  * 取り込む前に、行ごとの内容と担当者の対応（メールアドレスかユーザー名 → 利用者）を表で確かめてから登録する。
  * ここは CSV の解析・検証と担当者の照合だけを持つ純粋関数。登録はアプリケーション層の `importWorks`。
@@ -31,14 +37,16 @@ import { WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "./workInput.ts";
  * 列（見出しの名前で探す。並び順は自由・知らない列は無視。* は必須）:
  *   制作物名*・制作物 ID・大ジャンル・小ジャンル・区分・媒体・目的・用途・担当（主管担当）・制作担当・関係担当・
  *   制作者*・関係者・主管（人）・校了者*・納期・入稿日・投稿日・印刷日・入稿の有無・印刷する部数/枚数/個数・サイズ・尺・
- *   制作日数・タグ・Google Drive フォルダ・Slack Channel ID・有効性・機密区分・表記カテゴリ・年度
+ *   制作日数・タグ・Google Drive フォルダ・Slack Channel ID・機密区分・表記カテゴリ・年度
  * - 区分は小ジャンル（無ければ大ジャンル）から入る。媒体は小ジャンル・大ジャンルから既定が入る（書けばそちら）
- * - 複数の値は「;」「、」「,」（全角も可）か改行で区切る。Notion の書き出しの「題名 (https://www.notion.so/…)」はリンクを外して読む
- * - 担当（組織）は「局 › 担当」「局/担当」、担当の名前だけ（同名が無いとき）、局の名前かコード（PR など）で書く
+ * - 複数の値は「;」「、」「,」（全角も可）か改行で区切る
+ * - 担当（組織）は「局 › 担当」「局/担当」、担当の名前だけ（同名が無いとき）、局の名前かコード（PR など）で書く。
+ *   担当（主管担当）は 1 つ、制作担当も 1 つ（WorkTeamPolicy。利用者決定 2026-10-17）、関係担当は複数
  * - 人はメールアドレス（@ を含む）かユーザー名（一度サインインした利用者）で書く。同名が複数いるときはメールで書く
- * - 日付は 2026-11-14・2026/11/14・2026年11月14日・Nov 14, 2026（その日の終わりまで）。時刻を付けるなら「2026-11-14 18:00」
- * - チェックボックス（入稿の有無・有効性）は Yes / No。有効性が No なら中止（cancelled）として登録する
- * - 校了者が複数書かれていれば、先頭の人を校了権限者（1 人。確定方針 C3）にし、残りは関係者に入れる
+ * - 校了者は 1 人（確定方針 C3）。複数書かれた行は取り込まない
+ * - 日付は 2026-11-14・2026/11/14（その日の終わりまで）。時刻を付けるなら「2026-11-14 18:00」
+ * - チェックボックス（入稿の有無）は Yes / No（はい・いいえ も）
+ * - 有効性・校了済みは状態（中止・校了）から導く値なので列に持たない。中止・校了は登録してから操作で入れる
  */
 export const workCsvColumns = [
   {
@@ -92,7 +100,7 @@ export const workCsvColumns = [
   {
     key: "approver",
     header: "校了者",
-    aliases: ["校了者", "校了権限者", "校了担当", "approver", "approvers"],
+    aliases: ["校了者", "校了権限者", "校了担当", "approver"],
     required: true,
   },
   { key: "deadline", header: "納期", aliases: ["納期", "deadline"], required: false },
@@ -139,7 +147,6 @@ export const workCsvColumns = [
     aliases: ["Slack Channel ID", "Slack チャンネル ID", "Slack", "slackChannelId"],
     required: false,
   },
-  { key: "effective", header: "有効性", aliases: ["有効性", "有効", "effective"], required: false },
   {
     key: "confidentiality",
     header: "機密区分",
@@ -153,13 +160,11 @@ export const workCsvColumns = [
     required: false,
   },
   { key: "year", header: "年度", aliases: ["年度", "回", "year"], required: false },
-  // 読むが取り込まない（行の知らせに書く）
-  { key: "finalized", header: "校了済み", aliases: ["校了済み", "finalized"], required: false },
 ] as const;
 type ColumnKey = (typeof workCsvColumns)[number]["key"];
 
-/** 雛形に出す列（読むだけの列は出さない） */
-export const workCsvTemplateColumns = workCsvColumns.filter((c) => c.key !== "finalized");
+/** 雛形に出す列（読む列と同じ） */
+export const workCsvTemplateColumns: readonly (typeof workCsvColumns)[number][] = workCsvColumns;
 
 /** 1 回に取り込める行数（Convex の 1 mutation に収めるため。超えたら分けて取り込む） */
 export const WORK_IMPORT_MAX_ROWS = 200;
@@ -195,7 +200,7 @@ export function normalizePersonKey(value: string): string {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-const splitList = splitNotionList;
+const splitList = splitCsvList;
 
 export interface WorkCsvRow {
   /** CSV の行番号（1 始まり。見出しの行を含む） */
@@ -209,7 +214,7 @@ export interface WorkCsvRow {
   subGenre: WorkSubGenre | null;
   creators: string[];
   managers: string[];
-  /** 関係者（校了者が複数なら 2 人目以降もここ） */
+  /** 関係者 */
   stakeholders: string[];
   approver: string;
   deadlineAt: Instant | null;
@@ -221,8 +226,6 @@ export interface WorkCsvRow {
   tags: string[];
   driveFolderUrl: string;
   slackChannelId: string;
-  /** 有効性 No → 中止として登録 */
-  lifecycle: "active" | "cancelled";
   legacyId: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
@@ -234,8 +237,6 @@ export interface WorkCsvRow {
   relatedTeams: string[];
   /** 取り込めない理由（担当者の照合は別。{@link resolveWorkImport} で足す） */
   problems: string[];
-  /** 取り込めるが知らせておくこと（校了者が複数・校了済みは取り込まない 等） */
-  notes: string[];
 }
 
 export interface WorkCsvParseResult {
@@ -262,10 +263,10 @@ function findHeader(
 
 /**
  * 納期の欄 → 締切の時刻（その日の終わり、または指定の時刻）。空は null、読めなければ undefined。
- * 2026-11-14・2026/11/14・2026年11月14日・Nov 14, 2026 と、時刻付き（18:00・6:00 PM）
+ * 2026-11-14・2026/11/14 と、時刻付き「2026-11-14 18:00」（shared/csvValues.ts）
  */
 export function parseWorkDeadline(value: string): Instant | null | undefined {
-  return parseNotionDate(value);
+  return parseCsvDateTime(value);
 }
 
 /**
@@ -274,8 +275,9 @@ export function parseWorkDeadline(value: string): Instant | null | undefined {
  */
 export function parseWorkCsv(
   text: string,
-  opts: { defaultYear: number; now: Instant },
+  opts: { defaultYear: number; now: Instant; teamPolicy?: WorkTeamPolicy },
 ): WorkCsvParseResult {
+  const maxProduction = (opts.teamPolicy ?? defaultWorkTeamPolicy).maxProductionTeams;
   const table = parseCsv(text);
   const header = findHeader(table);
   if (!header)
@@ -304,7 +306,6 @@ export function parseWorkCsv(
       return k === undefined ? "" : (cells[k] ?? "").trim();
     };
     const problems: string[] = [];
-    const notes: string[] = [];
     const title = get("title");
     if (title === "") problems.push("制作物名がありません");
     else if (title.length > WORK_TITLE_MAX)
@@ -355,13 +356,11 @@ export function parseWorkCsv(
     if (creators.length === 0) problems.push("制作者がありません");
     const approvers = splitList(get("approver"));
     if (approvers.length === 0) problems.push("校了者がありません");
-    const stakeholders = Array.from(
-      new Set([...splitList(get("stakeholders")), ...approvers.slice(1)]),
-    );
-    if (approvers.length > 1)
-      notes.push(
-        `校了者が ${approvers.length} 人書かれています。校了権限者は「${approvers[0]}」の 1 人にし、ほかの人は関係者に入れます`,
+    else if (approvers.length > 1)
+      problems.push(
+        `校了者が ${approvers.length} 人書かれています。校了を宣言できるのは 1 人です（確定方針 C3）`,
       );
+    const stakeholders = splitList(get("stakeholders"));
 
     const deadlineText = get("deadline");
     const deadline = parseWorkDeadline(deadlineText);
@@ -372,12 +371,12 @@ export function parseWorkCsv(
     else if (deadline !== null && deadline <= opts.now) problems.push("納期が過ぎています");
 
     const publishText = get("publishAt");
-    const publishAt = parseNotionDate(publishText);
+    const publishAt = parseCsvDateTime(publishText);
     if (publishAt === undefined)
       problems.push(`入稿日・投稿日・印刷日「${publishText}」を日付として読めません`);
 
     const printerText = get("requiresPrinterSubmission");
-    const requiresPrinterSubmission = parseNotionCheckbox(printerText);
+    const requiresPrinterSubmission = parseCsvBoolean(printerText);
     if (requiresPrinterSubmission === undefined)
       problems.push(`入稿の有無「${printerText}」が分かりません（Yes / No）`);
 
@@ -413,15 +412,6 @@ export function parseWorkCsv(
       );
     }
 
-    const effectiveText = get("effective");
-    const effective = parseNotionCheckbox(effectiveText);
-    if (effective === undefined)
-      problems.push(`有効性「${effectiveText}」が分かりません（Yes / No）`);
-    const lifecycle = effective === false ? "cancelled" : "active";
-    if (effective === false) notes.push("有効性が No なので、中止（無効）の制作物として登録します");
-    if (parseNotionCheckbox(get("finalized")) === true)
-      notes.push("「校了済み」は取り込みません（校了は版を提出して宣言します）");
-
     const confText = get("confidentiality");
     const confidentiality =
       confText === ""
@@ -435,6 +425,13 @@ export function parseWorkCsv(
 
     const ownerTeams = splitList(get("ownerTeam"));
     if (ownerTeams.length > 1) problems.push("担当（主管担当）は 1 つだけ書いてください");
+    const productionTeams = splitList(get("productionTeams"));
+    if (productionTeams.length > maxProduction)
+      problems.push(
+        maxProduction === 1
+          ? "制作担当は 1 つだけ書いてください（あとから変えられます）"
+          : `制作担当は ${maxProduction} つまでです`,
+      );
 
     rows.push({
       line: i + 1,
@@ -458,15 +455,13 @@ export function parseWorkCsv(
       tags,
       driveFolderUrl,
       slackChannelId,
-      lifecycle,
       legacyId: get("legacyId"),
       confidentiality: confidentiality ?? "normal",
       notationCategories: splitList(get("notation")),
       ownerTeam: ownerTeams[0] ?? null,
-      productionTeams: Array.from(new Set(splitList(get("productionTeams")))),
-      relatedTeams: Array.from(new Set(splitList(get("relatedTeams")))),
+      productionTeams,
+      relatedTeams: splitList(get("relatedTeams")),
       problems,
-      notes,
     });
   }
   if (rows.length > WORK_IMPORT_MAX_ROWS)
@@ -526,8 +521,6 @@ export interface WorkImportInput {
   tags?: string[];
   driveFolderUrl?: string;
   slackChannelId?: string;
-  /** 有効性 No → 中止として登録 */
-  lifecycle?: "cancelled";
   legacyId?: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
@@ -559,8 +552,6 @@ export interface WorkImportRow {
   relatedTeams: TeamRefMatch[];
   /** 取り込めない理由（行の内容と担当者の照合） */
   problems: string[];
-  /** 取り込めるが知らせておくこと */
-  notes: string[];
   /** 問題が無い行だけ登録の内容が入る */
   input: WorkImportInput | null;
 }
@@ -658,7 +649,7 @@ export function resolveWorkImport(
           ...(row.subGenre ? { subGenre: row.subGenre } : {}),
           creatorIds: ids(creators),
           managerIds: ids(managers),
-          stakeholderIds: ids(stakeholders).filter((id) => id !== approver!.user!.id),
+          stakeholderIds: ids(stakeholders),
           approverId: approver!.user!.id,
           ...(row.deadlineAt !== null ? { deadlineAt: row.deadlineAt } : {}),
           ...(row.publishAt !== null ? { publishAt: row.publishAt } : {}),
@@ -671,7 +662,6 @@ export function resolveWorkImport(
           tags: row.tags,
           ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
           ...(row.slackChannelId ? { slackChannelId: row.slackChannelId } : {}),
-          ...(row.lifecycle === "cancelled" ? { lifecycle: "cancelled" as const } : {}),
           ...(row.legacyId ? { legacyId: row.legacyId } : {}),
           confidentiality: row.confidentiality,
           notationCategories: row.notationCategories,
@@ -690,7 +680,6 @@ export function resolveWorkImport(
       productionTeams,
       relatedTeams,
       problems,
-      notes: row.notes,
       input,
     };
   });
@@ -702,7 +691,7 @@ function csvCell(value: string): string {
 }
 
 /**
- * 雛形（Notion の制作物 DB の列名の見出しと記入例 1 行。納期の例は 30 日後）。
+ * 雛形（委員会の制作物 DB の項目名の見出しと記入例 1 行。納期の例は 30 日後）。
  * Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側
  */
 export function workCsvTemplate(now: Instant = Date.now()): string {
@@ -716,7 +705,7 @@ export function workCsvTemplate(now: Instant = Date.now()): string {
     mediaType: "",
     purpose: "来場者向け総合案内",
     ownerTeam: "PR › デザイン担当",
-    productionTeams: "PR › デザイン担当;PR › SNS担当",
+    productionTeams: "PR › デザイン担当",
     relatedTeams: "JIM",
     creators: "mock-creator@example.invalid",
     stakeholders: "",
@@ -731,7 +720,6 @@ export function workCsvTemplate(now: Instant = Date.now()): string {
     tags: "公式パンフ;マスター",
     driveFolderUrl: "https://drive.google.com/drive/folders/example",
     slackChannelId: "C0123ABCDEF",
-    effective: "Yes",
     confidentiality: "通常",
     notation: "A1;A2",
     year: "100",

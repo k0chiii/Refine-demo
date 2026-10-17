@@ -206,9 +206,8 @@ describe("制作物の一括登録（CSV）", () => {
     expect(a).toContain("機密区分「秘密」が分かりません");
     expect(a).toContain("制作者「誰か」が見つかりません");
     expect(a).toContain("2 人います");
-    // 校了者が複数なら先頭の人が校了権限者、残りは関係者（行は止めない。知らせだけ）
-    expect(b).not.toContain("校了");
-    expect(preview.rows[1]!.notes.join()).toContain("校了者が 2 人");
+    // 校了者は 1 人（確定方針 C3）。複数書かれた行は取り込まない
+    expect(b).toContain("校了者が 2 人");
     expect(b).toContain("納期が過ぎています");
   });
 

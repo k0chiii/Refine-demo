@@ -67,7 +67,11 @@ describe("端末への通知（Web Push）", () => {
     });
     expect(JSON.stringify(plan?.payload)).not.toContain("誤字");
 
-    // 送る前に閲覧権限が外れたら、伏せた内容にする
+    // 送る前に閲覧権限が外れたら（非公開になり、ACL も外れた）、伏せた内容にする
+    await ctx.works.update({
+      ...(await ctx.works.findById(work.id))!,
+      confidentiality: "restricted",
+    });
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       principalType: "user",

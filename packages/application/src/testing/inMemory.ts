@@ -173,7 +173,9 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     people: {
       displayName: async (id) => state.names.get(id) ?? null,
       listMembers: async (limit) =>
-        [...state.names].slice(0, limit).map(([id, name]) => ({ id, name, email: null })),
+        [...new Set([...state.members, ...state.names.keys()])]
+          .slice(0, limit)
+          .map((id) => ({ id, name: state.names.get(id) ?? "", email: null })),
       profiles: async (ids) =>
         [...new Set(ids)].flatMap((id) =>
           state.names.has(id) || state.members.has(id)

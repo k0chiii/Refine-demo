@@ -179,10 +179,10 @@ describe("組織の CSV の取り込み", () => {
 });
 
 describe("制作物の主管担当・制作担当", () => {
-  it("登録・変更では組織にある局・担当だけを指せる。空の主管担当は外す。制作担当は置き換え（重複は除く）", async () => {
+  it("登録・変更では組織にある局・担当だけを指せる。空の主管担当は外す。制作担当は置き換え（重複は除く。1 つまで）", async () => {
     const { ctx, pr, design, sns } = await setup();
     await expect(seedWork(ctx, { ownerTeamId: "nope" })).rejects.toThrow(code("team_not_found"));
-    await expect(seedWork(ctx, { productionTeamIds: [design.id, "nope"] })).rejects.toThrow(
+    await expect(seedWork(ctx, { productionTeamIds: ["nope"] })).rejects.toThrow(
       code("team_not_found"),
     );
     const blank = await seedWork(ctx, { ownerTeamId: "", productionTeamIds: [""] });
@@ -193,9 +193,9 @@ describe("制作物の主管担当・制作担当", () => {
     expect(work).toMatchObject({ ownerTeamId: design.id, productionTeamIds: [design.id] });
     const changed = await updateWork(ctx, principals.manager, {
       workId: work.id,
-      patch: { ownerTeamId: pr.id, productionTeamIds: [sns.id, design.id, sns.id] },
+      patch: { ownerTeamId: pr.id, productionTeamIds: [sns.id, sns.id] },
     });
-    expect(changed).toMatchObject({ ownerTeamId: pr.id, productionTeamIds: [sns.id, design.id] });
+    expect(changed).toMatchObject({ ownerTeamId: pr.id, productionTeamIds: [sns.id] });
     await expect(
       updateWork(ctx, principals.manager, { workId: work.id, patch: { ownerTeamId: "nope" } }),
     ).rejects.toThrow(code("team_not_found"));
@@ -224,7 +224,7 @@ describe("制作物の主管担当・制作担当", () => {
     const parsed = parseWorkCsv(
       [
         "題名,区分,媒体,制作者,校了権限者,主管担当,制作担当",
-        `A,印刷物,PDF,creator,approver,広報局 › デザイン担当,デザイン担当;広報局/SNS担当`,
+        `A,印刷物,PDF,creator,approver,広報局 › デザイン担当,広報局/SNS担当`,
       ].join("\n"),
       { defaultYear: 100, now: ctx.clock.now() },
     );
@@ -244,7 +244,7 @@ describe("制作物の主管担当・制作担当", () => {
     });
     expect(created).toMatchObject({
       ownerTeamId: design.id,
-      productionTeamIds: [design.id, sns.id],
+      productionTeamIds: [sns.id],
     });
     await expect(
       importWorks(ctx, principals.sysadmin, {

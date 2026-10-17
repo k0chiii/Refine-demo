@@ -356,7 +356,7 @@ export function WorkFormFields({
           />
           <TeamSelect
             label="制作担当"
-            multi
+            hint="1 つ（あとから変えられます）"
             value={form.productionTeamIds}
             onChange={setIds("productionTeamIds")}
           />
@@ -389,7 +389,7 @@ export function WorkFormFields({
         />
         <UserPicker
           label="関係者"
-          hint="職責ではないので、これだけでは制作物を見られません（閲覧は管理者の閲覧権限で）"
+          hint="職責ではありません（提出・採否・校了はできません）。非公開・取扱注意の制作物でも見られます"
           value={form.stakeholderIds}
           onChange={setIds("stakeholderIds")}
         />
@@ -491,7 +491,10 @@ export function WorkFormFields({
               onChange={set("category")}
             />
           </Field>
-          <Field label="機密区分">
+          <Field
+            label="機密区分"
+            hint="通常は委員なら誰でも見られます。非公開・取扱注意は職責・関係者・担当の所属する人と、管理者が閲覧権限を付けた人だけ"
+          >
             <Select value={form.confidentiality} onChange={set("confidentiality")}>
               <option value="normal">通常</option>
               <option value="restricted">非公開・取扱注意</option>

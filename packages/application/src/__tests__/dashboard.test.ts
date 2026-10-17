@@ -92,8 +92,9 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     expect(d.backlog.stale).toHaveLength(1);
   });
 
-  it("閲覧権限の無い人には何も出ない", async () => {
+  it("閲覧権限の無い人には何も出ない（非公開の制作物）", async () => {
     const { ctx, works } = await setup();
+    for (const w of await works()) await ctx.works.update({ ...w, confidentiality: "restricted" });
     const d = await buildDashboard(ctx, principals.stranger, await works());
     expect(
       [...Object.values(d.mine), ...Object.values(d.backlog)].every((l) => l.length === 0),
