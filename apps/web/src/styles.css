@@ -195,6 +195,25 @@ body {
     font-size: max(16px, 1rem);
   }
 }
+/*
+ * 上の iOS だけの指定は、M3E の部品の shadow DOM の中（日付の年月日・時刻の欄は contenteditable）には届かない。
+ * それらの文字は M3E の form-field のトークンで決まる（rem のまま。iOS の文字サイズを小さくすると 16px 未満になり、
+ * 制作物登録の納期・入稿日の欄でフォーカスしたときに拡大される。利用者指摘 2026-10-17）。
+ * compact（スマホ）では、入力欄の文字を 16px 以上にする（viewport の拡大禁止は使わない）。
+ */
+@media (max-width: 599px) {
+  :root {
+    --m3e-form-field-font-size: max(16px, 1rem);
+  }
+  :is(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]),
+    textarea,
+    select,
+    [contenteditable]:not([contenteditable="false"])
+  ) {
+    font-size: max(16px, 1rem);
+  }
+}
 :root {
   /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
   --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));
