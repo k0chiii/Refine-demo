@@ -37,6 +37,8 @@ interface Props {
   onCommentFrame: (d: FigmaDraft) => void;
   renderInPage?: (vp: Viewport) => ReactNode;
   footer?: ReactNode;
+  /** 埋め込みの読み込みが終わった（親はそれまで紙面を隠して読み込み中の指標を出す。docs/UI_M3E.md §65） */
+  onReady?: () => void;
 }
 
 /** 添付の URL からフレームの表示名（URL のファイル名 › ノード ID） */
@@ -61,6 +63,7 @@ export function FigmaEmbedViewer({
   onCommentFrame,
   renderInPage,
   footer,
+  onReady,
 }: Props) {
   const current = frames.find((f) => f.id === currentId) ?? frames[0];
   const ref = current ? parseFigmaUrl(current.externalUrl) : null;
@@ -155,6 +158,7 @@ export function FigmaEmbedViewer({
             title={`Figma の埋め込み: ${figmaFrameLabel(current.externalUrl, frames.indexOf(current))}`}
             src={embed}
             allowFullScreen
+            onLoad={() => onReady?.()}
             referrerPolicy="strict-origin-when-cross-origin"
           />
           {renderInPage ? (

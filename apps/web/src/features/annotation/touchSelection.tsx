@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { portalHost } from "@/lib/portalHost";
 import { useMedia } from "@/lib/useMedia";
 import { M3eFab } from "@m3e/react/fab";
 import { M3eIcon } from "@m3e/react/icon";
@@ -49,6 +50,6 @@ export function TouchCommentButton({ onCommit }: { onCommit: () => void }) {
       <M3eIcon slot="icon" name="add_comment" />
       <span slot="label">選んだ文字にコメント</span>
     </M3eFab>,
-    document.body,
+    portalHost(),
   );
 }

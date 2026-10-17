@@ -7,6 +7,8 @@ import {
   type SocialPost,
 } from "@mf100/domain";
 import {
+  useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -19,6 +21,11 @@ import { bezelUrl, deviceById, outerSize, type DeviceSpec } from "./devices";
 import { Icon, StatusIcons } from "./icons";
 import "./preview.css";
 import { scrollBehavior } from "@/lib/motion";
+import { nextStacked } from "@/features/annotation/stacked";
+import { TouchCommentButton, useTouchSelection } from "@/features/annotation/touchSelection";
+import { useMedia } from "@/lib/useMedia";
+import { ImageMarkLayer, PostMarksContext } from "./postMarks";
+import { buildTextSegments, selectionToRange, tokenize, type TextPick } from "./postText";
 
 /**
  * SNS 投稿のプレビュー（編集画面・校正画面・書き出しで共用）。
@@ -179,6 +186,7 @@ function IgCarousel({
                 aspect={frame}
                 focus={im.focus}
                 alt={im.alt}
+                markIndex={i}
               />
             </div>
           ))
@@ -226,12 +234,15 @@ export function CroppedImage({
   focus,
   alt,
   className,
+  markIndex,
 }: {
   image: PreviewImage | undefined;
   aspect: SocialAspect;
   focus?: { x: number; y: number } | undefined;
   alt: string;
   className?: string;
+  /** 校正画面: この画像が記録の何枚目か（0 始まり）。渡すとコメントの印と位置の入力を重ねる */
+  markIndex?: number;
 }) {
   const r = image ? cropRect(aspect, image.w, image.h, focus) : { x: 0, y: 0, w: 1, h: 1 };
   return (
@@ -254,6 +265,7 @@ export function CroppedImage({
       ) : (
         <span className="sp-img__none">画像なし</span>
       )}
+      {image && markIndex !== undefined ? <ImageMarkLayer imageIndex={markIndex} crop={r} /> : null}
     </div>
   );
 }
@@ -297,6 +309,9 @@ export function igTruncate(text: string, lead: number, lines = 2, perLine = 26):
 /**
  * 本文。ハッシュタグ・メンションは各サービスの色。Instagram の本文の URL はリンクにならない（黒い文字のまま）。
  * Instagram は 2 行で切って「続きを読む」。
+ * 校正画面（PostMarksContext あり）では、本文を区切りごとに本文での位置（data-s / data-e）を持たせ、
+ * - コメントの範囲を強調する（押すとそのコメントを開く。開いたときは「続きを読む」を開いてそこへスクロールする）
+ * - 文字を選ぶとその範囲にコメントできる（マウス・キーボードは選び終えた瞬間、タッチは「選んだ文字にコメント」）
  */
 export function PostText({
   text: full,
@@ -311,33 +326,189 @@ export function PostText({
   /** 1 行に入る全角の字数（画面の幅から計算） */
   perLine?: number;
 }) {
+  const ctx = useContext(PostMarksContext);
+  const ctxRef = useRef(ctx);
+  ctxRef.current = ctx;
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
   const cut = clamp !== undefined && !open ? igTruncate(full, clamp, 2, perLine) : null;
   const text = cut ?? full;
-  const marks = [
+  const tokens = tokenize(text.length, [
     ...extractHashtags(text).map((m) => ({ ...m, kind: "tag" as const })),
     ...extractMentions(text).map((m) => ({ ...m, kind: "tag" as const })),
-    ...extractUrls(text).map((m) => ({ ...m, kind: "url" as const })),
-  ].sort((a, b) => a.start - b.start);
-  const parts: ReactNode[] = [];
-  let at = 0;
-  for (const [i, m] of marks.entries()) {
-    if (m.start < at) continue;
-    if (m.start > at) parts.push(text.slice(at, m.start));
-    const raw = text.slice(m.start, m.end);
-    if (m.kind === "url" && platform === "instagram") parts.push(raw);
-    else
-      parts.push(
-        <span key={i} className={m.kind === "url" ? "sp-link" : "sp-tag"}>
-          {m.kind === "url" ? xUrlLabel(raw) : raw}
-        </span>,
-      );
-    at = m.end;
-  }
-  parts.push(text.slice(at));
+    // X の URL は短く省略して見せるので、画面の文字と本文が対応しない（途中で分けない）
+    ...extractUrls(text).map((m) => ({ ...m, kind: "url" as const, atomic: platform === "x" })),
+  ]);
+  const selecting = ctx?.selecting === true;
+  const segments = buildTextSegments(
+    text.length,
+    tokens,
+    ctx?.texts ?? [],
+    ctx?.draft?.kind === "text" ? ctx.draft : null,
+  );
+
+  // 開いたコメントが本文にあれば、「続きを読む」の先なら開き、見える所へスクロールして強調する
+  const activeText = ctx?.texts.find((t) => t.id === ctx.activeId);
+  const lastReveal = useRef<number | null>(null);
+  useEffect(() => {
+    if (!ctx || !activeText || lastReveal.current === ctx.revealKey) return;
+    if (cut !== null && activeText.end > cut.length) {
+      setOpen(true); // 開いた後の描画でもう一度ここに来る
+      return;
+    }
+    const el = rootRef.current?.querySelector(`[data-thread~="${CSS.escape(activeText.id)}"]`);
+    if (!el) return;
+    lastReveal.current = ctx.revealKey;
+    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: scrollBehavior() });
+  }, [ctx?.revealKey, ctx?.activeId, activeText?.end, cut?.length, open]);
+
+  /** いまの選択を本文の範囲に直す（この本文の外・空なら null）。画面の座標の範囲も添える */
+  const readSelection = useCallback((): TextPick | null => {
+    const root = rootRef.current;
+    if (!root || !ctxRef.current?.selecting) return null;
+    const sel = window.getSelection();
+    const r = selectionToRange(root, sel, text.length);
+    if (!r || !sel) return null;
+    const b = sel.getRangeAt(0).getBoundingClientRect();
+    return { ...r, box: { x: b.left, y: b.top, w: b.width, h: b.height } };
+  }, [text.length]);
+  const emit = (d: TextPick) => {
+    const b = d.box ?? { x: 0, y: 0, w: 0, h: 0 };
+    ctxRef.current?.onText(
+      { start: d.start, end: d.end },
+      { left: b.x, top: b.y, right: b.x + b.w, bottom: b.y + b.h },
+    );
+  };
+  const touchSel = useTouchSelection(selecting, readSelection);
+  /** マウス・キーボードの端末（文字カーソルを置いて Shift＋矢印で選べるようにする）。タッチは長押しで選ぶ */
+  const finePointer = useMedia("(pointer: fine)") && selecting;
+  useEffect(() => {
+    if (!finePointer) return;
+    // 本文の外で離しても選び終えた合図になるよう、文書で受ける。投稿欄の中の操作は無視
+    const onUp = (e: Event) => {
+      if ((e.target as Element | null)?.closest?.(".compose-pop")) return;
+      const d = readSelection();
+      if (d) emit(d);
+    };
+    document.addEventListener("pointerup", onUp);
+    return () => document.removeEventListener("pointerup", onUp);
+  }, [finePointer, readSelection]);
+
+  const openBy = (ids: string[]) => {
+    const id = nextStacked(ids, ctx?.activeId ?? null);
+    if (id) ctx?.onOpen(id);
+  };
   return (
     <>
-      <span className="sp-text">{parts}</span>
+      {touchSel.candidate ? (
+        <TouchCommentButton
+          onCommit={() => {
+            const d = touchSel.candidate;
+            touchSel.clear();
+            window.getSelection()?.removeAllRanges();
+            if (d) emit(d);
+          }}
+        />
+      ) : null}
+      <span
+        ref={rootRef}
+        className="sp-text"
+        data-post-body=""
+        // キーボードでも範囲を選べるように、マウス・キーボードの端末では文字カーソルを置けるようにする（編集はさせない）
+        {...(finePointer
+          ? {
+              contentEditable: true,
+              suppressContentEditableWarning: true,
+              spellCheck: false,
+              inputMode: "none" as const,
+              role: "textbox",
+              "aria-multiline": true,
+              "aria-readonly": true,
+              "aria-label": "投稿の本文（Shift＋矢印キーで範囲を選んでコメント）",
+              onBeforeInput: (e: React.FormEvent) => e.preventDefault(),
+              onPaste: (e: React.ClipboardEvent) => e.preventDefault(),
+              onDrop: (e: React.DragEvent) => e.preventDefault(),
+              onCut: (e: React.ClipboardEvent) => e.preventDefault(),
+              onKeyUp: (e: React.KeyboardEvent) => {
+                if (
+                  e.key.startsWith("Arrow") ||
+                  e.key === "Shift" ||
+                  e.key === "End" ||
+                  e.key === "Home"
+                ) {
+                  const d = readSelection();
+                  if (d) emit(d);
+                }
+              },
+            }
+          : {})}
+      >
+        {segments.map((seg) => {
+          const raw = text.slice(seg.start, seg.end);
+          const xUrl = seg.kind === "url" && platform === "x";
+          const look = seg.kind === "tag" ? "sp-tag" : xUrl ? "sp-link" : "";
+          const pos = {
+            "data-s": seg.start,
+            "data-e": seg.end,
+            ...(seg.atomic ? { "data-atomic": "1" } : {}),
+          };
+          const label = xUrl ? xUrlLabel(raw) : raw;
+          if (seg.marks.length === 0 && !seg.draft)
+            return (
+              <span key={seg.start} {...pos} {...(look ? { className: look } : {})}>
+                {label}
+              </span>
+            );
+          const ids = seg.marks.map((m) => m.id);
+          const active = seg.marks.some((m) => m.id === ctx?.activeId);
+          const first = seg.marks.filter((m) => m.start >= seg.start && m.start < seg.end);
+          const fbOnly = seg.marks.length > 0 && seg.marks.every((m) => m.kind === "feedback");
+          const cls = [
+            look,
+            seg.marks.length ? "sp-mark-text" : "",
+            active ? "is-active" : "",
+            seg.marks.some((m) => m.severity === "critical") ? "is-critical" : "",
+            fbOnly ? "is-fb" : "",
+            seg.draft ? "is-draft" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          // 番号は、そのコメントの範囲が始まる区間にだけ付ける
+          const index = first.map((m) => m.index).join(",");
+          return (
+            <span
+              key={seg.start}
+              {...pos}
+              className={cls}
+              {...(seg.marks.length
+                ? {
+                    "data-thread": ids.join(" "),
+                    ...(index ? { "data-index": index } : {}),
+                    role: "button",
+                    tabIndex: 0,
+                    title: seg.marks
+                      .map((m) => `${m.kind === "feedback" ? "FB" : "コメント"} ${m.index}`)
+                      .join("・"),
+                    // 同じ箇所に複数あれば押すたびに次のコメントへ
+                    onClick: (e: React.MouseEvent) => {
+                      // 文字を選んだ直後のクリックでは開かない
+                      if (!window.getSelection()?.isCollapsed) return;
+                      e.stopPropagation();
+                      openBy(ids);
+                    },
+                    onKeyDown: (e: React.KeyboardEvent) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      openBy(ids);
+                    },
+                  }
+                : {})}
+            >
+              {label}
+            </span>
+          );
+        })}
+      </span>
       {cut !== null ? (
         <>
           …{" "}
@@ -493,6 +664,7 @@ function InstagramStory({
   const list = post.images;
   const [index, setIndex] = useState(0);
   const snap = useSnapTrack(list.length, index, setIndex);
+  const marks = useContext(PostMarksContext);
   const user = post.account.username || "username";
   return (
     <div className="sp-story">
@@ -517,10 +689,36 @@ function InstagramStory({
               aspect="9:16"
               focus={im?.focus}
               alt={im?.alt ?? ""}
+              {...(im ? { markIndex: i } : {})}
             />
           </div>
         ))}
       </div>
+      {/* コメントを付けられるとき、画像の上のクリックは位置の入力に使うので、前後へは矢印で送る */}
+      {marks?.selecting && list.length > 1 ? (
+        <>
+          {index > 0 ? (
+            <button
+              type="button"
+              className="sp-nav sp-nav--prev"
+              aria-label="前の画像"
+              onClick={() => snap.go(index - 1)}
+            >
+              <Icon name="igChevronLeft" size={12} />
+            </button>
+          ) : null}
+          {index < list.length - 1 ? (
+            <button
+              type="button"
+              className="sp-nav sp-nav--next"
+              aria-label="次の画像"
+              onClick={() => snap.go(index + 1)}
+            >
+              <Icon name="igChevronRight" size={12} />
+            </button>
+          ) : null}
+        </>
+      ) : null}
       <div className="sp-story__top">
         <div className="sp-story__bars">
           {(list.length ? list : [undefined]).map((im, i) => (
@@ -673,9 +871,10 @@ function XPost({ post, images, pc }: { post: SocialPost; images: PreviewImage[];
         </p>
         {list.length ? (
           <div className={`sp-x__media sp-x__media--${list.length}`}>
-            {list.map((im) => (
+            {list.map((im, i) => (
               <CroppedImage
                 key={im.key}
+                markIndex={i}
                 image={images.find((x) => x.key === im.key)}
                 aspect={
                   list.length === 1
@@ -1013,7 +1212,12 @@ export function PostPreview({
   const { ref, scale } = useFitScale(outer);
   const story = isStory(post, view);
   return (
-    <figure className="sp-figure" aria-label="投稿のプレビュー">
+    <figure
+      className="sp-figure"
+      aria-label="投稿のプレビュー"
+      // 縮めて表示しているあいだ、コメントの印を実際の大きさ（画面の px）に保つための倍率
+      style={{ "--sp-k": 1 / scale } as CSSProperties}
+    >
       <div className="sp-frame-fit" ref={ref} style={scale < 1 ? { zoom: scale } : undefined}>
         <DeviceFrame spec={spec} color={color} dark={story}>
           <PreviewContent

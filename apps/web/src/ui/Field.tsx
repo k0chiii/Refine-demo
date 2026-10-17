@@ -4,11 +4,15 @@ import {
   isValidElement,
   useContext,
   useId,
+  useLayoutEffect,
+  useRef,
+  type ComponentProps,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import type { M3eSelectElement } from "@m3e/web/select";
 import { M3eCheckbox } from "@m3e/react/checkbox";
 import { M3eFormField } from "@m3e/react/form-field";
 import { M3eOption } from "@m3e/react/option";
@@ -140,6 +144,66 @@ export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   );
 }
 
+/** 選択中の値を、順序と「未選択（空の値）」を除いた集合にそろえる（比較用） */
+const selectionSet = (v: string | readonly string[] | null | undefined): string[] =>
+  (Array.isArray(v) ? v : v == null ? [] : [v])
+    .map(String)
+    .filter((x) => x !== "")
+    .sort();
+
+const sameSelection = (a: string | readonly string[] | null, b: string | readonly string[]) => {
+  const x = selectionSet(a);
+  const y = selectionSet(b);
+  return x.length === y.length && x.every((v, i) => v === y[i]);
+};
+
+/**
+ * M3E select を React の「制御された入力」として使うための土台（`Select` ・担当・小ジャンルが使う）。
+ *
+ * 素の `<M3eSelect value={…}>` には 2 つの罠があった（docs/UI_M3E.md）:
+ * 1. `@lit/react` は React の再描画のたびに `value` を代入し直す。M3E は代入のたびに `_pendingValue` を作り直し、
+ *    全 option を 1 つずつ非同期（await 付き）で `selected` に書き直す。フォームのどこか 1 文字を打つだけで
+ *    画面中の全 select が選択し直しになり、選んだ直後の再描画では、選んだ値を古い値で上書きし得る。
+ *    → 要素が持っている選択と違うときだけ代入する（普段は代入しない）。
+ * 2. `multi` をプロパティで渡すと属性が付かず、M3E の option は「複数選択ではない」と判断して
+ *    2 つ目を選ぶたびに 1 つ目の選択を外す（option の update が `hasAttribute("multi")` を見る）。
+ *    → `multi` は属性で渡す。
+ */
+export function ControlledSelect({
+  value,
+  multi = false,
+  onValueChange,
+  children,
+  ...rest
+}: Omit<ComponentProps<typeof M3eSelect>, "value" | "multi" | "onChange"> & {
+  value: string | readonly string[];
+  multi?: boolean;
+  /** 選ばれた値（単一選択でも配列。未選択は空配列）を返す */
+  onValueChange: (values: string[]) => void;
+}) {
+  const ref = useRef<M3eSelectElement>(null);
+  useLayoutEffect(() => {
+    ref.current?.toggleAttribute("multi", multi);
+  }, [multi]);
+  // 描き直すたびに呼ぶ。要素の選択が state と同じなら何もしない
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && !sameSelection(el.value, value)) el.value = multi ? [...selectionSet(value)] : value;
+  });
+  return (
+    <M3eSelect
+      ref={ref}
+      {...rest}
+      onChange={() => {
+        const v = ref.current?.value;
+        onValueChange(selectionSet(v).length === 0 ? [] : Array.isArray(v) ? v : [String(v)]);
+      }}
+    >
+      {children}
+    </M3eSelect>
+  );
+}
+
 export interface SelectProps extends Omit<
   SelectHTMLAttributes<HTMLSelectElement>,
   "onChange" | "value"
@@ -151,7 +215,7 @@ export interface SelectProps extends Omit<
 
 /**
  * `<option value>…</option>` の子を受け取り m3e-option に写す（既存の呼び出し側を変えない）。
- * 値は m3e-select の `value` プロパティに同期する。
+ * 値の同期は {@link ControlledSelect}（`value` を描き直しのたびには代入しない）。
  */
 export function Select({
   value,
@@ -175,7 +239,7 @@ export function Select({
     ];
   });
   return (
-    <M3eSelect
+    <ControlledSelect
       {...(fieldId ? { id: fieldId } : {})}
       {...(disabled ? { disabled: true } : {})}
       {...(required ? { required: true } : {})}
@@ -186,13 +250,10 @@ export function Select({
           : {})}
       className={`select ${rest.className ?? ""}`}
       value={value}
-      onChange={(e) => {
-        const v = (e.target as unknown as { value: string | readonly string[] | null }).value;
-        onChange({ target: { value: Array.isArray(v) ? String(v[0] ?? "") : String(v ?? "") } });
-      }}
+      onValueChange={(values) => onChange({ target: { value: values[0] ?? "" } })}
     >
       {options}
-    </M3eSelect>
+    </ControlledSelect>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   isFigmaUrl,
   isReviewableArtifact,
   isWebLiveArtifact,
+  type MediaType,
   formatVideoSpan,
   pickCompareArtifact,
   pickReviewArtifact,
@@ -71,11 +72,21 @@ import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
+import {
+  effectiveMarkMode,
+  markModeIcon,
+  markModeLabel,
+  markModes,
+  useMarkMode,
+  type MarkMode,
+} from "@/features/review/markMode";
+import { CompareButton } from "@/features/compare/CompareButton";
 import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
 import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { remaining } from "@/lib/format";
+import { workHint } from "@/lib/workHint";
 import {
   blockedReasonLabel,
   closedReasonLabel,
@@ -84,7 +95,13 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
-import { usePinchZoom } from "@/lib/usePinchZoom";
+import {
+  DEFAULT_ZOOM_LIMITS,
+  PINCH_MIN,
+  stepScale,
+  usePinchZoom,
+  type ZoomLimits,
+} from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { FeedbackPane } from "@/features/feedback/FeedbackPane";
@@ -97,7 +114,13 @@ import { M3eButton } from "@m3e/react/button";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
-import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import {
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuItemGroup,
+  M3eMenuItemRadio,
+  M3eMenuTrigger,
+} from "@m3e/react/menu";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { InfoTab } from "./InfoTab";
 import { VersionsTab } from "./VersionsTab";
@@ -135,9 +158,15 @@ type Draft = {
   figma?: FigmaDraft;
   /** 位置なしのコメント（ツールバーから） */
   free?: boolean;
+  /** SNS 投稿のプレビューで選んだ位置（本文の添付の text_range・画像の添付の image_rect / image_pin）。そのままコメントの位置にする */
+  anchor?: Anchor;
+  /** 上の位置の呼び名（投稿欄に出す。「本文」「2 枚目の画像」）と、本文の引用文 */
+  postPlace?: { label: string; quote?: string };
 };
 
 const COMPOSE_W = 300;
+/** 紙面の描き終わりの通知が届かなくても、ファイルが届いてからこの時間で読み込み中の表示を終える */
+const PAINT_TIMEOUT_MS = 8000;
 
 function anchorTop(anchor: Anchor, vp: Viewport): number | null {
   if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
@@ -210,9 +239,10 @@ export function Editor({
   }, [workData, revisions, version]);
   const revisionId = target?.id ?? null;
   // 媒体が分かったら、その紙面のビューア（PDF.js など）を版・ファイルの取得と並行して読み込み始める
-  const mediaType = workData?.work.mediaType;
+  // 一覧・ホームで押した行から分かる媒体（workHint）で、works.get が届く前から読み込み始める
+  const mediaType = workData?.work.mediaType ?? workHint(workId)?.mediaType;
   useEffect(() => {
-    if (mediaType) preloadViewers(mediaType);
+    if (mediaType) preloadViewers(mediaType as MediaType);
   }, [mediaType]);
   const dataRaw = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   // 版を切り替えた直後に前の版の結果が残ることがあるので、表示中の版のものだけを使う
@@ -244,7 +274,20 @@ export function Editor({
   const [showResolved, setShowResolved] = useState(false);
   /** コメントの絞り込み: 人のコメントだけ / 自動校正だけ */
   const [who, setWho] = useState<"all" | "human" | "bot">("all");
-  const [artifactId, setArtifactId] = useState<string | null>(null);
+  /** 利用者が選んだ添付（選んでいなければ既定の添付。下の artifactId） */
+  const [pickedArtifactId, setArtifactId] = useState<string | null>(null);
+  // 紙面に出す添付。選んでいなければ、提出の順番によらず PDF → 画像 → 文章 → 動画（動画の制作物は動画を先に。.ai などの原本は
+  // 情報 › この版のファイル から落とす）。state に写さず描画のなかで決める（写すと、版が届いてから 1 回余計に描かれ、
+  // 「添付がありません」が一瞬出ていた。§65）
+  const artifactId: string | null = data
+    ? pickedArtifactId && data.artifacts.some((a) => a.id === pickedArtifactId)
+      ? pickedArtifactId
+      : (data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
+        pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
+          ?.id ??
+        data.artifacts[0]?.id ??
+        null)
+    : null;
   const [artifactSheet, setArtifactSheet] = useState(false);
   // 固定ペイン（引き出し）の幅。supporting pane は temporary resizing: 閉じたら既定（expanded 360 / large 412）に戻す
   const [paneW, setPaneW] = useState<number | null>(null);
@@ -261,9 +304,14 @@ export function Editor({
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /** 引き出し「FB」で開いている相談 */
   const [fbOpenId, setFbOpenId] = useState<string | null>(search.fb ?? null);
-  /** 紙面の範囲から書くのはコメント（解決する指摘）か相談（FB） */
-  const [composeKind, setComposeKind] = useState<"comment" | "feedback">("comment");
+  /**
+   * 紙面に印を付けたとき作るもの: コメント（解決する指摘）・FB（解決しない相談）・なし（印を付けない）。下のツールバーで切り替える。
+   * このタブのあいだ覚える（features/review/markMode）。権限で使えないモードは下の markMode に置き換える
+   */
+  const [markPick, setMarkPick] = useMarkMode();
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** SNS のプレビューでコメントの位置へ移して強調する合図（カード・印を押すたびに増える） */
+  const [postReveal, setPostReveal] = useState(0);
   /** 動画の再生位置を移す（コメントのカードを押したとき）。key が変わるたびに移す */
   const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
   /** Web のライブ表示でその要素へ移す（カードを押したとき。端末も合わせる） */
@@ -292,10 +340,22 @@ export function Editor({
   // 校正物はピンチでも拡大縮小できる（アプリ全体は拡大しない）
   // 要素は読み込みが終わってから描かれるので、ref ではなく state で受ける（最初の描画時にはまだ無い）
   const [viewerEl, setViewerEl] = useState<HTMLDivElement | null>(null);
-  usePinchZoom(viewerEl, scale, setScale);
+  // PDF の拡大の上限は実寸比 1000%（紙面が大きいときはその分下げる）。PdfViewer が知らせる「幅に合わせた大きさの実寸比」で、
+  // 倍率（scale）の上限に直す。PDF 以外（画像・文章）は従来どおり PINCH_MAX
+  const pdfLimits = useRef<{ fit: number; max: number } | null>(null);
+  const zoomLimits = useCallback((): ZoomLimits => {
+    const l = pdfLimits.current;
+    return l && l.fit > 0
+      ? { min: PINCH_MIN, max: Math.max(1, l.max / l.fit) }
+      : DEFAULT_ZOOM_LIMITS;
+  }, []);
+  usePinchZoom(viewerEl, scale, setScale, zoomLimits);
   // 添付を切り替えたら倍率は幅に合わせた大きさに戻す（画像で拡大した倍率が文章に持ち越されて 220% から始まっていた）
   useEffect(() => {
     setScale(1);
+    pdfLimits.current = null;
+    // SNS のプレビューで選んだ位置は、他の添付に切り替えたら破棄する（その添付の紙面には投稿欄が出ないため）
+    setDraft((d) => (d?.anchor ? null : d));
   }, [artifactId]);
 
   // 回転ボタンは利用者判断で外した（2026-10-14）。原稿は正位置で校正する。ビューアの回転機能自体は残す
@@ -384,16 +444,7 @@ export function Editor({
     if (!data) return;
     // 添付の種類が確定したら、媒体の見込みが外れていてもその種類のビューアを読み込み始める（ファイルの取得と並行）
     for (const a of data.artifacts) if (isReviewableArtifact(a)) preloadViewers(a.type);
-    if (!artifactId || !data.artifacts.some((a) => a.id === artifactId))
-      // 紙面に出すのは提出の順番によらず PDF → 画像 → 文章 → 動画（動画の制作物は動画を先に。.ai などの原本は 情報 › この版のファイル から落とす）
-      setArtifactId(
-        data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
-          pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
-            ?.id ??
-          data.artifacts[0]?.id ??
-          null,
-      );
-  }, [data, artifactId]);
+  }, [data]);
   // ボトムシート（狭い画面）: 普段は閉じて紙面を画面いっぱいに使い、ツールバーの「コメント・版・情報」で開く
   // （利用者指示 2026-10-15。以前は下にタブだけの覗き見を常に出していた）。半分 → 全部、下に払うと閉じる。
   // 止まる高さとハンドルは属性でしか渡せないので、シートが DOM に入った時点で ref で設定する
@@ -481,6 +532,8 @@ export function Editor({
     leftBlob: otherBlob.blob ?? null,
     rightText: artifact && text?.artifactId === artifact.id ? text.body : null,
   });
+  /** 最初の 1 枚を描き終えた添付（PDF・画像・動画のビューアが知らせる。下の paperDone） */
+  const [paintedFor, setPaintedFor] = useState<string | null>(null);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [swipe, setSwipe] = useState(false);
 
@@ -492,7 +545,8 @@ export function Editor({
     if (!data || !draft || !revisionId) return;
     const { body, mentions } = composeStore.get();
     let anchor: Anchor | undefined;
-    if (artifact && !draft.free) {
+    if (draft.anchor && !draft.free) anchor = draft.anchor;
+    else if (artifact && !draft.free) {
       if (artifact.type === "pdf" && draft.page)
         anchor = draft.rect
           ? { type: "pdf_rect", artifactId: artifact.id, page: draft.page, rect: draft.rect }
@@ -605,9 +659,12 @@ export function Editor({
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
-  if (workData === undefined) return <Loading label="制作物を読み込んでいます" />;
-  const { work } = workData;
-  const isSns = work.mediaType === "sns";
+  // 制作物の中身が届く前から、アプリバー・ツールバー・紙面の枠を同じ形で出す（届いてから枠が現れると、読み込み中の画面が何段にも
+  // 見えた。利用者指示 2026-10-17「一回の読み込みで3回くらい表示が変わるのヤダ」。docs/UI_M3E.md §65）。
+  // 以降の `workData` が要るところは、届いていなければ何も出さない
+  const work = workData?.work ?? null;
+  const isSns = work?.mediaType === "sns";
+  const hint = workHint(workId);
   const openAuthoring = () =>
     void navigate({
       to: isSns ? "/works/$workId/post" : "/works/$workId/write",
@@ -643,10 +700,22 @@ export function Editor({
   // 相談（FB）は解決しない話し合いなので、受付が終わった版・校了した版の上でも範囲を選んで立てられる
   const canFeedback = revisionId !== null;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  const selecting = canComment || canFeedback;
-  /** 範囲から書くもの: コメントできない版では相談だけ */
+  /** いま効く書き込みのモード（コメントできない版では「コメント」は FB になる） */
+  const markMode = effectiveMarkMode(markPick, { comment: canComment, feedback: canFeedback });
+  /** 紙面に印を付けられるか（なし のときは、押す・なぞるが紙面そのもの（PDF のリンクなど）に届く） */
+  const selecting = markMode !== "none";
+  /** 範囲から書くもの: 位置なしのコメントはコメント。それ以外は選んでいるモード（コメントできない版では相談だけ） */
   const draftKind: "comment" | "feedback" =
-    !canComment || (composeKind === "feedback" && !draft?.free) ? "feedback" : "comment";
+    draft?.free && canComment
+      ? "comment"
+      : markMode === "feedback" || !canComment
+        ? "feedback"
+        : "comment";
+  /** モードを替える。印を付けないにしたら、書きかけの位置つきの投稿欄は閉じる（位置なしのコメントは残す）。引き出しは動かさない */
+  const changeMarkMode = (m: MarkMode) => {
+    setMarkPick(m);
+    if (m === "none" && draft && !draft.free) resetCompose();
+  };
   const busy =
     doPost.pending ||
     doDecide.pending ||
@@ -656,10 +725,20 @@ export function Editor({
   const goVersion = (r: { kind: string; sequence: number }) =>
     void navigate({ to: "/works/$workId/v/$n", params: { workId, n: String(versionOf(r)) } });
 
+  /**
+   * SNS 投稿のプレビューを見ているとき、本文・画像の位置のコメントは添付を切り替えず、プレビューの上でその位置を開く
+   * （本文の添付の text_range・画像の添付の image_rect / image_pin）
+   */
+  const staysInPostPreview = (a: Anchor) =>
+    artifact?.fileName === POST_MANIFEST_NAME &&
+    (a.type === "text_range" || a.type === "image_rect" || a.type === "image_pin") &&
+    (data?.artifacts ?? []).some((x) => x.id === a.artifactId);
   const jumpTo = (t: Thread) => {
     setActiveThreadId(t.id);
+    setPostReveal((n) => n + 1);
     if (t.anchor) {
-      if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
+      if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor as Anchor))
+        setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor as Anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
@@ -680,7 +759,7 @@ export function Editor({
     revisionId: string | null;
   }) => {
     if (t.revisionId && t.revisionId !== revisionId) {
-      const rev = workData.revisions.find((r) => r.id === t.revisionId);
+      const rev = workData?.revisions.find((r) => r.id === t.revisionId);
       if (rev)
         void navigate({
           to: "/works/$workId/v/$n",
@@ -690,8 +769,10 @@ export function Editor({
       return;
     }
     setActiveThreadId(t.id);
+    setPostReveal((n) => n + 1);
     if (t.anchor) {
-      if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
+      if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor))
+        setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
@@ -708,7 +789,7 @@ export function Editor({
       meId={me?.id ?? null}
       canDecide={can?.decide ?? false}
       canReply={canComment || (can?.decide ?? false)}
-      canEdit={work.lifecycle !== "finalized"}
+      canEdit={work?.lifecycle !== "finalized"}
       pending={busy}
       {...(className ? { className } : {})}
       onSelect={() => jumpTo(t)}
@@ -722,7 +803,7 @@ export function Editor({
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || draft.marking || !(canComment || canFeedback)) return null;
+    if (!draft || draft.marking || draft.anchor || !(canComment || canFeedback)) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     // 位置なし・動画の時刻だけ（画面の位置なし）・Figma のフレーム単位は、紙面（映像・画面）の右上
@@ -772,8 +853,6 @@ export function Editor({
         onCancel={resetCompose}
         pending={doPost.pending}
         kind={draftKind}
-        // 位置なしのコメント（ツールバーから）とコメントできない版では切り替えない
-        {...(canComment && !draft.free ? { onKind: setComposeKind } : {})}
         {...(draft.range && text && artifact && revisionId
           ? {
               extra: (
@@ -796,6 +875,33 @@ export function Editor({
               ),
             }
           : {})}
+      />
+    );
+  };
+  /** SNS 投稿のプレビューで選んだ位置の投稿欄（PostReview が置く座標を受ける。狭い画面は画面下） */
+  const composePost = (at: { x: number; y: number }) => {
+    if (!draft?.anchor || !(canComment || canFeedback)) return null;
+    const place = draft.postPlace;
+    return (
+      <StoredComposePopover
+        store={composeStore}
+        x={at.x}
+        y={at.y}
+        docked={compact}
+        // 狭い画面の投稿欄は引用を別の行で出す。広い画面は場所の行に引用も添える
+        {...(place?.quote && compact ? { quote: place.quote.slice(0, 80) } : {})}
+        place={
+          place
+            ? place.quote && !compact
+              ? `${place.label}「${place.quote.slice(0, 30)}${place.quote.length > 30 ? "…" : ""}」`
+              : place.label
+            : "SNS 投稿"
+        }
+        placeIcon={draft.anchor.type === "text_range" ? "format_quote" : "image"}
+        onSubmit={() => void doPost.run()}
+        onCancel={resetCompose}
+        pending={doPost.pending}
+        kind={draftKind}
       />
     );
   };
@@ -868,13 +974,38 @@ export function Editor({
     },
     selecting,
   };
+  /** 紙面を出してよいか（中身が決まり、PDF・画像・動画は最初の 1 枚を描き終えた） */
+  const paperDone = (() => {
+    if (!workData) return false;
+    if (!target) return true;
+    if (!data) return false;
+    if (!artifact) return true;
+    if (artifact.fileName === POST_MANIFEST_NAME) return true;
+    // 外部リンクのうち、紙面として出すもの（Web のライブ表示・Figma の埋め込み）は iframe が読み込めてから
+    if (artifact.role === "external")
+      return isWebLiveArtifact(artifact) ||
+        (artifact.externalUrl && isFigmaUrl(artifact.externalUrl))
+        ? paintedFor === artifact.id
+        : true;
+    if (blob.error) return true;
+    if (!blob.blob) return false;
+    if (artifact.type === "document") return text?.artifactId === artifact.id;
+    if (
+      artifact.type === "pdf" ||
+      ((artifact.type === "image" || artifact.type === "video") && blob.url)
+    )
+      return paintedFor === artifact.id;
+    return true;
+  })();
   const renderViewer = (): ReactNode => {
+    // 届くまでは紙面を出さない（読み込み中の表示は、親が 1 つだけ紙面の上に重ねている。比較中の左右の枠は従来どおり）
+    if (!workData) return compareWith ? <Loading label="制作物を読み込んでいます" /> : null;
     if (!target)
       return (
         <div className="empty editor__empty">
           <M3eIcon name="upload_file" />
           まだ版がありません
-          {workData.can.submit && work.lifecycle === "active" ? (
+          {workData.can.submit && work?.lifecycle === "active" ? (
             <div className="row">
               <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
                 最初の版を提出
@@ -887,7 +1018,7 @@ export function Editor({
           ) : null}
         </div>
       );
-    if (!data) return <Loading label="版を読み込んでいます" />;
+    if (!data) return compareWith ? <Loading label="版を読み込んでいます" /> : null;
     if (!artifact) return <div className="empty">添付がありません</div>;
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
@@ -895,10 +1026,36 @@ export function Editor({
           <PostReview
             manifestArtifactId={artifact.id}
             artifacts={data.artifacts}
-            isFinal={work.finalRevisionId === data.revision.id}
-            workTitle={work.title}
+            isFinal={workData.work.finalRevisionId === data.revision.id}
+            workTitle={workData.work.title}
             socialProfileId={workData.work.socialProfileId}
             revisionLabel={data.revision.label}
+            annotate={{
+              threads: overlayThreads,
+              activeThreadId,
+              revealKey: postReveal,
+              selecting,
+              draftAnchor: draft?.anchor ?? null,
+              onSelectThread: (id) => {
+                viewerProps.onSelectThread(id);
+                setPostReveal((n) => n + 1);
+                // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
+                if (!mobile && fbIndex.has(id) === false && drawer !== "comments")
+                  openDrawer("comments");
+              },
+              onDraft: (d) => {
+                if (!d) {
+                  resetCompose();
+                  return;
+                }
+                setDraft({
+                  anchor: d.anchor,
+                  postPlace: { label: d.label, ...(d.quote ? { quote: d.quote } : {}) },
+                });
+                setActiveThreadId(null);
+              },
+              renderCompose: composePost,
+            }}
           />
         </div>
       );
@@ -940,13 +1097,14 @@ export function Editor({
               resetCompose();
             }}
             threads={overlayThreads}
-            selecting={canComment}
+            selecting={selecting}
             onCommentFrame={(d) => {
               setDraft({ figma: d });
               setActiveThreadId(null);
             }}
             renderInPage={(vp) => compose(vp, null)}
             footer={record}
+            onReady={() => setPaintedFor(artifact.id)}
           />
         );
       }
@@ -966,6 +1124,7 @@ export function Editor({
             onStates={setWebStates}
             renderInPage={(vp, box) => compose(vp, box)}
             footer={record}
+            onReady={() => setPaintedFor(artifact.id)}
           />
         );
       return (
@@ -981,14 +1140,17 @@ export function Editor({
       );
     }
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので文字も見せる）
-    if (!blob.blob) return <Loading label="ファイルを取得しています" caption />;
+    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので、比較中の枠には文字も見せる）
+    if (!blob.blob)
+      return compareWith ? <Loading label="ファイルを取得しています" caption /> : null;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
           blob={blob.blob}
           artifactId={artifact.id}
+          onReady={() => setPaintedFor(artifact.id)}
           {...viewerProps}
+          passive={!selecting}
           draft={draft?.page ? (draft as Draft & { page: number }) : null}
           onDraft={(d) => {
             setDraft(d);
@@ -998,7 +1160,10 @@ export function Editor({
           onPageChange={setPage}
           scale={scale}
           besideWidth={besideWidth}
-          onZoom={setZoom}
+          onZoom={(z, l) => {
+            pdfLimits.current = l ?? null;
+            setZoom(z);
+          }}
           rotation={rotation}
           onPageCount={setPageCount}
           renderInPage={
@@ -1015,6 +1180,9 @@ export function Editor({
           {...(compareWith ? cmp.pdfProps("right") : {})}
         />
       );
+    // 文章は復号が済むまで出さない（済む前に下の「この形式は…」へ落ちて一瞬見えていた）
+    if (artifact.type === "document" && text?.artifactId !== artifact.id)
+      return compareWith ? <Loading label="文章を読み込んでいます" /> : null;
     if (artifact.type === "document" && text?.artifactId === artifact.id)
       return text.html !== undefined ? (
         <RichTextViewer
@@ -1060,8 +1228,10 @@ export function Editor({
         <ImageViewer
           url={blob.url}
           artifactId={artifact.id}
+          onReady={() => setPaintedFor(artifact.id)}
           alt={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
+          passive={!selecting}
           draft={draft?.rect || draft?.point ? draft : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1069,7 +1239,10 @@ export function Editor({
           }}
           scale={scale}
           besideWidth={besideWidth}
-          onZoom={setZoom}
+          onZoom={(z) => {
+            pdfLimits.current = null;
+            setZoom(z);
+          }}
           {...(compareWith ? cmp.imageProps("right") : {})}
           renderInPage={inPage}
           renderGutter={gutter}
@@ -1107,6 +1280,7 @@ export function Editor({
         <VideoViewer
           url={blob.url}
           artifactId={artifact.id}
+          onReady={() => setPaintedFor(artifact.id)}
           label={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
           draft={draft?.time ? draft : null}
@@ -1207,6 +1381,23 @@ export function Editor({
     return <div className="empty">この形式は比較できません</div>;
   };
 
+  // 紙面の読み込みをひとつにまとめる（利用者指示 2026-10-17。docs/UI_M3E.md §65）: 版・ファイル・ビューアの読み込みと最初の 1 枚を
+  // 描くところまでを「読み込み中」とし、そのあいだは紙面の上に指標をひとつだけ重ねて動かさない。終わったら紙面を一度に出す
+  const pending = !compareWith && !paperDone;
+  /** 開いて最初の読み込み（一度紙面が出たあと添付を替えたときは、アプリバー・ツールバーはそのままにして紙面だけ隠す） */
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (paperDone) revealed.current = true;
+  }, [paperDone]);
+  const initial = pending && !revealed.current;
+  // 紙面を描き終えるはずの通知（ビューアの onReady）が何かの理由で届かなくても、指標のまま止まらないよう、ファイルが届いてから
+  // 一定時間でそのまま出す
+  useEffect(() => {
+    if (!pending || !artifact || (artifact.role !== "external" && !blob.blob)) return;
+    const id = window.setTimeout(() => setPaintedFor(artifact.id), PAINT_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, [pending, artifact?.id, blob.blob]);
+
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
   /** 外部リンクのうち、紙面として出すもの（Web のライブ表示・Figma の埋め込み） */
@@ -1219,8 +1410,8 @@ export function Editor({
     <div className="comments">
       <AutoProofreadStatus auto={auto} />
       <div className="comments__header">
-        {/* 狭い画面: 「位置なしでコメント」はツールバーからこちらへ（ツールバーは引き出しのボタンに場所を譲る） */}
-        {mobile && canComment ? (
+        {/* 「位置なしでコメント」はここから（ツールバーの丸いボタンは、印を付けるものを切り替える「書き込み」に譲った） */}
+        {canComment ? (
           <M3eButton
             variant="tonal"
             className="comments__free"
@@ -1323,6 +1514,26 @@ export function Editor({
       ]}
     />
   );
+  /** この制作物の別の版と比べる（比べる入口はアプリバーの「比べる」。利用者指示 2026-10-17） */
+  const compareRevision = (id: string) => {
+    if (!workData) return;
+    setScale(1);
+    // 新しい版を常に末尾（右）の操作できる側に置く。古い版を見ている時に新しい版を選んだら、新しい版を開いて今の版と並べる
+    const cur = workData.revisions.find((r) => r.id === revisionId);
+    const next = workData.revisions.find((r) => r.id === id);
+    if (cur && next && next.submittedAt > cur.submittedAt)
+      void navigate({
+        to: "/works/$workId/v/$n",
+        params: { workId, n: String(versionOf(next)) },
+        search: { compare: cur.id },
+      });
+    else setCompareWith(id);
+  };
+  const stopCompare = () => {
+    setCompareWith(null);
+    setScale(1);
+    resetCompose();
+  };
   const drawerBody = (d: Drawer | null) =>
     d === "comments" ? (
       commentsPanel
@@ -1336,32 +1547,16 @@ export function Editor({
         onOpen={setFbOpenId}
         onShowPlace={showFeedbackPlace}
       />
-    ) : d === "versions" ? (
+    ) : d === "versions" && workData ? (
       <VersionsTab
         work={workData}
         currentId={revisionId}
-        compareWith={compareWith}
-        compareTarget={crossWork ? otherLabel : null}
         canVoid={can?.void ?? false}
         onOpen={goVersion}
-        onPickOther={() => setPickerOpen(true)}
-        onCompare={(id) => {
-          setScale(1);
-          // 新しい版を常に末尾（右）の操作できる側に置く。古い版を見ている時に新しい版を選んだら、新しい版を開いて今の版と並べる
-          const cur = workData.revisions.find((r) => r.id === revisionId);
-          const next = id ? workData.revisions.find((r) => r.id === id) : undefined;
-          if (cur && next && next.submittedAt > cur.submittedAt)
-            void navigate({
-              to: "/works/$workId/v/$n",
-              params: { workId, n: String(versionOf(next)) },
-              search: { tab: "versions", compare: cur.id },
-            });
-          else setCompareWith(id);
-        }}
         onSubmit={() => setSubmitOpen(true)}
         onWrite={openAuthoring}
       />
-    ) : d === "info" ? (
+    ) : d === "info" && workData ? (
       <InfoTab
         work={workData}
         revision={data ?? null}
@@ -1372,8 +1567,9 @@ export function Editor({
   const desktopDrawer = drawer !== null && !mobile;
   // 「ピンの高さに並べる」では紙面の横にコメントの列（補助ペインと同じ 360 / 412）＋間隔 24 が並ぶので、幅合わせから除く
   const besideWidth = layout === "aligned" && !compareWith ? defaultPane + 24 : 0;
-  const zoomStep = (dir: 1 | -1) =>
-    setScale((s) => Math.min(5, Math.max(0.25, +(dir > 0 ? s * 1.25 : s / 1.25).toFixed(3))));
+  const zoomStep = (dir: 1 | -1) => setScale((s) => stepScale(s, dir, zoomLimits()));
+  const atMinZoom = scale <= zoomLimits().min + 0.001;
+  const atMaxZoom = scale >= zoomLimits().max - 0.001;
   const sheetTab: Drawer = drawer ?? "comments";
   /** 狭い画面: 引き出し（コメント・版・情報）をシートで開くボタン。紙面のツールバーが無いとき（まだ版が無い・外部リンク）も出す */
   const sheetButtons = (
@@ -1404,24 +1600,44 @@ export function Editor({
             <M3eIcon name="arrow_back" className="icon--mirror" />
           </M3eIconButton>
         </AppBarSlot>
-        <AppBarSlot slot="title" title={work.title}>
-          {work.title}
+        <AppBarSlot slot="title" title={work?.title ?? hint?.title ?? ""}>
+          {work?.title ?? hint?.title ?? ""}
         </AppBarSlot>
-        {revision ? (
-          <AppBarSlot slot="subtitle">
-            {revision.label}・
-            {open
-              ? `受付中・${remaining(revision.deadlineAt, now)}`
-              : revision.reviewClosedReason
-                ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-                : reviewStateLabel[revision.reviewState]}
-            {work.finalRevisionId === revision.id ? "・校了版" : ""}
-          </AppBarSlot>
-        ) : null}
+        {/* 副題（版・状態）は紙面と一緒に現れる。それまでは空の 1 行で場所だけ取り、題名が動かないようにする */}
+        <AppBarSlot slot="subtitle">
+          {revision && work && !initial ? (
+            <>
+              {revision.label}・
+              {open
+                ? `受付中・${remaining(revision.deadlineAt, now)}`
+                : revision.reviewClosedReason
+                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  : reviewStateLabel[revision.reviewState]}
+              {work.finalRevisionId === revision.id ? "・校了版" : ""}
+            </>
+          ) : (
+            "\u00A0"
+          )}
+        </AppBarSlot>
         <AppBarSlot slot="actions">
+          {/* 比べる入口はここ 1 つ（紙面と一緒に現れる。ピンの左に置き、ピンの位置は動かさない） */}
+          {!initial && workData && revisionId ? (
+            <CompareButton
+              revisions={workData.revisions}
+              currentId={revisionId}
+              compareWith={compareWith}
+              target={
+                otherLabel ?? workData.revisions.find((r) => r.id === compareWith)?.label ?? null
+              }
+              compact={compact}
+              onCompareRevision={compareRevision}
+              onPickOther={() => setPickerOpen(true)}
+              onStop={stopCompare}
+            />
+          ) : null}
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
-          {can?.completeReview ? (
+          {initial ? null : can?.completeReview ? (
             <M3eButton
               variant="filled"
               className="appbar-primary"
@@ -1464,7 +1680,9 @@ export function Editor({
               : undefined
           }
         >
-          <div className="ws__viewer" ref={setViewerEl}>
+          <div className={`ws__viewer ${pending ? "ws__viewer--pending" : ""}`} ref={setViewerEl}>
+            {/* 読み込み中の指標は、ここに 1 つだけ。版・ファイル・ビューア・最初の描画のどの段でも同じ要素のまま動かさない（文字も付けない） */}
+            {pending ? <Loading label="制作物を読み込んでいます" className="ws__loading" /> : null}
             {compareWith ? (
               <div className="compare-wrap">
                 <CompareStatus
@@ -1485,14 +1703,6 @@ export function Editor({
                         <span className="compare__label-text" title={otherLabel ?? undefined}>
                           {otherLabel ?? "…"}
                         </span>
-                        {/* 比べる相手を替える（別の制作物の版を選ぶ）。同じ制作物の版は引き出し「版」から */}
-                        <M3eIconButton
-                          aria-label="別の制作物と比べる"
-                          className="compare__swap"
-                          onClick={() => setPickerOpen(true)}
-                        >
-                          <M3eIcon name="swap_horiz" />
-                        </M3eIconButton>
                       </div>
                       <Suspense fallback={<ViewerLoading />}>{renderOther()}</Suspense>
                     </div>
@@ -1509,10 +1719,10 @@ export function Editor({
                 )}
               </div>
             ) : (
-              <Suspense fallback={<ViewerLoading />}>{renderViewer()}</Suspense>
+              <Suspense fallback={null}>{renderViewer()}</Suspense>
             )}
 
-            {artifact && (artifact.role !== "external" || isLiveExternal) ? (
+            {artifact && !initial && (artifact.role !== "external" || isLiveExternal) ? (
               <M3eToolbar
                 className="ws__toolbar"
                 shape="rounded"
@@ -1554,7 +1764,11 @@ export function Editor({
                     <>
                       {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる） */}
                       {mobile ? null : (
-                        <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
+                        <M3eIconButton
+                          aria-label="縮小"
+                          disabled={atMinZoom}
+                          onClick={() => zoomStep(-1)}
+                        >
                           <M3eIcon name="zoom_out" />
                         </M3eIconButton>
                       )}
@@ -1571,21 +1785,29 @@ export function Editor({
                         {mobile ? <M3eMenuTrigger htmlFor="zoom-menu" /> : null}
                       </M3eButton>
                       {mobile ? null : (
-                        <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
+                        <M3eIconButton
+                          aria-label="拡大"
+                          disabled={atMaxZoom}
+                          onClick={() => zoomStep(1)}
+                        >
                           <M3eIcon name="zoom_in" />
                         </M3eIconButton>
                       )}
                     </>
                   ) : null}
-                  {canComment && !mobile ? (
+                  {/* 書き込み（印を付けるとき作るもの）: コメント / FB / なし。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
+                      引き出しは動かさない（FB を立てると、これまでどおり引き出し「FB」でそのやり取りが開く） */}
+                  {canComment || canFeedback ? (
                     <M3eIconButton
-                      aria-label="位置なしでコメント"
-                      onClick={() => {
-                        setDraft({ free: true });
-                        setActiveThreadId(null);
-                      }}
+                      className="ws__mark-mode"
+                      aria-label="書き込み: コメント / FB / なし"
+                      title={`書き込み: コメント / FB / なし（いまは${markModeLabel[markMode]}）`}
                     >
-                      <M3eIcon name="add_comment" />
+                      <M3eIcon
+                        name={markModeIcon[markMode]}
+                        className={markMode === "none" ? "" : "icon--filled"}
+                      />
+                      <M3eMenuTrigger htmlFor="mark-mode-menu" />
                     </M3eIconButton>
                   ) : null}
                   {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
@@ -1636,20 +1858,6 @@ export function Editor({
                       <M3eIcon name="vertical_split" className={swipe ? "icon--filled" : ""} />
                     </M3eIconButton>
                   ) : null}
-                  {compareWith ? (
-                    <M3eIconButton
-                      aria-label="比較を終了"
-                      toggle
-                      selected
-                      onClick={() => {
-                        setCompareWith(null);
-                        setScale(1);
-                        resetCompose();
-                      }}
-                    >
-                      <M3eIcon name="compare" className="icon--filled" />
-                    </M3eIconButton>
-                  ) : null}
                   {mobile ? (
                     <>
                       {/* 前に拡大縮小があるときだけ区切る（動画は拡大縮小しない） */}
@@ -1698,6 +1906,24 @@ export function Editor({
               >
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
+            ) : null}
+            {canComment || canFeedback ? (
+              <M3eMenu id="mark-mode-menu" positionY="above">
+                <M3eMenuItemGroup aria-label="書き込み（印を付けたとき作るもの）">
+                  {markModes
+                    .filter((m) => m === "none" || (m === "comment" ? canComment : canFeedback))
+                    .map((m) => (
+                      <M3eMenuItemRadio
+                        key={m}
+                        checked={markMode === m}
+                        onClick={() => changeMarkMode(m)}
+                      >
+                        <M3eIcon slot="icon" name={markModeIcon[m]} />
+                        {m === "none" ? "なし（印を付けない）" : markModeLabel[m]}
+                      </M3eMenuItemRadio>
+                    ))}
+                </M3eMenuItemGroup>
+              </M3eMenu>
             ) : null}
             {mobile ? (
               <M3eMenu id="zoom-menu" positionY="above">

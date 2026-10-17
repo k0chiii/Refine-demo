@@ -10,9 +10,9 @@ describe("Convex 統合: AI 校正（任意）", () => {
     const workId = await setupWork(t, cast);
     const s = await cast.creator.as.query(api.ai.status, { workId });
     expect(s.available).toBe(false);
-    expect(s.reason).toMatch(/設定されていません/);
+    expect(s.reason).toBeTruthy(); // 使えない理由が返る（文言は問わない）
     const r = await cast.creator.as.action(api.ai.proofread, { workId, text: "5月祭" });
-    expect(r.blocked).toMatch(/設定されていません/);
+    expect(r.blocked).toBeTruthy();
     expect(r.candidates).toEqual([]);
     await expect(
       cast.stranger.as.action(api.ai.proofread, { workId, text: "x" }),

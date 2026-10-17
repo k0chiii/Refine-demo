@@ -195,6 +195,25 @@ body {
     font-size: max(16px, 1rem);
   }
 }
+/*
+ * 上の iOS だけの指定は、M3E の部品の shadow DOM の中（日付の年月日・時刻の欄は contenteditable）には届かない。
+ * それらの文字は M3E の form-field のトークンで決まる（rem のまま。iOS の文字サイズを小さくすると 16px 未満になり、
+ * 制作物登録の納期・入稿日の欄でフォーカスしたときに拡大される。利用者指摘 2026-10-17）。
+ * compact（スマホ）では、入力欄の文字を 16px 以上にする（viewport の拡大禁止は使わない）。
+ */
+@media (max-width: 599px) {
+  :root {
+    --m3e-form-field-font-size: max(16px, 1rem);
+  }
+  :is(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]),
+    textarea,
+    select,
+    [contenteditable]:not([contenteditable="false"])
+  ) {
+    font-size: max(16px, 1rem);
+  }
+}
 :root {
   /* 共通アプリバーの高さ（64）＋上のセーフエリア（ノッチ・ダイナミックアイランド。viewport-fit=cover） */
   --mf-appbar-h: calc(64px + env(safe-area-inset-top, 0px));
@@ -1781,6 +1800,18 @@ m3e-dialog [slot="actions"] {
   flex: 1;
   min-height: 0;
 }
+/* 校正画面の読み込み中（docs/UI_M3E.md §65）: 版・ファイル・ビューアのどの段でも、指標は紙面の中央にこの 1 つだけ。
+   紙面は作っておくが見せず（描画・測定は進む）、最初の 1 枚が描き終わったら、紙面・指摘の印・文字をいっぺんに出す */
+.ws__viewer > .ws__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  padding: 0;
+  pointer-events: none;
+}
+.ws__viewer--pending > :not(.ws__loading, .ws__toolbar, .ws__side-toolbar, m3e-menu) {
+  visibility: hidden;
+}
 .viewer {
   display: flex;
   flex-direction: column;
@@ -1854,6 +1885,36 @@ m3e-dialog [slot="actions"] {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+/* 印を付けないとき（書き込み「なし」。AnchorOverlay の passive）: 印の層は押す・なぞるを下の紙面へ通す。
+   印そのもの（番号の丸・押せる範囲 48）は押してスレッドを開ける。範囲の面は下のリンクを塞がないよう通す */
+.viewer__overlay--passive {
+  pointer-events: none;
+  cursor: default;
+}
+.viewer__overlay--passive [data-anchor] {
+  pointer-events: auto;
+}
+.viewer__overlay--passive .anchor-rect {
+  pointer-events: none;
+}
+/* PDF の中のリンク（PdfLinks）: canvas と印の層のあいだ。見た目は何も足さず、触れると薄く示す */
+.pdf-links {
+  position: absolute;
+  inset: 0;
+}
+.pdf-link {
+  position: absolute;
+  display: block;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.pdf-link:hover {
+  background: color-mix(in srgb, var(--mf-primary) 12%, transparent);
+}
+.pdf-link:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 1px;
 }
 .anchor-rect {
   fill: color-mix(in srgb, var(--mf-primary) 14%, transparent);
@@ -2057,6 +2118,21 @@ m3e-dialog [slot="actions"] {
 }
 .action-sheet__header {
   padding: 0 16px 4px;
+}
+/* アプリバーの「比べる」（features/compare/CompareButton）: 何と比べるかの選択（広い画面は Menu、compact は Bottom sheet）。
+   見出し（この制作物の版・ほかの制作物）は選べない小さな文字 */
+.compare-menu__label,
+.compare-sheet__label {
+  padding: 8px 16px 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.compare-menu__empty {
+  font: var(--mf-type-body-small);
+}
+.compare-sheet__empty {
+  margin: 0;
+  padding: 4px 16px 12px;
 }
 .action-sheet__list {
   margin: 0 -16px;
@@ -2263,7 +2339,7 @@ m3e-dialog [slot="actions"] {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
   padding: 0 4px 4px;
-  /* 左の見出しには「別の制作物と比べる」のアイコンボタン（40）が並ぶので、右も同じ高さにして紙面の上端を揃える */
+  /* 左右の見出しの高さを揃えて紙面の上端を揃える */
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2273,9 +2349,6 @@ m3e-dialog [slot="actions"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.compare__swap {
-  flex: none;
 }
 .compare__hint {
   margin-inline-start: 8px;
@@ -2325,32 +2398,8 @@ m3e-dialog [slot="actions"] {
 .version__label {
   font: var(--mf-type-title-small);
 }
-.versions__void,
-.versions__cross-pick {
+.versions__void {
   justify-self: start;
-}
-/* 別の制作物と比較中（利用者指示 2026-10-17）: 相手の題名・版と「変える」「終了」。色は選択中と同じ secondary container */
-.versions__cross {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 8px 8px 12px;
-  border-radius: var(--mf-shape-medium, 12px);
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-}
-.versions__cross-text {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-.versions__cross-text > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.versions__cross .meta {
-  color: inherit;
 }
 
 /* 引き出し「情報」 */
@@ -4207,11 +4256,7 @@ m3e-snackbar {
   font: var(--mf-type-label-medium);
   font-variant-numeric: tabular-nums;
 }
-/* 範囲から書く欄の「コメント／FB」切り替え */
-.compose-pop__kind {
-  width: 100%;
-  margin-bottom: 4px;
-}
+/* 範囲から書く欄が何を書くか（FB のときだけ小さく示す。切り替えはツールバーの「書き込み」） */
 .compose-pop__note {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
@@ -4649,6 +4694,28 @@ m3e-snackbar {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+/* ビューア（.viewer）は紙面の枠の高さに収め、中の .viewer__stage だけがスクロールする（エディタの .ws__viewer > .viewer と同じ）。
+   枠に収めないと、紙面の中身の高さまで伸びて .viewer__stage はスクロールせず、外の枠がスクロールする。
+   すると PdfViewer が .viewer__stage の scrollTop で行うページ送り・「紙面の場所を表示」・表示中のページの判定・ピンチの焦点保持が効かない */
+.fb-stage__viewer > .viewer {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* 読み込み中（§65）: 指標は紙面の中央にひとつだけ。操作の行・説明・紙面は最初の 1 枚が描き終わるまで隠し、いっぺんに出す */
+.fb-stage__viewer > .fb-stage__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  padding: 0;
+  pointer-events: none;
+}
+.fb-stage--pending .fb-stage__bar > :not(.fb-stage__open),
+.fb-stage--pending .fb-stage__hint,
+.fb-stage--pending .fb-stage__viewer > :not(.fb-stage__loading) {
+  visibility: hidden;
 }
 .fb-stage__empty {
   flex: 1 1 auto;
@@ -4707,10 +4774,6 @@ m3e-snackbar {
 }
 .import-list__problems {
   display: block;
-}
-/* 1 つを選ぶ切り替え（ui/ChoiceGroup。M3 の connected ボタングループ）: 幅いっぱいに置くときはボタンを等分 */
-.compose-pop__kind > m3e-button {
-  flex: 1 1 0;
 }
 /* SNS アカウントのダイアログ: アイコンの見本と画像を選ぶボタン */
 .profile-dialog__avatar {
@@ -5411,11 +5474,92 @@ m3e-snackbar {
   color: var(--mf-on-surface-variant);
   border-bottom: 1px solid var(--mf-outline-variant);
 }
-.tag-picker__options {
+/* タグ（Notion の multi-select 風）: チップと入力が 1 つの下線の中に並び、欄を押すと候補が開く */
+.tag-anchor {
+  position: relative;
+}
+.tag-field {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 6px 8px;
+  min-height: 48px;
+  padding: 8px 0 7px;
+  border-bottom: 1px solid var(--mf-outline);
+  cursor: text;
+  transition: border-color var(--mf-motion);
+}
+.tag-field:focus-within {
+  border-bottom-color: var(--mf-primary);
+  box-shadow: 0 1px 0 0 var(--mf-primary);
+}
+.tag-field__chips {
+  display: contents;
+}
+.tag-field__input {
+  flex: 1 1 120px;
+  width: auto;
+  min-width: 120px;
+  padding: 4px 0;
+}
+.tag-field__input::placeholder {
+  color: var(--mf-on-surface-variant);
+}
+.tag-menu {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  z-index: 20;
+  margin-top: 4px;
+  max-height: min(280px, 50dvh);
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-high);
+  box-shadow: var(--mf-elevation-3);
+}
+.tag-menu__note {
+  margin: 0;
+  padding: 12px;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+}
+.tag-menu__create {
+  color: var(--mf-primary);
+}
+/* タグの色: 文字から決まる M3 のトーナル container 5 色（container と on-container の組なのでコントラストは M3 の保証内） */
+.tag-tone-0 {
+  --tag-bg: var(--mf-primary-container);
+  --tag-fg: var(--mf-on-primary-container);
+}
+.tag-tone-1 {
+  --tag-bg: var(--mf-secondary-container);
+  --tag-fg: var(--mf-on-secondary-container);
+}
+.tag-tone-2 {
+  --tag-bg: var(--mf-tertiary-container);
+  --tag-fg: var(--mf-on-tertiary-container);
+}
+.tag-tone-3 {
+  --tag-bg: var(--mf-success-container);
+  --tag-fg: var(--mf-on-success-container);
+}
+.tag-tone-4 {
+  --tag-bg: var(--mf-warning-container);
+  --tag-fg: var(--mf-on-warning-container);
+}
+.tag-chip {
+  --m3e-elevated-chip-container-color: var(--tag-bg);
+  --m3e-elevated-chip-elevation: none;
+  --m3e-elevated-chip-hover-elevation: none;
+  --m3e-chip-label-text-color: var(--tag-fg);
+  --m3e-chip-icon-color: var(--tag-fg);
+}
+.tag-dot {
+  padding: 2px 10px;
+  border-radius: var(--mf-shape-full);
+  background: var(--tag-bg);
+  color: var(--tag-fg);
 }
 .info-tab__flags {
   flex-wrap: wrap;

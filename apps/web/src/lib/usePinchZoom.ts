@@ -3,13 +3,40 @@ import { useEffect, useRef } from "react";
 export const PINCH_MIN = 0.25;
 export const PINCH_MAX = 5;
 
-const clamp = (s: number) => Math.min(PINCH_MAX, Math.max(PINCH_MIN, +s.toFixed(3)));
-
-/** 2 本の指の間隔の比から倍率を出す（上下限つき） */
-export function pinchScale(start: number, startDistance: number, distance: number): number {
-  if (startDistance <= 0) return start;
-  return clamp(start * (distance / startDistance));
+/** 倍率の下限・上限。PDF は紙面の大きさで上限が変わる（呼び出し側が limits で渡す） */
+export interface ZoomLimits {
+  min: number;
+  max: number;
 }
+export const DEFAULT_ZOOM_LIMITS: ZoomLimits = { min: PINCH_MIN, max: PINCH_MAX };
+const clampTo = (s: number, l: ZoomLimits) => Math.min(l.max, Math.max(l.min, +s.toFixed(3)));
+
+/** 2 本の指の間隔の比から倍率を出す（上下限つき。段階に丸めず連続で） */
+export function pinchScale(
+  start: number,
+  startDistance: number,
+  distance: number,
+  limits: ZoomLimits = DEFAULT_ZOOM_LIMITS,
+): number {
+  if (startDistance <= 0) return start;
+  return clampTo(start * (distance / startDistance), limits);
+}
+
+/** 「＋」「−」の 1 回の倍率（等比。細かく刻む。利用者指示 2026-10-17「PDF がもっと細かく拡大できると良い」） */
+export const ZOOM_STEP = 1.15;
+/** 「＋」「−」で 1 段動かした倍率（上下限つき） */
+export function stepScale(
+  scale: number,
+  dir: 1 | -1,
+  limits: ZoomLimits = DEFAULT_ZOOM_LIMITS,
+): number {
+  return clampTo(dir > 0 ? scale * ZOOM_STEP : scale / ZOOM_STEP, limits);
+}
+
+/** Ctrl（Mac のトラックパッドのピンチ）・⌘ ＋ ホイールの 1 目盛りの倍率 */
+const WHEEL_RATE = 0.01;
+/** ホイールが止まってから倍率を確定して描き直すまで（ms） */
+const WHEEL_COMMIT_MS = 160;
 
 /**
  * 拡大縮小のあと、指（またはポインタ）の下にあった点が同じ画面位置に来るスクロール量の変化。
@@ -54,9 +81,17 @@ export function takeZoomFocus(stage: HTMLElement): ZoomFocus | null {
  *   ピンチが一度も効いていなかった）
  * - トラックパッドのピンチ（Ctrl＋ホイール）でも同じように拡大縮小する
  */
-export function usePinchZoom(el: HTMLElement | null, scale: number, setScale: (s: number) => void) {
+export function usePinchZoom(
+  el: HTMLElement | null,
+  scale: number,
+  setScale: (s: number) => void,
+  /** 倍率の上下限（PDF は紙面の大きさで変わる）。既定は PINCH_MIN〜PINCH_MAX */
+  limits?: () => ZoomLimits,
+) {
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
+  const limitsRef = useRef(limits);
+  limitsRef.current = limits;
   useEffect(() => {
     if (!el) return;
     let g: {
@@ -86,9 +121,10 @@ export function usePinchZoom(el: HTMLElement | null, scale: number, setScale: (s
       el.querySelector<HTMLElement>(".viewer__stage");
 
     /** 倍率を確定し、描き直しの後で中点の下の箇所を元の画面位置に戻す */
+    const bounds = () => limitsRef.current?.() ?? DEFAULT_ZOOM_LIMITS;
     const commit = (stage: HTMLElement, content: HTMLElement, u: Pt, target: Pt, k: number) => {
       const prev = scaleRef.current;
-      const next = clamp(prev * k);
+      const next = clampTo(prev * k, bounds());
       const kk = next / prev;
       if (Math.abs(kk - 1) < 0.005) return;
       scaleRef.current = next;
@@ -143,7 +179,7 @@ export function usePinchZoom(el: HTMLElement | null, scale: number, setScale: (s
       if (!pts) return;
       if (e.cancelable) e.preventDefault();
       const [a, b] = pts;
-      g.k = pinchScale(g.s0, g.d0, Math.hypot(a.x - b.x, a.y - b.y)) / g.s0;
+      g.k = pinchScale(g.s0, g.d0, Math.hypot(a.x - b.x, a.y - b.y), bounds()) / g.s0;
       g.m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const dx = g.m.x - g.m0.x;
       const dy = g.m.y - g.m0.y;
@@ -158,15 +194,50 @@ export function usePinchZoom(el: HTMLElement | null, scale: number, setScale: (s
       content.style.willChange = "";
       commit(stage, content, u, m, k);
     };
+    // Ctrl／⌘ ＋ ホイール: ホイールが回っているあいだは内容を CSS の transform で拡大して見せるだけにし（描き直さない）、
+    // 止まって WHEEL_COMMIT_MS 後に 1 回だけ倍率を確定して描き直す（ピンチと同じ）。段階に丸めず、回した量だけ連続で変わる
+    let w: {
+      s0: number;
+      k: number;
+      stage: HTMLElement;
+      content: HTMLElement;
+      /** 回し始めた点（画面座標）と、内容の左上から見たその位置。回している間は動かさない */
+      at: Pt;
+      u: Pt;
+      timer: number;
+    } | null = null;
+    const endWheel = () => {
+      if (!w) return;
+      const { stage, content, u, at, k } = w;
+      window.clearTimeout(w.timer);
+      w = null;
+      content.style.transform = "";
+      content.style.transformOrigin = "";
+      content.style.willChange = "";
+      commit(stage, content, u, at, k);
+    };
     const wheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
+      if (!e.ctrlKey && !e.metaKey) return;
       const stage = stageOf(e.target);
       const content = stage?.firstElementChild as HTMLElement | null | undefined;
       if (!stage || !content) return;
       e.preventDefault();
-      const r = content.getBoundingClientRect();
-      const at = { x: e.clientX, y: e.clientY };
-      commit(stage, content, { x: at.x - r.left, y: at.y - r.top }, at, Math.exp(-e.deltaY * 0.01));
+      if (!w) {
+        const r = content.getBoundingClientRect();
+        const at = { x: e.clientX, y: e.clientY };
+        const u = { x: at.x - r.left, y: at.y - r.top };
+        content.style.transformOrigin = `${u.x}px ${u.y}px`;
+        content.style.willChange = "transform";
+        w = { s0: scaleRef.current, k: 1, stage, content, at, u, timer: 0 };
+      }
+      const bw = bounds();
+      // deltaMode が行（Firefox のマウスホイール）のときは 1 行を約 16px として換算する
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const next = clampTo(w.s0 * w.k * Math.exp(-dy * WHEEL_RATE), bw);
+      w.k = next / w.s0;
+      w.content.style.transform = `scale(${w.k})`;
+      window.clearTimeout(w.timer);
+      w.timer = window.setTimeout(endWheel, WHEEL_COMMIT_MS);
     };
 
     const opts = { passive: false, capture: true } as const;
@@ -181,6 +252,13 @@ export function usePinchZoom(el: HTMLElement | null, scale: number, setScale: (s
       el.removeEventListener("touchend", end, opts);
       el.removeEventListener("touchcancel", end, opts);
       el.removeEventListener("wheel", wheel);
+      if (w) {
+        window.clearTimeout(w.timer);
+        w.content.style.transform = "";
+        w.content.style.transformOrigin = "";
+        w.content.style.willChange = "";
+        w = null;
+      }
     };
   }, [el, setScale]);
 }

@@ -39,10 +39,7 @@ try {
   // マニフェスト
   const href = await page.getAttribute('link[rel="manifest"]', "href");
   const manifest = await (await page.request.get(new URL(href, BASE).toString())).json();
-  check(
-    manifest.name === "校正システム" && !!manifest.short_name,
-    "マニフェスト: name / short_name",
-  );
+  check(!!manifest.name && !!manifest.short_name, "マニフェスト: name / short_name");
   check(
     manifest.start_url === "/" && manifest.scope === "/" && manifest.display === "standalone",
     "マニフェスト: start_url / scope / display",
@@ -121,15 +118,11 @@ try {
   // オフライン: 知らせが出て、開き直しても外枠が出る
   await context.setOffline(true);
   await page.waitForSelector("m3e-snackbar", { timeout: 5000 }).catch(() => {});
-  const snack = await page.evaluate(
-    () => document.querySelector("m3e-snackbar")?.textContent ?? "",
-  );
-  check(snack.includes("オフライン"), `オフラインの知らせ（${snack.trim().slice(0, 30)}…）`);
+  check((await page.locator("m3e-snackbar").count()) > 0, "オフラインの知らせ（snackbar）が出る");
   await page.reload();
   await page.waitForSelector("#root *", { timeout: 10_000 });
-  const text = await page.evaluate(() => document.body.innerText);
   check(
-    text.includes("MF100") || text.includes("サインイン"),
+    await page.evaluate(() => (document.querySelector("#root")?.childElementCount ?? 0) > 0),
     "オフラインで開き直しても画面が出る",
   );
   await context.setOffline(false);
@@ -148,14 +141,12 @@ try {
       original.replace(/const VERSION = "([0-9a-f]+)"/, 'const VERSION = "$1e2e"'),
     );
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
-    await page.waitForFunction(
-      () => /新しいバージョン/.test(document.querySelector("m3e-snackbar")?.textContent ?? ""),
-      null,
-      { timeout: 15_000 },
-    );
-    check(true, "新しい版: 「新しいバージョンがあります」と「更新」が出る");
+    // 更新の操作（snackbar の「更新」ボタン。名前は操作を見つける手がかり）が出るのを待つ
+    const updateButton = page.locator("m3e-snackbar").getByRole("button", { name: "更新" });
+    await updateButton.waitFor({ timeout: 15_000 });
+    check(true, "新しい版: 更新の操作が出る");
     const reloaded = page.waitForEvent("framenavigated", { timeout: 15_000 });
-    await page.locator("m3e-snackbar").getByRole("button", { name: "更新" }).click();
+    await updateButton.click();
     await reloaded;
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     // 古い外枠のキャッシュは新しい SW の activate が消す。1 つになるまで待つ

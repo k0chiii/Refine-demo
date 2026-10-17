@@ -1,3 +1,4 @@
+import { byteLength, emptyPost, postManifest } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import {
@@ -7,8 +8,15 @@ import {
   searchMentionCandidates,
 } from "../usecases/comments.ts";
 import { assignReviewers, closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
+import { confirmSubmission, prepareSubmission } from "../usecases/submissions.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
-import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
+import {
+  HOUR,
+  principals,
+  seedWork,
+  submitRevision,
+  uploadVerifiedItem,
+} from "../testing/scenario.ts";
 
 const code = (c: string) => expect.objectContaining({ code: c });
 
@@ -335,5 +343,149 @@ describe("メンション", () => {
     const a = await postComment(ctx, principals.reviewer, { ...at, body: "表記が違う" });
     const b = await postComment(ctx, principals.manager, { ...at, body: "私もそう思う" });
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe("SNS 投稿の版の位置（本文の範囲・画像の矩形とピン。端末の枠のプレビューで付ける）", () => {
+  /** 本文（30 バイト）・画像 2 枚・内容の記録の 4 添付を提出した版 */
+  async function snsSetup() {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { mediaType: "sns" });
+    const body = "第100回五月祭を開催します！"; // 14 文字・40 バイト
+    const image = (k: string) => ({
+      key: k,
+      fileName: `${k}.png`,
+      alt: "説明",
+      aspect: "1:1" as const,
+    });
+    const snapshot = postManifest({
+      ...emptyPost("instagram"),
+      body,
+      images: [image("01-a"), image("02-b")],
+    });
+    const file = (
+      fileName: string,
+      type: "document" | "image",
+      mimeType: string,
+      size: number,
+    ) => ({
+      fileName,
+      mimeType,
+      type,
+      role: "source" as const,
+      declaredSize: size,
+    });
+    const prepared = await prepareSubmission(ctx, principals.creator, {
+      workId: work.id,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "初稿",
+      focusNotes: "",
+      items: [
+        file("post-body.txt", "document", "text/plain", byteLength(body)),
+        file("01-a.png", "image", "image/png", 100),
+        file("02-b.png", "image", "image/png", 100),
+        file("mf100-post.json", "document", "application/json", byteLength(snapshot)),
+      ],
+      postSnapshot: snapshot,
+    });
+    for (const item of prepared.items)
+      await uploadVerifiedItem(ctx, principals.creator, {
+        itemId: item.id,
+        size: item.declaredSize ?? 100,
+        sha256: "abc",
+      });
+    const { revision } = await confirmSubmission(ctx, principals.creator, {
+      sessionId: prepared.session.id,
+    });
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      principalType: "user",
+      principalId: principals.reviewer.userId,
+      permission: "review",
+    });
+    await assignReviewers(ctx, principals.manager, {
+      revisionId: revision.id,
+      reviewerIds: [principals.reviewer.userId],
+      reviewType: "general",
+    });
+    const artifacts = await ctx.artifacts.listByRevision(revision.id);
+    const by = (name: string) => artifacts.find((a) => a.fileName === name)!;
+    const post = (anchor: Parameters<typeof postComment>[2]["anchor"]) =>
+      postComment(ctx, principals.reviewer, {
+        revisionId: revision.id,
+        body: "位置のコメント",
+        kind: "correction",
+        severity: "minor",
+        ...(anchor ? { anchor } : {}),
+      });
+    return { by, post, body };
+  }
+
+  it("本文の添付に text_range、各画像の添付に image_rect・image_pin を付けられる", async () => {
+    const { by, post, body } = await snsSetup();
+    const start = body.indexOf("五月祭");
+    const text = await post({
+      type: "text_range",
+      artifactId: by("post-body.txt").id,
+      start,
+      end: start + 3,
+      quote: "五月祭",
+    });
+    expect(text.anchor).toMatchObject({ type: "text_range", start, end: start + 3 });
+    const rect = await post({
+      type: "image_rect",
+      artifactId: by("01-a.png").id,
+      rect: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+    });
+    expect(rect.artifactId).toBe(by("01-a.png").id);
+    const pin = await post({
+      type: "image_pin",
+      artifactId: by("02-b.png").id,
+      point: { x: 0.5, y: 0.5 },
+    });
+    expect(pin.anchor).toMatchObject({ type: "image_pin", point: { x: 0.5, y: 0.5 } });
+  });
+
+  it("種類の合わない添付・内容の記録・本文の大きさを超える範囲は拒否する", async () => {
+    const { by, post, body } = await snsSetup();
+    const rejected = (anchor: Parameters<typeof post>[0]) =>
+      expect(post(anchor)).rejects.toThrow(code("anchor_artifact_mismatch"));
+    // 画像の添付に文章の範囲、本文の添付に画像の矩形
+    await rejected({
+      type: "text_range",
+      artifactId: by("01-a.png").id,
+      start: 0,
+      end: 3,
+      quote: "第10",
+    });
+    await rejected({
+      type: "image_rect",
+      artifactId: by("post-body.txt").id,
+      rect: { x: 0, y: 0, w: 0.5, h: 0.5 },
+    });
+    // 内容の記録（mf100-post.json）そのものには付けない
+    await rejected({
+      type: "image_pin",
+      artifactId: by("mf100-post.json").id,
+      point: { x: 0.5, y: 0.5 },
+    });
+    // 本文のバイト数を超える終端（壊れた値）
+    await rejected({
+      type: "text_range",
+      artifactId: by("post-body.txt").id,
+      start: 0,
+      end: byteLength(body) + 1,
+      quote: "第100回",
+    });
+    // 壊れた座標は従来どおり anchor_invalid
+    await expect(
+      post({
+        type: "image_rect",
+        artifactId: by("01-a.png").id,
+        rect: { x: 0.8, y: 0.8, w: 0.5, h: 0.5 },
+      }),
+    ).rejects.toThrow(code("anchor_invalid"));
   });
 });
