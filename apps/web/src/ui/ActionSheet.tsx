@@ -105,27 +105,29 @@ export function ActionSheet({
           <span className="title-small">{title}</span>
         </div>
       ) : null}
-      {items.length === 0 && empty ? (
-        <div className="action-sheet__empty">{empty}</div>
-      ) : (
-        <M3eActionList className="list action-sheet__list" aria-label={title ?? "操作"}>
-          {items.map((it, i) => (
-            <M3eListAction
-              key={i}
-              className="list__item"
-              disabled={it.disabled === true}
-              onClick={() => {
-                onClose();
-                afterHidden(ref.current, it.onSelect);
-              }}
-            >
-              <M3eIcon slot="leading" name={it.selected ? "check" : it.icon} />
-              <span className="list__headline">{it.label}</span>
-              {it.supporting ? <span slot="supporting-text">{it.supporting}</span> : null}
-            </M3eListAction>
-          ))}
-        </M3eActionList>
-      )}
+      <div className="action-sheet__body">
+        {items.length === 0 && empty ? (
+          <div className="action-sheet__empty">{empty}</div>
+        ) : (
+          <M3eActionList className="list action-sheet__list" aria-label={title ?? "操作"}>
+            {items.map((it, i) => (
+              <M3eListAction
+                key={i}
+                className="list__item"
+                disabled={it.disabled === true}
+                onClick={() => {
+                  onClose();
+                  afterHidden(ref.current, it.onSelect);
+                }}
+              >
+                <M3eIcon slot="leading" name={it.selected ? "check" : it.icon} />
+                <span className="list__headline">{it.label}</span>
+                {it.supporting ? <span slot="supporting-text">{it.supporting}</span> : null}
+              </M3eListAction>
+            ))}
+          </M3eActionList>
+        )}
+      </div>
     </M3eBottomSheet>,
     document.body,
   );

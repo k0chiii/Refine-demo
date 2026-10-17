@@ -2030,8 +2030,7 @@ m3e-dialog [slot="actions"] {
   padding: 8px 16px 12px;
 }
 .ws__sheet,
-.notif-sheet,
-.action-sheet {
+.notif-sheet {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .ws__sheet {
@@ -2042,6 +2041,11 @@ m3e-dialog [slot="actions"] {
 .action-sheet {
   --m3e-bottom-sheet-max-width: 100%;
   --m3e-bottom-sheet-z-index: 40;
+}
+.action-sheet__body {
+  /* ホームインジケーターの分は、シート本体の padding ではなく中身に入れる。
+     シートは「中身の高さ」で開くので、padding だとその分だけ中身が押し縮められて最後の項目が見切れる */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .action-sheet__header {
   padding: 0 16px 4px;
