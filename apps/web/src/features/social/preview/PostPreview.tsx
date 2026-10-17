@@ -1027,12 +1027,6 @@ export function PostPreview({
           />
         </DeviceFrame>
       </div>
-      <figcaption className="sp-caption">
-        {spec.kind === "pc"
-          ? null
-          : `${spec.label}（画面 ${spec.w}×${spec.h}${scale < 1 ? `、実寸の ${Math.round(scale * 100)}% で表示` : ""}）。`}
-        実際の画面に寄せた再現です。折り返し・切り詰め・余白は端末やアプリの版で変わるので、確定の表示は実機で確認してください。
-      </figcaption>
     </figure>
   );
 }

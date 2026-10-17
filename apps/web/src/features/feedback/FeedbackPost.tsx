@@ -201,12 +201,17 @@ export function FeedbackPost({
       {/* メニューは操作バーの外に置く（バーはマウスが離れると押せなくなるため。開いている間はバーを出したまま） */}
       <M3eMenu id={reactId} className="fb-react-menu">
         {FEEDBACK_REACTIONS.map((e) => {
-          // 項目に名前を添え、自分が付けたものに印（M3 Menus: 選択は色以外でも示す）
+          // 自分が付けたものに印（M3 Menus: 選択は色以外でも示す）
           const mine = post.reactions.some((r) => r.emoji === e && r.mine);
           return (
-            <M3eMenuItem key={e} onClick={() => void react.run(e)}>
+            // 名前は出さず絵文字だけ（利用者指示 2026-10-17）。読み上げには名前を残す
+            <M3eMenuItem
+              key={e}
+              aria-label={`${e} ${reactionNames[e] ?? ""}${mine ? "（付けています）" : ""}`}
+              onClick={() => void react.run(e)}
+            >
               {mine ? <M3eIcon slot="icon" name="check" /> : null}
-              {e} {reactionNames[e] ?? ""}
+              {e}
             </M3eMenuItem>
           );
         })}
