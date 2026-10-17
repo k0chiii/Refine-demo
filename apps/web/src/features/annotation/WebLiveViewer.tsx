@@ -414,7 +414,13 @@ export function WebLiveViewer({
       ) : null}
       {state === "loading" ? (
         // iframe の上に重ねるので contained（M3: 他の中身の上では容器付きで目立たせる）
-        <Loading contained caption label="サイトを読み込んでいます" className="wlive__loading" />
+        <Loading
+          calm
+          contained
+          caption
+          label="サイトを読み込んでいます"
+          className="wlive__loading"
+        />
       ) : null}
     </div>
   );

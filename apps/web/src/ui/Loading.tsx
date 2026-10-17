@@ -11,8 +11,23 @@ import { M3eLoadingIndicator } from "@m3e/react/loading-indicator";
  *   `caption` を付けたときだけ文字も見える（ファイルの取得など長くなり得る待ちに）
  * - 動きを減らす設定（prefers-reduced-motion）では指標の回転と変形を止めて形だけ出す（M3E 側は未対応）
  * - ごく短い読み込みで点滅しないよう、現れるまで 150ms 待つ（styles.css の .loading）
+ * - `calm`: 外側の回転（transform。合成だけで済む）は残し、内側の形の変形（clip-path。毎フレーム主スレッドで
+ *   描き直す）を止める。ファイルの取得・ビューアの読み込みのように、待つ間に PDF.js などの重い処理が同じ
+ *   スレッドで走る場所に使う（UI_M3E §60。CPU 4 倍遅で校正画面の PDF が出るまでが約 0.5〜1.5 秒延びていた）
  * 進み具合が分かる処理（転送・自動校正）は従来どおり progress indicator（M3 Progress indicators）を使う。
  */
+let calmStyles: CSSStyleSheet | undefined;
+/** M3E の指標の内側（.active-indicator）の rotate-inner（clip-path の変形）だけを止める。形は soft burst のまま */
+function calmSheet(): CSSStyleSheet {
+  if (!calmStyles) {
+    calmStyles = new CSSStyleSheet();
+    calmStyles.replaceSync(
+      ".container.calm .active-indicator { animation: none; clip-path: var(--_polygon-soft-burst); }",
+    );
+  }
+  return calmStyles;
+}
+
 export function Loading({
   label,
   caption,
@@ -21,6 +36,7 @@ export function Loading({
   contained = false,
   className,
   slot,
+  calm = false,
 }: {
   /** 何を読み込んでいるか（読み上げの名前。例「制作物を読み込んでいます」） */
   label: string;
@@ -35,6 +51,8 @@ export function Loading({
   className?: string;
   /** Web Components の slot に置くとき */
   slot?: string;
+  /** 形の変形を止めて回転だけにする（重い処理と並ぶ待ち。上の説明） */
+  calm?: boolean;
 }) {
   const reduced = useMedia("(prefers-reduced-motion: reduce)");
   const ref = useRef<M3eLoadingIndicatorElement>(null);
@@ -44,13 +62,17 @@ export function Loading({
     let cancelled = false;
     // M3E の指標は shadow DOM の .container.animate で回る。動きを減らす設定ではその印を外して止める
     void el.updateComplete.then(() => {
-      if (!cancelled)
-        el.shadowRoot?.querySelector(".container")?.classList.toggle("animate", !reduced);
+      if (cancelled || !el.shadowRoot) return;
+      const container = el.shadowRoot.querySelector(".container");
+      container?.classList.toggle("animate", !reduced);
+      container?.classList.toggle("calm", calm);
+      if (calm && !el.shadowRoot.adoptedStyleSheets.includes(calmSheet()))
+        el.shadowRoot.adoptedStyleSheets = [...el.shadowRoot.adoptedStyleSheets, calmSheet()];
     });
     return () => {
       cancelled = true;
     };
-  }, [reduced]);
+  }, [reduced, calm]);
 
   const text = caption === true ? label : typeof caption === "string" ? caption : null;
   const Tag = inline ? "span" : "div";
