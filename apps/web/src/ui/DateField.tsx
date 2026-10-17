@@ -1,5 +1,5 @@
 import { QuestionHead } from "./Field";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   deadlineFromJst,
   deadlineToJst,
@@ -16,6 +16,21 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+/** YYYY-MM-DD → date-input の値（ローカルの Date。年月日だけを使う） */
+const toLocalDate = (date: string | null) =>
+  date === null
+    ? null
+    : new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+const fromLocalDate = (d: Date | null) =>
+  !d || Number.isNaN(d.getTime())
+    ? null
+    : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** HH:mm → time-input の値（ローカルの Date。時分だけを使う） */
+const toLocalTime = (t: string | null) =>
+  t === null ? null : new Date(2000, 0, 1, Number(t.slice(0, 2)), Number(t.slice(3, 5)));
+const fromLocalTime = (d: Date | null) =>
+  !d || Number.isNaN(d.getTime()) ? null : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 /**
  * 締切・納期の入力（M3E date-input + date picker、任意で time-input + time picker）。
@@ -59,22 +74,12 @@ export function DateField({
   const [pendingTime, setPendingTime] = useState<string | null>(null);
   const time = parts ? parts.time : pendingTime;
 
-  /** YYYY-MM-DD → date-input の値（ローカルの Date。年月日だけを使う） */
-  const toLocalDate = (date: string | null) =>
-    date === null
-      ? null
-      : new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
-  const fromLocalDate = (d: Date | null) =>
-    !d || Number.isNaN(d.getTime())
-      ? null
-      : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  /** HH:mm → time-input の値（ローカルの Date。時分だけを使う） */
-  const toLocalTime = (t: string | null) =>
-    t === null ? null : new Date(2000, 0, 1, Number(t.slice(0, 2)), Number(t.slice(3, 5)));
-  const fromLocalTime = (d: Date | null) =>
-    !d || Number.isNaN(d.getTime()) ? null : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
   const minDate = min === undefined ? null : toJstDate(min);
+  // M3E の date-input には Date オブジェクトを渡す。毎回 new Date すると、@lit/react が描き直しのたびに「値が変わった」と
+  // 見て、フォームのどこを操作しても全部の日付欄が更新される（入力途中の年月日も巻き込む）。日付が同じなら同じ Date を渡す
+  const dateValue = useMemo(() => toLocalDate(parts?.date ?? null), [parts?.date]);
+  const timeValue = useMemo(() => toLocalTime(time), [time]);
+  const minValue = useMemo(() => (minDate === null ? null : toLocalDate(minDate)), [minDate]);
   const emitDate = (e: Event) => {
     const date = fromLocalDate((e.target as unknown as { value: Date | null }).value);
     onChange(date === null ? null : deadlineFromJst(date, time));
@@ -107,9 +112,9 @@ export function DateField({
             type="date"
             aria-labelledby={`${id}-label`}
             aria-describedby={summaryId}
-            value={toLocalDate(parts?.date ?? null)}
+            value={dateValue}
             {...(required ? { required: true } : {})}
-            {...(minDate !== null ? { minDate: toLocalDate(minDate) } : {})}
+            {...(minValue !== null ? { minDate: minValue } : {})}
             yearLabel="年"
             monthLabel="月"
             dayLabel="日"
@@ -131,7 +136,7 @@ export function DateField({
             timeFormat="24"
             aria-labelledby={`${id}-label ${timeLabelId}`}
             aria-describedby={summaryId}
-            value={toLocalTime(time)}
+            value={timeValue}
             hourLabel="時"
             minuteLabel="分"
             onChange={(e) =>

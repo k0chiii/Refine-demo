@@ -1,7 +1,7 @@
 import { QuestionHead } from "./Field";
 import { api } from "@mf100/convex/api";
-import { useQuery } from "convex/react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { useStableQuery } from "@/lib/useStableQuery";
 import { M3eAutocomplete } from "@m3e/react/autocomplete";
 import { M3eInputChip } from "@m3e/react/chips";
 import { M3eFormField } from "@m3e/react/form-field";
@@ -42,8 +42,14 @@ export function UserPicker({
   const [open, setOpen] = useState(false);
   const listId = useId();
   const inputId = useId();
-  const selected = useQuery(api.users.byIds, value.length > 0 ? { ids: value } : "skip") ?? [];
-  const rawCandidates = useQuery(api.users.search, open ? { text, limit: 8 } : "skip");
+  // 選ぶ・外すたびに byIds の引数が変わる。素の useQuery だと結果が届くまでの間チップが全部「…」に戻る（描き直したように見える）ので、
+  // 前回の結果を保つ。検索も同じ（1 文字打つたびに候補が空→「検索しています…」→一覧、と変わらないように）
+  const selected =
+    useStableQuery(api.users.byIds, value.length > 0 ? { ids: value } : "skip") ?? [];
+  // 一度名前が分かった人は、結果が来る前でも名前を出す（追加した直後のチップ）
+  const names = useRef(new Map<string, string>());
+  for (const u of selected) names.current.set(u.id, u.name);
+  const rawCandidates = useStableQuery(api.users.search, open ? { text, limit: 8 } : "skip");
   const candidates = rawCandidates ?? [];
   const hidden = new Set([...value, ...exclude]);
   const visible = candidates.filter((u) => !hidden.has(u.id));
@@ -68,15 +74,15 @@ export function UserPicker({
       {value.length > 0 ? (
         <div className="picker__chips" role="grid" aria-label={`${label}の選択済み`}>
           {value.map((id) => {
-            const u = selected.find((s) => s.id === id);
+            const name = selected.find((s) => s.id === id)?.name ?? names.current.get(id);
             return (
               <M3eInputChip
                 key={id}
                 removable
-                removeLabel={`${u?.name ?? id} を外す`}
+                removeLabel={`${name ?? id} を外す`}
                 onRemove={() => remove(id)}
               >
-                {u?.name ?? "…"}
+                {name ?? "…"}
               </M3eInputChip>
             );
           })}

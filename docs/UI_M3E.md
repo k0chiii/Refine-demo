@@ -1642,3 +1642,28 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 - **担当の所属は要るときだけ読む**: `requireUser` / `optionalUser` は `teams` を読まず、`Principal.teamIds` を入れない（型はそのまま任意）。所属が効くのは非公開で担当の付いた制作物の閲覧の判定だけなので、application の `loadAuthorizedWork`（`work.view` で通らなかったとき）・`canView`（ホーム・ダッシュボード・FB の「開ける」）と Convex の `listMyWorks` が、その場合に限って `withTeamMembership` / `teamIdsOf` で担当の一覧（高々 300 件）を読んで添える。`teams` がどのクエリの読み集合にも入らなくなり、担当の編集のたびに全画面の購読が再実行されることが無くなった。所属する人が非公開の制作物を見られる判定（§58）はそのまま（テストで確認）
 - **メンションの候補はサーバーで検索**: 名簿（通常の制作物では全委員 ≤500 人）を画面で丸ごと購読するのをやめ、「@」に続けて打った文字で `comments.searchMentionCandidates` / `feedback.searchPeople`（名前・メールの部分一致。名前順・20 人まで。`users.search` と同じ形）を引く。打っていない間は購読しない（`useDeferredValue` で速い打鍵は少し遅らせる。次の結果が届くまで前の候補を出したまま）。非公開の制作物は見られる人の小さな一覧の中から同じ検索で探す。選んだ人の名前は `MentionDirectory` に控え、投稿のときに本文に「@名前」が残っているかを確かめる（`activeMentions`）。候補の一覧は M3E の list のまま
 - **見送り: 一覧の 1 行に要る「最新の版・受付中の版・締切」を `works` に非正規化する**: `listMine` は制作物ごとに `revisions.by_work` を引くが、制作物は年度あたり高々数百件で、版は制作物あたり数件。索引の読みで、デモでも実データでも計測で問題になっていない。提出確定時に `works` へ写す書き込みを増やす割に合わないので、遅さが出てから
+
+## 61. セレクトボックスで選ぶたび「再描画」に見えるのをやめる（2026-10-17・利用者指示）
+
+**利用者の指示**: 「セレクトボックスで選ぶたび再レンダリングみたいになるのやめたい」
+
+### 再現と原因（デモビルド・Chromium で計測。作業メモ: 制作物の編集ダイアログで主管担当・制作担当・関係担当・大／小ジャンル・媒体を選んだ）
+
+候補を順に調べた。React の commit は選ぶたび 1 回（commit の連鎖は無い）、`key` の変化・部品の再マウント・LazyDialog や Suspense の戻りは無い（選んだ前後の DOM の増減は 小ジャンルの option group だけ）。残ったのが M3E との値のやり取り（制御された select の往復）で、次の 2 つだった。
+
+1. **`multi`（関係担当）は 2 つ目を選ぶと 1 つ目が外れていた**。`@lit/react` は `multi` をプロパティで渡すので、`multi` 属性が付かない。M3E の option は `selected` になるとき `panel.hasAttribute("multi")` を見て、無ければ「単一選択」とみなして他の option の `selected` を外す。選択のたびに option の `selected` が、option の update（外す）と select の同期（戻す）で行き来し、最後に押した 1 つだけが残る。実測（関係担当で 3 つ続けて押す）: change イベントの値は [8,9] なのに、次のフレームでは [9] だけ、3 つ目は [9,10] → [10] だけ。
+2. **描き直しのたびに全部の select が選択し直しになっていた**。`@lit/react` は React が描き直すたびに `value` を代入し直し、M3E の `value` setter は毎回 `_pendingValue` を新しく作って、全 option を 1 つずつ（await 付きで）`selected` に書き直す。実測: 「制作物名」に 1 文字打つだけで `m3e-select` の更新が 14 回、option の `value`・`selected` の代入が 54 回、`m3e-form-field` が 11 回、`m3e-date-input` が 2 回。選ぶ直前の古い値で上書きし得る、選ぶたびに画面中の入力が動く、遅い端末ではもたつく。
+
+Convex を使う本番だけで起きる分もある（デモは前回の値を返すので出ない）: `useQuery` は引数が変わると結果が届くまで `undefined` を返す。担当者の選択（`users.byIds`）は選ぶたびにチップが全部「…」へ戻り、検索（`users.search`）は 1 文字ごとに候補が空→「検索しています…」→一覧と変わり、制作物一覧（`works.listMine` の状態・ジャンル・検索）は絞り込むたびに骨組みへ戻る。
+
+### 直したこと
+
+- `ui/Field.tsx` に `ControlledSelect` を足し、`Select`・`TeamSelect`・小ジャンルの 3 か所がそれを使う。`multi` は属性で渡す。`value` は「要素が持つ選択と違うときだけ」代入する（普段は代入しない）。
+- `lib/useStableQuery.ts`（引数が変わっても新しい結果が届くまで前回の結果を返す `useQuery`）を、`UserPicker`（選択済みの名前・候補）と制作物一覧の `works.listMine` に使う。UserPicker は一度分かった名前も控える。
+- `ui/DateField.tsx` は M3E の date-input へ毎回 `new Date` を渡していたので、日付・時刻が同じなら同じ `Date` を渡す（`useMemo`）。
+- 計測（編集ダイアログで 1 文字打ったとき／大ジャンルを選んだとき。M3E の更新回数）: select 14 → 0／14 → 3、date-input 2 → 0／2 → 0、form-field 11 → 4／16 → 10。関係担当は 3 つ続けて選ぶと 3 つとも残る。
+
+### 見送ったもの
+
+- ダイアログの再描画そのもの（React の commit は 1 回で、DOM の差も小さい）。
+- 表記カテゴリの filter chip（`selected` の代入は同じ値で、見た目の変化は出なかった）。

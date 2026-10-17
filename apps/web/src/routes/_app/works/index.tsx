@@ -11,6 +11,7 @@ import {
 } from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { useStableQuery } from "@/lib/useStableQuery";
 import type { M3eFilterChipElement } from "@m3e/web/chips";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
@@ -96,7 +97,8 @@ function Works() {
       },
       replace: true,
     });
-  const works = useQuery(api.works.listMine, {
+  // 絞り込み（状態・ジャンル・検索）で引数が変わっても、新しい一覧が届くまで前の一覧を出す（骨組みへ戻さない）
+  const works = useStableQuery(api.works.listMine, {
     ...(q ? { text: q } : {}),
     ...(lifecycle ? { lifecycle: lifecycle as "active" } : {}),
     ...(search.genre ? { genre: search.genre } : {}),

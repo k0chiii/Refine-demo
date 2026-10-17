@@ -21,6 +21,7 @@ import { mediaLabel } from "@/lib/labels";
 import { DateField } from "@/ui/DateField";
 import {
   Checkbox,
+  ControlledSelect,
   Field,
   Select,
   TextArea,
@@ -30,7 +31,6 @@ import {
 } from "@/ui/Field";
 import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
 import { M3eOptGroup, M3eOption } from "@m3e/react/option";
-import { M3eSelect } from "@m3e/react/select";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
 import { TagPicker } from "./TagPicker";
@@ -197,16 +197,12 @@ function SubGenreSelect({
   const labelId = useFieldLabelId();
   const groups = (genre ? [genre] : workGenres).map((g) => ({ genre: g, items: subGenresOf(g) }));
   return (
-    <M3eSelect
+    <ControlledSelect
       {...(fieldId ? { id: fieldId } : {})}
       {...(labelId ? { "aria-labelledby": labelId } : {})}
       className="select"
       value={value}
-      onChange={(e) => {
-        const v = (e.target as unknown as { value: string | readonly string[] | null }).value;
-        const code = Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
-        onChange(code as WorkSubGenre | "");
-      }}
+      onValueChange={(values) => onChange((values[0] ?? "") as WorkSubGenre | "")}
     >
       <M3eOption value="">未選択</M3eOption>
       {groups.map((g) => (
@@ -219,7 +215,7 @@ function SubGenreSelect({
           ))}
         </M3eOptGroup>
       ))}
-    </M3eSelect>
+    </ControlledSelect>
   );
 }
 

@@ -1,9 +1,8 @@
 import { api } from "@mf100/convex/api";
 import { sortTeams, type Team } from "@mf100/domain";
 import { useQuery } from "convex/react";
-import { Field, useFieldId, useFieldLabelId } from "@/ui/Field";
+import { ControlledSelect, Field, useFieldId, useFieldLabelId } from "@/ui/Field";
 import { M3eOptGroup, M3eOption } from "@m3e/react/option";
-import { M3eSelect } from "@m3e/react/select";
 
 /**
  * 担当（局 › 担当）を選ぶ欄。M3E select（複数選択は `multi`）に、局ごとの option group で担当を並べる。
@@ -48,17 +47,13 @@ function TeamOptions({
   const sorted = sortTeams(teams);
   const bureaus = sorted.filter((t) => t.kind === "bureau");
   return (
-    <M3eSelect
+    <ControlledSelect
       {...(fieldId ? { id: fieldId } : {})}
       {...(labelId ? { "aria-labelledby": labelId } : {})}
       className="select"
-      {...(multi ? { multi: true } : {})}
+      multi={multi}
       value={multi ? value : (value[0] ?? "")}
-      onChange={(e) => {
-        const v = (e.target as unknown as { value: string | readonly string[] | null }).value;
-        const ids = (Array.isArray(v) ? v : v ? [v] : []).filter((x): x is string => !!x);
-        onChange(ids);
-      }}
+      onValueChange={onChange}
     >
       {multi ? null : <M3eOption value="">なし</M3eOption>}
       {bureaus.map((b) => (
@@ -74,6 +69,6 @@ function TeamOptions({
             ))}
         </M3eOptGroup>
       ))}
-    </M3eSelect>
+    </ControlledSelect>
   );
 }
