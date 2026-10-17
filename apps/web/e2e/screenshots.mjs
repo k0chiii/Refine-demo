@@ -136,7 +136,7 @@ const pickUser = async (scope, name) => {
     .getByRole("option", { name: new RegExp(name) })
     .first()
     .click();
-  await page.waitForTimeout(200);
+  await settle();
 };
 
 /** PDF の最初のページが描かれるまで待つ（連続表示では canvas は先に置かれ、画面の近くに来てから描かれる） */
@@ -186,7 +186,7 @@ const drawer = async (label) => {
   const b = page.locator(`.ws__side-toolbar m3e-icon-button[aria-label^="${label}"]`);
   if ((await b.getAttribute("selected")) === null) await b.click();
   await page.waitForSelector(".drawer__body");
-  await page.waitForTimeout(300);
+  await settle();
 };
 
 async function main() {
@@ -205,35 +205,35 @@ async function main() {
   expectTrue((await siteRows()) === 1, "制作物一覧で、制作物が 1 か所にない");
   const allRows = await page.locator(WORKS_ENTRY).count();
   await page.locator(".works__team--production").click();
-  await page.waitForTimeout(400);
+  await settle();
   await page
     .locator("#works-production-menu m3e-menu-item-radio", { hasText: "広報局 › デザイン担当" })
     .click();
   await page.waitForURL(/production=/);
-  await page.waitForTimeout(400);
+  await settle();
   const designRows = await page.locator(WORKS_ENTRY).count();
   expectTrue(
     (await siteRows()) === 1 && designRows < allRows,
     "制作担当で絞り込んでも、その担当の制作物だけにならない",
   );
   await page.locator(".works__sort").click();
-  await page.waitForTimeout(400);
+  await settle();
   await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "主管担当順" }).click();
   await page.waitForURL(/sort=owner/);
-  await page.waitForTimeout(400);
+  await settle();
   await shot("02b-works-filtered");
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
   // 22 アカウントメニュー（右上のアバター）
   await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
-  await page.waitForTimeout(500);
+  await settle();
   await shot("22-account-menu");
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  await settle();
   // 31b レールの FAB「版を提出」→ 版を提出する制作物を選ぶ（自分が制作者の進行中の制作物を納期順。§36 L-15）
   await page.locator('m3e-nav-rail m3e-fab[aria-label="版を提出"]').click();
   await page.waitForSelector("m3e-dialog.submit-picker[open] m3e-list-action");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("31b-submit-picker");
   await page
     .locator('m3e-dialog.submit-picker[open] [slot="actions"] m3e-button', {
@@ -241,17 +241,17 @@ async function main() {
     })
     .click();
   await page.waitForSelector("m3e-dialog.submit-picker[open]", { state: "detached" });
-  await page.waitForTimeout(300);
+  await settle();
   // 31 制作物の登録は登録権限のある人だけ、制作物の一覧のアプリバーの操作から（FAB は「版を提出」に譲った）
   await page.locator('.shell__appbar m3e-icon-button[aria-label="制作物を登録"]').click();
   await page.waitForSelector("m3e-dialog[open] input");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("31-new-work");
   await page
     .locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
     .click();
   await page.waitForURL(/\/works$/);
-  await page.waitForTimeout(300);
+  await settle();
 
   // 03 エディタ（版なし）
   await page.locator(WORKS_ENTRY, { hasText: "MF100 公式パンフレット" }).first().click();
@@ -278,10 +278,10 @@ async function main() {
         .locator('m3e-dialog[open] m3e-icon-button[aria-label="カレンダーから選ぶ"]')
         .first()
         .click();
-      await page.waitForTimeout(600);
+      await settle();
       await shot("21-date-picker");
       await page.locator("m3e-datepicker m3e-button", { hasText: "キャンセル" }).click();
-      await page.waitForTimeout(300);
+      await settle();
       // 専門確認: 写真（肖像・権利）を校正者に依頼
       await page
         .locator('m3e-dialog[open] m3e-expansion-panel.checks-details [slot="header"]')
@@ -327,7 +327,7 @@ async function main() {
   await page
     .locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
     .click();
-  await page.waitForTimeout(300);
+  await settle();
 
   // 07 ダッシュボード（校正者）: 「校正する」に割り当てが出る
   await signInAs("mock-nogiku-reviewer");
@@ -337,11 +337,11 @@ async function main() {
   // 29 large（1200 以上）: メニューで標準の展開レール（220）。内容を押す。状態は保存され、既定は折りたたみ
   await railToggle.click();
   await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "expanded");
-  await page.waitForTimeout(500);
+  await settle();
   await shot("29-rail-expanded");
   await railToggle.click();
   await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "compact");
-  await page.waitForTimeout(400);
+  await settle();
 
   // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る（ダッシュボードの「校正する」の行から。同じ制作物は「次の締切」にも出る）
   await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).first().click();
@@ -377,12 +377,12 @@ async function main() {
     await page.mouse.up();
     await page.waitForTimeout(400);
     await page.locator(".ws__handle").hover();
-    await page.waitForTimeout(300);
+    await settle();
     await shot("35-pane-drag-handle");
     await page.locator(".ws__handle").focus();
     await page.keyboard.press("Home"); // 既定幅に戻す
     await page.mouse.move(700, 400);
-    await page.waitForTimeout(300);
+    await settle();
   }
   // 23 ピンの高さに並べる（Google ドキュメント式） / 24 ピンだけ（Figma 式）
   await page.locator('m3e-icon-button[aria-label="ピンの高さに並べる"]').click();
@@ -445,22 +445,22 @@ async function main() {
   // 61 ホームを編集（全画面のダイアログ。節ごとのスイッチと上下のボタン。§36 W-26）
   await page.locator('.shell__appbar m3e-icon-button[aria-label="ホームを編集"]').click();
   await page.waitForSelector("m3e-dialog.home-edit[open] m3e-switch");
-  await page.waitForTimeout(500);
+  await settle();
   await shot("61-home-edit");
   await page
     .locator('m3e-dialog.home-edit[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
     .click();
   await page.waitForSelector("m3e-dialog.home-edit[open]", { state: "detached" });
-  await page.waitForTimeout(300);
+  await settle();
 
   // 09 採否判断（制作者）: ⋮ → 不採用（理由）
   await go(revisionUrl);
   await page.waitForSelector(".comments .thread");
   const first = page.locator(".comments .thread").first();
   await first.locator(".thread__body").click();
-  await page.waitForTimeout(300);
+  await settle();
   await first.locator('m3e-icon-button[aria-label="その他の操作"]').click();
-  await page.waitForTimeout(300);
+  await settle();
   await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
   await page.fill(".thread textarea", "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み");
   await page.locator(".thread m3e-button", { hasText: "不採用" }).click();
@@ -614,10 +614,10 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await page.locator('.bell m3e-icon-button[aria-label^="通知"]').click();
   await page.waitForSelector("#notif-menu .notif");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("18-notifications");
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  await settle();
 
   // 13 管理画面 / 12 閲覧権限（管理者）: 管理画面のダイアログ（管理者は内容を閲覧しない: D3）
   await signInAs("mock-nogiku-admin");
@@ -627,10 +627,10 @@ async function main() {
   await shot("13-admin-works");
   await page.locator(adminWorks).first().click();
   await page.waitForSelector("m3e-dialog[open] .acl");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("12-acl");
   await page.locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "閉じる" }).click();
-  await page.waitForTimeout(300);
+  await settle();
   // 13a・13b 管理のタブ（ユーザー・監査ログ）
   await page.locator("m3e-tab", { hasText: "ユーザー" }).click();
   await page.waitForSelector('m3e-list[aria-label="ユーザー"] m3e-switch');
@@ -731,7 +731,7 @@ async function main() {
   await page.waitForSelector(WORKS_ENTRY);
   await railToggle.click();
   await page.waitForSelector(".shell__scrim");
-  await page.waitForTimeout(600);
+  await settle();
   await shot("30-rail-modal");
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
@@ -743,14 +743,14 @@ async function main() {
   await go(`${BASE}/`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForSelector(".submit-fab m3e-fab");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("20-mobile-dashboard");
   await page.locator(".shell__appbar .bell m3e-icon-button").click();
   await page.waitForSelector("m3e-bottom-sheet.notif-sheet .notif");
-  await page.waitForTimeout(800);
+  await settle();
   await shot("32-mobile-notifications");
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.notif-sheet").hide());
-  await page.waitForTimeout(600);
+  await settle();
   // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う。右下に FAB「版を提出」）
   await go(`${BASE}/works`);
   await page.waitForSelector("m3e-list-action");
@@ -768,16 +768,16 @@ async function main() {
   await page.waitForTimeout(600);
   await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
   await page.waitForSelector("m3e-bottom-sheet.action-sheet .list__item");
-  await page.waitForTimeout(700);
+  await settle();
   await shot("37-mobile-action-sheet");
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.action-sheet").hide());
-  await page.waitForTimeout(600);
+  await settle();
   await go(revision2Url);
   await pdfReady();
   await page.waitForTimeout(600);
   // 34 引き出しは普段は閉じていて、ツールバーの「コメント」で半分まで開く
   await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
-  await page.waitForTimeout(700);
+  await settle();
   expectTrue(
     await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").open),
     "ツールバーのコメントでシートが開かない",
@@ -794,11 +794,11 @@ async function main() {
   // 65 狭い画面の FB: シートのタブで「FB」に切り替える（制作物の相談の一覧）
   await page.locator("m3e-bottom-sheet.ws__sheet m3e-tab", { hasText: "FB" }).click();
   await page.waitForSelector("m3e-bottom-sheet.ws__sheet .fb-pane");
-  await page.waitForTimeout(500);
+  await settle();
   await shot("65-mobile-editor-fb");
   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
-  await page.waitForTimeout(500);
+  await settle();
   await page.setViewportSize({ width: 1440, height: 900 });
 
   // ---------- 文章エディタ（Google ドキュメント相当。docs/EDITOR_RESEARCH.md）
@@ -850,10 +850,10 @@ async function main() {
   );
   // 40 段落スタイル（メニューは各スタイルの見た目で並ぶ。ショートカットも表示）
   await page.locator("#wt-style").click();
-  await page.waitForTimeout(500);
+  await settle();
   await shot("40-write-style-menu");
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  await settle();
   // 41 検索と置換（Ctrl+H）: 補助ペインで検索しながら編集を続けられる
   await page.click(".doc");
   await page.keyboard.press("Control+h");
@@ -864,13 +864,13 @@ async function main() {
   await shot("41-write-find");
   // 42 文字カウント（その他メニュー → 文字カウント。入力中に表示も切り替えられる）
   await page.locator("#wt-more").click();
-  await page.waitForTimeout(300);
+  await settle();
   await page.locator("#wt-more-menu m3e-menu-item", { hasText: "文字カウント" }).click();
   await page.waitForSelector("m3e-dialog[open] .count-list");
-  await page.waitForTimeout(300);
+  await settle();
   await shot("42-write-word-count");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "完了" }).click();
-  await page.waitForTimeout(300);
+  await settle();
   // 版として提出 → HTML の版スナップショット（書式付き）が第1版になる
   await page.locator("m3e-button", { hasText: "版として提出" }).click();
   await page.waitForSelector("m3e-dialog[open] textarea");
@@ -983,7 +983,7 @@ async function main() {
     window.matchMedia = window.__origMatchMedia;
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForTimeout(400);
+  await settle();
   // 45 コメントを見ながら直す（制作者）: 補助ペイン「コメント」→ 押すと本文の該当箇所を選ぶ
   await signInAs("mock-nogiku-creator");
   await go(`${writeWorkUrl}/write`);
@@ -997,13 +997,13 @@ async function main() {
   await shot("45-write-refs");
   // 46 compact の文章エディタ: 画面下に浮かぶ vibrant のツールバー
   await page.setViewportSize({ width: 412, height: 915 });
-  await page.waitForTimeout(800);
+  await settle();
   await page.click(".doc");
   await shot("46-write-compact");
   // 46a 丸いボタン（文字の書式）で 2 本目のツールバーが伸びる。押しても本文のフォーカスは外れない
   await page.locator('.mfb__bar m3e-icon-button[aria-label="文字の書式"]').click();
   await page.waitForSelector(".mfb__panel--text");
-  await page.waitForTimeout(500);
+  await settle();
   expectTrue(
     await page.evaluate(() => document.activeElement?.closest(".doc") !== null),
     "丸いボタンで本文のフォーカスが外れた",
@@ -1035,13 +1035,13 @@ async function main() {
   // 46c 隣の丸い FAB（挿入）: 押すと＋が×に回り、挿入の操作が伸びて出る
   await page.locator('.mfb__fab[aria-label="挿入"]').click();
   await page.waitForSelector(".mfb__panel--insert");
-  await page.waitForTimeout(500);
+  await settle();
   await shot("46c-write-compact-fab");
   await page.locator('.mfb__fab[aria-label="挿入を閉じる"]').click();
-  await page.waitForTimeout(300);
+  await settle();
   // 47 その他（補助ペインと道具）はボトムシート
   await page.locator('.mfb__bar m3e-icon-button[aria-label="その他"]').click();
-  await page.waitForTimeout(700);
+  await settle();
   await shot("47-write-compact-more");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -1280,7 +1280,7 @@ async function v2Scenes() {
   await page.waitForTimeout(300);
   await shot("26a-mobile-long-press");
   await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
-  await page.waitForTimeout(300);
+  await settle();
   // ピンチ（2 本指）で校正物だけが拡大する（アプリ全体は拡大しない）。指を離すと倍率が確定する
   const zoomBefore = await page.locator(".ws__zoom").first().innerText();
   await page.evaluate(() => {
@@ -1316,7 +1316,7 @@ async function v2Scenes() {
     `ピンチで拡大しない（${zoomBefore} → ${zoomAfter}）`,
   );
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForTimeout(400);
+  await settle();
   void poster;
 
   // 56–59 SNS 投稿: 編集とプレビュー → 提出 → 校正画面のプレビュー → 校了版の書き出し
@@ -1364,7 +1364,7 @@ async function v2Scenes() {
   // 機種・表示の設定は右下の FAB から開く menu（M3 FAB menu。web では menu を使う）
   await page.locator(".preview-fab m3e-fab").click();
   await page.locator("m3e-menu-item-radio", { hasText: "プロフィールで見る" }).click();
-  await page.waitForTimeout(300);
+  await settle();
   await shot("57-sns-preview-grid", ".post-preview");
   await btn("版として提出").click();
   await page.waitForSelector("m3e-dialog[open]");
