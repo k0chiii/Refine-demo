@@ -88,11 +88,6 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
       onOpen={openThread}
       onShowPlace={showPlace}
       expandable={false}
-      intro={
-        narrow
-          ? "この制作物についての相談・話し合い（解決はしません）。紙面の範囲についての FB は、制作物を開いて範囲を選ぶと立てられます"
-          : "この制作物についての相談・話し合い（解決はしません）。紙面の印を押すと、その場所の FB が開きます。範囲の FB は制作物を開いて立てます"
-      }
     />
   ) : null;
   const stage =

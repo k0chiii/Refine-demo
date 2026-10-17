@@ -56,7 +56,7 @@ export function FeedbackPane({
   openId,
   onOpen,
   onShowPlace,
-  intro = "解決しない相談・話し合いの場所です。紙面の範囲を選んで「FB」に切り替えても始められます",
+  intro,
   expandable = true,
 }: {
   workId: string;
@@ -87,7 +87,7 @@ export function FeedbackPane({
   return (
     <div className="fb-pane">
       <div className="fb-pane__intro">
-        <p className="fb-pane__lead">{intro}</p>
+        {intro ? <p className="fb-pane__lead">{intro}</p> : null}
         {starting ? null : (
           <M3eButton variant="tonal" onClick={() => setStarting(true)}>
             <M3eIcon slot="icon" name="add_comment" />

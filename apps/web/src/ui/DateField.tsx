@@ -160,10 +160,8 @@ export function DateField({
                 ? formatJstDate(value - 1)
                 : formatJstShort(value)
             : value === null
-              ? "時刻を入れなければ、その日の 23:59 までです"
-              : time === null
-                ? `${formatDeadlineUntil(value)}（時刻を入れるとその時刻で締め切ります）`
-                : formatDeadlineUntil(value)}
+              ? "日付だけでも、時刻を付けてもよい"
+              : formatDeadlineUntil(value)}
         </p>
       </div>
       <M3eDatepicker

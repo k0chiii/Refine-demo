@@ -40,7 +40,7 @@ try {
   const href = await page.getAttribute('link[rel="manifest"]', "href");
   const manifest = await (await page.request.get(new URL(href, BASE).toString())).json();
   check(
-    manifest.name === "MF100 校正システム" && !!manifest.short_name,
+    manifest.name === "校正システム" && !!manifest.short_name,
     "マニフェスト: name / short_name",
   );
   check(

@@ -82,9 +82,9 @@ describe("締切の意味（利用者決定 2026-10-15: 日付だけ＝その日
 });
 
 describe("締切の表示（日付・曜日・時刻）", () => {
-  it("日付だけの締切は「その日の 23:59」と見せる", () => {
-    expect(formatDeadline(deadlineFromJst("2026-11-14")!, NOW)).toBe("11/14（土）23:59");
-    expect(formatDeadlineUntil(deadlineFromJst("2026-11-14")!, NOW)).toBe("11/14（土）23:59 まで");
+  it("日付だけの締切は時刻を書かない（利用者指示 2026-10-17）", () => {
+    expect(formatDeadline(deadlineFromJst("2026-11-14")!, NOW)).toBe("11/14（土）");
+    expect(formatDeadlineUntil(deadlineFromJst("2026-11-14")!, NOW)).toBe("11/14（土）");
   });
   it("時刻を指定したらその時刻", () => {
     expect(formatDeadlineUntil(deadlineFromJst("2026-11-14", "18:00")!, NOW)).toBe(
@@ -93,7 +93,7 @@ describe("締切の表示（日付・曜日・時刻）", () => {
     expect(formatDeadline(deadlineFromJst("2026-11-02", "09:05")!, NOW)).toBe("11/2（月）09:05");
   });
   it("年が変わるときだけ年を付ける", () => {
-    expect(formatDeadline(deadlineFromJst("2026-12-31")!, NOW)).toBe("12/31（木）23:59");
-    expect(formatDeadline(deadlineFromJst("2027-01-05")!, NOW)).toBe("2027/1/5（火）23:59");
+    expect(formatDeadline(deadlineFromJst("2026-12-31")!, NOW)).toBe("12/31（木）");
+    expect(formatDeadline(deadlineFromJst("2027-01-05")!, NOW)).toBe("2027/1/5（火）");
   });
 });

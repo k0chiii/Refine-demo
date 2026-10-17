@@ -95,18 +95,20 @@ export function deadlineToJst(deadlineAt: Instant): JstDeadlineParts {
 }
 
 /**
- * 締切の表示「11/14（土）23:59」（要件 §10-5: 日付のみの締切も具体的な時刻を必ず見せる）。
- * 翌日 0:00 JST ちょうどは前日の 23:59 と書く。年は `now` と違うときだけ前に付ける（「2027/1/5（火）23:59」）。
+ * 締切の表示「11/14（土）18:00」。日付だけの締切（翌日 0:00 JST ちょうど）は時刻を書かず「11/14（土）」
+ * （利用者指示 2026-10-17「締切の時刻指定がない時『23:59まで』も消して欲しい」。要件 §10-5 の「時刻を必ず見せる」を改めた。DECISIONS）。
+ * 年は `now` と違うときだけ前に付ける（「2027/1/5（火）」）。
  */
 export function formatDeadline(deadlineAt: Instant, now: Instant = Date.now()): string {
   const endOfDay = isEndOfJstDayDeadline(deadlineAt);
   const w = jstWall(endOfDay ? deadlineAt - 1 : deadlineAt);
-  const time = endOfDay ? "23:59" : `${pad(w.getUTCHours())}:${pad(w.getUTCMinutes())}`;
+  const time = endOfDay ? "" : `${pad(w.getUTCHours())}:${pad(w.getUTCMinutes())}`;
   const year = w.getUTCFullYear() !== jstWall(now).getUTCFullYear() ? `${w.getUTCFullYear()}/` : "";
   return `${year}${w.getUTCMonth() + 1}/${w.getUTCDate()}（${WEEKDAYS[w.getUTCDay()]}）${time}`;
 }
 
-/** 受付の締切の表示「11/14（土）23:59 まで」 */
+/** 受付の締切の表示。時刻があれば「11/14（土）18:00 まで」、日付だけなら「11/14（土）」 */
 export function formatDeadlineUntil(deadlineAt: Instant, now: Instant = Date.now()): string {
-  return `${formatDeadline(deadlineAt, now)} まで`;
+  const label = formatDeadline(deadlineAt, now);
+  return isEndOfJstDayDeadline(deadlineAt) ? label : `${label} まで`;
 }

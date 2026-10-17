@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "MF100 校正システム",
-  "short_name": "MF100 校正",
-  "description": "第100回五月祭の制作物を提出・校正・校了するためのシステム",
+  "name": "校正システム",
+  "short_name": "校正",
+  "description": "制作物の提出・校正・校了",
   "lang": "ja",
   "dir": "ltr",
   "start_url": "/",
