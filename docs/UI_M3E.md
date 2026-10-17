@@ -1446,13 +1446,14 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 利用者の指示「Humation のアバター選択画面もつけて欲しい」。それまでアバター（`ui/UserAvatar`）はメール（または ID）から決まる絵だけだった。本人が部品と色を選び、アカウントごとに保存できるようにした（PC とスマホで共通）。
 
 - **入口**: 右上のアカウントメニュー（compact はボトムシート）の「アバターを変える」（`face`）。保存すると、右上・コメント・FB・メンション候補・管理のユーザー一覧など `UserAvatar` を使う場所すべてに同じ絵が出る
-- **ダイアログ**（`features/account/AvatarPickerDialog`）: M3 Dialogs › Full-screen dialog。compact は全画面（`dialog--full`）、それ以上は幅 640 の普通のダイアログ。上に大きなプレビュー（152）と「おまかせ」（新しい種で部位を決め直し、色も候補から選ぶ）・「元に戻す」（開いたときの状態へ）。その下に部位のタブ（M3E tabs: 髪型・トップス・ボトムス・小物・めがね・色）
+- **ダイアログ**（`features/account/AvatarPickerDialog`）: M3 Dialogs › Full-screen dialog。compact は全画面（`dialog--full`）、それ以上は幅 640 の普通のダイアログ。上に大きなプレビュー（152）と「おまかせ」（新しい種で部位を決め直し、色も候補から選ぶ）・「元に戻す」（開いたときの状態へ）。その下に部位のタブ（M3E tabs: 髪型・トップス・小物・めがね・色）
+- **出す部位・色はアイコンに映るものだけ**（同日の利用者指示「アイコンとか、ボトムスとか画面に映らないところの設定はいらないので見直して」）。アバターは右上・コメント・リストなどで丸いアイコン（24〜40。選択画面のプレビューも同じ切り抜きの 152）としてしか出ない。Humation の切り抜き `avatar`（y −4.5〜83.5）に対し、ボトムスの層は y 85 から始まるので 1 画素も入らない。Chromium で 8 種の種 × 全部品 × 24・40・152 の丸い切り抜きを描いて画素を比べた結果: **ボトムス（部位 8 種すべて）とボトムスの色は 0 画素**、髪型 24/24・トップス 8/8（えりと肩）・小物 43/43・めがね 3/3、髪・肌・トップス・線・背景の色はすべて変わる。よって**ボトムスの部位と色のタブ・見本を外し**、設定の形からも外した（domain `AVATAR_PART_SLOTS`＝head・body・item・glasses、`AVATAR_COLOR_SLOTS`＝hair・skin・clothes・stroke。Convex の `vAvatarConfig` も同じ鍵だけ）。保存済みの値に `bottom` が残っていても読むときに捨て（`parseAvatarConfig`・`validateAvatarConfig` とも失敗にしない。`users.avatar` の保存の形 `vStoredAvatarConfig` は旧データのため鍵を限定しない）、「おまかせ」も残った役割だけを決める。切り抜きは広げない（映る範囲を増やすのではなく、映らないものを外す）
 - **部品の一覧**: 1 つを選ぶ `radiogroup`（`role="radio"`・`aria-checked`。選んでいるものだけ Tab で止まり、矢印・Home・End で移る）。各項目はその部品だけ替えた小さな絵（56）と日本語名（`lib/avatar` の辞書。辞書に無ければ Humation の名前）。小さな絵は `<use>` で部品の定義（`PartDefs`。見えない svg の `<defs>` に 1 回だけ置く）を参照し、小物の 43 個を並べても DOM を膨らませない（部品 1 つ約 10KB の SVG を 43 × 5 層で複製しない）。定義の中の `id` は部品ごとに名前空間を付け、clipPath 等が混ざらないようにする
-- **色**: 役割ごと（髪・肌・トップス・ボトムス・線）と背景に、候補の色を丸い見本（`radiogroup`。名前を読み上げる）で並べ、「ほかの色」で `<input type="color">` からも選べる。候補は `lib/avatar` の `AVATAR_PALETTES`（先頭が Humation の既定）
-- **保存**: `me.setAvatar`（本人だけ。null で設定を消し、メールから決まる絵に戻す「既定に戻す」）。形の検証と正規化は domain `validateAvatarConfig`（部位・部品の名前は `[a-z0-9-]`、色は 6 桁の 16 進を `#` 無し・大文字に、16 項目まで、種は 120 文字まで）。部品が実在するかはアセット（manifest）を持つ Web 側で確かめ、知らない部品は捨てる（`sanitizeAvatarConfig`。別の版のアセットで選んだ名前でも描画が止まらない）。保存値は部位すべてを部品の名前で持つ（種に頼らない）
+- **色**: 役割ごと（髪・肌・トップス・線）と背景に、候補の色を丸い見本（`radiogroup`。名前を読み上げる）で並べ、「ほかの色」で `<input type="color">` からも選べる。候補は `lib/avatar` の `AVATAR_PALETTES`（先頭が Humation の既定）
+- **保存**: `me.setAvatar`（本人だけ。null で設定を消し、メールから決まる絵に戻す「既定に戻す」）。形の検証と正規化は domain `validateAvatarConfig`（部位・色の役割は `AVATAR_PART_SLOTS` / `AVATAR_COLOR_SLOTS` にあるものだけ残し、それ以外の整った名前は黙って捨てる。部品の名前は `[a-z0-9-]`、色は 6 桁の 16 進を `#` 無し・大文字に、16 項目まで、種は 120 文字まで）。部品が実在するかはアセット（manifest）を持つ Web 側で確かめ、知らない部品は捨てる（`sanitizeAvatarConfig`。別の版のアセットで選んだ名前でも描画が止まらない）。保存値は部位すべてを部品の名前で持つ（種に頼らない）
 - **ほかの人のアバター**: 各クエリ（コメント・FB など）の返り値に設定を混ぜず、`AvatarProvider`（`_app` の根）が画面にいま出ている ID の集合で `users.avatars` を 1 本だけ購読する。`UserAvatar` は `userId` を登録するだけ。ID の出入りは 60ms まとめ、読み直し中は前回の値を出す（ちらつかない）。自分の絵は `me.avatar` を直接渡す（保存した瞬間に右上が変わる）
 - アセット（約 700KB）と選択画面のコードは初めて使うときに読み込む（`lib/avatar` の `loadHumation`、`_app` の `lazy`）。`@humation/core`（部品の解決・種からの決定）を web の依存に足した
-- 検証: E2E 70（髪型と髪の色を替えて保存 → 右上の svg が変わる）・70b（compact の全画面）。axe 0 件。domain・Convex のテスト（`avatar.test.ts`・`me.test.ts`）
+- 検証: E2E 70（髪型と髪の色を替えて保存 → 右上の svg が変わる。タブに「ボトムス」が無いことも確かめる）・70b（compact の全画面）。axe 0 件。domain・Convex のテスト（`avatar.test.ts`・`me.test.ts`。`bottom` の残る旧データを読めることを含む）
 
 ## 57. 別の制作物と比べる（2026-10-17・利用者指示）
 

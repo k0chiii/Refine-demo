@@ -1,10 +1,36 @@
 import { v } from "convex/values";
 
 /**
- * アバター（Humation）の設定。形の検証と正規化は domain の validateAvatarConfig（部品の名前が実在するかは Web 側）。
+ * アバター（Humation）の設定（me.setAvatar の引数）。形の検証と正規化は domain の validateAvatarConfig（部品の名前が実在するかは Web 側）。
  * selections: 部位 → 部品の名前、colors: 色の役割 → 6 桁の 16 進、background: 背景の色。
+ * 部位・色の役割は domain `AVATAR_PART_SLOTS` / `AVATAR_COLOR_SLOTS` と同じ（丸いアイコンに映るものだけ。
+ * ボトムスは映らないので外した。利用者指示 2026-10-17）。
  */
 export const vAvatarConfig = v.object({
+  seed: v.optional(v.string()),
+  selections: v.optional(
+    v.object({
+      head: v.optional(v.string()),
+      body: v.optional(v.string()),
+      item: v.optional(v.string()),
+      glasses: v.optional(v.string()),
+    }),
+  ),
+  colors: v.optional(
+    v.object({
+      hair: v.optional(v.string()),
+      skin: v.optional(v.string()),
+      clothes: v.optional(v.string()),
+      stroke: v.optional(v.string()),
+    }),
+  ),
+  background: v.optional(v.string()),
+});
+/**
+ * 保存済みのアバターの設定（users.avatar）。外した部位・色の役割（`bottom`）が残っている古い値も読めるよう、
+ * 部位・役割の名前は限定しない。読むときは domain `parseAvatarConfig` が知らない項目を捨てる。
+ */
+export const vStoredAvatarConfig = v.object({
   seed: v.optional(v.string()),
   selections: v.optional(v.record(v.string(), v.string())),
   colors: v.optional(v.record(v.string(), v.string())),
