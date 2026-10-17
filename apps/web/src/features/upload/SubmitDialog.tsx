@@ -12,6 +12,7 @@ import {
   revisionDeclarationItems,
   suggestedChecksFor,
   type CheckType,
+  type MediaType,
   type RevisionDeclarations,
   POST_MANIFEST_NAME,
 } from "@mf100/domain";
@@ -24,6 +25,7 @@ import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
+import { Loading } from "@/ui/Loading";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
 import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
@@ -40,6 +42,76 @@ import {
 } from "./submissionFlow";
 import { guessArtifactType, guessMimeType } from "./fileKind";
 import { toast } from "@/lib/toast";
+
+/**
+ * 媒体ごとの提出のしかた（利用者指示 2026-10-17「区分に応じて提出画面を分けたい。web ならリンクだけでいい」）。
+ * - web: ファイルは無く、サイトの URL だけ（校正者はライブ表示の上でコメントする）
+ * - figma: ファイルは無く、フレームの URL だけ（取り込んで画像の添付にし、URL は外部リンクとしても残す）
+ * - pdf・画像・動画: その種類のファイルだけ
+ * - 文章・SNS 投稿: ファイル（文章エディタ・投稿の編集が作った下書きを最初から入れて開く）
+ * - その他: ファイルと、あれば外部リンク
+ */
+type SubmitInput =
+  | { kind: "web" }
+  | { kind: "figma" }
+  | {
+      kind: "files";
+      /** ファイル選択に渡す accept。無ければ制限しない */
+      accept?: string;
+      /** 「PDF」「画像」「動画」。ファイル欄の案内と、違う種類を置いたときの知らせに使う */
+      noun?: string;
+      matches?: (f: File) => boolean;
+      /** 外部リンク（任意）も受けるか */
+      link: boolean;
+    };
+
+function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
+  switch (mediaType) {
+    case "web":
+      return { kind: "web" };
+    case "figma":
+      return { kind: "figma" };
+    case "pdf":
+      return {
+        kind: "files",
+        accept: ".pdf,application/pdf",
+        noun: "PDF",
+        matches: (f) => guessArtifactType(f.name, f.type) === "pdf",
+        link: false,
+      };
+    case "image":
+      return {
+        kind: "files",
+        accept: "image/*",
+        noun: "画像",
+        matches: (f) => guessArtifactType(f.name, f.type) === "image",
+        link: false,
+      };
+    case "video":
+      return {
+        kind: "files",
+        accept: "video/*,.mov,.m4v,.mp4,.webm",
+        noun: "動画",
+        matches: (f) => guessArtifactType(f.name, f.type) === "video",
+        link: false,
+      };
+    case "document":
+    case "sns":
+      return { kind: "files", link: false };
+    default:
+      return { kind: "files", link: true };
+  }
+}
+
+/** http(s) の URL か（ライブ表示の iframe に渡せるもの） */
+const isHttpUrl = (raw: string) => {
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
 
 /**
  * U-04 版提出（ダイアログ。狭い画面では全画面）。制作物の画面を離れずに提出し、確定後はその版の校正画面へ移る。
@@ -79,7 +151,7 @@ export function SubmitDialog({
   // Figma 連携（Worker にトークンがあるか）。無ければ URL は外部リンク（埋め込み表示）だけ付く
   const [figmaEnabled, setFigmaEnabled] = useState<boolean | null>(null);
   useEffect(() => {
-    if (!open || !token) return;
+    if (!open || !token || data?.work.mediaType !== "figma") return;
     let cancelled = false;
     void figmaStatus(token).then((r) => {
       if (!cancelled) setFigmaEnabled(r.enabled);
@@ -87,7 +159,7 @@ export function SubmitDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, token]);
+  }, [open, token, data?.work.mediaType]);
   const figmaFrames = useMemo(() => collectFigmaUrls(form.figmaUrls), [form.figmaUrls]);
   /** 取り込む（画像の添付になる）フレーム: ノード ID のある URL。連携が無ければ取り込まない */
   const figmaImports = figmaEnabled ? figmaFrames.filter((f) => f.ref.nodeId) : [];
@@ -163,8 +235,20 @@ export function SubmitDialog({
   const accepting = revisions.find((r) => r.id === data?.acceptingRevisionId) ?? null;
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
-  const addFiles = (list: FileList | File[] | null) => {
-    const next = Array.from(list ?? []);
+  // 文章エディタ・投稿の編集が下書きから作ったファイルを持って開いたときは、媒体に関わらずファイルの提出
+  const input: SubmitInput =
+    initialFiles && initialFiles.length > 0
+      ? { kind: "files", link: false }
+      : submitInputFor(work?.mediaType);
+  const linkOnly = input.kind === "web" || input.kind === "figma";
+  /** 置いたファイルのうち、この制作物の種類（PDF・画像・動画）に合わないものは受けない（選択は accept で絞る） */
+  const addFiles = (list: FileList | File[] | null, fromDrop = false) => {
+    let next = Array.from(list ?? []);
+    if (fromDrop && input.kind === "files" && input.matches) {
+      const ok = next.filter(input.matches);
+      if (ok.length < next.length) setError(`${input.noun} のファイルだけ出せます`);
+      next = ok;
+    }
     if (next.length === 0) return;
     setFiles((cur) => [...cur, ...next.filter((f) => !cur.some((c) => c.name === f.name))]);
   };
@@ -177,6 +261,10 @@ export function SubmitDialog({
       return setError("校正期限が過ぎています。今より後の日時にしてください");
     if (!token)
       return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
+    if (input.kind === "web" && !isHttpUrl(form.externalUrl))
+      return setError("サイトの URL を https:// から入れてください");
+    if (input.kind === "figma" && figmaFrames.length === 0)
+      return setError("Figma のフレームの URL を入れてください");
     const items = [
       ...files.map((f) => ({
         fileName: f.name,
@@ -207,7 +295,8 @@ export function SubmitDialog({
         role: "external" as const,
         externalUrl: f.url,
       })),
-      ...(form.externalUrl.trim()
+      ...(form.externalUrl.trim() &&
+      (input.kind === "web" || (input.kind === "files" && input.link))
         ? [
             {
               fileName: form.externalUrl.trim(),
@@ -268,10 +357,22 @@ export function SubmitDialog({
     setFlow(f);
     try {
       await f.start();
+      // リンクだけの提出（Web・Figma）は転送する実体が無い。取り込みまで済んだらそのまま確定する（失敗が残れば止まって再試行）
+      if (linkOnly && canConfirm(f.state)) await f.confirm().catch(() => undefined);
     } catch (err) {
       setError(describeError(err).message);
     }
   };
+
+  const requiredCount = checkTypes.filter((t) => checks[t]?.on).length;
+  const primaryLabel = linkOnly ? "提出する" : "アップロードを開始";
+  const startDisabled =
+    !work ||
+    (input.kind === "web"
+      ? !form.externalUrl.trim()
+      : input.kind === "figma"
+        ? figmaFrames.length === 0
+        : files.length === 0 && !(input.link && form.externalUrl.trim()));
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
@@ -279,65 +380,112 @@ export function SubmitDialog({
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>
-            {`${accepting.label} が ${formatDeadlineUntil(accepting.deadlineAt)}受付中。`}
-            確定した時点で受付が終了します。
+            {`${accepting.label} が ${formatDeadlineUntil(accepting.deadlineAt)}受付中。確定した時点で受付が終了します。`}
           </p>
         ) : null}
-        {!flow ? (
+        {!work ? (
+          // 媒体が分かるまで、別の入力欄を出して差し替えない
+          <Loading label="読み込んでいます" />
+        ) : !flow ? (
           <>
-            <div
-              className={`file-drop ${dragging ? "file-drop--over" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                addFiles(e.dataTransfer.files);
-              }}
-            >
-              <M3eIcon name="upload_file" />
-              <span>ここにファイルを置くか、</span>
-              <label className="file-drop__pick">
-                選択
-                <input
-                  type="file"
-                  multiple
-                  aria-label="ファイルを選択"
-                  onChange={(e) => addFiles(e.target.files)}
+            {input.kind === "web" ? (
+              <Field
+                label="サイトの URL"
+                required
+                hint="校正者は表示したサイトの上で、要素を選んでコメントします"
+              >
+                <TextInput
+                  type="url"
+                  value={form.externalUrl}
+                  onChange={set("externalUrl")}
+                  placeholder="https://"
                 />
-              </label>
-              {files.length > 0 ? (
-                <ul className="file-drop__files">
-                  {files.map((f) => (
-                    <li key={f.name}>
-                      {f.name}
-                      <span className="muted">
-                        　{formatBytes(f.size)}・
-                        {f === shownFile
-                          ? "紙面に表示（コメントはこのファイルに）"
-                          : `${artifactFormatLabel({ type: guessArtifactType(f.name, f.type), fileName: f.name })}（ダウンロード用）`}
-                      </span>
-                      <M3eIconButton
-                        className="file-drop__remove"
-                        aria-label={`${f.name} を外す`}
-                        onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
-                      >
-                        <M3eIcon name="close" />
-                      </M3eIconButton>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-            <p className="small muted">
-              PDF と .ai
-              のように、同じ制作物のファイルをまとめて出せます。紙面に出してコメントを付けるのは
-              PDF（無ければ画像・文章・動画。動画の制作物は動画）で、ほかのファイルはエディタの「情報
-              › この版のファイル」からダウンロードできます。
-            </p>
+              </Field>
+            ) : input.kind === "figma" ? (
+              <>
+                {/* Figma（docs/FIGMA_WEB_PROOFING.md FG-05）: フレームの URL を貼ると、Worker が Figma から PNG を書き出して
+                    画像の添付にする（位置コメントは画像の上）。連携が無いとき・ノード ID の無い URL は外部リンク
+                    （埋め込み表示とフレーム単位のコメント）だけ */}
+                <Field
+                  label="Figma のフレームの URL（1 行に 1 つ）"
+                  required
+                  hint={
+                    figmaEnabled === false
+                      ? "Figma 連携が未設定のため、URL は外部リンクとして付きます（埋め込み表示とフレーム単位のコメント）"
+                      : "フレームを選んで「リンクをコピー」（…?node-id=1-2）。提出時に画像として取り込みます"
+                  }
+                >
+                  <TextArea
+                    value={form.figmaUrls}
+                    onChange={set("figmaUrls")}
+                    placeholder="https://www.figma.com/design/…?node-id=1-2"
+                    rows={3}
+                  />
+                </Field>
+                {figmaFrames.length > 0 ? (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    {figmaFrames.length} 件の URL
+                    {figmaImports.length > 0
+                      ? `・${figmaImports.length} 件を画像として取り込みます`
+                      : ""}
+                    {figmaFrames.some((f) => !f.ref.nodeId)
+                      ? "・ノード ID の無い URL はファイル全体の埋め込み表示だけです"
+                      : ""}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <div
+                className={`file-drop ${dragging ? "file-drop--over" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  addFiles(e.dataTransfer.files, true);
+                }}
+              >
+                <M3eIcon name="upload_file" />
+                <span>
+                  {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
+                </span>
+                <label className="file-drop__pick">
+                  選択
+                  <input
+                    type="file"
+                    multiple
+                    {...(input.accept ? { accept: input.accept } : {})}
+                    aria-label="ファイルを選択"
+                    onChange={(e) => addFiles(e.target.files)}
+                  />
+                </label>
+                {files.length > 0 ? (
+                  <ul className="file-drop__files">
+                    {files.map((f) => (
+                      <li key={f.name}>
+                        {f.name}
+                        <span className="muted">
+                          　{formatBytes(f.size)}・
+                          {f === shownFile
+                            ? "紙面に表示（コメントはこのファイルに）"
+                            : `${artifactFormatLabel({ type: guessArtifactType(f.name, f.type), fileName: f.name })}（ダウンロード用）`}
+                        </span>
+                        <M3eIconButton
+                          className="file-drop__remove"
+                          aria-label={`${f.name} を外す`}
+                          onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
+                        >
+                          <M3eIcon name="close" />
+                        </M3eIconButton>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )}
             <div className="form">
               <Field label="版の種別" required>
                 <Select value={form.kind} onChange={set("kind")}>
@@ -379,16 +527,7 @@ export function SubmitDialog({
                 }
               />
             </Field>
-            {isFirst ? (
-              <Field label="補足（必要な場合のみ）">
-                <TextArea
-                  value={form.notes}
-                  onChange={set("notes")}
-                  placeholder="リファレンス・未確定や未調整の部分・変更できない条件など"
-                />
-              </Field>
-            ) : null}
-            {/* 提出前の確認（Notion の版 DB のチェックボックス）。文章だけの項目は文章の制作物にだけ出す */}
+            {/* 提出前の確認（Notion の版 DB のチェックボックス）と申告。文章だけの項目は文章の制作物にだけ出す */}
             <section className="submit-checklist" aria-label="提出前の確認">
               <h3 className="submit-checklist__h">
                 提出前の確認
@@ -410,9 +549,6 @@ export function SubmitDialog({
             </section>
             <section className="submit-checklist" aria-label="この版の申告">
               <h3 className="submit-checklist__h">この版の申告</h3>
-              <p className="small muted" style={{ margin: 0 }}>
-                使っているものの申告です（品質の確認ではありません）。写真と指針外の色は、下の専門確認を自動で付けます
-              </p>
               {revisionDeclarationItems.map((it) => (
                 <Checkbox
                   key={it.key}
@@ -423,84 +559,59 @@ export function SubmitDialog({
                 />
               ))}
             </section>
+            {/* 詳細: 補足（初回）・外部リンク（その他の媒体）・専門確認（§2.2-4。校了時に未完了ならブロック D6） */}
             <M3eExpansionPanel className="expansion checks-details">
-              <span slot="header">専門確認を依頼する</span>
-              <div className="checks">
-                {checkTypes.map((t) => (
-                  <div key={t} className={`check ${checks[t]?.on ? "" : "check--done"}`}>
-                    <Checkbox
-                      id={`check-${t}`}
-                      checked={checks[t]?.on ?? false}
-                      onChange={(on) => setChecks((c) => ({ ...c, [t]: { ...c[t]!, on } }))}
-                      label={checkTypeLabels[t]}
-                    />
-                    <span />
-                    {checks[t]?.on ? (
-                      <div style={{ minWidth: 240 }}>
-                        <UserPicker
-                          label="担当者（任意）"
-                          single
-                          value={checks[t]?.assignee ?? []}
-                          onChange={(ids) =>
-                            setChecks((c) => ({ ...c, [t]: { ...c[t]!, assignee: ids } }))
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <span />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </M3eExpansionPanel>
-            {/* Figma（利用者決定 2026-10-17: まず REST API で試す。docs/FIGMA_WEB_PROOFING.md FG-05）:
-                フレームの URL を貼ると、Worker が Figma から PNG を書き出して画像の添付にする（位置コメントは画像の上）。
-                連携が無いとき・ノード ID の無い URL は外部リンク（埋め込み表示とフレーム単位のコメント）だけ */}
-            <M3eExpansionPanel
-              className="expansion"
-              {...(work?.mediaType === "figma" ? { open: true } : {})}
-            >
-              <span slot="header">Figma のフレーム</span>
+              <span slot="header">
+                詳細（{isFirst ? "補足・" : ""}専門確認
+                {requiredCount > 0 ? ` ${requiredCount} 件` : ""}）
+              </span>
               <div className="stack">
-                <Field
-                  label="フレームの URL（1 行に 1 つ）"
-                  hint={
-                    figmaEnabled === false
-                      ? "Figma 連携が未設定（サーバーに FIGMA_ACCESS_TOKEN が無い）。URL は外部リンクとして付き、Figma の埋め込み表示とフレーム単位のコメントができます。位置を指すコメントには、書き出した PNG・PDF を上の添付に加えてください"
-                      : "Figma で フレームを選び「リンクをコピー」（…?node-id=1-2）。提出時に Figma から画像を取り込み、紙面に出して位置コメントを付けられます。URL も外部リンクとして残ります"
-                  }
-                >
-                  <TextArea
-                    value={form.figmaUrls}
-                    onChange={set("figmaUrls")}
-                    placeholder="https://www.figma.com/design/…?node-id=1-2"
-                    rows={3}
-                  />
-                </Field>
-                {figmaFrames.length > 0 ? (
-                  <p className="small muted" style={{ margin: 0 }}>
-                    {figmaFrames.length} 件の Figma の URL
-                    {figmaImports.length > 0
-                      ? `・${figmaImports.length} 件を画像として取り込みます`
-                      : ""}
-                    {figmaFrames.some((f) => !f.ref.nodeId)
-                      ? "・ノード ID の無い URL はファイル全体の埋め込み表示だけです"
-                      : ""}
-                  </p>
+                {isFirst ? (
+                  <Field label="補足（必要な場合のみ）">
+                    <TextArea
+                      value={form.notes}
+                      onChange={set("notes")}
+                      placeholder="リファレンス・未確定や未調整の部分・変更できない条件など"
+                    />
+                  </Field>
                 ) : null}
-              </div>
-            </M3eExpansionPanel>
-            <M3eExpansionPanel className="expansion">
-              <span slot="header">外部リンク</span>
-              <div>
-                <Field label="URL">
-                  <TextInput
-                    type="url"
-                    value={form.externalUrl}
-                    onChange={set("externalUrl")}
-                    placeholder="https://"
-                  />
-                </Field>
+                {input.kind === "files" && input.link ? (
+                  <Field label="外部リンク（任意）">
+                    <TextInput
+                      type="url"
+                      value={form.externalUrl}
+                      onChange={set("externalUrl")}
+                      placeholder="https://"
+                    />
+                  </Field>
+                ) : null}
+                <div className="checks" role="group" aria-label="専門確認を依頼する">
+                  {checkTypes.map((t) => (
+                    <div key={t} className={`check ${checks[t]?.on ? "" : "check--done"}`}>
+                      <Checkbox
+                        id={`check-${t}`}
+                        checked={checks[t]?.on ?? false}
+                        onChange={(on) => setChecks((c) => ({ ...c, [t]: { ...c[t]!, on } }))}
+                        label={checkTypeLabels[t]}
+                      />
+                      <span />
+                      {checks[t]?.on ? (
+                        <div style={{ minWidth: 240 }}>
+                          <UserPicker
+                            label="担当者（任意）"
+                            single
+                            value={checks[t]?.assignee ?? []}
+                            onChange={(ids) =>
+                              setChecks((c) => ({ ...c, [t]: { ...c[t]!, assignee: ids } }))
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <span />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </M3eExpansionPanel>
           </>
@@ -571,14 +682,8 @@ export function SubmitDialog({
           {flow ? "中止して戻る" : "キャンセル"}
         </M3eButton>
         {!flow ? (
-          <M3eButton
-            variant="filled"
-            disabled={
-              !work || (files.length === 0 && !form.externalUrl.trim() && figmaFrames.length === 0)
-            }
-            onClick={() => void start()}
-          >
-            アップロードを開始
+          <M3eButton variant="filled" disabled={startDisabled} onClick={() => void start()}>
+            {primaryLabel}
           </M3eButton>
         ) : (
           <M3eButton
