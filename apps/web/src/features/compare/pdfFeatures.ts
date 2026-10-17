@@ -1,6 +1,5 @@
 import type { NormalizedRect, PageFeature, PageLine } from "@mf100/domain";
-import type { PDFDocumentProxy } from "pdfjs-dist";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 
 /**
  * PDF のページ特徴（版比較・自動校正で共用）。PDF.js でテキストを抜き、行・位置・縮小画像を作る。
@@ -21,7 +20,7 @@ export interface PdfPageFeature extends PageFeature {
 const THUMB = 16;
 
 /** ページを小さく描いて 16×16 の濃淡（0..1）にする */
-async function thumbnail(page: pdfjs.PDFPageProxy): Promise<number[] | undefined> {
+async function thumbnail(page: PDFPageProxy): Promise<number[] | undefined> {
   if (typeof document === "undefined") return undefined;
   const base = page.getViewport({ scale: 1 });
   const vp = page.getViewport({ scale: 64 / base.width });
@@ -61,10 +60,12 @@ export async function extractPageFeature(
   const page = await doc.getPage(n);
   const vp = page.getViewport({ scale: 1 });
   const content = await page.getTextContent();
+  // PDF.js 本体はここで静的に import しない（校正画面全体が引き込む）。features/annotation/pdfjs を動的に読む
+  const { Util } = (await import("@/features/annotation/pdfjs")).pdfjs;
   const raw: RawItem[] = [];
   for (const it of content.items) {
     if (!("str" in it) || it.str === "") continue;
-    const tx = pdfjs.Util.transform(vp.transform, it.transform);
+    const tx = Util.transform(vp.transform, it.transform);
     const h = Math.hypot(tx[2], tx[3]) || it.height || 10;
     raw.push({ str: it.str, x: tx[4], y: tx[5] - h, w: it.width * vp.scale, h });
   }

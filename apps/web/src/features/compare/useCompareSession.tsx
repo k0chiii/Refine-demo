@@ -1,4 +1,3 @@
-import { documentView } from "@/features/writing/documentView";
 import {
   diffHighlights,
   diffText,
@@ -18,6 +17,7 @@ import {
   type ViewerController,
   type ViewPosition,
 } from "@/features/annotation/viewerSync";
+import { documentView } from "@/features/writing/documentView";
 import type { TextViewerController } from "./textSync";
 import { usePdfComparison, type PdfComparison } from "./useComparison";
 
@@ -134,10 +134,12 @@ export function useCompareSession(opts: {
   useEffect(() => {
     if (!active || kind !== "document" || !left || !leftBlob) return;
     let cancelled = false;
-    void leftBlob.text().then((t) => {
-      if (cancelled) return;
-      setOtherText({ id: left.id, ...documentView(left, t) });
-    });
+    void leftBlob
+      .text()
+      .then((t) => documentView(left, t))
+      .then((view) => {
+        if (!cancelled) setOtherText({ id: left.id, ...view });
+      });
     return () => {
       cancelled = true;
     };

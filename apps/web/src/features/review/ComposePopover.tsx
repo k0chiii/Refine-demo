@@ -8,9 +8,35 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
-import { M3eButton, M3eIconButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
+import { useComposeState, type ComposeStore } from "./composeStore";
 import { MentionTextarea } from "./mentions";
+
+/**
+ * 書きかけを ComposeStore に置く投稿欄。打つたびに描き直されるのはこの部品だけで、親（Editor）は描き直されない。
+ * 本文・メンション以外の props は ComposePopover と同じ。
+ */
+export function StoredComposePopover({
+  store,
+  ...rest
+}: { store: ComposeStore } & Omit<
+  Parameters<typeof ComposePopover>[0],
+  "value" | "onChange" | "mentions" | "onMentions"
+>) {
+  const { body, mentions } = useComposeState(store);
+  return (
+    <ComposePopover
+      {...rest}
+      value={body}
+      onChange={store.setBody}
+      mentions={mentions}
+      onMentions={store.setMentions}
+    />
+  );
+}
 
 /**
  * 範囲・ピンのそばに出る投稿欄（Google ドキュメント / Figma の「コメントを追加」）。

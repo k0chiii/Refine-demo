@@ -30,6 +30,4 @@ export function jsonToMarkdown(doc: JSONContent): string {
 }
 
 /** Markdown の原稿か（拡張子か MIME で判定） */
-export function isMarkdownArtifact(a: { fileName: string; mimeType?: string | null }): boolean {
-  return /\.(md|markdown)$/i.test(a.fileName) || a.mimeType === "text/markdown";
-}
+export { isMarkdownArtifact } from "./plainText";
