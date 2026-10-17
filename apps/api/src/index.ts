@@ -1,5 +1,6 @@
 import { createConvexCleanupGateway } from "./adapters/convexCleanupGateway.ts";
 import { createConvexGateway } from "./adapters/convexGateway.ts";
+import { createFigmaClient } from "./adapters/figmaClient.ts";
 import { createJoseVerifier } from "./adapters/joseVerifier.ts";
 import { createR2Store } from "./adapters/r2Store.ts";
 import { createApp } from "./app.ts";
@@ -20,6 +21,8 @@ export default {
       allowedOrigins: env.ALLOWED_ORIGINS.split(",")
         .map((s) => s.trim())
         .filter(Boolean),
+      // Figma はトークン（秘密）があるときだけ。ブラウザに渡さず、この Worker からだけ呼ぶ
+      figma: env.FIGMA_ACCESS_TOKEN ? createFigmaClient(env.FIGMA_ACCESS_TOKEN) : null,
     });
     return app.fetch(request, env, ctx);
   },

@@ -1229,6 +1229,159 @@ m3e-dialog [slot="actions"] {
   gap: 4px;
 }
 
+/* ---------- 「アバターを変える」（Humation。§56）
+ * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
+ * 部品の小さな絵は <use> で定義（.avatar-defs）を参照し、43 個並べても DOM を膨らませない */
+.avatar-picker {
+  --m3e-dialog-max-width: 640px;
+}
+/* 中身はダイアログの内側（640 − 余白 24×2）に収める（.dialog--full .dialog-body の 640 より狭く） */
+.avatar-picker .dialog-body {
+  min-width: min(560px, 90vw);
+  max-width: 100%;
+  gap: 12px;
+}
+.avatar-picker__loading {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+}
+.avatar-picker__preview {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.avatar-picker__big {
+  box-shadow: inset 0 0 0 1px var(--mf-outline-variant);
+}
+.avatar-picker__preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.avatar-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.avatar-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 4px;
+}
+.avatar-part {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 2px solid transparent;
+  border-radius: var(--mf-shape-md);
+  background: transparent;
+  color: var(--mf-on-surface);
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.avatar-part:hover {
+  background: var(--mf-surface-container-high);
+}
+.avatar-part:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 0;
+}
+.avatar-part--on {
+  border-color: var(--mf-primary);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.avatar-part__label {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.avatar-thumb {
+  box-shadow: inset 0 0 0 1px var(--mf-outline-variant);
+}
+.avatar-colors {
+  display: grid;
+  gap: 12px;
+}
+.avatar-colors__row {
+  display: grid;
+  gap: 6px;
+}
+.avatar-colors__choices {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.avatar-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.avatar-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--mf-outline-variant);
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 2px var(--mf-surface);
+}
+.avatar-swatch:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+.avatar-swatch--on {
+  border-color: var(--mf-primary);
+  box-shadow:
+    inset 0 0 0 2px var(--mf-surface),
+    0 0 0 2px var(--mf-primary);
+}
+.avatar-colors__custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mf-on-surface-variant);
+}
+.avatar-colors__custom input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--mf-outline-variant);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.avatar-colors__custom input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.avatar-colors__custom input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+@media (max-width: 599px) {
+  .avatar-picker .dialog-body {
+    min-width: 0;
+  }
+  /* 6 つのタブ（髪型…色）を 412 の幅に収める（余白を詰めないと「色」が右にはみ出て、横に送らないと押せない） */
+  .avatar-picker .pane-tabs {
+    --m3e-tab-padding-start: 8px;
+    --m3e-tab-padding-end: 8px;
+  }
+  .avatar-parts {
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  }
+}
+
 /* ---------- 版を提出（§36 L-15）
  * compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16・右 16・セーフエリアを避ける。M3 FAB › Placement）。
  * 内容の最後の行が FAB に隠れないよう、下の余白に FAB の高さ（56）と間（16）を足す */
@@ -1250,6 +1403,33 @@ m3e-dialog [slot="actions"] {
 }
 .submit-picker__list {
   margin: 0 -24px;
+}
+/* 別の制作物と比べる（利用者指示 2026-10-17）: 検索 → 制作物 → 版。広い画面は基本ダイアログ、compact は全画面（.dialog--full） */
+.cross-picker .dialog-body {
+  min-width: min(560px, 90vw);
+  gap: 8px;
+}
+.cross-picker__search {
+  min-width: 0;
+}
+.cross-picker__hint,
+.cross-picker__empty {
+  margin: 0;
+}
+.cross-picker__list {
+  margin: 0 -24px;
+  max-height: min(50vh, 480px);
+  overflow: auto;
+}
+@media (max-width: 599px) {
+  .cross-picker__list {
+    max-height: none;
+  }
+  /* 全画面のダイアログ: 候補が少なくても画面を満たす（見出し・操作ボタンの分を除いた高さ） */
+  .cross-picker .cross-picker__body {
+    min-height: calc(100dvh - 200px);
+    align-content: start;
+  }
 }
 .action-sheet__empty {
   padding: 0 0 16px;
@@ -1856,6 +2036,12 @@ m3e-dialog [slot="actions"] {
 .thread__index {
   --m3e-text-button-label-text-color: var(--mf-on-surface-variant);
   --m3e-button-icon-color: var(--mf-on-surface-variant);
+  /* 端末名・フレーム名が長くてもカードを広げない（§55）。% だと最小幅の計算に効かず列が広がるので px で */
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .thread__name {
   font: var(--mf-type-label-large);
@@ -2016,7 +2202,20 @@ m3e-dialog [slot="actions"] {
 .compare__label {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
-  padding: 0 4px 8px;
+  padding: 0 4px 4px;
+  /* 左の見出しには「別の制作物と比べる」のアイコンボタン（40）が並ぶので、右も同じ高さにして紙面の上端を揃える */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+}
+.compare__label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compare__swap {
+  flex: none;
 }
 .compare__hint {
   margin-inline-start: 8px;
@@ -2066,8 +2265,32 @@ m3e-dialog [slot="actions"] {
 .version__label {
   font: var(--mf-type-title-small);
 }
-.versions__void {
+.versions__void,
+.versions__cross-pick {
   justify-self: start;
+}
+/* 別の制作物と比較中（利用者指示 2026-10-17）: 相手の題名・版と「変える」「終了」。色は選択中と同じ secondary container */
+.versions__cross {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--mf-shape-medium, 12px);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.versions__cross-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.versions__cross-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.versions__cross .meta {
+  color: inherit;
 }
 
 /* 引き出し「情報」 */
@@ -2838,7 +3061,7 @@ m3e-icon.icon--on {
   }
 }
 
-/* ---------- 表記ルール（表記統一）: M3 list-detail。一覧は M3E のリスト、840 以上は詳細を右のペインに（839 以下はダイアログ） */
+/* ---------- 表記ルール（表記統一）: 600 以上は表（§54）、599 以下は M3E のリスト。840 以上は詳細を右のペインに（839 以下はダイアログ） */
 .notation__tabs,
 .page-tabs {
   margin: 0 0 12px;
@@ -2861,28 +3084,43 @@ m3e-icon.icon--on {
   width: 240px;
   flex: none;
 }
-/* 2 ペイン: 一覧 360（1200 以上は 412）・間 24・詳細は残り全部（M3 list-detail）。ペインは surface-container-low の面で囲う */
+/* 2 ペイン: 表は残り全部、詳細は右に 360（1200 以上は 412）・間 24（M3 Supporting pane）。ペインは surface-container-low の面で囲う */
 .notation__ld--two {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 24px;
   align-items: start;
 }
 @media (min-width: 1200px) {
   .notation__ld--two {
-    grid-template-columns: 412px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 412px;
   }
 }
-.notation__ld--two > .notation__list,
+.notation__ld--two > .notation__list {
+  min-width: 0;
+}
+/* 補助のペイン（詳細）は surface-container-low の面で囲う。主の内容（表）は面で囲わない（ダッシュボードの補助ペインと同じ。§49） */
 .notation__detail {
   min-width: 0;
   border-radius: var(--mf-shape-lg);
   background: var(--mf-surface-container-low);
   padding: 16px;
 }
-/* 一覧の行の左右の余白（16）をペインの内側の余白に重ねる（.list は -16 外へ出す） */
-.notation__ld--two .notation__rules {
-  margin: 0 -8px;
+/* 表の側: 画面の高さに収め、表の中だけスクロール（見出しが上に貼り付く）。操作の行（検索・絞り込み）は表の直上に固定 */
+.notation__list--table {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100dvh - var(--mf-appbar-h, 64px) - 32px);
+  display: flex;
+  flex-direction: column;
+}
+.notation__list--table > .notation__toolbar,
+.notation__list--table > .notation__filters {
+  flex: none;
+}
+/* 絞り込みの行と表の間は 16（§48。4dp 刻みで、関連する部品のまとまりの間） */
+.notation__list--table > .notation__filters {
+  margin-bottom: 12px;
 }
 /* 詳細は画面の高さに収め、一覧をスクロールしても見えたままにする（中だけスクロール） */
 .notation__detail {
@@ -2892,6 +3130,185 @@ m3e-icon.icon--on {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px 24px 24px;
+}
+
+/* ルールの表（features/notation/RuleTable.tsx。M2 data table の寸法を M3 のトークンで。§54）
+ * 面は surface-container-lowest（ペインの low の上に 1 段明るい面。外枠や影ではなく色の段差で分ける: M3 の tonal surfaces）、
+ * 角は medium（M3E の形。M2 の 4dp ではなく、ペインの large の内側に収まる段）。横に溢れたら表の中だけ横にスクロール */
+.rule-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--mf-surface-container-lowest);
+  border-radius: var(--mf-shape-md);
+  container-type: inline-size;
+}
+.rule-table__table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface);
+}
+/* 見出し: 56dp・title-small（M2 の header は subtitle 2 = medium の太さ）。表の上に貼り付く（collapse だと貼り付いた線が消えるので separate） */
+.rule-table__th {
+  height: 56px;
+  padding: 0 16px;
+  text-align: start;
+  vertical-align: middle;
+  font: var(--mf-type-title-small);
+  color: var(--mf-on-surface);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--mf-surface-container-lowest);
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+/* 本文: 52dp・左右 16dp。行の間は outline-variant の区切り線（列をまたいで読むため。最後の行には引かない） */
+.rule-table__td {
+  height: 52px;
+  padding: 0 16px;
+  vertical-align: middle;
+  text-align: start;
+  font: var(--mf-type-body-medium);
+  border-bottom: 1px solid var(--mf-outline-variant);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.rule-table__rowhead {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+.rule-table__row:last-child > * {
+  border-bottom: 0;
+}
+.rule-table__correct {
+  font-weight: 500;
+}
+.rule-table__pattern {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: var(--mf-on-surface-variant);
+  background: none;
+  padding: 0;
+}
+/* 長い文字は省略記号で切る（全文は hover・長押しでツールチップ） */
+.rule-table__clip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 数値（年度）は右寄せ・等幅の数字（M2 data table・M3 Typography） */
+.rule-table__num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+/* 行: 押すと詳細（single-action）。hover は on-surface 8% の state layer、選んだ行は secondary-container（M3E のリストの選択と同じ）＋先頭の印 */
+.rule-table__row {
+  cursor: pointer;
+}
+.rule-table__row:hover > * {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.rule-table__row--selected > * {
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.rule-table__row--selected:hover > * {
+  background: color-mix(
+    in srgb,
+    var(--mf-on-secondary-container) 8%,
+    var(--mf-secondary-container)
+  );
+}
+/* 選んだ行の補足の文字（カテゴリ名・正規表現・2 つ目以降の統一表記）も on-secondary-container（on-surface-variant だと 4.5:1 に届かない） */
+.rule-table__row--selected .muted,
+.rule-table__row--selected .rule-table__pattern {
+  color: inherit;
+}
+.rule-table__row--selected > :first-child::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 4px;
+  inset-block: 10px;
+  width: 4px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+}
+/* 無効のルールは控えめに（§49: 状態は色だけに頼らず、文字（「状態」の列・「無効」）でも出す） */
+.rule-table__row--off > * {
+  color: var(--mf-on-surface-variant);
+}
+.rule-table__row:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: -3px;
+}
+.rule-table__empty {
+  height: 96px;
+  padding: 0 16px;
+  text-align: center;
+  color: var(--mf-on-surface-variant);
+}
+/* 並べ替えの見出し: 押せる範囲は文字と矢印（hover は丸い state layer。M3E の形）。矢印は並べ替え中の列だけ常に出し、ほかは hover で */
+.rule-table__sort {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin-inline-start: -8px;
+  padding: 0 8px;
+  border-radius: var(--mf-shape-full);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.rule-table__sort:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.rule-table__sort:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 0;
+}
+.rule-table__num .rule-table__sort {
+  flex-direction: row-reverse;
+  margin-inline: 0 -8px;
+}
+.rule-table__sort-icon {
+  font-size: 18px;
+  opacity: 0;
+  color: var(--mf-on-surface-variant);
+  transition: opacity var(--mf-motion-effects-fast);
+}
+.rule-table__sort:hover .rule-table__sort-icon,
+.rule-table__sort:focus-visible .rule-table__sort-icon,
+.rule-table__sort--on .rule-table__sort-icon {
+  opacity: 1;
+}
+.rule-table__sort--on .rule-table__sort-icon {
+  color: var(--mf-on-surface);
+}
+/* 表が狭いとき（詳細を開いた expanded など）は、ルール名 → 年度 → カテゴリ の順に列を隠す（内容は詳細のペインにある）。
+ * 境目は「統一表記・誤表記に 150 ずつ残る幅」（固定の列 ID 96・厳格さ 84・カテゴリ 160・年度 88 と、ルール名も等分の 150） */
+@container (max-width: 899px) {
+  .rule-table__col--title {
+    display: none;
+  }
+}
+@container (max-width: 759px) {
+  .rule-table__col--years {
+    display: none;
+  }
+}
+@container (max-width: 659px) {
+  .rule-table__col--cat {
+    display: none;
+  }
 }
 .notation__detail-head {
   display: flex;
@@ -2904,17 +3321,6 @@ m3e-icon.icon--on {
   min-width: 0;
   margin: 0;
   font: var(--mf-type-title-large);
-}
-.notation__detail-empty {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 64px 16px;
-  text-align: center;
-}
-.notation__detail-empty m3e-icon {
-  font-size: 40px;
-  color: var(--mf-on-surface-variant);
 }
 .rule-row__correct {
   font-weight: 500;
@@ -4346,4 +4752,585 @@ m3e-snackbar {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
   white-space: normal;
+}
+
+/* ---------- 動画の校正（VideoViewer。利用者指示 2026-10-17: タイムライン指定と範囲選択。§53）
+   映像は紙面と同じ紙（viewer__page）に置き、下にタイムライン（印の段＋M3 Sliders の見た目の再生位置）と操作の行 */
+.vplayer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-inline: auto;
+  flex: none;
+  max-width: 100%;
+  border-radius: var(--mf-shape-md);
+}
+.vplayer:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.vplayer__frame {
+  align-self: center;
+  overflow: hidden;
+  background: #000;
+}
+.vplayer__frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.vplayer--full {
+  background: #000;
+  justify-content: center;
+  padding: 16px;
+}
+.vplayer--full .vplayer__frame {
+  flex: 1;
+  width: 100%;
+}
+.vplayer--full .vplayer__frame video {
+  object-fit: contain;
+}
+.vplayer--full .vtl,
+.vplayer--full .vplayer__bar {
+  background: var(--mf-surface-container);
+  border-radius: var(--mf-shape-md);
+}
+.vplayer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.vplayer__time {
+  font: var(--mf-type-label-large);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+.vplayer__rate {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+/* スマホ: 操作は折り返して並べる（間を空ける余白は使わない） */
+@media (max-width: 599px) {
+  .vplayer__bar .spacer,
+  .vplayer__skip {
+    display: none;
+  }
+}
+
+/* タイムライン: 上の段がコメントの印（時点は番号の丸、範囲は帯。FB は角丸の四角）、下が再生位置 */
+.vtl {
+  display: flex;
+  flex-direction: column;
+  padding-inline: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.vtl__lane {
+  position: relative;
+  min-height: 32px;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-surface-container);
+}
+.vtl__lane--select {
+  cursor: crosshair;
+  /* 指で横になぞると範囲を選ぶ（縦はページのスクロール） */
+  touch-action: pan-y;
+}
+.vtl__item {
+  position: absolute;
+  inset-inline: 0;
+  height: 20px;
+  pointer-events: none;
+}
+.vtl__bar {
+  position: absolute;
+  top: 7px;
+  height: 6px;
+  border-radius: var(--mf-shape-full);
+  background: color-mix(in srgb, var(--mf-primary) 45%, transparent);
+}
+.vtl__bar--fb {
+  background: color-mix(in srgb, var(--mf-secondary) 35%, transparent);
+  outline: 1px dashed var(--mf-secondary);
+}
+.vtl__bar--active {
+  background: var(--mf-primary);
+}
+.vtl__mark {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 2px solid var(--mf-on-primary);
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+  font: var(--mf-type-label-small);
+  font-weight: 700;
+  line-height: 16px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* 押せる範囲は 32 以上（M3 の最小のタッチ領域に近づける。印どうしが重ならない程度） */
+.vtl__mark::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.vtl__mark--fb {
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+  border-color: var(--mf-on-secondary-container);
+  border-width: 1.5px;
+}
+.vtl__mark--active {
+  background: var(--mf-on-primary-container);
+  outline: 2px solid var(--mf-primary);
+}
+.vtl__mark--fb.vtl__mark--active {
+  background: var(--mf-secondary);
+  color: var(--mf-on-secondary, #fff);
+}
+.vtl__mark:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+/* 選んでいる範囲（下書き）: tertiary ではなく primary の枠（配色を増やさない。§43） */
+.vtl__draft {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: var(--mf-shape-xs);
+  background: color-mix(in srgb, var(--mf-primary) 16%, transparent);
+  border: 2px solid var(--mf-primary);
+  pointer-events: none;
+}
+.vtl__draft-point {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  translate: -1px 0;
+  background: var(--mf-primary);
+  pointer-events: none;
+}
+.vtl__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  translate: -50% 0;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-primary);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vtl__edge::before {
+  content: "";
+  position: absolute;
+  inset: -4px -12px;
+}
+.vtl__edge::after {
+  content: "";
+  position: absolute;
+  top: 30%;
+  bottom: 30%;
+  left: 5px;
+  width: 2px;
+  background: var(--mf-on-primary);
+  border-radius: 1px;
+}
+.vtl__edge:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+.vtl__cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  translate: -1px 0;
+  background: var(--mf-on-surface);
+  opacity: 0.6;
+  pointer-events: none;
+}
+/* 再生位置（M3 Sliders: 進んだ側は primary の太い線、残りは secondary-container、つまみは縦の棒） */
+.vtl__track {
+  position: relative;
+  height: 32px;
+  cursor: pointer;
+  touch-action: none;
+}
+.vtl__track:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--mf-shape-xs);
+}
+.vtl__inactive,
+.vtl__active {
+  position: absolute;
+  top: 12px;
+  height: 8px;
+  border-radius: var(--mf-shape-full);
+}
+.vtl__inactive {
+  inset-inline: 0;
+  background: var(--mf-secondary-container);
+}
+.vtl__active {
+  left: 0;
+  background: var(--mf-primary);
+}
+.vtl__thumb {
+  position: absolute;
+  top: 4px;
+  width: 4px;
+  height: 24px;
+  translate: -2px 0;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+  box-shadow: 0 0 0 3px var(--mf-surface-container-low);
+}
+.vtl__hover {
+  position: absolute;
+  bottom: 30px;
+  translate: -50% 0;
+  padding: 2px 6px;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-inverse-surface, #2f3036);
+  color: var(--mf-inverse-on-surface, #f1f0f7);
+  font: var(--mf-type-label-small);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.compose-pop__place {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 0;
+  font: var(--mf-type-label-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-primary);
+}
+.compose-pop__place m3e-icon {
+  font-size: 18px;
+}
+.vplayer__marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.vtl__hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+  pointer-events: none;
+}
+.vplayer__marking {
+  font: var(--mf-type-body-small);
+  color: var(--mf-primary);
+}
+
+/* ---------------------------------------------------------------- Web のライブ表示・Figma の埋め込み（docs/UI_M3E.md §55） */
+.wlive__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.wlive__banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  width: 100%;
+  max-width: 960px;
+  padding: 8px 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container);
+  color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-small);
+}
+.wlive__banner m3e-icon {
+  flex: none;
+  font-size: 18px;
+  color: var(--mf-primary);
+}
+.wlive__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  max-width: 960px;
+}
+.wlive__device {
+  max-width: 100%;
+}
+.wlive__width {
+  width: 120px;
+}
+.wlive__width input {
+  width: 100%;
+  font: var(--mf-type-body-medium);
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.wlive__frame-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+}
+/* 枠: 実機の CSS ピクセルで組み、transform で縮める（zoom だと iframe の中の幅が変わる）。外側は縮めた後の大きさで場所を取る */
+.wlive__fit {
+  position: relative;
+  flex: none;
+}
+.wlive__fit--hidden {
+  display: none;
+}
+.wlive__scaled {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+}
+.wlive__screen {
+  position: absolute;
+  overflow: hidden;
+  background: #fff;
+  /* ベゼル画像（z 5）の下、枠の本体の上 */
+  z-index: 2;
+}
+.wlive__slot {
+  flex: none;
+}
+/* 枠の本体（ベゼルの無い機種の黒い枠・PC のバー）は iframe の下、ベゼル画像（z 5）とホームインジケーター（z 3）は上。
+   .sp-frame に z-index を付けると stacking context ができてベゼルが iframe の下になるので付けない */
+.wlive__scaled > .wlive__pc {
+  position: relative;
+  z-index: 1;
+}
+.wlive__frame {
+  display: block;
+  border: 0;
+  background: #fff;
+}
+/* 印の層: 面は押させず（下の iframe を操作できるように）、ピン・範囲だけ押せる */
+.wlive__marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.wlive__marks .viewer__overlay {
+  pointer-events: none;
+}
+.wlive__marks [data-anchor] {
+  pointer-events: auto;
+}
+.wlive__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+  background: var(--mf-surface-container-low);
+}
+/* 投稿欄の層（縮めていない座標。画面の上に重ねる） */
+.wlive__layer {
+  position: absolute;
+  pointer-events: none;
+}
+.wlive__layer > * {
+  pointer-events: auto;
+}
+.wlive__pc {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.12),
+    0 10px 30px rgb(0 0 0 / 0.14);
+}
+.wlive__pc-bar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  background: #e9ecf3;
+  color: #4b5565;
+  font: 500 13px/1 var(--mf-font);
+}
+.wlive__pc-dots {
+  width: 44px;
+  height: 12px;
+  background:
+    radial-gradient(circle at 6px 6px, #fc605c 5px, transparent 6px),
+    radial-gradient(circle at 22px 6px, #fdbc40 5px, transparent 6px),
+    radial-gradient(circle at 38px 6px, #34c84a 5px, transparent 6px);
+}
+.wlive__pc-url {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wlive__caption {
+  margin: 0;
+  max-width: 720px;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  text-align: center;
+}
+.wlive__refused {
+  width: 100%;
+  max-width: 560px;
+}
+.wlive__refused-body {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+.wlive__refused-body > m3e-icon {
+  flex: none;
+  font-size: 28px;
+  color: var(--mf-error);
+}
+.wlive__refused-body p {
+  margin: 0 0 8px;
+}
+.external--record {
+  width: 100%;
+  max-width: 720px;
+  padding: 16px 0 0;
+}
+/* タブレットの枠（ベゼル画像は無いので CSS） */
+.sp-frame--tablet .sp-frame__body {
+  background: #2b2b2e;
+}
+.sp-device--tablet {
+  border-radius: 18px;
+}
+/* Figma の埋め込み */
+.figma-embed__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.figma-embed__frame {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  border-radius: var(--mf-shape-md);
+  overflow: hidden;
+  background: #1e1e1e;
+}
+.figma-embed__iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  border: 0;
+}
+.figma-embed__layer {
+  inset: 0;
+}
+/* Figma から取り込んだ画像の由来 */
+.ws__viewer > .origin-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.origin-wrap > .viewer {
+  flex: 1;
+  min-height: 0;
+}
+.origin-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 8px;
+  font: var(--mf-type-body-small);
+}
+/* リンクを M3 の text button / icon button の見た目で（M3E の button に href を付けると入れ子の操作になるので素の a） */
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  border-radius: 20px;
+  font: var(--mf-type-label-large);
+  color: var(--mf-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.link-button m3e-icon {
+  font-size: 18px;
+}
+.link-button:hover,
+.link-icon:hover {
+  background: color-mix(in srgb, var(--mf-primary) 8%, transparent);
+}
+.link-button:focus-visible,
+.link-icon:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.link-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--mf-on-surface-variant);
+}
+.link-icon m3e-icon {
+  font-size: 24px;
+}
+.thread__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-primary);
+  text-decoration: none;
+}
+.thread__link m3e-icon {
+  font-size: 16px;
+}
+/* スマホ: バナーと説明は短く詰める */
+@media (max-width: 599px) {
+  .wlive__banner,
+  .wlive__caption {
+    font-size: 11px;
+  }
+  .wlive__mode m3e-button {
+    min-width: 0;
+  }
 }

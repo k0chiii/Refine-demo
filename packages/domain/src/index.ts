@@ -30,3 +30,6 @@ export * from "./social/index.ts";
 export * from "./feedback/feedback.ts";
 export * from "./notification/access.ts";
 export * from "./notification/push.ts";
+export * from "./web/figma.ts";
+export * from "./web/webProof.ts";
+export * from "./account/avatar.ts";

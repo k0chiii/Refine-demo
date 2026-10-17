@@ -5,6 +5,7 @@ import {
   artifactFormatLabel,
   checkTypeLabels,
   checkTypes,
+  collectFigmaUrls,
   pickReviewArtifact,
   type CheckType,
   POST_MANIFEST_NAME,
@@ -12,7 +13,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
-import { uploadItem } from "@/integrations/api";
+import { figmaStatus, importFigmaFrames, uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
 import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
@@ -69,16 +70,35 @@ export function SubmitDialog({
     focusNotes: "",
     notes: "",
     externalUrl: "",
+    /** Figma のフレームの URL（1 行 1 つ。取り込んで画像の添付にし、URL も外部リンクとして残す） */
+    figmaUrls: "",
   });
+  // Figma 連携（Worker にトークンがあるか）。無ければ URL は外部リンク（埋め込み表示）だけ付く
+  const [figmaEnabled, setFigmaEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!open || !token) return;
+    let cancelled = false;
+    void figmaStatus(token).then((r) => {
+      if (!cancelled) setFigmaEnabled(r.enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, token]);
+  const figmaFrames = useMemo(() => collectFigmaUrls(form.figmaUrls), [form.figmaUrls]);
+  /** 取り込む（画像の添付になる）フレーム: ノード ID のある URL。連携が無ければ取り込まない */
+  const figmaImports = figmaEnabled ? figmaFrames.filter((f) => f.ref.nodeId) : [];
   // 初めての版か、版の更新か（説明の項目を FB テンプレに合わせて変える。利用者決定 2026-10-15 A-1）
   const isFirst = !(data?.revisions ?? []).some(
     (r) => r.kind === "standard" && r.reviewState !== "void",
   );
   const [files, setFiles] = useState<File[]>([]);
-  // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章）
+  // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章 → 動画。
+  // 動画の制作物は動画を先に）
   const shownFile =
     pickReviewArtifact(
       files.map((f) => ({ type: guessArtifactType(f.name, f.type), role: "source" as const, f })),
+      data?.work.mediaType === "video" ? "video" : undefined,
     )?.f ?? null;
   const [dragging, setDragging] = useState(false);
   /** 専門確認（§2.2-4）。種別ごとに要否・担当者を宣言する。校了時に未完了ならブロック（D6）。 */
@@ -144,6 +164,28 @@ export function SubmitDialog({
         role: "source" as const,
         declaredSize: f.size,
       })),
+      // Figma のフレーム（ファイルの次に並べる。SubmissionFlow がこの順を前提にする）。名前は取り込みでノード名になる
+      ...figmaImports.map((f) => ({
+        fileName: `figma-${f.ref.nodeId!.replace(":", "-")}.png`,
+        mimeType: "image/png",
+        type: "image" as const,
+        role: "source" as const,
+        origin: {
+          kind: "figma" as const,
+          fileKey: f.ref.fileKey,
+          nodeId: f.ref.nodeId!,
+          scale: 2,
+          box: { width: 0, height: 0 },
+        },
+      })),
+      // Figma の URL は外部リンクとしても残す（埋め込み表示・フレーム単位のコメント・「Figma で開く」）
+      ...figmaFrames.map((f) => ({
+        fileName: f.url,
+        mimeType: "text/uri-list",
+        type: "external_link" as const,
+        role: "external" as const,
+        externalUrl: f.url,
+      })),
       ...(form.externalUrl.trim()
         ? [
             {
@@ -187,6 +229,7 @@ export function SubmitDialog({
             requestId,
           }).then((r) => ({ sessionId: r.sessionId, items: r.items })),
         upload: (itemId, file, onProgress) => uploadItem(token, itemId, file, onProgress),
+        ...(figmaEnabled ? { importFigma: (its) => importFigmaFrames(token, its) } : {}),
         reset: (itemId) => reset({ itemId: itemId as Id<"uploadItems"> }).then(() => undefined),
         confirm: (sessionId, rid) =>
           confirm({
@@ -197,6 +240,7 @@ export function SubmitDialog({
         randomId: () => crypto.randomUUID(),
       },
       files,
+      figmaImports.map((f) => ({ fileKey: f.ref.fileKey, nodeId: f.ref.nodeId! })),
     );
     setFlow(f);
     try {
@@ -268,8 +312,8 @@ export function SubmitDialog({
             <p className="small muted">
               PDF と .ai
               のように、同じ制作物のファイルをまとめて出せます。紙面に出してコメントを付けるのは
-              PDF（無ければ画像・文章）で、ほかのファイルはエディタの「情報 ›
-              この版のファイル」からダウンロードできます。
+              PDF（無ければ画像・文章・動画。動画の制作物は動画）で、ほかのファイルはエディタの「情報
+              › この版のファイル」からダウンロードできます。
             </p>
             <div className="form">
               <Field label="版の種別" required>
@@ -351,6 +395,43 @@ export function SubmitDialog({
                 ))}
               </div>
             </M3eExpansionPanel>
+            {/* Figma（利用者決定 2026-10-17: まず REST API で試す。docs/FIGMA_WEB_PROOFING.md FG-05）:
+                フレームの URL を貼ると、Worker が Figma から PNG を書き出して画像の添付にする（位置コメントは画像の上）。
+                連携が無いとき・ノード ID の無い URL は外部リンク（埋め込み表示とフレーム単位のコメント）だけ */}
+            <M3eExpansionPanel
+              className="expansion"
+              {...(work?.mediaType === "figma" ? { open: true } : {})}
+            >
+              <span slot="header">Figma のフレーム</span>
+              <div className="stack">
+                <Field
+                  label="フレームの URL（1 行に 1 つ）"
+                  hint={
+                    figmaEnabled === false
+                      ? "Figma 連携が未設定（サーバーに FIGMA_ACCESS_TOKEN が無い）。URL は外部リンクとして付き、Figma の埋め込み表示とフレーム単位のコメントができます。位置を指すコメントには、書き出した PNG・PDF を上の添付に加えてください"
+                      : "Figma で フレームを選び「リンクをコピー」（…?node-id=1-2）。提出時に Figma から画像を取り込み、紙面に出して位置コメントを付けられます。URL も外部リンクとして残ります"
+                  }
+                >
+                  <TextArea
+                    value={form.figmaUrls}
+                    onChange={set("figmaUrls")}
+                    placeholder="https://www.figma.com/design/…?node-id=1-2"
+                    rows={3}
+                  />
+                </Field>
+                {figmaFrames.length > 0 ? (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    {figmaFrames.length} 件の Figma の URL
+                    {figmaImports.length > 0
+                      ? `・${figmaImports.length} 件を画像として取り込みます`
+                      : ""}
+                    {figmaFrames.some((f) => !f.ref.nodeId)
+                      ? "・ノード ID の無い URL はファイル全体の埋め込み表示だけです"
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            </M3eExpansionPanel>
             <M3eExpansionPanel className="expansion">
               <span slot="header">外部リンク</span>
               <div>
@@ -394,7 +475,7 @@ export function SubmitDialog({
                     {
                       {
                         pending: "待機",
-                        uploading: "転送中",
+                        uploading: it.source === "figma" ? "Figma から取り込み中" : "転送中",
                         verified: "確認済み",
                         failed: "失敗",
                       }[it.status]
@@ -409,7 +490,7 @@ export function SubmitDialog({
                           .catch((e: unknown) => setError(describeError(e).message))
                       }
                     >
-                      再アップロード
+                      {it.source === "figma" ? "再取り込み" : "再アップロード"}
                     </M3eButton>
                   ) : null}
                 </div>
@@ -434,7 +515,9 @@ export function SubmitDialog({
         {!flow ? (
           <M3eButton
             variant="filled"
-            disabled={!work || (files.length === 0 && !form.externalUrl.trim())}
+            disabled={
+              !work || (files.length === 0 && !form.externalUrl.trim() && figmaFrames.length === 0)
+            }
             onClick={() => void start()}
           >
             アップロードを開始

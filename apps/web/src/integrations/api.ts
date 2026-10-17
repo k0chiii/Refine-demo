@@ -135,3 +135,59 @@ export async function fetchFeedbackFileBlob(token: string, fileId: string): Prom
 export async function downloadFeedbackFile(token: string, fileId: string, fileName: string) {
   saveBlob(await fetchFeedbackFileBlob(token, fileId), fileName);
 }
+
+// ---------------------------------------------------------------- Figma の取り込み（Hono /figma/*）
+
+export interface FigmaImportItemInput {
+  itemId: string;
+  fileKey: string;
+  /** 「1:2」 */
+  nodeId: string;
+}
+export interface FigmaImportItemResult {
+  itemId: string;
+  status: string;
+  failureMessage: string | null;
+  nodeName: string | null;
+}
+
+/** Figma 連携が使えるか（Worker にトークンがあるか）。失敗したら使えないものとして扱う */
+export async function figmaStatus(token: string): Promise<{ enabled: boolean }> {
+  try {
+    const res = await fetch(`${API_URL}/figma/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { enabled: false };
+    const json = (await res.json()) as { enabled?: unknown };
+    return { enabled: json.enabled === true };
+  } catch {
+    return { enabled: false };
+  }
+}
+
+/**
+ * Figma のフレームを Worker に取り込ませる（Worker が Figma API を呼び、R2 へ入れ、Convex に採用を求める）。
+ * ブラウザは Figma のトークンを持たない
+ */
+export async function importFigmaFrames(
+  token: string,
+  items: FigmaImportItemInput[],
+): Promise<FigmaImportItemResult[]> {
+  const res = await fetch(`${API_URL}/figma/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    items?: FigmaImportItemResult[];
+    code?: string;
+    message?: string;
+  };
+  if (!res.ok)
+    throw new Error(
+      json.code === "figma_not_configured"
+        ? "Figma 連携が未設定です。書き出した PNG/PDF を添付してください"
+        : (json.message ?? "Figma から取り込めませんでした。もう一度お試しください。"),
+    );
+  return json.items ?? [];
+}

@@ -2,7 +2,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
@@ -22,9 +22,24 @@ import {
   M3eNavRail,
 } from "@/ui/m3e";
 import { ActionSheet } from "@/ui/ActionSheet";
+import { AvatarProvider } from "@/ui/AvatarProvider";
 import { UserAvatar } from "@/ui/UserAvatar";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
+
+/** 画面に出ている人のアバターの設定（Humation）をまとめて引く Provider で包む（§56） */
+function AppLayout() {
+  return (
+    <AvatarProvider>
+      <AppShell />
+    </AvatarProvider>
+  );
+}
+
+/** アバターを変える（初めて開くまで読み込まない。Humation のアセットは UserAvatar と同じく遅延） */
+const AvatarPickerDialog = lazy(() =>
+  import("@/features/account/AvatarPickerDialog").then((m) => ({ default: m.AvatarPickerDialog })),
+);
 
 const RAIL_KEY = "mf100.rail.expanded";
 const readRailPref = () => {
@@ -46,7 +61,7 @@ const readRailPref = () => {
  * 右下（下部ナビの上 16）に同じ FAB を出す。提出できる制作物が無い人には出さない。制作物の登録は制作物の一覧のアプリバー（登録権限のある人だけ）。
  * 通知は独立した画面を持たず、アカウントの隣のベルのパネル（compact はボトムシート）から対象へ飛ぶ。
  */
-function AppLayout() {
+function AppShell() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
   const navigate = useNavigate();
@@ -65,6 +80,9 @@ function AppLayout() {
   /** large の下の階層で、一時的にレールを広げたか（画面を移ると折りたたみに戻る） */
   const [subOpen, setSubOpen] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
+  /** 「アバターを変える」。一度開いたら描いたままにする（閉じるアニメーションと 2 回目をすぐ開くため） */
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [avatarMounted, setAvatarMounted] = useState(false);
   const submitTargets = useSubmitTargets();
   const [pickerOpen, setPickerOpen] = useState(false);
   const launcher = useSubmitLauncher();
@@ -203,11 +221,20 @@ function AppLayout() {
       className={className ?? ""}
       {...(cls === "compact" ? { onClick: () => setAccountSheet(true) } : {})}
     >
-      <UserAvatar seed={me.email ?? me.id} size={size} />
+      <UserAvatar seed={me.email ?? me.id} userId={me.id} config={me.avatar} size={size} />
       {cls === "compact" ? null : <M3eMenuTrigger htmlFor="account-menu" />}
     </M3eIconButton>
   );
   const accountActions = [
+    // 自分のアバター（Humation）を選ぶ（利用者指示 2026-10-17）
+    {
+      icon: "face",
+      label: "アバターを変える",
+      onSelect: () => {
+        setAvatarMounted(true);
+        setAvatarOpen(true);
+      },
+    },
     ...(cls === "compact" && me.isSystemAdmin
       ? [
           {
@@ -315,7 +342,7 @@ function AppLayout() {
           <M3eMenu id="account-menu" positionX="before">
             <div className="account-menu__header">
               <span aria-hidden="true">
-                <UserAvatar seed={me.email ?? me.id} size={40} />
+                <UserAvatar seed={me.email ?? me.id} userId={me.id} config={me.avatar} size={40} />
               </span>
               <div>
                 <div className="label-large">{me.name}</div>
@@ -344,6 +371,11 @@ function AppLayout() {
           />
         ) : null}
         {launcher.element}
+        {avatarMounted ? (
+          <Suspense fallback={null}>
+            <AvatarPickerDialog open={avatarOpen} onClose={() => setAvatarOpen(false)} me={me} />
+          </Suspense>
+        ) : null}
       </div>
       {/* FB のスレッドでも下部ナビは残す（利用者指示 2026-10-15「ナビゲーションバーを消して欲しいわけじゃない」） */}
       {cls === "compact" && (!immersive || chatRoute) ? (

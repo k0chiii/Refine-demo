@@ -1,5 +1,16 @@
 import { v } from "convex/values";
 
+/**
+ * アバター（Humation）の設定。形の検証と正規化は domain の validateAvatarConfig（部品の名前が実在するかは Web 側）。
+ * selections: 部位 → 部品の名前、colors: 色の役割 → 6 桁の 16 進、background: 背景の色。
+ */
+export const vAvatarConfig = v.object({
+  seed: v.optional(v.string()),
+  selections: v.optional(v.record(v.string(), v.string())),
+  colors: v.optional(v.record(v.string(), v.string())),
+  background: v.optional(v.string()),
+});
+
 export const vPermissionLevel = v.union(
   v.literal("view"),
   v.literal("review"),
@@ -28,9 +39,44 @@ export const vArtifactType = v.union(
   v.literal("pdf"),
   v.literal("image"),
   v.literal("document"),
+  v.literal("video"),
   v.literal("other"),
   v.literal("external_link"),
 );
+/** 添付の由来（Figma から取り込んだ・サイトのスクリーンショット）。domain の ArtifactOrigin と同じ形 */
+export const vArtifactOrigin = v.union(
+  v.object({
+    kind: v.literal("figma"),
+    fileKey: v.string(),
+    nodeId: v.string(),
+    nodeName: v.optional(v.string()),
+    figmaVersion: v.optional(v.string()),
+    lastModified: v.optional(v.string()),
+    scale: v.number(),
+    box: v.object({ width: v.number(), height: v.number() }),
+  }),
+  v.object({
+    kind: v.literal("web_snapshot"),
+    url: v.string(),
+    deviceId: v.optional(v.string()),
+    viewport: v.object({
+      width: v.number(),
+      height: v.number(),
+      dpr: v.number(),
+      orientation: v.union(v.literal("portrait"), v.literal("landscape")),
+    }),
+    userAgent: v.optional(v.string()),
+    fullPage: v.boolean(),
+    capturedAt: v.number(),
+  }),
+);
+/** Figma から取り込んだときに Figma の応答から埋める値（検証完了に添える） */
+export const vFigmaImportMeta = v.object({
+  nodeName: v.string(),
+  figmaVersion: v.optional(v.string()),
+  lastModified: v.optional(v.string()),
+  box: v.object({ width: v.number(), height: v.number() }),
+});
 export const vThreadKind = v.union(
   v.literal("correction"),
   v.literal("question"),

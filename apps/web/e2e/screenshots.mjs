@@ -1034,10 +1034,10 @@ async function v2Scenes() {
   // 50–52 表記ルール（システム管理者）: 一覧と詳細・試す・提案
   await signInAs("mock-nogiku-admin");
   await go("/notation");
-  await page.waitForSelector(".notation__rules m3e-list-action");
+  await page.waitForSelector(".rule-table tbody tr[data-id]");
   await shot("50-notation-rules");
-  // 50b 行を押すと右のペインに詳細（M3 list-detail。説明・例外・厳格さ・有効／無効・履歴）
-  await page.locator(".notation__rules m3e-list-action", { hasText: "A2-0001" }).click();
+  // 50b 表の行を押すと右のペインに詳細（§54 の表 ＋ M3 Supporting pane。説明・例外・厳格さ・有効／無効・履歴）
+  await page.locator(".rule-table tbody tr[data-id]", { hasText: "A2-0001" }).click();
   await page.waitForSelector(".notation__detail .rule-editor");
   await page.waitForTimeout(400);
   await shot("50b-notation-rule-detail");
@@ -1047,7 +1047,7 @@ async function v2Scenes() {
   await shot("51-notation-try");
   await signInAs("mock-nogiku-reviewer");
   await go("/notation");
-  await page.waitForSelector(".notation__rules m3e-list-action");
+  await page.waitForSelector(".rule-table tbody tr[data-id]");
   await btn("追加を提案").click();
   await page.waitForSelector(".notation__detail .rule-editor");
   const ed = page.locator(".notation__detail");
@@ -1120,12 +1120,82 @@ async function v2Scenes() {
   );
   await page.waitForTimeout(800);
   await shot("55-compare-pdf");
+  // 67 別の制作物と比べる（利用者指示 2026-10-17）: 左の見出しのボタン → 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
+  //    左の見出しは「題名・版」、比較の状況に「別の制作物」、引き出し「版」に「別の制作物と比較中」
+  await page
+    .locator('.compare__label--other m3e-icon-button[aria-label="別の制作物と比べる"]')
+    .click();
+  await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
+  await page.fill(".cross-picker[open] input", "パンフレット");
+  await page.waitForTimeout(500);
+  await page
+    .locator(".cross-picker[open] m3e-list-action", { hasText: "MF100 公式パンフレット" })
+    .click();
+  await page.waitForSelector(".cross-picker[open] m3e-list-action.list__item--selected");
+  expectTrue(
+    (
+      await page.locator(".cross-picker[open] m3e-list-action.list__item--selected").innerText()
+    ).includes("最新"),
+    "最新の版が選ばれていない",
+  );
+  await page.locator(".cross-picker[open] m3e-button", { hasText: "比べる" }).click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector(".compare__label--other")
+        ?.textContent?.startsWith("MF100 公式パンフレット・第"),
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll(".compare__pane")].every(
+        (p) => (p.querySelector(".viewer__page canvas")?.width ?? 0) > 0,
+      ),
+    null,
+    { timeout: 30_000 },
+  );
+  // 相手を替えた後にページの対応を解析し直す（前の組の結果を引きずらない）
+  await page.waitForFunction(
+    () =>
+      /ページ対応: 旧 [1-9]\d* → 新 [1-9]/.test(
+        document.querySelector(".compare-status")?.textContent ?? "",
+      ),
+    null,
+    { timeout: 30_000 },
+  );
+  expectTrue(
+    (await page.locator(".compare-status").innerText()).includes(
+      "別の制作物「MF100 公式パンフレット」",
+    ),
+    "比較の状況に別の制作物と出ない",
+  );
+  await drawer("版");
+  await page.waitForSelector(".versions__cross");
+  await page.waitForTimeout(800);
+  await shot("67-compare-cross-work");
   // 26a タッチ（compact・受付中の版）: なぞるだけではコメントを作らない（スクロール）。長押ししてからなぞると範囲が選べ、投稿欄が出る
   const posterV2 = new URL(page.url()).pathname;
   await page.setViewportSize({ width: 412, height: 915 });
   await go(posterV2);
   await pdfReady();
   await page.waitForTimeout(800);
+  // 67b compact: シート「版」の「別の制作物と比べる」→ 相手を選ぶダイアログは全画面（M3 Dialogs）
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="版"]').click();
+  await page.waitForSelector(".drawer--sheet .versions");
+  // 67 の比較が続いていれば札の「変える」、そうでなければ「別の制作物と比べる」
+  await page
+    .locator(
+      '.drawer--sheet m3e-button:has-text("変える"), .drawer--sheet m3e-button:has-text("別の制作物と比べる")',
+    )
+    .first()
+    .click();
+  await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
+  await shot("67b-compare-cross-picker-compact");
+  await page.locator(".cross-picker[open] m3e-button", { hasText: "キャンセル" }).click();
+  await page.waitForSelector(".cross-picker[open]", { state: "detached" });
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await page.waitForTimeout(600);
   const touchOn = (type, x, y) =>
     page.evaluate(
       ([type, x, y]) => {
@@ -1296,6 +1366,268 @@ async function v2Scenes() {
   await go("/notation");
   await page.waitForSelector("m3e-list-action");
   await shot("60-notation-compact");
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 66 動画の校正（利用者指示 2026-10-17）: 制作者が動画を提出し、校正者が時点・範囲・画面の位置でコメントする
+  await signInAs("mock-nogiku-creator");
+  await go("/works");
+  await page.locator(WORKS_ENTRY, { hasText: "MF100 告知動画" }).first().click();
+  await page.waitForURL(/\/works\/[^/]+$/);
+  const videoWork = page.url();
+  await submitRevision("最初の版を提出", [resolve(FIXTURES, "promo.webm")], "初稿の告知動画");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await signInAs("mock-nogiku-reviewer");
+  await go(videoWork);
+  const videoReady = () =>
+    page.waitForFunction(
+      () => (document.querySelector(".vplayer video")?.readyState ?? 0) >= 1,
+      null,
+      {
+        timeout: 20_000,
+      },
+    );
+  await videoReady();
+  const postVideo = async (body) => {
+    await page.waitForSelector(".compose-pop textarea");
+    await page.fill(".compose-pop textarea", body);
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+  };
+  const seekTo = async (ratio) => {
+    const tb = await page.locator(".vtl__track").boundingBox();
+    await page.mouse.click(tb.x + tb.width * ratio, tb.y + tb.height / 2);
+    await page.waitForTimeout(300);
+  };
+  // 時点: 3 秒で止めて C
+  await seekTo(0.25);
+  await page.locator(".vplayer").focus();
+  await page.keyboard.press("c");
+  await page.waitForSelector(".compose-pop__place");
+  expectTrue(
+    (await page.locator(".compose-pop__place").innerText()).includes("0:03 の時点"),
+    "動画の投稿欄に時点が出ない",
+  );
+  await postVideo("ここで音が途切れる");
+  // 範囲: タイムラインの上の段を 6 秒 → 9 秒までなぞる
+  const lb = await page.locator(".vtl__lane").boundingBox();
+  await page.mouse.move(lb.x + lb.width * 0.5, lb.y + lb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lb.x + lb.width * 0.75, lb.y + lb.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForSelector(".compose-pop__place");
+  expectTrue(
+    (await page.locator(".compose-pop__place").innerText()).includes("0:06–0:09 の範囲"),
+    "タイムラインをなぞっても範囲にならない",
+  );
+  await shot("66b-video-range-compose");
+  await postVideo("この間のテロップが速すぎる");
+  // 画面の位置: 1 秒で止めて映像の左上をドラッグ
+  await seekTo(1 / 12);
+  const fr = await page.locator(".vplayer__frame").boundingBox();
+  await page.mouse.move(fr.x + fr.width * 0.05, fr.y + fr.height * 0.05);
+  await page.mouse.down();
+  await page.mouse.move(fr.x + fr.width * 0.4, fr.y + fr.height * 0.2, { steps: 8 });
+  await page.mouse.up();
+  await postVideo("タイムコードの表示を消す");
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page.locator(".vtl__mark").count()) === 3 &&
+      (await page.locator(".vtl__bar").count()) === 1,
+    "タイムラインに時点・範囲の印が出ない",
+  );
+  // カードの時刻を押すとその時刻へ移って止まり、画面の範囲が重なる
+  await seekTo(0.9);
+  await page
+    .locator(".thread", { hasText: "タイムコードの表示を消す" })
+    .locator(".thread__index")
+    .click();
+  await page.waitForTimeout(500);
+  const at = await page.evaluate(() => document.querySelector(".vplayer video").currentTime);
+  expectTrue(Math.abs(at - 1) < 0.05, `カードの時刻へ移らない（${at}）`);
+  expectTrue((await page.locator(".vplayer .anchor-rect").count()) === 1, "画面の範囲が重ならない");
+  await shot("66-video-review");
+  await webFigmaScenes();
+}
+
+/** 67 Web サイトのライブ表示・68 Figma の取り込みと埋め込み（利用者指示 2026-10-17）。E2E は小さく: 提出 → コメント → 端末の切り替え → 撮影 */
+async function webFigmaScenes() {
+  // 68 Web: 制作者が公式サイトの版を見本サイト（同じオリジン）の URL で提出し、校正者がライブ表示の要素にコメントする
+  await signInAs("mock-nogiku-creator");
+  const siteWork = await openWork("公式サイト トップページ");
+  // 19・55 でこの制作物には版があるので、引き出し「版」から新しい版として出す
+  await drawer("版");
+  await btn("新しい版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "公式サイトの初稿（ライブ表示で確認）");
+  await page
+    .locator('m3e-dialog[open] m3e-expansion-panel [slot="header"]', { hasText: "外部リンク" })
+    .click();
+  await page.fill('m3e-dialog[open] input[type="url"]', `${BASE}/demo-site/index.html`);
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/\d+$/, { timeout: 15_000 });
+  await signInAs("mock-nogiku-reviewer");
+  await go(siteWork);
+  await page.waitForSelector(".wlive__frame", { timeout: 15_000 });
+  // ブリッジの ready（印の層が出る）
+  await page.waitForSelector(".wlive__marks", { timeout: 15_000 });
+  await page.locator(".wlive__mode m3e-button", { hasText: "コメント" }).click();
+  await page.waitForTimeout(400);
+  // iframe の中の見出しを押す（縮小表示なので座標ではなく、要素にポインターイベントを送る）
+  const site = page.frameLocator(".wlive__frame");
+  const clickIn = (selector) =>
+    site
+      .locator(selector)
+      .first()
+      .evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        const r = el.getBoundingClientRect();
+        const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        for (const type of ["pointerdown", "pointerup"])
+          el.dispatchEvent(
+            new PointerEvent(type, {
+              ...at,
+              button: 0,
+              bubbles: true,
+              cancelable: true,
+              pointerId: 1,
+            }),
+          );
+      });
+  await clickIn("#events h2");
+  await page.waitForSelector(".compose-pop__place");
+  const place = await page.locator(".compose-pop__place").innerText();
+  expectTrue(place.includes("iPhone 17（402px）"), `投稿欄に端末と要素が出ない（${place}）`);
+  await page.fill(".compose-pop textarea", "見出し「企画一覧」は「企画をさがす」に揃える");
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+  await page.waitForFunction(
+    () => document.querySelectorAll(".wlive__marks .anchor-pin").length === 1,
+    null,
+    { timeout: 10_000 },
+  );
+  // PC 1440 に切り替えても同じ要素に印が付き直る（位置は外れない）
+  await page.locator(".wlive__device").click();
+  await page.locator("m3e-menu-item-radio:visible", { hasText: "PC 1440" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".wlive__marks .anchor-pin").length === 1,
+    null,
+    { timeout: 10_000 },
+  );
+  await page.waitForTimeout(600);
+  expectTrue(
+    (await page.locator(".thread", { hasText: "位置が外れました" }).count()) === 0,
+    "PC 幅で位置が外れた",
+  );
+  expectTrue(
+    (await page.locator(".thread .thread__index").innerText()).includes("iPhone 17（402px）"),
+    "カードに付けたときの端末幅が出ない",
+  );
+  await shot("68-web-live-comment");
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.waitForTimeout(800);
+  await shot("68b-web-live-mobile");
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 69 Figma: 制作者がフレームの URL を貼って取り込み（デモは見本 PNG）、校正者が画像の上にピン → 埋め込み表示でフレームにコメント
+  await signInAs("mock-nogiku-creator");
+  const figmaWork = await openWork("公式サイト 画面デザイン（Figma）");
+  await btn("最初の版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "ホームのスマホ・PC の画面案");
+  await page.fill(
+    'm3e-dialog[open] textarea[placeholder^="https://www.figma.com"]',
+    "https://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=12-34\nhttps://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=56-78",
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item__state--verified").length >= 4,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await signInAs("mock-nogiku-reviewer");
+  await go(figmaWork);
+  await page.waitForSelector(".origin-bar", { timeout: 15_000 });
+  expectTrue(
+    (await page.locator(".origin-bar").innerText()).includes("Figma: ホーム（スマホ）"),
+    "取り込んだ画像に Figma の由来が出ない",
+  );
+  await page.waitForSelector(".viewer__page img");
+  await commentOnRect(0.3, 0.2, 0.7, 0.3, "見出しの帯の色を公式サイトに合わせる");
+  await shot("69-figma-import");
+  // 埋め込み表示（Figma の URL の添付）に切り替えてフレーム単位でコメント
+  await pickArtifact("Figma: https://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=12-34");
+  await page.waitForSelector(".figma-embed__iframe");
+  await page.locator("m3e-button", { hasText: "このフレームにコメント" }).click();
+  await page.waitForSelector(".compose-pop__place");
+  expectTrue(
+    (await page.locator(".compose-pop__place").innerText()).includes("フレーム"),
+    "フレーム単位のコメントの投稿欄が出ない",
+  );
+  await page.fill(".compose-pop textarea", "このフレーム全体の余白を見直したい");
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page
+      .locator(".thread", { hasText: "フレーム全体" })
+      .locator(".thread__link")
+      .count()) === 1,
+    "フレームのコメントに「Figma で開く」が無い",
+  );
+  await shot("69b-figma-embed");
+  // 70 アバターを変える（Humation。§56）: アカウントメニュー → 髪型を替え、「色」で髪の色を替えて保存 → 右上のアバターが変わる
+  await go("/");
+  await page.waitForSelector(".shell__account svg", { timeout: 20_000 });
+  const avatarBefore = await page
+    .locator(".shell__account svg")
+    .first()
+    .evaluate((el) => el.outerHTML);
+  await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+  await page.locator("m3e-menu-item", { hasText: "アバターを変える" }).click();
+  const picker = page.locator("m3e-dialog.avatar-picker[open]");
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
+  await page.waitForTimeout(400);
+  // 部品の一覧は 1 つを選ぶ radiogroup。いま選んでいないものを 1 つ選ぶ
+  await picker.locator('.avatar-parts [role="radio"][aria-checked="false"]').first().click();
+  await page.waitForTimeout(400);
+  await shot("70-avatar-picker");
+  await picker.locator("m3e-tab", { hasText: "色" }).click();
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
+  await picker
+    .locator(".avatar-colors__row")
+    .first()
+    .locator('[role="radio"][aria-checked="false"]')
+    .nth(2)
+    .click();
+  await page.waitForTimeout(200);
+  await picker.locator('[slot="actions"] m3e-button', { hasText: "保存する" }).click();
+  await page.waitForFunction(
+    (before) => {
+      const svg = document.querySelector(".shell__account svg");
+      return Boolean(svg) && svg.outerHTML !== before;
+    },
+    avatarBefore,
+    { timeout: 10_000 },
+  );
+  await page
+    .waitForSelector("m3e-dialog.avatar-picker[open]", { state: "detached", timeout: 10_000 })
+    .catch(() => {});
+  // 70b compact: アカウントのボトムシート → 全画面のダイアログ（「色」のタブ）
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.waitForTimeout(400);
+  await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+  await page.locator("m3e-list-action", { hasText: "アバターを変える" }).click();
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
+  await picker.locator("m3e-tab", { hasText: "色" }).click();
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
+  await page.waitForTimeout(400);
+  await shot("70b-avatar-picker-compact");
+  await picker.locator('[slot="actions"] m3e-button', { hasText: "キャンセル" }).click();
+  await page.waitForTimeout(400);
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 

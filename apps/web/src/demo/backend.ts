@@ -159,6 +159,13 @@ class DemoBackend {
     itemId: string,
     file: File,
     sha256: string,
+    /** Figma から取り込んだとき（Worker の /figma/import 相当）に添える値 */
+    figma?: {
+      nodeName: string;
+      figmaVersion?: string;
+      lastModified?: string;
+      box: { width: number; height: number };
+    },
   ): Promise<{ status: string; failureMessage: string | null }> {
     const target = (await this.mutation(internal.submissions.beginUpload, { itemId })) as {
       attemptId: string;
@@ -170,6 +177,7 @@ class DemoBackend {
         attemptId: target.attemptId,
         size: file.size,
         sha256,
+        ...(figma ? { figma } : {}),
       })) as { status: string; failureMessage: string | null };
     } catch (error) {
       // 採用されなかった試行の実体は自分で消す（本番の Hono の補償と同じ）

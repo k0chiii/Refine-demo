@@ -36,9 +36,56 @@ export interface UploadOps {
   complete(
     token: string,
     attemptId: string,
-    meta: { size: number; sha256: string },
+    meta: { size: number; sha256: string; figma?: FigmaImportMeta },
   ): Promise<{ status: string; failureMessage: string | null }>;
   fail(token: string, attemptId: string, message: string): Promise<void>;
+}
+
+/** Figma から取り込んだとき、検証完了に添える値（Convex の domain `FigmaImportMeta` と同じ形） */
+export interface FigmaImportMeta {
+  nodeName: string;
+  figmaVersion?: string;
+  lastModified?: string;
+  box: { width: number; height: number };
+}
+
+/**
+ * Figma REST API（docs/FIGMA_WEB_PROOFING.md §2.1.2）。トークンはサーバーの秘密（FIGMA_ACCESS_TOKEN）で、
+ * ブラウザには渡さない。テストでは偽物に差し替える（実際のネットワークは呼ばない）。
+ */
+export interface FigmaNodeInfo {
+  name: string;
+  box: { width: number; height: number } | null;
+}
+export interface FigmaClient {
+  /** `GET /v1/files/:key/nodes?ids=` の要約。無いノードは nodes に入らない */
+  getNodes(
+    fileKey: string,
+    nodeIds: readonly string[],
+  ): Promise<{
+    version: string | null;
+    lastModified: string | null;
+    nodes: Map<string, FigmaNodeInfo>;
+  }>;
+  /** `GET /v1/images/:key?ids=&scale=&format=png`。描けなかったノードは null */
+  renderImages(
+    fileKey: string,
+    nodeIds: readonly string[],
+    scale: number,
+  ): Promise<Map<string, string | null>>;
+  /** 書き出された画像（一時 URL）を取る */
+  download(url: string): Promise<ArrayBuffer>;
+}
+
+/** Figma API の失敗（429 の Retry-After を含む）。利用者に見せる文面は figmaImport が作る */
+export class FigmaApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly retryAfterSec: number | null = null,
+  ) {
+    super(`figma api ${status}`);
+    this.name = "FigmaApiError";
+  }
 }
 
 export interface ArtifactAccess {

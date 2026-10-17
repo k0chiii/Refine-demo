@@ -12,6 +12,8 @@ import {
   vBotOrigin,
   vProofreadingRunFields,
   vFeedbackTemplateId,
+  vArtifactOrigin,
+  vAvatarConfig,
 } from "./lib/validators.ts";
 
 /**
@@ -59,6 +61,7 @@ const artifactType = v.union(
   v.literal("pdf"),
   v.literal("image"),
   v.literal("document"),
+  v.literal("video"),
   v.literal("other"),
   v.literal("external_link"),
 );
@@ -115,6 +118,50 @@ export const anchorValidator = v.union(
     end: v.number(),
     quote: v.string(),
   }),
+  v.object({
+    type: v.literal("video_time"),
+    artifactId: v.string(),
+    start: v.number(),
+    end: v.optional(v.number()),
+    rect: v.optional(rect),
+    point: v.optional(point),
+  }),
+  // Web のライブ表示の要素（docs/FIGMA_WEB_PROOFING.md §6.1）
+  v.object({
+    type: v.literal("web_element"),
+    artifactId: v.string(),
+    url: v.string(),
+    selector: v.object({
+      css: v.string(),
+      xpath: v.optional(v.string()),
+      textQuote: v.optional(
+        v.object({
+          exact: v.string(),
+          prefix: v.optional(v.string()),
+          suffix: v.optional(v.string()),
+        }),
+      ),
+      tag: v.string(),
+    }),
+    rect: v.optional(rect),
+    point: v.optional(point),
+    viewport: v.object({
+      width: v.number(),
+      height: v.number(),
+      dpr: v.number(),
+      deviceId: v.optional(v.string()),
+      orientation: v.union(v.literal("portrait"), v.literal("landscape")),
+    }),
+    fallback: v.object({ pageX: v.number(), pageY: v.number(), scrollY: v.number() }),
+  }),
+  // Figma の埋め込み表示のフレーム（位置は取れないのでノード単位）
+  v.object({
+    type: v.literal("figma_node"),
+    artifactId: v.string(),
+    fileKey: v.string(),
+    nodeId: v.string(),
+    nodeName: v.optional(v.string()),
+  }),
 );
 
 export default defineSchema({
@@ -137,6 +184,8 @@ export default defineSchema({
     /** Nogiku Access から同期した組織権限名（後続）。NOGIKU_ACCESS_ENABLED=true のときだけ参照する。 */
     orgPermissions: v.optional(v.array(v.string())),
     lastLoginAt: v.optional(v.number()),
+    /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17） */
+    avatar: v.optional(vAvatarConfig),
   })
     .index("email", ["email"])
     .index("by_nogikuSubject", ["nogikuSubject"]),
@@ -228,6 +277,8 @@ export default defineSchema({
     pageCount: v.optional(v.number()),
     status: artifactStatus,
     failureMessage: v.optional(v.string()),
+    /** 由来（Figma から取り込んだ・サイトのスクリーンショット） */
+    origin: v.optional(vArtifactOrigin),
   }).index("by_revision", ["revisionId"]),
 
   uploadSessions: defineTable({
@@ -273,6 +324,7 @@ export default defineSchema({
     status: artifactStatus,
     failureMessage: v.optional(v.string()),
     purgedAt: v.optional(v.number()),
+    origin: v.optional(vArtifactOrigin),
   }).index("by_session", ["sessionId"]),
 
   /**

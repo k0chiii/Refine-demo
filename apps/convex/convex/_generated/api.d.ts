@@ -27,6 +27,7 @@ import type * as lib_adapters from "../lib/adapters.js";
 import type * as lib_ai_anthropic from "../lib/ai/anthropic.js";
 import type * as lib_ai_provider from "../lib/ai/provider.js";
 import type * as lib_errors from "../lib/errors.js";
+import type * as lib_nogikuAccess from "../lib/nogikuAccess.js";
 import type * as lib_principal from "../lib/principal.js";
 import type * as lib_redirect from "../lib/redirect.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
@@ -76,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   "lib/ai/anthropic": typeof lib_ai_anthropic;
   "lib/ai/provider": typeof lib_ai_provider;
   "lib/errors": typeof lib_errors;
+  "lib/nogikuAccess": typeof lib_nogikuAccess;
   "lib/principal": typeof lib_principal;
   "lib/redirect": typeof lib_redirect;
   "lib/serviceAuth": typeof lib_serviceAuth;

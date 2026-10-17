@@ -12,3 +12,8 @@
 # ハッシュ付きのファイルは中身が変わらない
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+# 見本サイトとブリッジ（Web の校正。docs/FIGMA_WEB_PROOFING.md）: 見本サイトは校正システム（同じオリジン）の iframe からだけ開ける
+/demo-site/*
+  Content-Security-Policy: frame-ancestors 'self'
+/bridge.js
+  Cache-Control: no-cache

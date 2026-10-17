@@ -108,6 +108,42 @@ const completeArgs = (b: Record<string, unknown>) =>
   str(b.attemptId) && num(b.size) && typeof b.sha256 === "string" && /^[0-9a-f]{64}$/.test(b.sha256)
     ? ({ ok: true, args: { attemptId: b.attemptId, size: b.size, sha256: b.sha256 } } as const)
     : ({ ok: false } as const);
+/** 版の提出物の検証完了: Figma から取り込んだときはノード名などを添える（形が合わなければ無視して保存しない） */
+const itemCompleteArgs = (b: Record<string, unknown>) => {
+  const base = completeArgs(b);
+  if (!base.ok) return base;
+  const f = b.figma;
+  if (
+    typeof f === "object" &&
+    f !== null &&
+    str((f as Record<string, unknown>).nodeName) &&
+    typeof (f as Record<string, unknown>).box === "object"
+  ) {
+    const r = f as {
+      nodeName: string;
+      figmaVersion?: unknown;
+      lastModified?: unknown;
+      box: Record<string, unknown>;
+    };
+    const box = {
+      width: num(r.box.width) ? r.box.width : 0,
+      height: num(r.box.height) ? r.box.height : 0,
+    };
+    return {
+      ok: true,
+      args: {
+        ...base.args,
+        figma: {
+          nodeName: r.nodeName.slice(0, 200),
+          box,
+          ...(str(r.figmaVersion) ? { figmaVersion: r.figmaVersion } : {}),
+          ...(str(r.lastModified) ? { lastModified: r.lastModified } : {}),
+        },
+      },
+    } as const;
+  }
+  return base;
+};
 const failArgs = (b: Record<string, unknown>) =>
   str(b.attemptId)
     ? ({ ok: true, args: { attemptId: b.attemptId, message: message(b.message) } } as const)
@@ -123,7 +159,7 @@ http.route({
 http.route({
   path: "/internal/uploads/items/complete",
   method: "POST",
-  handler: serviceUpload(internal.submissions.completeUpload, completeArgs),
+  handler: serviceUpload(internal.submissions.completeUpload, itemCompleteArgs),
 });
 http.route({
   path: "/internal/uploads/items/fail",

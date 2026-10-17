@@ -10,7 +10,7 @@ export async function setupWork(
   cast: Cast,
   over: {
     title?: string;
-    mediaType?: "pdf" | "image" | "document" | "other";
+    mediaType?: "pdf" | "image" | "document" | "video" | "web" | "figma" | "other";
     notationCategories?: string[];
   } = {},
 ) {
@@ -40,7 +40,9 @@ export async function submitFiles(
   items: Array<{
     fileName: string;
     mimeType: string;
-    type: "pdf" | "image" | "document" | "other";
+    type: "pdf" | "image" | "document" | "video" | "other" | "external_link";
+    /** 外部リンク（role external。実体は送らない） */
+    externalUrl?: string;
   }>,
 ) {
   const prepared = await cast.creator.as.mutation(api.submissions.prepare, {
@@ -50,10 +52,15 @@ export async function submitFiles(
     deadlineAt: Date.now() + 48 * HOUR,
     changeSummary: "提出",
     focusNotes: "",
-    items: items.map((i) => ({ ...i, role: "source" as const })),
+    items: items.map((i) =>
+      i.externalUrl
+        ? { ...i, role: "external" as const }
+        : { fileName: i.fileName, mimeType: i.mimeType, type: i.type, role: "source" as const },
+    ),
   });
   for (const [k, it] of prepared.items.entries())
-    await uploadVerified(cast.creator, it.id, { size: 10 + k, sha256: `sha-${k}` });
+    if (it.keyPrefix !== null)
+      await uploadVerified(cast.creator, it.id, { size: 10 + k, sha256: `sha-${k}` });
   const confirmed = await cast.creator.as.mutation(api.submissions.confirm, {
     sessionId: prepared.sessionId as Id<"uploadSessions">,
   });

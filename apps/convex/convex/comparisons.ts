@@ -10,7 +10,7 @@ const vPair = v.object({
   right: v.union(v.number(), v.null()),
 });
 
-/** 版比較の手動ページ対応（読むのは閲覧権限、直すのは校正に関わる人） */
+/** 版比較の手動ページ対応（読むのは両方の制作物の閲覧権限、直すのは表示中の制作物で校正に関わる人。別の制作物の版とも比べられる） */
 export const getOverride = query({
   args: { leftArtifactId: v.string(), rightArtifactId: v.string() },
   handler: async (ctx, args) => {
