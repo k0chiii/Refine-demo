@@ -35,6 +35,36 @@ describe("Convex 統合: 自分のアバター（Humation）", () => {
     expect(await cast.reviewer.as.query(api.users.avatars, { ids: [cast.creator.id] })).toEqual([]);
   });
 
+  it("保存済みの値にボトムス（アイコンに映らないので外した）が残っていても、読むときに捨てる", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    // 旧クライアントが保存した形（bottom の部位と色を含む）を直接書く
+    await t.run((ctx) =>
+      ctx.db.patch(cast.creator.id, {
+        avatar: {
+          selections: { head: "braids", bottom: "wide-pants" },
+          colors: { hair: "4A3728", bottom: "000000" },
+          background: "F6F5F4",
+        },
+      }),
+    );
+    const expected = {
+      selections: { head: "braids" },
+      colors: { hair: "4A3728" },
+      background: "F6F5F4",
+    };
+    expect((await cast.creator.as.query(api.me.me, {}))?.avatar).toEqual(expected);
+    expect(await cast.reviewer.as.query(api.users.avatars, { ids: [cast.creator.id] })).toEqual([
+      { id: cast.creator.id, avatar: expected },
+    ]);
+    // ボトムスだけの旧データは「設定なし」
+    await t.run((ctx) =>
+      ctx.db.patch(cast.creator.id, { avatar: { selections: { bottom: "wide-pants" } } }),
+    );
+    expect((await cast.creator.as.query(api.me.me, {}))?.avatar).toBeNull();
+    expect(await cast.reviewer.as.query(api.users.avatars, { ids: [cast.creator.id] })).toEqual([]);
+  });
+
   it("形の違う設定は avatar_invalid。未ログインは変えられない", async () => {
     const t = createHarness();
     const cast = await createCast(t);

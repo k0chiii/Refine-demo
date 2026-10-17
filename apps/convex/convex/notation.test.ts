@@ -44,7 +44,10 @@ describe("Convex 統合: 表記統一", () => {
     expect(book.managers[0]!.user.name).toBeTruthy();
 
     // 制作物で選んだカテゴリ（B は A を継承）で版にスナップショットが残る
-    const workId = await setupWork(t, cast, { notationCategories: ["B"] });
+    const workId = await setupWork(t, cast, {
+      notationCategories: ["B"],
+      confidentiality: "restricted",
+    });
     const set = await cast.reviewer.as.query(api.notation.rulesForWork, { workId });
     expect(set.rules.map((r) => r.ruleId)).toEqual(["A1-0001"]);
     await expect(cast.stranger.as.query(api.notation.rulesForWork, { workId })).rejects.toThrow(

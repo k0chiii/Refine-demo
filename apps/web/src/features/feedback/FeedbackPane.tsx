@@ -8,7 +8,11 @@ import { useState } from "react";
 import { formatJstCompact } from "@/lib/format";
 import { useWindowClass } from "@/lib/useMedia";
 import { Field, TextInput } from "@/ui/Field";
-import { M3eActionList, M3eButton, M3eIcon, M3eIconButton, M3eListAction } from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { FeedbackComposer } from "./FeedbackComposer";
 import { FeedbackConversation } from "./FeedbackConversation";
 
@@ -103,7 +107,7 @@ export function FeedbackPane({
         />
       ) : null}
       {threads === undefined ? (
-        <p className="muted fb-pane__empty">読み込み中…</p>
+        <Loading size="small" label="相談を読み込んでいます" />
       ) : threads.length === 0 ? (
         <p className="muted fb-pane__empty">まだ相談はありません</p>
       ) : (
@@ -227,7 +231,9 @@ function FeedbackPaneThread({
           <M3eIcon name="arrow_back" />
         </M3eIconButton>
         <div className="fb-pane__heading">
-          <span className="fb-pane__title">{data?.thread.title ?? "読み込み中…"}</span>
+          <span className="fb-pane__title">
+            {data ? data.thread.title : <Loading inline label="相談を読み込んでいます" />}
+          </span>
           {data ? (
             <span className="fb-pane__sub">
               {[data.thread.revision?.label, place].filter(Boolean).join("・") || "制作物について"}

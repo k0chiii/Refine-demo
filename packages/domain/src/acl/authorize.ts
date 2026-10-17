@@ -7,6 +7,7 @@ import {
   type Principal,
   type WorkPermissionGrant,
 } from "./Permission.ts";
+import { defaultWorkViewPolicy, type WorkViewPolicy } from "./WorkViewPolicy.ts";
 
 /**
  * 操作権限の最小モデル（§7.2）。
@@ -30,6 +31,8 @@ export interface AuthorizationContext {
   work: Work;
   grants: readonly WorkPermissionGrant[];
   principal: Principal;
+  /** 閲覧範囲のポリシー（省略すると {@link defaultWorkViewPolicy}） */
+  viewPolicy?: WorkViewPolicy;
 }
 
 export interface WorkRoles {
@@ -51,10 +54,53 @@ function hasLevel(ctx: AuthorizationContext, required: PermissionLevel): boolean
   return level !== null && permissionIncludes(level, required);
 }
 
-/** 作品に対して何らかの関与（職責または ACL）があるか。一覧・検索・メタ情報の表示可否はこれで決める。 */
+/** 制作物に付いている担当（主管担当・制作担当・関係担当）の ID。重なりは除く */
+export function workTeamIdsOf(
+  work: Pick<Work, "ownerTeamId" | "productionTeamIds" | "relatedTeamIds">,
+): string[] {
+  return Array.from(
+    new Set([
+      ...(work.ownerTeamId ? [work.ownerTeamId] : []),
+      ...work.productionTeamIds,
+      ...work.relatedTeamIds,
+    ]),
+  );
+}
+
+/**
+ * 職責ではないが制作物に関わる人か: 関係者（stakeholderIds）、または主管担当・制作担当・関係担当に所属する人。
+ * 利用者決定 2026-10-17「（閲覧権限は）自動でつける」。閲覧にだけ効き、ほかの操作の権限にはならない。
+ */
+export function isInvolvedInWork(
+  work: Pick<Work, "stakeholderIds" | "ownerTeamId" | "productionTeamIds" | "relatedTeamIds">,
+  principal: Principal,
+): boolean {
+  if (work.stakeholderIds?.includes(principal.userId)) return true;
+  const teamIds = principal.teamIds;
+  if (!teamIds || teamIds.length === 0) return false;
+  return workTeamIdsOf(work).some((id) => teamIds.includes(id));
+}
+
+/** 通常の制作物を委員なら誰でも見られる設定か（一覧・メンション候補の作り方を切り替えるときに使う） */
+export function allMembersCanView(
+  work: Pick<Work, "confidentiality">,
+  policy: WorkViewPolicy = defaultWorkViewPolicy,
+): boolean {
+  return work.confidentiality === "normal" && policy.normalWorks === "all_members";
+}
+
+/**
+ * 制作物を見られるか（一覧・検索・メタ情報・通知の本文・FB の制作物へのリンクの可否はこれで決める）。
+ * - 職責（制作者・校了権限者・主管）か閲覧以上の ACL がある人
+ * - 関係者、主管担当・制作担当・関係担当に所属する人（{@link isInvolvedInWork}。利用者決定 2026-10-17）
+ * - 機密区分が通常の制作物は、ポリシーが all_members ならサインインした委員の誰でも（既定。D3 の細則）
+ * 非公開・取扱注意（restricted）は上の 2 つだけ。システム管理者も、職責・ACL・所属が無ければ見られない。
+ */
 export function canViewWork(ctx: AuthorizationContext): boolean {
   const roles = rolesOf(ctx.work, ctx.principal);
-  return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "view");
+  if (roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "view")) return true;
+  if (isInvolvedInWork(ctx.work, ctx.principal)) return true;
+  return allMembersCanView(ctx.work, ctx.viewPolicy);
 }
 
 export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolean {

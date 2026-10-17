@@ -9,7 +9,6 @@ import {
   canPostFeedback,
   canRenameFeedbackThread,
   canViewFeedback,
-  canViewWork,
   computeWorkStats,
   deriveFeedbackThreadTitle,
   feedbackExcerptSource,
@@ -50,6 +49,7 @@ import {
   type WorkStatsRow,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
+import { canView, principalOf, searchPeopleByText } from "../shared.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
 
@@ -128,7 +128,7 @@ async function mentionPolicy(
   ids: readonly string[],
 ): Promise<(userId: string) => boolean> {
   if (work.confidentiality === "restricted") {
-    const allowed = new Set(mentionableUserIds(work, grants));
+    const allowed = new Set(mentionableUserIds(work, grants, await ctx.teams.list()));
     return (id) => allowed.has(id);
   }
   const members = new Set((await ctx.people.profiles([...new Set(ids)])).map((p) => p.id));
@@ -158,7 +158,7 @@ export async function listFeedbackMentionCandidates(
   const { work, grants } = await loadFeedbackWork(ctx, principal, workId);
   const people =
     work.confidentiality === "restricted"
-      ? await ctx.people.profiles(mentionableUserIds(work, grants))
+      ? await ctx.people.profiles(mentionableUserIds(work, grants, await ctx.teams.list()))
       : await ctx.people.listMembers(500);
   return people
     .filter((p) => p.id !== principal.userId)
@@ -167,16 +167,20 @@ export async function listFeedbackMentionCandidates(
 }
 
 /** メンションの候補を名前・メールで絞る（10 人まで） */
+/**
+ * メンションの候補を「@」に続けて打った文字で探す（名前・メールの部分一致。名前順・limit 人まで。自分は除く）。
+ * 画面は候補の一覧を丸ごと購読せず、打つたびにこの検索を引く（docs/UI_M3E.md §60）。
+ */
 export async function searchFeedbackPeople(
   ctx: AppContext,
   principal: Principal,
-  input: { workId: string; text: string },
-): Promise<Array<{ id: string; name: string }>> {
-  const q = input.text.trim().toLowerCase();
-  return (await listFeedbackMentionCandidates(ctx, principal, input.workId))
-    .filter((p) => q === "" || `${p.name} ${p.email ?? ""}`.toLowerCase().includes(q))
-    .slice(0, 10)
-    .map((p) => ({ id: p.id, name: p.name }));
+  input: { workId: string; text: string; limit?: number },
+): Promise<PersonProfile[]> {
+  return searchPeopleByText(
+    await listFeedbackMentionCandidates(ctx, principal, input.workId),
+    input.text,
+    input.limit,
+  );
 }
 
 // ---------------------------------------------------------------- 一覧・詳細
@@ -351,7 +355,7 @@ export async function listFeedbackSpaces(
       confidentiality: work.confidentiality,
       mediaType: work.mediaType,
       lifecycle: work.lifecycle,
-      canOpen: canViewWork({ work, grants, principal }),
+      canOpen: await canView(ctx, principal, work, grants),
       threads: threads.length,
       unread,
       lastPostAt,
@@ -497,7 +501,7 @@ export async function getFeedbackThread(
       confidentiality: work.confidentiality,
       lifecycle: work.lifecycle,
       mediaType: work.mediaType,
-      canOpen: canViewWork({ work, grants, principal }),
+      canOpen: await canView(ctx, principal, work, grants),
     },
     posts,
     can: {
@@ -605,12 +609,10 @@ async function notifyFeedback(
   thread: FeedbackThread,
   msg: { recipients: string[]; mentions: string[]; text: string; title: string | null },
 ): Promise<void> {
+  // 非公開の制作物は見られる人だけに知らせる（担当の所属も数える）
+  const teams = work.confidentiality === "restricted" ? await ctx.teams.list() : [];
   const canSee = (userId: string) =>
-    canViewFeedback({
-      work,
-      grants,
-      principal: { userId, isSystemAdmin: false, groupIds: [], orgPermissions: [] },
-    });
+    canViewFeedback({ work, grants, principal: principalOf(userId, teams) });
   const who = await personName(ctx, principal.userId);
   const head = about(work.title, `のスレッド「${excerpt(thread.title, 40)}」`, who);
   const at = { workId: work.id, threadId: thread.id };

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import {
   decideThread,
-  listMentionCandidates,
   postComment,
   replyToThread,
+  searchMentionCandidates,
 } from "../usecases/comments.ts";
 import { assignReviewers, closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
@@ -14,7 +14,8 @@ const code = (c: string) => expect.objectContaining({ code: c });
 
 async function setup() {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx);
+  // 非公開の制作物（通常の制作物は委員の誰でも見られるので、閲覧権限の境目はこちらで確かめる）
+  const work = await seedWork(ctx, { confidentiality: "restricted" });
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
@@ -267,7 +268,10 @@ describe("メンション", () => {
 
   it("見られる人だけをメンションでき、メンションされた人に通知が届く（制作者は重ねて通知しない）", async () => {
     const { ctx, work, revision } = await setup();
-    expect((await listMentionCandidates(ctx, principals.reviewer, work.id)).sort()).toEqual(
+    const ids = (
+      await searchMentionCandidates(ctx, principals.reviewer, { workId: work.id, text: "" })
+    ).map((p) => p.id);
+    expect(ids.sort()).toEqual(
       [
         principals.approver.userId,
         principals.creator.userId,
@@ -275,9 +279,9 @@ describe("メンション", () => {
         principals.reviewer.userId,
       ].sort(),
     );
-    await expect(listMentionCandidates(ctx, principals.stranger, work.id)).rejects.toThrow(
-      code("forbidden"),
-    );
+    await expect(
+      searchMentionCandidates(ctx, principals.stranger, { workId: work.id, text: "" }),
+    ).rejects.toThrow(code("forbidden"));
 
     const thread = await postComment(ctx, principals.reviewer, {
       revisionId: revision.id,

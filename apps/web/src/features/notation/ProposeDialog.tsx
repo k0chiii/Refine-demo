@@ -4,7 +4,8 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
 import { toast } from "@/lib/toast";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 

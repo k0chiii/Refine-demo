@@ -1,37 +1,41 @@
 import { api } from "@mf100/convex/api";
 import {
+  bureauCodes,
+  matchPerson,
   parseTeamCsv,
   planTeamImport,
   sortTeams,
   teamCsvTemplate,
+  type PersonMatch,
   type Team,
   type TeamCsvParseResult,
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
 import { useWindowClass } from "@/lib/useMedia";
+import { Loading } from "@/ui/Loading";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
-import { Field, TextInput } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eDialog,
-  M3eDivider,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListItem,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { Field, Select, TextInput } from "@/ui/Field";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
+import { UserPicker } from "@/ui/UserPicker";
 
 /**
  * 管理 › 担当（利用者決定 2026-10-15: 「局 › 担当」の 2 段は管理画面で持つ。Nogiku の組織情報との同期は後続）。
- * 局ごとに担当を並べ、各行の ⋮ から 名前を変える・上へ・下へ・削除（compact はボトムシート。M3 Breakpoints）。
- * まとめて作るときは CSV（局・担当の 2 列）。取り込みは何度やっても同じ（既にある局・担当は作らない）。
+ * 局ごとに担当を並べ、各行の ⋮ から 編集（名前・絵文字・Drive・所属。局はコードも）・上へ・下へ・削除（compact はボトムシート。M3 Breakpoints）。
+ * 項目は Notion の担当 DB に揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）: 局（コード JIM・ZAI・SSK・EVE・PR・SYS・WG・CAP）・
+ * 付番（並び順）・絵文字・Google Drive フォルダ・ユーザ（所属する人）。
+ * まとめて作るときは CSV（委員会の担当 DB の項目名）。取り込みは何度やっても同じ（既にある局・担当は作らない）。
+ * 所属する人は、その担当の制作物を（非公開でも）見られる（利用者決定 2026-10-17。acl/authorize.ts）。
  * 制作物が使っている担当と、担当のある局は消せない（domain の team_in_use）。
  */
 export function TeamsAdmin() {
@@ -42,10 +46,16 @@ export function TeamsAdmin() {
   const [edit, setEdit] = useState<
     | { mode: "add-bureau" }
     | { mode: "add-team"; bureau: Team }
-    | { mode: "rename"; team: Team }
+    | { mode: "edit"; team: Team }
     | null
   >(null);
-  const [name, setName] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    emoji: "",
+    driveFolderUrl: "",
+    memberIds: [] as string[],
+  });
   const [removing, setRemoving] = useState<Team | null>(null);
   const [sheetFor, setSheetFor] = useState<Team | null>(null);
   const [importing, setImporting] = useState(false);
@@ -55,20 +65,29 @@ export function TeamsAdmin() {
   const childrenOf = (b: Team) => sorted.filter((t) => t.parentId === b.id);
   const siblings = (t: Team) =>
     t.kind === "bureau" ? bureaus : sorted.filter((x) => x.parentId === t.parentId);
+  const isBureau =
+    edit?.mode === "add-bureau" || (edit?.mode === "edit" && edit.team.kind === "bureau");
 
   const doSave = useAction(async () => {
     if (!edit) return;
-    const trimmed = name.trim();
-    if (edit.mode === "add-bureau") await save({ name: trimmed, kind: "bureau" });
+    const meta = {
+      emoji: form.emoji.trim() || null,
+      driveFolderUrl: form.driveFolderUrl.trim() || null,
+      memberIds: form.memberIds,
+      ...(isBureau ? { code: form.code || null } : {}),
+    };
+    const name = form.name.trim();
+    if (edit.mode === "add-bureau") await save({ name, kind: "bureau", ...meta });
     else if (edit.mode === "add-team")
-      await save({ name: trimmed, kind: "team", parentId: edit.bureau.id });
+      await save({ name, kind: "team", parentId: edit.bureau.id, ...meta });
     else
       await save({
         id: edit.team.id,
-        name: trimmed,
+        name,
         kind: edit.team.kind,
         ...(edit.team.parentId ? { parentId: edit.team.parentId } : {}),
         order: edit.team.order,
+        ...meta,
       });
     setEdit(null);
   });
@@ -78,7 +97,7 @@ export function TeamsAdmin() {
     toast(`「${removing.name}」を削除しました`);
     setRemoving(null);
   });
-  // 並べ替え: 隣と順番を入れ替える
+  // 並べ替え: 隣と順番を入れ替える（コードなどの項目は省略＝そのまま）
   const move = useAction(async (t: Team, dir: -1 | 1) => {
     const list = siblings(t);
     const i = list.findIndex((x) => x.id === t.id);
@@ -90,7 +109,14 @@ export function TeamsAdmin() {
   });
 
   const openEdit = (next: NonNullable<typeof edit>) => {
-    setName(next.mode === "rename" ? next.team.name : "");
+    const t = next.mode === "edit" ? next.team : null;
+    setForm({
+      name: t?.name ?? "",
+      code: t?.code ?? "",
+      emoji: t?.emoji ?? "",
+      driveFolderUrl: t?.driveFolderUrl ?? "",
+      memberIds: [...(t?.memberIds ?? [])],
+    });
     setEdit(next);
   };
   const actions = (t: Team): ActionSheetItem[] => {
@@ -108,8 +134,8 @@ export function TeamsAdmin() {
         : []),
       {
         icon: "edit",
-        label: "名前を変える",
-        onSelect: () => openEdit({ mode: "rename", team: t }),
+        label: "編集",
+        onSelect: () => openEdit({ mode: "edit", team: t }),
       },
       {
         icon: "arrow_upward",
@@ -150,6 +176,22 @@ export function TeamsAdmin() {
       </span>
     );
   };
+  /** 行の見出し: 絵文字 → 名前（局はコードも） */
+  const headline = (t: Team) => (
+    <span className="list__headline">
+      {t.emoji ? <span className="teams-admin__emoji">{t.emoji}</span> : null}
+      {t.name}
+      {t.code ? <span className="teams-admin__code">{t.code}</span> : null}
+    </span>
+  );
+  const supporting = (t: Team) =>
+    [
+      t.kind === "bureau" ? `担当 ${childrenOf(t).length}` : null,
+      t.memberIds?.length ? `所属 ${t.memberIds.length} 人` : null,
+      t.driveFolderUrl ? "Drive" : null,
+    ]
+      .filter(Boolean)
+      .join("・");
 
   return (
     <section className="stack teams-admin">
@@ -168,11 +210,11 @@ export function TeamsAdmin() {
         </M3eButton>
       </div>
       <p className="muted small">
-        制作物一覧は、ここで決めた「局 ›
-        担当」の入れ子で並びます。制作物には主管担当と制作担当を選べます
+        制作物には主管担当と制作担当（1 つずつ）・関係担当を選べます。項目は委員会の「担当」DB
+        と同じ（局のコード・絵文字・Google Drive フォルダ・所属する人）
       </p>
       {teams === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="担当を読み込んでいます" />
       ) : bureaus.length === 0 ? (
         <div className="empty">まだ局がありません。「局を追加」か CSV で作れます</div>
       ) : (
@@ -183,14 +225,15 @@ export function TeamsAdmin() {
             <M3eList className="list" aria-label={b.name}>
               <M3eListItem className="list__item teams-admin__bureau-item">
                 <M3eIcon slot="leading" name="corporate_fare" />
-                <span className="list__headline">{b.name}</span>
-                <span slot="supporting-text">担当 {childrenOf(b).length}</span>
+                {headline(b)}
+                <span slot="supporting-text">{supporting(b)}</span>
                 {more(b)}
               </M3eListItem>
               {childrenOf(b).map((t) => (
                 <M3eListItem key={t.id} className="list__item teams-admin__team">
                   <M3eIcon slot="leading" name="groups" />
-                  <span className="list__headline">{t.name}</span>
+                  {headline(t)}
+                  {supporting(t) ? <span slot="supporting-text">{supporting(t)}</span> : null}
                   {more(t)}
                 </M3eListItem>
               ))}
@@ -206,35 +249,73 @@ export function TeamsAdmin() {
         items={sheetFor ? actions(sheetFor) : []}
       />
 
-      <M3eDialog open={edit !== null} onClosed={() => setEdit(null)} closeLabel="閉じる">
+      <M3eDialog
+        open={edit !== null}
+        onClosed={() => setEdit(null)}
+        closeLabel="閉じる"
+        className={compact ? "dialog--full" : ""}
+      >
         <span slot="header">
           {edit?.mode === "add-bureau"
             ? "局を追加"
             : edit?.mode === "add-team"
               ? `担当を追加（${edit.bureau.name}）`
-              : "名前を変える"}
+              : edit?.team.kind === "bureau"
+                ? "局を編集"
+                : "担当を編集"}
         </span>
         <div className="dialog-body">
-          <Field
-            label={
-              edit?.mode === "add-bureau" ||
-              (edit?.mode === "rename" && edit.team.kind === "bureau")
-                ? "局の名前"
-                : "担当の名前"
-            }
-            required
-          >
+          <Field label={isBureau ? "局の名前" : "担当の名前"} required>
             <TextInput
               required
               autoFocus
               maxLength={40}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && name.trim()) void doSave.run();
+                if (e.key === "Enter" && form.name.trim()) void doSave.run();
               }}
             />
           </Field>
+          <div className="form">
+            {isBureau ? (
+              <Field label="局のコード" hint="Notion の「局」の選択肢">
+                <Select
+                  value={form.code}
+                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                >
+                  <option value="">なし</option>
+                  {bureauCodes.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+            <Field label="絵文字">
+              <TextInput
+                maxLength={8}
+                placeholder="🎨"
+                value={form.emoji}
+                onChange={(e) => setForm((f) => ({ ...f, emoji: e.target.value }))}
+              />
+            </Field>
+          </div>
+          <Field label="Google Drive フォルダ" hint="https://drive.google.com/… の URL">
+            <TextInput
+              type="url"
+              placeholder="https://drive.google.com/drive/folders/…"
+              value={form.driveFolderUrl}
+              onChange={(e) => setForm((f) => ({ ...f, driveFolderUrl: e.target.value }))}
+            />
+          </Field>
+          <UserPicker
+            label="所属する人（ユーザ）"
+            hint="所属する人は、この担当が主管担当・制作担当・関係担当の制作物を（非公開でも）見られます"
+            value={form.memberIds}
+            onChange={(ids) => setForm((f) => ({ ...f, memberIds: ids }))}
+          />
         </div>
         <div slot="actions" className="row">
           <span className="spacer" />
@@ -243,7 +324,7 @@ export function TeamsAdmin() {
           </M3eButton>
           <M3eButton
             variant="filled"
-            disabled={doSave.pending || !name.trim()}
+            disabled={doSave.pending || !form.name.trim()}
             onClick={() => void doSave.run()}
           >
             保存
@@ -294,7 +375,11 @@ export function downloadTeamCsvTemplate() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** CSV（局・担当）の取り込み。作る局・担当と、既にあるものの数を確かめてから取り込む */
+/**
+ * CSV（委員会の担当 DB の項目名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ）の取り込み。
+ * 作る局・担当と、既にあるものの数、所属する人の照合（メールアドレスかユーザー名）を確かめてから取り込む。
+ * 見つからない人がいる行も取り込めるが、その人は所属に入れない（行ごとに知らせる）
+ */
 function ImportTeamsDialog({
   open,
   onClose,
@@ -309,7 +394,30 @@ function ImportTeamsDialog({
   const [parsed, setParsed] = useState<TeamCsvParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [pending, setPending] = useState(false);
-  const plan = parsed ? planTeamImport(parsed.rows, existing) : null;
+  const keys = useMemo(
+    () => (parsed ? Array.from(new Set(parsed.rows.flatMap((r) => r.members))) : []),
+    [parsed],
+  );
+  const directory = useQuery(api.teams.importDirectory, keys.length ? { keys } : "skip");
+  const matches = useMemo(() => {
+    if (!parsed) return null;
+    const dir = directory ?? [];
+    return new Map(
+      parsed.rows.map((r) => [r.line, r.members.map((k) => matchPerson(k, dir))] as const),
+    );
+  }, [parsed, directory]);
+  const memberIds = useMemo(() => {
+    const out = new Map<number, string[]>();
+    for (const [line, list] of matches ?? [])
+      out.set(
+        line,
+        list.flatMap((m) => (m.user ? [m.user.id] : [])),
+      );
+    return out;
+  }, [matches]);
+  const resolving = keys.length > 0 && directory === undefined;
+  const plan = parsed && !resolving ? planTeamImport(parsed.rows, existing, memberIds) : null;
+  const misses = (list: PersonMatch[] | undefined) => (list ?? []).filter((m) => !m.user);
   const close = () => {
     setParsed(null);
     setFileName("");
@@ -331,9 +439,13 @@ function ImportTeamsDialog({
     try {
       const r = await importBatch({
         rows: parsed.rows.map((row) => ({
+          line: row.line,
           bureau: row.bureau,
           team: row.team,
           ...(row.order !== undefined ? { order: row.order } : {}),
+          ...(row.emoji ? { emoji: row.emoji } : {}),
+          ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
+          memberIds: memberIds.get(row.line) ?? [],
         })),
       });
       toast(
@@ -351,8 +463,9 @@ function ImportTeamsDialog({
       <span slot="header">CSV で局と担当を取り込む</span>
       <div className="dialog-body stack">
         <p className="small muted">
-          1 行に 1
-          つの担当を「局,担当」で書きます（担当を空にすると局だけを作ります）。既にある局・担当は作りません。
+          列は委員会の担当 DB の項目名と同じ（局・担当名・付番・絵文字・Google Drive
+          フォルダ・ユーザ）。局は名前かコード（PR・JIM など）で 1
+          つ書き、担当を空にすると局だけを作ります。既にある局・担当は作りません。
         </p>
         <div className="row">
           <input
@@ -368,6 +481,12 @@ function ImportTeamsDialog({
           </M3eButton>
           {fileName ? <span className="small">{fileName}</span> : null}
         </div>
+        {resolving ? (
+          <M3eLinearProgressIndicator
+            mode="indeterminate"
+            aria-label="所属する人を照合しています"
+          />
+        ) : null}
         {parsed && plan ? (
           <>
             {parsed.errors.length ? (
@@ -387,9 +506,47 @@ function ImportTeamsDialog({
                 {plan.create.map((c, i) => (
                   <M3eListItem key={i} className="list__item">
                     <M3eIcon slot="leading" name={c.team ? "groups" : "corporate_fare"} />
-                    {c.team ? `${c.bureau} › ${c.team}` : c.bureau}
+                    <span className="list__headline">
+                      {c.emoji ? `${c.emoji} ` : ""}
+                      {c.team ? `${c.bureau} › ${c.team}` : c.bureau}
+                      {c.code ? <span className="teams-admin__code">{c.code}</span> : null}
+                    </span>
+                    {c.memberIds?.length || c.driveFolderUrl ? (
+                      <span slot="supporting-text">
+                        {[
+                          c.memberIds?.length ? `所属 ${c.memberIds.length} 人` : null,
+                          c.driveFolderUrl ? "Drive" : null,
+                        ]
+                          .filter(Boolean)
+                          .join("・")}
+                      </span>
+                    ) : null}
                   </M3eListItem>
                 ))}
+              </M3eList>
+            ) : null}
+            {/* 行ごとの知らせ: 見つからない人 */}
+            {parsed.rows.some((r) => misses(matches?.get(r.line)).length) ? (
+              <M3eList className="list" aria-label="確認してほしいこと">
+                {parsed.rows
+                  .filter((r) => misses(matches?.get(r.line)).length)
+                  .map((r) => (
+                    <M3eListItem key={r.line} className="list__item">
+                      <M3eIcon slot="leading" name="info" />
+                      <span slot="overline">{r.line} 行目</span>
+                      <span className="list__headline">
+                        {r.team ? `${r.bureau} › ${r.team}` : r.bureau}
+                      </span>
+                      <span slot="supporting-text">
+                        {misses(matches?.get(r.line))
+                          .map(
+                            (m) =>
+                              `「${m.key}」${m.reason === "ambiguous" ? "に当たる人が複数います" : "が見つかりません"}（所属に入れません）`,
+                          )
+                          .join("。")}
+                      </span>
+                    </M3eListItem>
+                  ))}
               </M3eList>
             ) : null}
           </>

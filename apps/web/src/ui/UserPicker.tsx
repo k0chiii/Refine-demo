@@ -2,7 +2,11 @@ import { QuestionHead } from "./Field";
 import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
 import { useId, useState } from "react";
-import { M3eAutocomplete, M3eFormField, M3eIcon, M3eInputChip, M3eOption } from "./m3e";
+import { M3eAutocomplete } from "@m3e/react/autocomplete";
+import { M3eInputChip } from "@m3e/react/chips";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eOption } from "@m3e/react/option";
 
 export interface UserPickerProps {
   label: string;
@@ -111,6 +115,7 @@ export function UserPicker({
             {visible.map((u) => (
               <M3eOption key={u.id} value={u.id} className="picker__option">
                 {u.name}
+                {u.generation ? <span className="muted small"> {u.generation} 代</span> : null}
                 {u.email ? <span className="muted small"> {u.email}</span> : null}
               </M3eOption>
             ))}

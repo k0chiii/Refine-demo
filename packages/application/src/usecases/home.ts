@@ -2,7 +2,6 @@ import {
   dashboardWidgetIds,
   defaultSubmitTargetPolicy,
   isAccepting,
-  isAllowed,
   isSubmitTarget,
   normalizeDashboardLayout,
   revisionLabel,
@@ -17,7 +16,7 @@ import {
   type Work,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
-import { loadAuthorizedWork } from "../shared.ts";
+import { canView, loadAuthorizedWork } from "../shared.ts";
 
 /**
  * 「版を提出する制作物」の現在の条件（L-15）。制度の判断なので値として外に出す（domain の既定をそのまま使う）。
@@ -191,7 +190,7 @@ export async function listSubmitTargets(
   for (const work of works) {
     const grants = await ctx.acl.listByWork(work.id);
     const authz = { work, grants, principal };
-    if (!isAllowed("work.view", authz)) continue;
+    if (!(await canView(ctx, principal, work, grants))) continue;
     const revisions = await ctx.revisions.listByWork(work.id);
     if (!isSubmitTarget(authz, revisions, policy)) continue;
     const live = revisions

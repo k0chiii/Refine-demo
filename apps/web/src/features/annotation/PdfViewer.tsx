@@ -1,16 +1,10 @@
-import type { Anchor, NormalizedRect, Viewport } from "@mf100/domain";
+import type { NormalizedRect, Viewport } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
+import { pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
 import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
-
-// Vite がワーカーを別チャンクとして配信する
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
 
 export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: number; y: number } };
 
@@ -304,8 +298,4 @@ function PdfCanvas({
   }, [doc, n, scale, rotation, near]);
 
   return <canvas ref={ref} role="img" aria-label={`PDF の ${n} ページ目`} />;
-}
-
-export function anchorPage(anchor: Anchor): number | null {
-  return anchor.type === "pdf_rect" || anchor.type === "pdf_pin" ? anchor.page : null;
 }

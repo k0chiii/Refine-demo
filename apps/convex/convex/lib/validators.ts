@@ -1,10 +1,36 @@
 import { v } from "convex/values";
 
 /**
- * アバター（Humation）の設定。形の検証と正規化は domain の validateAvatarConfig（部品の名前が実在するかは Web 側）。
+ * アバター（Humation）の設定（me.setAvatar の引数）。形の検証と正規化は domain の validateAvatarConfig（部品の名前が実在するかは Web 側）。
  * selections: 部位 → 部品の名前、colors: 色の役割 → 6 桁の 16 進、background: 背景の色。
+ * 部位・色の役割は domain `AVATAR_PART_SLOTS` / `AVATAR_COLOR_SLOTS` と同じ（丸いアイコンに映るものだけ。
+ * ボトムスは映らないので外した。利用者指示 2026-10-17）。
  */
 export const vAvatarConfig = v.object({
+  seed: v.optional(v.string()),
+  selections: v.optional(
+    v.object({
+      head: v.optional(v.string()),
+      body: v.optional(v.string()),
+      item: v.optional(v.string()),
+      glasses: v.optional(v.string()),
+    }),
+  ),
+  colors: v.optional(
+    v.object({
+      hair: v.optional(v.string()),
+      skin: v.optional(v.string()),
+      clothes: v.optional(v.string()),
+      stroke: v.optional(v.string()),
+    }),
+  ),
+  background: v.optional(v.string()),
+});
+/**
+ * 保存済みのアバターの設定（users.avatar）。外した部位・色の役割（`bottom`）が残っている古い値も読めるよう、
+ * 部位・役割の名前は限定しない。読むときは domain `parseAvatarConfig` が知らない項目を捨てる。
+ */
+export const vStoredAvatarConfig = v.object({
   seed: v.optional(v.string()),
   selections: v.optional(v.record(v.string(), v.string())),
   colors: v.optional(v.record(v.string(), v.string())),
@@ -29,6 +55,86 @@ export const vMediaType = v.union(
   v.literal("other"),
 );
 export const vConfidentiality = v.union(v.literal("normal"), v.literal("restricted"));
+
+// ---------------------------------------------------------------- Notion の制作物 DB・版 DB・担当 DB に揃えた項目（docs/NOTION_ALIGNMENT.md）
+/** 大ジャンル（domain の workGenres） */
+export const vWorkGenre = v.union(
+  v.literal("graphic"),
+  v.literal("ui"),
+  v.literal("video"),
+  v.literal("text_ja"),
+  v.literal("text_foreign"),
+);
+/** 小ジャンル（domain の workSubGenres のコード） */
+export const vWorkSubGenre = v.union(
+  v.literal("digital_sns"),
+  v.literal("digital_web"),
+  v.literal("digital_youtube"),
+  v.literal("digital_other"),
+  v.literal("print_flyer"),
+  v.literal("print_other"),
+  v.literal("print_banner"),
+  v.literal("print_booklet"),
+  v.literal("solid_decoration"),
+  v.literal("print_large"),
+  v.literal("print_decoration"),
+  v.literal("goods"),
+  v.literal("resource_icon"),
+  v.literal("graphic_other"),
+  v.literal("video"),
+  v.literal("pr_text"),
+  v.literal("plan_text"),
+  v.literal("web_copy"),
+  v.literal("form"),
+  v.literal("text_other"),
+  v.literal("web_design"),
+  v.literal("committee_screen"),
+);
+/** 制作物の Notion に揃えた任意の項目（表の形。登録・保存の形） */
+export const vWorkMetadataFields = {
+  genre: v.optional(vWorkGenre),
+  subGenre: v.optional(vWorkSubGenre),
+  stakeholderIds: v.optional(v.array(v.string())),
+  publishAt: v.optional(v.number()),
+  requiresPrinterSubmission: v.optional(v.boolean()),
+  printQuantity: v.optional(v.number()),
+  sizeOrLength: v.optional(v.string()),
+  productionDays: v.optional(v.number()),
+  tags: v.optional(v.array(v.string())),
+  driveFolderUrl: v.optional(v.string()),
+  slackChannelId: v.optional(v.string()),
+};
+/** 同じ項目の変更の形（null で消す） */
+export const vWorkMetadataPatch = {
+  genre: v.optional(v.union(vWorkGenre, v.null())),
+  subGenre: v.optional(v.union(vWorkSubGenre, v.null())),
+  stakeholderIds: v.optional(v.union(v.array(v.string()), v.null())),
+  publishAt: v.optional(v.union(v.number(), v.null())),
+  requiresPrinterSubmission: v.optional(v.union(v.boolean(), v.null())),
+  printQuantity: v.optional(v.union(v.number(), v.null())),
+  sizeOrLength: v.optional(v.union(v.string(), v.null())),
+  productionDays: v.optional(v.union(v.number(), v.null())),
+  tags: v.optional(v.union(v.array(v.string()), v.null())),
+  driveFolderUrl: v.optional(v.union(v.string(), v.null())),
+  slackChannelId: v.optional(v.union(v.string(), v.null())),
+};
+/** 版の提出時の申告（写真・めい・指針外の色の使用） */
+export const vRevisionDeclarations = v.object({
+  usesPhotos: v.boolean(),
+  usesMascot: v.boolean(),
+  usesOffPaletteColors: v.boolean(),
+});
+/** 局のコード（domain の bureauCodes） */
+export const vBureauCode = v.union(
+  v.literal("JIM"),
+  v.literal("ZAI"),
+  v.literal("SSK"),
+  v.literal("EVE"),
+  v.literal("PR"),
+  v.literal("SYS"),
+  v.literal("WG"),
+  v.literal("CAP"),
+);
 export const vRevisionKind = v.union(v.literal("rough"), v.literal("standard"));
 export const vArtifactRole = v.union(
   v.literal("source"),

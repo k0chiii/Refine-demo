@@ -6,7 +6,10 @@ import { useEffect, useState } from "react";
 import { fetchArtifactBlob } from "@/integrations/api";
 import { useAction } from "@/lib/useAction";
 import { Card } from "@/ui/Card";
-import { M3eButton, M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import {
   FullscreenPreview,
   PostPreview,
@@ -142,7 +145,7 @@ export function PostReview({
   });
 
   if (error) return <div className="alert">{error}</div>;
-  if (!post) return <p className="muted">読み込み中…</p>;
+  if (!post) return <Loading label="投稿を読み込んでいます" />;
   return (
     <div className="post-review">
       <div className="post-preview stack">

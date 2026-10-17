@@ -1,6 +1,8 @@
 import { describeError } from "@/lib/errors";
 import { toast } from "@/lib/toast";
-import { M3eIcon, M3eMenuItemCheckbox, M3eSwitch } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eMenuItemCheckbox } from "@m3e/react/menu";
+import { M3eSwitch } from "@m3e/react/switch";
 import { useDevicePush } from "./useDevicePush";
 
 /**

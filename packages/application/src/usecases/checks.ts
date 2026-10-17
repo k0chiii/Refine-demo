@@ -8,6 +8,7 @@ import {
   type Principal,
   type RequiredCheck,
   waiveCheck,
+  type WorkAction,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
@@ -57,12 +58,17 @@ export async function addRequiredCheck(
   return check;
 }
 
-async function loadCheck(ctx: AppContext, principal: Principal, checkId: string) {
+async function loadCheck(
+  ctx: AppContext,
+  principal: Principal,
+  checkId: string,
+  action: WorkAction = "work.view",
+) {
   const check = await ctx.checks.findById(checkId);
   if (!check) throw new DomainError("check_not_found", { checkId });
   const revision = await ctx.revisions.findById(check.revisionId);
   if (!revision) throw new DomainError("check_not_found", { checkId });
-  const { work, grants } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  const { work, grants } = await loadAuthorizedWork(ctx, principal, revision.workId, action);
   return { check, revision, work, grants };
 }
 
@@ -71,7 +77,14 @@ export async function completeRequiredCheck(
   principal: Principal,
   input: { checkId: string; note?: string },
 ): Promise<RequiredCheck> {
-  const { check, revision, work, grants } = await loadCheck(ctx, principal, input.checkId);
+  // 完了を記録できるのは制作物の確認に参加できる人（職責・review 以上の ACL）。
+  // 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）が、見られるだけでは担当の無い確認を完了できない
+  const { check, revision, work, grants } = await loadCheck(
+    ctx,
+    principal,
+    input.checkId,
+    "comment.post",
+  );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   const canActForAnyone =

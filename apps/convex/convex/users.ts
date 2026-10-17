@@ -21,7 +21,13 @@ export const search = query({
       .filter((u) => q === "" || `${u.name ?? ""} ${u.email ?? ""}`.toLowerCase().includes(q))
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ja"))
       .slice(0, Math.min(limit ?? 20, 50))
-      .map((u) => ({ id: u._id, name: u.name ?? "", email: u.email ?? null }));
+      .map((u) => ({
+        id: u._id,
+        name: u.name ?? "",
+        email: u.email ?? null,
+        /** 代（Notion のユーザ DB「代」。同名の人を見分ける手がかり） */
+        generation: u.generation ?? null,
+      }));
   },
 });
 

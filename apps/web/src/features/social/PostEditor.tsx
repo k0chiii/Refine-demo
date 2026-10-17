@@ -44,10 +44,14 @@ import { describeError } from "@/lib/errors";
 import { formatJstShort } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import { useWindowClass } from "@/lib/useMedia";
+import { Loading } from "@/ui/Loading";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Card } from "@/ui/Card";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eIcon, M3eIconButton, M3eList, M3eListItem } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { PaneTabs } from "@/ui/PaneTabs";
 import {
@@ -83,7 +87,7 @@ export function PostEditor({ workId }: { workId: string }) {
     latest ? { revisionId: latest.id as Id<"revisions"> } : "skip",
   );
   if (workData === undefined || docData === undefined || (latest && latestRev === undefined))
-    return <p className="muted write-loading">読み込み中…</p>;
+    return <Loading label="投稿の下書きを読み込んでいます" className="write-loading" />;
   // 媒体に合わないエディタでは編集させない（文章の原稿を投稿で上書きしないため）
   const expected = draftFormatFor(workData.work.mediaType);
   if (expected !== "post")
@@ -536,16 +540,18 @@ function PostSurface({
                 <M3eListItem key={im.key} className="post-image">
                   {a ? (
                     <img slot="leading" className="post-image__thumb" src={a.url} alt="" />
+                  ) : im.artifactId ? (
+                    <Loading
+                      slot="leading"
+                      inline
+                      label={`${i + 1} 枚目の画像を読み込んでいます`}
+                    />
                   ) : (
                     <M3eIcon slot="leading" name="image" />
                   )}
                   <span slot="overline">
                     {i + 1} 枚目
-                    {!a
-                      ? im.artifactId
-                        ? "・読み込み中"
-                        : "・この端末に無い画像です。選び直してください"
-                      : ""}
+                    {!a && !im.artifactId ? "・この端末に無い画像です。選び直してください" : ""}
                   </span>
                   {im.fileName.replace(/^\d{2}-/, "")}
                   <span slot="supporting-text" className="post-image__fields">

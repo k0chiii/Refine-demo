@@ -199,14 +199,15 @@ describe("制作物の一括登録（CSV）", () => {
     const preview = resolveWorkImport(parsed, directory);
     expect(preview.ready).toBe(0);
     const [a, b] = preview.rows.map((r) => r.problems.join("／"));
-    expect(a).toContain("題名がありません");
-    expect(a).toContain("区分がありません");
+    expect(a).toContain("制作物名がありません");
+    expect(a).toContain("小ジャンル（または区分）がありません");
     expect(a).toContain("媒体「ポスター」が分かりません");
     expect(a).toContain("納期「明日」を日付として読めません");
     expect(a).toContain("機密区分「秘密」が分かりません");
     expect(a).toContain("制作者「誰か」が見つかりません");
     expect(a).toContain("2 人います");
-    expect(b).toContain("校了権限者は 1 人だけ");
+    // 校了者は 1 人（確定方針 C3）。複数書かれた行は取り込まない
+    expect(b).toContain("校了者が 2 人");
     expect(b).toContain("納期が過ぎています");
   });
 
@@ -230,9 +231,9 @@ describe("制作物の一括登録（CSV）", () => {
 
   it("見出しが無い・必須の列が無い・行が多すぎるとファイル全体の問題になる", () => {
     expect(parseWorkCsv("a,b\n1,2", { defaultYear: 100, now: T0 }).errors[0]).toContain("見出し");
-    expect(parseWorkCsv("題名\nA", { defaultYear: 100, now: T0 }).errors[0]).toContain(
-      "区分・媒体・制作者・校了権限者",
-    );
+    const only = parseWorkCsv("題名\nA", { defaultYear: 100, now: T0 }).errors;
+    expect(only[0]).toContain("制作者・校了者");
+    expect(only[1]).toContain("小ジャンル");
     const many = [
       header,
       ...Array.from(

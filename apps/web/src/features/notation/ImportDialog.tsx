@@ -10,15 +10,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
-import {
-  M3eAccordion,
-  M3eButton,
-  M3eDialog,
-  M3eExpansionPanel,
-  M3eIcon,
-  M3eList,
-  M3eListItem,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eAccordion, M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import { toast } from "@/lib/toast";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;

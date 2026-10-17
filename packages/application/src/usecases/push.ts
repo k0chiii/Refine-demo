@@ -5,10 +5,10 @@ import {
   type PushPayload,
   pushOutcome,
   type PushSubscriptionInput,
-  recipientPrincipal,
   validatePushSubscription,
 } from "@mf100/domain";
 import type { AppContext, PushSubscriptionRecord } from "../ports.ts";
+import { principalOf } from "../shared.ts";
 import { presentNotifications } from "./notifications.ts";
 
 /*
@@ -90,7 +90,12 @@ export async function planPushDelivery(
   if (!n || n.readAt !== undefined) return null;
   const subs = await ctx.pushSubscriptions.listByUser(n.recipientId);
   if (subs.length === 0) return null;
-  const [shown] = await presentNotifications(ctx, recipientPrincipal(n.recipientId), [n]);
+  // 受信者の担当の所属も添えて、非公開の制作物を所属で見られる人を伏せない
+  const [shown] = await presentNotifications(
+    ctx,
+    principalOf(n.recipientId, await ctx.teams.list()),
+    [n],
+  );
   const hidden = n.workId !== undefined && shown?.workId === undefined;
   const work = !hidden && n.workId ? await ctx.works.findById(n.workId) : null;
   const payload = buildPushPayload({

@@ -57,6 +57,7 @@ export const demo = internalMutation({
           email: u.email,
           isSystemAdmin: u.isSystemAdmin,
           source: "nogiku_mock",
+          generation: 100,
         });
         ids[u.sub] = existing._id;
       } else {
@@ -66,6 +67,8 @@ export const demo = internalMutation({
           nogikuSubject: u.sub,
           source: "nogiku_mock",
           isSystemAdmin: u.isSystemAdmin,
+          // 代（Notion のユーザ DB「代」）。サンプルは全員 100 代
+          generation: 100,
         });
       }
     }
@@ -102,25 +105,41 @@ export const demo = internalMutation({
     const existingTeams = await ctx.db.query("teams").take(1000);
     if (existingTeams.length === 0) {
       const admin = ids["mock-nogiku-admin"]!;
-      const tree: Array<[string, string[]]> = [
-        ["広報局", ["デザイン担当", "SNS担当", "Web担当"]],
-        ["総務局", ["渉外担当"]],
-        ["企画局", []],
-      ];
-      for (const [bi, [bureau, children]] of tree.entries()) {
+      // 局のコード・絵文字・Drive のフォルダ・所属は Notion の担当 DB に揃えた項目（架空の値）
+      const tree: Array<[string, "PR" | "JIM" | "EVE", string, Array<[string, string, string[]]>]> =
+        [
+          [
+            "広報局",
+            "PR",
+            "📣",
+            [
+              ["デザイン担当", "🎨", ["mock-nogiku-creator", "mock-nogiku-manager"]],
+              ["SNS担当", "📱", ["mock-nogiku-creator"]],
+              ["Web担当", "🌐", ["mock-nogiku-reviewer"]],
+            ],
+          ],
+          ["総務局", "JIM", "🗂️", [["渉外担当", "🤝", ["mock-nogiku-approver"]]]],
+          ["企画局", "EVE", "🎪", []],
+        ];
+      for (const [bi, [bureau, code, emoji, children]] of tree.entries()) {
         const bureauId = await ctx.db.insert("teams", {
           name: bureau,
           kind: "bureau",
+          code,
+          emoji,
+          driveFolderUrl: `https://drive.google.com/drive/folders/demo-${code.toLowerCase()}`,
           order: bi + 1,
           updatedAt: now,
           updatedBy: admin,
         });
         teamIds[bureau] = bureauId;
-        for (const [ti, name] of children.entries())
+        for (const [ti, [name, teamEmoji, members]] of children.entries())
           teamIds[`${bureau}/${name}`] = await ctx.db.insert("teams", {
             name,
             kind: "team",
             parentId: bureauId,
+            emoji: teamEmoji,
+            memberIds: members.map((sub) => ids[sub]!),
             order: ti + 1,
             updatedAt: now,
             updatedBy: admin,
@@ -145,39 +164,68 @@ export const demo = internalMutation({
       {
         title: "MF100 公式パンフレット",
         purpose: "来場者向け総合案内",
-        category: "印刷物",
+        category: "印刷物（冊子）",
         mediaType: "pdf" as const,
         legacyId: "PR-001",
         notationCategories: ["A1", "A2", "A3"],
+        // Notion の制作物 DB に揃えた項目（架空の値）
+        genre: "graphic" as const,
+        subGenre: "print_booklet" as const,
+        stakeholderIds: [ids["mock-nogiku-reviewer"]!],
+        publishAt: endOfJstDay(now + 37 * day),
+        requiresPrinterSubmission: true,
+        printQuantity: 30000,
+        sizeOrLength: "A5・48 ページ",
+        productionDays: 45,
+        tags: ["公式パンフ", "マスター", "1次公開"],
+        driveFolderUrl: "https://drive.google.com/drive/folders/demo-pamphlet",
+        slackChannelId: "C0100PAMPHLT",
         ...teamsOf("広報局/デザイン担当", ["広報局/デザイン担当"]),
+        relatedTeamIds: teamIds["総務局"] ? [teamIds["総務局"]] : [],
       },
       {
         title: "公式サイト トップページ",
         purpose: "Web 来場者導線",
-        category: "Web",
+        category: "web原稿",
         mediaType: "web" as const,
         legacyId: "WEB-003",
         notationCategories: ["B"],
-        // 制作担当が 2 つ（制作担当で並べると両方に出る）
-        ...teamsOf("広報局/Web担当", ["広報局/Web担当", "広報局/デザイン担当"]),
+        genre: "text_ja" as const,
+        subGenre: "web_copy" as const,
+        tags: ["1次公開"],
+        driveFolderUrl: "https://drive.google.com/drive/folders/demo-website",
+        // 主管担当は Web担当、制作担当はデザイン担当（制作担当は 1 つ。利用者決定 2026-10-17）
+        ...teamsOf("広報局/Web担当", ["広報局/デザイン担当"]),
       },
       {
         title: "EVE 企画ポスター",
         purpose: "前夜祭告知",
-        category: "グラフィック",
+        category: "印刷物（紙・ビラ）",
         mediaType: "image" as const,
         legacyId: "EVE-012",
         notationCategories: ["D"],
+        genre: "graphic" as const,
+        subGenre: "print_flyer" as const,
+        requiresPrinterSubmission: true,
+        printQuantity: 200,
+        sizeOrLength: "A2",
+        productionDays: 10,
         // 担当を決めていない例（担当別の表示で「担当未設定」に出る）
         ...teamsOf(null, []),
       },
       {
         title: "公式 Instagram 開催告知",
         purpose: "SNS での開催告知（Instagram カルーセル）",
-        category: "SNS",
+        category: "デジタル画像（SNS投稿用画像）",
         mediaType: "sns" as const,
         legacyId: "SNS-021",
         notationCategories: ["A1", "A2", "A3"],
+        genre: "graphic" as const,
+        subGenre: "digital_sns" as const,
+        publishAt: endOfJstDay(now + 14 * day),
+        requiresPrinterSubmission: false,
+        sizeOrLength: "1080×1350・5 枚",
+        tags: ["2次公開"],
         ...(igProfile ? { socialProfileId: igProfile } : {}),
         ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
       },
@@ -185,20 +233,27 @@ export const demo = internalMutation({
         // 動画の校正（時点・範囲・画面の位置でコメント。利用者指示 2026-10-17）
         title: "MF100 告知動画",
         purpose: "開催告知の 15 秒動画（SNS・会場モニター）",
-        category: "動画",
+        category: "映像",
         mediaType: "video" as const,
         legacyId: "VID-031",
         notationCategories: ["A1", "A2", "A3"],
+        genre: "video" as const,
+        subGenre: "video" as const,
+        sizeOrLength: "1920×1080・15 秒",
+        productionDays: 20,
         ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
       },
       {
         // Figma の校正（フレームを画像として取り込み、位置コメント。埋め込み表示とフレーム単位のコメントも。利用者指示 2026-10-17）
         title: "公式サイト 画面デザイン（Figma）",
         purpose: "公式サイトのスマホ・PC の画面デザイン",
-        category: "Web",
+        category: "webデザイン",
         mediaType: "figma" as const,
         legacyId: "FIG-041",
         notationCategories: ["B"],
+        genre: "ui" as const,
+        subGenre: "web_design" as const,
+        tags: ["art_web"],
         ...teamsOf("広報局/Web担当", ["広報局/Web担当"]),
       },
     ];
@@ -211,9 +266,9 @@ export const demo = internalMutation({
         .unique();
       if (existing) continue;
       const workId = await ctx.db.insert("works", {
+        relatedTeamIds: [],
         ...s,
         year: 100,
-        relatedTeamIds: [],
         managerIds: [ids["mock-nogiku-manager"]!],
         creatorIds: [ids["mock-nogiku-creator"]!],
         approverId: ids["mock-nogiku-approver"]!,

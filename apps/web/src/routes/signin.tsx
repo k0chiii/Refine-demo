@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { Card } from "@/ui/Card";
 import { Field, Select, TextInput } from "@/ui/Field";
-import { M3eButton, M3eExpansionPanel, M3eHeading } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eHeading } from "@m3e/react/heading";
 import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/signin")({ component: SignIn });

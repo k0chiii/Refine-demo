@@ -15,17 +15,13 @@ import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { formatJstShort } from "@/lib/format";
 import { resolutionLabel, severityLabel } from "@/lib/labels";
-import {
-  M3eAvatar,
-  M3eButton,
-  M3eCard,
-  M3eFormField,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eAvatar } from "@m3e/react/avatar";
+import { M3eButton } from "@m3e/react/button";
+import { M3eCard } from "@m3e/react/card";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import { StatusText } from "@/ui/Chip";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { UserPicker } from "@/ui/UserPicker";

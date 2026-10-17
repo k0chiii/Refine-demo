@@ -2,15 +2,12 @@ import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJstCompact } from "@/lib/format";
-import {
-  M3eActionList,
-  M3eBadge,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eListAction,
-  M3eSearchBar,
-} from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eBadge } from "@m3e/react/badge";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eSearchBar } from "@m3e/react/search";
 
 const mediaIcon: Record<string, string> = {
   pdf: "picture_as_pdf",
@@ -61,7 +58,7 @@ export function FeedbackSpaceList({
         </M3eFilterChip>
       </M3eFilterChipSet>
       {shown === undefined ? (
-        <p className="muted fb-spaces__empty">読み込み中…</p>
+        <Loading size="small" label="FB スペースを読み込んでいます" />
       ) : shown.length === 0 ? (
         <p className="muted fb-spaces__empty">
           {q ? `「${query.trim()}」に合う制作物はありません` : "FB スペースはまだありません"}

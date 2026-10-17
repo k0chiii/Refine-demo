@@ -1,19 +1,14 @@
 import type { Editor } from "@tiptap/core";
 import { useEditorState } from "@tiptap/react";
 import { Fragment, type ReactNode } from "react";
-import {
-  M3eButton,
-  M3eButtonGroup,
-  M3eDivider,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuItemRadio,
-  M3eMenuTrigger,
-  M3eToolbar,
-  M3eTooltip,
-} from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eButtonGroup } from "@m3e/react/button-group";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
+import { M3eToolbar } from "@m3e/react/toolbar";
+import { M3eTooltip } from "@m3e/react/tooltip";
 import { highlightColors, paragraphStyles, textColors, type ParagraphStyleId } from "./extensions";
 
 /** ツールバーの幅に応じて、末尾側のまとまりからその他メニューへ畳む（M3 Toolbars › Adaptive: 入らない操作は末尾のオーバーフローメニューへ） */

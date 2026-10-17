@@ -1,21 +1,19 @@
 import { api } from "@mf100/convex/api";
-import { socialPlatformLabels, WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "@mf100/domain";
 import type { Id } from "@mf100/convex/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
-import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
-import { DateField } from "@/ui/DateField";
-import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eExpansionPanel } from "@/ui/m3e";
-import { UserPicker } from "@/ui/UserPicker";
-import { CategoryPicker } from "@/features/notation/CategoryPicker";
-import { TeamSelect } from "./TeamSelect";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { WorkFormFields, workFormFromWork, workFormReady, workFormToFields } from "./WorkForm";
 
 type Work = FunctionReturnType<typeof api.works.get>["work"];
 
-/** 制作物の編集（v1 / UC-01 の更新）。職責の変更も含む。楽観的排他（version）で競合を検出する。 */
+/**
+ * 制作物の編集（v1 / UC-01 の更新）。職責の変更も含む。楽観的排他（version）で競合を検出する。
+ * 項目は登録と同じ（Notion の制作物 DB に揃えた。docs/NOTION_ALIGNMENT.md）。空にした任意の項目は null で消す。
+ */
 export function EditWorkDialog({
   work,
   open,
@@ -26,27 +24,9 @@ export function EditWorkDialog({
   onClose: () => void;
 }) {
   const update = useMutation(api.works.update);
-  const initial = () => ({
-    title: work.title,
-    purpose: work.purpose,
-    category: work.category,
-    mediaType: work.mediaType as string,
-    legacyId: work.legacyId ?? "",
-    deadlineAt: work.deadlineAt ?? null,
-    confidentiality: work.confidentiality as string,
-    creatorIds: [...work.creatorIds],
-    approverIds: [work.approverId],
-    managerIds: [...work.managerIds],
-    notationCategories: [...(work.notationCategories ?? [])],
-    ownerTeam: work.ownerTeamId ? [work.ownerTeamId] : ([] as string[]),
-    productionTeamIds: [...work.productionTeamIds],
-    socialProfileId: work.socialProfileId ?? "",
-  });
-  const [form, setForm] = useState(initial);
-  // SNS 投稿の制作物: どのアカウント（本体の設定）で投稿するか
-  const profiles = useQuery(api.social.list, open && form.mediaType === "sns" ? {} : "skip");
+  const [form, setForm] = useState(() => workFormFromWork(work));
   useEffect(() => {
-    if (open) setForm(initial());
+    if (open) setForm(workFormFromWork(work));
   }, [open, work.version]);
 
   const { run, pending } = useAction(async () => {
@@ -66,118 +46,21 @@ export function EditWorkDialog({
         // 主管担当を外すときは空文字（application で「なし」に戻す）
         ownerTeamId: form.ownerTeam[0] ?? "",
         productionTeamIds: form.productionTeamIds,
+        relatedTeamIds: form.relatedTeamIds,
         ...(form.mediaType === "sns" ? { socialProfileId: form.socialProfileId || null } : {}),
         ...(form.legacyId ? { legacyId: form.legacyId } : {}),
         ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
+        ...workFormToFields(form),
       },
     });
     onClose();
   });
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-  const setIds = (k: "creatorIds" | "approverIds" | "managerIds") => (ids: string[]) =>
-    setForm((f) => ({ ...f, [k]: ids }));
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
       <span slot="header">制作物を編集</span>
-      <div className="dialog-body">
-        <Field label="名称" required>
-          <TextInput
-            required
-            maxLength={WORK_TITLE_MAX}
-            value={form.title}
-            onChange={set("title")}
-          />
-        </Field>
-        <Field label="目的・対象者">
-          <TextArea value={form.purpose} onChange={set("purpose")} />
-        </Field>
-        <div className="form">
-          <Field label="区分" required>
-            <TextInput
-              required
-              maxLength={WORK_CATEGORY_MAX}
-              value={form.category}
-              onChange={set("category")}
-            />
-          </Field>
-          <Field label="媒体" required>
-            <Select value={form.mediaType} onChange={set("mediaType")}>
-              {Object.entries(mediaLabel).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <DateField
-            label="納期"
-            value={form.deadlineAt}
-            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
-          />
-          {form.mediaType === "sns" ? (
-            <Field label="SNS アカウント" hint="管理 › SNS アカウントで登録したもの">
-              <Select value={form.socialProfileId} onChange={set("socialProfileId")}>
-                <option value="">未設定</option>
-                {(profiles ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {socialPlatformLabels[p.platform]} @{p.username}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
-        </div>
-        <div className="form">
-          <TeamSelect
-            label="主管担当"
-            value={form.ownerTeam}
-            onChange={(ids) => setForm((f) => ({ ...f, ownerTeam: ids }))}
-          />
-          <TeamSelect
-            label="制作担当"
-            multi
-            value={form.productionTeamIds}
-            onChange={(ids) => setForm((f) => ({ ...f, productionTeamIds: ids }))}
-          />
-        </div>
-        <UserPicker
-          label="主管・制作統括"
-          value={form.managerIds}
-          onChange={setIds("managerIds")}
-        />
-        <UserPicker
-          label="制作者"
-          required
-          value={form.creatorIds}
-          onChange={setIds("creatorIds")}
-        />
-        <UserPicker
-          label="校了権限者"
-          required
-          single
-          value={form.approverIds}
-          onChange={setIds("approverIds")}
-        />
-        <CategoryPicker
-          value={form.notationCategories}
-          onChange={(codes) => setForm((f) => ({ ...f, notationCategories: codes }))}
-        />
-        <M3eExpansionPanel className="expansion">
-          <span slot="header">詳細設定（旧ID・機密区分）</span>
-          <div className="form">
-            <Field label="旧ID（Notion 等）">
-              <TextInput value={form.legacyId} onChange={set("legacyId")} />
-            </Field>
-            <Field label="機密区分">
-              <Select value={form.confidentiality} onChange={set("confidentiality")}>
-                <option value="normal">通常</option>
-                <option value="restricted">非公開・取扱注意</option>
-              </Select>
-            </Field>
-          </div>
-        </M3eExpansionPanel>
+      <div className="dialog-body work-form">
+        <WorkFormFields form={form} setForm={setForm} mode="edit" />
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>
@@ -185,7 +68,7 @@ export function EditWorkDialog({
         </M3eButton>
         <M3eButton
           variant="filled"
-          disabled={pending || form.creatorIds.length === 0 || form.approverIds.length === 0}
+          disabled={pending || !workFormReady(form)}
           onClick={() => void run()}
         >
           保存

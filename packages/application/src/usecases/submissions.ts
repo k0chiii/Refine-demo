@@ -26,7 +26,9 @@ import {
   type FigmaImportMeta,
   type CheckType,
   type RequiredCheck,
+  type RevisionDeclarations,
   checkTypeLabels,
+  normalizeSelfChecks,
   revisionLabel,
   voidRevision,
   releaseAdoptedAttempt,
@@ -61,6 +63,9 @@ export interface PrepareSubmissionInput {
   requiredChecks?: Array<{ type: CheckType; label?: string; assigneeId?: string }>;
   /** SNS 投稿の版: 添付する内容の記録（mf100-post.json）と同じ JSON。添付との対応をここで確かめる */
   postSnapshot?: string;
+  /** 提出時の申告（写真・めい・指針外の色の使用）と、本人が確認した項目（Notion の版 DB に揃えた。docs/NOTION_ALIGNMENT.md） */
+  declarations?: RevisionDeclarations;
+  selfChecks?: readonly string[];
   requestId?: string;
 }
 
@@ -111,6 +116,18 @@ export async function prepareSubmission(
         expiresAt: now + SESSION_TTL_MS,
         // 確定時の競合比較の基準。クライアントからは受け取らない（§5.2-11）
         baseRevisionCount: baseRevisions.length,
+        ...(input.declarations
+          ? {
+              declarations: {
+                usesPhotos: input.declarations.usesPhotos === true,
+                usesMascot: input.declarations.usesMascot === true,
+                usesOffPaletteColors: input.declarations.usesOffPaletteColors === true,
+              },
+            }
+          : {}),
+        ...(input.selfChecks && normalizeSelfChecks(input.selfChecks).length > 0
+          ? { selfChecks: normalizeSelfChecks(input.selfChecks) }
+          : {}),
         ...(input.requiredChecks && input.requiredChecks.length > 0
           ? {
               requiredChecks: input.requiredChecks.map((c) => ({
@@ -331,6 +348,8 @@ export async function confirmSubmission(
         deadlineAt: session.deadlineAt,
         changeSummary: session.changeSummary,
         focusNotes: session.focusNotes,
+        ...(session.declarations ? { declarations: session.declarations } : {}),
+        ...(session.selfChecks ? { selfChecks: session.selfChecks } : {}),
       },
       plan,
     );

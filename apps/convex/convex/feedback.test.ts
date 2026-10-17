@@ -22,7 +22,7 @@ describe("Convex 統合: 制作のフィードバック", () => {
       body: feedbackTemplate("creator_first").body,
       template: "creator_first",
     });
-    // 制作物に関与していない委員も読めて投稿できる（制作物そのものは開けない）
+    // 制作物に関与していない委員も読めて投稿できる（通常の制作物はそのものも開ける。利用者決定 2026-10-17）
     const postId = await cast.stranger.as.mutation(api.feedback.post, {
       threadId,
       body: "夜の雰囲気が伝わります",
@@ -30,7 +30,7 @@ describe("Convex 統合: 制作のフィードバック", () => {
     const view = await cast.stranger.as.query(api.feedback.getThread, { threadId });
     expect(view).toMatchObject({
       thread: { title: "配色の方向性", postCount: 2 },
-      work: { id: workId, title: "EVE 企画ポスター", canOpen: false },
+      work: { id: workId, title: "EVE 企画ポスター", canOpen: true },
       can: { post: true, editOwn: true, rename: false },
     });
     expect(view!.posts.map((p) => [p.author.name, p.template ?? null])).toEqual([
@@ -88,7 +88,10 @@ describe("Convex 統合: 制作のフィードバック", () => {
       title: "表紙",
       body: "相談です",
     });
-    const candidates = await cast.reviewer.as.query(api.feedback.mentionCandidates, { workId });
+    const candidates = await cast.reviewer.as.query(api.feedback.searchPeople, {
+      workId,
+      text: "",
+    });
     expect(candidates.map((p) => p.name)).toEqual([
       "admin",
       "approver",
@@ -103,7 +106,7 @@ describe("Convex 統合: 制作のフィードバック", () => {
     });
     expect(
       await cast.reviewer.as.query(api.feedback.searchPeople, { workId, text: "stran" }),
-    ).toEqual([{ id: cast.stranger.id, name: "stranger" }]);
+    ).toEqual([{ id: cast.stranger.id, name: "stranger", email: "stranger@example.invalid" }]);
 
     await cast.stranger.as.mutation(api.feedback.post, {
       threadId,

@@ -15,6 +15,7 @@ import {
   AVATAR_COLOR_LABELS,
   AVATAR_COLOR_SLOTS,
   AVATAR_PALETTES,
+  AVATAR_PART_SLOTS,
   AVATAR_SLOTS,
   partLabel,
   randomAvatarConfig,
@@ -27,17 +28,31 @@ import {
 } from "@/lib/avatar";
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eCircularProgressIndicator, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
 import { PaneTabs } from "@/ui/PaneTabs";
 
-/** 選択画面の中の状態（部位はすべて部品の ID で確定している） */
+/**
+ * 選択画面の中の状態（部位はすべて部品の ID で確定している）。
+ * 持つのはアイコンに映る部位・色の役割だけ（domain の AVATAR_PART_SLOTS / AVATAR_COLOR_SLOTS。ボトムスは持たない）
+ */
 interface Draft {
-  selections: Record<string, string>;
-  colors: Record<string, string>;
+  selections: Record<AvatarSlotId, string>;
+  colors: Record<AvatarColorSlot, string>;
   background: string;
 }
 
 type Tab = AvatarSlotId | "colors";
+
+/** Humation の全部位の選択から、アイコンに映る部位だけを取り出す */
+function visibleSelections(all: Record<string, string>): Record<AvatarSlotId, string> {
+  return Object.fromEntries(AVATAR_PART_SLOTS.map((slot) => [slot, all[slot] ?? ""])) as Record<
+    AvatarSlotId,
+    string
+  >;
+}
 
 /** 保存値（または無し）から、画面の状態を作る。seed から決まる部位も ID に確定する */
 function resolveDraft(hm: Humation, baseSeed: string, config: AvatarConfig | null): Draft {
@@ -50,12 +65,14 @@ function resolveDraft(hm: Humation, baseSeed: string, config: AvatarConfig | nul
       ...(safe?.background ? { background: safe.background } : {}),
     })
     .toJSON();
-  const colors: Record<string, string> = {};
-  for (const slot of AVATAR_COLOR_SLOTS)
-    colors[slot] = json.colors[slot] ?? hm.manifest.defaults.colors[slot] ?? "000000";
   return {
-    selections: json.selections,
-    colors,
+    selections: visibleSelections(json.selections),
+    colors: Object.fromEntries(
+      AVATAR_COLOR_SLOTS.map((slot) => [
+        slot,
+        json.colors[slot] ?? hm.manifest.defaults.colors[slot] ?? "000000",
+      ]),
+    ) as Record<AvatarColorSlot, string>,
     background:
       json.background === "transparent" ? hm.manifest.defaults.background : json.background,
   };
@@ -67,6 +84,8 @@ const sameDraft = (a: Draft, b: Draft) => JSON.stringify(a) === JSON.stringify(b
  * アバターを変える（Humation。利用者指示 2026-10-17「Humation のアバター選択画面もつけて欲しい」）。
  * 上に大きなプレビュー、「おまかせ」（新しい種と候補の色）と「元に戻す」、部位ごとのタブに部品の一覧（その部品だけ替えた小さな絵）、
  * 「色」のタブに役割ごとの色の候補と背景。保存はアカウントごと（PC とスマホで共通）。
+ * 出す部位・色は丸いアイコンに映るものだけ（髪型・トップス・小物・めがね、髪・肌・トップス・線・背景）。ボトムスは
+ * アイコンの切り抜きに入らないので出さない（利用者指示 2026-10-17「アイコンとか、ボトムスとか画面に映らないところの設定はいらないので見直して」）。
  * compact は全画面、それ以上は普通のダイアログ（M3 Dialogs › Full-screen dialog）。
  * 部品の一覧は 1 つを選ぶ radiogroup（矢印キーで移り、選んだものだけ Tab で止まる）。小さな絵は `<use>` で部品を参照し、
  * 43 個並べても DOM を膨らませない（部品の定義は PartDefs に 1 回だけ置く）。
@@ -122,7 +141,7 @@ export function AvatarPickerDialog({
     const r = randomAvatarConfig();
     const json = hm.core.createAvatar(hm.manifest, { seed: r.seed }).toJSON();
     setDraft({
-      selections: json.selections,
+      selections: visibleSelections(json.selections),
       colors: { ...draft.colors, ...r.colors },
       background: r.background,
     });
@@ -139,9 +158,7 @@ export function AvatarPickerDialog({
       <span slot="header">アバターを変える</span>
       <div className="dialog-body avatar-picker__body">
         {!hm || !draft ? (
-          <div className="avatar-picker__loading">
-            <M3eCircularProgressIndicator indeterminate aria-label="アバターの部品を読み込み中" />
-          </div>
+          <Loading label="アバターの部品を読み込んでいます" className="avatar-picker__loading" />
         ) : (
           <>
             <div className="avatar-picker__preview">
@@ -290,7 +307,7 @@ function PartsPane({
   onPick,
 }: {
   hm: Humation;
-  slot: string;
+  slot: AvatarSlotId;
   draft: Draft;
   onPick: (partId: string) => void;
 }) {
@@ -363,7 +380,7 @@ function PartsPane({
 
 function ColorsPane({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
   const rows: Array<{ key: AvatarColorSlot | "background"; value: string }> = [
-    ...AVATAR_COLOR_SLOTS.map((k) => ({ key: k, value: draft.colors[k] ?? "000000" })),
+    ...AVATAR_COLOR_SLOTS.map((k) => ({ key: k, value: draft.colors[k] })),
     { key: "background" as const, value: draft.background },
   ];
   const set = (key: AvatarColorSlot | "background", hex: string) =>

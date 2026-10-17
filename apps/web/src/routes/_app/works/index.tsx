@@ -3,7 +3,10 @@ import {
   sortTeams,
   sortWorks,
   workBelongsToTeam,
+  workGenreLabels,
+  workGenres,
   type Team,
+  type WorkGenre,
   type WorkSortKey,
 } from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -15,16 +18,11 @@ import { WorksList } from "@/features/work/WorksList";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import {
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItemGroup,
-  M3eMenuItemRadio,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 
 type TeamAxis = "owner" | "production";
 const SORT_KEYS = ["accepting", "deadline", "title", "owner", "production"] as const;
@@ -40,9 +38,19 @@ const axisLabel: Record<TeamAxis, string> = { owner: "主管担当", production:
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (
     s: Record<string, unknown>,
-  ): { q?: string; new?: boolean; owner?: string; production?: string; sort?: WorkSortKey } => ({
+  ): {
+    q?: string;
+    new?: boolean;
+    owner?: string;
+    production?: string;
+    genre?: WorkGenre;
+    sort?: WorkSortKey;
+  } => ({
     ...(typeof s.q === "string" && s.q ? { q: s.q } : {}),
     ...(s.new === true || s.new === "true" ? { new: true } : {}),
+    ...((workGenres as readonly string[]).includes(s.genre as string)
+      ? { genre: s.genre as WorkGenre }
+      : {}),
     ...(typeof s.owner === "string" && s.owner ? { owner: s.owner } : {}),
     ...(typeof s.production === "string" && s.production ? { production: s.production } : {}),
     ...(SORT_KEYS.includes(s.sort as WorkSortKey) && s.sort !== "accepting"
@@ -72,7 +80,12 @@ function Works() {
   const compact = useWindowClass() === "compact";
   // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
   const canRegister = !compact;
-  const setSearch = (patch: { owner?: string; production?: string; sort?: WorkSortKey }) =>
+  const setSearch = (patch: {
+    owner?: string;
+    production?: string;
+    genre?: WorkGenre | undefined;
+    sort?: WorkSortKey;
+  }) =>
     void navigate({
       to: "/works",
       search: (s) => {
@@ -86,6 +99,7 @@ function Works() {
   const works = useQuery(api.works.listMine, {
     ...(q ? { text: q } : {}),
     ...(lifecycle ? { lifecycle: lifecycle as "active" } : {}),
+    ...(search.genre ? { genre: search.genre } : {}),
   });
   const hasTeams = teams !== undefined && teams.length > 0;
   const owner = hasTeams ? search.owner : undefined;
@@ -101,7 +115,7 @@ function Works() {
     );
     return sortWorks(picked, teams, effectiveSort);
   }, [works, teams, owner, production, effectiveSort]);
-  const filtered = Boolean(lifecycle || owner || production);
+  const filtered = Boolean(lifecycle || owner || production || search.genre);
   const setCreating = (on: boolean) =>
     void navigate({
       to: "/works",
@@ -153,6 +167,32 @@ function Works() {
             ))}
           </div>
         ) : null}
+        {/* 大ジャンル（Notion の制作物 DB の select）で絞る。利用者決定 2026-10-17 */}
+        <MenuChip
+          id="works-genre-menu"
+          className="works__genre"
+          label={search.genre ? workGenreLabels[search.genre] : "大ジャンル"}
+          ariaLabel={`大ジャンルで絞り込み: ${search.genre ? workGenreLabels[search.genre] : "指定なし"}（変える）`}
+          active={search.genre !== undefined}
+        >
+          <M3eMenuItemGroup aria-label="大ジャンル">
+            <M3eMenuItemRadio
+              checked={!search.genre}
+              onClick={() => setSearch({ genre: undefined })}
+            >
+              指定しない
+            </M3eMenuItemRadio>
+            {workGenres.map((g) => (
+              <M3eMenuItemRadio
+                key={g}
+                checked={search.genre === g}
+                onClick={() => setSearch({ genre: g })}
+              >
+                {workGenreLabels[g]}
+              </M3eMenuItemRadio>
+            ))}
+          </M3eMenuItemGroup>
+        </MenuChip>
         <MenuChip
           id="works-sort-menu"
           className="works__sort"
@@ -175,7 +215,7 @@ function Works() {
         </MenuChip>
       </div>
       {shown === undefined || teams === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="制作物を読み込んでいます" />
       ) : shown.length === 0 ? (
         <div className="empty">
           {q

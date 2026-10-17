@@ -10,14 +10,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { Checkbox, Field, TextArea, TextInput } from "@/ui/Field";
-import {
-  M3eActionList,
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eLinearProgressIndicator,
-  M3eListAction,
-} from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { toast } from "@/lib/toast";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 
@@ -60,7 +57,7 @@ export function ProfilesAdmin() {
         </M3eButton>
       </div>
       {list === undefined ? (
-        <M3eLinearProgressIndicator mode="indeterminate" aria-label="SNS アカウントを読み込み中" />
+        <Loading label="SNS アカウントを読み込んでいます" />
       ) : list.length === 0 ? (
         <div className="empty">まだありません</div>
       ) : (

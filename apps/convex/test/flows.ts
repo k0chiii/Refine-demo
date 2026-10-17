@@ -12,6 +12,8 @@ export async function setupWork(
     title?: string;
     mediaType?: "pdf" | "image" | "document" | "video" | "web" | "figma" | "other";
     notationCategories?: string[];
+    /** 非公開・取扱注意（通常の制作物は委員なら誰でも見られるので、閲覧権限の境目はこちらで確かめる） */
+    confidentiality?: "normal" | "restricted";
   } = {},
 ) {
   const workId = (await cast.manager.as.mutation(api.works.create, {
@@ -23,6 +25,7 @@ export async function setupWork(
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
     ...(over.notationCategories ? { notationCategories: over.notationCategories } : {}),
+    ...(over.confidentiality ? { confidentiality: over.confidentiality } : {}),
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,

@@ -26,11 +26,14 @@ async function unreadOf(t: Harness, userId: string): Promise<number> {
 }
 
 describe("Convex 統合: 通知の認可（§5.2-10）", () => {
-  it("閲覧 ACL の無い人への割当通知と、ACL 取消後の既存通知は作品名・確認観点を返さない", async () => {
+  it("非公開の制作物: 閲覧 ACL の無い人への割当通知と、ACL 取消後の既存通知は作品名・確認観点を返さない", async () => {
     vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, { title: "極秘ポスター" });
+    const workId = await setupWork(t, cast, {
+      title: "極秘ポスター",
+      confidentiality: "restricted",
+    });
     const { revisionId } = await submitFiles(cast, workId, pdf);
     await cast.manager.as.mutation(api.reviews.assign, {
       revisionId,

@@ -12,7 +12,11 @@ import {
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
-async function setupWork(t: Harness, cast: Awaited<ReturnType<typeof createCast>>) {
+async function setupWork(
+  t: Harness,
+  cast: Awaited<ReturnType<typeof createCast>>,
+  confidentiality: "normal" | "restricted" = "normal",
+) {
   const workId = (await cast.manager.as.mutation(api.works.create, {
     title: "MF100 パンフレット",
     purpose: "来場者案内",
@@ -21,6 +25,7 @@ async function setupWork(t: Harness, cast: Awaited<ReturnType<typeof createCast>
     year: 100,
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
+    confidentiality,
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
@@ -65,10 +70,10 @@ describe("Convex 統合: 認可と状態遷移", () => {
     vi.useRealTimers();
   });
 
-  it("A-01 / A-20: 権限のない Nogiku ユーザーは作品 ID を直接指定しても一覧・詳細・添付を得られない。個人 ACL だけで閲覧できる", async () => {
+  it("A-01 / A-20: 非公開の作品は、権限のない Nogiku ユーザーが作品 ID を直接指定しても一覧・詳細・添付を得られない。個人 ACL だけで閲覧できる", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast);
+    const workId = await setupWork(t, cast, "restricted");
 
     await expect(cast.stranger.as.query(api.works.get, { workId })).rejects.toThrow(
       code("forbidden"),
@@ -93,10 +98,10 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await expect(t.query(api.works.get, { workId })).rejects.toThrow(code("unauthenticated"));
   });
 
-  it("A-19 / A-11: 管理者のみ ACL を変更でき、剥奪後は閲覧・投稿・添付認可ができない", async () => {
+  it("A-19 / A-11: 管理者のみ ACL を変更でき、剥奪後は閲覧・投稿・添付認可ができない（非公開の作品）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast);
+    const workId = await setupWork(t, cast, "restricted");
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
     const rev = await cast.reviewer.as.query(api.revisions.get, { revisionId });
@@ -502,7 +507,12 @@ describe("Convex 統合: 認可と状態遷移", () => {
     // ユーザー検索は一般利用者も可（表示名・メールのみ）
     const found = await cast.creator.as.query(api.users.search, { text: "review" });
     expect(found).toEqual([
-      { id: cast.reviewer.id, name: "reviewer", email: "reviewer@example.invalid" },
+      {
+        id: cast.reviewer.id,
+        name: "reviewer",
+        email: "reviewer@example.invalid",
+        generation: null,
+      },
     ]);
   });
 
@@ -550,19 +560,26 @@ describe("Convex 統合: 認可と状態遷移", () => {
     expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([]);
   });
 
-  it("メンション: 候補は見られる人だけ、見られない人は拒否、メンションされた人に通知が届き名前が返る", async () => {
+  it("メンション: 候補は見られる人だけ、見られない人は拒否、メンションされた人に通知が届き名前が返る（非公開の作品）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast);
+    const workId = await setupWork(t, cast, "restricted");
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
 
-    const candidates = await cast.reviewer.as.query(api.comments.mentionCandidates, { workId });
+    const candidates = await cast.reviewer.as.query(api.comments.searchMentionCandidates, {
+      workId,
+      text: "",
+    });
     expect(candidates.map((u) => u.id).sort()).toEqual(
       [cast.creator.id, cast.approver.id, cast.manager.id, cast.reviewer.id].sort(),
     );
+    // 打った文字で絞る（名前・メールの部分一致）
+    expect(
+      await cast.reviewer.as.query(api.comments.searchMentionCandidates, { workId, text: "appr" }),
+    ).toEqual([{ id: cast.approver.id, name: "approver", email: "approver@example.invalid" }]);
     await expect(
-      cast.stranger.as.query(api.comments.mentionCandidates, { workId }),
+      cast.stranger.as.query(api.comments.searchMentionCandidates, { workId, text: "" }),
     ).rejects.toThrow(code("forbidden"));
     await expect(
       cast.reviewer.as.mutation(api.comments.post, {

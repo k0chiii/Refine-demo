@@ -13,7 +13,10 @@ import {
   vProofreadingRunFields,
   vFeedbackTemplateId,
   vArtifactOrigin,
-  vAvatarConfig,
+  vBureauCode,
+  vRevisionDeclarations,
+  vStoredAvatarConfig,
+  vWorkMetadataFields,
 } from "./lib/validators.ts";
 
 /**
@@ -184,8 +187,10 @@ export default defineSchema({
     /** Nogiku Access から同期した組織権限名（後続）。NOGIKU_ACCESS_ENABLED=true のときだけ参照する。 */
     orgPermissions: v.optional(v.array(v.string())),
     lastLoginAt: v.optional(v.number()),
-    /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17） */
-    avatar: v.optional(vAvatarConfig),
+    /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17）。古い値の `bottom` も保持する（読むときに捨てる） */
+    avatar: v.optional(vStoredAvatarConfig),
+    /** 代（Notion のユーザ DB「代」。例: 100。システム管理者が付ける） */
+    generation: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("by_nogikuSubject", ["nogikuSubject"]),
@@ -211,12 +216,16 @@ export default defineSchema({
     notationCategories: v.optional(v.array(v.string())),
     /** SNS 投稿で使うアカウント（socialProfiles の ID） */
     socialProfileId: v.optional(v.string()),
+    /** Notion の制作物 DB に揃えた項目（大ジャンル・小ジャンル・関係者・入稿・タグ・リンク。docs/NOTION_ALIGNMENT.md） */
+    ...vWorkMetadataFields,
     version: v.number(),
   })
     .index("by_year", ["year"])
     .index("by_social_profile", ["socialProfileId"])
     .index("by_owner_team", ["ownerTeamId"])
     .index("by_lifecycle", ["lifecycle"])
+    /** 機密区分で引く（通常の制作物は委員なら誰でも見られるので、一覧は ACL を読まずに索引で集める。works.listMyWorks） */
+    .index("by_confidentiality", ["confidentiality"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
   /** 職責（制作者・校了者・主管）を「ユーザー → 作品」で引くための派生テーブル。works 書込み時に同期する。 */
@@ -259,6 +268,9 @@ export default defineSchema({
     snapshotHash: v.optional(v.string()),
     /** 提出時の表記統一ルールの組（ルール ID と版） */
     notationSnapshot: v.optional(vRuleSetSnapshot),
+    /** 提出時の申告と本人の確認（Notion の版 DB のチェックボックス） */
+    declarations: v.optional(vRevisionDeclarations),
+    selfChecks: v.optional(v.array(v.string())),
   })
     .index("by_work", ["workId"])
     .index("by_work_state", ["workId", "reviewState"])
@@ -300,6 +312,8 @@ export default defineSchema({
         v.object({ type: v.string(), label: v.string(), assigneeId: v.optional(v.string()) }),
       ),
     ),
+    declarations: v.optional(vRevisionDeclarations),
+    selfChecks: v.optional(v.array(v.string())),
     purgedAt: v.optional(v.number()),
   })
     .index("by_work", ["workId"])
@@ -447,6 +461,11 @@ export default defineSchema({
     kind: v.union(v.literal("bureau"), v.literal("team")),
     parentId: v.optional(v.string()),
     order: v.number(),
+    /** Notion の担当 DB に揃えた項目: 局のコード（局だけ）・絵文字・Google Drive フォルダ・所属する人 */
+    code: v.optional(vBureauCode),
+    emoji: v.optional(v.string()),
+    driveFolderUrl: v.optional(v.string()),
+    memberIds: v.optional(v.array(v.string())),
     updatedAt: v.number(),
     updatedBy: v.string(),
   }).index("by_parent", ["parentId"]),

@@ -6,20 +6,20 @@ import { formatJstShort } from "@/lib/format";
 import { permissionLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Field, Select } from "@/ui/Field";
+import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import {
-  M3eButton,
-  M3eDivider,
-  M3eExpansionPanel,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListItem,
   M3eMenu,
   M3eMenuItem,
   M3eMenuItemGroup,
   M3eMenuItemRadio,
   M3eMenuTrigger,
-} from "@/ui/m3e";
+} from "@m3e/react/menu";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { UserPicker } from "@/ui/UserPicker";
 
@@ -56,10 +56,13 @@ export function AclPanel({ workId }: { workId: string }) {
       permission: p,
     });
   });
-  if (grants === undefined) return <p className="muted small">読み込み中…</p>;
+  if (grants === undefined) return <Loading size="small" label="閲覧権限を読み込んでいます" />;
   const active = grants.filter((g) => g.revokedAt === undefined);
   return (
     <div className="acl">
+      <p className="muted small">
+        通常の制作物は委員なら誰でも見られます。ここで付けるのは、非公開・取扱注意の制作物を見られる人（関係者と担当の所属する人には自動で付きます）と、校正・編集・管理の権限です
+      </p>
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません</p>
       ) : (

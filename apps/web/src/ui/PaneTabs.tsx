@@ -1,4 +1,5 @@
-import { M3eBadge, M3eTab, M3eTabs } from "./m3e";
+import { M3eBadge } from "@m3e/react/badge";
+import { M3eTab, M3eTabs } from "@m3e/react/tabs";
 
 /**
  * 画面内の切り替え（M3E tabs・secondary）。内容は呼び出し側が描く（パネルは使わない）。

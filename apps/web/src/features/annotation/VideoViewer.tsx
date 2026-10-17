@@ -14,15 +14,10 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import {
-  M3eButton,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItemGroup,
-  M3eMenuItemRadio,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 import { AnchorOverlay, overlayLabel, type OverlayThread } from "./AnchorOverlay";
 
 /** 動画の下書き（時点・範囲と、画面の上の矩形かピン） */

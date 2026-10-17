@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { downloadFeedbackFile, fetchFeedbackFileBlob } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
-import { M3eDialog, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eSkeleton } from "@m3e/react/skeleton";
 import { iconFor } from "./FeedbackComposer";
 
 export interface FeedbackFileView {
@@ -49,7 +52,14 @@ function ImageThumb({ file, onOpen }: { file: FeedbackFileView; onOpen: (url: st
       disabled={!url}
       onClick={() => url && onOpen(url)}
     >
-      {url ? <img src={url} alt="" /> : <span className="fb-thumb__loading" />}
+      {url ? (
+        <img src={url} alt="" />
+      ) : (
+        // 画像が届くまで同じ大きさのスケルトン（M3E skeleton。枚数分の場所を先に取り、届いたら入れ替わる）
+        <M3eSkeleton shape="square" aria-hidden="true">
+          <span className="fb-thumb__loading" />
+        </M3eSkeleton>
+      )}
     </button>
   );
 }

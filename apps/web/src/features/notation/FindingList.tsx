@@ -1,6 +1,7 @@
 import { ruleStrictnessLabels, type Finding } from "@mf100/domain";
 import type { ReactNode } from "react";
-import { M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 
 /**
  * 表記の確認箇所の一覧（M3E list）。1 件 = 3 行のリスト項目:

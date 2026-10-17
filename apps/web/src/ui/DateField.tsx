@@ -1,16 +1,19 @@
 import { QuestionHead } from "./Field";
 import { useId, useState } from "react";
-import { deadlineFromJst, deadlineToJst, formatDeadlineUntil, toJstDate } from "@/lib/format";
 import {
-  M3eDateInput,
-  M3eDatepicker,
-  M3eDatepickerToggle,
-  M3eFormField,
-  M3eIcon,
-  M3eIconButton,
-  M3eTimepicker,
-  M3eTimepickerToggle,
-} from "./m3e";
+  deadlineFromJst,
+  deadlineToJst,
+  formatDeadlineUntil,
+  formatJstDate,
+  formatJstShort,
+  toJstDate,
+} from "@/lib/format";
+import { M3eDateInput } from "@m3e/react/date-input";
+import { M3eDatepicker, M3eDatepickerToggle } from "@m3e/react/datepicker";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -29,6 +32,7 @@ export function DateField({
   required,
   hint,
   min,
+  kind = "deadline",
 }: {
   label: string;
   value: number | null;
@@ -37,6 +41,11 @@ export function DateField({
   hint?: string;
   /** この日より前の日付は選べない（epoch ms。その JST 暦日に丸める） */
   min?: number;
+  /**
+   * deadline（既定）: 締切・納期。日付だけなら「その日の 23:59 まで」と出す。
+   * date: 入稿日などの日付。値の持ち方は同じ（日付だけなら翌日 0:00 JST）だが、「まで」とは書かない
+   */
+  kind?: "deadline" | "date";
 }) {
   const id = useId();
   const inputId = `${id}-input`;
@@ -144,11 +153,17 @@ export function DateField({
           </M3eIconButton>
         </M3eFormField>
         <p className="q__help" id={summaryId} aria-live="polite">
-          {value === null
-            ? "時刻を入れなければ、その日の 23:59 までです"
-            : time === null
-              ? `${formatDeadlineUntil(value)}（時刻を入れるとその時刻で締め切ります）`
-              : formatDeadlineUntil(value)}
+          {kind === "date"
+            ? value === null
+              ? "日付だけでも、時刻を付けてもよい"
+              : time === null
+                ? formatJstDate(value - 1)
+                : formatJstShort(value)
+            : value === null
+              ? "時刻を入れなければ、その日の 23:59 までです"
+              : time === null
+                ? `${formatDeadlineUntil(value)}（時刻を入れるとその時刻で締め切ります）`
+                : formatDeadlineUntil(value)}
         </p>
       </div>
       <M3eDatepicker

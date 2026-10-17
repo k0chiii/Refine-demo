@@ -12,22 +12,17 @@ import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { Field, Select } from "@/ui/Field";
-import {
-  M3eActionList,
-  M3eButton,
-  M3eDialog,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eIconButton,
-  M3eListAction,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-  M3eSearchBar,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import { M3eSearchBar } from "@m3e/react/search";
 
 type Tab = "rules" | "proposals" | "categories" | "try";
 
@@ -88,7 +83,7 @@ function Notation() {
     return (
       <>
         {title}
-        <p className="muted">読み込み中…</p>
+        <Loading label="表記ルールを読み込んでいます" />
       </>
     );
   const canEditAny = Object.values(book.roles).some((r) => r !== "member");

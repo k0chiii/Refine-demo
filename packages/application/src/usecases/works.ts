@@ -1,11 +1,14 @@
 import {
   applyWorkPatch,
   assertExpectedVersion,
+  assignWorkMetadata,
   type Confidentiality,
   DomainError,
   type MediaType,
   newlyReferencedPeople,
+  normalizeProductionTeamIds,
   normalizeWorkEssentials,
+  normalizeWorkMetadata,
   orgPermissions,
   type Principal,
   requireOrgPermission,
@@ -13,14 +16,16 @@ import {
   type Work,
   type WorkImportInput,
   type WorkLifecycle,
+  type WorkMetadataInput,
   WORK_IMPORT_MAX_ROWS,
+  workMetadataKeys,
   type WorkPatch,
   type UserId,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 
-export interface CreateWorkInput {
+export interface CreateWorkInput extends WorkMetadataInput {
   title: string;
   purpose: string;
   category: string;
@@ -28,6 +33,7 @@ export interface CreateWorkInput {
   year: number;
   legacyId?: string;
   ownerTeamId?: string;
+  /** 制作担当。数の上限はドメインの WorkTeamPolicy（既定 1 つ。利用者決定 2026-10-17） */
   productionTeamIds?: string[];
   relatedTeamIds?: string[];
   managerIds?: string[];
@@ -71,11 +77,15 @@ export async function createWork(
       ...(input.addRegistrantAsManager === false ? [] : [principal.userId]),
     ]),
   );
-  // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責の人は委員の名簿にいること
-  await assertPeopleExist(ctx, essentials);
+  // Notion に揃えた任意の項目（大ジャンル・小ジャンル・関係者・入稿・タグ・リンク）はドメインで整える
+  const meta = normalizeWorkMetadata(pickMetadata(input));
+  // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責・関係者の人は委員の名簿にいること
+  await assertPeopleExist(ctx, { ...essentials, stakeholderIds: meta.stakeholderIds ?? [] });
   const ownerTeamId = input.ownerTeamId?.trim() || undefined;
-  const productionTeamIds = cleanTeamIds(input.productionTeamIds ?? []);
-  await assertTeamsExist(ctx, ownerTeamId, productionTeamIds);
+  // 制作担当は 1 つまで（ポリシー値 WorkTeamPolicy）。関係担当は複数
+  const productionTeamIds = normalizeProductionTeamIds(input.productionTeamIds ?? []);
+  const relatedTeamIds = cleanTeamIds(input.relatedTeamIds ?? []);
+  await assertTeamsExist(ctx, ownerTeamId, productionTeamIds, relatedTeamIds);
   const data: Omit<Work, "id"> = {
     year: input.year,
     title: essentials.title,
@@ -83,7 +93,7 @@ export async function createWork(
     category: essentials.category,
     mediaType: input.mediaType,
     productionTeamIds,
-    relatedTeamIds: input.relatedTeamIds ?? [],
+    relatedTeamIds,
     managerIds,
     creatorIds: essentials.creatorIds,
     approverId: essentials.approverId,
@@ -96,6 +106,7 @@ export async function createWork(
   if (input.deadlineAt !== undefined) data.deadlineAt = input.deadlineAt;
   if (input.notationCategories !== undefined)
     data.notationCategories = cleanCategories(input.notationCategories);
+  assignWorkMetadata(data, meta);
   const work = await ctx.works.insert(data);
   await ctx.audit.record({
     entityType: "work",
@@ -189,13 +200,20 @@ export async function updateWork(
   const patch: WorkPatch = stripUndefined(rest);
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
-  // 制作担当は全体の置き換え（重複・空を除く）
-  if (patch.productionTeamIds) patch.productionTeamIds = cleanTeamIds(patch.productionTeamIds);
+  // 制作担当・関係担当は全体の置き換え（重複・空を除く）。制作担当の数の上限は applyWorkPatch（WorkTeamPolicy）で確かめる
+  if (patch.productionTeamIds)
+    patch.productionTeamIds = normalizeProductionTeamIds(patch.productionTeamIds);
+  if (patch.relatedTeamIds) patch.relatedTeamIds = cleanTeamIds(patch.relatedTeamIds);
   const owner = ownerTeamId === undefined ? undefined : ownerTeamId.trim();
-  await assertTeamsExist(ctx, owner || undefined, patch.productionTeamIds ?? []);
-  // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人の校了権限者）をドメインで確かめる
+  await assertTeamsExist(
+    ctx,
+    owner || undefined,
+    patch.productionTeamIds ?? [],
+    patch.relatedTeamIds ?? [],
+  );
+  // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人の校了権限者、Notion に揃えた項目の形）をドメインで確かめる
   const next = applyWorkPatch(work, patch);
-  // 新しく職責に入った人は委員の名簿にいること
+  // 新しく職責・関係者に入った人は委員の名簿にいること
   await assertPeopleExist(ctx, next, work);
   // 主管担当: 空文字は「主管担当なし」（外す）
   if (owner === "") delete next.ownerTeamId;
@@ -244,12 +262,17 @@ export async function changeWorkLifecycle(
 }
 
 /**
- * 職責（制作者・校了権限者・主管）に入る人が委員の名簿（PeopleDirectory）にいるか。
- * before を渡すと、既に職責にいた人は確かめ直さない。知らない人は `work_invalid`（unknown_user）。
+ * 職責（制作者・校了権限者・主管）と関係者に入る人が委員の名簿（PeopleDirectory）にいるか。
+ * before を渡すと、既に入っていた人は確かめ直さない。知らない人は `work_invalid`（unknown_user）。
  */
 async function assertPeopleExist(
   ctx: AppContext,
-  after: { creatorIds: readonly UserId[]; approverId: UserId; managerIds: readonly UserId[] },
+  after: {
+    creatorIds: readonly UserId[];
+    approverId: UserId;
+    managerIds: readonly UserId[];
+    stakeholderIds?: readonly UserId[] | undefined;
+  },
   before: Work | null = null,
 ): Promise<void> {
   const ids = newlyReferencedPeople(before, after);
@@ -261,26 +284,41 @@ async function assertPeopleExist(
     ? "creatorIds"
     : after.approverId === missing[0]
       ? "approverId"
-      : "managerIds";
+      : after.managerIds.includes(missing[0]!)
+        ? "managerIds"
+        : "stakeholderIds";
   throw new DomainError("work_invalid", { field, reason: "unknown_user", userIds: missing });
+}
+
+/** 登録の入力から Notion に揃えた項目だけを抜く（undefined の項目は入れない） */
+function pickMetadata(input: WorkMetadataInput): WorkMetadataInput {
+  const out: Record<string, unknown> = {};
+  for (const k of workMetadataKeys) if (input[k] !== undefined) out[k] = input[k];
+  return out as WorkMetadataInput;
 }
 
 function cleanTeamIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids.map((id) => id.trim()).filter((id) => id !== "")));
 }
 
-/** 主管担当・制作担当が組織（局 › 担当）にあるか。空なら確かめない */
+/** 主管担当・制作担当・関係担当が組織（局 › 担当）にあるか。空なら確かめない */
 async function assertTeamsExist(
   ctx: AppContext,
   ownerTeamId: string | undefined,
   productionTeamIds: readonly string[],
+  relatedTeamIds: readonly string[] = [],
 ): Promise<void> {
-  const ids = [...(ownerTeamId ? [ownerTeamId] : []), ...productionTeamIds];
+  const ids = [...(ownerTeamId ? [ownerTeamId] : []), ...productionTeamIds, ...relatedTeamIds];
   for (const id of new Set(ids))
     if (!(await ctx.teams.findById(id)))
       throw new DomainError("team_not_found", {
         teamId: id,
-        field: id === ownerTeamId ? "ownerTeamId" : "productionTeamIds",
+        field:
+          id === ownerTeamId
+            ? "ownerTeamId"
+            : productionTeamIds.includes(id)
+              ? "productionTeamIds"
+              : "relatedTeamIds",
       });
 }
 

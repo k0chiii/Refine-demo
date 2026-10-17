@@ -21,6 +21,55 @@ Object.assign(g.process.env, {
 
 const modules = import.meta.glob("../../../convex/convex/**/*.*s");
 
+/**
+ * convex-test は globalThis の Math・Date・performance・setTimeout など（下の一覧）を、構築時と関数呼び出しのたびに
+ * アクセサ（読むたびに AsyncLocalStorage を見る）へ差し替える（トランザクション中の fetch・setTimeout を禁じるため）。
+ * アクセサはアプリ全体に効くので、M3E の配色計算（Math.* を数十万回）・PDF.js の描画・React まで遅くなっていた
+ * （4 倍遅い CPU で初回読み込みの長いタスクが +300ms。docs/UI_M3E.md §60）。
+ * デモでは Convex 呼び出しを 1 本のキューで直列化しているので、構築直後と各呼び出しの後に元のプロパティへ戻す
+ * （呼び出しの最中だけアクセサになる）。本番ビルドにはこのファイルは入らない。
+ */
+const PATCHED_GLOBALS = [
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "fetch",
+  "Date",
+  "Math",
+  "console",
+  "process",
+  "crypto",
+  "Crypto",
+  "CryptoKey",
+  "SubtleCrypto",
+  "atob",
+  "btoa",
+  "Request",
+  "Response",
+  "Headers",
+  "URL",
+  "URLSearchParams",
+  "AbortController",
+  "TextEncoder",
+  "TextDecoder",
+  "structuredClone",
+  "queueMicrotask",
+  "performance",
+] as const;
+/** convex-test を構築する前の、globalThis 自身のプロパティ（継承しているものは undefined） */
+const originalGlobals = new Map(
+  PATCHED_GLOBALS.map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const),
+);
+function restoreGlobals(): void {
+  for (const [key, original] of originalGlobals) {
+    const now = Object.getOwnPropertyDescriptor(globalThis, key);
+    if (!now?.get || !now.configurable) continue; // 差し替えられていない
+    if (original) Object.defineProperty(globalThis, key, original);
+    else delete (globalThis as unknown as Record<string, unknown>)[key]; // 継承したものに戻る
+  }
+}
+
 export interface DemoUser {
   id: string;
   sub: string;
@@ -37,9 +86,22 @@ class DemoBackend {
   private readonly blobs = new Map<string, Blob>();
   private seeded: Promise<void> | null = null;
 
+  constructor() {
+    // convexTest() が差し替えた globalThis のプロパティを戻す（上の restoreGlobals）
+    restoreGlobals();
+  }
+
   /** 全ての Convex 呼び出しを直列化する（AsyncLocalStorage シムの前提）。 */
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(fn, fn);
+    // 呼び出しが終わるたびに、convex-test が差し替えた globalThis のプロパティを元に戻す（上の restoreGlobals）
+    const run = async () => {
+      try {
+        return await fn();
+      } finally {
+        restoreGlobals();
+      }
+    };
+    const next = this.queue.then(run, run);
     this.queue = next.catch(() => undefined);
     return next;
   }

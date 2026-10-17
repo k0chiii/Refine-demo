@@ -3,14 +3,12 @@ import { useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatJstShort } from "@/lib/format";
 import { lifecycleLabel, mediaLabel, reviewStateLabel } from "@/lib/labels";
-import {
-  M3eActionList,
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eListAction,
-  M3eSearchBar,
-} from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eSearchBar } from "@m3e/react/search";
 
 const mediaIcon: Record<string, string> = {
   pdf: "picture_as_pdf",
@@ -99,7 +97,7 @@ export function CrossWorkPicker({
               あなたが見られる制作物から選びます。選んだ制作物の版が左、いま開いている版が右に並びます。
             </p>
             {works === undefined ? (
-              <p className="muted small cross-picker__empty">読み込み中…</p>
+              <Loading size="small" label="制作物を読み込んでいます" />
             ) : candidates.length === 0 ? (
               <p className="muted small cross-picker__empty">
                 {text ? `「${text}」に合う制作物はありません` : "比べられる制作物はありません"}
@@ -140,7 +138,7 @@ export function CrossWorkPicker({
               比べる版を選びます（最新の版が選ばれています）
             </p>
             {picked === undefined ? (
-              <p className="muted small cross-picker__empty">読み込み中…</p>
+              <Loading size="small" label="版を読み込んでいます" />
             ) : revisions.length === 0 ? (
               <p className="muted small cross-picker__empty">この制作物にはまだ版がありません</p>
             ) : (

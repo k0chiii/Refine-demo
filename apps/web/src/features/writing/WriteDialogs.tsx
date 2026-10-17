@@ -1,7 +1,10 @@
 import { countText } from "@mf100/domain";
 import { useEffect, useState } from "react";
 import { Field, TextInput } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eList, M3eListItem, M3eSwitch } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
+import { M3eSwitch } from "@m3e/react/switch";
 
 /** リンクの挿入・編集（Ctrl+K）。M3 Dialogs: 操作は 2 つまで。URL を空にして適用するとリンクを外す */
 export function LinkDialog({

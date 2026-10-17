@@ -3,13 +3,11 @@ import type { Finding } from "@mf100/domain";
 import { useAction as useConvexAction, useQuery } from "convex/react";
 import { useState } from "react";
 import { useAction } from "@/lib/useAction";
-import {
-  M3eButton,
-  M3eCircularProgressIndicator,
-  M3eDialog,
-  M3eIcon,
-  M3eIconButton,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eCircularProgressIndicator } from "@m3e/react/progress-indicator";
 import { FindingList } from "./FindingList";
 
 /**

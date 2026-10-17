@@ -7,7 +7,8 @@ import { useState } from "react";
 import { describeError } from "@/lib/errors";
 import { toast } from "@/lib/toast";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import { M3eButton, M3eIcon } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
 
 const editorPath = {
   document: "/works/$workId/write",

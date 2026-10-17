@@ -2,16 +2,26 @@ import { api } from "@mf100/convex/api";
 import { pickReviewArtifact, type Anchor } from "@mf100/domain";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
+import { anchorPage } from "@/features/annotation/anchorPage";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
-import { anchorPage, PdfViewer } from "@/features/annotation/PdfViewer";
-import { RichTextViewer } from "@/features/annotation/RichTextViewer";
+// 大きなビューア（PDF.js・TipTap・動画）はその添付を開くまで読み込まない
+import {
+  PdfViewer,
+  preloadViewers,
+  RichTextViewer,
+  VideoViewer,
+  ViewerLoading,
+} from "@/features/annotation/lazyViewers";
 import { TextViewer } from "@/features/annotation/TextViewer";
-import { VideoViewer } from "@/features/annotation/VideoViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { documentView } from "@/features/writing/documentView";
-import { M3eButton, M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import type { FeedbackThreadSummary } from "./FeedbackPane";
 
 /** 紙面の FB の番号（その版の紙面に印がある相談を、立てた順に 1, 2, …。エディタの引き出し「FB」と同じ数え方） */
@@ -55,6 +65,11 @@ export function FeedbackStage({
     [work],
   );
   const shownId = revisionId ?? null;
+  // 媒体が分かったら紙面のビューアを版・ファイルの取得と並行して読み込み始める（Editor と同じ）
+  const mediaType = work?.work.mediaType;
+  useEffect(() => {
+    if (mediaType) preloadViewers(mediaType);
+  }, [mediaType]);
   const dataRaw = useQuery(api.revisions.get, shownId ? { revisionId: shownId } : "skip");
   const data = dataRaw && dataRaw.revision.id === shownId ? dataRaw : undefined;
   const [artifactId, setArtifactId] = useState<string | null>(null);
@@ -90,9 +105,12 @@ export function FeedbackStage({
   useEffect(() => {
     if (!artifact || artifact.type !== "document" || !blob.blob) return;
     let cancelled = false;
-    void blob.blob.text().then((t) => {
-      if (!cancelled) setText({ artifactId: artifact.id, ...documentView(artifact, t) });
-    });
+    void blob.blob
+      .text()
+      .then((t) => documentView(artifact, t))
+      .then((view) => {
+        if (!cancelled) setText({ artifactId: artifact.id, ...view });
+      });
     return () => {
       cancelled = true;
     };
@@ -120,7 +138,8 @@ export function FeedbackStage({
   };
 
   const viewer = (): ReactNode => {
-    if (work === undefined) return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (work === undefined)
+      return <Loading calm label="制作物を読み込んでいます" className="fb-stage__empty" />;
     if (!shownId)
       return (
         <div className="empty fb-stage__empty">
@@ -128,11 +147,12 @@ export function FeedbackStage({
           まだ版がありません。制作物全体についてのスレッドは右から立てられます
         </div>
       );
-    if (!data) return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (!data) return <Loading calm label="版を読み込んでいます" className="fb-stage__empty" />;
     if (!artifact)
       return <div className="empty fb-stage__empty">この版には紙面に出せる添付がありません</div>;
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    if (!blob.blob) return <p className="muted fb-stage__empty">ファイルを取得中…</p>;
+    if (!blob.blob)
+      return <Loading calm label="ファイルを取得しています" caption className="fb-stage__empty" />;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
@@ -163,7 +183,8 @@ export function FeedbackStage({
         <TextViewer text={text.body} scale={scale} artifactId={artifact.id} {...viewerProps} />
       );
     }
-    if (artifact.type === "document") return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (artifact.type === "document")
+      return <Loading calm label="文章を読み込んでいます" className="fb-stage__empty" />;
     if (artifact.type === "video" && blob.url)
       return (
         <VideoViewer
@@ -276,7 +297,9 @@ export function FeedbackStage({
             印を押すとその FB を開きます。範囲の FB は「制作物を開く」から立てます
           </p>
         ) : null}
-        <div className="fb-stage__viewer">{viewer()}</div>
+        <div className="fb-stage__viewer">
+          <Suspense fallback={<ViewerLoading className="fb-stage__empty" />}>{viewer()}</Suspense>
+        </div>
       </section>
     </>
   );

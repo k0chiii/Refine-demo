@@ -13,18 +13,17 @@ import { describeError } from "@/lib/errors";
 import { formatJstShort } from "@/lib/format";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
+import { Loading } from "@/ui/Loading";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import {
-  M3eBottomSheet,
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eIconButton,
-  M3eToolbar,
-  M3eTooltip,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eToolbar } from "@m3e/react/toolbar";
+import { M3eTooltip } from "@m3e/react/tooltip";
 import { documentExtensions, highlightColors, paragraphStyles, textColors } from "./extensions";
 import { buildPlainText, documentHtml } from "./plainText";
 import { NotationMarks, SearchReplace } from "./plugins";
@@ -63,7 +62,7 @@ export function WriteEditor({ workId }: { workId: string }) {
   const docData = useQuery(api.documents.get, { workId });
   const [reloadKey, setReloadKey] = useState(0);
   if (workData === undefined || docData === undefined)
-    return <p className="muted write-loading">読み込み中…</p>;
+    return <Loading label="原稿を読み込んでいます" className="write-loading" />;
   // 媒体に合わないエディタでは編集させない（SNS 投稿の下書きを文章で上書きしないため）
   const expected = draftFormatFor(workData.work.mediaType);
   if (expected !== "document")

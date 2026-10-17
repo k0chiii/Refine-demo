@@ -6,7 +6,10 @@ import { useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPlainText, offsetToPos } from "@/features/writing/plainText";
 import { setNotationMarks } from "@/features/writing/plugins";
-import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
 import { AiAssist } from "./AiAssist";
 import { FindingList } from "./FindingList";
 import { useProofreader } from "./useProofreader";
@@ -164,7 +167,8 @@ export function NotationPanel({
     editor.view.focus();
   };
 
-  if (check.state === "loading") return <p className="panel-pad muted">読み込み中…</p>;
+  if (check.state === "loading")
+    return <Loading size="small" label="表記ルールを読み込んでいます" />;
   if (check.state === "no-categories")
     return (
       <div className="panel-pad stack">

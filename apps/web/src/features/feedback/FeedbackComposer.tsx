@@ -1,15 +1,22 @@
 import { useAuthToken } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
 import { FEEDBACK_FILES_MAX, feedbackTemplates, type FeedbackTemplateId } from "@mf100/domain";
-import { useMutation, useQuery } from "convex/react";
-import { useId, useRef, useState } from "react";
+import { useMutation } from "convex/react";
+import { useId, useMemo, useRef, useState } from "react";
 import { guessArtifactType, guessMimeType } from "@/features/upload/fileKind";
-import { activeMentions, MentionProvider, MentionTextarea } from "@/features/review/mentions";
+import {
+  activeMentions,
+  createMentionDirectory,
+  MentionProvider,
+  MentionTextarea,
+} from "@/features/review/mentions";
 import { uploadFeedbackFile } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import { describeError } from "@/lib/errors";
-import { M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 
 export interface ComposerResult {
   body: string;
@@ -20,7 +27,7 @@ export interface ComposerResult {
 
 /**
  * FB スレッドの投稿欄（新しいスレッドの最初の投稿と返信で共通）。
- * - 本文は @ でメンション（その制作物の FB でメンションできる人。api.feedback.mentionCandidates）
+ * - 本文は @ でメンション（その制作物の FB でメンションできる人を、打った文字でサーバーに探させる。api.feedback.searchPeople）
  * - 「テンプレート」から FB テンプレート（制作者・初回／制作者・版更新／校正er）を書き出しに入れる（利用者の FB 制度案）
  * - 作業中の案（PDF・画像・.ai など）を添付。送るときに R2 へ上げ、検証済みになってから投稿する
  * - Ctrl（⌘）＋Enter で送る
@@ -53,7 +60,7 @@ export function FeedbackComposer({
 }) {
   const token = useAuthToken();
   const id = useId().replace(/:/g, "");
-  const candidates = useQuery(api.feedback.mentionCandidates, { workId: workId });
+  const mentionDirectory = useMemo(() => createMentionDirectory(workId, "feedback"), [workId]);
   const prepareFiles = useMutation(api.feedback.prepareFiles);
   const [body, setBody] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
@@ -108,7 +115,7 @@ export function FeedbackComposer({
       setSending("投稿しています…");
       await onSubmit({
         body: body.trim(),
-        mentions: activeMentions(body, mentions, candidates ?? []),
+        mentions: activeMentions(body, mentions, mentionDirectory),
         fileIds,
         ...(template ? { template } : {}),
       });
@@ -124,7 +131,7 @@ export function FeedbackComposer({
   };
 
   return (
-    <MentionProvider value={candidates ?? []}>
+    <MentionProvider value={mentionDirectory}>
       <div className={`fb-composer ${dense ? "fb-composer--dense" : ""}`}>
         <MentionTextarea
           className="fb-composer__input"

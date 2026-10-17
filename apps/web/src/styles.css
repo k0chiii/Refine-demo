@@ -770,6 +770,53 @@ m3e-dialog [slot="actions"] {
   justify-items: center;
   gap: 8px;
 }
+/* 読み込み中（ui/Loading.tsx）: M3 Expressive Loading indicator を区画の中央に。
+   ごく短い読み込みで点滅しないよう 150ms 待って現れる（キャッシュ済みのデモでは見えないことが多い） */
+.loading {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-medium);
+  animation: loading-in var(--mf-motion-effects) 150ms both;
+}
+@keyframes loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.loading--small {
+  padding: 16px;
+  gap: 8px;
+  font: var(--mf-type-body-small);
+}
+.loading--small > m3e-loading-indicator {
+  --m3e-loading-indicator-size: 24px;
+  --m3e-loading-indicator-container-size: 32px;
+}
+.loading--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  vertical-align: middle;
+}
+.loading--inline > m3e-loading-indicator {
+  --m3e-loading-indicator-size: 20px;
+  --m3e-loading-indicator-container-size: 24px;
+}
+.loading__text {
+  max-width: 40ch;
+}
 
 .dialog-body {
   display: grid;
@@ -1230,7 +1277,7 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- 「アバターを変える」（Humation。§56）
- * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
+ * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ（アイコンに映る部位だけ。ボトムスは無い）、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
  * 部品の小さな絵は <use> で定義（.avatar-defs）を参照し、43 個並べても DOM を膨らませない */
 .avatar-picker {
   --m3e-dialog-max-width: 640px;
@@ -1372,7 +1419,7 @@ m3e-dialog [slot="actions"] {
   .avatar-picker .dialog-body {
     min-width: 0;
   }
-  /* 6 つのタブ（髪型…色）を 412 の幅に収める（余白を詰めないと「色」が右にはみ出て、横に送らないと押せない） */
+  /* 5 つのタブ（髪型・トップス・小物・めがね・色）を 412 の幅に収める（余白を詰めないと「色」が右にはみ出て、横に送らないと押せない） */
   .avatar-picker .pane-tabs {
     --m3e-tab-padding-start: 8px;
     --m3e-tab-padding-end: 8px;
@@ -1723,6 +1770,7 @@ m3e-dialog [slot="actions"] {
 .ws__viewer > .viewer,
 .ws__viewer > .compare,
 .ws__viewer > .empty,
+.ws__viewer > .loading,
 .ws__viewer > .external {
   flex: 1;
   min-height: 0;
@@ -3996,6 +4044,11 @@ m3e-snackbar {
   object-fit: cover;
   display: block;
 }
+.fb-thumb__loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .fb-image-dialog img {
   max-width: 100%;
   height: auto;
@@ -5333,4 +5386,68 @@ m3e-snackbar {
   .wlive__mode m3e-button {
     min-width: 0;
   }
+}
+
+/* ---------- 制作物の登録・編集（Notion の制作物 DB に揃えた節。§58） */
+.work-form {
+  gap: 24px;
+}
+.form-section {
+  display: grid;
+  gap: 16px;
+}
+.form-section__h {
+  margin: 0;
+  padding-bottom: 4px;
+  font: var(--mf-type-title-small);
+  color: var(--mf-on-surface-variant);
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.tag-picker__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.info-tab__flags {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.info-tab__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mf-primary);
+}
+.info-tab__link m3e-icon {
+  font-size: 16px;
+}
+.import-list__notes {
+  display: block;
+  color: var(--mf-on-surface-variant);
+}
+/* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
+.submit-checklist {
+  display: grid;
+  gap: 8px;
+}
+.submit-checklist__h {
+  margin: 0;
+  font: var(--mf-type-title-small);
+}
+.submit-checklist .checkbox {
+  align-items: start;
+}
+.submit-checklist .checkbox label {
+  padding-top: 10px;
+  line-height: 20px;
+}
+/* 管理 › 担当: 局のコード・絵文字 */
+.teams-admin__emoji {
+  margin-right: 4px;
+}
+.teams-admin__code {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+  margin-left: 6px;
 }

@@ -7,14 +7,15 @@ import {
   REDACTED_NOTIFICATION,
 } from "../usecases/notifications.ts";
 import { assignReviewers, remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { saveTeam } from "../usecases/teams.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
 /** 通知本文にも制作物の ACL を適用する（§5.2-10。レビュー指摘 P1） */
 describe("通知の本文と制作物の閲覧権限", () => {
-  it("閲覧 ACL の無い人を割り当てても、作品名・確認観点を含む通知を送らない", async () => {
+  it("非公開の制作物に閲覧 ACL の無い人を割り当てても、作品名・確認観点を含む通知を送らない", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { title: "極秘ポスター" });
+    const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
     const revision = await submitRevision(ctx, work.id);
     await assignReviewers(ctx, principals.manager, {
       revisionId: revision.id,
@@ -37,7 +38,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
 
   it("ACL を取り消した後は、既存の通知も作品名を伏せて返す（再付与で戻る）", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { title: "極秘ポスター" });
+    const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
     const revision = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -74,6 +75,51 @@ describe("通知の本文と制作物の閲覧権限", () => {
     });
     const [again] = await listMyNotifications(ctx, principals.reviewer);
     expect(again?.body).toContain("極秘ポスター");
+  });
+
+  it("通常の制作物は委員なら誰でも見られるので、割当の通知も伏せない（利用者決定 2026-10-17）", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { title: "公開チラシ" });
+    const revision = await submitRevision(ctx, work.id);
+    await assignReviewers(ctx, principals.manager, {
+      revisionId: revision.id,
+      reviewerIds: [principals.stranger.userId],
+      reviewType: "general",
+    });
+    const [note] = await listMyNotifications(ctx, principals.stranger);
+    expect(note?.body).toContain("公開チラシ");
+    expect(note?.workId).toBe(work.id);
+  });
+
+  it("非公開の制作物でも、担当の所属する人には伏せない（所属は担当の一覧から判定する）", async () => {
+    const ctx = createInMemoryContext();
+    const bureau = await saveTeam(ctx, principals.sysadmin, { name: "広報局", kind: "bureau" });
+    const design = await saveTeam(ctx, principals.sysadmin, {
+      name: "デザイン担当",
+      kind: "team",
+      parentId: bureau.id,
+      memberIds: [principals.stranger.userId],
+    });
+    const work = await seedWork(ctx, {
+      title: "極秘ポスター",
+      confidentiality: "restricted",
+      productionTeamIds: [design.id],
+    });
+    const revision = await submitRevision(ctx, work.id);
+    await assignReviewers(ctx, principals.manager, {
+      revisionId: revision.id,
+      reviewerIds: [principals.stranger.userId],
+      reviewType: "general",
+    });
+    const stored = ctx.state.notifications
+      .all()
+      .find((n) => n.recipientId === principals.stranger.userId)!;
+    expect(stored.body).toContain("極秘ポスター");
+    const [note] = await listMyNotifications(ctx, {
+      ...principals.stranger,
+      teamIds: [design.id],
+    });
+    expect(note?.body).toContain("極秘ポスター");
   });
 
   it("フィードバックの通知は restricted 以外なら制作物の ACL が無くても見られる", async () => {

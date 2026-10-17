@@ -2,6 +2,24 @@ import { parseCsv } from "../notation/importer.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
+import { splitCsvList } from "../shared/csvValues.ts";
+import { isDriveUrl } from "../work/metadata.ts";
+
+/**
+ * 局のコード（Notion の担当 DB「局」の multi_select の選択肢。利用者決定 2026-10-17）。
+ * 局の正式な名前（日本語）は Notion に無いので、コードだけをポリシー値として持ち、名前は管理画面で付ける。
+ */
+export const bureauCodes = ["JIM", "ZAI", "SSK", "EVE", "PR", "SYS", "WG", "CAP"] as const;
+export type BureauCode = (typeof bureauCodes)[number];
+
+/** 局のコードとして読めるか（大文字小文字・全角を無視） */
+export function parseBureauCode(text: string): BureauCode | null {
+  const key = text.normalize("NFKC").trim().toUpperCase();
+  return (bureauCodes as readonly string[]).includes(key) ? (key as BureauCode) : null;
+}
+
+/** 絵文字（Notion の担当 DB「絵文字」）の長さの上限（文字の見た目の数ではなくコードポイント） */
+export const TEAM_EMOJI_MAX = 8;
 
 /**
  * 組織（局 › 担当 の 2 階層）。利用者決定 2026-10-15「組織は管理画面で管理する（Nogiku との同期は後で）」。
@@ -16,8 +34,20 @@ export interface Team {
   kind: TeamKind;
   /** 担当の属する局の ID（局は持たない） */
   parentId?: string;
-  /** 同じ親の中での並び順（小さいほど上） */
+  /** 同じ親の中での並び順（小さいほど上。Notion の「付番」） */
   order: number;
+  // ---- Notion の担当 DB に揃えた項目（任意。docs/NOTION_ALIGNMENT.md）
+  /** 局のコード（局だけ。JIM・ZAI・SSK・EVE・PR・SYS・WG・CAP） */
+  code?: BureauCode;
+  /** 絵文字 */
+  emoji?: string;
+  /** Google Drive のフォルダ */
+  driveFolderUrl?: string;
+  /**
+   * 所属する人（Notion の「ユーザ」）。所属する人は、その担当が主管担当・制作担当・関係担当の制作物を
+   * （非公開・取扱注意でも）見られる（利用者決定 2026-10-17。acl/authorize.ts の isInvolvedInWork）
+   */
+  memberIds?: UserId[];
   updatedAt: Instant;
   updatedBy: UserId;
 }
@@ -28,7 +58,14 @@ export interface TeamInput {
   parentId?: string | undefined;
   /** 省略すると同じ親の中で最後 */
   order?: number | undefined;
+  /** 局のコード（局だけ）。null・空で外す */
+  code?: string | null | undefined;
+  emoji?: string | null | undefined;
+  driveFolderUrl?: string | null | undefined;
+  memberIds?: readonly string[] | null | undefined;
 }
+
+export type TeamMetadata = Pick<Team, "code" | "emoji" | "driveFolderUrl" | "memberIds">;
 
 /** 登録できる局・担当の数の上限（ポリシー値） */
 export const TEAM_MAX = 300;
@@ -55,15 +92,26 @@ export function validateTeam(
   input: TeamInput,
   existing: readonly Team[],
   selfId?: string,
-): { name: string; kind: TeamKind; parentId?: string; order: number } {
+): { name: string; kind: TeamKind; parentId?: string; order: number } & TeamMetadata {
   const name = input.name.trim();
   if (name === "") throw invalid("name", "required");
   if (Array.from(name).length > TEAM_NAME_MAX) throw invalid("name", "too_long");
   const others = existing.filter((t) => t.id !== selfId);
   const parentId = input.parentId?.trim() || undefined;
+  const meta: TeamMetadata = {};
   if (input.kind === "bureau") {
     if (parentId !== undefined) throw invalid("parentId", "bureau_has_parent");
+    const codeText = input.code?.trim() ?? "";
+    if (codeText !== "") {
+      const code = parseBureauCode(codeText);
+      if (!code) throw invalid("code", "unknown");
+      // 同じコードの局は 1 つ
+      if (others.some((t) => t.kind === "bureau" && t.code === code))
+        throw new DomainError("team_duplicate", { code, name, parentId: null });
+      meta.code = code;
+    }
   } else if (input.kind === "team") {
+    if (input.code) throw invalid("code", "team_has_code");
     if (parentId === undefined) throw invalid("parentId", "required");
     const parent = others.find((t) => t.id === parentId);
     if (!parent || parent.kind !== "bureau") throw invalid("parentId", "not_bureau");
@@ -82,7 +130,53 @@ export function validateTeam(
   } else {
     order = siblings.reduce((max, t) => Math.max(max, t.order), 0) + 1;
   }
-  return { name, kind: input.kind, ...(parentId !== undefined ? { parentId } : {}), order };
+  const emoji = input.emoji?.trim() ?? "";
+  if (emoji !== "") {
+    if (Array.from(emoji).length > TEAM_EMOJI_MAX || /\s/.test(emoji))
+      throw invalid("emoji", "too_long");
+    meta.emoji = emoji;
+  }
+  const drive = input.driveFolderUrl?.trim() ?? "";
+  if (drive !== "") {
+    if (!isDriveUrl(drive)) throw invalid("driveFolderUrl", "not_drive_url");
+    meta.driveFolderUrl = drive;
+  }
+  if (input.memberIds) {
+    const ids: string[] = [];
+    for (const raw of input.memberIds) {
+      const id = raw.trim();
+      if (id === "") throw invalid("memberIds", "blank_id");
+      if (!ids.includes(id)) ids.push(id);
+    }
+    if (ids.length > 0) meta.memberIds = ids;
+  }
+  return {
+    name,
+    kind: input.kind,
+    ...(parentId !== undefined ? { parentId } : {}),
+    order,
+    ...meta,
+  };
+}
+
+/** 局をコードで引く（CSV の「局」にコードが書かれたとき） */
+export function findBureauByCode(code: string, teams: readonly Team[]): Team | null {
+  const c = parseBureauCode(code);
+  if (!c) return null;
+  return teams.find((t) => t.kind === "bureau" && t.code === c) ?? null;
+}
+
+/** その人が所属する局・担当の ID（Principal.teamIds を組むとき・通知の受信者の所属を添えるときに使う） */
+export function memberTeamIds(
+  teams: readonly Pick<Team, "id" | "memberIds">[],
+  userId: UserId,
+): string[] {
+  return teams.filter((t) => t.memberIds?.includes(userId)).map((t) => t.id);
+}
+
+/** 局の表示名「PR 広報局」（絵文字があれば先頭に）。担当は名前だけ */
+export function teamDisplayName(team: Pick<Team, "name" | "code" | "emoji">): string {
+  return [team.emoji, team.code, team.name].filter(Boolean).join(" ");
 }
 
 const byOrderThenName = (a: Team, b: Team) =>
@@ -141,13 +235,19 @@ function oneOf(candidates: Team[]): TeamMatch {
 export function matchTeam(ref: string, teams: readonly Team[]): TeamMatch {
   const key = teamNameKey(ref);
   if (key === "") return { kind: "not_found" };
-  // 名前そのもの（区切りの文字を含む名前もここで当たる）
+  // 名前そのもの（区切りの文字を含む名前もここで当たる）。局はコード（PR など）でも引ける
   const whole = teams.filter((t) => teamNameKey(t.name) === key);
   if (whole.length) return oneOf(whole);
+  const byCode = findBureauByCode(ref, teams);
+  if (byCode) return { kind: "ok", team: byCode };
   const parts = key.split(PATH_SPLIT).filter((p) => p !== "");
   if (parts.length !== 2) return { kind: "not_found" };
   const [bureauKey, childKey] = parts as [string, string];
-  const bureaus = teams.filter((t) => t.kind === "bureau" && teamNameKey(t.name) === bureauKey);
+  const bureaus = teams.filter(
+    (t) =>
+      t.kind === "bureau" &&
+      (teamNameKey(t.name) === bureauKey || (t.code && teamNameKey(t.code) === bureauKey)),
+  );
   const bureauIds = new Set(bureaus.map((b) => b.id));
   return oneOf(
     teams.filter(
@@ -237,10 +337,18 @@ export function sortWorks<
 export interface TeamCsvRow {
   /** CSV の行番号（1 始まり。見出しの行を含む） */
   line: number;
+  /** 局（名前かコード）。1 行に 1 つ */
   bureau: string;
   /** null = 局だけを定める行 */
   team: string | null;
+  /** 並び順（Notion の「付番」） */
   order?: number;
+  /** 絵文字（Notion の「絵文字」） */
+  emoji?: string;
+  /** Google Drive のフォルダ */
+  driveFolderUrl?: string;
+  /** 所属する人の書き方のまま（メールアドレスかユーザー名。照合は取り込む側） */
+  members: string[];
 }
 
 export interface TeamCsvParseResult {
@@ -249,10 +357,14 @@ export interface TeamCsvParseResult {
   errors: { line: number; message: string }[];
 }
 
-const teamCsvColumns = {
+/** 列の見出し（委員会の担当 DB と同じ列名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ。以前の列名も読む） */
+export const teamCsvColumns = {
   bureau: ["局", "局名", "bureau"],
   team: ["担当", "担当名", "team"],
-  order: ["順", "順番", "並び順", "order"],
+  order: ["順", "順番", "並び順", "付番", "order"],
+  emoji: ["絵文字", "emoji"],
+  drive: ["Google Drive フォルダ", "Google Drive", "Drive フォルダ", "driveFolderUrl"],
+  members: ["ユーザ", "ユーザー", "メンバー", "所属", "members"],
 } as const;
 type TeamColumn = keyof typeof teamCsvColumns;
 
@@ -273,8 +385,10 @@ function findTeamHeader(
 }
 
 /**
- * 組織の CSV を読む。列は見出しの名前で探す: 局（必須。局名・bureau でも可）・担当（担当名・team）・順（整数）。
+ * 組織の CSV を読む。列は見出しの名前で探す: 局（必須。名前かコード。局名・bureau でも可）・担当（担当名・team）・
+ * 順（付番。整数）・絵文字・Google Drive フォルダ・ユーザ（所属する人。「;」「,」区切り）。
  * 担当が空の行は局だけを定める。空の行・見出しより前の行は読まない。
+ * アプリの担当はちょうど 1 つの局に属するので、局が複数書かれた行は問題として返す（取り込まない）。
  */
 export function parseTeamCsv(text: string): TeamCsvParseResult {
   const table = parseCsv(text);
@@ -299,11 +413,18 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
       const k = header.map[col];
       return k === undefined ? "" : (cells[k] ?? "").trim();
     };
-    const bureau = get("bureau");
+    const bureaus = splitCsvList(get("bureau"));
+    const bureau = bureaus[0] ?? "";
     const team = get("team");
     const orderText = get("order").normalize("NFKC");
+    const emoji = get("emoji");
+    const drive = get("drive");
     const problems: string[] = [];
     if (bureau === "") problems.push("局がありません");
+    if (bureaus.length > 1)
+      problems.push(
+        `局が ${bureaus.length} つ書かれています。担当が属する局は 1 つだけ書いてください`,
+      );
     for (const [label, name] of [
       ["局", bureau],
       ["担当", team],
@@ -316,6 +437,10 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
       if (Number.isInteger(n) && Math.abs(n) <= 1_000_000) order = n;
       else problems.push(`順「${orderText}」を整数として読めません`);
     }
+    if (emoji !== "" && (Array.from(emoji).length > TEAM_EMOJI_MAX || /\s/.test(emoji)))
+      problems.push(`絵文字「${emoji}」が長すぎます`);
+    if (drive !== "" && !isDriveUrl(drive))
+      problems.push(`Google Drive フォルダ「${drive}」が Drive の URL ではありません`);
     if (problems.length) {
       errors.push({ line, message: problems.join("。") });
       continue;
@@ -325,6 +450,9 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
       bureau,
       team: team === "" ? null : team,
       ...(order !== undefined ? { order } : {}),
+      ...(emoji !== "" ? { emoji } : {}),
+      ...(drive !== "" ? { driveFolderUrl: drive } : {}),
+      members: splitCsvList(get("members")),
     });
   }
   if (rows.length > TEAM_MAX)
@@ -334,35 +462,63 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
   return { rows, errors };
 }
 
+/** 取り込みで作る 1 件（局だけの行は team: null）。局の行で bureau がコードなら code にも入れる */
+export interface TeamImportEntry {
+  bureau: string;
+  team: string | null;
+  order?: number;
+  code?: BureauCode;
+  emoji?: string;
+  driveFolderUrl?: string;
+  /** 所属する人（照合済みの ID。取り込む側が入れる） */
+  memberIds?: string[];
+}
+
 export interface TeamImportPlan {
-  /** 新しく作る局・担当（局だけの行は team: null）。局は担当より前に並ぶとは限らない（作る側で局を先に作る） */
-  create: { bureau: string; team: string | null; order?: number }[];
+  /** 新しく作る局・担当。局は担当より前に並ぶとは限らない（作る側で局を先に作る） */
+  create: TeamImportEntry[];
   /** すでにある（名前が一致した）行の数 */
   existing: number;
 }
 
+/** CSV の「局」（名前かコード）に当たる既存の局の ID */
+function existingBureauId(ref: string, existing: readonly Team[]): string | undefined {
+  const key = teamNameKey(ref);
+  const byName = existing.find((t) => t.kind === "bureau" && teamNameKey(t.name) === key);
+  return (byName ?? findBureauByCode(ref, existing) ?? undefined)?.id;
+}
+
 /**
- * 取り込みの計画: 行ごとに、局・担当がもうあるか（名前で照合）、新しく作るか。
- * 担当の行の局が無ければ、その局も作る。同じ CSV を何度取り込んでも二重にはならない（冪等）。
+ * 取り込みの計画: 行ごとに、局・担当がもうあるか（名前かコードで照合）、新しく作るか。
+ * 担当の行の局が無ければ、その局も作る（「局」がコードなら名前もコードにし、code を付ける。名前は管理画面で直せる）。
+ * 同じ CSV を何度取り込んでも二重にはならない（冪等）。
+ * `memberIds` を渡すと（行番号 → 照合済みの ID）、作る担当にその人を入れる。
  */
 export function planTeamImport(
   rows: readonly TeamCsvRow[],
   existing: readonly Team[],
+  memberIds: ReadonlyMap<number, readonly string[]> = new Map(),
 ): TeamImportPlan {
-  const bureauIdByKey = new Map<string, string>();
-  for (const t of existing) if (t.kind === "bureau") bureauIdByKey.set(teamNameKey(t.name), t.id);
   const existingTeams = new Set(
     existing
       .filter((t) => t.kind === "team" && t.parentId !== undefined)
       .map((t) => `${t.parentId}\u0000${teamNameKey(t.name)}`),
   );
-  const create: TeamImportPlan["create"] = [];
-  const plannedBureaus = new Map<string, TeamImportPlan["create"][number]>();
+  const create: TeamImportEntry[] = [];
+  const plannedBureaus = new Map<string, TeamImportEntry>();
   const plannedTeams = new Set<string>();
   let existingCount = 0;
+  const bureauEntry = (row: TeamCsvRow): TeamImportEntry => {
+    const code = parseBureauCode(row.bureau);
+    return { bureau: row.bureau, team: null, ...(code ? { code } : {}) };
+  };
+  const members = (row: TeamCsvRow) => {
+    const ids = memberIds.get(row.line);
+    return ids && ids.length > 0 ? { memberIds: [...ids] } : {};
+  };
   for (const row of rows) {
     const bKey = teamNameKey(row.bureau);
-    const bureauId = bureauIdByKey.get(bKey);
+    const bureauId = existingBureauId(row.bureau, existing);
     if (row.team === null) {
       if (bureauId !== undefined) existingCount++;
       else {
@@ -370,10 +526,12 @@ export function planTeamImport(
         if (planned) {
           if (planned.order === undefined && row.order !== undefined) planned.order = row.order;
         } else {
-          const entry = {
-            bureau: row.bureau,
-            team: null,
+          const entry: TeamImportEntry = {
+            ...bureauEntry(row),
             ...(row.order !== undefined ? { order: row.order } : {}),
+            ...(row.emoji ? { emoji: row.emoji } : {}),
+            ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
+            ...members(row),
           };
           plannedBureaus.set(bKey, entry);
           create.push(entry);
@@ -387,7 +545,7 @@ export function planTeamImport(
       continue;
     }
     if (bureauId === undefined && !plannedBureaus.has(bKey)) {
-      const entry = { bureau: row.bureau, team: null };
+      const entry = bureauEntry(row);
       plannedBureaus.set(bKey, entry);
       create.push(entry);
     }
@@ -398,14 +556,25 @@ export function planTeamImport(
       bureau: row.bureau,
       team: row.team,
       ...(row.order !== undefined ? { order: row.order } : {}),
+      ...(row.emoji ? { emoji: row.emoji } : {}),
+      ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
+      ...members(row),
     });
   }
   return { create, existing: existingCount };
 }
 
-/** 組織の CSV の雛形（見出しと記入例 3 行）。Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側 */
+/**
+ * 組織の CSV の雛形（見出しと記入例 3 行。委員会の担当 DB と同じ列名）。
+ * Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側
+ */
 export function teamCsvTemplate(): string {
-  return ["局,担当,順", "広報局,デザイン担当,1", "広報局,SNS担当,2", "総務局,渉外担当,1"]
+  return [
+    "局,担当名,付番,絵文字,Google Drive フォルダ,ユーザ",
+    "PR,デザイン担当,1,🎨,https://drive.google.com/drive/folders/example-design,mock-creator@example.invalid",
+    "PR,SNS担当,2,📣,,",
+    "JIM,渉外担当,1,,,",
+  ]
     .map((l) => `${l}\r\n`)
     .join("");
 }

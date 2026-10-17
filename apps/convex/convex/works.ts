@@ -8,6 +8,8 @@ import {
 } from "@mf100/application";
 import {
   canViewWork,
+  currentDeclarations,
+  defaultWorkViewPolicy,
   hasOrgPermission,
   normalizePersonKey,
   orgPermissions,
@@ -16,19 +18,30 @@ import {
   isAllowed,
   isGrantActive,
   revisionLabel,
+  workTeamIdsOf,
   type Principal,
   type Work,
+  type WorkViewPolicy,
 } from "@mf100/domain";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type DatabaseReader } from "./_generated/server";
-import { createAppContext, createReadContext } from "./lib/adapters.ts";
+import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
-import { requireUser } from "./lib/principal.ts";
+import { requireUser, teamIdsOf } from "./lib/principal.ts";
 import { resolveUsers } from "./lib/users.ts";
-import { vConfidentiality, vLifecycleTarget, vMediaType } from "./lib/validators.ts";
+import {
+  vConfidentiality,
+  vLifecycleTarget,
+  vMediaType,
+  vWorkGenre,
+  vWorkMetadataFields,
+  vWorkMetadataPatch,
+} from "./lib/validators.ts";
 
 const workPatch = {
+  /** Notion の制作物 DB に揃えた項目（null で消す。docs/NOTION_ALIGNMENT.md） */
+  ...vWorkMetadataPatch,
   title: v.optional(v.string()),
   purpose: v.optional(v.string()),
   category: v.optional(v.string()),
@@ -65,6 +78,8 @@ export const create = mutation({
     confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
     activate: v.optional(v.boolean()),
+    /** Notion の制作物 DB に揃えた項目 */
+    ...vWorkMetadataFields,
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -95,9 +110,12 @@ export const importBatch = mutation({
         legacyId: v.optional(v.string()),
         confidentiality: vConfidentiality,
         notationCategories: v.array(v.string()),
-        /** 主管担当・制作担当（teams の ID） */
+        /** 主管担当・制作担当・関係担当（teams の ID） */
         ownerTeamId: v.optional(v.string()),
         productionTeamIds: v.optional(v.array(v.string())),
+        relatedTeamIds: v.optional(v.array(v.string())),
+        /** 制作物 DB に揃えた項目（docs/NOTION_ALIGNMENT.md） */
+        ...vWorkMetadataFields,
       }),
     ),
     source: v.optional(v.string()),
@@ -107,7 +125,13 @@ export const importBatch = mutation({
     return runUseCase(async () => {
       const works = await importWorks(createAppContext(ctx), principal, {
         ...args,
-        rows: args.rows.map((r) => ({ ...r, productionTeamIds: r.productionTeamIds ?? [] })),
+        rows: args.rows.map((r) => ({
+          ...r,
+          stakeholderIds: r.stakeholderIds ?? [],
+          tags: r.tags ?? [],
+          productionTeamIds: r.productionTeamIds ?? [],
+          relatedTeamIds: r.relatedTeamIds ?? [],
+        })),
       });
       return works.map((w) => w.id);
     });
@@ -185,6 +209,7 @@ export const get = query({
       const users = await resolveUsers(ctx.db, [
         ...work.creatorIds,
         ...work.managerIds,
+        ...(work.stakeholderIds ?? []),
         work.approverId,
         ...revisions.map((r) => r.submittedBy),
         ...approvals.map((a) => a.actorId),
@@ -224,8 +249,11 @@ export const get = query({
         people: {
           creators: work.creatorIds.map((id) => users.get(id)),
           managers: work.managerIds.map((id) => users.get(id)),
+          stakeholders: (work.stakeholderIds ?? []).map((id) => users.get(id)),
           approver: users.get(work.approverId),
         },
+        /** 「現在の版」の申告（写真・めい・指針外の色。Notion の formula に相当）。申告の無い版なら null */
+        currentDeclarations: currentDeclarations(revisions),
         revisions: revisions.map((r) => ({
           ...r,
           label: revisionLabel(r),
@@ -256,7 +284,7 @@ export const get = query({
 });
 
 /**
- * 制作物一覧（U-02）。自分が職責または ACL で関与する作品だけを返す。全件購読はしない。
+ * 制作物一覧（U-02）。自分が見られる制作物を返す（通常の制作物は委員なら誰でも。非公開は関わる人だけ。listMyWorks）。
  */
 export const listMine = query({
   args: {
@@ -271,6 +299,8 @@ export const listMine = query({
       ),
     ),
     text: v.optional(v.string()),
+    /** 大ジャンルで絞る（Notion の select） */
+    genre: v.optional(vWorkGenre),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -281,9 +311,10 @@ export const listMine = query({
     for (const work of mine) {
       if (args.year !== undefined && work.year !== args.year) continue;
       if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
+      if (args.genre !== undefined && work.genre !== args.genre) continue;
       if (
         text &&
-        !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose}`
+        !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose} ${(work.tags ?? []).join(" ")}`
           .toLowerCase()
           .includes(text)
       )
@@ -324,32 +355,53 @@ export const listMine = query({
   },
 });
 
+/** 一覧で読む制作物の上限（委員会の制作物は年度あたり高々数百件） */
+const WORKS_SCAN_LIMIT = 2000;
+
 /**
- * 自分が関わる制作物（職責または有効な ACL）。閲覧可否はドメインで最終判定する（取消直後の整合）。
- * 一覧とダッシュボードで共用。
+ * 自分が見られる制作物。通常の制作物は委員なら誰でも（WorkViewPolicy。利用者決定 2026-10-17「閲覧は基本全員できて良い」）、
+ * 非公開・取扱注意は職責・有効な ACL・関係者・担当の所属がある人。一覧・ダッシュボード・版提出の候補で共用。
+ *
+ * 読み方（docs/UI_M3E.md §60）: ポリシーが all_members のとき、通常の制作物は `by_confidentiality` の索引で集めるだけで
+ * ACL を読まない（判定は機密区分だけで決まる）。非公開は同じ索引で集め、1 件ずつ ACL を読んでドメインの canViewWork で判定する
+ * （職責・ACL・関係者で通らなければ、そのときだけ担当の所属を 1 回読んで判定し直す）。
+ * 並びは works を全走査していたときと同じ（_creationTime の昇順）。ポリシーが involved_only なら従来どおり全件を判定する。
  */
-export async function listMyWorks(db: DatabaseReader, principal: Principal): Promise<Work[]> {
+export async function listMyWorks(
+  db: DatabaseReader,
+  principal: Principal,
+  policy: WorkViewPolicy = defaultWorkViewPolicy,
+): Promise<Work[]> {
   const app = createReadContext(db);
-  const ids = new Set<string>();
-  for (const r of await db
-    .query("workRoles")
-    .withIndex("by_user", (q) => q.eq("userId", principal.userId))
-    .collect())
-    ids.add(r.workId);
-  for (const g of await db
-    .query("workPermissions")
-    .withIndex("by_principal", (q) =>
-      q.eq("principalType", "user").eq("principalId", principal.userId),
-    )
-    .collect()) {
-    if (g.revokedAt === undefined) ids.add(g.workId);
-  }
-  const out: Work[] = [];
-  for (const id of ids) {
-    const work = await app.works.findById(id);
-    if (!work) continue;
+  // 担当の所属を添えた主体。非公開の制作物で要るときだけ、1 回読む
+  let member: Principal | null = null;
+  const canView = async (work: Work): Promise<boolean> => {
     const grants = await app.acl.listByWork(work.id);
-    if (canViewWork({ work, grants, principal })) out.push(work);
+    if (canViewWork({ work, grants, principal, viewPolicy: policy })) return true;
+    if (principal.teamIds !== undefined || workTeamIdsOf(work).length === 0) return false;
+    member ??= { ...principal, teamIds: await teamIdsOf(db, principal.userId as Id<"users">) };
+    return canViewWork({ work, grants, principal: member, viewPolicy: policy });
+  };
+  const out: Work[] = [];
+  if (policy.normalWorks !== "all_members") {
+    for (const work of await app.works.list(WORKS_SCAN_LIMIT))
+      if (await canView(work)) out.push(work);
+    return out;
+  }
+  const byConfidentiality = (c: Doc<"works">["confidentiality"]) =>
+    db
+      .query("works")
+      .withIndex("by_confidentiality", (q) => q.eq("confidentiality", c))
+      .take(WORKS_SCAN_LIMIT);
+  const [normal, restricted] = await Promise.all([
+    byConfidentiality("normal"),
+    byConfidentiality("restricted"),
+  ]);
+  // 索引の中は _creationTime 順。2 本を作成時刻で合流し、全走査と同じ並びにする
+  const docs = [...normal, ...restricted].sort((a, b) => a._creationTime - b._creationTime);
+  for (const doc of docs) {
+    const work = workFromDoc(doc);
+    if (doc.confidentiality === "normal" || (await canView(work))) out.push(work);
   }
   return out;
 }
@@ -366,6 +418,9 @@ function summarize(
     legacyId: work.legacyId ?? null,
     category: work.category,
     mediaType: work.mediaType,
+    genre: work.genre ?? null,
+    subGenre: work.subGenre ?? null,
+    tags: [...(work.tags ?? [])],
     year: work.year,
     lifecycle: work.lifecycle,
     confidentiality: work.confidentiality,

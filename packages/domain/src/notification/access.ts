@@ -23,9 +23,10 @@ export function canSeeNotificationSubject(
 
 /**
  * 通知の受信者を判定に使う主体。受信者は操作した本人ではないため userId しか分からない。
+ * 担当の所属（teamIds）は呼び出し側が担当の一覧から添える（非公開の制作物を所属で見られる人に伏せないため）。
  * グループ連動（Nogiku Access）前の MVP では groupIds は常に空なので、利用者本人の主体と同じ判定になる。
  * 連動後にグループ経由でだけ見られる人は「見られない」側に倒れる（保護情報を漏らさない向き）。
  */
-export function recipientPrincipal(userId: UserId): Principal {
-  return { userId, isSystemAdmin: false, groupIds: [], orgPermissions: [] };
+export function recipientPrincipal(userId: UserId, teamIds: readonly string[] = []): Principal {
+  return { userId, isSystemAdmin: false, groupIds: [], orgPermissions: [], teamIds };
 }

@@ -4,7 +4,7 @@ import {
   decideThread,
   editThread,
   listCarryCandidates,
-  listMentionCandidates,
+  searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
   replyToThread,
 } from "@mf100/application";
@@ -177,20 +177,16 @@ export const carryForward = mutation({
   },
 });
 
-/** メンションの候補（その制作物を見られる人）。候補を取れるのも見られる人だけ */
-export const mentionCandidates = query({
-  args: { workId: v.string() },
-  handler: async (ctx, { workId }) => {
+/**
+ * メンションの候補を「@」に続けて打った文字で探す（その制作物を見られる人のうち名前・メールが一致する人。名前順・20 人まで）。
+ * 候補を取れるのも見られる人だけ。画面は候補の一覧を丸ごと購読せず、打っている間だけこの検索を購読する（docs/UI_M3E.md §60）
+ */
+export const searchMentionCandidates = query({
+  args: { workId: v.string(), text: v.string() },
+  handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(async () => {
-      const ids = await listMentionCandidates(createReadContext(ctx.db), principal, workId);
-      const users = await resolveUsers(ctx.db, ids);
-      return ids
-        .flatMap((id) => {
-          const u = users.get(id);
-          return u ? [u] : [];
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, "ja"));
-    });
+    return runUseCase(() =>
+      searchMentionCandidatesUseCase(createReadContext(ctx.db), principal, args),
+    );
   },
 });

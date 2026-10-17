@@ -186,9 +186,12 @@ function workInvalidMessage(details: unknown): string | null {
     managerIds: "主管・制作統括",
     mediaType: "媒体",
     confidentiality: "機密区分",
+    productionTeamIds: "制作担当",
   };
   const name = typeof d.field === "string" ? label[d.field] : undefined;
   if (!name) return null;
+  if (d.reason === "too_many")
+    return `${name}は ${max ?? 1} つまでです。選び直してください（あとから変えられます）`;
   if (d.reason === "required")
     return d.field === "creatorIds"
       ? "制作者を 1 人以上選んでください"

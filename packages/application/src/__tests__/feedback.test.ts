@@ -116,7 +116,8 @@ describe("フィードバックのスレッドと投稿", () => {
 
     const view = await getFeedbackThread(ctx, stranger, t1);
     expect(view.thread.participants.map((p) => p.id)).toEqual([creator.userId, reviewer.userId]);
-    expect(view.work).toMatchObject({ title: "EVE 企画ポスター", canOpen: false });
+    // 通常の制作物は委員なら誰でも開ける（利用者決定 2026-10-17）
+    expect(view.work).toMatchObject({ title: "EVE 企画ポスター", canOpen: true });
     expect(view.posts.map((p) => p.template)).toEqual(["creator_first", "reviewer"]);
     expect(view.can).toEqual({ post: true, editOwn: true, rename: false });
     // 未読の区切りのため、開いた人が最後に読んだ時刻を返す（読んでいなければ null）
@@ -281,10 +282,14 @@ describe("メンションと通知", () => {
     const { ctx, work } = await setup();
     expect(
       (await listFeedbackMentionCandidates(ctx, stranger, work.id)).map((p) => p.id).sort(),
-    ).toEqual([creator, reviewer, manager, approver].map((p) => p.userId).sort());
+    ).toEqual([creator, reviewer, manager, approver, sysadmin].map((p) => p.userId).sort());
     expect(await searchFeedbackPeople(ctx, stranger, { workId: work.id, text: "本郷" })).toEqual([
-      { id: reviewer.userId, name: "本郷 校正" },
+      { id: reviewer.userId, name: "本郷 校正", email: null },
     ]);
+    // 空文字なら全員（名前順）。limit で切る
+    expect(
+      (await searchFeedbackPeople(ctx, stranger, { workId: work.id, text: "", limit: 2 })).length,
+    ).toBe(2);
     const secret = await seedWork(ctx, { title: "非公開", confidentiality: "restricted" });
     expect(
       (await listFeedbackMentionCandidates(ctx, creator, secret.id)).map((p) => p.id).sort(),

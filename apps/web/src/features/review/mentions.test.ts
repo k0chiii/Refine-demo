@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { activeMentions, mentionQueryAt } from "./mentions";
+import { activeMentions, createMentionDirectory, mentionQueryAt } from "./mentions";
 
 describe("mentionQueryAt", () => {
   it("カーソル直前の @よみ を拾う", () => {
@@ -13,12 +13,14 @@ describe("mentionQueryAt", () => {
 });
 
 describe("activeMentions", () => {
-  const users = [
-    { id: "u1", name: "本郷 校正" },
-    { id: "u2", name: "五月 めい" },
-  ];
+  // 候補から選んだ人の名前は検索先（directory）に控える
+  const dir = createMentionDirectory("w1", "comments");
+  dir.remember({ id: "u1", name: "本郷 校正" });
+  dir.remember({ id: "u2", name: "五月 めい" });
   it("本文に @名前 が残っている人だけ", () => {
-    expect(activeMentions("@本郷 校正 お願いします", ["u1", "u2", "u1"], users)).toEqual(["u1"]);
-    expect(activeMentions("名前を消した", ["u1"], users)).toEqual([]);
+    expect(activeMentions("@本郷 校正 お願いします", ["u1", "u2", "u1"], dir)).toEqual(["u1"]);
+    expect(activeMentions("名前を消した", ["u1"], dir)).toEqual([]);
+    // 控えの無い人（候補から選んでいない ID）は数えない
+    expect(activeMentions("@誰か", ["u9"], dir)).toEqual([]);
   });
 });

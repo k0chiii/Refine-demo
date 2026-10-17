@@ -1,4 +1,3 @@
-import { documentView } from "@/features/writing/documentView";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
@@ -27,6 +26,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -37,19 +37,35 @@ import {
 } from "react";
 import { AlignedGutter, type GutterItem } from "@/features/annotation/AlignedGutter";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
+import { anchorPage } from "@/features/annotation/anchorPage";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
-import { PdfViewer, anchorPage } from "@/features/annotation/PdfViewer";
+// 大きなビューア（PDF.js・TipTap・動画・ライブ表示・Figma）はその添付を開くまで読み込まない
+import {
+  FigmaEmbedViewer,
+  PdfViewer,
+  preloadViewers,
+  RichTextViewer,
+  VideoViewer,
+  ViewerLoading,
+  WebLiveViewer,
+} from "@/features/annotation/lazyViewers";
 import { TextViewer } from "@/features/annotation/TextViewer";
-import { VideoViewer } from "@/features/annotation/VideoViewer";
-import { WebLiveViewer, type WebDraft } from "@/features/annotation/WebLiveViewer";
-import { FigmaEmbedViewer, type FigmaDraft } from "@/features/annotation/FigmaEmbedViewer";
+import type { WebDraft } from "@/features/annotation/WebLiveViewer";
+import type { FigmaDraft } from "@/features/annotation/FigmaEmbedViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
-import { ComposePopover } from "@/features/review/ComposePopover";
-import { activeMentions, MentionProvider } from "@/features/review/mentions";
+import { documentView } from "@/features/writing/documentView";
+import { StoredComposePopover } from "@/features/review/ComposePopover";
+import { createComposeStore } from "@/features/review/composeStore";
+import {
+  activeMentions,
+  createMentionDirectory,
+  MentionProvider,
+} from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PinButton, useRecordOpened } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
+import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
@@ -59,7 +75,6 @@ import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
 import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
 import { useCompareSession } from "@/features/compare/useCompareSession";
-import { RichTextViewer } from "@/features/annotation/RichTextViewer";
 import { remaining } from "@/lib/format";
 import {
   blockedReasonLabel,
@@ -77,18 +92,13 @@ import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Field, TextArea } from "@/ui/Field";
 import { StatusText } from "@/ui/Chip";
-import {
-  M3eBottomSheet,
-  M3eButton,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-  M3eToolbar,
-} from "@/ui/m3e";
+import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
+import { M3eButton } from "@m3e/react/button";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import { M3eToolbar } from "@m3e/react/toolbar";
 import { InfoTab } from "./InfoTab";
 import { VersionsTab } from "./VersionsTab";
 
@@ -199,6 +209,11 @@ export function Editor({
     return revisions.find((r) => r.kind === "standard" && r.sequence === version) ?? null;
   }, [workData, revisions, version]);
   const revisionId = target?.id ?? null;
+  // 媒体が分かったら、その紙面のビューア（PDF.js など）を版・ファイルの取得と並行して読み込み始める
+  const mediaType = workData?.work.mediaType;
+  useEffect(() => {
+    if (mediaType) preloadViewers(mediaType);
+  }, [mediaType]);
   const dataRaw = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   // 版を切り替えた直後に前の版の結果が残ることがあるので、表示中の版のものだけを使う
   const data = dataRaw && revisionId && dataRaw.revision.id === revisionId ? dataRaw : undefined;
@@ -264,10 +279,10 @@ export function Editor({
     artifactId: string;
     revisionId: string;
   } | null>(null);
-  const [body, setBody] = useState("");
-  const [mentions, setMentions] = useState<string[]>([]);
-  // メンションの候補（この制作物を見られる人）
-  const mentionCandidates = useQuery(api.comments.mentionCandidates, { workId });
+  // 投稿欄の書きかけ（本文・メンション）。Editor の state に置かず、投稿欄だけが購読する（1 文字ごとに全体を描き直さない）
+  const [composeStore] = useState(createComposeStore);
+  // メンションの検索先（候補は「@」に続けて打った文字でサーバーに探させる。名簿は購読しない。§60）
+  const mentionDirectory = useMemo(() => createMentionDirectory(workId, "comments"), [workId]);
   const [requestId, setRequestId] = useState(newRequestId);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -367,6 +382,8 @@ export function Editor({
   }, [revisionId]);
   useEffect(() => {
     if (!data) return;
+    // 添付の種類が確定したら、媒体の見込みが外れていてもその種類のビューアを読み込み始める（ファイルの取得と並行）
+    for (const a of data.artifacts) if (isReviewableArtifact(a)) preloadViewers(a.type);
     if (!artifactId || !data.artifacts.some((a) => a.id === artifactId))
       // 紙面に出すのは提出の順番によらず PDF → 画像 → 文章 → 動画（動画の制作物は動画を先に。.ai などの原本は 情報 › この版のファイル から落とす）
       setArtifactId(
@@ -397,18 +414,16 @@ export function Editor({
   }, []);
   // 紙面で範囲を選んだだけ（まだ書いていない）なら Esc で選択をやめる。書きかけのコメントは消さない（§35 I-07）。
   // メニュー・ダイアログを閉じる Esc（defaultPrevented）と IME の変換中は何もしない
-  const bodyRef = useRef(body);
-  bodyRef.current = body;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
-      if (bodyRef.current.trim()) return;
+      if (composeStore.get().body.trim()) return;
       setDraft(null);
-      setBody("");
+      composeStore.reset();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [composeStore]);
 
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
   // 文章は倍率をそのまま表示（PDF・画像はビューアが実寸比を返す）
@@ -424,10 +439,12 @@ export function Editor({
   useEffect(() => {
     if (!artifact || artifact.type !== "document" || !blob.blob) return;
     let cancelled = false;
-    void blob.blob.text().then((t) => {
-      if (cancelled) return;
-      setText({ artifactId: artifact.id, ...documentView(artifact, t) });
-    });
+    void blob.blob
+      .text()
+      .then((t) => documentView(artifact, t))
+      .then((view) => {
+        if (!cancelled) setText({ artifactId: artifact.id, ...view });
+      });
     return () => {
       cancelled = true;
     };
@@ -469,11 +486,11 @@ export function Editor({
 
   const resetCompose = () => {
     setDraft(null);
-    setBody("");
-    setMentions([]);
+    composeStore.reset();
   };
   const doPost = useAction(async () => {
     if (!data || !draft || !revisionId) return;
+    const { body, mentions } = composeStore.get();
     let anchor: Anchor | undefined;
     if (artifact && !draft.free) {
       if (artifact.type === "pdf" && draft.page)
@@ -510,7 +527,7 @@ export function Editor({
         revisionId,
         ...(anchor ? { anchor } : {}),
         body,
-        mentions: activeMentions(body, mentions, mentionCandidates ?? []),
+        mentions: activeMentions(body, mentions, mentionDirectory),
       });
       resetCompose();
       openFeedback(id);
@@ -524,7 +541,7 @@ export function Editor({
       severity: "major",
       requestId,
       ...(anchor ? { anchor } : {}),
-      mentions: activeMentions(body, mentions, mentionCandidates ?? []),
+      mentions: activeMentions(body, mentions, mentionDirectory),
     });
     resetCompose();
     setRequestId(newRequestId());
@@ -540,7 +557,7 @@ export function Editor({
     await reply({
       threadId: threadId as Id<"commentThreads">,
       body: b,
-      mentions: activeMentions(b, ids, mentionCandidates ?? []),
+      mentions: activeMentions(b, ids, mentionDirectory),
     });
   });
   const doAssignThread = useAction(async (threadId: string, ids: string[]) => {
@@ -588,7 +605,7 @@ export function Editor({
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
-  if (workData === undefined) return <p className="muted">読み込み中…</p>;
+  if (workData === undefined) return <Loading calm label="制作物を読み込んでいます" />;
   const { work } = workData;
   const isSns = work.mediaType === "sns";
   const openAuthoring = () =>
@@ -722,13 +739,10 @@ export function Editor({
       pos = popoverPos(b, vp);
     } else if (box) pos = { x: Math.max(0, box.x), y: box.y + box.h + 6 };
     return (
-      <ComposePopover
+      <StoredComposePopover
+        store={composeStore}
         x={pos.x}
         y={pos.y}
-        value={body}
-        onChange={setBody}
-        mentions={mentions}
-        onMentions={setMentions}
         docked={compact}
         {...(draft.range && text
           ? { quote: text.body.slice(draft.range.start, draft.range.end).slice(0, 80) }
@@ -873,7 +887,7 @@ export function Editor({
           ) : null}
         </div>
       );
-    if (!data) return <div className="empty">読み込み中…</div>;
+    if (!data) return <Loading calm label="版を読み込んでいます" />;
     if (!artifact) return <div className="empty">添付がありません</div>;
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
@@ -967,7 +981,8 @@ export function Editor({
       );
     }
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    if (!blob.blob) return <div className="empty">ファイルを取得中…</div>;
+    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので文字も見せる）
+    if (!blob.blob) return <Loading calm label="ファイルを取得しています" caption />;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
@@ -1119,7 +1134,7 @@ export function Editor({
   const renderOther = (): ReactNode => {
     if (!compareWith) return null;
     if (!other || !otherArtifact) return <div className="empty">比較する添付がありません</div>;
-    if (!otherBlob.blob) return <div className="empty">ファイルを取得中…</div>;
+    if (!otherBlob.blob) return <Loading calm label="比べる版のファイルを取得しています" caption />;
     const none = {
       threads: [],
       activeThreadId: null,
@@ -1142,7 +1157,7 @@ export function Editor({
         />
       );
     if (otherArtifact.type === "document") {
-      if (!cmp.otherText) return <div className="empty">文章を読み込み中…</div>;
+      if (!cmp.otherText) return <Loading label="比べる版の文章を読み込んでいます" />;
       return cmp.otherText.html !== undefined ? (
         <RichTextViewer
           html={cmp.otherText.html}
@@ -1378,7 +1393,7 @@ export function Editor({
   });
 
   return (
-    <MentionProvider value={mentionCandidates ?? []}>
+    <MentionProvider value={mentionDirectory}>
       <div className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""}`}>
         {/* 見出し・戻る・主要操作は共通アプリバーへ（M3 App bars: ページの見出し＋戻る＋ 1–2 の必須操作。多い操作はツールバーへ） */}
         <AppBarSlot slot="leading">
@@ -1479,7 +1494,7 @@ export function Editor({
                           <M3eIcon name="swap_horiz" />
                         </M3eIconButton>
                       </div>
-                      {renderOther()}
+                      <Suspense fallback={<ViewerLoading />}>{renderOther()}</Suspense>
                     </div>
                     <div className="compare__pane">
                       <div className="compare__label">
@@ -1488,13 +1503,13 @@ export function Editor({
                           <span className="compare__hint">コメントできます</span>
                         ) : null}
                       </div>
-                      {renderViewer()}
+                      <Suspense fallback={<ViewerLoading />}>{renderViewer()}</Suspense>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              renderViewer()
+              <Suspense fallback={<ViewerLoading />}>{renderViewer()}</Suspense>
             )}
 
             {artifact && (artifact.role !== "external" || isLiveExternal) ? (

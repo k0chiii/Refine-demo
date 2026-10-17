@@ -22,7 +22,12 @@ const DAY = 86_400_000;
 async function setup() {
   const ctx = createInMemoryContext();
   const now = ctx.clock.now();
-  const late = await seedWork(ctx, { title: "B 遅い納期", deadlineAt: now + 20 * DAY });
+  // B は非公開（校正者には見えない。通常の制作物は委員の誰でも見られるため）
+  const late = await seedWork(ctx, {
+    title: "B 遅い納期",
+    deadlineAt: now + 20 * DAY,
+    confidentiality: "restricted",
+  });
   const soon = await seedWork(ctx, { title: "A 近い納期", deadlineAt: now + 3 * DAY });
   const text = await seedWork(ctx, { title: "C 文章", mediaType: "document" });
   const held = await seedWork(ctx, { title: "D 保留" });
