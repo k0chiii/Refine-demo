@@ -331,6 +331,12 @@ export function PostReview({
             placement="inline"
           />
         </div>
+        {/* 使い方の一文は上に置く（下だと浮遊ツールバーの裏に隠れる） */}
+        <p className="small muted">
+          {annotate?.selecting
+            ? "本文は文字を選ぶ、画像はドラッグ（スマホは長押し）でコメントできます"
+            : "コメントを付けた本文・画像の場所が印で出ます"}
+        </p>
         <PostMarksContext.Provider value={marksValue}>
           <div className="post-annotate" ref={wrapRef}>
             <PostPreview
@@ -360,11 +366,6 @@ export function PostReview({
             {hiddenNote}
           </p>
         ) : null}
-        <p className="small muted">
-          {annotate?.selecting
-            ? "本文は文字を選ぶ、画像はドラッグ（スマホは長押し）でコメントできます"
-            : "コメントを付けた本文・画像の場所が印で出ます"}
-        </p>
       </div>
       <Card title="投稿用に書き出す">
         {isFinal ? (
