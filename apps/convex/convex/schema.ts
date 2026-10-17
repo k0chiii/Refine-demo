@@ -13,9 +13,9 @@ import {
   vProofreadingRunFields,
   vFeedbackTemplateId,
   vArtifactOrigin,
-  vAvatarConfig,
   vBureauCode,
   vRevisionDeclarations,
+  vStoredAvatarConfig,
   vWorkMetadataFields,
 } from "./lib/validators.ts";
 
@@ -187,8 +187,8 @@ export default defineSchema({
     /** Nogiku Access から同期した組織権限名（後続）。NOGIKU_ACCESS_ENABLED=true のときだけ参照する。 */
     orgPermissions: v.optional(v.array(v.string())),
     lastLoginAt: v.optional(v.number()),
-    /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17） */
-    avatar: v.optional(vAvatarConfig),
+    /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17）。古い値の `bottom` も保持する（読むときに捨てる） */
+    avatar: v.optional(vStoredAvatarConfig),
     /** 代（Notion のユーザ DB「代」。例: 100。システム管理者が付ける） */
     generation: v.optional(v.number()),
   })

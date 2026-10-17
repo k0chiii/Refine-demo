@@ -1,5 +1,11 @@
 import type { HumationManifest, PartOption } from "@humation/core";
-import type { AvatarConfig } from "@mf100/domain";
+import {
+  AVATAR_COLOR_SLOTS,
+  AVATAR_PART_SLOTS,
+  type AvatarColorSlot,
+  type AvatarConfig,
+  type AvatarPartSlot,
+} from "@mf100/domain";
 import { useEffect, useState, type ComponentType } from "react";
 
 /**
@@ -7,6 +13,9 @@ import { useEffect, useState, type ComponentType } from "react";
  * - アセット（約 700KB）は初回表示時に遅延読み込みし、UserAvatar と選択画面で共有する
  * - 保存された設定に知らない部品・色の役割があれば捨てる（描画が例外で止まらないように。形の検証は domain）
  * - 部位・部品・色の日本語名と、色の候補（パレット）はここに置く
+ * - 選べる部位・色の役割は domain の `AVATAR_PART_SLOTS` / `AVATAR_COLOR_SLOTS`（丸いアイコンに映るものだけ。
+ *   Humation の manifest にはボトムス（部位 `bottom`・色 `bottom`）もあるが、アイコンの切り抜きに 1 画素も入らないので出さない。
+ *   利用者指示 2026-10-17「アイコンとか、ボトムスとか画面に映らないところの設定はいらないので見直して」）
  */
 
 export type AvatarComponent = ComponentType<{
@@ -62,11 +71,14 @@ export function useHumation(): Humation | null {
   return mod;
 }
 
-/** 選べる色の役割（背景は別に持つ。線の色は選択画面でも変えられる） */
-export const AVATAR_COLOR_SLOTS = ["hair", "skin", "clothes", "bottom", "stroke"] as const;
-export type AvatarColorSlot = (typeof AVATAR_COLOR_SLOTS)[number];
+export { AVATAR_COLOR_SLOTS, AVATAR_PART_SLOTS, type AvatarColorSlot, type AvatarPartSlot };
 
-/** 設定の中から、アセットに実在する部品・色だけを残す（Avatar に渡しても例外にならない形） */
+export const isAvatarPartSlot = (slot: string): slot is AvatarPartSlot =>
+  (AVATAR_PART_SLOTS as readonly string[]).includes(slot);
+export const isAvatarColorSlot = (slot: string): slot is AvatarColorSlot =>
+  (AVATAR_COLOR_SLOTS as readonly string[]).includes(slot);
+
+/** 設定の中から、選べる部位・役割で、アセットに実在する部品・色だけを残す（Avatar に渡しても例外にならない形） */
 export function sanitizeAvatarConfig(
   { manifest, core }: Humation,
   config: AvatarConfig | null | undefined,
@@ -74,8 +86,9 @@ export function sanitizeAvatarConfig(
   if (!config) return null;
   const out: AvatarConfig = {};
   if (config.seed) out.seed = config.seed;
-  const selections: Record<string, string> = {};
+  const selections: Partial<Record<AvatarPartSlot, string>> = {};
   for (const [slot, value] of Object.entries(config.selections ?? {})) {
+    if (!isAvatarPartSlot(slot) || !value) continue;
     if (!manifest.selectionSlots.some((s) => s.id === slot)) continue;
     try {
       const id = core.resolvePartId(value, manifest, slot);
@@ -86,10 +99,9 @@ export function sanitizeAvatarConfig(
     }
   }
   if (Object.keys(selections).length) out.selections = selections;
-  const colors: Record<string, string> = {};
+  const colors: Partial<Record<AvatarColorSlot, string>> = {};
   for (const [slot, value] of Object.entries(config.colors ?? {})) {
-    if ((AVATAR_COLOR_SLOTS as readonly string[]).includes(slot) && /^[0-9A-F]{6}$/.test(value))
-      colors[slot] = value;
+    if (isAvatarColorSlot(slot) && value && /^[0-9A-F]{6}$/.test(value)) colors[slot] = value;
   }
   if (Object.keys(colors).length) out.colors = colors;
   if (config.background && /^[0-9A-F]{6}$/.test(config.background))
@@ -97,21 +109,21 @@ export function sanitizeAvatarConfig(
   return Object.keys(out).length ? out : null;
 }
 
-/** 部位（selection slot）の表示順と日本語名 */
-export const AVATAR_SLOTS = [
-  { id: "head", label: "髪型" },
-  { id: "body", label: "トップス" },
-  { id: "bottom", label: "ボトムス" },
-  { id: "item", label: "小物" },
-  { id: "glasses", label: "めがね" },
-] as const satisfies ReadonlyArray<{ id: string; label: string }>;
-export type AvatarSlotId = (typeof AVATAR_SLOTS)[number]["id"];
+/** 部位（selection slot）の表示順と日本語名（domain の AVATAR_PART_SLOTS の順。トップスはえりと肩がアイコンに映る） */
+const PART_SLOT_LABELS: Record<AvatarPartSlot, string> = {
+  head: "髪型",
+  body: "トップス",
+  item: "小物",
+  glasses: "めがね",
+};
+export const AVATAR_SLOTS: ReadonlyArray<{ id: AvatarPartSlot; label: string }> =
+  AVATAR_PART_SLOTS.map((id) => ({ id, label: PART_SLOT_LABELS[id] }));
+export type AvatarSlotId = AvatarPartSlot;
 
 export const AVATAR_COLOR_LABELS: Record<AvatarColorSlot | "background", string> = {
   hair: "髪の色",
   skin: "肌の色",
   clothes: "トップスの色",
-  bottom: "ボトムスの色",
   stroke: "線の色",
   background: "背景の色",
 };
@@ -151,15 +163,6 @@ const PART_LABELS: Record<string, string> = {
   shirt: "シャツ",
   jacket: "ジャケット",
   hoodie: "パーカー",
-  // ボトムス
-  "wide-pants": "ワイドパンツ",
-  "tapered-pants": "テーパードパンツ",
-  culottes: "キュロット",
-  "long-skirt": "ロングスカート",
-  "mini-skirt": "ミニスカート",
-  "midi-skirt": "ミディスカート",
-  "flared-skirt": "フレアスカート",
-  "cropped-pants": "クロップドパンツ",
   // 小物
   none: "なし",
   "crab-headband": "カニのカチューシャ",
@@ -276,7 +279,6 @@ export const AVATAR_PALETTES: Record<AvatarColorSlot | "background", Swatch[]> =
     { hex: "4A2E1A", name: "最も深い" },
   ],
   clothes: [...NEUTRALS, ...HUES],
-  bottom: [{ hex: "000000", name: "黒" }, ...NEUTRALS.filter((s) => s.hex !== "000000"), ...HUES],
   stroke: [
     { hex: "000000", name: "黒" },
     { hex: "3A3A3A", name: "濃い灰色" },
@@ -300,7 +302,7 @@ export const AVATAR_PALETTES: Record<AvatarColorSlot | "background", Swatch[]> =
   ],
 };
 
-/** 「おまかせ」: 新しい種と、候補から選んだ色（線の色はそのまま） */
+/** 「おまかせ」: 新しい種と、候補から選んだ色（アイコンに映る役割だけ。線の色はそのまま） */
 export function randomAvatarConfig(): Required<
   Pick<AvatarConfig, "seed" | "colors" | "background">
 > {
@@ -311,7 +313,6 @@ export function randomAvatarConfig(): Required<
       hair: pick(AVATAR_PALETTES.hair),
       skin: pick(AVATAR_PALETTES.skin),
       clothes: pick(AVATAR_PALETTES.clothes),
-      bottom: pick(AVATAR_PALETTES.bottom),
     },
     background: pick(AVATAR_PALETTES.background.filter((s) => s.hex !== "263238")),
   };

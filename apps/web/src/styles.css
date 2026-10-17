@@ -1277,7 +1277,7 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- 「アバターを変える」（Humation。§56）
- * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
+ * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ（アイコンに映る部位だけ。ボトムスは無い）、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
  * 部品の小さな絵は <use> で定義（.avatar-defs）を参照し、43 個並べても DOM を膨らませない */
 .avatar-picker {
   --m3e-dialog-max-width: 640px;
@@ -1419,7 +1419,7 @@ m3e-dialog [slot="actions"] {
   .avatar-picker .dialog-body {
     min-width: 0;
   }
-  /* 6 つのタブ（髪型…色）を 412 の幅に収める（余白を詰めないと「色」が右にはみ出て、横に送らないと押せない） */
+  /* 5 つのタブ（髪型・トップス・小物・めがね・色）を 412 の幅に収める（余白を詰めないと「色」が右にはみ出て、横に送らないと押せない） */
   .avatar-picker .pane-tabs {
     --m3e-tab-padding-start: 8px;
     --m3e-tab-padding-end: 8px;

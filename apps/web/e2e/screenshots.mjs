@@ -1654,12 +1654,24 @@ async function webFigmaScenes() {
   const picker = page.locator("m3e-dialog.avatar-picker[open]");
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
   await page.waitForTimeout(400);
+  // アイコンに映らないボトムスの部位・色は出さない（利用者指示 2026-10-17）。タブは髪型・トップス・小物・めがね・色
+  expectTrue(
+    (await picker.locator("m3e-tab").allInnerTexts()).map((t) => t.trim()).join(",") ===
+      "髪型,トップス,小物,めがね,色",
+    "アバターのタブが「髪型・トップス・小物・めがね・色」でない",
+  );
   // 部品の一覧は 1 つを選ぶ radiogroup。いま選んでいないものを 1 つ選ぶ
   await picker.locator('.avatar-parts [role="radio"][aria-checked="false"]').first().click();
   await page.waitForTimeout(400);
   await shot("70-avatar-picker");
   await picker.locator("m3e-tab", { hasText: "色" }).click();
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
+  expectTrue(
+    (await picker.locator(".avatar-colors__label").allInnerTexts())
+      .map((t) => t.trim())
+      .join(",") === "髪の色,肌の色,トップスの色,線の色,背景の色",
+    "アバターの色の役割が「髪・肌・トップス・線・背景」でない",
+  );
   await picker
     .locator(".avatar-colors__row")
     .first()
@@ -1681,8 +1693,13 @@ async function webFigmaScenes() {
     .catch(() => {});
   // 70b compact: アカウントのボトムシート → 全画面のダイアログ（「色」のタブ）
   await page.setViewportSize({ width: 412, height: 915 });
-  await page.waitForTimeout(400);
+  // compact の配置（アカウントのボトムシート）に切り替わってから押す（切り替わる前に押すと PC のメニューが開いて消える）
+  await page.waitForSelector("m3e-bottom-sheet.action-sheet", { timeout: 10_000 });
+  await settle();
   await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+  await page.waitForSelector("m3e-bottom-sheet.action-sheet[open] .list__item", {
+    timeout: 10_000,
+  });
   await settle(); // ボトムシートが上がり切るまで
   await page.locator("m3e-list-action", { hasText: "アバターを変える" }).click();
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
