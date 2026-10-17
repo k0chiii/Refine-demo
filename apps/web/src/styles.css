@@ -4639,6 +4639,15 @@ m3e-snackbar {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+/* ビューア（.viewer）は紙面の枠の高さに収め、中の .viewer__stage だけがスクロールする（エディタの .ws__viewer > .viewer と同じ）。
+   枠に収めないと、紙面の中身の高さまで伸びて .viewer__stage はスクロールせず、外の枠がスクロールする。
+   すると PdfViewer が .viewer__stage の scrollTop で行うページ送り・「紙面の場所を表示」・表示中のページの判定・ピンチの焦点保持が効かない */
+.fb-stage__viewer > .viewer {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 /* 読み込み中（§61）: 指標は紙面の中央にひとつだけ。操作の行・説明・紙面は最初の 1 枚が描き終わるまで隠し、いっぺんに出す */
 .fb-stage__viewer > .fb-stage__loading {
