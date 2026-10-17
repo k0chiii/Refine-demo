@@ -7,6 +7,7 @@ import { CategoriesPanel } from "@/features/notation/CategoriesPanel";
 import { ImportDialog } from "@/features/notation/ImportDialog";
 import { ProposalsPanel } from "@/features/notation/ProposalsPanel";
 import { draftOf, emptyDraft, RuleEditor } from "@/features/notation/RuleEditor";
+import { RuleTable } from "@/features/notation/RuleTable";
 import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
@@ -39,10 +40,12 @@ export const Route = createFileRoute("/_app/notation")({
 /**
  * 表記ルール（表記統一）。ルールの一覧・検索・編集・無効化・履歴・取り込み・書き出し、変更提案、カテゴリ。
  * 誰でも閲覧・提案でき、編集と承認はカテゴリ管理者（権限はサーバーが判定。画面の出し分けは補助）。
- * 一覧と詳細（M3 list-detail。利用者指示 2026-10-16「UI はマテリアルデザインにあるものだけで」）。
- * - 一覧は M3E のリスト（M3 に表は無い）。行は押すと詳細を開くだけ（行の中に選択欄やスイッチを置かない: M3 Lists の
- *   single-action・Cards の「押せる面の上に操作を置かない」）。カテゴリ・厳格さ・有効／無効は詳細で直す
- * - 840 以上は一覧（360、1200 以上は 412）と詳細を並べる。839 以下は詳細をダイアログで開く（599 以下は全画面）
+ * 一覧と詳細（利用者指示 2026-10-16「UI はマテリアルデザインにあるものだけで」、利用者決定 2026-10-17「表記ルールは表形式に」）。
+ * - 600 以上は表（`RuleTable`。M3 に表は無いので M2 data table の寸法を M3 のトークンと M3E の部品で組む。§54）。
+ *   599 以下は M3E のリスト（M3: 表はスマホに向かない）。どちらも行は押すと詳細を開くだけ（行の中に選択欄やスイッチを
+ *   置かない: M3 Lists の single-action・Cards の「押せる面の上に操作を置かない」）。カテゴリ・厳格さ・有効／無効は詳細で直す
+ * - 840 以上は表（残り全部）と詳細（右に 360、1200 以上は 412。M3 Supporting pane）を並べる。839 以下は詳細をダイアログで開く
+ *   （599 以下は全画面）
  */
 function Notation() {
   const { view: tab = "rules" } = Route.useSearch();
@@ -135,6 +138,7 @@ function Notation() {
   ) : current ? (
     <RuleEditor book={book} rule={current} onDone={() => setSelected(null)} />
   ) : null;
+  const showPane = twoPane && detail !== null;
 
   return (
     <div className="notation">
@@ -158,8 +162,8 @@ function Notation() {
       ) : tab === "try" ? (
         <RuleTester book={book} />
       ) : (
-        <div className={`notation__ld ${twoPane ? "notation__ld--two" : ""}`}>
-          <div className="notation__list">
+        <div className={`notation__ld ${showPane ? "notation__ld--two" : ""}`}>
+          <div className={`notation__list ${win !== "compact" ? "notation__list--table" : ""}`}>
             <div className="row notation__toolbar">
               <M3eSearchBar
                 className="search notation__search"
@@ -237,7 +241,19 @@ function Notation() {
               </M3eFilterChipSet>
               <span className="small muted">{rules.length} 件</span>
             </div>
-            {rules.length === 0 ? (
+            {win !== "compact" ? (
+              <RuleTable
+                book={book}
+                rules={rules}
+                selected={creating ? null : selected}
+                showStatus={showDisabled}
+                onOpen={(ruleId) => {
+                  setCreating(null);
+                  setSelected(ruleId);
+                }}
+                empty={text ? `「${text}」に一致するルールはありません` : "ルールがありません"}
+              />
+            ) : rules.length === 0 ? (
               <div className="empty">
                 {text ? `「${text}」に一致するルールはありません` : "ルールがありません"}
               </div>
@@ -272,33 +288,24 @@ function Notation() {
               </M3eActionList>
             )}
           </div>
-          {twoPane ? (
+          {/* 詳細は M3 Supporting pane: 行を選ぶ（か「追加」）と右に出て、閉じると表が幅いっぱいに戻る */}
+          {showPane ? (
             <section className="notation__detail" aria-label="ルールの詳細">
-              {detail ? (
-                <>
-                  <header className="notation__detail-head">
-                    <h2 className="notation__detail-title">
-                      {creating ? "ルールを追加" : (current?.title ?? "ルール")}
-                    </h2>
-                    <M3eIconButton
-                      aria-label="詳細を閉じる"
-                      onClick={() => {
-                        setSelected(null);
-                        setCreating(null);
-                      }}
-                    >
-                      <M3eIcon name="close" />
-                    </M3eIconButton>
-                  </header>
-                  {detail}
-                </>
-              ) : (
-                <div className="empty notation__detail-empty">
-                  <M3eIcon name="rule" />
-                  <span className="title-medium">ルールを選ぶと、ここで確かめて直せます</span>
-                  <span className="muted">説明・例外・厳格さ・有効／無効・変更履歴</span>
-                </div>
-              )}
+              <header className="notation__detail-head">
+                <h2 className="notation__detail-title">
+                  {creating ? "ルールを追加" : (current?.title ?? "ルール")}
+                </h2>
+                <M3eIconButton
+                  aria-label="詳細を閉じる"
+                  onClick={() => {
+                    setSelected(null);
+                    setCreating(null);
+                  }}
+                >
+                  <M3eIcon name="close" />
+                </M3eIconButton>
+              </header>
+              {detail}
             </section>
           ) : null}
         </div>

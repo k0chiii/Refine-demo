@@ -1381,3 +1381,34 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 - **再生できない形式**（ProRes の .mov など）は、映像の代わりに「ブラウザで再生できない形式」とダウンロードを出す
 - **見るだけの場所**（FB スペースの紙面・版比較の左）: 同じ再生画面で、印を押すとその時刻へ移る。範囲は選べない
 - 制約（後続）: ファイルは丸ごと取得してから再生（`GET /files` に範囲取得が無い）、コマ送りは 30fps とみなす、版比較の同期再生、ホバーでのコマの縮小画像、通知から開いたときは開いたコメントの時刻へ移る（ページ送りと同じ）
+
+## 54. 表記ルールを表に戻す（M2 data table の寸法を M3 のトークンと M3E の部品で。2026-10-17・利用者決定）
+
+利用者の決定「表記ルールのところ、表形式のがいいかもしれない。M3E の要件を満たすようにデザインして」。§49 で表記ルールもリストにしたが、表記ルールは「統一表記・誤表記・厳格さを行どうしで見比べる」画面（§48 の「表を使うのは行どうしを列で見比べるときだけ」に当たる）なので表に戻した。ほかの画面はリストのまま。決定ログは docs/DECISIONS.md「表と編集できるセル → M3 のリスト」の行。
+
+### 拠りどころ（何に従ったか）
+
+- **M3・M3E に表の部品は無い**（§31・§49。@m3e/react 2.9.2 にも無い）。Google 自身の M3 実装（Angular Material の mat-table、Flutter の DataTable）と同じく、**Material の data table の仕様（m2.material.io/components/data-tables）の寸法・振る舞いを M3 のトークン（色・文字・形）で組み、表の中と周りの部品は M3E** にする（検索バー・フィルターチップ・選択欄・ボタン・メニュー・ツールチップ・アイコン）
+- **M2 data table から従ったもの**: 見出しの行 56dp・本文の行 52dp・セルの左右 16dp。見出しは medium の太さ（M3 の title-small）、本文は body-medium。数値は右寄せ。並べ替えは見出しを押す（`aria-sort`）・矢印は並べ替え中の列は常に出し、ほかの列は hover で。行の hover と選択に state layer。行の間に区切り線。見出しは固定（スクロールしても見える）。長い文字は省略記号で切り、ツールチップに全文。表を操作する部品（検索・絞り込み）は表の直上。押せる部品は 48dp
+- **M3 のトークンに置き換えたもの**: 面は surface-container-lowest、区切り線は outline-variant、選択は secondary-container（M3E のリストの選択と同じ色）、hover は on-surface 8% の state layer、文字は type scale（title-small / body-medium / 等幅の数字）。**外枠と影は無し**（M2 は外枠 1dp・角 4dp。M3 は面の色の段差で分ける: tonal surfaces）
+- **M3E の形（Expressive shape）**: 表の角は medium（12。ペインの large 16 の内側に収まる段）、選んだ行の印は primary の丸い棒（M3E の active indicator の形。色と印の 2 つの手がかり ＋ `aria-selected`）、並べ替えの見出しの hover は丸い state layer。motion は Standard（矢印の出入りだけ effects-fast。業務の道具なので §43 と同じ）
+- **M3 Lists / Cards の原則（§49）は表にも**: 行は 1 つの操作（押す・Enter・Space で詳細を開く）だけで、行の中にチップ・スイッチ・選択欄・ボタンを置かない。状態は文字（「状態」の列・厳格さ）で、chip にしない
+- **M3 Canonical layouts › Supporting pane**: 表が主（残り全部）、詳細は右の補助のペイン 360（1200 以上は 412）・間 24・surface-container-low の面。補助のペインは行を選ぶ（か「追加」）と出て、閉じると表が幅いっぱいに戻る。§49 の「何も選んでいないときは詳細のペインに案内」は list-detail の話で、表は見比べるのが主目的なので、選んでいない間は表に幅を使う。839 以下は詳細をダイアログ（599 以下は全画面。M3 Dialogs）
+- **M3 Layout › Window size classes**: 599 以下（compact）は表を出さず §49 のリストのまま（M3: 表はスマホに向かない。列を潰すより 2 行のリスト）。600 以上は表
+
+### 作り
+
+- `features/notation/RuleTable.tsx`。semantic な `<table>`（`aria-label`、`<th scope="col">`、行の見出しは ID の `<th scope="row">`、`aria-sort` は並べ替え中の列だけ、選んだ行に `aria-selected`）。CSS は `.rule-table*`（styles.css）。ルートの `notation.tsx` は compact ではリスト、それ以外は表を出す
+- 列: ID（既定の並び順）・統一表記（先頭が太字、2 つ目以降は on-surface-variant）・誤表記（正規表現は等幅）・ルール名・カテゴリ（コードと名前）・厳格さ・年度（右寄せ・等幅の数字。空は「全年度」）・状態（「無効も表示」のときだけ出す。それ以外はすべて有効で列の意味が無い）。無効のルールは文字を on-surface-variant に（色だけに頼らず「無効」の文字も出る）
+- 列の幅は固定（`table-layout: fixed`）: ID 96・カテゴリ 160・厳格さ 84・年度 88・状態 68。統一表記・誤表記・ルール名が残りを等分し、収まらない文字は省略記号（切れたセルだけ hover・長押しで M3E tooltip に全文）
+- 表が狭いとき（詳細を開いた expanded など）はコンテナクエリで ルール名（899 以下）→ 年度（759 以下）→ カテゴリ（659 以下）の順に隠す（境目は「統一表記・誤表記に 150 ずつ残る幅」）。隠した内容は詳細のペインにある。それでも収まらなければ表の中だけ横にスクロール（ページは横に動かない）
+- 表は画面の高さに収め、表の中だけスクロール（見出しは貼り付く。`border-collapse: separate` にしないと貼り付いた線が消える）。ページ送りは入れない（いまの件数では検索・絞り込みで足りる。M2 の仕様でもページ送りは任意）
+- キーボード: 行は Tab で 1 つ（選んだ行か先頭。roving tabindex）に止まり、↑↓・Home・End・PageUp／PageDown で移る。Enter・Space で詳細。フォーカスは行の内側に `--mf-focus-ring`。並べ替えの見出しのボタンも同じ ring。見出しのボタンの読み上げは「〜で並べ替え」（見える文字を含む: WCAG 2.5.3）
+- E2E（`e2e/screenshots.mjs`）の 50・50b は表の行（`.rule-table tbody tr[data-id]`）を押す。60（compact）はリストのまま。axe の違反は増えていない（残るのは日付ピッカーの `aria-command-name` だけ）
+- 消したもの: 詳細のペインの「ルールを選ぶと、ここで確かめて直せます」の案内（補助のペインは選ぶまで出さない）
+
+### 見送ったもの
+
+- 複数選択（checkbox）とまとめての操作: §49 と同じ理由（まとめて処理する場面が提案だけ）。要るときは M3E checkbox の列を先頭に足す（M2 の仕様どおり hover で出す）
+- 密度の切り替え・ページ送り（M3E paginator）・読み込み中の線の進捗: 件数が増えたら。表の作りはそのまま足せる
+- 列の表示の切り替え（利用者が選ぶ）: 自動で隠す列で足りる間は入れない

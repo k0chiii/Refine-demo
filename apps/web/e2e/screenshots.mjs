@@ -1034,10 +1034,10 @@ async function v2Scenes() {
   // 50–52 表記ルール（システム管理者）: 一覧と詳細・試す・提案
   await signInAs("mock-nogiku-admin");
   await go("/notation");
-  await page.waitForSelector(".notation__rules m3e-list-action");
+  await page.waitForSelector(".rule-table tbody tr[data-id]");
   await shot("50-notation-rules");
-  // 50b 行を押すと右のペインに詳細（M3 list-detail。説明・例外・厳格さ・有効／無効・履歴）
-  await page.locator(".notation__rules m3e-list-action", { hasText: "A2-0001" }).click();
+  // 50b 表の行を押すと右のペインに詳細（§54 の表 ＋ M3 Supporting pane。説明・例外・厳格さ・有効／無効・履歴）
+  await page.locator(".rule-table tbody tr[data-id]", { hasText: "A2-0001" }).click();
   await page.waitForSelector(".notation__detail .rule-editor");
   await page.waitForTimeout(400);
   await shot("50b-notation-rule-detail");
@@ -1047,7 +1047,7 @@ async function v2Scenes() {
   await shot("51-notation-try");
   await signInAs("mock-nogiku-reviewer");
   await go("/notation");
-  await page.waitForSelector(".notation__rules m3e-list-action");
+  await page.waitForSelector(".rule-table tbody tr[data-id]");
   await btn("追加を提案").click();
   await page.waitForSelector(".notation__detail .rule-editor");
   const ed = page.locator(".notation__detail");
