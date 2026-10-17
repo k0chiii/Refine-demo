@@ -1517,7 +1517,7 @@ async function v2Scenes() {
   await page.locator(".post-image input").first().fill("五月祭のポスター");
   await page.waitForTimeout(600);
   await shot("56-sns-editor");
-  // 端末は機種で選ぶ（既定は iPhone 17。画面は実機の CSS ピクセルで組む）
+  // 端末は機種で選ぶ（既定は iPhone 17。画面は実機の CSS ピクセル 402×874 で組む。注記の文は 416186b で外した）
   expectTrue(
     await page
       .locator(".sp-device")
@@ -1549,6 +1549,227 @@ async function v2Scenes() {
     "校了前に書き出せてしまう",
   );
   await shot("58-sns-review");
+
+  // 59a SNS のプレビューの上で、本文の範囲・画像の矩形とピンを指してコメントする（利用者指示 2026-10-17）。
+  // スマホの幅（412×915）で、端末の枠に入ったプレビューのまま。位置は提出した版の本文のオフセットと元画像の正規化座標で保存される
+  await signInAs("mock-nogiku-reviewer");
+  await page.setViewportSize({ width: 412, height: 915 });
+  await go(`${sns}/v/1`);
+  await page.waitForSelector(".sp-ig__slide .sp-marks.is-drawable", { timeout: 20_000 });
+  await settle();
+  // コメントは投稿の後にサーバーから届いて印になる（投稿欄が閉じた直後はまだ無い）ので、出るまで待つ
+  const marksShown = (selector, message) =>
+    page
+      .waitForFunction((sel) => document.querySelector(sel) !== null, selector, { timeout: 8000 })
+      .catch(() => {
+        throw new Error(message);
+      });
+  // カルーセルの送りは滑らかなスクロールなので、画像が枠にぴったり止まるまで待つ（途中で撮ると次の画像がはみ出して写る）
+  const carouselSettled = (index) =>
+    page.waitForFunction(
+      (i) => {
+        const t = document.querySelector(".sp-figure .sp-ig__track");
+        return t !== null && Math.abs(t.scrollLeft - i * t.clientWidth) < 1.5;
+      },
+      index,
+      { timeout: 5000 },
+    );
+  const postComment = async (body) => {
+    await page.waitForSelector(".compose-pop textarea");
+    await page.fill(".compose-pop textarea", body);
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+    await settle();
+  };
+  // 本文: 文字を選ぶとその範囲にコメントできる。端末の枠は CSS の zoom で縮めて見せているので、位置は測った座標で指す
+  const selectInCaption = async (n) => {
+    const r = await page.evaluate((needle) => {
+      const root = document.querySelector(".sp-figure .sp-text");
+      root.scrollIntoView({ block: "center" });
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let t = w.nextNode(); t; t = w.nextNode()) {
+        const i = t.data.indexOf(needle);
+        if (i < 0) continue;
+        const range = document.createRange();
+        range.setStart(t, i);
+        range.setEnd(t, i + needle.length);
+        const b = range.getBoundingClientRect();
+        return { x: b.left, y: b.top, w: b.width, h: b.height };
+      }
+      return null;
+    }, n);
+    expectTrue(r !== null, `プレビューの本文に「${n}」が見つからない`);
+    await page.mouse.move(r.x + 1, r.y + r.h / 2);
+    await page.mouse.down();
+    await page.mouse.move(r.x + r.w - 1, r.y + r.h / 2, { steps: 6 });
+    await page.mouse.up();
+  };
+  const needle = "五月祭";
+  await selectInCaption(needle);
+  await postComment("「五月祭」の表記は正式名称に統一してください（本文の範囲）");
+  await marksShown(".sp-figure .sp-mark-text", "本文の範囲のコメントが強調されない");
+  expectTrue(
+    (await page.locator(".sp-figure .sp-mark-text", { hasText: needle }).count()) >= 1,
+    "本文の範囲のコメントが、選んだ文字の上に強調されない",
+  );
+  // 画像 1 枚目: ドラッグした矩形にコメントできる
+  const slide1 = page.locator(".sp-ig__slide").nth(0).locator(".sp-marks");
+  const drag = async (layer, x0, y0, x1, y1) => {
+    await layer.scrollIntoViewIfNeeded();
+    const b = await layer.boundingBox();
+    await page.mouse.move(b.x + b.width * x0, b.y + b.height * y0);
+    await page.mouse.down();
+    if (x1 !== undefined)
+      await page.mouse.move(b.x + b.width * x1, b.y + b.height * y1, { steps: 8 });
+    await page.mouse.up();
+  };
+  await drag(slide1, 0.15, 0.2, 0.6, 0.5);
+  await postComment("ポスターのロゴが小さいので大きくしてください（画像 1 の矩形）");
+  await marksShown(".sp-figure .sp-ig__slide:first-child .sp-mark--rect", "画像の矩形の印が出ない");
+  // 位置は画像の中の割合（端末の枠・拡大率に依存しない）。ここで測って、後で別の画面の大きさと比べる
+  const rectRatio = () =>
+    page.evaluate(() => {
+      const m = document
+        .querySelector(".sp-figure .sp-ig__slide .sp-mark--rect")
+        .getBoundingClientRect();
+      const l = document
+        .querySelector(".sp-figure .sp-ig__slide .sp-marks")
+        .getBoundingClientRect();
+      return [
+        (m.left - l.left) / l.width,
+        (m.top - l.top) / l.height,
+        m.width / l.width,
+        m.height / l.height,
+      ];
+    });
+  const ratioMobile = await rectRatio();
+  // 画像 2 枚目: 次の画像へ送ってクリックでピン
+  await page.locator(".sp-figure .sp-nav--next").click();
+  await page.waitForFunction(
+    () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "2/2",
+  );
+  await carouselSettled(1);
+  await drag(page.locator(".sp-ig__slide").nth(1).locator(".sp-marks"), 0.7, 0.6);
+  await postComment("この画像の右下は切れて見えます（画像 2 のピン）");
+  await marksShown(".sp-figure .sp-mark--point", "画像のピンが出ない");
+  // 1 枚目へ戻して撮る: 本文の強調と 1 枚目の矩形が同時に見える
+  await page.locator(".sp-figure .sp-nav--prev").click();
+  await page.waitForFunction(
+    () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "1/2",
+  );
+  await carouselSettled(0);
+  await page.evaluate(() =>
+    document.querySelector(".sp-figure .sp-text").scrollIntoView({ block: "center" }),
+  );
+  await shot("59a-sns-anchored-comments");
+  // 59b コメントを開くと、その画像へ送って位置を強調する（ピンは 2 枚目。いまは 1 枚目を見ている）
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await settle();
+  // ピンのコメントのカード（番号は自動校正のコメントも数えるので、書いた文で探す）を押す
+  await page.locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "画像 2 のピン" }).click();
+  await page.waitForFunction(
+    () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "2/2",
+    null,
+    { timeout: 5000 },
+  );
+  await carouselSettled(1);
+  await marksShown(".sp-figure .sp-mark--point.is-active", "開いたコメントの印が強調されない");
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await settle();
+  await shot("59b-sns-anchored-open");
+  // 本文の印を押すとそのコメントを開く
+  // （端末の枠は CSS の zoom で縮めて見せているので、押す位置は測った座標で指す）
+  const markBox = await page
+    .locator(".sp-figure .sp-mark-text", { hasText: needle })
+    .first()
+    .evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+  await page.mouse.click(markBox.x, markBox.y);
+  await marksShown(".sp-figure .sp-mark-text.is-active", "本文の強調を押してもコメントが開かない");
+  // （本文の強調を押すと、狭い画面ではそのコメントが見えるようにシートが開く。閉じてから続ける）
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await settle();
+  // 「… 続きを読む」の先の本文にもコメントでき、そのコメントを開くと本文が開いて強調される
+  const moreBox = await page.locator(".sp-figure .sp-more").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.click(moreBox.x, moreBox.y);
+  await page.waitForFunction(() => document.querySelector(".sp-figure .sp-more") === null);
+  await selectInCaption("ご覧ください");
+  await postComment("続きの本文にもコメントできます（「続きを読む」の先）");
+  await page
+    .waitForFunction(
+      () =>
+        [...document.querySelectorAll(".sp-figure .sp-mark-text")].some((e) =>
+          e.textContent.includes("ご覧"),
+        ),
+      null,
+      { timeout: 8000 },
+    )
+    .catch(() => {
+      throw new Error("続きの本文の強調が出ない");
+    });
+  await go("/works");
+  await go(`${sns}/v/1`); // 開き直すと、キャプションはまた 2 行で切られている
+  await page.waitForSelector(".sp-figure .sp-more", { timeout: 20_000 });
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await settle();
+  await page.locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "続きの本文にも" }).click();
+  await page.waitForFunction(() => document.querySelector(".sp-figure .sp-more") === null, null, {
+    timeout: 5000,
+  });
+  await marksShown(
+    ".sp-figure .sp-mark-text.is-active",
+    "続きの本文のコメントを開いても強調されない",
+  );
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await settle();
+  // 広い画面（別の大きさ）でも、同じコメントが画像の同じ場所に付く
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settle();
+  await page.waitForSelector(".sp-figure .sp-mark--rect");
+  await page
+    .locator(".sp-figure .sp-nav--prev")
+    .click()
+    .catch(() => {});
+  await page.waitForFunction(
+    () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "1/2",
+  );
+  const ratioDesktop = await rectRatio();
+  expectTrue(
+    ratioMobile.every((v, i) => Math.abs(v - ratioDesktop[i]) < 0.01),
+    `画像の矩形の位置が画面の大きさで変わる（${ratioMobile.join(",")} → ${ratioDesktop.join(",")}）`,
+  );
+  // 付けたコメントは未解決のままだと理由なしでは校了できないので、制作者が ✓ で反映済みにする
+  await page.setViewportSize({ width: 412, height: 915 });
+  await signInAs("mock-nogiku-creator");
+  await go(`${sns}/v/1`);
+  await page.waitForSelector(".sp-figure .sp-mark--rect", { timeout: 20_000 });
+  const openComments = async () => {
+    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+    await settle();
+  };
+  await openComments();
+  for (let i = 0; i < 10; i++) {
+    const resolveBtn = page
+      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]')
+      .first();
+    if ((await resolveBtn.count()) === 0) break;
+    await page.locator("m3e-bottom-sheet.ws__sheet .thread .thread__body").first().click();
+    await resolveBtn.click();
+    await page.waitForTimeout(500);
+  }
+  expectTrue(
+    (await page
+      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]')
+      .count()) === 0,
+    "プレビューに付けたコメントを反映済みにできない",
+  );
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await page.setViewportSize({ width: 1440, height: 900 });
   await signInAs("mock-nogiku-approver");
   await go(`${sns}/v/1`);
   await page.waitForSelector(".sp-figure", { timeout: 20_000 });

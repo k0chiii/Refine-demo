@@ -8,6 +8,7 @@ import {
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { haptic } from "@/lib/haptics";
+import { portalHost } from "@/lib/portalHost";
 
 /** タッチで範囲選択を始めるまでの長押しの時間と、長押しとみなす指のぶれの上限 */
 export const LONG_PRESS_MS = 320;
@@ -343,46 +344,60 @@ export function AnchorOverlay({
       ) : null}
     </svg>
   );
-  const pressLayer =
-    charge || pop
-      ? createPortal(
-          <svg className="press-layer" aria-hidden="true">
-            {charge ? (
-              <g
-                key={charge.key}
-                className="press-charge"
-                transform={`translate(${charge.x} ${charge.y})`}
-                style={
-                  {
-                    "--press-delay": `${CHARGE_DELAY_MS}ms`,
-                    "--press-ms": `${LONG_PRESS_MS - CHARGE_DELAY_MS}ms`,
-                  } as CSSProperties
-                }
-                aria-hidden="true"
-              >
-                <circle r={CHARGE_R} className="press-charge__track" />
-                <circle r={CHARGE_R} pathLength={100} className="press-charge__ring" />
-              </g>
-            ) : null}
-            {pop ? (
-              <circle
-                key={pop.key}
-                cx={pop.x}
-                cy={pop.y}
-                r={CHARGE_R}
-                className="press-pop"
-                aria-hidden="true"
-                onAnimationEnd={() => setPop(null)}
-              />
-            ) : null}
-          </svg>,
-          document.body,
-        )
-      : null;
+  const pressLayer = <PressLayer charge={charge} pop={pop} onPopEnd={() => setPop(null)} />;
   return (
     <>
       {overlay}
       {pressLayer}
     </>
+  );
+}
+
+/**
+ * 長押しの手応えの輪（満ちていく輪と、満ちた瞬間に弾ける輪）。位置は画面の座標（clientX/Y）。
+ * 紙面の枠で切れないよう、紙面の外の画面全体の層に描く。SNS のプレビューの画像でも同じものを使う
+ */
+export function PressLayer({
+  charge,
+  pop,
+  onPopEnd,
+}: {
+  charge: { x: number; y: number; key: number } | null;
+  pop: { x: number; y: number; key: number } | null;
+  onPopEnd: () => void;
+}) {
+  if (!charge && !pop) return null;
+  return createPortal(
+    <svg className="press-layer" aria-hidden="true">
+      {charge ? (
+        <g
+          key={charge.key}
+          className="press-charge"
+          transform={`translate(${charge.x} ${charge.y})`}
+          style={
+            {
+              "--press-delay": `${CHARGE_DELAY_MS}ms`,
+              "--press-ms": `${LONG_PRESS_MS - CHARGE_DELAY_MS}ms`,
+            } as CSSProperties
+          }
+          aria-hidden="true"
+        >
+          <circle r={CHARGE_R} className="press-charge__track" />
+          <circle r={CHARGE_R} pathLength={100} className="press-charge__ring" />
+        </g>
+      ) : null}
+      {pop ? (
+        <circle
+          key={pop.key}
+          cx={pop.x}
+          cy={pop.y}
+          r={CHARGE_R}
+          className="press-pop"
+          aria-hidden="true"
+          onAnimationEnd={onPopEnd}
+        />
+      ) : null}
+    </svg>,
+    portalHost(),
   );
 }
