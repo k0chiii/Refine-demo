@@ -1,6 +1,7 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
+import type { WorkGenre, WorkSubGenre } from "./metadata.ts";
 
 /** Work.lifecycle（§5.1）。校正受付・校了とは独立した状態。 */
 export const workLifecycles = ["draft", "active", "on_hold", "finalized", "cancelled"] as const;
@@ -53,8 +54,40 @@ export interface Work {
   notationCategories?: readonly string[];
   /** SNS 投稿の制作物で使うアカウント（本体の設定の SocialProfile の ID） */
   socialProfileId?: string;
+
+  // ---- Notion の制作物 DB に揃えた項目（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。古い行には無いので全部任意
+  /** 大ジャンル */
+  genre?: WorkGenre;
+  /** 小ジャンル（区分 category はここから既定を入れる） */
+  subGenre?: WorkSubGenre;
+  /** 関係者（職責ではない。閲覧権限は付かない） */
+  stakeholderIds?: readonly UserId[];
+  /** 入稿日・投稿日・印刷日（時刻を含むことがある） */
+  publishAt?: Instant;
+  /** 入稿の有無（印刷所などへ入稿する制作物か） */
+  requiresPrinterSubmission?: boolean;
+  /** 印刷する部数／枚数／個数 */
+  printQuantity?: number;
+  /** サイズ・尺（A4、1920×1080、30 秒 など） */
+  sizeOrLength?: string;
+  /** 制作日数 */
+  productionDays?: number;
+  /** タグ（Notion の選択肢を候補にするが、ほかの語も可） */
+  tags?: readonly string[];
+  /** Google Drive のフォルダ */
+  driveFolderUrl?: string;
+  /** Slack のチャンネル ID */
+  slackChannelId?: string;
   /** 楽観的排他用のバージョン */
   version: number;
+}
+
+/**
+ * Notion の「有効性」（checkbox）に相当する値。中止（cancelled）した制作物だけが無効。別の真偽値は持たない
+ * （Notion の「校了済み」も同じく lifecycle が finalized かどうかで導く）
+ */
+export function isWorkEffective(work: Pick<Work, "lifecycle">): boolean {
+  return work.lifecycle !== "cancelled";
 }
 
 const transitions: Record<WorkLifecycle, readonly WorkLifecycle[]> = {

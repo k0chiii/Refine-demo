@@ -1,12 +1,23 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { checkTypeLabels, checkTypes, socialPlatformLabels, type CheckType } from "@mf100/domain";
+import {
+  checklistFor,
+  checkTypeLabels,
+  checkTypes,
+  isEndOfJstDayDeadline,
+  revisionDeclarationItems,
+  socialPlatformLabels,
+  teamPath,
+  workGenreLabels,
+  workSubGenreLabel,
+  type CheckType,
+} from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
 import { EditWorkDialog } from "@/features/work/EditWorkDialog";
-import { formatDeadline, formatJstShort } from "@/lib/format";
+import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
   checkStateLabel,
@@ -146,6 +157,101 @@ export function InfoTab({
     setAddCheckDraft(null);
   });
 
+  const teams = useQuery(api.teams.list, {});
+  const teamNames = (ids: readonly string[]) =>
+    ids.map((id) => teamPath(id, teams ?? []) ?? "（不明な担当）").join("、");
+  const names = (list: ReadonlyArray<{ name: string } | undefined>) =>
+    list.map((p) => p?.name ?? "（不明なユーザー）").join("、");
+  const link = (href: string, label: string) => (
+    <a href={href} target="_blank" rel="noreferrer noopener" className="info-tab__link">
+      {label}
+      <M3eIcon name="open_in_new" aria-hidden="true" />
+    </a>
+  );
+  type Row = readonly [string, ReactNode];
+  /** 無い任意の項目は出さない（Notion の空欄と同じ） */
+  const optional = (label: string, value: ReactNode | null | undefined): Row[] =>
+    value === null || value === undefined || value === "" ? [] : [[label, value]];
+  const propGroups: Array<{ title: string; rows: Row[] }> = [
+    {
+      title: "基本",
+      rows: [
+        ["制作物名", w.title] as Row,
+        ["目的・用途", w.purpose || "未入力"] as Row,
+        ...optional("大ジャンル", w.genre ? workGenreLabels[w.genre] : null),
+        ...optional("小ジャンル", workSubGenreLabel(w.subGenre)),
+        ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
+        ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
+        ...(revision?.revision.focusNotes
+          ? ([["観点", revision.revision.focusNotes]] as Row[])
+          : []),
+        ["制作物 ID", w.legacyId || "なし"] as Row,
+        ...(w.confidentiality === "restricted" ? ([["機密", "非公開・取扱注意"]] as Row[]) : []),
+      ],
+    },
+    {
+      title: "担当と人",
+      rows: [
+        ...optional("担当（主管担当）", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
+        ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
+        ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
+        ["制作者", names(people.creators) || "—"] as Row,
+        ["校了者", people.approver?.name ?? "—"] as Row,
+        ["主管", names(people.managers) || "—"] as Row,
+        ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
+      ],
+    },
+    {
+      title: "日程と入稿",
+      rows: [
+        ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
+        ...optional(
+          "入稿日・投稿日・印刷日",
+          w.publishAt === undefined
+            ? null
+            : isEndOfJstDayDeadline(w.publishAt)
+              ? formatJstDate(w.publishAt - 1)
+              : formatJstShort(w.publishAt),
+        ),
+        ...optional(
+          "入稿の有無",
+          w.requiresPrinterSubmission === undefined
+            ? null
+            : w.requiresPrinterSubmission
+              ? "あり"
+              : "なし",
+        ),
+        ...optional(
+          "印刷する部数/枚数/個数",
+          w.printQuantity === undefined ? null : w.printQuantity.toLocaleString("ja-JP"),
+        ),
+        ...optional("サイズ・尺", w.sizeOrLength),
+        ...optional("制作日数", w.productionDays === undefined ? null : `${w.productionDays} 日`),
+      ],
+    },
+    {
+      title: "リンク",
+      rows: [
+        ...optional(
+          "Google Drive フォルダ",
+          w.driveFolderUrl ? link(w.driveFolderUrl, "フォルダを開く") : null,
+        ),
+        ...optional("Slack Channel ID", w.slackChannelId),
+        ...(w.mediaType === "sns"
+          ? ([
+              [
+                "SNS",
+                (() => {
+                  const p = profiles?.find((x) => x.id === w.socialProfileId);
+                  return p ? `${socialPlatformLabels[p.platform]} @${p.username}` : "未設定";
+                })(),
+              ],
+            ] as Row[])
+          : []),
+      ],
+    },
+  ].filter((g) => g.rows.length > 0);
+
   return (
     <div className="info-tab">
       {w.lifecycle !== "active" ? (
@@ -153,43 +259,45 @@ export function InfoTab({
           {lifecycleLabel[w.lifecycle]}
         </StatusText>
       ) : null}
-      {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは「編集」のダイアログ */}
-      <M3eList className="list prop-list" aria-label="基本情報">
-        {(
-          [
-            ["名称", w.title],
-            ["目的", w.purpose || "未入力"],
-            ["区分", `${w.category} / ${mediaLabel[w.mediaType]}`],
-            ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)],
-            ...(revision?.revision.focusNotes
-              ? ([["観点", revision.revision.focusNotes]] as const)
-              : []),
-            ["制作者", people.creators.map((p) => p?.name).join("、") || "—"],
-            ["校了権限者", people.approver?.name ?? "—"],
-            ["主管", people.managers.map((p) => p?.name).join("、") || "—"],
-            ["旧ID", w.legacyId || "なし"],
-            ...(w.mediaType === "sns"
-              ? ([
-                  [
-                    "SNS",
-                    (() => {
-                      const p = profiles?.find((x) => x.id === w.socialProfileId);
-                      return p ? `${socialPlatformLabels[p.platform]} @${p.username}` : "未設定";
-                    })(),
-                  ],
-                ] as const)
-              : []),
-            ...(w.confidentiality === "restricted"
-              ? ([["機密", "非公開・取扱注意"]] as const)
-              : []),
-          ] as ReadonlyArray<readonly [string, string]>
-        ).map(([label, value]) => (
-          <M3eListItem key={label} className="list__item">
-            <span slot="overline">{label}</span>
-            <span className="prop-list__value">{value}</span>
-          </M3eListItem>
-        ))}
-      </M3eList>
+      {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは「編集」のダイアログ。
+          節は Notion の制作物 DB に揃えて 基本／担当と人／日程と入稿／リンク（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md） */}
+      {propGroups.map((g) => (
+        <section key={g.title} className="info-tab__section" aria-label={g.title}>
+          <h2 className="info-tab__h">{g.title}</h2>
+          <M3eList className="list prop-list">
+            {g.rows.map(([label, value]) => (
+              <M3eListItem key={label} className="list__item">
+                <span slot="overline">{label}</span>
+                <span className="prop-list__value">{value}</span>
+              </M3eListItem>
+            ))}
+          </M3eList>
+        </section>
+      ))}
+      {/* 「現在の版」の申告（写真・めい・指針外の色の使用）と、表示中の版の提出前の確認。Notion の版 DB の formula に相当 */}
+      {work.currentDeclarations || (revision?.revision.selfChecks?.length ?? 0) > 0 ? (
+        <section className="info-tab__section" aria-label="現在の版の申告">
+          <h2 className="info-tab__h">現在の版の申告</h2>
+          {work.currentDeclarations ? (
+            <div className="row info-tab__flags">
+              {revisionDeclarationItems.map((it) => (
+                <StatusText
+                  key={it.key}
+                  tone={work.currentDeclarations![it.key] ? "warning" : "neutral"}
+                >
+                  {it.label}: {work.currentDeclarations![it.key] ? "あり" : "なし"}
+                </StatusText>
+              ))}
+            </div>
+          ) : null}
+          {revision?.revision.selfChecks?.length ? (
+            <p className="small muted" style={{ margin: 0 }}>
+              {revision.revision.label} の提出前の確認: {revision.revision.selfChecks.length} /{" "}
+              {checklistFor(w.genre).length} 項目を確認済み
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       {revision ? <RevisionFiles artifacts={revision.artifacts} shownId={shownArtifactId} /> : null}
 
       <div className="info-tab__actions">

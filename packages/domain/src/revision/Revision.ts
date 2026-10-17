@@ -2,6 +2,7 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import { isBeforeDeadline, type Instant } from "../shared/time.ts";
 import type { RuleSetSnapshot } from "../notation/ruleset.ts";
+import type { RevisionDeclarations, SubmissionCheckId } from "../work/metadata.ts";
 
 /** 0版（ラフ）と第1版以降（通常版）は別種別（C8 / D1）。 */
 export type RevisionKind = "rough" | "standard";
@@ -31,6 +32,10 @@ export interface Revision {
   snapshotHash?: string;
   /** 提出時の表記統一ルールの組（どのルールのどの版で検査するか）。後からルールを変えても版の結果は変わらない */
   notationSnapshot?: RuleSetSnapshot;
+  /** 提出時の申告（写真・めい・指針外の色の使用。Notion の版 DB のチェックボックス）。古い版には無い */
+  declarations?: RevisionDeclarations;
+  /** 提出前に本人が確認した項目（Notion の版 DB のチェックボックス） */
+  selfChecks?: readonly SubmissionCheckId[];
 }
 
 export function isAccepting(revision: Revision): boolean {
@@ -85,6 +90,8 @@ export interface NewRevisionInput {
   changeSummary: string;
   focusNotes: string;
   snapshotHash?: string;
+  declarations?: RevisionDeclarations;
+  selfChecks?: readonly SubmissionCheckId[];
 }
 
 export function createRevision(input: NewRevisionInput, plan: RevisionPlan): NewRevision {
@@ -107,6 +114,9 @@ export function createRevision(input: NewRevisionInput, plan: RevisionPlan): New
     focusNotes: input.focusNotes,
   };
   if (input.snapshotHash !== undefined) revision.snapshotHash = input.snapshotHash;
+  if (input.declarations !== undefined) revision.declarations = { ...input.declarations };
+  if (input.selfChecks !== undefined && input.selfChecks.length > 0)
+    revision.selfChecks = [...input.selfChecks];
   return revision;
 }
 

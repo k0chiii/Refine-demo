@@ -27,6 +27,7 @@ import {
   vArtifactType,
   vCheckType,
   vFigmaImportMeta,
+  vRevisionDeclarations,
   vRevisionKind,
 } from "./lib/validators.ts";
 import { DomainError } from "@mf100/domain";
@@ -57,6 +58,9 @@ export const prepare = mutation({
       ),
     ),
     postSnapshot: v.optional(v.string()),
+    /** 提出時の申告（写真・めい・指針外の色の使用）と本人が確認した項目（Notion の版 DB に揃えた） */
+    declarations: v.optional(vRevisionDeclarations),
+    selfChecks: v.optional(v.array(v.string())),
     requestId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

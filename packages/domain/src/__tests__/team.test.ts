@@ -234,8 +234,8 @@ describe("組織の CSV", () => {
       ].join("\n"),
     );
     expect(parsed.rows).toEqual([
-      { line: 3, bureau: "広報局", team: "デザイン担当", order: 1 },
-      { line: 5, bureau: "総務局", team: null },
+      { line: 3, bureau: "広報局", team: "デザイン担当", order: 1, members: [], notes: [] },
+      { line: 5, bureau: "総務局", team: null, members: [], notes: [] },
     ]);
     expect(parsed.errors.map((e) => e.line)).toEqual([6, 7, 8]);
     expect(parsed.errors[0]!.message).toContain("順「x」");
@@ -310,9 +310,9 @@ describe("制作物の一括登録の主管担当・制作担当", () => {
     expect(preview.rows[1]!.input).toMatchObject({ productionTeamIds: [] });
     expect(preview.rows[1]!.input).not.toHaveProperty("ownerTeamId");
     const c = preview.rows[2]!.problems.join("／");
-    expect(c).toContain("主管担当「デザイン担当」に当たる担当が 2 つあります");
+    expect(c).toContain("担当（主管担当）「デザイン担当」に当たる担当が 2 つあります");
     expect(c).toContain("制作担当「どこか」が見つかりません");
-    expect(preview.rows[3]!.problems.join()).toContain("主管担当は 1 つだけ");
+    expect(preview.rows[3]!.problems.join()).toContain("担当（主管担当）は 1 つだけ");
     expect(preview.ready).toBe(2);
     // 組織を渡さなければ、担当を書いた行は登録できない
     expect(resolveWorkImport(parsed, directory).ready).toBe(1);
@@ -322,8 +322,9 @@ describe("制作物の一括登録の主管担当・制作担当", () => {
     const parsed = parseWorkCsv(workCsvTemplate(T0), { defaultYear: 100, now: T0 });
     expect(parsed.rows[0]).toMatchObject({
       managers: ["五月 主管"],
-      ownerTeam: "広報局 › デザイン担当",
-      productionTeams: ["広報局 › デザイン担当", "広報局 › SNS担当"],
+      ownerTeam: "PR › デザイン担当",
+      productionTeams: ["PR › デザイン担当", "PR › SNS担当"],
+      relatedTeams: ["JIM"],
     });
     const onlyOwnerTeam = parseWorkCsv(
       ["題名,区分,媒体,制作者,校了権限者,主管担当", "A,印刷物,PDF,五月 めい,駒場 校了,企画局"].join(

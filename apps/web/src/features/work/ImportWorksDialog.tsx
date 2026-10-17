@@ -4,12 +4,13 @@ import {
   parseWorkCsv,
   resolveWorkImport,
   teamPath,
-  workCsvColumns,
   workCsvTemplate,
+  workCsvTemplateColumns,
   type PersonMatch,
   type Team,
   type TeamRefMatch,
   type WorkCsvParseResult,
+  workSubGenreLabel,
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
@@ -32,7 +33,7 @@ export function downloadWorkCsvTemplate() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "制作物の一括登録.csv";
+  a.download = "制作物の一括登録（Notion の列名）.csv";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -117,7 +118,7 @@ export function ImportWorksDialog({
         ? Array.from(
             new Set(
               parsed.rows
-                .flatMap((r) => [...r.creators, ...r.managers, r.approver])
+                .flatMap((r) => [...r.creators, ...r.managers, ...r.stakeholders, r.approver])
                 .filter(Boolean),
             ),
           )
@@ -162,6 +163,7 @@ export function ImportWorksDialog({
             ...i,
             creatorIds: i.creatorIds as Id<"users">[],
             managerIds: i.managerIds as Id<"users">[],
+            stakeholderIds: i.stakeholderIds ?? [],
             approverId: i.approverId as Id<"users">,
           };
         }),
@@ -189,11 +191,15 @@ export function ImportWorksDialog({
       <span slot="header">CSV で制作物を一括登録</span>
       <div className="dialog-body stack">
         <p className="small muted">
-          1 行に 1 つの制作物を書いた CSV を選びます。列は{" "}
-          {workCsvColumns.map((c) => `${c.header}${c.required ? "（必須）" : ""}`).join("・")}。
-          担当者はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」で区切ります。主管担当・制作担当は組織の局・担当を「広報局
-          ›
-          デザイン担当」のように書きます。登録する前に、内容と担当者の対応をこの表で確かめられます。
+          1 行に 1 つの制作物を書いた CSV を選びます。列の名前は Notion の「制作物」DB
+          の書き出しと同じです（そのまま読めます）:{" "}
+          {workCsvTemplateColumns
+            .map((c) => `${c.header}${c.required ? "（必須）" : ""}`)
+            .join("・")}
+          。
+          区分と媒体は小ジャンルから自動で入ります。人はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」か「,」で区切ります（Notion
+          のリンク付きの書き方もそのまま読めます）。担当・制作担当・関係担当は組織の局・担当を「PR ›
+          デザイン担当」のように、局はコードでも書けます。登録する前に、内容と人の対応をこの表で確かめられます。
         </p>
         <div className="row">
           <input
@@ -256,17 +262,27 @@ export function ImportWorksDialog({
                       {r.row.title || <span className="muted">（題名なし）</span>}
                     </span>
                     <span slot="supporting-text" className="import-list__detail">
-                      {r.row.mediaType ? mediaLabel[r.row.mediaType] : "媒体なし"}・制作者{" "}
-                      {people(r.creators)}・主管 {people(r.managers)}・主管担当{" "}
+                      {r.row.subGenre
+                        ? workSubGenreLabel(r.row.subGenre)
+                        : r.row.category || "区分なし"}
+                      ・{r.row.mediaType ? mediaLabel[r.row.mediaType] : "媒体なし"}・制作者{" "}
+                      {people(r.creators)}・主管 {people(r.managers)}・担当{" "}
                       {r.ownerTeam ? teamRef(r.ownerTeam, teams ?? []) : "—"}・制作担当{" "}
-                      {teamRefs(r.productionTeams, teams ?? [])}・校了権限者{" "}
-                      {r.approver ? person(r.approver) : "—"}・納期{" "}
+                      {teamRefs(r.productionTeams, teams ?? [])}・校了者{" "}
+                      {r.approver ? person(r.approver) : "—"}
+                      {r.stakeholders.length ? (
+                        <>・関係者 {people(r.stakeholders)}</>
+                      ) : null}・納期{" "}
                       {r.row.deadlineAt ? formatDeadline(r.row.deadlineAt) : "—"}
+                      {r.row.tags.length ? `・タグ ${r.row.tags.join("、")}` : ""}
                       {r.input ? null : (
                         <span className="import-list__problems">
                           {r.problems.join("。") || "ファイルの問題（上）を直してください"}
                         </span>
                       )}
+                      {r.notes.length ? (
+                        <span className="import-list__notes">{r.notes.join("。")}</span>
+                      ) : null}
                     </span>
                     <span slot="trailing" className="meta">
                       {r.input ? "登録する" : "確認が必要"}

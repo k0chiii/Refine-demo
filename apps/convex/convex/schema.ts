@@ -14,6 +14,9 @@ import {
   vFeedbackTemplateId,
   vArtifactOrigin,
   vAvatarConfig,
+  vBureauCode,
+  vRevisionDeclarations,
+  vWorkMetadataFields,
 } from "./lib/validators.ts";
 
 /**
@@ -186,6 +189,8 @@ export default defineSchema({
     lastLoginAt: v.optional(v.number()),
     /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17） */
     avatar: v.optional(vAvatarConfig),
+    /** 代（Notion のユーザ DB「代」。例: 100。システム管理者が付ける） */
+    generation: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("by_nogikuSubject", ["nogikuSubject"]),
@@ -211,6 +216,8 @@ export default defineSchema({
     notationCategories: v.optional(v.array(v.string())),
     /** SNS 投稿で使うアカウント（socialProfiles の ID） */
     socialProfileId: v.optional(v.string()),
+    /** Notion の制作物 DB に揃えた項目（大ジャンル・小ジャンル・関係者・入稿・タグ・リンク。docs/NOTION_ALIGNMENT.md） */
+    ...vWorkMetadataFields,
     version: v.number(),
   })
     .index("by_year", ["year"])
@@ -259,6 +266,9 @@ export default defineSchema({
     snapshotHash: v.optional(v.string()),
     /** 提出時の表記統一ルールの組（ルール ID と版） */
     notationSnapshot: v.optional(vRuleSetSnapshot),
+    /** 提出時の申告と本人の確認（Notion の版 DB のチェックボックス） */
+    declarations: v.optional(vRevisionDeclarations),
+    selfChecks: v.optional(v.array(v.string())),
   })
     .index("by_work", ["workId"])
     .index("by_work_state", ["workId", "reviewState"])
@@ -300,6 +310,8 @@ export default defineSchema({
         v.object({ type: v.string(), label: v.string(), assigneeId: v.optional(v.string()) }),
       ),
     ),
+    declarations: v.optional(vRevisionDeclarations),
+    selfChecks: v.optional(v.array(v.string())),
     purgedAt: v.optional(v.number()),
   })
     .index("by_work", ["workId"])
@@ -447,6 +459,11 @@ export default defineSchema({
     kind: v.union(v.literal("bureau"), v.literal("team")),
     parentId: v.optional(v.string()),
     order: v.number(),
+    /** Notion の担当 DB に揃えた項目: 局のコード（局だけ）・絵文字・Google Drive フォルダ・所属する人 */
+    code: v.optional(vBureauCode),
+    emoji: v.optional(v.string()),
+    driveFolderUrl: v.optional(v.string()),
+    memberIds: v.optional(v.array(v.string())),
     updatedAt: v.number(),
     updatedBy: v.string(),
   }).index("by_parent", ["parentId"]),

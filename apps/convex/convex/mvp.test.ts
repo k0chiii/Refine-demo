@@ -502,7 +502,12 @@ describe("Convex 統合: 認可と状態遷移", () => {
     // ユーザー検索は一般利用者も可（表示名・メールのみ）
     const found = await cast.creator.as.query(api.users.search, { text: "review" });
     expect(found).toEqual([
-      { id: cast.reviewer.id, name: "reviewer", email: "reviewer@example.invalid" },
+      {
+        id: cast.reviewer.id,
+        name: "reviewer",
+        email: "reviewer@example.invalid",
+        generation: null,
+      },
     ]);
   });
 

@@ -15,6 +15,7 @@ import {
   M3eButton,
   M3eDialog,
   M3eIcon,
+  M3eIconButton,
   M3eLinearProgressIndicator,
   M3eList,
   M3eListAction,
@@ -22,6 +23,7 @@ import {
   M3eSearchBar,
   M3eSwitch,
 } from "@/ui/m3e";
+import { Field, TextInput } from "@/ui/Field";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
@@ -61,6 +63,15 @@ function Admin() {
   );
   const works = useQuery(api.acl.adminWorks, me?.isSystemAdmin && tab === "works" ? {} : "skip");
   const setAdmin = useMutation(api.admin.setSystemAdmin);
+  const setGeneration = useMutation(api.admin.setGeneration);
+  // 代（Notion のユーザ DB「代」）を付ける小さなダイアログ
+  const [genFor, setGenFor] = useState<{ id: string; name: string; value: string } | null>(null);
+  const saveGeneration = useAction(async () => {
+    if (!genFor) return;
+    const n = genFor.value.trim() === "" ? null : Number(genFor.value.normalize("NFKC"));
+    await setGeneration({ userId: genFor.id as Id<"users">, generation: n });
+    setGenFor(null);
+  });
   const [aclFor, setAclFor] = useState<{ id: string; title: string } | null>(null);
   const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -183,20 +194,34 @@ function Admin() {
                       <span className="list__headline">{u.name}</span>
                       <span slot="supporting-text">
                         {u.email}
+                        {u.generation ? `・${u.generation} 代` : ""}
                         {u.isSystemAdmin ? "・システム管理者" : ""}
                       </span>
-                      <M3eSwitch
-                        slot="trailing"
-                        checked={u.isSystemAdmin}
-                        disabled={u.id === me.id || toggle.pending}
-                        aria-label={`${u.name} をシステム管理者にする`}
-                        onChange={(e: Event) =>
-                          void toggle.run(
-                            u.id,
-                            (e.target as HTMLInputElement & { checked: boolean }).checked,
-                          )
-                        }
-                      />
+                      <span slot="trailing" className="row">
+                        <M3eIconButton
+                          aria-label={`${u.name} の代を設定`}
+                          onClick={() =>
+                            setGenFor({
+                              id: u.id,
+                              name: u.name,
+                              value: u.generation ? String(u.generation) : "",
+                            })
+                          }
+                        >
+                          <M3eIcon name="badge" />
+                        </M3eIconButton>
+                        <M3eSwitch
+                          checked={u.isSystemAdmin}
+                          disabled={u.id === me.id || toggle.pending}
+                          aria-label={`${u.name} をシステム管理者にする`}
+                          onChange={(e: Event) =>
+                            void toggle.run(
+                              u.id,
+                              (e.target as HTMLInputElement & { checked: boolean }).checked,
+                            )
+                          }
+                        />
+                      </span>
                     </M3eListItem>
                   ))}
               </M3eList>
@@ -247,6 +272,34 @@ function Admin() {
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setAclFor(null)}>
             閉じる
+          </M3eButton>
+        </div>
+      </M3eDialog>
+      {/* 代（Notion のユーザ DB「代」）。認証には触れず、管理者が付ける（docs/NOTION_ALIGNMENT.md） */}
+      <M3eDialog open={genFor !== null} onClosed={() => setGenFor(null)} closeLabel="閉じる">
+        <span slot="header">{genFor?.name} の代</span>
+        <div className="dialog-body">
+          <Field label="代" hint="例: 100。空にすると消します">
+            <TextInput
+              type="number"
+              min={1}
+              max={999}
+              inputMode="numeric"
+              value={genFor?.value ?? ""}
+              onChange={(e) => setGenFor((g) => (g ? { ...g, value: e.target.value } : g))}
+            />
+          </Field>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setGenFor(null)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={saveGeneration.pending}
+            onClick={() => void saveGeneration.run()}
+          >
+            保存
           </M3eButton>
         </div>
       </M3eDialog>

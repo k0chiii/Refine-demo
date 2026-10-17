@@ -3,6 +3,7 @@ import type { UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { Artifact, ArtifactOrigin, ArtifactRole, ArtifactType } from "./Artifact.ts";
 import type { Revision, RevisionKind } from "./Revision.ts";
+import type { RevisionDeclarations, SubmissionCheckId } from "../work/metadata.ts";
 
 /**
  * 版提出の「準備」と「確定」を分離する（F-04 / §8.1 / A-02 / A-16）。
@@ -34,6 +35,9 @@ export interface UploadSession {
   baseRevisionCount: number;
   /** 確定時に作る専門確認（§2.2-4）。 */
   requiredChecks?: Array<{ type: string; label: string; assigneeId?: string }>;
+  /** 提出時の申告・確認（確定時に版へ写す） */
+  declarations?: RevisionDeclarations;
+  selfChecks?: readonly SubmissionCheckId[];
   /** abandoned 後に R2 の孤立オブジェクトを全て削除し終えた時刻（D14 清掃） */
   purgedAt?: Instant;
 }

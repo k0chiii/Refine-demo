@@ -1,5 +1,13 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
+import {
+  normalizeDriveUrl,
+  normalizeSlackChannelId,
+  normalizeWorkTags,
+  WORK_SIZE_MAX,
+  workGenres,
+  workSubGenreCodes,
+} from "./metadata.ts";
 import { confidentialities, mediaTypes, type Work } from "./Work.ts";
 
 /**
@@ -24,13 +32,15 @@ export interface WorkEssentials {
   managerIds: readonly UserId[];
 }
 
-type WorkInvalidField = "title" | "category" | "creatorIds" | "approverId" | "managerIds";
+type WorkInvalidField =
+  | "title"
+  | "category"
+  | "creatorIds"
+  | "approverId"
+  | "managerIds"
+  | "stakeholderIds";
 
-function invalid(
-  field: WorkInvalidField | "mediaType" | "confidentiality",
-  reason: string,
-  extra = {},
-) {
+function invalid(field: string, reason: string, extra = {}) {
   return new DomainError("work_invalid", { field, reason, ...extra });
 }
 
@@ -61,6 +71,108 @@ export function normalizeWorkEssentials<T extends WorkEssentials>(fields: T): T 
   return { ...fields, title, category, creatorIds, approverId, managerIds };
 }
 
+/**
+ * Notion の制作物 DB に揃えた任意の項目（docs/NOTION_ALIGNMENT.md）。登録・変更・CSV で共通。
+ * null は「消す」（変更のとき）。生成時は null も undefined も「無し」
+ */
+export type WorkMetadataInput = {
+  [
+    K in
+      | "genre"
+      | "subGenre"
+      | "stakeholderIds"
+      | "publishAt"
+      | "requiresPrinterSubmission"
+      | "printQuantity"
+      | "sizeOrLength"
+      | "productionDays"
+      | "tags"
+      | "driveFolderUrl"
+      | "slackChannelId"
+  ]?: Work[K] | null | undefined;
+};
+export const workMetadataKeys = [
+  "genre",
+  "subGenre",
+  "stakeholderIds",
+  "publishAt",
+  "requiresPrinterSubmission",
+  "printQuantity",
+  "sizeOrLength",
+  "productionDays",
+  "tags",
+  "driveFolderUrl",
+  "slackChannelId",
+] as const satisfies ReadonlyArray<keyof WorkMetadataInput>;
+
+/**
+ * Notion に揃えた項目を確かめて整える。undefined は「触らない」（返り値にも入れない）、null は「消す」（null で返す）。
+ * - 大ジャンル・小ジャンルは選択肢の中の値。選択肢の一覧は metadata.ts（Notion の select）
+ * - 関係者: 空の ID は不可、重なりは 1 人に。実在は application が名簿で確かめる
+ * - 部数・制作日数: 0 以上の整数。サイズ・尺: 100 文字まで。タグ: 20 個・各 30 文字まで
+ * - Drive の URL は https の drive.google.com／docs.google.com、Slack は C で始まるチャンネル ID
+ */
+export function normalizeWorkMetadata(input: WorkMetadataInput): WorkMetadataInput {
+  const out: WorkMetadataInput = {};
+  const { genre, subGenre, stakeholderIds, publishAt, sizeOrLength, tags } = input;
+  if (genre !== undefined) {
+    if (genre !== null && !(workGenres as readonly string[]).includes(genre))
+      throw invalid("genre", "unknown");
+    out.genre = genre;
+  }
+  if (subGenre !== undefined) {
+    if (subGenre !== null && !(workSubGenreCodes as readonly string[]).includes(subGenre))
+      throw invalid("subGenre", "unknown");
+    out.subGenre = subGenre;
+  }
+  if (stakeholderIds !== undefined)
+    out.stakeholderIds =
+      stakeholderIds === null || stakeholderIds.length === 0
+        ? null
+        : cleanIds(stakeholderIds, "stakeholderIds");
+  if (publishAt !== undefined) {
+    if (publishAt !== null && (!Number.isFinite(publishAt) || publishAt <= 0))
+      throw invalid("publishAt", "not_a_time");
+    out.publishAt = publishAt;
+  }
+  if (input.requiresPrinterSubmission !== undefined)
+    out.requiresPrinterSubmission = input.requiresPrinterSubmission;
+  for (const k of ["printQuantity", "productionDays"] as const) {
+    const n = input[k];
+    if (n === undefined) continue;
+    if (n !== null && (!Number.isInteger(n) || n < 0 || n > 1_000_000_000))
+      throw invalid(k, "not_a_count");
+    out[k] = n;
+  }
+  if (sizeOrLength !== undefined) {
+    const s = sizeOrLength?.trim() ?? "";
+    if (Array.from(s).length > WORK_SIZE_MAX)
+      throw invalid("sizeOrLength", "too_long", { max: WORK_SIZE_MAX });
+    out.sizeOrLength = s === "" ? null : s;
+  }
+  if (tags !== undefined) {
+    const clean = tags === null ? [] : normalizeWorkTags(tags);
+    out.tags = clean.length === 0 ? null : clean;
+  }
+  if (input.driveFolderUrl !== undefined)
+    out.driveFolderUrl = normalizeDriveUrl(input.driveFolderUrl);
+  if (input.slackChannelId !== undefined)
+    out.slackChannelId = normalizeSlackChannelId(input.slackChannelId);
+  return out;
+}
+
+/** 整えた項目を Work に当てる（null の項目は消す）。生成・変更で共通 */
+export function assignWorkMetadata<T extends Partial<Work>>(target: T, meta: WorkMetadataInput): T {
+  const t = target as Record<string, unknown>;
+  for (const k of workMetadataKeys) {
+    const v = meta[k];
+    if (v === undefined) continue;
+    if (v === null) delete t[k];
+    else t[k] = v;
+  }
+  return target;
+}
+
 /** Work の変更で受け付ける項目（組織・SNS アカウント・表記カテゴリの正規化と存在確認はアプリケーション層） */
 export type WorkPatch = {
   [
@@ -79,37 +191,46 @@ export type WorkPatch = {
       | "relatedTeamIds"
       | "notationCategories"
   ]?: Work[K] | undefined;
-};
+} & WorkMetadataInput;
 
 /**
  * Work に変更を当てた結果を返す（version を 1 進める）。生成時と同じ不変条件を検証する。
- * undefined の項目は「変えない」。
+ * undefined の項目は「変えない」。Notion に揃えた任意の項目は null で消せる。
  */
 export function applyWorkPatch(work: Work, patch: WorkPatch): Work {
   const defined: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(patch)) if (v !== undefined) defined[k] = v;
+  const meta: WorkMetadataInput = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    if ((workMetadataKeys as readonly string[]).includes(k))
+      (meta as Record<string, unknown>)[k] = v;
+    else defined[k] = v;
+  }
   const next = { ...work, ...(defined as WorkPatch), version: work.version + 1 } as Work;
   if (!(mediaTypes as readonly string[]).includes(next.mediaType))
     throw invalid("mediaType", "unknown");
   if (!(confidentialities as readonly string[]).includes(next.confidentiality))
     throw invalid("confidentiality", "unknown");
+  assignWorkMetadata(next, normalizeWorkMetadata(meta));
   return normalizeWorkEssentials(next);
 }
 
+type PeopleFields = Pick<Work, "creatorIds" | "approverId" | "managerIds"> & {
+  stakeholderIds?: readonly UserId[] | undefined;
+};
+
+const peopleOf = (w: PeopleFields) => [
+  ...w.creatorIds,
+  w.approverId,
+  ...w.managerIds,
+  ...(w.stakeholderIds ?? []),
+];
+
 /**
- * 変更後の Work が新たに参照する人（制作者・校了権限者・主管）。
+ * 変更後の Work が新たに参照する人（制作者・校了権限者・主管・関係者）。
  * 既に参照していた人は確かめ直さない（名簿から外れた人がいても、無関係な変更を止めない）。
  */
-export function newlyReferencedPeople(
-  before: Pick<Work, "creatorIds" | "approverId" | "managerIds"> | null,
-  after: Pick<Work, "creatorIds" | "approverId" | "managerIds">,
-): UserId[] {
-  const known = new Set(
-    before ? [...before.creatorIds, before.approverId, ...before.managerIds] : [],
-  );
-  return Array.from(
-    new Set(
-      [...after.creatorIds, after.approverId, ...after.managerIds].filter((id) => !known.has(id)),
-    ),
-  );
+export function newlyReferencedPeople(before: PeopleFields | null, after: PeopleFields): UserId[] {
+  const known = new Set(before ? peopleOf(before) : []);
+  return Array.from(new Set(peopleOf(after).filter((id) => !known.has(id))));
 }

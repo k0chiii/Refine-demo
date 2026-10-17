@@ -30,6 +30,36 @@ export const setSystemAdmin = mutation({
   },
 });
 
+/**
+ * 代（Notion のユーザ DB「代」。例: 100）を付ける。管理者のみ。null で消す。
+ * 認証（Nogiku）には触れない。名簿の連携ができるまでは管理者が手で付ける（docs/NOTION_ALIGNMENT.md）
+ */
+export const setGeneration = mutation({
+  args: { userId: v.id("users"), generation: v.union(v.number(), v.null()) },
+  handler: async (ctx, { userId, generation }) => {
+    const { principal } = await requireUser(ctx);
+    if (!principal.isSystemAdmin) unauthenticated();
+    if (
+      generation !== null &&
+      (!Number.isInteger(generation) || generation < 1 || generation > 999)
+    )
+      throw new Error("代は 1〜999 の整数で入力してください");
+    const before = await ctx.db.get("users", userId);
+    if (!before) throw new Error("ユーザーが見つかりません");
+    await ctx.db.patch("users", userId, { generation: generation ?? undefined });
+    await ctx.db.insert("auditEvents", {
+      entityType: "user",
+      entityId: userId,
+      operation: "set_generation",
+      actorId: principal.userId,
+      before: before.generation ?? null,
+      after: generation,
+      at: Date.now(),
+    });
+    return null;
+  },
+});
+
 /** 監査ログ（F-13）。管理者のみ。 */
 export const auditLog = query({
   args: {

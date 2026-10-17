@@ -75,6 +75,8 @@ export const searchUsers = query({
         name: u.name ?? "",
         email: u.email ?? null,
         isSystemAdmin: u.isSystemAdmin ?? false,
+        /** 代（Notion のユーザ DB「代」） */
+        generation: u.generation ?? null,
       }));
   },
 });

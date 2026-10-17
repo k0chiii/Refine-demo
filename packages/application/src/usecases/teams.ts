@@ -1,5 +1,6 @@
 import {
   DomainError,
+  findBureauByCode,
   planTeamImport,
   sortTeams,
   TEAM_MAX,
@@ -7,9 +8,30 @@ import {
   validateTeam,
   type Principal,
   type Team,
+  type TeamCsvRow,
+  type TeamImportEntry,
   type TeamInput,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
+
+/** 所属する人（Notion の「ユーザ」）が委員の名簿にいるか。既にいた人は確かめ直さない */
+async function assertMembersExist(
+  ctx: AppContext,
+  after: readonly string[],
+  before: readonly string[],
+): Promise<void> {
+  const known = new Set(before);
+  const ids = after.filter((id) => !known.has(id));
+  if (ids.length === 0) return;
+  const found = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length > 0)
+    throw new DomainError("team_invalid", {
+      field: "memberIds",
+      reason: "unknown_user",
+      userIds: missing,
+    });
+}
 
 /**
  * 組織（局 › 担当）。利用者決定 2026-10-15「組織は管理画面で管理する（Nogiku との同期は後で）」。
@@ -37,14 +59,22 @@ export async function saveTeam(
     if (!before) throw new DomainError("team_not_found", { teamId: id });
     // 並び順を省略したら、親が同じ間は今の並び順のまま
     const sameParent = (rest.parentId?.trim() || undefined) === before.parentId;
+    // Notion に揃えた項目（コード・絵文字・Drive・所属）は、省略（undefined）なら今の値のまま。null・空で外す
+    const keep = <K extends "code" | "emoji" | "driveFolderUrl" | "memberIds">(k: K) =>
+      rest[k] === undefined ? before[k] : rest[k];
     const clean = validateTeam(
       {
         ...rest,
         order: rest.order ?? (sameParent && rest.kind === before.kind ? before.order : undefined),
+        code: keep("code"),
+        emoji: keep("emoji"),
+        driveFolderUrl: keep("driveFolderUrl"),
+        memberIds: keep("memberIds"),
       },
       all,
       id,
     );
+    await assertMembersExist(ctx, clean.memberIds ?? [], before.memberIds ?? []);
     if (clean.kind !== before.kind) {
       // 種類（局 ⇔ 担当）は、担当を持つ局・制作物が使っている局・担当では変えられない
       const hasChildren = all.some((t) => t.parentId === id);
@@ -71,6 +101,7 @@ export async function saveTeam(
   if (all.length >= TEAM_MAX)
     throw new DomainError("team_invalid", { reason: "limit", max: TEAM_MAX });
   const clean = validateTeam(rest, all);
+  await assertMembersExist(ctx, clean.memberIds ?? [], []);
   const created = await ctx.teams.insert({ ...clean, updatedAt: now, updatedBy: principal.userId });
   await ctx.audit.record({
     entityType: "team",
@@ -111,7 +142,9 @@ export async function deleteTeam(ctx: AppContext, principal: Principal, id: stri
 export async function importTeams(
   ctx: AppContext,
   principal: Principal,
-  rows: { bureau: string; team: string | null; order?: number }[],
+  rows: TeamCsvRow[] | Array<Omit<TeamCsvRow, "line" | "members" | "notes"> & Partial<TeamCsvRow>>,
+  /** 行番号 → 照合済みの所属する人の ID（画面が照合する。無ければ所属は入れない） */
+  memberIds: ReadonlyMap<number, readonly string[]> = new Map(),
 ): Promise<{ created: number; existing: number }> {
   requireSystemAdmin(principal);
   if (rows.length === 0 || rows.length > TEAM_MAX)
@@ -122,11 +155,14 @@ export async function importTeams(
     });
   const all = await ctx.teams.list();
   const plan = planTeamImport(
-    rows.map((r, i) => ({ ...r, line: i + 1 })),
+    rows.map((r, i) => ({ members: [], notes: [], ...r, line: r.line ?? i + 1 })),
     all,
+    memberIds,
   );
   if (all.length + plan.create.length > TEAM_MAX)
     throw new DomainError("team_invalid", { reason: "limit", max: TEAM_MAX });
+  const members = new Set(plan.create.flatMap((c) => c.memberIds ?? []));
+  await assertMembersExist(ctx, [...members], []);
   const now = ctx.clock.now();
   const current = [...all];
   const createdIds: string[] = [];
@@ -140,15 +176,29 @@ export async function importTeams(
     createdIds.push(created.id);
     return created;
   };
+  const metaOf = (c: TeamImportEntry) => ({
+    ...(c.order !== undefined ? { order: c.order } : {}),
+    ...(c.emoji ? { emoji: c.emoji } : {}),
+    ...(c.driveFolderUrl ? { driveFolderUrl: c.driveFolderUrl } : {}),
+    ...(c.memberIds ? { memberIds: c.memberIds } : {}),
+  });
   for (const c of plan.create)
-    if (c.team === null) await insert({ name: c.bureau, kind: "bureau", order: c.order });
+    if (c.team === null)
+      await insert({
+        name: c.bureau,
+        kind: "bureau",
+        ...(c.code ? { code: c.code } : {}),
+        ...metaOf(c),
+      });
   for (const c of plan.create) {
     if (c.team === null) continue;
-    // 局は作り終えているので、名前で引ける（planTeamImport と同じ照合）
+    // 局は作り終えているので、名前かコードで引ける（planTeamImport と同じ照合）
     const key = teamNameKey(c.bureau);
-    const bureau = current.find((t) => t.kind === "bureau" && teamNameKey(t.name) === key);
+    const bureau =
+      current.find((t) => t.kind === "bureau" && teamNameKey(t.name) === key) ??
+      findBureauByCode(c.bureau, current);
     if (!bureau) throw new DomainError("team_not_found", { bureau: c.bureau });
-    await insert({ name: c.team, kind: "team", parentId: bureau.id, order: c.order });
+    await insert({ name: c.team, kind: "team", parentId: bureau.id, ...metaOf(c) });
   }
   await ctx.audit.record({
     entityType: "team",

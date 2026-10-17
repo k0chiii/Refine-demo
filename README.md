@@ -6,7 +6,7 @@
 
 ## 画面
 
-主要画面の一覧（撮影経路）は [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md)。PWA（インストール・オフライン起動・更新）は [`docs/PWA.md`](docs/PWA.md)。v2 の機能（高度な版比較・SNS 投稿プレビュー・表記統一と提出時の自動校正・任意の AI 校正）は [`docs/FEATURES_V2.md`](docs/FEATURES_V2.md)。バックエンド無しで触れるデモモード: `cd apps/web && pnpm dev:demo`。
+主要画面の一覧（撮影経路）は [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md)。制作物・版・担当・ユーザの項目と委員会の Notion「校正システム」DB の対応は [`docs/NOTION_ALIGNMENT.md`](docs/NOTION_ALIGNMENT.md)。PWA（インストール・オフライン起動・更新）は [`docs/PWA.md`](docs/PWA.md)。v2 の機能（高度な版比較・SNS 投稿プレビュー・表記統一と提出時の自動校正・任意の AI 校正）は [`docs/FEATURES_V2.md`](docs/FEATURES_V2.md)。バックエンド無しで触れるデモモード: `cd apps/web && pnpm dev:demo`。
 
 ## 構成（DDD / Clean Architecture）
 

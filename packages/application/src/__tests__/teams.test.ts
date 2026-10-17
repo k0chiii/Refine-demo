@@ -15,7 +15,11 @@ const code = (c: string) => expect.objectContaining({ code: c });
 
 async function setup() {
   const ctx = createInMemoryContext();
-  const pr = await saveTeam(ctx, principals.sysadmin, { name: "広報局", kind: "bureau" });
+  const pr = await saveTeam(ctx, principals.sysadmin, {
+    name: "広報局",
+    kind: "bureau",
+    code: "PR",
+  });
   const design = await saveTeam(ctx, principals.sysadmin, {
     name: "デザイン担当",
     kind: "team",
@@ -143,8 +147,9 @@ describe("組織（局 › 担当）の管理", () => {
 describe("組織の CSV の取り込み", () => {
   it("無い局・担当だけを局から先に作り、何度取り込んでも二重にならない。監査は一括で 1 件", async () => {
     const { ctx } = await setup();
+    // 雛形は Notion の担当 DB の列名（局はコード PR・JIM、絵文字・Drive・ユーザ）。PR はもうある広報局にコードで当たる
     const rows = parseTeamCsv(
-      [teamCsvTemplate().trim(), "企画局,,3", "財務局,会計担当,"].join("\r\n"),
+      [teamCsvTemplate().trim(), "企画局,,3,,,", "財務局,会計担当,,,,"].join("\r\n"),
     ).rows;
     await expect(importTeams(ctx, principals.manager, rows)).rejects.toThrow(code("forbidden"));
     expect(await importTeams(ctx, principals.sysadmin, rows)).toEqual({ created: 5, existing: 2 });
@@ -154,12 +159,16 @@ describe("組織の CSV の取り込み", () => {
       "広報局",
       "広報局 › デザイン担当",
       "広報局 › SNS担当",
-      "総務局",
-      "総務局 › 渉外担当",
+      "JIM",
+      "JIM › 渉外担当",
       "企画局",
       "財務局",
       "財務局 › 会計担当",
     ]);
+    // 「局」がコードだけなら、名前もコードの局を作り code を付ける（名前は管理画面で直す）。担当の絵文字・Drive も入る
+    expect(list.find((t) => t.name === "JIM")).toMatchObject({ kind: "bureau", code: "JIM" });
+    expect(list.find((t) => t.name === "渉外担当")).not.toHaveProperty("emoji");
+    expect(list.find((t) => t.name === "財務局")).not.toHaveProperty("code");
     expect(await importTeams(ctx, principals.sysadmin, rows)).toEqual({
       created: 0,
       existing: rows.length,

@@ -111,6 +111,7 @@ export function UserPicker({
             {visible.map((u) => (
               <M3eOption key={u.id} value={u.id} className="picker__option">
                 {u.name}
+                {u.generation ? <span className="muted small"> {u.generation} 代</span> : null}
                 {u.email ? <span className="muted small"> {u.email}</span> : null}
               </M3eOption>
             ))}

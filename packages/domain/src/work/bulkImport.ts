@@ -1,55 +1,145 @@
 import { parseCsv } from "../notation/importer.ts";
 import { matchTeam, type Team, type TeamMatch } from "../org/team.ts";
-import { deadlineFromJst, toJstDate } from "../shared/deadline.ts";
+import { toJstDate } from "../shared/deadline.ts";
 import type { Instant } from "../shared/time.ts";
+import {
+  defaultMediaTypeFor,
+  genreOfSubGenre,
+  isDriveUrl,
+  normalizeSlackChannelId,
+  normalizeWorkTags,
+  parseNonNegativeInteger,
+  parseWorkGenre,
+  parseWorkSubGenre,
+  WORK_SIZE_MAX,
+  workGenreLabels,
+  workSubGenreLabel,
+  type WorkGenre,
+  type WorkSubGenre,
+} from "./metadata.ts";
+import { parseNotionCheckbox, parseNotionDate, splitNotionList } from "./notionCsv.ts";
 import { confidentialities, mediaTypes, type Confidentiality, type MediaType } from "./Work.ts";
 import { WORK_CATEGORY_MAX, WORK_TITLE_MAX } from "./workInput.ts";
 
 /**
  * 制作物の一括登録（CSV）。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」。
+ * 列の名前は委員会の Notion「校正システム」の制作物 DB の書き出しに揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。
+ * 以前の列名（題名・用途・旧ID・校了権限者・主管担当）もそのまま読める。
  * 取り込む前に、行ごとの内容と担当者の対応（メールアドレスかユーザー名 → 利用者）を表で確かめてから登録する。
  * ここは CSV の解析・検証と担当者の照合だけを持つ純粋関数。登録はアプリケーション層の `importWorks`。
  *
- * 列（見出しの名前で探す。並び順は自由・知らない列は無視）:
- *   題名*・年度・用途・区分*・媒体*・制作者*・主管・校了権限者*・納期・旧ID・機密区分・表記カテゴリ・主管担当・制作担当（* は必須）
- * - 制作者・主管・表記カテゴリ・制作担当は複数を「;」「、」「,」（全角も可）か改行で区切る
- * - 主管担当（1 つ）・制作担当は組織（局 › 担当）を「広報局 › デザイン担当」「広報局/デザイン担当」、担当の名前だけ（同名が無いとき）、局の名前で書く。
- *   「主管」（人）と「主管担当」（組織）は別の列
- * - 担当者はメールアドレス（@ を含む）かユーザー名（一度サインインした利用者）で書く。同名が複数いるときはメールで書く
- * - 納期は 2026-11-14 か 2026/11/14（その日の終わりまで）。時刻を付けるなら「2026-11-14 18:00」
- * - 媒体は PDF・画像・文章・SNS 投稿・動画・Web・Figma・その他（内部の英字の値でもよい）
+ * 列（見出しの名前で探す。並び順は自由・知らない列は無視。* は必須）:
+ *   制作物名*・制作物 ID・大ジャンル・小ジャンル・区分・媒体・目的・用途・担当（主管担当）・制作担当・関係担当・
+ *   制作者*・関係者・主管（人）・校了者*・納期・入稿日・投稿日・印刷日・入稿の有無・印刷する部数/枚数/個数・サイズ・尺・
+ *   制作日数・タグ・Google Drive フォルダ・Slack Channel ID・有効性・機密区分・表記カテゴリ・年度
+ * - 区分は小ジャンル（無ければ大ジャンル）から入る。媒体は小ジャンル・大ジャンルから既定が入る（書けばそちら）
+ * - 複数の値は「;」「、」「,」（全角も可）か改行で区切る。Notion の書き出しの「題名 (https://www.notion.so/…)」はリンクを外して読む
+ * - 担当（組織）は「局 › 担当」「局/担当」、担当の名前だけ（同名が無いとき）、局の名前かコード（PR など）で書く
+ * - 人はメールアドレス（@ を含む）かユーザー名（一度サインインした利用者）で書く。同名が複数いるときはメールで書く
+ * - 日付は 2026-11-14・2026/11/14・2026年11月14日・Nov 14, 2026（その日の終わりまで）。時刻を付けるなら「2026-11-14 18:00」
+ * - チェックボックス（入稿の有無・有効性）は Yes / No。有効性が No なら中止（cancelled）として登録する
+ * - 校了者が複数書かれていれば、先頭の人を校了権限者（1 人。確定方針 C3）にし、残りは関係者に入れる
  */
 export const workCsvColumns = [
   {
     key: "title",
-    header: "題名",
-    aliases: ["題名", "名称", "タイトル", "制作物", "title"],
+    header: "制作物名",
+    aliases: ["制作物名", "題名", "名称", "タイトル", "制作物", "title"],
     required: true,
   },
-  { key: "year", header: "年度", aliases: ["年度", "回", "year"], required: false },
+  {
+    key: "legacyId",
+    header: "制作物 ID",
+    aliases: ["制作物 ID", "制作物ID", "旧ID", "旧 ID", "legacyId"],
+    required: false,
+  },
+  {
+    key: "genre",
+    header: "大ジャンル",
+    aliases: ["大ジャンル", "ジャンル", "genre"],
+    required: false,
+  },
+  { key: "subGenre", header: "小ジャンル", aliases: ["小ジャンル", "subGenre"], required: false },
+  { key: "category", header: "区分", aliases: ["区分", "分類", "category"], required: false },
+  { key: "mediaType", header: "媒体", aliases: ["媒体", "媒体種別", "mediaType"], required: false },
   {
     key: "purpose",
-    header: "用途",
-    aliases: ["用途", "目的", "目的・対象者", "purpose"],
+    header: "目的・用途",
+    aliases: ["目的・用途", "用途", "目的", "目的・対象者", "purpose"],
     required: false,
   },
-  { key: "category", header: "区分", aliases: ["区分", "分類", "category"], required: true },
-  { key: "mediaType", header: "媒体", aliases: ["媒体", "媒体種別", "mediaType"], required: true },
-  { key: "creators", header: "制作者", aliases: ["制作者", "creators", "creator"], required: true },
   {
-    key: "managers",
-    header: "主管",
-    aliases: ["主管", "managers", "manager"],
+    key: "ownerTeam",
+    header: "担当",
+    aliases: ["担当", "主管担当", "主管の担当", "ownerTeam"],
     required: false,
   },
+  {
+    key: "productionTeams",
+    header: "制作担当",
+    aliases: ["制作担当", "productionTeams"],
+    required: false,
+  },
+  {
+    key: "relatedTeams",
+    header: "関係担当",
+    aliases: ["関係担当", "関連担当", "relatedTeams"],
+    required: false,
+  },
+  { key: "creators", header: "制作者", aliases: ["制作者", "creators", "creator"], required: true },
+  { key: "stakeholders", header: "関係者", aliases: ["関係者", "stakeholders"], required: false },
+  { key: "managers", header: "主管", aliases: ["主管", "managers", "manager"], required: false },
   {
     key: "approver",
-    header: "校了権限者",
-    aliases: ["校了権限者", "校了担当", "approver"],
+    header: "校了者",
+    aliases: ["校了者", "校了権限者", "校了担当", "approver", "approvers"],
     required: true,
   },
   { key: "deadline", header: "納期", aliases: ["納期", "deadline"], required: false },
-  { key: "legacyId", header: "旧ID", aliases: ["旧ID", "旧 ID", "legacyId"], required: false },
+  {
+    key: "publishAt",
+    header: "入稿日・投稿日・印刷日",
+    aliases: ["入稿日・投稿日・印刷日", "入稿日", "投稿日", "印刷日", "publishAt"],
+    required: false,
+  },
+  {
+    key: "requiresPrinterSubmission",
+    header: "入稿の有無",
+    aliases: ["入稿の有無", "入稿", "requiresPrinterSubmission"],
+    required: false,
+  },
+  {
+    key: "printQuantity",
+    header: "印刷する部数/枚数/個数",
+    aliases: ["印刷する部数/枚数/個数", "部数", "印刷部数", "印刷する部数", "printQuantity"],
+    required: false,
+  },
+  {
+    key: "sizeOrLength",
+    header: "サイズ・尺",
+    aliases: ["サイズ・尺", "サイズ", "尺", "sizeOrLength"],
+    required: false,
+  },
+  {
+    key: "productionDays",
+    header: "制作日数",
+    aliases: ["制作日数", "productionDays"],
+    required: false,
+  },
+  { key: "tags", header: "タグ", aliases: ["タグ", "tags"], required: false },
+  {
+    key: "driveFolderUrl",
+    header: "Google Drive フォルダ",
+    aliases: ["Google Drive フォルダ", "Google Drive", "Drive フォルダ", "Drive", "driveFolderUrl"],
+    required: false,
+  },
+  {
+    key: "slackChannelId",
+    header: "Slack Channel ID",
+    aliases: ["Slack Channel ID", "Slack チャンネル ID", "Slack", "slackChannelId"],
+    required: false,
+  },
+  { key: "effective", header: "有効性", aliases: ["有効性", "有効", "effective"], required: false },
   {
     key: "confidentiality",
     header: "機密区分",
@@ -62,20 +152,14 @@ export const workCsvColumns = [
     aliases: ["表記カテゴリ", "表記ルールのカテゴリ", "notationCategories"],
     required: false,
   },
-  {
-    key: "ownerTeam",
-    header: "主管担当",
-    aliases: ["主管担当", "主管の担当", "ownerTeam"],
-    required: false,
-  },
-  {
-    key: "productionTeams",
-    header: "制作担当",
-    aliases: ["制作担当", "productionTeams"],
-    required: false,
-  },
+  { key: "year", header: "年度", aliases: ["年度", "回", "year"], required: false },
+  // 読むが取り込まない（行の知らせに書く）
+  { key: "finalized", header: "校了済み", aliases: ["校了済み", "finalized"], required: false },
 ] as const;
 type ColumnKey = (typeof workCsvColumns)[number]["key"];
+
+/** 雛形に出す列（読むだけの列は出さない） */
+export const workCsvTemplateColumns = workCsvColumns.filter((c) => c.key !== "finalized");
 
 /** 1 回に取り込める行数（Convex の 1 mutation に収めるため。超えたら分けて取り込む） */
 export const WORK_IMPORT_MAX_ROWS = 200;
@@ -90,6 +174,7 @@ const mediaAliases: Record<string, MediaType> = {
   "sns 投稿": "sns",
   sns投稿: "sns",
   動画: "video",
+  映像: "video",
   video: "video",
   web: "web",
   figma: "figma",
@@ -110,12 +195,7 @@ export function normalizePersonKey(value: string): string {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function splitList(value: string): string[] {
-  return value
-    .split(/[;；、,，\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
-}
+const splitList = splitNotionList;
 
 export interface WorkCsvRow {
   /** CSV の行番号（1 始まり。見出しの行を含む） */
@@ -125,10 +205,24 @@ export interface WorkCsvRow {
   purpose: string;
   category: string;
   mediaType: MediaType | null;
+  genre: WorkGenre | null;
+  subGenre: WorkSubGenre | null;
   creators: string[];
   managers: string[];
+  /** 関係者（校了者が複数なら 2 人目以降もここ） */
+  stakeholders: string[];
   approver: string;
   deadlineAt: Instant | null;
+  publishAt: Instant | null;
+  requiresPrinterSubmission: boolean | null;
+  printQuantity: number | null;
+  sizeOrLength: string;
+  productionDays: number | null;
+  tags: string[];
+  driveFolderUrl: string;
+  slackChannelId: string;
+  /** 有効性 No → 中止として登録 */
+  lifecycle: "active" | "cancelled";
   legacyId: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
@@ -136,8 +230,12 @@ export interface WorkCsvRow {
   ownerTeam: string | null;
   /** 制作担当（組織）の書き方のまま */
   productionTeams: string[];
+  /** 関係担当（組織）の書き方のまま */
+  relatedTeams: string[];
   /** 取り込めない理由（担当者の照合は別。{@link resolveWorkImport} で足す） */
   problems: string[];
+  /** 取り込めるが知らせておくこと（校了者が複数・校了済みは取り込まない 等） */
+  notes: string[];
 }
 
 export interface WorkCsvParseResult {
@@ -162,15 +260,12 @@ function findHeader(
   return null;
 }
 
-/** 納期の欄 → 締切の時刻（その日の終わり、または指定の時刻）。空は null、読めなければ undefined */
+/**
+ * 納期の欄 → 締切の時刻（その日の終わり、または指定の時刻）。空は null、読めなければ undefined。
+ * 2026-11-14・2026/11/14・2026年11月14日・Nov 14, 2026 と、時刻付き（18:00・6:00 PM）
+ */
 export function parseWorkDeadline(value: string): Instant | null | undefined {
-  const v = value.normalize("NFKC").trim();
-  if (v === "") return null;
-  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$/.exec(v);
-  if (!m) return undefined;
-  const date = `${m[1]}-${m[2]!.padStart(2, "0")}-${m[3]!.padStart(2, "0")}`;
-  const time = m[4] !== undefined ? `${m[4].padStart(2, "0")}:${m[5]}` : null;
-  return deadlineFromJst(date, time) ?? undefined;
+  return parseNotionDate(value);
 }
 
 /**
@@ -187,13 +282,19 @@ export function parseWorkCsv(
     return {
       rows: [],
       errors: [
-        "見出しの行が見つかりません。1 行目に「題名」などの列名を書いてください（雛形を書き出せます）",
+        "見出しの行が見つかりません。1 行目に「制作物名」などの列名を書いてください（雛形を書き出せます）",
       ],
     };
   const missing = workCsvColumns.filter((c) => c.required && header.map[c.key] === undefined);
   const errors = missing.length
     ? [`必須の列がありません: ${missing.map((c) => c.header).join("・")}`]
     : [];
+  if (
+    header.map.category === undefined &&
+    header.map.subGenre === undefined &&
+    header.map.genre === undefined
+  )
+    errors.push("「小ジャンル」（または「大ジャンル」「区分」）の列がありません");
   const rows: WorkCsvRow[] = [];
   for (let i = header.index + 1; i < table.length; i++) {
     const cells = table[i]!;
@@ -203,12 +304,29 @@ export function parseWorkCsv(
       return k === undefined ? "" : (cells[k] ?? "").trim();
     };
     const problems: string[] = [];
+    const notes: string[] = [];
     const title = get("title");
-    if (title === "") problems.push("題名がありません");
+    if (title === "") problems.push("制作物名がありません");
     else if (title.length > WORK_TITLE_MAX)
-      problems.push(`題名は ${WORK_TITLE_MAX} 文字までです（${title.length} 文字あります）`);
-    const category = get("category");
-    if (category === "") problems.push("区分がありません");
+      problems.push(`制作物名は ${WORK_TITLE_MAX} 文字までです（${title.length} 文字あります）`);
+
+    // 大ジャンル・小ジャンル（Notion の選択肢）。小ジャンルから大ジャンルの既定が決まる
+    const genreText = get("genre");
+    let genre: WorkGenre | null = genreText === "" ? null : parseWorkGenre(genreText);
+    if (genreText !== "" && genre === null)
+      problems.push(
+        `大ジャンル「${genreText}」が分かりません（${Object.values(workGenreLabels).join("・")}）`,
+      );
+    const subText = get("subGenre");
+    const subGenre = subText === "" ? null : parseWorkSubGenre(subText);
+    if (subText !== "" && subGenre === null)
+      problems.push(`小ジャンル「${subText}」が分かりません`);
+    if (genre === null && subGenre !== null) genre = genreOfSubGenre(subGenre);
+
+    // 区分は小ジャンル（無ければ大ジャンル）の名前。書いてあればそちら
+    const category =
+      get("category") || workSubGenreLabel(subGenre) || (genre ? workGenreLabels[genre] : "");
+    if (category === "") problems.push("小ジャンル（または区分）がありません");
     else if (category.length > WORK_CATEGORY_MAX)
       problems.push(`区分は ${WORK_CATEGORY_MAX} 文字までです（${category.length} 文字あります）`);
 
@@ -220,24 +338,89 @@ export function parseWorkCsv(
       else problems.push(`年度「${yearText}」を数として読めません`);
     }
 
+    // 媒体: 書いてあればそれ、無ければ小ジャンル・大ジャンルの既定
     const mediaText = get("mediaType");
-    const mediaType =
-      mediaAliases[normalizePersonKey(mediaText)] ??
-      ((mediaTypes as readonly string[]).includes(mediaText) ? (mediaText as MediaType) : null);
-    if (mediaType === null)
-      problems.push(mediaText === "" ? "媒体がありません" : `媒体「${mediaText}」が分かりません`);
+    let mediaType: MediaType | null = null;
+    if (mediaText !== "") {
+      mediaType =
+        mediaAliases[normalizePersonKey(mediaText)] ??
+        ((mediaTypes as readonly string[]).includes(mediaText) ? (mediaText as MediaType) : null);
+      if (mediaType === null) problems.push(`媒体「${mediaText}」が分かりません`);
+    } else {
+      mediaType = defaultMediaTypeFor(subGenre, genre);
+      if (mediaType === null) problems.push("媒体がありません（小ジャンルか媒体を書いてください）");
+    }
 
     const creators = splitList(get("creators"));
     if (creators.length === 0) problems.push("制作者がありません");
     const approvers = splitList(get("approver"));
-    if (approvers.length === 0) problems.push("校了権限者がありません");
-    if (approvers.length > 1) problems.push("校了権限者は 1 人だけ書いてください");
+    if (approvers.length === 0) problems.push("校了者がありません");
+    const stakeholders = Array.from(
+      new Set([...splitList(get("stakeholders")), ...approvers.slice(1)]),
+    );
+    if (approvers.length > 1)
+      notes.push(
+        `校了者が ${approvers.length} 人書かれています。校了権限者は「${approvers[0]}」の 1 人にし、ほかの人は関係者に入れます`,
+      );
 
     const deadlineText = get("deadline");
     const deadline = parseWorkDeadline(deadlineText);
     if (deadline === undefined)
-      problems.push(`納期「${deadlineText}」を日付として読めません（例: 2026-11-14）`);
+      problems.push(
+        `納期「${deadlineText}」を日付として読めません（例: 2026-11-14、2026年11月14日）`,
+      );
     else if (deadline !== null && deadline <= opts.now) problems.push("納期が過ぎています");
+
+    const publishText = get("publishAt");
+    const publishAt = parseNotionDate(publishText);
+    if (publishAt === undefined)
+      problems.push(`入稿日・投稿日・印刷日「${publishText}」を日付として読めません`);
+
+    const printerText = get("requiresPrinterSubmission");
+    const requiresPrinterSubmission = parseNotionCheckbox(printerText);
+    if (requiresPrinterSubmission === undefined)
+      problems.push(`入稿の有無「${printerText}」が分かりません（Yes / No）`);
+
+    const quantityText = get("printQuantity");
+    const printQuantity = parseNonNegativeInteger(quantityText);
+    if (printQuantity === undefined)
+      problems.push(`印刷する部数/枚数/個数「${quantityText}」を数として読めません`);
+    const daysText = get("productionDays");
+    const productionDays = parseNonNegativeInteger(daysText);
+    if (productionDays === undefined) problems.push(`制作日数「${daysText}」を数として読めません`);
+
+    const sizeOrLength = get("sizeOrLength");
+    if (Array.from(sizeOrLength).length > WORK_SIZE_MAX)
+      problems.push(`サイズ・尺は ${WORK_SIZE_MAX} 文字までです`);
+
+    let tags: string[] = [];
+    try {
+      tags = normalizeWorkTags(splitList(get("tags")));
+    } catch {
+      problems.push("タグが多すぎるか、長すぎます（20 個・各 30 文字まで）");
+    }
+
+    const driveFolderUrl = get("driveFolderUrl");
+    if (driveFolderUrl !== "" && !isDriveUrl(driveFolderUrl))
+      problems.push(`Google Drive フォルダ「${driveFolderUrl}」が Drive の URL ではありません`);
+
+    let slackChannelId = "";
+    try {
+      slackChannelId = normalizeSlackChannelId(get("slackChannelId")) ?? "";
+    } catch {
+      problems.push(
+        `Slack Channel ID「${get("slackChannelId")}」はチャンネル ID（C で始まる英数字）で書いてください`,
+      );
+    }
+
+    const effectiveText = get("effective");
+    const effective = parseNotionCheckbox(effectiveText);
+    if (effective === undefined)
+      problems.push(`有効性「${effectiveText}」が分かりません（Yes / No）`);
+    const lifecycle = effective === false ? "cancelled" : "active";
+    if (effective === false) notes.push("有効性が No なので、中止（無効）の制作物として登録します");
+    if (parseNotionCheckbox(get("finalized")) === true)
+      notes.push("「校了済み」は取り込みません（校了は版を提出して宣言します）");
 
     const confText = get("confidentiality");
     const confidentiality =
@@ -251,7 +434,7 @@ export function parseWorkCsv(
       problems.push(`機密区分「${confText}」が分かりません（通常・非公開）`);
 
     const ownerTeams = splitList(get("ownerTeam"));
-    if (ownerTeams.length > 1) problems.push("主管担当は 1 つだけ書いてください");
+    if (ownerTeams.length > 1) problems.push("担当（主管担当）は 1 つだけ書いてください");
 
     rows.push({
       line: i + 1,
@@ -260,16 +443,30 @@ export function parseWorkCsv(
       purpose: get("purpose"),
       category,
       mediaType,
+      genre,
+      subGenre,
       creators,
       managers: splitList(get("managers")),
+      stakeholders,
       approver: approvers[0] ?? "",
       deadlineAt: deadline ?? null,
+      publishAt: publishAt ?? null,
+      requiresPrinterSubmission: requiresPrinterSubmission ?? null,
+      printQuantity: printQuantity ?? null,
+      sizeOrLength,
+      productionDays: productionDays ?? null,
+      tags,
+      driveFolderUrl,
+      slackChannelId,
+      lifecycle,
       legacyId: get("legacyId"),
       confidentiality: confidentiality ?? "normal",
       notationCategories: splitList(get("notation")),
       ownerTeam: ownerTeams[0] ?? null,
       productionTeams: Array.from(new Set(splitList(get("productionTeams")))),
+      relatedTeams: Array.from(new Set(splitList(get("relatedTeams")))),
       problems,
+      notes,
     });
   }
   if (rows.length > WORK_IMPORT_MAX_ROWS)
@@ -314,10 +511,23 @@ export interface WorkImportInput {
   purpose: string;
   category: string;
   mediaType: MediaType;
+  genre?: WorkGenre;
+  subGenre?: WorkSubGenre;
   creatorIds: string[];
   managerIds: string[];
+  stakeholderIds?: string[];
   approverId: string;
   deadlineAt?: Instant;
+  publishAt?: Instant;
+  requiresPrinterSubmission?: boolean;
+  printQuantity?: number;
+  sizeOrLength?: string;
+  productionDays?: number;
+  tags?: string[];
+  driveFolderUrl?: string;
+  slackChannelId?: string;
+  /** 有効性 No → 中止として登録 */
+  lifecycle?: "cancelled";
   legacyId?: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
@@ -325,6 +535,8 @@ export interface WorkImportInput {
   ownerTeamId?: string;
   /** 制作担当（組織の ID） */
   productionTeamIds: string[];
+  /** 関係担当（組織の ID） */
+  relatedTeamIds?: string[];
 }
 
 /** CSV に書かれた局・担当と、その照合の結果 */
@@ -337,13 +549,18 @@ export interface WorkImportRow {
   row: WorkCsvRow;
   creators: PersonMatch[];
   managers: PersonMatch[];
+  stakeholders: PersonMatch[];
   approver: PersonMatch | null;
   /** 主管担当の照合（列が空なら null） */
   ownerTeam: TeamRefMatch | null;
   /** 制作担当の照合 */
   productionTeams: TeamRefMatch[];
+  /** 関係担当の照合 */
+  relatedTeams: TeamRefMatch[];
   /** 取り込めない理由（行の内容と担当者の照合） */
   problems: string[];
+  /** 取り込めるが知らせておくこと */
+  notes: string[];
   /** 問題が無い行だけ登録の内容が入る */
   input: WorkImportInput | null;
 }
@@ -373,7 +590,7 @@ const teamIdOf = (m: TeamRefMatch) => (m.match.kind === "ok" ? m.match.team.id :
 
 /**
  * 解析結果と利用者の一覧・組織（局 › 担当）から、取り込みの確認表を作る。
- * 旧ID が CSV の中や既存の制作物と重なる行は、二重登録を避けるため取り込まない。
+ * 制作物 ID（旧ID）が CSV の中や既存の制作物と重なる行は、二重登録を避けるため取り込まない。
  */
 export function resolveWorkImport(
   parsed: WorkCsvParseResult,
@@ -386,43 +603,50 @@ export function resolveWorkImport(
   const rows = parsed.rows.map((row): WorkImportRow => {
     const creators = row.creators.map((k) => matchPerson(k, directory));
     const managers = row.managers.map((k) => matchPerson(k, directory));
+    const stakeholders = row.stakeholders.map((k) => matchPerson(k, directory));
     const approver = row.approver ? matchPerson(row.approver, directory) : null;
     const ownerTeam: TeamRefMatch | null = row.ownerTeam
       ? { key: row.ownerTeam, match: matchTeam(row.ownerTeam, teams) }
       : null;
-    const productionTeams = row.productionTeams.map((key): TeamRefMatch => ({
-      key,
-      match: matchTeam(key, teams),
-    }));
+    const refs = (keys: string[]) =>
+      keys.map((key): TeamRefMatch => ({ key, match: matchTeam(key, teams) }));
+    const productionTeams = refs(row.productionTeams);
+    const relatedTeams = refs(row.relatedTeams);
     const problems = [...row.problems];
-    for (const m of creators) {
-      const p = describeMiss("制作者", m);
-      if (p) problems.push(p);
-    }
-    for (const m of managers) {
-      const p = describeMiss("主管", m);
-      if (p) problems.push(p);
-    }
+    for (const [label, list] of [
+      ["制作者", creators],
+      ["主管", managers],
+      ["関係者", stakeholders],
+    ] as const)
+      for (const m of list) {
+        const p = describeMiss(label, m);
+        if (p) problems.push(p);
+      }
     if (approver) {
-      const p = describeMiss("校了権限者", approver);
+      const p = describeMiss("校了者", approver);
       if (p) problems.push(p);
     }
     if (ownerTeam) {
-      const p = describeTeamMiss("主管担当", ownerTeam);
+      const p = describeTeamMiss("担当（主管担当）", ownerTeam);
       if (p) problems.push(p);
     }
-    for (const m of productionTeams) {
-      const p = describeTeamMiss("制作担当", m);
-      if (p) problems.push(p);
-    }
+    for (const [label, list] of [
+      ["制作担当", productionTeams],
+      ["関係担当", relatedTeams],
+    ] as const)
+      for (const m of list) {
+        const p = describeTeamMiss(label, m);
+        if (p) problems.push(p);
+      }
     if (row.legacyId) {
       if (existing.has(row.legacyId))
-        problems.push(`旧ID「${row.legacyId}」の制作物がすでにあります`);
+        problems.push(`制作物 ID「${row.legacyId}」の制作物がすでにあります`);
       else if (seenLegacy.has(row.legacyId))
-        problems.push(`旧ID「${row.legacyId}」が CSV の中で重なっています`);
+        problems.push(`制作物 ID「${row.legacyId}」が CSV の中で重なっています`);
       seenLegacy.add(row.legacyId);
     }
     const ok = problems.length === 0 && parsed.errors.length === 0 && row.mediaType !== null;
+    const ids = (list: PersonMatch[]) => Array.from(new Set(list.map((m) => m.user!.id)));
     const input: WorkImportInput | null = ok
       ? {
           title: row.title,
@@ -430,18 +654,45 @@ export function resolveWorkImport(
           purpose: row.purpose,
           category: row.category,
           mediaType: row.mediaType!,
-          creatorIds: Array.from(new Set(creators.map((m) => m.user!.id))),
-          managerIds: Array.from(new Set(managers.map((m) => m.user!.id))),
+          ...(row.genre ? { genre: row.genre } : {}),
+          ...(row.subGenre ? { subGenre: row.subGenre } : {}),
+          creatorIds: ids(creators),
+          managerIds: ids(managers),
+          stakeholderIds: ids(stakeholders).filter((id) => id !== approver!.user!.id),
           approverId: approver!.user!.id,
           ...(row.deadlineAt !== null ? { deadlineAt: row.deadlineAt } : {}),
+          ...(row.publishAt !== null ? { publishAt: row.publishAt } : {}),
+          ...(row.requiresPrinterSubmission !== null
+            ? { requiresPrinterSubmission: row.requiresPrinterSubmission }
+            : {}),
+          ...(row.printQuantity !== null ? { printQuantity: row.printQuantity } : {}),
+          ...(row.sizeOrLength ? { sizeOrLength: row.sizeOrLength } : {}),
+          ...(row.productionDays !== null ? { productionDays: row.productionDays } : {}),
+          tags: row.tags,
+          ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
+          ...(row.slackChannelId ? { slackChannelId: row.slackChannelId } : {}),
+          ...(row.lifecycle === "cancelled" ? { lifecycle: "cancelled" as const } : {}),
           ...(row.legacyId ? { legacyId: row.legacyId } : {}),
           confidentiality: row.confidentiality,
           notationCategories: row.notationCategories,
           ...(ownerTeam ? { ownerTeamId: teamIdOf(ownerTeam) } : {}),
           productionTeamIds: Array.from(new Set(productionTeams.map(teamIdOf))),
+          relatedTeamIds: Array.from(new Set(relatedTeams.map(teamIdOf))),
         }
       : null;
-    return { row, creators, managers, approver, ownerTeam, productionTeams, problems, input };
+    return {
+      row,
+      creators,
+      managers,
+      stakeholders,
+      approver,
+      ownerTeam,
+      productionTeams,
+      relatedTeams,
+      problems,
+      notes: row.notes,
+      input,
+    };
   });
   return { rows, errors: parsed.errors, ready: rows.filter((r) => r.input).length };
 }
@@ -450,24 +701,41 @@ function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-/** 雛形（見出しと記入例 1 行。納期の例は 30 日後）。Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側 */
+/**
+ * 雛形（Notion の制作物 DB の列名の見出しと記入例 1 行。納期の例は 30 日後）。
+ * Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側
+ */
 export function workCsvTemplate(now: Instant = Date.now()): string {
-  const header = workCsvColumns.map((c) => c.header);
-  const example = [
-    "MF100 公式パンフレット",
-    "100",
-    "来場者向け総合案内",
-    "印刷物",
-    "PDF",
-    "mock-creator@example.invalid",
-    "五月 主管",
-    "mock-approver@example.invalid",
-    toJstDate(now + 30 * 86_400_000),
-    "PR-001",
-    "通常",
-    "A1;A2",
-    "広報局 › デザイン担当",
-    "広報局 › デザイン担当;広報局 › SNS担当",
-  ];
-  return `${[header, example].map((r) => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
+  const header = workCsvTemplateColumns.map((c) => c.header);
+  const example: Record<(typeof workCsvTemplateColumns)[number]["key"], string> = {
+    title: "MF100 公式パンフレット",
+    legacyId: "PR-001",
+    genre: "グラフィック",
+    subGenre: "印刷物（冊子）",
+    category: "",
+    mediaType: "",
+    purpose: "来場者向け総合案内",
+    ownerTeam: "PR › デザイン担当",
+    productionTeams: "PR › デザイン担当;PR › SNS担当",
+    relatedTeams: "JIM",
+    creators: "mock-creator@example.invalid",
+    stakeholders: "",
+    managers: "五月 主管",
+    approver: "mock-approver@example.invalid",
+    deadline: toJstDate(now + 30 * 86_400_000),
+    publishAt: toJstDate(now + 37 * 86_400_000),
+    requiresPrinterSubmission: "Yes",
+    printQuantity: "3000",
+    sizeOrLength: "A5・32 ページ",
+    productionDays: "20",
+    tags: "公式パンフ;マスター",
+    driveFolderUrl: "https://drive.google.com/drive/folders/example",
+    slackChannelId: "C0123ABCDEF",
+    effective: "Yes",
+    confidentiality: "通常",
+    notation: "A1;A2",
+    year: "100",
+  };
+  const row = workCsvTemplateColumns.map((c) => example[c.key]);
+  return `${[header, row].map((r) => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }

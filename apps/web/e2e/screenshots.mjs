@@ -266,6 +266,16 @@ async function main() {
         reviewer.name,
       );
       await shot("14-submit-required-checks");
+      // 71b 提出前の確認と申告（Notion の版 DB のチェックボックス。§58）: 3 つ確認し、写真とめいの使用を申告
+      for (const id of ["theme_font", "balance", "committee_output"])
+        await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+      await page.locator("m3e-dialog[open] m3e-checkbox#declare-usesPhotos").click();
+      await page.locator("m3e-dialog[open] m3e-checkbox#declare-usesMascot").click();
+      await page
+        .locator('m3e-dialog[open] .submit-checklist[aria-label="提出前の確認"]')
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await shot("71b-submit-checklist");
     },
   );
   await shot("04-submit-verified");
@@ -285,12 +295,21 @@ async function main() {
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
   await page.waitForTimeout(500);
+  // 基本情報が長くなった（§58）ので、引き出しを上端に戻してから撮る
+  await page.evaluate(() => document.querySelector(".drawer__body")?.scrollTo(0, 0));
+  await page.waitForTimeout(200);
   await shot("06-editor-info");
 
   // 15 制作物の編集（主管）: 引き出し「情報」の「編集」
   await btn("編集").click();
   await page.waitForSelector("m3e-dialog[open] m3e-input-chip");
   await shot("15-work-edit");
+  // 71 Notion の制作物 DB に揃えた節（§58）: 「日程と入稿」「リンク」まで送る
+  await page
+    .locator('m3e-dialog[open] .form-section[aria-label="日程と入稿"]')
+    .scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  await shot("71-work-edit-sections");
   await page
     .locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
     .click();

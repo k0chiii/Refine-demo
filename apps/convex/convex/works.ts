@@ -8,6 +8,7 @@ import {
 } from "@mf100/application";
 import {
   canViewWork,
+  currentDeclarations,
   hasOrgPermission,
   normalizePersonKey,
   orgPermissions,
@@ -26,9 +27,18 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { resolveUsers } from "./lib/users.ts";
-import { vConfidentiality, vLifecycleTarget, vMediaType } from "./lib/validators.ts";
+import {
+  vConfidentiality,
+  vLifecycleTarget,
+  vMediaType,
+  vWorkGenre,
+  vWorkMetadataFields,
+  vWorkMetadataPatch,
+} from "./lib/validators.ts";
 
 const workPatch = {
+  /** Notion の制作物 DB に揃えた項目（null で消す。docs/NOTION_ALIGNMENT.md） */
+  ...vWorkMetadataPatch,
   title: v.optional(v.string()),
   purpose: v.optional(v.string()),
   category: v.optional(v.string()),
@@ -65,6 +75,8 @@ export const create = mutation({
     confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
     activate: v.optional(v.boolean()),
+    /** Notion の制作物 DB に揃えた項目 */
+    ...vWorkMetadataFields,
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -95,9 +107,13 @@ export const importBatch = mutation({
         legacyId: v.optional(v.string()),
         confidentiality: vConfidentiality,
         notationCategories: v.array(v.string()),
-        /** 主管担当・制作担当（teams の ID） */
+        /** 主管担当・制作担当・関係担当（teams の ID） */
         ownerTeamId: v.optional(v.string()),
         productionTeamIds: v.optional(v.array(v.string())),
+        relatedTeamIds: v.optional(v.array(v.string())),
+        /** Notion の制作物 DB に揃えた項目。有効性 No は中止として登録 */
+        ...vWorkMetadataFields,
+        lifecycle: v.optional(v.literal("cancelled")),
       }),
     ),
     source: v.optional(v.string()),
@@ -107,7 +123,13 @@ export const importBatch = mutation({
     return runUseCase(async () => {
       const works = await importWorks(createAppContext(ctx), principal, {
         ...args,
-        rows: args.rows.map((r) => ({ ...r, productionTeamIds: r.productionTeamIds ?? [] })),
+        rows: args.rows.map((r) => ({
+          ...r,
+          stakeholderIds: r.stakeholderIds ?? [],
+          tags: r.tags ?? [],
+          productionTeamIds: r.productionTeamIds ?? [],
+          relatedTeamIds: r.relatedTeamIds ?? [],
+        })),
       });
       return works.map((w) => w.id);
     });
@@ -185,6 +207,7 @@ export const get = query({
       const users = await resolveUsers(ctx.db, [
         ...work.creatorIds,
         ...work.managerIds,
+        ...(work.stakeholderIds ?? []),
         work.approverId,
         ...revisions.map((r) => r.submittedBy),
         ...approvals.map((a) => a.actorId),
@@ -224,8 +247,11 @@ export const get = query({
         people: {
           creators: work.creatorIds.map((id) => users.get(id)),
           managers: work.managerIds.map((id) => users.get(id)),
+          stakeholders: (work.stakeholderIds ?? []).map((id) => users.get(id)),
           approver: users.get(work.approverId),
         },
+        /** 「現在の版」の申告（写真・めい・指針外の色。Notion の formula に相当）。申告の無い版なら null */
+        currentDeclarations: currentDeclarations(revisions),
         revisions: revisions.map((r) => ({
           ...r,
           label: revisionLabel(r),
@@ -271,6 +297,8 @@ export const listMine = query({
       ),
     ),
     text: v.optional(v.string()),
+    /** 大ジャンルで絞る（Notion の select） */
+    genre: v.optional(vWorkGenre),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -281,9 +309,10 @@ export const listMine = query({
     for (const work of mine) {
       if (args.year !== undefined && work.year !== args.year) continue;
       if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
+      if (args.genre !== undefined && work.genre !== args.genre) continue;
       if (
         text &&
-        !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose}`
+        !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose} ${(work.tags ?? []).join(" ")}`
           .toLowerCase()
           .includes(text)
       )
@@ -366,6 +395,9 @@ function summarize(
     legacyId: work.legacyId ?? null,
     category: work.category,
     mediaType: work.mediaType,
+    genre: work.genre ?? null,
+    subGenre: work.subGenre ?? null,
+    tags: [...(work.tags ?? [])],
     year: work.year,
     lifecycle: work.lifecycle,
     confidentiality: work.confidentiality,

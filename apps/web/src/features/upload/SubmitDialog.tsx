@@ -3,11 +3,16 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
   artifactFormatLabel,
+  checklistFor,
   checkTypeLabels,
   checkTypes,
   collectFigmaUrls,
+  emptyDeclarations,
   pickReviewArtifact,
+  revisionDeclarationItems,
+  suggestedChecksFor,
   type CheckType,
+  type RevisionDeclarations,
   POST_MANIFEST_NAME,
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
@@ -105,6 +110,24 @@ export function SubmitDialog({
   const [checks, setChecks] = useState<Record<string, { on: boolean; assignee: string[] }>>(
     Object.fromEntries(checkTypes.map((t) => [t, { on: false, assignee: [] }])),
   );
+  /**
+   * 提出前の確認と申告（Notion の版 DB のチェックボックスに揃えた。利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。
+   * 確認は本人の確認（提出を止めない）。申告（写真・めい・指針外の色の使用）は版に記録し、写真と指針外の色は専門確認を勧める
+   */
+  const [selfChecks, setSelfChecks] = useState<string[]>([]);
+  const [declarations, setDeclarations] = useState<RevisionDeclarations>(emptyDeclarations);
+  const checklist = checklistFor(data?.work.genre);
+  const declare = (key: keyof RevisionDeclarations, on: boolean) => {
+    const next = { ...declarations, [key]: on };
+    setDeclarations(next);
+    // 写真の使用 → 写真（肖像・権利）、指針外の色 → デザイン の専門確認を付ける（外すのは人が決める）
+    if (on)
+      setChecks((c) => {
+        const out = { ...c };
+        for (const t of suggestedChecksFor({ [key]: true })) out[t] = { ...out[t]!, on: true };
+        return out;
+      });
+  };
   const [flow, setFlow] = useState<SubmissionFlow | null>(null);
   const [state, setState] = useState<FlowState>(initialState);
   // 入力の不足・転送の失敗はスナックバーで知らせる（ダイアログの中に赤い箱を出さない）
@@ -226,6 +249,8 @@ export function SubmitDialog({
             items,
             ...(requiredChecks.length > 0 ? { requiredChecks } : {}),
             ...(postSnapshot !== undefined ? { postSnapshot } : {}),
+            declarations,
+            ...(selfChecks.length > 0 ? { selfChecks } : {}),
             requestId,
           }).then((r) => ({ sessionId: r.sessionId, items: r.items })),
         upload: (itemId, file, onProgress) => uploadItem(token, itemId, file, onProgress),
@@ -365,6 +390,41 @@ export function SubmitDialog({
                 />
               </Field>
             ) : null}
+            {/* 提出前の確認（Notion の版 DB のチェックボックス）。文章だけの項目は文章の制作物にだけ出す */}
+            <section className="submit-checklist" aria-label="提出前の確認">
+              <h3 className="submit-checklist__h">
+                提出前の確認
+                <span className="muted small">
+                  　{selfChecks.length} / {checklist.length}
+                </span>
+              </h3>
+              {checklist.map((c) => (
+                <Checkbox
+                  key={c.id}
+                  id={`self-check-${c.id}`}
+                  checked={selfChecks.includes(c.id)}
+                  onChange={(on) =>
+                    setSelfChecks((cur) => (on ? [...cur, c.id] : cur.filter((x) => x !== c.id)))
+                  }
+                  label={c.label.replace(/^（文章制作物のみ）/, "")}
+                />
+              ))}
+            </section>
+            <section className="submit-checklist" aria-label="この版の申告">
+              <h3 className="submit-checklist__h">この版の申告</h3>
+              <p className="small muted" style={{ margin: 0 }}>
+                使っているものの申告です（品質の確認ではありません）。写真と指針外の色は、下の専門確認を自動で付けます
+              </p>
+              {revisionDeclarationItems.map((it) => (
+                <Checkbox
+                  key={it.key}
+                  id={`declare-${it.key}`}
+                  checked={declarations[it.key]}
+                  onChange={(on) => declare(it.key, on)}
+                  label={it.label}
+                />
+              ))}
+            </section>
             <M3eExpansionPanel className="expansion checks-details">
               <span slot="header">専門確認を依頼する</span>
               <div className="checks">

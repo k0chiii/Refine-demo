@@ -5334,3 +5334,67 @@ m3e-snackbar {
     min-width: 0;
   }
 }
+
+/* ---------- 制作物の登録・編集（Notion の制作物 DB に揃えた節。§58） */
+.work-form {
+  gap: 24px;
+}
+.form-section {
+  display: grid;
+  gap: 16px;
+}
+.form-section__h {
+  margin: 0;
+  padding-bottom: 4px;
+  font: var(--mf-type-title-small);
+  color: var(--mf-on-surface-variant);
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.tag-picker__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.info-tab__flags {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.info-tab__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mf-primary);
+}
+.info-tab__link m3e-icon {
+  font-size: 16px;
+}
+.import-list__notes {
+  display: block;
+  color: var(--mf-on-surface-variant);
+}
+/* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
+.submit-checklist {
+  display: grid;
+  gap: 8px;
+}
+.submit-checklist__h {
+  margin: 0;
+  font: var(--mf-type-title-small);
+}
+.submit-checklist .checkbox {
+  align-items: start;
+}
+.submit-checklist .checkbox label {
+  padding-top: 10px;
+  line-height: 20px;
+}
+/* 管理 › 担当: 局のコード・絵文字 */
+.teams-admin__emoji {
+  margin-right: 4px;
+}
+.teams-admin__code {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+  margin-left: 6px;
+}
