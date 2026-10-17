@@ -605,7 +605,7 @@ export function Editor({
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
-  if (workData === undefined) return <Loading calm label="制作物を読み込んでいます" />;
+  if (workData === undefined) return <Loading label="制作物を読み込んでいます" />;
   const { work } = workData;
   const isSns = work.mediaType === "sns";
   const openAuthoring = () =>
@@ -887,7 +887,7 @@ export function Editor({
           ) : null}
         </div>
       );
-    if (!data) return <Loading calm label="版を読み込んでいます" />;
+    if (!data) return <Loading label="版を読み込んでいます" />;
     if (!artifact) return <div className="empty">添付がありません</div>;
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
@@ -982,7 +982,7 @@ export function Editor({
     }
     if (blob.error) return <div className="alert">{blob.error}</div>;
     // ファイルは丸ごと取得してから出す（動画などは長くなり得るので文字も見せる）
-    if (!blob.blob) return <Loading calm label="ファイルを取得しています" caption />;
+    if (!blob.blob) return <Loading label="ファイルを取得しています" caption />;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
@@ -1134,7 +1134,7 @@ export function Editor({
   const renderOther = (): ReactNode => {
     if (!compareWith) return null;
     if (!other || !otherArtifact) return <div className="empty">比較する添付がありません</div>;
-    if (!otherBlob.blob) return <Loading calm label="比べる版のファイルを取得しています" caption />;
+    if (!otherBlob.blob) return <Loading label="比べる版のファイルを取得しています" caption />;
     const none = {
       threads: [],
       activeThreadId: null,

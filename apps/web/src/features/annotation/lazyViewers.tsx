@@ -65,11 +65,6 @@ export function preloadViewers(kind: MediaType | ArtifactType): void {
 /** ビューアの読み込み中（ファイルの取得中と同じ見せ方。M3E の Loading indicator。docs/UI_M3E.md §59） */
 export function ViewerLoading({ className }: { className?: string }) {
   return (
-    <Loading
-      calm
-      label="ビューアを読み込んでいます"
-      caption
-      {...(className ? { className } : {})}
-    />
+    <Loading label="ビューアを読み込んでいます" caption {...(className ? { className } : {})} />
   );
 }
