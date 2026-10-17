@@ -25,7 +25,7 @@ const confirm = () =>
   });
 
 /**
- * この端末への通知（Web Push）の状態と操作。通知パネルのスイッチと、開いたときの「通知をオンにしますか？」で共用する。
+ * この端末への通知（Web Push）の状態と操作。アカウントの「通知の設定」と、開いたときの「通知をオンにしますか？」で共用する。
  * - サーバーに鍵があれば Web Push（購読して Convex から届く）
  * - デモ（サーバー無し）は「この端末の中だけ」（許可を取り、アプリの中で起きた通知をこの端末で出す）
  * - どちらでもない（鍵の無い本番など）は使えない（usable: false）
@@ -108,4 +108,13 @@ export function useDevicePush() {
     enable,
     disable,
   };
+}
+
+/**
+ * アカウントのメニューに「通知の設定」を出すか（PushSetting を出す条件と同じ: 端末への通知が使える環境で、この端末が対応している）。
+ * サインイン前は問い合わせない（enabled: false）
+ */
+export function usePushAvailable(enabled: boolean): boolean {
+  const config = useQuery(api.push.config, enabled ? {} : "skip");
+  return config !== undefined && (config !== null || DEMO) && pushSupport() !== "unsupported";
 }
