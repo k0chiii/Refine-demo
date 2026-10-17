@@ -292,11 +292,6 @@ export function FeedbackStage({
             <M3eIcon name="open_in_new" />
           </Link>
         </div>
-        {artifact ? (
-          <p className="fb-stage__hint">
-            印を押すとその FB を開きます。範囲の FB は「制作物を開く」から立てます
-          </p>
-        ) : null}
         <div className="fb-stage__viewer">
           <Suspense fallback={<ViewerLoading className="fb-stage__empty" />}>{viewer()}</Suspense>
         </div>
