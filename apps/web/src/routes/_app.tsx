@@ -1,26 +1,28 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@mf100/convex/api";
-import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
+import { saveData, whenIdle } from "@/lib/preload";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
 import { NotificationPrompt } from "@/features/notifications/NotificationPrompt";
 import { disablePush } from "@/lib/push";
 import { useWindowClass } from "@/lib/useMedia";
-import {
-  M3eAppBar,
-  M3eFab,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-  M3eNavBar,
-  M3eNavItem,
-  M3eNavRail,
-} from "@/ui/m3e";
+import { M3eAppBar } from "@m3e/react/app-bar";
+import { M3eFab } from "@m3e/react/fab";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import { M3eNavBar, M3eNavItem } from "@m3e/react/nav-bar";
+import { M3eNavRail } from "@m3e/react/nav-rail";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { AvatarProvider } from "@/ui/AvatarProvider";
 import { UserAvatar } from "@/ui/UserAvatar";
@@ -73,6 +75,7 @@ function AppShell() {
     if (endpoint) await unsubscribePush({ endpoint }).catch(() => undefined);
   };
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const router = useRouter();
   const cls = useWindowClass();
   const [railPref, setRailPref] = useState(readRailPref);
   const [modalOpen, setModalOpen] = useState(false);
@@ -113,6 +116,33 @@ function AppShell() {
     if (isLoading) return;
     if (!isAuthenticated || me === null) void navigate({ to: "/signin", replace: true });
   }, [isLoading, isAuthenticated, me, navigate]);
+  // 最初の画面が落ち着いたら、下部ナビ・レールの行き先の画面のコードを先に読み込む（画面ごとに分けた分、押したときに
+  // 取りに行くと待たせる。ホバーでの先読み（defaultPreload: intent）はスマホでは効かない）。校正画面（制作物を開いた画面）は
+  // 大きいので少し遅らせて 2 段目に。通信量の節約（Data Saver）では行わない。docs/UI_M3E.md §60
+  const meId = me?.id;
+  useEffect(() => {
+    if (!meId || saveData()) return;
+    const quiet = () => undefined;
+    const cancelFirst = whenIdle(() => {
+      for (const to of ["/", "/works", "/feedback", "/notation", "/write"] as const)
+        void router.preloadRoute({ to }).catch(quiet);
+    }, 4000);
+    let cancelSecond: (() => void) | null = null;
+    const timer = window.setTimeout(() => {
+      cancelSecond = whenIdle(
+        () =>
+          void router
+            .preloadRoute({ to: "/works/$workId", params: { workId: "preload" } })
+            .catch(quiet),
+        4000,
+      );
+    }, 3000);
+    return () => {
+      cancelFirst();
+      window.clearTimeout(timer);
+      cancelSecond?.();
+    };
+  }, [meId, router]);
 
   // モーダルの展開レールは、行き先を選んだ時・幅が変わった時・Esc で閉じる
   useEffect(() => {
