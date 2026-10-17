@@ -111,8 +111,7 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
     ) : (
       <div className="empty fb-stage__empty">
         <M3eIcon name="forum" />
-        <span className="title-medium">制作物を選ぶと、紙面とスレッドが開きます</span>
-        <span className="muted">制作物ごとに 1 つの FB スペースがあります</span>
+        <span className="title-medium">制作物を選んでください</span>
       </div>
     );
 
@@ -164,7 +163,9 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
       </>
     );
   const showSpaces = large && !spacesPane.collapsed;
-  const showThreads = !threadsPane2.collapsed;
+  /** スレッドのペインは制作物を選んでから出す（利用者指示 2026-10-17） */
+  const hasThreads = Boolean(workId);
+  const showThreads = hasThreads && !threadsPane2.collapsed;
   const handle = (side: "start" | "end") => {
     const pane = side === "start" ? spacesPane : threadsPane2;
     return (
@@ -185,8 +186,7 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
   const columns = [
     ...(large ? [showSpaces ? `${spacesPane.width}px` : "0px", "24px"] : []),
     "minmax(360px, 1fr)",
-    "24px",
-    showThreads ? `${threadsPane2.width}px` : "0px",
+    ...(hasThreads ? ["24px", showThreads ? `${threadsPane2.width}px` : "0px"] : []),
   ].join(" ");
   return (
     <>
@@ -199,28 +199,25 @@ export function FeedbackSpaceView({ workId, threadId }: { workId?: string; threa
         ) : null}
         {large ? handle("start") : null}
         <div className="fb-space__pane fb-space__stage">{stage}</div>
-        {handle("end")}
-        <div className="fb-space__pane fb-space__threads" hidden={!showThreads}>
-          {!showThreads ? null : workId ? (
-            <>
-              <header className="fb-space__head">
-                <span className="fb-space__title">{title}</span>
-                {space ? (
-                  <span className="fb-space__sub">
-                    スレッド {space.threads}
-                    {space.unread ? `・未読 ${space.unread}` : ""}
-                  </span>
-                ) : null}
-              </header>
-              {threadsPane}
-            </>
-          ) : (
-            <div className="empty fb-stage__empty">
-              <M3eIcon name="chat" />
-              スレッドはここに出ます
-            </div>
-          )}
-        </div>
+        {hasThreads ? handle("end") : null}
+        {hasThreads ? (
+          <div className="fb-space__pane fb-space__threads" hidden={!showThreads}>
+            {showThreads ? (
+              <>
+                <header className="fb-space__head">
+                  <span className="fb-space__title">{title}</span>
+                  {space ? (
+                    <span className="fb-space__sub">
+                      スレッド {space.threads}
+                      {space.unread ? `・未読 ${space.unread}` : ""}
+                    </span>
+                  ) : null}
+                </header>
+                {threadsPane}
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </>
   );
