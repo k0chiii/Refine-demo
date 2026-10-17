@@ -14,4 +14,10 @@ export interface Bindings {
    * （`wrangler secret put`。Convex 側にも同じ値。16 文字以上）。未設定ならアップロードは 503
    */
   MF100_UPLOAD_SECRET?: string;
+  /**
+   * Figma REST API のトークン（`wrangler secret put FIGMA_ACCESS_TOKEN`。個人アクセストークンは最長 90 日、
+   * スコープ `file_content:read`）。未設定なら /figma/import は「未設定」を返し、UI は取り込みを出さない。
+   * 利用者決定 2026-10-17「API が使えるならまずはそっちで試す」。トークンを置くのは利用者の手順
+   */
+  FIGMA_ACCESS_TOKEN?: string;
 }

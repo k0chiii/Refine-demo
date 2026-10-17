@@ -780,7 +780,7 @@ function DeviceScreen({
  * 端末の外形。iPhone は Apple の公式ベゼル画像を画面の上に重ね、それ以外は CSS で枠を描く。
  * 中の画面は実機と同じ CSS ピクセルで組むので、文字の折り返しは実機と同じになる（表示だけ縮める）。
  */
-function DeviceFrame({
+export function DeviceFrame({
   spec,
   color,
   dark,

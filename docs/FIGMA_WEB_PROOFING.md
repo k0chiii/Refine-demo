@@ -1,6 +1,6 @@
 # Figma と Web サイトの校正を本体で行う — 要件調査（叩き台）
 
-> 版: 0.1（2026-10-17） / 状態: 調査結果と設計提案。MVP（Phase 0＋1）を推奨の既定値（§8）で実装中。承認事項（§5）は未承認
+> 版: 0.2（2026-10-17） / 状態: **MVP（Phase 0＋1）＋ Figma の REST API 取り込み（Phase 2 の FG-05）を実装済み**（決定ログ「Figma・Web の校正（本体で）」、docs/UI_M3E.md §55）。利用者決定 2026-10-17: 委員会の Figma は Education プラン。「API が使えるならまずはそっちで試す」→ 取り込みを先に、iframe の埋め込みはフレーム単位のコメントの代わりの手段。承認事項（§5）のうち 1（プラン）・2（API の利用）は利用者が承認。**トークン（`FIGMA_ACCESS_TOKEN`）を Worker の秘密に置くのは利用者の手順**（この環境では本物の Figma API を呼んでいない）。残り（書き戻し・Browser Rendering・プロキシ・スニペット設置）は未承認でポリシー値のまま。実装の状態は §10
 > 利用者の指示: 「Figma をこの校正システム内で開いて校正ができるようにしたい。実際のウェブサイトを校正システム内で表示して、位置を合わせてコメントが入れられるような形（レスポンシブ対応、デバイス対応）でお願いしたい。しっかりと要件を調べて。」
 > 位置づけ: 要件 v1.1 の確定方針 C5（「動画・Web・Figma などは外部ツールでの作業を許容する」）を、動画（docs/UI_M3E.md §53、決定ログ「動画の校正（本体で）」）に続いて Figma・Web にも広げる提案。F-10（外部リンクと議論結果の記録）は残し、その上に「本体で位置を指してコメントする」手段を足す。§9.3「外部コメントを完全同期したと誤認させない」は維持する。
 > 調査の方法: この環境では WebFetch が全ホストで名前解決に失敗したため、外部の情報は WebSearch の結果要約から取った。一次資料を直接読めていない箇所は「※要確認」と明記した。コード側の事実（Anchor 型・Artifact 型・DEVICES・Hono ルート・デモモード）はリポジトリを読んで確認した。
@@ -181,16 +181,16 @@ Cloudflare: https://developers.cloudflare.com/browser-rendering/limits/ 、https
 
 ## 5. 承認が必要な事項
 
-| #   | 事項                                                                                                                                                  | 誰が／何を            | 承認前の動き                                                                         |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
-| 1   | **委員会の Figma プランとシート**（Starter か Professional 以上か、トークン所有者が Full/Dev シートか）。Starter なら FG-05 は月 6〜20 回しか動かない | 利用者・委員会        | FG-01〜04・09（手動書き出し）だけ実装                                                |
-| 2   | **Figma OAuth アプリの登録**（名称・リダイレクト URI・許可する埋め込みオリジン）。PAT は 90 日で切れるので OAuth を推奨                               | 委員会の Figma 管理者 | 登録せず、環境変数 `FIGMA_*` が無ければ機能を隠す（AI 校正と同じ `status` パターン） |
-| 3   | Figma へのコメント書き戻し（外部への実データ送信）                                                                                                    | 利用者                | 既定無効のポリシー値                                                                 |
-| 4   | **Cloudflare Workers Paid への切替**（$5/月＋Browser Rendering 超過 $0.09/時）。無料枠は 10 分/日・同時 3 で試験運用の撮影には足りない可能性          | 利用者（課金）        | 制作者がスクリーンショットを手動添付                                                 |
-| 5   | プロキシの**許可リスト**（ホスト名）と**専用オリジン**（DNS 設定）。外部サイトのプロキシ表示は利用規約上の確認も                                      | 利用者・委員会        | スニペット方式（委員会のサイト）のみ                                                 |
-| 6   | 委員会のサイト（公式サイト・ステージング）への**ブリッジスニペット設置と `Content-Security-Policy: frame-ancestors <アプリのオリジン>`**              | Web 担当              | デモの見本サイトで実装・検証                                                         |
-| 7   | ステージングの Basic 認証などの資格情報を Worker の秘密として持つか                                                                                   | 利用者                | 持たない（公開 URL のみ撮影）                                                        |
-| 8   | スクリーンショット・Figma 書き出し画像の保持期間（D14 と同じか）                                                                                      | 制度担当              | 版の添付と同じ                                                                       |
+| #   | 事項                                                                                                                                                  | 誰が／何を            | 承認前の動き                                                                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **委員会の Figma プランとシート**（Starter か Professional 以上か、トークン所有者が Full/Dev シートか）。Starter なら FG-05 は月 6〜20 回しか動かない | 利用者・委員会        | **承認済み（2026-10-17: Education プラン＝Professional 相当。「API が使えるならまずはそっちで試す」）**。FG-05 を実装。トークンは利用者が `wrangler secret put FIGMA_ACCESS_TOKEN` で置く |
+| 2   | **Figma OAuth アプリの登録**（名称・リダイレクト URI・許可する埋め込みオリジン）。PAT は 90 日で切れるので OAuth を推奨                               | 委員会の Figma 管理者 | まずは PAT（90 日で更新）。OAuth は後続。`FIGMA_ACCESS_TOKEN` が無ければ `/figma/status` が無効を返し UI は取り込みを出さない（AI 校正と同じ `status` パターン）                          |
+| 3   | Figma へのコメント書き戻し（外部への実データ送信）                                                                                                    | 利用者                | 既定無効のポリシー値                                                                                                                                                                      |
+| 4   | **Cloudflare Workers Paid への切替**（$5/月＋Browser Rendering 超過 $0.09/時）。無料枠は 10 分/日・同時 3 で試験運用の撮影には足りない可能性          | 利用者（課金）        | 制作者がスクリーンショットを手動添付                                                                                                                                                      |
+| 5   | プロキシの**許可リスト**（ホスト名）と**専用オリジン**（DNS 設定）。外部サイトのプロキシ表示は利用規約上の確認も                                      | 利用者・委員会        | スニペット方式（委員会のサイト）のみ                                                                                                                                                      |
+| 6   | 委員会のサイト（公式サイト・ステージング）への**ブリッジスニペット設置と `Content-Security-Policy: frame-ancestors <アプリのオリジン>`**              | Web 担当              | デモの見本サイトで実装・検証                                                                                                                                                              |
+| 7   | ステージングの Basic 認証などの資格情報を Worker の秘密として持つか                                                                                   | 利用者                | 持たない（公開 URL のみ撮影）                                                                                                                                                             |
+| 8   | スクリーンショット・Figma 書き出し画像の保持期間（D14 と同じか）                                                                                      | 制度担当              | 版の添付と同じ                                                                                                                                                                            |
 
 ## 6. 提案する設計
 
@@ -337,3 +337,43 @@ MVP＝Phase 0＋Phase 1。これで「校正システム内で表示し、位置
 - `apps/web/src/features/annotation/`: `WebLiveViewer.tsx`、`ImageViewer` への由来チップ。`features/social/preview/devices.ts` にタブレット・PC 幅を追加して共用。
 - `apps/web/src/demo/`・`public/demo-site/`: 見本サイトと seed。
 - 文書: `docs/REQUIREMENTS.md` の C5・F-10・§3.2 後続（「Web DOM に追随する注釈」「Figma 同期」）を本提案で更新、`docs/DECISIONS.md` に「Figma・Web の校正（本体で）」の行、`docs/UI_M3E.md` に §54。
+
+## 10. 実装の状態（2026-10-17）
+
+| 項目                                                                                                                                                                 | 状態                                                                               | 場所                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `web_element`・`figma_node` アンカー、`validateAnchor`、`anchorFitsArtifact`、`webElementAnchor`                                                                     | 実装                                                                               | `packages/domain/src/comment/Anchor.ts`                                                                         |
+| 再アンカー `resolveWebAnchor`（attached / moved / detached）、`placeIn`・`relativeTo`・`toViewportUnit`、場所の表示、`WebProofPolicy`                                | 実装                                                                               | `packages/domain/src/web/webProof.ts`                                                                           |
+| Figma の URL の解釈（design / file / proto / ブランチ、node-id 1-2 → 1:2）、ディープリンク、Embed Kit 2.0 の URL、`FigmaPolicy`                                      | 実装                                                                               | `packages/domain/src/web/figma.ts`                                                                              |
+| `Artifact.origin`（figma / web_snapshot）、取り込み項目の由来とノード名の反映（`markItemVerified`）                                                                  | 実装                                                                               | `packages/domain/src/revision/Artifact.ts`・`UploadSession.ts`、Convex `artifacts.origin`・`uploadItems.origin` |
+| コメント・FB のアンカーと添付の種類の検査                                                                                                                            | 実装                                                                               | `packages/application/src/usecases/comments.ts`・`feedback.ts`                                                  |
+| Hono `GET /figma/status`・`POST /figma/import`（nodes → images → 取得 → 試行 → R2 → 採用。429 は Retry-After を 1 回）                                               | 実装（偽のクライアントで試験。本物の API はこの環境から呼んでいない）              | `apps/api/src/figmaImport.ts`・`adapters/figmaClient.ts`                                                        |
+| ブリッジ（スニペット）と見本サイト                                                                                                                                   | 実装                                                                               | `apps/web/public/bridge.js`・`public/demo-site/`                                                                |
+| `WebLiveViewer`（端末・回転・幅・閲覧／コメント・印・埋め込み拒否の案内・CM-03 のバナー・WB-12 の注記）                                                              | 実装                                                                               | `apps/web/src/features/annotation/WebLiveViewer.tsx`・`webBridge.ts`                                            |
+| `FigmaEmbedViewer`（埋め込み・フレームの切り替え・「このフレームにコメント」・「Figma で開く」）                                                                     | 実装                                                                               | `apps/web/src/features/annotation/FigmaEmbedViewer.tsx`                                                         |
+| 提出ダイアログの「Figma のフレーム」（URL → 取り込み。連携が無ければ外部リンクだけ）                                                                                 | 実装                                                                               | `apps/web/src/features/upload/SubmitDialog.tsx`・`submissionFlow.ts`                                            |
+| カード: 付けたときの端末幅、「位置が外れました」、「Figma で開く」                                                                                                   | 実装                                                                               | `apps/web/src/features/review/ThreadCard.tsx`                                                                   |
+| WB-01 提出確定時のスクリーンショット（Browser Rendering）、WB-06 切り抜き、WB-08 プロキシ、FG-06 版比較の既定ペア、FG-08 Figma コメントの読み取り・書き戻し、Webhook | 未実装（承認待ち。ポリシー値は既定で無効）                                         | —                                                                                                               |
+| 通知から開いたときに端末幅・要素へ移る（CM-06）                                                                                                                      | 一部（カードを押すと端末を合わせて要素へ。通知からは開いたコメントが選ばれるまで） | —                                                                                                               |
+
+### 10.1 サイトへのブリッジの設置（Web 担当向け）
+
+1. サイトの `<head>` か `</body>` の前に 1 行:
+   ```html
+   <script
+     src="https://<校正システムのオリジン>/bridge.js"
+     data-allow-origin="https://<校正システムのオリジン>"
+     defer
+   ></script>
+   ```
+   `data-allow-origin` は校正システムのオリジン（複数なら空白区切り）。省くとサイトと同じオリジンの親にだけ応える。校正システムの外で開いたページでは何もしない。
+2. 応答ヘッダーに `Content-Security-Policy: frame-ancestors 'self' https://<校正システムのオリジン>` を付ける（`X-Frame-Options: DENY / SAMEORIGIN` は外す。両方あると CSP が優先される）。ステージングに Basic 認証があると iframe の中でも求められる（Safari は第三者 Cookie を遮るので、ログインの要るステージングは崩れることがある）。
+3. ブリッジがやり取りするのは postMessage だけで、送るのは押した要素のセレクタ・タグ・短い引用文（200 文字まで）・矩形・URL のパス。フォームの値・Cookie は送らない。許していないオリジンからのメッセージは無視する。
+4. 校正システム側: 版の提出で「外部リンク」にサイトの URL（https）を入れる。校正画面でその添付を開くとライブ表示になり、ブリッジが応えると「閲覧／コメント」が使える。応えない（埋め込み拒否・未設置）ときは理由と「新しいタブで開く」が出る。
+
+### 10.2 Figma の取り込みの設定（利用者の手順）
+
+1. Figma の設定 › Security › Personal access tokens でトークンを作る（スコープ `file_content:read`、期限は最長 90 日。切れたら作り直して置き替える）。
+2. `cd apps/api && wrangler secret put FIGMA_ACCESS_TOKEN`（ローカルは `.dev.vars`）。ブラウザ・Convex には渡らない。
+3. 提出ダイアログの「Figma のフレーム」に、Figma でフレームを選んで「リンクをコピー」した URL（`…?node-id=1-2`）を 1 行ずつ貼る。提出時に 1 ファイル 1 回の `nodes` と `images` で PNG（scale 2）を書き出し、画像の添付（ファイル名はノード名）になる。URL は外部リンクとしても残り、埋め込み表示とフレーム単位のコメント、「Figma で開く」に使う。
+4. レート制限（429）は 1 回だけ待って再試行し、それでも失敗したら項目が「失敗」になるので「再取り込み」を押す。トークンに権限が無い・ファイルが見つからないときは理由が出る。

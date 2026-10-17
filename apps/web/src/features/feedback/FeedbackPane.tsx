@@ -1,5 +1,6 @@
 import { api } from "@mf100/convex/api";
-import { formatVideoSpan, type Anchor } from "@mf100/domain";
+import { formatFigmaPlace, formatVideoSpan, type Anchor } from "@mf100/domain";
+import { webPlaceLabel } from "@/features/annotation/webBridge";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -29,6 +30,10 @@ export function anchorPlace(anchor: Anchor | null): string | null {
     }
     case "video_time":
       return formatVideoSpan(anchor);
+    case "web_element":
+      return webPlaceLabel(anchor);
+    case "figma_node":
+      return formatFigmaPlace(anchor);
     case "external":
       return null;
   }

@@ -5,7 +5,7 @@
  * ベゼルが配られていない機種（iPhone 16e・SE、Android）は CSS で枠を描く。
  * 画面の大きさの出典: Apple のベゼル PNG（画面の穴 ÷ 3）、Playwright の端末定義（Chrome DevTools と同じ値）。
  */
-export type DeviceKind = "iphone" | "android" | "pc";
+export type DeviceKind = "iphone" | "android" | "tablet" | "pc";
 export type Cutout = "island" | "notch" | "punch" | "home-button" | "none";
 
 export interface DeviceBezel {
@@ -302,6 +302,62 @@ export function deviceById(id: string): DeviceSpec {
   );
 }
 
+/**
+ * Web サイトのライブ表示（docs/FIGMA_WEB_PROOFING.md WB-03・§2.2.4）で選べる端末。
+ * SNS プレビューの機種（DEVICES。iPhone は実機ベゼル）に、タブレットと PC の代表幅を足す。
+ * SNS プレビューの一覧は変えない（この並びは Web の校正だけで使う）。
+ * 寸法は Playwright の端末定義（Chrome DevTools と同じ値）。PC は高さ 0（置き場所の高さいっぱい）。
+ * 既定（Q5）: スマホは iPhone 17（402×874）、PC は 1440。
+ */
+const tablet = (id: string, label: string, w: number, h: number): DeviceSpec => ({
+  id,
+  label,
+  kind: "tablet",
+  w,
+  h,
+  top: 24,
+  bottom: 20,
+  radius: 18,
+  cutout: "none",
+});
+const pc = (w: number): DeviceSpec => ({
+  id: `pc-${w}`,
+  label: `PC ${w}`,
+  kind: "pc",
+  w,
+  h: 0,
+  top: 0,
+  bottom: 0,
+  radius: 12,
+  cutout: "none",
+});
+export const WEB_DEVICES: readonly DeviceSpec[] = [
+  deviceById("iphone-17"),
+  deviceById("iphone-17-pro-max"),
+  deviceById("iphone-se-3"),
+  deviceById("pixel-10"),
+  deviceById("galaxy-s24"),
+  tablet("ipad-11", "iPad（11 インチ）", 820, 1180),
+  tablet("ipad-pro-13", "iPad Pro（13 インチ）", 1032, 1376),
+  pc(1280),
+  pc(1440),
+  pc(1920),
+];
+export const WEB_DEFAULT_DEVICE = "iphone-17";
+export const WEB_DEFAULT_PC = "pc-1440";
+
+export function webDeviceById(id: string): DeviceSpec {
+  return (
+    WEB_DEVICES.find((d) => d.id === id) ??
+    (WEB_DEVICES.find((d) => d.id === WEB_DEFAULT_DEVICE) as DeviceSpec)
+  );
+}
+
+/** コメントが付けられた端末幅（viewport）に最も近い Web の端末。幅が同じものを優先し、無ければ null */
+export function webDeviceForWidth(width: number): DeviceSpec | null {
+  return WEB_DEVICES.find((d) => d.w === width) ?? null;
+}
+
 /** ベゼル画像の URL（色が無効なら最初の色） */
 export function bezelUrl(spec: DeviceSpec, color?: string): string | undefined {
   if (!spec.bezel) return undefined;
@@ -313,6 +369,7 @@ export function bezelUrl(spec: DeviceSpec, color?: string): string | undefined {
 export function outerSize(spec: DeviceSpec): { w: number; h: number } {
   if (spec.bezel) return { w: spec.bezel.w, h: spec.bezel.h };
   if (spec.kind === "pc") return { w: spec.w, h: 0 };
+  if (spec.kind === "tablet") return { w: spec.w + 40, h: spec.h + 40 };
   if (spec.cutout === "home-button") return { w: spec.w + 24, h: spec.h + 24 + 120 };
   return { w: spec.w + 24, h: spec.h + 24 };
 }

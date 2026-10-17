@@ -40,6 +40,7 @@ export function ComposePopover({
   docked,
   quote,
   place,
+  placeIcon = "schedule",
   kind = "comment",
   onKind,
 }: {
@@ -61,6 +62,8 @@ export function ComposePopover({
   quote?: string;
   /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。docked でなくても出す */
   place?: string;
+  /** place のアイコン（既定は時計。Web の要素は ads_click、Figma のフレームは design_services） */
+  placeIcon?: string;
   /** 書くもの: コメント（指摘して解決する）か FB（解決しない相談）。利用者決定 2026-10-15 */
   kind?: "comment" | "feedback";
   /** 渡すと「コメント／FB」を切り替えられる（コメントできない版では渡さず FB だけ） */
@@ -118,7 +121,7 @@ export function ComposePopover({
       {docked && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}
       {place ? (
         <div className="compose-pop__place">
-          <M3eIcon name="schedule" />
+          <M3eIcon name={placeIcon} />
           {place}
         </div>
       ) : null}

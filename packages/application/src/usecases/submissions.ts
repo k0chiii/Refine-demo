@@ -20,8 +20,10 @@ import {
   toArtifact,
   type UploadItem,
   type UploadSession,
+  type ArtifactOrigin,
   type ArtifactRole,
   type ArtifactType,
+  type FigmaImportMeta,
   type CheckType,
   type RequiredCheck,
   checkTypeLabels,
@@ -52,6 +54,8 @@ export interface PrepareSubmissionInput {
     role: ArtifactRole;
     declaredSize?: number;
     externalUrl?: string;
+    /** 由来（Figma から取り込む項目は fileKey・nodeId。取り込みが済むとノード名などが埋まる） */
+    origin?: ArtifactOrigin;
   }>;
   /** この版で必要な専門確認（§2.2-4）。確定時に RequiredCheck として作られる。 */
   requiredChecks?: Array<{ type: CheckType; label?: string; assigneeId?: string }>;
@@ -128,6 +132,7 @@ export async function prepareSubmission(
           status: it.role === "external" ? "verified" : "pending",
         };
         if (it.declaredSize !== undefined) base.declaredSize = it.declaredSize;
+        if (it.origin !== undefined) base.origin = it.origin;
         if (it.role === "external") {
           if (!it.externalUrl)
             throw new DomainError("anchor_invalid", { reason: "external_url_required" });
@@ -195,7 +200,14 @@ export async function beginItemUpload(
 export async function completeItemUpload(
   ctx: AppContext,
   principal: Principal,
-  input: { attemptId: string; size: number; sha256: string; pageCount?: number },
+  input: {
+    attemptId: string;
+    size: number;
+    sha256: string;
+    pageCount?: number;
+    /** Figma から取り込んだとき、Figma の応答から埋める値（ノード名・版・フレームの大きさ） */
+    figma?: FigmaImportMeta;
+  },
 ): Promise<UploadItem> {
   const now = ctx.clock.now();
   const attempt = await loadOwnUploadAttempt(ctx, principal, input.attemptId, "uploadItem");
@@ -204,12 +216,13 @@ export async function completeItemUpload(
   assertSessionOpen(session, now);
   assertItemUploadable(item);
   assertAttemptAdoptable(attempt, now);
-  const meta: { size: number; sha256: string; objectKey: string; pageCount?: number } = {
+  const meta: Parameters<typeof markItemVerified>[1] = {
     size: input.size,
     sha256: input.sha256,
     objectKey: attempt.objectKey,
   };
   if (input.pageCount !== undefined) meta.pageCount = input.pageCount;
+  if (input.figma !== undefined) meta.figma = input.figma;
   const next = markItemVerified(item, meta);
   await ctx.attempts.update(
     next.status === "verified" ? adoptAttempt(attempt, now) : discardAttempt(attempt, now),

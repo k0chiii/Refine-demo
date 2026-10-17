@@ -17,6 +17,8 @@
   ],
   // 秘密は vars に書かない: `wrangler secret put MF100_UPLOAD_SECRET`（ファイル提出。必須）・
   // `wrangler secret put MF100_CLEANUP_SECRET`（R2 清掃）。どちらも Convex 側と同じ値。ローカルは .dev.vars
+  // `wrangler secret put FIGMA_ACCESS_TOKEN`（Figma のフレームの取り込み。任意。無ければ取り込みは出ない。
+  // 個人アクセストークンは最長 90 日・スコープ file_content:read。利用者が自分で設定する）
   "vars": {
     // `wrangler dev` 用の既定値。本番は下の env.production（`wrangler deploy --env production`）
     "CONVEX_URL": "http://127.0.0.1:3210",

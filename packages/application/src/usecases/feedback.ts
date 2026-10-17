@@ -1,5 +1,6 @@
 import {
   adoptAttempt,
+  anchorFitsArtifact,
   assertAttemptAdoptable,
   discardAttempt,
   assertFeedbackFileAttachable,
@@ -686,7 +687,11 @@ async function checkPlace(
   if (!input.anchor) return { revisionId: revision.id };
   validateAnchor(input.anchor);
   const artifact = await ctx.artifacts.findById(input.anchor.artifactId);
-  if (!artifact || artifact.revisionId !== revision.id)
+  if (
+    !artifact ||
+    artifact.revisionId !== revision.id ||
+    !anchorFitsArtifact(input.anchor, artifact)
+  )
     throw new DomainError("anchor_artifact_mismatch", {
       artifactId: input.anchor.artifactId,
       revisionId: revision.id,

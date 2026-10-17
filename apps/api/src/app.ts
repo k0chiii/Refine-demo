@@ -1,9 +1,11 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
+import { importFigmaFrames, type FigmaImportItem } from "./figmaImport.ts";
 import type {
   ArtifactAccess,
   BackendGateway,
+  FigmaClient,
   ObjectStore,
   TokenVerifier,
   UploadOps,
@@ -15,6 +17,10 @@ export interface AppDeps {
   gateway: BackendGateway;
   store: ObjectStore;
   allowedOrigins: string[];
+  /** Figma REST API（FIGMA_ACCESS_TOKEN があるときだけ。無ければ null で /figma は「未設定」） */
+  figma?: FigmaClient | null;
+  /** Figma の書き出しの倍率（domain の FigmaPolicy.renderScale。既定 2） */
+  figmaScale?: number;
 }
 
 type AppEnv = { Variables: { token: string; subject: string } };
@@ -37,7 +43,7 @@ export function createApp(deps: AppDeps) {
     cors({
       origin: (origin) => (deps.allowedOrigins.includes(origin) ? origin : null),
       allowHeaders: ["Authorization", "Content-Type", "X-MF100-Sha256"],
-      allowMethods: ["GET", "PUT", "OPTIONS"],
+      allowMethods: ["GET", "PUT", "POST", "OPTIONS"],
       maxAge: 600,
     }),
   );
@@ -48,6 +54,7 @@ export function createApp(deps: AppDeps) {
   app.use("/uploads/*", requireAuth(deps));
   app.use("/files/*", requireAuth(deps));
   app.use("/feedback/*", requireAuth(deps));
+  app.use("/figma/*", requireAuth(deps));
 
   /**
    * R2 へ保存し、sha256（R2 側で検証）と申告サイズを確かめてから Convex に採用を求める。
@@ -142,6 +149,52 @@ export function createApp(deps: AppDeps) {
   app.get("/feedback/files/:fileId", async (c) => {
     const access = await deps.gateway.authorizeFeedbackFile(c.get("token"), c.req.param("fileId"));
     return (await serve(access)) ?? c.json({ code: "object_missing" }, 404);
+  });
+
+  /**
+   * Figma 連携（docs/FIGMA_WEB_PROOFING.md FG-05。利用者決定 2026-10-17「API が使えるならまずはそっちで試す」）。
+   * - GET /figma/status: トークンが設定されているか（UI が「Figma から取り込む」を出すか決める）
+   * - POST /figma/import: 準備済みの項目（由来 figma）に、Figma から書き出した PNG を入れる。
+   *   トークンはこの Worker の秘密で、ブラウザへは渡さない。項目の持ち主か・受付中かは Convex が確かめる
+   */
+  app.get("/figma/status", (c) => c.json({ enabled: Boolean(deps.figma) }));
+  app.post("/figma/import", async (c) => {
+    if (!deps.figma)
+      return c.json(
+        {
+          code: "figma_not_configured",
+          message:
+            "Figma 連携が未設定です（FIGMA_ACCESS_TOKEN）。書き出した PNG/PDF を添付してください",
+        },
+        503,
+      );
+    const body = (await c.req.json().catch(() => null)) as { items?: unknown } | null;
+    const items = Array.isArray(body?.items) ? (body!.items as unknown[]) : null;
+    if (!items || items.length === 0 || items.length > 50)
+      return c.json({ code: "bad_request", message: "items（1〜50 件）が必要です" }, 400);
+    const parsed: FigmaImportItem[] = [];
+    for (const raw of items) {
+      const it = raw as Record<string, unknown>;
+      if (
+        typeof it.itemId !== "string" ||
+        typeof it.fileKey !== "string" ||
+        typeof it.nodeId !== "string" ||
+        it.itemId.length > 200
+      )
+        return c.json({ code: "bad_request", message: "items の形が違います" }, 400);
+      parsed.push({ itemId: it.itemId, fileKey: it.fileKey, nodeId: it.nodeId });
+    }
+    const results = await importFigmaFrames(
+      {
+        figma: deps.figma,
+        uploads: deps.gateway.itemUploads,
+        store: deps.store,
+        scale: deps.figmaScale ?? 2,
+      },
+      c.get("token"),
+      parsed,
+    );
+    return c.json({ items: results });
   });
 
   app.onError((error, c) => {

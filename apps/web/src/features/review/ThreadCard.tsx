@@ -3,7 +3,13 @@ import type { Id } from "@mf100/convex/dataModel";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { formatVideoSpan } from "@mf100/domain";
+import {
+  figmaDeepLink,
+  formatFigmaPlace,
+  formatVideoSpan,
+  type WebAnchorState,
+} from "@mf100/domain";
+import { webViewportLabel } from "@/features/annotation/webBridge";
 import { MentionTextarea, renderWithMentions } from "./mentions";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
@@ -55,9 +61,12 @@ export function ThreadCard({
   pending,
   className,
   index,
+  placeState,
 }: {
   /** 紙面のピンと同じ番号（ピンの名前「コメント N」と対応させる） */
   index?: number;
+  /** Web のライブ表示での再アンカーの結果（moved: 文字で見つけた、detached: 位置が外れた） */
+  placeState?: WebAnchorState;
   thread: Thread;
   active: boolean;
   meId: string | null;
@@ -145,7 +154,11 @@ export function ThreadCard({
                 aria-label={
                   t.anchor.type === "video_time"
                     ? `コメント ${index} の時刻 ${formatVideoSpan(t.anchor)} を再生位置にする`
-                    : `コメント ${index} の位置を表示`
+                    : t.anchor.type === "web_element"
+                      ? `コメント ${index} の要素を表示（${webViewportLabel(t.anchor)} で付けたコメント）`
+                      : t.anchor.type === "figma_node"
+                        ? `コメント ${index} のフレームを表示`
+                        : `コメント ${index} の位置を表示`
                 }
                 onClick={(e: Event) => {
                   stop(e);
@@ -154,9 +167,25 @@ export function ThreadCard({
               >
                 <M3eIcon
                   slot="icon"
-                  name={t.anchor.type === "video_time" ? "schedule" : "location_on"}
+                  name={
+                    t.anchor.type === "video_time"
+                      ? "schedule"
+                      : t.anchor.type === "web_element"
+                        ? t.anchor.viewport.width < 600
+                          ? "smartphone"
+                          : "computer"
+                        : t.anchor.type === "figma_node"
+                          ? "design_services"
+                          : "location_on"
+                  }
                 />
-                {t.anchor.type === "video_time" ? `${index}・${formatVideoSpan(t.anchor)}` : index}
+                {t.anchor.type === "video_time"
+                  ? `${index}・${formatVideoSpan(t.anchor)}`
+                  : t.anchor.type === "web_element"
+                    ? `${index}・${webViewportLabel(t.anchor)}`
+                    : t.anchor.type === "figma_node"
+                      ? `${index}・${formatFigmaPlace(t.anchor)}`
+                      : index}
               </M3eButton>
             ) : null}
             {canDecide && !closed ? (
@@ -195,14 +224,47 @@ export function ThreadCard({
           {t.anchor?.type === "text_range" ? (
             <blockquote className="thread__quote">「{t.anchor.quote}」</blockquote>
           ) : null}
+          {t.anchor?.type === "web_element" && t.anchor.selector.textQuote ? (
+            <blockquote className="thread__quote">
+              「{t.anchor.selector.textQuote.exact}」
+            </blockquote>
+          ) : null}
           <div className="thread__body">{renderWithMentions(t.body, t.mentionUsers)}</div>
           {closed ||
           t.severity === "critical" ||
           t.carriedFromThreadId ||
           t.assignee ||
           t.origin?.needsReview ||
-          t.origin?.textSource === "ocr" ? (
+          t.origin?.textSource === "ocr" ||
+          (placeState && placeState !== "attached") ||
+          t.anchor?.type === "figma_node" ? (
             <div className="thread__meta">
+              {/* Web のライブ表示: 要素が見つからない（位置が外れた）・文字で見つけた（動いた）。消さずに注記する（WB-05） */}
+              {placeState === "detached" ? (
+                <StatusText tone="error" icon="location_off">
+                  位置が外れました（要素が見つかりません）
+                </StatusText>
+              ) : placeState === "moved" ? (
+                <StatusText tone="warning" icon="move_down">
+                  文字で見つけた位置に出しています
+                </StatusText>
+              ) : null}
+              {t.anchor?.type === "figma_node" ? (
+                <a
+                  className="thread__link"
+                  href={figmaDeepLink({
+                    kind: "design",
+                    fileKey: t.anchor.fileKey,
+                    nodeId: t.anchor.nodeId,
+                  })}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={stop}
+                >
+                  <M3eIcon name="open_in_new" />
+                  Figma で開く
+                </a>
+              ) : null}
               {/* 状態は文字＋アイコン（M3 の chip は操作の部品なので、ただの表示には使わない。§49） */}
               {t.origin?.needsReview ? <StatusText icon="help">要確認</StatusText> : null}
               {t.origin?.textSource === "ocr" ? (

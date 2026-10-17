@@ -7,6 +7,38 @@ export type ArtifactType = "pdf" | "image" | "document" | "video" | "other" | "e
 /** アップロード実体の検証状態。verified になるまで版は提出確定できない（F-04 / A-02 / A-16）。 */
 export type ArtifactStatus = "pending" | "uploaded" | "verified" | "failed";
 
+/**
+ * 添付の由来（画像・PDF がどこから来たか。docs/FIGMA_WEB_PROOFING.md §6.1）。校正の座標は従来どおり画像基準。
+ * - figma: Figma の REST API で書き出したフレーム（fileKey・nodeId・ノード名・Figma 側の版・取得倍率・フレームの大きさ）。
+ *   画像の 0..1 は `node_offset = {x: rect.x * box.width, y: rect.y * box.height}` で Figma のフレーム座標に戻せる
+ * - web_snapshot: サイトのスクリーンショット（URL・端末・ビューポート・撮影時刻。撮影の自動化は承認後）
+ */
+export type ArtifactOrigin =
+  | {
+      kind: "figma";
+      fileKey: string;
+      nodeId: string;
+      nodeName?: string;
+      figmaVersion?: string;
+      lastModified?: string;
+      scale: number;
+      box: { width: number; height: number };
+    }
+  | {
+      kind: "web_snapshot";
+      url: string;
+      deviceId?: string;
+      viewport: {
+        width: number;
+        height: number;
+        dpr: number;
+        orientation: "portrait" | "landscape";
+      };
+      userAgent?: string;
+      fullPage: boolean;
+      capturedAt: number;
+    };
+
 export interface Artifact {
   id: ArtifactId;
   revisionId: RevisionId;
@@ -22,6 +54,25 @@ export interface Artifact {
   pageCount?: number;
   status: ArtifactStatus;
   failureMessage?: string;
+  /** 由来（Figma から取り込んだ・サイトのスクリーンショット）。無ければ提出されたファイル */
+  origin?: ArtifactOrigin;
+}
+
+/** ライブ表示（iframe）の対象になる添付: http(s) の外部リンク（Figma の URL は埋め込み表示なので除く） */
+export function isWebLiveArtifact(
+  a: Pick<Artifact, "role"> & { externalUrl?: string | undefined },
+): boolean {
+  return (
+    a.role === "external" &&
+    typeof a.externalUrl === "string" &&
+    /^https?:\/\//i.test(a.externalUrl) &&
+    !isFigmaUrl(a.externalUrl)
+  );
+}
+
+/** Figma のファイル・プロトタイプの URL か（埋め込み表示とフレーム単位のコメントの対象） */
+export function isFigmaUrl(url: string): boolean {
+  return /^https:\/\/(?:www\.)?figma\.com\/(?:design|file|proto|board|slides)\//i.test(url);
 }
 
 /** 外部リンクは実体検証対象外。R2 添付はすべて verified であること。 */

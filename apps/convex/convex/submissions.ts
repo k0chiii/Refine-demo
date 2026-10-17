@@ -21,7 +21,14 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { vArtifactRole, vArtifactType, vCheckType, vRevisionKind } from "./lib/validators.ts";
+import {
+  vArtifactOrigin,
+  vArtifactRole,
+  vArtifactType,
+  vCheckType,
+  vFigmaImportMeta,
+  vRevisionKind,
+} from "./lib/validators.ts";
 import { DomainError } from "@mf100/domain";
 
 /** 版提出の準備（U-04 / F-04）。Revision はまだ作らない。 */
@@ -41,6 +48,7 @@ export const prepare = mutation({
         role: vArtifactRole,
         declaredSize: v.optional(v.number()),
         externalUrl: v.optional(v.string()),
+        origin: v.optional(vArtifactOrigin),
       }),
     ),
     requiredChecks: v.optional(
@@ -92,6 +100,8 @@ export const completeUpload = internalMutation({
     size: v.number(),
     sha256: v.string(),
     pageCount: v.optional(v.number()),
+    /** Figma から取り込んだとき（Hono の /figma/import）に Figma の応答から埋める値 */
+    figma: v.optional(vFigmaImportMeta),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);

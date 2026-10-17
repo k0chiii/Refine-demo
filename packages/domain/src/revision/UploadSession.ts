@@ -1,7 +1,7 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
-import type { Artifact, ArtifactRole, ArtifactType } from "./Artifact.ts";
+import type { Artifact, ArtifactOrigin, ArtifactRole, ArtifactType } from "./Artifact.ts";
 import type { Revision, RevisionKind } from "./Revision.ts";
 
 /**
@@ -63,6 +63,27 @@ export interface UploadItem {
   failureMessage?: string;
   /** R2 上のオブジェクトを清掃で削除した時刻（objectKey は履歴のため残す） */
   purgedAt?: Instant;
+  /** 由来（Figma から取り込む項目は準備時に fileKey・nodeId を持ち、取り込み完了でノード名などが埋まる） */
+  origin?: ArtifactOrigin;
+}
+
+/** Figma から取り込んだときに Figma の応答から埋める値（ノード名・版・フレームの大きさ） */
+export interface FigmaImportMeta {
+  nodeName: string;
+  figmaVersion?: string;
+  lastModified?: string;
+  box: { width: number; height: number };
+}
+
+/** ノード名からファイル名を作る（記号は "_"、空なら nodeId。拡張子 .png） */
+export function figmaFrameFileName(nodeName: string, nodeId: string): string {
+  const base =
+    Array.from(nodeName)
+      .map((c) => (c.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(c) ? "_" : c))
+      .join("")
+      .trim()
+      .slice(0, 80) || `figma-${nodeId.replace(":", "-")}`;
+  return `${base}.png`;
 }
 
 export function assertSessionOpen(session: UploadSession, now: Instant): void {
@@ -111,7 +132,14 @@ export function assertItemUploadable(item: UploadItem): void {
  */
 export function markItemVerified(
   item: UploadItem,
-  meta: { size: number; sha256: string; objectKey: string; pageCount?: number },
+  meta: {
+    size: number;
+    sha256: string;
+    objectKey: string;
+    pageCount?: number;
+    /** Figma から取り込んだ項目（origin.kind が figma）にだけ反映する。ノード名がファイル名になる */
+    figma?: FigmaImportMeta;
+  },
 ): UploadItem {
   if (item.role === "external")
     throw new DomainError("upload_item_invalid_state", {
@@ -134,6 +162,16 @@ export function markItemVerified(
   };
   delete next.failureMessage;
   if (meta.pageCount !== undefined) next.pageCount = meta.pageCount;
+  if (meta.figma && item.origin?.kind === "figma") {
+    next.origin = {
+      ...item.origin,
+      nodeName: meta.figma.nodeName,
+      box: meta.figma.box,
+      ...(meta.figma.figmaVersion ? { figmaVersion: meta.figma.figmaVersion } : {}),
+      ...(meta.figma.lastModified ? { lastModified: meta.figma.lastModified } : {}),
+    };
+    next.fileName = figmaFrameFileName(meta.figma.nodeName, item.origin.nodeId);
+  }
   return next;
 }
 
@@ -175,5 +213,6 @@ export function toArtifact(item: UploadItem, revisionId: string): Omit<Artifact,
   if (item.sha256 !== undefined) a.sha256 = item.sha256;
   if (item.size !== undefined) a.size = item.size;
   if (item.pageCount !== undefined) a.pageCount = item.pageCount;
+  if (item.origin !== undefined) a.origin = item.origin;
   return a;
 }
