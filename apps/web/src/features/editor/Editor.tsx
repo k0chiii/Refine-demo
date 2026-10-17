@@ -86,7 +86,13 @@ import {
 } from "@/lib/labels";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
-import { usePinchZoom } from "@/lib/usePinchZoom";
+import {
+  DEFAULT_ZOOM_LIMITS,
+  PINCH_MIN,
+  stepScale,
+  usePinchZoom,
+  type ZoomLimits,
+} from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { FeedbackPane } from "@/features/feedback/FeedbackPane";
@@ -310,10 +316,20 @@ export function Editor({
   // 校正物はピンチでも拡大縮小できる（アプリ全体は拡大しない）
   // 要素は読み込みが終わってから描かれるので、ref ではなく state で受ける（最初の描画時にはまだ無い）
   const [viewerEl, setViewerEl] = useState<HTMLDivElement | null>(null);
-  usePinchZoom(viewerEl, scale, setScale);
+  // PDF の拡大の上限は実寸比 1000%（紙面が大きいときはその分下げる）。PdfViewer が知らせる「幅に合わせた大きさの実寸比」で、
+  // 倍率（scale）の上限に直す。PDF 以外（画像・文章）は従来どおり PINCH_MAX
+  const pdfLimits = useRef<{ fit: number; max: number } | null>(null);
+  const zoomLimits = useCallback((): ZoomLimits => {
+    const l = pdfLimits.current;
+    return l && l.fit > 0
+      ? { min: PINCH_MIN, max: Math.max(1, l.max / l.fit) }
+      : DEFAULT_ZOOM_LIMITS;
+  }, []);
+  usePinchZoom(viewerEl, scale, setScale, zoomLimits);
   // 添付を切り替えたら倍率は幅に合わせた大きさに戻す（画像で拡大した倍率が文章に持ち越されて 220% から始まっていた）
   useEffect(() => {
     setScale(1);
+    pdfLimits.current = null;
   }, [artifactId]);
 
   // 回転ボタンは利用者判断で外した（2026-10-14）。原稿は正位置で校正する。ビューアの回転機能自体は残す
@@ -1041,7 +1057,10 @@ export function Editor({
           onPageChange={setPage}
           scale={scale}
           besideWidth={besideWidth}
-          onZoom={setZoom}
+          onZoom={(z, l) => {
+            pdfLimits.current = l ?? null;
+            setZoom(z);
+          }}
           rotation={rotation}
           onPageCount={setPageCount}
           renderInPage={
@@ -1116,7 +1135,10 @@ export function Editor({
           }}
           scale={scale}
           besideWidth={besideWidth}
-          onZoom={setZoom}
+          onZoom={(z) => {
+            pdfLimits.current = null;
+            setZoom(z);
+          }}
           {...(compareWith ? cmp.imageProps("right") : {})}
           renderInPage={inPage}
           renderGutter={gutter}
@@ -1437,8 +1459,9 @@ export function Editor({
   const desktopDrawer = drawer !== null && !mobile;
   // 「ピンの高さに並べる」では紙面の横にコメントの列（補助ペインと同じ 360 / 412）＋間隔 24 が並ぶので、幅合わせから除く
   const besideWidth = layout === "aligned" && !compareWith ? defaultPane + 24 : 0;
-  const zoomStep = (dir: 1 | -1) =>
-    setScale((s) => Math.min(5, Math.max(0.25, +(dir > 0 ? s * 1.25 : s / 1.25).toFixed(3))));
+  const zoomStep = (dir: 1 | -1) => setScale((s) => stepScale(s, dir, zoomLimits()));
+  const atMinZoom = scale <= zoomLimits().min + 0.001;
+  const atMaxZoom = scale >= zoomLimits().max - 0.001;
   const sheetTab: Drawer = drawer ?? "comments";
   /** 狭い画面: 引き出し（コメント・版・情報）をシートで開くボタン。紙面のツールバーが無いとき（まだ版が無い・外部リンク）も出す */
   const sheetButtons = (
@@ -1626,7 +1649,11 @@ export function Editor({
                     <>
                       {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる） */}
                       {mobile ? null : (
-                        <M3eIconButton aria-label="縮小" onClick={() => zoomStep(-1)}>
+                        <M3eIconButton
+                          aria-label="縮小"
+                          disabled={atMinZoom}
+                          onClick={() => zoomStep(-1)}
+                        >
                           <M3eIcon name="zoom_out" />
                         </M3eIconButton>
                       )}
@@ -1643,7 +1670,11 @@ export function Editor({
                         {mobile ? <M3eMenuTrigger htmlFor="zoom-menu" /> : null}
                       </M3eButton>
                       {mobile ? null : (
-                        <M3eIconButton aria-label="拡大" onClick={() => zoomStep(1)}>
+                        <M3eIconButton
+                          aria-label="拡大"
+                          disabled={atMaxZoom}
+                          onClick={() => zoomStep(1)}
+                        >
                           <M3eIcon name="zoom_in" />
                         </M3eIconButton>
                       )}

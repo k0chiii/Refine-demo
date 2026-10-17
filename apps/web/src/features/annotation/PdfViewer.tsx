@@ -8,8 +8,26 @@ import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
 
 export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: number; y: number } };
 
-/** 1 枚の canvas の画素数の上限 */
-const MAX_CANVAS_PIXELS = 16_000_000;
+/**
+ * 1 枚の canvas の画素数の上限（利用者指示 2026-10-17「少し画質荒くなってもいい」）。これを超える拡大は画素密度を下げて描き、
+ * CSS（canvas は 100% 幅）で引き伸ばす（少し粗くなる）。大きく拡大するほど 1 ページ全体を描き直す時間と、canvas のメモリ
+ * （1 枚 4 バイト × 画素数）が大きくなるので、iOS の上限（1,600 万画素前後）より小さく抑える
+ */
+export const MAX_CANVAS_PIXELS = 8_000_000;
+/** 拡大の上限（実寸比。1 ＝ 100%）。1000% */
+export const PDF_MAX_ZOOM = 10;
+/** 紙面の 1 辺の CSS 長さの上限（px）。ブラウザの要素の大きさの上限（Chrome 約 3,350 万、Safari はさらに小さい）より手前で止める */
+export const PDF_MAX_CSS_PX = 32_000;
+
+/** 画素密度の上限つきの描画密度。dpr を基準に、1 枚の画素数が max を超えないよう下げる（CSS の大きさは変えない） */
+export function canvasDensity(
+  cssWidth: number,
+  cssHeight: number,
+  dpr: number,
+  maxPixels = MAX_CANVAS_PIXELS,
+): number {
+  return Math.min(dpr, Math.sqrt(maxPixels / Math.max(1, cssWidth * cssHeight)));
+}
 
 /** PDF.js の倍率 1 は 1pt = 1px。Acrobat などの「100%」（実寸）は 96 / 72 倍 */
 export const PDF_ACTUAL_SIZE = 96 / 72;
@@ -33,8 +51,12 @@ interface Props extends ViewerSyncProps {
   /** 紙面の横に並べる列（Google ドキュメント式のコメント）の幅＋間隔。幅合わせから差し引く */
   besideWidth?: number;
   onPageCount?: (n: number) => void;
-  /** 実寸に対する表示倍率（1 ＝ 100%）を返す。ツールバーの数値表示用 */
-  onZoom?: (actual: number) => void;
+  /**
+   * 実寸に対する表示倍率（1 ＝ 100%）を返す。ツールバーの数値表示用。
+   * limits: 幅に合わせた大きさ（scale 1）の実寸比 `fit` と、拡大の上限の実寸比 `max`（PDF_MAX_ZOOM と紙面の大きさの上限の小さい方）。
+   * 親は scale の上限を max / fit にする（拡大縮小のたびに state の倍率から割り戻すと、描き直す前の古い値に当たるため）
+   */
+  onZoom?: (actual: number, limits?: { fit: number; max: number }) => void;
   /** ページの上に重ねるもの（投稿欄・吹き出し）。座標は viewport px */
   renderInPage?: (vp: Viewport, page: number) => ReactNode;
   /** ページの右に並べるもの（Google ドキュメント式に整列したコメント） */
@@ -174,8 +196,13 @@ export function PdfViewer({
   const widest = sizes.reduce((m, s) => Math.max(m, s.w), 0);
   const fit = widest > 0 && stageWidth > 0 ? Math.max(0.1, (stageWidth - besideWidth) / widest) : 0;
   const renderScale = fit * scale;
+  const longest = sizes.reduce((m, s) => Math.max(m, s.w, s.h), 0);
   useEffect(() => {
-    if (renderScale > 0) onZoom?.(renderScale / PDF_ACTUAL_SIZE);
+    if (renderScale > 0)
+      onZoom?.(renderScale / PDF_ACTUAL_SIZE, {
+        fit: fit / PDF_ACTUAL_SIZE,
+        max: Math.min(PDF_MAX_ZOOM, PDF_MAX_CSS_PX / Math.max(1, longest * PDF_ACTUAL_SIZE)),
+      });
   }, [renderScale]);
 
   // 倍率が変わったら焦点（ピンチの指・ポインタ、ボタンは舞台の中央）の下の箇所を縦・横とも同じ画面位置に保つ。
@@ -327,11 +354,8 @@ function PdfCanvas({
     void doc.getPage(n).then(async (p) => {
       if (cancelled) return;
       const vp = p.getViewport({ scale, rotation: (p.rotate + rotation) % 360 });
-      // 大きく拡大したとき canvas が端末の上限（iOS は 1 枚 1,600 万画素前後）を超えないよう、画素密度を下げる
-      const dpr = Math.min(
-        window.devicePixelRatio || 1,
-        Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, vp.width * vp.height)),
-      );
+      // 大きく拡大したとき canvas が上限（MAX_CANVAS_PIXELS）を超えないよう、画素密度を下げる（CSS の大きさはそのまま。少し粗くなる）
+      const dpr = canvasDensity(vp.width, vp.height, window.devicePixelRatio || 1);
       canvas.width = Math.floor(vp.width * dpr);
       canvas.height = Math.floor(vp.height * dpr);
       const ctx = canvas.getContext("2d")!;
