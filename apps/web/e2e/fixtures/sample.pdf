@@ -6,7 +6,7 @@ endobj
 << /Type /Pages /Kids [4 0 R 6 0 R] /Count 2 >>
 endobj
 3 0 obj
-<< /Length 159 >>
+<< /Length 160 >>
 stream
 BT /F1 28 Tf 72 720 Td (Gogatsusai MF100 Official Pamphlet) Tj ET
 0 0 1 RG 4 w 72 100 468 560 re S
@@ -14,10 +14,10 @@ BT /F1 14 Tf 90 680 Td (MF100 pamphlet draft - page 1) Tj ET
 endstream
 endobj
 4 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 3 0 R >>
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 3 0 R /Annots [8 0 R 9 0 R] >>
 endobj
 5 0 obj
-<< /Length 140 >>
+<< /Length 141 >>
 stream
 BT /F1 28 Tf 72 720 Td (Program and Map) Tj ET
 0 0 1 RG 4 w 72 100 468 560 re S
@@ -30,18 +30,26 @@ endobj
 7 0 obj
 << /Type /Catalog /Pages 2 0 R >>
 endobj
+8 0 obj
+<< /Type /Annot /Subtype /Link /Rect [90 610 330 640] /Border [0 0 0] /A << /S /URI /URI (https://example.com/mf100) >> >>
+endobj
+9 0 obj
+<< /Type /Annot /Subtype /Link /Rect [90 560 330 590] /Border [0 0 0] /Dest [6 0 R /XYZ 0 792 null] >>
+endobj
 xref
-0 8
+0 10
 0000000000 65535 f 
 0000000009 00000 n 
 0000000079 00000 n 
 0000000142 00000 n 
 0000000352 00000 n 
-0000000478 00000 n 
-0000000669 00000 n 
-0000000795 00000 n 
+0000000500 00000 n 
+0000000691 00000 n 
+0000000817 00000 n 
+0000000866 00000 n 
+0000001004 00000 n 
 trailer
-<< /Size 8 /Root 7 0 R >>
+<< /Size 10 /Root 7 0 R >>
 startxref
-844
+1122
 %%EOF

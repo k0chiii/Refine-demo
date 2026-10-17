@@ -37,6 +37,8 @@ interface Props {
   onSelectThread: (id: string) => void;
   /** 選択モードのとき、ドラッグで矩形、クリックでピンを確定する */
   selecting: boolean;
+  /** 印を付けないとき、押す・なぞるを下の紙面（PDF のリンクなど）へ通す（印そのものは押せる） */
+  passive?: boolean;
   onDraft: (draft: { rect?: NormalizedRect; point?: { x: number; y: number } }) => void;
   draft: { rect?: NormalizedRect; point?: { x: number; y: number } } | null;
   filterPage?: (anchor: Anchor) => boolean;
@@ -56,6 +58,7 @@ export function AnchorOverlay({
   activeThreadId,
   onSelectThread,
   selecting,
+  passive = false,
   onDraft,
   draft,
   filterPage,
@@ -221,7 +224,7 @@ export function AnchorOverlay({
   const overlay = (
     <svg
       ref={svgRef}
-      className="viewer__overlay"
+      className={`viewer__overlay ${passive ? "viewer__overlay--passive" : ""}`}
       width={viewport.width}
       height={viewport.height}
       // 中に押せるピン・範囲があるので img ではなく group（img の子は支援技術から見えない。§35 I-08）

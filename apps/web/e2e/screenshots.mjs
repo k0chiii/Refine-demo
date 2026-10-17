@@ -199,6 +199,51 @@ const drawer = async (label) => {
   await settle();
 };
 
+/**
+ * アプリバーの「比べる」（比べる入口はここ 1 つ。利用者指示 2026-10-17）。広い画面は Menu、compact は Bottom sheet。
+ * 「この制作物の版」から版を選ぶ（label は「第1版」など）。比べているときは「比べるのをやめる」も同じところ
+ */
+const compareButton = () => page.locator('.shell__appbar m3e-icon-button[aria-label^="比べる"]');
+const isCompact = () => (page.viewportSize()?.width ?? 1440) < 600;
+const openComparePicker = async () => {
+  await compareButton().click();
+  if (isCompact()) await page.waitForSelector("m3e-bottom-sheet.compare-sheet[open]");
+  else await page.waitForSelector("#compare-menu m3e-menu-item:visible");
+  await settle();
+};
+const comparePickItem = async (text) => {
+  const item = isCompact()
+    ? page.locator("m3e-bottom-sheet.compare-sheet m3e-list-action", { hasText: text }).first()
+    : page.locator("#compare-menu m3e-menu-item:visible", { hasText: text }).first();
+  await item.click();
+  await settle();
+};
+const compareWithRevision = async (label) => {
+  await openComparePicker();
+  await comparePickItem(label);
+};
+/**
+ * 下のツールバーの「書き込み」（印を付けたとき作るもの）: コメント / FB / なし。押すと小さな Menu。引き出しは動かさない
+ * （利用者指示 2026-10-17）。このタブのあいだ覚えるので、使い終わったらコメントに戻す
+ */
+const openMarkMenu = async () => {
+  await page.locator(".ws__toolbar .ws__mark-mode").click();
+  await page.waitForSelector("#mark-mode-menu m3e-menu-item-radio:visible");
+  await settle();
+};
+const setMarkMode = async (label) => {
+  await openMarkMenu();
+  await page
+    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: label })
+    .first()
+    .click();
+  await settle();
+};
+const stopCompare = async () => {
+  await openComparePicker();
+  await comparePickItem("比べるのをやめる");
+};
+
 async function main() {
   // 01 サインイン
   await page.goto(`${BASE}/signin`);
@@ -384,7 +429,7 @@ async function main() {
   );
   await page.waitForSelector(".thread");
   // 2 件目（位置なし）は未対応のまま残し、次版への持ち越し候補にする
-  await page.locator('m3e-icon-button[aria-label="位置なしでコメント"]').click();
+  await page.locator(".comments__free").click();
   await page.fill(
     ".compose-pop textarea",
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
@@ -515,13 +560,12 @@ async function main() {
     (n) => document.querySelectorAll(".comments .thread").length > n,
     threadsBeforeCarry,
   );
-  // 25 版の比較（引き出し「版」の「比較」）
+  // 25 版の比較（アプリバーの「比べる」→「この制作物の版」）
   await drawer("版");
   await shot("28-versions");
-  await page
-    .locator(".version", { hasText: "第1版" })
-    .locator("m3e-button", { hasText: "比較" })
-    .click();
+  await openComparePicker();
+  await shot("25a-compare-picker");
+  await comparePickItem("第1版");
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll(".compare__pane")].every(
@@ -561,18 +605,23 @@ async function main() {
       Math.abs(views[0].ry - views[1].ry) < 0.02,
     `拡大・スクロール後に左右の視点がずれている: ${JSON.stringify(views)}`,
   );
-  await page.locator('m3e-icon-button[aria-label="比較を終了"]').click();
-  await settle();
+  // 比べているあいだはボタンが選択状態で、同じところに「比べるのをやめる」
+  expectTrue(
+    (await compareButton().getAttribute("selected")) !== null,
+    "比べている間、比べるボタンが選択状態にならない",
+  );
+  await stopCompare();
+  await page.waitForFunction(() => document.querySelectorAll(".compare__pane").length === 0);
+  expectTrue(
+    (await compareButton().getAttribute("selected")) === null,
+    "比べるのをやめても、比べるボタンが選択状態のまま",
+  );
 
   // 38 比較しながら新しい版にコメント（校正者）: 第1版を開いて第2版と比較 → 第2版が右（操作できる側）に入れ替わる
   await signInAs("mock-nogiku-reviewer");
   await go(revision2Url.replace(/\/v\/2$/, "/v/1"));
   await pdfReady();
-  await drawer("版");
-  await page
-    .locator(".version", { hasText: "第2版" })
-    .locator("m3e-button", { hasText: "比較" })
-    .click();
+  await compareWithRevision("第2版");
   await page.waitForURL(/\/v\/2(\?|$)/, { timeout: 15_000 });
   await page.waitForFunction(
     () =>
@@ -717,6 +766,14 @@ async function main() {
   await go(revisionUrl);
   await pdfReady();
   await settle();
+  // 下のツールバーの「書き込み」を FB にして、紙面の範囲を選ぶ（投稿欄の右上の切り替えは無くした）
+  await openMarkMenu();
+  await shot("64a-mark-mode-menu");
+  await page
+    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: "FB" })
+    .first()
+    .click();
+  await settle();
   {
     const box = await page.locator(".viewer__overlay").first().boundingBox();
     await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
@@ -725,13 +782,20 @@ async function main() {
     await page.mouse.up();
   }
   await page.waitForSelector(".compose-pop textarea");
-  const fbSegment = page.locator(".compose-pop__kind m3e-button", { hasText: "FB" });
-  if (await fbSegment.count()) await fbSegment.click();
+  expectTrue(
+    (await page.locator(".compose-pop__kind").count()) === 0,
+    "投稿欄にコメント／FB の切り替えが残っている",
+  );
+  expectTrue(
+    (await page.locator(".compose-pop__note").innerText()).includes("FB"),
+    "FB のモードなのに、投稿欄が FB と示さない",
+  );
   await page.fill(".compose-pop textarea", "ここの余白、もう少し詰めても良さそう？ 迷っています");
   await page.locator(".compose-pop m3e-button", { hasText: "FB で相談" }).click();
   await page.waitForSelector(".fb-pane--thread .fb-post");
   await page.waitForSelector(".anchor-pin--fb");
   await shot("64-editor-fb");
+  // 書き込みはこのタブのあいだ覚えている（受付終了のこの版では「コメント」は選べない）。コメントに戻すのは、コメントできる版で（下の 39 の前）
   // 64b FB スペース（縦に 3 列: スペース・紙面・スレッド）。紙面の FB の印から、そのスレッドを開いて話す
   {
     const workId = new URL(revisionUrl).pathname.split("/")[2];
@@ -743,6 +807,79 @@ async function main() {
     await page.waitForSelector(".fb-stage .anchor-pin--fb");
     await shot("64b-feedback-space");
   }
+
+  // 73 書き込み「なし」（利用者指示 2026-10-17）: 印を付けず、PDF の中のリンクが押せる。外部の URL は新しいタブ（noopener noreferrer）、
+  //    ページ内のリンクはそのページへ。コメント・FB のモードではリンクの層を出さない（印の層がなぞるを受ける）
+  await go(revisionUrl);
+  await pdfReady();
+  await context.route("https://example.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<title>リンク先</title>" }),
+  );
+  expectTrue(
+    (await page.locator(".viewer__page .pdf-link").count()) === 0,
+    "FB のモードなのに、PDF のリンクの層が出ている",
+  );
+  await setMarkMode("なし");
+  await page.waitForSelector('.viewer__page[data-page="1"] a.pdf-link');
+  const links = await page
+    .locator('.viewer__page[data-page="1"] a.pdf-link')
+    .evaluateAll((els) =>
+      els.map((e) => ({ href: e.getAttribute("href"), target: e.target, rel: e.rel })),
+    );
+  expectTrue(
+    links.some(
+      (l) =>
+        l.href === "https://example.com/mf100" &&
+        l.target === "_blank" &&
+        /noopener/.test(l.rel) &&
+        /noreferrer/.test(l.rel),
+    ),
+    `外部リンクが new タブ・noopener noreferrer で出ない: ${JSON.stringify(links)}`,
+  );
+  await shot("73-pdf-links-no-mark");
+  // 紙面をなぞっても投稿欄（コメント・FB）は出ない
+  {
+    const box = await page.locator(".viewer__overlay").first().boundingBox();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    expectTrue(
+      (await page.locator(".compose-pop").count()) === 0,
+      "書き込みが「なし」なのに、紙面をなぞると投稿欄が出る",
+    );
+  }
+  // 外部リンクは新しいタブで開く
+  {
+    const [popup] = await Promise.all([
+      context.waitForEvent("page"),
+      page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="https://"]').click(),
+    ]);
+    await popup.waitForLoadState("domcontentloaded");
+    expectTrue(
+      popup.url().startsWith("https://example.com/mf100"),
+      `新しいタブの URL: ${popup.url()}`,
+    );
+    await popup.close();
+  }
+  // ページ内のリンクはそのページへ
+  await page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="#page-"]').click();
+  await page.waitForFunction(
+    () => {
+      const st = document.querySelector(".viewer__stage").getBoundingClientRect();
+      const p2 = document.querySelector('.viewer__page[data-page="2"]').getBoundingClientRect();
+      return Math.abs(p2.top - st.top) < 80;
+    },
+    null,
+    { timeout: 5000 },
+  );
+  // FB に戻すと、リンクの層は出ない（印の層がなぞるを受ける。リンクは印を付ける操作を奪わない）
+  await setMarkMode("FB");
+  expectTrue(
+    (await page.locator(".viewer__page .pdf-link").count()) === 0,
+    "FB のモードに戻しても、PDF のリンクの層が残っている",
+  );
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
@@ -825,6 +962,11 @@ async function main() {
   await shot("65-mobile-editor-fb");
   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await settle();
+  // 65b 狭い画面のツールバーにも「書き込み」（コメント / FB / なし）。押すと小さな Menu
+  await openMarkMenu();
+  await shot("65b-mobile-mark-mode");
+  await page.keyboard.press("Escape");
   await settle();
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -921,6 +1063,9 @@ async function main() {
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");
   await go(writeWorkUrl);
+  // 書き込みはこのタブのあいだ覚えていて、64 で FB にしたまま。ここはコメントできる版なので、コメントに戻す
+  await page.waitForSelector(".ws__toolbar .ws__mark-mode");
+  await setMarkMode("コメント");
   await page.waitForSelector(".rich-viewer__page .doc");
   await page.evaluate((needle) => {
     const root = document.querySelector(".rich-viewer__page .doc");
@@ -1160,11 +1305,7 @@ async function v2Scenes() {
   await autoProofreadDone(90_000);
   expectTrue((await page.locator(".thread .thread__bot").count()) > 0, "自動校正のコメントが無い");
   await shot("54-auto-proofread");
-  await drawer("版");
-  await page
-    .locator(".version", { hasText: "第1版" })
-    .locator("m3e-button", { hasText: "比較" })
-    .click();
+  await compareWithRevision("第1版");
   await page.waitForFunction(
     () => document.querySelector(".compare-status")?.textContent?.includes("追加 1"),
     null,
@@ -1174,11 +1315,11 @@ async function v2Scenes() {
   );
   await settle();
   await shot("55-compare-pdf");
-  // 67 別の制作物と比べる（利用者指示 2026-10-17）: 左の見出しのボタン → 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
-  //    左の見出しは「題名・版」、比較の状況に「別の制作物」、引き出し「版」に「別の制作物と比較中」
-  await page
-    .locator('.compare__label--other m3e-icon-button[aria-label="別の制作物と比べる"]')
-    .click();
+  // 67 別の制作物と比べる（利用者指示 2026-10-17）: アプリバーの「比べる」→「ほかの制作物」→ 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
+  //    左の見出しは「題名・版」、比較の状況に「別の制作物」、比べるボタンは選択状態
+  await openComparePicker();
+  await shot("67a-compare-picker-menu");
+  await comparePickItem("制作物を探して比べる");
   await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
   await page.fill(".cross-picker[open] input", "パンフレット");
   await page.waitForTimeout(500);
@@ -1224,8 +1365,10 @@ async function v2Scenes() {
     (await page.locator(".compare-status").innerText()).includes("MF100 公式パンフレット"),
     "比較の状況に相手の制作物の題名が出ない",
   );
-  await drawer("版");
-  await page.waitForSelector(".versions__cross");
+  expectTrue(
+    (await compareButton().getAttribute("selected")) !== null,
+    "別の制作物と比べている間、比べるボタンが選択状態にならない",
+  );
   await page.waitForTimeout(800);
   await shot("67-compare-cross-work");
   // 26a タッチ（compact・受付中の版）: なぞるだけではコメントを作らない（スクロール）。長押ししてからなぞると範囲が選べ、投稿欄が出る
@@ -1234,16 +1377,10 @@ async function v2Scenes() {
   await go(posterV2);
   await pdfReady();
   await settle();
-  // 67b compact: シート「版」の「別の制作物と比べる」→ 相手を選ぶダイアログは全画面（M3 Dialogs）
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label="版"]').click();
-  await page.waitForSelector(".drawer--sheet .versions");
-  // 67 の比較が続いていれば札の「変える」、そうでなければ「別の制作物と比べる」
-  await page
-    .locator(
-      '.drawer--sheet m3e-button:has-text("変える"), .drawer--sheet m3e-button:has-text("別の制作物と比べる")',
-    )
-    .first()
-    .click();
+  // 67b compact: アプリバーの「比べる」はピンの横。押すと Bottom sheet（この制作物の版・ほかの制作物）→ 相手を選ぶダイアログは全画面（M3 Dialogs）
+  await openComparePicker();
+  await shot("67c-compare-sheet-compact");
+  await comparePickItem("制作物を探して比べる");
   await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
   await shot("67b-compare-cross-picker-compact");
   await page.locator(".cross-picker[open] m3e-button", { hasText: "キャンセル" }).click();
@@ -1575,7 +1712,13 @@ async function webFigmaScenes() {
     { timeout: 10_000 },
   );
   // PC 1440 に切り替えても同じ要素に印が付き直る（位置は外れない）
-  await page.locator(".wlive__device").click();
+  // 投稿した直後は、ライブ表示の枠が印の位置へスクロールし直すことがある。M3E のメニューはスクロールで閉じるので、
+  // 開いたまま残るまで押し直す（落ち着くまでの間に押すと、開いてすぐ閉じる）
+  for (let i = 0; i < 4; i++) {
+    await page.locator(".wlive__device").click();
+    await page.waitForTimeout(500);
+    if ((await page.locator("m3e-menu:popover-open").count()) > 0) break;
+  }
   await page.locator("m3e-menu-item-radio:visible", { hasText: "PC 1440" }).click();
   await page.waitForFunction(
     () => document.querySelectorAll(".wlive__marks .anchor-pin").length === 1,

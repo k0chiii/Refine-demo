@@ -84,6 +84,8 @@ interface Props {
   renderInPage?: (vp: Viewport, box: PageRect | null) => ReactNode;
   /** 下に置くもの（外部での議論の結果の記録） */
   footer?: ReactNode;
+  /** サイトの読み込みが済んだ（ブリッジが応えた・応えないと分かったとき）。親が読み込み中の指標をひとつだけ出して待つ（§65） */
+  onReady?: () => void;
 }
 
 function readDevice(): string {
@@ -117,6 +119,7 @@ export function WebLiveViewer({
   onStates,
   renderInPage,
   footer,
+  onReady,
 }: Props) {
   const compact = useWindowClass() === "compact";
   const [deviceId, setDeviceId] = useState(readDevice);
@@ -213,6 +216,9 @@ export function WebLiveViewer({
     onNavigate: setPageUrl,
   });
   const { state, readyKey, resolve, setMode: sendMode, scrollTo, highlight, reload } = bridge;
+  useEffect(() => {
+    if (state !== "loading") onReady?.();
+  }, [state]);
   // 準備ができたら（サイトの中でページを移ったときも）、モードと探す要素を送る。コメントの一覧が変わっても送り直す
   const targetsKey = mine.map((t) => t.id).join(",");
   useEffect(() => {
@@ -412,8 +418,8 @@ export function WebLiveViewer({
           />
         </div>
       ) : null}
-      {state === "loading" ? (
-        // iframe の上に重ねるので contained（M3: 他の中身の上では容器付きで目立たせる）
+      {state === "loading" && !onReady ? (
+        // 親が待つとき（校正画面）は親の指標をひとつだけ出す。単独で使うときは iframe の上に重ねるので contained（M3: 他の中身の上では容器付きで目立たせる）
         <Loading contained caption label="サイトを読み込んでいます" className="wlive__loading" />
       ) : null}
     </div>

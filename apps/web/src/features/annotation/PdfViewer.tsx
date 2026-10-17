@@ -1,15 +1,34 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
+import { PdfLinks } from "./PdfLinks";
 import { pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
 import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
 
 export type PdfDraft = { page: number; rect?: NormalizedRect; point?: { x: number; y: number } };
 
-/** 1 枚の canvas の画素数の上限 */
-const MAX_CANVAS_PIXELS = 16_000_000;
+/**
+ * 1 枚の canvas の画素数の上限（利用者指示 2026-10-17「少し画質荒くなってもいい」）。これを超える拡大は画素密度を下げて描き、
+ * CSS（canvas は 100% 幅）で引き伸ばす（少し粗くなる）。大きく拡大するほど 1 ページ全体を描き直す時間と、canvas のメモリ
+ * （1 枚 4 バイト × 画素数）が大きくなるので、iOS の上限（1,600 万画素前後）より小さく抑える
+ */
+export const MAX_CANVAS_PIXELS = 8_000_000;
+/** 拡大の上限（実寸比。1 ＝ 100%）。1000% */
+export const PDF_MAX_ZOOM = 10;
+/** 紙面の 1 辺の CSS 長さの上限（px）。ブラウザの要素の大きさの上限（Chrome 約 3,350 万、Safari はさらに小さい）より手前で止める */
+export const PDF_MAX_CSS_PX = 32_000;
+
+/** 画素密度の上限つきの描画密度。dpr を基準に、1 枚の画素数が max を超えないよう下げる（CSS の大きさは変えない） */
+export function canvasDensity(
+  cssWidth: number,
+  cssHeight: number,
+  dpr: number,
+  maxPixels = MAX_CANVAS_PIXELS,
+): number {
+  return Math.min(dpr, Math.sqrt(maxPixels / Math.max(1, cssWidth * cssHeight)));
+}
 
 /** PDF.js の倍率 1 は 1pt = 1px。Acrobat などの「100%」（実寸）は 96 / 72 倍 */
 export const PDF_ACTUAL_SIZE = 96 / 72;
@@ -22,6 +41,11 @@ interface Props extends ViewerSyncProps {
   onSelectThread: (id: string) => void;
   /** ドラッグで範囲、クリックでピンを指定できるか（投稿権限があれば常時） */
   selecting: boolean;
+  /**
+   * 印を付けないとき（書き込み「なし」）: 紙面そのものを押せるようにする。印の層は押す・なぞるを通し（印そのものは押せる）、
+   * PDF の中のリンクを `<a>` として出す（外部 URL は新しいタブ、ページ内のリンクはそのページへ）。コメント・FB のモードでは出さない
+   */
+  passive?: boolean;
   draft: PdfDraft | null;
   onDraft: (d: PdfDraft | null) => void;
   /** 表示中のページ。親が変えるとそのページまで送る。読み手がスクロールすると `onPageChange` で返す */
@@ -33,14 +57,23 @@ interface Props extends ViewerSyncProps {
   /** 紙面の横に並べる列（Google ドキュメント式のコメント）の幅＋間隔。幅合わせから差し引く */
   besideWidth?: number;
   onPageCount?: (n: number) => void;
-  /** 実寸に対する表示倍率（1 ＝ 100%）を返す。ツールバーの数値表示用 */
-  onZoom?: (actual: number) => void;
+  /**
+   * 実寸に対する表示倍率（1 ＝ 100%）を返す。ツールバーの数値表示用。
+   * limits: 幅に合わせた大きさ（scale 1）の実寸比 `fit` と、拡大の上限の実寸比 `max`（PDF_MAX_ZOOM と紙面の大きさの上限の小さい方）。
+   * 親は scale の上限を max / fit にする（拡大縮小のたびに state の倍率から割り戻すと、描き直す前の古い値に当たるため）
+   */
+  onZoom?: (actual: number, limits?: { fit: number; max: number }) => void;
   /** ページの上に重ねるもの（投稿欄・吹き出し）。座標は viewport px */
   renderInPage?: (vp: Viewport, page: number) => ReactNode;
   /** ページの右に並べるもの（Google ドキュメント式に整列したコメント） */
   renderGutter?: (vp: Viewport, page: number) => ReactNode;
   /** 読み込んだ PDF を親と共有する（版比較の特徴抽出で同じ文書を使い、二重に読まない） */
   onDoc?: (doc: PDFDocumentProxy) => void;
+  /**
+   * 最初に画面に出るページを描き終えた（失敗して代わりのメッセージを出すときも）。親は、これが届くまで紙面を隠し、読み込み中の
+   * 指標をひとつだけ出して、届いたら紙面・指摘の印・文字をいっぺんに出す（読み込みの途中の姿を見せない。docs/UI_M3E.md §65）
+   */
+  onReady?: () => void;
 }
 
 type Size = { w: number; h: number };
@@ -57,6 +90,7 @@ export function PdfViewer({
   activeThreadId,
   onSelectThread,
   selecting,
+  passive = false,
   draft,
   onDraft,
   page,
@@ -69,6 +103,7 @@ export function PdfViewer({
   renderInPage,
   renderGutter,
   onDoc,
+  onReady,
   ...sync
 }: Props) {
   const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(true);
@@ -79,11 +114,44 @@ export function PdfViewer({
   const pageEls = useRef<Array<HTMLDivElement | null>>([]);
   const shown = useRef(1);
   const ratio = useRef(0);
+  // 最初に画面に出るページ（舞台の近くにあるもの）を全部描き終えたら、親へ一度だけ知らせる（添付が替わったらまた）。
+  // 1 枚だけ先に出して残りが後から埋まる（2 枚目が白いまま指摘の印だけ見える）のを避ける
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
+  const notified = useRef(false);
+  const near = useRef(new Set<number>());
+  const done = useRef(new Set<number>());
+  const notifyReady = useCallback(() => {
+    if (notified.current) return;
+    notified.current = true;
+    readyRef.current?.();
+  }, []);
+  const check = useCallback(() => {
+    if (near.current.size > 0 && [...near.current].every((n) => done.current.has(n))) notifyReady();
+  }, [notifyReady]);
+  const onNear = useCallback(
+    (n: number, isNear: boolean) => {
+      if (isNear) near.current.add(n);
+      else near.current.delete(n);
+      check();
+    },
+    [check],
+  );
+  const onPainted = useCallback(
+    (n: number) => {
+      done.current.add(n);
+      check();
+    },
+    [check],
+  );
 
   useEffect(() => {
     let cancelled = false;
     setDoc(null);
     setSizes([]);
+    notified.current = false;
+    near.current.clear();
+    done.current.clear();
     // 添付・版が替わったら先頭から
     shown.current = 1;
     ratio.current = 0;
@@ -103,9 +171,10 @@ export function PdfViewer({
           onDoc?.(d);
           onPageCount?.(d.numPages);
         })
-        .catch(() =>
-          setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。"),
-        ),
+        .catch(() => {
+          setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。");
+          notifyReady();
+        }),
     );
     return () => {
       cancelled = true;
@@ -134,8 +203,13 @@ export function PdfViewer({
   const widest = sizes.reduce((m, s) => Math.max(m, s.w), 0);
   const fit = widest > 0 && stageWidth > 0 ? Math.max(0.1, (stageWidth - besideWidth) / widest) : 0;
   const renderScale = fit * scale;
+  const longest = sizes.reduce((m, s) => Math.max(m, s.w, s.h), 0);
   useEffect(() => {
-    if (renderScale > 0) onZoom?.(renderScale / PDF_ACTUAL_SIZE);
+    if (renderScale > 0)
+      onZoom?.(renderScale / PDF_ACTUAL_SIZE, {
+        fit: fit / PDF_ACTUAL_SIZE,
+        max: Math.min(PDF_MAX_ZOOM, PDF_MAX_CSS_PX / Math.max(1, longest * PDF_ACTUAL_SIZE)),
+      });
   }, [renderScale]);
 
   // 倍率が変わったら焦点（ピンチの指・ポインタ、ボタンは舞台の中央）の下の箇所を縦・横とも同じ画面位置に保つ。
@@ -166,6 +240,15 @@ export function PdfViewer({
       shown.current = n;
       onPageChange?.(n);
     }
+  };
+  /** リンクの移動先のページへ送る（いまのページへのリンクでも、そのページの先頭へ） */
+  const goToPage = (n: number) => {
+    const stage = stageRef.current;
+    const el = pageEls.current[n - 1];
+    if (!stage || !el) return;
+    shown.current = n;
+    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top - 24;
+    onPageChange?.(n);
   };
   // 親がページを変えた（ページ送り・コメントへの移動・比較の相手）ときだけ、そのページまで送る
   useEffect(() => {
@@ -205,8 +288,20 @@ export function PdfViewer({
                       scale={renderScale}
                       rotation={rotation}
                       root={stageRef}
+                      onNear={onNear}
+                      onPainted={onPainted}
                     />
+                    {passive ? (
+                      <PdfLinks
+                        doc={doc}
+                        n={n}
+                        rotation={rotation}
+                        numPages={sizes.length}
+                        onGoto={goToPage}
+                      />
+                    ) : null}
                     <AnchorOverlay
+                      passive={passive}
                       viewport={viewport}
                       threads={threads.filter(
                         (t) =>
@@ -240,12 +335,18 @@ function PdfCanvas({
   scale,
   rotation,
   root,
+  onNear,
+  onPainted,
 }: {
   doc: PDFDocumentProxy;
   n: number;
   scale: number;
   rotation: number;
   root: React.RefObject<HTMLDivElement | null>;
+  /** 舞台の近く（描く対象）に入った・出た */
+  onNear?: (n: number, near: boolean) => void;
+  /** 描き終えた（取り消されたものは含まない。描けなかったときも「済んだ」として知らせる） */
+  onPainted?: (n: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [near, setNear] = useState(false);
@@ -262,6 +363,11 @@ function PdfCanvas({
   }, [root]);
 
   useEffect(() => {
+    onNear?.(n, near);
+    return () => onNear?.(n, false);
+  }, [n, near, onNear]);
+
+  useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     if (!near) {
@@ -274,11 +380,8 @@ function PdfCanvas({
     void doc.getPage(n).then(async (p) => {
       if (cancelled) return;
       const vp = p.getViewport({ scale, rotation: (p.rotate + rotation) % 360 });
-      // 大きく拡大したとき canvas が端末の上限（iOS は 1 枚 1,600 万画素前後）を超えないよう、画素密度を下げる
-      const dpr = Math.min(
-        window.devicePixelRatio || 1,
-        Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, vp.width * vp.height)),
-      );
+      // 大きく拡大したとき canvas が上限（MAX_CANVAS_PIXELS）を超えないよう、画素密度を下げる（CSS の大きさはそのまま。少し粗くなる）
+      const dpr = canvasDensity(vp.width, vp.height, window.devicePixelRatio || 1);
       canvas.width = Math.floor(vp.width * dpr);
       canvas.height = Math.floor(vp.height * dpr);
       const ctx = canvas.getContext("2d")!;
@@ -288,8 +391,9 @@ function PdfCanvas({
       try {
         await task.promise;
       } catch {
-        // 取り消し
+        // 取り消し（または描けなかった）
       }
+      if (!cancelled) onPainted?.(n);
     });
     return () => {
       cancelled = true;

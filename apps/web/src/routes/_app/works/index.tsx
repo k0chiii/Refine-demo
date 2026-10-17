@@ -18,6 +18,7 @@ import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { WorksList } from "@/features/work/WorksList";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
+import { rememberWorkHint } from "@/lib/workHint";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
@@ -235,7 +236,12 @@ function Works() {
           sort={effectiveSort}
           teamAxis={production ? "production" : owner ? "owner" : null}
           compact={compact}
-          onOpen={(workId) => void navigate({ to: "/works/$workId", params: { workId } })}
+          onOpen={(workId) => {
+            // 開く画面が works.get を待つあいだも題名を出せるように、行の値を渡しておく（§65）
+            const w = shown.find((x) => x.id === workId);
+            if (w) rememberWorkHint(workId, { title: w.title, mediaType: w.mediaType });
+            void navigate({ to: "/works/$workId", params: { workId } });
+          }}
         />
       )}
       <NewWorkDialog

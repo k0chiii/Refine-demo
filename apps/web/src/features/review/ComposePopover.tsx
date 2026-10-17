@@ -11,7 +11,6 @@ import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
-import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { MentionTextarea } from "./mentions";
 
@@ -68,7 +67,6 @@ export function ComposePopover({
   place,
   placeIcon = "schedule",
   kind = "comment",
-  onKind,
 }: {
   x: number;
   y: number;
@@ -90,10 +88,11 @@ export function ComposePopover({
   place?: string;
   /** place のアイコン（既定は時計。Web の要素は ads_click、Figma のフレームは design_services） */
   placeIcon?: string;
-  /** 書くもの: コメント（指摘して解決する）か FB（解決しない相談）。利用者決定 2026-10-15 */
+  /**
+   * 書くもの: コメント（指摘して解決する）か FB（解決しない相談）。利用者決定 2026-10-15。
+   * 切り替えはエディタの下のツールバーの「書き込み」（利用者指示 2026-10-17）。ここは何を書いているかを示すだけ
+   */
   kind?: "comment" | "feedback";
-  /** 渡すと「コメント／FB」を切り替えられる（コメントできない版では渡さず FB だけ） */
-  onKind?: (k: "comment" | "feedback") => void;
 }) {
   const fb = kind === "feedback";
   const what = fb ? "FB" : label;
@@ -130,20 +129,8 @@ export function ComposePopover({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      {onKind ? (
-        <ChoiceGroup
-          label="書くもの"
-          className="compose-pop__kind"
-          value={fb ? "feedback" : "comment"}
-          onChange={onKind}
-          choices={[
-            { value: "comment", label },
-            { value: "feedback", label: "FB" },
-          ]}
-        />
-      ) : fb ? (
-        <div className="compose-pop__note">FB（相談）として書きます</div>
-      ) : null}
+      {/* 切り替えは下のツールバーの「書き込み」。ここは書いているものを小さく示すだけ（押せない） */}
+      {fb ? <div className="compose-pop__note">FB（相談）として書きます</div> : null}
       {docked && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}
       {place ? (
         <div className="compose-pop__place">
