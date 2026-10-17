@@ -4347,3 +4347,292 @@ m3e-snackbar {
   color: var(--mf-on-surface-variant);
   white-space: normal;
 }
+
+/* ---------- 動画の校正（VideoViewer。利用者指示 2026-10-17: タイムライン指定と範囲選択。§53）
+   映像は紙面と同じ紙（viewer__page）に置き、下にタイムライン（印の段＋M3 Sliders の見た目の再生位置）と操作の行 */
+.vplayer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-inline: auto;
+  flex: none;
+  max-width: 100%;
+  border-radius: var(--mf-shape-md);
+}
+.vplayer:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.vplayer__frame {
+  align-self: center;
+  overflow: hidden;
+  background: #000;
+}
+.vplayer__frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.vplayer--full {
+  background: #000;
+  justify-content: center;
+  padding: 16px;
+}
+.vplayer--full .vplayer__frame {
+  flex: 1;
+  width: 100%;
+}
+.vplayer--full .vplayer__frame video {
+  object-fit: contain;
+}
+.vplayer--full .vtl,
+.vplayer--full .vplayer__bar {
+  background: var(--mf-surface-container);
+  border-radius: var(--mf-shape-md);
+}
+.vplayer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.vplayer__time {
+  font: var(--mf-type-label-large);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+.vplayer__rate {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+/* スマホ: 操作は折り返して並べる（間を空ける余白は使わない） */
+@media (max-width: 599px) {
+  .vplayer__bar .spacer,
+  .vplayer__skip {
+    display: none;
+  }
+}
+
+/* タイムライン: 上の段がコメントの印（時点は番号の丸、範囲は帯。FB は角丸の四角）、下が再生位置 */
+.vtl {
+  display: flex;
+  flex-direction: column;
+  padding-inline: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.vtl__lane {
+  position: relative;
+  min-height: 32px;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-surface-container);
+}
+.vtl__lane--select {
+  cursor: crosshair;
+  /* 指で横になぞると範囲を選ぶ（縦はページのスクロール） */
+  touch-action: pan-y;
+}
+.vtl__item {
+  position: absolute;
+  inset-inline: 0;
+  height: 20px;
+  pointer-events: none;
+}
+.vtl__bar {
+  position: absolute;
+  top: 7px;
+  height: 6px;
+  border-radius: var(--mf-shape-full);
+  background: color-mix(in srgb, var(--mf-primary) 45%, transparent);
+}
+.vtl__bar--fb {
+  background: color-mix(in srgb, var(--mf-secondary) 35%, transparent);
+  outline: 1px dashed var(--mf-secondary);
+}
+.vtl__bar--active {
+  background: var(--mf-primary);
+}
+.vtl__mark {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 2px solid var(--mf-on-primary);
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+  font: var(--mf-type-label-small);
+  font-weight: 700;
+  line-height: 16px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* 押せる範囲は 32 以上（M3 の最小のタッチ領域に近づける。印どうしが重ならない程度） */
+.vtl__mark::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.vtl__mark--fb {
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+  border-color: var(--mf-on-secondary-container);
+  border-width: 1.5px;
+}
+.vtl__mark--active {
+  background: var(--mf-on-primary-container);
+  outline: 2px solid var(--mf-primary);
+}
+.vtl__mark--fb.vtl__mark--active {
+  background: var(--mf-secondary);
+  color: var(--mf-on-secondary, #fff);
+}
+.vtl__mark:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+/* 選んでいる範囲（下書き）: tertiary ではなく primary の枠（配色を増やさない。§43） */
+.vtl__draft {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: var(--mf-shape-xs);
+  background: color-mix(in srgb, var(--mf-primary) 16%, transparent);
+  border: 2px solid var(--mf-primary);
+  pointer-events: none;
+}
+.vtl__draft-point {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  translate: -1px 0;
+  background: var(--mf-primary);
+  pointer-events: none;
+}
+.vtl__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  translate: -50% 0;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-primary);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vtl__edge::before {
+  content: "";
+  position: absolute;
+  inset: -4px -12px;
+}
+.vtl__edge::after {
+  content: "";
+  position: absolute;
+  top: 30%;
+  bottom: 30%;
+  left: 5px;
+  width: 2px;
+  background: var(--mf-on-primary);
+  border-radius: 1px;
+}
+.vtl__edge:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+.vtl__cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  translate: -1px 0;
+  background: var(--mf-on-surface);
+  opacity: 0.6;
+  pointer-events: none;
+}
+/* 再生位置（M3 Sliders: 進んだ側は primary の太い線、残りは secondary-container、つまみは縦の棒） */
+.vtl__track {
+  position: relative;
+  height: 32px;
+  cursor: pointer;
+  touch-action: none;
+}
+.vtl__track:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--mf-shape-xs);
+}
+.vtl__inactive,
+.vtl__active {
+  position: absolute;
+  top: 12px;
+  height: 8px;
+  border-radius: var(--mf-shape-full);
+}
+.vtl__inactive {
+  inset-inline: 0;
+  background: var(--mf-secondary-container);
+}
+.vtl__active {
+  left: 0;
+  background: var(--mf-primary);
+}
+.vtl__thumb {
+  position: absolute;
+  top: 4px;
+  width: 4px;
+  height: 24px;
+  translate: -2px 0;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+  box-shadow: 0 0 0 3px var(--mf-surface-container-low);
+}
+.vtl__hover {
+  position: absolute;
+  bottom: 30px;
+  translate: -50% 0;
+  padding: 2px 6px;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-inverse-surface, #2f3036);
+  color: var(--mf-inverse-on-surface, #f1f0f7);
+  font: var(--mf-type-label-small);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.compose-pop__place {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 0;
+  font: var(--mf-type-label-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-primary);
+}
+.compose-pop__place m3e-icon {
+  font-size: 18px;
+}
+.vplayer__marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.vtl__hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+  pointer-events: none;
+}
+.vplayer__marking {
+  font: var(--mf-type-body-small);
+  color: var(--mf-primary);
+}

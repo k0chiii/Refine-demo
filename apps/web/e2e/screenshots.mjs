@@ -1297,6 +1297,86 @@ async function v2Scenes() {
   await page.waitForSelector("m3e-list-action");
   await shot("60-notation-compact");
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 66 動画の校正（利用者指示 2026-10-17）: 制作者が動画を提出し、校正者が時点・範囲・画面の位置でコメントする
+  await signInAs("mock-nogiku-creator");
+  await go("/works");
+  await page.locator(WORKS_ENTRY, { hasText: "MF100 告知動画" }).first().click();
+  await page.waitForURL(/\/works\/[^/]+$/);
+  const videoWork = page.url();
+  await submitRevision("最初の版を提出", [resolve(FIXTURES, "promo.webm")], "初稿の告知動画");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await signInAs("mock-nogiku-reviewer");
+  await go(videoWork);
+  const videoReady = () =>
+    page.waitForFunction(
+      () => (document.querySelector(".vplayer video")?.readyState ?? 0) >= 1,
+      null,
+      {
+        timeout: 20_000,
+      },
+    );
+  await videoReady();
+  const postVideo = async (body) => {
+    await page.waitForSelector(".compose-pop textarea");
+    await page.fill(".compose-pop textarea", body);
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+  };
+  const seekTo = async (ratio) => {
+    const tb = await page.locator(".vtl__track").boundingBox();
+    await page.mouse.click(tb.x + tb.width * ratio, tb.y + tb.height / 2);
+    await page.waitForTimeout(300);
+  };
+  // 時点: 3 秒で止めて C
+  await seekTo(0.25);
+  await page.locator(".vplayer").focus();
+  await page.keyboard.press("c");
+  await page.waitForSelector(".compose-pop__place");
+  expectTrue(
+    (await page.locator(".compose-pop__place").innerText()).includes("0:03 の時点"),
+    "動画の投稿欄に時点が出ない",
+  );
+  await postVideo("ここで音が途切れる");
+  // 範囲: タイムラインの上の段を 6 秒 → 9 秒までなぞる
+  const lb = await page.locator(".vtl__lane").boundingBox();
+  await page.mouse.move(lb.x + lb.width * 0.5, lb.y + lb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lb.x + lb.width * 0.75, lb.y + lb.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForSelector(".compose-pop__place");
+  expectTrue(
+    (await page.locator(".compose-pop__place").innerText()).includes("0:06–0:09 の範囲"),
+    "タイムラインをなぞっても範囲にならない",
+  );
+  await shot("66b-video-range-compose");
+  await postVideo("この間のテロップが速すぎる");
+  // 画面の位置: 1 秒で止めて映像の左上をドラッグ
+  await seekTo(1 / 12);
+  const fr = await page.locator(".vplayer__frame").boundingBox();
+  await page.mouse.move(fr.x + fr.width * 0.05, fr.y + fr.height * 0.05);
+  await page.mouse.down();
+  await page.mouse.move(fr.x + fr.width * 0.4, fr.y + fr.height * 0.2, { steps: 8 });
+  await page.mouse.up();
+  await postVideo("タイムコードの表示を消す");
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page.locator(".vtl__mark").count()) === 3 &&
+      (await page.locator(".vtl__bar").count()) === 1,
+    "タイムラインに時点・範囲の印が出ない",
+  );
+  // カードの時刻を押すとその時刻へ移って止まり、画面の範囲が重なる
+  await seekTo(0.9);
+  await page
+    .locator(".thread", { hasText: "タイムコードの表示を消す" })
+    .locator(".thread__index")
+    .click();
+  await page.waitForTimeout(500);
+  const at = await page.evaluate(() => document.querySelector(".vplayer video").currentTime);
+  expectTrue(Math.abs(at - 1) < 0.05, `カードの時刻へ移らない（${at}）`);
+  expectTrue((await page.locator(".vplayer .anchor-rect").count()) === 1, "画面の範囲が重ならない");
+  await shot("66-video-review");
 }
 
 try {

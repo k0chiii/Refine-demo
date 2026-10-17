@@ -7,6 +7,8 @@ import type { ArtifactId } from "../shared/ids.ts";
  * - 画像: 原画像基準の正規化座標。トリミングや表示枠に依存しない。
  * - 文章（F-12 前倒し分）: 版スナップショット（添付テキスト）の文字オフセット [start, end) と引用文。
  *   引用文は表示・照合用で、スナップショットは版ごとに不変なのでオフセットは安定する。
+ * - 動画: 再生位置（秒）。時点（start だけ）か時間の範囲 [start, end)。画面の上の位置（矩形かピン）も付けられる
+ *   （座標は映像の原寸基準の 0..1）。Frame.io などの動画校正と同じく、時点・範囲・画面の位置の 3 つを 1 つのコメントで持つ。
  * 保存値はプレビューの拡大率・回転・ビューポート幅に依存しない（A-03）。
  */
 export interface NormalizedRect {
@@ -26,7 +28,29 @@ export type Anchor =
   | { type: "image_rect"; artifactId: ArtifactId; rect: NormalizedRect }
   | { type: "image_pin"; artifactId: ArtifactId; point: NormalizedPoint }
   | { type: "external"; artifactId: ArtifactId; note: string }
-  | { type: "text_range"; artifactId: ArtifactId; start: number; end: number; quote: string };
+  | { type: "text_range"; artifactId: ArtifactId; start: number; end: number; quote: string }
+  | {
+      type: "video_time";
+      artifactId: ArtifactId;
+      /** 再生位置（秒。ミリ秒まで） */
+      start: number;
+      /** 範囲の終わり（秒。無ければ時点） */
+      end?: number;
+      rect?: NormalizedRect;
+      point?: NormalizedPoint;
+    };
+
+/** 動画の長さの上限（秒。12 時間）。これを超える再生位置は壊れた値として拒否する */
+export const VIDEO_TIME_MAX = 12 * 60 * 60;
+
+/** 再生位置をミリ秒に丸める（保存値。表示や比較で浮動小数の端数が出ないように） */
+export function roundVideoTime(sec: number): number {
+  return Math.round(sec * 1000) / 1000;
+}
+
+function validTime(v: number): boolean {
+  return Number.isFinite(v) && v >= 0 && v <= VIDEO_TIME_MAX;
+}
 
 /** 引用文の最大長（保存容量とスレッド表示の都合。範囲自体はオフセットで保持する） */
 export const TEXT_QUOTE_MAX = 200;
@@ -81,8 +105,63 @@ export function validateAnchor(anchor: Anchor): void {
       )
         throw new DomainError("anchor_invalid", { anchor });
       return;
+    case "video_time":
+      if (
+        !validTime(anchor.start) ||
+        (anchor.end !== undefined && (!validTime(anchor.end) || anchor.end <= anchor.start)) ||
+        (anchor.rect !== undefined && anchor.point !== undefined) ||
+        (anchor.rect !== undefined && !validRect(anchor.rect)) ||
+        (anchor.point !== undefined && (!inUnit(anchor.point.x) || !inUnit(anchor.point.y)))
+      )
+        throw new DomainError("anchor_invalid", { anchor });
+      return;
   }
 }
+
+/**
+ * 動画の位置のアンカーを作る。時刻はミリ秒に丸め、終わりが始まりと同じか前なら時点にする。
+ * 画面の位置は矩形かピンのどちらか（両方あれば矩形）
+ */
+export function videoTimeAnchor(
+  artifactId: ArtifactId,
+  time: { start: number; end?: number | undefined },
+  place: { rect?: NormalizedRect | undefined; point?: NormalizedPoint | undefined } = {},
+): Extract<Anchor, { type: "video_time" }> {
+  const start = roundVideoTime(Math.max(0, time.start));
+  const end = time.end === undefined ? undefined : roundVideoTime(time.end);
+  return {
+    type: "video_time",
+    artifactId,
+    start,
+    ...(end !== undefined && end > start ? { end } : {}),
+    ...(place.rect ? { rect: place.rect } : place.point ? { point: place.point } : {}),
+  };
+}
+
+/**
+ * 再生位置の表示。既定は「m:ss」（1 時間以上は「h:mm:ss」）。precise では 1/100 秒まで（「m:ss.cc」）。
+ * 範囲は「0:03–0:06」（formatVideoSpan）
+ */
+export function formatVideoTime(sec: number, precise = false): string {
+  const t = Math.max(0, sec);
+  const whole = precise ? Math.floor(t) : Math.floor(t + 1e-6);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const s = whole % 60;
+  const base = h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  if (!precise) return base;
+  const cs = Math.min(99, Math.floor((t - whole) * 100 + 1e-6));
+  return `${base}.${pad(cs)}`;
+}
+
+/** 動画のアンカーの時刻の表示（時点は「0:03」、範囲は「0:03–0:06」） */
+export function formatVideoSpan(a: { start: number; end?: number | undefined }): string {
+  return a.end !== undefined
+    ? `${formatVideoTime(a.start)}–${formatVideoTime(a.end)}`
+    : formatVideoTime(a.start);
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
 
 /** 文章スナップショットから text_range アンカーを作る（引用文は先頭 TEXT_QUOTE_MAX 文字に切り詰め）。 */
 export function textRangeAnchor(

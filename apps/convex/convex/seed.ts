@@ -181,6 +181,16 @@ export const demo = internalMutation({
         ...(igProfile ? { socialProfileId: igProfile } : {}),
         ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
       },
+      {
+        // 動画の校正（時点・範囲・画面の位置でコメント。利用者指示 2026-10-17）
+        title: "MF100 告知動画",
+        purpose: "開催告知の 15 秒動画（SNS・会場モニター）",
+        category: "動画",
+        mediaType: "video" as const,
+        legacyId: "VID-031",
+        notationCategories: ["A1", "A2", "A3"],
+        ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
+      },
     ];
     const created: string[] = [];
     for (const s of samples) {

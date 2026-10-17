@@ -3,6 +3,7 @@ import type { Id } from "@mf100/convex/dataModel";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
+import { formatVideoSpan } from "@mf100/domain";
 import { MentionTextarea, renderWithMentions } from "./mentions";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
@@ -141,14 +142,21 @@ export function ThreadCard({
               <M3eButton
                 variant="text"
                 className="thread__index"
-                aria-label={`コメント ${index} の位置を表示`}
+                aria-label={
+                  t.anchor.type === "video_time"
+                    ? `コメント ${index} の時刻 ${formatVideoSpan(t.anchor)} を再生位置にする`
+                    : `コメント ${index} の位置を表示`
+                }
                 onClick={(e: Event) => {
                   stop(e);
                   onSelect();
                 }}
               >
-                <M3eIcon slot="icon" name="location_on" />
-                {index}
+                <M3eIcon
+                  slot="icon"
+                  name={t.anchor.type === "video_time" ? "schedule" : "location_on"}
+                />
+                {t.anchor.type === "video_time" ? `${index}・${formatVideoSpan(t.anchor)}` : index}
               </M3eButton>
             ) : null}
             {canDecide && !closed ? (

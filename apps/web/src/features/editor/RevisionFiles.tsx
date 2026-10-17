@@ -12,9 +12,11 @@ const iconOf = (a: Pick<Artifact, "type">) =>
       ? "image"
       : a.type === "document"
         ? "article"
-        : a.type === "external_link"
-          ? "link"
-          : "draft";
+        : a.type === "video"
+          ? "movie"
+          : a.type === "external_link"
+            ? "link"
+            : "draft";
 
 /**
  * 情報 › この版のファイル（利用者指示 2026-10-15: 画像の制作物は PDF と .ai を一緒に出し、コメントは基本 PDF に付ける。
