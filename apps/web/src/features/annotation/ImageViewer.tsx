@@ -23,6 +23,8 @@ interface Props extends ViewerSyncProps {
   onZoom?: (actual: number) => void;
   renderInPage?: (vp: Viewport) => ReactNode;
   renderGutter?: (vp: Viewport) => ReactNode;
+  /** 画像を読み込み終えて大きさ・倍率が決まった（失敗したときも）。親はそれまで紙面を隠して読み込み中の指標を出す（§61） */
+  onReady?: () => void;
 }
 
 /**
@@ -44,6 +46,7 @@ export function ImageViewer({
   onZoom,
   renderInPage,
   renderGutter,
+  onReady,
   ...sync
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
@@ -58,6 +61,12 @@ export function ImageViewer({
   useEffect(() => {
     if (fit > 0) onZoom?.(fit * scale);
   }, [fit, scale]);
+  // 大きさが決まって倍率が親に伝わった時点で知らせる（親が倍率の数値と紙面を同時に出せるよう、onZoom の後）
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
+  useEffect(() => {
+    if (viewport) readyRef.current?.();
+  }, [viewport !== null]);
   const imgRef = useRef<HTMLImageElement>(null);
   const { onScroll } = useViewerSync(
     stageRef,
@@ -83,6 +92,7 @@ export function ImageViewer({
               const img = e.currentTarget;
               setNatural({ w: img.naturalWidth, h: img.naturalHeight });
             }}
+            onError={() => onReady?.()}
           />
           {viewport ? (
             <AnchorOverlay

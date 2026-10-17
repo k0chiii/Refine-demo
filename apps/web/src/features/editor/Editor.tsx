@@ -10,6 +10,7 @@ import {
   isFigmaUrl,
   isReviewableArtifact,
   isWebLiveArtifact,
+  type MediaType,
   formatVideoSpan,
   pickCompareArtifact,
   pickReviewArtifact,
@@ -76,6 +77,7 @@ import { ImageSwipe } from "@/features/compare/ImageSwipe";
 import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { remaining } from "@/lib/format";
+import { workHint } from "@/lib/workHint";
 import {
   blockedReasonLabel,
   closedReasonLabel,
@@ -138,6 +140,8 @@ type Draft = {
 };
 
 const COMPOSE_W = 300;
+/** 紙面の描き終わりの通知が届かなくても、ファイルが届いてからこの時間で読み込み中の表示を終える */
+const PAINT_TIMEOUT_MS = 8000;
 
 function anchorTop(anchor: Anchor, vp: Viewport): number | null {
   if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
@@ -210,9 +214,10 @@ export function Editor({
   }, [workData, revisions, version]);
   const revisionId = target?.id ?? null;
   // 媒体が分かったら、その紙面のビューア（PDF.js など）を版・ファイルの取得と並行して読み込み始める
-  const mediaType = workData?.work.mediaType;
+  // 一覧・ホームで押した行から分かる媒体（workHint）で、works.get が届く前から読み込み始める
+  const mediaType = workData?.work.mediaType ?? workHint(workId)?.mediaType;
   useEffect(() => {
-    if (mediaType) preloadViewers(mediaType);
+    if (mediaType) preloadViewers(mediaType as MediaType);
   }, [mediaType]);
   const dataRaw = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   // 版を切り替えた直後に前の版の結果が残ることがあるので、表示中の版のものだけを使う
@@ -244,7 +249,20 @@ export function Editor({
   const [showResolved, setShowResolved] = useState(false);
   /** コメントの絞り込み: 人のコメントだけ / 自動校正だけ */
   const [who, setWho] = useState<"all" | "human" | "bot">("all");
-  const [artifactId, setArtifactId] = useState<string | null>(null);
+  /** 利用者が選んだ添付（選んでいなければ既定の添付。下の artifactId） */
+  const [pickedArtifactId, setArtifactId] = useState<string | null>(null);
+  // 紙面に出す添付。選んでいなければ、提出の順番によらず PDF → 画像 → 文章 → 動画（動画の制作物は動画を先に。.ai などの原本は
+  // 情報 › この版のファイル から落とす）。state に写さず描画のなかで決める（写すと、版が届いてから 1 回余計に描かれ、
+  // 「添付がありません」が一瞬出ていた。§61）
+  const artifactId: string | null = data
+    ? pickedArtifactId && data.artifacts.some((a) => a.id === pickedArtifactId)
+      ? pickedArtifactId
+      : (data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
+        pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
+          ?.id ??
+        data.artifacts[0]?.id ??
+        null)
+    : null;
   const [artifactSheet, setArtifactSheet] = useState(false);
   // 固定ペイン（引き出し）の幅。supporting pane は temporary resizing: 閉じたら既定（expanded 360 / large 412）に戻す
   const [paneW, setPaneW] = useState<number | null>(null);
@@ -384,16 +402,7 @@ export function Editor({
     if (!data) return;
     // 添付の種類が確定したら、媒体の見込みが外れていてもその種類のビューアを読み込み始める（ファイルの取得と並行）
     for (const a of data.artifacts) if (isReviewableArtifact(a)) preloadViewers(a.type);
-    if (!artifactId || !data.artifacts.some((a) => a.id === artifactId))
-      // 紙面に出すのは提出の順番によらず PDF → 画像 → 文章 → 動画（動画の制作物は動画を先に。.ai などの原本は 情報 › この版のファイル から落とす）
-      setArtifactId(
-        data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
-          pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
-            ?.id ??
-          data.artifacts[0]?.id ??
-          null,
-      );
-  }, [data, artifactId]);
+  }, [data]);
   // ボトムシート（狭い画面）: 普段は閉じて紙面を画面いっぱいに使い、ツールバーの「コメント・版・情報」で開く
   // （利用者指示 2026-10-15。以前は下にタブだけの覗き見を常に出していた）。半分 → 全部、下に払うと閉じる。
   // 止まる高さとハンドルは属性でしか渡せないので、シートが DOM に入った時点で ref で設定する
@@ -481,6 +490,8 @@ export function Editor({
     leftBlob: otherBlob.blob ?? null,
     rightText: artifact && text?.artifactId === artifact.id ? text.body : null,
   });
+  /** 最初の 1 枚を描き終えた添付（PDF・画像・動画のビューアが知らせる。下の paperDone） */
+  const [paintedFor, setPaintedFor] = useState<string | null>(null);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [swipe, setSwipe] = useState(false);
 
@@ -605,9 +616,12 @@ export function Editor({
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
-  if (workData === undefined) return <Loading label="制作物を読み込んでいます" />;
-  const { work } = workData;
-  const isSns = work.mediaType === "sns";
+  // 制作物の中身が届く前から、アプリバー・ツールバー・紙面の枠を同じ形で出す（届いてから枠が現れると、読み込み中の画面が何段にも
+  // 見えた。利用者指示 2026-10-17「一回の読み込みで3回くらい表示が変わるのヤダ」。docs/UI_M3E.md §61）。
+  // 以降の `workData` が要るところは、届いていなければ何も出さない
+  const work = workData?.work ?? null;
+  const isSns = work?.mediaType === "sns";
+  const hint = workHint(workId);
   const openAuthoring = () =>
     void navigate({
       to: isSns ? "/works/$workId/post" : "/works/$workId/write",
@@ -680,7 +694,7 @@ export function Editor({
     revisionId: string | null;
   }) => {
     if (t.revisionId && t.revisionId !== revisionId) {
-      const rev = workData.revisions.find((r) => r.id === t.revisionId);
+      const rev = workData?.revisions.find((r) => r.id === t.revisionId);
       if (rev)
         void navigate({
           to: "/works/$workId/v/$n",
@@ -708,7 +722,7 @@ export function Editor({
       meId={me?.id ?? null}
       canDecide={can?.decide ?? false}
       canReply={canComment || (can?.decide ?? false)}
-      canEdit={work.lifecycle !== "finalized"}
+      canEdit={work?.lifecycle !== "finalized"}
       pending={busy}
       {...(className ? { className } : {})}
       onSelect={() => jumpTo(t)}
@@ -868,13 +882,38 @@ export function Editor({
     },
     selecting,
   };
+  /** 紙面を出してよいか（中身が決まり、PDF・画像・動画は最初の 1 枚を描き終えた） */
+  const paperDone = (() => {
+    if (!workData) return false;
+    if (!target) return true;
+    if (!data) return false;
+    if (!artifact) return true;
+    if (artifact.fileName === POST_MANIFEST_NAME) return true;
+    // 外部リンクのうち、紙面として出すもの（Web のライブ表示・Figma の埋め込み）は iframe が読み込めてから
+    if (artifact.role === "external")
+      return isWebLiveArtifact(artifact) ||
+        (artifact.externalUrl && isFigmaUrl(artifact.externalUrl))
+        ? paintedFor === artifact.id
+        : true;
+    if (blob.error) return true;
+    if (!blob.blob) return false;
+    if (artifact.type === "document") return text?.artifactId === artifact.id;
+    if (
+      artifact.type === "pdf" ||
+      ((artifact.type === "image" || artifact.type === "video") && blob.url)
+    )
+      return paintedFor === artifact.id;
+    return true;
+  })();
   const renderViewer = (): ReactNode => {
+    // 届くまでは紙面を出さない（読み込み中の表示は、親が 1 つだけ紙面の上に重ねている。比較中の左右の枠は従来どおり）
+    if (!workData) return compareWith ? <Loading label="制作物を読み込んでいます" /> : null;
     if (!target)
       return (
         <div className="empty editor__empty">
           <M3eIcon name="upload_file" />
           まだ版がありません
-          {workData.can.submit && work.lifecycle === "active" ? (
+          {workData.can.submit && work?.lifecycle === "active" ? (
             <div className="row">
               <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
                 最初の版を提出
@@ -887,7 +926,7 @@ export function Editor({
           ) : null}
         </div>
       );
-    if (!data) return <Loading label="版を読み込んでいます" />;
+    if (!data) return compareWith ? <Loading label="版を読み込んでいます" /> : null;
     if (!artifact) return <div className="empty">添付がありません</div>;
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
@@ -895,8 +934,8 @@ export function Editor({
           <PostReview
             manifestArtifactId={artifact.id}
             artifacts={data.artifacts}
-            isFinal={work.finalRevisionId === data.revision.id}
-            workTitle={work.title}
+            isFinal={workData.work.finalRevisionId === data.revision.id}
+            workTitle={workData.work.title}
             socialProfileId={workData.work.socialProfileId}
             revisionLabel={data.revision.label}
           />
@@ -947,6 +986,7 @@ export function Editor({
             }}
             renderInPage={(vp) => compose(vp, null)}
             footer={record}
+            onReady={() => setPaintedFor(artifact.id)}
           />
         );
       }
@@ -966,6 +1006,7 @@ export function Editor({
             onStates={setWebStates}
             renderInPage={(vp, box) => compose(vp, box)}
             footer={record}
+            onReady={() => setPaintedFor(artifact.id)}
           />
         );
       return (
@@ -981,13 +1022,15 @@ export function Editor({
       );
     }
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので文字も見せる）
-    if (!blob.blob) return <Loading label="ファイルを取得しています" caption />;
+    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので、比較中の枠には文字も見せる）
+    if (!blob.blob)
+      return compareWith ? <Loading label="ファイルを取得しています" caption /> : null;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
           blob={blob.blob}
           artifactId={artifact.id}
+          onReady={() => setPaintedFor(artifact.id)}
           {...viewerProps}
           draft={draft?.page ? (draft as Draft & { page: number }) : null}
           onDraft={(d) => {
@@ -1015,6 +1058,9 @@ export function Editor({
           {...(compareWith ? cmp.pdfProps("right") : {})}
         />
       );
+    // 文章は復号が済むまで出さない（済む前に下の「この形式は…」へ落ちて一瞬見えていた）
+    if (artifact.type === "document" && text?.artifactId !== artifact.id)
+      return compareWith ? <Loading label="文章を読み込んでいます" /> : null;
     if (artifact.type === "document" && text?.artifactId === artifact.id)
       return text.html !== undefined ? (
         <RichTextViewer
@@ -1060,6 +1106,7 @@ export function Editor({
         <ImageViewer
           url={blob.url}
           artifactId={artifact.id}
+          onReady={() => setPaintedFor(artifact.id)}
           alt={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
           draft={draft?.rect || draft?.point ? draft : null}
@@ -1107,6 +1154,7 @@ export function Editor({
         <VideoViewer
           url={blob.url}
           artifactId={artifact.id}
+          onReady={() => setPaintedFor(artifact.id)}
           label={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
           draft={draft?.time ? draft : null}
@@ -1206,6 +1254,23 @@ export function Editor({
       );
     return <div className="empty">この形式は比較できません</div>;
   };
+
+  // 紙面の読み込みをひとつにまとめる（利用者指示 2026-10-17。docs/UI_M3E.md §61）: 版・ファイル・ビューアの読み込みと最初の 1 枚を
+  // 描くところまでを「読み込み中」とし、そのあいだは紙面の上に指標をひとつだけ重ねて動かさない。終わったら紙面を一度に出す
+  const pending = !compareWith && !paperDone;
+  /** 開いて最初の読み込み（一度紙面が出たあと添付を替えたときは、アプリバー・ツールバーはそのままにして紙面だけ隠す） */
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (paperDone) revealed.current = true;
+  }, [paperDone]);
+  const initial = pending && !revealed.current;
+  // 紙面を描き終えるはずの通知（ビューアの onReady）が何かの理由で届かなくても、指標のまま止まらないよう、ファイルが届いてから
+  // 一定時間でそのまま出す
+  useEffect(() => {
+    if (!pending || !artifact || (artifact.role !== "external" && !blob.blob)) return;
+    const id = window.setTimeout(() => setPaintedFor(artifact.id), PAINT_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, [pending, artifact?.id, blob.blob]);
 
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
@@ -1336,7 +1401,7 @@ export function Editor({
         onOpen={setFbOpenId}
         onShowPlace={showFeedbackPlace}
       />
-    ) : d === "versions" ? (
+    ) : d === "versions" && workData ? (
       <VersionsTab
         work={workData}
         currentId={revisionId}
@@ -1361,7 +1426,7 @@ export function Editor({
         onSubmit={() => setSubmitOpen(true)}
         onWrite={openAuthoring}
       />
-    ) : d === "info" ? (
+    ) : d === "info" && workData ? (
       <InfoTab
         work={workData}
         revision={data ?? null}
@@ -1404,24 +1469,29 @@ export function Editor({
             <M3eIcon name="arrow_back" className="icon--mirror" />
           </M3eIconButton>
         </AppBarSlot>
-        <AppBarSlot slot="title" title={work.title}>
-          {work.title}
+        <AppBarSlot slot="title" title={work?.title ?? hint?.title ?? ""}>
+          {work?.title ?? hint?.title ?? ""}
         </AppBarSlot>
-        {revision ? (
-          <AppBarSlot slot="subtitle">
-            {revision.label}・
-            {open
-              ? `受付中・${remaining(revision.deadlineAt, now)}`
-              : revision.reviewClosedReason
-                ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
-                : reviewStateLabel[revision.reviewState]}
-            {work.finalRevisionId === revision.id ? "・校了版" : ""}
-          </AppBarSlot>
-        ) : null}
+        {/* 副題（版・状態）は紙面と一緒に現れる。それまでは空の 1 行で場所だけ取り、題名が動かないようにする */}
+        <AppBarSlot slot="subtitle">
+          {revision && work && !initial ? (
+            <>
+              {revision.label}・
+              {open
+                ? `受付中・${remaining(revision.deadlineAt, now)}`
+                : revision.reviewClosedReason
+                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  : reviewStateLabel[revision.reviewState]}
+              {work.finalRevisionId === revision.id ? "・校了版" : ""}
+            </>
+          ) : (
+            "\u00A0"
+          )}
+        </AppBarSlot>
         <AppBarSlot slot="actions">
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
-          {can?.completeReview ? (
+          {initial ? null : can?.completeReview ? (
             <M3eButton
               variant="filled"
               className="appbar-primary"
@@ -1464,7 +1534,9 @@ export function Editor({
               : undefined
           }
         >
-          <div className="ws__viewer" ref={setViewerEl}>
+          <div className={`ws__viewer ${pending ? "ws__viewer--pending" : ""}`} ref={setViewerEl}>
+            {/* 読み込み中の指標は、ここに 1 つだけ。版・ファイル・ビューア・最初の描画のどの段でも同じ要素のまま動かさない（文字も付けない） */}
+            {pending ? <Loading label="制作物を読み込んでいます" className="ws__loading" /> : null}
             {compareWith ? (
               <div className="compare-wrap">
                 <CompareStatus
@@ -1509,10 +1581,10 @@ export function Editor({
                 )}
               </div>
             ) : (
-              <Suspense fallback={<ViewerLoading />}>{renderViewer()}</Suspense>
+              <Suspense fallback={null}>{renderViewer()}</Suspense>
             )}
 
-            {artifact && (artifact.role !== "external" || isLiveExternal) ? (
+            {artifact && !initial && (artifact.role !== "external" || isLiveExternal) ? (
               <M3eToolbar
                 className="ws__toolbar"
                 shape="rounded"

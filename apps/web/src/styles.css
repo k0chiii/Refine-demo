@@ -1775,6 +1775,18 @@ m3e-dialog [slot="actions"] {
   flex: 1;
   min-height: 0;
 }
+/* 校正画面の読み込み中（docs/UI_M3E.md §61）: 版・ファイル・ビューアのどの段でも、指標は紙面の中央にこの 1 つだけ。
+   紙面は作っておくが見せず（描画・測定は進む）、最初の 1 枚が描き終わったら、紙面・指摘の印・文字をいっぺんに出す */
+.ws__viewer > .ws__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  padding: 0;
+  pointer-events: none;
+}
+.ws__viewer--pending > :not(.ws__loading, .ws__toolbar, .ws__side-toolbar, m3e-menu) {
+  visibility: hidden;
+}
 .viewer {
   display: flex;
   flex-direction: column;
@@ -4627,6 +4639,19 @@ m3e-snackbar {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+}
+/* 読み込み中（§61）: 指標は紙面の中央にひとつだけ。操作の行・説明・紙面は最初の 1 枚が描き終わるまで隠し、いっぺんに出す */
+.fb-stage__viewer > .fb-stage__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  padding: 0;
+  pointer-events: none;
+}
+.fb-stage--pending .fb-stage__bar > :not(.fb-stage__open),
+.fb-stage--pending .fb-stage__hint,
+.fb-stage--pending .fb-stage__viewer > :not(.fb-stage__loading) {
+  visibility: hidden;
 }
 .fb-stage__empty {
   flex: 1 1 auto;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export type AppBarSlotName = "leading" | "title" | "subtitle" | "actions";
@@ -13,7 +13,8 @@ const installed = () =>
 /**
  * 共通アプリバー（`_app.tsx`）のスロットへ、いまの画面の見出し・戻る・操作を差し込む（M3 App bars: 「アプリバーは現在のページの
  * 見出し・ナビゲーション・1–2 の必須操作を置き、通知などの全体の操作も含められる」）。
- * 受け皿は `#appbar-<slot>`。描画後に探すので、最初の描画では何も出さない。
+ * 受け皿は `#appbar-<slot>`。描画後に探すので、最初の描画では何も出さない（探すのは描画の直後・画面に出る前の layout effect。
+ * passive effect だと、見出し・戻るが 1 フレーム遅れて現れ、読み込み中の画面が何段にも見えた。§61）。
  *
  * 見出し（title）は画面ごとのページタイトル（document.title）にもする。画面を移ったときに、フォーカスが行き場を失って
  * body にあるなら見出しへ移し、スクリーンリーダーに画面の切り替わりを伝える（WCAG 2.4.2・M3 Accessibility。§35 A-05）
@@ -29,7 +30,7 @@ export function AppBarSlot({
   children: ReactNode;
 }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     setHost(document.getElementById(`appbar-${slot}`));
   }, [slot]);
   useEffect(() => {

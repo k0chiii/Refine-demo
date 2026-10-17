@@ -1,6 +1,6 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
@@ -41,6 +41,11 @@ interface Props extends ViewerSyncProps {
   renderGutter?: (vp: Viewport, page: number) => ReactNode;
   /** 読み込んだ PDF を親と共有する（版比較の特徴抽出で同じ文書を使い、二重に読まない） */
   onDoc?: (doc: PDFDocumentProxy) => void;
+  /**
+   * 最初に画面に出るページを描き終えた（失敗して代わりのメッセージを出すときも）。親は、これが届くまで紙面を隠し、読み込み中の
+   * 指標をひとつだけ出して、届いたら紙面・指摘の印・文字をいっぺんに出す（読み込みの途中の姿を見せない。docs/UI_M3E.md §61）
+   */
+  onReady?: () => void;
 }
 
 type Size = { w: number; h: number };
@@ -69,6 +74,7 @@ export function PdfViewer({
   renderInPage,
   renderGutter,
   onDoc,
+  onReady,
   ...sync
 }: Props) {
   const [stageRef, stageWidth] = useStageWidth<HTMLDivElement>(true);
@@ -79,11 +85,44 @@ export function PdfViewer({
   const pageEls = useRef<Array<HTMLDivElement | null>>([]);
   const shown = useRef(1);
   const ratio = useRef(0);
+  // 最初に画面に出るページ（舞台の近くにあるもの）を全部描き終えたら、親へ一度だけ知らせる（添付が替わったらまた）。
+  // 1 枚だけ先に出して残りが後から埋まる（2 枚目が白いまま指摘の印だけ見える）のを避ける
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
+  const notified = useRef(false);
+  const near = useRef(new Set<number>());
+  const done = useRef(new Set<number>());
+  const notifyReady = useCallback(() => {
+    if (notified.current) return;
+    notified.current = true;
+    readyRef.current?.();
+  }, []);
+  const check = useCallback(() => {
+    if (near.current.size > 0 && [...near.current].every((n) => done.current.has(n))) notifyReady();
+  }, [notifyReady]);
+  const onNear = useCallback(
+    (n: number, isNear: boolean) => {
+      if (isNear) near.current.add(n);
+      else near.current.delete(n);
+      check();
+    },
+    [check],
+  );
+  const onPainted = useCallback(
+    (n: number) => {
+      done.current.add(n);
+      check();
+    },
+    [check],
+  );
 
   useEffect(() => {
     let cancelled = false;
     setDoc(null);
     setSizes([]);
+    notified.current = false;
+    near.current.clear();
+    done.current.clear();
     // 添付・版が替わったら先頭から
     shown.current = 1;
     ratio.current = 0;
@@ -103,9 +142,10 @@ export function PdfViewer({
           onDoc?.(d);
           onPageCount?.(d.numPages);
         })
-        .catch(() =>
-          setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。"),
-        ),
+        .catch(() => {
+          setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。");
+          notifyReady();
+        }),
     );
     return () => {
       cancelled = true;
@@ -205,6 +245,8 @@ export function PdfViewer({
                       scale={renderScale}
                       rotation={rotation}
                       root={stageRef}
+                      onNear={onNear}
+                      onPainted={onPainted}
                     />
                     <AnchorOverlay
                       viewport={viewport}
@@ -240,12 +282,18 @@ function PdfCanvas({
   scale,
   rotation,
   root,
+  onNear,
+  onPainted,
 }: {
   doc: PDFDocumentProxy;
   n: number;
   scale: number;
   rotation: number;
   root: React.RefObject<HTMLDivElement | null>;
+  /** 舞台の近く（描く対象）に入った・出た */
+  onNear?: (n: number, near: boolean) => void;
+  /** 描き終えた（取り消されたものは含まない。描けなかったときも「済んだ」として知らせる） */
+  onPainted?: (n: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [near, setNear] = useState(false);
@@ -260,6 +308,11 @@ function PdfCanvas({
     io.observe(el);
     return () => io.disconnect();
   }, [root]);
+
+  useEffect(() => {
+    onNear?.(n, near);
+    return () => onNear?.(n, false);
+  }, [n, near, onNear]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -288,8 +341,9 @@ function PdfCanvas({
       try {
         await task.promise;
       } catch {
-        // 取り消し
+        // 取り消し（または描けなかった）
       }
+      if (!cancelled) onPainted?.(n);
     });
     return () => {
       cancelled = true;

@@ -12,7 +12,6 @@ import {
   preloadViewers,
   RichTextViewer,
   VideoViewer,
-  ViewerLoading,
 } from "@/features/annotation/lazyViewers";
 import { TextViewer } from "@/features/annotation/TextViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
@@ -72,21 +71,27 @@ export function FeedbackStage({
   }, [mediaType]);
   const dataRaw = useQuery(api.revisions.get, shownId ? { revisionId: shownId } : "skip");
   const data = dataRaw && dataRaw.revision.id === shownId ? dataRaw : undefined;
-  const [artifactId, setArtifactId] = useState<string | null>(null);
+  /** 利用者が選んだ添付（選んでいなければ、版の既定の添付。下の artifactId） */
+  const [pickedId, setArtifactId] = useState<string | null>(null);
+  /** 最初の 1 枚を描き終えた添付（PDF・画像・動画のビューアが知らせる。下の paperDone） */
+  const [paintedFor, setPaintedFor] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [scale, setScale] = useState(1);
   const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
 
-  // 版が変わったら、紙面に出す添付を選び直す（PDF → 画像 → 文章）
+  // 紙面に出す添付。選んでいなければ PDF → 画像 → 文章。state に写さず描画のなかで決める（写すと、版が届いてから 1 回余計に描かれ、
+  // 「添付がありません」が一瞬出ていた。docs/UI_M3E.md §61）
+  const artifactId: string | null = data
+    ? pickedId && data.artifacts.some((a) => a.id === pickedId)
+      ? pickedId
+      : (pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
+          ?.id ?? null)
+    : null;
+  // 版が変わったら、選んだ添付を外して先頭のページから
   useEffect(() => {
     setPage(1);
-    setArtifactId(
-      data
-        ? (pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
-            ?.id ?? null)
-        : null,
-    );
+    setArtifactId(null);
   }, [data?.revision.id]);
   // 見せたい場所へ送る
   useEffect(() => {
@@ -137,9 +142,33 @@ export function FeedbackStage({
     onDraft: () => undefined,
   };
 
+  /** 紙面を出してよいか（中身が決まり、PDF・画像・動画は最初の 1 枚を描き終えた） */
+  const paperDone = (() => {
+    if (work === undefined) return false;
+    if (!shownId) return true;
+    if (!data) return false;
+    if (!artifact) return true;
+    if (blob.error) return true;
+    if (!blob.blob) return false;
+    if (artifact.type === "document") return text?.artifactId === artifact.id;
+    if (
+      artifact.type === "pdf" ||
+      ((artifact.type === "image" || artifact.type === "video") && blob.url)
+    )
+      return paintedFor === artifact.id;
+    return true;
+  })();
+  const pending = !paperDone;
+  // 描き終わりの通知が届かなくても、ファイルが届いてから一定時間で出す（指標のまま止めない）
+  useEffect(() => {
+    if (!pending || !artifact || !blob.blob) return;
+    const id = window.setTimeout(() => setPaintedFor(artifact.id), 8000);
+    return () => window.clearTimeout(id);
+  }, [pending, artifact?.id, blob.blob]);
+
+  // 読み込みの途中（制作物・版・ファイル・ビューア・最初の描画）は何も出さない。指標は紙面の上にひとつだけ置き、終わったら一度に出す
   const viewer = (): ReactNode => {
-    if (work === undefined)
-      return <Loading label="制作物を読み込んでいます" className="fb-stage__empty" />;
+    if (work === undefined) return null;
     if (!shownId)
       return (
         <div className="empty fb-stage__empty">
@@ -147,12 +176,11 @@ export function FeedbackStage({
           まだ版がありません。制作物全体についてのスレッドは右から立てられます
         </div>
       );
-    if (!data) return <Loading label="版を読み込んでいます" className="fb-stage__empty" />;
+    if (!data) return null;
     if (!artifact)
       return <div className="empty fb-stage__empty">この版には紙面に出せる添付がありません</div>;
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    if (!blob.blob)
-      return <Loading label="ファイルを取得しています" caption className="fb-stage__empty" />;
+    if (!blob.blob) return null;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
@@ -164,6 +192,7 @@ export function FeedbackStage({
           scale={scale}
           rotation={0}
           onPageCount={setPageCount}
+          onReady={() => setPaintedFor(artifact.id)}
         />
       );
     if (artifact.type === "image" && blob.url)
@@ -174,6 +203,7 @@ export function FeedbackStage({
           alt={`${data.revision.label}の添付「${artifact.fileName}」`}
           {...viewerProps}
           scale={scale}
+          onReady={() => setPaintedFor(artifact.id)}
         />
       );
     if (artifact.type === "document" && text?.artifactId === artifact.id) {
@@ -183,8 +213,7 @@ export function FeedbackStage({
         <TextViewer text={text.body} scale={scale} artifactId={artifact.id} {...viewerProps} />
       );
     }
-    if (artifact.type === "document")
-      return <Loading label="文章を読み込んでいます" className="fb-stage__empty" />;
+    if (artifact.type === "document") return null;
     if (artifact.type === "video" && blob.url)
       return (
         <VideoViewer
@@ -193,6 +222,7 @@ export function FeedbackStage({
           label={`${data.revision.label}の添付「${artifact.fileName}」`}
           {...viewerProps}
           seekRequest={videoSeek}
+          onReady={() => setPaintedFor(artifact.id)}
         />
       );
     return (
@@ -206,7 +236,7 @@ export function FeedbackStage({
   const reviewable = (data?.artifacts ?? []).filter((a) => a.role !== "external");
   return (
     <>
-      <section className="fb-stage" aria-label="紙面">
+      <section className={`fb-stage ${pending ? "fb-stage--pending" : ""}`} aria-label="紙面">
         <div className="fb-stage__bar" role="toolbar" aria-label="紙面の操作">
           {revisions.length ? (
             <>
@@ -293,7 +323,10 @@ export function FeedbackStage({
           </Link>
         </div>
         <div className="fb-stage__viewer">
-          <Suspense fallback={<ViewerLoading className="fb-stage__empty" />}>{viewer()}</Suspense>
+          {pending ? (
+            <Loading label="制作物を読み込んでいます" className="fb-stage__loading" />
+          ) : null}
+          <Suspense fallback={null}>{viewer()}</Suspense>
         </div>
       </section>
     </>

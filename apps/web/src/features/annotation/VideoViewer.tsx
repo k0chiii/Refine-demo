@@ -65,6 +65,8 @@ interface Props {
   besideWidth?: number;
   renderInPage?: (vp: Viewport) => ReactNode;
   renderGutter?: (vp: Viewport) => ReactNode;
+  /** 映像の大きさが分かった（再生できない形式と分かったときも）。親はそれまで紙面を隠して読み込み中の指標を出す（§61） */
+  onReady?: () => void;
 }
 
 const isVideoAnchor = (a: Anchor): a is VideoAnchor => a.type === "video_time";
@@ -96,7 +98,10 @@ export function VideoViewer({
   besideWidth = 0,
   renderInPage,
   renderGutter,
+  onReady,
 }: Props) {
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
   const videoRef = useRef<HTMLVideoElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -177,6 +182,7 @@ export function VideoViewer({
     const onMeta = () => {
       setNatural({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
       setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+      readyRef.current?.();
     };
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
@@ -399,7 +405,10 @@ export function VideoViewer({
                 const v = e.currentTarget;
                 v.playbackRate = rate;
               }}
-              onError={() => setUnplayable(true)}
+              onError={() => {
+                setUnplayable(true);
+                readyRef.current?.();
+              }}
             />
             {viewport ? (
               <AnchorOverlay

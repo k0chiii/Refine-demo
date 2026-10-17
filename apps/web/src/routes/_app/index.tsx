@@ -25,6 +25,7 @@ import {
 } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { useWindowClass } from "@/lib/useMedia";
+import { rememberWorkHint } from "@/lib/workHint";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
@@ -206,7 +207,10 @@ function Dashboard() {
     id: DashboardWidgetId,
     p: Partial<Pick<DashboardWidgetPref, "visible" | "limit">>,
   ) => void saveLayout.run(updateDashboardWidget(layout, id, p));
-  const open = (i: Item) => void navigate({ to: "/works/$workId", params: { workId: i.workId } });
+  const open = (i: Item) => {
+    rememberWorkHint(i.workId, { title: i.workTitle });
+    void navigate({ to: "/works/$workId", params: { workId: i.workId } });
+  };
 
   const rows = (id: DashboardWidgetId, items: Item[], sub: (i: Item) => string, label: string) => {
     if (id === "submit")
