@@ -1622,6 +1622,10 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 - **アイコンフォントの `<link rel=preload>`**: URL がハッシュ付きで index.html に書けない。public に置くと SW のキャッシュの扱いが変わる。エントリが小さくなったことで取りに行くのが早まったので見送り
 - フォント: Noto Sans JP は 124 分割の可変フォントで `font-display: swap`、使う分割だけ読む。変更なし
 
+### 合流後の計測（Loading indicator の分）
+
+§59 の Loading indicator（M3E `m3e-loading-indicator`）を入れた枝と合流した後、同じ機械・同じ条件で測り直した（デモビルド 2 つを続けて。CPU 4 倍遅）。読み込み・打鍵・メニューは同じ範囲だったが、**校正画面を開いて PDF の 1 ページ目が出るまで**が 1,750〜2,025ms → 2,360〜3,530ms に伸びた。原因は待っている間に動く指標の形の変化（clip-path の keyframes。main thread で毎フレーム style 再計算と layerize。トレースで UpdateLayoutTree 98 → 492ms・Layerize 80 → 515ms）で、動きを減らす設定（prefers-reduced-motion。指標の変形を止める）にすると 1,610〜1,880ms、指標を出さなければ 2,100〜2,220ms と元に戻る。`contain` で囲っても変わらない。指標を M3E に揃える（§59。利用者指示）と操作の軽さ（§60。利用者指示）が重なるところなので、ここでは変えずに記録だけ残す。手があるとすれば、長くなり得る待ち（ビューア・ファイルの取得）だけ変形を止めて形だけ出す、か M3E 側で合成できる動きに変わるのを待つ。
+
 ### デモモードに残る重さ（本番には無い）
 
 - デモは Convex の関数を convex-test でブラウザ内で実行し、AsyncLocalStorage の代用（`demo/asyncLocalStorageShim.ts`。LIFO）の前提で**全呼び出しを 1 本のキューで直列化**している。校正画面は開いた直後に 8 本前後のクエリを購読するので、紙面が出るまでにその合計（4 倍遅い CPU で約 1 秒）がかかる。本番は Convex へ並行に問い合わせるのでこの待ちは無い。並列化には正しい非同期コンテキストの追跡が要るので見送り
