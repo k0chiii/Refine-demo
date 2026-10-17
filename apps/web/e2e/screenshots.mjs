@@ -150,7 +150,7 @@ const pdfReady = () =>
 const pickArtifact = async (name) => {
   await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
   await page.locator("#artifact-menu m3e-menu-item:visible", { hasText: name }).first().click();
-  await page.waitForTimeout(400);
+  await settle();
 };
 /** ビューア上でドラッグ（範囲指定）→ その場の投稿欄に本文を入れて投稿 */
 const commentOnRect = async (x0, y0, x1, y1, body) => {
@@ -317,7 +317,7 @@ async function main() {
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
-  await page.waitForTimeout(500);
+  await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   await shot("06-editor-info");
 
   // 15 制作物の編集（主管）: 引き出し「情報」の「編集」
@@ -375,7 +375,7 @@ async function main() {
     await page.mouse.down();
     await page.mouse.move(hb.x + 2 + 56, hb.y + 24, { steps: 8 });
     await page.mouse.up();
-    await page.waitForTimeout(400);
+    await settle();
     await page.locator(".ws__handle").hover();
     await settle();
     await shot("35-pane-drag-handle");
@@ -505,12 +505,12 @@ async function main() {
   // ズームでの視点の同期: 拡大して右をスクロールしても、左右の舞台の中央に紙面の同じ箇所（ページ内の縦・横の割合）が来る
   for (let i = 0; i < 2; i++) {
     await page.locator('m3e-icon-button[aria-label="拡大"]').click();
-    await page.waitForTimeout(300);
+    await settle();
   }
   await page.evaluate(() =>
     [...document.querySelectorAll(".compare__pane .viewer__stage")].at(-1).scrollBy(120, 240),
   );
-  await page.waitForTimeout(500);
+  await settle();
   const views = await page.evaluate(() =>
     [...document.querySelectorAll(".compare__pane .viewer__stage")].map((s) => {
       const sr = s.getBoundingClientRect();
@@ -533,7 +533,7 @@ async function main() {
     `拡大・スクロール後に左右の視点がずれている: ${JSON.stringify(views)}`,
   );
   await page.locator('m3e-icon-button[aria-label="比較を終了"]').click();
-  await page.waitForTimeout(300);
+  await settle();
 
   // 38 比較しながら新しい版にコメント（校正者）: 第1版を開いて第2版と比較 → 第2版が右（操作できる側）に入れ替わる
   await signInAs("mock-nogiku-reviewer");
@@ -689,7 +689,7 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await go(revisionUrl);
   await pdfReady();
-  await page.waitForTimeout(500);
+  await settle();
   {
     const box = await page.locator(".viewer__overlay").first().boundingBox();
     await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
@@ -760,12 +760,12 @@ async function main() {
   await go(revision2Url);
   await pdfReady();
   await page.waitForSelector("m3e-bottom-sheet.ws__sheet"); // 通知のシート（非表示）と区別する
-  await page.waitForTimeout(800);
+  await settle();
   await shot("26-mobile-workspace");
   // 37 compact の補助的な選択はボトムシート（Breakpoints: compact は Bottom sheet、medium 以上は Menu）。添付が複数ある第1版で
   await go(revisionUrl);
   await pdfReady();
-  await page.waitForTimeout(600);
+  await settle();
   await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
   await page.waitForSelector("m3e-bottom-sheet.action-sheet .list__item");
   await settle();
@@ -774,7 +774,7 @@ async function main() {
   await settle();
   await go(revision2Url);
   await pdfReady();
-  await page.waitForTimeout(600);
+  await settle();
   // 34 引き出しは普段は閉じていて、ツールバーの「コメント」で半分まで開く
   await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
   await settle();
@@ -860,7 +860,7 @@ async function main() {
   await page.waitForSelector(".find input");
   await page.locator(".find input").first().fill("五月祭");
   await page.keyboard.press("Enter");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("41-write-find");
   // 42 文字カウント（その他メニュー → 文字カウント。入力中に表示も切り替えられる）
   await page.locator("#wt-more").click();
@@ -892,7 +892,7 @@ async function main() {
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
-  await page.waitForTimeout(500);
+  await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");
   await go(writeWorkUrl);
@@ -925,7 +925,7 @@ async function main() {
   await shot("43-write-review-select");
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".rich-viewer__page .text-anchor");
-  await page.waitForTimeout(500);
+  await settle();
   const quote = await page.locator(".rich-viewer__page .text-anchor").first().innerText();
   if (!quote.includes("百花繚乱")) throw new Error(`範囲へのコメントの位置がずれている: ${quote}`);
   await shot("44-write-review-comment");
@@ -949,7 +949,7 @@ async function main() {
   await go("/");
   await go(writeWorkUrl);
   await page.waitForSelector(".rich-viewer__page .doc");
-  await page.waitForTimeout(600);
+  await settle();
   await page.evaluate((needle) => {
     const root = document.querySelector(".rich-viewer__page .doc");
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -991,7 +991,7 @@ async function main() {
   await page.locator('.write__side m3e-icon-button[aria-label="コメント"]').click();
   await page.waitForSelector(".refs__item");
   await page.locator(".refs__item").first().click();
-  await page.waitForTimeout(400);
+  await settle();
   const picked = await page.evaluate(() => getSelection()?.toString() ?? "");
   if (!picked.includes("百花繚乱")) throw new Error(`コメントから本文を選べない: ${picked}`);
   await shot("45-write-refs");
@@ -1056,7 +1056,7 @@ const openWork = async (title) => {
   await entry.first().waitFor();
   await entry.first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
-  await page.waitForTimeout(500);
+  await settle();
   return new URL(page.url()).pathname;
 };
 const expectTrue = (cond, msg) => {
@@ -1073,7 +1073,7 @@ async function v2Scenes() {
   // 50b 表の行を押すと右のペインに詳細（§54 の表 ＋ M3 Supporting pane。説明・例外・厳格さ・有効／無効・履歴）
   await page.locator(".rule-table tbody tr[data-id]", { hasText: "A2-0001" }).click();
   await page.waitForSelector(".notation__detail .rule-editor");
-  await page.waitForTimeout(400);
+  await settle();
   await shot("50b-notation-rule-detail");
   await go("/notation?view=try");
   await page.waitForSelector("m3e-list-item.finding");
@@ -1089,7 +1089,7 @@ async function v2Scenes() {
   await ed.locator("textarea").nth(0).fill("Web");
   await ed.locator("textarea").nth(1).fill("ウェッブ");
   await ed.locator("m3e-button", { hasText: "追加を提案" }).click();
-  await page.waitForTimeout(600);
+  await page.waitForSelector("m3e-snackbar"); // 提案を受けた知らせが出たら送れている
   await signInAs("mock-nogiku-admin");
   await go("/notation?view=proposals");
   await page.waitForSelector("m3e-card.proposal");
@@ -1153,7 +1153,7 @@ async function v2Scenes() {
       timeout: 30_000,
     },
   );
-  await page.waitForTimeout(800);
+  await settle();
   await shot("55-compare-pdf");
   // 67 別の制作物と比べる（利用者指示 2026-10-17）: 左の見出しのボタン → 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
   //    左の見出しは「題名・版」、比較の状況に「別の制作物」、引き出し「版」に「別の制作物と比較中」
@@ -1214,7 +1214,7 @@ async function v2Scenes() {
   await page.setViewportSize({ width: 412, height: 915 });
   await go(posterV2);
   await pdfReady();
-  await page.waitForTimeout(800);
+  await settle();
   // 67b compact: シート「版」の「別の制作物と比べる」→ 相手を選ぶダイアログは全画面（M3 Dialogs）
   await page.locator('.ws__toolbar m3e-icon-button[aria-label="版"]').click();
   await page.waitForSelector(".drawer--sheet .versions");
@@ -1277,7 +1277,7 @@ async function v2Scenes() {
     (await page.locator(".viewer__overlay .anchor-draft").count()) > 0,
     "長押しで範囲が描かれない",
   );
-  await page.waitForTimeout(300);
+  await settle();
   await shot("26a-mobile-long-press");
   await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
   await settle();
@@ -1309,7 +1309,12 @@ async function v2Scenes() {
     for (let d = 40; d <= 90; d += 10) fire("touchmove", d);
     fire("touchend", null);
   });
-  await page.waitForTimeout(800);
+  await page.waitForFunction(
+    (before) => document.querySelector(".ws__zoom")?.innerText !== before,
+    zoomBefore,
+    { timeout: 5000 },
+  );
+  await settle();
   const zoomAfter = await page.locator(".ws__zoom").first().innerText();
   expectTrue(
     parseInt(zoomAfter, 10) > parseInt(zoomBefore, 10) * 2,
@@ -1433,7 +1438,8 @@ async function v2Scenes() {
   const seekTo = async (ratio) => {
     const tb = await page.locator(".vtl__track").boundingBox();
     await page.mouse.click(tb.x + tb.width * ratio, tb.y + tb.height / 2);
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => !document.querySelector(".vplayer video").seeking);
+    await settle();
   };
   // 時点: 3 秒で止めて C
   await seekTo(0.25);
@@ -1466,7 +1472,9 @@ async function v2Scenes() {
   await page.mouse.move(fr.x + fr.width * 0.4, fr.y + fr.height * 0.2, { steps: 8 });
   await page.mouse.up();
   await postVideo("タイムコードの表示を消す");
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => document.querySelectorAll(".vtl__mark").length === 3, null, {
+    timeout: 5000,
+  });
   expectTrue(
     (await page.locator(".vtl__mark").count()) === 3 &&
       (await page.locator(".vtl__bar").count()) === 1,
@@ -1478,7 +1486,7 @@ async function v2Scenes() {
     .locator(".thread", { hasText: "タイムコードの表示を消す" })
     .locator(".thread__index")
     .click();
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => !document.querySelector(".vplayer video").seeking);
   const at = await page.evaluate(() => document.querySelector(".vplayer video").currentTime);
   expectTrue(Math.abs(at - 1) < 0.05, `カードの時刻へ移らない（${at}）`);
   expectTrue((await page.locator(".vplayer .anchor-rect").count()) === 1, "画面の範囲が重ならない");
