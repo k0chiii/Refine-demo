@@ -59,6 +59,7 @@ const artifactType = v.union(
   v.literal("pdf"),
   v.literal("image"),
   v.literal("document"),
+  v.literal("video"),
   v.literal("other"),
   v.literal("external_link"),
 );
@@ -114,6 +115,14 @@ export const anchorValidator = v.union(
     start: v.number(),
     end: v.number(),
     quote: v.string(),
+  }),
+  v.object({
+    type: v.literal("video_time"),
+    artifactId: v.string(),
+    start: v.number(),
+    end: v.optional(v.number()),
+    rect: v.optional(rect),
+    point: v.optional(point),
   }),
 );
 

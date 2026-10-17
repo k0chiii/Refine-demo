@@ -1,5 +1,5 @@
 import { api } from "@mf100/convex/api";
-import type { Anchor } from "@mf100/domain";
+import { formatVideoSpan, type Anchor } from "@mf100/domain";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -27,6 +27,8 @@ export function anchorPlace(anchor: Anchor | null): string | null {
       const q = anchor.quote.replace(/\s+/g, " ").trim();
       return `「${q.length > 16 ? `${q.slice(0, 15)}…` : q}」`;
     }
+    case "video_time":
+      return formatVideoSpan(anchor);
     case "external":
       return null;
   }

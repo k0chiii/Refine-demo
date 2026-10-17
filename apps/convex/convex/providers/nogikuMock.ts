@@ -30,6 +30,7 @@ export default function NogikuMock() {
           : MOCK_DEFAULT.sub;
       const profile: NogikuOAuthProfile = {
         id: sub,
+        sub,
         name: typeof credentials.name === "string" ? credentials.name : MOCK_DEFAULT.name,
         email: typeof credentials.email === "string" ? credentials.email : `${sub}@example.invalid`,
       };

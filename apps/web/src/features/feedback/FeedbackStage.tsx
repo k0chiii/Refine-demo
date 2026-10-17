@@ -8,6 +8,7 @@ import { ImageViewer } from "@/features/annotation/ImageViewer";
 import { anchorPage, PdfViewer } from "@/features/annotation/PdfViewer";
 import { RichTextViewer } from "@/features/annotation/RichTextViewer";
 import { TextViewer } from "@/features/annotation/TextViewer";
+import { VideoViewer } from "@/features/annotation/VideoViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { documentView } from "@/features/writing/documentView";
 import { M3eButton, M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
@@ -60,11 +61,17 @@ export function FeedbackStage({
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [scale, setScale] = useState(1);
+  const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
 
   // 版が変わったら、紙面に出す添付を選び直す（PDF → 画像 → 文章）
   useEffect(() => {
     setPage(1);
-    setArtifactId(data ? (pickReviewArtifact(data.artifacts)?.id ?? null) : null);
+    setArtifactId(
+      data
+        ? (pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
+            ?.id ?? null)
+        : null,
+    );
   }, [data?.revision.id]);
   // 見せたい場所へ送る
   useEffect(() => {
@@ -72,6 +79,7 @@ export function FeedbackStage({
     if (focus.anchor.artifactId !== artifactId) setArtifactId(focus.anchor.artifactId);
     const p = anchorPage(focus.anchor);
     if (p) setPage(p);
+    if (focus.anchor.type === "video_time") setVideoSeek({ t: focus.anchor.start, key: focus.at });
   }, [focus?.at]);
 
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
@@ -156,6 +164,16 @@ export function FeedbackStage({
       );
     }
     if (artifact.type === "document") return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (artifact.type === "video" && blob.url)
+      return (
+        <VideoViewer
+          url={blob.url}
+          artifactId={artifact.id}
+          label={`${data.revision.label}の添付「${artifact.fileName}」`}
+          {...viewerProps}
+          seekRequest={videoSeek}
+        />
+      );
     return (
       <div className="empty fb-stage__empty">
         この形式は紙面に出せません（ダウンロードして確認）
@@ -224,20 +242,25 @@ export function FeedbackStage({
               </M3eIconButton>
             </>
           ) : null}
-          <M3eIconButton
-            aria-label="縮小"
-            disabled={scale <= 0.5}
-            onClick={() => setScale((s) => Math.max(0.5, Math.round((s - 0.25) * 100) / 100))}
-          >
-            <M3eIcon name="zoom_out" />
-          </M3eIconButton>
-          <M3eIconButton
-            aria-label="拡大"
-            disabled={scale >= 3}
-            onClick={() => setScale((s) => Math.min(3, Math.round((s + 0.25) * 100) / 100))}
-          >
-            <M3eIcon name="zoom_in" />
-          </M3eIconButton>
+          {/* 動画は画面に合わせて出すので拡大縮小しない */}
+          {artifact?.type === "video" ? null : (
+            <>
+              <M3eIconButton
+                aria-label="縮小"
+                disabled={scale <= 0.5}
+                onClick={() => setScale((s) => Math.max(0.5, Math.round((s - 0.25) * 100) / 100))}
+              >
+                <M3eIcon name="zoom_out" />
+              </M3eIconButton>
+              <M3eIconButton
+                aria-label="拡大"
+                disabled={scale >= 3}
+                onClick={() => setScale((s) => Math.min(3, Math.round((s + 0.25) * 100) / 100))}
+              >
+                <M3eIcon name="zoom_in" />
+              </M3eIconButton>
+            </>
+          )}
           <Link
             to="/works/$workId"
             params={{ workId }}

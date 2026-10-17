@@ -4,8 +4,10 @@ import type { Id } from "@mf100/convex/dataModel";
 import {
   isBeforeDeadline,
   isReviewableArtifact,
+  formatVideoSpan,
   pickReviewArtifact,
   textRangeAnchor,
+  videoTimeAnchor,
   toViewportRect,
   type Anchor,
   type NormalizedRect,
@@ -28,6 +30,7 @@ import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { ImageViewer } from "@/features/annotation/ImageViewer";
 import { PdfViewer, anchorPage } from "@/features/annotation/PdfViewer";
 import { TextViewer } from "@/features/annotation/TextViewer";
+import { VideoViewer } from "@/features/annotation/VideoViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { ComposePopover } from "@/features/review/ComposePopover";
 import { activeMentions, MentionProvider } from "@/features/review/mentions";
@@ -98,6 +101,10 @@ type Draft = {
   point?: { x: number; y: number };
   range?: { start: number; end: number };
   box?: { x: number; y: number; w: number; h: number };
+  /** 動画の時点（end があれば範囲）。rect・point と一緒なら、その時点の画面の位置 */
+  time?: { start: number; end?: number };
+  /** 動画で範囲を選んでいる途中（投稿欄はまだ出さない） */
+  marking?: boolean;
   /** 位置なしのコメント（ツールバーから） */
   free?: boolean;
 };
@@ -224,6 +231,8 @@ export function Editor({
   /** 紙面の範囲から書くのはコメント（解決する指摘）か相談（FB） */
   const [composeKind, setComposeKind] = useState<"comment" | "feedback">("comment");
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** 動画の再生位置を移す（コメントのカードを押したとき）。key が変わるたびに移す */
+  const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
   const [proposeFrom, setProposeFrom] = useState<{
     quote: string;
     surrounding: string;
@@ -332,10 +341,11 @@ export function Editor({
   useEffect(() => {
     if (!data) return;
     if (!artifactId || !data.artifacts.some((a) => a.id === artifactId))
-      // 紙面に出すのは提出の順番によらず PDF → 画像 → 文章（.ai などの原本は 情報 › この版のファイル から落とす）
+      // 紙面に出すのは提出の順番によらず PDF → 画像 → 文章 → 動画（動画の制作物は動画を先に。.ai などの原本は 情報 › この版のファイル から落とす）
       setArtifactId(
         data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
-          pickReviewArtifact(data.artifacts)?.id ??
+          pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
+            ?.id ??
           data.artifacts[0]?.id ??
           null,
       );
@@ -445,6 +455,8 @@ export function Editor({
             : undefined;
       else if (artifact.type === "document" && draft.range && text?.artifactId === artifact.id)
         anchor = textRangeAnchor(artifact.id, text.body, draft.range.start, draft.range.end);
+      else if (artifact.type === "video" && draft.time)
+        anchor = videoTimeAnchor(artifact.id, draft.time, { rect: draft.rect, point: draft.point });
     }
     if (draftKind === "feedback") {
       // 相談（FB）: 解決しない話し合いとして、この版の場所に立てる。立てたら引き出し「FB」でそのやり取りを開く
@@ -588,6 +600,7 @@ export function Editor({
       if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor as Anchor);
       if (p) setPage(p);
+      if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
     }
   };
   /** 引き出し「FB」でその相談を開く（狭い画面はシートを FB で開く） */
@@ -618,6 +631,7 @@ export function Editor({
       if (t.anchor.artifactId !== artifactId) setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor);
       if (p) setPage(p);
+      if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
     }
   };
   const card = (t: Thread & { index: number }, className?: string) => (
@@ -643,10 +657,12 @@ export function Editor({
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || !(canComment || canFeedback)) return null;
+    if (!draft || draft.marking || !(canComment || canFeedback)) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
-    if (draft.free && vp) pos = { x: Math.max(8, vp.width - COMPOSE_W - 8), y: 8 };
+    // 位置なし・動画の時刻だけ（画面の位置なし）は、紙面（映像）の右上
+    if ((draft.free || (draft.time && !draft.rect && !draft.point)) && vp)
+      pos = { x: Math.max(8, vp.width - COMPOSE_W - 8), y: 8 };
     else if (vp && (draft.rect || draft.point)) {
       const b = draft.rect
         ? toViewportRect(draft.rect, vp)
@@ -668,6 +684,14 @@ export function Editor({
         docked={compact}
         {...(draft.range && text
           ? { quote: text.body.slice(draft.range.start, draft.range.end).slice(0, 80) }
+          : {})}
+        {...(draft.time
+          ? {
+              place:
+                draft.time.end !== undefined
+                  ? `${formatVideoSpan(draft.time)} の範囲`
+                  : `${formatVideoSpan(draft.time)} の時点`,
+            }
           : {})}
         onSubmit={() => void doPost.run()}
         onCancel={resetCompose}
@@ -926,6 +950,24 @@ export function Editor({
           renderGutter={gutter}
         />
       );
+    if (artifact.type === "video" && blob.url)
+      return (
+        <VideoViewer
+          url={blob.url}
+          artifactId={artifact.id}
+          label={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
+          {...viewerProps}
+          draft={draft?.time ? draft : null}
+          onDraft={(d) => {
+            setDraft(d);
+            setActiveThreadId(null);
+          }}
+          seekRequest={videoSeek}
+          besideWidth={besideWidth}
+          renderInPage={inPage}
+          renderGutter={gutter}
+        />
+      );
     return (
       <div className="empty">
         この形式はブラウザ内でプレビューできません
@@ -997,6 +1039,17 @@ export function Editor({
           onDraft={() => undefined}
           scale={scale}
           {...cmp.imageProps("left")}
+        />
+      );
+    if (otherArtifact.type === "video" && otherBlob.url)
+      return (
+        <VideoViewer
+          url={otherBlob.url}
+          artifactId={otherArtifact.id}
+          label={`${other?.revision.label ?? "比べる版"}の添付「${otherArtifact.fileName}」`}
+          {...none}
+          draft={null}
+          onDraft={() => undefined}
         />
       );
     return <div className="empty">この形式は比較できません</div>;
@@ -1077,9 +1130,11 @@ export function Editor({
         ) : threads.length === 0 ? (
           <p className="muted small comments__empty">
             {canComment
-              ? touch
-                ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
-                : "ファイルの上でドラッグすると、その場にコメントできます"
+              ? artifact?.type === "video"
+                ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
+                : touch
+                  ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                  : "ファイルの上でドラッグすると、その場にコメントできます"
               : "コメントはありません"}
           </p>
         ) : (
@@ -1419,7 +1474,10 @@ export function Editor({
                   ) : null}
                   {mobile ? (
                     <>
-                      <span className="ws__toolbar-sep" />
+                      {/* 前に拡大縮小があるときだけ区切る（動画は拡大縮小しない） */}
+                      {isPdf || isImage || artifact.type === "document" ? (
+                        <span className="ws__toolbar-sep" />
+                      ) : null}
                       {sheetButtons}
                     </>
                   ) : null}

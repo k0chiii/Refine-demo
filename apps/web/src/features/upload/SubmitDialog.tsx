@@ -75,10 +75,12 @@ export function SubmitDialog({
     (r) => r.kind === "standard" && r.reviewState !== "void",
   );
   const [files, setFiles] = useState<File[]>([]);
-  // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章）
+  // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章 → 動画。
+  // 動画の制作物は動画を先に）
   const shownFile =
     pickReviewArtifact(
       files.map((f) => ({ type: guessArtifactType(f.name, f.type), role: "source" as const, f })),
+      data?.work.mediaType === "video" ? "video" : undefined,
     )?.f ?? null;
   const [dragging, setDragging] = useState(false);
   /** 専門確認（§2.2-4）。種別ごとに要否・担当者を宣言する。校了時に未完了ならブロック（D6）。 */
@@ -268,8 +270,8 @@ export function SubmitDialog({
             <p className="small muted">
               PDF と .ai
               のように、同じ制作物のファイルをまとめて出せます。紙面に出してコメントを付けるのは
-              PDF（無ければ画像・文章）で、ほかのファイルはエディタの「情報 ›
-              この版のファイル」からダウンロードできます。
+              PDF（無ければ画像・文章・動画。動画の制作物は動画）で、ほかのファイルはエディタの「情報
+              › この版のファイル」からダウンロードできます。
             </p>
             <div className="form">
               <Field label="版の種別" required>

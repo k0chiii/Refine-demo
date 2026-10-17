@@ -28,6 +28,7 @@ export const vArtifactType = v.union(
   v.literal("pdf"),
   v.literal("image"),
   v.literal("document"),
+  v.literal("video"),
   v.literal("other"),
   v.literal("external_link"),
 );

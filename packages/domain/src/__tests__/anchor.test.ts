@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  formatVideoSpan,
+  formatVideoTime,
   fromViewportRect,
   TEXT_QUOTE_MAX,
   textRangeAnchor,
   toViewportRect,
   validateAnchor,
+  VIDEO_TIME_MAX,
+  videoTimeAnchor,
+  type Anchor,
   type Viewport,
 } from "../comment/Anchor.ts";
 
@@ -92,5 +97,67 @@ describe("validateAnchor", () => {
       end: text.length,
       quote: "",
     });
+  });
+});
+
+describe("動画の位置（時点・範囲・画面の上）", () => {
+  const ok = (a: Anchor) => expect(() => validateAnchor(a)).not.toThrow();
+  const bad = (a: Anchor) =>
+    expect(() => validateAnchor(a)).toThrow(expect.objectContaining({ code: "anchor_invalid" }));
+  const v = (x: Partial<Extract<Anchor, { type: "video_time" }>>): Anchor => ({
+    type: "video_time",
+    artifactId: "a1",
+    start: 3,
+    ...x,
+  });
+
+  it("時点・範囲・画面の矩形かピンを持てる", () => {
+    ok(v({}));
+    ok(v({ start: 0 }));
+    ok(v({ end: 6.5 }));
+    ok(v({ end: 6.5, rect }));
+    ok(v({ point: { x: 0.5, y: 0.5 } }));
+  });
+
+  it("負の時刻・長すぎる時刻・終わりが始まり以前・矩形とピンの両方・はみ出す矩形は拒否", () => {
+    bad(v({ start: -1 }));
+    bad(v({ start: Number.NaN }));
+    bad(v({ start: VIDEO_TIME_MAX + 1 }));
+    bad(v({ end: 3 }));
+    bad(v({ end: 2 }));
+    bad(v({ rect, point: { x: 0.1, y: 0.1 } }));
+    bad(v({ rect: { x: 0.9, y: 0, w: 0.2, h: 0.1 } }));
+    bad(v({ point: { x: 1.2, y: 0 } }));
+  });
+
+  it("作るときはミリ秒に丸め、終わりが始まり以前なら時点。矩形があればピンは付けない", () => {
+    expect(videoTimeAnchor("a1", { start: 1.23456, end: 4.56789 })).toEqual({
+      type: "video_time",
+      artifactId: "a1",
+      start: 1.235,
+      end: 4.568,
+    });
+    expect(videoTimeAnchor("a1", { start: 4, end: 4 })).toEqual({
+      type: "video_time",
+      artifactId: "a1",
+      start: 4,
+    });
+    expect(videoTimeAnchor("a1", { start: -0.2 }, { rect, point: { x: 0.1, y: 0.1 } })).toEqual({
+      type: "video_time",
+      artifactId: "a1",
+      start: 0,
+      rect,
+    });
+  });
+
+  it("時刻の表示は m:ss（1 時間以上は h:mm:ss）、細かくは 1/100 秒まで。範囲は「–」でつなぐ", () => {
+    expect(formatVideoTime(0)).toBe("0:00");
+    expect(formatVideoTime(3.999)).toBe("0:03");
+    expect(formatVideoTime(65)).toBe("1:05");
+    expect(formatVideoTime(3725)).toBe("1:02:05");
+    expect(formatVideoTime(3.5, true)).toBe("0:03.50");
+    expect(formatVideoTime(12.007, true)).toBe("0:12.00");
+    expect(formatVideoSpan({ start: 3 })).toBe("0:03");
+    expect(formatVideoSpan({ start: 3, end: 6.4 })).toBe("0:03–0:06");
   });
 });

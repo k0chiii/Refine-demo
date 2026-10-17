@@ -21,4 +21,10 @@ describe("提出ファイルの種類", () => {
     expect(guessArtifactType("a.html", "")).toBe("document");
     expect(guessArtifactType("a.bin", "")).toBe("other");
   });
+  it("動画（MIME が無い .mov も拡張子で）", () => {
+    expect(guessArtifactType("cm.mp4", "video/mp4")).toBe("video");
+    expect(guessArtifactType("cm.webm", "video/webm")).toBe("video");
+    expect(guessMimeType("cm.MOV", "")).toBe("video/quicktime");
+    expect(guessArtifactType("cm.mov", "")).toBe("video");
+  });
 });

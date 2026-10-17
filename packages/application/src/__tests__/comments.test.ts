@@ -149,6 +149,34 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
     expect(t.artifactId).toBe(artifact!.id);
   });
 
+  it("動画の位置（時点・範囲・画面の矩形）を付けられ、壊れた時刻は拒否する", async () => {
+    const { ctx, revision } = await setup();
+    const [artifact] = await ctx.artifacts.listByRevision(revision.id);
+    const t = await postComment(ctx, principals.reviewer, {
+      revisionId: revision.id,
+      body: "テロップの表記",
+      kind: "correction",
+      severity: "minor",
+      anchor: {
+        type: "video_time",
+        artifactId: artifact!.id,
+        start: 3.2,
+        end: 6,
+        rect: { x: 0.1, y: 0.7, w: 0.8, h: 0.2 },
+      },
+    });
+    expect(t.anchor).toMatchObject({ type: "video_time", start: 3.2, end: 6 });
+    await expect(
+      postComment(ctx, principals.reviewer, {
+        revisionId: revision.id,
+        body: "x",
+        kind: "correction",
+        severity: "minor",
+        anchor: { type: "video_time", artifactId: artifact!.id, start: 6, end: 3 },
+      }),
+    ).rejects.toThrow(code("anchor_invalid"));
+  });
+
   it("A-10: 同じ requestId の投稿再送は二重投稿にならない", async () => {
     const { ctx, revision } = await setup();
     const a = await postComment(ctx, principals.reviewer, {

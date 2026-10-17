@@ -10,7 +10,7 @@ export async function setupWork(
   cast: Cast,
   over: {
     title?: string;
-    mediaType?: "pdf" | "image" | "document" | "other";
+    mediaType?: "pdf" | "image" | "document" | "video" | "other";
     notationCategories?: string[];
   } = {},
 ) {
@@ -40,7 +40,7 @@ export async function submitFiles(
   items: Array<{
     fileName: string;
     mimeType: string;
-    type: "pdf" | "image" | "document" | "other";
+    type: "pdf" | "image" | "document" | "video" | "other";
   }>,
 ) {
   const prepared = await cast.creator.as.mutation(api.submissions.prepare, {
