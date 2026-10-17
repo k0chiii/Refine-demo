@@ -182,34 +182,6 @@ export function normalizeWorkTags(tags: readonly string[]): string[] {
 }
 
 // ---------------------------------------------------------------- リンク・ID
-/** Google Drive のフォルダ（または Drive 上のファイル）の URL か */
-export function isDriveUrl(url: string): boolean {
-  return /^https:\/\/(drive|docs)\.google\.com(\/\S*)?$/i.test(url.trim());
-}
-
-/** Google Drive の URL を整える。空は null。Drive 以外・https 以外は work_invalid（field は呼び出し側） */
-export function normalizeDriveUrl(
-  value: string | null | undefined,
-  field = "driveFolderUrl",
-): string | null {
-  const v = value?.trim() ?? "";
-  if (v === "") return null;
-  if (!isDriveUrl(v)) throw new DomainError("work_invalid", { field, reason: "not_drive_url" });
-  return v;
-}
-
-/**
- * Slack のチャンネル ID（C で始まる英数字。例: C0123ABCDEF）。チャンネル名（#general）ではなく ID を持つ（Notion と同じ）。
- * 空は null。形が違えば work_invalid
- */
-export function normalizeSlackChannelId(value: string | null | undefined): string | null {
-  const v = value?.normalize("NFKC").trim().toUpperCase() ?? "";
-  if (v === "") return null;
-  if (!/^[CG][A-Z0-9]{8,20}$/.test(v))
-    throw new DomainError("work_invalid", { field: "slackChannelId", reason: "format" });
-  return v;
-}
-
 /** 0 以上の整数（部数・制作日数）。空は null、読めなければ undefined */
 export function parseNonNegativeInteger(text: string): number | null | undefined {
   const v = text

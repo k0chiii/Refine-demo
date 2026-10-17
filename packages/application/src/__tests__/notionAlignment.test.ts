@@ -13,7 +13,7 @@ const invalid = (field: string, reason: string) =>
 const HOUR = 3_600_000;
 
 describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOTION_ALIGNMENT.md）", () => {
-  it("登録で大ジャンル・小ジャンル・関係者・入稿・タグ・リンクを持ち、関係者は名簿にいること", async () => {
+  it("登録で大ジャンル・小ジャンル・関係者・入稿・タグを持ち、関係者は名簿にいること", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, {
       genre: "graphic",
@@ -25,8 +25,6 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
       sizeOrLength: " A5 ",
       productionDays: 20,
       tags: ["公式パンフ", "公式パンフ", " マスター "],
-      driveFolderUrl: "https://drive.google.com/drive/folders/x",
-      slackChannelId: "c0123abcdef",
     });
     expect(work).toMatchObject({
       genre: "graphic",
@@ -37,13 +35,9 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
       sizeOrLength: "A5",
       productionDays: 20,
       tags: ["公式パンフ", "マスター"],
-      slackChannelId: "C0123ABCDEF",
     });
     await expect(seedWork(ctx, { stakeholderIds: ["ghost"] })).rejects.toThrow(
       invalid("stakeholderIds", "unknown_user"),
-    );
-    await expect(seedWork(ctx, { slackChannelId: "#general" })).rejects.toThrow(
-      invalid("slackChannelId", "format"),
     );
     // 関係者は職責ではない（主管に入らない）。閲覧は自動で付く（acl.test.ts）
     const roles = ctx.state.works.get(work.id)!;
@@ -223,14 +217,13 @@ describe("版の提出時の申告と確認（Notion の版 DB に揃えた）",
 });
 
 describe("担当（Notion の担当 DB に揃えた項目）", () => {
-  it("局のコード・絵文字・Drive・所属を保存し、省略した変更では残す。所属は名簿にいる人だけ", async () => {
+  it("局のコード・絵文字・所属を保存し、省略した変更では残す。所属は名簿にいる人だけ", async () => {
     const ctx = createInMemoryContext();
     const pr = await saveTeam(ctx, principals.sysadmin, {
       name: "広報局",
       kind: "bureau",
       code: "PR",
       emoji: "📣",
-      driveFolderUrl: "https://drive.google.com/drive/folders/pr",
     });
     const design = await saveTeam(ctx, principals.sysadmin, {
       name: "デザイン担当",

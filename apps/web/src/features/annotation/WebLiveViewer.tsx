@@ -584,19 +584,6 @@ export function WebLiveViewer({
             </div>
           ) : null}
         </div>
-        {!noBridge ? (
-          <p className="wlive__caption">
-            {pc ? `PC（幅 ${screenW}px` : `${spec.label}（画面 ${sizeText}`}
-            {scale < 1 ? `、実寸の ${Math.round(scale * 100)}% で表示` : ""}）。
-            {mode === "comment"
-              ? "サイトの要素を押すとその要素に、なぞると要素の中の範囲に、文字を選ぶとその文字にコメントできます。"
-              : selecting
-                ? "「コメント」に切り替えると要素を指してコメントできます。"
-                : ""}
-            実機の UA・DPR・タッチ・Safari
-            固有の表示は再現されません。確定の表示は実機で確かめてください
-          </p>
-        ) : null}
         {footer}
       </div>
     </div>

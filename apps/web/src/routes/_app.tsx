@@ -14,6 +14,7 @@ import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { saveData, whenIdle } from "@/lib/preload";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
 import { NotificationPrompt } from "@/features/notifications/NotificationPrompt";
+import { usePushAvailable } from "@/features/notifications/useDevicePush";
 import { disablePush } from "@/lib/push";
 import { useWindowClass } from "@/lib/useMedia";
 import { M3eAppBar } from "@m3e/react/app-bar";
@@ -41,6 +42,13 @@ function AppLayout() {
 /** アバターを変える（初めて開くまで読み込まない。Humation のアセットは UserAvatar と同じく遅延） */
 const AvatarPickerDialog = lazy(() =>
   import("@/features/account/AvatarPickerDialog").then((m) => ({ default: m.AvatarPickerDialog })),
+);
+
+/** 通知の設定（この端末への通知。初めて開くまで読み込まない） */
+const PushSettingDialog = lazy(() =>
+  import("@/features/notifications/PushSettingDialog").then((m) => ({
+    default: m.PushSettingDialog,
+  })),
 );
 
 const RAIL_KEY = "mf100.rail.expanded";
@@ -86,6 +94,11 @@ function AppShell() {
   /** 「アバターを変える」。一度開いたら描いたままにする（閉じるアニメーションと 2 回目をすぐ開くため） */
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [avatarMounted, setAvatarMounted] = useState(false);
+  /** 「通知の設定」。アバターと同じく一度開いたら描いたままにする */
+  const [pushOpen, setPushOpen] = useState(false);
+  const [pushMounted, setPushMounted] = useState(false);
+  // 端末への通知が使える環境・端末のときだけ、アカウントに「通知の設定」を出す（サインイン後に問い合わせる）
+  const pushAvailable = usePushAvailable(isAuthenticated && me != null);
   const submitTargets = useSubmitTargets();
   const [pickerOpen, setPickerOpen] = useState(false);
   const launcher = useSubmitLauncher();
@@ -265,6 +278,19 @@ function AppShell() {
         setAvatarOpen(true);
       },
     },
+    // 端末への通知（Web Push）のオン・オフ。以前は通知パネルの一番上にあった（利用者指示 2026-10-17）
+    ...(pushAvailable
+      ? [
+          {
+            icon: "notifications",
+            label: "通知の設定",
+            onSelect: () => {
+              setPushMounted(true);
+              setPushOpen(true);
+            },
+          },
+        ]
+      : []),
     ...(cls === "compact" && me.isSystemAdmin
       ? [
           {
@@ -404,6 +430,11 @@ function AppShell() {
         {avatarMounted ? (
           <Suspense fallback={null}>
             <AvatarPickerDialog open={avatarOpen} onClose={() => setAvatarOpen(false)} me={me} />
+          </Suspense>
+        ) : null}
+        {pushMounted ? (
+          <Suspense fallback={null}>
+            <PushSettingDialog open={pushOpen} onClose={() => setPushOpen(false)} />
           </Suspense>
         ) : null}
       </div>

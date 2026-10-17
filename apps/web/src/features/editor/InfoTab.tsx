@@ -165,12 +165,6 @@ export function InfoTab({
     ids.map((id) => teamPath(id, teams ?? []) ?? "（不明な担当）").join("、");
   const names = (list: ReadonlyArray<{ name: string } | undefined>) =>
     list.map((p) => p?.name ?? "（不明なユーザー）").join("、");
-  const link = (href: string, label: string) => (
-    <a href={href} target="_blank" rel="noreferrer noopener" className="info-tab__link">
-      {label}
-      <M3eIcon name="open_in_new" aria-hidden="true" />
-    </a>
-  );
   type Row = readonly [string, ReactNode];
   /** 無い任意の項目は出さない（Notion の空欄と同じ） */
   const optional = (label: string, value: ReactNode | null | undefined): Row[] =>
@@ -233,25 +227,19 @@ export function InfoTab({
       ],
     },
     {
-      title: "リンク",
-      rows: [
-        ...optional(
-          "Google Drive フォルダ",
-          w.driveFolderUrl ? link(w.driveFolderUrl, "フォルダを開く") : null,
-        ),
-        ...optional("Slack Channel ID", w.slackChannelId),
-        ...(w.mediaType === "sns"
+      title: "SNS",
+      rows:
+        w.mediaType === "sns"
           ? ([
               [
-                "SNS",
+                "アカウント",
                 (() => {
                   const p = profiles?.find((x) => x.id === w.socialProfileId);
                   return p ? `${socialPlatformLabels[p.platform]} @${p.username}` : "未設定";
                 })(),
               ],
             ] as Row[])
-          : []),
-      ],
+          : [],
     },
   ].filter((g) => g.rows.length > 0);
 
@@ -263,7 +251,7 @@ export function InfoTab({
         </StatusText>
       ) : null}
       {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは「編集」のダイアログ。
-          節は Notion の制作物 DB に揃えて 基本／担当と人／日程と入稿／リンク（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md） */}
+          節は Notion の制作物 DB に揃えて 基本／担当と人／日程と入稿（SNS は媒体が SNS のときだけ。利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md） */}
       {propGroups.map((g) => (
         <section key={g.title} className="info-tab__section" aria-label={g.title}>
           <h2 className="info-tab__h">{g.title}</h2>

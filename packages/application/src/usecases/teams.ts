@@ -59,8 +59,8 @@ export async function saveTeam(
     if (!before) throw new DomainError("team_not_found", { teamId: id });
     // 並び順を省略したら、親が同じ間は今の並び順のまま
     const sameParent = (rest.parentId?.trim() || undefined) === before.parentId;
-    // Notion に揃えた項目（コード・絵文字・Drive・所属）は、省略（undefined）なら今の値のまま。null・空で外す
-    const keep = <K extends "code" | "emoji" | "driveFolderUrl" | "memberIds">(k: K) =>
+    // Notion に揃えた項目（コード・絵文字・所属）は、省略（undefined）なら今の値のまま。null・空で外す
+    const keep = <K extends "code" | "emoji" | "memberIds">(k: K) =>
       rest[k] === undefined ? before[k] : rest[k];
     const clean = validateTeam(
       {
@@ -68,7 +68,6 @@ export async function saveTeam(
         order: rest.order ?? (sameParent && rest.kind === before.kind ? before.order : undefined),
         code: keep("code"),
         emoji: keep("emoji"),
-        driveFolderUrl: keep("driveFolderUrl"),
         memberIds: keep("memberIds"),
       },
       all,
@@ -179,7 +178,6 @@ export async function importTeams(
   const metaOf = (c: TeamImportEntry) => ({
     ...(c.order !== undefined ? { order: c.order } : {}),
     ...(c.emoji ? { emoji: c.emoji } : {}),
-    ...(c.driveFolderUrl ? { driveFolderUrl: c.driveFolderUrl } : {}),
     ...(c.memberIds ? { memberIds: c.memberIds } : {}),
   });
   for (const c of plan.create)

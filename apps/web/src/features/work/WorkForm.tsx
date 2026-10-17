@@ -59,8 +59,6 @@ export interface WorkFormState {
   sizeOrLength: string;
   productionDays: string;
   tags: string[];
-  driveFolderUrl: string;
-  slackChannelId: string;
   creatorIds: string[];
   approverIds: string[];
   managerIds: string[];
@@ -89,8 +87,6 @@ export function emptyWorkForm(): WorkFormState {
     sizeOrLength: "",
     productionDays: "",
     tags: [],
-    driveFolderUrl: "",
-    slackChannelId: "",
     creatorIds: [],
     approverIds: [],
     managerIds: [],
@@ -120,8 +116,6 @@ export function workFormFromWork(work: Work): WorkFormState {
     sizeOrLength: work.sizeOrLength ?? "",
     productionDays: work.productionDays === undefined ? "" : String(work.productionDays),
     tags: [...(work.tags ?? [])],
-    driveFolderUrl: work.driveFolderUrl ?? "",
-    slackChannelId: work.slackChannelId ?? "",
     creatorIds: [...work.creatorIds],
     approverIds: [work.approverId],
     managerIds: [...work.managerIds],
@@ -154,8 +148,6 @@ export function workFormToFields(form: WorkFormState) {
     sizeOrLength: form.sizeOrLength.trim() || null,
     productionDays: num(form.productionDays),
     tags: form.tags,
-    driveFolderUrl: form.driveFolderUrl.trim() || null,
-    slackChannelId: form.slackChannelId.trim() || null,
   };
 }
 
@@ -232,7 +224,7 @@ function SubGenreSelect({
 }
 
 /**
- * 登録・編集で共通の入力。節は Notion の制作物 DB の並びに沿って 基本／担当と人／日程と入稿／リンク、
+ * 登録・編集で共通の入力。節は Notion の制作物 DB の並びに沿って 基本／担当と人／日程と入稿、
  * 表記統一のカテゴリ、詳細設定（制作物 ID・区分・機密区分・SNS アカウント）。
  */
 export function WorkFormFields({
@@ -442,26 +434,6 @@ export function WorkFormFields({
               inputMode="numeric"
               value={form.productionDays}
               onChange={set("productionDays")}
-            />
-          </Field>
-        </div>
-      </FormSection>
-
-      <FormSection title="リンク">
-        <div className="form">
-          <Field label="Google Drive フォルダ" hint="https://drive.google.com/… の URL">
-            <TextInput
-              type="url"
-              placeholder="https://drive.google.com/drive/folders/…"
-              value={form.driveFolderUrl}
-              onChange={set("driveFolderUrl")}
-            />
-          </Field>
-          <Field label="Slack Channel ID" hint="C で始まるチャンネル ID（チャンネル名ではなく）">
-            <TextInput
-              placeholder="C0123ABCDEF"
-              value={form.slackChannelId}
-              onChange={set("slackChannelId")}
             />
           </Field>
         </div>

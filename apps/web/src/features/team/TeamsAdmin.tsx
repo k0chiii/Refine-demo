@@ -31,9 +31,9 @@ import { UserPicker } from "@/ui/UserPicker";
 
 /**
  * 管理 › 担当（利用者決定 2026-10-15: 「局 › 担当」の 2 段は管理画面で持つ。Nogiku の組織情報との同期は後続）。
- * 局ごとに担当を並べ、各行の ⋮ から 編集（名前・絵文字・Drive・所属。局はコードも）・上へ・下へ・削除（compact はボトムシート。M3 Breakpoints）。
+ * 局ごとに担当を並べ、各行の ⋮ から 編集（名前・絵文字・所属。局はコードも）・上へ・下へ・削除（compact はボトムシート。M3 Breakpoints）。
  * 項目は Notion の担当 DB に揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）: 局（コード JIM・ZAI・SSK・EVE・PR・SYS・WG・CAP）・
- * 付番（並び順）・絵文字・Google Drive フォルダ・ユーザ（所属する人）。
+ * 付番（並び順）・絵文字・ユーザ（所属する人）。
  * まとめて作るときは CSV（委員会の担当 DB の項目名）。取り込みは何度やっても同じ（既にある局・担当は作らない）。
  * 所属する人は、その担当の制作物を（非公開でも）見られる（利用者決定 2026-10-17。acl/authorize.ts）。
  * 制作物が使っている担当と、担当のある局は消せない（domain の team_in_use）。
@@ -53,7 +53,6 @@ export function TeamsAdmin() {
     name: "",
     code: "",
     emoji: "",
-    driveFolderUrl: "",
     memberIds: [] as string[],
   });
   const [removing, setRemoving] = useState<Team | null>(null);
@@ -72,7 +71,6 @@ export function TeamsAdmin() {
     if (!edit) return;
     const meta = {
       emoji: form.emoji.trim() || null,
-      driveFolderUrl: form.driveFolderUrl.trim() || null,
       memberIds: form.memberIds,
       ...(isBureau ? { code: form.code || null } : {}),
     };
@@ -114,7 +112,6 @@ export function TeamsAdmin() {
       name: t?.name ?? "",
       code: t?.code ?? "",
       emoji: t?.emoji ?? "",
-      driveFolderUrl: t?.driveFolderUrl ?? "",
       memberIds: [...(t?.memberIds ?? [])],
     });
     setEdit(next);
@@ -188,7 +185,6 @@ export function TeamsAdmin() {
     [
       t.kind === "bureau" ? `担当 ${childrenOf(t).length}` : null,
       t.memberIds?.length ? `所属 ${t.memberIds.length} 人` : null,
-      t.driveFolderUrl ? "Drive" : null,
     ]
       .filter(Boolean)
       .join("・");
@@ -211,7 +207,7 @@ export function TeamsAdmin() {
       </div>
       <p className="muted small">
         制作物には主管担当と制作担当（1 つずつ）・関係担当を選べます。項目は委員会の「担当」DB
-        と同じ（局のコード・絵文字・Google Drive フォルダ・所属する人）
+        と同じ（局のコード・絵文字・所属する人）
       </p>
       {teams === undefined ? (
         <Loading label="担当を読み込んでいます" />
@@ -302,14 +298,6 @@ export function TeamsAdmin() {
               />
             </Field>
           </div>
-          <Field label="Google Drive フォルダ" hint="https://drive.google.com/… の URL">
-            <TextInput
-              type="url"
-              placeholder="https://drive.google.com/drive/folders/…"
-              value={form.driveFolderUrl}
-              onChange={(e) => setForm((f) => ({ ...f, driveFolderUrl: e.target.value }))}
-            />
-          </Field>
           <UserPicker
             label="所属する人（ユーザ）"
             hint="所属する人は、この担当が主管担当・制作担当・関係担当の制作物を（非公開でも）見られます"
@@ -376,7 +364,7 @@ export function downloadTeamCsvTemplate() {
 }
 
 /**
- * CSV（委員会の担当 DB の項目名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ）の取り込み。
+ * CSV（委員会の担当 DB の項目名: 局・担当名・付番・絵文字・ユーザ）の取り込み。
  * 作る局・担当と、既にあるものの数、所属する人の照合（メールアドレスかユーザー名）を確かめてから取り込む。
  * 見つからない人がいる行も取り込めるが、その人は所属に入れない（行ごとに知らせる）
  */
@@ -444,7 +432,6 @@ function ImportTeamsDialog({
           team: row.team,
           ...(row.order !== undefined ? { order: row.order } : {}),
           ...(row.emoji ? { emoji: row.emoji } : {}),
-          ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
           memberIds: memberIds.get(row.line) ?? [],
         })),
       });
@@ -463,8 +450,8 @@ function ImportTeamsDialog({
       <span slot="header">CSV で局と担当を取り込む</span>
       <div className="dialog-body stack">
         <p className="small muted">
-          列は委員会の担当 DB の項目名と同じ（局・担当名・付番・絵文字・Google Drive
-          フォルダ・ユーザ）。局は名前かコード（PR・JIM など）で 1
+          列は委員会の担当 DB
+          の項目名と同じ（局・担当名・付番・絵文字・ユーザ）。局は名前かコード（PR・JIM など）で 1
           つ書き、担当を空にすると局だけを作ります。既にある局・担当は作りません。
         </p>
         <div className="row">
@@ -511,15 +498,8 @@ function ImportTeamsDialog({
                       {c.team ? `${c.bureau} › ${c.team}` : c.bureau}
                       {c.code ? <span className="teams-admin__code">{c.code}</span> : null}
                     </span>
-                    {c.memberIds?.length || c.driveFolderUrl ? (
-                      <span slot="supporting-text">
-                        {[
-                          c.memberIds?.length ? `所属 ${c.memberIds.length} 人` : null,
-                          c.driveFolderUrl ? "Drive" : null,
-                        ]
-                          .filter(Boolean)
-                          .join("・")}
-                      </span>
+                    {c.memberIds?.length ? (
+                      <span slot="supporting-text">所属 {c.memberIds.length} 人</span>
                     ) : null}
                   </M3eListItem>
                 ))}

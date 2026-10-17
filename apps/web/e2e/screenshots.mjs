@@ -1382,8 +1382,11 @@ async function v2Scenes() {
   await shot("56-sns-editor");
   // 端末は機種で選ぶ（既定は iPhone 17。画面は実機の CSS ピクセルで組む）
   expectTrue(
-    (await page.locator(".sp-caption").innerText()).includes("iPhone 17（画面 402×874"),
-    "端末の機種と画面の大きさが出ない",
+    await page
+      .locator(".sp-device")
+      .first()
+      .evaluate((el) => el.style.width === "402px" && el.style.height === "874px"),
+    "既定の端末（iPhone 17・402×874）で組まれていない",
   );
   // 機種・表示の設定は右下の FAB から開く menu（M3 FAB menu。web では menu を使う）
   await page.locator(".preview-fab m3e-fab").click();

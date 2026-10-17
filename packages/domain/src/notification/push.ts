@@ -120,17 +120,17 @@ export function buildPushPayload(input: {
     return {
       ...base,
       title: "新しい通知",
-      body: "MF100 校正システムを開いて確かめてください",
+      body: "校正システムを開いて確かめてください",
       url: "/",
     };
   const body =
     input.work === null
-      ? "MF100 校正システム"
+      ? "校正システム"
       : input.work.restricted
         ? "非公開の制作物"
         : policy.showWorkTitle
           ? `『${input.work.title}』`
-          : "MF100 校正システム";
+          : "校正システム";
   return { ...base, title: n.title, body, url: notificationPath(n) };
 }
 

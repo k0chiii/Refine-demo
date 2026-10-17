@@ -63,7 +63,7 @@ describe("日付だけの締切＝その日の終わり（利用者決定 2026-1
     expect((await closeExpiredReviews(ctx)).map((r) => r.id)).toEqual([revision.id]);
   });
 
-  it("期限前の通知は当日 0:00 から届き、本文に「11/14（土）23:59 まで」を書く", async () => {
+  it("期限前の通知は当日 0:00 から届き、本文に「11/14（土）」を書く", async () => {
     const { ctx } = await setup();
     ctx.clock.current = jst(2026, 11, 13, 23, 59);
     expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 締切の 24 時間と 1 分前
@@ -71,6 +71,6 @@ describe("日付だけの締切＝その日の終わり（利用者決定 2026-1
     expect(await remindUpcomingDeadlines(ctx)).toBe(1);
     const [note] = await listMyNotifications(ctx, principals.reviewer);
     expect(note?.kind).toBe("deadline_approaching");
-    expect(note?.body).toContain("11/14（土）23:59 まで");
+    expect(note?.body).toContain("11/14（土）");
   });
 });

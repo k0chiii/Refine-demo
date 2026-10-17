@@ -6,8 +6,6 @@ import type { Instant } from "../shared/time.ts";
 import {
   defaultMediaTypeFor,
   genreOfSubGenre,
-  isDriveUrl,
-  normalizeSlackChannelId,
   normalizeWorkTags,
   parseNonNegativeInteger,
   parseWorkGenre,
@@ -37,7 +35,7 @@ import {
  * 列（見出しの名前で探す。並び順は自由・知らない列は無視。* は必須）:
  *   制作物名*・制作物 ID・大ジャンル・小ジャンル・区分・媒体・目的・用途・担当（主管担当）・制作担当・関係担当・
  *   制作者*・関係者・主管（人）・校了者*・納期・入稿日・投稿日・印刷日・入稿の有無・印刷する部数/枚数/個数・サイズ・尺・
- *   制作日数・タグ・Google Drive フォルダ・Slack Channel ID・機密区分・表記カテゴリ・年度
+ *   制作日数・タグ・機密区分・表記カテゴリ・年度
  * - 区分は小ジャンル（無ければ大ジャンル）から入る。媒体は小ジャンル・大ジャンルから既定が入る（書けばそちら）
  * - 複数の値は「;」「、」「,」（全角も可）か改行で区切る
  * - 担当（組織）は「局 › 担当」「局/担当」、担当の名前だけ（同名が無いとき）、局の名前かコード（PR など）で書く。
@@ -136,18 +134,6 @@ export const workCsvColumns = [
   },
   { key: "tags", header: "タグ", aliases: ["タグ", "tags"], required: false },
   {
-    key: "driveFolderUrl",
-    header: "Google Drive フォルダ",
-    aliases: ["Google Drive フォルダ", "Google Drive", "Drive フォルダ", "Drive", "driveFolderUrl"],
-    required: false,
-  },
-  {
-    key: "slackChannelId",
-    header: "Slack Channel ID",
-    aliases: ["Slack Channel ID", "Slack チャンネル ID", "Slack", "slackChannelId"],
-    required: false,
-  },
-  {
     key: "confidentiality",
     header: "機密区分",
     aliases: ["機密区分", "機密", "confidentiality"],
@@ -224,8 +210,6 @@ export interface WorkCsvRow {
   sizeOrLength: string;
   productionDays: number | null;
   tags: string[];
-  driveFolderUrl: string;
-  slackChannelId: string;
   legacyId: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
@@ -399,19 +383,6 @@ export function parseWorkCsv(
       problems.push("タグが多すぎるか、長すぎます（20 個・各 30 文字まで）");
     }
 
-    const driveFolderUrl = get("driveFolderUrl");
-    if (driveFolderUrl !== "" && !isDriveUrl(driveFolderUrl))
-      problems.push(`Google Drive フォルダ「${driveFolderUrl}」が Drive の URL ではありません`);
-
-    let slackChannelId = "";
-    try {
-      slackChannelId = normalizeSlackChannelId(get("slackChannelId")) ?? "";
-    } catch {
-      problems.push(
-        `Slack Channel ID「${get("slackChannelId")}」はチャンネル ID（C で始まる英数字）で書いてください`,
-      );
-    }
-
     const confText = get("confidentiality");
     const confidentiality =
       confText === ""
@@ -453,8 +424,6 @@ export function parseWorkCsv(
       sizeOrLength,
       productionDays: productionDays ?? null,
       tags,
-      driveFolderUrl,
-      slackChannelId,
       legacyId: get("legacyId"),
       confidentiality: confidentiality ?? "normal",
       notationCategories: splitList(get("notation")),
@@ -519,8 +488,6 @@ export interface WorkImportInput {
   sizeOrLength?: string;
   productionDays?: number;
   tags?: string[];
-  driveFolderUrl?: string;
-  slackChannelId?: string;
   legacyId?: string;
   confidentiality: Confidentiality;
   notationCategories: string[];
@@ -660,8 +627,6 @@ export function resolveWorkImport(
           ...(row.sizeOrLength ? { sizeOrLength: row.sizeOrLength } : {}),
           ...(row.productionDays !== null ? { productionDays: row.productionDays } : {}),
           tags: row.tags,
-          ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
-          ...(row.slackChannelId ? { slackChannelId: row.slackChannelId } : {}),
           ...(row.legacyId ? { legacyId: row.legacyId } : {}),
           confidentiality: row.confidentiality,
           notationCategories: row.notationCategories,
@@ -718,8 +683,6 @@ export function workCsvTemplate(now: Instant = Date.now()): string {
     sizeOrLength: "A5・32 ページ",
     productionDays: "20",
     tags: "公式パンフ;マスター",
-    driveFolderUrl: "https://drive.google.com/drive/folders/example",
-    slackChannelId: "C0123ABCDEF",
     confidentiality: "通常",
     notation: "A1;A2",
     year: "100",

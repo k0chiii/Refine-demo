@@ -54,7 +54,7 @@ export function FeedbackSpaceList({
       </M3eSearchBar>
       <M3eFilterChipSet aria-label="絞り込み" className="fb-spaces__filters">
         <M3eFilterChip selected={unreadOnly} onClick={() => setUnreadOnly((v) => !v)}>
-          未読あり
+          未読
         </M3eFilterChip>
       </M3eFilterChipSet>
       {shown === undefined ? (

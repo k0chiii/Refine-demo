@@ -17,7 +17,6 @@ import {
   currentDeclarations,
   defaultMediaTypeFor,
   genreOfSubGenre,
-  normalizeSlackChannelId,
   normalizeWorkTags,
   parseWorkGenre,
   parseWorkSubGenre,
@@ -67,23 +66,12 @@ describe("Notion の制作物 DB に揃えた項目（docs/NOTION_ALIGNMENT.md�
     expect(defaultMediaTypeFor(null, null)).toBeNull();
   });
 
-  it("タグは整えて重なりを除く。Slack はチャンネル ID だけ。Drive は drive.google.com の https だけ", () => {
+  it("タグは整えて重なりを除く。部数・小ジャンルは決まった形だけ", () => {
     expect(normalizeWorkTags([" 公式パンフ ", "公式パンフ", "", "art_web"])).toEqual([
       "公式パンフ",
       "art_web",
     ]);
     expect(() => normalizeWorkTags(["あ".repeat(31)])).toThrow(invalid("tags", "too_long"));
-    expect(normalizeSlackChannelId(" c0123abcdef ")).toBe("C0123ABCDEF");
-    expect(normalizeSlackChannelId("")).toBeNull();
-    expect(() => normalizeSlackChannelId("#general")).toThrow(invalid("slackChannelId", "format"));
-    expect(
-      normalizeWorkMetadata({ driveFolderUrl: "https://drive.google.com/drive/folders/x" }),
-    ).toEqual({
-      driveFolderUrl: "https://drive.google.com/drive/folders/x",
-    });
-    expect(() => normalizeWorkMetadata({ driveFolderUrl: "https://example.com/" })).toThrow(
-      invalid("driveFolderUrl", "not_drive_url"),
-    );
     expect(() => normalizeWorkMetadata({ printQuantity: -1 })).toThrow(
       invalid("printQuantity", "not_a_count"),
     );
@@ -93,19 +81,19 @@ describe("Notion の制作物 DB に揃えた項目（docs/NOTION_ALIGNMENT.md�
   });
 
   it("変更では undefined は触らず、null で消す。関係者も名簿の確認の対象", () => {
-    const work = makeWork({ tags: ["a"], slackChannelId: "C0123ABCDEF", stakeholderIds: ["s1"] });
+    const work = makeWork({ tags: ["a"], sizeOrLength: "A4", stakeholderIds: ["s1"] });
     const next = applyWorkPatch(work, {
       genre: "graphic",
       subGenre: "print_flyer",
       tags: null,
-      slackChannelId: undefined,
+      sizeOrLength: undefined,
       publishAt: endOfJstDate("2026-05-16")!,
       stakeholderIds: ["s1", "s2", "s2"],
     });
     expect(next).toMatchObject({
       genre: "graphic",
       subGenre: "print_flyer",
-      slackChannelId: "C0123ABCDEF",
+      sizeOrLength: "A4",
       publishAt: endOfJstDate("2026-05-16"),
       stakeholderIds: ["s1", "s2"],
       version: work.version + 1,
@@ -180,7 +168,7 @@ const teams = [
 describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
   const now = Date.UTC(2026, 0, 1);
   const header =
-    "制作物名,制作物 ID,大ジャンル,小ジャンル,目的・用途,担当,制作担当,関係担当,制作者,関係者,校了者,納期,入稿日・投稿日・印刷日,入稿の有無,印刷する部数/枚数/個数,サイズ・尺,制作日数,タグ,Google Drive フォルダ,Slack Channel ID";
+    "制作物名,制作物 ID,大ジャンル,小ジャンル,目的・用途,担当,制作担当,関係担当,制作者,関係者,校了者,納期,入稿日・投稿日・印刷日,入稿の有無,印刷する部数/枚数/個数,サイズ・尺,制作日数,タグ";
 
   it("項目名で読み、区分と媒体は小ジャンルから、局はコードでも引ける", () => {
     const parsed = parseWorkCsv(
@@ -205,8 +193,6 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
           "A5・48 ページ",
           "45",
           '"公式パンフ, マスター"',
-          "https://drive.google.com/drive/folders/abc",
-          "C0123ABCDEF",
         ].join(","),
       ].join("\n"),
       { defaultYear: 100, now },
@@ -233,8 +219,6 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
       sizeOrLength: "A5・48 ページ",
       productionDays: 45,
       tags: ["公式パンフ", "マスター"],
-      driveFolderUrl: "https://drive.google.com/drive/folders/abc",
-      slackChannelId: "C0123ABCDEF",
       problems: [],
     });
     const preview = resolveWorkImport(parsed, directory, {}, teams);
@@ -255,10 +239,10 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
   it("校了者が複数・制作担当が複数の行は取り込まない（1 人・1 つ）。有効性・校了済みの列は無い", () => {
     const parsed = parseWorkCsv(
       [
-        "制作物名,小ジャンル,媒体,制作者,校了者,制作担当,入稿の有無,印刷する部数/枚数/個数,Slack Channel ID,Google Drive フォルダ,大ジャンル,有効性",
-        "A,映像,,五月 めい,駒場 校了; 本郷 校正,,,,,,,No",
-        "B,webデザイン,PDF,五月 めい,駒場 校了,PR › デザイン担当; JIM,たぶん,たくさん,#general,https://example.com/x,漫画,",
-        "C,,,五月 めい,駒場 校了,JIM,,,,,外国語文章,",
+        "制作物名,小ジャンル,媒体,制作者,校了者,制作担当,入稿の有無,印刷する部数/枚数/個数,大ジャンル,有効性",
+        "A,映像,,五月 めい,駒場 校了; 本郷 校正,,,,,No",
+        "B,webデザイン,PDF,五月 めい,駒場 校了,PR › デザイン担当; JIM,たぶん,たくさん,漫画,",
+        "C,,,五月 めい,駒場 校了,JIM,,,外国語文章,",
       ].join("\n"),
       { defaultYear: 100, now },
     );
@@ -271,8 +255,6 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
     expect(problems).toContain("制作担当は 1 つだけ");
     expect(problems).toContain("入稿の有無「たぶん」");
     expect(problems).toContain("印刷する部数/枚数/個数「たくさん」");
-    expect(problems).toContain("Slack Channel ID「#general」");
-    expect(problems).toContain("Google Drive フォルダ「https://example.com/x」");
     expect(problems).toContain("大ジャンル「漫画」");
     // 大ジャンルだけ: 区分は大ジャンルの名前、媒体は大ジャンルの既定（文章）
     expect(c).toMatchObject({
@@ -356,10 +338,7 @@ describe("担当の CSV（委員会の担当 DB の項目名）と局のコー�
       validateTeam({ name: "担当", kind: "team", parentId: "pr", code: "PR" }, teams),
     ).toThrow(expect.objectContaining({ code: "team_invalid" }));
     expect(() =>
-      validateTeam(
-        { name: "担当", kind: "team", parentId: "pr", driveFolderUrl: "http://x" },
-        teams,
-      ),
+      validateTeam({ name: "担当", kind: "team", parentId: "pr", emoji: "あ い" }, teams),
     ).toThrow(expect.objectContaining({ code: "team_invalid" }));
   });
 
@@ -368,13 +347,13 @@ describe("担当の CSV（委員会の担当 DB の項目名）と局のコー�
     expect(memberTeamIds(teams, "u1")).toEqual([]);
   });
 
-  it("項目名（担当名・局・付番・絵文字・Google Drive フォルダ・ユーザ）で読む。局が複数の行は取り込まない", () => {
+  it("項目名（担当名・局・付番・絵文字・ユーザ）で読む。局が複数の行は取り込まない", () => {
     const parsed = parseTeamCsv(
       [
-        "担当名,局,付番,絵文字,Google Drive フォルダ,ユーザ,メンション",
-        "デザイン担当,PR,1,🎨,https://drive.google.com/drive/folders/d,五月 めい; 駒場 校了,@design",
-        '横断担当,"PR, SYS",2,,,,',
-        ",ZAI,,,,,",
+        "担当名,局,付番,絵文字,ユーザ,メンション",
+        "デザイン担当,PR,1,🎨,五月 めい; 駒場 校了,@design",
+        '横断担当,"PR, SYS",2,,,',
+        ",ZAI,,,,",
       ].join("\n"),
     );
     expect(parsed.errors).toHaveLength(1);
@@ -385,7 +364,6 @@ describe("担当の CSV（委員会の担当 DB の項目名）と局のコー�
       team: "デザイン担当",
       order: 1,
       emoji: "🎨",
-      driveFolderUrl: "https://drive.google.com/drive/folders/d",
       members: ["五月 めい", "駒場 校了"],
     });
     expect(parsed.rows[1]).toMatchObject({ bureau: "ZAI", team: null });

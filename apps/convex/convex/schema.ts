@@ -216,8 +216,14 @@ export default defineSchema({
     notationCategories: v.optional(v.array(v.string())),
     /** SNS 投稿で使うアカウント（socialProfiles の ID） */
     socialProfileId: v.optional(v.string()),
-    /** Notion の制作物 DB に揃えた項目（大ジャンル・小ジャンル・関係者・入稿・タグ・リンク。docs/NOTION_ALIGNMENT.md） */
+    /** Notion の制作物 DB に揃えた項目（大ジャンル・小ジャンル・関係者・入稿・タグ。docs/NOTION_ALIGNMENT.md） */
     ...vWorkMetadataFields,
+    /**
+     * 廃止（利用者指示 2026-10-17「SlackのチャンネルとGoogleドライブはいらない」）。読み書きしない。
+     * すでに保存された制作物の検証を通すためだけに残す（データ移行はしない）
+     */
+    driveFolderUrl: v.optional(v.string()),
+    slackChannelId: v.optional(v.string()),
     version: v.number(),
   })
     .index("by_year", ["year"])
@@ -461,9 +467,10 @@ export default defineSchema({
     kind: v.union(v.literal("bureau"), v.literal("team")),
     parentId: v.optional(v.string()),
     order: v.number(),
-    /** Notion の担当 DB に揃えた項目: 局のコード（局だけ）・絵文字・Google Drive フォルダ・所属する人 */
+    /** Notion の担当 DB に揃えた項目: 局のコード（局だけ）・絵文字・所属する人 */
     code: v.optional(vBureauCode),
     emoji: v.optional(v.string()),
+    /** 廃止（利用者指示 2026-10-17）。読み書きしない。すでに保存された担当の検証を通すためだけに残す */
     driveFolderUrl: v.optional(v.string()),
     memberIds: v.optional(v.array(v.string())),
     updatedAt: v.number(),

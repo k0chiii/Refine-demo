@@ -1504,9 +1504,15 @@ m3e-dialog [slot="actions"] {
   .works__controls {
     flex-wrap: nowrap;
     overflow-x: auto;
+    /* 横だけに動かす。overflow-x だけだと縦も auto になり、チップのタッチ領域のはみ出しで行が上下に動いていた（利用者指摘 2026-10-17） */
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     margin-inline: -16px;
     padding-inline: 16px;
+    /* チップのタッチ領域が行の下へ 8px はみ出すので、その分を内側に取ってはみ出しを無くす（見た目の位置は変えない） */
+    padding-block-end: 8px;
+    margin-block-end: -8px;
   }
   .works__controls > *,
   .works__filters {
@@ -1947,6 +1953,8 @@ m3e-dialog [slot="actions"] {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden; /* 横だけに動かす（.works__controls と同じ） */
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   border-radius: inherit;
 }
@@ -2030,8 +2038,7 @@ m3e-dialog [slot="actions"] {
   padding: 8px 16px 12px;
 }
 .ws__sheet,
-.notif-sheet,
-.action-sheet {
+.notif-sheet {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .ws__sheet {
@@ -2042,6 +2049,11 @@ m3e-dialog [slot="actions"] {
 .action-sheet {
   --m3e-bottom-sheet-max-width: 100%;
   --m3e-bottom-sheet-z-index: 40;
+}
+.action-sheet__body {
+  /* ホームインジケーターの分は、シート本体の padding ではなく中身に入れる。
+     シートは「中身の高さ」で開くので、padding だとその分だけ中身が押し縮められて最後の項目が見切れる */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .action-sheet__header {
   padding: 0 16px 4px;
@@ -4224,12 +4236,22 @@ m3e-snackbar {
   font-size: 20px;
 }
 
-/* 通知パネルの一番上:「この端末にも通知を送る」（Web Push。§45）。行の形は M3 の list item（先頭アイコン・2 行・末尾スイッチ） */
+/* 「通知の設定」（アカウントのメニュー。§61）: compact は全画面。M3E のダイアログは中身の高さで決まるので、
+   本文に最小の高さを与えて画面いっぱいにする（見出し・操作の分と、上下のセーフエリアを除く） */
+@media (max-width: 599px) {
+  .push-dialog .dialog-body {
+    align-content: start;
+    min-height: calc(
+      100dvh - 162px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
+  }
+}
+/* 「通知の設定」ダイアログの「この端末にも通知を送る」（Web Push。§45・§61）。行の形は M3 の list item（先頭アイコン・2 行・末尾スイッチ） */
 .notif-push {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 16px 12px;
+  padding: 8px 0;
 }
 .notif-push__icon {
   flex: none;
@@ -4791,20 +4813,6 @@ m3e-snackbar {
     animation: press-appear 160ms reverse forwards;
     opacity: 0.24;
   }
-}
-/* 通知パネル（メニュー）の「この端末にも通知を送る」: チェックの付くメニュー項目。2 行目に説明 */
-.notif-push-item__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-block: 8px;
-  white-space: normal;
-}
-.notif-push-item__hint {
-  display: block;
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
-  white-space: normal;
 }
 
 /* ---------- 動画の校正（VideoViewer。利用者指示 2026-10-17: タイムライン指定と範囲選択。§53）
@@ -5412,15 +5420,6 @@ m3e-snackbar {
 .info-tab__flags {
   flex-wrap: wrap;
   gap: 8px;
-}
-.info-tab__link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--mf-primary);
-}
-.info-tab__link m3e-icon {
-  font-size: 16px;
 }
 .import-list__notes {
   display: block;

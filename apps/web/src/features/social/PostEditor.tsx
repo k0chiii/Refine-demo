@@ -494,27 +494,7 @@ function PostSurface({
           />
         </div>
       </Card>
-      <Card
-        title={`画像（${post.images.length}）`}
-        actions={
-          canEdit ? (
-            <>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-                onChange={(e) => void addFiles(e.target.files)}
-              />
-              <M3eButton variant="tonal" onClick={() => fileRef.current?.click()}>
-                <M3eIcon slot="icon" name="add_photo_alternate" />
-                画像を追加
-              </M3eButton>
-            </>
-          ) : null
-        }
-      >
+      <Card title={`画像（${post.images.length}）`}>
         {post.platform === "instagram" ? (
           <ChoiceGroup
             label="形式"
@@ -614,6 +594,23 @@ function PostSurface({
             })}
           </M3eList>
         )}
+        {canEdit ? (
+          // 画像を追加は欄の右下（利用者指示 2026-10-17「上にあるのは違和感」）
+          <div className="form__actions">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => void addFiles(e.target.files)}
+            />
+            <M3eButton variant="tonal" onClick={() => fileRef.current?.click()}>
+              <M3eIcon slot="icon" name="add_photo_alternate" />
+              画像を追加
+            </M3eButton>
+          </div>
+        ) : null}
       </Card>
     </div>
   );

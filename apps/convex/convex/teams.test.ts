@@ -66,10 +66,9 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
     });
     const list = await cast.admin.as.query(api.teams.list, {});
     expect(list.map((x) => x.name)).toEqual(["PR", "デザイン担当", "SNS担当", "JIM", "渉外担当"]);
-    // 局のコード・絵文字・Drive・所属する人（雛形のメールが名簿に無ければ所属は入らない）
+    // 局のコード・絵文字・所属する人（雛形のメールが名簿に無ければ所属は入らない）
     expect(list[0]).toMatchObject({ kind: "bureau", code: "PR" });
     expect(list[1]).toMatchObject({ emoji: "🎨" });
-    expect(list[1]!.driveFolderUrl).toContain("drive.google.com");
   });
 
   it("制作物の担当: 無い ID は拒否、使っている担当は消せない。一覧に担当と制作者の名前が出る", async () => {

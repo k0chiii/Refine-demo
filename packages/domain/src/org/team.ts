@@ -3,7 +3,6 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import { splitCsvList } from "../shared/csvValues.ts";
-import { isDriveUrl } from "../work/metadata.ts";
 
 /**
  * 局のコード（Notion の担当 DB「局」の multi_select の選択肢。利用者決定 2026-10-17）。
@@ -41,8 +40,6 @@ export interface Team {
   code?: BureauCode;
   /** 絵文字 */
   emoji?: string;
-  /** Google Drive のフォルダ */
-  driveFolderUrl?: string;
   /**
    * 所属する人（Notion の「ユーザ」）。所属する人は、その担当が主管担当・制作担当・関係担当の制作物を
    * （非公開・取扱注意でも）見られる（利用者決定 2026-10-17。acl/authorize.ts の isInvolvedInWork）
@@ -61,11 +58,10 @@ export interface TeamInput {
   /** 局のコード（局だけ）。null・空で外す */
   code?: string | null | undefined;
   emoji?: string | null | undefined;
-  driveFolderUrl?: string | null | undefined;
   memberIds?: readonly string[] | null | undefined;
 }
 
-export type TeamMetadata = Pick<Team, "code" | "emoji" | "driveFolderUrl" | "memberIds">;
+export type TeamMetadata = Pick<Team, "code" | "emoji" | "memberIds">;
 
 /** 登録できる局・担当の数の上限（ポリシー値） */
 export const TEAM_MAX = 300;
@@ -135,11 +131,6 @@ export function validateTeam(
     if (Array.from(emoji).length > TEAM_EMOJI_MAX || /\s/.test(emoji))
       throw invalid("emoji", "too_long");
     meta.emoji = emoji;
-  }
-  const drive = input.driveFolderUrl?.trim() ?? "";
-  if (drive !== "") {
-    if (!isDriveUrl(drive)) throw invalid("driveFolderUrl", "not_drive_url");
-    meta.driveFolderUrl = drive;
   }
   if (input.memberIds) {
     const ids: string[] = [];
@@ -345,8 +336,6 @@ export interface TeamCsvRow {
   order?: number;
   /** 絵文字（Notion の「絵文字」） */
   emoji?: string;
-  /** Google Drive のフォルダ */
-  driveFolderUrl?: string;
   /** 所属する人の書き方のまま（メールアドレスかユーザー名。照合は取り込む側） */
   members: string[];
 }
@@ -357,13 +346,12 @@ export interface TeamCsvParseResult {
   errors: { line: number; message: string }[];
 }
 
-/** 列の見出し（委員会の担当 DB と同じ列名: 局・担当名・付番・絵文字・Google Drive フォルダ・ユーザ。以前の列名も読む） */
+/** 列の見出し（委員会の担当 DB と同じ列名: 局・担当名・付番・絵文字・ユーザ。以前の列名も読む） */
 export const teamCsvColumns = {
   bureau: ["局", "局名", "bureau"],
   team: ["担当", "担当名", "team"],
   order: ["順", "順番", "並び順", "付番", "order"],
   emoji: ["絵文字", "emoji"],
-  drive: ["Google Drive フォルダ", "Google Drive", "Drive フォルダ", "driveFolderUrl"],
   members: ["ユーザ", "ユーザー", "メンバー", "所属", "members"],
 } as const;
 type TeamColumn = keyof typeof teamCsvColumns;
@@ -386,7 +374,7 @@ function findTeamHeader(
 
 /**
  * 組織の CSV を読む。列は見出しの名前で探す: 局（必須。名前かコード。局名・bureau でも可）・担当（担当名・team）・
- * 順（付番。整数）・絵文字・Google Drive フォルダ・ユーザ（所属する人。「;」「,」区切り）。
+ * 順（付番。整数）・絵文字・ユーザ（所属する人。「;」「,」区切り）。
  * 担当が空の行は局だけを定める。空の行・見出しより前の行は読まない。
  * アプリの担当はちょうど 1 つの局に属するので、局が複数書かれた行は問題として返す（取り込まない）。
  */
@@ -418,7 +406,6 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
     const team = get("team");
     const orderText = get("order").normalize("NFKC");
     const emoji = get("emoji");
-    const drive = get("drive");
     const problems: string[] = [];
     if (bureau === "") problems.push("局がありません");
     if (bureaus.length > 1)
@@ -439,8 +426,6 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
     }
     if (emoji !== "" && (Array.from(emoji).length > TEAM_EMOJI_MAX || /\s/.test(emoji)))
       problems.push(`絵文字「${emoji}」が長すぎます`);
-    if (drive !== "" && !isDriveUrl(drive))
-      problems.push(`Google Drive フォルダ「${drive}」が Drive の URL ではありません`);
     if (problems.length) {
       errors.push({ line, message: problems.join("。") });
       continue;
@@ -451,7 +436,6 @@ export function parseTeamCsv(text: string): TeamCsvParseResult {
       team: team === "" ? null : team,
       ...(order !== undefined ? { order } : {}),
       ...(emoji !== "" ? { emoji } : {}),
-      ...(drive !== "" ? { driveFolderUrl: drive } : {}),
       members: splitCsvList(get("members")),
     });
   }
@@ -469,7 +453,6 @@ export interface TeamImportEntry {
   order?: number;
   code?: BureauCode;
   emoji?: string;
-  driveFolderUrl?: string;
   /** 所属する人（照合済みの ID。取り込む側が入れる） */
   memberIds?: string[];
 }
@@ -530,7 +513,6 @@ export function planTeamImport(
             ...bureauEntry(row),
             ...(row.order !== undefined ? { order: row.order } : {}),
             ...(row.emoji ? { emoji: row.emoji } : {}),
-            ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
             ...members(row),
           };
           plannedBureaus.set(bKey, entry);
@@ -557,7 +539,6 @@ export function planTeamImport(
       team: row.team,
       ...(row.order !== undefined ? { order: row.order } : {}),
       ...(row.emoji ? { emoji: row.emoji } : {}),
-      ...(row.driveFolderUrl ? { driveFolderUrl: row.driveFolderUrl } : {}),
       ...members(row),
     });
   }
@@ -570,10 +551,10 @@ export function planTeamImport(
  */
 export function teamCsvTemplate(): string {
   return [
-    "局,担当名,付番,絵文字,Google Drive フォルダ,ユーザ",
-    "PR,デザイン担当,1,🎨,https://drive.google.com/drive/folders/example-design,mock-creator@example.invalid",
-    "PR,SNS担当,2,📣,,",
-    "JIM,渉外担当,1,,,",
+    "局,担当名,付番,絵文字,ユーザ",
+    "PR,デザイン担当,1,🎨,mock-creator@example.invalid",
+    "PR,SNS担当,2,📣,",
+    "JIM,渉外担当,1,,",
   ]
     .map((l) => `${l}\r\n`)
     .join("");

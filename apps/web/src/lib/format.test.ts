@@ -14,10 +14,10 @@ const jst = (y: number, mo: number, d: number, h = 0, mi = 0) => Date.UTC(y, mo 
 const NOW = jst(2026, 10, 15, 10);
 
 describe("締切の書式（画面で使う関数は lib/format から。実装は domain）", () => {
-  it("日付だけの締切は「11/14（土）23:59 まで」", () => {
+  it("日付だけの締切は「11/14（土）」（時刻を書かない）", () => {
     const deadlineAt = deadlineFromJst("2026-11-14")!;
-    expect(formatDeadlineUntil(deadlineAt, NOW)).toBe("11/14（土）23:59 まで");
-    expect(formatDeadline(deadlineAt, NOW)).toBe("11/14（土）23:59");
+    expect(formatDeadlineUntil(deadlineAt, NOW)).toBe("11/14（土）");
+    expect(formatDeadline(deadlineAt, NOW)).toBe("11/14（土）");
   });
   it("時刻を指定した締切は「11/14（土）18:00 まで」", () => {
     expect(formatDeadlineUntil(deadlineFromJst("2026-11-14", "18:00")!, NOW)).toBe(
@@ -35,7 +35,7 @@ describe("締切の書式（画面で使う関数は lib/format から。実装�
     });
   });
   it("既定の締切（3 日後の終わり）は日付だけの締切として表示される", () => {
-    expect(formatDeadline(endOfJstDay(NOW + 3 * 86_400_000), NOW)).toBe("10/18（日）23:59");
+    expect(formatDeadline(endOfJstDay(NOW + 3 * 86_400_000), NOW)).toBe("10/18（日）");
   });
   it("締切ではない日付（最後の動きなど）は年月日だけ", () => {
     expect(formatJstDate(jst(2026, 11, 14, 23, 59))).toBe("2026/11/14");

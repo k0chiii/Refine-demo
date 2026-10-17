@@ -74,10 +74,6 @@ export interface Work {
   productionDays?: number;
   /** タグ（Notion の選択肢を候補にするが、ほかの語も可） */
   tags?: readonly string[];
-  /** Google Drive のフォルダ */
-  driveFolderUrl?: string;
-  /** Slack のチャンネル ID */
-  slackChannelId?: string;
   /** 楽観的排他用のバージョン */
   version: number;
 }

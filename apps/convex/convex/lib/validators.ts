@@ -101,8 +101,6 @@ export const vWorkMetadataFields = {
   sizeOrLength: v.optional(v.string()),
   productionDays: v.optional(v.number()),
   tags: v.optional(v.array(v.string())),
-  driveFolderUrl: v.optional(v.string()),
-  slackChannelId: v.optional(v.string()),
 };
 /** 同じ項目の変更の形（null で消す） */
 export const vWorkMetadataPatch = {
@@ -115,8 +113,6 @@ export const vWorkMetadataPatch = {
   sizeOrLength: v.optional(v.union(v.string(), v.null())),
   productionDays: v.optional(v.union(v.number(), v.null())),
   tags: v.optional(v.union(v.array(v.string()), v.null())),
-  driveFolderUrl: v.optional(v.union(v.string(), v.null())),
-  slackChannelId: v.optional(v.union(v.string(), v.null())),
 };
 /** 版の提出時の申告（写真・めい・指針外の色の使用） */
 export const vRevisionDeclarations = v.object({
