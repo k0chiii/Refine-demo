@@ -1,0 +1,593 @@
+import { api } from "@mf100/convex/api";
+import type { Id } from "@mf100/convex/dataModel";
+import { checkTypeLabels, checkTypes, socialPlatformLabels, type CheckType } from "@mf100/domain";
+import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { useState } from "react";
+import { AclPanel } from "@/features/work/AclPanel";
+import { EditWorkDialog } from "@/features/work/EditWorkDialog";
+import { formatDeadline, formatJstShort } from "@/lib/format";
+import {
+  approvalActionLabel,
+  checkStateLabel,
+  lifecycleActionLabel,
+  lifecycleLabel,
+  mediaLabel,
+} from "@/lib/labels";
+import { newRequestId, useAction } from "@/lib/useAction";
+import { StatusText } from "@/ui/Chip";
+import { Field, Select, TextArea, TextInput } from "@/ui/Field";
+import { M3eButton, M3eDialog, M3eIcon, M3eList, M3eListItem } from "@/ui/m3e";
+import { UserPicker } from "@/ui/UserPicker";
+import { RevisionFiles } from "./RevisionFiles";
+import type { WorkData } from "./VersionsTab";
+
+type RevisionData = FunctionReturnType<typeof api.revisions.get>;
+
+/**
+ * エディタの引き出し「情報」: 基本情報、専門確認、独立確認、校了履歴と、制作物に対する操作
+ * （校了を宣言、理由付きで再開、校正者の割り当て、編集、閲覧権限、保留／中止）。
+ */
+export function InfoTab({
+  work,
+  revision,
+  isAdmin,
+  shownArtifactId = null,
+}: {
+  work: WorkData;
+  /** 表示中の版（無ければ null） */
+  revision: RevisionData | null;
+  isAdmin: boolean;
+  /** 紙面に出している添付（この版のファイルの一覧で印を付ける） */
+  shownArtifactId?: string | null;
+}) {
+  const finalize = useMutation(api.approvals.finalize);
+  const reopen = useMutation(api.approvals.reopen);
+  const assign = useMutation(api.reviews.assign);
+  const changeLifecycle = useMutation(api.works.changeLifecycle);
+  const completeCheck = useMutation(api.checks.complete);
+  const waiveCheck = useMutation(api.checks.waive);
+  const addCheck = useMutation(api.checks.add);
+  const confirmIndependently = useMutation(api.approvals.confirm);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState("");
+  const [autoNote, setAutoNote] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmNote, setConfirmNote] = useState("");
+  const [reopenReason, setReopenReason] = useState("");
+  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
+  const [waiveDraft, setWaiveDraft] = useState<{ checkId: string; reason: string } | null>(null);
+  const [addCheckDraft, setAddCheckDraft] = useState<{ type: string; assignee: string[] } | null>(
+    null,
+  );
+  const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
+
+  const { work: w, people, approvals, can } = work;
+  // 独立確認（D2）: 制作者本人が校了する制作物では、ほかの人の確認の記録が校了の前に要る（判定はサーバー）
+  const confirmation = useQuery(api.approvals.confirmationStatus, {
+    workId: w.id as Id<"works">,
+  });
+  const confirmationTarget =
+    work.revisions.find((r) => r.id === confirmation?.candidateRevisionId) ?? null;
+  const needsConfirmation = confirmation?.required === true && confirmation.valid === null;
+  const candidate = work.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
+  const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
+  const checks = revision?.checks ?? [];
+  const pendingChecks = checks.filter((c) => c.state === "pending").length;
+  // 人の未対応のコメント（自動校正は校了を止めないので別に数える）
+  const blocking = Math.max(0, (candidate?.unresolvedCount ?? 0) - (candidate?.openBotCount ?? 0));
+  const lifecycleTargets: Array<"active" | "on_hold" | "cancelled"> =
+    w.lifecycle === "active"
+      ? ["on_hold", "cancelled"]
+      : w.lifecycle === "on_hold" || w.lifecycle === "draft"
+        ? ["active", "cancelled"]
+        : [];
+
+  // SNS 投稿の制作物: どのアカウント（本体の設定）で投稿するか
+  const profiles = useQuery(api.social.list, w.mediaType === "sns" ? {} : "skip");
+  const doFinalize = useAction(async () => {
+    if (!candidate) return;
+    await finalize({
+      workId: w.id as Id<"works">,
+      revisionId: candidate.id as Id<"revisions">,
+      requestId,
+      expectedVersion: w.version,
+      ...(exceptionReason.trim() ? { exceptionReason: exceptionReason.trim() } : {}),
+      ...(autoNote.trim() ? { autoProofreadNote: autoNote.trim() } : {}),
+    });
+    setFinalizeOpen(false);
+  });
+  const doConfirm = useAction(async () => {
+    if (!confirmation?.candidateRevisionId) return;
+    await confirmIndependently({
+      revisionId: confirmation.candidateRevisionId as Id<"revisions">,
+      ...(confirmNote.trim() ? { note: confirmNote.trim() } : {}),
+    });
+    setConfirmOpen(false);
+    setConfirmNote("");
+  });
+  const doReopen = useAction(async () => {
+    await reopen({ workId: w.id as Id<"works">, reason: reopenReason, expectedVersion: w.version });
+    setReopenOpen(false);
+  });
+  const doAssign = useAction(async () => {
+    const target = revision?.revision.id ?? accepting?.id;
+    if (!target) return;
+    await assign({ revisionId: target as Id<"revisions">, reviewerIds, reviewType: "general" });
+    setAssignOpen(false);
+    setReviewerIds([]);
+  });
+  const doLifecycle = useAction(async (to: "active" | "on_hold" | "cancelled") => {
+    await changeLifecycle({ workId: w.id as Id<"works">, to, expectedVersion: w.version });
+    if (to === "cancelled") setCancelOpen(false);
+  });
+  const doCompleteCheck = useAction(async (checkId: string) => {
+    await completeCheck({ checkId: checkId as Id<"requiredChecks"> });
+  });
+  const doWaiveCheck = useAction(async () => {
+    if (!waiveDraft) return;
+    await waiveCheck({
+      checkId: waiveDraft.checkId as Id<"requiredChecks">,
+      reason: waiveDraft.reason,
+    });
+    setWaiveDraft(null);
+  });
+  const doAddCheck = useAction(async () => {
+    if (!addCheckDraft || !revision) return;
+    await addCheck({
+      revisionId: revision.revision.id as Id<"revisions">,
+      type: addCheckDraft.type as CheckType,
+      ...(addCheckDraft.assignee[0] ? { assigneeId: addCheckDraft.assignee[0] } : {}),
+    });
+    setAddCheckDraft(null);
+  });
+
+  return (
+    <div className="info-tab">
+      {w.lifecycle !== "active" ? (
+        <StatusText tone={w.lifecycle === "finalized" ? "success" : "neutral"}>
+          {lifecycleLabel[w.lifecycle]}
+        </StatusText>
+      ) : null}
+      {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは「編集」のダイアログ */}
+      <M3eList className="list prop-list" aria-label="基本情報">
+        {(
+          [
+            ["名称", w.title],
+            ["目的", w.purpose || "未入力"],
+            ["区分", `${w.category} / ${mediaLabel[w.mediaType]}`],
+            ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)],
+            ...(revision?.revision.focusNotes
+              ? ([["観点", revision.revision.focusNotes]] as const)
+              : []),
+            ["制作者", people.creators.map((p) => p?.name).join("、") || "—"],
+            ["校了権限者", people.approver?.name ?? "—"],
+            ["主管", people.managers.map((p) => p?.name).join("、") || "—"],
+            ["旧ID", w.legacyId || "なし"],
+            ...(w.mediaType === "sns"
+              ? ([
+                  [
+                    "SNS",
+                    (() => {
+                      const p = profiles?.find((x) => x.id === w.socialProfileId);
+                      return p ? `${socialPlatformLabels[p.platform]} @${p.username}` : "未設定";
+                    })(),
+                  ],
+                ] as const)
+              : []),
+            ...(w.confidentiality === "restricted"
+              ? ([["機密", "非公開・取扱注意"]] as const)
+              : []),
+          ] as ReadonlyArray<readonly [string, string]>
+        ).map(([label, value]) => (
+          <M3eListItem key={label} className="list__item">
+            <span slot="overline">{label}</span>
+            <span className="prop-list__value">{value}</span>
+          </M3eListItem>
+        ))}
+      </M3eList>
+      {revision ? <RevisionFiles artifacts={revision.artifacts} shownId={shownArtifactId} /> : null}
+
+      <div className="info-tab__actions">
+        {can.finalize && w.lifecycle === "active" ? (
+          // 校了権限者の「いまやる 1 つ」なので filled（M3 Usability。§35 A-20。利用者決定 2026-10-15）
+          <M3eButton variant="filled" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
+            <M3eIcon slot="icon" name="verified" />
+            校了を宣言
+          </M3eButton>
+        ) : null}
+        {can.reopen && w.lifecycle === "finalized" ? (
+          <M3eButton variant="outlined" onClick={() => setReopenOpen(true)}>
+            理由付きで再開
+          </M3eButton>
+        ) : null}
+        {can.assign && (revision || accepting) && w.lifecycle === "active" ? (
+          <M3eButton variant="outlined" onClick={() => setAssignOpen(true)}>
+            校正者を割り当てる
+          </M3eButton>
+        ) : null}
+        {can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
+          <M3eButton variant="text" onClick={() => setEditOpen(true)}>
+            編集
+          </M3eButton>
+        ) : null}
+        {can.edit
+          ? lifecycleTargets.map((to) => (
+              <M3eButton
+                key={to}
+                variant="text"
+                onClick={() =>
+                  to === "cancelled" ? setCancelOpen(true) : void doLifecycle.run(to)
+                }
+              >
+                {lifecycleActionLabel[to]}
+              </M3eButton>
+            ))
+          : null}
+      </div>
+
+      {revision && (checks.length > 0 || revision.can.addCheck) ? (
+        <section className="info-tab__section" aria-label="専門確認">
+          <h2 className="info-tab__h">
+            専門確認
+            {checks.length > 0 ? (
+              <StatusText tone={pendingChecks > 0 ? "warning" : "success"} className="ml">
+                {pendingChecks > 0 ? `未完了 ${pendingChecks}` : "すべて完了"}
+              </StatusText>
+            ) : null}
+            <span className="spacer" />
+            {revision.can.addCheck && !addCheckDraft ? (
+              <M3eButton
+                variant="text"
+                onClick={() => setAddCheckDraft({ type: "photo", assignee: [] })}
+              >
+                追加
+              </M3eButton>
+            ) : null}
+          </h2>
+          <div className="checks">
+            {checks.map((c) => (
+              <div key={c.id} className={`check ${c.state !== "pending" ? "check--done" : ""}`}>
+                <StatusText
+                  tone={
+                    c.state === "done" ? "success" : c.state === "waived" ? "neutral" : "warning"
+                  }
+                >
+                  {checkStateLabel[c.state]}
+                </StatusText>
+                <div>
+                  {c.label}
+                  <div className="small muted">
+                    {c.assignee?.name ?? "担当未指定"}
+                    {c.doneByUser
+                      ? `・${c.state === "waived" ? "免除" : "確認"} ${c.doneByUser.name} ${formatJstShort(c.doneAt ?? 0)}`
+                      : ""}
+                    {c.note ? `・${c.note}` : ""}
+                  </div>
+                </div>
+                <div className="row">
+                  {c.canComplete ? (
+                    <M3eButton
+                      variant="tonal"
+                      disabled={doCompleteCheck.pending}
+                      onClick={() => void doCompleteCheck.run(c.id)}
+                    >
+                      確認を完了
+                    </M3eButton>
+                  ) : null}
+                  {c.canWaive ? (
+                    <M3eButton
+                      variant="text"
+                      onClick={() => setWaiveDraft({ checkId: c.id, reason: "" })}
+                    >
+                      免除する
+                    </M3eButton>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+          {waiveDraft ? (
+            <div className="stack">
+              <Field label="免除の理由" hint="監査の記録に残ります" required>
+                <TextArea
+                  value={waiveDraft.reason}
+                  onChange={(e) => setWaiveDraft({ ...waiveDraft, reason: e.target.value })}
+                />
+              </Field>
+              <div className="row">
+                <span className="spacer" />
+                <M3eButton variant="text" onClick={() => setWaiveDraft(null)}>
+                  キャンセル
+                </M3eButton>
+                <M3eButton
+                  variant="filled"
+                  disabled={doWaiveCheck.pending || !waiveDraft.reason.trim()}
+                  onClick={() => void doWaiveCheck.run()}
+                >
+                  免除を記録
+                </M3eButton>
+              </div>
+            </div>
+          ) : null}
+          {addCheckDraft ? (
+            <div className="stack">
+              <Field label="確認の種別">
+                <Select
+                  value={addCheckDraft.type}
+                  onChange={(e) => setAddCheckDraft({ ...addCheckDraft, type: e.target.value })}
+                >
+                  {checkTypes.map((t) => (
+                    <option key={t} value={t}>
+                      {checkTypeLabels[t]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <UserPicker
+                label="担当者（任意）"
+                single
+                value={addCheckDraft.assignee}
+                onChange={(ids) => setAddCheckDraft({ ...addCheckDraft, assignee: ids })}
+              />
+              <div className="row">
+                <span className="spacer" />
+                <M3eButton variant="text" onClick={() => setAddCheckDraft(null)}>
+                  キャンセル
+                </M3eButton>
+                <M3eButton
+                  variant="filled"
+                  disabled={doAddCheck.pending}
+                  onClick={() => void doAddCheck.run()}
+                >
+                  追加
+                </M3eButton>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {confirmation?.required && w.lifecycle === "active" ? (
+        <section className="info-tab__section" aria-label="独立確認">
+          <h2 className="info-tab__h">
+            独立確認
+            <StatusText tone={confirmation.valid ? "success" : "warning"} className="ml">
+              {confirmation.valid ? "確認済み" : "未確認"}
+            </StatusText>
+            <span className="spacer" />
+            {confirmation.canConfirm ? (
+              <M3eButton variant="tonal" onClick={() => setConfirmOpen(true)}>
+                <M3eIcon slot="icon" name="fact_check" />
+                独立確認をする
+              </M3eButton>
+            ) : null}
+          </h2>
+          <p className="small muted" style={{ margin: 0 }}>
+            制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）が
+            {confirmationTarget ? `${confirmationTarget.label}を` : "最新の版を"}
+            確認した記録が要ります。
+          </p>
+          {confirmation.valid ? (
+            <div className="small">
+              {confirmation.valid.confirmer?.name ?? "（不明なユーザー）"}・
+              {formatJstShort(confirmation.valid.confirmedAt)}
+              {confirmation.valid.note ? `・${confirmation.valid.note}` : ""}
+            </div>
+          ) : null}
+          {confirmation.confirmedByMe && !confirmation.valid ? (
+            <div className="small muted">
+              あなたの確認は記録されていますが、いまは有効ではありません（職責・閲覧権限が変わったため）。
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {approvals.length > 0 ? (
+        <section className="info-tab__section" aria-label="校了履歴">
+          <h2 className="info-tab__h">校了履歴</h2>
+          <ul className="info__history">
+            {approvals.map((a, i) => (
+              <li key={i}>
+                <StatusText tone={a.action === "reopened" ? "warning" : "success"}>
+                  {approvalActionLabel[a.action]}
+                </StatusText>
+                <span className="small muted">
+                  {` ・ ${a.actor?.name ?? ""}・${formatJstShort(a.createdAt)}`}
+                </span>
+                {a.exceptionReason ? (
+                  <div className="small muted">例外理由: {a.exceptionReason}</div>
+                ) : null}
+                {a.reason ? <div className="small muted">理由: {a.reason}</div> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {isAdmin ? (
+        <section className="info-tab__section" aria-label="閲覧権限">
+          <h2 className="info-tab__h">閲覧権限</h2>
+          <AclPanel workId={w.id} />
+        </section>
+      ) : null}
+
+      <EditWorkDialog work={w} open={editOpen} onClose={() => setEditOpen(false)} />
+
+      {/* U-07 校了: 校了版・必須確認・重大未解決・例外理由・実行者を最終確認して確定。二重クリック防止。 */}
+      <M3eDialog open={finalizeOpen} onClosed={() => setFinalizeOpen(false)} closeLabel="閉じる">
+        <span slot="header">校了を宣言</span>
+        <div className="dialog-body">
+          <p style={{ margin: 0 }}>
+            対象版: <strong>{candidate?.label ?? "（通常版がありません）"}</strong>。宣言者:{" "}
+            <strong>{people.approver?.name}</strong>
+          </p>
+          {candidate && candidate.pendingChecks.length > 0 ? (
+            <div className="alert--warn alert">
+              <span>
+                未完了の専門確認: {candidate.pendingChecks.join("、")}
+                。完了または免除されるまで、理由なしの校了はできません。
+              </span>
+            </div>
+          ) : null}
+          {blocking > 0 ? (
+            <div className="alert--warn alert">
+              <span>未対応のコメントが {blocking} 件あります。理由なしでは校了できません。</span>
+            </div>
+          ) : null}
+          {candidate && candidate.openBotCount > 0 ? (
+            <>
+              <div className="alert--warn alert">
+                <span>
+                  自動校正のコメントが {candidate.openBotCount}{" "}
+                  件、まだ確認されていません。校了はできますが、件数とメモが校了の記録に残ります。
+                </span>
+              </div>
+              <Field label="自動校正についてのメモ（任意）">
+                <TextInput value={autoNote} onChange={(e) => setAutoNote(e.target.value)} />
+              </Field>
+            </>
+          ) : null}
+          <Field
+            label="例外校了の理由"
+            hint="未解決のコメントや専門確認を残して校了するときだけ書きます"
+          >
+            <TextArea
+              value={exceptionReason}
+              onChange={(e) => setExceptionReason(e.target.value)}
+            />
+          </Field>
+          {confirmation?.required ? (
+            confirmation.valid ? (
+              <p className="small" style={{ margin: 0 }}>
+                <StatusText tone="success">独立確認済み</StatusText>{" "}
+                {confirmation.valid.confirmer?.name ?? "（不明なユーザー）"}・
+                {formatJstShort(confirmation.valid.confirmedAt)}
+              </p>
+            ) : (
+              <div className="alert--warn alert">
+                <span>
+                  制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）がこの版の独立確認をするまで校了できません。確認する人は、引き出し「情報」の「独立確認をする」から記録します。
+                </span>
+              </div>
+            )
+          ) : null}
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setFinalizeOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doFinalize.pending || !candidate || needsConfirmation}
+            onClick={() => void doFinalize.run()}
+          >
+            校了を確定する
+          </M3eButton>
+        </div>
+      </M3eDialog>
+
+      {/* 独立確認（D2）: 確認者本人の操作で記録する。校了する人が確認者を選ぶのではない */}
+      <M3eDialog open={confirmOpen} onClosed={() => setConfirmOpen(false)} closeLabel="閉じる">
+        <span slot="header">独立確認をする</span>
+        <div className="dialog-body">
+          <p style={{ margin: 0 }}>
+            対象版: <strong>{confirmationTarget?.label ?? "（通常版がありません）"}</strong>
+            。制作者・校了権限者とは別の立場で、この版の内容を確認したことを記録します。記録はあなたの名前で残り、校了の証跡になります。
+          </p>
+          <Field label="確認のメモ（任意）" hint="確認した範囲など。500 文字まで">
+            <TextArea
+              value={confirmNote}
+              maxLength={500}
+              onChange={(e) => setConfirmNote(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setConfirmOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doConfirm.pending || !confirmation?.candidateRevisionId}
+            onClick={() => void doConfirm.run()}
+          >
+            確認したことを記録
+          </M3eButton>
+        </div>
+      </M3eDialog>
+
+      <M3eDialog open={reopenOpen} onClosed={() => setReopenOpen(false)} closeLabel="閉じる">
+        <span slot="header">校了を解除して再開</span>
+        <div className="dialog-body">
+          <Field label="再開理由" required>
+            <TextArea
+              required
+              value={reopenReason}
+              onChange={(e) => setReopenReason(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setReopenOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doReopen.pending || !reopenReason.trim()}
+            onClick={() => void doReopen.run()}
+          >
+            再開する
+          </M3eButton>
+        </div>
+      </M3eDialog>
+
+      <M3eDialog open={cancelOpen} onClosed={() => setCancelOpen(false)} closeLabel="閉じる">
+        <span slot="header">この制作物を中止しますか？</span>
+        <div className="dialog-body">
+          <p style={{ margin: 0 }}>
+            中止すると、版の提出・校正・校了ができなくなります。中止は取り消せません。
+          </p>
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setCancelOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doLifecycle.pending}
+            onClick={() => void doLifecycle.run("cancelled")}
+          >
+            中止する
+          </M3eButton>
+        </div>
+      </M3eDialog>
+
+      <M3eDialog open={assignOpen} onClosed={() => setAssignOpen(false)} closeLabel="閉じる">
+        <span slot="header">校正者を割り当て</span>
+        <div className="dialog-body">
+          <p className="small muted" style={{ margin: 0 }}>
+            対象: {revision?.revision.label ?? accepting?.label}
+          </p>
+          <UserPicker label="校正者" value={reviewerIds} onChange={setReviewerIds} />
+        </div>
+        <div slot="actions" className="row">
+          <M3eButton variant="text" onClick={() => setAssignOpen(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="filled"
+            disabled={doAssign.pending || reviewerIds.length === 0}
+            onClick={() => void doAssign.run()}
+          >
+            割り当てる
+          </M3eButton>
+        </div>
+      </M3eDialog>
+    </div>
+  );
+}

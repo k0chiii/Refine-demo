@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mf100-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // 放置アップロードセッションの孤立 R2 オブジェクト清掃（D14）。Convex 側の abandoned 化（毎時）の後に走る
+  "triggers": { "crons": ["23 * * * *"] },
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      // 非公開バケット。公開 URL は設定しない（§13 / §14 やってはいけないこと）
+      "bucket_name": "mf100-assets",
+      "preview_bucket_name": "mf100-assets-dev",
+    },
+  ],
+  // 秘密は vars に書かない: `wrangler secret put MF100_UPLOAD_SECRET`（ファイル提出。必須）・
+  // `wrangler secret put MF100_CLEANUP_SECRET`（R2 清掃）。どちらも Convex 側と同じ値。ローカルは .dev.vars
+  "vars": {
+    // `wrangler dev` 用の既定値。本番は `wrangler secret` / ダッシュボードで上書きする
+    "CONVEX_URL": "http://127.0.0.1:3210",
+    "CONVEX_SITE_URL": "http://127.0.0.1:3211",
+    "ALLOWED_ORIGINS": "http://localhost:5173",
+  },
+}

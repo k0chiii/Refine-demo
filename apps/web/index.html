@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f6f5ff" />
+    <title>MF100 校正システム</title>
+    <meta name="description" content="第100回五月祭の制作物を提出・校正・校了するためのシステム" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- iOS のホーム画面から開いたとき（standalone）の見た目 -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MF100 校正" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  </head>
+  <body>
+    <!--
+      m3e-theme は <body> の直下に置く。直下にあるときだけ M3E はテーマ変数（--md-sys-color-*）を
+      html に、フォント・背景色を body に適用する（それ以外は m3e-theme 自身の shadow に閉じる）。
+      React のルートはその内側。設定値は src/theme.ts で登録・更新する。
+    -->
+    <m3e-theme color="#1b5fb4" variant="vibrant" scheme="light" motion="expressive" strong-focus>
+      <div id="root"></div>
+    </m3e-theme>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

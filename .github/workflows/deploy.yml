@@ -1,0 +1,99 @@
+# CD
+# - デモ版（ブラウザ内で動く Convex。実データなし）: main に入ったら Cloudflare Pages の本番、PR ごとにプレビューへ配る。
+#   リポジトリの Secrets に CLOUDFLARE_API_TOKEN・CLOUDFLARE_ACCOUNT_ID が無いあいだは、配らずに飛ばす
+# - 本番（Convex・Workers・Web）: CLAUDE.md「本番デプロイは明示承認まで行わない」に従い、自動では走らせない。
+#   Actions の画面から手で起動し（workflow_dispatch）、さらに GitHub の Environment「production」の承認者が承認してから進む
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 配る先
+        type: choice
+        options: [demo, production]
+        default: demo
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ inputs.target || 'demo' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  demo:
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'demo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    steps:
+      - name: Cloudflare の設定が無ければ飛ばす
+        if: env.HAS_CLOUDFLARE != 'true'
+        run: echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID が未設定なので、デモ版は配りません"
+      - uses: actions/checkout@v5
+        if: env.HAS_CLOUDFLARE == 'true'
+      - uses: pnpm/action-setup@v4
+        if: env.HAS_CLOUDFLARE == 'true'
+      - uses: actions/setup-node@v5
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: env.HAS_CLOUDFLARE == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: デモ版をビルド
+        if: env.HAS_CLOUDFLARE == 'true'
+        run: pnpm --filter @mf100/web build:demo
+      - name: Cloudflare Pages へ配る（main は本番、PR はブランチごとのプレビュー）
+        if: env.HAS_CLOUDFLARE == 'true'
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+        run: pnpm exec wrangler pages deploy ../web/dist-demo --project-name mf100-refine-demo --branch "$BRANCH" --commit-dirty=true
+
+  production:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 承認者を付けた Environment。Secrets（CONVEX_DEPLOY_KEY・CLOUDFLARE_*）と Variables（VITE_API_URL）もここに置く
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 確認（型・単体テスト）
+        run: |
+          pnpm build
+          pnpm typecheck
+          pnpm --filter @mf100/web typecheck
+          pnpm test
+      - name: Convex を配り、その URL で Web をビルド
+        working-directory: apps/convex
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: pnpm exec convex deploy --cmd "pnpm --filter @mf100/web build" --cmd-url-env-var-name VITE_CONVEX_URL
+      - name: Workers（ファイルの提出と配信）を配る
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy
+      - name: Web を Cloudflare Pages へ配る
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler pages deploy ../web/dist --project-name mf100-refine --branch main

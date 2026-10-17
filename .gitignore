@@ -3,6 +3,7 @@ node_modules/
 
 # build outputs
 dist/
+dist-demo/
 .vite/
 .wrangler/
 *.tsbuildinfo
@@ -11,6 +12,7 @@ dist/
 .env
 .env.*
 !.env.example
+.dev.vars
 
 # Convex のデプロイメント設定（個人の dev deployment を指す）
 apps/convex/.env.local
@@ -26,3 +28,13 @@ apps/web/src/routeTree.gen.ts
 # Vite+ task cache
 .vite-plus/
 node_modules/.vite-plus/
+
+# pnpm dev がサービスごとに書くログ
+.logs/
+apps/web/public/ocr/
+
+# 撮影の出力（画像はリポジトリに置かない）
+apps/web/e2e/out/
+
+# Claude Code の作業用ワークツリー
+.claude/worktrees/

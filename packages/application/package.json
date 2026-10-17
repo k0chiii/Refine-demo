@@ -2,8 +2,8 @@
   "name": "@mf100/application",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "MF100 アプリケーション層。ユースケースとポート（リポジトリ・時計・監査・冪等性）。インフラ非依存。",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -23,6 +23,6 @@
   },
   "devDependencies": {
     "typescript": "5.9.3",
-    "vite-plus": "1.1.0"
+    "vite-plus": "1.2.0"
   }
 }

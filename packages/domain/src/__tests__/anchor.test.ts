@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
-import { fromViewportRect, toViewportRect, validateAnchor, type Viewport } from "../comment/Anchor.ts";
+import {
+  fromViewportRect,
+  TEXT_QUOTE_MAX,
+  textRangeAnchor,
+  toViewportRect,
+  validateAnchor,
+  type Viewport,
+} from "../comment/Anchor.ts";
 
 const rect = { x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
 
@@ -28,7 +35,10 @@ describe("Anchor 座標変換（A-03: 倍率・回転に依存しない）", () 
     expect(b.w / a.w).toBeCloseTo(2);
   });
   it("90度回転で左上の矩形が右上へ移る", () => {
-    const px = toViewportRect({ x: 0, y: 0, w: 0.1, h: 0.1 }, { width: 800, height: 600, rotation: 90 });
+    const px = toViewportRect(
+      { x: 0, y: 0, w: 0.1, h: 0.1 },
+      { width: 800, height: 600, rotation: 90 },
+    );
     expect(px.x).toBeCloseTo(720);
     expect(px.y).toBeCloseTo(0);
   });
@@ -36,12 +46,51 @@ describe("Anchor 座標変換（A-03: 倍率・回転に依存しない）", () 
 
 describe("validateAnchor", () => {
   it("範囲外の矩形は拒否する", () => {
-    expect(() => validateAnchor({ type: "pdf_rect", artifactId: "a", page: 1, rect: { x: 0.9, y: 0, w: 0.5, h: 0.1 } })).toThrow();
+    expect(() =>
+      validateAnchor({
+        type: "pdf_rect",
+        artifactId: "a",
+        page: 1,
+        rect: { x: 0.9, y: 0, w: 0.5, h: 0.1 },
+      }),
+    ).toThrow();
     expect(() => validateAnchor({ type: "pdf_rect", artifactId: "a", page: 0, rect })).toThrow();
-    expect(() => validateAnchor({ type: "image_pin", artifactId: "a", point: { x: 1.2, y: 0 } })).toThrow();
+    expect(() =>
+      validateAnchor({ type: "image_pin", artifactId: "a", point: { x: 1.2, y: 0 } }),
+    ).toThrow();
   });
   it("正常なアンカーは通る", () => {
-    expect(() => validateAnchor({ type: "pdf_rect", artifactId: "a", page: 1, rect })).not.toThrow();
+    expect(() =>
+      validateAnchor({ type: "pdf_rect", artifactId: "a", page: 1, rect }),
+    ).not.toThrow();
     expect(() => validateAnchor({ type: "image_rect", artifactId: "a", rect })).not.toThrow();
+  });
+
+  it("F-12: text_range は [start, end) の文字オフセットと引用文を持ち、空範囲・長すぎる引用は拒否", () => {
+    const text = "五月祭常任委員会のパンフレット。表紙の配色を確認してください。";
+    const a = textRangeAnchor("art1", text, 0, 8);
+    expect(a).toEqual({
+      type: "text_range",
+      artifactId: "art1",
+      start: 0,
+      end: 8,
+      quote: "五月祭常任委員会",
+    });
+    expect(() => validateAnchor(a)).not.toThrow();
+    expect(() => validateAnchor({ ...a, end: 0 })).toThrow(
+      expect.objectContaining({ code: "anchor_invalid" }),
+    );
+    expect(() => validateAnchor({ ...a, start: -1 })).toThrow(
+      expect.objectContaining({ code: "anchor_invalid" }),
+    );
+    expect(() => validateAnchor({ ...a, quote: "x".repeat(TEXT_QUOTE_MAX + 1) })).toThrow(
+      expect.objectContaining({ code: "anchor_invalid" }),
+    );
+    // 範囲外はスナップショット長に丸める
+    expect(textRangeAnchor("art1", text, 100, 200)).toMatchObject({
+      start: text.length,
+      end: text.length,
+      quote: "",
+    });
   });
 });

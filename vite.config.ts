@@ -12,14 +12,25 @@ export default defineConfig({
     singleQuote: false,
     printWidth: 100,
     trailingComma: "all",
+    ignorePatterns: [
+      // `npx convex dev` が再生成する。lint と同じく整形対象にしない
+      "apps/convex/convex/_generated/**",
+      // `npx convex ai-files install` が置くベンダー文書。プロジェクトの整形規則で書き換えない
+      "apps/convex/.agents/**",
+      "apps/convex/.claude/**",
+      // Claude Code の作業用ワークツリー（リポジトリの複製）
+      ".claude/**",
+    ],
   },
   lint: {
     ignorePatterns: [
       "**/dist/**",
+      "**/dist-demo/**",
       "**/node_modules/**",
       "apps/convex/convex/_generated/**",
       "apps/web/src/routeTree.gen.ts",
       ".wrangler/**",
+      ".claude/**",
     ],
     options: {
       typeAware: true,

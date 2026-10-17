@@ -1,0 +1,126 @@
+import {
+  buildPushPayload,
+  type Principal,
+  type PushContentPolicy,
+  type PushPayload,
+  pushOutcome,
+  type PushSubscriptionInput,
+  recipientPrincipal,
+  validatePushSubscription,
+} from "@mf100/domain";
+import type { AppContext, PushSubscriptionRecord } from "../ports.ts";
+import { presentNotifications } from "./notifications.ts";
+
+/*
+ * 端末への通知（Web Push）。利用者決定 2026-10-15。
+ * 購読（どの端末に送るか）を保存し、通知ができたら、その人の端末ごとに送る内容（buildPushPayload）を作る。
+ * 送ること自体（暗号化・プッシュサービスへの送信）はアダプタ（Convex の action）の仕事。
+ */
+
+/**
+ * この端末に通知を送るようにする。同じ端末（endpoint）が別の人で登録済みなら、今の人に付け替える
+ * （共用の端末でサインインし直した。前の人の通知を出さない）。
+ */
+export async function subscribePush(
+  ctx: AppContext,
+  principal: Principal,
+  input: PushSubscriptionInput & { device?: string },
+): Promise<PushSubscriptionRecord> {
+  const sub = validatePushSubscription(input);
+  const device = input.device?.trim().slice(0, 80) || undefined;
+  const existing = await ctx.pushSubscriptions.findByEndpoint(sub.endpoint);
+  if (existing) {
+    const next: PushSubscriptionRecord = {
+      ...existing,
+      ...sub,
+      userId: principal.userId,
+      failureCount: 0,
+    };
+    if (device) next.device = device;
+    await ctx.pushSubscriptions.update(next);
+    return next;
+  }
+  return ctx.pushSubscriptions.insert({
+    userId: principal.userId,
+    ...sub,
+    ...(device ? { device } : {}),
+    createdAt: ctx.clock.now(),
+    failureCount: 0,
+  });
+}
+
+/** この端末への通知をやめる（自分の購読だけ。無ければ何もしない） */
+export async function unsubscribePush(
+  ctx: AppContext,
+  principal: Principal,
+  endpoint: string,
+): Promise<boolean> {
+  const existing = await ctx.pushSubscriptions.findByEndpoint(endpoint);
+  if (!existing || existing.userId !== principal.userId) return false;
+  await ctx.pushSubscriptions.delete(existing.id);
+  return true;
+}
+
+/** この端末に送っているか（設定の表示用。自分の購読だけを見る） */
+export async function isPushSubscribed(
+  ctx: AppContext,
+  principal: Principal,
+  endpoint: string,
+): Promise<boolean> {
+  const existing = await ctx.pushSubscriptions.findByEndpoint(endpoint);
+  return existing !== null && existing.userId === principal.userId;
+}
+
+export interface PushDelivery {
+  payload: PushPayload;
+  targets: Array<Pick<PushSubscriptionRecord, "id" | "endpoint" | "p256dh" | "auth">>;
+}
+
+/**
+ * 通知 1 件を端末に送る計画。受信者の購読が無ければ null。
+ * 送る時点でも見られるかを確かめ直す（作った後に ACL が外れたら、伏せた内容にする）。
+ * 既読になっていれば送らない（ほかの端末で先に読んだ）。
+ */
+export async function planPushDelivery(
+  ctx: AppContext,
+  notificationId: string,
+  policy?: PushContentPolicy,
+): Promise<PushDelivery | null> {
+  const n = await ctx.notifications.findById(notificationId);
+  if (!n || n.readAt !== undefined) return null;
+  const subs = await ctx.pushSubscriptions.listByUser(n.recipientId);
+  if (subs.length === 0) return null;
+  const [shown] = await presentNotifications(ctx, recipientPrincipal(n.recipientId), [n]);
+  const hidden = n.workId !== undefined && shown?.workId === undefined;
+  const work = !hidden && n.workId ? await ctx.works.findById(n.workId) : null;
+  const payload = buildPushPayload({
+    notification: shown ?? n,
+    work: work ? { title: work.title, restricted: work.confidentiality === "restricted" } : null,
+    hidden,
+    unread: await ctx.notifications.countUnread(n.recipientId),
+    ...(policy ? { policy } : {}),
+  });
+  return {
+    payload,
+    targets: subs.map(({ id, endpoint, p256dh, auth }) => ({ id, endpoint, p256dh, auth })),
+  };
+}
+
+/** 送った結果を記録する（成功で失敗回数を 0 に。宛先が無くなった・続けて失敗したら購読を消す） */
+export async function recordPushResult(
+  ctx: AppContext,
+  subscriptionId: string,
+  status: number,
+): Promise<"kept" | "deleted" | "missing"> {
+  const sub = await ctx.pushSubscriptions.findById(subscriptionId);
+  if (!sub) return "missing";
+  const r = pushOutcome(status, sub.failureCount);
+  if (r.action === "delete") {
+    await ctx.pushSubscriptions.delete(sub.id);
+    return "deleted";
+  }
+  const next: PushSubscriptionRecord = { ...sub, failureCount: r.failureCount };
+  if (status >= 200 && status < 300) next.lastSuccessAt = ctx.clock.now();
+  await ctx.pushSubscriptions.update(next);
+  return "kept";
+}

@@ -1,12 +1,21 @@
 import {
+  applyWorkPatch,
   assertExpectedVersion,
   type Confidentiality,
   DomainError,
   type MediaType,
+  newlyReferencedPeople,
+  normalizeWorkEssentials,
+  orgPermissions,
   type Principal,
+  requireOrgPermission,
   transitionLifecycle,
   type Work,
+  type WorkImportInput,
   type WorkLifecycle,
+  WORK_IMPORT_MAX_ROWS,
+  type WorkPatch,
+  type UserId,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
@@ -26,55 +35,187 @@ export interface CreateWorkInput {
   approverId: string;
   deadlineAt?: number;
   confidentiality?: Confidentiality;
+  /** 表記統一のルールカテゴリ（人が選ぶ。空なら検査しない） */
+  notationCategories?: string[];
   /** 登録と有効化を分ける案（§7.2）に備え、既定は即時 active。 */
   activate?: boolean;
+  /**
+   * 登録した人を主管に含めるか（既定 true）。一括登録では含めない: 管理者が全件の主管になってしまうため。
+   * 主管は CSV の「主管」列だけ（利用者決定 2026-10-15・UI_M3E §36）
+   */
+  addRegistrantAsManager?: boolean;
 }
 
 /**
  * 制作物登録（F-02 / UC-01）。
  * 実装上の仮置き: 認証済みユーザーは誰でも登録でき、登録者は自動的に主管担当（managerIds）に含まれる。
- * 「登録できる人」の制度上の範囲は D3/D10 と合わせて確認する。
+ * 登録できる人は Nogiku の組織権限 `works:create` で管理する（利用者決定 2026-10-10）。Nogiku Access 未接続の MVP では全員が持つ。
  */
-export async function createWork(ctx: AppContext, principal: Principal, input: CreateWorkInput): Promise<Work> {
-  if (input.title.trim() === "") throw new DomainError("forbidden", { reason: "title_required" });
-  if (input.creatorIds.length === 0) throw new DomainError("forbidden", { reason: "creator_required" });
-  const managerIds = Array.from(new Set([...(input.managerIds ?? []), principal.userId]));
+export async function createWork(
+  ctx: AppContext,
+  principal: Principal,
+  input: CreateWorkInput,
+): Promise<Work> {
+  requireOrgPermission(principal, orgPermissions.worksCreate);
+  // 名称・区分・制作者・校了権限者・主管の不変条件は変更と同じドメイン関数で確かめる
+  const essentials = normalizeWorkEssentials({
+    title: input.title,
+    category: input.category,
+    creatorIds: input.creatorIds,
+    approverId: input.approverId,
+    managerIds: input.managerIds ?? [],
+  });
+  const managerIds = Array.from(
+    new Set([
+      ...essentials.managerIds,
+      ...(input.addRegistrantAsManager === false ? [] : [principal.userId]),
+    ]),
+  );
+  // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責の人は委員の名簿にいること
+  await assertPeopleExist(ctx, essentials);
+  const ownerTeamId = input.ownerTeamId?.trim() || undefined;
+  const productionTeamIds = cleanTeamIds(input.productionTeamIds ?? []);
+  await assertTeamsExist(ctx, ownerTeamId, productionTeamIds);
   const data: Omit<Work, "id"> = {
     year: input.year,
-    title: input.title.trim(),
+    title: essentials.title,
     purpose: input.purpose,
-    category: input.category,
+    category: essentials.category,
     mediaType: input.mediaType,
-    productionTeamIds: input.productionTeamIds ?? [],
+    productionTeamIds,
     relatedTeamIds: input.relatedTeamIds ?? [],
     managerIds,
-    creatorIds: Array.from(new Set(input.creatorIds)),
-    approverId: input.approverId,
+    creatorIds: essentials.creatorIds,
+    approverId: essentials.approverId,
     lifecycle: input.activate === false ? "draft" : "active",
     confidentiality: input.confidentiality ?? "normal",
     version: 1,
   };
   if (input.legacyId !== undefined) data.legacyId = input.legacyId;
-  if (input.ownerTeamId !== undefined) data.ownerTeamId = input.ownerTeamId;
+  if (ownerTeamId !== undefined) data.ownerTeamId = ownerTeamId;
   if (input.deadlineAt !== undefined) data.deadlineAt = input.deadlineAt;
+  if (input.notationCategories !== undefined)
+    data.notationCategories = cleanCategories(input.notationCategories);
   const work = await ctx.works.insert(data);
-  await ctx.audit.record({ entityType: "work", entityId: work.id, operation: "create", actorId: principal.userId, after: work, at: ctx.clock.now() });
+  await ctx.audit.record({
+    entityType: "work",
+    entityId: work.id,
+    operation: "create",
+    actorId: principal.userId,
+    after: work,
+    at: ctx.clock.now(),
+  });
   return work;
+}
+
+/**
+ * 制作物の一括登録（CSV。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」）。
+ * 画面で CSV を解析・照合（domain の parseWorkCsv / resolveWorkImport）して確認した行だけを受け取り、
+ * 1 件ずつの登録と同じ {@link createWork}（権限 `works:create`・検証・監査）を通して、まとめて（1 トランザクションで）登録する。
+ * どれか 1 行でも登録できなければ、何も登録しない。
+ */
+export async function importWorks(
+  ctx: AppContext,
+  principal: Principal,
+  input: { rows: readonly WorkImportInput[]; source?: string },
+): Promise<Work[]> {
+  requireOrgPermission(principal, orgPermissions.worksCreate);
+  if (input.rows.length === 0 || input.rows.length > WORK_IMPORT_MAX_ROWS)
+    throw new DomainError("work_import_invalid", {
+      reason: "row_count",
+      count: input.rows.length,
+      max: WORK_IMPORT_MAX_ROWS,
+    });
+  const created: Work[] = [];
+  for (const [index, row] of input.rows.entries()) {
+    try {
+      created.push(
+        await createWork(ctx, principal, {
+          ...row,
+          managerIds: row.managerIds,
+          notationCategories: row.notationCategories,
+          addRegistrantAsManager: false,
+        }),
+      );
+    } catch (e) {
+      // 1 件ずつの登録と同じ検証（createWork）で落ちた行は、何行目かを添えて返す
+      if (e instanceof DomainError && e.code === "work_invalid")
+        throw new DomainError("work_import_invalid", {
+          ...e.details,
+          reason: "row_invalid",
+          index,
+          cause: e.code,
+          causeReason: e.details.reason ?? null,
+        });
+      throw e;
+    }
+  }
+  await ctx.audit.record({
+    entityType: "work",
+    entityId: "bulk",
+    operation: "bulk_import",
+    actorId: principal.userId,
+    after: {
+      count: created.length,
+      workIds: created.map((w) => w.id),
+      ...(input.source ? { source: input.source } : {}),
+    },
+    at: ctx.clock.now(),
+  });
+  return created;
 }
 
 export interface UpdateWorkInput {
   workId: string;
   expectedVersion?: number;
-  patch: Partial<Pick<Work, "title" | "purpose" | "category" | "mediaType" | "deadlineAt" | "creatorIds" | "approverId" | "managerIds" | "confidentiality" | "legacyId" | "ownerTeamId" | "productionTeamIds" | "relatedTeamIds">>;
+  patch: WorkPatch & {
+    /** 主管担当（空文字で外す） */
+    ownerTeamId?: string;
+    /** SNS のアカウント（本体の設定）の割り当て。null で外す */
+    socialProfileId?: string | null;
+  };
 }
 
-export async function updateWork(ctx: AppContext, principal: Principal, input: UpdateWorkInput): Promise<Work> {
+export async function updateWork(
+  ctx: AppContext,
+  principal: Principal,
+  input: UpdateWorkInput,
+): Promise<Work> {
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "work.edit");
   assertExpectedVersion(work, input.expectedVersion);
-  if (work.lifecycle === "finalized") throw new DomainError("work_already_finalized", { workId: work.id });
-  const next: Work = { ...work, ...stripUndefined(input.patch), version: work.version + 1 };
+  if (work.lifecycle === "finalized")
+    throw new DomainError("work_already_finalized", { workId: work.id });
+  const { socialProfileId, ownerTeamId, ...rest } = input.patch;
+  const patch: WorkPatch = stripUndefined(rest);
+  if (patch.notationCategories)
+    patch.notationCategories = cleanCategories(patch.notationCategories);
+  // 制作担当は全体の置き換え（重複・空を除く）
+  if (patch.productionTeamIds) patch.productionTeamIds = cleanTeamIds(patch.productionTeamIds);
+  const owner = ownerTeamId === undefined ? undefined : ownerTeamId.trim();
+  await assertTeamsExist(ctx, owner || undefined, patch.productionTeamIds ?? []);
+  // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人の校了権限者）をドメインで確かめる
+  const next = applyWorkPatch(work, patch);
+  // 新しく職責に入った人は委員の名簿にいること
+  await assertPeopleExist(ctx, next, work);
+  // 主管担当: 空文字は「主管担当なし」（外す）
+  if (owner === "") delete next.ownerTeamId;
+  else if (owner !== undefined) next.ownerTeamId = owner;
+  if (socialProfileId === null) delete next.socialProfileId;
+  else if (socialProfileId !== undefined) {
+    if (!(await ctx.socialProfiles.findById(socialProfileId)))
+      throw new DomainError("social_profile_invalid", { field: "socialProfileId" });
+    next.socialProfileId = socialProfileId;
+  }
   await ctx.works.update(next);
-  await ctx.audit.record({ entityType: "work", entityId: work.id, operation: "update", actorId: principal.userId, before: work, after: next, at: ctx.clock.now() });
+  await ctx.audit.record({
+    entityType: "work",
+    entityId: work.id,
+    operation: "update",
+    actorId: principal.userId,
+    before: work,
+    after: next,
+    at: ctx.clock.now(),
+  });
   return next;
 }
 
@@ -86,15 +227,73 @@ export async function changeWorkLifecycle(
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "work.edit");
   assertExpectedVersion(work, input.expectedVersion);
   // 校了・再開は approvals ユースケース経由のみ（監査イベントを伴う）。
-  if (work.lifecycle === "finalized") throw new DomainError("work_already_finalized", { workId: work.id });
+  if (work.lifecycle === "finalized")
+    throw new DomainError("work_already_finalized", { workId: work.id });
   const next = transitionLifecycle(work, input.to);
   await ctx.works.update(next);
-  await ctx.audit.record({ entityType: "work", entityId: work.id, operation: `lifecycle:${input.to}`, actorId: principal.userId, before: work.lifecycle, after: next.lifecycle, at: ctx.clock.now() });
+  await ctx.audit.record({
+    entityType: "work",
+    entityId: work.id,
+    operation: `lifecycle:${input.to}`,
+    actorId: principal.userId,
+    before: work.lifecycle,
+    after: next.lifecycle,
+    at: ctx.clock.now(),
+  });
   return next;
+}
+
+/**
+ * 職責（制作者・校了権限者・主管）に入る人が委員の名簿（PeopleDirectory）にいるか。
+ * before を渡すと、既に職責にいた人は確かめ直さない。知らない人は `work_invalid`（unknown_user）。
+ */
+async function assertPeopleExist(
+  ctx: AppContext,
+  after: { creatorIds: readonly UserId[]; approverId: UserId; managerIds: readonly UserId[] },
+  before: Work | null = null,
+): Promise<void> {
+  const ids = newlyReferencedPeople(before, after);
+  if (ids.length === 0) return;
+  const known = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
+  const missing = ids.filter((id) => !known.has(id));
+  if (missing.length === 0) return;
+  const field = after.creatorIds.includes(missing[0]!)
+    ? "creatorIds"
+    : after.approverId === missing[0]
+      ? "approverId"
+      : "managerIds";
+  throw new DomainError("work_invalid", { field, reason: "unknown_user", userIds: missing });
+}
+
+function cleanTeamIds(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids.map((id) => id.trim()).filter((id) => id !== "")));
+}
+
+/** 主管担当・制作担当が組織（局 › 担当）にあるか。空なら確かめない */
+async function assertTeamsExist(
+  ctx: AppContext,
+  ownerTeamId: string | undefined,
+  productionTeamIds: readonly string[],
+): Promise<void> {
+  const ids = [...(ownerTeamId ? [ownerTeamId] : []), ...productionTeamIds];
+  for (const id of new Set(ids))
+    if (!(await ctx.teams.findById(id)))
+      throw new DomainError("team_not_found", {
+        teamId: id,
+        field: id === ownerTeamId ? "ownerTeamId" : "productionTeamIds",
+      });
 }
 
 function stripUndefined<T extends object>(obj: T): Partial<T> {
   const out: Partial<T> = {};
-  for (const [k, v] of Object.entries(obj)) if (v !== undefined) (out as Record<string, unknown>)[k] = v;
+  for (const [k, v] of Object.entries(obj))
+    if (v !== undefined) (out as Record<string, unknown>)[k] = v;
   return out;
+}
+
+/** カテゴリコードの正規化（重複・空を除く。存在確認は表記統一側で行い、知らないコードは検査で無視される） */
+function cleanCategories(codes: readonly string[]): string[] {
+  return Array.from(
+    new Set(codes.map((c) => c.trim()).filter((c) => /^[A-Za-z][A-Za-z0-9_-]{0,15}$/.test(c))),
+  ).slice(0, 20);
 }

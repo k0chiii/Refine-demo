@@ -11,7 +11,16 @@ export const confidentialities = ["normal", "restricted"] as const;
 export type Confidentiality = (typeof confidentialities)[number];
 
 /** 媒体種別。導入対象外（external）は外部リンクで管理する（C5 / A-12）。 */
-export const mediaTypes = ["pdf", "image", "document", "video", "web", "figma", "other"] as const;
+export const mediaTypes = [
+  "pdf",
+  "image",
+  "document",
+  "sns",
+  "video",
+  "web",
+  "figma",
+  "other",
+] as const;
 export type MediaType = (typeof mediaTypes)[number];
 
 export interface Work {
@@ -37,6 +46,13 @@ export interface Work {
   lifecycle: WorkLifecycle;
   confidentiality: Confidentiality;
   finalRevisionId?: RevisionId;
+  /**
+   * 表記統一で使うルールカテゴリ（A1, B など）。制作物ごとに人が選ぶ。媒体・部署から自動では決めない。
+   * 未設定・空なら表記の検査をしない（登録・編集画面で選ぶよう促す）
+   */
+  notationCategories?: readonly string[];
+  /** SNS 投稿の制作物で使うアカウント（本体の設定の SocialProfile の ID） */
+  socialProfileId?: string;
   /** 楽観的排他用のバージョン */
   version: number;
 }
@@ -61,11 +77,16 @@ export function transitionLifecycle(work: Work, to: WorkLifecycle): Work {
 }
 
 export function assertWorkActive(work: Work): void {
-  if (work.lifecycle === "finalized") throw new DomainError("work_already_finalized", { workId: work.id });
-  if (work.lifecycle !== "active") throw new DomainError("work_not_active", { workId: work.id, lifecycle: work.lifecycle });
+  if (work.lifecycle === "finalized")
+    throw new DomainError("work_already_finalized", { workId: work.id });
+  if (work.lifecycle !== "active")
+    throw new DomainError("work_not_active", { workId: work.id, lifecycle: work.lifecycle });
 }
 
-export function assertExpectedVersion(work: { version: number }, expectedVersion: number | undefined): void {
+export function assertExpectedVersion(
+  work: { version: number },
+  expectedVersion: number | undefined,
+): void {
   if (expectedVersion !== undefined && expectedVersion !== work.version) {
     throw new DomainError("version_conflict", { expected: expectedVersion, actual: work.version });
   }

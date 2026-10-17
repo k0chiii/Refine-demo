@@ -2,12 +2,8 @@
   "name": "mf100-refine",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "MF100 校正システム（refine）- 東京大学五月祭常任委員会",
-  "packageManager": "pnpm@10.28.0",
-  "engines": {
-    "node": ">=22.18.0"
-  },
+  "type": "module",
   "scripts": {
     "check": "vp check",
     "fmt": "vp fmt",
@@ -15,13 +11,19 @@
     "test": "vp test",
     "typecheck": "vp run -r typecheck",
     "build": "vp run -r build",
-    "dev": "vp run @mf100/web#dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vp run @mf100/web#dev",
     "dev:convex": "vp run @mf100/convex#dev",
     "dev:api": "vp run @mf100/api#dev",
-    "codegen": "vp run @mf100/convex#codegen"
+    "codegen": "vp run @mf100/convex#codegen",
+    "deploy:demo": "pnpm --filter @mf100/web build:demo && cd apps/api && pnpm exec wrangler pages deploy ../web/dist-demo --project-name mf100-refine-demo"
   },
   "devDependencies": {
     "typescript": "5.9.3",
-    "vite-plus": "1.1.0"
-  }
+    "vite-plus": "1.2.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@10.28.0"
 }

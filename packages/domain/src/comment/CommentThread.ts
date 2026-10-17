@@ -2,6 +2,7 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { ArtifactId, RevisionId, ThreadId, UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { Anchor } from "./Anchor.ts";
+import type { BotOrigin } from "../notation/autoProofread.ts";
 
 /** スレッド種別（§9.1 設計案） */
 export const threadKinds = ["correction", "question", "discussion", "decision"] as const;
@@ -12,7 +13,14 @@ export const severities = ["critical", "major", "minor", "info"] as const;
 export type Severity = (typeof severities)[number];
 
 /** Comment.resolution（§5.1）。accepted=反映すると判断、resolved=反映済みなど確認された。単一フラグに統合しない。 */
-export const resolutions = ["open", "acknowledged", "accepted", "rejected", "deferred", "resolved"] as const;
+export const resolutions = [
+  "open",
+  "acknowledged",
+  "accepted",
+  "rejected",
+  "deferred",
+  "resolved",
+] as const;
 export type Resolution = (typeof resolutions)[number];
 
 export interface CommentThread {
@@ -29,6 +37,16 @@ export interface CommentThread {
   createdAt: Instant;
   /** 前版からの引き継ぎ元 */
   carriedFromThreadId?: ThreadId;
+  /** 次版へ引き継いだ先（引き継ぎ済みの目印。元スレッドは書き換えない） */
+  carriedToThreadId?: ThreadId;
+  /** 対応担当者（F-07）。採否判断者が割り当てる。 */
+  assigneeId?: UserId;
+  /** 本文の訂正回数。訂正前の本文は CommentEvent("edited") に残す（§5.2-9）。 */
+  editCount?: number;
+  /** 自動校正の指摘（投稿者はシステム）。人の投稿では設定しない */
+  origin?: BotOrigin;
+  /** 本文でメンションした人（制作物を見られる人だけ。validateMentions） */
+  mentions?: UserId[];
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;
@@ -53,7 +71,10 @@ export function decideThread(
   reason: string | undefined,
 ): CommentThread {
   if (!allowed[thread.resolution].includes(action)) {
-    throw new DomainError("comment_invalid_resolution_transition", { from: thread.resolution, to: action });
+    throw new DomainError("comment_invalid_resolution_transition", {
+      from: thread.resolution,
+      to: action,
+    });
   }
   if (requiresReason(action) && (reason === undefined || reason.trim() === "")) {
     throw new DomainError("comment_reason_required", { action });
@@ -62,10 +83,17 @@ export function decideThread(
 }
 
 /** 校了をブロックする「未対応の重大な指摘」か。閾値はポリシーで差し替え可能（D6）。 */
-export function isBlockingForApproval(thread: CommentThread, blockingSeverities: readonly Severity[]): boolean {
+export function isBlockingForApproval(
+  thread: CommentThread,
+  blockingSeverities: readonly Severity[],
+): boolean {
   if (thread.kind === "discussion") return false;
   if (!blockingSeverities.includes(thread.severity)) return false;
-  return thread.resolution === "open" || thread.resolution === "acknowledged" || thread.resolution === "accepted";
+  return (
+    thread.resolution === "open" ||
+    thread.resolution === "acknowledged" ||
+    thread.resolution === "accepted"
+  );
 }
 
 export type CommentEventType =
@@ -73,7 +101,67 @@ export type CommentEventType =
   | "replied"
   | "decided"
   | "edited"
-  | "carried_forward";
+  | "carried_forward"
+  | "assigned";
+
+/** 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。 */
+export function editThreadBody(
+  thread: CommentThread,
+  actorId: UserId,
+  body: string,
+): CommentThread {
+  if (thread.authorId !== actorId)
+    throw new DomainError("comment_edit_not_author", { threadId: thread.id });
+  if (thread.resolution !== "open" && thread.resolution !== "acknowledged") {
+    throw new DomainError("comment_invalid_resolution_transition", {
+      from: thread.resolution,
+      to: "edited",
+    });
+  }
+  if (body.trim() === "") throw new DomainError("comment_reason_required", { action: "edit" });
+  return { ...thread, body, editCount: (thread.editCount ?? 0) + 1 };
+}
+
+/**
+ * 前版の未解決指摘を次版へ引き継ぐ（F-07 / §3.2 の人手版）。
+ * 原指摘は書き換えず deferred にし、新版に carriedFromThreadId 付きの新スレッドを作る。位置は次版で再指定する。
+ */
+export function planCarryForward(
+  source: CommentThread,
+  targetRevisionId: RevisionId,
+  now: Instant,
+): { target: Omit<CommentThread, "id">; sourceAfter: CommentThread } {
+  if (source.carriedToThreadId)
+    throw new DomainError("comment_already_carried", { threadId: source.id });
+  if (source.revisionId === targetRevisionId)
+    throw new DomainError("comment_carry_same_revision", { threadId: source.id });
+  const sourceAfter: CommentThread =
+    source.resolution === "open" ||
+    source.resolution === "acknowledged" ||
+    source.resolution === "accepted"
+      ? { ...source, resolution: "deferred" }
+      : source;
+  const target: Omit<CommentThread, "id"> = {
+    revisionId: targetRevisionId,
+    authorId: source.authorId,
+    body: source.body,
+    kind: source.kind,
+    severity: source.severity,
+    resolution: "open",
+    createdAt: now,
+    carriedFromThreadId: source.id,
+  };
+  if (source.assigneeId !== undefined) target.assigneeId = source.assigneeId;
+  // 自動校正の指摘は持ち越しても自動校正の指摘として表示する（根拠のルールと版も引き継ぐ）
+  if (source.origin !== undefined) target.origin = source.origin;
+  return { target, sourceAfter };
+}
+
+/** 次版へ持ち越す候補: 未対応・持越・採用済み未反映の指摘（反映済み・不採用は対象外）。 */
+export function isCarryCandidate(thread: CommentThread): boolean {
+  if (thread.carriedToThreadId) return false;
+  return ["open", "acknowledged", "accepted", "deferred"].includes(thread.resolution);
+}
 
 export interface CommentEvent {
   threadId: ThreadId;

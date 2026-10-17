@@ -1,6 +1,7 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import { isBeforeDeadline, type Instant } from "../shared/time.ts";
+import type { RuleSetSnapshot } from "../notation/ruleset.ts";
 
 /** 0版（ラフ）と第1版以降（通常版）は別種別（C8 / D1）。 */
 export type RevisionKind = "rough" | "standard";
@@ -28,6 +29,8 @@ export interface Revision {
   changeSummary: string;
   focusNotes: string;
   snapshotHash?: string;
+  /** 提出時の表記統一ルールの組（どのルールのどの版で検査するか）。後からルールを変えても版の結果は変わらない */
+  notationSnapshot?: RuleSetSnapshot;
 }
 
 export function isAccepting(revision: Revision): boolean {
@@ -36,8 +39,9 @@ export function isAccepting(revision: Revision): boolean {
 
 /**
  * 新しい版の計画（提出確定の前段）。
- * - rough: 作品につき 1 件、かつ通常版が存在する前に限る（実装上の仮置き §2.3）。
- * - standard: 既存 standard の最大 sequence + 1（最小 1）。
+ * - rough: 通常版が存在する前に限る。再提出は可（利用者決定 2026-10-10）。sequence は 0 始まりの提出回数で、
+ *   表示は常に「0版（ラフ）」。旧ラフは新ラフの確定で superseded になる。0版からの直接校了は不可。
+ * - standard: 既存 standard の最大 sequence + 1（最小 1）。0版の回数は通常版の番号に影響しない。
  * - 受付中の版は高々 1 件なので、open な版があればそれを superseded として閉じる対象にする。
  */
 export interface RevisionPlan {
@@ -46,15 +50,16 @@ export interface RevisionPlan {
 }
 
 export function planRevision(existing: readonly Revision[], kind: RevisionKind): RevisionPlan {
+  // 版番号は無効化した版も含めて一意（§5.2-6: 誤提出の訂正は履歴を持つ）
+  const standards = existing.filter((r) => r.kind === "standard");
+  const roughs = existing.filter((r) => r.kind === "rough");
   const live = existing.filter((r) => r.reviewState !== "void");
-  const standards = live.filter((r) => r.kind === "standard");
-  const roughs = live.filter((r) => r.kind === "rough");
 
   let sequence: number;
   if (kind === "rough") {
-    if (standards.length > 0) throw new DomainError("revision_rough_after_standard");
-    if (roughs.length > 0) throw new DomainError("revision_rough_already_exists");
-    sequence = 0;
+    if (standards.some((r) => r.reviewState !== "void"))
+      throw new DomainError("revision_rough_after_standard");
+    sequence = roughs.length;
   } else {
     sequence = standards.reduce((max, r) => Math.max(max, r.sequence), 0) + 1;
   }
@@ -84,7 +89,10 @@ export interface NewRevisionInput {
 
 export function createRevision(input: NewRevisionInput, plan: RevisionPlan): NewRevision {
   if (!isBeforeDeadline(input.now, input.deadlineAt)) {
-    throw new DomainError("revision_deadline_in_past", { now: input.now, deadlineAt: input.deadlineAt });
+    throw new DomainError("revision_deadline_in_past", {
+      now: input.now,
+      deadlineAt: input.deadlineAt,
+    });
   }
   const revision: NewRevision = {
     workId: input.workId,
@@ -118,7 +126,12 @@ export function supersede(previous: Revision, by: Pick<Revision, "id">, now: Ins
 export function closeByDeadline(revision: Revision, now: Instant): Revision {
   if (revision.reviewState !== "open") return revision;
   if (isBeforeDeadline(now, revision.deadlineAt)) return revision;
-  return { ...revision, reviewState: "closed", reviewClosedReason: "deadline", reviewClosedAt: now };
+  return {
+    ...revision,
+    reviewState: "closed",
+    reviewClosedReason: "deadline",
+    reviewClosedAt: now,
+  };
 }
 
 /**
@@ -126,16 +139,50 @@ export function closeByDeadline(revision: Revision, now: Instant): Revision {
  * `now < deadlineAt` かつ受付中、かつ当該制作物の最新の受付対象版であること。
  * 表示上の期限ジョブが遅延していても、ここでの比較で拒否する。
  */
-export function assertCanPostComment(revision: Revision, now: Instant, latestAcceptingRevisionId: RevisionId | null): void {
+export function assertCanPostComment(
+  revision: Revision,
+  now: Instant,
+  latestAcceptingRevisionId: RevisionId | null,
+): void {
   if (revision.reviewState !== "open") {
-    throw new DomainError("revision_not_accepting", { revisionId: revision.id, reviewState: revision.reviewState, reason: revision.reviewClosedReason });
+    throw new DomainError("revision_not_accepting", {
+      revisionId: revision.id,
+      reviewState: revision.reviewState,
+      reason: revision.reviewClosedReason,
+    });
   }
   if (!isBeforeDeadline(now, revision.deadlineAt)) {
-    throw new DomainError("revision_deadline_passed", { revisionId: revision.id, now, deadlineAt: revision.deadlineAt });
+    throw new DomainError("revision_deadline_passed", {
+      revisionId: revision.id,
+      now,
+      deadlineAt: revision.deadlineAt,
+    });
   }
   if (latestAcceptingRevisionId !== revision.id) {
-    throw new DomainError("revision_not_latest", { revisionId: revision.id, latestAcceptingRevisionId });
+    throw new DomainError("revision_not_latest", {
+      revisionId: revision.id,
+      latestAcceptingRevisionId,
+    });
   }
+}
+
+/**
+ * 誤提出の無効化（§5.2-6）。受付中の最新版のみ、理由必須。指摘・添付は履歴として残す（削除しない）。
+ * 無効化後は受付中の版が無くなる（旧版は再開しない。必要なら正しい版を再提出する）。
+ */
+export function voidRevision(
+  revision: Revision,
+  reason: string | undefined,
+  now: Instant,
+): Revision {
+  if (revision.reviewState !== "open")
+    throw new DomainError("revision_void_not_allowed", {
+      revisionId: revision.id,
+      reviewState: revision.reviewState,
+    });
+  const r = reason?.trim() ?? "";
+  if (r === "") throw new DomainError("revision_void_reason_required");
+  return { ...revision, reviewState: "void", reviewClosedReason: "void", reviewClosedAt: now };
 }
 
 /** 校了候補となる最終版: void でない最新の standard 版（0版からの直接校了は制度承認まで不可）。 */
@@ -148,7 +195,9 @@ export function latestStandardRevision(revisions: readonly Revision[]): Revision
   return best;
 }
 
-/** 表示用ラベル: 0版は「ラフ」、通常版は「第n版」。連番扱いしない。 */
+/** 表示用ラベル: 0版は「ラフ」（再提出は回数を併記）、通常版は「第n版」。連番扱いしない。 */
 export function revisionLabel(revision: Pick<Revision, "kind" | "sequence">): string {
-  return revision.kind === "rough" ? "0版（ラフ）" : `第${revision.sequence}版`;
+  if (revision.kind === "rough")
+    return revision.sequence === 0 ? "0版（ラフ）" : `0版（ラフ・${revision.sequence + 1}回目）`;
+  return `第${revision.sequence}版`;
 }

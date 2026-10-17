@@ -1,0 +1,903 @@
+/*
+ * SNS 投稿のプレビュー（Instagram / X のスマホアプリの見た目に寄せた再現）。アプリの UI ではなく、他サービスの画面を写したもの
+ * （ロゴ・アイコンは各サービスの Web 版の SVG。団体内でだけ使う）。
+ * 文字・色・寸法は公開ページ（埋め込み表示）の実測値:
+ *   Instagram: system フォント、ユーザー名 600 14/18 #000、補足 12/14 #737373、本文 14/18、ハッシュタグ #00376B、アイコン 24
+ *   X: system フォント、名前 700 15/20 #0F1419、@・時刻 15/20 #536471、本文 15/20、リンク #1D9BF0、認証 #1D9BF0
+ */
+.sp-figure {
+  /* 幅は置き場所いっぱい（中身の幅に合わせると、縮める倍率の計算と互いに揺れ続ける） */
+  width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sp-caption {
+  font-size: 12px;
+  color: var(--mf-on-surface-variant);
+  text-align: center;
+  max-width: 420px;
+}
+/* 端末の外形（ベゼル画像か CSS の枠）。中の .sp-device が実機の画面の大きさ */
+.sp-frame-fit {
+  display: flex;
+  justify-content: center;
+}
+.sp-frame {
+  position: relative;
+  flex: none;
+}
+.sp-frame__screen {
+  position: absolute;
+}
+.sp-frame__bezel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+.sp-frame__body {
+  position: absolute;
+  inset: 0;
+  background: #1c1c1e;
+  box-shadow:
+    inset 0 0 0 2px #3a3a3c,
+    0 10px 30px rgb(0 0 0 / 0.18);
+}
+.sp-frame--android .sp-frame__body {
+  background: #202124;
+}
+.sp-frame--bezel {
+  filter: drop-shadow(0 10px 24px rgb(0 0 0 / 0.16));
+}
+/* ホームボタンの機種（iPhone SE） */
+.sp-frame__button {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  width: 58px;
+  height: 58px;
+  margin-left: -29px;
+  border-radius: 50%;
+  border: 2px solid #48484a;
+}
+.sp-frame__speaker {
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  width: 50px;
+  height: 6px;
+  margin-left: -25px;
+  border-radius: 3px;
+  background: #3a3a3c;
+}
+.sp-device {
+  --sp-bg: #fff;
+  --sp-fg: #000;
+  --sp-muted: #737373;
+  --sp-line: #dbdbdb;
+  --sp-top: 0px;
+  --sp-bottom: 0px;
+  background: var(--sp-bg);
+  color: var(--sp-fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Hiragino Sans",
+    "Noto Sans JP Variable", "Noto Sans JP", sans-serif;
+  font-size: 14px;
+  line-height: 18px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  -webkit-font-smoothing: antialiased;
+}
+.sp-device--pc {
+  width: 600px;
+  max-width: 100%;
+  min-height: 420px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 24px 0;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.12),
+    0 10px 30px rgb(0 0 0 / 0.14);
+}
+.sp-device--dark {
+  --sp-bg: #000;
+  --sp-fg: #fff;
+}
+.sp-device__status {
+  flex: none;
+  height: var(--sp-top);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 30px 0 44px;
+  font-size: 17px;
+  position: relative;
+}
+.sp-device__status b {
+  font-weight: 600;
+}
+.sp-device--android .sp-device__status {
+  padding: 0 20px;
+  font-size: 14px;
+}
+.sp-cut--home-button .sp-device__status {
+  padding: 0 8px;
+  font-size: 12px;
+}
+.sp-cut--home-button .sp-device__status b {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.sp-cut--home-button .sp-device__status svg {
+  margin-left: auto;
+  transform: scale(0.8);
+  transform-origin: right center;
+}
+/* 画面の切り欠き（ベゼル画像がない機種だけ CSS で描く） */
+.sp-device__island,
+.sp-device__notch,
+.sp-device__punch {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  z-index: 4;
+}
+.sp-device__island {
+  top: 11px;
+  width: 124px;
+  height: 36px;
+  border-radius: 18px;
+}
+.sp-device__notch {
+  top: 0;
+  width: 162px;
+  height: 32px;
+  border-radius: 0 0 20px 20px;
+}
+.sp-device__punch {
+  top: 12px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+.sp-device__screen {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.sp-device__home {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--sp-fg);
+  z-index: 3;
+}
+.sp-device--android .sp-device__home {
+  width: 108px;
+  height: 4px;
+  bottom: 9px;
+}
+.sp-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sp-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.sp-scroll:focus-visible {
+  outline: 2px solid #0095f6;
+  outline-offset: -2px;
+}
+.sp-img {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  background: #efefef;
+}
+.sp-img img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+}
+.sp-img__none {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--sp-muted);
+  font-size: 12px;
+}
+.sp-avatar {
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #fff;
+  background: #c7c7c7;
+}
+.sp-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sp-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sp-tag {
+  color: #00376b;
+}
+.sp-link {
+  color: #1d9bf0;
+}
+.sp-more {
+  all: unset;
+  color: var(--sp-muted);
+  cursor: pointer;
+}
+.sp-badge {
+  flex: none;
+  vertical-align: -2px;
+  margin-left: 4px;
+}
+.sp-badge--ig {
+  color: #0095f6;
+}
+.sp-badge--x {
+  color: #1d9bf0;
+  margin-left: 2px;
+}
+.sp-rot180 {
+  transform: rotate(180deg);
+}
+
+/* ---------- Instagram: フィードの上のバー（新規投稿・ロゴ・お知らせ） */
+.sp-ig-top {
+  flex: none;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+.sp-ig-top__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* ---------- Instagram: フィードの投稿 */
+.sp-ig__head {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+}
+.sp-ig__ring {
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(from 200deg, #f9ce34, #ee2a7b, #6228d7, #f9ce34);
+  display: grid;
+}
+.sp-ig__ring .sp-avatar {
+  outline: 2px solid var(--sp-bg);
+}
+.sp-ig__user {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+.sp-ig__more {
+  margin-left: auto;
+}
+.sp-ig__media {
+  position: relative;
+}
+/* カルーセル: 横スクロールのスナップで 1 枚ずつ（スクロールバーは出さない） */
+.sp-ig__track {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+.sp-ig__track::-webkit-scrollbar {
+  display: none;
+}
+.sp-ig__track.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+.sp-ig__slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.sp-ig__count {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgb(18 18 18 / 0.7);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 5px 8px;
+  border-radius: 13px;
+}
+.sp-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(255 255 255 / 0.85);
+  color: #000;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgb(0 0 0 / 0.2);
+}
+.sp-nav--prev {
+  left: 10px;
+}
+.sp-nav--next {
+  right: 10px;
+}
+.sp-ig__actions {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  position: relative;
+}
+.sp-ig__pager {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+}
+.sp-ig__pager i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #dbdbdb;
+}
+.sp-ig__pager i.on {
+  background: #0095f6;
+}
+.sp-ig__save {
+  margin-left: auto;
+}
+.sp-ig__caption {
+  margin: 0;
+  padding: 0 12px;
+}
+.sp-ig__caption b {
+  font-weight: 600;
+}
+.sp-ig__time {
+  margin: 6px 0 0;
+  padding: 0 12px 12px;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--sp-muted);
+}
+.sp-ig__next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+.sp-ig__next i {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #efefef;
+}
+.sp-ig__next span {
+  width: 120px;
+  height: 10px;
+  border-radius: 5px;
+  background: #efefef;
+}
+.sp-ig-tabs {
+  flex: none;
+  height: calc(49px + var(--sp-bottom));
+  padding-bottom: var(--sp-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-top: 0.5px solid var(--sp-line);
+  background: var(--sp-bg);
+}
+.sp-ig-tabs__me {
+  display: grid;
+  border-radius: 50%;
+  padding: 1px;
+}
+.sp-ig-tabs__me.on {
+  box-shadow: 0 0 0 1.5px currentColor;
+}
+
+/* ---------- Instagram: プロフィール */
+.sp-prof__bar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px;
+  font-size: 20px;
+  line-height: 24px;
+}
+.sp-prof__bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.sp-prof__bar b {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-prof {
+  padding: 8px 16px 12px;
+}
+.sp-prof__top {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.sp-prof__side {
+  flex: 1;
+  min-width: 0;
+}
+.sp-prof__name {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+.sp-prof__stats {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0 0;
+}
+.sp-prof__stats div {
+  display: flex;
+  flex-direction: column;
+}
+.sp-prof__stats dt {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 20px;
+}
+.sp-prof__stats dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 16px;
+}
+.sp-prof__bio {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+.sp-prof__buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.sp-prof__buttons span {
+  flex: 1;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #efefef;
+  font-weight: 600;
+  font-size: 13px;
+}
+.sp-prof__tabs {
+  display: flex;
+  border-bottom: 0.5px solid var(--sp-line);
+}
+.sp-prof__tabs span {
+  flex: 1;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--sp-muted);
+}
+.sp-prof__tabs span.on {
+  color: var(--sp-fg);
+  box-shadow: inset 0 -1px 0 var(--sp-fg);
+}
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.sp-grid__cell {
+  position: relative;
+}
+.sp-grid__mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #fff;
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.4));
+}
+.sp-grid__tile--empty {
+  aspect-ratio: 3 / 4;
+  background: #efefef;
+}
+
+/* ---------- Instagram: ストーリーズ */
+.sp-story {
+  position: relative;
+  flex: 1;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+}
+/* ストーリーズ: 1 枚ずつ横に並べてスクロールスナップで送る */
+.sp-story__track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.sp-story__track::-webkit-scrollbar {
+  display: none;
+}
+.sp-story__track.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+.sp-story__slide {
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.sp-story__slide > .sp-img {
+  height: 100%;
+  aspect-ratio: auto !important;
+  border-radius: 8px;
+}
+/* 上下の飾りは押せない（押すと下の枠で送る） */
+.sp-story__top,
+.sp-story__bottom {
+  pointer-events: none;
+}
+.sp-story__top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+}
+.sp-story__bars {
+  display: flex;
+  gap: 2px;
+}
+.sp-story__bars i {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: rgb(255 255 255 / 0.35);
+}
+/* 見たもの・見ているものは白（見ているものは本物では時間で伸びるが、プレビューでは満たして見せる） */
+.sp-story__bars i.on {
+  background: rgb(255 255 255 / 0.95);
+}
+.sp-story__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  text-shadow: 0 0 4px rgb(0 0 0 / 0.4);
+}
+.sp-story__user b {
+  font-weight: 600;
+}
+.sp-story__time {
+  color: rgb(255 255 255 / 0.7);
+}
+.sp-story__icons {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+}
+.sp-story__bottom {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--sp-bottom) + 4px);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.sp-story__reply {
+  flex: 1;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  border: 1px solid rgb(255 255 255 / 0.6);
+  border-radius: 22px;
+}
+.sp-story__safe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(
+    rgb(255 0 80 / 0.25) 0 14%,
+    transparent 14% 80%,
+    rgb(255 0 80 / 0.25) 80%
+  );
+  font-size: 11px;
+}
+.sp-story__safe span {
+  padding: 4px 8px;
+  margin-top: 64px;
+}
+.sp-story__safe span:last-child {
+  margin: 0 0 76px;
+}
+
+/* ---------- X */
+.sp-x {
+  --sp-fg: #0f1419;
+  --sp-muted: #536471;
+  color: #0f1419;
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 20px;
+  border-bottom: 1px solid #eff3f4;
+}
+.sp-x-pc .sp-x {
+  border: 1px solid #eff3f4;
+  border-radius: 0;
+  margin: 0 24px;
+}
+.sp-x__main {
+  flex: 1;
+  min-width: 0;
+}
+.sp-x__head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+/* 幅が足りないときは表示名と @ をそれぞれ省略し、時刻は残す（X の表示に合わせる） */
+.sp-x__name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 2em;
+}
+.sp-x__meta {
+  color: #536471;
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 3 auto;
+  min-width: 2em;
+}
+.sp-x__time {
+  color: #536471;
+  margin-left: 4px;
+  flex: none;
+}
+.sp-x__more {
+  margin-left: auto;
+  color: #536471;
+  flex: none;
+}
+.sp-x__text {
+  margin: 2px 0 0;
+}
+.sp-x .sp-tag,
+.sp-x .sp-link {
+  color: #1d9bf0;
+}
+.sp-x__media {
+  margin-top: 12px;
+  display: grid;
+  gap: 2px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #cfd9de;
+}
+.sp-x__media--2,
+.sp-x__media--4 {
+  grid-template-columns: 1fr 1fr;
+}
+.sp-x__media--3 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.sp-x__media--3 > :first-child {
+  grid-row: span 2;
+  height: 100%;
+  aspect-ratio: auto !important;
+}
+.sp-x__actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  justify-content: space-between;
+  margin-top: 12px;
+  color: #536471;
+}
+.sp-x__end {
+  display: flex;
+  gap: 16px;
+}
+.sp-x__next {
+  height: 80px;
+  border-bottom: 1px solid #eff3f4;
+}
+.sp-x-top {
+  flex: none;
+  height: 53px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  position: relative;
+  color: #0f1419;
+}
+.sp-x-top__logo {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.sp-x-tabs {
+  flex: none;
+  height: 53px;
+  display: flex;
+  border-bottom: 1px solid #eff3f4;
+  color: #536471;
+  font-size: 15px;
+  font-weight: 500;
+}
+.sp-x-tabs span {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.sp-x-tabs span.on {
+  color: #0f1419;
+  font-weight: 700;
+}
+.sp-x-tabs span.on::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: #1d9bf0;
+}
+.sp-x-nav {
+  flex: none;
+  height: calc(52px + var(--sp-bottom));
+  padding-bottom: var(--sp-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-top: 1px solid #eff3f4;
+  color: #0f1419;
+}
+/* 投稿ボタン（右下の青い丸） */
+.sp-x-fab {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--sp-bottom) + 52px + 16px);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1d9bf0;
+  color: #fff;
+  box-shadow:
+    rgb(101 119 134 / 0.2) 0 0 8px,
+    rgb(101 119 134 / 0.25) 0 1px 3px 1px;
+}
+
+/* ---------- 全画面のプレビュー（スマホ）: 端末の画面いっぱい。上下は本物のステータスバー・ホームインジケーターの分だけ空ける */
+.sp-full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #fff;
+  display: flex;
+}
+.sp-full__screen {
+  flex: 1;
+  width: 100%;
+  height: 100dvh;
+}
+.sp-full__status {
+  flex: none;
+  height: var(--sp-top);
+  background: var(--sp-bg);
+}
+/* 閉じるボタン: アプリの上のバー（ハート・ロゴなど）と重ならないよう、画面の左下（タブバーの上）に小さく置く */
+.sp-full__close {
+  position: absolute;
+  left: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 49px + 12px);
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0.8;
+}
+.sp-full__close::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.sp-full__close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

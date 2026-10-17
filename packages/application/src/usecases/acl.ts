@@ -1,4 +1,11 @@
-import { DomainError, isGrantActive, type PermissionLevel, type Principal, type PrincipalType, type WorkPermissionGrant } from "@mf100/domain";
+import {
+  DomainError,
+  isGrantActive,
+  type PermissionLevel,
+  type Principal,
+  type PrincipalType,
+  type WorkPermissionGrant,
+} from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 
@@ -15,9 +22,16 @@ export interface GrantInput {
   permission: PermissionLevel;
 }
 
-export async function grantWorkPermission(ctx: AppContext, principal: Principal, input: GrantInput): Promise<WorkPermissionGrant> {
+export async function grantWorkPermission(
+  ctx: AppContext,
+  principal: Principal,
+  input: GrantInput,
+): Promise<WorkPermissionGrant> {
   if (!principal.isSystemAdmin) throw new DomainError("acl_requires_system_admin");
-  if (input.principalType !== "user") throw new DomainError("acl_group_principal_not_enabled", { principalType: input.principalType });
+  if (input.principalType !== "user")
+    throw new DomainError("acl_group_principal_not_enabled", {
+      principalType: input.principalType,
+    });
   const work = await ctx.works.findById(input.workId);
   if (!work) throw new DomainError("forbidden", { workId: input.workId });
 
@@ -25,11 +39,23 @@ export async function grantWorkPermission(ctx: AppContext, principal: Principal,
   const grants = await ctx.acl.listByWork(work.id);
   // 同一主体の有効な付与は 1 件に正規化する（レベル変更 = 旧付与を取消して新付与）。
   for (const g of grants) {
-    if (isGrantActive(g) && g.principalType === input.principalType && g.principalId === input.principalId) {
+    if (
+      isGrantActive(g) &&
+      g.principalType === input.principalType &&
+      g.principalId === input.principalId
+    ) {
       if (g.permission === input.permission) return g;
       const revoked = { ...g, revokedBy: principal.userId, revokedAt: now };
       await ctx.acl.update(revoked);
-      await ctx.audit.record({ entityType: "workPermission", entityId: work.id, operation: "revoke", actorId: principal.userId, before: g, after: revoked, at: now });
+      await ctx.audit.record({
+        entityType: "workPermission",
+        entityId: work.id,
+        operation: "revoke",
+        actorId: principal.userId,
+        before: g,
+        after: revoked,
+        at: now,
+      });
     }
   }
   const grant: WorkPermissionGrant = {
@@ -41,7 +67,14 @@ export async function grantWorkPermission(ctx: AppContext, principal: Principal,
     grantedAt: now,
   };
   await ctx.acl.insert(grant);
-  await ctx.audit.record({ entityType: "workPermission", entityId: work.id, operation: "grant", actorId: principal.userId, after: grant, at: now });
+  await ctx.audit.record({
+    entityType: "workPermission",
+    entityId: work.id,
+    operation: "grant",
+    actorId: principal.userId,
+    after: grant,
+    at: now,
+  });
   return grant;
 }
 
@@ -56,16 +89,32 @@ export async function revokeWorkPermission(
   const now = ctx.clock.now();
   let count = 0;
   for (const g of await ctx.acl.listByWork(work.id)) {
-    if (!isGrantActive(g) || g.principalType !== input.principalType || g.principalId !== input.principalId) continue;
+    if (
+      !isGrantActive(g) ||
+      g.principalType !== input.principalType ||
+      g.principalId !== input.principalId
+    )
+      continue;
     await ctx.acl.update({ ...g, revokedBy: principal.userId, revokedAt: now });
-    await ctx.audit.record({ entityType: "workPermission", entityId: work.id, operation: "revoke", actorId: principal.userId, before: g, at: now });
+    await ctx.audit.record({
+      entityType: "workPermission",
+      entityId: work.id,
+      operation: "revoke",
+      actorId: principal.userId,
+      before: g,
+      at: now,
+    });
     count++;
   }
   return count;
 }
 
 /** 管理者が ACL 画面で参照する（取消履歴込み）。一般ユーザーには返さない。 */
-export async function listWorkPermissions(ctx: AppContext, principal: Principal, workId: string): Promise<WorkPermissionGrant[]> {
+export async function listWorkPermissions(
+  ctx: AppContext,
+  principal: Principal,
+  workId: string,
+): Promise<WorkPermissionGrant[]> {
   if (!principal.isSystemAdmin) {
     // 主管・校了者は自分の作品の有効な ACL を閲覧できる
     await loadAuthorizedWork(ctx, principal, workId, "audit.view");
