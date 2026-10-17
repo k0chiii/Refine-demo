@@ -50,15 +50,7 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       printQuantity: 3000,
       sizeOrLength: "A5",
       tags: ["公式パンフ"],
-      driveFolderUrl: "https://drive.google.com/drive/folders/x",
-      slackChannelId: "C0123ABCDEF",
     })) as Id<"works">;
-    await expect(
-      cast.manager.as.mutation(api.works.create, {
-        ...base,
-        driveFolderUrl: "https://example.com",
-      }),
-    ).rejects.toThrow(code("work_invalid"));
     const detail = await cast.manager.as.query(api.works.get, { workId });
     expect(detail.work).toMatchObject({
       genre: "graphic",
@@ -66,7 +58,6 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       stakeholderIds: [cast.reviewer.id],
       relatedTeamIds: [bureau],
       tags: ["公式パンフ"],
-      slackChannelId: "C0123ABCDEF",
     });
     expect(detail.people.stakeholders.map((p) => p?.name)).toEqual(["reviewer"]);
     expect(detail.currentDeclarations).toBeNull();
@@ -186,7 +177,6 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       kind: "bureau",
       code: "pr",
       emoji: "📣",
-      driveFolderUrl: "https://drive.google.com/drive/folders/pr",
     });
     await cast.admin.as.mutation(api.teams.save, {
       name: "デザイン担当",

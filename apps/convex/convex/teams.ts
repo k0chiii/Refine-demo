@@ -30,7 +30,6 @@ export const save = mutation({
     /** 省略は「変えない」、null・空で外す */
     code: v.optional(v.union(vBureauCode, v.string(), v.null())),
     emoji: v.optional(v.union(v.string(), v.null())),
-    driveFolderUrl: v.optional(v.union(v.string(), v.null())),
     memberIds: v.optional(v.union(v.array(v.string()), v.null())),
   },
   handler: async (ctx, args) => {
@@ -67,7 +66,6 @@ export const importBatch = mutation({
         team: v.union(v.string(), v.null()),
         order: v.optional(v.number()),
         emoji: v.optional(v.string()),
-        driveFolderUrl: v.optional(v.string()),
         /** 照合済みの所属する人の ID */
         memberIds: v.optional(v.array(v.string())),
         /** parseTeamCsv の行をそのまま送れるように受け取るだけ（照合前の書き方。使わない） */
@@ -88,7 +86,6 @@ export const importBatch = mutation({
           team: r.team,
           ...(r.order !== undefined ? { order: r.order } : {}),
           ...(r.emoji ? { emoji: r.emoji } : {}),
-          ...(r.driveFolderUrl ? { driveFolderUrl: r.driveFolderUrl } : {}),
           members: [],
         };
       });

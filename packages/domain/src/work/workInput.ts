@@ -1,13 +1,6 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
-import {
-  normalizeDriveUrl,
-  normalizeSlackChannelId,
-  normalizeWorkTags,
-  WORK_SIZE_MAX,
-  workGenres,
-  workSubGenreCodes,
-} from "./metadata.ts";
+import { normalizeWorkTags, WORK_SIZE_MAX, workGenres, workSubGenreCodes } from "./metadata.ts";
 import { confidentialities, mediaTypes, type Work } from "./Work.ts";
 
 /**
@@ -116,8 +109,6 @@ export type WorkMetadataInput = {
       | "sizeOrLength"
       | "productionDays"
       | "tags"
-      | "driveFolderUrl"
-      | "slackChannelId"
   ]?: Work[K] | null | undefined;
 };
 export const workMetadataKeys = [
@@ -130,8 +121,6 @@ export const workMetadataKeys = [
   "sizeOrLength",
   "productionDays",
   "tags",
-  "driveFolderUrl",
-  "slackChannelId",
 ] as const satisfies ReadonlyArray<keyof WorkMetadataInput>;
 
 /**
@@ -139,7 +128,6 @@ export const workMetadataKeys = [
  * - 大ジャンル・小ジャンルは選択肢の中の値。選択肢の一覧は metadata.ts（Notion の select）
  * - 関係者: 空の ID は不可、重なりは 1 人に。実在は application が名簿で確かめる
  * - 部数・制作日数: 0 以上の整数。サイズ・尺: 100 文字まで。タグ: 20 個・各 30 文字まで
- * - Drive の URL は https の drive.google.com／docs.google.com、Slack は C で始まるチャンネル ID
  */
 export function normalizeWorkMetadata(input: WorkMetadataInput): WorkMetadataInput {
   const out: WorkMetadataInput = {};
@@ -183,10 +171,6 @@ export function normalizeWorkMetadata(input: WorkMetadataInput): WorkMetadataInp
     const clean = tags === null ? [] : normalizeWorkTags(tags);
     out.tags = clean.length === 0 ? null : clean;
   }
-  if (input.driveFolderUrl !== undefined)
-    out.driveFolderUrl = normalizeDriveUrl(input.driveFolderUrl);
-  if (input.slackChannelId !== undefined)
-    out.slackChannelId = normalizeSlackChannelId(input.slackChannelId);
   return out;
 }
 

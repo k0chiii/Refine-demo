@@ -5413,15 +5413,6 @@ m3e-snackbar {
   flex-wrap: wrap;
   gap: 8px;
 }
-.info-tab__link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--mf-primary);
-}
-.info-tab__link m3e-icon {
-  font-size: 16px;
-}
 .import-list__notes {
   display: block;
   color: var(--mf-on-surface-variant);
