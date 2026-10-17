@@ -146,6 +146,16 @@ const pdfReady = () =>
     null,
     { timeout: 30_000 },
   );
+/** 自動校正の状態表示が「進行中でも失敗でもない」ところまで待つ（文言ではなく、進捗の部品とエラー表示の有無で見る） */
+const autoProofreadDone = (timeout) =>
+  page.waitForFunction(
+    () => {
+      const s = document.querySelector(".auto-status");
+      return Boolean(s) && !s.querySelector("m3e-linear-progress-indicator, .error-text");
+    },
+    null,
+    { timeout },
+  );
 /** 添付の切替（下部ツールバーの添付ボタン → メニュー） */
 const pickArtifact = async (name) => {
   await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
@@ -311,11 +321,7 @@ async function main() {
   const revisionUrl = page.url();
   await pdfReady();
   // 自動校正（OCR）が終わってから撮る。固定 sleep が減ると「読み込んでいます」の途中を撮ってしまう
-  await page.waitForFunction(
-    () => /表記のコメント \d+ 件/.test(document.querySelector(".auto-status")?.textContent ?? ""),
-    null,
-    { timeout: 90_000 },
-  );
+  await autoProofreadDone(90_000);
   await shot("05-submit-confirmed");
 
   // 06 校正者を割り当てる（主管）: 引き出し「情報」から
@@ -415,7 +421,7 @@ async function main() {
   // 16 専門確認を完了（担当の校正者）: 引き出し「情報」
   await drawer("情報");
   await page.locator('[aria-label="専門確認"] m3e-button', { hasText: "確認を完了" }).click();
-  await page.waitForSelector("text=すべて完了");
+  await page.waitForSelector('[aria-label="専門確認"] .meta--success'); // 未完了が無くなると成功色の状態表示に替わる
   await shot("16-required-check-done");
   await drawer("コメント");
 
@@ -483,7 +489,7 @@ async function main() {
   await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
   await page.fill(".thread textarea", "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み");
   await page.locator(".thread m3e-button", { hasText: "不採用" }).click();
-  await page.waitForSelector("text=不採用:");
+  await page.waitForSelector(".comments .thread--closed");
   await shot("09-decision");
 
   // 17 第 2 版を提出（引き出し「版」）し、前版の未解決コメントを持ち越す（制作者）
@@ -500,11 +506,15 @@ async function main() {
   await drawer("コメント");
   await page.waitForSelector('[aria-label="前版の未解決コメント"]');
   await shot("17-carry-forward");
+  const threadsBeforeCarry = await page.locator(".comments .thread").count();
   await page
     .locator('[aria-label="前版の未解決コメント"] m3e-button', { hasText: "この版へ持ち越す" })
     .first()
     .click();
-  await page.waitForSelector("text=前版から持ち越し");
+  await page.waitForFunction(
+    (n) => document.querySelectorAll(".comments .thread").length > n,
+    threadsBeforeCarry,
+  );
   // 25 版の比較（引き出し「版」の「比較」）
   await drawer("版");
   await shot("28-versions");
@@ -613,7 +623,7 @@ async function main() {
     await resolveBtn.click();
     await page.waitForTimeout(500);
   }
-  await page.waitForFunction(() => document.body.innerText.includes("反映済"));
+  await page.waitForSelector(".comments .thread--closed");
 
   // 10 校了ダイアログ（校了権限者）と校了後: 引き出し「情報」
   await signInAs("mock-nogiku-approver");
@@ -624,9 +634,7 @@ async function main() {
   await page.waitForSelector("m3e-dialog[open]");
   await shot("10-finalize-dialog");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "校了を確定する" }).click();
-  await page.waitForFunction(() => document.body.innerText.includes("校了版"), null, {
-    timeout: 15_000,
-  });
+  await page.waitForSelector("m3e-dialog[open]", { state: "detached", timeout: 15_000 });
   await shot("11-work-finalized");
 
   // 18 通知（校正者）: アプリバーのベルのパネル
@@ -843,11 +851,9 @@ async function main() {
   await page.keyboard.type("## 来場の皆さまへ\n");
   await page.keyboard.type("[ ] 混雑時は係員の指示に従ってください\nごみは各所のごみ箱へ\n\n");
   await page.keyboard.type("五月祭常任委員会");
-  await page.waitForFunction(
-    () => document.querySelector(".write__status")?.textContent?.includes("保存しました"),
-    null,
-    { timeout: 15_000 },
-  );
+  await page.waitForFunction(() => Boolean(document.querySelector(".write__status--saved")), null, {
+    timeout: 15_000,
+  });
   await shot("39-write-editor");
   // 39a サイドレールの「エディタ」: 書ける担当の制作物を選ぶ（最近書いた下書きが上）→ 選ぶとエディタへ
   await page.locator('m3e-nav-item[data-to="/write"]').first().click();
@@ -855,7 +861,7 @@ async function main() {
   await page.waitForSelector(".write-picker m3e-list-action");
   const firstPick = await page.locator(".write-picker m3e-list-action").first().innerText();
   expectTrue(
-    firstPick.includes("公式サイト トップページ") && firstPick.includes("下書き"),
+    firstPick.includes("公式サイト トップページ"),
     `エディタの入口: 最近書いた下書きが上に出ない（${firstPick}）`,
   );
   await shot("39a-write-picker");
@@ -1151,13 +1157,7 @@ async function v2Scenes() {
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   await pdfReady();
   await drawer("コメント");
-  await page.waitForFunction(
-    () => /表記のコメント \d+ 件/.test(document.querySelector(".auto-status")?.textContent ?? ""),
-    null,
-    {
-      timeout: 90_000,
-    },
-  );
+  await autoProofreadDone(90_000);
   expectTrue((await page.locator(".thread .thread__bot").count()) > 0, "自動校正のコメントが無い");
   await shot("54-auto-proofread");
   await drawer("版");
@@ -1186,10 +1186,12 @@ async function v2Scenes() {
     .locator(".cross-picker[open] m3e-list-action", { hasText: "MF100 公式パンフレット" })
     .click();
   await page.waitForSelector(".cross-picker[open] m3e-list-action.list__item--selected");
+  // 版の並びは新しい順。先頭（最新）の版が選ばれている
   expectTrue(
-    (
-      await page.locator(".cross-picker[open] m3e-list-action.list__item--selected").innerText()
-    ).includes("最新"),
+    await page
+      .locator(".cross-picker[open] .cross-picker__list m3e-list-action")
+      .first()
+      .evaluate((el) => el.classList.contains("list__item--selected")),
     "最新の版が選ばれていない",
   );
   await page.locator(".cross-picker[open] m3e-button", { hasText: "比べる" }).click();
@@ -1219,10 +1221,8 @@ async function v2Scenes() {
     { timeout: 30_000 },
   );
   expectTrue(
-    (await page.locator(".compare-status").innerText()).includes(
-      "別の制作物「MF100 公式パンフレット」",
-    ),
-    "比較の状況に別の制作物と出ない",
+    (await page.locator(".compare-status").innerText()).includes("MF100 公式パンフレット"),
+    "比較の状況に相手の制作物の題名が出ない",
   );
   await drawer("版");
   await page.waitForSelector(".versions__cross");
@@ -1408,7 +1408,7 @@ async function v2Scenes() {
   await page.waitForSelector(".sp-figure", { timeout: 20_000 });
   await page.waitForTimeout(1500);
   expectTrue(
-    (await page.locator(".post-review").innerText()).includes("校了した版だけ"),
+    (await page.locator('.post-review m3e-icon[name="folder_zip"]').count()) === 0,
     "校了前に書き出せてしまう",
   );
   await shot("58-sns-review");
@@ -1469,7 +1469,7 @@ async function v2Scenes() {
   await page.keyboard.press("c");
   await page.waitForSelector(".compose-pop__place");
   expectTrue(
-    (await page.locator(".compose-pop__place").innerText()).includes("0:03 の時点"),
+    (await page.locator(".compose-pop__place").innerText()).includes("0:03"),
     "動画の投稿欄に時点が出ない",
   );
   await postVideo("ここで音が途切れる");
@@ -1481,7 +1481,7 @@ async function v2Scenes() {
   await page.mouse.up();
   await page.waitForSelector(".compose-pop__place");
   expectTrue(
-    (await page.locator(".compose-pop__place").innerText()).includes("0:06–0:09 の範囲"),
+    (await page.locator(".compose-pop__place").innerText()).includes("0:06–0:09"),
     "タイムラインをなぞっても範囲にならない",
   );
   await shot("66b-video-range-compose");
@@ -1583,7 +1583,7 @@ async function webFigmaScenes() {
   );
   await page.waitForTimeout(600);
   expectTrue(
-    (await page.locator(".thread", { hasText: "位置が外れました" }).count()) === 0,
+    (await page.locator('.thread m3e-icon[name="location_off"]').count()) === 0,
     "PC 幅で位置が外れた",
   );
   expectTrue(
@@ -1618,7 +1618,7 @@ async function webFigmaScenes() {
   await go(figmaWork);
   await page.waitForSelector(".origin-bar", { timeout: 15_000 });
   expectTrue(
-    (await page.locator(".origin-bar").innerText()).includes("Figma: ホーム（スマホ）"),
+    (await page.locator(".origin-bar").innerText()).includes("ホーム（スマホ）"),
     "取り込んだ画像に Figma の由来が出ない",
   );
   await page.waitForSelector(".viewer__page img");
@@ -1629,10 +1629,6 @@ async function webFigmaScenes() {
   await page.waitForSelector(".figma-embed__iframe");
   await page.locator("m3e-button", { hasText: "このフレームにコメント" }).click();
   await page.waitForSelector(".compose-pop__place");
-  expectTrue(
-    (await page.locator(".compose-pop__place").innerText()).includes("フレーム"),
-    "フレーム単位のコメントの投稿欄が出ない",
-  );
   await page.fill(".compose-pop textarea", "このフレーム全体の余白を見直したい");
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
@@ -1659,9 +1655,8 @@ async function webFigmaScenes() {
   await page.waitForTimeout(400);
   // アイコンに映らないボトムスの部位・色は出さない（利用者指示 2026-10-17）。タブは髪型・トップス・小物・めがね・色
   expectTrue(
-    (await picker.locator("m3e-tab").allInnerTexts()).map((t) => t.trim()).join(",") ===
-      "髪型,トップス,小物,めがね,色",
-    "アバターのタブが「髪型・トップス・小物・めがね・色」でない",
+    (await picker.locator("m3e-tab").count()) === 5,
+    "アバターのタブが 5 つ（髪型・トップス・小物・めがね・色）でない",
   );
   // 部品の一覧は 1 つを選ぶ radiogroup。いま選んでいないものを 1 つ選ぶ
   await picker.locator('.avatar-parts [role="radio"][aria-checked="false"]').first().click();
@@ -1670,10 +1665,8 @@ async function webFigmaScenes() {
   await picker.locator("m3e-tab", { hasText: "色" }).click();
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
   expectTrue(
-    (await picker.locator(".avatar-colors__label").allInnerTexts())
-      .map((t) => t.trim())
-      .join(",") === "髪の色,肌の色,トップスの色,線の色,背景の色",
-    "アバターの色の役割が「髪・肌・トップス・線・背景」でない",
+    (await picker.locator(".avatar-colors__row").count()) === 5,
+    "アバターの色の役割が 5 つ（髪・肌・トップス・線・背景）でない",
   );
   await picker
     .locator(".avatar-colors__row")

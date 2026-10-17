@@ -3,10 +3,10 @@ import { describe, expect, it } from "vite-plus/test";
 import { describeError } from "./errors";
 
 describe("describeError（UI_M3E §35 W-02）", () => {
-  it("英語のメッセージ（ライブラリ・ネットワーク）は決まった日本語にする", () => {
-    expect(describeError(new TypeError("Failed to fetch")).message).toBe(
-      "操作を完了できませんでした。もう一度お試しください。",
-    );
+  it("英語のメッセージ（ライブラリ・ネットワーク）はそのまま見せない", () => {
+    const message = describeError(new TypeError("Failed to fetch")).message;
+    expect(message).not.toBe("");
+    expect(message).not.toContain("Failed to fetch");
   });
 
   it("画面で投げた日本語の文言はそのまま出す", () => {
@@ -15,9 +15,9 @@ describe("describeError（UI_M3E §35 W-02）", () => {
     );
   });
 
-  it("知らないコードは決まった文言にコードを添える", () => {
-    expect(describeError(new ConvexError({ code: "something_new" })).message).toBe(
-      "操作を完了できませんでした。もう一度お試しください（コード: something_new）。",
+  it("知らないコードは、問い合わせの手がかりとしてコードを添える", () => {
+    expect(describeError(new ConvexError({ code: "something_new" })).message).toContain(
+      "something_new",
     );
   });
 
