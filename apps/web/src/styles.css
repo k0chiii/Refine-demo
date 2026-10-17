@@ -1229,6 +1229,159 @@ m3e-dialog [slot="actions"] {
   gap: 4px;
 }
 
+/* ---------- 「アバターを変える」（Humation。§56）
+ * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
+ * 部品の小さな絵は <use> で定義（.avatar-defs）を参照し、43 個並べても DOM を膨らませない */
+.avatar-picker {
+  --m3e-dialog-max-width: 640px;
+}
+/* 中身はダイアログの内側（640 − 余白 24×2）に収める（.dialog--full .dialog-body の 640 より狭く） */
+.avatar-picker .dialog-body {
+  min-width: min(560px, 90vw);
+  max-width: 100%;
+  gap: 12px;
+}
+.avatar-picker__loading {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+}
+.avatar-picker__preview {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.avatar-picker__big {
+  box-shadow: inset 0 0 0 1px var(--mf-outline-variant);
+}
+.avatar-picker__preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.avatar-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.avatar-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 4px;
+}
+.avatar-part {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 2px solid transparent;
+  border-radius: var(--mf-shape-md);
+  background: transparent;
+  color: var(--mf-on-surface);
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.avatar-part:hover {
+  background: var(--mf-surface-container-high);
+}
+.avatar-part:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 0;
+}
+.avatar-part--on {
+  border-color: var(--mf-primary);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.avatar-part__label {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.avatar-thumb {
+  box-shadow: inset 0 0 0 1px var(--mf-outline-variant);
+}
+.avatar-colors {
+  display: grid;
+  gap: 12px;
+}
+.avatar-colors__row {
+  display: grid;
+  gap: 6px;
+}
+.avatar-colors__choices {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.avatar-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.avatar-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--mf-outline-variant);
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 2px var(--mf-surface);
+}
+.avatar-swatch:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+.avatar-swatch--on {
+  border-color: var(--mf-primary);
+  box-shadow:
+    inset 0 0 0 2px var(--mf-surface),
+    0 0 0 2px var(--mf-primary);
+}
+.avatar-colors__custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mf-on-surface-variant);
+}
+.avatar-colors__custom input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--mf-outline-variant);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.avatar-colors__custom input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.avatar-colors__custom input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+@media (max-width: 599px) {
+  .avatar-picker .dialog-body {
+    min-width: 0;
+  }
+  /* 6 つのタブ（髪型…色）を 412 の幅に収める（余白を詰めないと「色」が右にはみ出て、横に送らないと押せない） */
+  .avatar-picker .pane-tabs {
+    --m3e-tab-padding-start: 8px;
+    --m3e-tab-padding-end: 8px;
+  }
+  .avatar-parts {
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  }
+}
+
 /* ---------- 版を提出（§36 L-15）
  * compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16・右 16・セーフエリアを避ける。M3 FAB › Placement）。
  * 内容の最後の行が FAB に隠れないよう、下の余白に FAB の高さ（56）と間（16）を足す */

@@ -108,7 +108,7 @@ export function FeedbackPost({
         </time>
       ) : (
         <span className="fb-post__avatar" aria-hidden="true">
-          <UserAvatar seed={post.author.id} size={36} />
+          <UserAvatar seed={post.author.id} userId={post.author.id} size={36} />
         </span>
       )}
       <div className="fb-post__main">

@@ -1,5 +1,16 @@
 import { v } from "convex/values";
 
+/**
+ * アバター（Humation）の設定。形の検証と正規化は domain の validateAvatarConfig（部品の名前が実在するかは Web 側）。
+ * selections: 部位 → 部品の名前、colors: 色の役割 → 6 桁の 16 進、background: 背景の色。
+ */
+export const vAvatarConfig = v.object({
+  seed: v.optional(v.string()),
+  selections: v.optional(v.record(v.string(), v.string())),
+  colors: v.optional(v.record(v.string(), v.string())),
+  background: v.optional(v.string()),
+});
+
 export const vPermissionLevel = v.union(
   v.literal("view"),
   v.literal("review"),

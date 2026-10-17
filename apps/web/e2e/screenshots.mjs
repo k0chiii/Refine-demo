@@ -1579,6 +1579,56 @@ async function webFigmaScenes() {
     "フレームのコメントに「Figma で開く」が無い",
   );
   await shot("69b-figma-embed");
+  // 70 アバターを変える（Humation。§56）: アカウントメニュー → 髪型を替え、「色」で髪の色を替えて保存 → 右上のアバターが変わる
+  await go("/");
+  await page.waitForSelector(".shell__account svg", { timeout: 20_000 });
+  const avatarBefore = await page
+    .locator(".shell__account svg")
+    .first()
+    .evaluate((el) => el.outerHTML);
+  await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+  await page.locator("m3e-menu-item", { hasText: "アバターを変える" }).click();
+  const picker = page.locator("m3e-dialog.avatar-picker[open]");
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
+  await page.waitForTimeout(400);
+  // 部品の一覧は 1 つを選ぶ radiogroup。いま選んでいないものを 1 つ選ぶ
+  await picker.locator('.avatar-parts [role="radio"][aria-checked="false"]').first().click();
+  await page.waitForTimeout(400);
+  await shot("70-avatar-picker");
+  await picker.locator("m3e-tab", { hasText: "色" }).click();
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
+  await picker
+    .locator(".avatar-colors__row")
+    .first()
+    .locator('[role="radio"][aria-checked="false"]')
+    .nth(2)
+    .click();
+  await page.waitForTimeout(200);
+  await picker.locator('[slot="actions"] m3e-button', { hasText: "保存する" }).click();
+  await page.waitForFunction(
+    (before) => {
+      const svg = document.querySelector(".shell__account svg");
+      return Boolean(svg) && svg.outerHTML !== before;
+    },
+    avatarBefore,
+    { timeout: 10_000 },
+  );
+  await page
+    .waitForSelector("m3e-dialog.avatar-picker[open]", { state: "detached", timeout: 10_000 })
+    .catch(() => {});
+  // 70b compact: アカウントのボトムシート → 全画面のダイアログ（「色」のタブ）
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.waitForTimeout(400);
+  await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+  await page.locator("m3e-list-action", { hasText: "アバターを変える" }).click();
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
+  await picker.locator("m3e-tab", { hasText: "色" }).click();
+  await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
+  await page.waitForTimeout(400);
+  await shot("70b-avatar-picker-compact");
+  await picker.locator('[slot="actions"] m3e-button', { hasText: "キャンセル" }).click();
+  await page.waitForTimeout(400);
+  await page.setViewportSize({ width: 1440, height: 900 });
 }
 
 try {

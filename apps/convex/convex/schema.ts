@@ -13,6 +13,7 @@ import {
   vProofreadingRunFields,
   vFeedbackTemplateId,
   vArtifactOrigin,
+  vAvatarConfig,
 } from "./lib/validators.ts";
 
 /**
@@ -183,6 +184,8 @@ export default defineSchema({
     /** Nogiku Access から同期した組織権限名（後続）。NOGIKU_ACCESS_ENABLED=true のときだけ参照する。 */
     orgPermissions: v.optional(v.array(v.string())),
     lastLoginAt: v.optional(v.number()),
+    /** 本人が選んだアバター（Humation）。無ければメール（または ID）から決まる絵（利用者指示 2026-10-17） */
+    avatar: v.optional(vAvatarConfig),
   })
     .index("email", ["email"])
     .index("by_nogikuSubject", ["nogikuSubject"]),

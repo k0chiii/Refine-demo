@@ -138,7 +138,7 @@ export function ThreadCard({
                 <M3eIcon name="smart_toy" />
               </M3eAvatar>
             ) : (
-              <UserAvatar seed={t.author?.email ?? t.authorId} size={28} />
+              <UserAvatar seed={t.author?.email ?? t.authorId} userId={t.authorId} size={28} />
             )}
             <div className="thread__who">
               <span className="thread__name">{t.author?.name}</span>
@@ -466,7 +466,7 @@ function ThreadEvents({ threadId }: { threadId: string }) {
         if (e.eventType === "replied")
           return (
             <li key={i} className="thread__replyitem">
-              <UserAvatar seed={e.actor?.email ?? e.actorId} size={24} />
+              <UserAvatar seed={e.actor?.email ?? e.actorId} userId={e.actorId} size={24} />
               <div>
                 <span className="thread__name">{e.actor?.name}</span>
                 <span className="thread__time">{formatJstShort(e.createdAt)}</span>

@@ -179,7 +179,7 @@ export function MentionTextarea({
               onClick={() => pick(u)}
             >
               <span slot="leading">
-                <UserAvatar seed={u.email ?? u.id} size={24} />
+                <UserAvatar seed={u.email ?? u.id} userId={u.id} size={24} />
               </span>
               {u.name}
             </M3eListAction>
