@@ -1,7 +1,7 @@
 import type { M3eLoadingIndicatorElement } from "@m3e/web/loading-indicator";
 import { useEffect, useRef } from "react";
 import { useMedia } from "@/lib/useMedia";
-import { M3eLoadingIndicator } from "./m3e";
+import { M3eLoadingIndicator } from "@m3e/react/loading-indicator";
 
 /**
  * 読み込み中の表示（利用者指示 2026-10-17「読み込み中のやつも M3E に揃えてね」）。

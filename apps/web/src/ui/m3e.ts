@@ -8,8 +8,8 @@
  * **画面のコードはここからではなく、部品ごとに `@m3e/react/<name>` から直接 import する**（docs/UI_M3E.md §60）。
  * Web Components は読み込んだ時点で要素を登録する（副作用）ので、この束ねたファイルを 1 つ import すると
  * 全部品（圧縮前 2.5MB・圧縮後約 270KB）が最初の画面に入り、サインイン画面を開くだけで全部を読み込んでいた。
- * 部品ごとに import すれば、ビルドがその画面で使う部品だけを束ねる。このファイルは目録と移行中のコードのために残す
- * （`M3eDialog` は初めて開くまで描かない `ui/LazyDialog` を使う。`M3eSnackbar` は `@m3e/web/snackbar`）。
+ * 部品ごとに import すれば、ビルドがその画面で使う部品だけを束ねる。このファイルは目録として残す（画面のコードからの
+ * import は 0 件。`M3eDialog` は初めて開くまで描かない `ui/LazyDialog` を使う。`M3eSnackbar` は `@m3e/web/snackbar`）。
  */
 export { M3eButton } from "@m3e/react/button";
 export { M3eIconButton } from "@m3e/react/icon-button";

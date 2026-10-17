@@ -29,7 +29,9 @@ import {
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
 import { Loading } from "@/ui/Loading";
-import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
 import { PaneTabs } from "@/ui/PaneTabs";
 
 /**

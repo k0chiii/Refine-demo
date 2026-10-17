@@ -2,7 +2,9 @@ import { WORK_TAG_LENGTH_MAX, WORK_TAG_MAX, workTagOptions } from "@mf100/domain
 import type { M3eFilterChipElement } from "@m3e/web/chips";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { QuestionHead } from "@/ui/Field";
-import { M3eFilterChip, M3eFormField, M3eIcon, M3eInputChip } from "@/ui/m3e";
+import { M3eFilterChip, M3eInputChip } from "@m3e/react/chips";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eIcon } from "@m3e/react/icon";
 
 /**
  * タグ（Notion の制作物 DB の multi_select）。Notion にある選択肢は filter chip で押して付け外し、

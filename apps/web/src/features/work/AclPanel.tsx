@@ -7,20 +7,19 @@ import { permissionLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Field, Select } from "@/ui/Field";
 import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import {
-  M3eButton,
-  M3eDivider,
-  M3eExpansionPanel,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListItem,
   M3eMenu,
   M3eMenuItem,
   M3eMenuItemGroup,
   M3eMenuItemRadio,
   M3eMenuTrigger,
-} from "@/ui/m3e";
+} from "@m3e/react/menu";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { UserPicker } from "@/ui/UserPicker";
 

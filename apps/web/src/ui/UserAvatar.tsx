@@ -2,7 +2,7 @@ import type { AvatarConfig } from "@mf100/domain";
 import { useMemo } from "react";
 import { sanitizeAvatarConfig, useHumation } from "@/lib/avatar";
 import { useUserAvatarConfig } from "./AvatarProvider";
-import { M3eSkeleton } from "./m3e";
+import { M3eSkeleton } from "@m3e/react/skeleton";
 
 /**
  * ユーザーのアバター（Humation）。

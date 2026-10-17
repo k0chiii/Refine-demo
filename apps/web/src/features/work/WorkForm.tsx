@@ -28,7 +28,9 @@ import {
   useFieldId,
   useFieldLabelId,
 } from "@/ui/Field";
-import { M3eExpansionPanel, M3eOptGroup, M3eOption, M3eSelect } from "@/ui/m3e";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eOptGroup, M3eOption } from "@m3e/react/option";
+import { M3eSelect } from "@m3e/react/select";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
 import { TagPicker } from "./TagPicker";
