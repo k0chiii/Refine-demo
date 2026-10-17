@@ -1251,6 +1251,33 @@ m3e-dialog [slot="actions"] {
 .submit-picker__list {
   margin: 0 -24px;
 }
+/* 別の制作物と比べる（利用者指示 2026-10-17）: 検索 → 制作物 → 版。広い画面は基本ダイアログ、compact は全画面（.dialog--full） */
+.cross-picker .dialog-body {
+  min-width: min(560px, 90vw);
+  gap: 8px;
+}
+.cross-picker__search {
+  min-width: 0;
+}
+.cross-picker__hint,
+.cross-picker__empty {
+  margin: 0;
+}
+.cross-picker__list {
+  margin: 0 -24px;
+  max-height: min(50vh, 480px);
+  overflow: auto;
+}
+@media (max-width: 599px) {
+  .cross-picker__list {
+    max-height: none;
+  }
+  /* 全画面のダイアログ: 候補が少なくても画面を満たす（見出し・操作ボタンの分を除いた高さ） */
+  .cross-picker .cross-picker__body {
+    min-height: calc(100dvh - 200px);
+    align-content: start;
+  }
+}
 .action-sheet__empty {
   padding: 0 0 16px;
 }
@@ -2016,7 +2043,20 @@ m3e-dialog [slot="actions"] {
 .compare__label {
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
-  padding: 0 4px 8px;
+  padding: 0 4px 4px;
+  /* 左の見出しには「別の制作物と比べる」のアイコンボタン（40）が並ぶので、右も同じ高さにして紙面の上端を揃える */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+}
+.compare__label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compare__swap {
+  flex: none;
 }
 .compare__hint {
   margin-inline-start: 8px;
@@ -2066,8 +2106,32 @@ m3e-dialog [slot="actions"] {
 .version__label {
   font: var(--mf-type-title-small);
 }
-.versions__void {
+.versions__void,
+.versions__cross-pick {
   justify-self: start;
+}
+/* 別の制作物と比較中（利用者指示 2026-10-17）: 相手の題名・版と「変える」「終了」。色は選択中と同じ secondary container */
+.versions__cross {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--mf-shape-medium, 12px);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.versions__cross-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.versions__cross-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.versions__cross .meta {
+  color: inherit;
 }
 
 /* 引き出し「情報」 */

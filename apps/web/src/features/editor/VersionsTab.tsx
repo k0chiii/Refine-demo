@@ -12,23 +12,32 @@ import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
 
 export type WorkData = FunctionReturnType<typeof api.works.get>;
 
-/** エディタの引き出し「版」: 履歴、この版を開く、2 つ並べて比較、新しい版を提出、誤提出の無効化。 */
+/**
+ * エディタの引き出し「版」: 履歴、この版を開く、2 つ並べて比較、別の制作物の版と比べる、新しい版を提出、誤提出の無効化。
+ * 別の制作物と比べている間は、その相手（題名・版）を「比較中」として先頭に出す（利用者指示 2026-10-17）。
+ */
 export function VersionsTab({
   work,
   currentId,
   compareWith,
+  compareTarget,
   canVoid,
   onOpen,
   onCompare,
+  onPickOther,
   onSubmit,
   onWrite,
 }: {
   work: WorkData;
   currentId: string | null;
   compareWith: string | null;
+  /** 比べている相手が別の制作物の版のとき、その見出し（「題名・版」） */
+  compareTarget: string | null;
   canVoid: boolean;
   onOpen: (r: WorkData["revisions"][number]) => void;
   onCompare: (id: string | null) => void;
+  /** 「別の制作物と比べる」（比べる相手を選ぶダイアログを開く） */
+  onPickOther: () => void;
   onSubmit: () => void;
   /** 文章エディタを開く（下書きを書いて版として提出する） */
   onWrite: () => void;
@@ -57,6 +66,21 @@ export function VersionsTab({
               name={work.work.mediaType === "sns" ? "post_add" : "edit_document"}
             />
             {work.work.mediaType === "sns" ? "投稿を作る" : "文章を書く"}
+          </M3eButton>
+        </div>
+      ) : null}
+      {compareTarget !== null ? (
+        <div className="versions__cross" role="status">
+          <M3eIcon name="compare_arrows" aria-hidden="true" />
+          <span className="versions__cross-text">
+            <span className="meta">別の制作物と比較中</span>
+            <span className="title-small">{compareTarget}</span>
+          </span>
+          <M3eButton variant="text" onClick={onPickOther}>
+            変える
+          </M3eButton>
+          <M3eButton variant="text" onClick={() => onCompare(null)}>
+            終了
           </M3eButton>
         </div>
       ) : null}
@@ -117,6 +141,13 @@ export function VersionsTab({
           })}
         </ul>
       )}
+      {/* 比べている間は上の札の「変える」から（同じ入口を 2 つ出さない） */}
+      {current && compareTarget === null ? (
+        <M3eButton variant="text" className="versions__cross-pick" onClick={onPickOther}>
+          <M3eIcon slot="icon" name="compare_arrows" />
+          別の制作物と比べる
+        </M3eButton>
+      ) : null}
       {current && canVoid ? (
         <M3eButton variant="text" className="versions__void" onClick={() => setVoidDraft("")}>
           この版を無効化

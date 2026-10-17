@@ -1120,12 +1120,82 @@ async function v2Scenes() {
   );
   await page.waitForTimeout(800);
   await shot("55-compare-pdf");
+  // 67 別の制作物と比べる（利用者指示 2026-10-17）: 左の見出しのボタン → 制作物を検索して選ぶ → 最新の版が選ばれている →「比べる」
+  //    左の見出しは「題名・版」、比較の状況に「別の制作物」、引き出し「版」に「別の制作物と比較中」
+  await page
+    .locator('.compare__label--other m3e-icon-button[aria-label="別の制作物と比べる"]')
+    .click();
+  await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
+  await page.fill(".cross-picker[open] input", "パンフレット");
+  await page.waitForTimeout(500);
+  await page
+    .locator(".cross-picker[open] m3e-list-action", { hasText: "MF100 公式パンフレット" })
+    .click();
+  await page.waitForSelector(".cross-picker[open] m3e-list-action.list__item--selected");
+  expectTrue(
+    (
+      await page.locator(".cross-picker[open] m3e-list-action.list__item--selected").innerText()
+    ).includes("最新"),
+    "最新の版が選ばれていない",
+  );
+  await page.locator(".cross-picker[open] m3e-button", { hasText: "比べる" }).click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector(".compare__label--other")
+        ?.textContent?.startsWith("MF100 公式パンフレット・第"),
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll(".compare__pane")].every(
+        (p) => (p.querySelector(".viewer__page canvas")?.width ?? 0) > 0,
+      ),
+    null,
+    { timeout: 30_000 },
+  );
+  // 相手を替えた後にページの対応を解析し直す（前の組の結果を引きずらない）
+  await page.waitForFunction(
+    () =>
+      /ページ対応: 旧 [1-9]\d* → 新 [1-9]/.test(
+        document.querySelector(".compare-status")?.textContent ?? "",
+      ),
+    null,
+    { timeout: 30_000 },
+  );
+  expectTrue(
+    (await page.locator(".compare-status").innerText()).includes(
+      "別の制作物「MF100 公式パンフレット」",
+    ),
+    "比較の状況に別の制作物と出ない",
+  );
+  await drawer("版");
+  await page.waitForSelector(".versions__cross");
+  await page.waitForTimeout(800);
+  await shot("67-compare-cross-work");
   // 26a タッチ（compact・受付中の版）: なぞるだけではコメントを作らない（スクロール）。長押ししてからなぞると範囲が選べ、投稿欄が出る
   const posterV2 = new URL(page.url()).pathname;
   await page.setViewportSize({ width: 412, height: 915 });
   await go(posterV2);
   await pdfReady();
   await page.waitForTimeout(800);
+  // 67b compact: シート「版」の「別の制作物と比べる」→ 相手を選ぶダイアログは全画面（M3 Dialogs）
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="版"]').click();
+  await page.waitForSelector(".drawer--sheet .versions");
+  // 67 の比較が続いていれば札の「変える」、そうでなければ「別の制作物と比べる」
+  await page
+    .locator(
+      '.drawer--sheet m3e-button:has-text("変える"), .drawer--sheet m3e-button:has-text("別の制作物と比べる")',
+    )
+    .first()
+    .click();
+  await page.waitForSelector(".cross-picker[open] .cross-picker__list m3e-list-action");
+  await shot("67b-compare-cross-picker-compact");
+  await page.locator(".cross-picker[open] m3e-button", { hasText: "キャンセル" }).click();
+  await page.waitForSelector(".cross-picker[open]", { state: "detached" });
+  await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await page.waitForTimeout(600);
   const touchOn = (type, x, y) =>
     page.evaluate(
       ([type, x, y]) => {

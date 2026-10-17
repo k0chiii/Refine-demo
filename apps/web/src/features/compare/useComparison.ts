@@ -56,6 +56,10 @@ export function usePdfComparison(
   );
   const save = useMutation(api.comparisons.saveOverride);
 
+  // 組（添付の ID）が変わったら、前の組の「解析済み」を引きずらない（比べる相手を替えた直後に 旧 0 → 新 0・全ページ対応なしと出ていた）
+  useEffect(() => {
+    setStatus("idle");
+  }, [key]);
   useEffect(() => {
     if (!left?.doc || !right?.doc) return;
     let cancelled = false;

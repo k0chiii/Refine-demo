@@ -1,8 +1,17 @@
-import { DomainError, isAllowed, type ManualPair, type Principal } from "@mf100/domain";
+import {
+  canEditAlignment,
+  comparisonScope,
+  DomainError,
+  type ManualPair,
+  type Principal,
+} from "@mf100/domain";
 import type { AlignmentOverride, AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 
-/** 比較する 2 つの添付が同じ制作物の版に属することを確かめ、制作物を返す（他の制作物の添付を混ぜない） */
+/**
+ * 比較する 2 つの添付の版と制作物を読む。左（比べる相手）と右（表示中の版）は別の制作物でもよい
+ * （利用者指示 2026-10-17: 別の制作物との比較）。どちらかが無ければ存在も漏らさず forbidden。
+ */
 async function loadPair(ctx: AppContext, leftArtifactId: string, rightArtifactId: string) {
   const [l, r] = await Promise.all([
     ctx.artifacts.findById(leftArtifactId),
@@ -13,40 +22,46 @@ async function loadPair(ctx: AppContext, leftArtifactId: string, rightArtifactId
     ctx.revisions.findById(l.revisionId),
     ctx.revisions.findById(r.revisionId),
   ]);
-  if (!lr || !rr || lr.workId !== rr.workId)
-    throw new DomainError("forbidden", { reason: "artifact_work_mismatch" });
-  return lr.workId;
+  if (!lr || !rr) throw new DomainError("forbidden", { reason: "revision_not_found" });
+  return { leftWorkId: lr.workId, rightWorkId: rr.workId };
 }
 
-/** 手動のページ対応を読む（閲覧できる人なら誰でも） */
+/** 手動のページ対応を読む（両方の制作物を閲覧できる人なら誰でも。片方でも見られなければ存在も返さない） */
 export async function getAlignmentOverride(
   ctx: AppContext,
   principal: Principal,
   leftArtifactId: string,
   rightArtifactId: string,
 ): Promise<AlignmentOverride | null> {
-  const workId = await loadPair(ctx, leftArtifactId, rightArtifactId);
-  await loadAuthorizedWork(ctx, principal, workId, "work.view");
+  const { leftWorkId, rightWorkId } = await loadPair(ctx, leftArtifactId, rightArtifactId);
+  await loadAuthorizedWork(ctx, principal, rightWorkId, "work.view");
+  if (comparisonScope(leftWorkId, rightWorkId) === "cross_work")
+    await loadAuthorizedWork(ctx, principal, leftWorkId, "work.view");
   return ctx.alignments.find(leftArtifactId, rightArtifactId);
 }
 
 const MAX_PAIRS = 2000;
 
 /**
- * 手動のページ対応を保存する。校正に関わる人（指摘できる人・版を提出できる人）だけ。
- * 元のアンカー（指摘の座標）は版ごとの元ファイル基準のままで、この対応は表示にだけ使う。
+ * 手動のページ対応を保存する。校正に関わる人（指摘できる人・版を提出できる人）だけ（domain `canEditAlignment`）。
+ * 別の制作物との比較では、表示中（右）の制作物でその条件を満たし、相手（左）の制作物を閲覧できればよい。
+ * 保存先の workId は表示中（右）の制作物。元のアンカー（指摘の座標）は版ごとの元ファイル基準のままで、この対応は表示にだけ使う。
  */
 export async function saveAlignmentOverride(
   ctx: AppContext,
   principal: Principal,
   input: { leftArtifactId: string; rightArtifactId: string; pairs: ManualPair[] },
 ): Promise<void> {
-  const workId = await loadPair(ctx, input.leftArtifactId, input.rightArtifactId);
-  const { work, grants } = await loadAuthorizedWork(ctx, principal, workId, "work.view");
-  const may =
-    isAllowed("revision.submit", { work, grants, principal }) ||
-    isAllowed("comment.post", { work, grants, principal });
-  if (!may) throw new DomainError("forbidden", { reason: "alignment_edit" });
+  const { leftWorkId, rightWorkId } = await loadPair(
+    ctx,
+    input.leftArtifactId,
+    input.rightArtifactId,
+  );
+  const { work, grants } = await loadAuthorizedWork(ctx, principal, rightWorkId, "work.view");
+  if (comparisonScope(leftWorkId, rightWorkId) === "cross_work")
+    await loadAuthorizedWork(ctx, principal, leftWorkId, "work.view");
+  if (!canEditAlignment({ work, grants, principal }))
+    throw new DomainError("forbidden", { reason: "alignment_edit" });
   if (input.pairs.length > MAX_PAIRS)
     throw new DomainError("forbidden", { reason: "too_many_pairs" });
   for (const p of input.pairs) {
@@ -61,7 +76,7 @@ export async function saveAlignmentOverride(
     throw new DomainError("forbidden", { reason: "duplicate_page" });
   const current = await ctx.alignments.find(input.leftArtifactId, input.rightArtifactId);
   const row = {
-    workId,
+    workId: rightWorkId,
     leftArtifactId: input.leftArtifactId,
     rightArtifactId: input.rightArtifactId,
     pairs: input.pairs,

@@ -2,9 +2,12 @@ import { documentView } from "@/features/writing/documentView";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
+  compareTargetLabel,
+  comparisonScope,
   isBeforeDeadline,
   isReviewableArtifact,
   formatVideoSpan,
+  pickCompareArtifact,
   pickReviewArtifact,
   textRangeAnchor,
   videoTimeAnchor,
@@ -43,6 +46,7 @@ import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
+import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
 import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
 import { useCompareSession } from "@/features/compare/useCompareSession";
@@ -261,6 +265,8 @@ export function Editor({
   // 回転ボタンは利用者判断で外した（2026-10-14）。原稿は正位置で校正する。ビューアの回転機能自体は残す
   const rotation = 0 as const;
   const [compareWith, setCompareWith] = useState<string | null>(null);
+  /** 「別の制作物と比べる」の相手を選ぶダイアログ */
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   // 開いた制作物を「最近開いた制作物」（ホーム）に記録する
   useRecordOpened(workId);
@@ -413,13 +419,21 @@ export function Editor({
   const switchable = (data?.artifacts ?? []).filter(
     (a) => isReviewableArtifact(a) || a.role === "external",
   );
-  // 版比較: 同じ制作物の他の版
-  const other = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
-  const otherArtifact =
-    other?.artifacts.find((a) => a.role !== "external" && a.fileName === artifact?.fileName) ??
-    other?.artifacts.find((a) => a.role !== "external" && a.type === artifact?.type) ??
-    (other ? pickReviewArtifact(other.artifacts) : null) ??
-    null;
+  // 版比較: 同じ制作物の他の版、または別の制作物の版（利用者指示 2026-10-17）。閲覧権限は revisions.get が確かめる
+  const otherRaw = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
+  // 相手を替えた直後に前の相手の結果が残ることがあるので、いま比べている版のものだけを使う
+  const other =
+    otherRaw && compareWith && otherRaw.revision.id === compareWith ? otherRaw : undefined;
+  const scope = other ? comparisonScope(other.work.id, workId) : "same_work";
+  const crossWork = scope === "cross_work";
+  /** 左（比べる相手）の見出し。別の制作物なら「題名・版」 */
+  const otherLabel = other
+    ? compareTargetLabel(
+        { workId: other.work.id, workTitle: other.work.title, revisionLabel: other.revision.label },
+        workId,
+      )
+    : null;
+  const otherArtifact = other ? pickCompareArtifact(other.artifacts, artifact, scope) : null;
   const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null);
   // 高度な版比較: ページの自動対応・スクロール同期・文章差分（features/compare）
   const cmp = useCompareSession({
@@ -1033,7 +1047,7 @@ export function Editor({
         <ImageViewer
           url={otherBlob.url}
           artifactId={otherArtifact.id}
-          alt={`${other?.revision.label ?? "比べる版"}の添付「${otherArtifact.fileName}」`}
+          alt={`${otherLabel ?? "比べる版"}の添付「${otherArtifact.fileName}」`}
           {...none}
           draft={null}
           onDraft={() => undefined}
@@ -1046,7 +1060,7 @@ export function Editor({
         <VideoViewer
           url={otherBlob.url}
           artifactId={otherArtifact.id}
-          label={`${other?.revision.label ?? "比べる版"}の添付「${otherArtifact.fileName}」`}
+          label={`${otherLabel ?? "比べる版"}の添付「${otherArtifact.fileName}」`}
           {...none}
           draft={null}
           onDraft={() => undefined}
@@ -1180,8 +1194,10 @@ export function Editor({
         work={workData}
         currentId={revisionId}
         compareWith={compareWith}
+        compareTarget={crossWork ? otherLabel : null}
         canVoid={can?.void ?? false}
         onOpen={goVersion}
+        onPickOther={() => setPickerOpen(true)}
         onCompare={(id) => {
           setScale(1);
           // 新しい版を常に末尾（右）の操作できる側に置く。古い版を見ている時に新しい版を選んだら、新しい版を開いて今の版と並べる
@@ -1304,18 +1320,33 @@ export function Editor({
           <div className="ws__viewer" ref={setViewerEl}>
             {compareWith ? (
               <div className="compare-wrap">
-                <CompareStatus cmp={cmp} />
+                <CompareStatus
+                  cmp={cmp}
+                  otherWork={crossWork ? (other?.work.title ?? null) : null}
+                />
                 {swipe && cmp.kind === "image" && otherBlob.url && blob.url ? (
                   <ImageSwipe
                     leftUrl={otherBlob.url}
                     rightUrl={blob.url}
-                    leftLabel={other?.revision.label ?? "旧版"}
+                    leftLabel={otherLabel ?? "旧版"}
                     rightLabel={revision?.label ?? "新版"}
                   />
                 ) : (
                   <div className="compare">
                     <div className="compare__pane">
-                      <div className="compare__label">{other?.revision.label ?? "…"}</div>
+                      <div className="compare__label compare__label--other">
+                        <span className="compare__label-text" title={otherLabel ?? undefined}>
+                          {otherLabel ?? "…"}
+                        </span>
+                        {/* 比べる相手を替える（別の制作物の版を選ぶ）。同じ制作物の版は引き出し「版」から */}
+                        <M3eIconButton
+                          aria-label="別の制作物と比べる"
+                          className="compare__swap"
+                          onClick={() => setPickerOpen(true)}
+                        >
+                          <M3eIcon name="swap_horiz" />
+                        </M3eIconButton>
+                      </div>
                       {renderOther()}
                     </div>
                     <div className="compare__pane">
@@ -1634,6 +1665,16 @@ export function Editor({
         ) : null}
 
         <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+        <CrossWorkPicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          currentWorkId={workId}
+          onPick={(id) => {
+            setScale(1);
+            resetCompose();
+            setCompareWith(id);
+          }}
+        />
         {proposeFrom ? (
           <ProposeDialog
             open
@@ -1649,7 +1690,7 @@ export function Editor({
           <PageMappingDialog
             open={mappingOpen}
             pdf={cmp.pdf}
-            leftLabel={other?.revision.label ?? "旧版"}
+            leftLabel={otherLabel ?? "旧版"}
             rightLabel={revision?.label ?? "新版"}
             onClose={() => setMappingOpen(false)}
           />
@@ -1659,9 +1700,17 @@ export function Editor({
   );
 }
 
-/** 比較の状況（解析中・同期を止めた理由・差分の件数）。M3: 状態はテキストで短く */
-function CompareStatus({ cmp }: { cmp: ReturnType<typeof useCompareSession> }) {
+/** 比較の状況（別の制作物か・解析中・同期を止めた理由・差分の件数）。M3: 状態はテキストで短く */
+function CompareStatus({
+  cmp,
+  otherWork,
+}: {
+  cmp: ReturnType<typeof useCompareSession>;
+  /** 比べている相手が別の制作物なら、その題名 */
+  otherWork: string | null;
+}) {
   const parts: string[] = [];
+  if (otherWork !== null) parts.push(`別の制作物「${otherWork}」の版と比べています`);
   if (cmp.kind === "pdf") {
     if (cmp.pdf.status === "analyzing") parts.push("ページの対応を解析中…");
     else if (cmp.pdf.status === "error")

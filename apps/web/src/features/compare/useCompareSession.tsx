@@ -110,8 +110,15 @@ export function useCompareSession(opts: {
             ? "image"
             : "other";
 
+  // 添付が替わった側だけ PDF の文書を忘れる（ビューアは読み込んだときにしか onDoc を呼ばないので、
+  // 替わっていない側まで消すと、比べる相手を替えた後にページの対応が二度と解析されない）
   useEffect(() => {
-    setDocs({ left: null, right: null });
+    setDocs((cur) => (cur.left === null ? cur : { ...cur, left: null }));
+  }, [left?.id]);
+  useEffect(() => {
+    setDocs((cur) => (cur.right === null ? cur : { ...cur, right: null }));
+  }, [right?.id]);
+  useEffect(() => {
     setSyncNote(null);
   }, [left?.id, right?.id]);
 
