@@ -2,12 +2,13 @@ import type { AvatarConfig } from "@mf100/domain";
 import { useMemo } from "react";
 import { sanitizeAvatarConfig, useHumation } from "@/lib/avatar";
 import { useUserAvatarConfig } from "./AvatarProvider";
+import { M3eSkeleton } from "./m3e";
 
 /**
  * ユーザーのアバター（Humation）。
  * - 本人が選んだ設定（`config`。または `userId` で AvatarProvider から引いた保存値）があればその絵
  * - 無ければ seed（メール or ID）から決定的に同じ絵が描かれる
- * アセット（約 700KB）は初回表示時に遅延読み込みし、読み込み前はプレースホルダの円を出す。
+ * アセット（約 700KB）は初回表示時に遅延読み込みし、読み込み前は同じ大きさの円のスケルトン（M3E skeleton。配置が動かない）を出す。
  * 保存値に知らない部品があっても描画が止まらないよう、アセットに照らして捨てる（lib/avatar の sanitize）。
  */
 export function UserAvatar({
@@ -33,11 +34,12 @@ export function UserAvatar({
   const safe = useMemo(() => (mod ? sanitizeAvatarConfig(mod, chosen) : null), [mod, chosen]);
   if (!mod)
     return (
-      <span
-        className={`user-avatar user-avatar--placeholder ${className ?? ""}`}
-        style={{ width: size, height: size }}
-        aria-hidden="true"
-      />
+      <M3eSkeleton shape="circular" aria-hidden="true">
+        <span
+          className={`user-avatar user-avatar--placeholder ${className ?? ""}`}
+          style={{ width: size, height: size }}
+        />
+      </M3eSkeleton>
     );
   const { Avatar, manifest } = mod;
   return (

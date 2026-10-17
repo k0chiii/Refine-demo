@@ -8,6 +8,7 @@ import { anchorPlace } from "@/features/feedback/FeedbackPane";
 import { useVisualViewportBox } from "@/lib/useKeyboardInset";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Loading } from "@/ui/Loading";
 import { M3eButton, M3eIcon, M3eIconButton } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/feedback/$threadId")({
@@ -92,7 +93,7 @@ function FeedbackThread() {
       </AppBarSlot>
       {data ? <AppBarSlot slot="subtitle">{data.work.title}</AppBarSlot> : null}
       {data === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="相談を読み込んでいます" />
       ) : data === null ? (
         <div className="empty">このスレッドは見つからないか、見る権限がありません</div>
       ) : (

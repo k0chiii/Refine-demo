@@ -18,6 +18,7 @@ import { WorksList } from "@/features/work/WorksList";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Loading } from "@/ui/Loading";
 import {
   M3eFilterChip,
   M3eFilterChipSet,
@@ -220,7 +221,7 @@ function Works() {
         </MenuChip>
       </div>
       {shown === undefined || teams === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="制作物を読み込んでいます" />
       ) : shown.length === 0 ? (
         <div className="empty">
           {q

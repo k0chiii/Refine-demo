@@ -12,6 +12,7 @@ import { RuleTester } from "@/features/notation/RuleTester";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { Field, Select } from "@/ui/Field";
 import {
@@ -88,7 +89,7 @@ function Notation() {
     return (
       <>
         {title}
-        <p className="muted">読み込み中…</p>
+        <Loading label="表記ルールを読み込んでいます" />
       </>
     );
   const canEditAny = Object.values(book.roles).some((r) => r !== "member");

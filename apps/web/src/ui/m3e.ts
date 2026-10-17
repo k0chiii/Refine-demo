@@ -40,6 +40,8 @@ export {
   M3eLinearProgressIndicator,
   M3eCircularProgressIndicator,
 } from "@m3e/react/progress-indicator";
+// 読み込み中の表示（M3 Expressive Loading indicator。短い不確定の待ち。画面の中身の読み込みは ui/Loading.tsx で包む）
+export { M3eLoadingIndicator } from "@m3e/react/loading-indicator";
 export { M3eDivider } from "@m3e/react/divider";
 export { M3eHeading } from "@m3e/react/heading";
 export { M3eFormField } from "@m3e/react/form-field";

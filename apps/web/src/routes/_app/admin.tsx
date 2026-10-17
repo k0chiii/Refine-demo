@@ -16,7 +16,6 @@ import {
   M3eDialog,
   M3eIcon,
   M3eIconButton,
-  M3eLinearProgressIndicator,
   M3eList,
   M3eListAction,
   M3eListItem,
@@ -24,6 +23,7 @@ import {
   M3eSwitch,
 } from "@/ui/m3e";
 import { Field, TextInput } from "@/ui/Field";
+import { Loading } from "@/ui/Loading";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
@@ -129,7 +129,7 @@ function Admin() {
           </div>
           <p className="muted small">制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます</p>
           {works === undefined ? (
-            <M3eLinearProgressIndicator mode="indeterminate" aria-label="制作物を読み込み中" />
+            <Loading label="制作物を読み込んでいます" />
           ) : works.length === 0 ? (
             <div className="empty">制作物がありません</div>
           ) : (
@@ -179,7 +179,7 @@ function Admin() {
             </M3eSearchBar>
             {/* 行の末尾のスイッチはその場で効く（M3 Switch: 保存の操作なしで切り替わる設定） */}
             {users === undefined ? (
-              <M3eLinearProgressIndicator mode="indeterminate" aria-label="ユーザーを読み込み中" />
+              <Loading label="ユーザーを読み込んでいます" />
             ) : users.length === 0 ? (
               <div className="empty">一致するユーザーはいません</div>
             ) : (
@@ -237,7 +237,7 @@ function Admin() {
           <p className="muted small">直近 100 件の操作</p>
           {/* 記録を読むだけのリスト（M3 Lists: non-interactive）。新しい順で届く */}
           {audit === undefined ? (
-            <M3eLinearProgressIndicator mode="indeterminate" aria-label="監査ログを読み込み中" />
+            <Loading label="監査ログを読み込んでいます" />
           ) : audit.length === 0 ? (
             <div className="empty">操作の記録はありません</div>
           ) : (

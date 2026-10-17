@@ -27,7 +27,8 @@ import {
 } from "@/lib/avatar";
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eCircularProgressIndicator, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { Loading } from "@/ui/Loading";
+import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
 import { PaneTabs } from "@/ui/PaneTabs";
 
 /** 選択画面の中の状態（部位はすべて部品の ID で確定している） */
@@ -139,9 +140,7 @@ export function AvatarPickerDialog({
       <span slot="header">アバターを変える</span>
       <div className="dialog-body avatar-picker__body">
         {!hm || !draft ? (
-          <div className="avatar-picker__loading">
-            <M3eCircularProgressIndicator indeterminate aria-label="アバターの部品を読み込み中" />
-          </div>
+          <Loading label="アバターの部品を読み込んでいます" className="avatar-picker__loading" />
         ) : (
           <>
             <div className="avatar-picker__preview">

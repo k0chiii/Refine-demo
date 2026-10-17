@@ -27,6 +27,7 @@ import { useAction } from "@/lib/useAction";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Loading } from "@/ui/Loading";
 import {
   M3eActionList,
   M3eButton,
@@ -187,7 +188,7 @@ function Dashboard() {
       <>
         <AppBarSlot slot="title">ホーム</AppBarSlot>
         {editButton}
-        <p className="muted">読み込み中…</p>
+        <Loading label="ホームを読み込んでいます" />
       </>
     );
 
