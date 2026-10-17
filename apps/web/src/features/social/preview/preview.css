@@ -14,12 +14,6 @@
   align-items: center;
   gap: 8px;
 }
-.sp-caption {
-  font-size: 12px;
-  color: var(--mf-on-surface-variant);
-  text-align: center;
-  max-width: 420px;
-}
 /* 端末の外形（ベゼル画像か CSS の枠）。中の .sp-device が実機の画面の大きさ */
 .sp-frame-fit {
   display: flex;
