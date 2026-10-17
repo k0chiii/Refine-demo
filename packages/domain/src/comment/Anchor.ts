@@ -1,5 +1,6 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { ArtifactId } from "../shared/ids.ts";
+import { POST_MANIFEST_NAME } from "../social/post.ts";
 
 /**
  * コメント位置（§5.2-8 / §9.1）。
@@ -12,6 +13,8 @@ import type { ArtifactId } from "../shared/ids.ts";
  * - Web（ライブ表示。docs/FIGMA_WEB_PROOFING.md §6.1）: 外部リンクの添付（サイトの URL）の上で、ページの中の要素を
  *   CSS セレクタ・XPath・引用文で指し、要素の中の相対位置（矩形かピン。0..1）と、付けたときの端末幅（viewport）、
  *   見つからなかったときの文書座標（fallback）を持つ。表示時に要素を探し直す（resolveWebAnchor）。
+ * - SNS 投稿（端末の枠のプレビュー。social/postAnchor.ts）: 新しい種類は作らず、本文の添付（post-body.txt）の text_range と、
+ *   画像の添付の image_rect / image_pin（元画像基準の正規化座標）をそのまま使う
  * - Figma（埋め込み表示）: 埋め込みは位置を返さないので、コメントは「このフレーム（ノード）について」の単位（figma_node）。
  * 保存値はプレビューの拡大率・回転・ビューポート幅に依存しない（A-03）。
  */
@@ -223,10 +226,19 @@ const validViewportSize = (v: number) =>
  * - figma_node は Figma の URL の添付にだけ付く
  * - external（外部での議論の記録）は role external の添付
  * - それ以外（PDF・画像・文章・動画の位置）は実体のある添付
+ * 添付の種類（type）が分かるときは、位置の種類と合うことも確かめる（text_range は文章、image_* は画像）。SNS 投稿の版では、本文（post-body.txt）の範囲と各画像（元画像基準の矩形・ピン）がこれに当たり、
+ * 内容の記録（mf100-post.json）そのものには位置を付けない。
+ * 文章の範囲は添付のバイト数を超えない（UTF-16 の文字数はバイト数以下。サイズが分かるときだけ）
  */
 export function anchorFitsArtifact(
   anchor: Anchor,
-  artifact: { role: string; externalUrl?: string | undefined },
+  artifact: {
+    role: string;
+    externalUrl?: string | undefined;
+    type?: string | undefined;
+    fileName?: string | undefined;
+    size?: number | undefined;
+  },
 ): boolean {
   const figma =
     typeof artifact.externalUrl === "string" &&
@@ -243,10 +255,29 @@ export function anchorFitsArtifact(
       return artifact.role === "external" && figma;
     case "external":
       return artifact.role === "external";
-    default:
-      return artifact.role !== "external";
+    default: {
+      if (artifact.role === "external") return false;
+      if (artifact.fileName === POST_MANIFEST_NAME) return false;
+      const want = anchorArtifactType[anchor.type];
+      if (artifact.type !== undefined && want !== undefined && artifact.type !== want) return false;
+      if (
+        anchor.type === "text_range" &&
+        typeof artifact.size === "number" &&
+        artifact.size > 0 &&
+        anchor.end > artifact.size
+      )
+        return false;
+      return true;
+    }
   }
 }
+
+/** 位置の種類が付く添付の種類（文章の範囲と画像の位置だけ。PDF・動画の位置は従来どおり添付の種類を問わない） */
+const anchorArtifactType: Partial<Record<Anchor["type"], string>> = {
+  image_rect: "image",
+  image_pin: "image",
+  text_range: "document",
+};
 
 /**
  * Web 要素のアンカーを作る（ブリッジが返した位置から）。矩形があればピンは付けない。
