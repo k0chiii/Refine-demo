@@ -13,6 +13,7 @@ import { describeError } from "@/lib/errors";
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
 import { useWindowClass } from "@/lib/useMedia";
+import { Loading } from "@/ui/Loading";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { Field, TextInput } from "@/ui/Field";
 import {
@@ -172,7 +173,7 @@ export function TeamsAdmin() {
         担当」の入れ子で並びます。制作物には主管担当と制作担当を選べます
       </p>
       {teams === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="担当を読み込んでいます" />
       ) : bureaus.length === 0 ? (
         <div className="empty">まだ局がありません。「局を追加」か CSV で作れます</div>
       ) : (

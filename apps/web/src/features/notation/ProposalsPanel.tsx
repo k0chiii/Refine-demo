@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { formatJst } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
+import { Loading } from "@/ui/Loading";
 import {
   M3eButton,
   M3eCard,
@@ -88,7 +89,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
         ) : null}
       </div>
       {list === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="提案を読み込んでいます" />
       ) : list.length === 0 ? (
         <div className="empty">
           {status === "open" ? "未処理の提案はありません" : "該当する提案はありません"}

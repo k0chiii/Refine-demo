@@ -6,6 +6,7 @@ import { formatJstShort } from "@/lib/format";
 import { permissionLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { Field, Select } from "@/ui/Field";
+import { Loading } from "@/ui/Loading";
 import {
   M3eButton,
   M3eDivider,
@@ -56,7 +57,7 @@ export function AclPanel({ workId }: { workId: string }) {
       permission: p,
     });
   });
-  if (grants === undefined) return <p className="muted small">読み込み中…</p>;
+  if (grants === undefined) return <Loading size="small" label="閲覧権限を読み込んでいます" />;
   const active = grants.filter((g) => g.revokedAt === undefined);
   return (
     <div className="acl">

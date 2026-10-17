@@ -1486,3 +1486,34 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 
 - 相手の版の上でのコメント（相手は見るだけ。コメントは表示中の版に）。相手の制作物のコメントの持ち越し
 - 3 つ以上を並べる、別の制作物の相手を URL に残す（版を開いた直後に落とす従来の作りに合わせた）
+
+## 59. 読み込み中の表示を M3E に揃える（2026-10-17・利用者指示）
+
+利用者の指示「読み込み中のやつも M3E に揃えてね」。画面・区画の中身が届くまで文字で出していた「読み込み中…」「ファイルを取得中…」「文章を読み込み中…」（約 30 箇所）と、管理画面の一覧で使っていた不確定の linear progress を、M3 Expressive の **Loading indicator**（`m3e-loading-indicator`。形が移り変わる不確定の指標）に置き換えた。決定ログは docs/DECISIONS.md「読み込み中の表示」。
+
+### 使い分け（M3 Loading indicator / Progress indicators / Skeleton loader）
+
+| 場面                                                                                                                             | 部品                                                                                                  | 理由                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 画面・区画の中身を取りに行っている短い待ち（制作物・版・一覧・相談・表記ルール・提案・担当・ユーザー・監査ログ・アバターの部品） | **Loading indicator**（`ui/Loading.tsx`）を区画の中央に                                               | M3: 5 秒未満の不確定の待ちは loading indicator。中身の代わりに置き、届いたら入れ替わる             |
+| 添付のファイルの取得（PDF・画像・動画。長くなり得る）                                                                            | Loading indicator ＋ 文字「ファイルを取得しています」（`caption`）                                    | 進み具合は取れない（丸ごと fetch）が、何を待っているかは見せる                                     |
+| Web サイトのライブ表示を iframe に読み込む間                                                                                     | Loading indicator の **contained**（`contained`）                                                     | M3: 他の中身の上に重ねるときは容器付きで目立たせる                                                 |
+| 行の中・題名の位置（投稿の画像 1 枚、相談の題名）                                                                                | Loading indicator の `inline`（24px）                                                                 | 文字の位置に小さく置く                                                                             |
+| 進み具合が分かる処理（転送・確定・CSV の取り込み・自動校正）                                                                     | **Progress indicator**（従来どおり linear。`SubmitDialog` `ImportWorksDialog` `AutoProofreadStatus`） | M3: 確定の進捗や長い処理は progress indicator。情報のある文（「〇〇 を読み込んでいます」）は残す   |
+| 外部の処理の待ち（AI の確認）                                                                                                    | Circular progress（従来どおり。`AiAssist`）                                                           | 中身の読み込みではなく処理の実行                                                                   |
+| 大きさの決まった絵の場所取り（ユーザーのアバター、FB の画像のサムネイル）                                                        | **Skeleton**（`m3e-skeleton` circular / square）                                                      | M3: 配置が動かないことが大事な場所。一覧の行は件数が分からず骸骨の方が跳ねるので loading indicator |
+
+### 部品 `ui/Loading.tsx`
+
+- `<Loading label="制作物を読み込んでいます" />`: `label` は何を待っているか（必須）。`size="small"`（32px。側の一覧・小さなパネル）、`inline`（24px。行の中）、`contained`（重ねるとき）、`caption`（文字も見せる。true なら label、文字列ならその文）、`className`（置き場所の調整。`fb-stage__empty` `write-loading` `avatar-picker__loading` `wlive__loading` を流用）、`slot`（Web Components の slot に置くとき）
+- 読み上げ: 外側が `role="status"` で、現れたときに `label` を一度知らせる。指標の絵は `aria-hidden`（M3E の指標は `role="progressbar"` を持つが、名前と live region で二重に読ませない）。文字を見せないときは `.sr-only` に label
+- 動きを減らす設定（`prefers-reduced-motion: reduce`）: M3E 2.9.2 の loading indicator は未対応なので、`updateComplete` の後に shadow DOM の `.container.animate` を外して回転・変形を止め、形だけ出す（`lib/useMedia`）。skeleton は M3E 側が対応済み
+- 点滅させない: `.loading` は 150ms 待って現れる（opacity の fade。キャッシュ済みのデモや Convex の購読が即座に返るときは見えない）。このため E2E のスクリーンショットには写らない（72 は撮っていない）
+- トークン: 小さい指標は `--m3e-loading-indicator-size`（M3E の実装の名前。README の `-active-indicator-size` ではない）と `--m3e-loading-indicator-container-size`
+- `ws__viewer > .loading` はビューアの区画いっぱいに（`.empty` と同じ扱い）
+
+### 置き換えた場所
+
+- 画面: ホーム、制作物一覧、エディタ（書く制作物を選ぶ）、表記ルール、相談のスレッド、旧 URL の転送、管理（制作物・ユーザー・監査ログ・担当・SNS アカウント）
+- 校正画面: 制作物・版・ファイルの取得・比べる版（ファイル・文章）。FB スペース: 一覧・相談・紙面（制作物・版・ファイル・文章）・スレッドの題名。文章エディタ・投稿エディタ・投稿の校正・投稿の画像の行。表記ルールのパネル・提案・閲覧権限・比べる制作物を選ぶダイアログ・アバターを変える・Web サイトのライブ表示
+- 残したもの: M3E autocomplete の `loadingLabel`（ユーザー検索。部品の内蔵）、自動校正の進捗の文、転送の進捗

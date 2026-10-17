@@ -50,6 +50,7 @@ import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard"
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PinButton, useRecordOpened } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
+import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
@@ -588,7 +589,7 @@ export function Editor({
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
-  if (workData === undefined) return <p className="muted">読み込み中…</p>;
+  if (workData === undefined) return <Loading label="制作物を読み込んでいます" />;
   const { work } = workData;
   const isSns = work.mediaType === "sns";
   const openAuthoring = () =>
@@ -873,7 +874,7 @@ export function Editor({
           ) : null}
         </div>
       );
-    if (!data) return <div className="empty">読み込み中…</div>;
+    if (!data) return <Loading label="版を読み込んでいます" />;
     if (!artifact) return <div className="empty">添付がありません</div>;
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
@@ -967,7 +968,8 @@ export function Editor({
       );
     }
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    if (!blob.blob) return <div className="empty">ファイルを取得中…</div>;
+    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので文字も見せる）
+    if (!blob.blob) return <Loading label="ファイルを取得しています" caption />;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
@@ -1119,7 +1121,7 @@ export function Editor({
   const renderOther = (): ReactNode => {
     if (!compareWith) return null;
     if (!other || !otherArtifact) return <div className="empty">比較する添付がありません</div>;
-    if (!otherBlob.blob) return <div className="empty">ファイルを取得中…</div>;
+    if (!otherBlob.blob) return <Loading label="比べる版のファイルを取得しています" caption />;
     const none = {
       threads: [],
       activeThreadId: null,
@@ -1142,7 +1144,7 @@ export function Editor({
         />
       );
     if (otherArtifact.type === "document") {
-      if (!cmp.otherText) return <div className="empty">文章を読み込み中…</div>;
+      if (!cmp.otherText) return <Loading label="比べる版の文章を読み込んでいます" />;
       return cmp.otherText.html !== undefined ? (
         <RichTextViewer
           html={cmp.otherText.html}

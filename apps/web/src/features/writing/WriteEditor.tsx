@@ -13,6 +13,7 @@ import { describeError } from "@/lib/errors";
 import { formatJstShort } from "@/lib/format";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
+import { Loading } from "@/ui/Loading";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -63,7 +64,7 @@ export function WriteEditor({ workId }: { workId: string }) {
   const docData = useQuery(api.documents.get, { workId });
   const [reloadKey, setReloadKey] = useState(0);
   if (workData === undefined || docData === undefined)
-    return <p className="muted write-loading">読み込み中…</p>;
+    return <Loading label="原稿を読み込んでいます" className="write-loading" />;
   // 媒体に合わないエディタでは編集させない（SNS 投稿の下書きを文章で上書きしないため）
   const expected = draftFormatFor(workData.work.mediaType);
   if (expected !== "document")

@@ -31,6 +31,7 @@ import {
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
+import { Loading } from "@/ui/Loading";
 import {
   M3eButton,
   M3eCard,
@@ -417,9 +418,8 @@ export function WebLiveViewer({
         </div>
       ) : null}
       {state === "loading" ? (
-        <div className="wlive__loading" role="status">
-          サイトを読み込んでいます…
-        </div>
+        // iframe の上に重ねるので contained（M3: 他の中身の上では容器付きで目立たせる）
+        <Loading contained caption label="サイトを読み込んでいます" className="wlive__loading" />
       ) : null}
     </div>
   );

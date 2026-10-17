@@ -2,6 +2,7 @@ import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJstCompact } from "@/lib/format";
+import { Loading } from "@/ui/Loading";
 import {
   M3eActionList,
   M3eBadge,
@@ -61,7 +62,7 @@ export function FeedbackSpaceList({
         </M3eFilterChip>
       </M3eFilterChipSet>
       {shown === undefined ? (
-        <p className="muted fb-spaces__empty">読み込み中…</p>
+        <Loading size="small" label="FB スペースを読み込んでいます" />
       ) : shown.length === 0 ? (
         <p className="muted fb-spaces__empty">
           {q ? `「${query.trim()}」に合う制作物はありません` : "FB スペースはまだありません"}

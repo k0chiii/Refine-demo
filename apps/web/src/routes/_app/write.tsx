@@ -5,6 +5,7 @@ import { formatDeadline, formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
+import { Loading } from "@/ui/Loading";
 import { M3eActionList, M3eIcon, M3eListAction } from "@/ui/m3e";
 
 export const Route = createFileRoute("/_app/write")({ component: WritePicker });
@@ -32,7 +33,7 @@ function WritePicker() {
         書く制作物を選んでください（あなたが版を提出できる、進行中の制作物）
       </p>
       {works === undefined ? (
-        <p className="muted">読み込み中…</p>
+        <Loading label="書ける制作物を読み込んでいます" />
       ) : works.length === 0 ? (
         <div className="empty">
           <M3eIcon name="edit_document" />

@@ -11,6 +11,7 @@ import { TextViewer } from "@/features/annotation/TextViewer";
 import { VideoViewer } from "@/features/annotation/VideoViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { documentView } from "@/features/writing/documentView";
+import { Loading } from "@/ui/Loading";
 import { M3eButton, M3eIcon, M3eIconButton, M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@/ui/m3e";
 import type { FeedbackThreadSummary } from "./FeedbackPane";
 
@@ -120,7 +121,8 @@ export function FeedbackStage({
   };
 
   const viewer = (): ReactNode => {
-    if (work === undefined) return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (work === undefined)
+      return <Loading label="制作物を読み込んでいます" className="fb-stage__empty" />;
     if (!shownId)
       return (
         <div className="empty fb-stage__empty">
@@ -128,11 +130,12 @@ export function FeedbackStage({
           まだ版がありません。制作物全体についてのスレッドは右から立てられます
         </div>
       );
-    if (!data) return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (!data) return <Loading label="版を読み込んでいます" className="fb-stage__empty" />;
     if (!artifact)
       return <div className="empty fb-stage__empty">この版には紙面に出せる添付がありません</div>;
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    if (!blob.blob) return <p className="muted fb-stage__empty">ファイルを取得中…</p>;
+    if (!blob.blob)
+      return <Loading label="ファイルを取得しています" caption className="fb-stage__empty" />;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
@@ -163,7 +166,8 @@ export function FeedbackStage({
         <TextViewer text={text.body} scale={scale} artifactId={artifact.id} {...viewerProps} />
       );
     }
-    if (artifact.type === "document") return <p className="muted fb-stage__empty">読み込み中…</p>;
+    if (artifact.type === "document")
+      return <Loading label="文章を読み込んでいます" className="fb-stage__empty" />;
     if (artifact.type === "video" && blob.url)
       return (
         <VideoViewer
