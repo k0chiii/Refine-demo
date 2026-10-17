@@ -1073,6 +1073,14 @@
   outline: none;
   cursor: text;
 }
+/*
+ * スマホの幅（compact）・iOS では styles.css が contenteditable の文字を 16px 以上にする（入力欄の拡大防止）。
+ * 本文は編集しない（読み取り専用で、文字カーソルを置くだけ）うえ、端末の画面を写したものなので、実機の文字の大きさのままにする。
+ * 大きくなると本文の折り返しが実機と変わり、範囲を選ぶ位置も狂う。:is の詳細度に負けないよう端末の枠を添える
+ */
+.sp-device .sp-text[contenteditable="true"] {
+  font-size: inherit;
+}
 .sp-text[contenteditable="true"]:focus-visible {
   outline: 2px solid var(--mf-primary);
   outline-offset: 3px;
