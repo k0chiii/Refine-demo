@@ -1545,7 +1545,7 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 
 - `<Loading label="制作物を読み込んでいます" />`: `label` は何を待っているか（必須）。`size="small"`（32px。側の一覧・小さなパネル）、`inline`（24px。行の中）、`contained`（重ねるとき）、`caption`（文字も見せる。true なら label、文字列ならその文）、`className`（置き場所の調整。`fb-stage__empty` `write-loading` `avatar-picker__loading` `wlive__loading` を流用）、`slot`（Web Components の slot に置くとき）
 - 読み上げ: 外側が `role="status"` で、現れたときに `label` を一度知らせる。指標の絵は `aria-hidden`（M3E の指標は `role="progressbar"` を持つが、名前と live region で二重に読ませない）。文字を見せないときは `.sr-only` に label
-- 校正画面・FB の紙面・Web のライブ表示の待ちは `calm`（回転だけ。形の変形を止める）。待つ間に PDF.js などの重い処理が同じスレッドで走るため（§60「合流後の計測」）
+- 形の変化（M3E の rotate-inner。soft burst → 五角形 → 錠剤 → 太陽 → 楕円）は全部の画面で止めない（利用者決定 2026-10-17「A でお願い」。§60「合流後の計測」）
 - 動きを減らす設定（`prefers-reduced-motion: reduce`）: M3E 2.9.2 の loading indicator は未対応なので、`updateComplete` の後に shadow DOM の `.container.animate` を外して回転・変形を止め、形だけ出す（`lib/useMedia`）。skeleton は M3E 側が対応済み
 - 点滅させない: `.loading` は 150ms 待って現れる（opacity の fade。キャッシュ済みのデモや Convex の購読が即座に返るときは見えない）。このため E2E のスクリーンショットには写らない（72 は撮っていない）
 - トークン: 小さい指標は `--m3e-loading-indicator-size`（M3E の実装の名前。README の `-active-indicator-size` ではない）と `--m3e-loading-indicator-container-size`
@@ -1627,7 +1627,7 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 
 §59 の Loading indicator（M3E `m3e-loading-indicator`）を入れた枝と合流した後、同じ機械・同じ条件で測り直した（デモビルド 2 つを続けて。CPU 4 倍遅）。読み込み・打鍵・メニューは同じ範囲だったが、**校正画面を開いて PDF の 1 ページ目が出るまで**が 1,750〜2,025ms → 2,360〜3,530ms に伸びた。原因は待っている間に動く指標の形の変化（clip-path の keyframes。main thread で毎フレーム style 再計算と layerize。トレースで UpdateLayoutTree 98 → 492ms・Layerize 80 → 515ms）で、動きを減らす設定（prefers-reduced-motion。指標の変形を止める）にすると 1,610〜1,880ms、指標を出さなければ 2,100〜2,220ms と元に戻る。`contain` で囲っても変わらない。指標を M3E に揃える（§59。利用者指示）と操作の軽さ（§60。利用者指示）が重なるところなので、ここでは変えずに記録だけ残す。手があるとすれば、長くなり得る待ち（ビューア・ファイルの取得）だけ変形を止めて形だけ出す、か M3E 側で合成できる動きに変わるのを待つ。
 
-**直したこと（2026-10-17）**: `Loading` に `calm` を足した。外側の回転（transform。合成だけで済む）は残し、内側の形の変形（`rotate-inner` の clip-path）だけを shadow DOM に足した 1 行のスタイルで止める（形は soft burst のまま）。M3E の指標の見た目（回る形）は保ち、待つ間に PDF.js などの重い処理が同じスレッドで走る校正画面の待ち（制作物・版・ファイルの取得・ビューアの読み込み・比べる版。FB の紙面も同じ）と Web のライブ表示に使う。ほかの画面の待ちは変形したまま。同じ条件（CPU 4 倍遅、続けて採った組）で PDF の 1 ページ目が出るまで: 直す前 2,300〜3,360ms → `calm` 1,960〜2,280ms（動きを減らす設定 1,480〜1,810ms）。残りの差は回転の分。
+**利用者の決定（2026-10-17）**: いったん `Loading` に `calm`（外側の回転は残し、内側の形の変形だけを止める）を足し、校正画面・FB の紙面・Web のライブ表示の待ちに使った（CPU 4 倍遅で PDF の 1 ページ目まで 2,300〜3,360ms → 1,960〜2,280ms）。利用者に「ローディングってもっと動的にいろんな形に変化すると思ったけど違うの」と聞かれ、A（全部の画面で形を変える。遅い端末で PDF が出るまで 0.3〜1 秒延び、普通の PC ではその約 4 分の 1）と B（今のまま）を示したところ「A でお願い」。`calm` は外し、全部の画面で M3E どおり形を変える。重さが問題になったら、まず待ちの区画が PDF.js の描画と重なる時間を縮める（ビューアの先読み）方を考える
 
 ### デモモードに残る重さ（本番には無い）
 
