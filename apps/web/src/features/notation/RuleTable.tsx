@@ -10,7 +10,8 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { M3eIcon, M3eTooltip } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eTooltip } from "@m3e/react/tooltip";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
 type Rule = Book["rules"][number];

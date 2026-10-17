@@ -19,19 +19,14 @@ import { useWindowClass } from "@/lib/useMedia";
 import { Loading } from "@/ui/Loading";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { Field, Select, TextInput } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eDialog,
-  M3eDivider,
-  M3eIcon,
-  M3eIconButton,
-  M3eLinearProgressIndicator,
-  M3eList,
-  M3eListItem,
-  M3eMenu,
-  M3eMenuItem,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 import { UserPicker } from "@/ui/UserPicker";
 
 /**

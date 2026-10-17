@@ -3,7 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eDialog } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
 import {
   emptyWorkForm,
   withoutNulls,

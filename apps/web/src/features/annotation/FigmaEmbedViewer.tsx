@@ -8,7 +8,9 @@ import {
 import { useMemo, type ReactNode } from "react";
 import type { OverlayThread } from "./AnchorOverlay";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
-import { M3eButton, M3eIcon, M3eMenu, M3eMenuItemRadio, M3eMenuTrigger } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eMenu, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 
 type FigmaAnchor = Extract<Anchor, { type: "figma_node" }>;
 

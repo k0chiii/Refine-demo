@@ -68,6 +68,11 @@ export function bodyOfHtml(html: string): string {
   return parsed.body.innerHTML;
 }
 
+/** Markdown の原稿か（拡張子 .md/.markdown か MIME）。markdown.ts（marked・TipTap を引き込む）から分けて置く */
+export function isMarkdownArtifact(a: { fileName: string; mimeType?: string | null }): boolean {
+  return /\.(md|markdown)$/i.test(a.fileName) || a.mimeType === "text/markdown";
+}
+
 export function isHtmlArtifact(a: { mimeType?: string; fileName: string }): boolean {
   return a.mimeType === "text/html" || /\.html?$/i.test(a.fileName);
 }

@@ -2,13 +2,30 @@ import { api } from "@mf100/convex/api";
 import { useNavigate } from "@tanstack/react-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useEffect, useState, type ReactNode } from "react";
-import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { formatDeadlineUntil } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
+import { whenIdle } from "@/lib/preload";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
-import { M3eActionList, M3eButton, M3eDialog, M3eIcon, M3eListAction } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+
+/**
+ * 版提出ダイアログ（日付・時刻の選択、ユーザー選択、Figma の取り込みなどで圧縮前 300KB 近い）は、提出を始めるまで読み込まない。
+ * シェル（_app）が静的に import していたため、サインインした直後のホームの描画と競っていた（docs/UI_M3E.md §60）。
+ * 提出できる人には、画面が落ち着いたころ（idle）に先に取りに行き、押したときに待たせない
+ */
+const loadSubmitDialog = () => import("@/features/upload/SubmitDialog");
+const SubmitDialog = lazy(() => loadSubmitDialog().then((m) => ({ default: m.SubmitDialog })));
+let submitDialogPreloaded = false;
+function preloadSubmitDialog() {
+  if (submitDialogPreloaded) return;
+  submitDialogPreloaded = true;
+  whenIdle(() => void loadSubmitDialog().catch(() => undefined));
+}
 
 export type SubmitTarget = FunctionReturnType<typeof api.home.submitTargets>[number];
 type Route = SubmitTarget["route"];
@@ -23,7 +40,12 @@ export const submitRouteIcon: Record<Route, string> = {
 /** 自分が版を提出できる制作物（締切順）。判定は application の listSubmitTargets（提出の権限を必ず確かめる） */
 export function useSubmitTargets(): SubmitTarget[] | undefined {
   const { isAuthenticated } = useConvexAuth();
-  return useQuery(api.home.submitTargets, isAuthenticated ? {} : "skip");
+  const targets = useQuery(api.home.submitTargets, isAuthenticated ? {} : "skip");
+  const canSubmit = (targets?.length ?? 0) > 0;
+  useEffect(() => {
+    if (canSubmit) preloadSubmitDialog();
+  }, [canSubmit]);
+  return targets;
 }
 
 /** 行の 2 行目: 媒体・いまの版・納期 */
@@ -75,15 +97,17 @@ export function useSubmitLauncher(): {
     }
   };
   const element = target ? (
-    <SubmitDialog
-      key={target}
-      workId={target}
-      open={open}
-      onClose={() => {
-        setOpen(false);
-        setTarget(null);
-      }}
-    />
+    <Suspense fallback={null}>
+      <SubmitDialog
+        key={target}
+        workId={target}
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setTarget(null);
+        }}
+      />
+    </Suspense>
   ) : null;
   return { start, element };
 }

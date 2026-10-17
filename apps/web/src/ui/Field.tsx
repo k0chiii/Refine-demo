@@ -9,7 +9,10 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { M3eCheckbox, M3eFormField, M3eOption, M3eSelect } from "./m3e";
+import { M3eCheckbox } from "@m3e/react/checkbox";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eOption } from "@m3e/react/option";
+import { M3eSelect } from "@m3e/react/select";
 
 /**
  * フォーム部品。入力そのものは native の input / textarea を使う（日本語 IME・キーボード操作・ブラウザ標準の検証を優先: §4 デザイン）。

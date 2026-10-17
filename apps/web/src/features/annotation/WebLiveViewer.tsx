@@ -32,17 +32,12 @@ import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { Loading } from "@/ui/Loading";
-import {
-  M3eButton,
-  M3eCard,
-  M3eFormField,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItemGroup,
-  M3eMenuItemRadio,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eCard } from "@m3e/react/card";
+import { M3eFormField } from "@m3e/react/form-field";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { useWebBridge, webDeviceLabel, type BridgeHit, type BridgeRects } from "./webBridge";
 

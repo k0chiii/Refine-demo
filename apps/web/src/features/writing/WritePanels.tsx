@@ -3,7 +3,10 @@ import { TextSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { Checkbox, Field, TextInput } from "@/ui/Field";
-import { M3eActionList, M3eButton, M3eIcon, M3eIconButton, M3eListAction } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { gotoMatch, replaceAll, replaceCurrent, searchState, setSearch } from "./plugins";
 import { buildPlainText, offsetToPos } from "./plainText";
 

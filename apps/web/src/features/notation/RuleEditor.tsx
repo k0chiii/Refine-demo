@@ -13,14 +13,11 @@ import { useEffect, useState } from "react";
 import { formatJst } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eIcon,
-  M3eIconButton,
-  M3eExpansionPanel,
-  M3eList,
-  M3eListItem,
-} from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import { Card } from "@/ui/Card";
 import { toast } from "@/lib/toast";
 

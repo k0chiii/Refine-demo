@@ -2,7 +2,8 @@ import { api } from "@mf100/convex/api";
 import { sortTeams, type Team } from "@mf100/domain";
 import { useQuery } from "convex/react";
 import { Field, useFieldId, useFieldLabelId } from "@/ui/Field";
-import { M3eOptGroup, M3eOption, M3eSelect } from "@/ui/m3e";
+import { M3eOptGroup, M3eOption } from "@m3e/react/option";
+import { M3eSelect } from "@m3e/react/select";
 
 /**
  * 担当（局 › 担当）を選ぶ欄。M3E select（複数選択は `multi`）に、局ごとの option group で担当を並べる。

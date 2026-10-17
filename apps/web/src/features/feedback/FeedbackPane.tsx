@@ -9,7 +9,10 @@ import { formatJstCompact } from "@/lib/format";
 import { useWindowClass } from "@/lib/useMedia";
 import { Field, TextInput } from "@/ui/Field";
 import { Loading } from "@/ui/Loading";
-import { M3eActionList, M3eButton, M3eIcon, M3eIconButton, M3eListAction } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { FeedbackComposer } from "./FeedbackComposer";
 import { FeedbackConversation } from "./FeedbackConversation";
 

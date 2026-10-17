@@ -3,15 +3,11 @@ import { useQuery } from "convex/react";
 import { useState } from "react";
 import { formatJstCompact } from "@/lib/format";
 import { Loading } from "@/ui/Loading";
-import {
-  M3eActionList,
-  M3eBadge,
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eListAction,
-  M3eSearchBar,
-} from "@/ui/m3e";
+import { M3eBadge } from "@m3e/react/badge";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eSearchBar } from "@m3e/react/search";
 
 const mediaIcon: Record<string, string> = {
   pdf: "picture_as_pdf",

@@ -28,22 +28,19 @@ import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
+import { M3eDivider } from "@m3e/react/divider";
+import { M3eHeading } from "@m3e/react/heading";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eList, M3eListAction, M3eListItem } from "@m3e/react/list";
 import {
-  M3eActionList,
-  M3eButton,
-  M3eDivider,
-  M3eHeading,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListAction,
-  M3eListItem,
   M3eMenu,
   M3eMenuItem,
   M3eMenuItemGroup,
   M3eMenuItemRadio,
   M3eMenuTrigger,
-} from "@/ui/m3e";
+} from "@m3e/react/menu";
 
 export const Route = createFileRoute("/_app/")({ component: Dashboard });
 

@@ -3,7 +3,9 @@ import { artifactFormatLabel, isReviewableArtifact, type Artifact } from "@mf100
 import { downloadArtifact } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
-import { M3eIcon, M3eIconButton, M3eList, M3eListItem } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 
 const iconOf = (a: Pick<Artifact, "type">) =>
   a.type === "pdf"

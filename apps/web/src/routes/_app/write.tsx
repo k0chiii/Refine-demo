@@ -6,7 +6,8 @@ import { mediaLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
-import { M3eActionList, M3eIcon, M3eListAction } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
 export const Route = createFileRoute("/_app/write")({ component: WritePicker });
 

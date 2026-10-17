@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { M3eIcon } from "./m3e";
+import { M3eIcon } from "@m3e/react/icon";
 
 export type ChipTone = "neutral" | "primary" | "success" | "warning" | "error";
 

@@ -19,16 +19,10 @@ import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
-import {
-  M3eFilterChip,
-  M3eFilterChipSet,
-  M3eIcon,
-  M3eIconButton,
-  M3eMenu,
-  M3eMenuItemGroup,
-  M3eMenuItemRadio,
-  M3eMenuTrigger,
-} from "@/ui/m3e";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 
 type TeamAxis = "owner" | "production";
 const SORT_KEYS = ["accepting", "deadline", "title", "owner", "production"] as const;

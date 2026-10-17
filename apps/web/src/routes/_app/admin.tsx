@@ -10,18 +10,13 @@ import { AclPanel } from "@/features/work/AclPanel";
 import { downloadWorkCsvTemplate, ImportWorksDialog } from "@/features/work/ImportWorksDialog";
 import { ExportStatsDialog } from "@/features/work/ExportStatsDialog";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
-import {
-  M3eActionList,
-  M3eButton,
-  M3eDialog,
-  M3eIcon,
-  M3eIconButton,
-  M3eList,
-  M3eListAction,
-  M3eListItem,
-  M3eSearchBar,
-  M3eSwitch,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eActionList, M3eList, M3eListAction, M3eListItem } from "@m3e/react/list";
+import { M3eSearchBar } from "@m3e/react/search";
+import { M3eSwitch } from "@m3e/react/switch";
 import { Field, TextInput } from "@/ui/Field";
 import { Loading } from "@/ui/Loading";
 import { UserAvatar } from "@/ui/UserAvatar";

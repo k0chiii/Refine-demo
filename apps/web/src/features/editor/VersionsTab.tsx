@@ -8,7 +8,9 @@ import { closedReasonLabel, reviewStateLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { StatusText } from "@/ui/Chip";
 import { Field, TextArea } from "@/ui/Field";
-import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
 
 export type WorkData = FunctionReturnType<typeof api.works.get>;
 

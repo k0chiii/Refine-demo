@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMedia } from "@/lib/useMedia";
-import { M3eFab, M3eIcon } from "@/ui/m3e";
+import { M3eFab } from "@m3e/react/fab";
+import { M3eIcon } from "@m3e/react/icon";
 import type { TextRangeDraft } from "./TextViewer";
 
 /**

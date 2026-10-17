@@ -4,7 +4,8 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
-import { M3eButton, M3eDialog } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
 import { WorkFormFields, workFormFromWork, workFormReady, workFormToFields } from "./WorkForm";
 
 type Work = FunctionReturnType<typeof api.works.get>["work"];

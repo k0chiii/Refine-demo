@@ -1,5 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { M3eActionList, M3eBottomSheet, M3eIcon, M3eListAction } from "@/ui/m3e";
+import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
 export interface ActionSheetItem {
   icon: string;

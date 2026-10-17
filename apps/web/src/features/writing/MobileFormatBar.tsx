@@ -1,6 +1,10 @@
 import type { Editor } from "@tiptap/core";
 import { useEffect, useState } from "react";
-import { M3eButtonGroup, M3eFab, M3eIcon, M3eIconButton, M3eToolbar } from "@/ui/m3e";
+import { M3eButtonGroup } from "@m3e/react/button-group";
+import { M3eFab } from "@m3e/react/fab";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eToolbar } from "@m3e/react/toolbar";
 import { formatCommands, type FormatState } from "./WriteToolbar";
 
 type Group = "text" | "block" | "insert";

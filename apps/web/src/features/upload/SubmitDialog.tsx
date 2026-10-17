@@ -24,14 +24,12 @@ import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
-import {
-  M3eButton,
-  M3eIconButton,
-  M3eDialog,
-  M3eExpansionPanel,
-  M3eIcon,
-  M3eLinearProgressIndicator,
-} from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 import { UserPicker } from "@/ui/UserPicker";
 import {
   SubmissionFlow,

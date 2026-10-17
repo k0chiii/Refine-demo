@@ -3,7 +3,7 @@ import { defaultRuleCategories, ruleSetPresets } from "@mf100/domain";
 import { useQuery } from "convex/react";
 import { Card } from "@/ui/Card";
 import { Checkbox } from "@/ui/Field";
-import { M3eFilterChip, M3eFilterChipSet } from "@/ui/m3e";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 
 /**
  * 表記統一のカテゴリを制作物ごとに選ぶ。よく使う組み合わせ（プリセット）から選んでも、個別に選んでもよい。

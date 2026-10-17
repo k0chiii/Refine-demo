@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { describeError } from "@/lib/errors";
 import { isStandalone } from "@/lib/push";
 import { toast } from "@/lib/toast";
-import { M3eButton, M3eDialog, M3eIcon } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import { M3eIcon } from "@m3e/react/icon";
 import { useDevicePush } from "./useDevicePush";
 
 const LATER_KEY = "mf100.notifyPromptLater";

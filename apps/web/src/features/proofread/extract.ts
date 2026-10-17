@@ -1,7 +1,9 @@
-import { documentView } from "@/features/writing/documentView";
 import type { ProofreadSegment } from "@mf100/domain";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { extractPageFeature } from "@/features/compare/pdfFeatures";
+import { documentView } from "@/features/writing/documentView";
+
+/** PDF.js 本体（約 400KB）は PDF を扱うときだけ読み込む（校正画面を開いただけでは引き込まない）。ワーカーの設定も同じ場所 */
+const pdfjs = () => import("@/features/annotation/pdfjs").then((m) => m.pdfjs);
 
 /**
  * 自動校正のために添付から文字と位置を取り出す（利用者の端末で行う。外部には送らない）。
@@ -21,8 +23,7 @@ export async function documentSegments(
   artifact: ArtifactRef,
   blob: Blob,
 ): Promise<ProofreadSegment[]> {
-  const t = await blob.text();
-  const text = documentView(artifact, t).body;
+  const text = (await documentView(artifact, await blob.text())).body;
   return [{ kind: "text", text }];
 }
 
@@ -33,7 +34,7 @@ export async function pdfSegments(
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ segments: ProofreadSegment[]; textless: number[] }> {
   const data = await blob.arrayBuffer();
-  const task = pdfjs.getDocument({
+  const task = (await pdfjs()).getDocument({
     data,
     cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
     cMapPacked: true,
@@ -152,7 +153,7 @@ export async function pdfOcrSegments(
 ): Promise<ProofreadSegment[]> {
   const target = pages.slice(0, OCR_PDF_PAGES_MAX);
   if (!target.length) return [];
-  const task = pdfjs.getDocument({
+  const task = (await pdfjs()).getDocument({
     data: await blob.arrayBuffer(),
     cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
     cMapPacked: true,

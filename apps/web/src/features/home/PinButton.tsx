@@ -3,7 +3,8 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect } from "react";
 import { toast } from "@/lib/toast";
 import { useAction } from "@/lib/useAction";
-import { M3eIcon, M3eIconButton } from "@/ui/m3e";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
 
 /**
  * 「ホームにピン留め」（§36 W-26）。エディタのアプリバーの操作。押すたびにピン留めと解除が切り替わる（M3 icon button の toggle）。

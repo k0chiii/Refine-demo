@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { downloadFeedbackFile, fetchFeedbackFileBlob } from "@/integrations/api";
 import { formatBytes } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
-import { M3eDialog, M3eIcon, M3eIconButton, M3eSkeleton } from "@/ui/m3e";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eIcon } from "@m3e/react/icon";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eSkeleton } from "@m3e/react/skeleton";
 import { iconFor } from "./FeedbackComposer";
 
 export interface FeedbackFileView {
