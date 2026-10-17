@@ -9,7 +9,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { useDevicePush } from "./useDevicePush";
 
 const LATER_KEY = "mf100.notifyPromptLater";
-/** 「あとで」を押したら、しばらく聞かない（通知パネルのスイッチからはいつでもオンにできる） */
+/** 「あとで」を押したら、しばらく聞かない（アカウントの「通知の設定」からはいつでもオンにできる） */
 const LATER_MS = 14 * 24 * 60 * 60 * 1000;
 
 const askedRecently = () => {
@@ -85,7 +85,7 @@ export function NotificationPrompt() {
           コメントやメンション、締切の知らせを、この端末のバナーで受け取れます。未読の数はアプリのアイコンにも出ます。
         </p>
         <p className="small muted">
-          あとからでも、通知（ベル）のパネルの一番上でオン・オフできます
+          あとからでも、右上のアカウントの「通知の設定」でオン・オフできます
         </p>
       </div>
       <div slot="actions" className="row">

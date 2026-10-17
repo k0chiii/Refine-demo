@@ -1,18 +1,16 @@
 import { describeError } from "@/lib/errors";
 import { toast } from "@/lib/toast";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eMenuItemCheckbox } from "@m3e/react/menu";
 import { M3eSwitch } from "@m3e/react/switch";
 import { useDevicePush } from "./useDevicePush";
 
 /**
- * 通知パネルの一番上:「この端末にも通知を送る」スイッチ（Web Push）。
+ * 「この端末にも通知を送る」スイッチ（Web Push）。アカウントメニューの「通知の設定」ダイアログに置く
+ * （利用者指示 2026-10-17「通知の設定もプロフィールの方にやりたい。この位置は通知が醜すぎる」。以前は通知パネルの一番上）。
  * 端末への通知が使えない環境（鍵の無い本番）では出さない。デモはサーバーが無いので「この端末の中だけ」で通知する。
  * iPhone の Safari ではスイッチの代わりに「ホーム画面に追加すると受け取れる」と案内する。
- * 通知パネル（M3E menu）の中ではスイッチを置かず、チェックの付くメニュー項目にする（M3 Menus: メニューの項目に
- * スイッチやボタンを入れない。選ぶ項目はチェック）。スマホのボトムシートでは行末のスイッチ
  */
-export function PushSetting({ inMenu = false }: { inMenu?: boolean }) {
+export function PushSetting() {
   const push = useDevicePush();
   if (!push.usable || push.support === "unsupported") return null;
 
@@ -34,21 +32,6 @@ export function PushSetting({ inMenu = false }: { inMenu?: boolean }) {
         : push.local
           ? "デモ: この端末の中で起きた通知をバナーとアイコンの数字で知らせます"
           : "アプリを閉じていても、題名と制作物名を知らせます";
-
-  if (inMenu)
-    return (
-      <M3eMenuItemCheckbox
-        className="notif-push-item"
-        checked={push.on}
-        disabled={push.support !== "available" || push.pending}
-        onClick={() => void toggle(!push.on)}
-      >
-        <span className="notif-push-item__text">
-          この端末にも通知を送る
-          <span className="notif-push-item__hint">{hint}</span>
-        </span>
-      </M3eMenuItemCheckbox>
-    );
 
   return (
     <div className="notif-push">

@@ -7,7 +7,6 @@ import { useEffect, useRef } from "react";
 import { formatJstShort } from "@/lib/format";
 import { setAppBadge } from "@/lib/pwa";
 import { showDeviceNotification } from "@/lib/push";
-import { PushSetting } from "./PushSetting";
 import { useDevicePush } from "./useDevicePush";
 import { useAction } from "@/lib/useAction";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
@@ -128,7 +127,6 @@ function Menu({ id }: { id: string }) {
       <div className="notif-menu__header">
         <span className="label-large">通知</span>
       </div>
-      <PushSetting inMenu />
       {unread > 0 ? (
         <M3eMenuItem disabled={doMarkAll.pending} onClick={() => void doMarkAll.run()}>
           <M3eIcon slot="icon" name="done_all" />
@@ -203,7 +201,6 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
           </M3eButton>
         ) : null}
       </div>
-      <PushSetting />
       {!list || list.length === 0 ? (
         <p className="muted notif-sheet__empty">通知はありません</p>
       ) : (
