@@ -37,13 +37,40 @@ page.on("console", (m) => {
   if (m.type() === "error") console.error("[console]", m.text());
 });
 
+/**
+ * 固定 sleep の代わりに、画面が落ち着くまで待つ（2 フレーム経過し、有限の animation / transition が終わるまで。Shadow DOM 内も見る）。
+ * スピナーなど無限に繰り返すものは無視する。想定外の animation で止まらないよう 3 秒で打ち切る。
+ */
+const settle = () =>
+  page.evaluate(
+    () =>
+      new Promise((done) => {
+        const limit = performance.now() + 3000;
+        // M3E は Shadow DOM 内で transition するため、document.getAnimations() では見えない。shadowRoot も辿る
+        const busy = () => {
+          const roots = [document];
+          for (const r of roots)
+            for (const el of r.querySelectorAll("*")) if (el.shadowRoot) roots.push(el.shadowRoot);
+          return roots.some((r) =>
+            r.getAnimations().some((a) => {
+              const t = a.effect?.getComputedTiming();
+              return a.playState === "running" && t && t.iterations !== Infinity;
+            }),
+          );
+        };
+        const check = () =>
+          !busy() || performance.now() > limit ? done() : requestAnimationFrame(check);
+        requestAnimationFrame(() => requestAnimationFrame(check));
+      }),
+  );
+
 const shot = async (name, scrollTo) => {
   await page.evaluate(async (sel) => {
     window.scrollTo(0, 0);
     if (sel) document.querySelector(sel)?.scrollIntoView({ block: "center" });
     await document.fonts.load('400 24px "Material Symbols Outlined"');
   }, scrollTo ?? null);
-  await page.waitForTimeout(600);
+  await settle();
   await page.screenshot({ path: resolve(OUT, `${name}.png`), fullPage: false });
   console.log("saved", name);
   if (A11Y) {
@@ -81,7 +108,7 @@ const go = async (path) => {
     },
     path.replace(BASE, ""),
   );
-  await page.waitForTimeout(800);
+  await settle();
 };
 
 // サインイン画面の「ログイン済みならダッシュボードへ」の効果と競合しないよう、/signin に戻ってからサインインし /queue 到達を待つ
@@ -93,7 +120,7 @@ const signInAs = async (sub) => {
     await globalThis.__mf100demo.signIn(s);
   }, sub);
   await page.waitForURL((u) => new URL(u).pathname === "/", { timeout: 10_000 });
-  await page.waitForTimeout(300);
+  await settle();
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
