@@ -1,4 +1,6 @@
+import { parseAvatarConfig, type AvatarConfig } from "@mf100/domain";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { requireUser } from "./lib/principal.ts";
 import { resolveUsers } from "./lib/users.ts";
@@ -30,5 +32,25 @@ export const byIds = query({
     await requireUser(ctx);
     const users = await resolveUsers(ctx.db, ids.slice(0, 100));
     return [...users.values()];
+  },
+});
+
+/**
+ * 画面に出ている人のアバターの設定（Humation。利用者指示 2026-10-17）。
+ * アバターは多くの画面（コメント・FB・メンション候補・管理）に出るので、各クエリの返り値には混ぜず、
+ * 画面がいま出している ID だけをまとめて引く（1 画面 1 購読）。設定のある人だけ返す。
+ */
+export const avatars = query({
+  args: { ids: v.array(v.string()) },
+  handler: async (ctx, { ids }) => {
+    await requireUser(ctx);
+    const out: Array<{ id: string; avatar: AvatarConfig }> = [];
+    for (const id of new Set(ids.slice(0, 200))) {
+      if (id === "system" || id.startsWith("bot:")) continue;
+      const doc = await ctx.db.get("users", id as Id<"users">).catch(() => null);
+      const avatar = parseAvatarConfig(doc?.avatar);
+      if (avatar) out.push({ id, avatar });
+    }
+    return out;
   },
 });

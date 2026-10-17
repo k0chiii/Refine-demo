@@ -72,7 +72,11 @@ export function AclPanel({ workId }: { workId: string }) {
               return (
                 <M3eListItem key={g.principalId} className="list__item">
                   <span slot="leading">
-                    <UserAvatar seed={g.principal?.email ?? g.principalId} size={40} />
+                    <UserAvatar
+                      seed={g.principal?.email ?? g.principalId}
+                      userId={g.principalId}
+                      size={40}
+                    />
                   </span>
                   <span className="list__headline">{name}</span>
                   <span slot="supporting-text">

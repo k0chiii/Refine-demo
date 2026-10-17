@@ -130,6 +130,9 @@ importers:
       '@humation/assets-humation-1':
         specifier: ^1.0.3
         version: 1.0.3
+      '@humation/core':
+        specifier: 1.0.3
+        version: 1.0.3
       '@humation/react':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)

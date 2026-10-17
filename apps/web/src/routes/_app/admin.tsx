@@ -178,7 +178,7 @@ function Admin() {
                   .map((u) => (
                     <M3eListItem key={u.id} className="list__item">
                       <span slot="leading">
-                        <UserAvatar seed={u.email ?? u.id} size={40} />
+                        <UserAvatar seed={u.email ?? u.id} userId={u.id} size={40} />
                       </span>
                       <span className="list__headline">{u.name}</span>
                       <span slot="supporting-text">
