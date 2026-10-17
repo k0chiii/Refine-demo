@@ -158,7 +158,15 @@ try {
     await page.locator("m3e-snackbar").getByRole("button", { name: "更新" }).click();
     await reloaded;
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    await page.waitForTimeout(800);
+    // 古い外枠のキャッシュは新しい SW の activate が消す。1 つになるまで待つ
+    await page.waitForFunction(
+      async (b) => {
+        const k = (await caches.keys()).filter((n) => n.startsWith("mf100-shell-"));
+        return k.length === 1 && !b.includes(k[0]);
+      },
+      before,
+      { timeout: 10_000 },
+    );
     const after = await page.evaluate(async () =>
       (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")),
     );
