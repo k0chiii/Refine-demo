@@ -2,16 +2,23 @@ import { documentView } from "@/features/writing/documentView";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
+  figmaDeepLink,
+  formatFigmaPlace,
+  formatWebPlace,
   isBeforeDeadline,
+  isFigmaUrl,
   isReviewableArtifact,
+  isWebLiveArtifact,
   formatVideoSpan,
   pickReviewArtifact,
   textRangeAnchor,
   videoTimeAnchor,
   toViewportRect,
+  webElementAnchor,
   type Anchor,
   type NormalizedRect,
   type Viewport,
+  type WebAnchorState,
   POST_MANIFEST_NAME,
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
@@ -31,6 +38,8 @@ import { ImageViewer } from "@/features/annotation/ImageViewer";
 import { PdfViewer, anchorPage } from "@/features/annotation/PdfViewer";
 import { TextViewer } from "@/features/annotation/TextViewer";
 import { VideoViewer } from "@/features/annotation/VideoViewer";
+import { WebLiveViewer, type WebDraft } from "@/features/annotation/WebLiveViewer";
+import { FigmaEmbedViewer, type FigmaDraft } from "@/features/annotation/FigmaEmbedViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { ComposePopover } from "@/features/review/ComposePopover";
 import { activeMentions, MentionProvider } from "@/features/review/mentions";
@@ -63,6 +72,7 @@ import { FeedbackPane } from "@/features/feedback/FeedbackPane";
 import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Field, TextArea } from "@/ui/Field";
+import { StatusText } from "@/ui/Chip";
 import {
   M3eBottomSheet,
   M3eButton,
@@ -105,6 +115,10 @@ type Draft = {
   time?: { start: number; end?: number };
   /** 動画で範囲を選んでいる途中（投稿欄はまだ出さない） */
   marking?: boolean;
+  /** Web のライブ表示で押した要素（ブリッジが返した位置と、付けたときの端末） */
+  web?: WebDraft;
+  /** Figma の埋め込みのフレーム（「このフレームについて」） */
+  figma?: FigmaDraft;
   /** 位置なしのコメント（ツールバーから） */
   free?: boolean;
 };
@@ -233,6 +247,13 @@ export function Editor({
   const [draft, setDraft] = useState<Draft | null>(null);
   /** 動画の再生位置を移す（コメントのカードを押したとき）。key が変わるたびに移す */
   const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
+  /** Web のライブ表示でその要素へ移す（カードを押したとき。端末も合わせる） */
+  const [webFocus, setWebFocus] = useState<{
+    anchor: Extract<Anchor, { type: "web_element" }>;
+    key: number;
+  } | null>(null);
+  /** ライブ表示での再アンカーの結果（カードに「位置が外れました」を出す） */
+  const [webStates, setWebStates] = useState<ReadonlyMap<string, WebAnchorState>>(new Map());
   const [proposeFrom, setProposeFrom] = useState<{
     quote: string;
     surrounding: string;
@@ -457,6 +478,16 @@ export function Editor({
         anchor = textRangeAnchor(artifact.id, text.body, draft.range.start, draft.range.end);
       else if (artifact.type === "video" && draft.time)
         anchor = videoTimeAnchor(artifact.id, draft.time, { rect: draft.rect, point: draft.point });
+      else if (artifact.role === "external" && draft.web)
+        anchor = webElementAnchor(artifact.id, draft.web.place);
+      else if (artifact.role === "external" && draft.figma)
+        anchor = {
+          type: "figma_node",
+          artifactId: artifact.id,
+          fileKey: draft.figma.fileKey,
+          nodeId: draft.figma.nodeId,
+          ...(draft.figma.nodeName ? { nodeName: draft.figma.nodeName } : {}),
+        };
     }
     if (draftKind === "feedback") {
       // 相談（FB）: 解決しない話し合いとして、この版の場所に立てる。立てたら引き出し「FB」でそのやり取りを開く
@@ -601,6 +632,7 @@ export function Editor({
       const p = anchorPage(t.anchor as Anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
+      if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
     }
   };
   /** 引き出し「FB」でその相談を開く（狭い画面はシートを FB で開く） */
@@ -632,6 +664,7 @@ export function Editor({
       const p = anchorPage(t.anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
+      if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
     }
   };
   const card = (t: Thread & { index: number }, className?: string) => (
@@ -639,6 +672,7 @@ export function Editor({
       key={t.id}
       thread={t}
       index={t.index}
+      {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
       active={t.id === activeThreadId}
       meId={me?.id ?? null}
       canDecide={can?.decide ?? false}
@@ -660,8 +694,8 @@ export function Editor({
     if (!draft || draft.marking || !(canComment || canFeedback)) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
-    // 位置なし・動画の時刻だけ（画面の位置なし）は、紙面（映像）の右上
-    if ((draft.free || (draft.time && !draft.rect && !draft.point)) && vp)
+    // 位置なし・動画の時刻だけ（画面の位置なし）・Figma のフレーム単位は、紙面（映像・画面）の右上
+    if ((draft.free || draft.figma || (draft.time && !draft.rect && !draft.point)) && vp)
       pos = { x: Math.max(8, vp.width - COMPOSE_W - 8), y: 8 };
     else if (vp && (draft.rect || draft.point)) {
       const b = draft.rect
@@ -692,7 +726,20 @@ export function Editor({
                   ? `${formatVideoSpan(draft.time)} の範囲`
                   : `${formatVideoSpan(draft.time)} の時点`,
             }
-          : {})}
+          : draft.web
+            ? {
+                place: formatWebPlace(
+                  { ...draft.web.place, type: "web_element", artifactId: "" },
+                  draft.web.deviceLabel,
+                ),
+                placeIcon: "ads_click",
+              }
+            : draft.figma
+              ? {
+                  place: formatFigmaPlace({ ...draft.figma, type: "figma_node", artifactId: "" }),
+                  placeIcon: "design_services",
+                }
+              : {})}
         onSubmit={() => void doPost.run()}
         onCancel={resetCompose}
         pending={doPost.pending}
@@ -827,35 +874,84 @@ export function Editor({
           />
         </div>
       );
-    if (artifact.role === "external")
+    if (artifact.role === "external") {
+      // 外部での議論の結果の記録（F-10 / CM-04）。ライブ表示・Figma の埋め込みでも下に残す
+      const record = canComment ? (
+        <div className="external external--record">
+          <Field
+            label="外部での議論の結果"
+            hint="外部で話した結論は合意事項としてコメントに残ります"
+          >
+            <TextArea value={externalNote} onChange={(e) => setExternalNote(e.target.value)} />
+          </Field>
+          <div className="row">
+            <span className="spacer" />
+            <M3eButton
+              variant="tonal"
+              disabled={doRecordExternal.pending || !externalNote.trim()}
+              onClick={() => void doRecordExternal.run()}
+            >
+              合意事項として記録
+            </M3eButton>
+          </div>
+        </div>
+      ) : null;
+      const url = artifact.externalUrl ?? "";
+      if (isFigmaUrl(url)) {
+        const frames = data.artifacts.flatMap((a) =>
+          a.role === "external" && a.externalUrl && isFigmaUrl(a.externalUrl)
+            ? [{ id: a.id, externalUrl: a.externalUrl }]
+            : [],
+        );
+        return (
+          <FigmaEmbedViewer
+            frames={frames}
+            currentId={artifact.id}
+            onSwitch={(id) => {
+              setArtifactId(id);
+              resetCompose();
+            }}
+            threads={overlayThreads}
+            selecting={canComment}
+            onCommentFrame={(d) => {
+              setDraft({ figma: d });
+              setActiveThreadId(null);
+            }}
+            renderInPage={(vp) => compose(vp, null)}
+            footer={record}
+          />
+        );
+      }
+      if (isWebLiveArtifact(artifact))
+        return (
+          <WebLiveViewer
+            url={url}
+            artifactId={artifact.id}
+            label={`${data.revision?.label ?? "この版"}の外部リンク「${url}」`}
+            {...viewerProps}
+            draft={draft?.web ?? null}
+            onDraft={(d) => {
+              setDraft(d ? { web: d } : null);
+              setActiveThreadId(null);
+            }}
+            focusRequest={webFocus}
+            onStates={setWebStates}
+            renderInPage={(vp, box) => compose(vp, box)}
+            footer={record}
+          />
+        );
       return (
         <div className="external">
-          <a href={artifact.externalUrl ?? "#"} target="_blank" rel="noreferrer noopener">
-            <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} />{" "}
-            {artifact.externalUrl}
+          <a href={url || "#"} target="_blank" rel="noreferrer noopener">
+            <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} /> {url}
           </a>
           <p className="muted small">
             外部ツール上のコメントは同期されません。結論はここに記録してください。
           </p>
-          {canComment ? (
-            <>
-              <Field label="外部での議論の結果" hint="合意事項としてコメントに残ります">
-                <TextArea value={externalNote} onChange={(e) => setExternalNote(e.target.value)} />
-              </Field>
-              <div className="row">
-                <span className="spacer" />
-                <M3eButton
-                  variant="tonal"
-                  disabled={doRecordExternal.pending || !externalNote.trim()}
-                  onClick={() => void doRecordExternal.run()}
-                >
-                  合意事項として記録
-                </M3eButton>
-              </div>
-            </>
-          ) : null}
+          {record}
         </div>
       );
+    }
     if (blob.error) return <div className="alert">{blob.error}</div>;
     if (!blob.blob) return <div className="empty">ファイルを取得中…</div>;
     if (artifact.type === "pdf")
@@ -930,8 +1026,8 @@ export function Editor({
           {...(compareWith ? cmp.textProps("right") : {})}
         />
       );
-    if (artifact.type === "image" && blob.url)
-      return (
+    if (artifact.type === "image" && blob.url) {
+      const image = (
         <ImageViewer
           url={blob.url}
           artifactId={artifact.id}
@@ -950,6 +1046,33 @@ export function Editor({
           renderGutter={gutter}
         />
       );
+      const origin = artifact.origin;
+      if (origin?.kind !== "figma" || compareWith) return image;
+      // Figma から取り込んだフレーム（FG-02〜04）: 由来と、そのノードへのリンク。座標は画像基準のまま
+      const link = figmaDeepLink({
+        kind: "design",
+        fileKey: origin.fileKey,
+        nodeId: origin.nodeId,
+      });
+      return (
+        <div className="origin-wrap">
+          <div className="origin-bar" role="note">
+            <StatusText icon="design_services">
+              Figma: {origin.nodeName ?? origin.nodeId}
+              {origin.lastModified
+                ? `（${new Date(origin.lastModified).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })} 取得）`
+                : ""}
+            </StatusText>
+            <span className="spacer" />
+            <a className="link-button" href={link} target="_blank" rel="noreferrer noopener">
+              <M3eIcon name="open_in_new" />
+              Figma で開く
+            </a>
+          </div>
+          {image}
+        </div>
+      );
+    }
     if (artifact.type === "video" && blob.url)
       return (
         <VideoViewer
@@ -1057,6 +1180,11 @@ export function Editor({
 
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
+  /** 外部リンクのうち、紙面として出すもの（Web のライブ表示・Figma の埋め込み） */
+  const isLiveExternal =
+    artifact?.role === "external" &&
+    !!artifact.externalUrl &&
+    (isWebLiveArtifact(artifact) || isFigmaUrl(artifact.externalUrl));
 
   const commentsPanel = (
     <div className="comments">
@@ -1132,9 +1260,13 @@ export function Editor({
             {canComment
               ? artifact?.type === "video"
                 ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
-                : touch
-                  ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
-                  : "ファイルの上でドラッグすると、その場にコメントできます"
+                : artifact && isWebLiveArtifact(artifact)
+                  ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
+                  : artifact?.role === "external" && isLiveExternal
+                    ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
+                    : touch
+                      ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                      : "ファイルの上でドラッグすると、その場にコメントできます"
               : "コメントはありません"}
           </p>
         ) : (
@@ -1281,7 +1413,7 @@ export function Editor({
             title="添付"
             items={switchable.map((a) => ({
               icon: "draft",
-              label: `${a.role === "external" ? "外部: " : ""}${a.fileName}`,
+              label: `${a.role === "external" ? (a.externalUrl && isFigmaUrl(a.externalUrl) ? "Figma: " : "外部: ") : ""}${a.fileName}`,
               selected: a.id === artifactId,
               onSelect: () => {
                 setArtifactId(a.id);
@@ -1334,7 +1466,7 @@ export function Editor({
               renderViewer()
             )}
 
-            {artifact && artifact.role !== "external" ? (
+            {artifact && (artifact.role !== "external" || isLiveExternal) ? (
               <M3eToolbar
                 className="ws__toolbar"
                 shape="rounded"
@@ -1549,7 +1681,11 @@ export function Editor({
                     }}
                   >
                     <M3eIcon slot="icon" name={a.id === artifactId ? "check" : "draft"} />
-                    {a.role === "external" ? "外部: " : ""}
+                    {a.role === "external"
+                      ? a.externalUrl && isFigmaUrl(a.externalUrl)
+                        ? "Figma: "
+                        : "外部: "
+                      : ""}
                     {a.fileName}
                   </M3eMenuItem>
                 ))}

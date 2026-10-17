@@ -1381,3 +1381,31 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 - **再生できない形式**（ProRes の .mov など）は、映像の代わりに「ブラウザで再生できない形式」とダウンロードを出す
 - **見るだけの場所**（FB スペースの紙面・版比較の左）: 同じ再生画面で、印を押すとその時刻へ移る。範囲は選べない
 - 制約（後続）: ファイルは丸ごと取得してから再生（`GET /files` に範囲取得が無い）、コマ送りは 30fps とみなす、版比較の同期再生、ホバーでのコマの縮小画像、通知から開いたときは開いたコメントの時刻へ移る（ページ送りと同じ）
+
+## 55. Figma と Web サイトの校正（ライブ表示・端末プリセット・Figma の取り込み。2026-10-17・利用者指示）
+
+利用者の指示「Figma をこの校正システム内で開いて校正ができるようにしたい。実際のウェブサイトを校正システム内で表示して、位置を合わせてコメントが入れられるような形（レスポンシブ対応、デバイス対応）で」。同日の追加「（Figma は）Education プランなんだよね。難しければ iframe でいい」→「API が使えるならまずはそっちで試してみようよ」。調査と要件は docs/FIGMA_WEB_PROOFING.md、決定ログは docs/DECISIONS.md「Figma・Web の校正（本体で）」。
+
+### 決めたこと（Web）
+
+- **ライブ表示**（`features/annotation/WebLiveViewer`）: 版の外部リンク（http/https。Figma の URL は除く）を開くと、紙面に iframe でサイトを出す。上に **CM-03 のバナー**（ライブ表示は今の内容。版の内容は添付）、操作の行（M3E tonal ボタン＋メニューの端末、回転の toggle icon button、PC は幅の outlined text field、「閲覧／コメント」は connected button group（§49 の ChoiceGroup）、再読み込み、新しいタブで開く）、縮めた枠、説明（端末・画面の大きさ・実寸の何%・WB-12「実機の UA・DPR・タッチ・Safari 固有の表示は再現されません」）、その下に従来の「外部での議論の結果」（F-10 / CM-04）
+- **端末**: SNS プレビューの機種（§28。iPhone は Apple の公式ベゼル）に、タブレット（iPad 11 / Pro 13）と PC の幅（1280・1440・1920）を足した `WEB_DEVICES`（SNS の一覧は変えない）。既定は iPhone 17（402×874）と PC 1440（Q5）。画面は実機の CSS ピクセルで組み、`transform: scale` で縮める（`zoom` だと iframe の中の幅が変わる）。iframe は枠の子にせず、枠の中の穴の位置に重ねる（スマホ ⇄ PC で枠が変わっても iframe を作り直さない＝再読み込みしない）
+- **コメント**: 「コメント」に切り替えると、サイト側のブリッジ（`public/bridge.js`）が押した要素（一意な CSS セレクタ・XPath・タグ・引用文・要素の中の相対位置・文書座標）を返し、その場に投稿欄（「iPhone 17（402px）・h2」の場所つき）。保存は domain の `web_element`。印は要素の**今の位置**に親が描く（ブリッジがスクロール・リサイズ・DOM の変化のたびに候補の矩形を返し、どれを採るかは domain `resolveWebAnchor`）。番号の丸（FB は角丸の四角）で PDF と同じ見た目、面は押させず iframe をそのまま操作できる
+- **別の端末幅のコメント**（Q6 Atarim 方式）: 全部出し、カードの番号のボタンに「iPhone 17（402px）」と付けたときの端末幅を出す。押すとその端末（同じ幅のプリセット。無ければ PC に幅を入れる）に切り替えて要素へスクロールする。見つからなければ「位置が外れました」（error の文字）、引用文で見つけたら「文字で見つけた位置に出しています」（warning）。消さない（WB-05）
+- **埋め込み拒否・ブリッジ未設置**（WB-07）: iframe の load の後 2.5 秒（全体で 9 秒）ブリッジの `ready` が来なければ、M3E の outlined card で理由と「新しいタブで開く」、スクリーンショットで校正する案内。iframe は別オリジンなので拒否を直接は検知できない
+- **安全**: 親と子は postMessage だけ。親は添付の URL のオリジンにだけ送り、同じオリジンと `source` からしか受けない。子（ブリッジ）は `data-allow-origin` のオリジンにだけ応える。iframe の sandbox に `allow-top-navigation` は付けない。サイトの内容で外へ出るのは押した要素のセレクタ・引用文（200 文字）・矩形だけ
+
+### 決めたこと（Figma）
+
+- **取り込み**（FG-05。利用者決定「まずは API で」）: 提出ダイアログの「Figma のフレーム」に URL を 1 行ずつ貼ると、Worker（`POST /figma/import`。トークン `FIGMA_ACCESS_TOKEN` は Worker の秘密）が 1 ファイル 1 回ずつ `nodes` と `images`（scale 2、PNG）で書き出し、ブラウザからの PUT と同じ道（試行 → R2 → 採用）で**画像の添付**にする。ファイル名はノード名、由来（`origin.kind="figma"`: fileKey・nodeId・ノード名・Figma の版・取得倍率・フレームの大きさ）を持つ。画像の上に「Figma: ノード名（取得時刻）」と「Figma で開く」。位置コメントは従来の画像の矩形・ピン。連携が無い（トークン未設定）ときはダイアログの案内が変わり、URL は外部リンクだけになる。429 は Retry-After を 1 回だけ待つ、失敗は項目の「失敗」と理由、「再取り込み」で項目ごとにやり直す（F-04 と同じ）
+- **埋め込み**（`features/annotation/FigmaEmbedViewer`。Embed Kit 2.0 `embed.figma.com/design/:key/:name?node-id=…&embed-host=mf100`）: Figma の URL の添付を開くと出る。上にバナー（位置は取れない・コメントはフレーム単位・Figma のサインインを求められることがある）、フレームの切り替え（4 つまでは connected button group、それより多いときはメニュー）、tonal「このフレームにコメント」（`figma_node`。投稿欄は画面の右上。場所は「フレーム: ホーム」）、text「Figma で開く」。カードにも「Figma で開く」。デモ・E2E はオフラインなので埋め込みは黒いまま（iframe が出ることと、フレーム単位のコメントだけを確かめる）
+- **既定の紙面**: PDF → 画像 → 文章 → 動画の順のまま（取り込んだ画像が先、埋め込みは「添付を切り替え」から）
+
+### 見本サイト・E2E
+
+- `public/demo-site/`（第100回五月祭の公式サイトの見本。599 以下 1 列・ハンバーガー、600〜1023 は 2 列、1024 以上は 3 列＋横のナビ）がブリッジを読み込み、デモは同じオリジンの iframe でネットワーク無しに動く。`public/demo-figma/` は Figma から取り込んだ体の見本 PNG（スマホ・PC）
+- 撮影 67（iPhone 17 で付けた印が PC 1440 でも同じ要素に付く）・67b（compact）・68（取り込んだ画像に位置コメント）・68b（埋め込みとフレーム単位のコメント）
+
+### 後続（承認待ち・未実装）
+
+提出確定時のスクリーンショット（Cloudflare Browser Rendering。`WebProofPolicy.snapshotEnabled`）、要素の切り抜き（WB-06）、外部サイトのプロキシ表示（`allowedProxyHosts`）、Figma のコメントの読み取り・書き戻し（`FigmaPolicy.writeBack`）、OAuth（PAT は 90 日）、版比較で同じ nodeId を既定ペアに（FG-06）、通知から開いたときの端末幅の復元（CM-06）

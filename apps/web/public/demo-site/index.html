@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>第100回五月祭 公式サイト（見本）</title>
+    <meta
+      name="description"
+      content="校正システムのデモ用の見本サイト。実在の公式サイトではありません"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <!-- 校正システムのブリッジ（同じオリジンで配信。校正システムの iframe の中で開いたときだけ動く） -->
+    <script src="/bridge.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top">第100回五月祭</a>
+      <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="メニューを開く" />
+      <label for="nav-toggle" class="nav-burger" aria-hidden="true"><span></span></label>
+      <nav class="site-nav" aria-label="サイト内">
+        <a href="#about">五月祭とは</a>
+        <a href="#events">企画一覧</a>
+        <a href="#access">アクセス</a>
+        <a href="#news">お知らせ</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" id="about">
+        <p class="hero__eyebrow">2027年5月 開催</p>
+        <h1 class="hero__title">第100回五月祭へようこそ</h1>
+        <p class="hero__lead">
+          東京大学本郷・弥生キャンパスで開かれる学園祭です。100回目となる今回は、学生の企画と来場者のみなさんがつくる
+          2 日間をお届けします。
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="#events">企画をさがす</a>
+          <a class="btn" href="#access">アクセスを見る</a>
+        </div>
+      </section>
+
+      <section class="section" id="events">
+        <h2 class="section__title">企画一覧</h2>
+        <p class="section__lead">
+          分野ごとに見どころを紹介します。時間・場所は当日のパンフレットで確かめてください。
+        </p>
+        <ul class="cards">
+          <li class="card">
+            <div class="card__media card__media--a" aria-hidden="true"></div>
+            <h3 class="card__title">学術企画</h3>
+            <p class="card__text">
+              研究室の公開や講演会。最先端の研究を、学生の案内で身近に体験できます。
+            </p>
+            <a class="card__link" href="#events">くわしく見る</a>
+          </li>
+          <li class="card">
+            <div class="card__media card__media--b" aria-hidden="true"></div>
+            <h3 class="card__title">ステージ企画</h3>
+            <p class="card__text">
+              安田講堂前の特設ステージで、音楽・ダンス・パフォーマンスが日替わりで登場します。
+            </p>
+            <a class="card__link" href="#events">くわしく見る</a>
+          </li>
+          <li class="card">
+            <div class="card__media card__media--c" aria-hidden="true"></div>
+            <h3 class="card__title">模擬店</h3>
+            <p class="card__text">
+              キャンパスの各所に並ぶ食べもの・飲みものの屋台。食品衛生の講習を受けた学生が運営します。
+            </p>
+            <a class="card__link" href="#events">くわしく見る</a>
+          </li>
+          <li class="card">
+            <div class="card__media card__media--d" aria-hidden="true"></div>
+            <h3 class="card__title">こども向け企画</h3>
+            <p class="card__text">
+              工作や実験のワークショップ。小さなお子さまと一緒に楽しめる企画を集めました。
+            </p>
+            <a class="card__link" href="#events">くわしく見る</a>
+          </li>
+        </ul>
+      </section>
+
+      <section class="section section--tint" id="access">
+        <h2 class="section__title">アクセス</h2>
+        <div class="access">
+          <dl class="access__list">
+            <dt>会場</dt>
+            <dd>東京大学 本郷キャンパス・弥生キャンパス</dd>
+            <dt>最寄り駅</dt>
+            <dd>本郷三丁目駅（丸ノ内線・大江戸線）、東大前駅（南北線）、根津駅（千代田線）</dd>
+            <dt>開場時間</dt>
+            <dd>両日 9:00〜18:00（企画により異なります）</dd>
+          </dl>
+          <div class="access__map" role="img" aria-label="キャンパスの位置を示す地図の見本">
+            <span>MAP</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="news">
+        <h2 class="section__title">お知らせ</h2>
+        <ol class="news">
+          <li>
+            <time datetime="2027-04-20">4月20日</time><a href="#news">企画一覧を公開しました</a>
+          </li>
+          <li>
+            <time datetime="2027-04-10">4月10日</time
+            ><a href="#news">公式サイトをリニューアルしました</a>
+          </li>
+          <li>
+            <time datetime="2027-03-01">3月1日</time
+            ><a href="#news">第100回五月祭のテーマが決まりました</a>
+          </li>
+        </ol>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p class="site-footer__org">東京大学第100回五月祭常任委員会</p>
+      <p class="site-footer__note">
+        この見本サイトは MF100 校正システムのデモ用です。実在の公式サイトではありません。
+      </p>
+      <p class="site-footer__copy">&copy; 2027 May Festival Committee</p>
+    </footer>
+  </body>
+</html>

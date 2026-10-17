@@ -1,5 +1,6 @@
 import {
   type Anchor,
+  anchorFitsArtifact,
   assertCanPostComment,
   type CommentThread,
   type DecisionAction,
@@ -78,7 +79,12 @@ export async function postComment(
   if (input.anchor) {
     validateAnchor(input.anchor);
     const artifact = await ctx.artifacts.findById(input.anchor.artifactId);
-    if (!artifact || artifact.revisionId !== revision.id) {
+    // 添付はこの版のもので、種類が合うこと（Web の要素は URL の添付、Figma のフレームは Figma の URL の添付）
+    if (
+      !artifact ||
+      artifact.revisionId !== revision.id ||
+      !anchorFitsArtifact(input.anchor, artifact)
+    ) {
       throw new DomainError("anchor_artifact_mismatch", {
         artifactId: input.anchor.artifactId,
         revisionId: revision.id,

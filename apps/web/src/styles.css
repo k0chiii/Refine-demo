@@ -1856,6 +1856,12 @@ m3e-dialog [slot="actions"] {
 .thread__index {
   --m3e-text-button-label-text-color: var(--mf-on-surface-variant);
   --m3e-button-icon-color: var(--mf-on-surface-variant);
+  /* 端末名・フレーム名が長くてもカードを広げない（§55）。% だと最小幅の計算に効かず列が広がるので px で */
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .thread__name {
   font: var(--mf-type-label-large);
@@ -4635,4 +4641,296 @@ m3e-snackbar {
 .vplayer__marking {
   font: var(--mf-type-body-small);
   color: var(--mf-primary);
+}
+
+/* ---------------------------------------------------------------- Web のライブ表示・Figma の埋め込み（docs/UI_M3E.md §55） */
+.wlive__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.wlive__banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  width: 100%;
+  max-width: 960px;
+  padding: 8px 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container);
+  color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-small);
+}
+.wlive__banner m3e-icon {
+  flex: none;
+  font-size: 18px;
+  color: var(--mf-primary);
+}
+.wlive__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  max-width: 960px;
+}
+.wlive__device {
+  max-width: 100%;
+}
+.wlive__width {
+  width: 120px;
+}
+.wlive__width input {
+  width: 100%;
+  font: var(--mf-type-body-medium);
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.wlive__frame-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+}
+/* 枠: 実機の CSS ピクセルで組み、transform で縮める（zoom だと iframe の中の幅が変わる）。外側は縮めた後の大きさで場所を取る */
+.wlive__fit {
+  position: relative;
+  flex: none;
+}
+.wlive__fit--hidden {
+  display: none;
+}
+.wlive__scaled {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+}
+.wlive__screen {
+  position: absolute;
+  overflow: hidden;
+  background: #fff;
+  /* ベゼル画像（z 5）の下、枠の本体の上 */
+  z-index: 2;
+}
+.wlive__slot {
+  flex: none;
+}
+/* 枠の本体（ベゼルの無い機種の黒い枠・PC のバー）は iframe の下、ベゼル画像（z 5）とホームインジケーター（z 3）は上。
+   .sp-frame に z-index を付けると stacking context ができてベゼルが iframe の下になるので付けない */
+.wlive__scaled > .wlive__pc {
+  position: relative;
+  z-index: 1;
+}
+.wlive__frame {
+  display: block;
+  border: 0;
+  background: #fff;
+}
+/* 印の層: 面は押させず（下の iframe を操作できるように）、ピン・範囲だけ押せる */
+.wlive__marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.wlive__marks .viewer__overlay {
+  pointer-events: none;
+}
+.wlive__marks [data-anchor] {
+  pointer-events: auto;
+}
+.wlive__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+  background: var(--mf-surface-container-low);
+}
+/* 投稿欄の層（縮めていない座標。画面の上に重ねる） */
+.wlive__layer {
+  position: absolute;
+  pointer-events: none;
+}
+.wlive__layer > * {
+  pointer-events: auto;
+}
+.wlive__pc {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.12),
+    0 10px 30px rgb(0 0 0 / 0.14);
+}
+.wlive__pc-bar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  background: #e9ecf3;
+  color: #4b5565;
+  font: 500 13px/1 var(--mf-font);
+}
+.wlive__pc-dots {
+  width: 44px;
+  height: 12px;
+  background:
+    radial-gradient(circle at 6px 6px, #fc605c 5px, transparent 6px),
+    radial-gradient(circle at 22px 6px, #fdbc40 5px, transparent 6px),
+    radial-gradient(circle at 38px 6px, #34c84a 5px, transparent 6px);
+}
+.wlive__pc-url {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wlive__caption {
+  margin: 0;
+  max-width: 720px;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  text-align: center;
+}
+.wlive__refused {
+  width: 100%;
+  max-width: 560px;
+}
+.wlive__refused-body {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+.wlive__refused-body > m3e-icon {
+  flex: none;
+  font-size: 28px;
+  color: var(--mf-error);
+}
+.wlive__refused-body p {
+  margin: 0 0 8px;
+}
+.external--record {
+  width: 100%;
+  max-width: 720px;
+  padding: 16px 0 0;
+}
+/* タブレットの枠（ベゼル画像は無いので CSS） */
+.sp-frame--tablet .sp-frame__body {
+  background: #2b2b2e;
+}
+.sp-device--tablet {
+  border-radius: 18px;
+}
+/* Figma の埋め込み */
+.figma-embed__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.figma-embed__frame {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  border-radius: var(--mf-shape-md);
+  overflow: hidden;
+  background: #1e1e1e;
+}
+.figma-embed__iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  border: 0;
+}
+.figma-embed__layer {
+  inset: 0;
+}
+/* Figma から取り込んだ画像の由来 */
+.ws__viewer > .origin-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.origin-wrap > .viewer {
+  flex: 1;
+  min-height: 0;
+}
+.origin-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 8px;
+  font: var(--mf-type-body-small);
+}
+/* リンクを M3 の text button / icon button の見た目で（M3E の button に href を付けると入れ子の操作になるので素の a） */
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  border-radius: 20px;
+  font: var(--mf-type-label-large);
+  color: var(--mf-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.link-button m3e-icon {
+  font-size: 18px;
+}
+.link-button:hover,
+.link-icon:hover {
+  background: color-mix(in srgb, var(--mf-primary) 8%, transparent);
+}
+.link-button:focus-visible,
+.link-icon:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.link-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--mf-on-surface-variant);
+}
+.link-icon m3e-icon {
+  font-size: 24px;
+}
+.thread__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-primary);
+  text-decoration: none;
+}
+.thread__link m3e-icon {
+  font-size: 16px;
+}
+/* スマホ: バナーと説明は短く詰める */
+@media (max-width: 599px) {
+  .wlive__banner,
+  .wlive__caption {
+    font-size: 11px;
+  }
+  .wlive__mode m3e-button {
+    min-width: 0;
+  }
 }

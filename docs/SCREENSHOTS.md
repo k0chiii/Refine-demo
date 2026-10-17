@@ -33,6 +33,10 @@
 | 65  | compact: エディタのシートを「FB」に切り替え（この制作物の相談の一覧）                                                     | 校正者         | `65-mobile-editor-fb`        |
 | 66  | 動画の校正: タイムラインの印（時点は番号の丸・範囲は帯）、カードの時刻から移った位置と画面の範囲                          | 校正者         | `66-video-review`            |
 | 66b | 動画の校正: タイムラインの上の段をなぞって範囲を選び、投稿欄に「0:06–0:09 の範囲」                                        | 校正者         | `66b-video-range-compose`    |
+| 67  | Web のライブ表示: 見本サイトを iframe に出し、要素にコメント（iPhone 17 で付けた印が PC 1440 でも同じ要素に付く）         | 校正者         | `67-web-live-comment`        |
+| 67b | compact: Web のライブ表示（端末・閲覧／コメントの切り替え・縮めた画面）                                                   | 校正者         | `67b-web-live-mobile`        |
+| 68  | Figma から取り込んだフレーム（画像）に位置コメント。上に「Figma: ノード名（取得時刻）」と「Figma で開く」                 | 校正者         | `68-figma-import`            |
+| 68b | Figma の埋め込み表示（デモはオフラインで黒）: フレームの切り替えと「このフレームにコメント」、カードに「Figma で開く」    | 校正者         | `68b-figma-embed`            |
 | 14  | 版提出: 専門確認の宣言と担当者選択（ダイアログ内）                                                                        | 制作者         | `14-submit-required-checks`  |
 | 15  | 制作物の編集（引き出し「情報」からのダイアログ）                                                                          | 主管           | `15-work-edit`               |
 | 16  | 専門確認（担当者が確認完了。引き出し「情報」）                                                                            | 校正者         | `16-required-check-done`     |
@@ -89,7 +93,7 @@
 | 60  | compact: 表記ルール（下部バーに「表記ルール」）                                                                           | 校了権限者     | `60-notation-compact`        |
 | 61  | ホームを編集（全画面のダイアログ。節ごとの表示のスイッチと上下のボタン）                                                  | 制作者         | `61-home-edit`               |
 
-`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（75 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
+`pnpm a11y` で同じ経路に axe-core（WCAG 2.1 A/AA）を流し、`docs/a11y-report.json` に結果を書く（79 画面。残る指摘は M3E calendar 内部の 1 件のみ）。
 
 50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 

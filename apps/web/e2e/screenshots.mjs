@@ -1377,6 +1377,138 @@ async function v2Scenes() {
   expectTrue(Math.abs(at - 1) < 0.05, `カードの時刻へ移らない（${at}）`);
   expectTrue((await page.locator(".vplayer .anchor-rect").count()) === 1, "画面の範囲が重ならない");
   await shot("66-video-review");
+  await webFigmaScenes();
+}
+
+/** 67 Web サイトのライブ表示・68 Figma の取り込みと埋め込み（利用者指示 2026-10-17）。E2E は小さく: 提出 → コメント → 端末の切り替え → 撮影 */
+async function webFigmaScenes() {
+  // 67 Web: 制作者が公式サイトの版を見本サイト（同じオリジン）の URL で提出し、校正者がライブ表示の要素にコメントする
+  await signInAs("mock-nogiku-creator");
+  const siteWork = await openWork("公式サイト トップページ");
+  // 19・55 でこの制作物には版があるので、引き出し「版」から新しい版として出す
+  await drawer("版");
+  await btn("新しい版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "公式サイトの初稿（ライブ表示で確認）");
+  await page
+    .locator('m3e-dialog[open] m3e-expansion-panel [slot="header"]', { hasText: "外部リンク" })
+    .click();
+  await page.fill('m3e-dialog[open] input[type="url"]', `${BASE}/demo-site/index.html`);
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/\d+$/, { timeout: 15_000 });
+  await signInAs("mock-nogiku-reviewer");
+  await go(siteWork);
+  await page.waitForSelector(".wlive__frame", { timeout: 15_000 });
+  // ブリッジの ready（印の層が出る）
+  await page.waitForSelector(".wlive__marks", { timeout: 15_000 });
+  await page.locator(".wlive__mode m3e-button", { hasText: "コメント" }).click();
+  await page.waitForTimeout(400);
+  // iframe の中の見出しを押す（縮小表示なので座標ではなく、要素にポインターイベントを送る）
+  const site = page.frameLocator(".wlive__frame");
+  const clickIn = (selector) =>
+    site
+      .locator(selector)
+      .first()
+      .evaluate((el) => {
+        el.scrollIntoView({ block: "center" });
+        const r = el.getBoundingClientRect();
+        const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        for (const type of ["pointerdown", "pointerup"])
+          el.dispatchEvent(
+            new PointerEvent(type, {
+              ...at,
+              button: 0,
+              bubbles: true,
+              cancelable: true,
+              pointerId: 1,
+            }),
+          );
+      });
+  await clickIn("#events h2");
+  await page.waitForSelector(".compose-pop__place");
+  const place = await page.locator(".compose-pop__place").innerText();
+  expectTrue(place.includes("iPhone 17（402px）"), `投稿欄に端末と要素が出ない（${place}）`);
+  await page.fill(".compose-pop textarea", "見出し「企画一覧」は「企画をさがす」に揃える");
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+  await page.waitForFunction(
+    () => document.querySelectorAll(".wlive__marks .anchor-pin").length === 1,
+    null,
+    { timeout: 10_000 },
+  );
+  // PC 1440 に切り替えても同じ要素に印が付き直る（位置は外れない）
+  await page.locator(".wlive__device").click();
+  await page.locator("m3e-menu-item-radio:visible", { hasText: "PC 1440" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".wlive__marks .anchor-pin").length === 1,
+    null,
+    { timeout: 10_000 },
+  );
+  await page.waitForTimeout(600);
+  expectTrue(
+    (await page.locator(".thread", { hasText: "位置が外れました" }).count()) === 0,
+    "PC 幅で位置が外れた",
+  );
+  expectTrue(
+    (await page.locator(".thread .thread__index").innerText()).includes("iPhone 17（402px）"),
+    "カードに付けたときの端末幅が出ない",
+  );
+  await shot("67-web-live-comment");
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.waitForTimeout(800);
+  await shot("67b-web-live-mobile");
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 68 Figma: 制作者がフレームの URL を貼って取り込み（デモは見本 PNG）、校正者が画像の上にピン → 埋め込み表示でフレームにコメント
+  await signInAs("mock-nogiku-creator");
+  const figmaWork = await openWork("公式サイト 画面デザイン（Figma）");
+  await btn("最初の版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "ホームのスマホ・PC の画面案");
+  await page.fill(
+    'm3e-dialog[open] textarea[placeholder^="https://www.figma.com"]',
+    "https://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=12-34\nhttps://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=56-78",
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item__state--verified").length >= 4,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await signInAs("mock-nogiku-reviewer");
+  await go(figmaWork);
+  await page.waitForSelector(".origin-bar", { timeout: 15_000 });
+  expectTrue(
+    (await page.locator(".origin-bar").innerText()).includes("Figma: ホーム（スマホ）"),
+    "取り込んだ画像に Figma の由来が出ない",
+  );
+  await page.waitForSelector(".viewer__page img");
+  await commentOnRect(0.3, 0.2, 0.7, 0.3, "見出しの帯の色を公式サイトに合わせる");
+  await shot("68-figma-import");
+  // 埋め込み表示（Figma の URL の添付）に切り替えてフレーム単位でコメント
+  await pickArtifact("Figma: https://www.figma.com/design/AbCdEfGhIjKl/MF100-Web?node-id=12-34");
+  await page.waitForSelector(".figma-embed__iframe");
+  await page.locator("m3e-button", { hasText: "このフレームにコメント" }).click();
+  await page.waitForSelector(".compose-pop__place");
+  expectTrue(
+    (await page.locator(".compose-pop__place").innerText()).includes("フレーム"),
+    "フレーム単位のコメントの投稿欄が出ない",
+  );
+  await page.fill(".compose-pop textarea", "このフレーム全体の余白を見直したい");
+  await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page
+      .locator(".thread", { hasText: "フレーム全体" })
+      .locator(".thread__link")
+      .count()) === 1,
+    "フレームのコメントに「Figma で開く」が無い",
+  );
+  await shot("68b-figma-embed");
 }
 
 try {

@@ -191,6 +191,16 @@ export const demo = internalMutation({
         notationCategories: ["A1", "A2", "A3"],
         ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
       },
+      {
+        // Figma の校正（フレームを画像として取り込み、位置コメント。埋め込み表示とフレーム単位のコメントも。利用者指示 2026-10-17）
+        title: "公式サイト 画面デザイン（Figma）",
+        purpose: "公式サイトのスマホ・PC の画面デザイン",
+        category: "Web",
+        mediaType: "figma" as const,
+        legacyId: "FIG-041",
+        notationCategories: ["B"],
+        ...teamsOf("広報局/Web担当", ["広報局/Web担当"]),
+      },
     ];
     const created: string[] = [];
     for (const s of samples) {

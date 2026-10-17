@@ -1,11 +1,14 @@
 import type {
   ArtifactAccess,
   BackendGateway,
+  FigmaClient,
+  FigmaImportMeta,
+  FigmaNodeInfo,
   ObjectStore,
   TokenVerifier,
   UploadOps,
 } from "../ports.ts";
-import { GatewayError } from "../ports.ts";
+import { FigmaApiError, GatewayError } from "../ports.ts";
 
 export const fakeVerifier: TokenVerifier = {
   async verify(token) {
@@ -70,6 +73,8 @@ export interface FakeUploadTarget {
   /** false: 提出が確定した・投稿に付けた等で、もう受け付けない */
   open: boolean;
   size: number | null;
+  /** Figma から取り込んだときに添えられた値 */
+  figma?: FigmaImportMeta;
 }
 
 export class FakeUploads implements UploadOps {
@@ -111,7 +116,11 @@ export class FakeUploads implements UploadOps {
       fileName: t.fileName,
     };
   }
-  async complete(token: string, attemptId: string, meta: { size: number; sha256: string }) {
+  async complete(
+    token: string,
+    attemptId: string,
+    meta: { size: number; sha256: string; figma?: FigmaImportMeta },
+  ) {
     this.calls.push(`${this.label}complete:${attemptId}:${meta.size}:${meta.sha256}`);
     if (this.failNextCompleteWithNetworkError) {
       this.failNextCompleteWithNetworkError = false;
@@ -128,6 +137,7 @@ export class FakeUploads implements UploadOps {
     t.objectKey = a.objectKey;
     t.size = meta.size;
     t.failureMessage = null;
+    if (meta.figma) t.figma = meta.figma;
     a.state = "adopted";
     return { status: "verified", failureMessage: null };
   }
@@ -192,3 +202,60 @@ export class FakeGateway implements BackendGateway {
 }
 
 export { sha256Hex };
+
+/**
+ * Figma REST API の偽物（ネットワークは呼ばない）。ファイルごとにノードと画像を持ち、
+ * 呼ばれた回数と 429 を起こす設定で、レート制限の扱いを試す
+ */
+export class FakeFigma implements FigmaClient {
+  files = new Map<
+    string,
+    {
+      version: string;
+      lastModified: string;
+      nodes: Map<string, FigmaNodeInfo & { png: Uint8Array | null }>;
+    }
+  >();
+  calls: string[] = [];
+  /** 次の呼び出しで 429（Retry-After 秒）。null なら起こさない */
+  rateLimitNext: number | null = null;
+  /** 全部に 403 */
+  forbidden = false;
+  async getNodes(fileKey: string, nodeIds: readonly string[]) {
+    this.calls.push(`nodes:${fileKey}:${nodeIds.join(",")}`);
+    this.gate();
+    const f = this.files.get(fileKey);
+    if (!f) throw new FigmaApiError(404);
+    const nodes = new Map<string, FigmaNodeInfo>();
+    for (const id of nodeIds) {
+      const n = f.nodes.get(id);
+      if (n) nodes.set(id, { name: n.name, box: n.box });
+    }
+    return { version: f.version, lastModified: f.lastModified, nodes };
+  }
+  async renderImages(fileKey: string, nodeIds: readonly string[], scale: number) {
+    this.calls.push(`images:${fileKey}:${nodeIds.join(",")}:${scale}`);
+    this.gate();
+    const f = this.files.get(fileKey);
+    if (!f) throw new FigmaApiError(404);
+    const out = new Map<string, string | null>();
+    for (const id of nodeIds)
+      out.set(id, f.nodes.get(id)?.png ? `https://figma-cdn.invalid/${fileKey}/${id}.png` : null);
+    return out;
+  }
+  async download(url: string) {
+    this.calls.push(`download:${url}`);
+    const m = /\/([^/]+)\/([^/]+)\.png$/.exec(url);
+    const png = m ? this.files.get(m[1]!)?.nodes.get(m[2]!)?.png : null;
+    if (!png) throw new FigmaApiError(404);
+    return png.slice().buffer as ArrayBuffer;
+  }
+  private gate() {
+    if (this.forbidden) throw new FigmaApiError(403);
+    if (this.rateLimitNext !== null) {
+      const ra = this.rateLimitNext;
+      this.rateLimitNext = null;
+      throw new FigmaApiError(429, ra);
+    }
+  }
+}

@@ -104,4 +104,94 @@ describe("SubmissionFlow（U-04 / A-02 / A-10）", () => {
     await flow.confirm();
     expect(confirmed).toEqual(["req-fixed"]);
   });
+
+  it("Figma のフレームはファイルの後ろに並び、まとめて 1 回の取り込みで verified になる。失敗は項目ごとに再試行できる", async () => {
+    const importCalls: string[][] = [];
+    let failOnce = true;
+    const deps: FlowDeps = {
+      async prepare() {
+        return {
+          sessionId: "ses1",
+          items: [
+            { id: "a", fileName: "a.pdf", keyPrefix: "k/a" },
+            { id: "f1", fileName: "figma-1-2.png", keyPrefix: "k/f1" },
+            { id: "f2", fileName: "figma-3-4.png", keyPrefix: "k/f2" },
+            { id: "ext", fileName: "https://www.figma.com/design/x", keyPrefix: null },
+          ],
+        };
+      },
+      async upload() {
+        return { status: "verified", failureMessage: null };
+      },
+      async reset() {},
+      async importFigma(items) {
+        importCalls.push(items.map((i) => `${i.itemId}:${i.fileKey}:${i.nodeId}`));
+        return items.map((i) => {
+          if (i.itemId === "f2" && failOnce) {
+            failOnce = false;
+            return {
+              itemId: i.itemId,
+              status: "failed",
+              failureMessage: "回数制限",
+              nodeName: null,
+            };
+          }
+          return {
+            itemId: i.itemId,
+            status: "verified",
+            failureMessage: null,
+            nodeName: `フレーム ${i.nodeId}`,
+          };
+        });
+      },
+      async confirm(sessionId, _requestId) {
+        return {
+          revisionId: `rev-${sessionId}`,
+          sequence: 1,
+          kind: "standard",
+          supersededRevisionId: null,
+        };
+      },
+      randomId: () => "req",
+    };
+    const flow = new SubmissionFlow(
+      deps,
+      [file("a.pdf")],
+      [
+        { fileKey: "KEY", nodeId: "1:2" },
+        { fileKey: "KEY", nodeId: "3:4" },
+      ],
+    );
+    await flow.start();
+    expect(importCalls).toEqual([["f1:KEY:1:2", "f2:KEY:3:4"]]);
+    expect(flow.state.items.map((i) => `${i.source}:${i.status}`)).toEqual([
+      "file:verified",
+      "figma:verified",
+      "figma:failed",
+      "external:verified",
+    ]);
+    expect(flow.state.items[1]!.fileName).toBe("フレーム 1:2.png");
+    expect(failedItems(flow.state)[0]!.error).toBe("回数制限");
+    expect(canConfirm(flow.state)).toBe(false);
+    await flow.retry("f2");
+    expect(importCalls[1]).toEqual(["f2:KEY:3:4"]);
+    expect(canConfirm(flow.state)).toBe(true);
+  });
+
+  it("取り込みの口が無ければ Figma の項目は失敗として理由を出す", async () => {
+    const { deps } = makeDeps({});
+    const d2: FlowDeps = {
+      ...deps,
+      async prepare() {
+        return { sessionId: "s", items: [{ id: "f1", fileName: "figma.png", keyPrefix: "k/f1" }] };
+      },
+    };
+    const flow = new SubmissionFlow(d2, [], [{ fileKey: "KEY", nodeId: "1:2" }]);
+    await flow.start();
+    expect(flow.state.items[0]).toMatchObject({
+      source: "figma",
+      status: "failed",
+      error: "Figma 連携が未設定です",
+    });
+  });
 });

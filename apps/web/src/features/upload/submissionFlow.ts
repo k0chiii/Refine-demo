@@ -10,10 +10,20 @@ export type ItemStatus = "pending" | "uploading" | "verified" | "failed";
 export interface FlowItem {
   itemId: string;
   fileName: string;
-  file: File | null; // 外部リンクは null
+  file: File | null; // 外部リンク・Figma からの取り込みは null
+  /** 手元のファイル / Figma から取り込む / 外部リンク（実体なし） */
+  source: "file" | "figma" | "external";
+  /** Figma から取り込む項目のフレーム */
+  figma?: { fileKey: string; nodeId: string };
   status: ItemStatus;
   progress: number;
   error: string | null;
+}
+
+/** 準備する項目の並びと同じ順で、ファイルの後ろに置く Figma のフレーム */
+export interface FigmaFrameSource {
+  fileKey: string;
+  nodeId: string;
 }
 
 export interface FlowState {
@@ -41,6 +51,15 @@ export interface FlowDeps {
     onProgress: (f: number) => void,
   ): Promise<{ status: string; failureMessage: string | null }>;
   reset(itemId: string): Promise<void>;
+  /** Figma のフレームを取り込む（Worker が Figma API → R2 → 採用）。無ければ Figma の項目は失敗にする */
+  importFigma?(items: Array<{ itemId: string; fileKey: string; nodeId: string }>): Promise<
+    Array<{
+      itemId: string;
+      status: string;
+      failureMessage: string | null;
+      nodeName?: string | null;
+    }>
+  >;
   confirm(
     sessionId: string,
     requestId: string,
@@ -83,6 +102,8 @@ export class SubmissionFlow {
   constructor(
     private readonly deps: FlowDeps,
     private readonly files: File[],
+    /** 準備する項目のうち、ファイルの次に並ぶ Figma のフレーム（その後ろが外部リンク） */
+    private readonly figmaFrames: FigmaFrameSource[] = [],
   ) {}
 
   subscribe(fn: (s: FlowState) => void): () => void {
@@ -106,16 +127,84 @@ export class SubmissionFlow {
   async start(): Promise<void> {
     this.set({ error: null });
     const prepared = await this.deps.prepare();
-    const items: FlowItem[] = prepared.items.map((it, index) => ({
-      itemId: it.id,
-      fileName: it.fileName,
-      file: it.keyPrefix === null ? null : (this.files[index] ?? null),
-      status: it.keyPrefix === null ? "verified" : "pending",
-      progress: it.keyPrefix === null ? 1 : 0,
-      error: null,
-    }));
+    const n = this.files.length;
+    const items: FlowItem[] = prepared.items.map((it, index) => {
+      if (it.keyPrefix === null)
+        return {
+          itemId: it.id,
+          fileName: it.fileName,
+          file: null,
+          source: "external",
+          status: "verified",
+          progress: 1,
+          error: null,
+        };
+      const frame = index >= n ? this.figmaFrames[index - n] : undefined;
+      if (frame)
+        return {
+          itemId: it.id,
+          fileName: it.fileName,
+          file: null,
+          source: "figma",
+          figma: frame,
+          status: "pending",
+          progress: 0,
+          error: null,
+        };
+      return {
+        itemId: it.id,
+        fileName: it.fileName,
+        file: this.files[index] ?? null,
+        source: "file",
+        status: "pending",
+        progress: 0,
+        error: null,
+      };
+    });
     this.set({ sessionId: prepared.sessionId, items });
-    await Promise.all(items.filter((i) => i.file !== null).map((i) => this.uploadOne(i.itemId)));
+    await Promise.all([
+      ...items.filter((i) => i.file !== null).map((i) => this.uploadOne(i.itemId)),
+      this.importFigma(items.filter((i) => i.source === "figma").map((i) => i.itemId)),
+    ]);
+  }
+
+  /** Figma のフレームをまとめて取り込む（1 版 1 回の API 呼び出しに収める） */
+  private async importFigma(itemIds: string[]): Promise<void> {
+    if (itemIds.length === 0) return;
+    const targets = this.state.items.filter((i) => itemIds.includes(i.itemId) && i.figma);
+    for (const t of targets)
+      this.patchItem(t.itemId, { status: "uploading", progress: 0.2, error: null });
+    if (!this.deps.importFigma) {
+      for (const t of targets)
+        this.patchItem(t.itemId, { status: "failed", error: "Figma 連携が未設定です" });
+      return;
+    }
+    try {
+      const results = await this.deps.importFigma(
+        targets.map((t) => ({
+          itemId: t.itemId,
+          fileKey: t.figma!.fileKey,
+          nodeId: t.figma!.nodeId,
+        })),
+      );
+      for (const t of targets) {
+        const r = results.find((x) => x.itemId === t.itemId);
+        if (r?.status === "verified")
+          this.patchItem(t.itemId, {
+            status: "verified",
+            progress: 1,
+            ...(r.nodeName ? { fileName: `${r.nodeName}.png` } : {}),
+          });
+        else
+          this.patchItem(t.itemId, {
+            status: "failed",
+            error: r?.failureMessage ?? "Figma から取り込めませんでした",
+          });
+      }
+    } catch (error) {
+      for (const t of targets)
+        this.patchItem(t.itemId, { status: "failed", error: describeError(error).message });
+    }
   }
 
   private async uploadOne(itemId: string): Promise<void> {
@@ -143,7 +232,9 @@ export class SubmissionFlow {
   /** 失敗したファイルだけを再送する（A-02 の復旧手順）。 */
   async retry(itemId: string): Promise<void> {
     await this.deps.reset(itemId);
-    await this.uploadOne(itemId);
+    const item = this.state.items.find((i) => i.itemId === itemId);
+    if (item?.source === "figma") await this.importFigma([itemId]);
+    else await this.uploadOne(itemId);
   }
 
   /** 確定。再送時も同じ requestId を使い、二重版を作らない（A-10）。 */
