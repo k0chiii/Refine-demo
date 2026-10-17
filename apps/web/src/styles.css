@@ -1861,6 +1861,36 @@ m3e-dialog [slot="actions"] {
   -webkit-user-select: none;
   user-select: none;
 }
+/* 印を付けないとき（書き込み「なし」。AnchorOverlay の passive）: 印の層は押す・なぞるを下の紙面へ通す。
+   印そのもの（番号の丸・押せる範囲 48）は押してスレッドを開ける。範囲の面は下のリンクを塞がないよう通す */
+.viewer__overlay--passive {
+  pointer-events: none;
+  cursor: default;
+}
+.viewer__overlay--passive [data-anchor] {
+  pointer-events: auto;
+}
+.viewer__overlay--passive .anchor-rect {
+  pointer-events: none;
+}
+/* PDF の中のリンク（PdfLinks）: canvas と印の層のあいだ。見た目は何も足さず、触れると薄く示す */
+.pdf-links {
+  position: absolute;
+  inset: 0;
+}
+.pdf-link {
+  position: absolute;
+  display: block;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.pdf-link:hover {
+  background: color-mix(in srgb, var(--mf-primary) 12%, transparent);
+}
+.pdf-link:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 1px;
+}
 .anchor-rect {
   fill: color-mix(in srgb, var(--mf-primary) 14%, transparent);
   stroke: var(--mf-primary);
@@ -4195,11 +4225,7 @@ m3e-snackbar {
   font: var(--mf-type-label-medium);
   font-variant-numeric: tabular-nums;
 }
-/* 範囲から書く欄の「コメント／FB」切り替え */
-.compose-pop__kind {
-  width: 100%;
-  margin-bottom: 4px;
-}
+/* 範囲から書く欄が何を書くか（FB のときだけ小さく示す。切り替えはツールバーの「書き込み」） */
 .compose-pop__note {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
@@ -4707,10 +4733,6 @@ m3e-snackbar {
 }
 .import-list__problems {
   display: block;
-}
-/* 1 つを選ぶ切り替え（ui/ChoiceGroup。M3 の connected ボタングループ）: 幅いっぱいに置くときはボタンを等分 */
-.compose-pop__kind > m3e-button {
-  flex: 1 1 0;
 }
 /* SNS アカウントのダイアログ: アイコンの見本と画像を選ぶボタン */
 .profile-dialog__avatar {

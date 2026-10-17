@@ -212,6 +212,23 @@ const compareWithRevision = async (label) => {
   await openComparePicker();
   await comparePickItem(label);
 };
+/**
+ * 下のツールバーの「書き込み」（印を付けたとき作るもの）: コメント / FB / なし。押すと小さな Menu。引き出しは動かさない
+ * （利用者指示 2026-10-17）。このタブのあいだ覚えるので、使い終わったらコメントに戻す
+ */
+const openMarkMenu = async () => {
+  await page.locator(".ws__toolbar .ws__mark-mode").click();
+  await page.waitForSelector("#mark-mode-menu m3e-menu-item-radio:visible");
+  await settle();
+};
+const setMarkMode = async (label) => {
+  await openMarkMenu();
+  await page
+    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: label })
+    .first()
+    .click();
+  await settle();
+};
 const stopCompare = async () => {
   await openComparePicker();
   await comparePickItem("比べるのをやめる");
@@ -406,7 +423,7 @@ async function main() {
   );
   await page.waitForSelector(".thread");
   // 2 件目（位置なし）は未対応のまま残し、次版への持ち越し候補にする
-  await page.locator('m3e-icon-button[aria-label="位置なしでコメント"]').click();
+  await page.locator(".comments__free").click();
   await page.fill(
     ".compose-pop textarea",
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
@@ -741,6 +758,14 @@ async function main() {
   await go(revisionUrl);
   await pdfReady();
   await settle();
+  // 下のツールバーの「書き込み」を FB にして、紙面の範囲を選ぶ（投稿欄の右上の切り替えは無くした）
+  await openMarkMenu();
+  await shot("64a-mark-mode-menu");
+  await page
+    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: "FB" })
+    .first()
+    .click();
+  await settle();
   {
     const box = await page.locator(".viewer__overlay").first().boundingBox();
     await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
@@ -749,13 +774,20 @@ async function main() {
     await page.mouse.up();
   }
   await page.waitForSelector(".compose-pop textarea");
-  const fbSegment = page.locator(".compose-pop__kind m3e-button", { hasText: "FB" });
-  if (await fbSegment.count()) await fbSegment.click();
+  expectTrue(
+    (await page.locator(".compose-pop__kind").count()) === 0,
+    "投稿欄にコメント／FB の切り替えが残っている",
+  );
+  expectTrue(
+    (await page.locator(".compose-pop__note").innerText()).includes("FB"),
+    "FB のモードなのに、投稿欄が FB と示さない",
+  );
   await page.fill(".compose-pop textarea", "ここの余白、もう少し詰めても良さそう？ 迷っています");
   await page.locator(".compose-pop m3e-button", { hasText: "FB で相談" }).click();
   await page.waitForSelector(".fb-pane--thread .fb-post");
   await page.waitForSelector(".anchor-pin--fb");
   await shot("64-editor-fb");
+  // 書き込みはこのタブのあいだ覚えている（受付終了のこの版では「コメント」は選べない）。コメントに戻すのは、コメントできる版で（下の 39 の前）
   // 64b FB スペース（縦に 3 列: スペース・紙面・スレッド）。紙面の FB の印から、そのスレッドを開いて話す
   {
     const workId = new URL(revisionUrl).pathname.split("/")[2];
@@ -767,6 +799,79 @@ async function main() {
     await page.waitForSelector(".fb-stage .anchor-pin--fb");
     await shot("64b-feedback-space");
   }
+
+  // 73 書き込み「なし」（利用者指示 2026-10-17）: 印を付けず、PDF の中のリンクが押せる。外部の URL は新しいタブ（noopener noreferrer）、
+  //    ページ内のリンクはそのページへ。コメント・FB のモードではリンクの層を出さない（印の層がなぞるを受ける）
+  await go(revisionUrl);
+  await pdfReady();
+  await context.route("https://example.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<title>リンク先</title>" }),
+  );
+  expectTrue(
+    (await page.locator(".viewer__page .pdf-link").count()) === 0,
+    "FB のモードなのに、PDF のリンクの層が出ている",
+  );
+  await setMarkMode("なし");
+  await page.waitForSelector('.viewer__page[data-page="1"] a.pdf-link');
+  const links = await page
+    .locator('.viewer__page[data-page="1"] a.pdf-link')
+    .evaluateAll((els) =>
+      els.map((e) => ({ href: e.getAttribute("href"), target: e.target, rel: e.rel })),
+    );
+  expectTrue(
+    links.some(
+      (l) =>
+        l.href === "https://example.com/mf100" &&
+        l.target === "_blank" &&
+        /noopener/.test(l.rel) &&
+        /noreferrer/.test(l.rel),
+    ),
+    `外部リンクが new タブ・noopener noreferrer で出ない: ${JSON.stringify(links)}`,
+  );
+  await shot("73-pdf-links-no-mark");
+  // 紙面をなぞっても投稿欄（コメント・FB）は出ない
+  {
+    const box = await page.locator(".viewer__overlay").first().boundingBox();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    expectTrue(
+      (await page.locator(".compose-pop").count()) === 0,
+      "書き込みが「なし」なのに、紙面をなぞると投稿欄が出る",
+    );
+  }
+  // 外部リンクは新しいタブで開く
+  {
+    const [popup] = await Promise.all([
+      context.waitForEvent("page"),
+      page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="https://"]').click(),
+    ]);
+    await popup.waitForLoadState("domcontentloaded");
+    expectTrue(
+      popup.url().startsWith("https://example.com/mf100"),
+      `新しいタブの URL: ${popup.url()}`,
+    );
+    await popup.close();
+  }
+  // ページ内のリンクはそのページへ
+  await page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="#page-"]').click();
+  await page.waitForFunction(
+    () => {
+      const st = document.querySelector(".viewer__stage").getBoundingClientRect();
+      const p2 = document.querySelector('.viewer__page[data-page="2"]').getBoundingClientRect();
+      return Math.abs(p2.top - st.top) < 80;
+    },
+    null,
+    { timeout: 5000 },
+  );
+  // FB に戻すと、リンクの層は出ない（印の層がなぞるを受ける。リンクは印を付ける操作を奪わない）
+  await setMarkMode("FB");
+  expectTrue(
+    (await page.locator(".viewer__page .pdf-link").count()) === 0,
+    "FB のモードに戻しても、PDF のリンクの層が残っている",
+  );
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
@@ -849,6 +954,11 @@ async function main() {
   await shot("65-mobile-editor-fb");
   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+  await settle();
+  // 65b 狭い画面のツールバーにも「書き込み」（コメント / FB / なし）。押すと小さな Menu
+  await openMarkMenu();
+  await shot("65b-mobile-mark-mode");
+  await page.keyboard.press("Escape");
   await settle();
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -947,6 +1057,9 @@ async function main() {
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");
   await go(writeWorkUrl);
+  // 書き込みはこのタブのあいだ覚えていて、64 で FB にしたまま。ここはコメントできる版なので、コメントに戻す
+  await page.waitForSelector(".ws__toolbar .ws__mark-mode");
+  await setMarkMode("コメント");
   await page.waitForSelector(".rich-viewer__page .doc");
   await page.evaluate((needle) => {
     const root = document.querySelector(".rich-viewer__page .doc");
@@ -1595,7 +1708,13 @@ async function webFigmaScenes() {
     { timeout: 10_000 },
   );
   // PC 1440 に切り替えても同じ要素に印が付き直る（位置は外れない）
-  await page.locator(".wlive__device").click();
+  // 投稿した直後は、ライブ表示の枠が印の位置へスクロールし直すことがある。M3E のメニューはスクロールで閉じるので、
+  // 開いたまま残るまで押し直す（落ち着くまでの間に押すと、開いてすぐ閉じる）
+  for (let i = 0; i < 4; i++) {
+    await page.locator(".wlive__device").click();
+    await page.waitForTimeout(500);
+    if ((await page.locator("m3e-menu:popover-open").count()) > 0) break;
+  }
   await page.locator("m3e-menu-item-radio:visible", { hasText: "PC 1440" }).click();
   await page.waitForFunction(
     () => document.querySelectorAll(".wlive__marks .anchor-pin").length === 1,

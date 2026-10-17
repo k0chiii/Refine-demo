@@ -2,6 +2,7 @@ import type { NormalizedRect, Viewport } from "@mf100/domain";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
+import { PdfLinks } from "./PdfLinks";
 import { pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
 import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
@@ -40,6 +41,11 @@ interface Props extends ViewerSyncProps {
   onSelectThread: (id: string) => void;
   /** ドラッグで範囲、クリックでピンを指定できるか（投稿権限があれば常時） */
   selecting: boolean;
+  /**
+   * 印を付けないとき（書き込み「なし」）: 紙面そのものを押せるようにする。印の層は押す・なぞるを通し（印そのものは押せる）、
+   * PDF の中のリンクを `<a>` として出す（外部 URL は新しいタブ、ページ内のリンクはそのページへ）。コメント・FB のモードでは出さない
+   */
+  passive?: boolean;
   draft: PdfDraft | null;
   onDraft: (d: PdfDraft | null) => void;
   /** 表示中のページ。親が変えるとそのページまで送る。読み手がスクロールすると `onPageChange` で返す */
@@ -84,6 +90,7 @@ export function PdfViewer({
   activeThreadId,
   onSelectThread,
   selecting,
+  passive = false,
   draft,
   onDraft,
   page,
@@ -234,6 +241,15 @@ export function PdfViewer({
       onPageChange?.(n);
     }
   };
+  /** リンクの移動先のページへ送る（いまのページへのリンクでも、そのページの先頭へ） */
+  const goToPage = (n: number) => {
+    const stage = stageRef.current;
+    const el = pageEls.current[n - 1];
+    if (!stage || !el) return;
+    shown.current = n;
+    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top - 24;
+    onPageChange?.(n);
+  };
   // 親がページを変えた（ページ送り・コメントへの移動・比較の相手）ときだけ、そのページまで送る
   useEffect(() => {
     const stage = stageRef.current;
@@ -275,7 +291,17 @@ export function PdfViewer({
                       onNear={onNear}
                       onPainted={onPainted}
                     />
+                    {passive ? (
+                      <PdfLinks
+                        doc={doc}
+                        n={n}
+                        rotation={rotation}
+                        numPages={sizes.length}
+                        onGoto={goToPage}
+                      />
+                    ) : null}
                     <AnchorOverlay
+                      passive={passive}
                       viewport={viewport}
                       threads={threads.filter(
                         (t) =>

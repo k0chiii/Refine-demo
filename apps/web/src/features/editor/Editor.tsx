@@ -72,6 +72,14 @@ import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
+import {
+  effectiveMarkMode,
+  markModeIcon,
+  markModeLabel,
+  markModes,
+  useMarkMode,
+  type MarkMode,
+} from "@/features/review/markMode";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
@@ -106,7 +114,13 @@ import { M3eButton } from "@m3e/react/button";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
-import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import {
+  M3eMenu,
+  M3eMenuItem,
+  M3eMenuItemGroup,
+  M3eMenuItemRadio,
+  M3eMenuTrigger,
+} from "@m3e/react/menu";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { InfoTab } from "./InfoTab";
 import { VersionsTab } from "./VersionsTab";
@@ -286,8 +300,11 @@ export function Editor({
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /** 引き出し「FB」で開いている相談 */
   const [fbOpenId, setFbOpenId] = useState<string | null>(search.fb ?? null);
-  /** 紙面の範囲から書くのはコメント（解決する指摘）か相談（FB） */
-  const [composeKind, setComposeKind] = useState<"comment" | "feedback">("comment");
+  /**
+   * 紙面に印を付けたとき作るもの: コメント（解決する指摘）・FB（解決しない相談）・なし（印を付けない）。下のツールバーで切り替える。
+   * このタブのあいだ覚える（features/review/markMode）。権限で使えないモードは下の markMode に置き換える
+   */
+  const [markPick, setMarkPick] = useMarkMode();
   const [draft, setDraft] = useState<Draft | null>(null);
   /** 動画の再生位置を移す（コメントのカードを押したとき）。key が変わるたびに移す */
   const [videoSeek, setVideoSeek] = useState<{ t: number; key: number } | null>(null);
@@ -674,10 +691,22 @@ export function Editor({
   // 相談（FB）は解決しない話し合いなので、受付が終わった版・校了した版の上でも範囲を選んで立てられる
   const canFeedback = revisionId !== null;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  const selecting = canComment || canFeedback;
-  /** 範囲から書くもの: コメントできない版では相談だけ */
+  /** いま効く書き込みのモード（コメントできない版では「コメント」は FB になる） */
+  const markMode = effectiveMarkMode(markPick, { comment: canComment, feedback: canFeedback });
+  /** 紙面に印を付けられるか（なし のときは、押す・なぞるが紙面そのもの（PDF のリンクなど）に届く） */
+  const selecting = markMode !== "none";
+  /** 範囲から書くもの: 位置なしのコメントはコメント。それ以外は選んでいるモード（コメントできない版では相談だけ） */
   const draftKind: "comment" | "feedback" =
-    !canComment || (composeKind === "feedback" && !draft?.free) ? "feedback" : "comment";
+    draft?.free && canComment
+      ? "comment"
+      : markMode === "feedback" || !canComment
+        ? "feedback"
+        : "comment";
+  /** モードを替える。印を付けないにしたら、書きかけの位置つきの投稿欄は閉じる（位置なしのコメントは残す）。引き出しは動かさない */
+  const changeMarkMode = (m: MarkMode) => {
+    setMarkPick(m);
+    if (m === "none" && draft && !draft.free) resetCompose();
+  };
   const busy =
     doPost.pending ||
     doDecide.pending ||
@@ -803,8 +832,6 @@ export function Editor({
         onCancel={resetCompose}
         pending={doPost.pending}
         kind={draftKind}
-        // 位置なしのコメント（ツールバーから）とコメントできない版では切り替えない
-        {...(canComment && !draft.free ? { onKind: setComposeKind } : {})}
         {...(draft.range && text && artifact && revisionId
           ? {
               extra: (
@@ -996,7 +1023,7 @@ export function Editor({
               resetCompose();
             }}
             threads={overlayThreads}
-            selecting={canComment}
+            selecting={selecting}
             onCommentFrame={(d) => {
               setDraft({ figma: d });
               setActiveThreadId(null);
@@ -1049,6 +1076,7 @@ export function Editor({
           artifactId={artifact.id}
           onReady={() => setPaintedFor(artifact.id)}
           {...viewerProps}
+          passive={!selecting}
           draft={draft?.page ? (draft as Draft & { page: number }) : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1129,6 +1157,7 @@ export function Editor({
           onReady={() => setPaintedFor(artifact.id)}
           alt={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
+          passive={!selecting}
           draft={draft?.rect || draft?.point ? draft : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1307,8 +1336,8 @@ export function Editor({
     <div className="comments">
       <AutoProofreadStatus auto={auto} />
       <div className="comments__header">
-        {/* 狭い画面: 「位置なしでコメント」はツールバーからこちらへ（ツールバーは引き出しのボタンに場所を譲る） */}
-        {mobile && canComment ? (
+        {/* 「位置なしでコメント」はここから（ツールバーの丸いボタンは、印を付けるものを切り替える「書き込み」に譲った） */}
+        {canComment ? (
           <M3eButton
             variant="tonal"
             className="comments__free"
@@ -1692,15 +1721,19 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {canComment && !mobile ? (
+                  {/* 書き込み（印を付けるとき作るもの）: コメント / FB / なし。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
+                      引き出しは動かさない（FB を立てると、これまでどおり引き出し「FB」でそのやり取りが開く） */}
+                  {canComment || canFeedback ? (
                     <M3eIconButton
-                      aria-label="位置なしでコメント"
-                      onClick={() => {
-                        setDraft({ free: true });
-                        setActiveThreadId(null);
-                      }}
+                      className="ws__mark-mode"
+                      aria-label="書き込み: コメント / FB / なし"
+                      title={`書き込み: コメント / FB / なし（いまは${markModeLabel[markMode]}）`}
                     >
-                      <M3eIcon name="add_comment" />
+                      <M3eIcon
+                        name={markModeIcon[markMode]}
+                        className={markMode === "none" ? "" : "icon--filled"}
+                      />
+                      <M3eMenuTrigger htmlFor="mark-mode-menu" />
                     </M3eIconButton>
                   ) : null}
                   {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
@@ -1799,6 +1832,24 @@ export function Editor({
               >
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
+            ) : null}
+            {canComment || canFeedback ? (
+              <M3eMenu id="mark-mode-menu" positionY="above">
+                <M3eMenuItemGroup aria-label="書き込み（印を付けたとき作るもの）">
+                  {markModes
+                    .filter((m) => m === "none" || (m === "comment" ? canComment : canFeedback))
+                    .map((m) => (
+                      <M3eMenuItemRadio
+                        key={m}
+                        checked={markMode === m}
+                        onClick={() => changeMarkMode(m)}
+                      >
+                        <M3eIcon slot="icon" name={markModeIcon[m]} />
+                        {m === "none" ? "なし（印を付けない）" : markModeLabel[m]}
+                      </M3eMenuItemRadio>
+                    ))}
+                </M3eMenuItemGroup>
+              </M3eMenu>
             ) : null}
             {mobile ? (
               <M3eMenu id="zoom-menu" positionY="above">
