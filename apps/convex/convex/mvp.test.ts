@@ -567,12 +567,19 @@ describe("Convex 統合: 認可と状態遷移", () => {
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
 
-    const candidates = await cast.reviewer.as.query(api.comments.mentionCandidates, { workId });
+    const candidates = await cast.reviewer.as.query(api.comments.searchMentionCandidates, {
+      workId,
+      text: "",
+    });
     expect(candidates.map((u) => u.id).sort()).toEqual(
       [cast.creator.id, cast.approver.id, cast.manager.id, cast.reviewer.id].sort(),
     );
+    // 打った文字で絞る（名前・メールの部分一致）
+    expect(
+      await cast.reviewer.as.query(api.comments.searchMentionCandidates, { workId, text: "appr" }),
+    ).toEqual([{ id: cast.approver.id, name: "approver", email: "approver@example.invalid" }]);
     await expect(
-      cast.stranger.as.query(api.comments.mentionCandidates, { workId }),
+      cast.stranger.as.query(api.comments.searchMentionCandidates, { workId, text: "" }),
     ).rejects.toThrow(code("forbidden"));
     await expect(
       cast.reviewer.as.mutation(api.comments.post, {

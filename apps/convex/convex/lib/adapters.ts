@@ -51,6 +51,9 @@ function fromDoc<T extends TableNames, D extends Doc<T>>(doc: D): Strip<D> & { i
   return { ...(rest as Strip<D>), id: _id as string };
 }
 
+/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks） */
+export const workFromDoc = (doc: Doc<"works">): Work => fromDoc(doc) as Work;
+
 /** id を持たない行（ruleId などの業務キーで引く表） */
 function strip<D extends { _id: unknown; _creationTime: number }>(
   doc: D,

@@ -9,7 +9,6 @@ import {
   canPostFeedback,
   canRenameFeedbackThread,
   canViewFeedback,
-  canViewWork,
   computeWorkStats,
   deriveFeedbackThreadTitle,
   feedbackExcerptSource,
@@ -50,7 +49,7 @@ import {
   type WorkStatsRow,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
-import { principalOf } from "../shared.ts";
+import { canView, principalOf, searchPeopleByText } from "../shared.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
 
@@ -168,16 +167,20 @@ export async function listFeedbackMentionCandidates(
 }
 
 /** メンションの候補を名前・メールで絞る（10 人まで） */
+/**
+ * メンションの候補を「@」に続けて打った文字で探す（名前・メールの部分一致。名前順・limit 人まで。自分は除く）。
+ * 画面は候補の一覧を丸ごと購読せず、打つたびにこの検索を引く（docs/UI_M3E.md §60）。
+ */
 export async function searchFeedbackPeople(
   ctx: AppContext,
   principal: Principal,
-  input: { workId: string; text: string },
-): Promise<Array<{ id: string; name: string }>> {
-  const q = input.text.trim().toLowerCase();
-  return (await listFeedbackMentionCandidates(ctx, principal, input.workId))
-    .filter((p) => q === "" || `${p.name} ${p.email ?? ""}`.toLowerCase().includes(q))
-    .slice(0, 10)
-    .map((p) => ({ id: p.id, name: p.name }));
+  input: { workId: string; text: string; limit?: number },
+): Promise<PersonProfile[]> {
+  return searchPeopleByText(
+    await listFeedbackMentionCandidates(ctx, principal, input.workId),
+    input.text,
+    input.limit,
+  );
 }
 
 // ---------------------------------------------------------------- 一覧・詳細
@@ -352,7 +355,7 @@ export async function listFeedbackSpaces(
       confidentiality: work.confidentiality,
       mediaType: work.mediaType,
       lifecycle: work.lifecycle,
-      canOpen: canViewWork({ work, grants, principal }),
+      canOpen: await canView(ctx, principal, work, grants),
       threads: threads.length,
       unread,
       lastPostAt,
@@ -498,7 +501,7 @@ export async function getFeedbackThread(
       confidentiality: work.confidentiality,
       lifecycle: work.lifecycle,
       mediaType: work.mediaType,
-      canOpen: canViewWork({ work, grants, principal }),
+      canOpen: await canView(ctx, principal, work, grants),
     },
     posts,
     can: {

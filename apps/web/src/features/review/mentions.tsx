@@ -1,7 +1,9 @@
+import { api } from "@mf100/convex/api";
+import { useQuery } from "convex/react";
 import {
   createContext,
   useContext,
-  useMemo,
+  useDeferredValue,
   useRef,
   useState,
   type ReactNode,
@@ -16,10 +18,56 @@ export interface MentionUser {
   email?: string | null;
 }
 
-/** いま開いている制作物でメンションできる人（Editor が api.comments.mentionCandidates から渡す） */
-const MentionContext = createContext<readonly MentionUser[]>([]);
+/**
+ * メンションの検索先と、候補から選んだ人の名前の控え。
+ * 候補の一覧（通常の制作物では全委員 ≤500 人）を画面で丸ごと購読せず、「@」に続けて打った文字でサーバー側に探させる
+ * （comments.searchMentionCandidates / feedback.searchPeople。名前順・20 人まで。docs/UI_M3E.md §60）。
+ * 非公開の制作物では、見られる人の小さな一覧の中から同じ検索で探す。
+ * 選んだ人の名前は、投稿するときに本文に「@名前」が残っているか確かめるために控える（{@link activeMentions}）。
+ */
+export interface MentionDirectory {
+  workId: string;
+  /** どの検索を引くか: 校正のコメント（comments）か FB（feedback。自分は候補に出ない） */
+  scope: "comments" | "feedback";
+  remember(user: MentionUser): void;
+  nameOf(id: string): string | undefined;
+}
+
+export function createMentionDirectory(
+  workId: string,
+  scope: MentionDirectory["scope"],
+): MentionDirectory {
+  const names = new Map<string, string>();
+  return {
+    workId,
+    scope,
+    remember: (u) => names.set(u.id, u.name),
+    nameOf: (id) => names.get(id),
+  };
+}
+
+/** いま開いている制作物のメンションの検索先（Editor・FeedbackComposer が渡す） */
+const MentionContext = createContext<MentionDirectory | null>(null);
 export const MentionProvider = MentionContext.Provider;
-export const useMentionCandidates = () => useContext(MentionContext);
+export const useMentionDirectory = () => useContext(MentionContext);
+
+/** 「@」に続けて打った文字でサーバーに候補を探させる（打っていない間は購読しない） */
+function useMentionSearch(dir: MentionDirectory | null, text: string | null): MentionUser[] {
+  // 速く打っているときは少し遅れて検索する（1 文字ごとに購読を作り直さない）
+  const deferred = useDeferredValue(text);
+  const args = dir && deferred !== null ? { workId: dir.workId, text: deferred } : "skip";
+  const comments = useQuery(
+    api.comments.searchMentionCandidates,
+    dir?.scope === "comments" ? args : "skip",
+  );
+  const feedback = useQuery(api.feedback.searchPeople, dir?.scope === "feedback" ? args : "skip");
+  const results = dir?.scope === "feedback" ? feedback : comments;
+  // 次の結果が届くまでは前の候補を出したままにする（打つたびに消えて点滅しない）。閉じたら忘れる
+  const last = useRef<MentionUser[]>([]);
+  if (text === null) last.current = [];
+  else if (results !== undefined) last.current = results;
+  return text === null ? [] : (results ?? last.current);
+}
 
 /** カーソルの直前が「@よみ」なら、その開始位置と検索語を返す */
 export function mentionQueryAt(
@@ -32,15 +80,15 @@ export function mentionQueryAt(
   return { start: caret - m[2]!.length - 1, query: m[2]! };
 }
 
-/** 本文に「@名前」が残っている人だけを返す（消した人には通知しない） */
+/** 本文に「@名前」が残っている人だけを返す（消した人には通知しない）。名前は候補から選んだときの控え */
 export function activeMentions(
   body: string,
   ids: readonly string[],
-  users: readonly MentionUser[],
+  dir: Pick<MentionDirectory, "nameOf">,
 ): string[] {
   return [...new Set(ids)].filter((id) => {
-    const u = users.find((x) => x.id === id);
-    return u ? body.includes(`@${u.name}`) : false;
+    const name = dir.nameOf(id);
+    return name ? body.includes(`@${name}`) : false;
   });
 }
 
@@ -69,7 +117,7 @@ export function renderWithMentions(
 }
 
 /**
- * メンションできる入力欄。「@」に続けて名前を打つと、その制作物を見られる人の候補が下に出る（M3E list）。
+ * メンションできる入力欄。「@」に続けて名前を打つと、その制作物を見られる人の候補が下に出る（M3E list。サーバーで検索）。
  * ↑↓で選び Enter / Tab で確定、Esc で候補だけ閉じる。選んだ人の ID は onMentions で親に返す。
  * 候補を押してもフォーカスは入力欄に残す。
  */
@@ -89,7 +137,7 @@ export function MentionTextarea({
   onMentions: (ids: string[]) => void;
   ref?: React.Ref<HTMLTextAreaElement>;
 }) {
-  const users = useMentionCandidates();
+  const dir = useMentionDirectory();
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const setRef = (el: HTMLTextAreaElement | null) => {
     ref.current = el;
@@ -98,16 +146,8 @@ export function MentionTextarea({
   };
   const [q, setQ] = useState<{ start: number; query: string } | null>(null);
   const [index, setIndex] = useState(0);
-  const hits = useMemo(() => {
-    if (!q) return [];
-    const k = q.query.toLowerCase();
-    return users
-      .filter(
-        (u) =>
-          !k || u.name.toLowerCase().includes(k) || (u.email ?? "").toLowerCase().startsWith(k),
-      )
-      .slice(0, 6);
-  }, [q, users]);
+  const hits = useMentionSearch(dir, q?.query ?? null).slice(0, 6);
+  const active = Math.min(index, Math.max(0, hits.length - 1));
   const sync = (el: HTMLTextAreaElement) => {
     const next = mentionQueryAt(el.value, el.selectionStart ?? el.value.length);
     setQ(next);
@@ -119,6 +159,7 @@ export function MentionTextarea({
     const caret = el.selectionStart ?? value.length;
     const insert = `@${u.name} `;
     const next = value.slice(0, q.start) + insert + value.slice(caret);
+    dir?.remember(u);
     onValue(next);
     onMentions([...new Set([...mentions, u.id])]);
     setQ(null);
@@ -152,7 +193,7 @@ export function MentionTextarea({
             }
             if ((e.key === "Enter" || e.key === "Tab") && !e.nativeEvent.isComposing) {
               e.preventDefault();
-              pick(hits[index]!);
+              pick(hits[active]!);
               return;
             }
             if (e.key === "Escape") {
@@ -174,7 +215,7 @@ export function MentionTextarea({
           {hits.map((u, i) => (
             <M3eListAction
               key={u.id}
-              className={`mention-list__item ${i === index ? "mention-list__item--active" : ""}`}
+              className={`mention-list__item ${i === active ? "mention-list__item--active" : ""}`}
               onMouseDown={(e: { preventDefault: () => void }) => e.preventDefault()}
               onClick={() => pick(u)}
             >

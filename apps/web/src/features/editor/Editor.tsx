@@ -56,7 +56,11 @@ import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { documentView } from "@/features/writing/documentView";
 import { StoredComposePopover } from "@/features/review/ComposePopover";
 import { createComposeStore } from "@/features/review/composeStore";
-import { activeMentions, MentionProvider } from "@/features/review/mentions";
+import {
+  activeMentions,
+  createMentionDirectory,
+  MentionProvider,
+} from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PinButton, useRecordOpened } from "@/features/home/PinButton";
@@ -277,8 +281,8 @@ export function Editor({
   } | null>(null);
   // 投稿欄の書きかけ（本文・メンション）。Editor の state に置かず、投稿欄だけが購読する（1 文字ごとに全体を描き直さない）
   const [composeStore] = useState(createComposeStore);
-  // メンションの候補（この制作物を見られる人）
-  const mentionCandidates = useQuery(api.comments.mentionCandidates, { workId });
+  // メンションの検索先（候補は「@」に続けて打った文字でサーバーに探させる。名簿は購読しない。§60）
+  const mentionDirectory = useMemo(() => createMentionDirectory(workId, "comments"), [workId]);
   const [requestId, setRequestId] = useState(newRequestId);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -523,7 +527,7 @@ export function Editor({
         revisionId,
         ...(anchor ? { anchor } : {}),
         body,
-        mentions: activeMentions(body, mentions, mentionCandidates ?? []),
+        mentions: activeMentions(body, mentions, mentionDirectory),
       });
       resetCompose();
       openFeedback(id);
@@ -537,7 +541,7 @@ export function Editor({
       severity: "major",
       requestId,
       ...(anchor ? { anchor } : {}),
-      mentions: activeMentions(body, mentions, mentionCandidates ?? []),
+      mentions: activeMentions(body, mentions, mentionDirectory),
     });
     resetCompose();
     setRequestId(newRequestId());
@@ -553,7 +557,7 @@ export function Editor({
     await reply({
       threadId: threadId as Id<"commentThreads">,
       body: b,
-      mentions: activeMentions(b, ids, mentionCandidates ?? []),
+      mentions: activeMentions(b, ids, mentionDirectory),
     });
   });
   const doAssignThread = useAction(async (threadId: string, ids: string[]) => {
@@ -1389,7 +1393,7 @@ export function Editor({
   });
 
   return (
-    <MentionProvider value={mentionCandidates ?? []}>
+    <MentionProvider value={mentionDirectory}>
       <div className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""}`}>
         {/* 見出し・戻る・主要操作は共通アプリバーへ（M3 App bars: ページの見出し＋戻る＋ 1–2 の必須操作。多い操作はツールバーへ） */}
         <AppBarSlot slot="leading">

@@ -14,8 +14,8 @@ import {
   type ThreadKind,
   validateAnchor,
 } from "@mf100/domain";
-import type { AppContext } from "../ports.ts";
-import { checkMentions, idempotent, loadAuthorizedWork } from "../shared.ts";
+import type { AppContext, PersonProfile } from "../ports.ts";
+import { checkMentions, idempotent, loadAuthorizedWork, searchPeopleByText } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
@@ -394,16 +394,20 @@ export async function carryForwardThread(
 }
 
 /**
- * メンションの候補: その制作物を見られる人（見られる人だけが候補を取れる）。
- * 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）ので名簿の全員（500 人まで）、
- * 非公開は職責・ACL・関係者・担当の所属がある人（利用者決定 2026-10-17）。
+ * メンションの候補を「@」に続けて打った文字で探す: その制作物を見られる人のうち、名前・メールが一致する人（名前順・limit 人まで）。
+ * 候補を取れるのも見られる人だけ。
+ * 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）ので名簿（500 人まで）から探し、
+ * 非公開は職責・ACL・関係者・担当の所属がある人（利用者決定 2026-10-17）の小さな一覧から探す。
+ * 画面は名簿を丸ごと購読せず、打つたびにこの検索を引く（docs/UI_M3E.md §60）。
  */
-export async function listMentionCandidates(
+export async function searchMentionCandidates(
   ctx: AppContext,
   principal: Principal,
-  workId: string,
-): Promise<string[]> {
-  const { work, grants } = await loadAuthorizedWork(ctx, principal, workId, "work.view");
-  if (allMembersCanView(work)) return (await ctx.people.listMembers(500)).map((p) => p.id);
-  return mentionableUserIds(work, grants, await ctx.teams.list());
+  input: { workId: string; text: string; limit?: number },
+): Promise<PersonProfile[]> {
+  const { work, grants } = await loadAuthorizedWork(ctx, principal, input.workId, "work.view");
+  const people = allMembersCanView(work)
+    ? await ctx.people.listMembers(500)
+    : await ctx.people.profiles(mentionableUserIds(work, grants, await ctx.teams.list()));
+  return searchPeopleByText(people, input.text, input.limit);
 }

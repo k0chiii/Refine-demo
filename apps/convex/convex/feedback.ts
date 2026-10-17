@@ -8,7 +8,6 @@ import {
   expireFeedbackFiles,
   failFeedbackFileUpload,
   getFeedbackThread,
-  listFeedbackMentionCandidates,
   listFeedbackSpaces,
   listFeedbackThreads,
   markFeedbackRead,
@@ -80,18 +79,10 @@ export const getThread = query({
   },
 });
 
-/** メンションの候補（画面で前もって読み、手元で絞る）。自分は除く・名前順 */
-export const mentionCandidates = query({
-  args: { workId: v.string() },
-  handler: async (ctx, { workId }) => {
-    const { principal } = await requireUser(ctx);
-    return runUseCase(() =>
-      listFeedbackMentionCandidates(createReadContext(ctx.db), principal, workId),
-    );
-  },
-});
-
-/** メンションの候補を名前・メールで探す（10 人まで） */
+/**
+ * メンションの候補を「@」に続けて打った文字で探す（名前・メールの部分一致。自分は除く・名前順・20 人まで）。
+ * 画面は候補の一覧を丸ごと購読せず、打っている間だけこの検索を購読する（docs/UI_M3E.md §60）
+ */
 export const searchPeople = query({
   args: { workId: v.string(), text: v.string() },
   handler: async (ctx, args) => {

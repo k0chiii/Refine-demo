@@ -94,6 +94,15 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
     await expect(cast.reviewer.as.query(api.works.get, { workId })).resolves.toBeTruthy();
     await expect(cast.stranger.as.query(api.works.get, { workId })).resolves.toBeTruthy();
     await expect(cast.admin.as.query(api.works.get, { workId })).rejects.toThrow(code("forbidden"));
+    // 一覧・ダッシュボードも同じ判定（所属は要るときだけ読む。docs/UI_M3E.md §60）
+    expect((await cast.stranger.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([
+      workId,
+    ]);
+    expect((await cast.reviewer.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([
+      workId,
+    ]);
+    expect(await cast.admin.as.query(api.works.listMine, {})).toEqual([]);
+    await expect(cast.stranger.as.query(api.dashboard.get, {})).resolves.toBeTruthy();
     // 所属を外すと見られなくなる
     await cast.admin.as.mutation(api.teams.save, {
       id: design,

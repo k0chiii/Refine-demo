@@ -284,8 +284,12 @@ describe("メンションと通知", () => {
       (await listFeedbackMentionCandidates(ctx, stranger, work.id)).map((p) => p.id).sort(),
     ).toEqual([creator, reviewer, manager, approver, sysadmin].map((p) => p.userId).sort());
     expect(await searchFeedbackPeople(ctx, stranger, { workId: work.id, text: "本郷" })).toEqual([
-      { id: reviewer.userId, name: "本郷 校正" },
+      { id: reviewer.userId, name: "本郷 校正", email: null },
     ]);
+    // 空文字なら全員（名前順）。limit で切る
+    expect(
+      (await searchFeedbackPeople(ctx, stranger, { workId: work.id, text: "", limit: 2 })).length,
+    ).toBe(2);
     const secret = await seedWork(ctx, { title: "非公開", confidentiality: "restricted" });
     expect(
       (await listFeedbackMentionCandidates(ctx, creator, secret.id)).map((p) => p.id).sort(),

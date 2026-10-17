@@ -1627,11 +1627,11 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 - デモは Convex の関数を convex-test でブラウザ内で実行し、AsyncLocalStorage の代用（`demo/asyncLocalStorageShim.ts`。LIFO）の前提で**全呼び出しを 1 本のキューで直列化**している。校正画面は開いた直後に 8 本前後のクエリを購読するので、紙面が出るまでにその合計（4 倍遅い CPU で約 1 秒）がかかる。本番は Convex へ並行に問い合わせるのでこの待ちは無い。並列化には正しい非同期コンテキストの追跡が要るので見送り
 - 関数のモジュール（`apps/convex` の 90KB、Convex Auth の実装 106KB）もデモだけが読み込む
 
-### 後続（Convex のクエリ）
+### Convex のクエリ（合流後に直したもの）
 
-今回の計測はデモ（ブラウザ内実行）なので、サーバー側のクエリの重さは測れていない。別の作業で `works.listMyWorks` が `works.list(2000)` を全走査して `canViewWork` を 1 件ずつ判定する形に、`requireUser` / `optionalUser` が毎回 `teams` を `collect()` する形になった（通常の制作物を全委員が見られるようにするため）。実データで一覧・ホーム・制作物を開く購読が遅ければ、次の形を提案する:
+今回の計測はデモ（ブラウザ内実行）なので、サーバー側のクエリの重さは測れていない。別の作業（閲覧は基本全員。§58）で `works.listMyWorks` が `works.list(2000)` を全走査して `canViewWork` を 1 件ずつ判定する形に、`requireUser` / `optionalUser` が毎回 `teams` を `collect()` する形になっていたので、合流のときに次のとおり直した（テスト: `apps/convex/convex/listMyWorks.test.ts`・`notionAlignment.test.ts`、`packages/application/src/__tests__/acl.test.ts`）:
 
-- 通常（`confidentiality: "normal"`）の制作物は ACL を見ずに見られるので、`works` に `by_confidentiality`（`["confidentiality", "lifecycle"]`）の索引を足し、`normal` は索引で引いて `canViewWork` を呼ばず、`restricted` だけ従来の `workRoles.by_user` / `workPermissions.by_principal` から候補を集めて ACL を読む（`acl.listByWork` の呼び出しが「制作物の数」から「非公開の制作物の数」に減る）
-- 一覧の 1 行に要る「最新の版・受付中の版・締切」は `revisions.by_work` を制作物ごとに引く代わりに、版の提出確定時に `works` へ非正規化（`latestRevisionId`・`acceptingDeadlineAt` など）して 1 回の読みにする
-- `principal.teamIds` は呼び出しごとに `teams` を全件読むのではなく、必要な関数だけで遅延して読む（`teamIds()` のゲッター）か、ログイン時に `users.teamIds` へ同期しておく。読んだ `teams` は購読の読み集合に入るので、担当の編集のたびに全画面の購読が再実行されるのも避けられる
-- メンション候補（通常の制作物では全委員 ≤500 人）は一覧を丸ごと購読せず、`@` に続けて打った文字でサーバー検索（既存の `users.search` / `feedback.searchPeople`。`limit` 付き）にする。非公開の制作物だけ従来の小さな一覧でよい
+- **一覧は索引で集める**: `works` に `by_confidentiality`（`["confidentiality"]`）の索引を足した。ポリシー（`WorkViewPolicy.normalWorks`）が `all_members` のとき、通常の制作物は索引で引くだけで ACL を読まない（判定は機密区分だけで決まる）。非公開は同じ索引で集めて 1 件ずつ ACL を読み、職責・ACL・関係者で通らなければそのときだけ担当の所属を 1 回読んで判定し直す。`acl.listByWork` の読みは「制作物の数」から「非公開の制作物の数」に減る。2 本を作成時刻で合流するので、結果も並び（`_creationTime` 昇順）も全走査と同じ。ポリシーを `involved_only` に戻せば従来どおり全件を判定する。関係者（`stakeholderIds`）と担当（配列）は索引で引けないので、「職責・ACL の候補だけを引く」形ではなく非公開の全件を判定する（非公開は少ない前提）
+- **担当の所属は要るときだけ読む**: `requireUser` / `optionalUser` は `teams` を読まず、`Principal.teamIds` を入れない（型はそのまま任意）。所属が効くのは非公開で担当の付いた制作物の閲覧の判定だけなので、application の `loadAuthorizedWork`（`work.view` で通らなかったとき）・`canView`（ホーム・ダッシュボード・FB の「開ける」）と Convex の `listMyWorks` が、その場合に限って `withTeamMembership` / `teamIdsOf` で担当の一覧（高々 300 件）を読んで添える。`teams` がどのクエリの読み集合にも入らなくなり、担当の編集のたびに全画面の購読が再実行されることが無くなった。所属する人が非公開の制作物を見られる判定（§58）はそのまま（テストで確認）
+- **メンションの候補はサーバーで検索**: 名簿（通常の制作物では全委員 ≤500 人）を画面で丸ごと購読するのをやめ、「@」に続けて打った文字で `comments.searchMentionCandidates` / `feedback.searchPeople`（名前・メールの部分一致。名前順・20 人まで。`users.search` と同じ形）を引く。打っていない間は購読しない（`useDeferredValue` で速い打鍵は少し遅らせる。次の結果が届くまで前の候補を出したまま）。非公開の制作物は見られる人の小さな一覧の中から同じ検索で探す。選んだ人の名前は `MentionDirectory` に控え、投稿のときに本文に「@名前」が残っているかを確かめる（`activeMentions`）。候補の一覧は M3E の list のまま
+- **見送り: 一覧の 1 行に要る「最新の版・受付中の版・締切」を `works` に非正規化する**: `listMine` は制作物ごとに `revisions.by_work` を引くが、制作物は年度あたり高々数百件で、版は制作物あたり数件。索引の読みで、デモでも実データでも計測で問題になっていない。提出確定時に `works` へ写す書き込みを増やす割に合わないので、遅さが出てから

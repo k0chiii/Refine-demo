@@ -41,9 +41,10 @@ export interface Principal {
   /** Nogiku Access 由来の組織権限名（例 "works:create"）。"*" は制限なし（連携前の MVP）。 */
   orgPermissions: readonly string[];
   /**
-   * 所属する局・担当（Team）の ID。担当の「所属する人」（memberIds）から主体を組むところ（Convex）で入れる。
+   * 所属する局・担当（Team）の ID。担当の「所属する人」（memberIds）から組む。
    * 非公開・取扱注意の制作物を、その主管担当・制作担当・関係担当に所属する人が見られる判定に使う（利用者決定 2026-10-17）。
-   * 無ければ所属なしとして判定する（通知の受信者など、ID しか分からない主体は呼び出し側が所属を添える）。
+   * 無ければ所属なしとして判定する。主体を組むときに毎回担当を読むのではなく、判定に要るとき（非公開で担当の付いた制作物）に
+   * 呼び出し側（application の withTeamMembership・Convex の listMyWorks）が添える。通知の受信者など ID しか分からない主体も同様。
    */
   teamIds?: readonly string[];
 }

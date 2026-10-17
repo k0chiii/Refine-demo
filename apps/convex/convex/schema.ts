@@ -224,6 +224,8 @@ export default defineSchema({
     .index("by_social_profile", ["socialProfileId"])
     .index("by_owner_team", ["ownerTeamId"])
     .index("by_lifecycle", ["lifecycle"])
+    /** 機密区分で引く（通常の制作物は委員なら誰でも見られるので、一覧は ACL を読まずに索引で集める。works.listMyWorks） */
+    .index("by_confidentiality", ["confidentiality"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
   /** 職責（制作者・校了者・主管）を「ユーザー → 作品」で引くための派生テーブル。works 書込み時に同期する。 */

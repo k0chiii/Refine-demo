@@ -1,17 +1,20 @@
 import {
   allMembersCanView,
+  canViewWork,
   DomainError,
+  isAllowed,
   memberTeamIds,
   recipientPrincipal,
   requireAllowed,
   validateMentions,
+  workTeamIdsOf,
   type Principal,
   type Team,
   type Work,
   type WorkAction,
   type WorkPermissionGrant,
 } from "@mf100/domain";
-import type { AppContext } from "./ports.ts";
+import type { AppContext, PersonProfile } from "./ports.ts";
 
 export interface LoadedWork {
   work: Work;
@@ -31,8 +34,66 @@ export async function loadAuthorizedWork(
   const work = await ctx.works.findById(workId);
   if (!work) throw new DomainError("forbidden", { workId, action });
   const grants = await ctx.acl.listByWork(workId);
-  requireAllowed(action, { work, grants, principal });
+  if (!isAllowed(action, { work, grants, principal })) {
+    // 閲覧だけは担当の所属でも通る。所属は主体に添えていないので、ここで初めて（非公開の制作物のときだけ）読む
+    const member =
+      action === "work.view" ? await withTeamMembership(ctx, principal, work) : principal;
+    requireAllowed(action, { work, grants, principal: member });
+  }
   return { work, grants };
+}
+
+/**
+ * 担当の所属（teamIds）を、閲覧の判定に要るときだけ主体に添える。
+ * Convex は主体を組むときに teams を読まない（毎回全件読むと、どのクエリの読み集合にも teams が入り、
+ * 担当の編集のたびに全画面の購読が再実行される。docs/UI_M3E.md §60）。所属が効くのは
+ * 非公開・取扱注意の制作物（通常の制作物を関係者だけに戻したときはそれも）で、しかも担当の付いた制作物だけなので、
+ * その場合に限って担当の一覧（高々 TEAM_MAX 件）を読む。既に添えてあればそのまま返す。
+ */
+export async function withTeamMembership(
+  ctx: AppContext,
+  principal: Principal,
+  work: Pick<Work, "confidentiality" | "ownerTeamId" | "productionTeamIds" | "relatedTeamIds">,
+): Promise<Principal> {
+  if (principal.teamIds !== undefined) return principal;
+  if (allMembersCanView(work)) return principal;
+  if (workTeamIdsOf(work).length === 0) return principal;
+  return { ...principal, teamIds: memberTeamIds(await ctx.teams.list(), principal.userId) };
+}
+
+/**
+ * 制作物を見られるか（domain の canViewWork）。職責・ACL・関係者で見られなければ、担当の所属を読んで判定し直す。
+ * 通常の制作物（委員なら誰でも）では担当を読まない。
+ */
+export async function canView(
+  ctx: AppContext,
+  principal: Principal,
+  work: Work,
+  grants: readonly WorkPermissionGrant[],
+): Promise<boolean> {
+  if (canViewWork({ work, grants, principal })) return true;
+  const member = await withTeamMembership(ctx, principal, work);
+  return member !== principal && canViewWork({ work, grants, principal: member });
+}
+
+/** メンションの候補の既定の人数（画面の一覧に出す分）と上限 */
+export const PEOPLE_SEARCH_LIMIT = 20;
+const PEOPLE_SEARCH_LIMIT_MAX = 50;
+
+/**
+ * 名簿を打った文字で絞る（名前・メールの部分一致。空なら全員）。名前順に並べ、limit 人まで。
+ * メンションの候補は名簿を丸ごと画面に渡さず、「@」に続けて打った文字でサーバー側で絞る（users.search と同じ形）。
+ */
+export function searchPeopleByText(
+  people: readonly PersonProfile[],
+  text: string,
+  limit: number = PEOPLE_SEARCH_LIMIT,
+): PersonProfile[] {
+  const q = text.trim().toLowerCase();
+  return people
+    .filter((p) => q === "" || `${p.name} ${p.email ?? ""}`.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+    .slice(0, Math.max(0, Math.min(limit, PEOPLE_SEARCH_LIMIT_MAX)));
 }
 
 /**

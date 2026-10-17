@@ -13,6 +13,7 @@ import {
   type SubmitTargetPolicy,
   type Work,
 } from "@mf100/domain";
+import { canView } from "../shared.ts";
 import type { AppContext, NotificationKind } from "../ports.ts";
 import {
   listSubmitTargets,
@@ -144,7 +145,7 @@ export async function buildDashboard(
   for (const work of works) {
     const grants = await ctx.acl.listByWork(work.id);
     const authz = { work, grants, principal };
-    if (!isAllowed("work.view", authz)) continue;
+    if (!(await canView(ctx, principal, work, grants))) continue;
     visible.push(work);
     if (work.lifecycle !== "active") continue;
     const roles = rolesOf(work, principal);
@@ -276,7 +277,7 @@ export async function buildDashboard(
     const work = await ctx.works.findById(workId);
     if (!work) return null;
     const grants = await ctx.acl.listByWork(work.id);
-    if (!isAllowed("work.view", { work, grants, principal })) return null;
+    if (!(await canView(ctx, principal, work, grants))) return null;
     const revisions = (await ctx.revisions.listByWork(work.id)).filter(
       (r) => r.reviewState !== "void",
     );

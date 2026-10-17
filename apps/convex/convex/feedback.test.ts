@@ -88,7 +88,10 @@ describe("Convex 統合: 制作のフィードバック", () => {
       title: "表紙",
       body: "相談です",
     });
-    const candidates = await cast.reviewer.as.query(api.feedback.mentionCandidates, { workId });
+    const candidates = await cast.reviewer.as.query(api.feedback.searchPeople, {
+      workId,
+      text: "",
+    });
     expect(candidates.map((p) => p.name)).toEqual([
       "admin",
       "approver",
@@ -103,7 +106,7 @@ describe("Convex 統合: 制作のフィードバック", () => {
     });
     expect(
       await cast.reviewer.as.query(api.feedback.searchPeople, { workId, text: "stran" }),
-    ).toEqual([{ id: cast.stranger.id, name: "stranger" }]);
+    ).toEqual([{ id: cast.stranger.id, name: "stranger", email: "stranger@example.invalid" }]);
 
     await cast.stranger.as.mutation(api.feedback.post, {
       threadId,

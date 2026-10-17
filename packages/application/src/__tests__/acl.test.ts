@@ -60,9 +60,15 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     await expect(
       loadAuthorizedWork(ctx, principals.stranger, work.id, "work.view"),
     ).resolves.toBeTruthy();
-    // 担当の所属（主体に所属を添えるのは主体を組む側）
+    // 担当の所属（主体に所属を添えてあればそれを使う）
     const member = { ...principals.reviewer, teamIds: [design.id] };
     await expect(loadAuthorizedWork(ctx, member, work.id, "work.view")).resolves.toBeTruthy();
+    // 所属を添えていない主体でも、閲覧の判定で担当の一覧を読んで通す（所属は要るときだけ読む。§60）
+    await expect(
+      loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view"),
+    ).resolves.toBeTruthy();
+    // 所属を外すと見られない
+    await saveTeam(ctx, principals.sysadmin, { ...design, memberIds: [] });
     await expect(
       loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view"),
     ).rejects.toThrow(code("forbidden"));

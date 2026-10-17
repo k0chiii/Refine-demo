@@ -9,6 +9,7 @@ import {
 import {
   canViewWork,
   currentDeclarations,
+  defaultWorkViewPolicy,
   hasOrgPermission,
   normalizePersonKey,
   orgPermissions,
@@ -17,15 +18,17 @@ import {
   isAllowed,
   isGrantActive,
   revisionLabel,
+  workTeamIdsOf,
   type Principal,
   type Work,
+  type WorkViewPolicy,
 } from "@mf100/domain";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type DatabaseReader } from "./_generated/server";
-import { createAppContext, createReadContext } from "./lib/adapters.ts";
+import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
-import { requireUser } from "./lib/principal.ts";
+import { requireUser, teamIdsOf } from "./lib/principal.ts";
 import { resolveUsers } from "./lib/users.ts";
 import {
   vConfidentiality,
@@ -357,15 +360,48 @@ const WORKS_SCAN_LIMIT = 2000;
 
 /**
  * 自分が見られる制作物。通常の制作物は委員なら誰でも（WorkViewPolicy。利用者決定 2026-10-17「閲覧は基本全員できて良い」）、
- * 非公開・取扱注意は職責・有効な ACL・関係者・担当の所属がある人。
- * 制作物を読んでドメインの canViewWork で最終判定する（取消直後の整合）。一覧・ダッシュボード・版提出の候補で共用。
+ * 非公開・取扱注意は職責・有効な ACL・関係者・担当の所属がある人。一覧・ダッシュボード・版提出の候補で共用。
+ *
+ * 読み方（docs/UI_M3E.md §60）: ポリシーが all_members のとき、通常の制作物は `by_confidentiality` の索引で集めるだけで
+ * ACL を読まない（判定は機密区分だけで決まる）。非公開は同じ索引で集め、1 件ずつ ACL を読んでドメインの canViewWork で判定する
+ * （職責・ACL・関係者で通らなければ、そのときだけ担当の所属を 1 回読んで判定し直す）。
+ * 並びは works を全走査していたときと同じ（_creationTime の昇順）。ポリシーが involved_only なら従来どおり全件を判定する。
  */
-export async function listMyWorks(db: DatabaseReader, principal: Principal): Promise<Work[]> {
+export async function listMyWorks(
+  db: DatabaseReader,
+  principal: Principal,
+  policy: WorkViewPolicy = defaultWorkViewPolicy,
+): Promise<Work[]> {
   const app = createReadContext(db);
-  const out: Work[] = [];
-  for (const work of await app.works.list(WORKS_SCAN_LIMIT)) {
+  // 担当の所属を添えた主体。非公開の制作物で要るときだけ、1 回読む
+  let member: Principal | null = null;
+  const canView = async (work: Work): Promise<boolean> => {
     const grants = await app.acl.listByWork(work.id);
-    if (canViewWork({ work, grants, principal })) out.push(work);
+    if (canViewWork({ work, grants, principal, viewPolicy: policy })) return true;
+    if (principal.teamIds !== undefined || workTeamIdsOf(work).length === 0) return false;
+    member ??= { ...principal, teamIds: await teamIdsOf(db, principal.userId as Id<"users">) };
+    return canViewWork({ work, grants, principal: member, viewPolicy: policy });
+  };
+  const out: Work[] = [];
+  if (policy.normalWorks !== "all_members") {
+    for (const work of await app.works.list(WORKS_SCAN_LIMIT))
+      if (await canView(work)) out.push(work);
+    return out;
+  }
+  const byConfidentiality = (c: Doc<"works">["confidentiality"]) =>
+    db
+      .query("works")
+      .withIndex("by_confidentiality", (q) => q.eq("confidentiality", c))
+      .take(WORKS_SCAN_LIMIT);
+  const [normal, restricted] = await Promise.all([
+    byConfidentiality("normal"),
+    byConfidentiality("restricted"),
+  ]);
+  // 索引の中は _creationTime 順。2 本を作成時刻で合流し、全走査と同じ並びにする
+  const docs = [...normal, ...restricted].sort((a, b) => a._creationTime - b._creationTime);
+  for (const doc of docs) {
+    const work = workFromDoc(doc);
+    if (doc.confidentiality === "normal" || (await canView(work))) out.push(work);
   }
   return out;
 }
