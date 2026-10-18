@@ -7,11 +7,15 @@
  * - キャッシュに入るのは同一オリジンの静的ファイルだけ（API・データは入らない）
  * - オフラインで開き直しても外枠が出て、オフラインの知らせ（M3E snackbar）が出る
  * - 新しい版（sw.js の VERSION を一時的に書き換える）が届くと「更新」が出て、押すと切り替わり古いキャッシュが消える
+ * - 新しい版の外枠は、前の版にあるハッシュ付きファイル（/assets/*）を通信せずに写して用意する（取り直さない。index.html などは取り直す）
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+
+// Service Worker 自身の通信（install 中の取得）を context の request として見るための実験機能
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = "1";
 
 const DIST =
   process.env.DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), "../dist-demo");
@@ -140,6 +144,17 @@ try {
       swPath,
       original.replace(/const VERSION = "([0-9a-f]+)"/, 'const VERSION = "$1e2e"'),
     );
+    // 新しい版の install が取りに行ったパス。Service Worker 自身の取得（referer が sw.js）だけを数える
+    // （画面が使うファイルを Service Worker が中継した通信は、画面からの要求なので含めない）
+    const installFetched = [];
+    context.on("request", (r) => {
+      try {
+        if (r.serviceWorker() && (r.headers()["referer"] ?? "").endsWith("/sw.js"))
+          installFetched.push(new URL(r.url()).pathname);
+      } catch {
+        // ページの通信
+      }
+    });
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
     // 更新の操作（snackbar の「更新」ボタン。名前は操作を見つける手がかり）が出るのを待つ
     const updateButton = page.locator("m3e-snackbar").getByRole("button", { name: "更新" });
@@ -165,6 +180,23 @@ try {
       after.length === 1 && after[0].endsWith("e2e") && !before.includes(after[0]),
       `新しい版: 切り替わり古い外枠のキャッシュが消える（${before.join()} → ${after.join()}）`,
     );
+    // 新しい版の外枠が揃っている（写したものを含めて、一覧のすべてがキャッシュにある）
+    const precache = JSON.parse(/const PRECACHE = (\[.*?\]);/s.exec(original)[1]);
+    const cached = await page.evaluate(
+      async (name) => (await (await caches.open(name)).keys()).map((r) => new URL(r.url).pathname),
+      after[0],
+    );
+    const missing = precache.filter((p) => !cached.includes(p));
+    check(
+      missing.length === 0,
+      `新しい版: 外枠の一覧 ${precache.length} 本がすべて揃う（欠け ${missing.length}）`,
+    );
+    const assetsFetched = installFetched.filter((p) => p.startsWith("/assets/"));
+    check(
+      assetsFetched.length === 0,
+      `新しい版: ハッシュ付きの /assets/* を取り直さない（通信 ${assetsFetched.length} 本）`,
+    );
+    check(installFetched.includes("/index.html"), "新しい版: index.html は取り直す");
   } finally {
     writeFileSync(swPath, original);
   }

@@ -242,6 +242,49 @@ describe("GET /files/:artifactId（§9.1 / A-11）", () => {
       expect((await get({ Range: "bytes=0-1", "If-Range": etag })).status).toBe(206);
       expect((await get({ Range: "bytes=0-1", "If-Range": '"stale"' })).status).toBe(200);
     });
+    it("R2 の操作を減らす: 範囲・If-Range つき範囲・全体の取得は HEAD なしの 1 回、304 の確認は HEAD だけ", async () => {
+      const etag = (await get({})).headers.get("ETag")!;
+      const count = async (headers: Record<string, string>) => {
+        store.gets.length = 0;
+        store.heads = 0;
+        const res = await get(headers);
+        await res.arrayBuffer();
+        return { status: res.status, gets: store.gets.length, heads: store.heads };
+      };
+      expect(await count({})).toEqual({ status: 200, gets: 1, heads: 0 });
+      expect(await count({ Range: "bytes=1-4" })).toEqual({ status: 206, gets: 1, heads: 0 });
+      expect(await count({ Range: "bytes=1-4", "If-Range": etag })).toEqual({
+        status: 206,
+        gets: 1,
+        heads: 0,
+      });
+      expect(await count({ "If-None-Match": etag })).toEqual({ status: 304, gets: 0, heads: 1 });
+      // 範囲が実体の外: R2 が断るので HEAD で大きさを確かめて 416
+      expect(await count({ Range: `bytes=${total}-` })).toEqual({
+        status: 416,
+        gets: 1,
+        heads: 1,
+      });
+      // If-Range が違う: 範囲を捨てて全体を取り直す（まれ。実体は上書きされないので通常は起きない）
+      expect(await count({ Range: "bytes=1-4", "If-Range": '"stale"' })).toEqual({
+        status: 200,
+        gets: 2,
+        heads: 0,
+      });
+    });
+    it("範囲の書式を R2 に渡す形に読み替える（大きさを知らずに）", async () => {
+      const spec = async (range: string) => {
+        store.gets.length = 0;
+        await (await get({ Range: range })).arrayBuffer();
+        return store.gets[0]?.range;
+      };
+      expect(await spec("bytes=2-5")).toEqual({ offset: 2, length: 4 });
+      expect(await spec("bytes=2-")).toEqual({ offset: 2 });
+      expect(await spec("bytes=-3")).toEqual({ suffix: 3 });
+      // 終わりが始めより前・複数範囲・単位違いは範囲として扱わない（全体の取得）
+      expect(await spec("bytes=5-2")).toBeUndefined();
+      expect(await spec("bytes=0-1,3-4")).toBeUndefined();
+    });
     it("CORS: Range などを許可し、Content-Range などをブラウザに見せる", async () => {
       const pre = await app.request("/files/art1", {
         method: "OPTIONS",

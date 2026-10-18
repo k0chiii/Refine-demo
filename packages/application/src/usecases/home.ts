@@ -5,6 +5,7 @@ import {
   isSubmitTarget,
   normalizeDashboardLayout,
   revisionLabel,
+  rolesOf,
   submitRouteFor,
   type DashboardLimit,
   type DashboardWidgetId,
@@ -188,8 +189,15 @@ export async function listSubmitTargets(
 ): Promise<SubmitTarget[]> {
   const out: SubmitTarget[] = [];
   for (const work of works) {
+    // 読む前に、制作物そのものだけで決まる除外をする（isSubmitTarget が必ず false にする条件と同じ）。
+    // この問い合わせはシェルで常時購読されるので、候補にならない大多数の制作物の ACL・版を読まない
+    // （読んだ分だけ、その制作物の版・ACL の書込みで全員の購読が再実行される）
+    if (work.lifecycle !== "active") continue;
+    if (policy.creatorOnly && !rolesOf(work, principal).isCreator) continue;
     const grants = await ctx.acl.listByWork(work.id);
     const authz = { work, grants, principal };
+    // 版を読む前に、版に依らない条件（提出の権限）だけで落とす
+    if (!isSubmitTarget(authz, [], { ...policy, includeAccepting: true })) continue;
     if (!(await canView(ctx, principal, work, grants))) continue;
     const revisions = await ctx.revisions.listByWork(work.id);
     if (!isSubmitTarget(authz, revisions, policy)) continue;

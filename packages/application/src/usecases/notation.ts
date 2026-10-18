@@ -2,6 +2,7 @@ import {
   canAssignManagers,
   defaultRuleCategories,
   DomainError,
+  expandCategories,
   notationRole,
   neutralProposalTitle,
   proposalDedupeKey,
@@ -479,7 +480,11 @@ export async function currentRuleSet(
   selected: readonly string[],
   year: number,
 ): Promise<WorkRuleSet> {
-  const [categories, rules] = await Promise.all([loadCategories(ctx), ctx.notation.listRules()]);
+  const categories = await loadCategories(ctx);
+  // 当てはまるのは、選んだカテゴリとその継承元のカテゴリのルールだけ（resolveRuleSet が depth の無いカテゴリを落とす）。
+  // それ以外のカテゴリのルール（ルールブックの大半）は読まない。何も選んでいなければルールは 1 件も読まない
+  const wanted = selected.length ? [...expandCategories(categories, selected).keys()] : [];
+  const rules = wanted.length ? await ctx.notation.listRulesInCategories(wanted) : [];
   const effective = selected.length ? resolveRuleSet(categories, selected, rules, { year }) : [];
   return {
     categories: [...selected],
@@ -497,7 +502,15 @@ export async function rulesOfSnapshot(
   ctx: AppContext,
   snapshot: RuleSetSnapshot,
 ): Promise<EffectiveRule[]> {
-  const current = new Map((await ctx.notation.listRules()).map((r) => [r.ruleId, r]));
+  // 記録に載っているルールだけを 1 件ずつ引く（ルールブック全体を読まない）
+  const refs = [...new Set(snapshot.rules.map((r) => r.ruleId))];
+  const current = new Map<string, NotationRule | null>(
+    await Promise.all(
+      refs.map(
+        async (id) => [id, await ctx.notation.findRule(id)] as [string, NotationRule | null],
+      ),
+    ),
+  );
   const rules: NotationRule[] = [];
   for (const ref of snapshot.rules) {
     const now = current.get(ref.ruleId);

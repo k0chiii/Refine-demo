@@ -407,6 +407,8 @@ export interface NotationRepository {
   listCategories(): Promise<RuleCategory[]>;
   upsertCategory(category: RuleCategory): Promise<void>;
   listRules(): Promise<NotationRule[]>;
+  /** 指定したカテゴリのルールだけ（索引で引く。制作物に当てるルールの組を作るときに、無関係なカテゴリのルールを読まない） */
+  listRulesInCategories(categoryCodes: readonly string[]): Promise<NotationRule[]>;
   findRule(ruleId: string): Promise<NotationRule | null>;
   insertRule(rule: NotationRule): Promise<void>;
   updateRule(rule: NotationRule): Promise<void>;

@@ -16,8 +16,9 @@ export function CategoryPicker({
   value: string[];
   onChange: (codes: string[]) => void;
 }) {
-  const book = useQuery(api.notation.ruleBook, {});
-  const categories = book?.categories ?? defaultRuleCategories;
+  // カテゴリだけ購読する（ルールブック全件は読まない。ルールの編集で再実行されない）
+  const stored = useQuery(api.notation.categories, {});
+  const categories = stored ?? defaultRuleCategories;
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
   const parentsOf = (code: string) => categories.find((c) => c.code === code)?.parents ?? [];
   const inherited = new Set(value.flatMap(parentsOf).filter((p) => !value.includes(p)));

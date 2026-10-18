@@ -5,6 +5,7 @@ import {
   getRuleHistory,
   importRules,
   listRuleProposals,
+  loadCategories,
   proposeRule,
   resolveRulesForWork,
   saveCategory,
@@ -48,6 +49,19 @@ export const ruleBook = query({
         managers: book.managers.map((m) => ({ ...m, user: users.get(m.userId)! })),
       };
     });
+  },
+});
+
+/**
+ * カテゴリの一覧だけ（制作物のフォームのカテゴリ選択用）。ルール本体・管理者は読まない。
+ * ruleBook はルール全件を読むので、カテゴリだけ欲しい画面（制作物の登録・編集）がそれを購読すると、
+ * ルールが 1 件変わるたびに開いているフォームの購読が再実行され、全件を読み直す
+ */
+export const categories = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return runUseCase(() => loadCategories(createReadContext(ctx.db)));
   },
 });
 
