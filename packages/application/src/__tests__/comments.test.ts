@@ -244,7 +244,7 @@ describe("採否判断（A-07, D5）", () => {
       decideThread(ctx, principals.reviewer, { threadId: thread.id, action: "accepted" }),
     ).rejects.toThrow(code("forbidden"));
   });
-  it("受付終了後も制作者の処置記録は可能。校正者の返信は不可（D5 暫定）", async () => {
+  it("受付終了後も制作者の処置記録と返信は可能。校正者も返信できる（利用者決定 2026-10-18）", async () => {
     const { ctx, revision } = await setup();
     const thread = await postComment(ctx, principals.reviewer, {
       revisionId: revision.id,
@@ -262,7 +262,34 @@ describe("採否判断（A-07, D5）", () => {
     ).resolves.toBeUndefined();
     await expect(
       replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "追加で" }),
-    ).rejects.toThrow(code("comment_reply_not_allowed"));
+    ).resolves.toBeUndefined();
+  });
+  it("返信は制作物を見られる人なら誰でもできる（view 権限のみでも可）。無関係者は不可", async () => {
+    const { ctx, work, revision } = await setup();
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      principalType: "user",
+      principalId: "u_viewer",
+      permission: "view",
+    });
+    const viewer = {
+      userId: "u_viewer",
+      isSystemAdmin: false,
+      groupIds: [],
+      orgPermissions: ["*"],
+    };
+    const thread = await postComment(ctx, principals.reviewer, {
+      revisionId: revision.id,
+      body: "x",
+      kind: "question",
+      severity: "info",
+    });
+    await expect(
+      replyToThread(ctx, viewer, { threadId: thread.id, body: "y" }),
+    ).resolves.toBeUndefined();
+    await expect(
+      replyToThread(ctx, principals.stranger, { threadId: thread.id, body: "y" }),
+    ).rejects.toThrow(code("forbidden"));
   });
 });
 
