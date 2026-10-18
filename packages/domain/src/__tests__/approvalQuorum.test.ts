@@ -12,6 +12,7 @@ import {
 import {
   approvalSetupOf,
   approversOf,
+  creatorsAmongApprovers,
   isApproverOf,
   normalizeApprovalSetup,
 } from "../work/approvers.ts";
@@ -147,6 +148,80 @@ describe("校了者と人数の検証（書くとき）", () => {
     );
     // 校了者に関係ない変更は校了者を変えない
     expect(approvalSetupOf(applyWorkPatch(work, { title: "新" }))).toEqual(approvalSetupOf(work));
+  });
+});
+
+describe("制作者は校了者になれない（利用者決定 2026-10-18）", () => {
+  const overlap = invalid("approverIds", "creator_is_approver");
+  const base = { title: "t", category: "c", managerIds: [] as string[] };
+
+  it("重なりの判定", () => {
+    expect(creatorsAmongApprovers(["c1", "c2"], ["a1", "c2"])).toEqual(["c2"]);
+    expect(creatorsAmongApprovers(["c1"], ["a1"])).toEqual([]);
+  });
+
+  it("登録: 制作者を含む校了者（approverId でも approverIds でも）は拒否", () => {
+    expect(() =>
+      normalizeWorkEssentials({ ...base, creatorIds: ["c1"], approverId: "c1" }),
+    ).toThrowError(overlap);
+    expect(() =>
+      normalizeWorkEssentials({ ...base, creatorIds: ["c1", "c2"], approverIds: ["a1", " c2 "] }),
+    ).toThrowError(overlap);
+    expect(
+      normalizeWorkEssentials({ ...base, creatorIds: ["c1"], approverIds: ["a1", "a2"] }),
+    ).toMatchObject({ approverIds: ["a1", "a2"] });
+  });
+
+  it("変更: 校了者に制作者を入れる・制作者に校了者を入れる変更は拒否", () => {
+    const work = makeWork();
+    expect(() => applyWorkPatch(work, { approverIds: ["approver", "creator"] })).toThrowError(
+      overlap,
+    );
+    expect(() => applyWorkPatch(work, { approverId: "creator" })).toThrowError(overlap);
+    expect(() => applyWorkPatch(work, { creatorIds: ["creator", "approver"] })).toThrowError(
+      overlap,
+    );
+    // 同時に外す変更は通る
+    expect(
+      applyWorkPatch(work, { creatorIds: ["approver"], approverIds: ["creator"] }),
+    ).toMatchObject({ creatorIds: ["approver"], approverIds: ["creator"] });
+  });
+
+  it("決定前に保存された行（制作者＝校了者）は読めて、無関係な変更は止まらない", () => {
+    const legacy = makeWork({ creatorIds: ["same"], approverId: "same" });
+    expect(approvalSetupOf(legacy)).toEqual({ approverIds: ["same"], quorum: 1 });
+    expect(isApproverOf(legacy, "same")).toBe(true);
+    expect(requiresIndependentConfirmation(legacy)).toBe(true);
+    expect(requiresIndependentConfirmationFor(legacy, "same")).toBe(true);
+    expect(applyWorkPatch(legacy, { title: "新" }).title).toBe("新");
+    // 重なりを解消する変更は通る。別の人が新しく重なる変更は弾く
+    expect(applyWorkPatch(legacy, { approverIds: ["other"] }).approverId).toBe("other");
+    expect(() =>
+      applyWorkPatch(legacy, {
+        approverIds: ["same", "creator2"],
+        creatorIds: ["same", "creator2"],
+      }),
+    ).toThrowError(overlap);
+  });
+
+  it("CSV: 制作者と同じ人を校了者に書いた行は取り込まない（行の問題になる）", () => {
+    const directory = [
+      { id: "u1", name: "五月 めい", email: "m@example.invalid" },
+      { id: "u2", name: "駒場 校了", email: "k@example.invalid" },
+    ];
+    const resolve = (creators: string, approvers: string) =>
+      resolveWorkImport(
+        parseWorkCsv(
+          ["制作物名,小ジャンル,媒体,制作者,校了者", `A,映像,,${creators},${approvers}`].join("\n"),
+          { defaultYear: 100, now: T0 },
+        ),
+        directory,
+      );
+    const bad = resolve("五月 めい", "駒場 校了; 五月 めい");
+    expect(bad.ready).toBe(0);
+    expect(bad.rows[0]!.input).toBeNull();
+    expect(bad.rows[0]!.problems.length).toBeGreaterThan(0);
+    expect(resolve("五月 めい", "駒場 校了").ready).toBe(1);
   });
 });
 

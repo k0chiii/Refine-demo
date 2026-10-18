@@ -416,6 +416,8 @@ export const listMine = query({
       })),
       approvalQuorum: approvalSetupOf(work).quorum,
       approvalDeclared: declared,
+      /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
+      creatorIds: [...work.creatorIds],
       canEditApprovers:
         work.lifecycle !== "finalized" &&
         (work.managerIds.includes(principal.userId) || managed.has(work.id)),

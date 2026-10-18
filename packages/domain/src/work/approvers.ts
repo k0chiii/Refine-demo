@@ -9,6 +9,10 @@ import type { UserId } from "../shared/ids.ts";
  * - `approverIds` … 校了者の全員（1 人以上・重複なし）。無ければ `[approverId]`
  * - `approvalQuorum` … 校了とみなす人数（1 以上・校了者の数以下）。無ければ 1（「誰か 1 人」）
  * 読み方はこのファイルの {@link approvalSetupOf} に一本化する。書くときは {@link normalizeApprovalSetup} を通す。
+ *
+ * 制作者は校了者になれない（利用者決定 2026-10-18「制作者が校了者になることはないです」）。書くときに
+ * {@link normalizeApprovalSetup} が弾く。これより前に保存された行には、制作者が校了者に入っているものが残りうる
+ * （移行しない）。読む側はそれでも壊れず、従来の自己校了の扱い（独立確認。D2）で動く。
  */
 export interface ApprovalSetup {
   /** 校了者の全員（先頭が approverId） */
@@ -61,14 +65,36 @@ export interface ApprovalSetupInput {
   approvalQuorum?: number | undefined;
 }
 
+/** 校了者の中にいる制作者（重なり）。画面の選択肢と書き込みの検証で同じ判定を使う */
+export function creatorsAmongApprovers(
+  creatorIds: readonly string[],
+  approverIds: readonly string[],
+): UserId[] {
+  return approverIds.filter((id) => creatorIds.includes(id));
+}
+
+/** {@link normalizeApprovalSetup} の追加の条件 */
+export interface ApprovalSetupContext {
+  /** この制作物の制作者。校了者に含めると `work_invalid`（field approverIds・reason creator_is_approver） */
+  creatorIds?: readonly string[] | undefined;
+  /**
+   * すでに保存されている「制作者でもある校了者」（決定前に保存された行）。変更のとき、この人だけは据え置きとして通す。
+   * 新しく制作者と校了者が重なる変更は、ここに無いので弾かれる。登録には渡さない
+   */
+  existingOverlap?: readonly string[] | undefined;
+}
+
 /**
  * 書き込む校了者と人数を確かめて整える。違反は `work_invalid`。
  * - 校了者: 1 人以上。空の ID は不可（重なりは 1 人にまとめる）
+ * - 校了者に制作者を含めない（`context.creatorIds` を渡したとき。利用者決定 2026-10-18）。
+ *   既存の行の据え置き分だけは `context.existingOverlap` で通す
  * - 校了とみなす人数: 整数で 1 以上、校了者の数（重なりを除いた数）以下。省略は 1
- * 制作者を校了者に含めてよい。制作者本人の校了は独立確認（D2）が済んでいる版にだけ数えるので、
- * 人数に届かない設定として弾くことはしない（DECISIONS 2026-10-18）。
  */
-export function normalizeApprovalSetup(input: ApprovalSetupInput): ApprovalSetup {
+export function normalizeApprovalSetup(
+  input: ApprovalSetupInput,
+  context: ApprovalSetupContext = {},
+): ApprovalSetup {
   // これまでの項目（approverId 1 つ）が空のときは「未指定」と同じ（required）
   const legacy = input.approverId?.trim() ? [input.approverId] : [];
   const raw = input.approverIds ?? legacy;
@@ -79,6 +105,10 @@ export function normalizeApprovalSetup(input: ApprovalSetupInput): ApprovalSetup
     if (!approverIds.includes(id)) approverIds.push(id);
   }
   if (approverIds.length === 0) throw invalid("approverIds", "required");
+  const overlap = creatorsAmongApprovers(context.creatorIds ?? [], approverIds).filter(
+    (id) => !(context.existingOverlap ?? []).includes(id),
+  );
+  if (overlap.length > 0) throw invalid("approverIds", "creator_is_approver", { userIds: overlap });
   const quorum = input.approvalQuorum ?? 1;
   if (!Number.isInteger(quorum) || quorum < 1 || quorum > approverIds.length)
     throw invalid("approvalQuorum", "out_of_range", { max: approverIds.length });

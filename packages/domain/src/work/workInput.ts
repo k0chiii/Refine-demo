@@ -1,6 +1,11 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
-import { approvalSetupOf, approversOf, normalizeApprovalSetup } from "./approvers.ts";
+import {
+  approvalSetupOf,
+  approversOf,
+  creatorsAmongApprovers,
+  normalizeApprovalSetup,
+} from "./approvers.ts";
 import { normalizeWorkTags, WORK_SIZE_MAX, workGenres, workSubGenreCodes } from "./metadata.ts";
 import { confidentialities, mediaTypes, type Work } from "./Work.ts";
 
@@ -10,7 +15,8 @@ import { confidentialities, mediaTypes, type Work } from "./Work.ts";
  * - 名称: 前後の空白を除いて 1 文字以上 {@link WORK_TITLE_MAX} 文字まで
  * - 区分: 前後の空白を除いて 1 文字以上 {@link WORK_CATEGORY_MAX} 文字まで
  * - 制作者: 1 人以上。空の ID は不可（重複は 1 人にまとめる）
- * - 校了権限者: 1 人以上（空の ID は不可）と、校了とみなす人数（1..校了者の数。省略は 1。利用者決定 2026-10-18）
+ * - 校了権限者: 1 人以上（空の ID は不可）と、校了とみなす人数（1..校了者の数。省略は 1。利用者決定 2026-10-18）。
+ *   制作者は校了者に含められない（利用者決定 2026-10-18「制作者が校了者になることはないです」）
  * - 主管: 空の ID は不可（重複は 1 人にまとめる。0 人は可）
  * 人が実在する（委員である）かは、アプリケーション層が名簿（PeopleDirectory）で確かめる。
  */
@@ -83,6 +89,8 @@ export function normalizeProductionTeamIds(
 /** 不変条件を確かめ、正規化した値（名称・区分は trim 済み、ID は重複なし）を返す。違反は `work_invalid` */
 export function normalizeWorkEssentials<T extends WorkEssentials>(
   fields: T,
+  /** 変更のとき: 決定前から「制作者でもある校了者」だった人（据え置きとして通す）。登録では渡さない */
+  existingOverlap: readonly UserId[] = [],
 ): T & { approverId: UserId; approverIds: UserId[]; approvalQuorum: number } {
   const title = fields.title.trim();
   if (title === "") throw invalid("title", "required");
@@ -93,7 +101,7 @@ export function normalizeWorkEssentials<T extends WorkEssentials>(
     throw invalid("category", "too_long", { max: WORK_CATEGORY_MAX });
   const creatorIds = cleanIds(fields.creatorIds, "creatorIds");
   if (creatorIds.length === 0) throw invalid("creatorIds", "required");
-  const { approverIds, quorum } = normalizeApprovalSetup(fields);
+  const { approverIds, quorum } = normalizeApprovalSetup(fields, { creatorIds, existingOverlap });
   const managerIds = cleanIds(fields.managerIds, "managerIds");
   return {
     ...fields,
@@ -244,6 +252,8 @@ export function applyWorkPatch(
   if (patch.productionTeamIds !== undefined)
     defined.productionTeamIds = normalizeProductionTeamIds(patch.productionTeamIds, teamPolicy);
   const next = { ...work, ...(defined as WorkPatch), version: work.version + 1 } as Work;
+  // 決定（2026-10-18）より前に保存された行には、制作者が校了者に入っているものが残る。その据え置きは通し、新しい重なりだけ弾く
+  const existingOverlap = creatorsAmongApprovers(work.creatorIds, approversOf(work));
   // 校了者: これまでの approverId だけの変更は「その 1 人に置き換える」。人数は、指定が無ければ今の値を校了者の数に収める
   const approversPatched = patch.approverIds !== undefined || patch.approverId !== undefined;
   if (approversPatched) {
@@ -258,7 +268,7 @@ export function applyWorkPatch(
   if (!(confidentialities as readonly string[]).includes(next.confidentiality))
     throw invalid("confidentiality", "unknown");
   assignWorkMetadata(next, normalizeWorkMetadata(meta));
-  return normalizeWorkEssentials(next);
+  return normalizeWorkEssentials(next, existingOverlap);
 }
 
 type PeopleFields = Pick<Work, "creatorIds" | "approverId" | "managerIds"> & {

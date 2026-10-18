@@ -34,6 +34,7 @@ import { M3eOptGroup, M3eOption } from "@m3e/react/option";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
 import { ApproverFields } from "./ApproverFields";
+import { selectableApprovers, withoutCreatorsAsApprovers } from "./approverSelection";
 import { clampQuorum } from "./clampQuorum";
 import { TagPicker } from "./TagPicker";
 import { TeamSelect } from "./TeamSelect";
@@ -105,6 +106,8 @@ export function emptyWorkForm(): WorkFormState {
 }
 
 export function workFormFromWork(work: Work): WorkFormState {
+  // 決定（2026-10-18）より前に保存された行では制作者が校了者に入っていることがある。フォームには出さない（保存で外れる）
+  const approverIds = selectableApprovers(work.approverIds ?? [work.approverId], work.creatorIds);
   return {
     title: work.title,
     purpose: work.purpose,
@@ -122,8 +125,8 @@ export function workFormFromWork(work: Work): WorkFormState {
     productionDays: work.productionDays === undefined ? "" : String(work.productionDays),
     tags: [...(work.tags ?? [])],
     creatorIds: [...work.creatorIds],
-    approverIds: [...(work.approverIds ?? [work.approverId])],
-    approvalQuorum: String(work.approvalQuorum ?? 1),
+    approverIds,
+    approvalQuorum: String(clampQuorum(work.approvalQuorum ?? 1, approverIds.length)),
     managerIds: [...work.managerIds],
     stakeholderIds: [...(work.stakeholderIds ?? [])],
     ownerTeam: work.ownerTeamId ? [work.ownerTeamId] : [],
@@ -374,11 +377,12 @@ export function WorkFormFields({
           label="制作者"
           required
           value={form.creatorIds}
-          onChange={setIds("creatorIds")}
+          onChange={(ids) => setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))}
         />
         <ApproverFields
           required
           ids={form.approverIds}
+          excludeIds={form.creatorIds}
           quorum={form.approvalQuorum}
           onChange={(next) =>
             setForm((f) => ({ ...f, approverIds: next.ids, approvalQuorum: next.quorum }))

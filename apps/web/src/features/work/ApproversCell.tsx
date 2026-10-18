@@ -7,6 +7,7 @@ import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
 import { ApproverFields } from "./ApproverFields";
+import { selectableApprovers } from "./approverSelection";
 import { clampQuorum } from "./clampQuorum";
 
 export interface ApproversCellWork {
@@ -14,6 +15,8 @@ export interface ApproversCellWork {
   title: string;
   /** 校了者の全員（先頭が approverId） */
   approvers: ReadonlyArray<{ id: string; name: string }>;
+  /** 制作者の ID（校了者の候補から外す。制作者は校了者になれない） */
+  creatorIds: readonly string[];
   /** 校了とみなす人数 */
   approvalQuorum: number;
   /** 宣言の済んだ人数（校了者が 2 人以上の進行中のみ数える） */
@@ -83,12 +86,20 @@ export function ApproversCell({ w }: { w: ApproversCellWork }) {
 /** 校了者と人数を選んで保存する（制作物の更新。人数は 1..校了者の数） */
 function ApproversDialog({ w, onClose }: { w: ApproversCellWork; onClose: () => void }) {
   const update = useMutation(api.works.update);
-  const [ids, setIds] = useState(() => w.approvers.map((a) => a.id));
-  const [quorum, setQuorum] = useState(() => String(w.approvalQuorum));
+  // 決定前に保存された行で制作者が校了者に入っていても、選択済みには出さない（保存するときに外れる）
+  const initialIds = () =>
+    selectableApprovers(
+      w.approvers.map((a) => a.id),
+      w.creatorIds,
+    );
+  const [ids, setIds] = useState(initialIds);
+  const [quorum, setQuorum] = useState(() =>
+    String(clampQuorum(w.approvalQuorum, initialIds().length)),
+  );
   // 開き直したときは、いまの値から始める
   useEffect(() => {
-    setIds(w.approvers.map((a) => a.id));
-    setQuorum(String(w.approvalQuorum));
+    setIds(initialIds());
+    setQuorum(String(clampQuorum(w.approvalQuorum, initialIds().length)));
   }, [w.id]);
   const { run, pending } = useAction(async () => {
     await update({
@@ -107,6 +118,7 @@ function ApproversDialog({ w, onClose }: { w: ApproversCellWork; onClose: () => 
         <ApproverFields
           required
           ids={ids}
+          excludeIds={w.creatorIds}
           quorum={quorum}
           onChange={(next) => {
             setIds(next.ids);
