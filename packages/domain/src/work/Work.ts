@@ -41,8 +41,15 @@ export interface Work {
   managerIds: readonly UserId[];
   /** 制作者（版提出・採否判断） */
   creatorIds: readonly UserId[];
-  /** 校了権限者（一人） */
+  /**
+   * 校了権限者の先頭の 1 人（これまでの項目。古い行にはこれしか無い）。全員は `approverIds`、
+   * 読むときは必ず approvers.ts の approvalSetupOf を通す
+   */
   approverId: UserId;
+  /** 校了権限者の全員（利用者決定 2026-10-18）。無ければ `[approverId]` */
+  approverIds?: readonly UserId[];
+  /** 校了とみなす人数（1..校了者の数）。無ければ 1（誰か 1 人が宣言すれば校了） */
+  approvalQuorum?: number;
   deadlineAt?: Instant;
   lifecycle: WorkLifecycle;
   confidentiality: Confidentiality;

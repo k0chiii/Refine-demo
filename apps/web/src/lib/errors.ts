@@ -36,8 +36,7 @@ const messages: Record<string, string> = {
     "SNS アカウントの内容を確かめてください。ユーザー名は各サービスの規則に合わせ、アイコンは画像を選びます。",
   social_profile_limit: "SNS アカウントはこれ以上登録できません",
   work_import_invalid: "取り込めない行があります。確認の表で理由を見て、CSV を直してください。",
-  work_invalid:
-    "制作物の内容を確かめてください。名称・区分・制作者・校了権限者（1 人）は必須です。",
+  work_invalid: "制作物の内容を確かめてください。名称・区分・制作者・校了権限者は必須です。",
   social_profile_in_use:
     "この SNS アカウントは制作物に割り当てられているため削除できません。先に割り当てを外してください。",
   team_invalid:
@@ -51,6 +50,8 @@ const messages: Record<string, string> = {
     "コメントの位置を選び直してください。文章は 1 文字以上、引用は 200 文字までです。",
   anchor_artifact_mismatch: "コメントの位置がこの版のファイルにありません",
   approval_not_approver: "校了できるのは、この制作物の校了権限者だけです",
+  approval_already_declared:
+    "この版の校了はすでに宣言しています。ほかの校了者が宣言すると校了になります",
   approval_revision_not_candidate: "校了できるのは最新の通常版だけです",
   approval_rough_revision: "0版（ラフ）からは校了できません",
   approval_blocking_threads_remain:
@@ -186,7 +187,8 @@ function workInvalidMessage(details: unknown): string | null {
     title: "名称",
     category: "区分",
     creatorIds: "制作者",
-    approverId: "校了権限者",
+    approverIds: "校了権限者",
+    approvalQuorum: "校了とみなす人数",
     managerIds: "主管・制作統括",
     mediaType: "媒体",
     confidentiality: "機密区分",
@@ -199,14 +201,16 @@ function workInvalidMessage(details: unknown): string | null {
   if (d.reason === "required")
     return d.field === "creatorIds"
       ? "制作者を 1 人以上選んでください"
-      : d.field === "approverId"
-        ? "校了権限者を 1 人選んでください"
+      : d.field === "approverIds"
+        ? "校了権限者を 1 人以上選んでください"
         : `${name}を入力してください`;
   if (d.reason === "too_long") return `${name}は ${max ?? "決められた"} 文字までです`;
   if (d.reason === "blank_id") return `${name}に空の値があります。選び直してください`;
   if (d.reason === "unknown_user")
     return `${name}に名簿にいない人が含まれています。一度サインインした人から選び直してください`;
   if (d.reason === "unknown") return `${name}の値が正しくありません`;
+  if (d.reason === "out_of_range")
+    return `${name}は 1 以上、校了権限者の人数（${max ?? "選んだ人数"}）以下にしてください`;
   return null;
 }
 

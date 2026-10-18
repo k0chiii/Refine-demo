@@ -46,7 +46,7 @@
 | 版提出・確定                         | 制作者 or ACL `edit`                                                                                |
 | 新規指摘                             | 制作者・校了者・主管 or ACL `review` 以上、かつ版が受付中・期限前・最新受付版、作品が校了前         |
 | 採否判断                             | 制作者 or ACL `edit`（校正者は不可）                                                                |
-| 校了・再開                           | `approverId` のみ。管理者は不可                                                                     |
+| 校了・再開                           | 校了者（`approverIds`。無い行は `approverId`）のみ。管理者は不可                                    |
 | ACL 変更                             | `isSystemAdmin` のみ。`group` 主体は拒否（後続）                                                    |
 
 将来の Nogiku Access 連携は `Principal.groupIds` に値を入れるだけで `effectivePermission` が `group` 付与を評価する。

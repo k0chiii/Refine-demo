@@ -30,6 +30,8 @@ describe("制作物の不変条件（生成・変更で共通。PR #1 レビュ�
       category: "印刷物",
       creatorIds: ["c1", "c2"],
       approverId: "a",
+      approverIds: ["a"],
+      approvalQuorum: 1,
       managerIds: ["m"],
     });
   });
@@ -51,7 +53,7 @@ describe("制作物の不変条件（生成・変更で共通。PR #1 レビュ�
       invalid("creatorIds", "blank_id"),
     );
     expect(() => normalizeWorkEssentials({ ...essentials, approverId: "" })).toThrowError(
-      invalid("approverId", "required"),
+      invalid("approverIds", "required"),
     );
     expect(() => normalizeWorkEssentials({ ...essentials, managerIds: [" "] })).toThrowError(
       invalid("managerIds", "blank_id"),
@@ -65,7 +67,7 @@ describe("制作物の不変条件（生成・変更で共通。PR #1 レビュ�
       invalid("creatorIds", "required"),
     );
     expect(() => applyWorkPatch(work, { approverId: "" })).toThrowError(
-      invalid("approverId", "required"),
+      invalid("approverIds", "required"),
     );
     expect(() => applyWorkPatch(work, { mediaType: "fax" as never })).toThrowError(
       invalid("mediaType", "unknown"),

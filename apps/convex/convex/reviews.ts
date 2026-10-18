@@ -1,5 +1,5 @@
 import { assignReviewers, completeMyReview } from "@mf100/application";
-import { isBeforeDeadline, isDeadlineReached, revisionLabel } from "@mf100/domain";
+import { isApproverOf, isBeforeDeadline, isDeadlineReached, revisionLabel } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
@@ -72,7 +72,7 @@ export const myQueue = query({
       const hasAccess =
         work.creatorIds.includes(principal.userId) ||
         work.managerIds.includes(principal.userId) ||
-        work.approverId === principal.userId ||
+        isApproverOf(work, principal.userId) ||
         grants.some(
           (g) =>
             g.revokedAt === undefined &&

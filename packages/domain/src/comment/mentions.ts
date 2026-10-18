@@ -2,6 +2,7 @@ import { allMembersCanView, canViewWork, workTeamIdsOf } from "../acl/authorize.
 import { isGrantActive, type WorkPermissionGrant } from "../acl/Permission.ts";
 import { memberTeamIds, type Team } from "../org/team.ts";
 import { DomainError } from "../shared/DomainError.ts";
+import { approversOf } from "../work/approvers.ts";
 import type { Work } from "../work/Work.ts";
 
 /** 1 つのコメント・返信でメンションできる人数の上限（通知の大量送信を防ぐ） */
@@ -25,7 +26,7 @@ export function mentionableUserIds(
   const ids = new Set<string>([
     ...work.creatorIds,
     ...work.managerIds,
-    work.approverId,
+    ...approversOf(work),
     ...(work.stakeholderIds ?? []),
   ]);
   for (const g of grants)

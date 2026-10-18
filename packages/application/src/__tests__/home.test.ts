@@ -182,7 +182,7 @@ describe("制作物の一括登録", () => {
     mediaType: "pdf" as const,
     creatorIds: [principals.creator.userId],
     managerIds: [],
-    approverId: principals.approver.userId,
+    approverIds: [principals.approver.userId],
     confidentiality: "normal" as const,
     notationCategories: ["A1"],
     productionTeamIds: [],
@@ -218,7 +218,7 @@ describe("制作物の一括登録", () => {
       "work_import_invalid",
     );
     await expect(
-      importWorks(ctx, principals.manager, { rows: [{ ...row("一"), approverId: "" }] }),
+      importWorks(ctx, principals.manager, { rows: [{ ...row("一"), approverIds: [""] }] }),
     ).rejects.toThrow("work_import_invalid");
   });
 });

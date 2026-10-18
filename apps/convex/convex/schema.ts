@@ -101,6 +101,7 @@ const assignmentState = v.union(
   v.literal("excused"),
 );
 const approvalAction = v.union(
+  v.literal("declared"),
   v.literal("finalized"),
   v.literal("reopened"),
   v.literal("exception_finalized"),
@@ -207,7 +208,12 @@ export default defineSchema({
     relatedTeamIds: v.array(v.string()),
     managerIds: v.array(v.string()),
     creatorIds: v.array(v.string()),
+    /** 校了者の先頭の 1 人（これまでの項目。索引・古い読み手のために常に書く） */
     approverId: v.string(),
+    /** 校了者の全員（利用者決定 2026-10-18）。無い行は [approverId] と読む（移行しない。domain の approvalSetupOf） */
+    approverIds: v.optional(v.array(v.string())),
+    /** 校了とみなす人数（1..校了者の数）。無い行は 1 */
+    approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
     lifecycle,
     confidentiality,

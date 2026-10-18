@@ -2,11 +2,12 @@ import { isAllowed } from "../acl/authorize.ts";
 import type { Principal, WorkPermissionGrant } from "../acl/Permission.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
+import { isApproverOf } from "../work/approvers.ts";
 import type { Work } from "../work/Work.ts";
 
 /**
  * 独立確認（D2: 制作者本人が校了するときの事前確認の証跡）。
- * 制作者・校了権限者以外の人が、**自分の認証済みの操作で**「この制作物のこの版を確認した」と記録したもの。
+ * 制作者・校了権限者（何人いても全員）以外の人が、**自分の認証済みの操作で**「この制作物のこの版を確認した」と記録したもの。
  * 校了する人が確認者の ID を申告するだけでは証跡にならない（PR #1 レビュー指摘）。
  * 校了の時点で、制作物・対象版・確認者・確認時刻がいまも有効かを {@link isConfirmationValid} で確かめ直す。
  */
@@ -24,8 +25,11 @@ export interface ApprovalConfirmation {
 export const CONFIRMATION_NOTE_MAX = 500;
 
 /** 制作者でも校了権限者でもない人か（独立した確認者になれるか） */
-export function isIndependentOf(work: Pick<Work, "creatorIds" | "approverId">, userId: UserId) {
-  return userId !== work.approverId && !work.creatorIds.includes(userId);
+export function isIndependentOf(
+  work: Pick<Work, "creatorIds" | "approverId" | "approverIds">,
+  userId: UserId,
+) {
+  return !isApproverOf(work, userId) && !work.creatorIds.includes(userId);
 }
 
 /**

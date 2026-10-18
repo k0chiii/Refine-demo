@@ -135,7 +135,7 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
           mediaType: "pdf" as const,
           creatorIds: [cast.creator.id],
           managerIds: [],
-          approverId: cast.approver.id,
+          approverIds: [cast.approver.id],
           confidentiality: "normal" as const,
           notationCategories: [],
           ownerTeamId: bureau,

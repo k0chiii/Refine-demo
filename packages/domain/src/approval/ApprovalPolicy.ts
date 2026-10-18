@@ -7,6 +7,7 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { WorkPermissionGrant } from "../acl/Permission.ts";
+import { approvalSetupOf, isApproverOf } from "../work/approvers.ts";
 import { assertWorkActive, type Work } from "../work/Work.ts";
 import {
   type ApprovalConfirmation,
@@ -59,10 +60,23 @@ export interface FinalizationRequest {
   grants?: readonly WorkPermissionGrant[];
   /** これより前の独立確認は無効（再開した後は確認し直す） */
   confirmationsNotBefore?: Instant;
+  /**
+   * この制作物の校了の履歴（記録した順）。校了者ごとの宣言を数えるのに使う（利用者決定 2026-10-18）。
+   * 省略すると宣言は 0 件として扱い、校了とみなす人数が 1 ならこの宣言だけで校了になる。
+   */
+  events?: readonly ApprovalEvent[];
   policy?: ApprovalPolicy;
 }
 
 export interface FinalizationOutcome {
+  /** この宣言で「校了とみなす人数」に届いたか（届いたら校了に進む。届かなければ宣言の記録だけ） */
+  reached: boolean;
+  /** 校了とみなす人数 */
+  quorum: number;
+  /** この宣言を含めて、校了を宣言した校了者（記録した順） */
+  declaredApproverIds: readonly UserId[];
+  /** 先に宣言した人が付けた例外理由（届いたときの校了を例外校了として残すため）。無ければ undefined */
+  priorExceptionReason: string | undefined;
   revision: Revision;
   blockingThreadIds: readonly string[];
   incompleteCheckIds: readonly string[];
@@ -79,10 +93,24 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
     throw new DomainError("work_already_finalized", { workId: work.id });
   if (work.lifecycle !== "active")
     throw new DomainError("work_not_active", { lifecycle: work.lifecycle });
-  if (work.approverId !== req.actorId)
+  const setup = approvalSetupOf(work);
+  if (!setup.approverIds.includes(req.actorId))
     throw new DomainError("approval_not_approver", { actorId: req.actorId });
 
   const target = assertFinalCandidate(req.revisions, req.revisionId);
+
+  // 校了者ごとの宣言（この版・最後の再開より後・いまの校了者のみ）。同じ人の宣言は 1 人と数える
+  const prior = declarationsOf(req.events ?? [], target.id).filter((d) =>
+    setup.approverIds.includes(d.actorId),
+  );
+  const declared = prior.map((d) => d.actorId);
+  // 人数に届いていないのに同じ人が重ねて宣言することはできない。
+  // すでに届いている（人数を減らした・校了者を外したなど）のに校了に進んでいないときは、残りの校了者の宣言で校了に進める
+  if (declared.includes(req.actorId) && declared.length < setup.quorum)
+    throw new DomainError("approval_already_declared", { actorId: req.actorId });
+  const declaredApproverIds = declared.includes(req.actorId)
+    ? declared
+    : [...declared, req.actorId];
 
   const isSelf = work.creatorIds.includes(req.actorId);
   let confirmation: ApprovalConfirmation | null = null;
@@ -140,6 +168,10 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
   }
 
   return {
+    reached: declaredApproverIds.length >= setup.quorum,
+    quorum: setup.quorum,
+    declaredApproverIds,
+    priorExceptionReason: prior.find((d) => d.exceptionReason !== undefined)?.exceptionReason,
     revision: target,
     blockingThreadIds: blocking,
     incompleteCheckIds: incomplete,
@@ -152,6 +184,7 @@ export function evaluateFinalization(req: FinalizationRequest): FinalizationOutc
         .filter((c) => c.revisionId === target.id)
         .map((c) => ({ id: c.id, type: c.type, state: c.state, doneBy: c.doneBy ?? null })),
       selfApproval: isSelf,
+      approval: { quorum: setup.quorum, declaredApproverIds },
       independentConfirmation: confirmation
         ? {
             id: confirmation.id,
@@ -186,12 +219,30 @@ export function assertFinalCandidate(
   return target;
 }
 
-/** 自己校了（制作者＝校了権限者）のため、校了の前に独立確認が要る制作物か（D2。ポリシー値で切り替える） */
+/**
+ * 自己校了（制作者＝校了権限者）の校了者がいて、その人の校了の前に独立確認が要る制作物か（D2。ポリシー値で切り替える）。
+ * 校了者が複数のときは、制作者でもある校了者が 1 人でもいれば真（独立確認の欄を出す・記録を受け付ける）。
+ * 要るのはその校了者本人の宣言だけ（{@link requiresIndependentConfirmationFor}）
+ */
 export function requiresIndependentConfirmation(
-  work: Pick<Work, "creatorIds" | "approverId">,
+  work: Pick<Work, "creatorIds" | "approverId" | "approverIds">,
   policy: ApprovalPolicy = defaultApprovalPolicy,
 ): boolean {
-  return !policy.allowSelfApproval && work.creatorIds.includes(work.approverId);
+  return (
+    !policy.allowSelfApproval &&
+    approvalSetupOf(work).approverIds.some((id) => work.creatorIds.includes(id))
+  );
+}
+
+/** その校了者が宣言するのに独立確認が要るか（制作者本人が校了者のとき。D2 は校了者ごとに見る） */
+export function requiresIndependentConfirmationFor(
+  work: Pick<Work, "creatorIds" | "approverId" | "approverIds">,
+  userId: UserId,
+  policy: ApprovalPolicy = defaultApprovalPolicy,
+): boolean {
+  return (
+    !policy.allowSelfApproval && isApproverOf(work, userId) && work.creatorIds.includes(userId)
+  );
 }
 
 export interface IndependentConfirmationRequest {
@@ -219,7 +270,11 @@ export function evaluateIndependentConfirmation(req: IndependentConfirmationRequ
   return assertFinalCandidate(req.revisions, req.revisionId);
 }
 
-export type ApprovalAction = "finalized" | "reopened" | "exception_finalized";
+/**
+ * `declared` は、校了とみなす人数に届かない段階の校了者 1 人の宣言（校了にはまだ進まない）。
+ * 届いた宣言は従来どおり `finalized` / `exception_finalized` として残す（人数が 1 のときはこれだけ）。
+ */
+export type ApprovalAction = "declared" | "finalized" | "reopened" | "exception_finalized";
 
 export interface ApprovalEvent {
   workId: WorkId;
@@ -236,4 +291,79 @@ export function assertReopenReason(reason: string | undefined): string {
   const r = reason?.trim() ?? "";
   if (r === "") throw new DomainError("approval_reopen_reason_required");
   return r;
+}
+
+/** 版ごとの校了者 1 人の宣言（宣言の記録と、校了そのものの記録を同じ形で扱う） */
+export interface ApprovalDeclaration {
+  actorId: UserId;
+  at: Instant;
+  exceptionReason?: string;
+}
+
+/**
+ * その版に対する校了者ごとの宣言（同じ人は最初の 1 件だけ）。履歴は記録した順に渡す。
+ * 再開（reopened）が入ったら、それより前の宣言は数えない（再開のあとは宣言し直す）。
+ * `declared`・`finalized`・`exception_finalized` が宣言。人数が 1 のとき校了の記録がそのまま 1 人分の宣言になる
+ * （古い履歴も同じに読める）。いまの校了者かどうかは呼び出し側で絞る。
+ */
+export function declarationsOf(
+  events: readonly ApprovalEvent[],
+  revisionId: RevisionId,
+): ApprovalDeclaration[] {
+  let current: ApprovalDeclaration[] = [];
+  for (const e of events) {
+    if (e.action === "reopened") {
+      current = [];
+      continue;
+    }
+    if (e.revisionId !== revisionId || current.some((d) => d.actorId === e.actorId)) continue;
+    current.push({
+      actorId: e.actorId,
+      at: e.createdAt,
+      ...(e.exceptionReason !== undefined ? { exceptionReason: e.exceptionReason } : {}),
+    });
+  }
+  return current;
+}
+
+export interface ApprovalProgress {
+  /** 校了者の全員 */
+  approverIds: readonly UserId[];
+  /** 校了とみなす人数 */
+  quorum: number;
+  /** 宣言した校了者（いまの校了者のみ） */
+  declaredIds: readonly UserId[];
+  /** 数えている版（進行中は校了候補の版、校了後は校了した版）。無ければ null */
+  revisionId: RevisionId | null;
+  /** 人数に届いているか */
+  reached: boolean;
+}
+
+/** 校了の進み具合（n 人中 m 人）。画面はこれをそのまま出す */
+export function approvalProgressOf(
+  work: Pick<
+    Work,
+    "lifecycle" | "finalRevisionId" | "approverId" | "approverIds" | "approvalQuorum"
+  >,
+  events: readonly ApprovalEvent[],
+  revisions: readonly Revision[],
+): ApprovalProgress {
+  const setup = approvalSetupOf(work);
+  const revisionId =
+    work.lifecycle === "finalized"
+      ? (work.finalRevisionId ?? null)
+      : (latestStandardRevision(revisions)?.id ?? null);
+  const declaredIds =
+    revisionId === null
+      ? []
+      : declarationsOf(events, revisionId)
+          .map((d) => d.actorId)
+          .filter((id) => setup.approverIds.includes(id));
+  return {
+    approverIds: setup.approverIds,
+    quorum: setup.quorum,
+    declaredIds,
+    revisionId,
+    reached: declaredIds.length >= setup.quorum,
+  };
 }

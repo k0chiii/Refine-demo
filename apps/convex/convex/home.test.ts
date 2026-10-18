@@ -66,7 +66,7 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
         mediaType: "pdf" as const,
         creatorIds: [byName.creator!],
         managerIds: [],
-        approverId: byName.approver!,
+        approverIds: [byName.approver!],
         confidentiality: "normal" as const,
         notationCategories: [],
       })),

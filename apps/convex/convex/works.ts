@@ -12,8 +12,12 @@ import {
   defaultWorkViewPolicy,
   hasOrgPermission,
   normalizePersonKey,
+  permissionIncludes,
   orgPermissions,
   type DirectoryUser,
+  approvalProgressOf,
+  approvalSetupOf,
+  approversOf,
   isAccepting,
   isAllowed,
   isGrantActive,
@@ -48,7 +52,11 @@ const workPatch = {
   mediaType: v.optional(vMediaType),
   deadlineAt: v.optional(v.number()),
   creatorIds: v.optional(v.array(v.string())),
+  /** 校了者。approverIds があればそちら（複数可）。approverId だけなら「その 1 人に置き換える」 */
   approverId: v.optional(v.string()),
+  approverIds: v.optional(v.array(v.string())),
+  /** 校了とみなす人数（1..校了者の数。校了者だけを変えて省略すると、いまの人数を校了者の数に収める） */
+  approvalQuorum: v.optional(v.number()),
   managerIds: v.optional(v.array(v.string())),
   confidentiality: v.optional(vConfidentiality),
   legacyId: v.optional(v.string()),
@@ -73,7 +81,10 @@ export const create = mutation({
     relatedTeamIds: v.optional(v.array(v.string())),
     managerIds: v.optional(v.array(v.string())),
     creatorIds: v.array(v.string()),
-    approverId: v.string(),
+    /** 校了者。approverIds があればそちら。無ければ approverId の 1 人 */
+    approverId: v.optional(v.string()),
+    approverIds: v.optional(v.array(v.string())),
+    approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
     confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
@@ -105,7 +116,8 @@ export const importBatch = mutation({
         mediaType: vMediaType,
         creatorIds: v.array(v.id("users")),
         managerIds: v.array(v.id("users")),
-        approverId: v.id("users"),
+        approverIds: v.array(v.id("users")),
+        approvalQuorum: v.optional(v.number()),
         deadlineAt: v.optional(v.number()),
         legacyId: v.optional(v.string()),
         confidentiality: vConfidentiality,
@@ -206,11 +218,13 @@ export const get = query({
       );
       const approvals = await app.approvals.listByWork(work.id);
       const authz = { work, grants, principal };
+      // 校了者の全員と、宣言の進み具合（n 人中 m 人）。古い行（approverId だけ）も同じに読める
+      const approvers = approvalProgressOf(work, approvals, revisions);
       const users = await resolveUsers(ctx.db, [
         ...work.creatorIds,
         ...work.managerIds,
         ...(work.stakeholderIds ?? []),
-        work.approverId,
+        ...approvers.approverIds,
         ...revisions.map((r) => r.submittedBy),
         ...approvals.map((a) => a.actorId),
       ]);
@@ -274,7 +288,24 @@ export const get = query({
           creators: work.creatorIds.map((id) => users.get(id)),
           managers: work.managerIds.map((id) => users.get(id)),
           stakeholders: (work.stakeholderIds ?? []).map((id) => users.get(id)),
-          approver: users.get(work.approverId),
+          approver: users.get(approvers.approverIds[0]!),
+          approvers: approvers.approverIds.map((id) => users.get(id)),
+        },
+        /** 校了の進み具合: 校了者ごとの宣言（数えている版の分）と、校了とみなす人数 */
+        approval: {
+          quorum: approvers.quorum,
+          revisionId: approvers.revisionId,
+          reached: approvers.reached,
+          approvers: approvers.approverIds.map((id) => ({
+            user: users.get(id),
+            declared: approvers.declaredIds.includes(id),
+            isMe: id === principal.userId,
+          })),
+          declaredCount: approvers.declaredIds.length,
+          /** 閲覧している人が校了者で、まだ宣言していないか（校了の操作を出す） */
+          canDeclare:
+            approvers.approverIds.includes(principal.userId) &&
+            !approvers.declaredIds.includes(principal.userId),
         },
         /** 「現在の版」の申告（写真・めい・指針外の色。Notion の formula に相当）。申告の無い版なら null */
         currentDeclarations: currentDeclarations(revisions),
@@ -349,26 +380,45 @@ export const listMine = query({
         revisions
           .filter((r) => r.reviewState !== "void")
           .sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
-      picked.push({ work, latest, accepting });
+      // 校了者が 2 人以上いる進行中の制作物だけ、宣言の数を数える（履歴を読むのはそのときだけ）
+      const declared =
+        work.lifecycle === "active" && approvalSetupOf(work).quorum > 1
+          ? approvalProgressOf(work, await app.approvals.listByWork(work.id), revisions).declaredIds
+              .length
+          : 0;
+      picked.push({ work, latest, accepting, declared });
     }
-    // 制作者の表示名（一覧で「担当別」に並べたとき、誰の制作物か分かるように）
+    // 制作者・校了者の表示名（一覧で「担当別」に並べたとき、誰の制作物か分かるように）
     const users = await resolveUsers(
       ctx.db,
-      picked.flatMap((p) => p.work.creatorIds),
+      picked.flatMap((p) => [...p.work.creatorIds, ...approversOf(p.work)]),
     );
+    // 一覧から校了者を直せるか（主管、または管理者が付けた「管理」の閲覧権限。判定の本体は更新の work.edit）。
+    // 管理の権限は自分に付いたものだけを 1 回の索引で引く（制作物ごとに ACL を読まない）
+    const managed = await manageGrantedWorkIds(ctx.db, principal.userId);
     // 制作物ごとの FB（相談）の数と未読（一覧から制作物の FB へ直接入れるように）
     const fb = await summarizeFeedbackActivity(
       app,
       principal,
       picked.map((p) => p.work.id),
     );
-    const out = picked.map(({ work, latest, accepting }) => ({
+    const out = picked.map(({ work, latest, accepting, declared }) => ({
       ...summarize(
         work,
         latest,
         accepting,
         work.creatorIds.map((id) => users.get(id)?.name ?? "（不明なユーザー）"),
       ),
+      /** 校了者の全員（先頭が approverId）と校了とみなす人数、宣言の済んだ人数（2 人以上の進行中のみ） */
+      approvers: approversOf(work).map((id) => ({
+        id,
+        name: users.get(id)?.name ?? "（不明なユーザー）",
+      })),
+      approvalQuorum: approvalSetupOf(work).quorum,
+      approvalDeclared: declared,
+      canEditApprovers:
+        work.lifecycle !== "finalized" &&
+        (work.managerIds.includes(principal.userId) || managed.has(work.id)),
       fb: fb.get(work.id) ?? { threads: 0, unread: 0 },
     }));
     return out.sort(
@@ -378,6 +428,19 @@ export const listMine = query({
     );
   },
 });
+
+/** 自分に「管理」以上の閲覧権限が有効に付いている制作物（user 宛の付与のみ。work.edit の ACL 側） */
+async function manageGrantedWorkIds(db: DatabaseReader, userId: string): Promise<Set<string>> {
+  const rows = await db
+    .query("workPermissions")
+    .withIndex("by_principal", (q) => q.eq("principalType", "user").eq("principalId", userId))
+    .take(500);
+  return new Set(
+    rows
+      .filter((g) => g.revokedAt === undefined && permissionIncludes(g.permission, "manage"))
+      .map((g) => g.workId as string),
+  );
+}
 
 /** 一覧で読む制作物の上限（委員会の制作物は年度あたり高々数百件） */
 const WORKS_SCAN_LIMIT = 2000;

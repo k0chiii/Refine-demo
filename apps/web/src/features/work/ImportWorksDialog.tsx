@@ -115,7 +115,7 @@ export function ImportWorksDialog({
         ? Array.from(
             new Set(
               parsed.rows
-                .flatMap((r) => [...r.creators, ...r.managers, ...r.stakeholders, r.approver])
+                .flatMap((r) => [...r.creators, ...r.managers, ...r.stakeholders, ...r.approvers])
                 .filter(Boolean),
             ),
           )
@@ -161,7 +161,7 @@ export function ImportWorksDialog({
             creatorIds: i.creatorIds as Id<"users">[],
             managerIds: i.managerIds as Id<"users">[],
             stakeholderIds: i.stakeholderIds ?? [],
-            approverId: i.approverId as Id<"users">,
+            approverIds: i.approverIds as Id<"users">[],
           };
         }),
         source: fileName,
@@ -266,11 +266,11 @@ export function ImportWorksDialog({
                       ・{r.row.mediaType ? mediaLabel[r.row.mediaType] : "媒体なし"}・制作者{" "}
                       {people(r.creators)}・主管 {people(r.managers)}・担当{" "}
                       {r.ownerTeam ? teamRef(r.ownerTeam, teams ?? []) : "—"}・制作担当{" "}
-                      {teamRefs(r.productionTeams, teams ?? [])}・校了者{" "}
-                      {r.approver ? person(r.approver) : "—"}
-                      {r.stakeholders.length ? (
-                        <>・関係者 {people(r.stakeholders)}</>
-                      ) : null}・納期{" "}
+                      {teamRefs(r.productionTeams, teams ?? [])}・校了者 {people(r.approvers)}
+                      {r.row.approvalQuorum !== null && r.approvers.length > 1
+                        ? `（${r.row.approvalQuorum} 人で校了）`
+                        : ""}
+                      {r.stakeholders.length ? <>・関係者 {people(r.stakeholders)}</> : null}・納期{" "}
                       {r.row.deadlineAt ? formatDeadline(r.row.deadlineAt) : "—"}
                       {r.row.tags.length ? `・タグ ${r.row.tags.join("、")}` : ""}
                       {r.input ? null : (
