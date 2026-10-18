@@ -1100,6 +1100,7 @@ export function FullscreenPreview({
   safeArea = false,
   profile,
   onClose,
+  overlay,
 }: {
   post: SocialPost;
   images: PreviewImage[];
@@ -1107,6 +1108,11 @@ export function FullscreenPreview({
   safeArea?: boolean;
   profile?: PreviewProfile;
   onClose: () => void;
+  /**
+   * 全画面の上に重ねるもの（コメントの投稿欄）。全画面の外に置くと、要素の全画面（Android）では描かれず、
+   * iPhone でも校正画面の重なりの中にあって全画面の下に隠れるため、この中に置く
+   */
+  overlay?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 393 : innerWidth));
@@ -1184,6 +1190,7 @@ export function FullscreenPreview({
       >
         <Icon name="igClose" size={18} />
       </button>
+      {overlay}
     </div>,
     document.body,
   );

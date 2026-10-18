@@ -371,7 +371,7 @@ export function PostReview({
               safeArea
               {...(profile ? { profile } : {})}
             />
-            {annotate?.draftAnchor && composeAt ? annotate.renderCompose(composeAt) : null}
+            {!full && annotate?.draftAnchor && composeAt ? annotate.renderCompose(composeAt) : null}
           </div>
           {full ? (
             <FullscreenPreview
@@ -381,6 +381,9 @@ export function PostReview({
               safeArea
               {...(profile ? { profile } : {})}
               onClose={() => setFull(false)}
+              overlay={
+                annotate?.draftAnchor && composeAt ? annotate.renderCompose(composeAt) : null
+              }
             />
           ) : null}
         </PostMarksContext.Provider>
