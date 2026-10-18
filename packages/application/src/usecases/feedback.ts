@@ -385,7 +385,8 @@ export interface FeedbackFileView {
 
 export interface FeedbackPostView {
   id: string;
-  author: { id: string; name: string };
+  /** isCreator: その制作物の制作者か（スレッドでは制作者だけ示す。利用者指示 2026-10-18） */
+  author: { id: string; name: string; isCreator: boolean };
   /** 削除された投稿は「削除された投稿」（ファイル・メンション・リアクションは空） */
   body: string;
   deleted: boolean;
@@ -436,7 +437,11 @@ export async function getFeedbackThread(
   const name = nameCache(ctx);
   const posts: FeedbackPostView[] = [];
   for (const p of await ctx.feedback.listPosts(thread.id)) {
-    const author = { id: p.authorId, name: await name(p.authorId) };
+    const author = {
+      id: p.authorId,
+      name: await name(p.authorId),
+      isCreator: work.creatorIds.includes(p.authorId),
+    };
     if (p.deletedAt !== undefined) {
       posts.push({
         id: p.id,

@@ -119,6 +119,8 @@ describe("フィードバックのスレッドと投稿", () => {
     // 通常の制作物は委員なら誰でも開ける（利用者決定 2026-10-17）
     expect(view.work).toMatchObject({ title: "EVE 企画ポスター", canOpen: true });
     expect(view.posts.map((p) => p.template)).toEqual(["creator_first", "reviewer"]);
+    // スレッドでは制作者だけ示す（校正者などの役割は出さない）
+    expect(view.posts.map((p) => p.author.isCreator)).toEqual([true, false]);
     expect(view.can).toEqual({ post: true, editOwn: true, rename: false });
     // 未読の区切りのため、開いた人が最後に読んだ時刻を返す（読んでいなければ null）
     expect(view.readAt).toBeNull();

@@ -1,5 +1,5 @@
 import { api } from "@mf100/convex/api";
-import { FEEDBACK_REACTIONS, feedbackTemplates } from "@mf100/domain";
+import { FEEDBACK_REACTIONS } from "@mf100/domain";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -76,7 +76,6 @@ export function FeedbackPost({
   });
   const menuId = `fb-post-menu-${post.id}`;
   const reactId = `fb-react-${post.id}`;
-  const template = post.template ? feedbackTemplates.find((t) => t.id === post.template) : null;
 
   if (post.deleted)
     return (
@@ -118,7 +117,8 @@ export function FeedbackPost({
             {formatJstTime(post.createdAt)}
             {post.editedAt ? "（編集済み）" : ""}
           </time>
-          {template ? <span className="fb-post__tpl">{template.label}</span> : null}
+          {/* 役割は制作者だけ示す（校正者などは出さない。テンプレートの名前も出さない。利用者指示 2026-10-18） */}
+          {post.author.isCreator ? <span className="fb-post__tpl">制作者</span> : null}
         </header>
         {editing !== null ? (
           <div className="fb-post__edit">
