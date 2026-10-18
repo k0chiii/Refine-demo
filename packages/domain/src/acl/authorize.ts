@@ -19,6 +19,7 @@ export type WorkAction =
   | "work.edit"
   | "revision.submit"
   | "comment.post"
+  | "comment.reply"
   | "comment.decide"
   | "review.assign"
   | "work.finalize"
@@ -115,6 +116,9 @@ export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolea
     case "comment.post":
       // 割り当てられた校正者 = review 以上の ACL。制作者・校了者・主管も議論に参加できる。
       return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "review");
+    case "comment.reply":
+      // 既存のコメントへの返信は、制作物を見られる人なら誰でも（利用者決定 2026-10-18。D5 の暫定を改める）
+      return canViewWork(ctx);
     case "comment.decide":
       // 校正者はコメント投稿だけで採否を決めない（§2.1）。制作者と明示委任（edit）のみ。
       return roles.isCreator || hasLevel(ctx, "edit");

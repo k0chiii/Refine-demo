@@ -7,8 +7,6 @@ import {
   decideThread as decideThreadDomain,
   DomainError,
   isAccepting,
-  isAllowed,
-  isBeforeDeadline,
   type Principal,
   type Severity,
   type ThreadKind,
@@ -146,7 +144,7 @@ export async function postComment(
 }
 
 /**
- * 返信（D5 暫定）: 受付中は誰でも（投稿権限者）可。受付終了後は制作者（採否判断者）の処置記録のみ可。
+ * 返信: 制作物を見られる人なら誰でも、受付の前後に依らず可（利用者決定 2026-10-18。D5 の暫定を改める）。校了後は不可。
  * 本文は CommentEvent として追記し、原文スレッドは書き換えない。
  */
 export async function replyToThread(
@@ -163,15 +161,11 @@ export async function replyToThread(
     ctx,
     principal,
     revision.workId,
-    "comment.post",
+    "comment.reply",
   );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   const now = ctx.clock.now();
-  const open = isAccepting(revision) && isBeforeDeadline(now, revision.deadlineAt);
-  if (!open && !isAllowed("comment.decide", { work, grants, principal })) {
-    throw new DomainError("comment_reply_not_allowed", { threadId: thread.id });
-  }
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
   await ctx.threads.appendEvent({
     threadId: thread.id,

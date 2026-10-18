@@ -788,7 +788,7 @@ export function Editor({
       active={t.id === activeThreadId}
       meId={me?.id ?? null}
       canDecide={can?.decide ?? false}
-      canReply={canComment || (can?.decide ?? false)}
+      canReply={can?.reply ?? false}
       canEdit={work?.lifecycle !== "finalized"}
       pending={busy}
       {...(className ? { className } : {})}
