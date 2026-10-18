@@ -4144,24 +4144,11 @@ m3e-snackbar {
   display: block;
 }
 /* SNS プレビューの設定（機種・表示）。preview/PreviewSettings.tsx
-   FAB は窓の右下（compact 16、それより広い画面 24。M3 FAB menu › Adaptive layout）。セーフエリアの上に置く */
-.preview-fab {
-  position: fixed;
-  right: 24px;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  z-index: 20;
+   共通アプリバーの末尾の操作（#appbar-actions）に差し込むアイコンボタン。比べる・ピンなど先に描かれた操作より左へ寄せる */
+.appbar-preview-settings {
+  order: -1;
 }
-@media (max-width: 599px) {
-  .preview-fab {
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  }
-  /* 最後まで送ったとき、プレビューの下の説明が FAB に隠れないように */
-  .post-preview:has(> .preview-fab) {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-  }
-}
-/* 校正画面: 浮遊ツールバーがあるので FAB にせず、プレビューの右上のボタン */
+/* 校了した版の書き出し: プレビューの右上のボタン */
 .post-preview__bar {
   display: flex;
   justify-content: flex-end;
