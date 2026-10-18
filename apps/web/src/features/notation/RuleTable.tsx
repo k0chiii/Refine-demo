@@ -10,7 +10,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { M3eIcon } from "@m3e/react/icon";
+import { ColumnHeader, DataTable } from "@/ui/DataTable";
 import { M3eTooltip } from "@m3e/react/tooltip";
 
 type Book = FunctionReturnType<typeof api.notation.ruleBook>;
@@ -139,7 +139,7 @@ const COLUMNS: Column[] = [
 /**
  * ルールの表（600 以上。利用者決定 2026-10-17「表記ルールは表形式に」。docs/UI_M3E.md §54）。
  * M3・M3E に表の部品は無いので、Material の data table の仕様（M2）の寸法・振る舞いを M3 のトークンと M3E の部品で組む。
- * - 見出し 56・行 52・セルの左右 16。見出しは title-small、本文は body-medium。見出しは表の上に貼り付く
+ * - 外形（見出し 56・行 52・左右 16・見出しの面 surface-container・貼り付く見出し）は共通の表（ui/DataTable。§75）
  * - 行は押す（Enter・Space）と詳細を開くだけ（single-action。行の中に別の操作は置かない）。選んだ行は secondary-container の
  *   面と先頭の primary の印（手がかり 2 つ）と `aria-selected`。hover は on-surface 8% の state layer
  * - 見出しを押すと並べ替え（`aria-sort`）。並べ替え中の列は矢印を常に出し、ほかの列は hover で出す。既定は ID 順
@@ -242,59 +242,45 @@ export function RuleTable({
 
   const cellBody = (c: Column, r: Rule) =>
     c.truncate ? (
-      <span id={clipId(r.ruleId, c.key)} className="rule-table__clip" onPointerEnter={onClipEnter}>
+      <span id={clipId(r.ruleId, c.key)} className="mf-table__clip" onPointerEnter={onClipEnter}>
         {c.cell(r, book)}
       </span>
     ) : (
       c.cell(r, book)
     );
   const colClass = (c: Column) =>
-    `${c.numeric ? "rule-table__num" : ""} ${c.hide ? `rule-table__col--${c.hide}` : ""}`;
+    `${c.numeric ? "mf-table__num" : ""} ${c.hide ? `rule-table__col--${c.hide}` : ""}`;
 
   return (
-    <div className="rule-table">
-      <table className="rule-table__table" aria-label="ルール">
+    <>
+      <DataTable label="ルール" className="rule-table" fixed>
         <thead>
           <tr>
             {columns.map((c) => {
               const active = sort.key === c.key;
               return (
-                <th
+                <ColumnHeader
                   key={c.key}
-                  scope="col"
-                  className={`rule-table__th ${colClass(c)}`}
+                  className={colClass(c)}
                   style={c.width ? { width: c.width } : undefined}
-                  aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
-                >
-                  {c.sort ? (
-                    <button
-                      type="button"
-                      className={`rule-table__sort ${active ? "rule-table__sort--on" : ""}`}
-                      aria-label={`${c.label ?? c.header}で並べ替え`}
-                      onClick={() =>
-                        setSort((s) =>
-                          s.key === c.key
-                            ? { key: s.key, dir: s.dir === 1 ? -1 : 1 }
-                            : { key: c.key as SortKey, dir: 1 },
-                        )
+                  {...(c.label ? { label: c.label } : {})}
+                  {...(c.sort
+                    ? {
+                        sort: {
+                          active,
+                          dir: sort.dir === 1 ? "asc" : "desc",
+                          onSort: () =>
+                            setSort((s) =>
+                              s.key === c.key
+                                ? { key: s.key, dir: s.dir === 1 ? -1 : 1 }
+                                : { key: c.key as SortKey, dir: 1 },
+                            ),
+                        },
                       }
-                    >
-                      {c.header}
-                      <M3eIcon
-                        aria-hidden="true"
-                        name={active && sort.dir === -1 ? "arrow_downward" : "arrow_upward"}
-                        className="rule-table__sort-icon"
-                      />
-                    </button>
-                  ) : (
-                    <span
-                      className="rule-table__label"
-                      {...(c.label ? { "aria-label": c.label } : {})}
-                    >
-                      {c.header}
-                    </span>
-                  )}
-                </th>
+                    : {})}
+                >
+                  {c.header}
+                </ColumnHeader>
               );
             })}
           </tr>
@@ -302,7 +288,7 @@ export function RuleTable({
         <tbody>
           {sorted.length === 0 ? (
             <tr>
-              <td className="rule-table__empty" colSpan={columns.length}>
+              <td className="mf-table__empty" colSpan={columns.length}>
                 {empty}
               </td>
             </tr>
@@ -313,7 +299,7 @@ export function RuleTable({
                 <tr
                   key={r.ruleId}
                   data-id={r.ruleId}
-                  className={`rule-table__row ${isSel ? "rule-table__row--selected" : ""} ${r.enabled ? "" : "rule-table__row--off"}`}
+                  className={`mf-table__row mf-table__row--action ${isSel ? "mf-table__row--selected" : ""} ${r.enabled ? "" : "mf-table__row--off"}`}
                   aria-selected={isSel}
                   tabIndex={r.ruleId === tabStop ? 0 : -1}
                   onClick={() => onOpen(r.ruleId)}
@@ -324,12 +310,12 @@ export function RuleTable({
                       <th
                         key={c.key}
                         scope="row"
-                        className={`rule-table__td rule-table__rowhead ${colClass(c)}`}
+                        className={`mf-table__td mf-table__rowhead ${colClass(c)}`}
                       >
                         {cellBody(c, r)}
                       </th>
                     ) : (
-                      <td key={c.key} className={`rule-table__td ${colClass(c)}`}>
+                      <td key={c.key} className={`mf-table__td ${colClass(c)}`}>
                         {cellBody(c, r)}
                       </td>
                     ),
@@ -339,12 +325,12 @@ export function RuleTable({
             })
           )}
         </tbody>
-      </table>
+      </DataTable>
       {tip ? (
         <M3eTooltip key={tip.for} ref={tipRef as never} htmlFor={tip.for} touchGestures="auto">
           {tip.text}
         </M3eTooltip>
       ) : null}
-    </div>
+    </>
   );
 }

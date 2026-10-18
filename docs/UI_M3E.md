@@ -1346,7 +1346,7 @@ m3.material.io の sitemap にある**ドキュメント 262 ページ全部**�
 
 利用者の決定「制作物は、そのまんま階層化せずに並べて、フィルターとか並べ替えのタイミングでその概念を持ちだしたい」。§38 の「局 › 担当」の入れ子と、§50 の「主管担当／制作担当」の切り替えをやめた。
 
-- **一覧**: M3E の action list 1 本（`features/work/WorksList`）。行は今までどおり 2 行（題名と、版・校正の締切。PC は納期・主管担当・制作者も）。同じ制作物は 1 回だけ出る
+- **一覧**: M3E の action list 1 本（`features/work/WorksList`。§75 で表 `WorksTable` に替えた）。行は今までどおり 2 行（題名と、版・校正の締切。PC は納期・主管担当・制作者も）。同じ制作物は 1 回だけ出る
 - **絞り込み**: 状態のチップ（進行中・保留・校了）の右に、「主管担当 ▾」「制作担当 ▾」のチップ。押すとメニュー（M3 Chips: 絞り込みのチップからメニューを開ける）で「指定しない」か局・担当を選ぶ。選んでいる間はチップを選択中にし、「制作: デザイン担当」のように名前を出す。局（「広報局（局全体）」）を選ぶと、局そのものとその局の担当の制作物が出る。URL は `owner`・`production`（担当の ID）
 - **並べ替え**: 右端（スマホは横スクロールで隠れないようチップの並びの先頭）の「⇅ 校正の締切順 ▾」のチップからメニューで選ぶ: 校正の締切順（既定）・納期順・題名順・主管担当順・制作担当順。担当の順は組織の並び順（局 → その局の担当）で、制作担当が複数あればいちばん上の担当の位置。未設定・日付の無いものは後ろ、同じ順位は 校正の締切 → 題名。URL は `sort`
 - 担当で並べている・絞っているときは、その担当（「主管 広報局 › デザイン担当」など）を行の 2 行目の先頭に出す（スマホでも）。並びの理由が行から分かるように
@@ -1400,7 +1400,7 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 
 ### 作り
 
-- `features/notation/RuleTable.tsx`。semantic な `<table>`（`aria-label`、`<th scope="col">`、行の見出しは ID の `<th scope="row">`、`aria-sort` は並べ替え中の列だけ、選んだ行に `aria-selected`）。CSS は `.rule-table*`（styles.css）。ルートの `notation.tsx` は compact ではリスト、それ以外は表を出す
+- `features/notation/RuleTable.tsx`。semantic な `<table>`（`aria-label`、`<th scope="col">`、行の見出しは ID の `<th scope="row">`、`aria-sort` は並べ替え中の列だけ、選んだ行に `aria-selected`）。CSS は `.rule-table*` と共通の `.mf-table*`（styles.css。§75 で共通化）。ルートの `notation.tsx` は compact ではリスト、それ以外は表を出す
 - 列: ID（既定の並び順）・統一表記（先頭が太字、2 つ目以降は on-surface-variant）・誤表記（正規表現は等幅）・ルール名・カテゴリ（コードと名前）・厳格さ・年度（右寄せ・等幅の数字。空は「全年度」）・状態（「無効も表示」のときだけ出す。それ以外はすべて有効で列の意味が無い）。無効のルールは文字を on-surface-variant に（色だけに頼らず「無効」の文字も出る）
 - 列の幅は固定（`table-layout: fixed`）: ID 96・カテゴリ 160・厳格さ 84・年度 88・状態 68。統一表記・誤表記・ルール名が残りを等分し、収まらない文字は省略記号（切れたセルだけ hover・長押しで M3E tooltip に全文）
 - 表が狭いとき（詳細を開いた expanded など）はコンテナクエリで ルール名（899 以下）→ 年度（759 以下）→ カテゴリ（659 以下）の順に隠す（境目は「統一表記・誤表記に 150 ずつ残る幅」）。隠した内容は詳細のペインにある。それでも収まらなければ表の中だけ横にスクロール（ページは横に動かない）
@@ -1923,7 +1923,7 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 
 - **上段の数字（`DashboardKpis`）**: 左上から「やること」「締切が近い」「期限超過」「未解決のコメント」。大きな数 + 基準（未読・次の締切・解決済みの割合の棒）。色は期限超過が 1 件以上のときの error だけ。M3E card（filled）
 - **制作物の状況（`DashboardOverview`）**: 「やること」の下。見出しの右に**数字の時点**（`asOf`）。
-  - 左: **表**（制作物 / 状態 / 締切 / 未解決 / 校正 / 局）。**注意が要る順**（期限超過 → 期限が近い → 未解決などがある → 落ち着き。保留・校了は最後。同じなら締切が早い順）。題名は制作物へのリンク。8 行まで、「すべて表示」で広げる。数値は右寄せ・等幅。寸法は `.rule-table`（§54）と同じ
+  - 左: **表**（制作物 / 状態 / 締切 / 未解決 / 校正 / 局）。**注意が要る順**（期限超過 → 期限が近い → 未解決などがある → 落ち着き。保留・校了は最後。同じなら締切が早い順）。題名は制作物へのリンク。8 行まで、「すべて表示」で広げる。数値は右寄せ・等幅。寸法・見出しの面は共通の表（`.mf-table`。§75）
   - 狭いと列を隠す（コンテナクエリ）: 局 → 校正 → 状態（題名の下へ移す）。表の中だけが横に動き、ページは動かない（412 で確認）
   - 右のペイン（expanded 以上。それ未満は表の下）: **状態の積み上げ棒**（未提出 灰・校正中 青・受付終了 赤・保留 黄・校了 緑。区間の間は 2px、背景に対し 3:1 以上、0 から）+ 凡例（文字と数。棒の代替テキストを兼ねる）、**校正の進み**（M3E linear progress。確認を終えた校正者 / 割り当てた校正者）、**局別の小さな表**（主管担当を決めた制作物があるときだけ）
 - 説明の文・補助の文は置かない。空のときの文も「いまやることはありません」と数・名前だけにした。補助の列が空なら右のペインの枠も出さない
@@ -1932,3 +1932,27 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 - 折れ線・推移は作っていない（シードに時系列が無く、版の提出・コメントの推移を出す問いもまだ無い）。円グラフ・3D は使わない
 - 表の並べ替え（見出しで切り替え）は未実装（注意が要る順の固定）
 - 確認: 1440・768・412 で表示（ページの横スクロールなし）。E2E の 07・27・20 のホームの画像で確認
+
+## 75. 制作物一覧を表に・アプリの表を共通の見た目に（2026-10-18・利用者指示）
+
+利用者の指示:「制作物一覧も表がいいかも。m3e のサイトで動いている表を参考に。ヘッダーの色が白なのは嘘だと思う」。
+
+### M3E の表を調べた結果（出典: https://matraic.github.io/m3e/ 、`@m3e/web` 2.10.1 = npm の最新・2.9.2 と同じ部品の一覧）
+
+- **M3E に表の部品は無い**（2.9.2・2.10.1 のどちらも。`@m3e/web/dist` に table・grid・data の名前のモジュール無し。docs のサイドバーの全 66 ページに `<table>`・`role="table"` も 0 件）。docs の「表」に見えるのは `api-viewer-element` の Properties / Events の**リスト**（https://matraic.github.io/m3e/components/paginator.html の API 節）だけ。`m3e-paginator` の説明に「Provides navigation for paged information, **typically used with a table**」とあり、表は利用側が組む前提
+- docs の面・線（https://matraic.github.io/m3e/main.css・components/api-viewer.css）: 背景は `surface-container-low`、本文の面は `surface-container-lowest`、api-viewer の枠は **1px `outline-variant`・角 12px**、見出しの区切りは `outline-variant` の 1px、項目の区切りも `outline-variant`、ラベルは `on-surface`（太字は値）。paginator の見本は枠 `outline-variant` の中に右寄せ（件数の選択 → 範囲 → 前後の矢印）
+- 見出しの色: M3E は表を持たないので直接の答えは無い。**M3 の tonal surface の考え方**（Material Design 3 Color roles: 面の高さは surface-container の段で表す。https://m3.material.io/styles/color/roles）に沿って、見出しの行は本文の面（surface-container-lowest = 白）より 1 段濃い **`surface-container`**（このアプリの青系で #e3e7ff）にした。**白ではない**。Angular Material の M3 の表は見出しも `surface`（本文と同色）で、区切りは `outline` の線だけ（https://github.com/angular/components の `src/material/table/_m3-table.scss`。`@angular/material` 22.2.3 の npm パッケージで確認）なので、「見出しの色を変える」のは利用者指示による選択
+- 寸法・書体（同じく Angular Material の M3 の表のトークン）: 見出し 56（density で 52・48・44・40）・行 52・書体は見出し `title-small`（14px・500）、本文 `body-medium`、区切りは 1px。これは M2 の data table の 56 / 52 とも同じ
+- hover・選択・並べ替え・貼り付く見出し・ページ送りは M3E / M3 に表向けの規定が無いので、M3E の他部品に合わせた: hover は `on-surface` 8% の state layer、選んだ行は `secondary-container`（M3E のリストの選択）、並べ替えは文字＋矢印のボタン（hover は丸い state layer）と `aria-sort`、ページ送りは `m3e-paginator`（見本どおり右寄せ）、数値は右寄せ・等幅の数字
+
+### 作ったもの
+
+- **共通の表**: `ui/DataTable.tsx`（`DataTable`・`ColumnHeader`・`TablePager`・`pageSlice`）+ styles.css の `.mf-table*`。native `<table>` に、外枠（1px `outline-variant`・角 medium）・見出しの行（`surface-container`・`title-small`・`on-surface`・下に線・縦に収めると上に貼り付く）・行 52（2 行のセルは 64・`dense` は 44）・左右 16・行の区切り線・hover・選択・並べ替えの見出し・下の帯（ページ送り）。横に溢れたら表の中だけ横にスクロール（ページは動かさない）。狭い幅で列を隠すのは各表のコンテナクエリ
+- **制作物一覧**（`features/work/WorksTable.tsx`・ルート `routes/_app/works/index.tsx`）: 列は 題名（媒体のアイコン・非公開の鍵）/ 状態 / 版 / 校正の締切 / 納期 / 主管担当 / 制作担当 / 制作者 / FB（数と未読の点）。題名は制作物へのリンク（Tab・Enter。行のほかの場所を押しても開く）。校了・中止の行は控えめな色。状態は、ホームと同じ段階（`workStageOf`・`lib/stageInfo.ts`）
+  - 並べ替え: 見出し（題名・状態・校正の締切・納期・主管担当・制作担当）を押す。同じ列をもう一度で逆向き。URL の `sort`・`dir=desc` で持ち、並べ替えのチップ（「…順」）と同じ値。domain `sortWorks` に向き（`dir`）と「状態」順（校正中 → 受付終了 → 未提出 → 保留 → 校了。段階なしは最後）を足した（単体テストあり。値の無いものは向きに関わらず最後）
+  - 絞り込み（状態・担当・大ジャンル）・検索・チップの並べ替えは今までどおり。読み込みの出し方も同じ（`useStableQuery`・一つの読み込み表示）
+  - ページ送り: `m3e-paginator`（10・25・50・100 件。初期 25）。10 件を超えるときだけ出す。絞り込み・並べ替えを変えたら 1 ページ目へ。範囲の表記は日本語（`rangeLabelFormatter` は M3E 側が再描画しないので `requestUpdate()` で描き直す）
+  - 幅: medium 以上は一覧を縦に収め、見出しが貼り付き、ページ送りは表の下に残る。狭いと列を 制作者 → 制作担当 → 主管担当 → 版 → 納期 → FB → 状態 の順に隠し、状態・版・FB は題名の下へ移る。**スマホは表のまま 題名 + 校正の締切 の 2 列**（ページの横スクロールなし）
+  - 新しいクエリ・フィールドは足していない（`works.listMine` の値だけ。未解決のコメント数は一覧に無いので FB の数を出した）
+- **ほかの表**: ホームの 2 つの表（`.dtable*` を廃止して `DataTable`）、表記ルールの表（`.rule-table*` の外形を共通へ。行の操作・キーボード・ツールチップ・並べ替えは従来のまま）。見出しの色はどれも `surface-container`。管理画面に `<table>` は無い（リスト）ので対象外
+- 確認: 1440・768・412 の画像（E2E の 02・02b・02c・33 とホーム 07・27・20）。E2E は行の取り方を `.works .mf-table tbody tr` に替え、見出しの並べ替え（`aria-sort`・URL）と compact のページ横スクロールなしの確認を足した。axe の違反は日付ピッカーの `aria-command-name` だけ
