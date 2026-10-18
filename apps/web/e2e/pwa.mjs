@@ -7,8 +7,10 @@
  * - キャッシュに入るのは同一オリジンの静的ファイルだけ（API・データは入らない）
  * - オフラインで開き直しても外枠が出て、オフラインの知らせ（M3E snackbar）が出る
  * - 新しい版（sw.js の VERSION を一時的に書き換える）が届くと「更新」が出て、押すと切り替わり古いキャッシュが消える
+ * - 本番（Cloudflare Pages）と同じ /index.html → / のリダイレクトを挟んでも、画面の移動が止まらない
  */
 import { readFileSync, writeFileSync } from "node:fs";
+import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -16,7 +18,38 @@ import { chromium } from "playwright-core";
 const DIST =
   process.env.DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), "../dist-demo");
 
-const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";
+const ORIGIN = new URL(process.env.BASE_URL ?? "http://127.0.0.1:4173");
+/**
+ * 本番の Cloudflare Pages と同じく /index.html を / へ 308 でリダイレクトする中継を挟んで確かめる
+ * （リダイレクトを経た外枠を SW が画面の移動に返すと、ブラウザが読み込みを止める。2026-10-18 の不具合）
+ */
+const proxy = http.createServer((req, res) => {
+  if (req.url === "/index.html" || req.url?.startsWith("/index.html?")) {
+    res.writeHead(308, { Location: "/" });
+    res.end();
+    return;
+  }
+  const upstream = http.request(
+    {
+      host: ORIGIN.hostname,
+      port: ORIGIN.port,
+      path: req.url,
+      method: req.method,
+      headers: req.headers,
+    },
+    (r) => {
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    },
+  );
+  upstream.on("error", () => {
+    res.writeHead(502);
+    res.end();
+  });
+  req.pipe(upstream);
+});
+await new Promise((ok) => proxy.listen(0, "127.0.0.1", ok));
+const BASE = `http://127.0.0.1:${proxy.address().port}`;
 const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
 );
@@ -173,6 +206,7 @@ try {
   failed++;
 } finally {
   await browser.close();
+  proxy.close();
 }
 console.log(failed ? `\n${failed} 件失敗` : "\nすべて成功");
 process.exit(failed ? 1 : 0);
