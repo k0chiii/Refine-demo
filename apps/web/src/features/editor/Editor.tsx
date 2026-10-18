@@ -124,6 +124,7 @@ import {
 } from "@m3e/react/menu";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { InfoTab } from "./InfoTab";
+import { LeaveReviewPrompt } from "./LeaveReviewPrompt";
 import { VersionsTab } from "./VersionsTab";
 
 export type { Drawer, EditorSearch } from "./search";
@@ -1670,7 +1671,7 @@ export function Editor({
               確認を完了
             </M3eButton>
           ) : data?.myAssignment?.state === "responded" ? (
-            <span className="ws__done" role="img" title="確認完了" aria-label="確認完了">
+            <span className="ws__done" role="img" title="校正完了" aria-label="校正完了">
               <M3eIcon name="check_circle" className="icon--filled" />
             </span>
           ) : null}
@@ -2064,6 +2065,11 @@ export function Editor({
         ) : null}
 
         <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+        <LeaveReviewPrompt
+          workId={workId}
+          revisionId={revisionId}
+          needsCompletion={can?.completeReview === true}
+        />
         <CrossWorkPicker
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}

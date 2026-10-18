@@ -20,6 +20,7 @@ import { EditWorkDialog } from "@/features/work/EditWorkDialog";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
+  assignmentLabel,
   checkStateLabel,
   lifecycleActionLabel,
   lifecycleLabel,
@@ -91,6 +92,10 @@ export function InfoTab({
   const candidate = work.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
   const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
   const checks = revision?.checks ?? [];
+  const reviewers = revision?.assignments ?? [];
+  const reviewersDone = reviewers.filter(
+    (a) => a.state === "responded" || a.state === "excused",
+  ).length;
   const pendingChecks = checks.filter((c) => c.state === "pending").length;
   // 人の未対応のコメント（自動校正は校了を止めないので別に数える）
   const blocking = Math.max(0, (candidate?.unresolvedCount ?? 0) - (candidate?.openBotCount ?? 0));
@@ -328,6 +333,45 @@ export function InfoTab({
             ))
           : null}
       </div>
+
+      {/* 校正者ごとの状態。読了印として、校正完了にした人と時刻を制作者・主管が見られる（割り当てる権限のある人だけ） */}
+      {revision && revision.can.assign && revision.assignments.length > 0 ? (
+        <section className="info-tab__section" aria-label="校正者">
+          <h2 className="info-tab__h">
+            校正者
+            <StatusText
+              tone={reviewersDone === reviewers.length ? "success" : "neutral"}
+              className="ml"
+            >
+              校正完了 {reviewersDone} / {reviewers.length}
+            </StatusText>
+          </h2>
+          <div className="checks">
+            {reviewers.map((a) => {
+              const at = a.state === "responded" ? a.respondedAt : a.viewedAt;
+              return (
+                <div
+                  key={a.reviewerId}
+                  className={`check ${a.state === "responded" || a.state === "excused" ? "check--done" : ""}`}
+                >
+                  <StatusText
+                    tone={a.state === "responded" ? "success" : "neutral"}
+                    icon={a.state === "responded" ? "check_circle" : undefined}
+                  >
+                    {assignmentLabel[a.state]}
+                  </StatusText>
+                  <div>
+                    {a.reviewer?.name ?? a.reviewerId}
+                    {at !== undefined ? (
+                      <span className="small muted">・{formatJstShort(at)}</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {revision && (checks.length > 0 || revision.can.addCheck) ? (
         <section className="info-tab__section" aria-label="専門確認">
