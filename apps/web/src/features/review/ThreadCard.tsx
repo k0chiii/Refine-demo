@@ -224,14 +224,12 @@ export function ThreadCard({
                 aria-label="その他の操作"
                 size="extra-small"
                 className="thread__more"
-                {...(compact
-                  ? {
-                      onClick: (e: Event) => {
-                        stop(e);
-                        setSheetOpen(true);
-                      },
-                    }
-                  : {})}
+                // カード全体の onSelect へ伝えない（伝えると、メニューを開いた直後に「選び直し」の自動スクロールが走り、
+                // M3E のメニューは祖先のスクロールで閉じてしまう）
+                onClick={(e: Event) => {
+                  stop(e);
+                  if (compact) setSheetOpen(true);
+                }}
               >
                 <M3eIcon name="more_vert" />
                 {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}
@@ -671,14 +669,10 @@ function ReplyItem({
           aria-label="返信の操作"
           size="extra-small"
           className="thread__reply-more"
-          {...(compact
-            ? {
-                onClick: (ev: Event) => {
-                  stop(ev);
-                  setSheetOpen(true);
-                },
-              }
-            : {})}
+          onClick={(ev: Event) => {
+            stop(ev);
+            if (compact) setSheetOpen(true);
+          }}
         >
           <M3eIcon name="more_vert" />
           {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}

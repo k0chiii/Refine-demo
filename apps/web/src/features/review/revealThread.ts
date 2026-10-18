@@ -15,6 +15,8 @@ import { scrollBehavior } from "@/lib/motion";
 const CARD = "[data-thread-id]";
 /** 選択のあとカードの高さが変わる（返信欄・履歴が開く）間だけ、見え方を保つ */
 const FOLLOW_MS = 1500;
+/** 利用者が自分で操作した合図。これが来たらスクロールを始めない・続けない（メニューを開く・欄に触れるのを邪魔しない） */
+const USER_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 /** 一覧が現れるまで待つ上限（フレーム数。データ読み込み・タブ切り替えの分。約 10 秒） */
 const MAX_WAIT_FRAMES = 600;
 
@@ -87,6 +89,15 @@ function revealDelta(
   return Math.min(below, above);
 }
 
+/** 開いているメニュー（popover）があるか */
+function menuOpen(): boolean {
+  try {
+    return document.querySelector("m3e-menu:popover-open") !== null;
+  } catch {
+    return false;
+  }
+}
+
 function cardIn(id: string): HTMLElement | null {
   const css = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id;
   for (const el of document.querySelectorAll<HTMLElement>(`.comments__list ${CARD}`))
@@ -102,6 +113,22 @@ function cardIn(id: string): HTMLElement | null {
  * 中断・見つからないまま上限に達したら false
  */
 export async function scrollThreadIntoView(id: string, signal: AbortSignal): Promise<boolean> {
+  // 利用者が触れたら動かさない。選んだ操作そのもの（クリックの pointerdown）は、この関数が始まる前に済んでいる。
+  // M3E のメニューは祖先のスクロールで閉じるので、「⋮」を押した直後の自動スクロールがメニューを閉じてしまわないようにする
+  let acted = false;
+  const onUser = () => {
+    acted = true;
+  };
+  for (const ev of USER_EVENTS)
+    document.addEventListener(ev, onUser, { capture: true, passive: true });
+  try {
+    return await run(id, signal, () => acted);
+  } finally {
+    for (const ev of USER_EVENTS) document.removeEventListener(ev, onUser, { capture: true });
+  }
+}
+
+async function run(id: string, signal: AbortSignal, acted: () => boolean): Promise<boolean> {
   let card: HTMLElement | null = null;
   for (let i = 0; i < MAX_WAIT_FRAMES && !card; i++) {
     card = cardIn(id);
@@ -131,6 +158,7 @@ export async function scrollThreadIntoView(id: string, signal: AbortSignal): Pro
     if (!(await frame(signal))) return false;
   }
   if (!card.isConnected) return false;
+  if (acted()) return true; // 待っているあいだに利用者が操作した
   const sp = scrollParent(card);
   if (!sp) return true; // 一覧が全部見えている（スクロールするものがない）
 
@@ -147,20 +175,26 @@ export async function scrollThreadIntoView(id: string, signal: AbortSignal): Pro
       mode,
     );
     if (Math.abs(delta) < 1) return;
+    if (menuOpen()) return; // M3E のメニューは祖先のスクロールで閉じる。開いているあいだは動かさない
     dest = Math.max(0, Math.min(dest + delta, sp.scrollHeight - sp.clientHeight));
     sp.scrollTo({ top: dest, behavior });
   };
   place("start", scrollBehavior());
 
-  // 返信欄・履歴が開いてカードが伸びる間は、見え方を保つ。利用者が自分でスクロールしたらやめる
+  // 返信欄・履歴が開いてカードが伸びる間は、見え方を保つ。利用者が操作したらやめる（動いている最中のスムーズスクロールも止める。
+  // 止めないと、そのあとに開いたメニューが「祖先のスクロール」で閉じる）
   await new Promise<void>((resolve) => {
     const stop = () => {
       ro.disconnect();
       clearTimeout(timer);
-      for (const ev of ["wheel", "touchstart", "pointerdown", "keydown"])
-        sp.removeEventListener(ev, stop);
+      for (const ev of USER_EVENTS) document.removeEventListener(ev, onUser, true);
       signal.removeEventListener("abort", stop);
       resolve();
+    };
+    const onUser = () => {
+      if (sp.isConnected && Math.abs(sp.scrollTop - dest) >= 1)
+        sp.scrollTo({ top: sp.scrollTop, behavior: "instant" });
+      stop();
     };
     const ro = new ResizeObserver(() => {
       if (card!.isConnected) place("nearest", "auto");
@@ -168,8 +202,8 @@ export async function scrollThreadIntoView(id: string, signal: AbortSignal): Pro
     ro.observe(card!);
     ro.observe(sp);
     const timer = setTimeout(stop, FOLLOW_MS);
-    for (const ev of ["wheel", "touchstart", "pointerdown", "keydown"])
-      sp.addEventListener(ev, stop, { passive: true, once: true });
+    for (const ev of USER_EVENTS)
+      document.addEventListener(ev, onUser, { capture: true, passive: true });
     signal.addEventListener("abort", stop, { once: true });
   });
   return true;
