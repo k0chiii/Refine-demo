@@ -1285,6 +1285,340 @@ m3e-dialog [slot="actions"] {
 .list__item--unread .list__headline {
   font-weight: 500;
 }
+/* ---------- ホームの数字と表（features/home/DashboardOverview.tsx。§74）
+ * 上から: 数字のカード（左上が最重要）→ やること（上の .dash）→ 制作物の状況（表 + 内訳）。
+ * 表と内訳は上の .dash--columns と同じ 2 列（主 + 右の固定幅のペイン）に載せ、列の縁を揃える */
+.dash-page {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+@media (max-width: 599px) {
+  .dash-page {
+    gap: 24px;
+  }
+}
+
+/* 数字のカード: 大きな数を左上に、基準の数（次の締切・解決の割合）を下に。色は意味のあるときだけ（期限超過 = error） */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 839px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+.kpi {
+  --m3e-card-padding: 16px;
+  --m3e-card-shape: var(--mf-shape-lg);
+  --m3e-filled-card-container-color: var(--mf-surface-container-low);
+  display: block;
+  min-width: 0;
+}
+.kpi__body {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: 4px;
+  min-height: 104px;
+}
+.kpi__label {
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+}
+.kpi__value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--mf-on-surface);
+}
+.kpi__num {
+  font: 400 2.5rem / 3rem var(--mf-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.kpi__unit {
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+}
+.kpi--error .kpi__value {
+  color: var(--mf-error);
+}
+.kpi__sub {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  align-self: end;
+}
+@media (max-width: 599px) {
+  .kpi__body {
+    min-height: 96px;
+  }
+  .kpi__num {
+    font-size: 2rem;
+    line-height: 2.5rem;
+  }
+}
+
+/* 進み具合の棒: 棒（M3E linear progress）と「5 / 12」。0 から始まる軸で、割合を長さで比べる */
+.meter {
+  display: grid;
+  gap: 4px;
+  align-self: end;
+}
+.meter__bar,
+.progress-row__bar {
+  --m3e-linear-progress-indicator-thickness: 6px;
+  --m3e-progress-indicator-color: var(--mf-primary);
+  --m3e-progress-indicator-track-color: var(--mf-surface-container-highest);
+  display: block;
+  width: 100%;
+}
+.meter__text {
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 制作物の状況 */
+.ov {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.ov__asof {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+.ov__none {
+  margin: 0;
+}
+/* 右のペインの中身: 区切りは余白（見出し + 内容のまとまりを 20 離す） */
+.ov__side {
+  gap: 24px;
+  padding-block: 16px;
+}
+.ov__block {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.ov__blockhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ov__blockhead > .dash__title--side,
+.ov__block > .dash__title--side {
+  margin: 0;
+}
+/* 主の列は .list のようにはみ出さないので、右の内側余白は付けない */
+.dash--columns > .ov__main {
+  padding-inline-end: 0;
+}
+
+/* 段階の積み上げ棒: 1 本の棒で内訳を見せる（全体 = 100%、0 から）。色は意味（灰 = 未提出・青 = 校正中・赤 = 受付終了・黄 = 保留・緑 = 校了）。
+ * 区間の間は 2px の隙間（色が隣り合っても分かれて見える）。背景に対し 3:1 以上の濃さ。棒は読み上げ用に role="img"、下の凡例が文字と数で同じ内容を出す */
+.stagebar {
+  display: flex;
+  gap: 2px;
+  height: 16px;
+  border-radius: var(--mf-shape-full);
+  overflow: hidden;
+}
+.stagebar__seg {
+  min-width: 6px;
+  background: var(--mf-outline);
+}
+.stagebar__seg--unsubmitted {
+  background: var(--mf-outline);
+}
+.stagebar__seg--reviewing {
+  background: var(--mf-primary);
+}
+.stagebar__seg--lapsed {
+  background: var(--mf-error);
+}
+.stagebar__seg--on_hold {
+  background: var(--mf-warning);
+}
+.stagebar__seg--finalized {
+  background: var(--mf-success);
+}
+.legend {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--mf-type-body-medium);
+  min-height: 28px;
+}
+.legend__item--zero {
+  color: var(--mf-on-surface-variant);
+}
+.legend__swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--mf-shape-xs);
+  min-width: 0;
+}
+.legend__label {
+  flex: 1;
+}
+.legend__num {
+  font-variant-numeric: tabular-nums;
+}
+.progress-rows {
+  display: grid;
+  gap: 16px;
+}
+.progress-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 6px 8px;
+  font: var(--mf-type-body-medium);
+}
+.progress-row__text {
+  font-variant-numeric: tabular-nums;
+}
+.progress-row__bar {
+  grid-column: 1 / -1;
+}
+
+/* 表（制作物・局別）: ルールの表（.rule-table。§54）と同じ寸法・面・区切り線。
+ * 見出し 48・行 56（2 行の行は 64）・左右 16。数値は右寄せ・等幅の数字。行の操作は題名のリンクだけ（行全体も押せる）。
+ * 狭い幅では列を隠し（コンテナクエリ）、それでも収まらなければ表の中だけ横にスクロール */
+.dtable {
+  background: var(--mf-surface-container-lowest);
+  border-radius: var(--mf-shape-md);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  container-type: inline-size;
+}
+.dtable__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface);
+}
+.dtable__th {
+  height: 48px;
+  padding: 0 16px;
+  text-align: start;
+  vertical-align: middle;
+  font: var(--mf-type-title-small);
+  color: var(--mf-on-surface-variant);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.dtable__td {
+  height: 56px;
+  padding: 8px 16px;
+  vertical-align: middle;
+  text-align: start;
+  font: var(--mf-type-body-medium);
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+.dtable__row:last-child > * {
+  border-bottom: 0;
+}
+.dtable__num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.dtable__row:hover > * {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+/* 題名の列: 残りの幅を使い、長い題名は 2 行まで */
+.dtable__title {
+  font-weight: 500;
+  min-width: 180px;
+}
+.dtable__link {
+  color: var(--mf-on-surface);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.dtable__link:hover {
+  text-decoration: underline;
+}
+.dtable__link:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 2px;
+}
+.dtable__sub {
+  display: block;
+  font: var(--mf-type-body-small);
+  font-weight: 400;
+  color: var(--mf-on-surface-variant);
+  white-space: nowrap;
+}
+.dtable__date {
+  white-space: nowrap;
+}
+.dtable__date--overdue {
+  color: var(--mf-error);
+}
+.dtable__count {
+  font-weight: 500;
+}
+.dtable__col--bureau,
+.dtable__col--review,
+.dtable__col--stage {
+  white-space: nowrap;
+}
+/* 状態の列が隠れる幅では、題名の下に状態を出す */
+.dtable__stage-inline {
+  display: none;
+}
+@container (max-width: 639px) {
+  .dtable__col--bureau {
+    display: none;
+  }
+}
+@container (max-width: 539px) {
+  .dtable__col--review {
+    display: none;
+  }
+}
+@container (max-width: 459px) {
+  .dtable__col--stage {
+    display: none;
+  }
+  .dtable__stage-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+/* 局別の小さな表: 行は 44 */
+.dtable--small .dtable__th {
+  height: 40px;
+  padding-inline: 12px;
+}
+.dtable--small .dtable__td {
+  height: 44px;
+  padding-block: 0;
+  padding-inline: 12px;
+  font-weight: 400;
+}
+/* 右のペイン（surface-container-low）の上では、表は 1 段明るい面のまま */
+
 /* 「ホームを編集」: 節ごとのスイッチと上下のボタン */
 .home-edit__group {
   display: grid;

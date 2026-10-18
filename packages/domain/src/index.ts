@@ -15,6 +15,7 @@ export * from "./work/bulkImport.ts";
 export * from "./work/workStats.ts";
 export * from "./org/team.ts";
 export * from "./dashboard/layout.ts";
+export * from "./dashboard/overview.ts";
 export * from "./revision/Revision.ts";
 export * from "./revision/Artifact.ts";
 export * from "./comment/Anchor.ts";
