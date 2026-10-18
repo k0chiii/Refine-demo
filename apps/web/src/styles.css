@@ -3587,14 +3587,14 @@ m3e-icon.icon--on {
 .dialog-body > .rule-editor {
   padding-top: 8px;
 }
-/* 表記統一: 文章エディタの誤表記（波線）。要確認は点線で弱く */
+/* 表記統一: 文章エディタの誤表記。波線はうるさいので、薄めの細い直線（利用者指示 2026-10-18）。要確認は点線でさらに弱く */
 .notation-hit {
-  text-decoration: underline wavy var(--mf-error);
+  text-decoration: underline 2px color-mix(in srgb, var(--mf-error) 55%, transparent);
   text-decoration-skip-ink: none;
-  text-underline-offset: 3px;
+  text-underline-offset: 4px;
 }
 .notation-hit--review {
-  text-decoration: underline dotted var(--mf-warning);
+  text-decoration: underline 1.5px dotted color-mix(in srgb, var(--mf-warning) 70%, transparent);
 }
 .notation-panel__undo {
   justify-content: space-between;
