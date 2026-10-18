@@ -47,6 +47,13 @@ export interface CommentThread {
   origin?: BotOrigin;
   /** 本文でメンションした人（制作物を見られる人だけ。validateMentions） */
   mentions?: UserId[];
+  /**
+   * 投稿者が削除した時刻（論理削除。原文と履歴は CommentEvent に残す）。
+   * 削除済みのスレッドは件数・未解決・校了の判定・紙面の印から外れる（deletion.ts）。
+   */
+  deletedAt?: Instant;
+  /** 削除した時点で、投稿者以外の人の返信が残っていた（一覧に「削除されたコメント」として残す）。返信が無ければ一覧にも出さない */
+  deletedKeepsReplies?: boolean;
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;
@@ -102,7 +109,11 @@ export type CommentEventType =
   | "decided"
   | "edited"
   | "carried_forward"
-  | "assigned";
+  | "assigned"
+  /** スレッドの削除（投稿者のみ。論理削除） */
+  | "deleted"
+  /** 返信の削除（payload.replyEventId が削除した返信。返信の本文は元のイベントに残す） */
+  | "reply_deleted";
 
 /** 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。 */
 export function editThreadBody(
@@ -164,6 +175,8 @@ export function isCarryCandidate(thread: CommentThread): boolean {
 }
 
 export interface CommentEvent {
+  /** 保存済みのイベントの ID（返信の削除で対象を指す。追記する時は付けない） */
+  id?: string;
   threadId: ThreadId;
   eventType: CommentEventType;
   actorId: UserId;

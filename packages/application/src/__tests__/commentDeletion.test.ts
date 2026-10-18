@@ -1,0 +1,187 @@
+import { isListedThread } from "@mf100/domain";
+import { describe, expect, it } from "vite-plus/test";
+import { grantWorkPermission } from "../usecases/acl.ts";
+import { finalizeWork } from "../usecases/approvals.ts";
+import {
+  assignThread,
+  decideThread,
+  deleteReply,
+  deleteThread,
+  editThread,
+  listCarryCandidates,
+  postComment,
+  replyToThread,
+} from "../usecases/comments.ts";
+import { assignReviewers } from "../usecases/reviews.ts";
+import { createInMemoryContext } from "../testing/inMemory.ts";
+import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
+
+const code = (c: string) => expect.objectContaining({ code: c });
+
+async function setup() {
+  const ctx = createInMemoryContext();
+  const work = await seedWork(ctx);
+  const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
+  await grantWorkPermission(ctx, principals.sysadmin, {
+    workId: work.id,
+    principalType: "user",
+    principalId: principals.reviewer.userId,
+    permission: "review",
+  });
+  await assignReviewers(ctx, principals.manager, {
+    revisionId: revision.id,
+    reviewerIds: [principals.reviewer.userId],
+    reviewType: "general",
+  });
+  const post = (severity: "critical" | "info" = "critical") =>
+    postComment(ctx, principals.reviewer, {
+      revisionId: revision.id,
+      body: "団体名が誤り",
+      kind: "correction",
+      severity,
+    });
+  /** 返信の追記済みイベント ID（作成順） */
+  const replyIds = async (threadId: string) =>
+    (await ctx.threads.listEvents(threadId))
+      .filter((e) => e.eventType === "replied")
+      .map((e) => e.id!);
+  return { ctx, work, revision, post, replyIds };
+}
+
+describe("コメントの削除（投稿者のみ）", () => {
+  it("投稿者は削除でき、一覧・校了のブロックから外れる。原文と削除の記録は履歴に残る", async () => {
+    const { ctx, work, revision, post } = await setup();
+    const thread = await post();
+    // 重大未解決があるうちは校了できない
+    await expect(
+      finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id }),
+    ).rejects.toThrow(code("approval_blocking_threads_remain"));
+
+    await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
+
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
+    expect(await ctx.threads.listByRevision(revision.id, { includeDeleted: true })).toHaveLength(1);
+    const stored = await ctx.threads.findById(thread.id);
+    expect(stored?.deletedAt).toBe(ctx.clock.now());
+    expect(stored?.body).toBe("団体名が誤り");
+    expect(isListedThread(stored!)).toBe(false); // 返信が無ければ一覧にも出さない
+    const events = await ctx.threads.listEvents(thread.id);
+    expect(events.map((e) => e.eventType)).toEqual(["created", "deleted"]);
+    await expect(
+      finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("投稿者以外（制作者・管理者・校了権限者・ほかの委員）は削除できない", async () => {
+    const { ctx, post } = await setup();
+    const thread = await post();
+    for (const p of [
+      principals.creator,
+      principals.manager,
+      principals.approver,
+      principals.sysadmin,
+      principals.stranger,
+    ]) {
+      await expect(deleteThread(ctx, p, { threadId: thread.id })).rejects.toThrow(
+        code("comment_delete_not_author"),
+      );
+    }
+    expect((await ctx.threads.findById(thread.id))?.deletedAt).toBeUndefined();
+  });
+
+  it("校了後は投稿者でも削除できない", async () => {
+    const { ctx, work, revision, post } = await setup();
+    const thread = await post("info");
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    await expect(deleteThread(ctx, principals.reviewer, { threadId: thread.id })).rejects.toThrow(
+      code("work_already_finalized"),
+    );
+    expect((await ctx.threads.findById(thread.id))?.deletedAt).toBeUndefined();
+  });
+
+  it("削除済みのコメントには返信・訂正・採否・担当・再削除ができない。持ち越し候補にも出ない", async () => {
+    const { ctx, revision, post } = await setup();
+    const thread = await post();
+    await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
+    const gone = code("comment_thread_deleted");
+    await expect(
+      replyToThread(ctx, principals.creator, { threadId: thread.id, body: "y" }),
+    ).rejects.toThrow(gone);
+    await expect(
+      editThread(ctx, principals.reviewer, { threadId: thread.id, body: "z" }),
+    ).rejects.toThrow(gone);
+    await expect(
+      decideThread(ctx, principals.creator, { threadId: thread.id, action: "accepted" }),
+    ).rejects.toThrow(gone);
+    await expect(
+      assignThread(ctx, principals.creator, { threadId: thread.id, assigneeId: "u_x" }),
+    ).rejects.toThrow(gone);
+    await expect(deleteThread(ctx, principals.reviewer, { threadId: thread.id })).rejects.toThrow(
+      gone,
+    );
+    expect(await listCarryCandidates(ctx, principals.creator, revision.id)).toEqual([]);
+  });
+
+  it("他の人の返信があれば一覧に残り（本文は伏せる対象）、その返信が全て削除されると一覧から外れる", async () => {
+    const { ctx, revision, post, replyIds } = await setup();
+    const thread = await post();
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    await replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "お願いします" });
+    await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
+
+    // 件数・未解決の対象からは外れるが、返信の文脈のために一覧には残る
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
+    const kept = await ctx.threads.findById(thread.id);
+    expect(isListedThread(kept!)).toBe(true);
+
+    const [creatorReply] = await replyIds(thread.id);
+    await deleteReply(ctx, principals.creator, {
+      threadId: thread.id,
+      replyEventId: creatorReply!,
+    });
+    expect(isListedThread((await ctx.threads.findById(thread.id))!)).toBe(false);
+  });
+
+  it("自分の返信だけを削除でき、元の本文と削除の記録が履歴に残る", async () => {
+    const { ctx, post, replyIds } = await setup();
+    const thread = await post();
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    await replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "了解" });
+    const [fromCreator, fromReviewer] = await replyIds(thread.id);
+
+    // 他人の返信は（スレッドの投稿者・管理者でも）消せない
+    await expect(
+      deleteReply(ctx, principals.reviewer, { threadId: thread.id, replyEventId: fromCreator! }),
+    ).rejects.toThrow(code("comment_delete_not_author"));
+    await expect(
+      deleteReply(ctx, principals.sysadmin, { threadId: thread.id, replyEventId: fromReviewer! }),
+    ).rejects.toThrow(code("comment_delete_not_author"));
+
+    await deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: fromCreator! });
+    const events = await ctx.threads.listEvents(thread.id);
+    expect(events.map((e) => e.eventType)).toEqual([
+      "created",
+      "replied",
+      "replied",
+      "reply_deleted",
+    ]);
+    expect(events.find((e) => e.id === fromCreator)?.payload).toMatchObject({ body: "対応します" });
+    // スレッド自体は生きたまま
+    expect((await ctx.threads.findById(thread.id))?.deletedAt).toBeUndefined();
+    // 二重削除は見つからない扱い
+    await expect(
+      deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: fromCreator! }),
+    ).rejects.toThrow(code("comment_reply_not_found"));
+  });
+
+  it("校了後は返信も削除できない", async () => {
+    const { ctx, work, revision, post, replyIds } = await setup();
+    const thread = await post("info");
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    const [id] = await replyIds(thread.id);
+    await expect(
+      deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: id! }),
+    ).rejects.toThrow(code("work_already_finalized"));
+  });
+});

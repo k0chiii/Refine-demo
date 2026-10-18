@@ -1956,3 +1956,19 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
   - 新しいクエリ・フィールドは足していない（`works.listMine` の値だけ。未解決のコメント数は一覧に無いので FB の数を出した）
 - **ほかの表**: ホームの 2 つの表（`.dtable*` を廃止して `DataTable`）、表記ルールの表（`.rule-table*` の外形を共通へ。行の操作・キーボード・ツールチップ・並べ替えは従来のまま）。見出しの色はどれも `surface-container`。管理画面に `<table>` は無い（リスト）ので対象外
 - 確認: 1440・768・412 の画像（E2E の 02・02b・02c・33 とホーム 07・27・20）。E2E は行の取り方を `.works .mf-table tbody tr` に替え、見出しの並べ替え（`aria-sort`・URL）と compact のページ横スクロールなしの確認を足した。axe の違反は日付ピッカーの `aria-command-name` だけ
+
+## 76. コメントの削除（投稿者のみ・2026-10-18・利用者指示）
+
+利用者の指示:「コメントの削除機能欲しい。（投稿者のみ）」。FB の投稿の削除（`deletePost`）と同じ考え方で、コメントと返信を**論理削除**にする。
+
+- **誰が**: 投稿した本人だけ。制作者・システム管理者・校了権限者も他人のコメントは消せない（FB は管理者も可だが、こちらは本人のみ）。**校了後は不可**（訂正と同じ）。判定は domain `comment/deletion.ts`（`canDeleteComment` / `deleteThreadComment` / `deleteReply`）。サーバーが `thread.can.delete` と返信の `can.delete` を返し、画面は推測しない。見る権限（`work.view`）があれば自分のコメントは削除できる（投稿の期限・版の受付とは無関係）
+- **記録を消さない**: スレッドに `deletedAt` を付け、CommentEvent に `deleted`（スレッド）／`reply_deleted`（返信。`payload.replyEventId`）を追記する。原文・訂正前の本文・返信の本文は行に残り、画面向けに伏せる（`presentThread` / `projectThreadEvents`）。返信を指すため、履歴のイベントに `id` を持たせた（`CommentEvent.id`）
+- **スレッドの削除（返信の有無で 1 つの規則）**:
+  - 投稿者以外の人の返信が**無い** → 一覧から消え、紙面の印・未解決の数・校了のブロック・ホーム／ダッシュボードの数・持ち越し候補・担当一覧の件数からも外れる。`ThreadRepository.listByRevision` は既定で削除済みを除くので、集計はそのまま正しくなる
+  - 投稿者以外の返信が**ある** → 返信の文脈のため一覧には残り、本文は「削除されたコメント」（サーバーが差し替える。位置・メンション・担当・出所も伏せる）。紙面の印と数からは外れる（`deletedKeepsReplies`）。返信・採否・訂正・担当・持ち越しはできない（`comment_thread_deleted`）。その返信が全部削除されると一覧からも外れる
+  - 自分の返信だけが付いたスレッドは「返信なし」と同じに扱う
+- **返信の削除**: 返信した本人だけ。「削除された返信」として行は残し、本文は伏せる。返信ごとに ⋮（削除のみ。本人のときだけ出す）
+- **画面**: `ThreadCard` の「その他の操作」に「削除」（`can.delete` のときだけ。compact は ActionSheet）。押すと確認ダイアログ（FB と同じ M3E dialog）。削除するとカードと紙面の印は消える。説明文は置かない
+- 通知から開いたコメントが削除されていても、画面は一覧に無いだけで落ちない（`activeThreadId` が一覧に無ければ何も開かない）
+- 追加した DomainError: `comment_delete_not_author` / `comment_thread_deleted` / `comment_reply_not_found`（日本語は `apps/web/src/lib/errors.ts`）
+- 確認: domain・application・Convex 統合の単体テスト（状態・件数・エラーコード。文言は見ない）、E2E 75（自分のコメントを立てて削除し、スレッドの数が戻る）

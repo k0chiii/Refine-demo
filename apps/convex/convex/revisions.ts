@@ -10,6 +10,8 @@ import {
   isAllowed,
   isBeforeDeadline,
   isDeadlineReached,
+  isListedThread,
+  presentThread,
   revisionLabel,
 } from "@mf100/domain";
 import { v } from "convex/values";
@@ -43,7 +45,10 @@ export const get = query({
       const accepting = siblings.find(isAccepting) ?? null;
       const now = Date.now();
       const artifacts = await app.artifacts.listByRevision(revision.id);
-      const threads = await app.threads.listByRevision(revision.id);
+      // 削除されたコメントは、他の人の返信が残るものだけ「削除されたコメント」として出す（本文・位置は伏せる）
+      const threads = (await app.threads.listByRevision(revision.id, { includeDeleted: true }))
+        .filter(isListedThread)
+        .map((t) => presentThread(t, principal.userId, work.lifecycle));
       const assignments = await app.assignments.listByRevision(revision.id);
       const checks = await app.checks.listByRevision(revision.id);
       const users = await resolveUsers(ctx.db, [
