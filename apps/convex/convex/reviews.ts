@@ -83,7 +83,8 @@ export const myQueue = query({
       const myThreads = await ctx.db
         .query("commentThreads")
         .withIndex("by_revision", (q) => q.eq("revisionId", revision._id))
-        .collect();
+        .collect()
+        .then((rows) => rows.filter((t) => t.deletedAt === undefined));
       items.push({
         revisionId: revision._id,
         workId: work._id,

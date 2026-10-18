@@ -382,6 +382,10 @@ export default defineSchema({
     origin: v.optional(vBotOrigin),
     /** 本文でメンションした人（制作物を見られる人だけ） */
     mentions: v.optional(v.array(v.string())),
+    /** 投稿者が削除した時刻（論理削除。原文と履歴は commentEvents に残る） */
+    deletedAt: v.optional(v.number()),
+    /** 削除した時点で他の人の返信が残っていた（一覧に「削除されたコメント」として残す） */
+    deletedKeepsReplies: v.optional(v.boolean()),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
@@ -395,6 +399,8 @@ export default defineSchema({
       v.literal("edited"),
       v.literal("carried_forward"),
       v.literal("assigned"),
+      v.literal("deleted"),
+      v.literal("reply_deleted"),
     ),
     actorId: v.string(),
     reason: v.optional(v.string()),

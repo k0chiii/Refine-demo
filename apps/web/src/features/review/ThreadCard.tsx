@@ -23,12 +23,16 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import { StatusText } from "@/ui/Chip";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { useAction } from "@/lib/useAction";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { UserPicker } from "@/ui/UserPicker";
 
 export type Thread = FunctionReturnType<typeof api.revisions.get>["threads"][number];
 export const closedResolutions = ["rejected", "resolved", "deferred"];
-export const isClosed = (t: { resolution: string }) => closedResolutions.includes(t.resolution);
+/** 削除されたコメント（返信の文脈のために残してある）は解決済みとして数えない */
+export const isClosed = (t: { resolution: string; deleted?: boolean }) =>
+  t.deleted !== true && closedResolutions.includes(t.resolution);
 
 type Mode = null | "reply" | "rejected" | "deferred" | "assign" | "edit";
 
@@ -54,6 +58,8 @@ export function ThreadCard({
   onReply,
   onAssign,
   onEdit,
+  onDelete,
+  onDeleteReply,
   pending,
   className,
   index,
@@ -75,6 +81,9 @@ export function ThreadCard({
   onReply: (body: string, mentions: string[]) => Promise<void>;
   onAssign: (ids: string[]) => Promise<void>;
   onEdit: (body: string) => Promise<void>;
+  /** 自分のコメントの削除（t.can.delete のときだけ呼ばれる） */
+  onDelete: () => Promise<void>;
+  onDeleteReply: (replyEventId: string) => Promise<void>;
   pending?: boolean;
   className?: string;
 }) {
@@ -100,7 +109,13 @@ export function ThreadCard({
     setMentions([]);
   };
   const menuId = `tm-${t.id}`;
-  const hasMenu = canDecide || canEdit;
+  const gone = t.deleted;
+  const hasMenu = !gone && (canDecide || canEdit || t.can.delete);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const doDelete = useAction(async () => {
+    await onDelete();
+    setConfirmDelete(false);
+  });
   // compact の補助的な選択はボトムシート（M3 Breakpoints: compact は Bottom sheet、medium 以上は Menu）
   const compact = useWindowClass() === "compact";
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -117,13 +132,16 @@ export function ThreadCard({
     ...(canEdit && t.authorId === meId
       ? [{ icon: "edit", label: "訂正", onSelect: () => open("edit", t.body) }]
       : []),
+    ...(t.can.delete
+      ? [{ icon: "delete", label: "削除", onSelect: () => setConfirmDelete(true) }]
+      : []),
   ];
 
   return (
     <>
       <M3eCard
         variant={active ? "elevated" : "outlined"}
-        className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${className ?? ""}`}
+        className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${gone ? "thread--deleted" : ""} ${className ?? ""}`}
         aria-label={`コメント${index ? ` ${index}` : ""} ${t.author?.name ?? ""}`}
         onClick={onSelect}
       >
@@ -184,7 +202,7 @@ export function ThreadCard({
                       : index}
               </M3eButton>
             ) : null}
-            {canDecide && !closed ? (
+            {canDecide && !closed && !gone ? (
               <M3eIconButton
                 aria-label="解決済みにする"
                 size="extra-small"
@@ -225,15 +243,18 @@ export function ThreadCard({
               「{t.anchor.selector.textQuote.exact}」
             </blockquote>
           ) : null}
-          <div className="thread__body">{renderWithMentions(t.body, t.mentionUsers)}</div>
-          {closed ||
-          t.severity === "critical" ||
-          t.carriedFromThreadId ||
-          t.assignee ||
-          t.origin?.needsReview ||
-          t.origin?.textSource === "ocr" ||
-          (placeState && placeState !== "attached") ||
-          t.anchor?.type === "figma_node" ? (
+          <div className={`thread__body ${gone ? "thread__body--deleted" : ""}`}>
+            {gone ? t.body : renderWithMentions(t.body, t.mentionUsers)}
+          </div>
+          {!gone &&
+          (closed ||
+            t.severity === "critical" ||
+            t.carriedFromThreadId ||
+            t.assignee ||
+            t.origin?.needsReview ||
+            t.origin?.textSource === "ocr" ||
+            (placeState && placeState !== "attached") ||
+            t.anchor?.type === "figma_node") ? (
             <div className="thread__meta">
               {/* Web のライブ表示: 要素が見つからない（位置が外れた）・文字で見つけた（動いた）。消さずに注記する（WB-05） */}
               {placeState === "detached" ? (
@@ -283,10 +304,10 @@ export function ThreadCard({
               {t.assignee ? <StatusText icon="person">担当 {t.assignee.name}</StatusText> : null}
             </div>
           ) : null}
-          {active ? <ThreadEvents threadId={t.id} /> : null}
+          {active ? <ThreadEvents threadId={t.id} onDeleteReply={onDeleteReply} /> : null}
           {/* 返信（Google ドキュメントのコメントと同じ流れ）: 開いているカードの下に M3 の outlined text field を 1 つ。
               書き始める（フォーカスする）と「キャンセル」「返信」が出る。ラベルは欄の中（浮かぶラベル） */}
-          {active && canReply && (mode === null || mode === "reply") ? (
+          {active && canReply && !gone && (mode === null || mode === "reply") ? (
             <div className="thread__form" onClick={stop}>
               <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
                 <label slot="label" htmlFor={`${t.id}-reply`}>
@@ -404,6 +425,26 @@ export function ThreadCard({
           ) : null}
         </div>
       </M3eCard>
+      <M3eDialog open={confirmDelete} onClosed={() => setConfirmDelete(false)} closeLabel="閉じる">
+        <span slot="header">コメントを削除しますか？</span>
+        <div className="dialog-body" tabIndex={0}>
+          <p>本文は見えなくなります。元に戻せません</p>
+        </div>
+        <div slot="actions" className="row">
+          <span className="spacer" />
+          <M3eButton variant="text" onClick={() => setConfirmDelete(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="text"
+            className="thread__confirm-delete"
+            disabled={doDelete.pending}
+            onClick={() => void doDelete.run()}
+          >
+            削除
+          </M3eButton>
+        </div>
+      </M3eDialog>
       {hasMenu && compact ? (
         <ActionSheet
           open={sheetOpen}
@@ -438,6 +479,12 @@ export function ThreadCard({
               訂正
             </M3eMenuItem>
           ) : null}
+          {t.can.delete ? (
+            <M3eMenuItem onClick={() => setConfirmDelete(true)}>
+              <M3eIcon slot="icon" name="delete" />
+              削除
+            </M3eMenuItem>
+          ) : null}
         </M3eMenu>
       ) : null}
     </>
@@ -445,7 +492,14 @@ export function ThreadCard({
 }
 
 /** 返信・採否・担当・訂正の履歴。返信は会話として、それ以外は 1 行で。 */
-function ThreadEvents({ threadId }: { threadId: string }) {
+function ThreadEvents({
+  threadId,
+  onDeleteReply,
+}: {
+  threadId: string;
+  onDeleteReply: (replyEventId: string) => Promise<void>;
+}) {
+  const compact = useWindowClass() === "compact";
   const data = useQuery(api.comments.events, { threadId: threadId as Id<"commentThreads"> });
   if (!data) return null;
   const rest = data.events.filter((e) => e.eventType !== "created");
@@ -461,16 +515,13 @@ function ThreadEvents({ threadId }: { threadId: string }) {
         };
         if (e.eventType === "replied")
           return (
-            <li key={i} className="thread__replyitem">
-              <UserAvatar seed={e.actor?.email ?? e.actorId} userId={e.actorId} size={24} />
-              <div>
-                <span className="thread__name">{e.actor?.name}</span>
-                <span className="thread__time">{formatJstShort(e.createdAt)}</span>
-                <div className="thread__body">
-                  {renderWithMentions(p.body ?? "", e.mentionUsers)}
-                </div>
-              </div>
-            </li>
+            <ReplyItem
+              key={e.id || i}
+              event={e}
+              body={p.body ?? ""}
+              compact={compact}
+              onDelete={() => onDeleteReply(e.id)}
+            />
           );
         return (
           <li key={i} className="thread__event">
@@ -490,5 +541,96 @@ function ThreadEvents({ threadId }: { threadId: string }) {
         );
       })}
     </ul>
+  );
+}
+
+type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["events"][number];
+
+/** 返信 1 件。自分の返信だけ「⋮」から削除できる（削除した返信は本文を伏せて残す） */
+function ReplyItem({
+  event: e,
+  body,
+  compact,
+  onDelete,
+}: {
+  event: ThreadEvent;
+  body: string;
+  compact: boolean;
+  onDelete: () => Promise<void>;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const doDelete = useAction(async () => {
+    await onDelete();
+    setConfirm(false);
+  });
+  const stop = (ev: { stopPropagation: () => void }) => ev.stopPropagation();
+  const menuId = `rm-${e.id}`;
+  const deletable = e.can?.delete === true;
+  return (
+    <li className={`thread__replyitem ${e.deleted ? "thread__replyitem--deleted" : ""}`}>
+      <UserAvatar seed={e.actor?.email ?? e.actorId} userId={e.actorId} size={24} />
+      <div className="thread__replybody">
+        <span className="thread__name">{e.actor?.name}</span>
+        <span className="thread__time">{formatJstShort(e.createdAt)}</span>
+        <div className={`thread__body ${e.deleted ? "thread__body--deleted" : ""}`}>
+          {e.deleted ? body : renderWithMentions(body, e.mentionUsers)}
+        </div>
+      </div>
+      {deletable ? (
+        <M3eIconButton
+          aria-label="返信の操作"
+          size="extra-small"
+          className="thread__reply-more"
+          {...(compact
+            ? {
+                onClick: (ev: Event) => {
+                  stop(ev);
+                  setSheetOpen(true);
+                },
+              }
+            : {})}
+        >
+          <M3eIcon name="more_vert" />
+          {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}
+        </M3eIconButton>
+      ) : null}
+      {deletable && compact ? (
+        <ActionSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="返信の操作"
+          items={[{ icon: "delete", label: "削除", onSelect: () => setConfirm(true) }]}
+        />
+      ) : null}
+      {deletable && !compact ? (
+        <M3eMenu id={menuId} positionX="before" onClick={stop}>
+          <M3eMenuItem onClick={() => setConfirm(true)}>
+            <M3eIcon slot="icon" name="delete" />
+            削除
+          </M3eMenuItem>
+        </M3eMenu>
+      ) : null}
+      <M3eDialog open={confirm} onClosed={() => setConfirm(false)} closeLabel="閉じる">
+        <span slot="header">返信を削除しますか？</span>
+        <div className="dialog-body" tabIndex={0}>
+          <p>本文は見えなくなります。元に戻せません</p>
+        </div>
+        <div slot="actions" className="row">
+          <span className="spacer" />
+          <M3eButton variant="text" onClick={() => setConfirm(false)}>
+            キャンセル
+          </M3eButton>
+          <M3eButton
+            variant="text"
+            className="thread__confirm-delete"
+            disabled={doDelete.pending}
+            onClick={() => void doDelete.run()}
+          >
+            削除
+          </M3eButton>
+        </div>
+      </M3eDialog>
+    </li>
   );
 }

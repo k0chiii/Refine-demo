@@ -2636,6 +2636,14 @@ m3e-dialog [slot="actions"] {
   gap: 8px;
   align-items: flex-start;
 }
+.thread__replybody {
+  flex: 1;
+  min-width: 0;
+}
+.thread__body--deleted {
+  color: var(--mf-on-surface-variant);
+  font-style: italic;
+}
 .thread__replyitem .thread__name {
   margin-inline-end: 8px;
 }

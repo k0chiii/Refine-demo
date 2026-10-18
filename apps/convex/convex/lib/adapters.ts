@@ -321,12 +321,14 @@ export function createAppContext(
         const doc = await db.get("commentThreads", id as Id<"commentThreads">).catch(() => null);
         return doc ? (fromDoc(doc) as CommentThread) : null;
       },
-      async listByRevision(revisionId) {
+      async listByRevision(revisionId, options) {
         const docs = await db
           .query("commentThreads")
           .withIndex("by_revision", (q) => q.eq("revisionId", revisionId as Id<"revisions">))
           .collect();
-        return docs.map((d) => fromDoc(d) as CommentThread);
+        return docs
+          .filter((d) => options?.includeDeleted === true || d.deletedAt === undefined)
+          .map((d) => fromDoc(d) as CommentThread);
       },
       async insert(thread) {
         const id = await db.insert(
@@ -354,9 +356,8 @@ export function createAppContext(
           .collect();
         return docs.map((d) => {
           const { _id, _creationTime, ...rest } = d;
-          void _id;
           void _creationTime;
-          return rest as CommentEvent;
+          return { ...rest, id: _id as string } as CommentEvent;
         });
       },
     },

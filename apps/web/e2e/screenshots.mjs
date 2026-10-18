@@ -508,6 +508,34 @@ async function main() {
   await shot("19-text-range");
   await pickArtifact("sample.pdf");
 
+  // 75 自分のコメントを削除（投稿者のみ）: 位置なしのコメントを 1 件立て、⋮ →「削除」→ 確認で消す。スレッドの数が 1 つ減る
+  {
+    const count = () => page.locator(".comments .thread").count();
+    const n0 = await count();
+    await page.locator(".comments__free").click();
+    await page.fill(".compose-pop textarea", "削除の確認用のコメントです。");
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const mine = page.locator(".comments .thread", { hasText: "削除の確認用" });
+    await mine.locator(".thread__body").click();
+    await settle();
+    await mine.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+    await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
+    await settle();
+    await shot("75-comment-delete-confirm");
+    await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
+    expectTrue((await count()) === n0, "削除したコメントが一覧から消えない");
+  }
+
   // 27 ダッシュボード（制作者）: 「提出する」（各行に「版を提出」）・「返事をする」に未対応が出る。広い画面は 2 列（左がやること）
   await signInAs("mock-nogiku-creator");
   await page.waitForSelector("m3e-list-action");
