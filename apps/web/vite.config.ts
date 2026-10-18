@@ -64,6 +64,7 @@ function pwa(): Plugin {
     "/icons/icon-maskable-512.png",
     "/icons/apple-touch-icon.png",
     "/icons/favicon-32.png",
+    "/icons/badge-96.png",
   ];
   return {
     name: "mf100-pwa",

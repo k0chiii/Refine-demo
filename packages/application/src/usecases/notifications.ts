@@ -18,6 +18,11 @@ export interface NotifyInput {
   workId?: string;
   revisionId?: string;
   threadId?: string;
+  /**
+   * 端末の通知に載せる抜粋（コメントの冒頭など）。本文の抜粋と同じもの。確認観点・理由・締切などは渡さない。
+   * 見られない人の通知には保存しない
+   */
+  preview?: string;
 }
 
 /*
@@ -67,10 +72,12 @@ export function notificationSubjectOf(kind: NotificationKind): NotificationSubje
 
 /** 見られない人に返す形: 文面を伏せ、制作物・版・スレッドへの手がかり（ID）も返さない */
 function redact(n: Notification): Notification {
-  const { workId, revisionId, threadId, ...rest } = n;
+  const { workId, revisionId, threadId, actorId, preview, ...rest } = n;
   void workId;
   void revisionId;
   void threadId;
+  void actorId;
+  void preview;
   return { ...rest, ...REDACTED_NOTIFICATION };
 }
 
@@ -139,6 +146,9 @@ export async function notify(
         body: visible ? input.body : REDACTED_NOTIFICATION.body,
         createdAt: now,
       };
+      // 誰が（端末の通知に出す）と抜粋。見られない人には保存しない
+      if (visible && actorId) n.actorId = actorId;
+      if (visible && input.preview) n.preview = excerpt(input.preview);
       // ID は保存しておく（後で閲覧権限が付けば読取時に辿れる）。見られない間は読取時に返さない
       if (input.workId !== undefined) n.workId = input.workId;
       if (input.revisionId !== undefined) n.revisionId = input.revisionId;

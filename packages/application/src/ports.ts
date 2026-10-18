@@ -11,6 +11,7 @@ import type {
   Instant,
   ManualPair,
   NotationRule,
+  NotificationPrefs,
   ProofreadingRun,
   Principal,
   RequiredCheck,
@@ -163,6 +164,10 @@ export interface Notification {
   revisionId?: RevisionId;
   /** コメントのスレッド。feedback_* の通知ではフィードバックのスレッド */
   threadId?: string;
+  /** 通知のもとになった操作をした人（端末の通知に「誰が」を出す）。システム起点（締切・自動校正）は無い */
+  actorId?: UserId;
+  /** 端末の通知に載せてよい短い抜粋（コメントの冒頭など）。見られない人の通知には無い */
+  preview?: string;
   createdAt: Instant;
   readAt?: Instant;
 }
@@ -179,6 +184,17 @@ export interface NotificationRepository {
   findById(id: string): Promise<Notification | null>;
   update(notification: Notification): Promise<void>;
   countUnread(userId: UserId): Promise<number>;
+}
+
+/** 通知の受け取り方（利用者ごと。端末への通知にだけ効く）。行が無ければ既定（domain DEFAULT_NOTIFICATION_PREFS） */
+export interface NotificationPrefsRecord extends NotificationPrefs {
+  userId: UserId;
+  updatedAt: Instant;
+}
+
+export interface NotificationPrefsRepository {
+  find(userId: UserId): Promise<NotificationPrefsRecord | null>;
+  save(prefs: NotificationPrefsRecord): Promise<void>;
 }
 
 /** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意 */
@@ -387,6 +403,7 @@ export interface AppContext {
   checks: RequiredCheckRepository;
   notifications: NotificationRepository;
   pushSubscriptions: PushSubscriptionRepository;
+  notificationPrefs: NotificationPrefsRepository;
   documents: DocumentDraftRepository;
   socialProfiles: SocialProfileRepository;
   teams: TeamRepository;

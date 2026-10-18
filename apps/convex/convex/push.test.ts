@@ -105,6 +105,37 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("止めた分類の通知は端末に送らない（アプリ内の通知は残る）", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    await vapidEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await cast.reviewer.as.mutation(api.push.subscribe, await device(1));
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, {
+      mutedCategories: ["assignment"],
+    });
+    const workId = await setupWork(t, cast);
+    const { revisionId } = await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.reviews.assign, {
+      revisionId,
+      reviewerIds: [cast.reviewer.id],
+      reviewType: "general",
+    });
+    const [scheduled] = await scheduledDeliveries(t);
+    const notificationId = (scheduled!.args[0] as { notificationId: string }).notificationId;
+    const fetch = vi.fn(async () => new Response(null, { status: 201 }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+    const list = await cast.reviewer.as.query(api.notifications.list, {});
+    expect(list.some((n) => n.id === notificationId)).toBe(true);
+    // 誰が（actorId）は保存される
+    expect(list.find((n) => n.id === notificationId)?.actorId).toBe(cast.manager.id);
+    // 止めるのをやめれば送る
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { mutedCategories: [] });
+    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
+  });
+
   it("解除は自分の端末だけ", async () => {
     await vapidEnv();
     const t = createHarness();

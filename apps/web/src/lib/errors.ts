@@ -96,6 +96,7 @@ const messages: Record<string, string> = {
   feedback_not_found: "このスレッドや投稿は見つかりません。削除されたか、閲覧の権限がありません。",
   push_subscription_invalid:
     "この端末への通知を設定できませんでした。ブラウザを更新してやり直してください。",
+  notification_prefs_invalid: "通知の設定を保存できませんでした。もう一度お試しください。",
   feedback_file_not_ready:
     "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
   avatar_invalid: "アバターの設定を保存できませんでした。選び直してからもう一度お試しください。",

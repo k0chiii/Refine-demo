@@ -626,13 +626,20 @@ async function notifyFeedback(
       ctx,
       msg.recipients.filter((id) => !msg.mentions.includes(id) && canSee(id)),
       principal.userId,
-      { kind: "feedback_posted", title: msg.title, body: `${head}: ${excerpt(msg.text)}`, ...at },
+      {
+        kind: "feedback_posted",
+        title: msg.title,
+        body: `${head}: ${excerpt(msg.text)}`,
+        preview: msg.text,
+        ...at,
+      },
     );
   if (msg.mentions.length)
     await notify(ctx, msg.mentions, principal.userId, {
       kind: "feedback_mentioned",
       title: "フィードバックでメンションされました",
       body: `${head}: ${excerpt(msg.text)}`,
+      preview: msg.text,
       ...at,
     });
 }

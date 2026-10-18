@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildPushPayload,
+  clipPushText,
   DomainError,
   notificationPath,
+  PUSH_BODY_MAX,
+  PUSH_TITLE_MAX,
   pushOutcome,
+  pushTagOf,
   validatePushSubscription,
 } from "../index.ts";
 
@@ -47,57 +51,145 @@ describe("Web Push の購読の検証", () => {
 describe("Web Push の内容", () => {
   const n = {
     id: "n1",
-    kind: "comment_created",
+    kind: "comment_posted",
     title: "新しいコメント",
     workId: "w1",
     revisionId: "r1",
     threadId: "t1",
+    createdAt: 1_700_000_000_000,
+    preview: "相談です",
   };
+  const open = { title: "夏のポスター", restricted: false };
 
-  it("題名と制作物名だけを載せ、押すと同じ画面を開く", () => {
+  it("題名は制作物名、本文は送り主と抜粋。押すと同じ画面を開く", () => {
     const p = buildPushPayload({
       notification: n,
-      work: { title: "夏のポスター", restricted: false },
+      work: open,
       hidden: false,
+      actorName: "本郷 校正",
       unread: 3,
     });
-    expect(p).toEqual({
-      title: "新しいコメント",
-      body: "『夏のポスター』",
+    expect(p.title).toContain("夏のポスター");
+    expect(p.body).toContain("本郷 校正");
+    expect(p.body).toContain("相談です");
+    expect(p).toMatchObject({
       url: "/revisions/r1?thread=t1",
-      tag: "n1",
+      id: "n1",
       badge: 3,
+      createdAt: 1_700_000_000_000,
     });
   });
 
-  it("非公開の制作物の名前と、見られない通知の内容は載せない", () => {
-    expect(
+  it("同じスレッドの通知は同じ印でまとまり、スレッドが無ければ制作物、それも無ければ通知の ID", () => {
+    const tag = (x: object) =>
       buildPushPayload({
-        notification: n,
-        work: { title: "極秘", restricted: true },
+        notification: { ...n, ...x },
+        work: open,
         hidden: false,
+        unread: 0,
+      }).tag;
+    expect(tag({ id: "n1" })).toBe(tag({ id: "n2" }));
+    expect(tag({})).toBe("t1");
+    expect(tag({ threadId: undefined })).toBe("w1");
+    expect(tag({ threadId: undefined, workId: undefined })).toBe("n1");
+    expect(pushTagOf({ id: "n9" })).toBe("n9");
+  });
+
+  it("制作物の無い通知は通知の題名を題名にし、送り主か抜粋だけでも本文を作る", () => {
+    const base = { id: "n3", kind: "rule_proposed", title: "提案が届きました" };
+    const only = (extra: object, actorName: string | null) =>
+      buildPushPayload({
+        notification: { ...base, ...extra },
+        work: null,
+        hidden: false,
+        actorName,
         unread: 1,
-      }).body,
-    ).toBe("非公開の制作物");
-    const hidden = buildPushPayload({
-      notification: { ...n, title: "閲覧できない制作物の通知です" },
-      work: null,
-      hidden: true,
+      });
+    expect(only({}, "山田")).toMatchObject({
+      title: base.title,
+      tag: "n3",
+      url: "/notation?view=proposals",
+    });
+    expect(only({}, "山田").body).toContain("山田");
+    expect(only({ preview: "追加です" }, null).body).toContain("追加です");
+    expect(only({}, null).body.length).toBeGreaterThan(0);
+  });
+
+  it("長い題名・本文は切る", () => {
+    const p = buildPushPayload({
+      notification: { ...n, preview: "あ".repeat(500) },
+      work: { title: "題".repeat(300), restricted: false },
+      hidden: false,
+      actorName: "本郷",
+      unread: 0,
+    });
+    expect(Array.from(p.title).length).toBeLessThanOrEqual(PUSH_TITLE_MAX);
+    expect(Array.from(p.body).length).toBeLessThanOrEqual(PUSH_BODY_MAX);
+    expect(clipPushText("😀".repeat(10), 4)).toBe("😀😀😀…");
+  });
+
+  it("内容の表示を止めると、送り主と抜粋は載せず、題名は決まった文言になる", () => {
+    const input = { notification: n, work: open, hidden: false, actorName: "本郷 校正", unread: 1 };
+    const shown = buildPushPayload(input);
+    for (const off of [
+      buildPushPayload({ ...input, showPreview: false }),
+      buildPushPayload({ ...input, policy: { showWorkTitle: true, showPreview: false } }),
+    ]) {
+      const text = JSON.stringify([off.title, off.body]);
+      expect(text).not.toContain("本郷");
+      expect(text).not.toContain("相談です");
+      expect(off.title).not.toBe(shown.title);
+      expect(off.body).toContain("夏のポスター"); // 制作物名は従来どおり（ポリシーが許すとき）
+      expect(off.tag).toBe("t1");
+    }
+  });
+
+  it("非公開の制作物の名前・送り主・抜粋と、見られない通知の内容は載せない", () => {
+    const restricted = buildPushPayload({
+      notification: n,
+      work: { title: "極秘", restricted: true },
+      hidden: false,
+      actorName: "本郷 校正",
       unread: 1,
     });
-    expect(JSON.stringify(hidden)).not.toContain("r1");
+    expect(restricted.body).toBe("非公開の制作物");
+    expect(JSON.stringify(restricted)).not.toMatch(/極秘|本郷|相談です/);
+    // 内容の表示を止めていても、非公開の制作物名は出ない
+    const restrictedOff = buildPushPayload({
+      notification: n,
+      work: { title: "極秘", restricted: true },
+      hidden: false,
+      showPreview: false,
+      unread: 1,
+    });
+    expect(JSON.stringify(restrictedOff)).not.toContain("極秘");
+    const hidden = buildPushPayload({
+      notification: {
+        id: "n1",
+        kind: "comment_posted",
+        title: "閲覧できない制作物の通知です",
+        createdAt: 1,
+      },
+      work: null,
+      hidden: true,
+      actorName: "本郷 校正",
+      unread: 1,
+    });
+    expect(JSON.stringify(hidden)).not.toMatch(/r1|t1|w1|本郷|相談です/);
     expect(hidden.url).toBe("/");
+    expect(hidden.tag).toBe("n1");
   });
 
   it("ポリシーで制作物名を載せないようにできる", () => {
     const p = buildPushPayload({
       notification: n,
-      work: { title: "夏のポスター", restricted: false },
+      work: open,
       hidden: false,
+      actorName: "本郷 校正",
       unread: 0,
-      policy: { showWorkTitle: false },
+      policy: { showWorkTitle: false, showPreview: true },
     });
-    expect(p.body).not.toContain("夏のポスター");
+    expect(JSON.stringify(p)).not.toContain("夏のポスター");
   });
 
   it("行き先はアプリ内の通知と同じ", () => {
