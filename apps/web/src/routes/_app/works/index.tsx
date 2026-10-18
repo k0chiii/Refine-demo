@@ -74,7 +74,7 @@ export const Route = createFileRoute("/_app/works/")({
  * 表（共通の ui/DataTable。M3 に表の部品が無いので native `<table>`。利用者決定 2026-10-18「制作物一覧も表がいいかも」。§75）。
  * スマホ（compact）も表で、列を 題名 + 校正の締切 に絞る（状態・版・FB は題名の下）。
  * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、FAB は「版を提出」に譲り、1 件ずつの登録は
- * 登録の権限（Nogiku の組織権限 works:create）のある人にだけ、アプリバーの操作として出す（ダイアログは `?new=1`）。
+ * 登録の権限（Nogiku の組織権限 works:create と approvers:assign）のある人にだけ、アプリバーの操作として出す（ダイアログは `?new=1`）。
  * 検索語は `q` で渡る（検索バーは一旦外している）。見出し「制作物一覧」は共通アプリバーに差し込む（M3 App bars）。
  */
 function Works() {
@@ -88,6 +88,8 @@ function Works() {
   const compact = useWindowClass() === "compact";
   // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
   const canRegister = !compact;
+  // 登録は works:create に加えて、校了者を決める権限（approvers:assign）も要る
+  const canCreate = me?.canCreateWorks === true && me.canAssignApprovers;
   const dir: WorkSortDir = search.dir ?? "asc";
   const setSearch = (patch: {
     owner?: string;
@@ -156,7 +158,7 @@ function Works() {
   return (
     <div className="works">
       <AppBarSlot slot="title">制作物一覧</AppBarSlot>
-      {me?.canCreateWorks ? (
+      {canCreate ? (
         <AppBarSlot slot="actions">
           <M3eIconButton
             aria-label="制作物を登録"
@@ -270,10 +272,7 @@ function Works() {
           }}
         />
       )}
-      <NewWorkDialog
-        open={creating === true && me?.canCreateWorks === true}
-        onClose={() => setCreating(false)}
-      />
+      <NewWorkDialog open={creating === true && canCreate} onClose={() => setCreating(false)} />
     </div>
   );
 }

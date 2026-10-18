@@ -214,6 +214,9 @@ describe("制作物の一括登録", () => {
     const ctx = createInMemoryContext();
     const noPerm = { ...principals.manager, orgPermissions: [] };
     await expect(importWorks(ctx, noPerm, { rows: [row("一")] })).rejects.toThrow("forbidden");
+    // 校了者を決める権限（approvers:assign）が無い人も、登録できない
+    const createOnly = { ...principals.manager, orgPermissions: ["works:create"] };
+    await expect(importWorks(ctx, createOnly, { rows: [row("一")] })).rejects.toThrow("forbidden");
     await expect(importWorks(ctx, principals.manager, { rows: [] })).rejects.toThrow(
       "work_import_invalid",
     );

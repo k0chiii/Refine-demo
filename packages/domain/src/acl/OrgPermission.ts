@@ -11,6 +11,11 @@ import type { Principal } from "./Permission.ts";
 export const orgPermissions = {
   worksCreate: "works:create",
   reviewsAssign: "reviews:assign",
+  /**
+   * 校了者（と校了とみなす人数）を決められる。利用者決定（2026-10-18）「校了者を決めれる権限を作って欲しい」
+   * 「登録自体を権限者に限る」: 制作物の登録は works:create に加えて、これも要る（登録は必ず校了者を決めるため）。
+   */
+  approversAssign: "approvers:assign",
 } as const;
 
 export type OrgPermissionName = (typeof orgPermissions)[keyof typeof orgPermissions];
@@ -25,6 +30,10 @@ export const orgPermissionCatalog: ReadonlyArray<{ name: OrgPermissionName; desc
       name: orgPermissions.reviewsAssign,
       description: "版に校正者を割り当てられる（制作統括・主管担当）",
     },
+    {
+      name: orgPermissions.approversAssign,
+      description: "校了者を決められる（制作物の登録と、校了者・校了とみなす人数の変更）",
+    },
   ];
 
 export function hasOrgPermission(principal: Principal, name: OrgPermissionName): boolean {
@@ -34,4 +43,20 @@ export function hasOrgPermission(principal: Principal, name: OrgPermissionName):
 export function requireOrgPermission(principal: Principal, name: OrgPermissionName): void {
   if (!hasOrgPermission(principal, name))
     throw new DomainError("forbidden", { orgPermission: name });
+}
+
+/**
+ * 制作物を登録できる。登録は必ず校了者を決めるので、`works:create` と `approvers:assign` の両方が要る。
+ * Nogiku Access 未接続（`"*"`）のあいだは全員が持つ。
+ */
+export function canRegisterWorks(principal: Principal): boolean {
+  return (
+    hasOrgPermission(principal, orgPermissions.worksCreate) &&
+    hasOrgPermission(principal, orgPermissions.approversAssign)
+  );
+}
+
+export function requireWorkRegistration(principal: Principal): void {
+  requireOrgPermission(principal, orgPermissions.worksCreate);
+  requireOrgPermission(principal, orgPermissions.approversAssign);
 }

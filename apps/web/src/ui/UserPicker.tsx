@@ -21,6 +21,8 @@ export interface UserPickerProps {
   /** 候補から除外する ID（例: 既に割当済み） */
   exclude?: string[];
   placeholder?: string;
+  /** 見るだけ（外す・追加はできない。権限が無い人に、いまの選択だけを見せる） */
+  readOnly?: boolean;
 }
 
 /**
@@ -38,6 +40,7 @@ export function UserPicker({
   single,
   exclude = [],
   placeholder,
+  readOnly,
 }: UserPickerProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
@@ -64,7 +67,7 @@ export function UserPicker({
     setText("");
   };
   const remove = (id: string) => onChange(value.filter((v) => v !== id));
-  const canAdd = !single || value.length === 0;
+  const canAdd = !readOnly && (!single || value.length === 0);
 
   // <label> で全体を包まない: label 内の最初の labelable 要素（チップの「外す」ボタン）にクリックが転送されるため。
   return (
@@ -84,9 +87,13 @@ export function UserPicker({
             return (
               <M3eInputChip
                 key={id}
-                removable
-                removeLabel={`${name ?? id} を外す`}
-                onRemove={() => remove(id)}
+                {...(readOnly
+                  ? {}
+                  : {
+                      removable: true,
+                      removeLabel: `${name ?? id} を外す`,
+                      onRemove: () => remove(id),
+                    })}
               >
                 {name ?? "…"}
               </M3eInputChip>
@@ -133,7 +140,7 @@ export function UserPicker({
             ))}
           </M3eAutocomplete>
         </div>
-      ) : (
+      ) : readOnly ? null : (
         <span id={`${listId}-label`} className="field__label">
           {label}
           {hint ? ` — ${hint}` : ""}

@@ -1,6 +1,6 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
@@ -30,6 +30,9 @@ export function EditWorkDialog({
   onClose: () => void;
 }) {
   const update = useMutation(api.works.update);
+  const me = useQuery(api.me.me, {});
+  // 校了者を決める権限が無い人は、校了者の項目を送らない（変えられないので、見せるだけ）
+  const canAssignApprovers = me?.canAssignApprovers === true;
   const [form, setForm] = useState(() => workFormFromWork(work));
   useEffect(() => {
     if (open) setForm(workFormFromWork(work));
@@ -46,7 +49,7 @@ export function EditWorkDialog({
         mediaType: form.mediaType as "pdf",
         confidentiality: form.confidentiality as "normal",
         creatorIds: form.creatorIds,
-        ...approversFromForm(form),
+        ...(canAssignApprovers ? approversFromForm(form) : {}),
         managerIds: form.managerIds,
         notationCategories: form.notationCategories,
         // 主管担当を外すときは空文字（application で「なし」に戻す）
@@ -66,7 +69,12 @@ export function EditWorkDialog({
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
       <span slot="header">制作物を編集</span>
       <div className="dialog-body work-form">
-        <WorkFormFields form={form} setForm={setForm} mode="edit" />
+        <WorkFormFields
+          form={form}
+          setForm={setForm}
+          mode="edit"
+          canAssignApprovers={canAssignApprovers}
+        />
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>

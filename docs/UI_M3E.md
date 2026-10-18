@@ -993,7 +993,7 @@ W-01〜W-14・W-16・W-17・W-19〜W-22 を直した（W-15・W-18・W-23・W-24
 - 選んだら: PDF・画像・Web などの添付は**その場で版提出ダイアログ**（`features/upload/SubmitDialog`。制作物ごとに作り直し、前の制作物で選んだファイルを持ち越さない）。文章は文章エディタ（`/works/$workId/write`）、SNS 投稿は投稿の編集（`/post`）へ移る
 - **提出できる制作物が無い人には FAB を出さない**（校正だけの人・主管だけの人）。万一開いた後に無くなったら M3 の空状態「版を提出できる制作物はありません」と理由を出す
 - 判定は domain の `isSubmitTarget`: 既存の提出の権限（`revision.submit`。制作者または edit 委任）と進行中（`prepareSubmission` が拒否しない状態）を**必ず**確かめ、その上で `SubmitTargetPolicy` で狭める。既定は「職責として制作者の制作物だけ」「受付中の版があっても出す（新しい版で受付中の版は新版提出で閉じる）」。提出の入口は `submitRouteFor`（文章 → write、SNS → post、ほか → upload）。application の `listSubmitTargets` が候補を作り、Convex の `home.submitTargets` はアダプタ
-- 「**制作物を登録**」は登録権限（Nogiku の組織権限 `works:create`。`me.canCreateWorks` で出し分け、認可はサーバーで別に確かめる）のある人だけ、**制作物の一覧のアプリバーの操作**（アイコンボタン `note_add`）に置く。ダイアログは従来どおり（`?new=1`）
+- 「**制作物を登録**」は登録権限（Nogiku の組織権限 `works:create` と `approvers:assign`。`me.canCreateWorks` と `me.canAssignApprovers` で出し分け、認可はサーバーで別に確かめる）のある人だけ、**制作物の一覧のアプリバーの操作**（アイコンボタン `note_add`）に置く。ダイアログは従来どおり（`?new=1`）
 
 ### 制作物の一括登録（管理 › 制作物）
 
@@ -1001,7 +1001,7 @@ W-01〜W-14・W-16・W-17・W-19〜W-22 を直した（W-15・W-18・W-23・W-24
 - CSV の列（見出しの名前で探し、並びは自由）: **題名\*・年度・用途・区分\*・媒体\*・制作者\*・主管・校了権限者\*・納期・旧ID・機密区分・表記カテゴリ**（\* は必須。`createWork` の入力に合わせた）。年度が空なら 100。媒体は「PDF・画像・文章・SNS 投稿・動画・Web・Figma・その他」か内部の値。納期は `2026-11-14`（その日の終わり）か `2026-11-14 18:00`。複数の値は「;」「、」「,」で区切る
 - 担当者は**メールアドレスかユーザー名**（一度サインインした委員。UserPicker と同じ範囲）。照合は大文字小文字・全角半角・空白のゆれを無視した完全一致。見つからない・同名が複数いる担当者は、その行の「確認」に理由を出し、表のセルも赤い印（アイコン＋文字。色だけに頼らない）
 - 流れは表記ルールの取り込み（`features/notation/ImportDialog`）と同じ: ファイルを選ぶ → 確認の表（既存の `ui/DataTable`。行・題名・媒体・制作者・主管・校了権限者・納期・確認）と件数のチップ（行・登録できる・確認が必要）→「n 件を登録する」。確認が必要な行は登録せず、スナックバーで件数を知らせる
-- 解析と検証・照合は domain の `parseWorkCsv` / `resolveWorkImport`（純粋関数・単体テスト付き）。雛形は `workCsvTemplate`（BOM 付き UTF-8 で書き出す）。登録は application の `importWorks`: 権限 `works:create`、1 行ずつ従来の `createWork`（検証・登録者を主管に含める・監査）を通し、最後に一括の監査（`bulk_import`、件数・ID・ファイル名）。1 mutation なので**どれか 1 行でも失敗したら 1 件も登録しない**。1 回 200 行まで。旧ID が既存の制作物・CSV の中で重なる行は二重登録を避けて登録しない。担当者の照合用の利用者は Convex `works.importDirectory`（CSV に書かれたメール・名前に当たる人だけを返す。登録権限のある人だけ）
+- 解析と検証・照合は domain の `parseWorkCsv` / `resolveWorkImport`（純粋関数・単体テスト付き）。雛形は `workCsvTemplate`（BOM 付き UTF-8 で書き出す）。登録は application の `importWorks`: 権限 `works:create` と `approvers:assign`、1 行ずつ従来の `createWork`（検証・登録者を主管に含める・監査）を通し、最後に一括の監査（`bulk_import`、件数・ID・ファイル名）。1 mutation なので**どれか 1 行でも失敗したら 1 件も登録しない**。1 回 200 行まで。旧ID が既存の制作物・CSV の中で重なる行は二重登録を避けて登録しない。担当者の照合用の利用者は Convex `works.importDirectory`（CSV に書かれたメール・名前に当たる人だけを返す。登録権限のある人だけ）
 
 ### 自分だけのダッシュボード（W-26）
 
@@ -2091,3 +2091,10 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 - FB と同じ絵文字（domain の `REACTIONS`）・同じ規則（付け外し・1 人 1 絵文字 1 回）。部品は `ui/Reactions.tsx` に出し、FB の投稿とコメント・返信で共有する（チップ・選ぶメニュー・付けた人の名前の tooltip。マウスを乗せる・長押しで出る）。FB にも付けた人の名前が出るようになった
 - 付けられる人は返信と同じ（制作物を見られる人。校了後は不可）。削除されたコメント・返信には付けられない。通知は出さない（FB と同じ）
 - 保存は FB と同じくドキュメントに埋め込み（`commentThreads.reactions` / `commentEvents.reactions`。インデックスは既存の `by_revision` / `by_thread` で足りる）。返信の分は履歴（events）の購読だけが更新される
+
+## 82. 校了者を決める権限（2026-10-18・利用者指示「校了者を決めれる権限を作って欲しい」）
+
+- 組織権限 `approvers:assign`（`me.canAssignApprovers`）。「制作物を登録」（アプリバーの `note_add`）と管理の「CSV で一括登録」「1 件ずつ登録」は `works:create` と両方を持つ人にだけ出す。認可はサーバーで別に確かめる
+- 制作物の編集（`EditWorkDialog`）: 権限が無い人には校了者と人数を**見るだけ**（`ApproverFields` / `UserPicker` の `readOnly`。チップは外せず検索欄も出ない）。保存でも校了者の項目は送らない
+- 一覧の「校了者」のセル（`ApproversCell`）: `canEditApprovers`（権限があり、校了前）の人だけ押せる。主管・「管理」の閲覧権限による出し分けはやめた
+- 権限が無い変更の失敗は「校了者を決める権限がありません」（`forbidden` の `orgPermission`）

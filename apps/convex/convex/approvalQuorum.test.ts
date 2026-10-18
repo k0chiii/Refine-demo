@@ -97,13 +97,19 @@ describe("Convex 統合: 複数の校了者と校了とみなす人数", () => {
     expect(done.approval.declaredCount).toBe(2);
   });
 
-  it("校了者でない人は宣言できない。一覧は校了者の全員と進み具合を返し、編集できる人にだけ編集を許す", async () => {
-    const { cast, workId, revisionId } = await setup();
+  it("校了者でない人は宣言できない。一覧は校了者の全員と進み具合を返し、校了者を決める権限のある人にだけ編集を許す", async () => {
+    const { t, cast, workId, revisionId } = await setup();
     await expect(
       cast.manager.as.mutation(api.approvals.finalize, { workId, revisionId }),
     ).rejects.toThrow(code("forbidden"));
     await cast.reviewer.as.mutation(api.approvals.finalize, { workId, revisionId });
 
+    // Nogiku Access 接続後の挙動: 主管（manager）だけが approvers:assign を持ち、校了者本人は持たない
+    vi.stubEnv("NOGIKU_ACCESS_ENABLED", "true");
+    await t.run(async (ctx) => {
+      await ctx.db.patch(cast.manager.id, { orgPermissions: ["approvers:assign"] });
+      await ctx.db.patch(cast.approver.id, { orgPermissions: [] });
+    });
     const row = (await cast.manager.as.query(api.works.listMine, {})).find((w) => w.id === workId)!;
     expect(row.approvers.map((a) => a.id)).toEqual([
       cast.approver.id,
@@ -119,10 +125,19 @@ describe("Convex 統合: 複数の校了者と校了とみなす人数", () => {
       (w) => w.id === workId,
     )!;
     expect(asApprover.canEditApprovers).toBe(false);
-    // 編集の権限が無い人は、一覧のセルからも変えられない
+    // 権限が無い人は、一覧のセルからも変えられない
     await expect(
       cast.approver.as.mutation(api.works.update, { workId, patch: { approvalQuorum: 1 } }),
     ).rejects.toThrow(code("forbidden"));
+    // 権限のある人は、主管でなくても（work.edit が無くても）校了者を変えられる
+    await t.run((ctx) => ctx.db.patch(cast.stranger.id, { orgPermissions: ["approvers:assign"] }));
+    const asDecider = (await cast.stranger.as.query(api.works.listMine, {})).find(
+      (w) => w.id === workId,
+    )!;
+    expect(asDecider.canEditApprovers).toBe(true);
+    await cast.stranger.as.mutation(api.works.update, { workId, patch: { approvalQuorum: 1 } });
+    expect((await t.run((ctx) => ctx.db.get("works", workId)))!.approvalQuorum).toBe(1);
+    vi.unstubAllEnvs();
   });
 
   it("人数の範囲外・校了者 0 人は保存されない", async () => {

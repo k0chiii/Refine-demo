@@ -33,8 +33,8 @@ export function approversSummary(w: Pick<ApproversCellWork, "approvers">): strin
 }
 
 /**
- * 制作物一覧の「校了者」のセル。編集できる人（`canEditApprovers`）には押せるボタンで、
- * 押すと校了者の選択（制作物の編集と同じ ApproverFields）を開く。保存は制作物の更新（works.update。権限は work.edit）
+ * 制作物一覧の「校了者」のセル。校了者を決める権限のある人（`canEditApprovers`。me.canAssignApprovers と同じ権限）には押せるボタンで、
+ * 押すと校了者の選択（制作物の編集と同じ ApproverFields）を開く。保存は制作物の更新（works.update。権限は approvers:assign。校了者だけの更新は work.edit が無くても通る）
  */
 export function ApproversCell({ w }: { w: ApproversCellWork }) {
   const [open, setOpen] = useState(false);

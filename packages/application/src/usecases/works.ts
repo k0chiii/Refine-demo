@@ -1,5 +1,6 @@
 import {
   applyWorkPatch,
+  approversChanged,
   approversOf,
   assertExpectedVersion,
   assignWorkMetadata,
@@ -12,7 +13,9 @@ import {
   normalizeWorkMetadata,
   orgPermissions,
   type Principal,
+  hasOrgPermission,
   requireOrgPermission,
+  requireWorkRegistration,
   transitionLifecycle,
   type Work,
   type WorkImportInput,
@@ -60,14 +63,16 @@ export interface CreateWorkInput extends WorkMetadataInput {
 /**
  * 制作物登録（F-02 / UC-01）。
  * 実装上の仮置き: 認証済みユーザーは誰でも登録でき、登録者は自動的に主管担当（managerIds）に含まれる。
- * 登録できる人は Nogiku の組織権限 `works:create` で管理する（利用者決定 2026-10-10）。Nogiku Access 未接続の MVP では全員が持つ。
+ * 登録できる人は Nogiku の組織権限で管理する（利用者決定 2026-10-10）。登録は必ず校了者を決めるので、
+ * `works:create` に加えて `approvers:assign` も要る（利用者決定 2026-10-18「登録自体を権限者に限る」）。
+ * Nogiku Access 未接続の MVP では全員が持つ。
  */
 export async function createWork(
   ctx: AppContext,
   principal: Principal,
   input: CreateWorkInput,
 ): Promise<Work> {
-  requireOrgPermission(principal, orgPermissions.worksCreate);
+  requireWorkRegistration(principal);
   // 名称・区分・制作者・校了権限者（複数・校了とみなす人数）・主管の不変条件は変更と同じドメイン関数で確かめる
   const essentials = normalizeWorkEssentials({
     title: input.title,
@@ -131,7 +136,7 @@ export async function createWork(
 /**
  * 制作物の一括登録（CSV。利用者決定 2026-10-15「制作物の登録は管理者が一括で行う」）。
  * 画面で CSV を解析・照合（domain の parseWorkCsv / resolveWorkImport）して確認した行だけを受け取り、
- * 1 件ずつの登録と同じ {@link createWork}（権限 `works:create`・検証・監査）を通して、まとめて（1 トランザクションで）登録する。
+ * 1 件ずつの登録と同じ {@link createWork}（権限 `works:create` と `approvers:assign`・検証・監査）を通して、まとめて（1 トランザクションで）登録する。
  * どれか 1 行でも登録できなければ、何も登録しない。
  */
 export async function importWorks(
@@ -139,7 +144,7 @@ export async function importWorks(
   principal: Principal,
   input: { rows: readonly WorkImportInput[]; source?: string },
 ): Promise<Work[]> {
-  requireOrgPermission(principal, orgPermissions.worksCreate);
+  requireWorkRegistration(principal);
   if (input.rows.length === 0 || input.rows.length > WORK_IMPORT_MAX_ROWS)
     throw new DomainError("work_import_invalid", {
       reason: "row_count",
@@ -201,7 +206,17 @@ export async function updateWork(
   principal: Principal,
   input: UpdateWorkInput,
 ): Promise<Work> {
-  const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "work.edit");
+  // 校了者だけを変える更新は、校了者を決める権限（approvers:assign）があれば、閲覧できる制作物で通る（その人が校了者の決め手）。
+  // ほかの項目の変更は従来どおり work.edit
+  const approversOnly = isApproversOnlyPatch(input.patch);
+  const viaApproversAssign =
+    approversOnly && hasOrgPermission(principal, orgPermissions.approversAssign);
+  const { work } = await loadAuthorizedWork(
+    ctx,
+    principal,
+    input.workId,
+    viaApproversAssign ? "work.view" : "work.edit",
+  );
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
@@ -222,6 +237,8 @@ export async function updateWork(
   );
   // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人以上の校了権限者と校了とみなす人数、Notion に揃えた項目の形）をドメインで確かめる
   const next = applyWorkPatch(work, patch);
+  // 校了者・校了とみなす人数が変わる更新には、校了者を決める権限が要る（同じ値の送り直しは変更ではない）
+  if (approversChanged(work, next)) requireOrgPermission(principal, orgPermissions.approversAssign);
   // 新しく職責・関係者に入った人は委員の名簿にいること
   await assertPeopleExist(ctx, next, work);
   // 主管担当: 空文字は「主管担当なし」（外す）
@@ -244,6 +261,13 @@ export async function updateWork(
     at: ctx.clock.now(),
   });
   return next;
+}
+
+/** 校了者の項目（approverId / approverIds / approvalQuorum）だけを含む更新か */
+function isApproversOnlyPatch(patch: UpdateWorkInput["patch"]): boolean {
+  const approverKeys = ["approverId", "approverIds", "approvalQuorum"];
+  const defined = Object.entries(patch).filter(([, v]) => v !== undefined);
+  return defined.length > 0 && defined.every(([k]) => approverKeys.includes(k));
 }
 
 export async function changeWorkLifecycle(

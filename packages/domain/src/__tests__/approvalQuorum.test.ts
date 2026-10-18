@@ -11,6 +11,7 @@ import {
 } from "../approval/ApprovalPolicy.ts";
 import {
   approvalSetupOf,
+  approversChanged,
   approversOf,
   creatorsAmongApprovers,
   isApproverOf,
@@ -393,5 +394,22 @@ describe("CSV の一括登録（校了者は複数・人数の列）", () => {
   it("人数が校了者の数を超える・0・数でない行は取り込まない", () => {
     for (const q of ["3", "0", "たくさん"])
       expect(parse('"駒場 校了; 本郷 校正"', q).ready).toBe(0);
+  });
+});
+
+describe("校了者の変更の判定（approvers:assign が要る変更）", () => {
+  it("校了者の並び・人数が違えば変更、同じ値・古い行の読み替えは変更ではない", () => {
+    const base = makeWork({ approverId: "a1", approverIds: ["a1", "a2"], approvalQuorum: 2 });
+    expect(approversChanged(base, { ...base })).toBe(false);
+    expect(approversChanged(base, { ...base, approvalQuorum: 1 })).toBe(true);
+    expect(approversChanged(base, { ...base, approverIds: ["a1"], approvalQuorum: 1 })).toBe(true);
+    expect(approversChanged(base, { ...base, approverId: "a2", approverIds: ["a2", "a1"] })).toBe(
+      true,
+    );
+    // 古い行（approverId だけ）と、同じ内容を approverIds・人数 1 で書いたものは同じ
+    const legacy = makeWork({ approverId: "a1" });
+    expect(approversChanged(legacy, { ...legacy, approverIds: ["a1"], approvalQuorum: 1 })).toBe(
+      false,
+    );
   });
 });
