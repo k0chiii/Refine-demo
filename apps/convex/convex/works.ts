@@ -217,35 +217,59 @@ export const get = query({
       const openCounts = new Map<string, number>();
       const openBotCounts = new Map<string, number>();
       const pendingChecks = new Map<string, string[]>();
-      for (const r of revisions) {
-        pendingChecks.set(
-          r.id,
-          (await app.checks.listByRevision(r.id))
-            .filter((c) => c.state === "pending")
-            .map((c) => c.label),
-        );
-        const threads = await app.threads.listByRevision(r.id);
-        // 自動校正の未確認（校了時に確認メモを求める。校了は止めない）
-        openBotCounts.set(
-          r.id,
-          threads.filter(
-            (t) =>
-              t.origin?.kind === "bot" &&
-              (t.resolution === "open" || t.resolution === "acknowledged"),
-          ).length,
-        );
-        openCounts.set(
-          r.id,
-          threads.filter(
-            (t) =>
-              t.resolution === "open" ||
-              t.resolution === "acknowledged" ||
-              t.resolution === "accepted",
-          ).length,
-        );
-      }
+      // 版ごとの読み取りは互いに独立なので並べて待つ（版の数だけ順番に往復しない）
+      await Promise.all(
+        revisions.map(async (r) => {
+          const [checks, threads] = await Promise.all([
+            app.checks.listByRevision(r.id),
+            app.threads.listByRevision(r.id),
+          ]);
+          pendingChecks.set(
+            r.id,
+            checks.filter((c) => c.state === "pending").map((c) => c.label),
+          );
+          // 自動校正の未確認（校了時に確認メモを求める。校了は止めない）
+          openBotCounts.set(
+            r.id,
+            threads.filter(
+              (t) =>
+                t.origin?.kind === "bot" &&
+                (t.resolution === "open" || t.resolution === "acknowledged"),
+            ).length,
+          );
+          openCounts.set(
+            r.id,
+            threads.filter(
+              (t) =>
+                t.resolution === "open" ||
+                t.resolution === "acknowledged" ||
+                t.resolution === "accepted",
+            ).length,
+          );
+        }),
+      );
+      // 既定で開く版（受付中、無ければ最新の有効な版）の添付の要約。校正画面は版 → 添付の順に 2 回の問い合わせを待ってからファイルを
+      // 取りに行くので、この要約で 1 回早くファイルの先取りを始められる（web の EditorPrefetch）。認可は同じ（work.view を通った後）
+      const openRevision =
+        revisions.find(isAccepting) ??
+        revisions
+          .filter((r) => r.reviewState !== "void")
+          .sort((a, b) => b.submittedAt - a.submittedAt)[0] ??
+        null;
+      const openArtifacts = openRevision ? await app.artifacts.listByRevision(openRevision.id) : [];
       return {
         work,
+        defaultArtifacts: openRevision
+          ? {
+              revisionId: openRevision.id,
+              artifacts: openArtifacts.map((a) => ({
+                id: a.id,
+                type: a.type,
+                role: a.role,
+                fileName: a.fileName,
+              })),
+            }
+          : null,
         people: {
           creators: work.creatorIds.map((id) => users.get(id)),
           managers: work.managerIds.map((id) => users.get(id)),

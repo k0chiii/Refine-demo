@@ -80,6 +80,8 @@ export const get = query({
           title: work.title,
           lifecycle: work.lifecycle,
           mediaType: work.mediaType,
+          /** 添付を端末に残してよいかの判断に使う（web の fileCachePolicy）。認可には使わない */
+          confidentiality: work.confidentiality,
           finalRevisionId: work.finalRevisionId ?? null,
         },
         artifacts,

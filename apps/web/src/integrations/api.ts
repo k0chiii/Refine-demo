@@ -1,3 +1,13 @@
+import { createCacheStorePersistence } from "@/lib/artifactCacheStore";
+import {
+  ArtifactError,
+  ArtifactFiles,
+  type ArtifactTransport,
+  type OpenOptions,
+} from "@/lib/artifactFiles";
+import { defaultFileCachePolicy } from "@/lib/fileCachePolicy";
+import { jwtUser } from "@/lib/jwt";
+
 /** Hono API（ファイル提出・配信）。業務データは Convex、ファイルはこちら、の境界を守る。 */
 export const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
 
@@ -45,18 +55,57 @@ export async function uploadItem(
   return json as UploadResult;
 }
 
-/** 認可付きで添付を取得する。署名付き URL は無いので毎回 Bearer を付ける。 */
-export async function fetchArtifactBlob(token: string, artifactId: string): Promise<Blob> {
-  const res = await fetch(`${API_URL}/files/${encodeURIComponent(artifactId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok)
-    throw new Error(
-      res.status === 403
-        ? "このファイルを閲覧する権限がありません"
-        : "ファイルを読み込めませんでした。もう一度お試しください。",
-    );
-  return res.blob();
+/**
+ * 認可付きの添付の取得（Hono GET /files/:id）。署名付き URL は無いので、毎回 Bearer を付ける（Worker が毎回認可する）。
+ * 範囲取得（Range）・条件付き取得（If-None-Match → 304）に対応。応答の本体はストリームのまま渡す。
+ */
+const transport: ArtifactTransport = {
+  async request({ token, artifactId, start, end, ifNoneMatch, ifRange, signal }) {
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (start !== undefined) headers.Range = `bytes=${start}-${end !== undefined ? end : ""}`;
+    if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
+    if (ifRange) headers["If-Range"] = ifRange;
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/files/${encodeURIComponent(artifactId)}`, {
+        headers,
+        ...(signal ? { signal } : {}),
+      });
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      throw new ArtifactError(0);
+    }
+    if (res.status !== 200 && res.status !== 206 && res.status !== 304)
+      throw new ArtifactError(res.status);
+    const range = /^bytes (\d+)-\d+\/(\d+)$/.exec(res.headers.get("Content-Range") ?? "");
+    const length = Number(res.headers.get("Content-Length"));
+    return {
+      status: res.status,
+      etag: res.headers.get("ETag"),
+      contentType: res.headers.get("Content-Type"),
+      total: range ? Number(range[2]) : Number.isFinite(length) && length > 0 ? length : null,
+      start: range ? Number(range[1]) : 0,
+      rangeSupported: res.headers.get("Accept-Ranges") === "bytes",
+      body: res.body,
+    };
+  },
+};
+
+/** 添付の取得・写し（二重取得の排除、受け取りながらの利用、端末の写し）。lib/artifactFiles */
+export const artifactFiles = new ArtifactFiles({
+  transport,
+  persistence: createCacheStorePersistence(),
+  subjectOf: jwtUser,
+  policy: defaultFileCachePolicy,
+});
+
+/** 認可付きで添付を丸ごと取得する。同じ添付の取得は共有され、端末の写しがあればそこから */
+export function fetchArtifactBlob(
+  token: string,
+  artifactId: string,
+  opts?: OpenOptions,
+): Promise<Blob> {
+  return artifactFiles.blob(token, artifactId, opts);
 }
 
 /** 添付を手元に保存する（.ai など紙面に出さない原本も）。認可付きで取得してから、元のファイル名で保存させる */
