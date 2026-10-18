@@ -2,12 +2,13 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
 import { importFigmaFrames, type FigmaImportItem } from "./figmaImport.ts";
-import { matchesIfNoneMatch, resolveRange } from "./httpRange.ts";
+import { matchesIfNoneMatch, parseRange, resolveRange } from "./httpRange.ts";
 import type {
   ArtifactAccess,
   BackendGateway,
   FigmaClient,
   ObjectStore,
+  StoredObject,
   TokenVerifier,
   UploadOps,
 } from "./ports.ts";
@@ -134,7 +135,8 @@ export function createApp(deps: AppDeps) {
    *   `max-age` / `immutable` は付けない: 付けるとブラウザが Worker に尋ねずに写しを返し、剥奪が効かなくなる。
    *   手元の写し（クライアントの利用者別キャッシュ）は、毎回認可を通るここへの条件付き取得（ETag）で今も見られるか確かめる。
    * - Range 対応（206 / 416）と強い ETag（If-None-Match → 304）。認可を通ったあとにだけ判定するので、304 でも権限は毎回確かめている。
-   * - 本体は R2 のストリームをそのまま渡す（Worker のメモリに溜めない）。範囲のときは R2 の範囲読み。
+   * - 本体は R2 のストリームをそのまま渡す（Worker のメモリに溜めない）。範囲のときは R2 の範囲読み 1 回（HEAD で大きさを先に確かめない。
+   *   ETag・大きさは返ってきた実体から取り、If-Range が違うときだけ全体を取り直す）。HEAD を使うのは、中身が要らない 304 の確認と、範囲が実体の外のとき（416）だけ。
    *   no-transform: 経路で圧縮・変換させない（Content-Length と範囲の位置が狂わないように）
    */
   const serve = async (access: ArtifactAccess, req: Request) => {
@@ -154,16 +156,58 @@ export function createApp(deps: AppDeps) {
       return h;
     };
 
-    // 範囲も条件も無い通常の取得は R2 を 1 回だけ読む
-    if (!rangeHeader && !ifNoneMatch) {
-      const object = await deps.store.get(access.objectKey);
-      if (!object) return null;
-      return new Response(object.body, {
+    const plain = (object: StoredObject) =>
+      new Response(object.body, {
         headers: {
           ...headersFor(object.etag, object.contentType),
           "Content-Length": String(object.size),
         },
       });
+
+    // 条件（If-None-Match）が無い取得は R2 を 1 回だけ読む。大きさを知るための HEAD を先に打たない
+    // （PDF.js の範囲取得は 1 ファイルで十数本。HEAD＋GET だと R2 の操作（Class B）も往復も倍になる）。
+    if (!ifNoneMatch) {
+      const spec = parseRange(rangeHeader);
+      if (!spec) {
+        // 範囲なし（または範囲として扱わない書式）: 全体を返す
+        const object = await deps.store.get(access.objectKey);
+        return object ? plain(object) : null;
+      }
+      // 範囲あり: R2 の範囲読み 1 回で 206 を作る。実体の大きさ・ETag は返ってきた実体から取る
+      let ranged: StoredObject | null | "retry" = "retry";
+      try {
+        ranged = await deps.store.get(access.objectKey, spec);
+      } catch {
+        // 範囲が実体の外などで R2 が断った: 下の HEAD 経由（416 の判定）に任せる
+      }
+      if (ranged === null) return null;
+      if (ranged !== "retry") {
+        const range = resolveRange(rangeHeader, ranged.size);
+        // If-Range が今の実体の検証子と違えば、範囲は無視して全体を返す（実体は試行ごとの別キーで上書きされないので、通常は一致する）
+        const stale = ifRange !== undefined && ifRange !== ranged.etag;
+        if (range && range !== "unsatisfiable" && !stale)
+          return new Response(ranged.body, {
+            status: 206,
+            headers: {
+              ...headersFor(ranged.etag, ranged.contentType),
+              "Content-Length": String(range.length),
+              "Content-Range": `bytes ${range.offset}-${range.offset + range.length - 1}/${ranged.size}`,
+            },
+          });
+        await ranged.body.cancel().catch(() => undefined);
+        if (stale) {
+          const whole = await deps.store.get(access.objectKey);
+          return whole ? plain(whole) : null;
+        }
+        if (range === "unsatisfiable")
+          return new Response(null, {
+            status: 416,
+            headers: {
+              ...headersFor(ranged.etag, null),
+              "Content-Range": `bytes */${ranged.size}`,
+            },
+          });
+      }
     }
 
     const head = await deps.store.head(access.objectKey);

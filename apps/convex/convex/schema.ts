@@ -324,7 +324,9 @@ export default defineSchema({
   })
     .index("by_work", ["workId"])
     .index("by_submitter", ["submittedBy", "state"])
-    .index("by_state_expires", ["state", "expiresAt"]),
+    .index("by_state_expires", ["state", "expiresAt"])
+    /** 放置扱いで R2 の実体が未清掃のものを引く（purgedAt が無いものだけを索引の範囲で。filter だと清掃済みの行も毎時読み続ける） */
+    .index("by_state_purged_expires", ["state", "purgedAt", "expiresAt"]),
 
   uploadItems: defineTable({
     sessionId: v.id("uploadSessions"),
@@ -662,7 +664,8 @@ export default defineSchema({
     abandonedAt: v.optional(v.number()),
     purgedAt: v.optional(v.number()),
   })
-    .index("by_post", ["postId", "createdAt"])
+    /** 投稿に付けないままの添付で、まだ放置扱いにしていないものを引く（abandonedAt が無いものだけを索引の範囲で） */
+    .index("by_post_abandoned_created", ["postId", "abandonedAt", "createdAt"])
     .index("by_uploader", ["uploaderId", "createdAt"])
     .index("by_purged_and_abandoned", ["purgedAt", "abandonedAt"]),
 

@@ -2,8 +2,15 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { ConvexHttpClient } from "convex/browser";
 import { ConvexError } from "convex/values";
+import { createCoalescer } from "../inflight.ts";
 import type { BackendGateway, UploadAttemptTarget, UploadOps } from "../ports.ts";
 import { GatewayError } from "../ports.ts";
+
+/**
+ * 実行中の同じ認可の問い合わせをまとめる（isolate の中で共有。結果は残さない。inflight.ts）。
+ * キーに利用者のトークンを含めるので、別の利用者・別のトークンの結果が混ざることはない
+ */
+const coalesceAuthorize = createCoalescer();
 
 export interface ConvexGatewayConfig {
   /** Convex deployment URL（公開 query の呼出し） */
@@ -83,14 +90,18 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
 
   return {
     itemUploads: uploads("/internal/uploads/items", "itemId"),
-    async authorizeArtifact(token, artifactId) {
-      return withAuth(token)
-        .query(api.artifacts.authorizeAccess, { artifactId: artifactId as Id<"artifacts"> })
-        .catch(translate);
+    authorizeArtifact(token, artifactId) {
+      return coalesceAuthorize(`artifact\n${artifactId}\n${token}`, () =>
+        withAuth(token)
+          .query(api.artifacts.authorizeAccess, { artifactId: artifactId as Id<"artifacts"> })
+          .catch(translate),
+      );
     },
     feedbackUploads: uploads("/internal/feedback/files", "fileId"),
-    async authorizeFeedbackFile(token, fileId) {
-      return withAuth(token).query(api.feedback.authorizeFile, { fileId }).catch(translate);
+    authorizeFeedbackFile(token, fileId) {
+      return coalesceAuthorize(`feedback\n${fileId}\n${token}`, () =>
+        withAuth(token).query(api.feedback.authorizeFile, { fileId }).catch(translate),
+      );
     },
   };
 }

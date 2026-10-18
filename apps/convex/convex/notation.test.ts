@@ -105,3 +105,16 @@ describe("Convex 統合: 表記統一", () => {
     vi.useRealTimers();
   });
 });
+
+describe("Convex 統合: カテゴリだけの問い合わせ", () => {
+  it("ルールブックのカテゴリと同じ内容を返す（ルール・管理者は読まない）。未認証は拒否", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    await cast.admin.as.mutation(api.notation.save, { rule, expectedRevision: 0 });
+    const book = await cast.reviewer.as.query(api.notation.ruleBook, {});
+    const categories = await cast.reviewer.as.query(api.notation.categories, {});
+    expect(categories).toEqual(book.categories);
+    expect(categories.length).toBeGreaterThan(0);
+    await expect(t.query(api.notation.categories, {})).rejects.toThrow(code("unauthenticated"));
+  });
+});

@@ -449,6 +449,10 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         state.categories.set(c.code, clone(c));
       },
       listRules: async () => [...state.rules.values()].map(clone),
+      listRulesInCategories: async (codes) => {
+        const wanted = new Set(codes);
+        return [...state.rules.values()].filter((r) => wanted.has(r.categoryCode)).map(clone);
+      },
       findRule: async (id) => (state.rules.has(id) ? clone(state.rules.get(id)!) : null),
       insertRule: async (r) => {
         state.rules.set(r.ruleId, clone(r));

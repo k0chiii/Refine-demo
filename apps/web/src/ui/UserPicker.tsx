@@ -1,6 +1,7 @@
 import { QuestionHead } from "./Field";
 import { api } from "@mf100/convex/api";
 import { useId, useRef, useState } from "react";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useStableQuery } from "@/lib/useStableQuery";
 import { M3eAutocomplete } from "@m3e/react/autocomplete";
 import { M3eInputChip } from "@m3e/react/chips";
@@ -49,7 +50,12 @@ export function UserPicker({
   // 一度名前が分かった人は、結果が来る前でも名前を出す（追加した直後のチップ）
   const names = useRef(new Map<string, string>());
   for (const u of selected) names.current.set(u.id, u.name);
-  const rawCandidates = useStableQuery(api.users.search, open ? { text, limit: 8 } : "skip");
+  // 検索語は打ち止めてから問い合わせる（1 文字ごとに購読を作り直さない。空にしたときはすぐ）
+  const searchText = useDebouncedValue(text, 200, (t) => t === "");
+  const rawCandidates = useStableQuery(
+    api.users.search,
+    open ? { text: searchText, limit: 8 } : "skip",
+  );
   const candidates = rawCandidates ?? [];
   const hidden = new Set([...value, ...exclude]);
   const visible = candidates.filter((u) => !hidden.has(u.id));
