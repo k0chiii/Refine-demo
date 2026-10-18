@@ -13,15 +13,17 @@ export function createR2Store(bucket: R2Bucket): ObjectStore {
     },
     async head(key) {
       const obj = await bucket.head(key);
-      return obj ? { size: obj.size, sha256Hex: null } : null;
+      return obj ? { size: obj.size, sha256Hex: null, etag: obj.httpEtag } : null;
     },
-    async get(key) {
-      const obj = await bucket.get(key);
+    async get(key, range) {
+      // body は R2 からのストリームのまま返す（Worker のメモリに溜めない）
+      const obj = await bucket.get(key, range ? { range } : undefined);
       if (!obj) return null;
       return {
         body: obj.body,
         size: obj.size,
         contentType: obj.httpMetadata?.contentType ?? null,
+        etag: obj.httpEtag,
       };
     },
     async delete(key) {

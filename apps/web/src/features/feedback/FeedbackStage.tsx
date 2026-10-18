@@ -15,6 +15,7 @@ import {
 } from "@/features/annotation/lazyViewers";
 import { TextViewer } from "@/features/annotation/TextViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
+import { mayPersist } from "@/lib/fileCachePolicy";
 import { documentView } from "@/features/writing/documentView";
 import { Loading } from "@/ui/Loading";
 import { M3eButton } from "@m3e/react/button";
@@ -103,7 +104,9 @@ export function FeedbackStage({
   }, [focus?.at]);
 
   const artifact = data?.artifacts.find((a) => a.id === artifactId) ?? null;
-  const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null);
+  const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null, {
+    persist: mayPersist(data?.work.confidentiality),
+  });
   const [text, setText] = useState<{ artifactId: string; body: string; html?: string } | null>(
     null,
   );
@@ -149,7 +152,7 @@ export function FeedbackStage({
     if (!data) return false;
     if (!artifact) return true;
     if (blob.error) return true;
-    if (!blob.blob) return false;
+    if (!(artifact.type === "pdf" ? blob.download : blob.blob)) return false;
     if (artifact.type === "document") return text?.artifactId === artifact.id;
     if (
       artifact.type === "pdf" ||
@@ -180,11 +183,11 @@ export function FeedbackStage({
     if (!artifact)
       return <div className="empty fb-stage__empty">この版には紙面に出せる添付がありません</div>;
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    if (!blob.blob) return null;
+    if (!(artifact.type === "pdf" ? blob.download : blob.blob)) return null;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
-          blob={blob.blob}
+          download={blob.download}
           artifactId={artifact.id}
           {...viewerProps}
           page={page}

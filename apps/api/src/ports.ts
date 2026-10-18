@@ -125,10 +125,24 @@ export interface StoredObjectMeta {
   sha256Hex: string | null;
 }
 
+/** head の結果。etag は強い検証子（引用符つき。R2 の httpEtag）。無い実装では null */
+export interface StoredObjectHead extends StoredObjectMeta {
+  etag: string | null;
+}
+
+/** バイト範囲（両端を含む offset〜offset+length-1）。呼び出し側が実体の大きさに収めて解決した値 */
+export interface ByteRange {
+  offset: number;
+  length: number;
+}
+
 export interface StoredObject {
+  /** range を指定したときは、その範囲だけ */
   body: ReadableStream;
+  /** 実体全体の大きさ（範囲を指定しても全体） */
   size: number;
   contentType: string | null;
+  etag: string | null;
 }
 
 export interface ObjectStore {
@@ -138,7 +152,7 @@ export interface ObjectStore {
     body: ReadableStream | ArrayBuffer,
     opts: { contentType: string; sha256Hex: string },
   ): Promise<StoredObjectMeta>;
-  head(key: string): Promise<StoredObjectMeta | null>;
-  get(key: string): Promise<StoredObject | null>;
+  head(key: string): Promise<StoredObjectHead | null>;
+  get(key: string, range?: ByteRange): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
 }

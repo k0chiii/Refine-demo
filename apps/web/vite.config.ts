@@ -92,6 +92,53 @@ function pwa(): Plugin {
 }
 
 /**
+ * 接続先（Convex のデプロイ・ファイル API）への事前接続。HTML を読んだ時点で DNS・TCP・TLS を始めておくと、
+ * JS を読み終えて WebSocket / fetch を張るときには接続が済んでいる（往復の遅い回線ではここだけで 1 秒以上違う）。
+ * 接続先はビルド時の環境変数（VITE_CONVEX_URL・VITE_API_URL）から。デモ（バックエンド無し）では何も足さない。
+ * - Convex: WebSocket は匿名・資格情報つきのどちらの接続プールを使うか実装による。両方を温める
+ * - ファイル API: fetch（資格情報なしの CORS）なので crossorigin つき
+ */
+function preconnect(): Plugin {
+  let tags: Array<{
+    tag: "link";
+    attrs: Record<string, string | boolean>;
+    injectTo: "head-prepend";
+  }> = [];
+  return {
+    name: "mf100-preconnect",
+    configResolved(config) {
+      tags = [];
+      if (config.mode === "demo") return;
+      const origin = (value: unknown) => {
+        try {
+          return typeof value === "string" && value ? new URL(value).origin : null;
+        } catch {
+          return null;
+        }
+      };
+      const convex = origin(config.env.VITE_CONVEX_URL);
+      const api = origin(config.env.VITE_API_URL);
+      const link = (rel: string, href: string, crossorigin = false) =>
+        tags.push({
+          tag: "link",
+          attrs: { rel, href, ...(crossorigin ? { crossorigin: "" } : {}) },
+          injectTo: "head-prepend",
+        });
+      if (convex) {
+        link("preconnect", convex);
+        link("preconnect", convex, true);
+        link("dns-prefetch", convex);
+      }
+      if (api && api !== convex) {
+        link("preconnect", api, true);
+        link("dns-prefetch", api);
+      }
+    },
+    transformIndexHtml: () => tags,
+  };
+}
+
+/**
  * `--mode demo`: バックエンド無しで動くデモモード。convex/react と Convex Auth、Hono API 呼び出しを
  * src/demo/* に差し替え、apps/convex の実際の関数を convex-test でブラウザ内実行する（UI 開発・E2E・スクショ用）。
  */
@@ -105,6 +152,7 @@ export default defineConfig(({ mode }) => ({
       generatedRouteTree: "./src/routeTree.gen.ts",
     }),
     react(),
+    preconnect(),
     ocrAssets(),
     pwa(),
   ],

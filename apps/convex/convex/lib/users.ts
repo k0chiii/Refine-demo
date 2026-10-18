@@ -17,6 +17,7 @@ export async function resolveUsers(
   ids: Iterable<string>,
 ): Promise<Map<string, UserSummary>> {
   const out = new Map<string, UserSummary>();
+  const lookups: Array<Promise<void>> = [];
   for (const id of new Set(ids)) {
     if (id === "system") {
       out.set(id, { id, name: "システム", email: null });
@@ -27,8 +28,16 @@ export async function resolveUsers(
       out.set(id, { id, name: id === PROOFREADER_ID ? PROOFREADER_NAME : "システム", email: null });
       continue;
     }
-    const doc = await db.get("users", id as Id<"users">).catch(() => null);
-    out.set(id, summarizeUser(doc, id));
+    // 利用者の読み取りは互いに独立なので並べて待つ（人数分だけ順番に往復しない）
+    lookups.push(
+      db
+        .get("users", id as Id<"users">)
+        .catch(() => null)
+        .then((doc) => {
+          out.set(id, summarizeUser(doc, id));
+        }),
+    );
   }
+  await Promise.all(lookups);
   return out;
 }

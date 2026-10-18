@@ -1,10 +1,11 @@
 import type { NormalizedRect, Viewport } from "@mf100/domain";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { PdfLinks } from "./PdfLinks";
 import { PdfTextLayer } from "./PdfTextLayer";
-import { pdfjs } from "./pdfjs";
+import type { ArtifactDownload } from "@/lib/artifactFiles";
+import { openPdfFromDownload, pdfDocumentParams, pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
 import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
 
@@ -35,7 +36,9 @@ export function canvasDensity(
 export const PDF_ACTUAL_SIZE = 96 / 72;
 
 interface Props extends ViewerSyncProps {
-  blob: Blob;
+  /** 全部取得済みのファイル。取得中のものは download（受け取りながら開く。先頭の数百 KB で 1 ページ目を描ける） */
+  blob?: Blob | null;
+  download?: ArtifactDownload | null;
   artifactId: string;
   threads: OverlayThread[];
   activeThreadId: string | null;
@@ -87,6 +90,7 @@ type Size = { w: number; h: number };
  */
 export function PdfViewer({
   blob,
+  download,
   artifactId,
   threads,
   activeThreadId,
@@ -158,44 +162,60 @@ export function PdfViewer({
     shown.current = 1;
     ratio.current = 0;
     if (stageRef.current) stageRef.current.scrollTop = 0;
-    void blob.arrayBuffer().then((data) =>
-      pdfjs
-        .getDocument({
-          data,
-          cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
-          cMapPacked: true,
-          standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
-          useSystemFonts: true,
-        })
-        .promise.then((d) => {
-          if (cancelled) return;
-          setDoc(d);
-          onDoc?.(d);
-          onPageCount?.(d.numPages);
-        })
-        .catch(() => {
-          setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。");
-          notifyReady();
-        }),
-    );
+    const fail = () => {
+      if (cancelled) return;
+      setError("PDF を読み込めませんでした。ファイルが壊れていないか確かめてください。");
+      notifyReady();
+    };
+    void (async () => {
+      try {
+        const task = download
+          ? await openPdfFromDownload(download, fail)
+          : pdfjs.getDocument({
+              data: await blob!.arrayBuffer(),
+              ...pdfDocumentParams,
+            });
+        const d = await task.promise;
+        if (cancelled) return;
+        setDoc(d);
+        onDoc?.(d);
+        onPageCount?.(d.numPages);
+      } catch {
+        fail();
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [blob]);
+  }, [blob, download]);
 
   useEffect(() => {
     if (!doc) return;
     let cancelled = false;
-    void Promise.all(
-      Array.from({ length: doc.numPages }, (_, i) =>
-        doc.getPage(i + 1).then((p) => {
-          const vp = p.getViewport({ scale: 1, rotation: (p.rotate + rotation) % 360 });
-          return { w: vp.width, h: vp.height };
-        }),
-      ),
-    ).then((s) => {
-      if (!cancelled) setSizes(s);
+    let settled = false;
+    const sizeOf = (p: PDFPageProxy) => {
+      const vp = p.getViewport({ scale: 1, rotation: (p.rotate + rotation) % 360 });
+      return { w: vp.width, h: vp.height };
+    };
+    // 全ページの大きさが分かるのを待たずに、1 ページ目の大きさで仮の並びを作って描き始める（受け取りながら開いた PDF では、
+    // 全ページの定義を読むのに離れた箇所の取得が要る）。全ページ分が揃ったら実際の大きさに置き換える（ふつうは同じ）
+    void doc.getPage(1).then((p) => {
+      if (!cancelled && !settled) setSizes(Array.from({ length: doc.numPages }, () => sizeOf(p)));
     });
+    // 受け取り中は、残りのページの定義を読みに行かない（読むために離れた箇所の取得が走り、受け取りと帯域を取り合う）。
+    // 全部届いてから実際の大きさに置き換える。画面に出るページは PdfCanvas が必要に応じて読む
+    const delivered = download && !download.completed ? download.blob : Promise.resolve(null);
+    void delivered
+      .then(() =>
+        Promise.all(
+          Array.from({ length: doc.numPages }, (_, i) => doc.getPage(i + 1).then(sizeOf)),
+        ),
+      )
+      .then((s) => {
+        settled = true;
+        if (!cancelled) setSizes(s);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };

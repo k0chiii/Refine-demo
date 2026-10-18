@@ -7,11 +7,25 @@ import { createApp } from "./app.ts";
 import { purgeOrphanObjects } from "./cleanup.ts";
 import type { Bindings } from "./env.ts";
 
+/**
+ * JWT の検証器は isolate の中で使い回す。リクエストごとに作ると jose の JWKS の写し（既定 10 分）が毎回空になり、
+ * 全リクエスト（PDF.js の範囲取得は 1 ファイルで何本も）が Convex の /.well-known/jwks.json を取りに行って待たされる
+ */
+const verifiers = new Map<string, ReturnType<typeof createJoseVerifier>>();
+function verifierFor(siteUrl: string) {
+  let v = verifiers.get(siteUrl);
+  if (!v) {
+    v = createJoseVerifier(siteUrl);
+    verifiers.set(siteUrl, v);
+  }
+  return v;
+}
+
 /** Workers エントリ。環境ごとに依存を組み立てて Hono アプリに注入する。 */
 export default {
   async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
     const app = createApp({
-      verifier: createJoseVerifier(env.CONVEX_SITE_URL),
+      verifier: verifierFor(env.CONVEX_SITE_URL),
       gateway: createConvexGateway({
         convexUrl: env.CONVEX_URL,
         siteUrl: env.CONVEX_SITE_URL,

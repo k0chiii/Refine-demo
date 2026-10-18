@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
 import { importFigmaFrames, type FigmaImportItem } from "./figmaImport.ts";
+import { matchesIfNoneMatch, resolveRange } from "./httpRange.ts";
 import type {
   ArtifactAccess,
   BackendGateway,
@@ -42,9 +43,19 @@ export function createApp(deps: AppDeps) {
     "*",
     cors({
       origin: (origin) => (deps.allowedOrigins.includes(origin) ? origin : null),
-      allowHeaders: ["Authorization", "Content-Type", "X-MF100-Sha256"],
-      allowMethods: ["GET", "PUT", "POST", "OPTIONS"],
-      maxAge: 600,
+      // Range / If-None-Match / If-Range: 配信の部分取得（PDF.js の逐次読み込み）と、手元の写しが今も有効かの確認
+      allowHeaders: [
+        "Authorization",
+        "Content-Type",
+        "X-MF100-Sha256",
+        "Range",
+        "If-None-Match",
+        "If-Range",
+      ],
+      allowMethods: ["GET", "HEAD", "PUT", "POST", "OPTIONS"],
+      // ブラウザの JS から読めるようにする応答ヘッダー（範囲の取得に Content-Range・Accept-Ranges が要る）
+      exposeHeaders: ["Content-Range", "Accept-Ranges", "Content-Length", "ETag"],
+      maxAge: 7200,
     }),
   );
 
@@ -117,18 +128,72 @@ export function createApp(deps: AppDeps) {
     return c.json({ [idKey]: id, ...result, size, sha256: sha256Hex });
   };
 
-  /** 認可済みのオブジェクトを配信する。キャッシュさせず、型の推測もさせない */
-  const serve = async (access: ArtifactAccess) => {
-    const object = await deps.store.get(access.objectKey);
-    if (!object) return null;
-    return new Response(object.body, {
-      headers: {
-        "Content-Type": access.mimeType || object.contentType || "application/octet-stream",
-        "Content-Length": String(object.size),
+  /**
+   * 認可済みのオブジェクトを配信する。型の推測はさせない。
+   * - ブラウザの HTTP キャッシュには残さない（`private, no-store`）。権限剥奪後にキャッシュから読めないため（§9.1 / A-11）。
+   *   `max-age` / `immutable` は付けない: 付けるとブラウザが Worker に尋ねずに写しを返し、剥奪が効かなくなる。
+   *   手元の写し（クライアントの利用者別キャッシュ）は、毎回認可を通るここへの条件付き取得（ETag）で今も見られるか確かめる。
+   * - Range 対応（206 / 416）と強い ETag（If-None-Match → 304）。認可を通ったあとにだけ判定するので、304 でも権限は毎回確かめている。
+   * - 本体は R2 のストリームをそのまま渡す（Worker のメモリに溜めない）。範囲のときは R2 の範囲読み。
+   *   no-transform: 経路で圧縮・変換させない（Content-Length と範囲の位置が狂わないように）
+   */
+  const serve = async (access: ArtifactAccess, req: Request) => {
+    const rangeHeader = req.headers.get("Range") ?? undefined;
+    const ifNoneMatch = req.headers.get("If-None-Match") ?? undefined;
+    const ifRange = req.headers.get("If-Range") ?? undefined;
+
+    const headersFor = (etag: string | null, contentType: string | null) => {
+      const h: Record<string, string> = {
+        "Content-Type": access.mimeType || contentType || "application/octet-stream",
         "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(access.fileName)}`,
-        // 権限剥奪後にキャッシュから読めないように私的・保存禁止（§9.1）
-        "Cache-Control": "private, no-store",
+        "Cache-Control": "private, no-store, no-transform",
+        "Accept-Ranges": "bytes",
         "X-Content-Type-Options": "nosniff",
+      };
+      if (etag) h.ETag = etag;
+      return h;
+    };
+
+    // 範囲も条件も無い通常の取得は R2 を 1 回だけ読む
+    if (!rangeHeader && !ifNoneMatch) {
+      const object = await deps.store.get(access.objectKey);
+      if (!object) return null;
+      return new Response(object.body, {
+        headers: {
+          ...headersFor(object.etag, object.contentType),
+          "Content-Length": String(object.size),
+        },
+      });
+    }
+
+    const head = await deps.store.head(access.objectKey);
+    if (!head) return null;
+    if (matchesIfNoneMatch(ifNoneMatch, head.etag))
+      return new Response(null, { status: 304, headers: headersFor(head.etag, null) });
+
+    // If-Range が今の実体の検証子と違えば、範囲は無視して全体を返す
+    const honorRange = !ifRange || ifRange === head.etag;
+    const range = honorRange ? resolveRange(rangeHeader, head.size) : null;
+    if (range === "unsatisfiable")
+      return new Response(null, {
+        status: 416,
+        headers: { ...headersFor(head.etag, null), "Content-Range": `bytes */${head.size}` },
+      });
+    const object = await deps.store.get(access.objectKey, range ?? undefined);
+    if (!object) return null;
+    if (!range)
+      return new Response(object.body, {
+        headers: {
+          ...headersFor(object.etag, object.contentType),
+          "Content-Length": String(object.size),
+        },
+      });
+    return new Response(object.body, {
+      status: 206,
+      headers: {
+        ...headersFor(object.etag, object.contentType),
+        "Content-Length": String(range.length),
+        "Content-Range": `bytes ${range.offset}-${range.offset + range.length - 1}/${object.size}`,
       },
     });
   };
@@ -139,7 +204,7 @@ export function createApp(deps: AppDeps) {
 
   app.get("/files/:artifactId", async (c) => {
     const access = await deps.gateway.authorizeArtifact(c.get("token"), c.req.param("artifactId"));
-    return (await serve(access)) ?? c.json({ code: "object_missing" }, 404);
+    return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
   });
 
   app.put("/feedback/files/:fileId", (c) =>
@@ -148,7 +213,7 @@ export function createApp(deps: AppDeps) {
 
   app.get("/feedback/files/:fileId", async (c) => {
     const access = await deps.gateway.authorizeFeedbackFile(c.get("token"), c.req.param("fileId"));
-    return (await serve(access)) ?? c.json({ code: "object_missing" }, 404);
+    return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
   });
 
   /**

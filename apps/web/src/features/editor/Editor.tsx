@@ -13,7 +13,6 @@ import {
   type MediaType,
   formatVideoSpan,
   pickCompareArtifact,
-  pickReviewArtifact,
   textRangeAnchor,
   videoTimeAnchor,
   toViewportRect,
@@ -54,6 +53,8 @@ import { TextViewer } from "@/features/annotation/TextViewer";
 import type { WebDraft } from "@/features/annotation/WebLiveViewer";
 import type { FigmaDraft } from "@/features/annotation/FigmaEmbedViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
+import { mayPersist } from "@/lib/fileCachePolicy";
+import { defaultArtifactId } from "./defaultArtifact";
 import { documentView } from "@/features/writing/documentView";
 import { StoredComposePopover } from "@/features/review/ComposePopover";
 import { createComposeStore } from "@/features/review/composeStore";
@@ -284,11 +285,7 @@ export function Editor({
   const artifactId: string | null = data
     ? pickedArtifactId && data.artifacts.some((a) => a.id === pickedArtifactId)
       ? pickedArtifactId
-      : (data.artifacts.find((a) => a.fileName === POST_MANIFEST_NAME)?.id ??
-        pickReviewArtifact(data.artifacts, data.work.mediaType === "video" ? "video" : undefined)
-          ?.id ??
-        data.artifacts[0]?.id ??
-        null)
+      : defaultArtifactId(data.artifacts, data.work.mediaType)
     : null;
   const [artifactSheet, setArtifactSheet] = useState(false);
   // 固定ペイン（引き出し）の幅。supporting pane は temporary resizing: 閉じたら既定（expanded 360 / large 412）に戻す
@@ -483,7 +480,10 @@ export function Editor({
   useEffect(() => {
     if (artifact?.type === "document") setZoom(scale);
   }, [scale, artifact?.type]);
-  const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null);
+  const persistFiles = mayPersist(data?.work.confidentiality);
+  const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null, {
+    persist: persistFiles,
+  });
   // 文章添付は版スナップショットとして UTF-8 テキストに復号して保持する（F-12）
   // 文章エディタから提出した HTML は書式付きで表示し、範囲指摘のオフセットは本文の平文で数える
   const [text, setText] = useState<{ artifactId: string; body: string; html?: string } | null>(
@@ -525,7 +525,9 @@ export function Editor({
       )
     : null;
   const otherArtifact = other ? pickCompareArtifact(other.artifacts, artifact, scope) : null;
-  const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null);
+  const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null, {
+    persist: mayPersist(other?.work.confidentiality),
+  });
   // 高度な版比較: ページの自動対応・スクロール同期・文章差分（features/compare）
   const cmp = useCompareSession({
     active: compareWith !== null,
@@ -1003,7 +1005,8 @@ export function Editor({
         ? paintedFor === artifact.id
         : true;
     if (blob.error) return true;
-    if (!blob.blob) return false;
+    // PDF は受け取りながら開く（全部届く前から描ける）。ほかは全部届いてから
+    if (!(artifact.type === "pdf" ? blob.download : blob.blob)) return false;
     if (artifact.type === "document") return text?.artifactId === artifact.id;
     if (
       artifact.type === "pdf" ||
@@ -1155,13 +1158,13 @@ export function Editor({
       );
     }
     if (blob.error) return <div className="alert">{blob.error}</div>;
-    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので、比較中の枠には文字も見せる）
-    if (!blob.blob)
+    // ファイルは丸ごと取得してから出す（動画などは長くなり得るので、比較中の枠には文字も見せる）。PDF だけは受け取りながら開く
+    if (!(artifact.type === "pdf" ? blob.download : blob.blob))
       return compareWith ? <Loading label="ファイルを取得しています" caption /> : null;
     if (artifact.type === "pdf")
       return (
         <PdfViewer
-          blob={blob.blob}
+          download={blob.download}
           artifactId={artifact.id}
           onReady={() => setPaintedFor(artifact.id)}
           {...viewerProps}
@@ -1323,7 +1326,8 @@ export function Editor({
   const renderOther = (): ReactNode => {
     if (!compareWith) return null;
     if (!other || !otherArtifact) return <div className="empty">比較する添付がありません</div>;
-    if (!otherBlob.blob) return <Loading label="比べる版のファイルを取得しています" caption />;
+    if (!(otherArtifact.type === "pdf" ? otherBlob.download : otherBlob.blob))
+      return <Loading label="比べる版のファイルを取得しています" caption />;
     const none = {
       threads: [],
       activeThreadId: null,
@@ -1333,7 +1337,7 @@ export function Editor({
     if (otherArtifact.type === "pdf")
       return (
         <PdfViewer
-          blob={otherBlob.blob}
+          download={otherBlob.download}
           artifactId={otherArtifact.id}
           {...none}
           draft={null}

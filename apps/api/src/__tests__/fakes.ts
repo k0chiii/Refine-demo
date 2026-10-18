@@ -1,5 +1,6 @@
 import type {
   ArtifactAccess,
+  ByteRange,
   BackendGateway,
   FigmaClient,
   FigmaImportMeta,
@@ -38,17 +39,28 @@ export class MemoryStore implements ObjectStore {
     this.objects.set(key, { bytes: new Uint8Array(buf), contentType: opts.contentType });
     return { size: buf.byteLength, sha256Hex: actual };
   }
+  /** 内容から決まる強い検証子（R2 の httpEtag のまねごと） */
+  private etagOf(o: { bytes: Uint8Array }) {
+    let h = 2166136261;
+    for (const b of o.bytes) h = Math.imul(h ^ b, 16777619) >>> 0;
+    return `"${h.toString(16)}-${o.bytes.byteLength}"`;
+  }
+  /** get の呼び出し（範囲つきかどうか）。範囲リクエストが R2 の範囲読みになっているかの確認に使う */
+  readonly gets: Array<{ key: string; range: ByteRange | undefined }> = [];
   async head(key: string) {
     const o = this.objects.get(key);
-    return o ? { size: o.bytes.byteLength, sha256Hex: null } : null;
+    return o ? { size: o.bytes.byteLength, sha256Hex: null, etag: this.etagOf(o) } : null;
   }
-  async get(key: string) {
+  async get(key: string, range?: ByteRange) {
+    this.gets.push({ key, range });
     const o = this.objects.get(key);
     if (!o) return null;
+    const bytes = range ? o.bytes.slice(range.offset, range.offset + range.length) : o.bytes;
     return {
-      body: new Response(o.bytes.slice().buffer as ArrayBuffer).body!,
+      body: new Response(bytes.slice().buffer as ArrayBuffer).body!,
       size: o.bytes.byteLength,
       contentType: o.contentType,
+      etag: this.etagOf(o),
     };
   }
   async delete(key: string) {

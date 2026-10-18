@@ -177,9 +177,90 @@ describe("GET /files/:artifactId（§9.1 / A-11）", () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/pdf");
-    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(res.headers.get("Cache-Control")).toContain("no-store");
+    expect(res.headers.get("Cache-Control")).not.toMatch(/max-age|immutable/);
+    expect(res.headers.get("Accept-Ranges")).toBe("bytes");
+    expect(res.headers.get("ETag")).toMatch(/^".+"$/);
     expect(res.headers.get("Content-Disposition")).toContain(encodeURIComponent("表紙.pdf"));
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body));
+  });
+  describe("Range / ETag", () => {
+    const get = (headers: Record<string, string>, token = "valid:reviewer") =>
+      app.request("/files/art1", { headers: { Authorization: `Bearer ${token}`, ...headers } });
+    const total = body.byteLength;
+
+    it("範囲を 206 で返し、R2 の範囲読みで取る（全体を読まない）", async () => {
+      store.gets.length = 0;
+      const res = await get({ Range: "bytes=1-4" });
+      expect(res.status).toBe(206);
+      expect(res.headers.get("Content-Range")).toBe(`bytes 1-4/${total}`);
+      expect(res.headers.get("Content-Length")).toBe("4");
+      expect(res.headers.get("Accept-Ranges")).toBe("bytes");
+      expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body).slice(1, 5));
+      expect(store.gets).toEqual([{ key: "works/w1/rev1/a.pdf", range: { offset: 1, length: 4 } }]);
+    });
+    it("末尾までの指定・末尾 n バイト・実体を超える終わりを実体に収める", async () => {
+      const open = await get({ Range: "bytes=3-" });
+      expect(open.status).toBe(206);
+      expect(open.headers.get("Content-Range")).toBe(`bytes 3-${total - 1}/${total}`);
+      const suffix = await get({ Range: "bytes=-5" });
+      expect(suffix.headers.get("Content-Range")).toBe(`bytes ${total - 5}-${total - 1}/${total}`);
+      expect(new Uint8Array(await suffix.arrayBuffer())).toEqual(new Uint8Array(body).slice(-5));
+      const over = await get({ Range: `bytes=0-${total + 1000}` });
+      expect(over.headers.get("Content-Range")).toBe(`bytes 0-${total - 1}/${total}`);
+    });
+    it("実体の外の範囲は 416（Content-Range: bytes */size）", async () => {
+      const res = await get({ Range: `bytes=${total}-` });
+      expect(res.status).toBe(416);
+      expect(res.headers.get("Content-Range")).toBe(`bytes */${total}`);
+    });
+    it("複数範囲・単位違い・書式不正は範囲として扱わず、全体を 200 で返す", async () => {
+      for (const range of ["bytes=0-1,3-4", "items=0-1", "bytes=a-b"]) {
+        const res = await get({ Range: range });
+        expect(res.status).toBe(200);
+        expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body));
+      }
+    });
+    it("範囲でも認可は通る: 権限のない利用者は 403、剥奪後も 403", async () => {
+      expect((await get({ Range: "bytes=0-1" }, "valid:stranger")).status).toBe(403);
+      gateway.artifacts.get("art1")!.viewers = [];
+      expect((await get({ Range: "bytes=0-1" })).status).toBe(403);
+    });
+    it("If-None-Match が ETag に当たれば 304（本体なし）。権限のない人には 304 を返さない", async () => {
+      const etag = (await get({})).headers.get("ETag")!;
+      const hit = await get({ "If-None-Match": etag });
+      expect(hit.status).toBe(304);
+      expect(hit.headers.get("ETag")).toBe(etag);
+      expect(await hit.text()).toBe("");
+      expect((await get({ "If-None-Match": '"other"' })).status).toBe(200);
+      expect((await get({ "If-None-Match": etag }, "valid:stranger")).status).toBe(403);
+      gateway.artifacts.get("art1")!.viewers = [];
+      expect((await get({ "If-None-Match": etag })).status).toBe(403);
+    });
+    it("If-Range が今の ETag と違えば範囲を無視して全体を返す", async () => {
+      const etag = (await get({})).headers.get("ETag")!;
+      expect((await get({ Range: "bytes=0-1", "If-Range": etag })).status).toBe(206);
+      expect((await get({ Range: "bytes=0-1", "If-Range": '"stale"' })).status).toBe(200);
+    });
+    it("CORS: Range などを許可し、Content-Range などをブラウザに見せる", async () => {
+      const pre = await app.request("/files/art1", {
+        method: "OPTIONS",
+        headers: {
+          Origin: ORIGIN,
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "authorization,range,if-none-match",
+        },
+      });
+      const allowed = (pre.headers.get("Access-Control-Allow-Headers") ?? "").toLowerCase();
+      for (const h of ["authorization", "range", "if-none-match", "if-range"])
+        expect(allowed).toContain(h);
+      const res = await app.request("/files/art1", {
+        headers: { Authorization: "Bearer valid:reviewer", Origin: ORIGIN, Range: "bytes=0-1" },
+      });
+      const exposed = (res.headers.get("Access-Control-Expose-Headers") ?? "").toLowerCase();
+      for (const h of ["content-range", "accept-ranges", "content-length", "etag"])
+        expect(exposed).toContain(h);
+    });
   });
   it("権限のない利用者は 403。剥奪後は即時に拒否される（署名 URL を発行しないため）", async () => {
     expect(
@@ -279,8 +360,13 @@ describe("フィードバックの添付 PUT / GET /feedback/files/:fileId", () 
       headers: { Authorization: "Bearer valid:member" },
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(res.headers.get("Cache-Control")).toContain("no-store");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    const part = await app.request("/feedback/files/fb1", {
+      headers: { Authorization: "Bearer valid:member", Range: "bytes=0-3" },
+    });
+    expect(part.status).toBe(206);
+    expect(part.headers.get("Content-Range")).toBe(`bytes 0-3/${body.byteLength}`);
     expect(res.headers.get("Content-Disposition")).toContain(encodeURIComponent("案.pdf"));
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body));
     expect(

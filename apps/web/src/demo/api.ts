@@ -1,4 +1,12 @@
 /** `@/integrations/api` の差し替え（デモモード）: Hono/R2 の代わりにメモリ上の Blob を使う。 */
+import { createCacheStorePersistence } from "@/lib/artifactCacheStore";
+import {
+  ArtifactError,
+  ArtifactFiles,
+  type ArtifactTransport,
+  type OpenOptions,
+} from "@/lib/artifactFiles";
+import { defaultFileCachePolicy } from "@/lib/fileCachePolicy";
 import { demo } from "./backend";
 
 export const API_URL = "demo://";
@@ -29,8 +37,93 @@ export async function uploadItem(
   return { itemId, status: res.status, failureMessage: res.failureMessage, size: file.size };
 }
 
-export async function fetchArtifactBlob(_token: string, artifactId: string): Promise<Blob> {
-  return demo.fetchArtifact(artifactId);
+/**
+ * 擬似回線（E2E・計測用）。`globalThis.__mf100DemoNet = { latencyMs, bytesPerSec }` を先に置くと、添付の取得が
+ * 往復の遅れと帯域に従って届く（既定は即時）。本番の Worker と同じく Range / ETag / 304 に応じる
+ */
+type DemoNet = { latencyMs?: number; bytesPerSec?: number };
+const demoNet = (): DemoNet => (globalThis as { __mf100DemoNet?: DemoNet }).__mf100DemoNet ?? {};
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const DEMO_CHUNK = 32 * 1024;
+/** デモの通信回数（E2E が「同じ添付を何回取りに行ったか」を数える） */
+const demoRequests: Array<{ artifactId: string; start?: number; end?: number; status: number }> =
+  [];
+(globalThis as { __mf100DemoRequests?: typeof demoRequests }).__mf100DemoRequests = demoRequests;
+
+const demoTransport: ArtifactTransport = {
+  async request({ artifactId, start, end, ifNoneMatch, ifRange, signal }) {
+    const { latencyMs = 0, bytesPerSec = 0 } = demoNet();
+    if (latencyMs) await sleep(latencyMs);
+    let blob: Blob;
+    try {
+      blob = await demo.fetchArtifact(artifactId); // 認可は Convex の authorizeAccess（毎回）
+    } catch {
+      demoRequests.push({ artifactId, status: 403 });
+      throw new ArtifactError(403);
+    }
+    const etag = `"demo-${artifactId}-${blob.size}"`;
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      demoRequests.push({ artifactId, status: 304 });
+      return {
+        status: 304,
+        etag,
+        contentType: blob.type || null,
+        total: blob.size,
+        start: 0,
+        rangeSupported: true,
+        body: null,
+      };
+    }
+    const ranged = start !== undefined && (!ifRange || ifRange === etag);
+    const from = ranged ? start : 0;
+    const to = ranged ? Math.min(end === undefined ? blob.size : end + 1, blob.size) : blob.size;
+    demoRequests.push({
+      artifactId,
+      status: ranged ? 206 : 200,
+      ...(ranged ? { start: from, end: to - 1 } : {}),
+    });
+    let offset = from;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (signal?.aborted) return controller.error(new DOMException("aborted", "AbortError"));
+        if (offset >= to) return controller.close();
+        const next = Math.min(offset + DEMO_CHUNK, to);
+        if (bytesPerSec) await sleep(((next - offset) / bytesPerSec) * 1000);
+        controller.enqueue(new Uint8Array(await blob.slice(offset, next).arrayBuffer()));
+        offset = next;
+      },
+    });
+    return {
+      status: ranged ? 206 : 200,
+      etag,
+      contentType: blob.type || null,
+      total: blob.size,
+      start: from,
+      rangeSupported: true,
+      body,
+    };
+  },
+};
+
+/**
+ * デモのデータは読み込みのたびに作り直される（添付 ID が同じでも中身は別）ので、端末の写しの持ち主に読み込みごとの印を足し、
+ * 前の読み込みの写しは使わない。同じ読み込みの中では本番と同じ経路（メモリ → Cache Storage → 通信）を通る
+ */
+const demoLoadId = Math.random().toString(36).slice(2, 8);
+export const artifactFiles = new ArtifactFiles({
+  transport: demoTransport,
+  persistence: createCacheStorePersistence(),
+  subjectOf: () => `${demo.userId ?? "demo"}@${demoLoadId}`,
+  policy: defaultFileCachePolicy,
+});
+(globalThis as { __mf100Files?: ArtifactFiles }).__mf100Files = artifactFiles;
+
+export function fetchArtifactBlob(
+  token: string,
+  artifactId: string,
+  opts?: OpenOptions,
+): Promise<Blob> {
+  return artifactFiles.blob(token, artifactId, opts);
 }
 
 export async function downloadArtifact(token: string, artifactId: string, fileName: string) {

@@ -55,15 +55,30 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (BYPASS_PREFIXES.some((p) => url.pathname.startsWith(p))) return;
 
-  // 画面の移動: まずネットワーク（最新の index.html）。つながらないときだけキャッシュの外枠を返す（SPA なのでどのパスも index.html）
+  // 画面の移動: 版ごとの外枠（index.html）をキャッシュからすぐ返す（SPA なのでどのパスも同じ index.html）。
+  // 以前はネットワーク優先で、毎回 index.html の応答（実測 0.6 秒前後）を待ってから JS の読み込みが始まっていた。
+  // index.html は precache にある JS・CSS と同じ版のものなので、組み合わせは常に揃う。新しい版は待機させ、
+  // 画面の「更新」を押したときに切り替える（上の更新の方針どおり）。キャッシュに無いときだけネットワーク
+  // 対象はアプリの画面を開く移動（destination が document。iframe・拡張子つきのファイル・デモのサイトは含めない）
   if (req.mode === "navigate") {
+    const isAppScreen =
+      req.destination === "document" &&
+      !/\.[A-Za-z0-9]+$/.test(url.pathname) &&
+      !url.pathname.startsWith("/demo-site/");
     event.respondWith(
-      fetch(req).catch(() =>
-        caches
-          .open(SHELL)
-          .then((c) => c.match("/index.html"))
-          .then((r) => r || Response.error()),
-      ),
+      isAppScreen
+        ? caches
+            .open(SHELL)
+            .then((c) => c.match("/index.html"))
+            .then((hit) => hit || fetch(req))
+            .catch(() => Response.error())
+        : // それ以外は従来どおりネットワーク優先（つながらないときだけ外枠）
+          fetch(req).catch(() =>
+            caches
+              .open(SHELL)
+              .then((c) => c.match("/index.html"))
+              .then((r) => r || Response.error()),
+          ),
     );
     return;
   }

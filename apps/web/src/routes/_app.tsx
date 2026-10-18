@@ -9,9 +9,10 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { EditorPrefetch } from "@/features/editor/EditorPrefetch";
 import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/home/SubmitPicker";
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
-import { saveData, whenIdle } from "@/lib/preload";
+import { saveData, warmPdfAssets, whenIdle } from "@/lib/preload";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
 import { NotificationPrompt } from "@/features/notifications/NotificationPrompt";
 import { usePushAvailable } from "@/features/notifications/useDevicePush";
@@ -137,6 +138,7 @@ function AppShell() {
     if (!meId || saveData()) return;
     const quiet = () => undefined;
     const cancelFirst = whenIdle(() => {
+      warmPdfAssets();
       for (const to of ["/", "/works", "/feedback", "/notation", "/write"] as const)
         void router.preloadRoute({ to }).catch(quiet);
     }, 4000);
@@ -172,7 +174,9 @@ function AppShell() {
     return () => document.removeEventListener("keydown", onKey);
   }, [modalOpen]);
 
-  if (isLoading || !isAuthenticated || !me) return null;
+  // アプリの枠（me）が届くまでは何も描かない。ただし校正画面を開くときは、その間にファイルの先取りを始める（EditorPrefetch）
+  if (isLoading || !isAuthenticated || !me)
+    return isLoading || !isAuthenticated ? null : <EditorPrefetch path={path} />;
 
   const items = [
     { to: "/", icon: "space_dashboard", label: "ホーム" },
