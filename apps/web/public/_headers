@@ -12,6 +12,18 @@
 # ハッシュ付きのファイルは中身が変わらない
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+# ハッシュの付かない静的ファイル（名前は同じまま中身が変わりうるので immutable にはしない）。
+# 指定が無いと Cloudflare Pages は max-age=0, must-revalidate で、開くたびに（304 の）確認の往復が要る。
+# PDF.js の文字コード表・標準フォント、OCR の実行ファイルと学習データ（大きく、PDF.js / tesseract.js の版が変わらない限り同じ）は 30 日
+/pdfjs/*
+  Cache-Control: public, max-age=2592000
+/ocr/*
+  Cache-Control: public, max-age=2592000
+# 端末の枠の画像（見本サイトのプレビュー）は 30 日、アイコンは 7 日（差し替えても Service Worker の更新は cache: reload で取り直す）
+/devices/*
+  Cache-Control: public, max-age=2592000
+/icons/*
+  Cache-Control: public, max-age=604800
 # 見本サイトとブリッジ（Web の校正。docs/FIGMA_WEB_PROOFING.md）: 見本サイトは校正システム（同じオリジン）の iframe からだけ開ける
 /demo-site/*
   Content-Security-Policy: frame-ancestors 'self'

@@ -1,5 +1,6 @@
 import {
   bureauNameOf,
+  canViewWork,
   compareWorkRows,
   effectivePermission,
   isAccepting,
@@ -223,9 +224,13 @@ export async function buildDashboard(
     };
   };
   for (const work of works) {
-    const grants = await ctx.acl.listByWork(work.id);
+    // 進行中でない制作物（完了・保留・取消）は表の 1 行に数えるだけ。ACL は「見られるか」の判定にだけ要るので、
+    // ACL を見ずに見られると分かる（通常の制作物）なら読まない。ホームの購読が読む範囲が狭まり、ACL の書込みで再実行されなくなる
+    const viewableWithoutGrants =
+      work.lifecycle !== "active" && canViewWork({ work, grants: [], principal });
+    const grants = viewableWithoutGrants ? [] : await ctx.acl.listByWork(work.id);
     const authz = { work, grants, principal };
-    if (!(await canView(ctx, principal, work, grants))) continue;
+    if (!viewableWithoutGrants && !(await canView(ctx, principal, work, grants))) continue;
     visible.push(work);
     if (work.lifecycle !== "active") {
       const stage = workStageOf({

@@ -21,11 +21,41 @@ const VENDOR_PREFIXES = ["/pdfjs/", "/ocr/"];
 /** 横取りしない同一オリジンのパス（API を同じオリジンに置いた場合に備える） */
 const BYPASS_PREFIXES = ["/api/", "/auth/", "/.well-known/"];
 
+/**
+ * 新しい版の外枠を用意する。/assets/* はファイル名にハッシュが入っていて、同じ名前なら中身も同じなので、
+ * 前の版のキャッシュにあるものはそこから写し、通信しない（リリースで変わるのは数本のチャンクだけ。
+ * 以前は 250 本あまり・合計 6MB 超を毎回すべて取り直していた）。それ以外（index.html・マニフェスト・アイコン）は必ず取り直す。
+ * 前の版が無い（初回）、写せなかったときは、これまでどおり通信で取る。
+ */
+async function precache() {
+  const cache = await caches.open(SHELL);
+  const olds = [];
+  try {
+    for (const k of await caches.keys())
+      if (k.startsWith("mf100-shell-") && k !== SHELL) olds.push(await caches.open(k));
+  } catch {
+    // 前の版が読めなければ全部通信で取る
+  }
+  await Promise.all(
+    PRECACHE.map(async (p) => {
+      if (p.startsWith("/assets/")) {
+        for (const old of olds) {
+          // Vary（配信側が Origin などを付けていると、画面からの要求で入れ直したものに合わなくなる）は無視する: 名前が同じなら中身は同じ
+          const hit = await old.match(p, { ignoreVary: true }).catch(() => undefined);
+          if (hit && hit.ok && hit.status === 200) {
+            await cache.put(p, hit);
+            return;
+          }
+        }
+      }
+      await cache.add(new Request(p, { cache: "reload" }));
+    }),
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(SHELL)
-      .then((cache) => cache.addAll(PRECACHE.map((p) => new Request(p, { cache: "reload" }))))
+    precache()
       // 開いているアプリの画面が無ければ待たずに切り替える（書きかけの画面が無いので再読み込みの心配が無い）。
       // 画面が開けない版（下の unredirected の修正前）を入れた端末は「更新」を押せないため、ここで入れ替わる
       .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))

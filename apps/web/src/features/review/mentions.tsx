@@ -3,12 +3,12 @@ import { useQuery } from "convex/react";
 import {
   createContext,
   useContext,
-  useDeferredValue,
   useRef,
   useState,
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
@@ -53,8 +53,8 @@ export const useMentionDirectory = () => useContext(MentionContext);
 
 /** 「@」に続けて打った文字でサーバーに候補を探させる（打っていない間は購読しない） */
 function useMentionSearch(dir: MentionDirectory | null, text: string | null): MentionUser[] {
-  // 速く打っているときは少し遅れて検索する（1 文字ごとに購読を作り直さない）
-  const deferred = useDeferredValue(text);
+  // 速く打っているときは打ち止めてから検索する（1 文字ごとに購読を作り直さない）。「@」を打った直後（空の検索語）と閉じたときはすぐ
+  const deferred = useDebouncedValue(text, 150, (t) => t === null || t === "");
   const args = dir && deferred !== null ? { workId: dir.workId, text: deferred } : "skip";
   const comments = useQuery(
     api.comments.searchMentionCandidates,

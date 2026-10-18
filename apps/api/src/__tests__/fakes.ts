@@ -6,6 +6,7 @@ import type {
   FigmaImportMeta,
   FigmaNodeInfo,
   ObjectStore,
+  RangeRequest,
   TokenVerifier,
   UploadOps,
 } from "../ports.ts";
@@ -46,16 +47,28 @@ export class MemoryStore implements ObjectStore {
     return `"${h.toString(16)}-${o.bytes.byteLength}"`;
   }
   /** get の呼び出し（範囲つきかどうか）。範囲リクエストが R2 の範囲読みになっているかの確認に使う */
-  readonly gets: Array<{ key: string; range: ByteRange | undefined }> = [];
+  readonly gets: Array<{ key: string; range: ByteRange | RangeRequest | undefined }> = [];
+  /** head の呼び出し回数（範囲取得が HEAD なしの 1 回で済んでいるかの確認に使う） */
+  heads = 0;
   async head(key: string) {
+    this.heads++;
     const o = this.objects.get(key);
     return o ? { size: o.bytes.byteLength, sha256Hex: null, etag: this.etagOf(o) } : null;
   }
-  async get(key: string, range?: ByteRange) {
+  async get(key: string, range?: ByteRange | RangeRequest) {
     this.gets.push({ key, range });
     const o = this.objects.get(key);
     if (!o) return null;
-    const bytes = range ? o.bytes.slice(range.offset, range.offset + range.length) : o.bytes;
+    const size = o.bytes.byteLength;
+    let bytes = o.bytes;
+    if (range) {
+      // R2 と同じく、始めが実体の外なら例外。終わりは実体の末尾に収める
+      const offset = "suffix" in range ? Math.max(size - range.suffix, 0) : (range.offset ?? 0);
+      if (offset >= size) throw new Error("The requested range is not satisfiable (10039)");
+      const length =
+        "suffix" in range ? size - offset : Math.min(range.length ?? size - offset, size - offset);
+      bytes = o.bytes.slice(offset, offset + length);
+    }
     return {
       body: new Response(bytes.slice().buffer as ArrayBuffer).body!,
       size: o.bytes.byteLength,

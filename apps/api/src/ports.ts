@@ -136,6 +136,12 @@ export interface ByteRange {
   length: number;
 }
 
+/**
+ * 実体の大きさを知らずに頼む範囲（Range ヘッダーを読み替えたもの。parseRange）。R2 の範囲読みにそのまま渡せる。
+ * offset だけなら末尾まで、suffix は末尾 n バイト
+ */
+export type RangeRequest = { offset: number; length?: number } | { suffix: number };
+
 export interface StoredObject {
   /** range を指定したときは、その範囲だけ */
   body: ReadableStream;
@@ -153,6 +159,10 @@ export interface ObjectStore {
     opts: { contentType: string; sha256Hex: string },
   ): Promise<StoredObjectMeta>;
   head(key: string): Promise<StoredObjectHead | null>;
-  get(key: string, range?: ByteRange): Promise<StoredObject | null>;
+  /**
+   * 実体を読む。range を指定した場合、body はその範囲だけ（size は全体）。
+   * 範囲が実体の外のときは例外を投げてよい（呼び出し側は HEAD で大きさを確かめて 416 にする）。
+   */
+  get(key: string, range?: ByteRange | RangeRequest): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
 }
