@@ -205,6 +205,8 @@ function workInvalidMessage(details: unknown): string | null {
         ? "校了権限者を 1 人以上選んでください"
         : `${name}を入力してください`;
   if (d.reason === "too_long") return `${name}は ${max ?? "決められた"} 文字までです`;
+  if (d.reason === "creator_is_approver")
+    return "制作者は校了権限者にできません。校了権限者は制作者以外の人から選んでください";
   if (d.reason === "blank_id") return `${name}に空の値があります。選び直してください`;
   if (d.reason === "unknown_user")
     return `${name}に名簿にいない人が含まれています。一度サインインした人から選び直してください`;

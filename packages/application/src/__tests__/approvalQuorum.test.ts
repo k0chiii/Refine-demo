@@ -162,13 +162,17 @@ describe("校了者が複数のときの校了（利用者決定 2026-10-18）",
   });
 });
 
-describe("制作者が校了者のとき（D2 は校了者ごと）", () => {
+describe("決定前に保存された、制作者が校了者でもある行（D2 は校了者ごと）", () => {
   it("制作者である校了者は独立確認が要り、ほかの校了者は要らない", async () => {
-    const { ctx, work, revision } = await setup({
-      creatorIds: [principals.creator.userId],
+    const seeded = await setup({ approverIds: [a1.userId, a2.userId], approvalQuorum: 2 });
+    const { ctx, revision } = seeded;
+    // 登録・変更ではこの形を作れない（制作者は校了者になれない）ので、旧データを直接書いて再現する
+    const work = {
+      ...seeded.work,
+      approverId: principals.creator.userId,
       approverIds: [principals.creator.userId, a1.userId],
-      approvalQuorum: 2,
-    });
+    };
+    await ctx.works.update(work);
     const status = (who: typeof a1) => getConfirmationStatus(ctx, who, { workId: work.id });
     expect(await status(a1)).toMatchObject({ required: true, requiredForMe: false });
     expect(await status(principals.creator)).toMatchObject({ required: true, requiredForMe: true });

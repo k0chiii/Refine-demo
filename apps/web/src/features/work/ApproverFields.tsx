@@ -4,19 +4,22 @@ import { clampQuorum } from "./clampQuorum";
 
 /**
  * 校了者（複数）と校了とみなす人数の入力。制作物の登録・編集と、一覧の「校了者」のセルで共通。
- * 校了者が 2 人以上のときだけ人数の欄を出す。
+ * 校了者が 2 人以上のときだけ人数の欄を出す。制作者（excludeIds）は候補に出さない。
  */
 export function ApproverFields({
   ids,
   quorum,
   onChange,
   required,
+  excludeIds,
 }: {
   ids: string[];
   /** 画面の値は文字列（入力中の空を許す） */
   quorum: string;
   onChange: (next: { ids: string[]; quorum: string }) => void;
   required?: boolean;
+  /** 校了者に選べない人（この制作物の制作者。利用者決定 2026-10-18「制作者が校了者になることはない」） */
+  excludeIds?: readonly string[];
 }) {
   return (
     <>
@@ -24,6 +27,7 @@ export function ApproverFields({
         label="校了者（校了権限者）"
         {...(required ? { required } : {})}
         value={ids}
+        {...(excludeIds ? { exclude: [...excludeIds] } : {})}
         onChange={(next) =>
           onChange({
             ids: next,
