@@ -1898,14 +1898,92 @@ m3e-dialog [slot="actions"] {
 .viewer__overlay--passive .anchor-rect {
   pointer-events: none;
 }
-/* PDF の中のリンク（PdfLinks）: canvas と印の層のあいだ。見た目は何も足さず、触れると薄く示す */
+/* PDF の文字の層（PdfTextLayer。書き込み「なし」のときだけ）: canvas とリンクのあいだ。pdf.js の web/pdf_viewer.css の
+   .textLayer から必要な分だけ写した（全部は読み込まない）。文字は透明で、位置・大きさだけ canvas の文字に合わせ、
+   選んだ範囲を主色で見せる。--total-scale-factor（紙の 1pt が何 px か）は PdfTextLayer が入れる */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+/* 文字は回す前の向きで組んであるので、紙面の回転に合わせて回す（原点は左上。回したあと紙面の枠に収まるよう寄せる） */
+.textLayer[data-main-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+}
+.textLayer[data-main-rotation="180"] {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+.textLayer[data-main-rotation="270"] {
+  transform: rotate(270deg) translateX(-100%);
+}
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent {
+  display: contents;
+}
+.textLayer span[role="img"] {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--mf-primary) 32%, transparent);
+  color: transparent;
+}
+.textLayer br::selection {
+  background: transparent;
+}
+/* 文字のない所をなぞっても選択が飛ばないための受け皿（ドラッグ中だけ全面に伸ばす） */
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.textLayer.selecting .endOfContent {
+  top: 0;
+}
+/* PDF の中のリンク（PdfLinks）: 文字の層と印の層のあいだ。見た目は何も足さず、触れると薄く示す。
+   層そのものは押す・なぞるを下の文字の層へ通し（文字を選べる）、リンクの箱だけ押せる */
 .pdf-links {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 .pdf-link {
   position: absolute;
   display: block;
+  pointer-events: auto;
   border-radius: 2px;
   cursor: pointer;
 }

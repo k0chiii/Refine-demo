@@ -1795,13 +1795,13 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {/* 書き込み（印を付けるとき作るもの）: コメント / FB / なし。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
+                  {/* 書き込み（印を付けるとき作るもの）: コメント / FB / 選択（印を付けない）。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
                       引き出しは動かさない（FB を立てると、これまでどおり引き出し「FB」でそのやり取りが開く） */}
                   {canComment || canFeedback ? (
                     <M3eIconButton
                       className="ws__mark-mode"
-                      aria-label="書き込み: コメント / FB / なし"
-                      title={`書き込み: コメント / FB / なし（いまは${markModeLabel[markMode]}）`}
+                      aria-label="書き込み: コメント / FB / 選択"
+                      title={`書き込み: コメント / FB / 選択（いまは${markModeLabel[markMode]}）`}
                     >
                       <M3eIcon
                         name={markModeIcon[markMode]}
@@ -1919,7 +1919,7 @@ export function Editor({
                         onClick={() => changeMarkMode(m)}
                       >
                         <M3eIcon slot="icon" name={markModeIcon[m]} />
-                        {m === "none" ? "なし（印を付けない）" : markModeLabel[m]}
+                        {markModeLabel[m]}
                       </M3eMenuItemRadio>
                     ))}
                 </M3eMenuItemGroup>

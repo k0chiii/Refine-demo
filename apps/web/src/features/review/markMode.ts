@@ -5,7 +5,8 @@ import { useSyncExternalStore } from "react";
  * （利用者指示 2026-10-17「コメント/FB/なにもなしを切り替えたい。PDF中のリンクとか押せたらありがたいからね」）。
  * - comment: 範囲・ピンでコメント（解決する指摘）を作る
  * - feedback: 範囲・ピンで FB（解決しない相談）を作る
- * - none: 印を付けない。紙面を押す・なぞるはコメントに関係せず、紙面そのもの（PDF のリンクなど）が押せる
+ * - none: 印を付けない（「選択」・カーソルの絵。利用者指示 2026-10-18「なし」は分かりにくい）。紙面を押す・なぞるはコメントに関係せず、
+ *   紙面そのもの（PDF のリンク・文字の選択など）が使える
  * 「このタブのあいだ」覚える（sessionStorage。使えなければこのモジュールの変数）。投稿欄の書きかけ（composeStore）とは別で、
  * 投稿しても戻らない。制作物・版を替えても保つ。
  */
@@ -16,14 +17,14 @@ export const markModes: readonly MarkMode[] = ["comment", "feedback", "none"];
 export const markModeLabel: Record<MarkMode, string> = {
   comment: "コメント",
   feedback: "FB",
-  none: "なし",
+  none: "選択",
 };
 
 /** ツールバーのボタンのアイコン（いまのモードを示す。FB の引き出しの forum とは別の絵にする） */
 export const markModeIcon: Record<MarkMode, string> = {
   comment: "add_comment",
   feedback: "chat_add_on",
-  none: "pan_tool",
+  none: "arrow_selector_tool",
 };
 
 const KEY = "mf100.markMode";

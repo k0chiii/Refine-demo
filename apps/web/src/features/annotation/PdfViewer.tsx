@@ -3,6 +3,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { PdfLinks } from "./PdfLinks";
+import { PdfTextLayer } from "./PdfTextLayer";
 import { pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
 import { useViewerSync, type ViewerSyncProps } from "./viewerSync";
@@ -43,7 +44,8 @@ interface Props extends ViewerSyncProps {
   selecting: boolean;
   /**
    * 印を付けないとき（書き込み「なし」）: 紙面そのものを押せるようにする。印の層は押す・なぞるを通し（印そのものは押せる）、
-   * PDF の中のリンクを `<a>` として出す（外部 URL は新しいタブ、ページ内のリンクはそのページへ）。コメント・FB のモードでは出さない
+   * PDF の中のリンクを `<a>` として出し（外部 URL は新しいタブ、ページ内のリンクはそのページへ）、文字の層（PdfTextLayer）で
+   * 文字を選んでコピーできる。コメント・FB のモードでは出さない
    */
   passive?: boolean;
   draft: PdfDraft | null;
@@ -291,6 +293,15 @@ export function PdfViewer({
                       onNear={onNear}
                       onPainted={onPainted}
                     />
+                    {passive ? (
+                      <PdfTextLayer
+                        doc={doc}
+                        n={n}
+                        scale={renderScale}
+                        rotation={rotation}
+                        root={stageRef}
+                      />
+                    ) : null}
                     {passive ? (
                       <PdfLinks
                         doc={doc}
