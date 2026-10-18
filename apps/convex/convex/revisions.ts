@@ -11,6 +11,7 @@ import {
   isBeforeDeadline,
   isDeadlineReached,
   isListedThread,
+  isUnresponded,
   presentThread,
   revisionLabel,
 } from "@mf100/domain";
@@ -123,10 +124,7 @@ export const get = query({
             isAllowed("comment.decide", authz) &&
             work.lifecycle !== "finalized" &&
             accepting?.id === revision.id,
-          completeReview:
-            myAssignment !== null &&
-            myAssignment.state !== "responded" &&
-            myAssignment.state !== "excused",
+          completeReview: myAssignment !== null && isUnresponded(myAssignment),
         },
         /** UI が「なぜ投稿できないか」を説明するための理由 */
         commentBlockedReason: canPostNow

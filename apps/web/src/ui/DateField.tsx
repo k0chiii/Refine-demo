@@ -13,9 +13,12 @@ import { M3eDatepicker, M3eDatepickerToggle } from "@m3e/react/datepicker";
 import { M3eFormField } from "@m3e/react/form-field";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eSwitch } from "@m3e/react/switch";
 import { M3eTimepicker, M3eTimepickerToggle } from "@m3e/react/timepicker";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+/** 「時刻を指定」をオンにしたときの初めの時刻 */
+const DEFAULT_TIME = "18:00";
 
 /** YYYY-MM-DD → date-input の値（ローカルの Date。年月日だけを使う） */
 const toLocalDate = (date: string | null) =>
@@ -33,10 +36,12 @@ const fromLocalTime = (d: Date | null) =>
   !d || Number.isNaN(d.getTime()) ? null : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 /**
- * 締切・納期の入力（M3E date-input + date picker、任意で time-input + time picker）。
+ * 締切・納期の入力（M3E date-input + date picker、スイッチ「時刻を指定」をオンにしたときだけ time-input + time picker）。
  *
  * 意味は domain の `deadlineFromJst`（利用者決定 2026-10-15）: 日付だけなら **その日の終わり**（値は翌日 0:00 JST の epoch ms。
  * 判定 `now < deadlineAt` で 23:59:59.999 まで受付）、時刻を入れたらその時刻で締め切る。
+ * スイッチはまずオフ（時刻があるときだけオン）。オフにすると時刻を消す（= その日の終わり）、オンにすると 18:00 から始める
+ * （利用者指示 2026-10-18「時刻表示は、まずオンオフボタンで切り替え、時刻がある時だけ入力にしたい」）。
  * 入力欄の下に、確定する締切を「11/14（土）23:59 まで」と必ず出す（要件 §10-5）。
  * 表示・入力は JST の暦日・時刻として扱い、ブラウザのタイムゾーンに依存しないよう年月日と時分だけを受け渡す。
  */
@@ -67,12 +72,16 @@ export function DateField({
   const pickerId = `${id}-picker`;
   const timeId = `${id}-time`;
   const timeLabelId = `${id}-time-label`;
+  const switchId = `${id}-time-switch`;
   const timePickerId = `${id}-time-picker`;
   const summaryId = `${id}-summary`;
   const parts = value === null ? null : deadlineToJst(value);
   // 日付が空のあいだに入れた時刻は、日付が入るまでここで持つ
   const [pendingTime, setPendingTime] = useState<string | null>(null);
   const time = parts ? parts.time : pendingTime;
+  // 時刻の入力を出すかどうか。時刻があるあいだは必ずオン（外から値が入ったときも）。オンにして時刻がまだ空の間もオンのまま
+  const [timeOn, setTimeOn] = useState(time !== null);
+  const showTime = timeOn || time !== null;
 
   const minDate = min === undefined ? null : toJstDate(min);
   // M3E の date-input には Date オブジェクトを渡す。毎回 new Date すると、@lit/react が描き直しのたびに「値が変わった」と
@@ -87,6 +96,10 @@ export function DateField({
   const emitTime = (next: string | null) => {
     if (parts) onChange(deadlineFromJst(parts.date, next));
     else setPendingTime(next);
+  };
+  const switchTime = (on: boolean) => {
+    setTimeOn(on);
+    emitTime(on ? DEFAULT_TIME : null);
   };
 
   return (
@@ -125,38 +138,43 @@ export function DateField({
             <M3eDatepickerToggle htmlFor={pickerId} />
           </M3eIconButton>
         </M3eFormField>
-        {/* 時刻は任意（日付の下に置く。横に並べると幅で折り返しが変わり、入力のたびに形が跳ねる）。空ならその日の終わりまで */}
-        <M3eFormField variant="filled" className="field q__field" hideSubscript="always">
-          <label slot="label" id={timeLabelId} htmlFor={timeId}>
-            時刻（任意）
-          </label>
-          <M3eDateInput
-            id={timeId}
-            type="time"
-            timeFormat="24"
-            aria-labelledby={`${id}-label ${timeLabelId}`}
-            aria-describedby={summaryId}
-            value={timeValue}
-            hourLabel="時"
-            minuteLabel="分"
-            onChange={(e) =>
-              emitTime(fromLocalTime((e.target as unknown as { value: Date | null }).value))
-            }
+        {/* 時刻はスイッチで指定したときだけ入力を出す（日付の下に置く。横に並べると幅で折り返しが変わり、入力のたびに形が跳ねる）。オフならその日の終わりまで */}
+        <span className="checkbox">
+          <M3eSwitch
+            id={switchId}
+            aria-labelledby={`${switchId}-label`}
+            {...(showTime ? { "aria-controls": timeId } : {})}
+            checked={showTime}
+            onChange={(e) => switchTime((e.target as unknown as { checked: boolean }).checked)}
           />
-          {time !== null ? (
-            <M3eIconButton
-              slot="suffix"
-              aria-label="時刻を消す（その日の終わりまでにする）"
-              onClick={() => emitTime(null)}
-            >
-              <M3eIcon name="close" />
+          <label htmlFor={switchId} id={`${switchId}-label`}>
+            時刻を指定
+          </label>
+        </span>
+        {showTime ? (
+          <M3eFormField variant="filled" className="field q__field" hideSubscript="always">
+            <label slot="label" id={timeLabelId} htmlFor={timeId}>
+              時刻
+            </label>
+            <M3eDateInput
+              id={timeId}
+              type="time"
+              timeFormat="24"
+              aria-labelledby={`${id}-label ${timeLabelId}`}
+              aria-describedby={summaryId}
+              value={timeValue}
+              hourLabel="時"
+              minuteLabel="分"
+              onChange={(e) =>
+                emitTime(fromLocalTime((e.target as unknown as { value: Date | null }).value))
+              }
+            />
+            <M3eIconButton slot="suffix" aria-label="時刻を選ぶ">
+              <M3eIcon name="schedule" />
+              <M3eTimepickerToggle htmlFor={timePickerId} />
             </M3eIconButton>
-          ) : null}
-          <M3eIconButton slot="suffix" aria-label="時刻を選ぶ">
-            <M3eIcon name="schedule" />
-            <M3eTimepickerToggle htmlFor={timePickerId} />
-          </M3eIconButton>
-        </M3eFormField>
+          </M3eFormField>
+        ) : null}
         <p className="q__help" id={summaryId} aria-live="polite">
           {kind === "date"
             ? value === null
@@ -180,18 +198,20 @@ export function DateField({
         nextYearLabel="次の年"
         onChange={emitDate}
       />
-      <M3eTimepicker
-        id={timePickerId}
-        htmlFor={timeId}
-        format="24"
-        confirmLabel="決定"
-        dismissLabel="キャンセル"
-        hourLabel="時"
-        minuteLabel="分"
-        dialLabel="時刻を選ぶ"
-        inputLabel="時刻を入力"
-        modeToggleLabel="入力方法を切り替える"
-      />
+      {showTime ? (
+        <M3eTimepicker
+          id={timePickerId}
+          htmlFor={timeId}
+          format="24"
+          confirmLabel="決定"
+          dismissLabel="キャンセル"
+          hourLabel="時"
+          minuteLabel="分"
+          dialLabel="時刻を選ぶ"
+          inputLabel="時刻を入力"
+          modeToggleLabel="入力方法を切り替える"
+        />
+      ) : null}
     </>
   );
 }

@@ -7,7 +7,12 @@ import {
   replyToThread,
   searchMentionCandidates,
 } from "../usecases/comments.ts";
-import { assignReviewers, closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
+import {
+  assignReviewers,
+  closeExpiredReviews,
+  completeMyReview,
+  markRevisionViewed,
+} from "../usecases/reviews.ts";
 import { confirmSubmission, prepareSubmission } from "../usecases/submissions.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import {
@@ -92,6 +97,25 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
     expect((await ctx.works.findById(work.id))?.lifecycle).toBe("active");
     const a = await completeMyReview(ctx, principals.reviewer, revision.id);
     expect(a.state).toBe("responded");
+  });
+
+  it("校正完了は読了印: 二度押しても完了時刻は最初のまま。その後に閲覧しても戻らない", async () => {
+    const { ctx, revision } = await setup();
+    ctx.clock.current = revision.deadlineAt - 5 * HOUR;
+    const first = await completeMyReview(ctx, principals.reviewer, revision.id);
+    ctx.clock.current = revision.deadlineAt - HOUR;
+    const again = await completeMyReview(ctx, principals.reviewer, revision.id);
+    expect(again.respondedAt).toBe(first.respondedAt);
+    await markRevisionViewed(ctx, principals.reviewer, revision.id);
+    const stored = await ctx.assignments.find(revision.id, principals.reviewer.userId);
+    expect(stored).toMatchObject({ state: "responded", respondedAt: first.respondedAt });
+  });
+
+  it("割当のない人は校正完了にできない", async () => {
+    const { ctx, revision } = await setup();
+    await expect(completeMyReview(ctx, principals.creator, revision.id)).rejects.toThrow(
+      code("forbidden"),
+    );
   });
 
   it("view 権限のみのユーザーと無関係者は投稿できない", async () => {

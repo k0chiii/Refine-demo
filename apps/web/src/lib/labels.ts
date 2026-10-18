@@ -40,7 +40,7 @@ export const resolutionLabel: Record<string, string> = {
 export const assignmentLabel: Record<string, string> = {
   pending: "未確認",
   viewed: "閲覧済み",
-  responded: "確認完了",
+  responded: "校正完了",
   excused: "免除",
 };
 export const permissionLabel: Record<string, string> = {
