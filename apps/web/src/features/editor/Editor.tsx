@@ -783,9 +783,14 @@ export function Editor({
     artifact?.fileName === POST_MANIFEST_NAME &&
     (a.type === "text_range" || a.type === "image_rect" || a.type === "image_pin") &&
     (data?.artifacts ?? []).some((x) => x.id === a.artifactId);
-  const jumpTo = (t: Thread) => {
+  /**
+   * コメントを選ぶ。`reveal: false` は一覧のカードそのものを押したとき: 利用者が今そのカードを見て押しているので、一覧を
+   * 動かさない（動かすと押した先のカードが指の下から動き、続けて押す「⋮」などが外れる・開いたメニューが祖先のスクロールで閉じる）。
+   * 紙面のピン・範囲、URL、通知など、一覧の外から選ぶときだけカードまでスクロールする
+   */
+  const jumpTo = (t: Thread, opts?: { reveal?: boolean }) => {
     setActiveThreadId(t.id);
-    requestReveal(t.id);
+    if (opts?.reveal !== false) requestReveal(t.id);
     setPostReveal((n) => n + 1);
     if (t.anchor) {
       if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor as Anchor))
@@ -843,7 +848,7 @@ export function Editor({
       canEdit={work?.lifecycle !== "finalized"}
       pending={busy}
       {...(className ? { className } : {})}
-      onSelect={() => jumpTo(t)}
+      onSelect={() => jumpTo(t, { reveal: false })}
       onResolve={() => doDecide.run(t.id, "resolved", "")}
       onDecide={(a, r) => doDecide.run(t.id, a, r)}
       onReply={(b, ids) => doReply.run(t.id, b, ids)}
