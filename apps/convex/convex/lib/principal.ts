@@ -36,7 +36,7 @@ export async function teamIdsOf(db: DatabaseReader, userId: Id<"users">): Promis
   );
 }
 
-function principalOf(user: Doc<"users">): Principal {
+export function principalOf(user: Doc<"users">): Principal {
   return {
     userId: user._id,
     isSystemAdmin: user.isSystemAdmin ?? false,
