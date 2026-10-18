@@ -417,10 +417,13 @@ export function Editor({
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
+  // 校正者が版を開いたら「確認済み」にする。割当が未確認（pending）のときだけ呼ぶ
+  // （割当のない人や確認済みの人が版を開くたびに、何も変わらない mutation を打たない）
+  const needsViewMark = data?.myAssignment?.state === "pending";
   useEffect(() => {
-    if (revisionId)
+    if (revisionId && needsViewMark)
       void markViewed({ revisionId: revisionId as Id<"revisions"> }).catch(() => undefined);
-  }, [revisionId]);
+  }, [revisionId, needsViewMark]);
   useEffect(() => {
     setArtifactId(null);
     setPage(1);

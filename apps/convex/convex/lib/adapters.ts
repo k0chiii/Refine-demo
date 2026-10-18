@@ -265,8 +265,9 @@ export function createAppContext(
       async listAbandonedUnpurged(limit) {
         const docs = await db
           .query("uploadSessions")
-          .withIndex("by_state_expires", (q) => q.eq("state", "abandoned"))
-          .filter((q) => q.eq(q.field("purgedAt"), undefined))
+          .withIndex("by_state_purged_expires", (q) =>
+            q.eq("state", "abandoned").eq("purgedAt", undefined),
+          )
           .take(limit);
         return docs.map((d) => fromDoc(d) as UploadSession);
       },
@@ -605,6 +606,17 @@ export function createAppContext(
       },
       async listRules() {
         return (await db.query("notationRules").collect()).map((d) => strip(d) as NotationRule);
+      },
+      async listRulesInCategories(codes) {
+        const groups = await Promise.all(
+          [...new Set(codes)].map((code) =>
+            db
+              .query("notationRules")
+              .withIndex("by_category", (q) => q.eq("categoryCode", code))
+              .collect(),
+          ),
+        );
+        return groups.flat().map((d) => strip(d) as NotationRule);
       },
       async findRule(ruleId) {
         const d = await db
@@ -953,8 +965,9 @@ export function createAppContext(
       async listUnattachedFilesBefore(before, limit) {
         const docs = await db
           .query("feedbackFiles")
-          .withIndex("by_post", (q) => q.eq("postId", undefined).lte("createdAt", before))
-          .filter((q) => q.eq(q.field("abandonedAt"), undefined))
+          .withIndex("by_post_abandoned_created", (q) =>
+            q.eq("postId", undefined).eq("abandonedAt", undefined).lte("createdAt", before),
+          )
           .take(limit);
         return docs.map((d) => fromDoc(d) as FeedbackFile);
       },

@@ -42,9 +42,13 @@ export function FeedbackConversation({
       ),
     [data.posts, readAtOnOpen],
   );
+  // 開いたとき・新しい投稿が来たときに既読にする。すでに最後の投稿まで読んでいれば呼ばない
+  // （読み済みのスレッドを開き直すたびに既読の行を書き換えると、一覧・スレッドの購読が無駄に再実行される）
+  const upToDate = data.readAt !== null && data.readAt >= data.thread.lastPostAt;
   useEffect(() => {
+    if (upToDate) return;
     void markRead({ threadId }).catch(() => undefined);
-  }, [threadId, count]);
+  }, [threadId, count, upToDate]);
   // 開いたとき: 未読の線があればそこへ、無ければ一番下へ。その後に投稿が増えたら一番下へ
   const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
