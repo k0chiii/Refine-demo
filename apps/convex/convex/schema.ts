@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   vProposalContext,
+  vReactionEntries,
   vProposalKind,
   vProposalStatus,
   vRuleCategoryFields,
@@ -388,6 +389,8 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     /** 削除した時点で他の人の返信が残っていた（一覧に「削除されたコメント」として残す） */
     deletedKeepsReplies: v.optional(v.boolean()),
+    /** リアクション（絵文字ごとに押した人。FB と同じ形。誰も付けていなければ持たない） */
+    reactions: v.optional(vReactionEntries),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
@@ -407,6 +410,8 @@ export default defineSchema({
     actorId: v.string(),
     reason: v.optional(v.string()),
     payload: v.optional(v.any()),
+    /** 返信（replied）へのリアクション */
+    reactions: v.optional(vReactionEntries),
     createdAt: v.number(),
   }).index("by_thread", ["threadId"]),
 

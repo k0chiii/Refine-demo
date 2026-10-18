@@ -271,6 +271,12 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       },
       listEvents: async (threadId) =>
         state.events.filter((e) => e.threadId === threadId).map((e) => clone(e)),
+      setEventReactions: async (eventId, reactions) => {
+        const e = state.events.find((x) => x.id === eventId);
+        if (!e) return;
+        if (reactions.length > 0) e.reactions = clone(reactions);
+        else delete e.reactions;
+      },
     },
     assignments: {
       listByRevision: async (revisionId) =>

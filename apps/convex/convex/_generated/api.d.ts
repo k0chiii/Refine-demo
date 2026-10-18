@@ -30,6 +30,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_nogikuAccess from "../lib/nogikuAccess.js";
 import type * as lib_notationSamples from "../lib/notationSamples.js";
 import type * as lib_principal from "../lib/principal.js";
+import type * as lib_reactions from "../lib/reactions.js";
 import type * as lib_redirect from "../lib/redirect.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
 import type * as lib_users from "../lib/users.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nogikuAccess": typeof lib_nogikuAccess;
   "lib/notationSamples": typeof lib_notationSamples;
   "lib/principal": typeof lib_principal;
+  "lib/reactions": typeof lib_reactions;
   "lib/redirect": typeof lib_redirect;
   "lib/serviceAuth": typeof lib_serviceAuth;
   "lib/users": typeof lib_users;

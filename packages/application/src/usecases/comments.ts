@@ -18,6 +18,7 @@ import { markRevisionViewed } from "./reviews.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
   allMembersCanView,
+  assertCanReactToComment,
   assertThreadNotDeleted,
   deleteReply as deleteReplyDomain,
   deleteThreadComment,
@@ -26,6 +27,10 @@ import {
   mentionableUserIds,
   planCarryForward,
   revisionLabel,
+  summarizeCommentReactions,
+  toggleReplyReaction,
+  toggleThreadReaction,
+  type ReactionSummary,
 } from "@mf100/domain";
 
 /** 通知文面用の採否ラベル（表示名は UI 側と同じ日本語。状態名自体は設計提案）。 */
@@ -184,6 +189,40 @@ export async function replyToThread(
     revisionId: revision.id,
     threadId: thread.id,
   });
+}
+
+/**
+ * コメント（スレッド）または返信へのリアクションを付ける・外す。付いた後の集計を返す（利用者決定 2026-10-18）。
+ * 付けられる人は返信と同じ（制作物を見られる人。校了後は不可）。同じ人は 1 つの絵文字に 1 回だけで、押すたびに付け外しする。
+ * 通知は出さない（FB のリアクションと同じ）。replyEventId を渡すとその返信へ、無ければコメントへ。
+ */
+export async function toggleCommentReaction(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string; replyEventId?: string; emoji: string },
+): Promise<ReactionSummary[]> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "comment.reply");
+  assertCanReactToComment(work.lifecycle);
+  if (input.replyEventId === undefined) {
+    const next = toggleThreadReaction(thread, input.emoji, principal.userId);
+    await ctx.threads.update(next);
+    return summarizeCommentReactions(next.reactions, principal.userId);
+  }
+  assertThreadNotDeleted(thread);
+  const events = await ctx.threads.listEvents(thread.id);
+  const next = toggleReplyReaction(
+    events,
+    input.replyEventId,
+    input.emoji,
+    principal.userId,
+    thread.id,
+  );
+  await ctx.threads.setEventReactions(input.replyEventId, next);
+  return summarizeCommentReactions(next, principal.userId);
 }
 
 /** メンションされた人に知らせる（本人は除く。見られる人かは validateMentions で確認済み） */

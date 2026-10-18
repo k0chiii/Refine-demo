@@ -350,3 +350,8 @@ export const vFeedbackTemplateId = v.union(
   v.literal("creator_update"),
   v.literal("reviewer"),
 );
+
+/** リアクション（絵文字ごとに押した人。domain の ReactionEntry。FB の投稿・コメント・返信で共通） */
+export const vReactionEntries = v.array(
+  v.object({ emoji: v.string(), userIds: v.array(v.string()) }),
+);

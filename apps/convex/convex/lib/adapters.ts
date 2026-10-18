@@ -361,6 +361,12 @@ export function createAppContext(
           return { ...rest, id: _id as string } as CommentEvent;
         });
       },
+      async setEventReactions(eventId, reactions) {
+        // 空にしたらフィールドごと外す（undefined を渡すと patch は項目を消す）
+        await db.patch("commentEvents", eventId as Id<"commentEvents">, {
+          reactions: reactions.length > 0 ? reactions : undefined,
+        });
+      },
     },
     assignments: {
       async listByRevision(revisionId) {

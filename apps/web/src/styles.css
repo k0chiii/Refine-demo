@@ -2712,6 +2712,13 @@ m3e-dialog [slot="actions"] {
   cursor: pointer;
   color: var(--mf-on-surface);
 }
+/* 選んだコメントを一覧へスクロールするときの余白（features/review/revealThread が読む）。選択中は面の色で示す */
+.thread {
+  scroll-margin-block: 12px 16px;
+}
+.thread--active {
+  --m3e-elevated-card-container-color: var(--mf-secondary-container);
+}
 .thread--closed .thread__body {
   color: var(--mf-on-surface-variant);
 }
@@ -2793,6 +2800,19 @@ m3e-dialog [slot="actions"] {
 .thread__body--deleted {
   color: var(--mf-on-surface-variant);
   font-style: italic;
+}
+/* コメント・返信のリアクション（FB と同じ部品: ui/Reactions）。付いているチップの末尾に「付ける」ボタン */
+.thread__reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.thread__reactions--reply {
+  margin-top: 4px;
+}
+.thread__react {
+  color: var(--mf-on-surface-variant);
 }
 .thread__replyitem .thread__name {
   margin-inline-end: 8px;

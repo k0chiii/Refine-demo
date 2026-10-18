@@ -296,6 +296,6 @@ describe("Convex 統合: 制作のフィードバック", () => {
       threadId: eve._id as Id<"feedbackThreads">,
     });
     expect(view!.posts.map((p) => p.template)).toEqual(["creator_first", "reviewer"]);
-    expect(view!.posts[1]!.reactions).toEqual([{ emoji: "👍", count: 1, mine: true }]);
+    expect(view!.posts[1]!.reactions).toMatchObject([{ emoji: "👍", count: 1, mine: true }]);
   });
 });

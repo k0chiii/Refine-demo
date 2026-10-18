@@ -1,5 +1,4 @@
 import { api } from "@mf100/convex/api";
-import { FEEDBACK_REACTIONS } from "@mf100/domain";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -9,10 +8,10 @@ import { useAction } from "@/lib/useAction";
 import { TextArea } from "@/ui/Field";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
-import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
+import { QUICK_REACTIONS, ReactionChips, ReactionMenu, reactionNames } from "@/ui/Reactions";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { FeedbackFiles } from "./FeedbackFiles";
 
@@ -24,28 +23,6 @@ export type PostData = NonNullable<ThreadData>["posts"][number];
  * ⋮ から自分の投稿を直す・消す（消した投稿は「削除された投稿」として残す）。
  * リアクションは決まった絵文字だけ（FEEDBACK_REACTIONS）。自分が付けたものは選択中のチップ。
  */
-/** リアクションの名前（メニューの項目と読み上げ） */
-/**
- * M3E の複数選択のチップの組は role="group" に aria-orientation を付ける（group には付けられない属性。axe の aria-allowed-attr）。
- * 最初の描画が済んだら外す（向きは vertical を変えたときにしか付け直されない）。
- */
-const dropGroupOrientation = (el: HTMLElement | null) => {
-  const set = el as (HTMLElement & { updateComplete?: Promise<unknown> }) | null;
-  void set?.updateComplete?.then(() => set.removeAttribute("aria-orientation"));
-};
-
-const reactionNames: Record<string, string> = {
-  "👍": "いいね",
-  "🙏": "ありがとう",
-  "👀": "見ました",
-  "🎉": "おめでとう",
-  "💡": "ひらめき",
-  "❤️": "好き",
-};
-
-/** マウスを乗せたときに出す、すぐ付けられるリアクション（Slack の操作バーと同じ） */
-const QUICK_REACTIONS = ["👍", "🙏", "👀"] as const;
-
 export function FeedbackPost({
   post,
   people,
@@ -148,27 +125,12 @@ export function FeedbackPost({
         <div
           className={`fb-post__reactions ${post.reactions.length ? "" : "fb-post__reactions--empty"}`}
         >
-          {post.reactions.length ? (
-            // 自分が付けたものは色（選択の面）で示す。チェックの印は出さない（Slack と同じ。利用者指示 2026-10-15）
-            <M3eFilterChipSet
-              multi
-              hideSelectionIndicator
-              aria-label="リアクション"
-              className="fb-post__reaction-set"
-              ref={dropGroupOrientation}
-            >
-              {post.reactions.map((r) => (
-                <M3eFilterChip
-                  key={r.emoji}
-                  selected={r.mine}
-                  aria-label={`${r.emoji} ${reactionNames[r.emoji] ?? ""} ${r.count} 人${r.mine ? "（自分も）" : ""}`}
-                  onClick={() => void react.run(r.emoji)}
-                >
-                  {r.emoji} {r.count}
-                </M3eFilterChip>
-              ))}
-            </M3eFilterChipSet>
-          ) : null}
+          <ReactionChips
+            reactions={post.reactions}
+            idPrefix={`fb-chip-${post.id}`}
+            className="fb-post__reaction-set"
+            onToggle={(emoji) => void react.run(emoji)}
+          />
           {/* 投稿の操作: マウスを乗せたとき・キーボードで入ったときに右上に出す（Slack の操作バー）。
               タッチの端末ではリアクションの行の末尾に常に出す */}
           <div className="fb-post__actions" role="toolbar" aria-label="投稿の操作">
@@ -199,23 +161,12 @@ export function FeedbackPost({
         </div>
       </div>
       {/* メニューは操作バーの外に置く（バーはマウスが離れると押せなくなるため。開いている間はバーを出したまま） */}
-      <M3eMenu id={reactId} className="fb-react-menu">
-        {FEEDBACK_REACTIONS.map((e) => {
-          // 自分が付けたものに印（M3 Menus: 選択は色以外でも示す）
-          const mine = post.reactions.some((r) => r.emoji === e && r.mine);
-          return (
-            // 名前は出さず絵文字だけ（利用者指示 2026-10-17）。読み上げには名前を残す
-            <M3eMenuItem
-              key={e}
-              aria-label={`${e} ${reactionNames[e] ?? ""}${mine ? "（付けています）" : ""}`}
-              onClick={() => void react.run(e)}
-            >
-              {mine ? <M3eIcon slot="icon" name="check" /> : null}
-              {e}
-            </M3eMenuItem>
-          );
-        })}
-      </M3eMenu>
+      <ReactionMenu
+        id={reactId}
+        reactions={post.reactions}
+        className="fb-react-menu"
+        onPick={(emoji) => void react.run(emoji)}
+      />
       {post.can.edit || post.can.delete ? (
         <M3eMenu id={menuId} positionX="before">
           {post.can.edit ? (

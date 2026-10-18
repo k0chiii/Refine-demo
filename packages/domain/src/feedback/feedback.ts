@@ -5,6 +5,14 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { Anchor } from "../comment/Anchor.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
+import {
+  REACTIONS,
+  isReaction,
+  summarizeReactionEntries,
+  toggleReactionEntries,
+  type Reaction,
+  type ReactionEntry,
+} from "../shared/reactions.ts";
 
 /**
  * 制作のフィードバック（表現の議論）。利用者決定 2026-10-15「Slack ではなく MF100 の中で議論する」。
@@ -20,8 +28,8 @@ export const FEEDBACK_BODY_MAX = 5000;
 /** 1 つの投稿に付けられるファイルの数 */
 export const FEEDBACK_FILES_MAX = 10;
 /** 使えるリアクション（この並びで表示する） */
-export const FEEDBACK_REACTIONS = ["👍", "🙏", "👀", "🎉", "💡", "❤️"] as const;
-export type FeedbackReaction = (typeof FEEDBACK_REACTIONS)[number];
+export const FEEDBACK_REACTIONS = REACTIONS;
+export type FeedbackReaction = Reaction;
 /** 添付の置き場（R2 のオブジェクトキーの頭）。版の提出物（works/…）と名前空間を分ける */
 export const FEEDBACK_OBJECT_PREFIX = "feedback/";
 /** 投稿に付けないまま放置された添付を清掃の対象にするまでの時間 */
@@ -50,10 +58,7 @@ export interface FeedbackThread {
   anchor?: Anchor;
 }
 
-export interface FeedbackReactionEntry {
-  emoji: FeedbackReaction;
-  userIds: UserId[];
-}
+export type FeedbackReactionEntry = ReactionEntry;
 
 export interface FeedbackPost {
   id: string;
@@ -189,7 +194,7 @@ export function validateFeedbackBody(body: string, opts: { hasFiles: boolean }):
 }
 
 export function isFeedbackReaction(value: string): value is FeedbackReaction {
-  return (FEEDBACK_REACTIONS as readonly string[]).includes(value);
+  return isReaction(value);
 }
 
 export function validateFeedbackReaction(emoji: string): FeedbackReaction {
@@ -238,19 +243,7 @@ export function toggleFeedbackReaction(
   userId: UserId,
 ): FeedbackPost {
   validateFeedbackReaction(emoji);
-  const reactions = post.reactions.map((r) => ({ emoji: r.emoji, userIds: [...r.userIds] }));
-  const entry = reactions.find((r) => r.emoji === emoji);
-  if (!entry) reactions.push({ emoji, userIds: [userId] });
-  else if (entry.userIds.includes(userId))
-    entry.userIds = entry.userIds.filter((id) => id !== userId);
-  else entry.userIds.push(userId);
-  const order = (e: FeedbackReaction) => FEEDBACK_REACTIONS.indexOf(e);
-  return {
-    ...post,
-    reactions: reactions
-      .filter((r) => r.userIds.length > 0)
-      .sort((a, b) => order(a.emoji) - order(b.emoji)),
-  };
+  return { ...post, reactions: toggleReactionEntries(post.reactions, emoji, userId) };
 }
 
 /** 表示用の集計（絵文字・人数・自分が付けたか）。決まった並びで、0 人の絵文字は出さない */
@@ -258,11 +251,11 @@ export function summarizeFeedbackReactions(
   reactions: readonly FeedbackReactionEntry[],
   viewerId: UserId,
 ): Array<{ emoji: FeedbackReaction; count: number; mine: boolean }> {
-  return FEEDBACK_REACTIONS.flatMap((emoji) => {
-    const r = reactions.find((x) => x.emoji === emoji);
-    if (!r || r.userIds.length === 0) return [];
-    return [{ emoji, count: r.userIds.length, mine: r.userIds.includes(viewerId) }];
-  });
+  return summarizeReactionEntries(reactions, viewerId).map(({ emoji, count, mine }) => ({
+    emoji,
+    count,
+    mine,
+  }));
 }
 
 // ---------------------------------------------------------------- 添付

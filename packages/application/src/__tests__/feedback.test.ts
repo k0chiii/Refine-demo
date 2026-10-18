@@ -207,9 +207,10 @@ describe("フィードバックのスレッドと投稿", () => {
       [{ emoji: "👍", count: 1, mine: true }],
     );
     await toggleFeedbackReaction(ctx, stranger, { postId: first!.id, emoji: "👍" });
-    expect((await getFeedbackThread(ctx, creator, t)).posts[0]!.reactions).toEqual([
-      { emoji: "👍", count: 2, mine: false },
-    ]);
+    const shown = (await getFeedbackThread(ctx, creator, t)).posts[0]!.reactions;
+    expect(shown).toMatchObject([{ emoji: "👍", count: 2, mine: false }]);
+    // 付けた人（付けた順）も返す
+    expect(shown[0]!.users.map((u) => u.id)).toEqual([reviewer.userId, stranger.userId]);
     await expect(
       toggleFeedbackReaction(ctx, creator, { postId: first!.id, emoji: "🤔" }),
     ).rejects.toThrow(code("feedback_invalid"));

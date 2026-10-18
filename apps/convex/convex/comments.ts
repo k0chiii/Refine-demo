@@ -9,6 +9,7 @@ import {
   searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
   replyToThread,
+  toggleCommentReaction,
 } from "@mf100/application";
 import {
   DomainError,
@@ -22,6 +23,7 @@ import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
+import { reactionViews, reactorIds } from "./lib/reactions.ts";
 import { resolveUsers } from "./lib/users.ts";
 import { vDecision, vSeverity, vThreadKind } from "./lib/validators.ts";
 import { anchorValidator } from "./schema.ts";
@@ -59,6 +61,22 @@ export const reply = mutation({
       await replyToThread(createAppContext(ctx), principal, args);
       return null;
     });
+  },
+});
+
+/**
+ * コメント、または返信（replyEventId）へのリアクションを付ける・外す。付いた後の集計を返す。
+ * 付けられる人は返信と同じ。通知は出さない（FB と同じ）。
+ */
+export const toggleReaction = mutation({
+  args: {
+    threadId: v.id("commentThreads"),
+    replyEventId: v.optional(v.string()),
+    emoji: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() => toggleCommentReaction(createAppContext(ctx), principal, args));
   },
 });
 
@@ -107,6 +125,7 @@ export const events = query({
       const users = await resolveUsers(ctx.db, [
         ...events.map((e) => e.actorId),
         ...events.flatMap(mentionsOf),
+        ...events.flatMap((e) => reactorIds(e.reactions)),
       ]);
       return {
         canDecide:
@@ -117,6 +136,7 @@ export const events = query({
           .map((e) => ({
             ...e,
             actor: users.get(e.actorId),
+            reactions: reactionViews(e.reactions, principal.userId, users),
             mentionUsers: mentionsOf(e).flatMap((id) => {
               const u = users.get(id);
               return u ? [u] : [];

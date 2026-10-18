@@ -3,6 +3,7 @@ import type { ArtifactId, RevisionId, ThreadId, UserId } from "../shared/ids.ts"
 import type { Instant } from "../shared/time.ts";
 import type { Anchor } from "./Anchor.ts";
 import type { BotOrigin } from "../notation/autoProofread.ts";
+import type { ReactionEntry } from "../shared/reactions.ts";
 
 /** スレッド種別（§9.1 設計案） */
 export const threadKinds = ["correction", "question", "discussion", "decision"] as const;
@@ -54,6 +55,8 @@ export interface CommentThread {
   deletedAt?: Instant;
   /** 削除した時点で、投稿者以外の人の返信が残っていた（一覧に「削除されたコメント」として残す）。返信が無ければ一覧にも出さない */
   deletedKeepsReplies?: boolean;
+  /** リアクション（FB と同じ絵文字・同じ規則。comment/reactions.ts）。誰も付けていなければ持たない */
+  reactions?: ReactionEntry[];
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;
@@ -182,5 +185,7 @@ export interface CommentEvent {
   actorId: UserId;
   reason?: string;
   payload?: Record<string, unknown>;
+  /** 返信（replied）へのリアクション。ほかの種類のイベントには付かない */
+  reactions?: ReactionEntry[];
   createdAt: Instant;
 }

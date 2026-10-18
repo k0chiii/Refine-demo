@@ -3,6 +3,7 @@ import type {
   ApprovalEvent,
   Artifact,
   CommentEvent,
+  ReactionEntry,
   CommentThread,
   DocumentDraft,
   FeedbackFile,
@@ -115,6 +116,8 @@ export interface ThreadRepository {
   update(thread: CommentThread): Promise<void>;
   appendEvent(event: CommentEvent): Promise<void>;
   listEvents(threadId: string): Promise<CommentEvent[]>;
+  /** 返信（イベント）のリアクションを置き換える（空にすると持たない状態に戻す） */
+  setEventReactions(eventId: string, reactions: ReactionEntry[]): Promise<void>;
 }
 
 export interface ReviewAssignmentRepository {
