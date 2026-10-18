@@ -95,6 +95,7 @@ export const domainErrorCodes = [
   "feedback_file_not_ready",
   // 通知の配信（Web Push）
   "push_subscription_invalid",
+  "notification_prefs_invalid",
   // アカウント（アバター）
   "avatar_invalid",
   // 冪等性 / 競合

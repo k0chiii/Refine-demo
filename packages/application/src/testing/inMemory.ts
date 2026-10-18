@@ -30,6 +30,7 @@ import type {
   AppContext,
   AuditEntry,
   Notification,
+  NotificationPrefsRecord,
   PushSubscriptionRecord,
   RecentWork,
   StoredDashboardLayout,
@@ -96,6 +97,7 @@ export interface InMemoryContext extends AppContext {
     checks: Table<RequiredCheck>;
     notifications: Table<Notification>;
     pushSubscriptions: Table<PushSubscriptionRecord>;
+    notificationPrefs: Map<string, NotificationPrefsRecord>;
     documents: Table<DocumentDraft>;
     socialProfiles: Table<SocialProfile>;
     teams: Table<Team>;
@@ -143,6 +145,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     checks: new Table<RequiredCheck>("chk"),
     notifications: new Table<Notification>("ntf"),
     pushSubscriptions: new Table<PushSubscriptionRecord>("push"),
+    notificationPrefs: new Map(),
     documents: new Table<DocumentDraft>("doc"),
     socialProfiles: new Table<SocialProfile>("sp"),
     teams: new Table<Team>("team"),
@@ -347,6 +350,12 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       update: async (sub) => state.pushSubscriptions.put(sub),
       delete: async (id) => {
         state.pushSubscriptions.rows.delete(id);
+      },
+    },
+    notificationPrefs: {
+      find: async (userId) => clone(state.notificationPrefs.get(userId) ?? null),
+      save: async (prefs) => {
+        state.notificationPrefs.set(prefs.userId, clone(prefs));
       },
     },
     notifications: {

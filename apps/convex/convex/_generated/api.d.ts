@@ -38,6 +38,7 @@ import type * as lib_webpush from "../lib/webpush.js";
 import type * as me from "../me.js";
 import type * as notation from "../notation.js";
 import type * as notationSeed from "../notationSeed.js";
+import type * as notificationPrefs from "../notificationPrefs.js";
 import type * as notifications from "../notifications.js";
 import type * as proofreading from "../proofreading.js";
 import type * as providers_nogiku from "../providers/nogiku.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   me: typeof me;
   notation: typeof notation;
   notationSeed: typeof notationSeed;
+  notificationPrefs: typeof notificationPrefs;
   notifications: typeof notifications;
   proofreading: typeof proofreading;
   "providers/nogiku": typeof providers_nogiku;

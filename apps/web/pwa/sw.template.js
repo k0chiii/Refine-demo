@@ -154,10 +154,86 @@ self.addEventListener("fetch", (event) => {
 });
 
 /*
- * 端末への通知（Web Push。利用者決定 2026-10-15）。
+ * 端末への通知（Web Push。利用者決定 2026-10-15。普通のアプリの見た目に: 利用者指示 2026-10-18）。
  * 本文は Convex（pushNode.deliver）が端末の鍵で暗号化して送り、ブラウザが復号して渡す。
- * 中身は題名・制作物名・開く画面・未読の数だけ（コメントの抜粋などは載せない）。
+ * 中身は題名（制作物名）・本文（送り主と抜粋）・開く画面・未読の数・通知の時刻。利用者が「通知に内容を表示」を切っていれば、
+ * 送り主と抜粋は届かない（サーバーで作る時点で外れている）。
+ * - 同じ会話（tag = スレッド → 制作物 → 通知の ID）の通知は 1 つに置き換わり、「N件の新着」と最新の 1 行を出す
+ * - アプリを開いて見ている間は、音と振動を出さずに出す（Chrome・iOS は通知を出さない push を許さないため、出すこと自体はやめない）
  */
+const NOTIFICATION_ICON = "/icons/icon-192.png";
+/** Android のステータスバーに出す単色の小さなアイコン（白と透明） */
+const NOTIFICATION_BADGE = "/icons/badge-96.png";
+/** まとめた通知に残す行と通知の ID の上限 */
+const MERGE_LINES = 5;
+const MERGE_IDS = 20;
+
+const isText = (v) => typeof v === "string" && v.length > 0;
+
+/** 同じ印の通知がすでに出ていれば、その内容（まとめるために data に持たせた行・ID・件数）を返す */
+async function shownWithTag(tag) {
+  if (!tag) return null;
+  try {
+    const list = await self.registration.getNotifications({ tag });
+    const prev = list.find((n) => n.data && Array.isArray(n.data.lines));
+    return prev || null;
+  } catch {
+    return null;
+  }
+}
+
+/** この画面の持ち主のアプリを、いま見ている最中か（前面で、表示されている） */
+async function appInFront() {
+  try {
+    const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    return list.some(
+      (c) =>
+        new URL(c.url).origin === self.location.origin &&
+        c.focused &&
+        c.visibilityState === "visible",
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function showPush(data) {
+  const url = isText(data.url) && data.url.startsWith("/") ? data.url : "/";
+  const tag = isText(data.tag) ? data.tag : undefined;
+  const id = isText(data.id) ? data.id : (tag ?? null);
+  const line = typeof data.body === "string" ? data.body : "";
+  const timestamp =
+    typeof data.createdAt === "number" && data.createdAt > 0 ? data.createdAt : Date.now();
+  let title = isText(data.title) ? data.title : "MF100 校正システム";
+  let body = line;
+  let lines = [line];
+  let ids = id ? [id] : [];
+  let count = 1;
+
+  const prev = await shownWithTag(tag);
+  if (prev) {
+    // 題名はそのまま、本文は最新の 1 行に「N件の新着」を付ける
+    title = prev.title || title;
+    lines = [...prev.data.lines, line].slice(-MERGE_LINES);
+    ids = [...(Array.isArray(prev.data.ids) ? prev.data.ids : []), ...ids].slice(-MERGE_IDS);
+    count = (typeof prev.data.count === "number" ? prev.data.count : prev.data.lines.length) + 1;
+    body = `${count}件の新着: ${line}`;
+  }
+
+  const quiet = await appInFront();
+  await self.registration.showNotification(title, {
+    body,
+    // 同じ印の通知は置き換える。renotify: 置き換えでも知らせる（印があるときだけ指定できる）
+    ...(tag ? { tag, renotify: !quiet } : {}),
+    icon: NOTIFICATION_ICON,
+    badge: NOTIFICATION_BADGE,
+    timestamp,
+    lang: "ja",
+    silent: quiet,
+    data: { url, id, ids, lines, count },
+  });
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -165,17 +241,7 @@ self.addEventListener("push", (event) => {
   } catch {
     data = {};
   }
-  const title = typeof data.title === "string" && data.title ? data.title : "MF100 校正システム";
-  const url = typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/";
-  const tasks = [
-    self.registration.showNotification(title, {
-      body: typeof data.body === "string" ? data.body : "",
-      tag: typeof data.tag === "string" ? data.tag : undefined,
-      icon: "/icons/icon-192.png",
-      lang: "ja",
-      data: { url, id: typeof data.tag === "string" ? data.tag : null },
-    }),
-  ];
+  const tasks = [showPush(data)];
   // アプリのアイコンの数（iOS 16.4+・Chrome/Edge のインストール済みアプリ）
   if (typeof data.badge === "number" && "setAppBadge" in self.navigator)
     tasks.push(
@@ -204,7 +270,9 @@ self.addEventListener("notificationclick", (event) => {
         });
         return open.focus();
       }
-      if (data.id) target.searchParams.set("from_notification", data.id);
+      // まとめた通知は、含まれる通知をすべて既読にする（カンマ区切り。画面側で分ける）
+      const ids = Array.isArray(data.ids) && data.ids.length ? data.ids : data.id ? [data.id] : [];
+      if (ids.length) target.searchParams.set("from_notification", ids.join(","));
       if (open && "navigate" in open)
         return open.navigate(target.href).then((c) => (c || open).focus());
       return self.clients.openWindow(target.href);

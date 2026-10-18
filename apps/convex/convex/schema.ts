@@ -685,12 +685,24 @@ export default defineSchema({
     workId: v.optional(v.string()),
     revisionId: v.optional(v.string()),
     threadId: v.optional(v.string()),
+    /** 通知のもとになった操作をした人（端末の通知に「誰が」を出す）。システム起点は無い */
+    actorId: v.optional(v.string()),
+    /** 端末の通知に載せてよい短い抜粋。見られない人の通知には無い */
+    preview: v.optional(v.string()),
     createdAt: v.number(),
     readAt: v.optional(v.number()),
   })
     .index("by_recipient", ["recipientId", "createdAt"])
     // 未読の数・「すべて既読」は未読（readAt なし）だけをこの索引で読む。createdAt で「押した時刻まで」に区切る
     .index("by_recipient_read_created", ["recipientId", "readAt", "createdAt"]),
+
+  /** 通知の受け取り方（利用者ごとに 1 行。端末への通知にだけ効く。利用者指示 2026-10-18）。行が無ければ既定 */
+  notificationPrefs: defineTable({
+    userId: v.string(),
+    showPreview: v.boolean(),
+    mutedCategories: v.array(v.string()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 
   /** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意（利用者決定 2026-10-15） */
   pushSubscriptions: defineTable({

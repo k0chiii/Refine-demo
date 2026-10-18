@@ -1,5 +1,7 @@
 import {
   buildPushPayload,
+  isCategoryMuted,
+  normalizeNotificationPrefs,
   type Principal,
   type PushContentPolicy,
   type PushPayload,
@@ -78,8 +80,10 @@ export interface PushDelivery {
 
 /**
  * 通知 1 件を端末に送る計画。受信者の購読が無ければ null。
- * 送る時点でも見られるかを確かめ直す（作った後に ACL が外れたら、伏せた内容にする）。
+ * 送る時点でも見られるかを確かめ直す（作った後に ACL が外れたら、送り主・抜粋ごと伏せた内容にする）。
  * 既読になっていれば送らない（ほかの端末で先に読んだ）。
+ * 受信者がその分類の通知を止めていれば送らない（アプリ内の通知は残る）。
+ * 「通知に内容を表示」が切ってあれば、送り主と抜粋を載せない。
  */
 export async function planPushDelivery(
   ctx: AppContext,
@@ -88,6 +92,8 @@ export async function planPushDelivery(
 ): Promise<PushDelivery | null> {
   const n = await ctx.notifications.findById(notificationId);
   if (!n || n.readAt !== undefined) return null;
+  const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(n.recipientId));
+  if (isCategoryMuted(prefs, n.kind)) return null;
   const subs = await ctx.pushSubscriptions.listByUser(n.recipientId);
   if (subs.length === 0) return null;
   // 受信者の担当の所属も添えて、非公開の制作物を所属で見られる人を伏せない
@@ -98,10 +104,20 @@ export async function planPushDelivery(
   );
   const hidden = n.workId !== undefined && shown?.workId === undefined;
   const work = !hidden && n.workId ? await ctx.works.findById(n.workId) : null;
+  const shownNotification = shown ?? n;
+  const restricted = work?.confidentiality === "restricted";
+  // 送り主の名前は、載せるときだけ引く（伏せるとき・内容を出さないときは読まない）
+  const showPreview = prefs.showPreview && (policy?.showPreview ?? true);
+  const actorName =
+    showPreview && !hidden && !restricted && shownNotification.actorId
+      ? await ctx.people.displayName(shownNotification.actorId).catch(() => null)
+      : null;
   const payload = buildPushPayload({
-    notification: shown ?? n,
+    notification: shownNotification,
     work: work ? { title: work.title, restricted: work.confidentiality === "restricted" } : null,
     hidden,
+    actorName,
+    showPreview: prefs.showPreview,
     unread: await ctx.notifications.countUnread(n.recipientId),
     ...(policy ? { policy } : {}),
   });

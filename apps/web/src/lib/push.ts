@@ -131,6 +131,8 @@ export async function showDeviceNotification(n: {
   tag?: string;
   /** アプリの通知の ID（押したら既読にする） */
   notificationId?: string;
+  /** 通知ができた時刻（ミリ秒）。通知に出す時刻 */
+  createdAt?: number;
   inApp?: boolean;
 }): Promise<void> {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
@@ -139,8 +141,12 @@ export async function showDeviceNotification(n: {
   await reg.showNotification(n.title, {
     body: n.body,
     icon: "/icons/icon-192.png",
+    // Android のステータスバーに出す単色の小さなアイコン（白と透明）
+    badge: "/icons/badge-96.png",
     lang: "ja",
-    ...(n.tag ? { tag: n.tag } : {}),
+    ...(n.createdAt ? { timestamp: n.createdAt } : {}),
+    // 同じ会話の通知は置き換え、置き換えでも知らせる（Web Push の通知と同じ）
+    ...(n.tag ? { tag: n.tag, renotify: true } : {}),
     data: { url: n.url ?? "/", id: n.notificationId ?? null, inApp: n.inApp === true },
   });
 }
