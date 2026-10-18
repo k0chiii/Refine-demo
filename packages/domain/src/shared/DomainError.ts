@@ -49,6 +49,7 @@ export const domainErrorCodes = [
   "comment_delete_not_author",
   "comment_thread_deleted",
   "comment_reply_not_found",
+  "comment_reaction_invalid",
   "comment_carry_target_not_accepting",
   "comment_already_carried",
   "comment_carry_same_revision",

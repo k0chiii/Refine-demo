@@ -149,8 +149,8 @@ export function projectThreadEvents(
     const id = e.id ?? "";
     if (e.eventType === "replied") {
       if (gone.has(id)) {
-        const { payload: _payload, ...rest } = e;
-        void _payload;
+        const { payload: _payload, reactions: _reactions, ...rest } = e;
+        void [_payload, _reactions];
         out.push({
           ...rest,
           id,
@@ -204,9 +204,10 @@ export function presentThread<T extends CommentThread>(
     assigneeId: _assigneeId,
     carriedFromThreadId: _carriedFrom,
     origin: _origin,
+    reactions: _reactions,
     ...rest
   } = thread;
-  void [_anchor, _artifactId, _mentions, _assigneeId, _carriedFrom, _origin];
+  void [_anchor, _artifactId, _mentions, _assigneeId, _carriedFrom, _origin, _reactions];
   return {
     ...(rest as T),
     body: DELETED_COMMENT_PLACEHOLDER,

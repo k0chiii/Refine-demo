@@ -21,6 +21,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
+import { reactionViews, reactorIds } from "./lib/reactions.ts";
 import { resolveUsers } from "./lib/users.ts";
 
 /**
@@ -56,6 +57,7 @@ export const get = query({
         ...threads.map((t) => t.authorId),
         ...threads.flatMap((t) => (t.assigneeId ? [t.assigneeId] : [])),
         ...threads.flatMap((t) => t.mentions ?? []),
+        ...threads.flatMap((t) => reactorIds(t.reactions)),
         ...assignments.map((a) => a.reviewerId),
         ...checks.flatMap((c) => [
           ...(c.assigneeId ? [c.assigneeId] : []),
@@ -91,6 +93,7 @@ export const get = query({
             ...t,
             author: users.get(t.authorId),
             assignee: t.assigneeId ? users.get(t.assigneeId) : null,
+            reactions: reactionViews(t.reactions, principal.userId, users),
             mentionUsers: (t.mentions ?? []).flatMap((id) => {
               const u = users.get(id);
               return u ? [u] : [];
