@@ -25,9 +25,27 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
-      .then((cache) => cache.addAll(PRECACHE.map((p) => new Request(p, { cache: "reload" })))),
+      .then((cache) => cache.addAll(PRECACHE.map((p) => new Request(p, { cache: "reload" }))))
+      // 開いているアプリの画面が無ければ待たずに切り替える（書きかけの画面が無いので再読み込みの心配が無い）。
+      // 画面が開けない版（下の unredirected の修正前）を入れた端末は「更新」を押せないため、ここで入れ替わる
+      .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))
+      .then((wins) => (wins.length === 0 ? self.skipWaiting() : undefined)),
   );
 });
+
+/**
+ * リダイレクトを経た応答は、画面の移動（navigate）の応答に使えない（ブラウザが
+ * 「Response served by service worker has redirections」で読み込みを止める）。
+ * Cloudflare Pages は /index.html を / へリダイレクトするので、キャッシュの外枠は作り直してから返す
+ */
+async function unredirected(res) {
+  if (!res || !res.redirected) return res;
+  return new Response(await res.blob(), {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  });
+}
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
@@ -70,14 +88,14 @@ self.addEventListener("fetch", (event) => {
         ? caches
             .open(SHELL)
             .then((c) => c.match("/index.html"))
-            .then((hit) => hit || fetch(req))
+            .then((hit) => (hit ? unredirected(hit) : fetch(req)))
             .catch(() => Response.error())
         : // それ以外は従来どおりネットワーク優先（つながらないときだけ外枠）
           fetch(req).catch(() =>
             caches
               .open(SHELL)
               .then((c) => c.match("/index.html"))
-              .then((r) => r || Response.error()),
+              .then((r) => (r ? unredirected(r) : Response.error())),
           ),
     );
     return;
