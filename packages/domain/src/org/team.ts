@@ -1,3 +1,4 @@
+import type { WorkStage } from "../dashboard/overview.ts";
 import { parseCsv } from "../notation/importer.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
@@ -287,37 +288,65 @@ export function workBelongsToTeam(
   });
 }
 
-/** 制作物一覧の並べ替え: 校正の締切・納期（近い順。無いものは後ろ）・題名・主管担当・制作担当（組織の並び順。未設定は後ろ） */
-export type WorkSortKey = "accepting" | "deadline" | "title" | "owner" | "production";
+/** 制作物一覧の並べ替え: 校正の締切・納期（近い順。無いものは後ろ）・題名・状態・主管担当・制作担当（組織の並び順。未設定は後ろ） */
+export type WorkSortKey = "accepting" | "deadline" | "title" | "stage" | "owner" | "production";
+export type WorkSortDir = "asc" | "desc";
+
+/** 状態で並べる順（注意が要る順: 校正中 → 受付終了 → 未提出 → 保留 → 校了。段階の無い制作物は最後） */
+const stageSortOrder: Record<WorkStage, number> = {
+  reviewing: 0,
+  lapsed: 1,
+  unsubmitted: 2,
+  on_hold: 3,
+  finalized: 4,
+};
 
 /**
- * 制作物一覧を並べ替える（新しい配列を返す）。同じ順位のものは 校正の締切 → 題名 の順。
+ * 制作物一覧を並べ替える（新しい配列を返す）。同じ順位のものは 校正の締切 → 題名 の順（この順は向きに依らず昇順）。
+ * `dir` は選んだ列の向き。値が無いもの（締切なし・担当未設定・段階なし）は向きに依らず最後に置く。
  * 担当での並べ替えは sortTeams の順（局 → その局の担当）。制作担当が複数あれば、いちばん上の担当の位置で並べる。
+ * 状態で並べるときは、呼び出し側が `stage`（dashboard の workStageOf）を添える。
  */
 export function sortWorks<
   W extends WorkTeams & {
     title: string;
     acceptingDeadlineAt?: number | null;
     deadlineAt?: number | null;
+    stage?: WorkStage | null;
   },
->(works: readonly W[], teams: readonly Team[], key: WorkSortKey): W[] {
+>(works: readonly W[], teams: readonly Team[], key: WorkSortKey, dir: WorkSortDir = "asc"): W[] {
+  const sign = dir === "desc" ? -1 : 1;
   const rank = new Map(sortTeams(teams).map((t, i) => [t.id, i]));
   const teamRank = (w: W, axis: WorkTeamAxis) =>
     Math.min(Infinity, ...workTeamIds(w, axis).map((id) => rank.get(id) ?? Infinity));
-  const near = (a?: number | null, b?: number | null) => (a ?? Infinity) - (b ?? Infinity) || 0;
+  /** 値の小さい順（向きは sign）。無い値は向きに依らず後ろ */
+  const order = (a: number | null | undefined, b: number | null | undefined, s = 1) => {
+    const x = a ?? Infinity;
+    const y = b ?? Infinity;
+    if (x === y) return 0;
+    if (x === Infinity) return 1;
+    if (y === Infinity) return -1;
+    return (x - y) * s;
+  };
   const tie = (a: W, b: W) =>
-    near(a.acceptingDeadlineAt, b.acceptingDeadlineAt) || a.title.localeCompare(b.title, "ja");
+    order(a.acceptingDeadlineAt, b.acceptingDeadlineAt) || a.title.localeCompare(b.title, "ja");
   const primary = (a: W, b: W): number => {
     switch (key) {
+      case "accepting":
+        return order(a.acceptingDeadlineAt, b.acceptingDeadlineAt, sign);
       case "deadline":
-        return near(a.deadlineAt, b.deadlineAt);
+        return order(a.deadlineAt, b.deadlineAt, sign);
       case "title":
-        return a.title.localeCompare(b.title, "ja");
+        return a.title.localeCompare(b.title, "ja") * sign;
+      case "stage":
+        return order(
+          a.stage ? stageSortOrder[a.stage] : null,
+          b.stage ? stageSortOrder[b.stage] : null,
+          sign,
+        );
       case "owner":
       case "production":
-        return teamRank(a, key) - teamRank(b, key) || 0;
-      default:
-        return 0;
+        return order(teamRank(a, key), teamRank(b, key), sign);
     }
   };
   return [...works].sort((a, b) => primary(a, b) || tie(a, b));

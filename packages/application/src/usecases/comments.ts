@@ -18,6 +18,9 @@ import { markRevisionViewed } from "./reviews.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
   allMembersCanView,
+  assertThreadNotDeleted,
+  deleteReply as deleteReplyDomain,
+  deleteThreadComment,
   editThreadBody,
   isCarryCandidate,
   mentionableUserIds,
@@ -165,6 +168,7 @@ export async function replyToThread(
   );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
+  assertThreadNotDeleted(thread);
   const now = ctx.clock.now();
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
   await ctx.threads.appendEvent({
@@ -226,6 +230,7 @@ export async function decideThread(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
 
+  assertThreadNotDeleted(thread);
   const next = decideThreadDomain(thread, input.action, input.reason);
   const now = ctx.clock.now();
   await ctx.threads.update(next);
@@ -271,6 +276,7 @@ export async function assignThread(
   const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "comment.decide");
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
+  assertThreadNotDeleted(thread);
   const next: CommentThread = { ...thread };
   if (input.assigneeId) next.assigneeId = input.assigneeId;
   else delete next.assigneeId;
@@ -310,6 +316,7 @@ export async function editThread(
   const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "comment.post");
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
+  assertThreadNotDeleted(thread);
   const next = editThreadBody(thread, principal.userId, input.body);
   await ctx.threads.update(next);
   await ctx.threads.appendEvent({
@@ -320,6 +327,63 @@ export async function editThread(
     createdAt: ctx.clock.now(),
   });
   return next;
+}
+
+/**
+ * コメントの削除（投稿者本人のみ。校了後は不可）。論理削除で、原文と履歴は CommentEvent に残る。
+ * 他の人の返信が残るなら一覧に「削除されたコメント」として残し、無ければ一覧からも消す（domain/comment/deletion.ts）。
+ */
+export async function deleteThread(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string },
+): Promise<CommentThread> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  const now = ctx.clock.now();
+  const events = await ctx.threads.listEvents(thread.id);
+  const next = deleteThreadComment(thread, principal.userId, work.lifecycle, events, now);
+  await ctx.threads.update(next);
+  await ctx.threads.appendEvent({
+    threadId: thread.id,
+    eventType: "deleted",
+    actorId: principal.userId,
+    payload: { keepsReplies: next.deletedKeepsReplies === true },
+    createdAt: now,
+  });
+  return next;
+}
+
+/** 返信の削除（返信した本人のみ。校了後は不可）。返信の本文は元のイベントに残り、削除は reply_deleted として追記する。 */
+export async function deleteReply(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string; replyEventId: string },
+): Promise<void> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  const events = await ctx.threads.listEvents(thread.id);
+  const next = deleteReplyDomain(
+    thread,
+    input.replyEventId,
+    principal.userId,
+    work.lifecycle,
+    events,
+  );
+  await ctx.threads.appendEvent({
+    threadId: thread.id,
+    eventType: "reply_deleted",
+    actorId: principal.userId,
+    payload: { replyEventId: input.replyEventId },
+    createdAt: ctx.clock.now(),
+  });
+  if (next !== thread) await ctx.threads.update(next);
 }
 
 /** 次版へ持ち越す候補（前版の未解決コメント）。対象版より前に提出され、受付中でない版のもの。 */
@@ -357,6 +421,7 @@ export async function carryForwardThread(
     throw new DomainError("work_already_finalized", { workId: work.id });
   if (!isAccepting(target))
     throw new DomainError("comment_carry_target_not_accepting", { targetRevisionId: target.id });
+  assertThreadNotDeleted(source);
   const now = ctx.clock.now();
   const plan = planCarryForward(source, target.id, now);
   const created = await ctx.threads.insert(plan.target);

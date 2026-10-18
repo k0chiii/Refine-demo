@@ -2,13 +2,21 @@ import {
   assignThread,
   carryForwardThread,
   decideThread,
+  deleteReply,
+  deleteThread,
   editThread,
   listCarryCandidates,
   searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
   replyToThread,
 } from "@mf100/application";
-import { DomainError, isAllowed, revisionLabel } from "@mf100/domain";
+import {
+  DomainError,
+  isAllowed,
+  isListedThread,
+  projectThreadEvents,
+  revisionLabel,
+} from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
@@ -83,7 +91,15 @@ export const events = query({
         revision.workId,
         "work.view",
       );
-      const events = await app.threads.listEvents(threadId);
+      // 一覧に出ない（削除されて返信も無い）スレッドの履歴は返さない
+      const events = isListedThread(thread)
+        ? projectThreadEvents(
+            thread,
+            await app.threads.listEvents(threadId),
+            principal.userId,
+            work.lifecycle,
+          )
+        : [];
       const mentionsOf = (e: (typeof events)[number]): string[] => {
         const m = (e.payload as { mentions?: unknown } | undefined)?.mentions;
         return Array.isArray(m) ? m.filter((x): x is string => typeof x === "string") : [];
@@ -94,6 +110,7 @@ export const events = query({
       ]);
       return {
         canDecide:
+          thread.deletedAt === undefined &&
           isAllowed("comment.decide", { work, grants, principal }) &&
           work.lifecycle !== "finalized",
         events: events
@@ -107,6 +124,30 @@ export const events = query({
           }))
           .sort((a, b) => a.createdAt - b.createdAt),
       };
+    });
+  },
+});
+
+/** 自分のコメントの削除（論理削除。原文は履歴に残る）。 */
+export const remove = mutation({
+  args: { threadId: v.id("commentThreads") },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await deleteThread(createAppContext(ctx), principal, args);
+      return null;
+    });
+  },
+});
+
+/** 自分の返信の削除（論理削除。元の本文は履歴に残る）。replyEventId は events の返信の id。 */
+export const removeReply = mutation({
+  args: { threadId: v.id("commentThreads"), replyEventId: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await deleteReply(createAppContext(ctx), principal, args);
+      return null;
     });
   },
 });

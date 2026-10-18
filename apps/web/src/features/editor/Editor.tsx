@@ -255,6 +255,8 @@ export function Editor({
   const complete = useMutation(api.reviews.complete);
   const assignThread = useMutation(api.comments.assign);
   const editThread = useMutation(api.comments.edit);
+  const removeThread = useMutation(api.comments.remove);
+  const removeReply = useMutation(api.comments.removeReply);
   const carryForward = useMutation(api.comments.carryForward);
   const createFeedback = useMutation(api.feedback.createThread);
   // 相談（FB）: 解決しない話し合い。この制作物の相談を引き出し「FB」と紙面の印に使う
@@ -620,6 +622,13 @@ export function Editor({
   const doEditThread = useAction(async (threadId: string, b: string) => {
     await editThread({ threadId: threadId as Id<"commentThreads">, body: b });
   });
+  const doDeleteThread = useAction(async (threadId: string) => {
+    await removeThread({ threadId: threadId as Id<"commentThreads"> });
+    setActiveThreadId((cur) => (cur === threadId ? null : cur));
+  });
+  const doDeleteReply = useAction(async (threadId: string, replyEventId: string) => {
+    await removeReply({ threadId: threadId as Id<"commentThreads">, replyEventId });
+  });
   const doComplete = useAction(async () => {
     if (revisionId) await complete({ revisionId: revisionId as Id<"revisions"> });
   });
@@ -672,9 +681,11 @@ export function Editor({
     });
   const revision = data?.revision ?? null;
   const can = data?.can ?? null;
-  const resolvedCount = allThreads.filter(isClosed).length;
-  const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
-  const openCount = allThreads.length - resolvedCount;
+  // 削除されたコメント（他の人の返信のために一覧に残すもの）は件数に入れない
+  const liveThreads = allThreads.filter((t) => !t.deleted);
+  const resolvedCount = liveThreads.filter(isClosed).length;
+  const botCount = liveThreads.filter((t) => t.origin && !isClosed(t)).length;
+  const openCount = liveThreads.length - resolvedCount;
   // 表示中の版の紙面にある相談（立てた順に 1, 2, …。コメントの番号とは別に数える）
   const fbPlaced = (fbThreads ?? [])
     .filter((t) => t.anchor && t.revision?.id === revisionId)
@@ -721,7 +732,9 @@ export function Editor({
     doDecide.pending ||
     doReply.pending ||
     doAssignThread.pending ||
-    doEditThread.pending;
+    doEditThread.pending ||
+    doDeleteThread.pending ||
+    doDeleteReply.pending;
   const goVersion = (r: { kind: string; sequence: number }) =>
     void navigate({ to: "/works/$workId/v/$n", params: { workId, n: String(versionOf(r)) } });
 
@@ -798,6 +811,8 @@ export function Editor({
       onReply={(b, ids) => doReply.run(t.id, b, ids)}
       onAssign={(ids) => doAssignThread.run(t.id, ids)}
       onEdit={(b) => doEditThread.run(t.id, b)}
+      onDelete={() => doDeleteThread.run(t.id)}
+      onDeleteReply={(replyEventId) => doDeleteReply.run(t.id, replyEventId)}
     />
   );
 

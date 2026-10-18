@@ -125,7 +125,7 @@ const signInAs = async (sub) => {
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 /** 制作物一覧の行（「局 › 担当」の入れ子のリストの項目） */
-const WORKS_ENTRY = ".works m3e-list-action";
+const WORKS_ENTRY = ".works .mf-table tbody tr";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
   const input = scope.locator(".picker__search input").first();
@@ -251,7 +251,7 @@ async function main() {
   await page.locator(`m3e-expansion-panel [slot="header"]`).first().click();
   await shot("01-signin");
 
-  // 02 制作物一覧（制作者）: 入れ子にせず 1 本のリスト。02b は制作担当で絞り込み、主管担当順に並べ替えたところ
+  // 02 制作物一覧（制作者）: 1 つの表。02b は制作担当で絞り込み、主管担当順に並べ替えたところ。見出しを押すと並べ替え（aria-sort・URL）
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
@@ -277,6 +277,31 @@ async function main() {
   await page.waitForURL(/sort=owner/);
   await settle();
   await shot("02b-works-filtered");
+  await go(`${BASE}/works`);
+  await page.waitForSelector(WORKS_ENTRY);
+  // 見出しの並べ替え: 既定は校正の締切の昇順。納期を押すと納期の昇順、もう一度で降順（aria-sort と URL の dir）
+  const sortedTh = () => page.locator(".works .mf-table__th[aria-sort]");
+  expectTrue(
+    (await sortedTh().count()) === 1 &&
+      (await sortedTh().getAttribute("aria-sort")) === "ascending",
+    "制作物一覧の既定の並べ替えが見出しに出ていない",
+  );
+  await page.locator(".works .mf-table__th .mf-table__sort").nth(3).click();
+  await page.waitForURL(/sort=deadline/);
+  await settle();
+  expectTrue(
+    (await sortedTh().count()) === 1 &&
+      (await sortedTh().getAttribute("aria-sort")) === "ascending",
+    "納期の見出しを押しても、納期の昇順にならない",
+  );
+  await page.locator(".works .mf-table__th[aria-sort] .mf-table__sort").click();
+  await page.waitForURL(/dir=desc/);
+  await settle();
+  expectTrue(
+    (await sortedTh().getAttribute("aria-sort")) === "descending",
+    "同じ見出しをもう一度押しても、降順にならない",
+  );
+  await shot("02c-works-sorted");
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
   // 22 アカウントメニュー（右上のアバター）
@@ -508,6 +533,34 @@ async function main() {
   await shot("19-text-range");
   await pickArtifact("sample.pdf");
 
+  // 75 自分のコメントを削除（投稿者のみ）: 位置なしのコメントを 1 件立て、⋮ →「削除」→ 確認で消す。スレッドの数が 1 つ減る
+  {
+    const count = () => page.locator(".comments .thread").count();
+    const n0 = await count();
+    await page.locator(".comments__free").click();
+    await page.fill(".compose-pop textarea", "削除の確認用のコメントです。");
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const mine = page.locator(".comments .thread", { hasText: "削除の確認用" });
+    await mine.locator(".thread__body").click();
+    await settle();
+    await mine.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+    await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
+    await settle();
+    await shot("75-comment-delete-confirm");
+    await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
+    expectTrue((await count()) === n0, "削除したコメントが一覧から消えない");
+  }
+
   // 27 ダッシュボード（制作者）: 「提出する」（各行に「版を提出」）・「返事をする」に未対応が出る。広い画面は 2 列（左がやること）
   await signInAs("mock-nogiku-creator");
   await page.waitForSelector("m3e-list-action");
@@ -515,7 +568,7 @@ async function main() {
   // 27b ホームの数字と表（§74）: 数字のカード 4 枚・表に行・状態の積み上げ棒と凡例 5 段階。数・構造だけを見る（文言は見ない）
   expectTrue((await page.locator(".kpis .kpi").count()) === 4, "ホームの数字のカードが 4 枚でない");
   expectTrue(
-    (await page.locator(".ov .dtable__table").first().locator("tbody tr").count()) >= 1,
+    (await page.locator(".ov .mf-table__table").first().locator("tbody tr").count()) >= 1,
     "ホームの表に行がない",
   );
   expectTrue((await page.locator(".ov .legend__item").count()) === 5, "状態の凡例が 5 段階でない");
@@ -937,7 +990,13 @@ async function main() {
   await settle();
   // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う。右下に FAB「版を提出」）
   await go(`${BASE}/works`);
-  await page.waitForSelector("m3e-list-action");
+  await page.waitForSelector(WORKS_ENTRY);
+  expectTrue(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+    "compact の制作物一覧がページごと横にはみ出している",
+  );
   await shot("33-mobile-works");
   await signInAs("mock-nogiku-reviewer");
   // 26 compact のエディタ: 共通バーは消え、エディタのトップアプリバー。紙面は画面いっぱいで、引き出し（コメント・版・情報）はツールバーから開くボトムシート

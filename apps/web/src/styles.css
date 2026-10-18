@@ -1496,126 +1496,276 @@ m3e-dialog [slot="actions"] {
   grid-column: 1 / -1;
 }
 
-/* 表（制作物・局別）: ルールの表（.rule-table。§54）と同じ寸法・面・区切り線。
- * 見出し 48・行 56（2 行の行は 64）・左右 16。数値は右寄せ・等幅の数字。行の操作は題名のリンクだけ（行全体も押せる）。
- * 狭い幅では列を隠し（コンテナクエリ）、それでも収まらなければ表の中だけ横にスクロール */
-.dtable {
+/* ---------- 表（共通。ui/DataTable.tsx。docs/UI_M3E.md §75）
+ * M3・M3E に表の部品は無い（M3E 2.10 まで。docs の「表」は api-viewer のリストだけ）ので、native <table> を M3E の見本の面・線で組む。
+ * - 外枠: outline-variant の 1px・角は medium（M3E の paginator の見本・api-viewer の枠と同じ）。面は surface-container-lowest
+ * - 見出しの行: surface-container（白ではない。M3 の tonal surface で、本文の面より 1 段濃く）・title-small・on-surface。下に outline-variant の線
+ * - 寸法: 見出し 56・行 52（2 行のセルは 64・dense は 44）・左右 16（Angular Material の M3 の表と同じ。M2 の data table の 56 / 52）
+ * - 行: hover は on-surface 8% の state layer、選んだ行は secondary-container（M3E のリストの選択と同じ）。行の間は outline-variant の線
+ * - 数値は右寄せ・等幅の数字。並べ替えの見出しは文字＋矢印（aria-sort）。見出しは縦に収めたとき表の上に貼り付く
+ * - 縦に収めるときは --mf-table-max-h を与える（.mf-table__scroll が縦にスクロールする。下の footer はその外）。横は表の中だけ動く */
+.mf-table {
+  --mf-table-head-h: 56px;
+  --mf-table-row-h: 52px;
+  --mf-table-pad: 16px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   background: var(--mf-surface-container-lowest);
+  border: 1px solid var(--mf-outline-variant);
   border-radius: var(--mf-shape-md);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  overflow: hidden;
   container-type: inline-size;
 }
-.dtable__table {
+.mf-table--lines2 {
+  --mf-table-row-h: 64px;
+}
+.mf-table--dense {
+  --mf-table-head-h: 44px;
+  --mf-table-row-h: 44px;
+  --mf-table-pad: 12px;
+}
+.mf-table__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: var(--mf-table-max-h, none);
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.mf-table__table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font: var(--mf-type-body-medium);
   color: var(--mf-on-surface);
 }
-.dtable__th {
-  height: 48px;
-  padding: 0 16px;
+.mf-table--fixed .mf-table__table {
+  table-layout: fixed;
+}
+.mf-table__th {
+  height: var(--mf-table-head-h);
+  padding: 0 var(--mf-table-pad);
   text-align: start;
   vertical-align: middle;
   font: var(--mf-type-title-small);
-  color: var(--mf-on-surface-variant);
+  color: var(--mf-on-surface);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--mf-surface-container);
   border-bottom: 1px solid var(--mf-outline-variant);
 }
-.dtable__td {
-  height: 56px;
-  padding: 8px 16px;
+.mf-table__td {
+  height: var(--mf-table-row-h);
+  padding: 8px var(--mf-table-pad);
   vertical-align: middle;
   text-align: start;
   font: var(--mf-type-body-medium);
   border-bottom: 1px solid var(--mf-outline-variant);
 }
-.dtable__row:last-child > * {
+.mf-table--fixed .mf-table__td {
+  white-space: nowrap;
+  overflow: hidden;
+  padding-block: 0;
+}
+.mf-table__row:last-child > * {
   border-bottom: 0;
 }
-.dtable__num {
+.mf-table__rowhead {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+.mf-table__num {
   text-align: end;
   font-variant-numeric: tabular-nums;
 }
-.dtable__row:hover > * {
+.mf-table__row:hover > * {
   background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
 }
-/* 題名の列: 残りの幅を使い、長い題名は 2 行まで */
-.dtable__title {
-  font-weight: 500;
-  min-width: 180px;
+/* 行そのものを押せる表（single-action。行の中に別の操作は置かない） */
+.mf-table__row--action {
+  cursor: pointer;
 }
-.dtable__link {
-  color: var(--mf-on-surface);
+.mf-table__row:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: -3px;
+}
+.mf-table__row--selected > * {
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+}
+.mf-table__row--selected:hover > * {
+  background: color-mix(
+    in srgb,
+    var(--mf-on-secondary-container) 8%,
+    var(--mf-secondary-container)
+  );
+}
+/* 選んだ行の補足の文字も on-secondary-container（on-surface-variant だと 4.5:1 に届かない） */
+.mf-table__row--selected .muted,
+.mf-table__row--selected .mf-table__sub {
+  color: inherit;
+}
+.mf-table__row--selected > :first-child {
+  position: relative;
+}
+.mf-table__row--selected > :first-child::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 4px;
+  inset-block: 10px;
+  width: 4px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+}
+/* 控えめな行（無効・校了など）。状態は色だけに頼らず文字でも出す（§49） */
+.mf-table__row--off > * {
+  color: var(--mf-on-surface-variant);
+}
+.mf-table__empty {
+  height: 96px;
+  padding: 0 var(--mf-table-pad);
+  text-align: center;
+  color: var(--mf-on-surface-variant);
+}
+/* 題名のセル: 残りの幅を使い、長い題名は 2 行まで。リンクは題名だけ（行全体も押せる表では行の onClick と同じ先） */
+.mf-table__title {
+  font-weight: 500;
+  min-width: 200px;
+}
+.mf-table__link {
+  color: inherit;
   text-decoration: none;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.dtable__link:hover {
+.mf-table__link:hover {
   text-decoration: underline;
 }
-.dtable__link:focus-visible {
+.mf-table__link:focus-visible {
   outline: var(--mf-focus-ring);
   outline-offset: 2px;
+  border-radius: 2px;
 }
-.dtable__sub {
+/* セルの 2 行目（補足） */
+.mf-table__sub {
   display: block;
   font: var(--mf-type-body-small);
   font-weight: 400;
   color: var(--mf-on-surface-variant);
   white-space: nowrap;
 }
-.dtable__date {
+/* 長い文字は省略記号で切る（全文は hover・長押しでツールチップ） */
+.mf-table__clip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dtable__date--overdue {
+/* 並べ替えの見出し: 押せる範囲は文字と矢印（hover は丸い state layer。M3E の形）。矢印は並べ替え中の列は常に、ほかは hover で */
+.mf-table__sort {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin-inline-start: -8px;
+  padding: 0 8px;
+  border-radius: var(--mf-shape-full);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.mf-table__sort:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.mf-table__sort:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: 0;
+}
+.mf-table__num .mf-table__sort {
+  flex-direction: row-reverse;
+  margin-inline: 0 -8px;
+}
+.mf-table__sort-icon {
+  font-size: 18px;
+  opacity: 0;
+  color: var(--mf-on-surface-variant);
+  transition: opacity var(--mf-motion-effects-fast);
+}
+.mf-table__sort:hover .mf-table__sort-icon,
+.mf-table__sort:focus-visible .mf-table__sort-icon,
+.mf-table__sort--on .mf-table__sort-icon {
+  opacity: 1;
+}
+.mf-table__sort--on .mf-table__sort-icon {
+  color: var(--mf-on-surface);
+}
+/* hover の無い端末（タッチ）でも並べ替えられると分かるよう、矢印を薄く出しておく */
+@media (hover: none) {
+  .mf-table__sort-icon {
+    opacity: 0.6;
+  }
+  .mf-table__sort--on .mf-table__sort-icon {
+    opacity: 1;
+  }
+}
+/* 表の下の帯（ページ送り）: 見出しと同じ線で区切り、右寄せ（M3E の paginator の見本と同じ並び） */
+.mf-table__footer {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 56px;
+  padding-inline: 8px;
+  border-top: 1px solid var(--mf-outline-variant);
+  background: var(--mf-surface-container-lowest);
+  overflow-x: auto;
+}
+
+/* ホームの表（制作物・局別。features/home/DashboardOverview.tsx）: 狭いと列を隠す（コンテナクエリ）。数値・日付は折り返さない */
+.ov__date {
+  white-space: nowrap;
+}
+.ov__date--overdue {
   color: var(--mf-error);
 }
-.dtable__count {
+.ov__count {
   font-weight: 500;
 }
-.dtable__col--bureau,
-.dtable__col--review,
-.dtable__col--stage {
+.ov__col--bureau,
+.ov__col--review,
+.ov__col--stage {
   white-space: nowrap;
 }
 /* 状態の列が隠れる幅では、題名の下に状態を出す */
-.dtable__stage-inline {
+.ov__stage-inline {
   display: none;
 }
 @container (max-width: 639px) {
-  .dtable__col--bureau {
+  .ov__col--bureau {
     display: none;
   }
 }
 @container (max-width: 539px) {
-  .dtable__col--review {
+  .ov__col--review {
     display: none;
   }
 }
 @container (max-width: 459px) {
-  .dtable__col--stage {
+  .ov__col--stage {
     display: none;
   }
-  .dtable__stage-inline {
+  .ov__stage-inline {
     display: flex;
     align-items: center;
     gap: 4px;
   }
-}
-/* 局別の小さな表: 行は 44 */
-.dtable--small .dtable__th {
-  height: 40px;
-  padding-inline: 12px;
-}
-.dtable--small .dtable__td {
-  height: 44px;
-  padding-block: 0;
-  padding-inline: 12px;
-  font-weight: 400;
 }
 /* 右のペイン（surface-container-low）の上では、表は 1 段明るい面のまま */
 
@@ -2636,6 +2786,14 @@ m3e-dialog [slot="actions"] {
   gap: 8px;
   align-items: flex-start;
 }
+.thread__replybody {
+  flex: 1;
+  min-width: 0;
+}
+.thread__body--deleted {
+  color: var(--mf-on-surface-variant);
+  font-style: italic;
+}
 .thread__replyitem .thread__name {
   margin-inline-end: 8px;
 }
@@ -3653,59 +3811,14 @@ m3e-icon.icon--on {
   padding: 8px 24px 24px;
 }
 
-/* ルールの表（features/notation/RuleTable.tsx。M2 data table の寸法を M3 のトークンで。§54）
- * 面は surface-container-lowest（ペインの low の上に 1 段明るい面。外枠や影ではなく色の段差で分ける: M3 の tonal surfaces）、
- * 角は medium（M3E の形。M2 の 4dp ではなく、ペインの large の内側に収まる段）。横に溢れたら表の中だけ横にスクロール */
+/* ルールの表（features/notation/RuleTable.tsx。共通の表 .mf-table に、ルールだけの寸法・列を足す。§54・§75）
+ * ペインの高さに収め（親の flex の残り）、表の中だけ縦横にスクロールする。見出しは表の上に貼り付く */
 .rule-table {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+}
+.rule-table .mf-table__scroll {
   overscroll-behavior: contain;
-  background: var(--mf-surface-container-lowest);
-  border-radius: var(--mf-shape-md);
-  container-type: inline-size;
-}
-.rule-table__table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
-  font: var(--mf-type-body-medium);
-  color: var(--mf-on-surface);
-}
-/* 見出し: 56dp・title-small（M2 の header は subtitle 2 = medium の太さ）。表の上に貼り付く（collapse だと貼り付いた線が消えるので separate） */
-.rule-table__th {
-  height: 56px;
-  padding: 0 16px;
-  text-align: start;
-  vertical-align: middle;
-  font: var(--mf-type-title-small);
-  color: var(--mf-on-surface);
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--mf-surface-container-lowest);
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
-/* 本文: 52dp・左右 16dp。行の間は outline-variant の区切り線（列をまたいで読むため。最後の行には引かない） */
-.rule-table__td {
-  height: 52px;
-  padding: 0 16px;
-  vertical-align: middle;
-  text-align: start;
-  font: var(--mf-type-body-medium);
-  border-bottom: 1px solid var(--mf-outline-variant);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.rule-table__rowhead {
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  position: relative;
-}
-.rule-table__row:last-child > * {
-  border-bottom: 0;
 }
 .rule-table__correct {
   font-weight: 500;
@@ -3717,102 +3830,8 @@ m3e-icon.icon--on {
   background: none;
   padding: 0;
 }
-/* 長い文字は省略記号で切る（全文は hover・長押しでツールチップ） */
-.rule-table__clip {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 数値（年度）は右寄せ・等幅の数字（M2 data table・M3 Typography） */
-.rule-table__num {
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-}
-/* 行: 押すと詳細（single-action）。hover は on-surface 8% の state layer、選んだ行は secondary-container（M3E のリストの選択と同じ）＋先頭の印 */
-.rule-table__row {
-  cursor: pointer;
-}
-.rule-table__row:hover > * {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-.rule-table__row--selected > * {
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-}
-.rule-table__row--selected:hover > * {
-  background: color-mix(
-    in srgb,
-    var(--mf-on-secondary-container) 8%,
-    var(--mf-secondary-container)
-  );
-}
-/* 選んだ行の補足の文字（カテゴリ名・正規表現・2 つ目以降の統一表記）も on-secondary-container（on-surface-variant だと 4.5:1 に届かない） */
-.rule-table__row--selected .muted,
-.rule-table__row--selected .rule-table__pattern {
+.mf-table__row--selected .rule-table__pattern {
   color: inherit;
-}
-.rule-table__row--selected > :first-child::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 4px;
-  inset-block: 10px;
-  width: 4px;
-  border-radius: var(--mf-shape-full);
-  background: var(--mf-primary);
-}
-/* 無効のルールは控えめに（§49: 状態は色だけに頼らず、文字（「状態」の列・「無効」）でも出す） */
-.rule-table__row--off > * {
-  color: var(--mf-on-surface-variant);
-}
-.rule-table__row:focus-visible {
-  outline: var(--mf-focus-ring);
-  outline-offset: -3px;
-}
-.rule-table__empty {
-  height: 96px;
-  padding: 0 16px;
-  text-align: center;
-  color: var(--mf-on-surface-variant);
-}
-/* 並べ替えの見出し: 押せる範囲は文字と矢印（hover は丸い state layer。M3E の形）。矢印は並べ替え中の列だけ常に出し、ほかは hover で */
-.rule-table__sort {
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  margin-inline-start: -8px;
-  padding: 0 8px;
-  border-radius: var(--mf-shape-full);
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-.rule-table__sort:hover {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-.rule-table__sort:focus-visible {
-  outline: var(--mf-focus-ring);
-  outline-offset: 0;
-}
-.rule-table__num .rule-table__sort {
-  flex-direction: row-reverse;
-  margin-inline: 0 -8px;
-}
-.rule-table__sort-icon {
-  font-size: 18px;
-  opacity: 0;
-  color: var(--mf-on-surface-variant);
-  transition: opacity var(--mf-motion-effects-fast);
-}
-.rule-table__sort:hover .rule-table__sort-icon,
-.rule-table__sort:focus-visible .rule-table__sort-icon,
-.rule-table__sort--on .rule-table__sort-icon {
-  opacity: 1;
-}
-.rule-table__sort--on .rule-table__sort-icon {
-  color: var(--mf-on-surface);
 }
 /* 表が狭いとき（詳細を開いた expanded など）は、ルール名 → 年度 → カテゴリ の順に列を隠す（内容は詳細のペインにある）。
  * 境目は「統一表記・誤表記に 150 ずつ残る幅」（固定の列 ID 96・厳格さ 84・カテゴリ 160・年度 88 と、ルール名も等分の 150） */
@@ -4672,18 +4691,127 @@ m3e-snackbar {
   outline-offset: -2px;
 }
 
-/* 制作物一覧の行の末尾: 状態（進行中以外）と FB（相談）の数・未読の点 */
-.works-list__trailing {
-  gap: 12px;
+/* 制作物一覧の表（features/work/WorksTable.tsx。共通の .mf-table に、制作物だけの列・隠し方を足す。§75）
+ * medium 以上は一覧を縦に収め（見出しが貼り付き、ページ送りが下に残る）、スマホはページごとスクロール。
+ * 狭いと列を右から隠し（コンテナクエリ）、状態・版・FB は題名の下へ移る。 */
+.works-table {
+  --mf-table-max-h: none;
 }
-.works-list__fb {
+@media (min-width: 600px) {
+  .works-table {
+    --mf-table-max-h: max(360px, calc(100dvh - var(--mf-appbar-h, 64px) - 172px));
+  }
+}
+@media (max-width: 599px) {
+  .works-table {
+    --mf-table-pad: 12px;
+    margin-top: 16px;
+  }
+}
+/* 題名のセル: 媒体のアイコン + 題名（2 行まで）+ 題名の下の補足 */
+.works-table__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.works-table__media {
+  flex: none;
+  font-size: 20px;
+  color: var(--mf-on-surface-variant);
+}
+.works-table__name {
+  min-width: 0;
+}
+.works-table__lock {
+  font-size: 16px;
+  vertical-align: middle;
+  margin-inline-start: 4px;
+}
+.works-table__date {
+  white-space: nowrap;
+}
+.works-table__clip {
+  max-width: 180px;
+}
+.works-table__col--stage,
+.works-table__col--version,
+.works-table__col--delivery,
+.works-table__col--owner,
+.works-table__col--production,
+.works-table__col--creators {
+  white-space: nowrap;
+}
+/* FB（相談）の数と未読の点 */
+.works-table__fb {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-variant-numeric: tabular-nums;
 }
-.works-list__fb m3e-icon {
+.works-table__fb m3e-icon {
   font-size: 20px;
+}
+/* 表のセルの中の状態の文字は本文と同じ大きさ（題名の下の補足では小さいまま） */
+.mf-table__td > .meta {
+  font: inherit;
+}
+.mf-table__td > .meta .chip__icon {
+  font-size: 18px;
+}
+/* 列が隠れる幅では、その内容を題名の下に出す（状態・版・FB）。出ているあいだは出さない */
+.works-table__inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+}
+.works-table__in {
+  display: none;
+}
+@container (max-width: 1239px) {
+  .works-table__col--creators {
+    display: none;
+  }
+}
+@container (max-width: 1119px) {
+  .works-table__col--production {
+    display: none;
+  }
+}
+@container (max-width: 944px) {
+  .works-table__col--owner {
+    display: none;
+  }
+}
+@container (max-width: 769px) {
+  .works-table__col--version {
+    display: none;
+  }
+  .works-table__in--version {
+    display: inline;
+  }
+}
+@container (max-width: 689px) {
+  .works-table__col--delivery {
+    display: none;
+  }
+}
+@container (max-width: 539px) {
+  .works-table__col--fb {
+    display: none;
+  }
+  .works-table__in--fb {
+    display: inline-flex;
+  }
+}
+@container (max-width: 469px) {
+  .works-table__col--stage {
+    display: none;
+  }
+  .works-table__in--stage {
+    display: inline-flex;
+  }
 }
 
 /* 「通知の設定」（アカウントのメニュー。§61）: compact は全画面。M3E のダイアログは中身の高さで決まるので、

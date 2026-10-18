@@ -256,12 +256,18 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     },
     threads: {
       findById: async (id) => state.threads.get(id),
-      listByRevision: async (revisionId) =>
-        state.threads.all().filter((t) => t.revisionId === revisionId),
+      listByRevision: async (revisionId, options) =>
+        state.threads
+          .all()
+          .filter(
+            (t) =>
+              t.revisionId === revisionId &&
+              (options?.includeDeleted === true || t.deletedAt === undefined),
+          ),
       insert: async (t) => state.threads.insert(t),
       update: async (t) => state.threads.put(t),
       appendEvent: async (e) => {
-        state.events.push(clone(e));
+        state.events.push({ ...clone(e), id: `evt-${state.events.length + 1}` });
       },
       listEvents: async (threadId) =>
         state.events.filter((e) => e.threadId === threadId).map((e) => clone(e)),
