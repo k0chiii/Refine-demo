@@ -1,6 +1,6 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import {
@@ -23,6 +23,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import { StatusText } from "@/ui/Chip";
+import { ReactionChips, ReactionMenu, type ReactionView } from "@/ui/Reactions";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { useAction } from "@/lib/useAction";
 import { UserAvatar } from "@/ui/UserAvatar";
@@ -116,6 +117,7 @@ export function ThreadCard({
     await onDelete();
     setConfirmDelete(false);
   });
+  const toggleReaction = useMutation(api.comments.toggleReaction);
   // compact の補助的な選択はボトムシート（M3 Breakpoints: compact は Bottom sheet、medium 以上は Menu）
   const compact = useWindowClass() === "compact";
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -143,6 +145,7 @@ export function ThreadCard({
         variant={active ? "elevated" : "outlined"}
         className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${gone ? "thread--deleted" : ""} ${className ?? ""}`}
         aria-label={`コメント${index ? ` ${index}` : ""} ${t.author?.name ?? ""}`}
+        data-thread-id={t.id}
         onClick={onSelect}
       >
         <div slot="content" className="thread__content">
@@ -221,14 +224,12 @@ export function ThreadCard({
                 aria-label="その他の操作"
                 size="extra-small"
                 className="thread__more"
-                {...(compact
-                  ? {
-                      onClick: (e: Event) => {
-                        stop(e);
-                        setSheetOpen(true);
-                      },
-                    }
-                  : {})}
+                // カード全体の onSelect へ伝えない（伝えると、メニューを開いた直後に「選び直し」の自動スクロールが走り、
+                // M3E のメニューは祖先のスクロールで閉じてしまう）
+                onClick={(e: Event) => {
+                  stop(e);
+                  if (compact) setSheetOpen(true);
+                }}
               >
                 <M3eIcon name="more_vert" />
                 {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}
@@ -304,7 +305,19 @@ export function ThreadCard({
               {t.assignee ? <StatusText icon="person">担当 {t.assignee.name}</StatusText> : null}
             </div>
           ) : null}
-          {active ? <ThreadEvents threadId={t.id} onDeleteReply={onDeleteReply} /> : null}
+          {!gone ? (
+            <ReactionRow
+              id={`tr-${t.id}`}
+              reactions={t.reactions}
+              canReact={canReply}
+              onToggle={(emoji) =>
+                toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })
+              }
+            />
+          ) : null}
+          {active ? (
+            <ThreadEvents threadId={t.id} canReact={canReply} onDeleteReply={onDeleteReply} />
+          ) : null}
           {/* 返信（Google ドキュメントのコメントと同じ流れ）: 開いているカードの下に M3 の outlined text field を 1 つ。
               書き始める（フォーカスする）と「キャンセル」「返信」が出る。ラベルは欄の中（浮かぶラベル） */}
           {active && canReply && !gone && (mode === null || mode === "reply") ? (
@@ -491,12 +504,64 @@ export function ThreadCard({
   );
 }
 
+/**
+ * コメント・返信のリアクションの行（FB と同じ部品）。付いているものをチップで、「付ける」ボタンから選んで付け外し。
+ * 付けられる人は返信できる人と同じ（`canReact`）。それ以外の人には付いているものだけを見せる。
+ */
+function ReactionRow({
+  id,
+  reactions,
+  canReact,
+  onToggle,
+  className,
+}: {
+  id: string;
+  reactions: readonly ReactionView[];
+  canReact: boolean;
+  onToggle: (emoji: string) => Promise<unknown>;
+  className?: string;
+}) {
+  const react = useAction(onToggle);
+  if (reactions.length === 0 && !canReact) return null;
+  const menuId = `${id}-menu`;
+  return (
+    <div className={`thread__reactions ${className ?? ""}`} onClick={(e) => e.stopPropagation()}>
+      <ReactionChips
+        reactions={reactions}
+        idPrefix={`${id}-chip`}
+        className="thread__reaction-set"
+        disabled={!canReact}
+        onToggle={(emoji) => void react.run(emoji)}
+      />
+      {canReact ? (
+        <>
+          <M3eIconButton
+            aria-label="リアクションを付ける"
+            size="extra-small"
+            className="thread__react"
+          >
+            <M3eIcon name="add_reaction" />
+            <M3eMenuTrigger htmlFor={menuId} />
+          </M3eIconButton>
+          <ReactionMenu
+            id={menuId}
+            reactions={reactions}
+            onPick={(emoji) => void react.run(emoji)}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /** 返信・採否・担当・訂正の履歴。返信は会話として、それ以外は 1 行で。 */
 function ThreadEvents({
   threadId,
+  canReact,
   onDeleteReply,
 }: {
   threadId: string;
+  canReact: boolean;
   onDeleteReply: (replyEventId: string) => Promise<void>;
 }) {
   const compact = useWindowClass() === "compact";
@@ -518,6 +583,8 @@ function ThreadEvents({
             <ReplyItem
               key={e.id || i}
               event={e}
+              threadId={threadId}
+              canReact={canReact}
               body={p.body ?? ""}
               compact={compact}
               onDelete={() => onDeleteReply(e.id)}
@@ -549,17 +616,22 @@ type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["
 /** 返信 1 件。自分の返信だけ「⋮」から削除できる（削除した返信は本文を伏せて残す） */
 function ReplyItem({
   event: e,
+  threadId,
+  canReact,
   body,
   compact,
   onDelete,
 }: {
   event: ThreadEvent;
+  threadId: string;
+  canReact: boolean;
   body: string;
   compact: boolean;
   onDelete: () => Promise<void>;
 }) {
   const [confirm, setConfirm] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const toggleReaction = useMutation(api.comments.toggleReaction);
   const doDelete = useAction(async () => {
     await onDelete();
     setConfirm(false);
@@ -576,20 +648,31 @@ function ReplyItem({
         <div className={`thread__body ${e.deleted ? "thread__body--deleted" : ""}`}>
           {e.deleted ? body : renderWithMentions(body, e.mentionUsers)}
         </div>
+        {!e.deleted ? (
+          <ReactionRow
+            id={`rr-${e.id}`}
+            reactions={e.reactions}
+            canReact={canReact}
+            className="thread__reactions--reply"
+            onToggle={(emoji) =>
+              toggleReaction({
+                threadId: threadId as Id<"commentThreads">,
+                replyEventId: e.id,
+                emoji,
+              })
+            }
+          />
+        ) : null}
       </div>
       {deletable ? (
         <M3eIconButton
           aria-label="返信の操作"
           size="extra-small"
           className="thread__reply-more"
-          {...(compact
-            ? {
-                onClick: (ev: Event) => {
-                  stop(ev);
-                  setSheetOpen(true);
-                },
-              }
-            : {})}
+          onClick={(ev: Event) => {
+            stop(ev);
+            if (compact) setSheetOpen(true);
+          }}
         >
           <M3eIcon name="more_vert" />
           {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}

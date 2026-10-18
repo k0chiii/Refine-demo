@@ -211,7 +211,7 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
       relatedTeams: ["JIM"],
       creators: ["五月 めい"],
       stakeholders: ["本郷 校正"],
-      approver: "駒場 校了",
+      approvers: ["駒場 校了"],
       deadlineAt: endOfJstDate("2026-11-14"),
       publishAt: Date.UTC(2026, 10, 20, 9, 0),
       requiresPrinterSubmission: true,
@@ -228,7 +228,7 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
       productionTeamIds: ["design"],
       relatedTeamIds: ["jim"],
       creatorIds: ["u1"],
-      approverId: "u2",
+      approverIds: ["u2"],
       stakeholderIds: ["u3"],
       genre: "graphic",
       subGenre: "print_booklet",
@@ -236,7 +236,7 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
     });
   });
 
-  it("校了者が複数・制作担当が複数の行は取り込まない（1 人・1 つ）。有効性・校了済みの列は無い", () => {
+  it("制作担当が複数の行は取り込まない（1 つ）。校了者は複数書ける。有効性・校了済みの列は無い", () => {
     const parsed = parseWorkCsv(
       [
         "制作物名,小ジャンル,媒体,制作者,校了者,制作担当,入稿の有無,印刷する部数/枚数/個数,大ジャンル,有効性",
@@ -248,7 +248,8 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
     );
     const [a, b, c] = parsed.rows;
     expect(a).toMatchObject({ mediaType: "video", genre: "video", category: "映像" });
-    expect(a!.problems.join("／")).toContain("校了者が 2 人");
+    expect(a!.approvers).toEqual(["駒場 校了", "本郷 校正"]);
+    expect(a!.problems.join("／")).not.toContain("校了者");
     expect(a).not.toHaveProperty("lifecycle");
     expect(b!.mediaType).toBe("pdf");
     const problems = b!.problems.join("／");
@@ -265,7 +266,8 @@ describe("制作物の CSV（委員会の制作物 DB の項目名）", () => {
       problems: [],
     });
     const preview = resolveWorkImport(parsed, directory, {}, teams);
-    expect(preview.ready).toBe(1);
+    expect(preview.ready).toBe(2);
+    expect(preview.rows[0]!.input).toMatchObject({ approverIds: ["u2", "u3"] });
     expect(preview.rows[2]!.input).toMatchObject({ productionTeamIds: ["jim"] });
     // ポリシー値を上げれば複数の制作担当も読める
     const relaxed = parseWorkCsv(

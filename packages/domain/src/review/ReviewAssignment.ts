@@ -19,9 +19,12 @@ export function markViewed(a: ReviewAssignment, now: Instant): ReviewAssignment 
   return { ...a, state: "viewed", viewedAt: now };
 }
 
-/** 校正者が自分の確認を明示的に完了したときのみ responded にする（コメント投稿では自動遷移しない: A-06）。 */
+/**
+ * 校正者が自分の確認を明示的に完了したときのみ responded にする（コメント投稿では自動遷移しない: A-06）。
+ * 「校正完了」は読了印として残るので、すでに完了していれば時刻も含めて変えない（冪等）。
+ */
 export function markResponded(a: ReviewAssignment, now: Instant): ReviewAssignment {
-  if (a.state === "excused") return a;
+  if (a.state === "excused" || a.state === "responded") return a;
   const viewedAt = a.viewedAt ?? now;
   return { ...a, state: "responded", viewedAt, respondedAt: now };
 }

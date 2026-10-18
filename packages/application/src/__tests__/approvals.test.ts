@@ -8,7 +8,13 @@ import {
 } from "../usecases/approvals.ts";
 import { decideThread, postComment } from "../usecases/comments.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
-import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
+import {
+  HOUR,
+  principals,
+  seedLegacyCreatorApproverWork,
+  seedWork,
+  submitRevision,
+} from "../testing/scenario.ts";
 
 const code = (c: string) => expect.objectContaining({ code: c });
 
@@ -139,9 +145,9 @@ describe("校了と再開（A-08, A-09, A-10）", () => {
     ).rejects.toThrow(code("work_already_finalized"));
   });
 
-  it("自己校了（制作者＝校了者）は暫定で拒否される（D2）", async () => {
+  it("決定前に保存された自己校了（制作者＝校了者）の行は、読めて、暫定で独立確認なしでは校了できない（D2）", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { creatorIds: [principals.approver.userId] });
+    const work = await seedLegacyCreatorApproverWork(ctx);
     const rev = await submitRevision(ctx, work.id, { principal: principals.approver });
     await expect(
       finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: rev.id }),
@@ -149,10 +155,10 @@ describe("校了と再開（A-08, A-09, A-10）", () => {
   });
 });
 
-describe("独立確認（D2。PR #1 レビュー P1）", () => {
+describe("独立確認（D2。決定前に保存された自己校了の行だけが対象）", () => {
   async function selfApprovedWork() {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { creatorIds: [principals.approver.userId] });
+    const work = await seedLegacyCreatorApproverWork(ctx);
     const rev = await submitRevision(ctx, work.id, { principal: principals.approver });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,

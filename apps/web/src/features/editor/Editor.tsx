@@ -105,6 +105,7 @@ import {
 } from "@/lib/usePinchZoom";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
+import { useRevealThread } from "@/features/review/revealThread";
 import { FeedbackPane } from "@/features/feedback/FeedbackPane";
 import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -124,6 +125,7 @@ import {
 } from "@m3e/react/menu";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { InfoTab } from "./InfoTab";
+import { LeaveReviewPrompt } from "./LeaveReviewPrompt";
 import { VersionsTab } from "./VersionsTab";
 
 export type { Drawer, EditorSearch } from "./search";
@@ -301,6 +303,9 @@ export function Editor({
     return () => ro.disconnect();
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
+  const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
+  const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
   /** 引き出し「FB」で開いている相談 */
   const [fbOpenId, setFbOpenId] = useState<string | null>(search.fb ?? null);
   /**
@@ -430,7 +435,10 @@ export function Editor({
     setCompareWith(revisionId ? (search.compare ?? null) : null);
     setDraft(null);
     setActiveThreadId(revisionId ? (search.thread ?? null) : null);
-    if (revisionId && search.thread) setDrawer("comments");
+    if (revisionId && search.thread) {
+      setDrawer("comments");
+      requestReveal(search.thread);
+    }
     if (revisionId && search.compare)
       void navigate({
         to: ".",
@@ -673,6 +681,30 @@ export function Editor({
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
 
+  // コメントを選んだら（紙面のピン・範囲、URL の ?thread=、通知）、一覧が見える状態にしてからそのカードまでスクロールする。
+  // 一覧の位置合わせは features/review/revealThread。ここでは「一覧を見せる」ところまで（狭い画面はシートを開き、広い画面は
+  // 引き出しをコメントに切り替える）。選ぶたびに 1 回だけで、ライブ更新で動かさない
+  const revealHandled = useRef<number | null>(null);
+  useEffect(() => {
+    if (!reveal || revealHandled.current === reveal.n) return;
+    const t = allThreads.find((x) => x.id === reveal.id);
+    if (!t) return; // 版のデータが届いたら、もう一度ここへ来る
+    revealHandled.current = reveal.n;
+    // 絞り込みで隠れているときは外す（解決済みは選択中の分だけ下の threads が出す）
+    if (who !== "all" && (who === "bot") !== Boolean(t.origin)) setWho("all");
+    if (mobile) {
+      if (!(sheetOpen && drawer === "comments")) toggleSheet("comments");
+    } else if (layout === "panel" && drawer !== "comments") setDrawer("comments");
+  }, [reveal, allThreads]);
+  useRevealThread(reveal, drawer === "comments" && (!mobile || sheetOpen));
+  // 通知などで同じ版の別のコメントへ URL だけが変わったとき
+  useEffect(() => {
+    if (!revisionId || !search.thread) return;
+    setActiveThreadId(search.thread);
+    setDrawer("comments");
+    requestReveal(search.thread);
+  }, [search.thread]);
+
   // 制作物の中身が届く前から、アプリバー・ツールバー・紙面の枠を同じ形で出す（届いてから枠が現れると、読み込み中の画面が何段にも
   // 見えた。利用者指示 2026-10-17「一回の読み込みで3回くらい表示が変わるのヤダ」。docs/UI_M3E.md §65）。
   // 以降の `workData` が要るところは、届いていなければ何も出さない
@@ -751,8 +783,14 @@ export function Editor({
     artifact?.fileName === POST_MANIFEST_NAME &&
     (a.type === "text_range" || a.type === "image_rect" || a.type === "image_pin") &&
     (data?.artifacts ?? []).some((x) => x.id === a.artifactId);
-  const jumpTo = (t: Thread) => {
+  /**
+   * コメントを選ぶ。`reveal: false` は一覧のカードそのものを押したとき: 利用者が今そのカードを見て押しているので、一覧を
+   * 動かさない（動かすと押した先のカードが指の下から動き、続けて押す「⋮」などが外れる・開いたメニューが祖先のスクロールで閉じる）。
+   * 紙面のピン・範囲、URL、通知など、一覧の外から選ぶときだけカードまでスクロールする
+   */
+  const jumpTo = (t: Thread, opts?: { reveal?: boolean }) => {
     setActiveThreadId(t.id);
+    if (opts?.reveal !== false) requestReveal(t.id);
     setPostReveal((n) => n + 1);
     if (t.anchor) {
       if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor as Anchor))
@@ -810,7 +848,7 @@ export function Editor({
       canEdit={work?.lifecycle !== "finalized"}
       pending={busy}
       {...(className ? { className } : {})}
-      onSelect={() => jumpTo(t)}
+      onSelect={() => jumpTo(t, { reveal: false })}
       onResolve={() => doDecide.run(t.id, "resolved", "")}
       onDecide={(a, r) => doDecide.run(t.id, a, r)}
       onReply={(b, ids) => doReply.run(t.id, b, ids)}
@@ -989,8 +1027,6 @@ export function Editor({
       const t = threads.find((x) => x.id === id);
       if (!t) return;
       jumpTo(t);
-      // 狭い画面: 紙面のピン・範囲を押したら、そのコメントが見えるようにシートを開く
-      if (mobile && !(sheetOpen && drawer === "comments")) toggleSheet("comments");
     },
     selecting,
   };
@@ -1670,7 +1706,7 @@ export function Editor({
               確認を完了
             </M3eButton>
           ) : data?.myAssignment?.state === "responded" ? (
-            <span className="ws__done" role="img" title="確認完了" aria-label="確認完了">
+            <span className="ws__done" role="img" title="校正完了" aria-label="校正完了">
               <M3eIcon name="check_circle" className="icon--filled" />
             </span>
           ) : null}
@@ -2064,6 +2100,11 @@ export function Editor({
         ) : null}
 
         <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+        <LeaveReviewPrompt
+          workId={workId}
+          revisionId={revisionId}
+          needsCompletion={can?.completeReview === true}
+        />
         <CrossWorkPicker
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}

@@ -40,7 +40,7 @@ export const resolutionLabel: Record<string, string> = {
 export const assignmentLabel: Record<string, string> = {
   pending: "未確認",
   viewed: "閲覧済み",
-  responded: "確認完了",
+  responded: "校正完了",
   excused: "免除",
 };
 export const permissionLabel: Record<string, string> = {
@@ -60,6 +60,7 @@ export const mediaLabel: Record<string, string> = {
   other: "その他",
 };
 export const approvalActionLabel: Record<string, string> = {
+  declared: "校了を宣言",
   finalized: "校了",
   exception_finalized: "例外校了",
   reopened: "再開",

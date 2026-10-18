@@ -49,6 +49,7 @@ export const domainErrorCodes = [
   "comment_delete_not_author",
   "comment_thread_deleted",
   "comment_reply_not_found",
+  "comment_reaction_invalid",
   "comment_carry_target_not_accepting",
   "comment_already_carried",
   "comment_carry_same_revision",
@@ -68,6 +69,7 @@ export const domainErrorCodes = [
   "team_not_found",
   // 校了
   "approval_not_approver",
+  "approval_already_declared",
   "approval_revision_not_candidate",
   "approval_rough_revision",
   "approval_blocking_threads_remain",

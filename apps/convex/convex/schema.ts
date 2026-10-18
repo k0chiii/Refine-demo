@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   vProposalContext,
+  vReactionEntries,
   vProposalKind,
   vProposalStatus,
   vRuleCategoryFields,
@@ -101,6 +102,7 @@ const assignmentState = v.union(
   v.literal("excused"),
 );
 const approvalAction = v.union(
+  v.literal("declared"),
   v.literal("finalized"),
   v.literal("reopened"),
   v.literal("exception_finalized"),
@@ -207,7 +209,12 @@ export default defineSchema({
     relatedTeamIds: v.array(v.string()),
     managerIds: v.array(v.string()),
     creatorIds: v.array(v.string()),
+    /** 校了者の先頭の 1 人（これまでの項目。索引・古い読み手のために常に書く） */
     approverId: v.string(),
+    /** 校了者の全員（利用者決定 2026-10-18）。無い行は [approverId] と読む（移行しない。domain の approvalSetupOf） */
+    approverIds: v.optional(v.array(v.string())),
+    /** 校了とみなす人数（1..校了者の数）。無い行は 1 */
+    approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
     lifecycle,
     confidentiality,
@@ -388,6 +395,8 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     /** 削除した時点で他の人の返信が残っていた（一覧に「削除されたコメント」として残す） */
     deletedKeepsReplies: v.optional(v.boolean()),
+    /** リアクション（絵文字ごとに押した人。FB と同じ形。誰も付けていなければ持たない） */
+    reactions: v.optional(vReactionEntries),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
@@ -407,6 +416,8 @@ export default defineSchema({
     actorId: v.string(),
     reason: v.optional(v.string()),
     payload: v.optional(v.any()),
+    /** 返信（replied）へのリアクション */
+    reactions: v.optional(vReactionEntries),
     createdAt: v.number(),
   }).index("by_thread", ["threadId"]),
 

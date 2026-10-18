@@ -33,6 +33,9 @@ import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
 import { M3eOptGroup, M3eOption } from "@m3e/react/option";
 import { UserPicker } from "@/ui/UserPicker";
 import { CategoryPicker } from "@/features/notation/CategoryPicker";
+import { ApproverFields } from "./ApproverFields";
+import { selectableApprovers, withoutCreatorsAsApprovers } from "./approverSelection";
+import { clampQuorum } from "./clampQuorum";
 import { TagPicker } from "./TagPicker";
 import { TeamSelect } from "./TeamSelect";
 
@@ -61,6 +64,8 @@ export interface WorkFormState {
   tags: string[];
   creatorIds: string[];
   approverIds: string[];
+  /** 校了とみなす人数（画面の値は文字列。校了者が 1 人のときは 1） */
+  approvalQuorum: string;
   managerIds: string[];
   stakeholderIds: string[];
   ownerTeam: string[];
@@ -89,6 +94,7 @@ export function emptyWorkForm(): WorkFormState {
     tags: [],
     creatorIds: [],
     approverIds: [],
+    approvalQuorum: "1",
     managerIds: [],
     stakeholderIds: [],
     ownerTeam: [],
@@ -100,6 +106,8 @@ export function emptyWorkForm(): WorkFormState {
 }
 
 export function workFormFromWork(work: Work): WorkFormState {
+  // 決定（2026-10-18）より前に保存された行では制作者が校了者に入っていることがある。フォームには出さない（保存で外れる）
+  const approverIds = selectableApprovers(work.approverIds ?? [work.approverId], work.creatorIds);
   return {
     title: work.title,
     purpose: work.purpose,
@@ -117,7 +125,8 @@ export function workFormFromWork(work: Work): WorkFormState {
     productionDays: work.productionDays === undefined ? "" : String(work.productionDays),
     tags: [...(work.tags ?? [])],
     creatorIds: [...work.creatorIds],
-    approverIds: [work.approverId],
+    approverIds,
+    approvalQuorum: String(clampQuorum(work.approvalQuorum ?? 1, approverIds.length)),
     managerIds: [...work.managerIds],
     stakeholderIds: [...(work.stakeholderIds ?? [])],
     ownerTeam: work.ownerTeamId ? [work.ownerTeamId] : [],
@@ -158,6 +167,14 @@ export function withoutNulls<T extends Record<string, unknown>>(
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) if (v !== null && v !== undefined) out[k] = v;
   return out as { [K in keyof T]?: Exclude<T[K], null> };
+}
+
+/** 登録・更新に渡す校了者と人数（人数は 1..校了者の数に収める） */
+export function approversFromForm(form: Pick<WorkFormState, "approverIds" | "approvalQuorum">) {
+  return {
+    approverIds: form.approverIds,
+    approvalQuorum: clampQuorum(form.approvalQuorum, form.approverIds.length),
+  };
 }
 
 /** 登録・保存できるか（必須: 名称・区分（小ジャンルから入る）・制作者・校了権限者） */
@@ -238,7 +255,6 @@ export function WorkFormFields({
     (
       k:
         | "creatorIds"
-        | "approverIds"
         | "managerIds"
         | "stakeholderIds"
         | "ownerTeam"
@@ -361,15 +377,16 @@ export function WorkFormFields({
           label="制作者"
           required
           value={form.creatorIds}
-          onChange={setIds("creatorIds")}
+          onChange={(ids) => setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))}
         />
-        <UserPicker
-          label="校了者（校了権限者）"
+        <ApproverFields
           required
-          single
-          hint="校了を宣言できるのは 1 人（確定方針 C3）"
-          value={form.approverIds}
-          onChange={setIds("approverIds")}
+          ids={form.approverIds}
+          excludeIds={form.creatorIds}
+          quorum={form.approvalQuorum}
+          onChange={(next) =>
+            setForm((f) => ({ ...f, approverIds: next.ids, approvalQuorum: next.quorum }))
+          }
         />
         <UserPicker
           label="主管・制作統括"

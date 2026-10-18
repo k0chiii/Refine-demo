@@ -262,13 +262,20 @@ export const demo = internalMutation({
         .filter((q) => q.eq(q.field("legacyId"), s.legacyId))
         .unique();
       if (existing) continue;
+      // 校了者が複数の例（EVE-012: 駒場 校了 と 五月 主管 のどちらか 1 人が宣言すれば校了。利用者決定 2026-10-18）
+      const approverIds =
+        s.legacyId === "EVE-012"
+          ? [ids["mock-nogiku-approver"]!, ids["mock-nogiku-manager"]!]
+          : [ids["mock-nogiku-approver"]!];
       const workId = await ctx.db.insert("works", {
         relatedTeamIds: [],
         ...s,
         year: 100,
         managerIds: [ids["mock-nogiku-manager"]!],
         creatorIds: [ids["mock-nogiku-creator"]!],
-        approverId: ids["mock-nogiku-approver"]!,
+        approverId: approverIds[0]!,
+        approverIds,
+        approvalQuorum: 1,
         // 納期は日付だけ（その日の終わり＝翌日 0:00 JST）。30 日後の 23:59 まで
         deadlineAt: endOfJstDay(now + 30 * day),
         lifecycle: "active",
@@ -278,7 +285,7 @@ export const demo = internalMutation({
       for (const [userId, role] of [
         [ids["mock-nogiku-manager"]!, "manager"],
         [ids["mock-nogiku-creator"]!, "creator"],
-        [ids["mock-nogiku-approver"]!, "approver"],
+        ...approverIds.map((id) => [id, "approver"] as const),
       ] as const) {
         await ctx.db.insert("workRoles", { workId, userId, role });
       }

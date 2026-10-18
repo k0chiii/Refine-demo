@@ -177,7 +177,7 @@ describe("制作物の一括登録（CSV）", () => {
       year: 100,
       mediaType: "pdf",
       creatorIds: ["u1"], // メールと名前で同じ人を書いても 1 人
-      approverId: "u2",
+      approverIds: ["u2"],
       deadlineAt: endOfJstDate("2026-11-14"),
       legacyId: "PR-1",
       confidentiality: "restricted",
@@ -206,8 +206,9 @@ describe("制作物の一括登録（CSV）", () => {
     expect(a).toContain("機密区分「秘密」が分かりません");
     expect(a).toContain("制作者「誰か」が見つかりません");
     expect(a).toContain("2 人います");
-    // 校了者は 1 人（確定方針 C3）。複数書かれた行は取り込まない
-    expect(b).toContain("校了者が 2 人");
+    // 校了者は複数書ける（利用者決定 2026-10-18）。2 人とも名簿に当たる
+    expect(preview.rows[1]!.approvers.map((m) => m.user?.id)).toEqual(["u1", "u2"]);
+    expect(b).not.toContain("校了者");
     expect(b).toContain("納期が過ぎています");
   });
 

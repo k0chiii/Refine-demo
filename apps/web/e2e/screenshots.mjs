@@ -100,7 +100,7 @@ const ready = () =>
   });
 // デモのデータはメモリ上にあるため、ページ再読込（page.goto）ではなく SPA 内遷移で移動する
 const go = async (path) => {
-  await page.evaluate(
+  const nav = page.evaluate(
     (p) => {
       const [to, q] = p.split("?");
       const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
@@ -108,6 +108,25 @@ const go = async (path) => {
     },
     path.replace(BASE, ""),
   );
+  // 校正画面から別の画面へ移るとき、割当があり校正完了にしていなければ「校正を完了しますか？」が出て移動が止まる（LeaveReviewPrompt）。
+  // 移動が済むまで見張り、出たら「あとで」（そのまま移動）で進む。校正完了の確認そのものは専用の検証で見る
+  let moved = false;
+  const leave = page.locator("m3e-dialog[open]", { hasText: "校正を完了しますか？" });
+  const watch = (async () => {
+    while (!moved) {
+      if (await leave.count()) {
+        await leave.locator("m3e-button", { hasText: "あとで" }).click();
+        return;
+      }
+      await page.waitForTimeout(100);
+    }
+  })();
+  try {
+    await nav;
+  } finally {
+    moved = true;
+  }
+  await watch;
   await settle();
 };
 
@@ -1604,8 +1623,9 @@ async function v2Scenes() {
       .evaluate((el) => el.style.width === "402px" && el.style.height === "874px"),
     "既定の端末（iPhone 17・402×874）で組まれていない",
   );
-  // 機種・表示の設定は右下の FAB から開く menu（M3 FAB menu。web では menu を使う）
-  await page.locator(".preview-fab m3e-fab").click();
+  // 機種・表示の設定は共通アプリバーの末尾のボタンから開く menu（浮いた FAB は無い）
+  expectTrue((await page.locator(".preview-fab").count()) === 0, "浮いた設定の FAB が残っている");
+  await page.locator('#appbar-actions m3e-icon-button[aria-label^="プレビューの設定"]').click();
   await page.locator("m3e-menu-item-radio", { hasText: "プロフィールで見る" }).click();
   await settle();
   await shot("57-sns-preview-grid", ".post-preview");
@@ -1635,6 +1655,29 @@ async function v2Scenes() {
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${sns}/v/1`);
   await page.waitForSelector(".sp-ig__slide .sp-marks.is-drawable", { timeout: 20_000 });
+  await settle();
+  // 設定のボタンは共通アプリバーの末尾（浮いた FAB は無い）。スマホの幅でもバーからはみ出さず、全画面は menu から開き ✕ で戻れる
+  const barButton = page.locator('#appbar-actions m3e-icon-button[aria-label^="プレビューの設定"]');
+  expectTrue((await barButton.count()) === 1, "アプリバーにプレビューの設定のボタンが無い");
+  expectTrue((await page.locator(".preview-fab").count()) === 0, "浮いた設定の FAB が残っている");
+  expectTrue(
+    await page.evaluate(() => {
+      const bar = document.querySelector(".shell__appbar")?.getBoundingClientRect();
+      const btn = document
+        .querySelector('#appbar-actions m3e-icon-button[aria-label^="プレビューの設定"]')
+        ?.getBoundingClientRect();
+      return !!bar && !!btn && btn.right <= bar.right + 0.5 && btn.left >= bar.left;
+    }),
+    "スマホの幅でアプリバーの設定のボタンがはみ出している",
+  );
+  await shot("59a0-sns-appbar-compact");
+  await barButton.click();
+  await page.locator("m3e-menu-item", { hasText: "全画面で見る" }).waitFor();
+  await shot("59a1-sns-settings-menu-compact");
+  await page.locator("m3e-menu-item", { hasText: "全画面で見る" }).click();
+  await page.waitForSelector(".sp-full");
+  await page.locator(".sp-full__close").click();
+  await page.waitForSelector(".sp-full", { state: "detached" });
   await settle();
   // コメントは投稿の後にサーバーから届いて印になる（投稿欄が閉じた直後はまだ無い）ので、出るまで待つ
   const marksShown = (selector, message) =>

@@ -30,6 +30,23 @@ export async function seedWork(
 }
 
 /**
+ * 決定（2026-10-18「制作者が校了者になることはないです」）より前に保存された行を作る: 制作者が校了者でもある制作物。
+ * 登録・変更はこの形を作れないので、リポジトリへ直接書く（旧データの再現。approverIds・approvalQuorum の無い 1 人の校了者）。
+ */
+export async function seedLegacyCreatorApproverWork(
+  ctx: InMemoryContext,
+  over: Partial<Parameters<typeof createWork>[2]> = {},
+) {
+  const work = await seedWork(ctx, over);
+  const { approverIds: _ids, approvalQuorum: _quorum, ...rest } = work;
+  void _ids;
+  void _quorum;
+  const legacy = { ...rest, creatorIds: [principals.approver.userId] };
+  await ctx.works.update(legacy);
+  return legacy;
+}
+
+/**
  * Hono が実体を検証して記録するのと同じ手順（試行の開始 → 検証完了）。テスト・サンプルデータ用。
  * 本番ではサービス認証付きの境界からしか呼ばれない。
  */

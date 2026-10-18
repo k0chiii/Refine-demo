@@ -1,7 +1,9 @@
 import {
+  approvalSetupOf,
   bureauNameOf,
   canViewWork,
   compareWorkRows,
+  declarationsOf,
   effectivePermission,
   isAccepting,
   isAllowed,
@@ -305,8 +307,15 @@ export async function buildDashboard(
         unresolved === 0 &&
         pendingChecks.length === 0 &&
         isAllowed("work.finalize", authz)
-      )
-        out.mine.finalize.push(item(accepting, accepting.deadlineAt));
+      ) {
+        // 校了者が複数で、すでに自分が宣言した版は「校了待ち」に出さない（履歴を読むのは人数が 2 以上のときだけ）
+        const declaredByMe =
+          approvalSetupOf(work).quorum > 1 &&
+          declarationsOf(await ctx.approvals.listByWork(work.id), accepting.id).some(
+            (d) => d.actorId === principal.userId,
+          );
+        if (!declaredByMe) out.mine.finalize.push(item(accepting, accepting.deadlineAt));
+      }
       if (assignments.length === 0 && isAllowed("review.assign", authz))
         out.mine.assign.push(item(accepting, accepting.deadlineAt));
       if (assignments.length === 0)

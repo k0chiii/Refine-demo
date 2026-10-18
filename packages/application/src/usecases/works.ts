@@ -1,5 +1,6 @@
 import {
   applyWorkPatch,
+  approversOf,
   assertExpectedVersion,
   assignWorkMetadata,
   type Confidentiality,
@@ -38,7 +39,11 @@ export interface CreateWorkInput extends WorkMetadataInput {
   relatedTeamIds?: string[];
   managerIds?: string[];
   creatorIds: string[];
-  approverId: string;
+  /** 校了者。approverIds があればそちら（複数可）。無ければ approverId の 1 人（利用者決定 2026-10-18） */
+  approverId?: string;
+  approverIds?: string[];
+  /** 校了とみなす人数（1..校了者の数。省略は 1） */
+  approvalQuorum?: number;
   deadlineAt?: number;
   confidentiality?: Confidentiality;
   /** 表記統一のルールカテゴリ（人が選ぶ。空なら検査しない） */
@@ -63,12 +68,14 @@ export async function createWork(
   input: CreateWorkInput,
 ): Promise<Work> {
   requireOrgPermission(principal, orgPermissions.worksCreate);
-  // 名称・区分・制作者・校了権限者・主管の不変条件は変更と同じドメイン関数で確かめる
+  // 名称・区分・制作者・校了権限者（複数・校了とみなす人数）・主管の不変条件は変更と同じドメイン関数で確かめる
   const essentials = normalizeWorkEssentials({
     title: input.title,
     category: input.category,
     creatorIds: input.creatorIds,
     approverId: input.approverId,
+    approverIds: input.approverIds,
+    approvalQuorum: input.approvalQuorum,
     managerIds: input.managerIds ?? [],
   });
   const managerIds = Array.from(
@@ -97,6 +104,8 @@ export async function createWork(
     managerIds,
     creatorIds: essentials.creatorIds,
     approverId: essentials.approverId,
+    approverIds: essentials.approverIds,
+    approvalQuorum: essentials.approvalQuorum,
     lifecycle: input.activate === false ? "draft" : "active",
     confidentiality: input.confidentiality ?? "normal",
     version: 1,
@@ -211,7 +220,7 @@ export async function updateWork(
     patch.productionTeamIds ?? [],
     patch.relatedTeamIds ?? [],
   );
-  // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人の校了権限者、Notion に揃えた項目の形）をドメインで確かめる
+  // 生成時と同じ不変条件（空でない名称・区分、1 人以上の制作者、1 人以上の校了権限者と校了とみなす人数、Notion に揃えた項目の形）をドメインで確かめる
   const next = applyWorkPatch(work, patch);
   // 新しく職責・関係者に入った人は委員の名簿にいること
   await assertPeopleExist(ctx, next, work);
@@ -270,6 +279,7 @@ async function assertPeopleExist(
   after: {
     creatorIds: readonly UserId[];
     approverId: UserId;
+    approverIds?: readonly UserId[] | undefined;
     managerIds: readonly UserId[];
     stakeholderIds?: readonly UserId[] | undefined;
   },
@@ -282,8 +292,8 @@ async function assertPeopleExist(
   if (missing.length === 0) return;
   const field = after.creatorIds.includes(missing[0]!)
     ? "creatorIds"
-    : after.approverId === missing[0]
-      ? "approverId"
+    : approversOf(after).includes(missing[0]!)
+      ? "approverIds"
       : after.managerIds.includes(missing[0]!)
         ? "managerIds"
         : "stakeholderIds";

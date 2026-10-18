@@ -27,8 +27,13 @@ export const finalize = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const { event } = await finalizeWork(createAppContext(ctx), principal, args);
-      return { action: event.action, createdAt: event.createdAt };
+      const { event, finalized, declared, quorum } = await finalizeWork(
+        createAppContext(ctx),
+        principal,
+        args,
+      );
+      // finalized が false のときは校了者 1 人の宣言を記録しただけ（校了とみなす人数に届いていない）
+      return { action: event.action, createdAt: event.createdAt, finalized, declared, quorum };
     });
   },
 });
@@ -70,6 +75,7 @@ export const confirmationStatus = query({
       const users = await resolveUsers(ctx.db, s.valid ? [s.valid.confirmerId] : []);
       return {
         required: s.required,
+        requiredForMe: s.requiredForMe,
         candidateRevisionId: s.candidateRevisionId,
         valid: s.valid
           ? {

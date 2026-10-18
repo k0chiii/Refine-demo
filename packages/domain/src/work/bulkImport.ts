@@ -34,14 +34,15 @@ import {
  *
  * 列（見出しの名前で探す。並び順は自由・知らない列は無視。* は必須）:
  *   制作物名*・制作物 ID・大ジャンル・小ジャンル・区分・媒体・目的・用途・担当（主管担当）・制作担当・関係担当・
- *   制作者*・関係者・主管（人）・校了者*・納期・入稿日・投稿日・印刷日・入稿の有無・印刷する部数/枚数/個数・サイズ・尺・
+ *   制作者*・関係者・主管（人）・校了者*・校了とみなす人数・納期・入稿日・投稿日・印刷日・入稿の有無・印刷する部数/枚数/個数・サイズ・尺・
  *   制作日数・タグ・機密区分・表記カテゴリ・年度
  * - 区分は小ジャンル（無ければ大ジャンル）から入る。媒体は小ジャンル・大ジャンルから既定が入る（書けばそちら）
  * - 複数の値は「;」「、」「,」（全角も可）か改行で区切る
  * - 担当（組織）は「局 › 担当」「局/担当」、担当の名前だけ（同名が無いとき）、局の名前かコード（PR など）で書く。
  *   担当（主管担当）は 1 つ、制作担当も 1 つ（WorkTeamPolicy。利用者決定 2026-10-17）、関係担当は複数
  * - 人はメールアドレス（@ を含む）かユーザー名（一度サインインした利用者）で書く。同名が複数いるときはメールで書く
- * - 校了者は 1 人（確定方針 C3）。複数書かれた行は取り込まない
+ * - 校了者は複数書ける（利用者決定 2026-10-18）。「校了とみなす人数」の列（省略は 1）は 1 以上・校了者の数以下。
+ *   制作者は校了者にできない（同じ人が両方にいる行は取り込めない行になる）
  * - 日付は 2026-11-14・2026/11/14（その日の終わりまで）。時刻を付けるなら「2026-11-14 18:00」
  * - チェックボックス（入稿の有無）は Yes / No（はい・いいえ も）
  * - 有効性・校了済みは状態（中止・校了）から導く値なので列に持たない。中止・校了は登録してから操作で入れる
@@ -100,6 +101,12 @@ export const workCsvColumns = [
     header: "校了者",
     aliases: ["校了者", "校了権限者", "校了担当", "approver"],
     required: true,
+  },
+  {
+    key: "approvalQuorum",
+    header: "校了とみなす人数",
+    aliases: ["校了とみなす人数", "校了人数", "校了に必要な人数", "approvalQuorum"],
+    required: false,
   },
   { key: "deadline", header: "納期", aliases: ["納期", "deadline"], required: false },
   {
@@ -202,7 +209,10 @@ export interface WorkCsvRow {
   managers: string[];
   /** 関係者 */
   stakeholders: string[];
-  approver: string;
+  /** 校了者（複数可） */
+  approvers: string[];
+  /** 校了とみなす人数。列が空なら null（1 として扱う） */
+  approvalQuorum: number | null;
   deadlineAt: Instant | null;
   publishAt: Instant | null;
   requiresPrinterSubmission: boolean | null;
@@ -340,10 +350,15 @@ export function parseWorkCsv(
     if (creators.length === 0) problems.push("制作者がありません");
     const approvers = splitList(get("approver"));
     if (approvers.length === 0) problems.push("校了者がありません");
-    else if (approvers.length > 1)
-      problems.push(
-        `校了者が ${approvers.length} 人書かれています。校了を宣言できるのは 1 人です（確定方針 C3）`,
-      );
+    const quorumText = get("approvalQuorum");
+    const approvalQuorum = parseNonNegativeInteger(quorumText);
+    if (approvalQuorum === undefined)
+      problems.push(`校了とみなす人数「${quorumText}」を数として読めません`);
+    else if (
+      approvalQuorum !== null &&
+      (approvalQuorum < 1 || approvalQuorum > Math.max(approvers.length, 1))
+    )
+      problems.push(`校了とみなす人数は 1 以上、校了者の数（${approvers.length} 人）以下です`);
     const stakeholders = splitList(get("stakeholders"));
 
     const deadlineText = get("deadline");
@@ -416,7 +431,8 @@ export function parseWorkCsv(
       creators,
       managers: splitList(get("managers")),
       stakeholders,
-      approver: approvers[0] ?? "",
+      approvers,
+      approvalQuorum: approvalQuorum ?? null,
       deadlineAt: deadline ?? null,
       publishAt: publishAt ?? null,
       requiresPrinterSubmission: requiresPrinterSubmission ?? null,
@@ -480,7 +496,10 @@ export interface WorkImportInput {
   creatorIds: string[];
   managerIds: string[];
   stakeholderIds?: string[];
-  approverId: string;
+  /** 校了者（1 人以上） */
+  approverIds: string[];
+  /** 校了とみなす人数（省略は 1） */
+  approvalQuorum?: number;
   deadlineAt?: Instant;
   publishAt?: Instant;
   requiresPrinterSubmission?: boolean;
@@ -510,7 +529,7 @@ export interface WorkImportRow {
   creators: PersonMatch[];
   managers: PersonMatch[];
   stakeholders: PersonMatch[];
-  approver: PersonMatch | null;
+  approvers: PersonMatch[];
   /** 主管担当の照合（列が空なら null） */
   ownerTeam: TeamRefMatch | null;
   /** 制作担当の照合 */
@@ -562,7 +581,7 @@ export function resolveWorkImport(
     const creators = row.creators.map((k) => matchPerson(k, directory));
     const managers = row.managers.map((k) => matchPerson(k, directory));
     const stakeholders = row.stakeholders.map((k) => matchPerson(k, directory));
-    const approver = row.approver ? matchPerson(row.approver, directory) : null;
+    const approvers = row.approvers.map((k) => matchPerson(k, directory));
     const ownerTeam: TeamRefMatch | null = row.ownerTeam
       ? { key: row.ownerTeam, match: matchTeam(row.ownerTeam, teams) }
       : null;
@@ -575,14 +594,19 @@ export function resolveWorkImport(
       ["制作者", creators],
       ["主管", managers],
       ["関係者", stakeholders],
+      ["校了者", approvers],
     ] as const)
       for (const m of list) {
         const p = describeMiss(label, m);
         if (p) problems.push(p);
       }
-    if (approver) {
-      const p = describeMiss("校了者", approver);
-      if (p) problems.push(p);
+    // 制作者は校了者になれない（利用者決定 2026-10-18）。照合できた人どうしで重なりを見る
+    const creatorUserIds = creators.flatMap((m) => (m.user ? [m.user.id] : []));
+    for (const m of approvers) {
+      if (m.user && creatorUserIds.includes(m.user.id))
+        problems.push(
+          `校了者「${m.key}」は制作者でもあります。制作者は校了者にできません（別の人を校了者にしてください）`,
+        );
     }
     if (ownerTeam) {
       const p = describeTeamMiss("担当（主管担当）", ownerTeam);
@@ -617,7 +641,8 @@ export function resolveWorkImport(
           creatorIds: ids(creators),
           managerIds: ids(managers),
           stakeholderIds: ids(stakeholders),
-          approverId: approver!.user!.id,
+          approverIds: ids(approvers),
+          ...(row.approvalQuorum !== null ? { approvalQuorum: row.approvalQuorum } : {}),
           ...(row.deadlineAt !== null ? { deadlineAt: row.deadlineAt } : {}),
           ...(row.publishAt !== null ? { publishAt: row.publishAt } : {}),
           ...(row.requiresPrinterSubmission !== null
@@ -640,7 +665,7 @@ export function resolveWorkImport(
       creators,
       managers,
       stakeholders,
-      approver,
+      approvers,
       ownerTeam,
       productionTeams,
       relatedTeams,
@@ -676,6 +701,7 @@ export function workCsvTemplate(now: Instant = Date.now()): string {
     stakeholders: "",
     managers: "五月 主管",
     approver: "mock-approver@example.invalid",
+    approvalQuorum: "",
     deadline: toJstDate(now + 30 * 86_400_000),
     publishAt: toJstDate(now + 37 * 86_400_000),
     requiresPrinterSubmission: "Yes",

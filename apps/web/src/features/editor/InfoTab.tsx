@@ -20,11 +20,13 @@ import { EditWorkDialog } from "@/features/work/EditWorkDialog";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
+  assignmentLabel,
   checkStateLabel,
   lifecycleActionLabel,
   lifecycleLabel,
   mediaLabel,
 } from "@/lib/labels";
+import { toast } from "@/lib/toast";
 import { newRequestId, useAction } from "@/lib/useAction";
 import { StatusText } from "@/ui/Chip";
 import { Field, Select, TextArea, TextInput } from "@/ui/Field";
@@ -80,17 +82,26 @@ export function InfoTab({
   );
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
-  const { work: w, people, approvals, can } = work;
+  const { work: w, people, approvals, approval, can } = work;
+  const me = approval.approvers.find((a) => a.isMe) ?? null;
+  const multiApprovers = approval.approvers.length > 1;
+  // この宣言で「校了とみなす人数」に届くか（届かなければ宣言の記録だけで、校了にはまだ進まない）
+  const reachesNow = approval.declaredCount + 1 >= approval.quorum;
   // 独立確認（D2）: 制作者本人が校了する制作物では、ほかの人の確認の記録が校了の前に要る（判定はサーバー）
   const confirmation = useQuery(api.approvals.confirmationStatus, {
     workId: w.id as Id<"works">,
   });
   const confirmationTarget =
     work.revisions.find((r) => r.id === confirmation?.candidateRevisionId) ?? null;
-  const needsConfirmation = confirmation?.required === true && confirmation.valid === null;
+  // 独立確認が要るのは、制作者本人でもある校了者が宣言するとき（ほかの校了者の宣言は止めない）
+  const needsConfirmation = confirmation?.requiredForMe === true && confirmation.valid === null;
   const candidate = work.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
   const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
   const checks = revision?.checks ?? [];
+  const reviewers = revision?.assignments ?? [];
+  const reviewersDone = reviewers.filter(
+    (a) => a.state === "responded" || a.state === "excused",
+  ).length;
   const pendingChecks = checks.filter((c) => c.state === "pending").length;
   // 人の未対応のコメント（自動校正は校了を止めないので別に数える）
   const blocking = Math.max(0, (candidate?.unresolvedCount ?? 0) - (candidate?.openBotCount ?? 0));
@@ -105,7 +116,7 @@ export function InfoTab({
   const profiles = useQuery(api.social.list, w.mediaType === "sns" ? {} : "skip");
   const doFinalize = useAction(async () => {
     if (!candidate) return;
-    await finalize({
+    const done = await finalize({
       workId: w.id as Id<"works">,
       revisionId: candidate.id as Id<"revisions">,
       requestId,
@@ -114,6 +125,8 @@ export function InfoTab({
       ...(autoNote.trim() ? { autoProofreadNote: autoNote.trim() } : {}),
     });
     setFinalizeOpen(false);
+    // 人数に届かない宣言は記録だけ。届いたら校了（状態の表示が変わる）
+    if (!done.finalized) toast(`校了を宣言しました（${done.declared}/${done.quorum} 人）`);
   });
   const doConfirm = useAction(async () => {
     if (!confirmation?.candidateRevisionId) return;
@@ -193,7 +206,7 @@ export function InfoTab({
         ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
         ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
         ["制作者", names(people.creators) || "—"] as Row,
-        ["校了者", people.approver?.name ?? "—"] as Row,
+        ["校了者", <ApproverList key="approvers" approval={approval} />] as Row,
         ["主管", names(people.managers) || "—"] as Row,
         ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
       ],
@@ -292,12 +305,23 @@ export function InfoTab({
       {revision ? <RevisionFiles artifacts={revision.artifacts} shownId={shownArtifactId} /> : null}
 
       <div className="info-tab__actions">
-        {can.finalize && w.lifecycle === "active" ? (
-          // 校了権限者の「いまやる 1 つ」なので filled（M3 Usability。§35 A-20。利用者決定 2026-10-15）
+        {can.finalize && w.lifecycle === "active" && approval.canDeclare ? (
+          // 校了権限者の「いまやる 1 つ」なので filled（M3 Usability。§35 A-20。利用者決定 2026-10-15）。
+          // 校了者が複数のときは、まだ宣言していない校了者にだけ出す
           <M3eButton variant="filled" disabled={!candidate} onClick={() => setFinalizeOpen(true)}>
             <M3eIcon slot="icon" name="verified" />
             校了を宣言
           </M3eButton>
+        ) : null}
+        {can.finalize && w.lifecycle === "active" && me?.declared ? (
+          <StatusText tone="success" icon="check_circle">
+            宣言済み
+          </StatusText>
+        ) : null}
+        {multiApprovers && w.lifecycle === "active" ? (
+          <StatusText tone="neutral">
+            校了 {approval.declaredCount}/{approval.quorum} 人
+          </StatusText>
         ) : null}
         {can.reopen && w.lifecycle === "finalized" ? (
           <M3eButton variant="outlined" onClick={() => setReopenOpen(true)}>
@@ -328,6 +352,45 @@ export function InfoTab({
             ))
           : null}
       </div>
+
+      {/* 校正者ごとの状態。読了印として、校正完了にした人と時刻を制作者・主管が見られる（割り当てる権限のある人だけ） */}
+      {revision && revision.can.assign && revision.assignments.length > 0 ? (
+        <section className="info-tab__section" aria-label="校正者">
+          <h2 className="info-tab__h">
+            校正者
+            <StatusText
+              tone={reviewersDone === reviewers.length ? "success" : "neutral"}
+              className="ml"
+            >
+              校正完了 {reviewersDone} / {reviewers.length}
+            </StatusText>
+          </h2>
+          <div className="checks">
+            {reviewers.map((a) => {
+              const at = a.state === "responded" ? a.respondedAt : a.viewedAt;
+              return (
+                <div
+                  key={a.reviewerId}
+                  className={`check ${a.state === "responded" || a.state === "excused" ? "check--done" : ""}`}
+                >
+                  <StatusText
+                    tone={a.state === "responded" ? "success" : "neutral"}
+                    icon={a.state === "responded" ? "check_circle" : undefined}
+                  >
+                    {assignmentLabel[a.state]}
+                  </StatusText>
+                  <div>
+                    {a.reviewer?.name ?? a.reviewerId}
+                    {at !== undefined ? (
+                      <span className="small muted">・{formatJstShort(at)}</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {revision && (checks.length > 0 || revision.can.addCheck) ? (
         <section className="info-tab__section" aria-label="専門確認">
@@ -523,8 +586,14 @@ export function InfoTab({
         <div className="dialog-body">
           <p style={{ margin: 0 }}>
             対象版: <strong>{candidate?.label ?? "（通常版がありません）"}</strong>。宣言者:{" "}
-            <strong>{people.approver?.name}</strong>
+            <strong>{me?.user?.name ?? people.approver?.name}</strong>
           </p>
+          {multiApprovers ? (
+            <StatusText tone={reachesNow ? "success" : "neutral"}>
+              校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
+              {approval.declaredCount} 人{reachesNow ? "・あなたの宣言で校了" : ""}
+            </StatusText>
+          ) : null}
           {candidate && candidate.pendingChecks.length > 0 ? (
             <div className="alert--warn alert">
               <span>
@@ -560,7 +629,7 @@ export function InfoTab({
               onChange={(e) => setExceptionReason(e.target.value)}
             />
           </Field>
-          {confirmation?.required ? (
+          {confirmation?.requiredForMe ? (
             confirmation.valid ? (
               <p className="small" style={{ margin: 0 }}>
                 <StatusText tone="success">独立確認済み</StatusText>{" "}
@@ -585,7 +654,7 @@ export function InfoTab({
             disabled={doFinalize.pending || !candidate || needsConfirmation}
             onClick={() => void doFinalize.run()}
           >
-            校了を確定する
+            {reachesNow ? "校了を確定する" : "校了を宣言する"}
           </M3eButton>
         </div>
       </M3eDialog>
@@ -688,5 +757,33 @@ export function InfoTab({
         </div>
       </M3eDialog>
     </div>
+  );
+}
+
+/**
+ * 校了者の一覧。校了者が複数のときは、誰が宣言したか（チェック）と「n 人中 q 人で校了」の規則を添える。
+ * 数えているのは、進行中は校了候補の版、校了後は校了した版の宣言
+ */
+function ApproverList({ approval }: { approval: WorkData["approval"] }) {
+  const multi = approval.approvers.length > 1;
+  return (
+    <span className="info-tab__approvers">
+      {approval.approvers.map((a, i) => (
+        <StatusText
+          key={a.user?.id ?? i}
+          tone={a.declared ? "success" : "neutral"}
+          icon={a.declared ? "check_circle" : "pending"}
+          title={a.declared ? "宣言済み" : "未宣言"}
+        >
+          {a.user?.name ?? "（不明なユーザー）"}
+        </StatusText>
+      ))}
+      {multi ? (
+        <span className="small muted">
+          {approval.approvers.length} 人中 {approval.quorum} 人で校了（{approval.declaredCount}{" "}
+          人が宣言済み）
+        </span>
+      ) : null}
+    </span>
   );
 }

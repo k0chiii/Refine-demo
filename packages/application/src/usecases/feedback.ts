@@ -393,7 +393,13 @@ export interface FeedbackPostView {
   mentions: Array<{ id: string; name: string }>;
   files: FeedbackFileView[];
   template?: FeedbackTemplateId;
-  reactions: Array<{ emoji: FeedbackReaction; count: number; mine: boolean }>;
+  /** users: 付けた人（付けた順。画面は名前を長押し・マウスオーバーで見せる） */
+  reactions: Array<{
+    emoji: FeedbackReaction;
+    count: number;
+    mine: boolean;
+    users: Array<{ id: string; name: string }>;
+  }>;
   createdAt: number;
   editedAt?: number;
   can: { edit: boolean; delete: boolean };
@@ -471,6 +477,13 @@ export async function getFeedbackThread(
     }
     const mentions = [];
     for (const id of p.mentions) mentions.push({ id, name: await name(id) });
+    const reactions: FeedbackPostView["reactions"] = [];
+    for (const r of summarizeFeedbackReactions(p.reactions, principal.userId)) {
+      const users = [];
+      for (const id of p.reactions.find((x) => x.emoji === r.emoji)?.userIds ?? [])
+        users.push({ id, name: await name(id) });
+      reactions.push({ ...r, users });
+    }
     posts.push({
       id: p.id,
       author,
@@ -479,7 +492,7 @@ export async function getFeedbackThread(
       mentions,
       files,
       ...(p.template !== undefined ? { template: p.template } : {}),
-      reactions: summarizeFeedbackReactions(p.reactions, principal.userId),
+      reactions,
       createdAt: p.createdAt,
       ...(p.editedAt !== undefined ? { editedAt: p.editedAt } : {}),
       can: canModifyFeedbackPost(p, principal),
