@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import { isApproverOf } from "../work/approvers.ts";
 import type { Work } from "../work/Work.ts";
 import {
   effectivePermission,
@@ -45,7 +46,7 @@ export interface WorkRoles {
 export function rolesOf(work: Work, principal: Principal): WorkRoles {
   return {
     isCreator: work.creatorIds.includes(principal.userId),
-    isApprover: work.approverId === principal.userId,
+    isApprover: isApproverOf(work, principal.userId),
     isManager: work.managerIds.includes(principal.userId),
   };
 }

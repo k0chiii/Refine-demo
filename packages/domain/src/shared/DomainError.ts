@@ -68,6 +68,7 @@ export const domainErrorCodes = [
   "team_not_found",
   // 校了
   "approval_not_approver",
+  "approval_already_declared",
   "approval_revision_not_candidate",
   "approval_rough_revision",
   "approval_blocking_threads_remain",

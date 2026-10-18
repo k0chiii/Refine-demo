@@ -9,6 +9,8 @@ import {
   latestStandardRevision,
   normalizeConfirmationNote,
   requiresIndependentConfirmation,
+  requiresIndependentConfirmationFor,
+  approvalSetupOf,
   assertExpectedVersion,
   assertReopenReason,
   DomainError,
@@ -39,11 +41,18 @@ export interface FinalizeWorkInput {
 export interface FinalizeOutcome {
   work: Work;
   event: ApprovalEvent;
+  /** 校了に進んだか。false なら校了者 1 人の宣言を記録しただけ（校了とみなす人数に届いていない） */
+  finalized: boolean;
+  /** 宣言した校了者の数（この宣言を含む）と、校了とみなす人数 */
+  declared: number;
+  quorum: number;
 }
 
 /**
  * 校了宣言（C3 / C6 / F-09 / U-07 / A-08 / A-10）。
  * 本人認証・対象制作物・校了権限・最終版・重大未解決・例外理由をサーバーで一致確認して確定する。
+ * 校了者は個別に宣言し、宣言した校了者が「校了とみなす人数」に届いたとき校了になる（利用者決定 2026-10-18）。
+ * 届かない宣言は `declared` として記録するだけで、制作物の状態は変えない。
  */
 export async function finalizeWork(
   ctx: AppContext,
@@ -58,7 +67,8 @@ export async function finalizeWork(
     const checks = await ctx.checks.listByRevision(input.revisionId);
     // D2: 独立確認は確認者本人の操作で保存された記録だけを使う（申告された ID は受け取らない）
     const confirmations = await ctx.approvals.listConfirmationsByRevision(input.revisionId);
-    const notBefore = lastReopenedAt(await ctx.approvals.listByWork(work.id));
+    const history = await ctx.approvals.listByWork(work.id);
+    const notBefore = lastReopenedAt(history);
     const req: Parameters<typeof evaluateFinalization>[0] = {
       work,
       revisionId: input.revisionId,
@@ -68,6 +78,7 @@ export async function finalizeWork(
       actorId: principal.userId,
       confirmations,
       grants,
+      events: history,
     };
     if (notBefore !== undefined) req.confirmationsNotBefore = notBefore;
     if (input.exceptionReason !== undefined) req.exceptionReason = input.exceptionReason;
@@ -75,6 +86,34 @@ export async function finalizeWork(
     const outcome = evaluateFinalization(req);
 
     const now = ctx.clock.now();
+    const declared = outcome.declaredApproverIds.length;
+    if (!outcome.reached) {
+      // 人数に届かない宣言: 宣言を記録するだけ（校了にはまだ進まない）
+      const event: ApprovalEvent = {
+        workId: work.id,
+        revisionId: outcome.revision.id,
+        actorId: principal.userId,
+        action: "declared",
+        requiredChecksSnapshot: outcome.requiredChecksSnapshot,
+        createdAt: now,
+      };
+      if (outcome.usedException && input.exceptionReason !== undefined)
+        event.exceptionReason = input.exceptionReason;
+      await ctx.approvals.append(event);
+      await ctx.audit.record({
+        entityType: "work",
+        entityId: work.id,
+        operation: "approval_declared",
+        actorId: principal.userId,
+        ...(input.requestId !== undefined ? { requestId: input.requestId } : {}),
+        after: { revisionId: outcome.revision.id, declared, quorum: outcome.quorum },
+        at: now,
+      });
+      return { work, event, finalized: false, declared, quorum: outcome.quorum };
+    }
+    const usedException = outcome.usedException || outcome.priorExceptionReason !== undefined;
+    const exceptionReason =
+      (outcome.usedException ? input.exceptionReason : undefined) ?? outcome.priorExceptionReason;
     const next: Work = {
       ...work,
       lifecycle: "finalized",
@@ -86,12 +125,11 @@ export async function finalizeWork(
       workId: work.id,
       revisionId: outcome.revision.id,
       actorId: principal.userId,
-      action: outcome.usedException ? "exception_finalized" : "finalized",
+      action: usedException ? "exception_finalized" : "finalized",
       requiredChecksSnapshot: outcome.requiredChecksSnapshot,
       createdAt: now,
     };
-    if (outcome.usedException && input.exceptionReason !== undefined)
-      event.exceptionReason = input.exceptionReason;
+    if (usedException && exceptionReason !== undefined) event.exceptionReason = exceptionReason;
     const openBot = threads.filter(
       (t) =>
         t.origin?.kind === "bot" && (t.resolution === "open" || t.resolution === "acknowledged"),
@@ -125,7 +163,7 @@ export async function finalizeWork(
       workId: work.id,
       revisionId: outcome.revision.id,
     });
-    return { work: next, event };
+    return { work: next, event, finalized: true, declared, quorum: outcome.quorum };
   });
 }
 
@@ -170,7 +208,8 @@ export async function reopenWork(
     body: `「${work.title}」を${who}が再開しました（理由: ${excerpt(reason, 80)}）`,
     workId: work.id,
   });
-  return { work: next, event };
+  const { quorum } = approvalSetupOf(next);
+  return { work: next, event, finalized: false, declared: 0, quorum };
 }
 
 /** 最後に再開した時刻（再開より前の独立確認は数えない） */
@@ -238,8 +277,10 @@ export async function confirmIndependently(
 }
 
 export interface ConfirmationStatus {
-  /** 自己校了のため、校了の前に独立確認が要るか */
+  /** 校了者に制作者本人がいて（自己校了）、その人の校了の前に独立確認が要るか */
   required: boolean;
+  /** 閲覧している人の校了に、独立確認が要るか（制作者本人でもある校了者のとき。ほかの校了者は要らない） */
+  requiredForMe: boolean;
   /** 校了候補の版（最新の通常版）。無ければ null */
   candidateRevisionId: string | null;
   /** 校了候補の版で、いま有効な独立確認（無ければ null） */
@@ -261,10 +302,13 @@ export async function getConfirmationStatus(
   const { work, grants } = await loadAuthorizedWork(ctx, principal, input.workId, "work.view");
   const policy = input.policy;
   const required = work.lifecycle === "active" && requiresIndependentConfirmation(work, policy);
+  const requiredForMe =
+    required && requiresIndependentConfirmationFor(work, principal.userId, policy);
   const candidate = latestStandardRevision(await ctx.revisions.listByWork(work.id));
   if (!required || !candidate)
     return {
       required,
+      requiredForMe,
       candidateRevisionId: candidate?.id ?? null,
       valid: null,
       canConfirm: false,
@@ -276,7 +320,7 @@ export async function getConfirmationStatus(
     work,
     revisionId: candidate.id,
     grants,
-    actorId: work.approverId,
+    actorId: principal.userId,
     ...(notBefore !== undefined ? { notBefore } : {}),
   };
   const valid = findValidConfirmation(confirmations, validity);
@@ -288,5 +332,12 @@ export async function getConfirmationStatus(
     !confirmedByMe &&
     isIndependentOf(work, principal.userId) &&
     isAllowed("approval.confirm", { work, grants, principal });
-  return { required, candidateRevisionId: candidate.id, valid, canConfirm, confirmedByMe };
+  return {
+    required,
+    requiredForMe,
+    candidateRevisionId: candidate.id,
+    valid,
+    canConfirm,
+    confirmedByMe,
+  };
 }

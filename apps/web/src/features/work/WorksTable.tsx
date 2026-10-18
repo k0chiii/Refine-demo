@@ -16,6 +16,7 @@ import { rememberWorkHint } from "@/lib/workHint";
 import { StatusText } from "@/ui/Chip";
 import { ColumnHeader, DataTable, pageSlice, TablePager } from "@/ui/DataTable";
 import { M3eIcon } from "@m3e/react/icon";
+import { ApproversCell } from "./ApproversCell";
 
 export type WorkRow = FunctionReturnType<typeof api.works.listMine>[number] & {
   /** 段階（domain の workStageOf。下書き・中止は null） */
@@ -38,7 +39,7 @@ const DEFAULT_PAGE_SIZE = 25;
 /**
  * 制作物一覧の表（利用者決定 2026-10-18「制作物一覧も表がいいかも」。共通の表 ui/DataTable。docs/UI_M3E.md §75）。
  * 並べる順と絞り込みは呼び出し側（domain の sortWorks・workBelongsToTeam）。見出しを押すと `onSort`（題名・状態・校正の締切・納期・
- * 主管担当・制作担当。もう一度押すと向きが逆）。
+ * 主管担当・制作担当。もう一度押すと向きが逆）。校了者のセルは、編集できる人には押せて、校了者の選択を開く（ApproversCell）。
  * - 題名は制作物へのリンク（Tab・Enter で開ける）。行のほかの場所を押しても開く（`onOpen`）
  * - 狭い幅では列を隠す（コンテナクエリ）。状態・版・FB は題名の下に移る。スマホは 題名 + 校正の締切 の 2 列
  * - 件数が多いときは M3E の paginator（最小の 10 件を超えるとき）。並べ替え・絞り込みが変わったら 1 ページ目へ戻る
@@ -103,6 +104,7 @@ export function WorksTable({
           {hasTeams ? header("owner", "主管担当", "works-table__col--owner") : null}
           {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
           <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
+          <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
           <ColumnHeader numeric className="works-table__col--fb" label="フィードバック">
             FB
           </ColumnHeader>
@@ -233,6 +235,9 @@ function Row({
       ) : null}
       <td className="mf-table__td works-table__col--creators">
         <Clip text={w.creators.join("、") || null} />
+      </td>
+      <td className="mf-table__td works-table__col--approvers">
+        <ApproversCell w={w} />
       </td>
       <td className="mf-table__td mf-table__num works-table__col--fb">
         {fb ?? <span className="muted">0</span>}

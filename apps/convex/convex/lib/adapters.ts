@@ -31,6 +31,7 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
+import { approversOf } from "@mf100/domain";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
@@ -108,9 +109,17 @@ export function createAppContext(
     const rows: Array<{ userId: string; role: "creator" | "approver" | "manager" }> = [
       ...work.creatorIds.map((userId) => ({ userId, role: "creator" as const })),
       ...work.managerIds.map((userId) => ({ userId, role: "manager" as const })),
-      { userId: work.approverId, role: "approver" as const },
+      // 校了者は全員（複数の校了者。古い行は approverId の 1 人）
+      ...approversOf(work).map((userId) => ({ userId, role: "approver" as const })),
     ];
-    for (const r of rows) await db.insert("workRoles", { workId, ...r });
+    // 同じ人が同じ職責に重ねて入らないようにする
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const key = `${r.role}:${r.userId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      await db.insert("workRoles", { workId, ...r });
+    }
   };
 
   return {

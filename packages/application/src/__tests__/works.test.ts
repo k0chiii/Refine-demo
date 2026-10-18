@@ -18,6 +18,7 @@ const input = {
   creatorIds: [principals.creator.userId],
   approverId: principals.approver.userId,
 };
+const importInput = { ...input, approverIds: [principals.approver.userId] };
 
 describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）", () => {
   it("変更で空の名称・制作者なし・空の校了権限者を保存できない（保存されず版も進まない）", async () => {
@@ -30,7 +31,7 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
     );
     await expect(edit({ creatorIds: [] })).rejects.toThrow(invalid("creatorIds", "required"));
     await expect(edit({ creatorIds: [""] })).rejects.toThrow(invalid("creatorIds", "blank_id"));
-    await expect(edit({ approverId: "" })).rejects.toThrow(invalid("approverId", "required"));
+    await expect(edit({ approverId: "" })).rejects.toThrow(invalid("approverIds", "required"));
     await expect(edit({ category: " " })).rejects.toThrow(invalid("category", "required"));
     expect(await ctx.works.findById(work.id)).toEqual(work);
   });
@@ -43,7 +44,7 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
         workId: work.id,
         patch: { approverId: "nonexistent-user" },
       }),
-    ).rejects.toThrow(invalid("approverId", "unknown_user"));
+    ).rejects.toThrow(invalid("approverIds", "unknown_user"));
     await expect(
       updateWork(ctx, principals.manager, {
         workId: work.id,
@@ -71,14 +72,14 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
       invalid("creatorIds", "blank_id"),
     );
     await expect(createWork(ctx, reg, { ...input, approverId: " " })).rejects.toThrow(
-      invalid("approverId", "required"),
+      invalid("approverIds", "required"),
     );
     await expect(createWork(ctx, reg, { ...input, title: "" })).rejects.toThrow(
       invalid("title", "required"),
     );
     await expect(
       createWork(ctx, reg, { ...input, approverId: "nonexistent-user" }),
-    ).rejects.toThrow(invalid("approverId", "unknown_user"));
+    ).rejects.toThrow(invalid("approverIds", "unknown_user"));
     await expect(createWork(ctx, reg, { ...input, managerIds: ["ghost"] })).rejects.toThrow(
       invalid("managerIds", "unknown_user"),
     );
@@ -88,7 +89,7 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
   it("一括登録も同じ検証。だめな行があれば何件目かを添えて、何も登録しない", async () => {
     const ctx = createInMemoryContext();
     const row = {
-      ...input,
+      ...importInput,
       managerIds: [],
       confidentiality: "normal" as const,
       notationCategories: [],
@@ -109,7 +110,7 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
       }),
     );
     await expect(
-      importWorks(ctx, principals.sysadmin, { rows: [{ ...row, approverId: "ghost" }] }),
+      importWorks(ctx, principals.sysadmin, { rows: [{ ...row, approverIds: ["ghost"] }] }),
     ).rejects.toThrow(expect.objectContaining({ code: "work_import_invalid" }));
   });
 });

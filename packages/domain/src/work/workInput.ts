@@ -1,5 +1,6 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
+import { approvalSetupOf, approversOf, normalizeApprovalSetup } from "./approvers.ts";
 import { normalizeWorkTags, WORK_SIZE_MAX, workGenres, workSubGenreCodes } from "./metadata.ts";
 import { confidentialities, mediaTypes, type Work } from "./Work.ts";
 
@@ -9,7 +10,7 @@ import { confidentialities, mediaTypes, type Work } from "./Work.ts";
  * - 名称: 前後の空白を除いて 1 文字以上 {@link WORK_TITLE_MAX} 文字まで
  * - 区分: 前後の空白を除いて 1 文字以上 {@link WORK_CATEGORY_MAX} 文字まで
  * - 制作者: 1 人以上。空の ID は不可（重複は 1 人にまとめる）
- * - 校了権限者: ちょうど 1 人（空の ID は不可）
+ * - 校了権限者: 1 人以上（空の ID は不可）と、校了とみなす人数（1..校了者の数。省略は 1。利用者決定 2026-10-18）
  * - 主管: 空の ID は不可（重複は 1 人にまとめる。0 人は可）
  * 人が実在する（委員である）かは、アプリケーション層が名簿（PeopleDirectory）で確かめる。
  */
@@ -34,7 +35,10 @@ export interface WorkEssentials {
   title: string;
   category: string;
   creatorIds: readonly UserId[];
-  approverId: UserId;
+  /** 校了権限者。approverIds があればそちらが優先（無ければ approverId の 1 人） */
+  approverId?: UserId | undefined;
+  approverIds?: readonly UserId[] | undefined;
+  approvalQuorum?: number | undefined;
   managerIds: readonly UserId[];
 }
 
@@ -42,7 +46,7 @@ type WorkInvalidField =
   | "title"
   | "category"
   | "creatorIds"
-  | "approverId"
+  | "approverIds"
   | "managerIds"
   | "stakeholderIds"
   | "productionTeamIds";
@@ -77,7 +81,9 @@ export function normalizeProductionTeamIds(
 }
 
 /** 不変条件を確かめ、正規化した値（名称・区分は trim 済み、ID は重複なし）を返す。違反は `work_invalid` */
-export function normalizeWorkEssentials<T extends WorkEssentials>(fields: T): T {
+export function normalizeWorkEssentials<T extends WorkEssentials>(
+  fields: T,
+): T & { approverId: UserId; approverIds: UserId[]; approvalQuorum: number } {
   const title = fields.title.trim();
   if (title === "") throw invalid("title", "required");
   if (title.length > WORK_TITLE_MAX) throw invalid("title", "too_long", { max: WORK_TITLE_MAX });
@@ -87,10 +93,19 @@ export function normalizeWorkEssentials<T extends WorkEssentials>(fields: T): T 
     throw invalid("category", "too_long", { max: WORK_CATEGORY_MAX });
   const creatorIds = cleanIds(fields.creatorIds, "creatorIds");
   if (creatorIds.length === 0) throw invalid("creatorIds", "required");
-  const approverId = fields.approverId.trim();
-  if (approverId === "") throw invalid("approverId", "required");
+  const { approverIds, quorum } = normalizeApprovalSetup(fields);
   const managerIds = cleanIds(fields.managerIds, "managerIds");
-  return { ...fields, title, category, creatorIds, approverId, managerIds };
+  return {
+    ...fields,
+    title,
+    category,
+    creatorIds,
+    // approverId は先頭の 1 人（古い読み手・索引のために残す）
+    approverId: approverIds[0]!,
+    approverIds,
+    approvalQuorum: quorum,
+    managerIds,
+  };
 }
 
 /**
@@ -197,6 +212,8 @@ export type WorkPatch = {
       | "deadlineAt"
       | "creatorIds"
       | "approverId"
+      | "approverIds"
+      | "approvalQuorum"
       | "managerIds"
       | "confidentiality"
       | "legacyId"
@@ -227,6 +244,15 @@ export function applyWorkPatch(
   if (patch.productionTeamIds !== undefined)
     defined.productionTeamIds = normalizeProductionTeamIds(patch.productionTeamIds, teamPolicy);
   const next = { ...work, ...(defined as WorkPatch), version: work.version + 1 } as Work;
+  // 校了者: これまでの approverId だけの変更は「その 1 人に置き換える」。人数は、指定が無ければ今の値を校了者の数に収める
+  const approversPatched = patch.approverIds !== undefined || patch.approverId !== undefined;
+  if (approversPatched) {
+    // 空の approverId は「校了者なし」（required で弾く）
+    const ids = patch.approverIds ?? (patch.approverId?.trim() ? [patch.approverId] : []);
+    if (patch.approverIds === undefined) next.approverIds = ids;
+    if (patch.approvalQuorum === undefined)
+      next.approvalQuorum = Math.min(approvalSetupOf(work).quorum, Math.max(ids.length, 1));
+  }
   if (!(mediaTypes as readonly string[]).includes(next.mediaType))
     throw invalid("mediaType", "unknown");
   if (!(confidentialities as readonly string[]).includes(next.confidentiality))
@@ -236,12 +262,13 @@ export function applyWorkPatch(
 }
 
 type PeopleFields = Pick<Work, "creatorIds" | "approverId" | "managerIds"> & {
+  approverIds?: readonly UserId[] | undefined;
   stakeholderIds?: readonly UserId[] | undefined;
 };
 
 const peopleOf = (w: PeopleFields) => [
   ...w.creatorIds,
-  w.approverId,
+  ...approversOf(w),
   ...w.managerIds,
   ...(w.stakeholderIds ?? []),
 ];

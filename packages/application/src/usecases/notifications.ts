@@ -1,4 +1,5 @@
 import {
+  approversOf,
   canSeeNotificationSubject,
   DomainError,
   memberTeamIds,
@@ -253,6 +254,7 @@ export function workStakeholders(work: {
   creatorIds: readonly string[];
   managerIds: readonly string[];
   approverId: string;
+  approverIds?: readonly string[] | undefined;
 }): string[] {
-  return [...work.creatorIds, ...work.managerIds, work.approverId];
+  return [...work.creatorIds, ...work.managerIds, ...approversOf(work)];
 }

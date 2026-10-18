@@ -6,7 +6,13 @@ import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
-import { WorkFormFields, workFormFromWork, workFormReady, workFormToFields } from "./WorkForm";
+import {
+  approversFromForm,
+  WorkFormFields,
+  workFormFromWork,
+  workFormReady,
+  workFormToFields,
+} from "./WorkForm";
 
 type Work = FunctionReturnType<typeof api.works.get>["work"];
 
@@ -40,7 +46,7 @@ export function EditWorkDialog({
         mediaType: form.mediaType as "pdf",
         confidentiality: form.confidentiality as "normal",
         creatorIds: form.creatorIds,
-        approverId: form.approverIds[0] ?? work.approverId,
+        ...approversFromForm(form),
         managerIds: form.managerIds,
         notationCategories: form.notationCategories,
         // 主管担当を外すときは空文字（application で「なし」に戻す）

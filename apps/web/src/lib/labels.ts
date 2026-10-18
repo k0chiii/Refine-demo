@@ -60,6 +60,7 @@ export const mediaLabel: Record<string, string> = {
   other: "その他",
 };
 export const approvalActionLabel: Record<string, string> = {
+  declared: "校了を宣言",
   finalized: "校了",
   exception_finalized: "例外校了",
   reopened: "再開",

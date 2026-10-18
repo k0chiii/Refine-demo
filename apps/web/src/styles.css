@@ -4691,6 +4691,14 @@ m3e-snackbar {
   outline-offset: -2px;
 }
 
+/* 「情報」の校了者の一覧（誰が宣言したか + 「n 人中 q 人で校了」） */
+.info-tab__approvers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
 /* 制作物一覧の表（features/work/WorksTable.tsx。共通の .mf-table に、制作物だけの列・隠し方を足す。§75）
  * medium 以上は一覧を縦に収め（見出しが貼り付き、ページ送りが下に残る）、スマホはページごとスクロール。
  * 狭いと列を右から隠し（コンテナクエリ）、状態・版・FB は題名の下へ移る。 */
@@ -4739,8 +4747,20 @@ m3e-snackbar {
 .works-table__col--delivery,
 .works-table__col--owner,
 .works-table__col--production,
-.works-table__col--creators {
+.works-table__col--creators,
+.works-table__col--approvers {
   white-space: nowrap;
+}
+/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える */
+.works-table__approvers {
+  margin-inline-start: -12px;
+  max-width: 100%;
+  text-align: start;
+}
+.works-table__approvers-text {
+  display: block;
+  min-width: 0;
+  line-height: 1.3;
 }
 /* FB（相談）の数と未読の点 */
 .works-table__fb {
@@ -4776,6 +4796,11 @@ m3e-snackbar {
 }
 @container (max-width: 1119px) {
   .works-table__col--production {
+    display: none;
+  }
+}
+@container (max-width: 839px) {
+  .works-table__col--approvers {
     display: none;
   }
 }

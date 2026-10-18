@@ -6,6 +6,7 @@ import { useAction } from "@/lib/useAction";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
 import {
+  approversFromForm,
   emptyWorkForm,
   withoutNulls,
   WorkFormFields,
@@ -31,7 +32,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
       year: 100,
       ...(form.legacyId ? { legacyId: form.legacyId } : {}),
       creatorIds: form.creatorIds,
-      approverId: form.approverIds[0] ?? "",
+      ...approversFromForm(form),
       managerIds: form.managerIds,
       ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
