@@ -1,17 +1,31 @@
 import {
+  bureauNameOf,
+  compareWorkRows,
   effectivePermission,
   isAccepting,
   isAllowed,
+  isUnresolvedResolution,
+  nextDeadlineOf,
   permissionIncludes,
   revisionLabel,
   rolesOf,
+  summarizeByBureau,
+  tallyResolutions,
+  tallyStages,
+  workStageOf,
+  workUrgency,
+  type BureauSummary,
   type DashboardWidgetPref,
+  type Instant,
   type MediaType,
   type Principal,
+  type Resolution,
   type Revision,
   type SubmitRoute,
   type SubmitTargetPolicy,
   type Work,
+  type WorkOverviewRow,
+  type WorkStage,
 } from "@mf100/domain";
 import { canView } from "../shared.ts";
 import type { AppContext, NotificationKind } from "../ports.ts";
@@ -86,10 +100,45 @@ export interface Dashboard {
   roles: Record<DashboardRole, number>;
   /** いちばん近い締切（期間に関係なく）。全部が空のときの理由に使う */
   nextDeadline: DashboardItem | null;
+  /** 自分の数字（ホーム上段のカード） */
+  summary: DashboardSummary;
+  /** 自分が関わる制作物の全体の状況（数字・表） */
+  overview: DashboardOverview;
   /** 節の並び・表示・件数（保存した構成、無ければ役割から自動） */
   layout: DashboardWidgetPref[];
   /** 自分で構成を変えたか（「既定に戻す」を出す） */
   customized: boolean;
+}
+
+/** 自分の数字 */
+export interface DashboardSummary {
+  /** やること: 「提出する」から「割り当てる」までの行の合計 */
+  todo: number;
+  /** 期限が近い（{@link dashboardPolicy.upcomingWithinMs} 以内）校正の締切・納期 */
+  dueSoon: number;
+  /** 期限超過で受付が終わったまま次の版が出ていない制作物 */
+  overdue: number;
+  /** 自分宛てのコメントのうち未読 */
+  unread: number;
+}
+
+/** 自分が関わる制作物の全体の状況 */
+export interface DashboardOverview {
+  /** この数字を作った時刻 */
+  asOf: Instant;
+  /** 数えた制作物（下書き・取消を除く） */
+  total: number;
+  stages: Record<WorkStage, number>;
+  /** 受付中の版（受付が終わった最新の版を含む）の指摘: 未解決と、片付いたもの */
+  threads: { open: number; done: number };
+  /** 受付中の版の校正者: 割り当てた数と、確認を終えた数 */
+  reviewers: { total: number; done: number };
+  /** 受付中の版の未完了の専門確認 */
+  checksPending: number;
+  /** 校了していない制作物（注意が要る順） */
+  works: WorkOverviewRow[];
+  /** 主管担当の局ごと */
+  bureaus: BureauSummary[];
 }
 
 /** 閾値。制度ではなく表示の判断なので変更しやすいよう外に出す。 */
@@ -110,8 +159,6 @@ export const dashboardPolicy = {
   mentionsMax: 30,
 };
 
-const openResolutions = new Set(["open", "acknowledged", "accepted"]);
-
 function byDeadline(a: DashboardItem, b: DashboardItem): number {
   return (
     (a.deadlineAt ?? Infinity) - (b.deadlineAt ?? Infinity) ||
@@ -130,7 +177,7 @@ export async function buildDashboard(
   opts: { submitPolicy?: SubmitTargetPolicy } = {},
 ): Promise<Dashboard> {
   const now = ctx.clock.now();
-  const out: Omit<Dashboard, "layout" | "customized"> = {
+  const out: Omit<Dashboard, "layout" | "customized" | "summary" | "overview"> = {
     mine: { submit: [], review: [], respond: [], checks: [], finalize: [], assign: [] },
     upcoming: [],
     mentions: [],
@@ -142,12 +189,53 @@ export async function buildDashboard(
   };
   const visible: Work[] = [];
   const deadlines: DashboardItem[] = [];
+  // 全体の状況（表・内訳）。下書き・取消は数えない
+  const teams = await ctx.teams.list();
+  const rows: WorkOverviewRow[] = [];
+  const resolutions: Resolution[] = [];
+  const reviewers = { total: 0, done: 0 };
+  let checksPending = 0;
+  const overviewRow = (
+    work: Work,
+    stage: WorkStage,
+    part: Partial<WorkOverviewRow> & Pick<WorkOverviewRow, "reviewDeadlineAt">,
+  ): WorkOverviewRow => {
+    const base = {
+      workId: work.id,
+      title: work.title,
+      stage,
+      revisionId: null,
+      revisionLabel: null,
+      deliveryAt: work.deadlineAt ?? null,
+      unresolved: 0,
+      threads: 0,
+      reviewersTotal: 0,
+      reviewersDone: 0,
+      checksPending: 0,
+      bureau: bureauNameOf(work.ownerTeamId, teams),
+      ...part,
+    };
+    const nextDeadlineAt = nextDeadlineOf(base);
+    return {
+      ...base,
+      nextDeadlineAt,
+      urgency: workUrgency(base, now, dashboardPolicy.upcomingWithinMs),
+    };
+  };
   for (const work of works) {
     const grants = await ctx.acl.listByWork(work.id);
     const authz = { work, grants, principal };
     if (!(await canView(ctx, principal, work, grants))) continue;
     visible.push(work);
-    if (work.lifecycle !== "active") continue;
+    if (work.lifecycle !== "active") {
+      const stage = workStageOf({
+        lifecycle: work.lifecycle,
+        accepting: false,
+        hasRevision: false,
+      });
+      if (stage) rows.push(overviewRow(work, stage, { reviewDeadlineAt: null }));
+      continue;
+    }
     const roles = rolesOf(work, principal);
     const level = effectivePermission(grants, principal);
     if (roles.isCreator) out.roles.creator++;
@@ -167,15 +255,34 @@ export async function buildDashboard(
       count,
     });
     const roleHolder = roles.isCreator || roles.isApprover || roles.isManager;
+    // 全体の状況の 1 行に足す、版ごとの数
+    const detail: Partial<WorkOverviewRow> = {};
 
     let lastActivity = latest?.submittedAt ?? null;
     let reviewing = level !== null && permissionIncludes(level, "review") && !roleHolder;
     if (accepting) {
       const threads = await ctx.threads.listByRevision(accepting.id);
-      const unresolved = threads.filter((t) => openResolutions.has(t.resolution)).length;
+      const unresolved = threads.filter((t) => isUnresolvedResolution(t.resolution)).length;
       const assignments = await ctx.assignments.listByRevision(accepting.id);
       const checks = await ctx.checks.listByRevision(accepting.id);
       const pendingChecks = checks.filter((c) => c.state === "pending");
+      const reviewersDone = assignments.filter(
+        (a) => a.state === "responded" || a.state === "excused",
+      ).length;
+      for (const t of threads) resolutions.push(t.resolution);
+      reviewers.total += assignments.length;
+      reviewers.done += reviewersDone;
+      checksPending += pendingChecks.length;
+      Object.assign(detail, {
+        revisionId: accepting.id,
+        revisionLabel: revisionLabel(accepting),
+        reviewDeadlineAt: accepting.deadlineAt,
+        unresolved,
+        threads: threads.length,
+        reviewersTotal: assignments.length,
+        reviewersDone,
+        checksPending: pendingChecks.length,
+      });
       for (const t of threads) lastActivity = Math.max(lastActivity ?? 0, t.createdAt);
 
       const mine = assignments.find((a) => a.reviewerId === principal.userId);
@@ -210,11 +317,24 @@ export async function buildDashboard(
       latest.reviewState === "closed" &&
       latest.reviewClosedReason === "deadline"
     ) {
-      const unresolved = (await ctx.threads.listByRevision(latest.id)).filter((t) =>
-        openResolutions.has(t.resolution),
-      ).length;
+      const lapsedThreads = await ctx.threads.listByRevision(latest.id);
+      const unresolved = lapsedThreads.filter((t) => isUnresolvedResolution(t.resolution)).length;
       out.backlog.overdue.push(item(latest, latest.deadlineAt, unresolved));
+      for (const t of lapsedThreads) resolutions.push(t.resolution);
+      Object.assign(detail, {
+        revisionId: latest.id,
+        revisionLabel: revisionLabel(latest),
+        reviewDeadlineAt: latest.deadlineAt,
+        unresolved,
+        threads: lapsedThreads.length,
+      });
     }
+    const stage = workStageOf({
+      lifecycle: work.lifecycle,
+      accepting: accepting !== null,
+      hasRevision: revisions.length > 0,
+    });
+    if (stage) rows.push(overviewRow(work, stage, { reviewDeadlineAt: null, ...detail }));
     if (reviewing) out.roles.reviewer++;
     if (lastActivity !== null && now - lastActivity >= dashboardPolicy.staleAfterMs)
       out.backlog.stale.push(item(latest, lastActivity));
@@ -306,9 +426,26 @@ export async function buildDashboard(
   for (const list of [...Object.values(out.mine), ...Object.values(out.backlog)])
     list.sort(byDeadline);
 
+  const overview: DashboardOverview = {
+    asOf: now,
+    total: rows.length,
+    stages: tallyStages(rows.map((r) => r.stage)),
+    threads: tallyResolutions(resolutions),
+    reviewers,
+    checksPending,
+    works: rows.filter((r) => r.stage !== "finalized").sort(compareWorkRows),
+    bureaus: summarizeByBureau(rows),
+  };
+  const summary: DashboardSummary = {
+    todo: Object.values(out.mine).reduce((n, list) => n + list.length, 0),
+    dueSoon: out.upcoming.length,
+    overdue: out.backlog.overdue.length,
+    unread: out.mentions.filter((m) => m.unread).length,
+  };
+
   const held = new Set<DashboardRole>(
     (Object.keys(out.roles) as DashboardRole[]).filter((r) => out.roles[r] > 0),
   );
   const { widgets, customized } = await loadDashboardLayout(ctx, principal, held);
-  return { ...out, layout: widgets, customized };
+  return { ...out, summary, overview, layout: widgets, customized };
 }
