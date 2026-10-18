@@ -512,6 +512,18 @@ async function main() {
   await signInAs("mock-nogiku-creator");
   await page.waitForSelector("m3e-list-action");
   await shot("27-dashboard-creator");
+  // 27b ホームの数字と表（§74）: 数字のカード 4 枚・表に行・状態の積み上げ棒と凡例 5 段階。数・構造だけを見る（文言は見ない）
+  expectTrue((await page.locator(".kpis .kpi").count()) === 4, "ホームの数字のカードが 4 枚でない");
+  expectTrue(
+    (await page.locator(".ov .dtable__table").first().locator("tbody tr").count()) >= 1,
+    "ホームの表に行がない",
+  );
+  expectTrue((await page.locator(".ov .legend__item").count()) === 5, "状態の凡例が 5 段階でない");
+  expectTrue(
+    (await page.locator(".ov .stagebar__seg").count()) >= 1,
+    "状態の積み上げ棒に区間がない",
+  );
+  await shot("27b-dashboard-overview", ".ov");
   // 61 ホームを編集（全画面のダイアログ。節ごとのスイッチと上下のボタン。§36 W-26）
   await page.locator('.shell__appbar m3e-icon-button[aria-label="ホームを編集"]').click();
   await page.waitForSelector("m3e-dialog.home-edit[open] m3e-switch");
@@ -909,6 +921,14 @@ async function main() {
   await page.waitForSelector(".submit-fab m3e-fab");
   await settle();
   await shot("20-mobile-dashboard");
+  // ホームの表はページを横に動かさない（表の中だけが横に動く）
+  expectTrue(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+    "compact のホームがページごと横にはみ出している",
+  );
+  await shot("20b-mobile-dashboard-overview", ".ov");
   await page.locator(".shell__appbar .bell m3e-icon-button").click();
   await page.waitForSelector("m3e-bottom-sheet.notif-sheet .notif");
   await settle();

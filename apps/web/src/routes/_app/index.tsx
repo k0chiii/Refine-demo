@@ -13,6 +13,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Fragment, useState, type ReactNode } from "react";
+import { DashboardKpis, DashboardOverview } from "@/features/home/DashboardOverview";
 import { HomeEditDialog } from "@/features/home/HomeEditDialog";
 import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
 import { widgetInfo } from "@/features/home/widgets";
@@ -141,6 +142,7 @@ const limitLabel = (l: DashboardLimit) => (l === null ? "すべて" : `${l} 件`
  *   並べ替えはドラッグを使わず上下の操作（WCAG 2.5.7）。設定はアカウントに保存（PC とスマホで共通）
  * - compact は 1 列のリスト（M3 Cards: compact ではリスト）。expanded 以上は M3 Canonical layouts › Supporting pane:
  *   左が「やること」（残り全部）、右が補助の固定幅のペイン（360、1200 以上は 412）
+ * - 上に数字のカード（DashboardKpis）、「やること」の下に制作物の状況（表と内訳。DashboardOverview。§74）
  * - 主目的（やること）の見出しを最も強く、補助の見出しは控えめに（M3 Usability。§35 A-16）
  */
 function Dashboard() {
@@ -397,14 +399,15 @@ function Dashboard() {
       <span className="title-medium">いまやることはありません</span>
       <span>
         {roles.length > 0
-          ? `あなたの役割: ${roles.map((r) => `${roleLabels[r]} ${data.roles[r]} 件`).join("・")}。どれも、いま手を付けるものはありません。`
-          : "あなたが担当している進行中の制作物はありません。制作物の担当になると、ここにやることが出ます。"}
+          ? roles.map((r) => `${roleLabels[r]} ${data.roles[r]}`).join("・")
+          : "担当の制作物はありません"}
       </span>
-      <span>
-        {data.nextDeadline
-          ? `次の締切: ${data.nextDeadline.workTitle} の${data.nextDeadline.deadlineKind === "delivery" ? "納期" : "校正の締切"} ${formatDeadlineUntil(data.nextDeadline.deadlineAt ?? 0)}`
-          : "近い締切はありません"}
-      </span>
+      {data.nextDeadline ? (
+        <span>
+          次の締切 {data.nextDeadline.workTitle}・
+          {formatDeadlineUntil(data.nextDeadline.deadlineAt ?? 0)}
+        </span>
+      ) : null}
       {hiddenWithItems.length > 0 ? (
         <M3eButton variant="text" onClick={() => setEditing(true)}>
           隠した節を表示する（{hiddenWithItems.map((w) => widgetInfo[w.id].title).join("・")}）
@@ -417,13 +420,14 @@ function Dashboard() {
   const hiddenTodo = hiddenWithItems.filter((w) => dashboardWidgetColumn[w.id] === "todo");
   const side = shown.filter((w) => dashboardWidgetColumn[w.id] === "side");
   return (
-    <div>
+    <div className="dash-page">
       <AppBarSlot slot="title">ホーム</AppBarSlot>
       {editButton}
+      {data.overview.total > 0 || data.summary.todo > 0 ? <DashboardKpis data={data} /> : null}
       {shown.length === 0 ? (
         empty
       ) : twoColumns ? (
-        <div className="dash dash--columns">
+        <div className={`dash ${side.length > 0 ? "dash--columns" : ""}`}>
           <div className="dash__column" role="region" aria-label="やること">
             {todo.length ? (
               todo.map(section)
@@ -431,9 +435,7 @@ function Dashboard() {
               <div className="dash__none">
                 {hiddenTodo.length ? (
                   <>
-                    <p className="muted">
-                      表示している「やること」の節に、いま手を付けるものはありません。
-                    </p>
+                    <p className="muted">いまやることはありません</p>
                     <M3eButton variant="text" onClick={() => setEditing(true)}>
                       隠した節を表示する（{hiddenTodo.map((w) => widgetInfo[w.id].title).join("・")}
                       ）
@@ -446,9 +448,11 @@ function Dashboard() {
             )}
           </div>
           {/* 補助のペイン（M3 Supporting pane。読み上げでは complementary） */}
-          <aside className="dash__column dash__column--side" aria-label="予定と記録">
-            {side.map(section)}
-          </aside>
+          {side.length > 0 ? (
+            <aside className="dash__column dash__column--side" aria-label="予定と記録">
+              {side.map(section)}
+            </aside>
+          ) : null}
         </div>
       ) : (
         <div className="dash">
@@ -460,6 +464,7 @@ function Dashboard() {
           ))}
         </div>
       )}
+      <DashboardOverview data={data} twoColumns={twoColumns} />
       {cls === "compact" ? (
         <ActionSheet
           open={menuFor !== null}
