@@ -1,6 +1,14 @@
-import { DomainError } from "@mf100/domain";
+import {
+  DomainError,
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_KIND_CATEGORY,
+  type NotificationCategory,
+  notificationCategoryOf,
+} from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission, revokeWorkPermission } from "../usecases/acl.ts";
+import type { NotificationKind } from "../ports.ts";
+import { getNotificationPrefs, updateNotificationPrefs } from "../usecases/notificationPrefs.ts";
 import { notify } from "../usecases/notifications.ts";
 import {
   isPushSubscribed,
@@ -60,11 +68,13 @@ describe("端末への通知（Web Push）", () => {
     const plan = await planPushDelivery(ctx, n.id);
     expect(plan?.targets).toHaveLength(2);
     expect(plan?.payload).toMatchObject({
-      title: "校了を取り消しました",
-      body: "『夏のポスター』",
       url: `/works/${work.id}`,
+      id: n.id,
+      tag: work.id,
       badge: 1,
+      createdAt: n.createdAt,
     });
+    expect(plan?.payload.title).toContain("夏のポスター");
     expect(JSON.stringify(plan?.payload)).not.toContain("誤字");
 
     // 送る前に閲覧権限が外れたら（非公開になり、ACL も外れた）、伏せた内容にする
@@ -80,6 +90,152 @@ describe("端末への通知（Web Push）", () => {
     const hidden = await planPushDelivery(ctx, n.id);
     expect(JSON.stringify(hidden?.payload)).not.toContain("夏のポスター");
     expect(hidden?.payload.url).toBe("/");
+  });
+
+  describe("送り主・抜粋・設定", () => {
+    async function setup() {
+      const ctx = createInMemoryContext();
+      ctx.state.names.set(principals.reviewer.userId, "本郷 校正");
+      const work = await seedWork(ctx, { title: "夏のポスター" });
+      await grantWorkPermission(ctx, principals.sysadmin, {
+        workId: work.id,
+        principalType: "user",
+        principalId: principals.stranger.userId,
+        permission: "view",
+      });
+      await subscribePush(ctx, principals.stranger, sub());
+      const post = async (kind: "comment_posted" | "review_assigned" = "comment_posted") => {
+        await notify(ctx, [principals.stranger.userId], principals.reviewer.userId, {
+          kind,
+          title: "題名",
+          body: "『夏のポスター』・本郷 校正さん: 相談です",
+          preview: "相談です",
+          workId: work.id,
+          threadId: "thr-1",
+        });
+        return ctx.state.notifications.all().at(-1)!;
+      };
+      return { ctx, work, post };
+    }
+
+    it("送り主の名前と抜粋を載せ、同じスレッドの通知は同じ印でまとまる", async () => {
+      const { ctx, post } = await setup();
+      const a = await post();
+      const b = await post();
+      expect(a.actorId).toBe(principals.reviewer.userId);
+      const pa = (await planPushDelivery(ctx, a.id))!.payload;
+      const pb = (await planPushDelivery(ctx, b.id))!.payload;
+      expect(pa.body).toContain("本郷 校正");
+      expect(pa.body).toContain("相談です");
+      expect(pa.tag).toBe("thr-1");
+      expect(pb.tag).toBe(pa.tag);
+      expect(pb.id).toBe(b.id);
+    });
+
+    it("「通知に内容を表示」を切ると、送り主と抜粋を載せない（アプリ内の通知は残る）", async () => {
+      const { ctx, post } = await setup();
+      const n = await post();
+      await updateNotificationPrefs(ctx, principals.stranger, { showPreview: false });
+      const payload = (await planPushDelivery(ctx, n.id))!.payload;
+      expect(JSON.stringify(payload)).not.toMatch(/本郷|相談です/);
+      expect(ctx.state.notifications.get(n.id)?.preview).toBe("相談です");
+      // ポリシー側で止めても同じ
+      await updateNotificationPrefs(ctx, principals.stranger, { showPreview: true });
+      const byPolicy = (await planPushDelivery(ctx, n.id, {
+        showWorkTitle: true,
+        showPreview: false,
+      }))!;
+      expect(JSON.stringify(byPolicy.payload)).not.toMatch(/本郷|相談です/);
+    });
+
+    it("止めた分類の通知は端末に送らない。ほかの分類は送る", async () => {
+      const { ctx, post } = await setup();
+      const comment = await post("comment_posted");
+      const assigned = await post("review_assigned");
+      await updateNotificationPrefs(ctx, principals.stranger, { mutedCategories: ["reply"] });
+      expect(await planPushDelivery(ctx, comment.id)).toBeNull();
+      expect(await planPushDelivery(ctx, assigned.id)).not.toBeNull();
+      // アプリ内の通知は消えない
+      expect(ctx.state.notifications.get(comment.id)).toBeDefined();
+      await updateNotificationPrefs(ctx, principals.stranger, { mutedCategories: [] });
+      expect(await planPushDelivery(ctx, comment.id)).not.toBeNull();
+    });
+
+    it("非公開の制作物と、見られなくなった制作物は、名前・送り主・抜粋を載せない", async () => {
+      const { ctx, work, post } = await setup();
+      const n = await post();
+      await ctx.works.update({
+        ...(await ctx.works.findById(work.id))!,
+        confidentiality: "restricted",
+      });
+      // 閲覧 ACL があって見られる非公開の制作物
+      const restricted = (await planPushDelivery(ctx, n.id))!.payload;
+      expect(JSON.stringify(restricted)).not.toMatch(/夏のポスター|本郷|相談です/);
+      // ACL が外れて見られなくなった
+      await revokeWorkPermission(ctx, principals.sysadmin, {
+        workId: work.id,
+        principalType: "user",
+        principalId: principals.stranger.userId,
+      });
+      const hidden = (await planPushDelivery(ctx, n.id))!.payload;
+      expect(JSON.stringify(hidden)).not.toMatch(/夏のポスター|本郷|相談です|thr-1/);
+      expect(hidden.url).toBe("/");
+      expect(hidden.tag).toBe(n.id);
+    });
+
+    it("見られない人の通知には、送り主も抜粋も保存しない", async () => {
+      const ctx = createInMemoryContext();
+      ctx.state.names.set(principals.reviewer.userId, "本郷 校正");
+      const work = await seedWork(ctx, { title: "極秘" });
+      await ctx.works.update({ ...work, confidentiality: "restricted" });
+      await notify(ctx, [principals.stranger.userId], principals.reviewer.userId, {
+        kind: "comment_posted",
+        title: "t",
+        body: "b",
+        preview: "相談です",
+        workId: work.id,
+      });
+      const n = ctx.state.notifications.all()[0]!;
+      expect(n.actorId).toBeUndefined();
+      expect(n.preview).toBeUndefined();
+    });
+  });
+
+  describe("通知の受け取り方（利用者ごと）", () => {
+    it("既定は内容を表示・止めなし。渡した項目だけ変わり、本人の設定だけを読み書きする", async () => {
+      const ctx = createInMemoryContext();
+      expect(await getNotificationPrefs(ctx, principals.reviewer)).toEqual({
+        showPreview: true,
+        mutedCategories: [],
+      });
+      await updateNotificationPrefs(ctx, principals.reviewer, {
+        mutedCategories: ["rule", "mention"],
+      });
+      const after = await updateNotificationPrefs(ctx, principals.reviewer, { showPreview: false });
+      expect(after).toEqual({ showPreview: false, mutedCategories: ["mention", "rule"] });
+      expect(await getNotificationPrefs(ctx, principals.creator)).toEqual({
+        showPreview: true,
+        mutedCategories: [],
+      });
+    });
+
+    it("知らない分類は保存しない", async () => {
+      const ctx = createInMemoryContext();
+      await expect(
+        updateNotificationPrefs(ctx, principals.reviewer, { mutedCategories: ["nope"] }),
+      ).rejects.toBeInstanceOf(DomainError);
+      expect(ctx.state.notificationPrefs.size).toBe(0);
+    });
+
+    it("notify に渡す通知の種類はすべて分類に入っている", () => {
+      // NotificationKind に種類を足したら、domain の NOTIFICATION_KIND_CATEGORY にも足さないと型が通らない
+      const categories: Record<NotificationKind, NotificationCategory> = NOTIFICATION_KIND_CATEGORY;
+      for (const kind of Object.keys(categories)) {
+        expect(NOTIFICATION_KIND_CATEGORY).toHaveProperty(kind);
+        expect(NOTIFICATION_CATEGORIES).toContain(notificationCategoryOf(kind));
+      }
+      expect(Object.keys(categories).length).toBeGreaterThan(0);
+    });
   });
 
   it("購読が無い・既読の通知は送らない", async () => {

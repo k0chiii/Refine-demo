@@ -1,13 +1,13 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { notificationPath } from "@mf100/domain";
+import { notificationPath, pushTagOf } from "@mf100/domain";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef } from "react";
 import { formatJstShort } from "@/lib/format";
-import { setAppBadge } from "@/lib/pwa";
 import { showDeviceNotification } from "@/lib/push";
 import { useDevicePush } from "./useDevicePush";
+import { useSystemNotificationSync } from "./useSystemNotificationSync";
 import { useAction } from "@/lib/useAction";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
@@ -232,7 +232,8 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 }
 
 /**
- * アプリアイコンの件数を未読の通知の数に合わせる。端末の通知（Web Push）を押して開いたとき（?from_notification=）は
+ * アプリアイコンの件数を未読の通知の数に合わせ、既読になった通知を端末から閉じる（useSystemNotificationSync）。
+ * 端末の通知（Web Push）を押して開いたとき（?from_notification=。まとめた通知はカンマ区切り）は
  * その通知を既読にして、印を URL から消す。描画はしない。シェルに 1 つだけ置く
  */
 function AppBadge() {
@@ -241,15 +242,15 @@ function AppBadge() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const url = new URL(window.location.href);
-    const id = url.searchParams.get("from_notification");
-    if (!id) return;
+    const ids = (url.searchParams.get("from_notification") ?? "").split(",").filter(Boolean);
+    if (ids.length === 0) return;
     url.searchParams.delete("from_notification");
     window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
-    void markRead({ notificationId: id as Id<"notifications"> }).catch(() => undefined);
+    for (const id of ids.slice(0, 20))
+      void markRead({ notificationId: id as Id<"notifications"> }).catch(() => undefined);
   }, [isAuthenticated]);
   // サインアウトの途中（認証が外れた直後）に問い合わせない
-  const unread = useQuery(api.notifications.unreadCount, isAuthenticated ? {} : "skip") ?? 0;
-  useEffect(() => setAppBadge(unread), [unread]);
+  useSystemNotificationSync(isAuthenticated);
 
   // 端末の通知（この端末から出したもの）を押したとき: 開いているアプリの中で画面を移す（読み込み直さない。デモの中身を保つ）
   const router = useRouter();
@@ -288,8 +289,9 @@ function AppBadge() {
         title: n.title,
         body: n.body ?? "",
         url: notificationPath(n),
-        tag: n.id,
+        tag: pushTagOf(n),
         notificationId: n.id,
+        createdAt: n.createdAt,
         inApp: true,
       });
     }

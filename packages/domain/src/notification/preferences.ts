@@ -1,0 +1,99 @@
+import { DomainError } from "../shared/DomainError.ts";
+
+/*
+ * 通知の受け取り方（利用者ごとの設定）。利用者指示 2026-10-18「アプリのプッシュ通知、もう少し普通のアプリみたいにしたい」。
+ * 端末への通知（Web Push）にだけ効く。アプリ内の通知（ベルの一覧）は設定にかかわらず作られる。
+ */
+
+/** 通知の分類（設定でオン・オフする単位） */
+export const NOTIFICATION_CATEGORIES = [
+  "mention", // メンション
+  "reply", // 返信・コメント
+  "assignment", // 割当・確認依頼
+  "deadline", // 期限・リマインド
+  "rule", // 表記ルールの提案
+  "other", // その他
+] as const;
+
+export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+
+/**
+ * 通知の種類（kind）→ 分類。notify に渡す kind はすべてここに載せる（テストで確かめる）。
+ * - mention: 自分が名指しされた
+ * - reply: 自分の制作物・スレッドへのコメントや返信、その採否
+ * - assignment: 自分への割当・専門確認の依頼
+ * - deadline: 締切が近い
+ * - rule: 表記ルールの提案とその結果
+ * - other: 版の提出・無効、校了・再開、専門確認の完了、自動校正の終了
+ */
+export const NOTIFICATION_KIND_CATEGORY = {
+  mentioned: "mention",
+  feedback_mentioned: "mention",
+  comment_posted: "reply",
+  feedback_posted: "reply",
+  comment_decided: "reply",
+  review_assigned: "assignment",
+  comment_assigned: "assignment",
+  check_requested: "assignment",
+  deadline_approaching: "deadline",
+  rule_proposed: "rule",
+  rule_proposal_decided: "rule",
+  revision_submitted: "other",
+  revision_voided: "other",
+  work_finalized: "other",
+  work_reopened: "other",
+  check_completed: "other",
+  auto_proofread_done: "other",
+} as const satisfies Record<string, NotificationCategory>;
+
+/** 通知の種類 → 分類。知らない種類は「その他」 */
+export function notificationCategoryOf(kind: string): NotificationCategory {
+  const known = NOTIFICATION_KIND_CATEGORY as Record<string, NotificationCategory | undefined>;
+  return known[kind] ?? "other";
+}
+
+export interface NotificationPrefs {
+  /** 端末の通知に送り主と抜粋を載せる（iOS の「プレビューを表示」にあたる） */
+  showPreview: boolean;
+  /** 端末に送らない分類 */
+  mutedCategories: NotificationCategory[];
+}
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  showPreview: true,
+  mutedCategories: [],
+};
+
+/** 保存された設定（無ければ既定）を、決まった形・順にそろえる。知らない分類は捨てる */
+export function normalizeNotificationPrefs(
+  input?: { showPreview?: boolean; mutedCategories?: readonly string[] } | null,
+): NotificationPrefs {
+  const muted = new Set(input?.mutedCategories ?? []);
+  return {
+    showPreview: input?.showPreview ?? DEFAULT_NOTIFICATION_PREFS.showPreview,
+    mutedCategories: NOTIFICATION_CATEGORIES.filter((c) => muted.has(c)),
+  };
+}
+
+/** 利用者が送ってきた設定を確かめる（知らない分類は受け付けない） */
+export function validateNotificationPrefsPatch(patch: {
+  showPreview?: boolean;
+  mutedCategories?: readonly string[];
+}): { showPreview?: boolean; mutedCategories?: NotificationCategory[] } {
+  const out: { showPreview?: boolean; mutedCategories?: NotificationCategory[] } = {};
+  if (patch.showPreview !== undefined) out.showPreview = patch.showPreview === true;
+  if (patch.mutedCategories !== undefined) {
+    const known = new Set<string>(NOTIFICATION_CATEGORIES);
+    if (patch.mutedCategories.some((c) => !known.has(c)))
+      throw new DomainError("notification_prefs_invalid", { field: "mutedCategories" });
+    out.mutedCategories = normalizeNotificationPrefs({
+      mutedCategories: patch.mutedCategories,
+    }).mutedCategories;
+  }
+  return out;
+}
+
+/** この種類の通知を端末に送らない設定か */
+export function isCategoryMuted(prefs: NotificationPrefs, kind: string): boolean {
+  return prefs.mutedCategories.includes(notificationCategoryOf(kind));
+}

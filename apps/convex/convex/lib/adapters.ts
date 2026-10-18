@@ -2,6 +2,7 @@ import type {
   AlignmentOverride,
   AppContext,
   Notification,
+  NotificationPrefsRecord,
   PushSubscriptionRecord,
 } from "@mf100/application";
 import type {
@@ -452,6 +453,23 @@ export function createAppContext(
       },
       async delete(id) {
         await db.delete(id as Id<"pushSubscriptions">);
+      },
+    },
+    notificationPrefs: {
+      async find(userId) {
+        const doc = await db
+          .query("notificationPrefs")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .first();
+        return doc ? (strip(doc) as NotificationPrefsRecord) : null;
+      },
+      async save(prefs) {
+        const doc = await db
+          .query("notificationPrefs")
+          .withIndex("by_user", (q) => q.eq("userId", prefs.userId))
+          .first();
+        if (doc) await db.replace(doc._id, prefs);
+        else await db.insert("notificationPrefs", prefs);
       },
     },
     notifications: {
