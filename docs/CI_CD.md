@@ -23,3 +23,8 @@ PR と `main` への push で走る。手で起動することもできる。
 本番の順番: 型・単体テスト → `convex deploy`（Convex を配り、その URL を `VITE_CONVEX_URL` にして Web をビルド）→ `wrangler deploy --env production`（Workers）→ `wrangler pages deploy`（Web）。Convex の環境変数（Nogiku・`MF100_UPLOAD_SECRET`・`MF100_CLEANUP_SECRET` など）と Workers の秘密（`wrangler secret put --env production` で `MF100_UPLOAD_SECRET`・`MF100_CLEANUP_SECRET`。Convex と同じ値、16 文字以上）は README の表のとおり先に設定する。Workers の本番の `vars`（`CONVEX_URL`・`CONVEX_SITE_URL`・`ALLOWED_ORIGINS`）は `apps/api/wrangler.jsonc` の `env.production` に書く（ダッシュボードで変えても deploy で上書きされる）。`MF100_UPLOAD_SECRET` が無いと本番でファイルを提出できない。
 
 トークンや鍵はチャットやリポジトリに書かず、GitHub の Settings › Secrets and variables（本番は Settings › Environments › production）に入れる。
+
+## 表記ルールの初期データ（2026-10-18）
+
+- Deploy を手で起動するとき、`target: production` と一緒に `seed_notation` を入れると、Convex を配った直後に `convex run notationSeed:importSamples` を流す。
+- 入るのはデモ版と同じ表記ルール（`apps/convex/convex/lib/notationSamples.ts`）。同じ ruleId があれば飛ばすので、何度流しても増えない。記録上の実行者は最初のシステム管理者（いなければ失敗する）。
