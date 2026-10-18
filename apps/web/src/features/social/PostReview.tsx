@@ -336,7 +336,7 @@ export function PostReview({
               <M3eIconButton
                 variant="tonal"
                 aria-label="投稿用に書き出す"
-                className="preview-settings__button"
+                className="preview-settings__button post-export__button"
               >
                 <M3eIcon name="download" />
                 <M3eMenuTrigger htmlFor={exportMenuId} />
