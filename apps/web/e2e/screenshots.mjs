@@ -1777,10 +1777,16 @@ async function v2Scenes() {
   await btn("校了を宣言").click();
   await page.waitForSelector("m3e-dialog[open]");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "校了を確定する" }).click();
-  await page.waitForSelector('m3e-button:has-text("ZIP で保存")', { timeout: 20_000 });
+  // 書き出しは校了後だけ、プレビューの右上のボタンから menu
+  await page.waitForSelector('.post-preview__bar m3e-icon[name="download"]', { timeout: 20_000 });
   await page.waitForTimeout(1500);
   await page.waitForSelector("m3e-snackbar", { state: "detached" }); // 57 の知らせ（8 秒）が消えてから撮る
+  await page.locator('.post-preview__bar m3e-icon-button:has(m3e-icon[name="download"])').click();
+  await page.waitForSelector('m3e-menu-item:has(m3e-icon[name="folder_zip"])', {
+    state: "visible",
+  });
   await shot("59-sns-export");
+  await page.keyboard.press("Escape");
 
   // 60 表記ルール（compact）
   await page.setViewportSize({ width: 412, height: 915 });

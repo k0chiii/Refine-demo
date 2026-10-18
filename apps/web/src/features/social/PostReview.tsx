@@ -12,15 +12,14 @@ import {
   type Anchor,
   type SocialPost,
 } from "@mf100/domain";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { OverlayThread } from "@/features/annotation/AnchorOverlay";
 import { fetchArtifactBlob } from "@/integrations/api";
 import { useAction } from "@/lib/useAction";
-import { Card } from "@/ui/Card";
 import { Loading } from "@/ui/Loading";
-import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eList, M3eListItem } from "@m3e/react/list";
+import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import {
   FullscreenPreview,
   PostPreview,
@@ -74,8 +73,8 @@ export interface PostAnnotate {
 
 /**
  * 校正画面での SNS 投稿の表示（版に記録した内容から組み立てるプレビュー）と、校了版の書き出し。
- * - 書き出しは校了した版だけ（校了前の版を投稿用と取り違えないため）
- * - 実際の投稿はしない。本文のコピー・画像の保存・まとめて ZIP
+ * - 書き出しは校了した版だけ（校了前の版を投稿用と取り違えないため）。プレビューの右上のボタンから menu（利用者指示 2026-10-18: カードは邪魔）
+ * - 実際の投稿はしない。本文のコピー・まとめて ZIP（画像・代替テキストも入る）
  */
 export function PostReview({
   manifestArtifactId,
@@ -105,6 +104,7 @@ export function PostReview({
   // スマホでは自分の端末の画面いっぱいに出す全画面のプレビューも選べる
   const compact = useWindowClass() === "compact";
   const [full, setFull] = useState(false);
+  const exportMenuId = `post-export-${useId().replace(/:/g, "")}`;
   const [view, setView] = useState<PreviewView>("post");
   const wrapRef = useRef<HTMLDivElement>(null);
   const [composeAt, setComposeAt] = useState<{ x: number; y: number } | null>(null);
@@ -330,13 +330,36 @@ export function PostReview({
             compact={compact}
             placement="inline"
           />
+          {/* 書き出しは校了した版だけ。カードにせず、設定の隣のボタンから menu */}
+          {isFinal ? (
+            <>
+              <M3eIconButton
+                variant="tonal"
+                aria-label="投稿用に書き出す"
+                className="preview-settings__button"
+              >
+                <M3eIcon name="download" />
+                <M3eMenuTrigger htmlFor={exportMenuId} />
+              </M3eIconButton>
+              <M3eMenu id={exportMenuId} positionY="below" positionX="before">
+                <M3eMenuItem
+                  onClick={() =>
+                    void navigator.clipboard
+                      .writeText(post.body)
+                      .then(() => toast("本文をコピーしました"))
+                  }
+                >
+                  <M3eIcon slot="icon" name="content_copy" />
+                  本文をコピー
+                </M3eMenuItem>
+                <M3eMenuItem disabled={zip.pending} onClick={() => void zip.run()}>
+                  <M3eIcon slot="icon" name="folder_zip" />
+                  ZIP で保存
+                </M3eMenuItem>
+              </M3eMenu>
+            </>
+          ) : null}
         </div>
-        {/* 使い方の一文は上に置く（下だと浮遊ツールバーの裏に隠れる） */}
-        <p className="small muted">
-          {annotate?.selecting
-            ? "本文は文字を選ぶ、画像はドラッグ（スマホは長押し）でコメントできます"
-            : "コメントを付けた本文・画像の場所が印で出ます"}
-        </p>
         <PostMarksContext.Provider value={marksValue}>
           <div className="post-annotate" ref={wrapRef}>
             <PostPreview
@@ -367,59 +390,6 @@ export function PostReview({
           </p>
         ) : null}
       </div>
-      <Card title="投稿用に書き出す">
-        {isFinal ? (
-          <div className="stack">
-            <p className="small muted">校了した版の内容です。この画面から投稿はしません。</p>
-            <div className="row">
-              <M3eButton
-                variant="tonal"
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(post.body)
-                    .then(() => toast("本文をコピーしました"))
-                }
-              >
-                <M3eIcon slot="icon" name="content_copy" />
-                本文をコピー
-              </M3eButton>
-              <M3eButton variant="filled" disabled={zip.pending} onClick={() => void zip.run()}>
-                <M3eIcon slot="icon" name="folder_zip" />
-                ZIP で保存
-              </M3eButton>
-            </div>
-            <p className="small muted">ZIP には本文・画像・代替テキスト・記録をまとめます</p>
-            <M3eList aria-label="画像（投稿の順）">
-              {post.images.map((im, i) => {
-                const a = images.find((x) => x.key === im.key);
-                return (
-                  <M3eListItem key={im.key}>
-                    {a ? (
-                      <img slot="leading" className="post-image__thumb" src={a.url} alt="" />
-                    ) : null}
-                    <span slot="overline">{i + 1} 枚目</span>
-                    {im.fileName}
-                    <span slot="supporting-text">代替テキスト: {im.alt || "未設定"}</span>
-                    {a ? (
-                      <M3eButton
-                        slot="trailing"
-                        variant="text"
-                        onClick={() => save(im.fileName, a.blob)}
-                      >
-                        画像を保存
-                      </M3eButton>
-                    ) : null}
-                  </M3eListItem>
-                );
-              })}
-            </M3eList>
-          </div>
-        ) : (
-          <p className="small muted">
-            書き出しは校了した版だけでできます（校了前の版を投稿用と取り違えないため）
-          </p>
-        )}
-      </Card>
     </div>
   );
 }
