@@ -89,12 +89,6 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: pnpm exec convex deploy --cmd "pnpm --filter @mf100/web build" --cmd-url-env-var-name VITE_CONVEX_URL
-      - name: 表記ルールの初期データを入れる（指定したときだけ）
-        if: inputs.seed_notation
-        working-directory: apps/convex
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: pnpm exec convex run notationSeed:importSamples
       - name: Workers（ファイルの提出と配信）を配る
         working-directory: apps/api
         env:
@@ -107,3 +101,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler pages deploy ../web/dist --project-name mf100-refine --branch main
+      - name: 表記ルールの初期データを入れる（指定したときだけ。配り終えてから流すので、失敗しても配る処理は止まらない）
+        if: inputs.seed_notation
+        working-directory: apps/convex
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: pnpm exec convex run notationSeed:importSamples

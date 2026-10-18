@@ -819,7 +819,7 @@ async function main() {
     (await page.locator(".viewer__page .pdf-link").count()) === 0,
     "FB のモードなのに、PDF のリンクの層が出ている",
   );
-  await setMarkMode("なし");
+  await setMarkMode("選択");
   await page.waitForSelector('.viewer__page[data-page="1"] a.pdf-link');
   const links = await page
     .locator('.viewer__page[data-page="1"] a.pdf-link')
