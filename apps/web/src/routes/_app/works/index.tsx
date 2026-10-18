@@ -5,8 +5,10 @@ import {
   workBelongsToTeam,
   workGenreLabels,
   workGenres,
+  workStageOf,
   type Team,
   type WorkGenre,
+  type WorkSortDir,
   type WorkSortKey,
 } from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -15,7 +17,7 @@ import { useStableQuery } from "@/lib/useStableQuery";
 import type { M3eFilterChipElement } from "@m3e/web/chips";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
-import { WorksList } from "@/features/work/WorksList";
+import { WorksTable, type WorkRow } from "@/features/work/WorksTable";
 import { lifecycleLabel } from "@/lib/labels";
 import { useWindowClass } from "@/lib/useMedia";
 import { rememberWorkHint } from "@/lib/workHint";
@@ -27,11 +29,12 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 
 type TeamAxis = "owner" | "production";
-const SORT_KEYS = ["accepting", "deadline", "title", "owner", "production"] as const;
+const SORT_KEYS = ["accepting", "deadline", "title", "stage", "owner", "production"] as const;
 const sortLabel: Record<WorkSortKey, string> = {
   accepting: "校正の締切順",
   deadline: "納期順",
   title: "題名順",
+  stage: "状態順",
   owner: "主管担当順",
   production: "制作担当順",
 };
@@ -47,6 +50,7 @@ export const Route = createFileRoute("/_app/works/")({
     production?: string;
     genre?: WorkGenre;
     sort?: WorkSortKey;
+    dir?: "desc";
   } => ({
     ...(typeof s.q === "string" && s.q ? { q: s.q } : {}),
     ...(s.new === true || s.new === "true" ? { new: true } : {}),
@@ -58,15 +62,17 @@ export const Route = createFileRoute("/_app/works/")({
     ...(SORT_KEYS.includes(s.sort as WorkSortKey) && s.sort !== "accepting"
       ? { sort: s.sort as WorkSortKey }
       : {}),
+    ...(s.dir === "desc" ? { dir: "desc" as const } : {}),
   }),
   component: Works,
 });
 
 /**
- * U-02 制作物一覧。探して開くだけの入口。行を押すとエディタ（最新版）が開く。
- * 入れ子にせずに 1 本のリストで並べ、主管担当・制作担当は絞り込み（`owner`・`production`）と並べ替え（`sort`）で使う
- * （利用者決定 2026-10-16。既定は校正の締切が近い順）。絞り込み・並べ替えは M3 のチップ＋メニュー（M3 Chips）。
- * PC もスマホも M3E のリスト（M3 に表の部品が無いので揃えた。利用者決定 2026-10-16）。
+ * U-02 制作物一覧。探して開くだけの入口。行（題名のリンク）を押すとエディタ（最新版）が開く。
+ * 入れ子にせずに 1 つの表で並べ、主管担当・制作担当は絞り込み（`owner`・`production`）と並べ替え（`sort`・`dir`）で使う
+ * （利用者決定 2026-10-16。既定は校正の締切が近い順）。絞り込み・並べ替えは M3 のチップ＋メニュー（M3 Chips）と、表の見出し（同じ `sort`）。
+ * 表（共通の ui/DataTable。M3 に表の部品が無いので native `<table>`。利用者決定 2026-10-18「制作物一覧も表がいいかも」。§75）。
+ * スマホ（compact）も表で、列を 題名 + 校正の締切 に絞る（状態・版・FB は題名の下）。
  * 制作物の登録は管理者が一括で行う（§36。利用者決定 2026-10-15）ので、FAB は「版を提出」に譲り、1 件ずつの登録は
  * 登録の権限（Nogiku の組織権限 works:create）のある人にだけ、アプリバーの操作として出す（ダイアログは `?new=1`）。
  * 検索語は `q` で渡る（検索バーは一旦外している）。見出し「制作物一覧」は共通アプリバーに差し込む（M3 App bars）。
@@ -82,11 +88,13 @@ function Works() {
   const compact = useWindowClass() === "compact";
   // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
   const canRegister = !compact;
+  const dir: WorkSortDir = search.dir ?? "asc";
   const setSearch = (patch: {
     owner?: string;
     production?: string;
     genre?: WorkGenre | undefined;
     sort?: WorkSortKey;
+    dir?: "desc" | undefined;
   }) =>
     void navigate({
       to: "/works",
@@ -111,13 +119,29 @@ function Works() {
     !hasTeams && (sort === "owner" || sort === "production") ? "accepting" : sort;
   const shown = useMemo(() => {
     if (!works || !teams) return undefined;
-    const picked = works.filter(
-      (w) =>
-        (!owner || workBelongsToTeam(w, teams, "owner", owner)) &&
-        (!production || workBelongsToTeam(w, teams, "production", production)),
+    const picked: WorkRow[] = works
+      .filter(
+        (w) =>
+          (!owner || workBelongsToTeam(w, teams, "owner", owner)) &&
+          (!production || workBelongsToTeam(w, teams, "production", production)),
+      )
+      .map((w) => ({
+        ...w,
+        stage: workStageOf({
+          lifecycle: w.lifecycle,
+          accepting: w.acceptingRevisionId !== null,
+          hasRevision: w.latestRevisionLabel !== null,
+        }),
+      }));
+    return sortWorks(picked, teams, effectiveSort, dir);
+  }, [works, teams, owner, production, effectiveSort, dir]);
+  // 表の見出しを押す: 同じ列なら向きを逆に、別の列なら昇順で（URL の sort・dir。並べ替えのチップと同じ値）
+  const onSortColumn = (key: WorkSortKey) =>
+    setSearch(
+      key === effectiveSort
+        ? { dir: dir === "asc" ? "desc" : undefined }
+        : { sort: key, dir: undefined },
     );
-    return sortWorks(picked, teams, effectiveSort);
-  }, [works, teams, owner, production, effectiveSort]);
   const filtered = Boolean(lifecycle || owner || production || search.genre);
   const setCreating = (on: boolean) =>
     void navigate({
@@ -209,7 +233,7 @@ function Works() {
               <M3eMenuItemRadio
                 key={k}
                 checked={effectiveSort === k}
-                onClick={() => setSearch({ sort: k })}
+                onClick={() => setSearch({ sort: k, dir: undefined })}
               >
                 {sortLabel[k]}
               </M3eMenuItemRadio>
@@ -230,12 +254,14 @@ function Works() {
                 : "制作物がありません"}
         </div>
       ) : (
-        <WorksList
+        <WorksTable
           works={shown}
           teams={teams}
           sort={effectiveSort}
-          teamAxis={production ? "production" : owner ? "owner" : null}
+          dir={dir}
+          resetKey={[q, lifecycle, search.genre, owner, production, effectiveSort, dir].join("|")}
           compact={compact}
+          onSort={onSortColumn}
           onOpen={(workId) => {
             // 開く画面が works.get を待つあいだも題名を出せるように、行の値を渡しておく（§65）
             const w = shown.find((x) => x.id === workId);

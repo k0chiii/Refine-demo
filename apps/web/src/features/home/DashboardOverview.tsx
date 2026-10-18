@@ -1,11 +1,13 @@
 import type { api } from "@mf100/convex/api";
-import { workStages, type WorkStage, type WorkUrgency } from "@mf100/domain";
+import { workStages, type WorkUrgency } from "@mf100/domain";
 import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
 import { formatDeadline, formatJstShort, remaining } from "@/lib/format";
 import { rememberWorkHint } from "@/lib/workHint";
+import { stageInfo } from "@/lib/stageInfo";
 import { StatusText, type ChipTone } from "@/ui/Chip";
+import { ColumnHeader, DataTable } from "@/ui/DataTable";
 import { M3eButton } from "@m3e/react/button";
 import { M3eCard } from "@m3e/react/card";
 import { M3eHeading } from "@m3e/react/heading";
@@ -13,15 +15,6 @@ import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 
 type Data = FunctionReturnType<typeof api.dashboard.get>;
 type Row = Data["overview"]["works"][number];
-
-/** 段階の名前・アイコン・色の意味（色だけに頼らず、文字とアイコンでも出す） */
-const stageInfo: Record<WorkStage, { label: string; icon: string; tone: ChipTone }> = {
-  unsubmitted: { label: "未提出", icon: "upload_file", tone: "neutral" },
-  reviewing: { label: "校正中", icon: "rate_review", tone: "primary" },
-  lapsed: { label: "受付終了", icon: "error", tone: "error" },
-  on_hold: { label: "保留", icon: "pause", tone: "warning" },
-  finalized: { label: "校了", icon: "task_alt", tone: "success" },
-};
 
 /** 表の行数（これを超えたら「すべて表示」） */
 const TABLE_ROWS = 8;
@@ -157,37 +150,25 @@ function WorkTable({ rows, now }: { rows: Row[]; now: number }) {
   if (rows.length === 0) return <p className="muted ov__none">進行中の制作物はありません</p>;
   return (
     <>
-      <div className="dtable">
-        <table className="dtable__table" aria-label="進行中の制作物">
-          <thead>
-            <tr>
-              <th scope="col" className="dtable__th">
-                制作物
-              </th>
-              <th scope="col" className="dtable__th dtable__col--stage">
-                状態
-              </th>
-              <th scope="col" className="dtable__th">
-                締切
-              </th>
-              <th scope="col" className="dtable__th dtable__num">
-                未解決
-              </th>
-              <th scope="col" className="dtable__th dtable__num dtable__col--review">
-                校正
-              </th>
-              <th scope="col" className="dtable__th dtable__col--bureau">
-                局
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <WorkRow key={r.workId} r={r} now={now} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable label="進行中の制作物" lines={2}>
+        <thead>
+          <tr>
+            <ColumnHeader>制作物</ColumnHeader>
+            <ColumnHeader className="ov__col--stage">状態</ColumnHeader>
+            <ColumnHeader>締切</ColumnHeader>
+            <ColumnHeader numeric>未解決</ColumnHeader>
+            <ColumnHeader numeric className="ov__col--review">
+              校正
+            </ColumnHeader>
+            <ColumnHeader className="ov__col--bureau">局</ColumnHeader>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((r) => (
+            <WorkRow key={r.workId} r={r} now={now} />
+          ))}
+        </tbody>
+      </DataTable>
       {rows.length > TABLE_ROWS ? (
         <M3eButton variant="text" className="dash__more" onClick={() => setAll((v) => !v)}>
           {all ? "閉じる" : `すべて表示（${rows.length} 件）`}
@@ -204,39 +185,39 @@ function WorkRow({ r, now }: { r: Row; now: number }) {
   const overdue = r.urgency === "overdue";
   const tone = urgencyTone[r.urgency];
   return (
-    <tr className={`dtable__row dtable__row--${r.urgency}`}>
-      <th scope="row" className="dtable__td dtable__title">
+    <tr className="mf-table__row">
+      <th scope="row" className="mf-table__td mf-table__title">
         <Link
           to="/works/$workId"
           params={{ workId: r.workId }}
-          className="dtable__link"
+          className="mf-table__link"
           onClick={() => rememberWorkHint(r.workId, { title: r.title })}
         >
           {r.title}
         </Link>
         {/* 状態の列が隠れる幅では、題名の下に出す */}
-        <span className="dtable__sub dtable__stage-inline">
+        <span className="mf-table__sub ov__stage-inline">
           <StatusText tone={s.tone} icon={s.icon}>
             {s.label}
           </StatusText>
           {r.revisionLabel ? <span>・{r.revisionLabel}</span> : null}
         </span>
       </th>
-      <td className="dtable__td dtable__col--stage">
+      <td className="mf-table__td ov__col--stage">
         <StatusText tone={s.tone} icon={s.icon}>
           {s.label}
         </StatusText>
-        {r.revisionLabel ? <span className="dtable__sub">{r.revisionLabel}</span> : null}
+        {r.revisionLabel ? <span className="mf-table__sub">{r.revisionLabel}</span> : null}
       </td>
-      <td className="dtable__td">
+      <td className="mf-table__td">
         {next === null ? (
           <span className="muted">—</span>
         ) : (
           <>
-            <span className={`dtable__date ${overdue ? "dtable__date--overdue" : ""}`}>
+            <span className={`ov__date ${overdue ? "ov__date--overdue" : ""}`}>
               {formatDeadline(next, now)}
             </span>
-            <span className="dtable__sub">
+            <span className="mf-table__sub">
               {kind}・
               <span className={tone === "neutral" ? "" : `meta--${tone}`}>
                 {remaining(next, now)}
@@ -245,14 +226,14 @@ function WorkRow({ r, now }: { r: Row; now: number }) {
           </>
         )}
       </td>
-      <td className="dtable__td dtable__num">
+      <td className="mf-table__td mf-table__num">
         {r.unresolved > 0 ? (
-          <span className="dtable__count">{r.unresolved}</span>
+          <span className="ov__count">{r.unresolved}</span>
         ) : (
           <span className="muted">0</span>
         )}
       </td>
-      <td className="dtable__td dtable__num dtable__col--review">
+      <td className="mf-table__td mf-table__num ov__col--review">
         {r.stage !== "reviewing" ? (
           <span className="muted">—</span>
         ) : r.reviewersTotal === 0 ? (
@@ -263,7 +244,7 @@ function WorkRow({ r, now }: { r: Row; now: number }) {
           </span>
         )}
       </td>
-      <td className="dtable__td dtable__col--bureau">
+      <td className="mf-table__td ov__col--bureau">
         {r.bureau || <span className="muted">—</span>}
       </td>
     </tr>
@@ -388,42 +369,30 @@ function BureauTable({ data }: { data: Data }) {
       >
         局別
       </M3eHeading>
-      <div className="dtable dtable--small">
-        <table className="dtable__table" aria-label="局別の制作物">
-          <thead>
-            <tr>
-              <th scope="col" className="dtable__th">
-                局
+      <DataTable label="局別の制作物" dense>
+        <thead>
+          <tr>
+            <ColumnHeader>局</ColumnHeader>
+            <ColumnHeader numeric>制作物</ColumnHeader>
+            <ColumnHeader numeric>校正中</ColumnHeader>
+            <ColumnHeader numeric>未解決</ColumnHeader>
+            <ColumnHeader numeric>校了</ColumnHeader>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => (
+            <tr key={b.bureau} className="mf-table__row">
+              <th scope="row" className="mf-table__td">
+                {b.bureau || <span className="muted">未設定</span>}
               </th>
-              <th scope="col" className="dtable__th dtable__num">
-                制作物
-              </th>
-              <th scope="col" className="dtable__th dtable__num">
-                校正中
-              </th>
-              <th scope="col" className="dtable__th dtable__num">
-                未解決
-              </th>
-              <th scope="col" className="dtable__th dtable__num">
-                校了
-              </th>
+              <td className="mf-table__td mf-table__num">{b.works}</td>
+              <td className="mf-table__td mf-table__num">{b.reviewing}</td>
+              <td className="mf-table__td mf-table__num">{b.unresolved}</td>
+              <td className="mf-table__td mf-table__num">{b.finalized}</td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((b) => (
-              <tr key={b.bureau} className="dtable__row">
-                <th scope="row" className="dtable__td">
-                  {b.bureau || <span className="muted">未設定</span>}
-                </th>
-                <td className="dtable__td dtable__num">{b.works}</td>
-                <td className="dtable__td dtable__num">{b.reviewing}</td>
-                <td className="dtable__td dtable__num">{b.unresolved}</td>
-                <td className="dtable__td dtable__num">{b.finalized}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </DataTable>
     </section>
   );
 }

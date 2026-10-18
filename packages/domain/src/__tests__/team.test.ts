@@ -197,6 +197,58 @@ describe("制作物一覧の担当での絞り込み・並べ替え", () => {
     );
   });
 
+  it("向きを逆にすると逆順。値が無いものは向きに依らず最後、同じ順位は昇順のまま", () => {
+    expect(titles(sortWorks(works, teams, "deadline", "desc"))).toEqual([
+      "渉外資料",
+      "パンフレット",
+      "局の案内",
+      "ポスター",
+      "消えた担当",
+      "公式サイト",
+      "Instagram",
+    ]);
+    expect(titles(sortWorks(works, teams, "accepting", "desc"))).toEqual([
+      "消えた担当",
+      "パンフレット",
+      "局の案内",
+      "公式サイト",
+      "Instagram",
+      "ポスター",
+      "渉外資料",
+    ]);
+    expect(titles(sortWorks(works, teams, "title", "desc"))).toEqual(
+      titles(works).sort((a, b) => b.localeCompare(a, "ja")),
+    );
+    expect(titles(sortWorks(works, teams, "owner", "desc")).slice(-2)).toEqual([
+      "消えた担当",
+      "ポスター",
+    ]);
+  });
+
+  it("状態で並べると 校正中 → 受付終了 → 未提出 → 保留 → 校了、段階の無いものは最後", () => {
+    const staged = [
+      { ...works[0]!, title: "校了", stage: "finalized" as const },
+      { ...works[1]!, title: "未提出", stage: "unsubmitted" as const },
+      { ...works[2]!, title: "段階なし", stage: null },
+      { ...works[3]!, title: "校正中", stage: "reviewing" as const },
+      { ...works[4]!, title: "保留", stage: "on_hold" as const },
+    ];
+    expect(titles(sortWorks(staged, teams, "stage"))).toEqual([
+      "校正中",
+      "未提出",
+      "保留",
+      "校了",
+      "段階なし",
+    ]);
+    expect(titles(sortWorks(staged, teams, "stage", "desc"))).toEqual([
+      "校了",
+      "保留",
+      "未提出",
+      "校正中",
+      "段階なし",
+    ]);
+  });
+
   it("担当で並べると組織の並び順（局 → その局の担当）。制作担当はいちばん上の担当、未設定は後ろ", () => {
     expect(titles(sortWorks(works, teams, "owner"))).toEqual([
       "局の案内",
