@@ -636,7 +636,7 @@ function PostSurface({
           onClose={() => setFull(false)}
         />
       ) : null}
-      {/* 機種・表示の設定は FAB menu にしまう（上に選択欄を並べない） */}
+      {/* 機種・表示の設定は共通アプリバーの末尾のボタンから（上に選択欄・浮いた FAB を置かない） */}
       <PreviewSettings
         device={device.device}
         color={device.color}

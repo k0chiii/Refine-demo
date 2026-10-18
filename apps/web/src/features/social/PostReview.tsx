@@ -317,49 +317,46 @@ export function PostReview({
   return (
     <div className="post-review">
       <div className="post-preview stack">
-        {/* 機種・表示の設定: 校正画面は浮遊ツールバーがあるので FAB menu ではなく、右上のボタンから menu */}
-        <div className="post-preview__bar">
-          <PreviewSettings
-            device={device.device}
-            color={device.color}
-            onDevice={device.set}
-            {...(post.platform === "instagram" && post.format !== "story"
-              ? { view, onView: setView }
-              : {})}
-            {...(compact ? { onFullscreen: () => setFull(true) } : {})}
-            compact={compact}
-            placement="inline"
-          />
-          {/* 書き出しは校了した版だけ。カードにせず、設定の隣のボタンから menu */}
-          {isFinal ? (
-            <>
-              <M3eIconButton
-                variant="tonal"
-                aria-label="投稿用に書き出す"
-                className="preview-settings__button post-export__button"
+        {/* 機種・表示の設定は共通アプリバーの末尾のボタンから menu */}
+        <PreviewSettings
+          device={device.device}
+          color={device.color}
+          onDevice={device.set}
+          {...(post.platform === "instagram" && post.format !== "story"
+            ? { view, onView: setView }
+            : {})}
+          {...(compact ? { onFullscreen: () => setFull(true) } : {})}
+          compact={compact}
+        />
+        {/* 書き出しは校了した版だけ。カードにせず、プレビューの右上のボタンから menu */}
+        {isFinal ? (
+          <div className="post-preview__bar">
+            <M3eIconButton
+              variant="tonal"
+              aria-label="投稿用に書き出す"
+              className="post-export__button"
+            >
+              <M3eIcon name="download" />
+              <M3eMenuTrigger htmlFor={exportMenuId} />
+            </M3eIconButton>
+            <M3eMenu id={exportMenuId} positionY="below" positionX="before">
+              <M3eMenuItem
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(post.body)
+                    .then(() => toast("本文をコピーしました"))
+                }
               >
-                <M3eIcon name="download" />
-                <M3eMenuTrigger htmlFor={exportMenuId} />
-              </M3eIconButton>
-              <M3eMenu id={exportMenuId} positionY="below" positionX="before">
-                <M3eMenuItem
-                  onClick={() =>
-                    void navigator.clipboard
-                      .writeText(post.body)
-                      .then(() => toast("本文をコピーしました"))
-                  }
-                >
-                  <M3eIcon slot="icon" name="content_copy" />
-                  本文をコピー
-                </M3eMenuItem>
-                <M3eMenuItem disabled={zip.pending} onClick={() => void zip.run()}>
-                  <M3eIcon slot="icon" name="folder_zip" />
-                  ZIP で保存
-                </M3eMenuItem>
-              </M3eMenu>
-            </>
-          ) : null}
-        </div>
+                <M3eIcon slot="icon" name="content_copy" />
+                本文をコピー
+              </M3eMenuItem>
+              <M3eMenuItem disabled={zip.pending} onClick={() => void zip.run()}>
+                <M3eIcon slot="icon" name="folder_zip" />
+                ZIP で保存
+              </M3eMenuItem>
+            </M3eMenu>
+          </div>
+        ) : null}
         <PostMarksContext.Provider value={marksValue}>
           <div className="post-annotate" ref={wrapRef}>
             <PostPreview
