@@ -1,38 +1,55 @@
 import type { api } from "@mf100/convex/api";
-import { workStages, type WorkUrgency } from "@mf100/domain";
-import { Link } from "@tanstack/react-router";
+import { workStages } from "@mf100/domain";
+import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
-import { formatDeadline, formatJstShort, remaining } from "@/lib/format";
+import {
+  formatDeadline,
+  formatDeadlineUntil,
+  formatJstDate,
+  formatJstShort,
+  remaining,
+} from "@/lib/format";
 import { rememberWorkHint } from "@/lib/workHint";
 import { stageInfo } from "@/lib/stageInfo";
-import { StatusText, type ChipTone } from "@/ui/Chip";
 import { ColumnHeader, DataTable } from "@/ui/DataTable";
 import { M3eButton } from "@m3e/react/button";
 import { M3eCard } from "@m3e/react/card";
+import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
 import { M3eHeading } from "@m3e/react/heading";
 import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
+import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
 type Data = FunctionReturnType<typeof api.dashboard.get>;
-type Row = Data["overview"]["works"][number];
+type Item = Data["upcoming"][number];
 
-/** 表の行数（これを超えたら「すべて表示」） */
-const TABLE_ROWS = 8;
+/** 滞っている制作物の内訳（application の backlog）と、行の 2 行目 */
+const backlogGroups: Array<[keyof Data["backlog"], string, (i: Item) => string]> = [
+  [
+    "overdue",
+    "期限超過",
+    (i) => `締切 ${formatDeadline(i.deadlineAt ?? 0)}${i.count ? `・未対応 ${i.count}` : ""}`,
+  ],
+  ["unassigned", "校正者が未割り当て", (i) => `締切 ${formatDeadlineUntil(i.deadlineAt ?? 0)}`],
+  ["stale", "14 日間更新なし", (i) => `最終更新 ${formatJstDate(i.deadlineAt ?? 0)}`],
+  [
+    "dueSoon",
+    "納期が近い",
+    (i) => `納期 ${formatDeadline(i.deadlineAt ?? 0)}（${remaining(i.deadlineAt ?? 0)}）`,
+  ],
+];
+/** 内訳ごとの表示件数（これを超えたら「すべて表示」） */
+const BACKLOG_ROWS = 5;
 
 /**
- * 上段の数字（自分の数字 3 つと、全体の未解決のコメント）。
+ * 上段の数字（自分が関わる制作物の期限と、全体の未解決のコメント）。
  * 大きな数を左上から、基準の数（次の締切・解決済みの割合）を添える。色は意味のあるときだけ（期限超過 = error）
  */
-export function DashboardKpis({ data }: { data: Data }) {
+function DashboardKpis({ data }: { data: Data }) {
   const { summary, overview, nextDeadline } = data;
   const comments = overview.threads.open + overview.threads.done;
   return (
-    <section className="kpis" aria-label="サマリー">
-      <Kpi label="やること" value={summary.todo}>
-        {summary.unread > 0 ? (
-          <span className="kpi__sub">未読のコメント {summary.unread}</span>
-        ) : null}
-      </Kpi>
+    <section className="kpis kpis--three" aria-label="サマリー">
       <Kpi label="締切が近い" value={summary.dueSoon}>
         {nextDeadline?.deadlineAt ? (
           <span className="kpi__sub">次は {formatDeadline(nextDeadline.deadlineAt)}</span>
@@ -106,148 +123,112 @@ function Meter({
 }
 
 /**
- * 制作物の状況: 左に表（注意が要る順）、右に内訳（段階の積み上げ棒・解決と校正の進み・局別）。
+ * 制作物の状況（制作物のページの先頭。管理する人のための全体像）: 上に数字、左に滞っている制作物、右に内訳
+ * （段階の積み上げ棒・解決と校正の進み・局別）。compact は折りたたみで閉じておく（その下の表に早く届くように）。
  * 全部が空（制作物が 1 件も無い）のときは出さない
  */
-export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns: boolean }) {
+export function DashboardOverview({
+  data,
+  twoColumns,
+  collapsed,
+}: {
+  data: Data;
+  twoColumns: boolean;
+  collapsed: boolean;
+}) {
   const o = data.overview;
   if (o.total === 0) return null;
+  const hasBacklog = backlogGroups.some(([k]) => data.backlog[k].length > 0);
+  const breakdown = (
+    <>
+      <StageBreakdown data={data} />
+      <Progress data={data} />
+      <BureauTable data={data} />
+    </>
+  );
   return (
-    <section className="ov" aria-labelledby="ov-title">
-      <div className="dash__head">
+    <M3eExpansionPanel open={!collapsed} className="expansion ov">
+      <span slot="header" className="ov__header">
         <M3eHeading variant="title" size="large" level={2} emphasized id="ov-title">
           制作物の状況
         </M3eHeading>
-        <span className="spacer" />
         <time className="ov__asof" dateTime={new Date(o.asOf).toISOString()}>
           {formatJstShort(o.asOf)} 時点
         </time>
+      </span>
+      <div className="ov__body">
+        <DashboardKpis data={data} />
+        {hasBacklog ? (
+          <div className={twoColumns ? "dash dash--columns" : "dash"}>
+            <div className="dash__column ov__main">
+              <Backlog data={data} />
+            </div>
+            <div className="dash__column dash__column--side ov__side">{breakdown}</div>
+          </div>
+        ) : (
+          <div className="dash__column dash__column--side ov__side ov__side--flat">{breakdown}</div>
+        )}
       </div>
-      <div className={twoColumns ? "dash dash--columns" : "dash"}>
-        <div className="dash__column ov__main">
-          <WorkTable rows={o.works} now={o.asOf} />
-        </div>
-        <div className="dash__column dash__column--side ov__side">
-          <StageBreakdown data={data} />
-          <Progress data={data} />
-          <BureauTable data={data} />
-        </div>
+    </M3eExpansionPanel>
+  );
+}
+
+/** 滞っている制作物（期限超過・校正者が未割り当て・動きがない・納期が近い）。内訳ごとに数件、押すとエディタが開く */
+function Backlog({ data }: { data: Data }) {
+  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (k: string) =>
+    setExpanded((s) => {
+      const n = new Set(s);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  return (
+    <section className="dash__section" aria-labelledby="ov-backlog">
+      <div className="dash__head">
+        <M3eHeading variant="title" size="medium" level={3} emphasized id="ov-backlog">
+          滞っている制作物
+        </M3eHeading>
       </div>
+      {backlogGroups
+        .filter(([k]) => data.backlog[k].length > 0)
+        .map(([k, title, sub]) => {
+          const all = data.backlog[k];
+          const items = expanded.has(k) ? all : all.slice(0, BACKLOG_ROWS);
+          return (
+            <div key={k} className="dash__group">
+              <h4 className="dash__subtitle">
+                {title}
+                <span className="dash__count">{all.length}</span>
+              </h4>
+              <M3eActionList className="list" aria-label={title}>
+                {items.map((i) => (
+                  <M3eListAction
+                    key={`${i.workId}-${i.revisionId}`}
+                    className="list__item"
+                    onClick={() => {
+                      rememberWorkHint(i.workId, { title: i.workTitle });
+                      void navigate({ to: "/works/$workId", params: { workId: i.workId } });
+                    }}
+                  >
+                    <span className="list__headline">
+                      {i.workTitle}
+                      {i.revisionLabel ? <span className="muted">　{i.revisionLabel}</span> : null}
+                    </span>
+                    <span slot="supporting-text">{sub(i)}</span>
+                  </M3eListAction>
+                ))}
+              </M3eActionList>
+              {all.length > BACKLOG_ROWS ? (
+                <M3eButton variant="text" className="dash__more" onClick={() => toggle(k)}>
+                  {expanded.has(k) ? "閉じる" : `すべて表示（${all.length} 件）`}
+                </M3eButton>
+              ) : null}
+            </div>
+          );
+        })}
     </section>
-  );
-}
-
-const urgencyTone: Record<WorkUrgency, ChipTone> = {
-  overdue: "error",
-  soon: "warning",
-  open: "neutral",
-  calm: "neutral",
-};
-
-function WorkTable({ rows, now }: { rows: Row[]; now: number }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? rows : rows.slice(0, TABLE_ROWS);
-  if (rows.length === 0) return <p className="muted ov__none">進行中の制作物はありません</p>;
-  return (
-    <>
-      <DataTable label="進行中の制作物" lines={2}>
-        <thead>
-          <tr>
-            <ColumnHeader>制作物</ColumnHeader>
-            <ColumnHeader className="ov__col--stage">状態</ColumnHeader>
-            <ColumnHeader>締切</ColumnHeader>
-            <ColumnHeader numeric>未解決</ColumnHeader>
-            <ColumnHeader numeric className="ov__col--review">
-              校正
-            </ColumnHeader>
-            <ColumnHeader className="ov__col--bureau">局</ColumnHeader>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((r) => (
-            <WorkRow key={r.workId} r={r} now={now} />
-          ))}
-        </tbody>
-      </DataTable>
-      {rows.length > TABLE_ROWS ? (
-        <M3eButton variant="text" className="dash__more" onClick={() => setAll((v) => !v)}>
-          {all ? "閉じる" : `すべて表示（${rows.length} 件）`}
-        </M3eButton>
-      ) : null}
-    </>
-  );
-}
-
-function WorkRow({ r, now }: { r: Row; now: number }) {
-  const s = stageInfo[r.stage];
-  const next = r.nextDeadlineAt;
-  const kind = next !== null && r.deliveryAt === next ? "納期" : "校正";
-  const overdue = r.urgency === "overdue";
-  const tone = urgencyTone[r.urgency];
-  return (
-    <tr className="mf-table__row">
-      <th scope="row" className="mf-table__td mf-table__title">
-        <Link
-          to="/works/$workId"
-          params={{ workId: r.workId }}
-          className="mf-table__link"
-          onClick={() => rememberWorkHint(r.workId, { title: r.title })}
-        >
-          {r.title}
-        </Link>
-        {/* 状態の列が隠れる幅では、題名の下に出す */}
-        <span className="mf-table__sub ov__stage-inline">
-          <StatusText tone={s.tone} icon={s.icon}>
-            {s.label}
-          </StatusText>
-          {r.revisionLabel ? <span>・{r.revisionLabel}</span> : null}
-        </span>
-      </th>
-      <td className="mf-table__td ov__col--stage">
-        <StatusText tone={s.tone} icon={s.icon}>
-          {s.label}
-        </StatusText>
-        {r.revisionLabel ? <span className="mf-table__sub">{r.revisionLabel}</span> : null}
-      </td>
-      <td className="mf-table__td">
-        {next === null ? (
-          <span className="muted">—</span>
-        ) : (
-          <>
-            <span className={`ov__date ${overdue ? "ov__date--overdue" : ""}`}>
-              {formatDeadline(next, now)}
-            </span>
-            <span className="mf-table__sub">
-              {kind}・
-              <span className={tone === "neutral" ? "" : `meta--${tone}`}>
-                {remaining(next, now)}
-              </span>
-            </span>
-          </>
-        )}
-      </td>
-      <td className="mf-table__td mf-table__num">
-        {r.unresolved > 0 ? (
-          <span className="ov__count">{r.unresolved}</span>
-        ) : (
-          <span className="muted">0</span>
-        )}
-      </td>
-      <td className="mf-table__td mf-table__num ov__col--review">
-        {r.stage !== "reviewing" ? (
-          <span className="muted">—</span>
-        ) : r.reviewersTotal === 0 ? (
-          <StatusText tone="warning">未割当</StatusText>
-        ) : (
-          <span>
-            {r.reviewersDone} / {r.reviewersTotal}
-          </span>
-        )}
-      </td>
-      <td className="mf-table__td ov__col--bureau">
-        {r.bureau || <span className="muted">—</span>}
-      </td>
-    </tr>
   );
 }
 

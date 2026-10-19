@@ -582,8 +582,9 @@ export default defineSchema({
     .index("by_key", ["dedupeKey", "status"]),
 
   /**
-   * 自分だけのダッシュボード（W-26）の節の構成。アカウントごとに 1 行（PC とスマホで共通）。
-   * 知らない節の ID は読むときに捨て、あとから足した節は既定で末尾に足す（domain の normalizeDashboardLayout）。
+   * 旧ホーム（自分だけのダッシュボード W-26）の節の構成。アカウントごとに 1 行。
+   * 入口を制作・校正に分けたとき（利用者決定 2026-10-19）に読み書きをやめた。保存済みの行があるため、テーブルは残している
+   * （消す場合は、行を消してから schema から外す。本番の移行は承認後）。
    */
   dashboardLayouts: defineTable({
     userId: v.string(),
@@ -598,7 +599,7 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
-  /** ホームにピン留めした制作物（アカウントごと） */
+  /** ピン留めした制作物（アカウントごと。制作物のページの「ピン留め」で絞る） */
   workPins: defineTable({
     userId: v.string(),
     workId: v.id("works"),
@@ -607,7 +608,7 @@ export default defineSchema({
     .index("by_userId_and_pinnedAt", ["userId", "pinnedAt"])
     .index("by_userId_and_workId", ["userId", "workId"]),
 
-  /** 最近開いた制作物（エディタを開いたら記録。同じ制作物は 1 行。アカウントごとに上限まで） */
+  /** 旧ホームの「最近開いた制作物」。読み書きをやめた（dashboardLayouts と同じ理由で、テーブルは残している） */
   recentWorks: defineTable({
     userId: v.string(),
     workId: v.id("works"),

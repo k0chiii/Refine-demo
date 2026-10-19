@@ -12,7 +12,8 @@ import { M3eActionList, M3eListAction } from "@m3e/react/list";
 export const Route = createFileRoute("/_app/write")({ component: WritePicker });
 
 /**
- * エディタ（サイドレールの行き先）: 自分の担当で、いま書ける制作物を選んで文章エディタ（SNS は投稿エディタ）を開く。
+ * 新しく書く（制作の FAB「作る」から。利用者決定 2026-10-19: 書くはナビの行き先ではなく制作から入る。URL は従来どおり /write）:
+ * 自分の担当で、いま書ける制作物を選んで文章エディタ（SNS は投稿エディタ）を開く。
  * 出るのは版を提出できる人（制作者・主管担当など）の進行中の制作物だけ。最近書いた下書きが上、次に締切の近い順。
  */
 function WritePicker() {
@@ -29,7 +30,7 @@ function WritePicker() {
     `${mediaLabel[w.mediaType] ?? w.mediaType}${w.deadlineAt ? `・納期 ${formatDeadline(w.deadlineAt)}` : ""}`;
   return (
     <div className="write-picker">
-      <AppBarSlot slot="title">エディタ</AppBarSlot>
+      <AppBarSlot slot="title">新しく書く</AppBarSlot>
       <p className="muted small write-picker__lead">制作物を選んでください</p>
       {works === undefined ? (
         <Loading label="書ける制作物を読み込んでいます" />

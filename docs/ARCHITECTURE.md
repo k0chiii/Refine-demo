@@ -30,7 +30,7 @@
 - **application**: ユースケース関数（`confirmSubmission`, `postComment`, `decideThread`, `finalizeWork`, `reopenWork`, `grantWorkPermission` …）と、それが必要とするポート（`WorkRepository` …、`Clock`, `AuditLogger`, `IdempotencyStore`）。インメモリ実装（`@mf100/application/testing`）で受け入れ条件を単体テストする。
 - **apps/convex**: `convex/lib/adapters.ts` がポートを `ctx.db` で実装。公開関数は「認証 → ユースケース呼出 → ドメイン例外を ConvexError に変換」だけ。1 mutation = 1 トランザクション。
 - **apps/api**: ポート `TokenVerifier` / `BackendGateway` / `ObjectStore` に依存する Hono アプリ。本番は jose / ConvexHttpClient / R2、テストはフェイク。
-- **apps/web**: 画面は ダッシュボード（`/`）／制作物（`/works`）／エディタ（`/works/:id`, `/works/:id/v/N`）／管理（`/admin`）の 4 ルート（要件の U-01〜U-08 はこの中に収める。[`UI_M3E.md`](UI_M3E.md) §11）。アップロードのオーケストレーションは UI 非依存の `SubmissionFlow` に分離してテスト。座標変換はドメインの `toViewportRect / fromViewportRect` を使う。
+- **apps/web**: 画面は 制作（`/make`）／校正（`/check`）／制作物（`/works`）／エディタ（`/works/:id`, `/works/:id/v/N`）／管理（`/admin`）（`/` は最後に使った入口への振り分け。UI_M3E §83）（要件の U-01〜U-08 はこの中に収める。[`UI_M3E.md`](UI_M3E.md) §11）。アップロードのオーケストレーションは UI 非依存の `SubmissionFlow` に分離してテスト。座標変換はドメインの `toViewportRect / fromViewportRect` を使う。
 
 ## 認可の境界
 

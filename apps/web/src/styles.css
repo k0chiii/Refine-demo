@@ -71,6 +71,12 @@
   --mf-warning-container: #ede692;
   --mf-on-warning-container: #363102;
   --mf-warning: #6d5f05;
+  /* 校正の入口（利用者決定 2026-10-19）の色: 制作 = 青（primary）、校正 = ティール。青のテーマの中に収まる補助色で、
+     選択中のナビ・切り替え・行の操作の印に使う。色相は種の青に寄せたティール */
+  --mf-teal: #00696d;
+  --mf-on-teal: #ffffff;
+  --mf-teal-container: #b3ecee;
+  --mf-on-teal-container: #002022;
 
   /* 形（M3 shape scale。M3E の --md-sys-shape-corner-* を経由する） */
   --mf-shape-xs: var(--md-sys-shape-corner-extra-small, 4px);
@@ -1259,21 +1265,6 @@ m3e-dialog [slot="actions"] {
 .dash__divider {
   margin: 0;
 }
-.dash__none {
-  display: grid;
-  justify-items: start;
-  gap: 8px;
-}
-.dash__none > p {
-  margin: 0;
-}
-.dash__empty {
-  font: var(--mf-type-body-large);
-}
-.dash__empty > m3e-icon {
-  font-size: 48px;
-  color: var(--mf-primary);
-}
 /* 未読の印（通知のパネルと同じ点。色だけに頼らず「未読」と読み上げる） */
 .dash__unread {
   flex: none;
@@ -1288,16 +1279,6 @@ m3e-dialog [slot="actions"] {
 /* ---------- ホームの数字と表（features/home/DashboardOverview.tsx。§74）
  * 上から: 数字のカード（左上が最重要）→ やること（上の .dash）→ 制作物の状況（表 + 内訳）。
  * 表と内訳は上の .dash--columns と同じ 2 列（主 + 右の固定幅のペイン）に載せ、列の縁を揃える */
-.dash-page {
-  display: grid;
-  gap: 32px;
-  min-width: 0;
-}
-@media (max-width: 599px) {
-  .dash-page {
-    gap: 24px;
-  }
-}
 
 /* 数字のカード: 大きな数を左上に、基準の数（次の締切・解決の割合）を下に。色は意味のあるときだけ（期限超過 = error） */
 .kpis {
@@ -1309,6 +1290,15 @@ m3e-dialog [slot="actions"] {
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+}
+.kpis--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 839px) {
+  /* 2 列に 3 枚: 最後の 1 枚は全幅 */
+  .kpis--three > :last-child {
+    grid-column: 1 / -1;
   }
 }
 .kpi {
@@ -1384,9 +1374,27 @@ m3e-dialog [slot="actions"] {
 
 /* 制作物の状況 */
 .ov {
-  display: grid;
-  gap: 8px;
+  display: block;
   min-width: 0;
+  margin-block-end: 24px;
+  /* 見出し・中身の左端を、下の絞り込み・表と同じルーラーに揃える */
+  --m3e-expansion-header-padding-left: 0px;
+  --m3e-expansion-header-padding-right: 0px;
+  --m3e-expansion-panel-content-padding: 0px;
+}
+.ov__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ov__body {
+  display: grid;
+  gap: 24px;
+  padding-block: 8px 16px;
+}
+.ov__side--flat {
+  padding-inline: 16px;
 }
 .ov__asof {
   font: var(--mf-type-label-medium);
@@ -1769,16 +1777,6 @@ m3e-dialog [slot="actions"] {
 }
 /* 右のペイン（surface-container-low）の上では、表は 1 段明るい面のまま */
 
-/* 「ホームを編集」: 節ごとのスイッチと上下のボタン */
-.home-edit__group {
-  display: grid;
-  gap: 4px;
-}
-.home-edit__moves {
-  display: flex;
-  gap: 4px;
-}
-
 /* ---------- 「アバターを変える」（Humation。§56）
  * 上に大きなプレビューと「おまかせ」「元に戻す」、部位のタブ（アイコンに映る部位だけ。ボトムスは無い）、部品の一覧（1 つを選ぶ radiogroup）。色のタブは役割ごとの色の候補。
  * 部品の小さな絵は <use> で定義（.avatar-defs）を参照し、43 個並べても DOM を膨らませない */
@@ -1930,6 +1928,87 @@ m3e-dialog [slot="actions"] {
   .avatar-parts {
     grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   }
+}
+
+/* ---------- 入口: 制作 / 校正（ホームの代わり。利用者決定 2026-10-19。docs/UI_M3E.md §79）
+ * 制作 = 青（primary 系）、校正 = ティール（--mf-teal）。色は .ws[data-ws] のトークンに集め、部品は同じものを使う。
+ * 選択中のナビ・切り替え（ChoiceGroup）・行の操作の印がこの色になる。1 列で、広い画面でも読みやすい幅に収める */
+:root[data-theme="dark"] {
+  --mf-teal: #4fd8dc;
+  --mf-on-teal: #003739;
+  --mf-teal-container: #004f52;
+  --mf-on-teal-container: #9cf0f3;
+}
+.hub {
+  --hub-accent: var(--mf-primary);
+  --hub-on-accent: var(--mf-on-primary);
+  --hub-container: var(--mf-secondary-container);
+  --hub-on-container: var(--mf-on-secondary-container);
+  display: grid;
+  gap: 24px;
+  max-width: 880px;
+  min-width: 0;
+}
+.hub[data-hub="check"] {
+  --hub-accent: var(--mf-teal);
+  --hub-on-accent: var(--mf-on-teal);
+  --hub-container: var(--mf-teal-container);
+  --hub-on-container: var(--mf-on-teal-container);
+}
+/* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: 選んだものを入口の色に */
+.hub__tabs {
+  /* 選んでいるものは入口の色で塗り、ほかは中立の面（どちらも tonal のままだと色相でしか区別できない） */
+  --m3e-tonal-button-unselected-container-color: var(--mf-surface-container-high);
+  --m3e-tonal-button-unselected-label-text-color: var(--mf-on-surface-variant);
+  --m3e-tonal-button-selected-container-color: var(--hub-accent);
+  --m3e-tonal-button-selected-label-text-color: var(--hub-on-accent);
+  --m3e-tonal-button-selected-icon-color: var(--hub-on-accent);
+  --m3e-tonal-button-hover-selected-label-text-color: var(--hub-on-accent);
+  --m3e-tonal-button-focus-selected-label-text-color: var(--hub-on-accent);
+  --m3e-tonal-button-pressed-selected-label-text-color: var(--hub-on-accent);
+  --m3e-tonal-button-hover-selected-icon-color: var(--hub-on-accent);
+  --m3e-tonal-button-focus-selected-icon-color: var(--hub-on-accent);
+  --m3e-tonal-button-pressed-selected-icon-color: var(--hub-on-accent);
+  justify-self: start;
+  max-width: 100%;
+}
+/* 行の右の「次の操作」の印: 入口の色の丸い印。行全体が押せる（印は見た目） */
+.hub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding-inline: 12px;
+  border-radius: var(--mf-shape-full);
+  background: var(--hub-container);
+  color: var(--hub-on-container);
+  font: var(--mf-type-label-large);
+  white-space: nowrap;
+}
+.hub-chip m3e-icon {
+  font-size: 18px;
+}
+.hub-row__line {
+  display: block;
+}
+.hub .dash__section--side .hub-chip {
+  background: transparent;
+  color: var(--hub-accent);
+  padding-inline: 0;
+}
+/* ナビ: 校正の選択中はティール（制作は既定の青） */
+m3e-nav-item[data-to="/check"] {
+  --m3e-nav-item-active-container-color: var(--mf-teal-container);
+  --m3e-nav-item-active-icon-color: var(--mf-on-teal-container);
+  --m3e-nav-item-active-label-text-color: var(--mf-on-teal-container);
+}
+/* レールの下の行き先（表記ルール・管理）: 上の 4 つと間を空けて、レールの下端に寄せる */
+.rail__lower--first {
+  margin-block-start: auto;
+}
+/* M3E のレールの中身（.base）はホストの高さいっぱいに広げないと、下端に寄せられない。ホストを flex にして .base を縦に引き伸ばす */
+.shell__rail {
+  display: flex;
 }
 
 /* ---------- 版を提出（§36 L-15）
