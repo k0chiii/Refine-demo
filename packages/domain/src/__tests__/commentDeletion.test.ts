@@ -7,6 +7,7 @@ import {
   deleteThreadComment,
   isActiveThread,
   isListedThread,
+  planThreadDeletion,
   presentThread,
   projectThreadEvents,
   replyEntries,
@@ -113,6 +114,66 @@ describe("コメントの削除（投稿者は校了前だけ・システム管�
       NOW,
     );
     expect(isListedThread(next)).toBe(false);
+  });
+});
+
+describe("管理者の削除は返信ごとまとめて消す（利用者決定 2026-10-19）", () => {
+  const admin = { isSystemAdmin: true };
+  const events = [reply("e1", "creator"), reply("e2", "reviewer"), reply("e3", "approver")];
+
+  it("管理者: 削除されていない全ての返信が対象で、一覧には何も残らない", () => {
+    const plan = planThreadDeletion(
+      makeThread(),
+      "admin",
+      "active",
+      [...events, replyDeleted("e2", "reviewer")],
+      NOW,
+      admin,
+    );
+    expect(plan.authority).toBe("admin");
+    expect(plan.cascadeReplyIds).toEqual(["e1", "e3"]);
+    expect(plan.thread.deletedAt).toBe(NOW);
+    expect(isListedThread(plan.thread)).toBe(false);
+    // 校了後も同じ
+    expect(
+      planThreadDeletion(makeThread(), "admin", "finalized", events, NOW, admin).thread,
+    ).toMatchObject({
+      deletedAt: NOW,
+      deletedKeepsReplies: false,
+    });
+  });
+
+  it("管理者でも自分のコメントを校了前に消すときは本人の削除（従来どおり返信は残る）", () => {
+    const plan = planThreadDeletion(makeThread(), "reviewer", "active", events, NOW, admin);
+    expect(plan.authority).toBe("author");
+    expect(plan.cascadeReplyIds).toEqual([]);
+    expect(isListedThread(plan.thread)).toBe(true);
+  });
+
+  it("投稿者本人は返信を巻き込まない。権限の無い人は削除できない", () => {
+    const own = planThreadDeletion(makeThread(), "reviewer", "active", events, NOW);
+    expect(own.cascadeReplyIds).toEqual([]);
+    expect(isListedThread(own.thread)).toBe(true);
+    expect(() => planThreadDeletion(makeThread(), "creator", "active", events, NOW)).toThrowError(
+      code("comment_delete_not_author"),
+    );
+  });
+
+  it("presentThread: cascade は管理者の削除のときだけ真", () => {
+    const live = makeThread();
+    expect(presentThread(live, "admin", "active", admin).can).toEqual({
+      delete: true,
+      cascade: true,
+    });
+    expect(presentThread(live, "reviewer", "active", admin).can).toEqual({
+      delete: true,
+      cascade: false,
+    });
+    expect(presentThread(live, "reviewer", "active").can.cascade).toBe(false);
+    expect(presentThread(makeThread({ deletedAt: 5 }), "admin", "active", admin).can).toEqual({
+      delete: false,
+      cascade: false,
+    });
   });
 });
 

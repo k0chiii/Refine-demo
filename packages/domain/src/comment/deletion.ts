@@ -12,6 +12,8 @@ import type { CommentEvent, CommentThread } from "./CommentThread.ts";
  *   他人のコメント・返信も、校了後も削除できる（運用上の削除は常にできる必要がある。DECISIONS 2026-10-19）。閲覧権限は広げない。
  * - 論理削除: 行は消さず、スレッドに deletedAt を付け、CommentEvent("deleted" / "reply_deleted") を追記する。原文は履歴に残る。
  * - 他の人の返信が残るスレッドは一覧に「削除されたコメント」として残し（返信の文脈を保つ）、無ければ一覧からも消す。
+ *   ただしシステム管理者の削除は返信ごとまとめて消す（利用者決定 2026-10-19「管理者が返信付きのコメントを消すとき『まとめて消す』→ はい」）。
+ *   スレッドも全ての返信も論理削除で、一覧には何も残らない。
  * - 削除済みのスレッドは紙面の印・件数・未解決・校了の判定から外れる。
  */
 
@@ -107,7 +109,52 @@ export function assertThreadNotDeleted(thread: Pick<CommentThread, "id" | "delet
     throw new DomainError("comment_thread_deleted", { threadId: thread.id });
 }
 
-/** スレッドを削除した後の状態（原文は書き換えない。呼び出し側が "deleted" イベントを追記する） */
+/** スレッド削除の計画。管理者（authority が "admin"）の削除は返信ごとまとめて消す（利用者決定 2026-10-19） */
+export interface ThreadDeletion {
+  /** 削除後のスレッド */
+  thread: CommentThread;
+  authority: CommentDeleteAuthority;
+  /** まとめて削除する返信イベントの ID（管理者の削除だけ。削除されていない返信すべて。呼び出し側が "reply_deleted" を追記する） */
+  cascadeReplyIds: string[];
+}
+
+/**
+ * スレッドの削除を計画する（原文は書き換えない。呼び出し側が reply_deleted と "deleted" イベントを追記する）。
+ * - 投稿者本人（校了前）: 従来どおり。他の人の返信が残るなら「削除されたコメント」として一覧に残す。
+ * - システム管理者: スレッドと全ての返信をまとめて論理削除する。一覧には何も残らない。
+ *   本人でも校了後は管理者の権限で削除するので、まとめて消す。
+ */
+export function planThreadDeletion(
+  thread: CommentThread,
+  actorId: UserId,
+  lifecycle: WorkLifecycle,
+  events: readonly CommentEvent[],
+  now: Instant,
+  actor: DeleteActor = {},
+): ThreadDeletion {
+  const authority = assertCanDeleteComment(thread.authorId, actorId, lifecycle, actor);
+  assertThreadNotDeleted(thread);
+  if (authority === "admin") {
+    return {
+      thread: { ...thread, deletedAt: now, deletedKeepsReplies: false },
+      authority,
+      cascadeReplyIds: replyEntries(events)
+        .filter((r) => !r.deleted)
+        .map((r) => r.id),
+    };
+  }
+  return {
+    thread: {
+      ...thread,
+      deletedAt: now,
+      deletedKeepsReplies: hasLiveRepliesFromOthers(thread, events),
+    },
+    authority,
+    cascadeReplyIds: [],
+  };
+}
+
+/** スレッドを削除した後の状態（planThreadDeletion のスレッド側） */
 export function deleteThreadComment(
   thread: CommentThread,
   actorId: UserId,
@@ -116,13 +163,7 @@ export function deleteThreadComment(
   now: Instant,
   actor: DeleteActor = {},
 ): CommentThread {
-  assertCanDeleteComment(thread.authorId, actorId, lifecycle, actor);
-  assertThreadNotDeleted(thread);
-  return {
-    ...thread,
-    deletedAt: now,
-    deletedKeepsReplies: hasLiveRepliesFromOthers(thread, events),
-  };
+  return planThreadDeletion(thread, actorId, lifecycle, events, now, actor).thread;
 }
 
 /**
@@ -208,8 +249,8 @@ export function projectThreadEvents(
 export type ThreadView<T extends CommentThread = CommentThread> = T & {
   /** 削除されたコメント（本文・位置・メンションは伏せてある。返信の文脈のために残している） */
   deleted: boolean;
-  /** 閲覧者ができる操作。画面は権限を推測せず、これに従う */
-  can: { delete: boolean };
+  /** 閲覧者ができる操作。画面は権限を推測せず、これに従う。cascade は削除すると返信もまとめて消える（管理者の削除） */
+  can: { delete: boolean; cascade: boolean };
 };
 
 /**
@@ -226,7 +267,10 @@ export function presentThread<T extends CommentThread>(
     return {
       ...thread,
       deleted: false,
-      can: { delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer) },
+      can: {
+        delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer),
+        cascade: commentDeleteAuthority(thread.authorId, viewerId, lifecycle, viewer) === "admin",
+      },
     };
   }
   const {
@@ -244,6 +288,6 @@ export function presentThread<T extends CommentThread>(
     ...(rest as T),
     body: DELETED_COMMENT_PLACEHOLDER,
     deleted: true,
-    can: { delete: false },
+    can: { delete: false, cascade: false },
   };
 }

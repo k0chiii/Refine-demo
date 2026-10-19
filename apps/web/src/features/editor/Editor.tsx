@@ -897,12 +897,10 @@ export function Editor({
                   { ...draft.web.place, type: "web_element", artifactId: "" },
                   draft.web.deviceLabel,
                 ),
-                placeIcon: "ads_click",
               }
             : draft.figma
               ? {
                   place: formatFigmaPlace({ ...draft.figma, type: "figma_node", artifactId: "" }),
-                  placeIcon: "design_services",
                 }
               : {})}
         onSubmit={() => void doPost.run()}
@@ -953,7 +951,6 @@ export function Editor({
               : place.label
             : "SNS 投稿"
         }
-        placeIcon={draft.anchor.type === "text_range" ? "format_quote" : "image"}
         onSubmit={() => void doPost.run()}
         onCancel={resetCompose}
         pending={doPost.pending}
