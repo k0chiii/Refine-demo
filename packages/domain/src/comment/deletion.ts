@@ -11,25 +11,15 @@ import type { CommentEvent, CommentThread } from "./CommentThread.ts";
  * - システム管理者は、利用者指示 2026-10-19「管理者は全てのコメントやFB, スレッドを削除できるようにして欲しい」により、
  *   他人のコメント・返信も、校了後も削除できる（運用上の削除は常にできる必要がある。DECISIONS 2026-10-19）。閲覧権限は広げない。
  * - 論理削除: 行は消さず、スレッドに deletedAt を付け、CommentEvent("deleted" / "reply_deleted") を追記する。原文は履歴に残る。
- * - 他の人の返信が残るスレッドは一覧に「削除されたコメント」として残し（返信の文脈を保つ）、無ければ一覧からも消す。
- *   ただしシステム管理者の削除は返信ごとまとめて消す（利用者決定 2026-10-19「管理者が返信付きのコメントを消すとき『まとめて消す』→ はい」）。
- *   スレッドも全ての返信も論理削除で、一覧には何も残らない。
+ * - 削除したものは一覧に残さない（利用者指示 2026-10-19「「削除された投稿」として残さなくて良い。」）。
+ *   スレッドを削除すると、スレッドと全ての返信を一緒に論理削除する（管理者は利用者決定 2026-10-19「まとめて消す」、本人も同じ）。
+ *   返信だけを削除したときも、その返信は履歴に並べない。「削除されたコメント／返信」の行は作らない。
  * - 削除済みのスレッドは紙面の印・件数・未解決・校了の判定から外れる。
  */
-
-export const DELETED_COMMENT_PLACEHOLDER = "削除されたコメント";
-export const DELETED_REPLY_PLACEHOLDER = "削除された返信";
 
 /** 削除されていない（件数・紙面の印・校了の判定の対象になる）スレッドか */
 export function isActiveThread(thread: Pick<CommentThread, "deletedAt">): boolean {
   return thread.deletedAt === undefined;
-}
-
-/** 一覧に出すスレッドか（削除済みでも、他の人の返信が残っていれば「削除されたコメント」として出す） */
-export function isListedThread(
-  thread: Pick<CommentThread, "deletedAt" | "deletedKeepsReplies">,
-): boolean {
-  return thread.deletedAt === undefined || thread.deletedKeepsReplies === true;
 }
 
 /** 削除する人。システム管理者かどうかだけを渡す（本人かの判定は authorId と actorId で行う） */
@@ -99,30 +89,24 @@ export function replyEntries(events: readonly CommentEvent[]): ReplyEntry[] {
   return out;
 }
 
-/** 投稿者以外の人の、削除されていない返信があるか */
-function hasLiveRepliesFromOthers(thread: CommentThread, events: readonly CommentEvent[]): boolean {
-  return replyEntries(events).some((r) => !r.deleted && r.actorId !== thread.authorId);
-}
-
 export function assertThreadNotDeleted(thread: Pick<CommentThread, "id" | "deletedAt">): void {
   if (thread.deletedAt !== undefined)
     throw new DomainError("comment_thread_deleted", { threadId: thread.id });
 }
 
-/** スレッド削除の計画。管理者（authority が "admin"）の削除は返信ごとまとめて消す（利用者決定 2026-10-19） */
+/** スレッド削除の計画。本人も管理者も、スレッドと削除されていない全ての返信をまとめて消す */
 export interface ThreadDeletion {
   /** 削除後のスレッド */
   thread: CommentThread;
   authority: CommentDeleteAuthority;
-  /** まとめて削除する返信イベントの ID（管理者の削除だけ。削除されていない返信すべて。呼び出し側が "reply_deleted" を追記する） */
+  /** まとめて削除する返信イベントの ID（削除されていない返信すべて。呼び出し側が "reply_deleted" を追記する） */
   cascadeReplyIds: string[];
 }
 
 /**
  * スレッドの削除を計画する（原文は書き換えない。呼び出し側が reply_deleted と "deleted" イベントを追記する）。
- * - 投稿者本人（校了前）: 従来どおり。他の人の返信が残るなら「削除されたコメント」として一覧に残す。
- * - システム管理者: スレッドと全ての返信をまとめて論理削除する。一覧には何も残らない。
- *   本人でも校了後は管理者の権限で削除するので、まとめて消す。
+ * 投稿者本人（校了前）もシステム管理者も、スレッドと全ての返信をまとめて論理削除する。一覧には何も残らない。
+ * authority は監査に残すかの判定に使う（本人でも校了後は管理者の権限で削除する）。
  */
 export function planThreadDeletion(
   thread: CommentThread,
@@ -134,23 +118,12 @@ export function planThreadDeletion(
 ): ThreadDeletion {
   const authority = assertCanDeleteComment(thread.authorId, actorId, lifecycle, actor);
   assertThreadNotDeleted(thread);
-  if (authority === "admin") {
-    return {
-      thread: { ...thread, deletedAt: now, deletedKeepsReplies: false },
-      authority,
-      cascadeReplyIds: replyEntries(events)
-        .filter((r) => !r.deleted)
-        .map((r) => r.id),
-    };
-  }
   return {
-    thread: {
-      ...thread,
-      deletedAt: now,
-      deletedKeepsReplies: hasLiveRepliesFromOthers(thread, events),
-    },
+    thread: { ...thread, deletedAt: now },
     authority,
-    cascadeReplyIds: [],
+    cascadeReplyIds: replyEntries(events)
+      .filter((r) => !r.deleted)
+      .map((r) => r.id),
   };
 }
 
@@ -167,44 +140,34 @@ export function deleteThreadComment(
 }
 
 /**
- * 返信を削除する。対象は返信イベントの ID。投稿者本人かシステム管理者だけ（削除済み・返信でないものは見つからない扱い）。
- * 返す thread は、残っていた他の人の返信が全て無くなった「削除されたコメント」を一覧から外した状態（変わらなければ同じ値）。
+ * 返信を削除できるか確かめる。対象は返信イベントの ID。投稿者本人かシステム管理者だけ（削除済み・返信でないものは見つからない扱い）。
  * 呼び出し側が "reply_deleted" イベントを追記する。
  */
-export function deleteReply(
-  thread: CommentThread,
+export function assertCanDeleteReply(
+  thread: Pick<CommentThread, "id">,
   replyEventId: string,
   actorId: UserId,
   lifecycle: WorkLifecycle,
   events: readonly CommentEvent[],
   actor: DeleteActor = {},
-): CommentThread {
+): void {
   const reply = replyEntries(events).find((r) => r.id === replyEventId);
   if (!reply || reply.deleted)
     throw new DomainError("comment_reply_not_found", { threadId: thread.id, replyEventId });
   assertCanDeleteComment(reply.actorId, actorId, lifecycle, actor);
-  if (thread.deletedAt === undefined || thread.deletedKeepsReplies !== true) return thread;
-  // 削除した後に、他の人の返信がまだ残るか
-  const remaining = replyEntries(events).some(
-    (r) => !r.deleted && r.id !== replyEventId && r.actorId !== thread.authorId,
-  );
-  return remaining ? thread : { ...thread, deletedKeepsReplies: false };
 }
 
 export interface ThreadEventView extends CommentEvent {
   id: string;
-  /** 削除された返信（本文は伏せてある） */
-  deleted?: boolean;
   /** 返信の削除ができるか（返信にだけ付く） */
   can?: { delete: boolean };
 }
 
 /**
- * 履歴の見せ方。削除された返信は本文を伏せ、削除の記録（deleted / reply_deleted）は並べない。
- * 削除したスレッドの訂正前の本文も伏せる。原文はイベントに残り、ここで見せないだけ。
+ * 履歴の見せ方。削除された返信と、削除の記録（deleted / reply_deleted）は並べない（原文はイベントに残り、ここで見せないだけ）。
+ * 削除したスレッド自体は一覧に出ないので、その履歴は呼び出し側が返さない。
  */
 export function projectThreadEvents(
-  thread: Pick<CommentThread, "deletedAt">,
   events: readonly CommentEvent[],
   viewerId: UserId,
   lifecycle: WorkLifecycle,
@@ -216,29 +179,12 @@ export function projectThreadEvents(
     if (e.eventType === "reply_deleted" || e.eventType === "deleted") continue;
     const id = e.id ?? "";
     if (e.eventType === "replied") {
-      if (gone.has(id)) {
-        const { payload: _payload, reactions: _reactions, ...rest } = e;
-        void [_payload, _reactions];
-        out.push({
-          ...rest,
-          id,
-          deleted: true,
-          payload: { body: DELETED_REPLY_PLACEHOLDER },
-          can: { delete: false },
-        });
-      } else {
-        out.push({
-          ...e,
-          id,
-          can: { delete: canDeleteComment(e.actorId, viewerId, lifecycle, viewer) },
-        });
-      }
-      continue;
-    }
-    if (e.eventType === "edited" && thread.deletedAt !== undefined) {
-      const { payload: _payload, ...rest } = e;
-      void _payload;
-      out.push({ ...rest, id });
+      if (gone.has(id)) continue;
+      out.push({
+        ...e,
+        id,
+        can: { delete: canDeleteComment(e.actorId, viewerId, lifecycle, viewer) },
+      });
       continue;
     }
     out.push({ ...e, id });
@@ -247,15 +193,13 @@ export function projectThreadEvents(
 }
 
 export type ThreadView<T extends CommentThread = CommentThread> = T & {
-  /** 削除されたコメント（本文・位置・メンションは伏せてある。返信の文脈のために残している） */
-  deleted: boolean;
-  /** 閲覧者ができる操作。画面は権限を推測せず、これに従う。cascade は削除すると返信もまとめて消える（管理者の削除） */
-  can: { delete: boolean; cascade: boolean };
+  /** 閲覧者ができる操作。画面は権限を推測せず、これに従う。削除すると返信もまとめて消える */
+  can: { delete: boolean };
 };
 
 /**
- * 画面に渡すスレッド。削除済みは本文・位置・メンション・担当を伏せる（紙面の印も出ない）。
- * 削除できるのは投稿者本人とシステム管理者で、削除済みには何もできない。
+ * 画面に渡すスレッド（削除されていないもの）。削除できるのは投稿者本人とシステム管理者。
+ * 削除済みは一覧に出さないので、呼び出し側が渡す前に除く（listByRevision の既定）。
  */
 export function presentThread<T extends CommentThread>(
   thread: T,
@@ -263,31 +207,8 @@ export function presentThread<T extends CommentThread>(
   lifecycle: WorkLifecycle,
   viewer: DeleteActor = {},
 ): ThreadView<T> {
-  if (thread.deletedAt === undefined) {
-    return {
-      ...thread,
-      deleted: false,
-      can: {
-        delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer),
-        cascade: commentDeleteAuthority(thread.authorId, viewerId, lifecycle, viewer) === "admin",
-      },
-    };
-  }
-  const {
-    anchor: _anchor,
-    artifactId: _artifactId,
-    mentions: _mentions,
-    assigneeId: _assigneeId,
-    carriedFromThreadId: _carriedFrom,
-    origin: _origin,
-    reactions: _reactions,
-    ...rest
-  } = thread;
-  void [_anchor, _artifactId, _mentions, _assigneeId, _carriedFrom, _origin, _reactions];
   return {
-    ...(rest as T),
-    body: DELETED_COMMENT_PLACEHOLDER,
-    deleted: true,
-    can: { delete: false, cascade: false },
+    ...thread,
+    can: { delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer) },
   };
 }

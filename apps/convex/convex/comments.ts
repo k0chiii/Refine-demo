@@ -11,13 +11,7 @@ import {
   replyToThread,
   toggleCommentReaction,
 } from "@mf100/application";
-import {
-  DomainError,
-  isAllowed,
-  isListedThread,
-  projectThreadEvents,
-  revisionLabel,
-} from "@mf100/domain";
+import { DomainError, isAllowed, projectThreadEvents, revisionLabel } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
@@ -109,16 +103,16 @@ export const events = query({
         revision.workId,
         "work.view",
       );
-      // 一覧に出ない（削除されて返信も無い）スレッドの履歴は返さない
-      const events = isListedThread(thread)
-        ? projectThreadEvents(
-            thread,
-            await app.threads.listEvents(threadId),
-            principal.userId,
-            work.lifecycle,
-            principal,
-          )
-        : [];
+      // 削除されたスレッドは一覧に出ないので、履歴も返さない
+      const events =
+        thread.deletedAt === undefined
+          ? projectThreadEvents(
+              await app.threads.listEvents(threadId),
+              principal.userId,
+              work.lifecycle,
+              principal,
+            )
+          : [];
       const mentionsOf = (e: (typeof events)[number]): string[] => {
         const m = (e.payload as { mentions?: unknown } | undefined)?.mentions;
         return Array.isArray(m) ? m.filter((x): x is string => typeof x === "string") : [];

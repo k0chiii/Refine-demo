@@ -77,7 +77,7 @@ export interface FeedbackPost {
   reactions: FeedbackReactionEntry[];
   createdAt: Instant;
   editedAt?: Instant;
-  /** 削除（論理削除）。一覧には「削除された投稿」として残し、本文・添付は出さない */
+  /** 削除（論理削除）。スレッドの投稿・件数・最後の投稿・未読から外し、一覧に印も残さない。添付は読めなくなる */
   deletedAt?: Instant;
 }
 
@@ -143,9 +143,14 @@ export function canDeleteFeedbackThread(
   return thread.deletedAt === undefined && principal.isSystemAdmin;
 }
 
-/** 削除されていない（一覧・集計・画面に出す）スレッドか */
-export function isLiveFeedbackThread(thread: Pick<FeedbackThread, "deletedAt">): boolean {
-  return thread.deletedAt === undefined;
+/**
+ * 削除されていない（一覧・集計・画面に出す）スレッドか。
+ * 削除されたスレッドのほか、投稿が全て削除されて残りが無いスレッド（postCount が 0）も出さない
+ */
+export function isLiveFeedbackThread(
+  thread: Pick<FeedbackThread, "deletedAt" | "postCount">,
+): boolean {
+  return thread.deletedAt === undefined && thread.postCount > 0;
 }
 
 /** スレッドの題名の変更: 立てた本人かシステム管理者 */

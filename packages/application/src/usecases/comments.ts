@@ -20,7 +20,7 @@ import {
   allMembersCanView,
   assertCanReactToComment,
   assertThreadNotDeleted,
-  deleteReply as deleteReplyDomain,
+  assertCanDeleteReply,
   planThreadDeletion,
   editThreadBody,
   isCarryCandidate,
@@ -375,9 +375,9 @@ export async function editThread(
 
 /**
  * コメントの削除（投稿者本人は校了前だけ。システム管理者は他人のものも校了後も。利用者指示 2026-10-19）。論理削除で、原文と履歴は CommentEvent に残る。
- * - 本人の削除: 他の人の返信が残るなら一覧に「削除されたコメント」として残し、無ければ一覧からも消す（domain/comment/deletion.ts）。
- * - システム管理者の削除: スレッドと全ての返信をまとめて論理削除する（利用者決定 2026-10-19）。各返信に reply_deleted、
- *   スレッドに "deleted"（cascade・返信の件数つき）を追記し、監査には 1 件だけ残す（誰が・いつ・元の投稿者・返信の件数・校了後か）。
+ * 本人でも管理者でも、スレッドと全ての返信をまとめて論理削除し、一覧には何も残さない（利用者指示 2026-10-19「「削除された投稿」として残さなくて良い。」）。
+ * 各返信に reply_deleted、スレッドに "deleted"（返信の件数つき）を追記する。
+ * システム管理者の削除は、監査に 1 件だけ残す（誰が・いつ・元の投稿者・返信の件数・校了後か）。
  */
 export async function deleteThread(
   ctx: AppContext,
@@ -402,18 +402,14 @@ export async function deleteThread(
       payload: { replyEventId, cascade: true },
       createdAt: now,
     });
-  const cascade = plan.authority === "admin";
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "deleted",
     actorId: principal.userId,
-    payload: {
-      keepsReplies: next.deletedKeepsReplies === true,
-      ...(cascade ? { cascade: true, repliesDeleted: plan.cascadeReplyIds.length } : {}),
-    },
+    payload: { cascade: true, repliesDeleted: plan.cascadeReplyIds.length },
     createdAt: now,
   });
-  if (cascade)
+  if (plan.authority === "admin")
     await recordAdminDeletion(ctx, principal, {
       entityType: "commentThread",
       entityId: thread.id,
@@ -479,7 +475,7 @@ export async function deleteReply(
   if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
   const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
   const events = await ctx.threads.listEvents(thread.id);
-  const next = deleteReplyDomain(
+  assertCanDeleteReply(
     thread,
     input.replyEventId,
     principal.userId,
@@ -506,7 +502,6 @@ export async function deleteReply(
     lifecycle: work.lifecycle,
     at: now,
   });
-  if (next !== thread) await ctx.threads.update(next);
 }
 
 /** 次版へ持ち越す候補（前版の未解決コメント）。対象版より前に提出され、受付中でない版のもの。 */

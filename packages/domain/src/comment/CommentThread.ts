@@ -53,7 +53,7 @@ export interface CommentThread {
    * 削除済みのスレッドは件数・未解決・校了の判定・紙面の印から外れる（deletion.ts）。
    */
   deletedAt?: Instant;
-  /** 削除した時点で、投稿者以外の人の返信が残っていた（一覧に「削除されたコメント」として残す）。返信が無ければ一覧にも出さない */
+  /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。削除したものは一覧に出さない。保存済みの行との互換のために型・スキーマに残す */
   deletedKeepsReplies?: boolean;
   /** リアクション（FB と同じ絵文字・同じ規則。comment/reactions.ts）。誰も付けていなければ持たない */
   reactions?: ReactionEntry[];

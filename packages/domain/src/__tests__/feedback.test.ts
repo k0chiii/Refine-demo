@@ -113,8 +113,10 @@ describe("フィードバックの権限", () => {
     expect(canDeleteFeedbackThread({}, who("admin", true))).toBe(true);
     expect(canDeleteFeedbackThread({}, who("creator"))).toBe(false);
     expect(canDeleteFeedbackThread({ deletedAt: T0 }, who("admin", true))).toBe(false);
-    expect(isLiveFeedbackThread({})).toBe(true);
-    expect(isLiveFeedbackThread({ deletedAt: T0 })).toBe(false);
+    expect(isLiveFeedbackThread({ postCount: 1 })).toBe(true);
+    expect(isLiveFeedbackThread({ postCount: 1, deletedAt: T0 })).toBe(false);
+    // 投稿が全て削除されて残りが無いスレッドも、削除されたスレッドと同じに見せる
+    expect(isLiveFeedbackThread({ postCount: 0 })).toBe(false);
   });
 });
 

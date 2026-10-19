@@ -20,7 +20,7 @@ export type PostData = NonNullable<ThreadData>["posts"][number];
 
 /**
  * FB スレッドの 1 投稿（Slack のメッセージに当たる）。アバター・名前・時刻・本文・添付・リアクション。
- * ⋮ から自分の投稿を直す・消す（消した投稿は「削除された投稿」として残す）。
+ * ⋮ から自分の投稿を直す・消す（消した投稿は一覧から消え、行を残さない）。
  * リアクションは決まった絵文字だけ（FEEDBACK_REACTIONS）。自分が付けたものは選択中のチップ。
  */
 export function FeedbackPost({
@@ -53,16 +53,6 @@ export function FeedbackPost({
   });
   const menuId = `fb-post-menu-${post.id}`;
   const reactId = `fb-react-${post.id}`;
-
-  if (post.deleted)
-    return (
-      <article className="fb-post fb-post--deleted" aria-label="削除された投稿">
-        <span className="fb-post__avatar" aria-hidden="true">
-          <M3eIcon name="delete" />
-        </span>
-        <p className="muted small">削除された投稿</p>
-      </article>
-    );
 
   return (
     <article
@@ -186,7 +176,7 @@ export function FeedbackPost({
       <M3eDialog open={confirmDelete} onClosed={() => setConfirmDelete(false)} closeLabel="閉じる">
         <span slot="header">投稿を削除しますか？</span>
         <div className="dialog-body">
-          <p>「削除された投稿」として残り、本文と添付は見えなくなります。元に戻せません</p>
+          <p>本文と添付は見えなくなります。元に戻せません</p>
         </div>
         <div slot="actions" className="row">
           <span className="spacer" />

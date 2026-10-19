@@ -2887,10 +2887,6 @@ m3e-dialog [slot="actions"] {
   flex: 1;
   min-width: 0;
 }
-.thread__body--deleted {
-  color: var(--mf-on-surface-variant);
-  font-style: italic;
-}
 /* コメント・返信のリアクション（FB と同じ部品: ui/Reactions）。付いているチップの末尾に「付ける」ボタン */
 .thread__reactions {
   display: flex;
@@ -4530,9 +4526,6 @@ m3e-snackbar {
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   padding: 12px 8px;
-}
-.fb-post--deleted {
-  align-items: center;
 }
 .fb-post__avatar {
   display: grid;

@@ -29,7 +29,6 @@ export interface TimelinePost {
   id: string;
   author: { id: string };
   createdAt: number;
-  deleted: boolean;
   /** 自分の投稿か（未読の区切りでは自分の投稿を数えない） */
   mine: boolean;
 }
@@ -48,8 +47,7 @@ export function buildTimeline<P extends TimelinePost>(
   let unreadPlaced = false;
   for (const p of posts) {
     const newDay = prev === null || jstDay(prev.createdAt) !== jstDay(p.createdAt);
-    const unread =
-      !unreadPlaced && !p.mine && !p.deleted && (opts.readAt === null || p.createdAt > opts.readAt);
+    const unread = !unreadPlaced && !p.mine && (opts.readAt === null || p.createdAt > opts.readAt);
     // 未読の線は日付の区切りより先に置く（線まで送ったとき、その日の日付が線の下に見える）
     if (unread) {
       out.push({ type: "unread", key: "unread" });
@@ -65,8 +63,6 @@ export function buildTimeline<P extends TimelinePost>(
       !newDay &&
       !unread &&
       prev !== null &&
-      !prev.deleted &&
-      !p.deleted &&
       prev.author.id === p.author.id &&
       p.createdAt - prev.createdAt <= GROUP_WINDOW_MS;
     out.push({ type: "post", key: p.id, post: p, continued });

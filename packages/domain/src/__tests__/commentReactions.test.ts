@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { CommentEvent } from "../comment/CommentThread.ts";
-import { presentThread, projectThreadEvents } from "../comment/deletion.ts";
+import { projectThreadEvents } from "../comment/deletion.ts";
 import {
   assertCanReactToComment,
   summarizeCommentReactions,
@@ -113,16 +113,8 @@ describe("コメントへのリアクション", () => {
     expect(summarizeCommentReactions(undefined, "b")).toEqual([]);
   });
 
-  it("削除したコメント・返信のリアクションは画面に出さない", () => {
-    const t = {
-      ...makeThread(),
-      deletedAt: 5,
-      reactions: [{ emoji: "👍" as const, userIds: ["a"] }],
-    };
-    expect(presentThread(t, "a", "active")).not.toHaveProperty("reactions");
+  it("削除した返信は履歴に並べない（リアクションも出ない）", () => {
     const events = [reply("r1", [{ emoji: "👍", userIds: ["a"] }]), replyDeleted("r1")];
-    const [gone] = projectThreadEvents(makeThread(), events, "a", "active");
-    expect(gone).toMatchObject({ id: "r1", deleted: true });
-    expect(gone).not.toHaveProperty("reactions");
+    expect(projectThreadEvents(events, "a", "active")).toEqual([]);
   });
 });

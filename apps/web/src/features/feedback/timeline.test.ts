@@ -8,7 +8,6 @@ const post = (id: string, author: string, iso: string, mine = false) => ({
   id,
   author: { id: author },
   createdAt: at(iso),
-  deleted: false,
   mine,
 });
 

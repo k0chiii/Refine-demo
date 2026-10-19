@@ -63,7 +63,6 @@ import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts"
  */
 
 const UNKNOWN_NAME = "（不明なユーザー）";
-const DELETED_PLACEHOLDER = "削除された投稿";
 
 interface LoadedFeedbackWork {
   work: Work;
@@ -396,9 +395,7 @@ export interface FeedbackPostView {
   id: string;
   /** isCreator: その制作物の制作者か（スレッドでは制作者だけ示す。利用者指示 2026-10-18） */
   author: { id: string; name: string; isCreator: boolean };
-  /** 削除された投稿は「削除された投稿」（ファイル・メンション・リアクションは空） */
   body: string;
-  deleted: boolean;
   mentions: Array<{ id: string; name: string }>;
   files: FeedbackFileView[];
   template?: FeedbackTemplateId;
@@ -442,7 +439,7 @@ export interface FeedbackThreadView {
   readAt: number | null;
 }
 
-/** スレッドを開く（投稿は古い順）。既読の印は markFeedbackRead で別に付ける */
+/** スレッドを開く（投稿は古い順。削除された投稿は並べない）。既読の印は markFeedbackRead で別に付ける */
 export async function getFeedbackThread(
   ctx: AppContext,
   principal: Principal,
@@ -452,25 +449,13 @@ export async function getFeedbackThread(
   const name = nameCache(ctx);
   const posts: FeedbackPostView[] = [];
   for (const p of await ctx.feedback.listPosts(thread.id)) {
+    // 削除された投稿は並べない（利用者指示 2026-10-19「「削除された投稿」として残さなくて良い。」）
+    if (p.deletedAt !== undefined) continue;
     const author = {
       id: p.authorId,
       name: await name(p.authorId),
       isCreator: work.creatorIds.includes(p.authorId),
     };
-    if (p.deletedAt !== undefined) {
-      posts.push({
-        id: p.id,
-        author,
-        body: DELETED_PLACEHOLDER,
-        deleted: true,
-        mentions: [],
-        files: [],
-        reactions: [],
-        createdAt: p.createdAt,
-        can: { edit: false, delete: false },
-      });
-      continue;
-    }
     const files: FeedbackFileView[] = [];
     for (const id of p.fileIds) {
       const f = await ctx.feedback.findFile(id);
@@ -497,7 +482,6 @@ export async function getFeedbackThread(
       id: p.id,
       author,
       body: p.body,
-      deleted: false,
       mentions,
       files,
       ...(p.template !== undefined ? { template: p.template } : {}),
@@ -774,7 +758,8 @@ export async function editFeedbackPost(
 }
 
 /**
- * 投稿の削除（本人かシステム管理者）。論理削除で、一覧には「削除された投稿」として残る。
+ * 投稿の削除（本人かシステム管理者）。論理削除で、スレッドの投稿・件数・最後の投稿・未読からは外れる（「削除された投稿」の行は残さない）。
+ * 最初の投稿も同じ扱いで、スレッドは残りの投稿で続く。生きている投稿が無くなったスレッドは、削除されたスレッドと同じに見せる（isLiveFeedbackThread）。
  * 監査には誰が・どの投稿を・いつ・元の投稿者を残す（管理者の削除は byAdmin）
  */
 export async function deleteFeedbackPost(
@@ -787,7 +772,15 @@ export async function deleteFeedbackPost(
     throw new DomainError("forbidden", { postId: post.id });
   const now = ctx.clock.now();
   await ctx.feedback.updatePost({ ...post, deletedAt: now });
-  await ctx.feedback.updateThread({ ...thread, postCount: Math.max(0, thread.postCount - 1) });
+  // 件数と最後の投稿の時刻は、残った（削除されていない）投稿から数え直す。消した投稿のために未読が残らない
+  const live = (await ctx.feedback.listPosts(thread.id)).filter(
+    (p) => p.id !== post.id && p.deletedAt === undefined,
+  );
+  await ctx.feedback.updateThread({
+    ...thread,
+    postCount: live.length,
+    lastPostAt: live.length ? Math.max(...live.map((p) => p.createdAt)) : thread.lastPostAt,
+  });
   await ctx.audit.record({
     entityType: "feedbackPost",
     entityId: post.id,

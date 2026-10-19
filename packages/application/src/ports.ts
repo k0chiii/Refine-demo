@@ -105,14 +105,8 @@ export interface UploadAttemptRepository {
 
 export interface ThreadRepository {
   findById(id: string): Promise<CommentThread | null>;
-  /**
-   * 版のスレッド。削除済み（deletedAt あり）は既定で除く（件数・未解決・校了の判定などはこれで足りる）。
-   * 「削除されたコメント」として一覧に残すスレッドを含めたいときだけ includeDeleted を使う。
-   */
-  listByRevision(
-    revisionId: RevisionId,
-    options?: { includeDeleted?: boolean },
-  ): Promise<CommentThread[]>;
+  /** 版のスレッド。削除済み（deletedAt あり）は含めない（一覧・件数・未解決・校了の判定はこれで足りる） */
+  listByRevision(revisionId: RevisionId): Promise<CommentThread[]>;
   insert(thread: Omit<CommentThread, "id">): Promise<CommentThread>;
   update(thread: CommentThread): Promise<void>;
   appendEvent(event: CommentEvent): Promise<void>;

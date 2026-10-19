@@ -60,7 +60,9 @@ describe("Convex 統合: 制作のフィードバック", () => {
     ).rejects.toThrow(code("forbidden"));
     await cast.admin.as.mutation(api.feedback.deletePost, { postId });
     const after = await cast.creator.as.query(api.feedback.getThread, { threadId });
-    expect(after!.posts[1]).toMatchObject({ deleted: true, body: "削除された投稿" });
+    expect(after!.posts.map((x) => x.id)).not.toContain(postId);
+    expect(after!.posts).toHaveLength(1);
+    expect(after!.thread.postCount).toBe(1);
 
     // restricted: 制作物を見られない人には無いのと同じ
     await cast.manager.as.mutation(api.works.update, {

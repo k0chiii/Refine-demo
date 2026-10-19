@@ -159,7 +159,7 @@ describe("フィードバックのスレッドと投稿", () => {
     expect((await getFeedbackThread(ctx, reviewer, t)).thread.title).toBe("秘密");
   });
 
-  it("訂正は本人だけ、削除は本人かシステム管理者。削除した投稿は「削除された投稿」として残る", async () => {
+  it("訂正は本人だけ、削除は本人かシステム管理者。削除した投稿はスレッドの投稿から消える", async () => {
     const { ctx, work } = await setup();
     const t = await createFeedbackThread(ctx, creator, {
       workId: work.id,
@@ -183,17 +183,81 @@ describe("フィードバックのスレッドと投稿", () => {
     );
     await deleteFeedbackPost(ctx, sysadmin, { postId: p });
     view = await getFeedbackThread(ctx, reviewer, t);
-    expect(view.posts[1]).toMatchObject({
-      body: "削除された投稿",
-      deleted: true,
-      files: [],
-      can: { edit: false, delete: false },
-    });
+    expect(view.posts.map((x) => x.id)).not.toContain(p);
+    expect(view.posts).toHaveLength(1);
     expect(view.thread.postCount).toBe(1);
+    // 論理削除: 行は残り、監査も残る
+    expect((await ctx.feedback.findPost(p))?.deletedAt).toBe(ctx.clock.now());
     expect(ctx.state.audit.some((a) => a.entityType === "feedbackPost")).toBe(true);
     await expect(toggleFeedbackReaction(ctx, creator, { postId: p, emoji: "👍" })).rejects.toThrow(
       code("feedback_not_found"),
     );
+  });
+
+  it("削除した投稿は最後の投稿・件数・未読の数え方からも外れる（消した投稿のために未読が残らない）", async () => {
+    const { ctx, work } = await setup();
+    const t = await createFeedbackThread(ctx, creator, {
+      workId: work.id,
+      title: "配色",
+      body: "最初",
+    });
+    ctx.clock.advance(HOUR);
+    const first = (await getFeedbackThread(ctx, creator, t)).thread.lastPostAt;
+    const p = await postFeedback(ctx, reviewer, { threadId: t, body: "あとから" });
+    await markFeedbackRead(ctx, stranger, t); // 誰かが「あとから」より前に読んだ
+    ctx.clock.advance(HOUR);
+    const late = await postFeedback(ctx, manager, { threadId: t, body: "さらに" });
+    expect((await listFeedbackThreads(ctx, stranger, {}))[0]).toMatchObject({
+      postCount: 3,
+      lastPost: { excerpt: "さらに" },
+      unread: true,
+    });
+
+    await deleteFeedbackPost(ctx, manager, { postId: late });
+    let row = (await listFeedbackThreads(ctx, stranger, {}))[0]!;
+    expect(row).toMatchObject({ postCount: 2, lastPost: { excerpt: "あとから" } });
+    expect(row.lastPostAt).toBe((await ctx.feedback.findPost(p))!.createdAt);
+
+    // 真ん中の投稿を消しても、最後の投稿は変わらない
+    await deleteFeedbackPost(ctx, reviewer, { postId: p });
+    row = (await listFeedbackThreads(ctx, stranger, {}))[0]!;
+    expect(row).toMatchObject({ postCount: 1, lastPost: { excerpt: "最初" }, lastPostAt: first });
+    // 最初の投稿より後に読んでいた人は、消した投稿のせいで未読にならない
+    await markFeedbackRead(ctx, stranger, t);
+    expect((await listFeedbackThreads(ctx, stranger, {}))[0]!.unread).toBe(false);
+  });
+
+  it("最初の投稿を消しても、スレッドは残りの投稿で続く。全部消えたら削除されたスレッドと同じに見える", async () => {
+    const { ctx, work } = await setup();
+    const keep = await createFeedbackThread(ctx, stranger, {
+      workId: work.id,
+      title: "書体",
+      body: "ほかの話",
+    });
+    const t = await createFeedbackThread(ctx, creator, {
+      workId: work.id,
+      title: "配色",
+      body: "最初の投稿",
+    });
+    const second = await postFeedback(ctx, reviewer, { threadId: t, body: "二つ目" });
+    const [root] = (await getFeedbackThread(ctx, creator, t)).posts;
+
+    await deleteFeedbackPost(ctx, creator, { postId: root!.id });
+    const view = await getFeedbackThread(ctx, reviewer, t);
+    expect(view.posts.map((x) => x.id)).toEqual([second]);
+    expect(view.thread).toMatchObject({ title: "配色", postCount: 1 });
+    expect((await listFeedbackThreads(ctx, creator, {})).map((x) => x.id)).toContain(t);
+
+    // 最後の投稿を消すと、スレッドは一覧・スペース・開く画面から消える（行と投稿は残る）
+    await deleteFeedbackPost(ctx, reviewer, { postId: second });
+    expect((await listFeedbackThreads(ctx, creator, {})).map((x) => x.id)).toEqual([keep]);
+    expect((await listFeedbackSpaces(ctx, creator))[0]).toMatchObject({ threads: 1 });
+    await expect(getFeedbackThread(ctx, creator, t)).rejects.toThrow(code("feedback_not_found"));
+    await expect(postFeedback(ctx, creator, { threadId: t, body: "x" })).rejects.toThrow(
+      code("feedback_not_found"),
+    );
+    expect(await ctx.feedback.findThread(t)).toMatchObject({ id: t, postCount: 0 });
+    expect((await ctx.feedback.findThread(t))?.deletedAt).toBeUndefined();
   });
 
   it("リアクション・題名の変更・本文の検査", async () => {

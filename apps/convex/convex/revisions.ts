@@ -10,7 +10,6 @@ import {
   isAllowed,
   isBeforeDeadline,
   isDeadlineReached,
-  isListedThread,
   isUnresponded,
   presentThread,
   revisionLabel,
@@ -47,10 +46,10 @@ export const get = query({
       const accepting = siblings.find(isAccepting) ?? null;
       const now = Date.now();
       const artifacts = await app.artifacts.listByRevision(revision.id);
-      // 削除されたコメントは、他の人の返信が残るものだけ「削除されたコメント」として出す（本文・位置は伏せる）
-      const threads = (await app.threads.listByRevision(revision.id, { includeDeleted: true }))
-        .filter(isListedThread)
-        .map((t) => presentThread(t, principal.userId, work.lifecycle, principal));
+      // 削除されたコメントは出さない（listByRevision は削除済みを含めない。deletedKeepsReplies の古い行も同じ）
+      const threads = (await app.threads.listByRevision(revision.id)).map((t) =>
+        presentThread(t, principal.userId, work.lifecycle, principal),
+      );
       const assignments = await app.assignments.listByRevision(revision.id);
       const checks = await app.checks.listByRevision(revision.id);
       const users = await resolveUsers(ctx.db, [
