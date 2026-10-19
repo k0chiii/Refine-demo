@@ -135,6 +135,11 @@ function withDetails(code: string, details: unknown): string | null {
       return `添付は 1 つの投稿に ${typeof d.max === "number" ? d.max : 10} 件までです`;
   }
   if (code === "work_invalid") return workInvalidMessage(details);
+  if (code === "forbidden") {
+    const permission = (details as { orgPermission?: unknown } | null)?.orgPermission;
+    if (permission === "approvers:assign") return "校了者を決める権限がありません";
+    if (permission === "works:create") return "制作物を登録する権限がありません";
+  }
   if (code === "work_import_invalid" && d.reason === "row_invalid") {
     const index = (details as { index?: unknown } | null)?.index;
     const cause = (details as { cause?: unknown } | null)?.cause;

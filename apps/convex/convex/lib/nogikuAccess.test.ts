@@ -36,7 +36,7 @@ describe("組織権限の取得（permission/check）", () => {
     const fetchMock = vi.fn(async () => json({ valid: false, missing: [names[1]] }));
     const granted = await fetchOrgPermissions(config, "tok", fetchMock as unknown as typeof fetch);
 
-    expect(granted).toEqual([names[0]]);
+    expect(granted).toEqual(names.filter((_, i) => i !== 1));
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://access.example/api/permission/check");
     expect(init.method).toBe("POST");

@@ -10,9 +10,9 @@ import {
   canViewWork,
   currentDeclarations,
   defaultWorkViewPolicy,
+  canRegisterWorks,
   hasOrgPermission,
   normalizePersonKey,
-  permissionIncludes,
   orgPermissions,
   type DirectoryUser,
   approvalProgressOf,
@@ -103,7 +103,7 @@ export const create = mutation({
 
 /**
  * 制作物の一括登録（CSV）。画面が CSV を解析し、担当者を照合して確認した行だけを送る。
- * 登録は application の importWorks（権限 `works:create`・1 件ずつの登録と同じ検証と監査・まとめて 1 トランザクション）。
+ * 登録は application の importWorks（権限 `works:create` と `approvers:assign`・1 件ずつの登録と同じ検証と監査・まとめて 1 トランザクション）。
  */
 export const importBatch = mutation({
   args: {
@@ -152,13 +152,13 @@ export const importBatch = mutation({
 
 /**
  * 一括登録の担当者の照合に使う利用者（CSV に書かれたメールアドレス・名前に当たる人だけ）。
- * 一度でもサインインした委員が対象（UserPicker と同じ）。登録の権限（works:create）がある人だけが引ける。
+ * 一度でもサインインした委員が対象（UserPicker と同じ）。登録の権限（works:create と approvers:assign）がある人だけが引ける。
  */
 export const importDirectory = query({
   args: { keys: v.array(v.string()) },
   handler: async (ctx, { keys }): Promise<DirectoryUser[]> => {
     const { principal } = await requireUser(ctx);
-    if (!hasOrgPermission(principal, orgPermissions.worksCreate)) return [];
+    if (!canRegisterWorks(principal)) return [];
     const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
     if (wanted.size === 0) return [];
     const users = await ctx.db.query("users").take(5000);
@@ -393,9 +393,8 @@ export const listMine = query({
       ctx.db,
       picked.flatMap((p) => [...p.work.creatorIds, ...approversOf(p.work)]),
     );
-    // 一覧から校了者を直せるか（主管、または管理者が付けた「管理」の閲覧権限。判定の本体は更新の work.edit）。
-    // 管理の権限は自分に付いたものだけを 1 回の索引で引く（制作物ごとに ACL を読まない）
-    const managed = await manageGrantedWorkIds(ctx.db, principal.userId);
+    // 一覧から校了者を直せるか: 校了者を決める権限（approvers:assign）がある人。判定の本体は更新（updateWork）
+    const canAssignApprovers = hasOrgPermission(principal, orgPermissions.approversAssign);
     // 制作物ごとの FB（相談）の数と未読（一覧から制作物の FB へ直接入れるように）
     const fb = await summarizeFeedbackActivity(
       app,
@@ -418,9 +417,7 @@ export const listMine = query({
       approvalDeclared: declared,
       /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
       creatorIds: [...work.creatorIds],
-      canEditApprovers:
-        work.lifecycle !== "finalized" &&
-        (work.managerIds.includes(principal.userId) || managed.has(work.id)),
+      canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
       fb: fb.get(work.id) ?? { threads: 0, unread: 0 },
     }));
     return out.sort(
@@ -430,19 +427,6 @@ export const listMine = query({
     );
   },
 });
-
-/** 自分に「管理」以上の閲覧権限が有効に付いている制作物（user 宛の付与のみ。work.edit の ACL 側） */
-async function manageGrantedWorkIds(db: DatabaseReader, userId: string): Promise<Set<string>> {
-  const rows = await db
-    .query("workPermissions")
-    .withIndex("by_principal", (q) => q.eq("principalType", "user").eq("principalId", userId))
-    .take(500);
-  return new Set(
-    rows
-      .filter((g) => g.revokedAt === undefined && permissionIncludes(g.permission, "manage"))
-      .map((g) => g.workId as string),
-  );
-}
 
 /** 一覧で読む制作物の上限（委員会の制作物は年度あたり高々数百件） */
 const WORKS_SCAN_LIMIT = 2000;

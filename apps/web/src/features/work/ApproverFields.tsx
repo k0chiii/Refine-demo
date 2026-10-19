@@ -12,6 +12,7 @@ export function ApproverFields({
   onChange,
   required,
   excludeIds,
+  readOnly,
 }: {
   ids: string[];
   /** 画面の値は文字列（入力中の空を許す） */
@@ -20,12 +21,15 @@ export function ApproverFields({
   required?: boolean;
   /** 校了者に選べない人（この制作物の制作者。利用者決定 2026-10-18「制作者が校了者になることはない」） */
   excludeIds?: readonly string[];
+  /** 見るだけ（校了者を決める権限 approvers:assign が無い人。いまの校了者と人数を見せる） */
+  readOnly?: boolean;
 }) {
   return (
     <>
       <UserPicker
         label="校了者（校了権限者）"
-        {...(required ? { required } : {})}
+        {...(required && !readOnly ? { required } : {})}
+        {...(readOnly ? { readOnly } : {})}
         value={ids}
         {...(excludeIds ? { exclude: [...excludeIds] } : {})}
         onChange={(next) =>
@@ -45,6 +49,7 @@ export function ApproverFields({
             step={1}
             inputMode="numeric"
             value={quorum}
+            {...(readOnly ? { readOnly } : {})}
             onChange={(e) => onChange({ ids, quorum: e.target.value })}
             onBlur={() => onChange({ ids, quorum: String(clampQuorum(quorum, ids.length)) })}
           />

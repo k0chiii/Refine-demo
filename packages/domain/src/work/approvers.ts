@@ -48,6 +48,20 @@ export function approversOf(work: WorkApproverFields): UserId[] {
   return approvalSetupOf(work).approverIds;
 }
 
+/**
+ * 校了者（並びも含む。先頭が approverId）か校了とみなす人数が、変更の前後で違うか。
+ * 校了者を決める権限（approvers:assign）が要る変更かの判定に使う。同じ値の送り直しは変更に数えない
+ */
+export function approversChanged(before: WorkApproverFields, after: WorkApproverFields): boolean {
+  const a = approvalSetupOf(before);
+  const b = approvalSetupOf(after);
+  return (
+    a.quorum !== b.quorum ||
+    a.approverIds.length !== b.approverIds.length ||
+    a.approverIds.some((id, i) => id !== b.approverIds[i])
+  );
+}
+
 /** その人は、この制作物の校了者か */
 export function isApproverOf(work: WorkApproverFields, userId: UserId): boolean {
   return approversOf(work).includes(userId);

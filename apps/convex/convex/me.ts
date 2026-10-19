@@ -22,8 +22,10 @@ export const me = query({
       name: user.name ?? "",
       email: user.email ?? null,
       isSystemAdmin: user.isSystemAdmin ?? false,
-      /** 制作物を登録できるか（Nogiku の組織権限 works:create）。登録の入口を出すかに使う。認可はサーバーで別に確かめる */
+      /** 制作物を登録する権限（Nogiku の組織権限 works:create）。登録の入口は、これに canAssignApprovers も要る。認可はサーバーで別に確かめる */
       canCreateWorks: hasOrgPermission(principal, orgPermissions.worksCreate),
+      /** 校了者を決められるか（Nogiku の組織権限 approvers:assign）。登録の入口・一覧と編集の校了者の編集を出すかに使う */
+      canAssignApprovers: hasOrgPermission(principal, orgPermissions.approversAssign),
       source: user.source ?? null,
       mock: process.env.NOGIKU_MOCK_ENABLED === "true",
       /** 本人が選んだアバター（無ければ null。メールから決まる絵） */

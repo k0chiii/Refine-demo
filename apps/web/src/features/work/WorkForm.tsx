@@ -244,10 +244,13 @@ export function WorkFormFields({
   form,
   setForm,
   mode,
+  canAssignApprovers = true,
 }: {
   form: WorkFormState;
   setForm: (update: (f: WorkFormState) => WorkFormState) => void;
   mode: "create" | "edit";
+  /** 校了者を決める権限（approvers:assign）。無い人には、編集で校了者を見るだけにする（登録はこの権限が要る） */
+  canAssignApprovers?: boolean;
 }) {
   const set = (k: keyof WorkFormState) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -381,6 +384,7 @@ export function WorkFormFields({
         />
         <ApproverFields
           required
+          {...(mode === "edit" && !canAssignApprovers ? { readOnly: true } : {})}
           ids={form.approverIds}
           excludeIds={form.creatorIds}
           quorum={form.approvalQuorum}

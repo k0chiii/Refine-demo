@@ -75,6 +75,8 @@ function Admin() {
     await setAdmin({ userId: userId as Id<"users">, value });
   });
   if (!me) return null;
+  // 登録は works:create に加えて、校了者を決める権限（approvers:assign）も要る
+  const canRegister = me.canCreateWorks && me.canAssignApprovers;
   const title = <AppBarSlot slot="title">管理</AppBarSlot>;
   if (!me.isSystemAdmin)
     return (
@@ -101,7 +103,7 @@ function Admin() {
       />
       {tab === "works" ? (
         <section className="stack">
-          {me.canCreateWorks ? (
+          {canRegister ? (
             <div className="row admin-works__actions">
               <M3eButton variant="filled" onClick={() => setImporting(true)}>
                 <M3eIcon slot="icon" name="upload_file" />
@@ -252,7 +254,7 @@ function Admin() {
           )}
         </section>
       )}
-      {me.canCreateWorks ? (
+      {canRegister ? (
         <>
           <ImportWorksDialog
             open={importing}

@@ -209,8 +209,10 @@ describe("校了者と人数の変更（制作物の更新）", () => {
     expect(next).toMatchObject({ approverId: a2.userId, approverIds: [a2.userId, a1.userId] });
     const one = await edit({ approverIds: [a3.userId] });
     expect(approvalSetupOf(one)).toEqual({ approverIds: [a3.userId], quorum: 1 });
+    // 校了者を決める権限（approvers:assign）が無い人は変えられない（制作者も work.edit は無い）
+    const noOrg = { ...principals.creator, orgPermissions: [] as string[] };
     await expect(
-      updateWork(ctx, principals.creator, { workId: work.id, patch: { approvalQuorum: 1 } }),
+      updateWork(ctx, noOrg, { workId: work.id, patch: { approvalQuorum: 1 } }),
     ).rejects.toThrow(code("forbidden"));
   });
 
