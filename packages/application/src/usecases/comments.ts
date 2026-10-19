@@ -21,7 +21,7 @@ import {
   assertCanReactToComment,
   assertThreadNotDeleted,
   deleteReply as deleteReplyDomain,
-  deleteThreadComment,
+  planThreadDeletion,
   editThreadBody,
   isCarryCandidate,
   mentionableUserIds,
@@ -375,8 +375,9 @@ export async function editThread(
 
 /**
  * コメントの削除（投稿者本人は校了前だけ。システム管理者は他人のものも校了後も。利用者指示 2026-10-19）。論理削除で、原文と履歴は CommentEvent に残る。
- * 管理者の削除は監査に残す（誰が・どのコメントを・いつ・元の投稿者）。
- * 他の人の返信が残るなら一覧に「削除されたコメント」として残し、無ければ一覧からも消す（domain/comment/deletion.ts）。
+ * - 本人の削除: 他の人の返信が残るなら一覧に「削除されたコメント」として残し、無ければ一覧からも消す（domain/comment/deletion.ts）。
+ * - システム管理者の削除: スレッドと全ての返信をまとめて論理削除する（利用者決定 2026-10-19）。各返信に reply_deleted、
+ *   スレッドに "deleted"（cascade・返信の件数つき）を追記し、監査には 1 件だけ残す（誰が・いつ・元の投稿者・返信の件数・校了後か）。
  */
 export async function deleteThread(
   ctx: AppContext,
@@ -390,37 +391,45 @@ export async function deleteThread(
   const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
   const now = ctx.clock.now();
   const events = await ctx.threads.listEvents(thread.id);
-  const next = deleteThreadComment(
-    thread,
-    principal.userId,
-    work.lifecycle,
-    events,
-    now,
-    principal,
-  );
+  const plan = planThreadDeletion(thread, principal.userId, work.lifecycle, events, now, principal);
+  const next = plan.thread;
   await ctx.threads.update(next);
+  for (const replyEventId of plan.cascadeReplyIds)
+    await ctx.threads.appendEvent({
+      threadId: thread.id,
+      eventType: "reply_deleted",
+      actorId: principal.userId,
+      payload: { replyEventId, cascade: true },
+      createdAt: now,
+    });
+  const cascade = plan.authority === "admin";
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "deleted",
     actorId: principal.userId,
-    payload: { keepsReplies: next.deletedKeepsReplies === true },
+    payload: {
+      keepsReplies: next.deletedKeepsReplies === true,
+      ...(cascade ? { cascade: true, repliesDeleted: plan.cascadeReplyIds.length } : {}),
+    },
     createdAt: now,
   });
-  await recordAdminDeletion(ctx, principal, {
-    entityType: "commentThread",
-    entityId: thread.id,
-    authorId: thread.authorId,
-    workId: work.id,
-    revisionId: thread.revisionId,
-    lifecycle: work.lifecycle,
-    at: now,
-  });
+  if (cascade)
+    await recordAdminDeletion(ctx, principal, {
+      entityType: "commentThread",
+      entityId: thread.id,
+      authorId: thread.authorId,
+      workId: work.id,
+      revisionId: thread.revisionId,
+      lifecycle: work.lifecycle,
+      at: now,
+      repliesDeleted: plan.cascadeReplyIds.length,
+    });
   return next;
 }
 
 /**
  * 管理者による他人のコメント・返信の削除を監査に残す（本人の削除は CommentEvent が履歴）。
- * 校了後の削除かも記録する。
+ * 校了後の削除かも記録する。スレッドの削除は返信ごとまとめて消すので、返信の件数も 1 件の記録に入れる。
  */
 async function recordAdminDeletion(
   ctx: AppContext,
@@ -434,9 +443,12 @@ async function recordAdminDeletion(
     lifecycle: string;
     at: number;
     threadId?: string;
+    repliesDeleted?: number;
   },
 ): Promise<void> {
-  if (!principal.isSystemAdmin || d.authorId === principal.userId) return;
+  if (!principal.isSystemAdmin) return;
+  // 自分の返信・コメントを（校了前に）自分で消すのは本人の削除。スレッドのまとめ削除は管理者の権限なので常に残す
+  if (d.entityType === "commentReply" && d.authorId === principal.userId) return;
   await ctx.audit.record({
     entityType: d.entityType,
     entityId: d.entityId,
@@ -448,6 +460,7 @@ async function recordAdminDeletion(
       workId: d.workId,
       revisionId: d.revisionId,
       ...(d.threadId !== undefined ? { threadId: d.threadId } : {}),
+      ...(d.repliesDeleted !== undefined ? { repliesDeleted: d.repliesDeleted } : {}),
       afterFinalized: d.lifecycle === "finalized",
     },
     at: d.at,

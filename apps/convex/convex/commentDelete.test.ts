@@ -221,4 +221,60 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
         .every((a) => (a.before as { authorId: string }).authorId === cast.reviewer.id),
     ).toBe(true);
   });
+
+  it("管理者が返信付きのコメントを削除すると、返信ごと一覧・件数・通知から消え、監査は 1 件。本人の削除は従来どおり", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const { rid, postAs } = await setup(t, cast);
+    const threadId = await postAs(cast.reviewer, "critical");
+    const own = await postAs(cast.reviewer, "info");
+    await cast.creator.as.mutation(api.comments.reply, { threadId, body: "対応します" });
+    await cast.reviewer.as.mutation(api.comments.reply, { threadId, body: "お願いします" });
+    await cast.creator.as.mutation(api.comments.reply, { threadId: own, body: "了解" });
+
+    // 管理者にだけ cascade が立つ（本人・他人には立たない）
+    const flags = async (who: Cast["admin"]) =>
+      (await who.as.query(api.revisions.get, { revisionId: rid })).threads.map((x) => x.can);
+    expect(await flags(cast.admin)).toEqual([
+      { delete: true, cascade: true },
+      { delete: true, cascade: true },
+    ]);
+    expect(await flags(cast.reviewer)).toEqual([
+      { delete: true, cascade: false },
+      { delete: true, cascade: false },
+    ]);
+
+    await cast.admin.as.mutation(api.comments.remove, { threadId });
+    const after = await cast.creator.as.query(api.revisions.get, { revisionId: rid });
+    expect(after.threads.map((x) => x.id)).toEqual([own]); // 「削除されたコメント」も残らない
+    expect((await cast.creator.as.query(api.comments.events, { threadId })).events).toEqual([]);
+    const queue = await cast.reviewer.as.query(api.reviews.myQueue, {});
+    expect(queue.every((q) => q.totalCommentCount === 1)).toBe(true);
+    // 返信を 1 件ずつ消す必要はない（消えているので見つからない）
+    const events = await t.run((ctx) =>
+      ctx.db
+        .query("commentEvents")
+        .filter((q) => q.eq(q.field("threadId"), threadId))
+        .collect(),
+    );
+    expect(events.filter((e) => e.eventType === "reply_deleted")).toHaveLength(2);
+    // 削除したコメントへの通知は飛び先を返さない
+    const notes = await cast.creator.as.query(api.notifications.list, {});
+    expect(notes.some((n) => n.threadId === threadId)).toBe(false);
+
+    // 本人の削除は従来どおり: 他の人の返信が残る
+    await cast.reviewer.as.mutation(api.comments.remove, { threadId: own });
+    const kept = (await cast.creator.as.query(api.revisions.get, { revisionId: rid })).threads;
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toMatchObject({ id: own, deleted: true });
+
+    const audits = await t.run((ctx) => ctx.db.query("auditEvents").collect());
+    const mine = audits.filter((a) => a.operation === "delete" && a.entityType === "commentThread");
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({
+      actorId: cast.admin.id,
+      before: { authorId: cast.reviewer.id },
+      after: { byAdmin: true, repliesDeleted: 2, afterFinalized: false },
+    });
+  });
 });

@@ -431,11 +431,24 @@ export async function buildDashboard(
 
   // 自分宛てのコメント（通知から）
   const titles = new Map(visible.map((w) => [w.id, w.title]));
+  const goneThreads = new Map<string, boolean>();
+  const isCommentGone = async (n: { threadId?: string }): Promise<boolean> => {
+    if (n.threadId === undefined) return false;
+    let gone = goneThreads.get(n.threadId);
+    if (gone === undefined) {
+      const t = await ctx.threads.findById(n.threadId).catch(() => null);
+      gone = t?.deletedAt !== undefined;
+      goneThreads.set(n.threadId, gone);
+    }
+    return gone;
+  };
   for (const n of await ctx.notifications.listForUser(principal.userId, 100)) {
     if (out.mentions.length >= dashboardPolicy.mentionsMax) break;
     if (!dashboardPolicy.mentionKinds.includes(n.kind)) continue;
     if (now - n.createdAt > dashboardPolicy.mentionsWithinMs) continue;
     if (!n.workId || !titles.has(n.workId)) continue;
+    // 削除されたコメントへの通知は出さない（本文を伏せ、飛び先も無い）
+    if (await isCommentGone(n)) continue;
     out.mentions.push({
       workId: n.workId,
       workTitle: titles.get(n.workId)!,

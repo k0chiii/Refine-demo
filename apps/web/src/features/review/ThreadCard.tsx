@@ -113,6 +113,12 @@ export function ThreadCard({
   const gone = t.deleted;
   const hasMenu = !gone && (canDecide || canEdit || t.can.delete);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // 管理者の削除は返信もまとめて消える。確認のときだけ返信の件数を読む
+  const cascade = t.can.cascade;
+  const replyCount = useQuery(
+    api.comments.events,
+    confirmDelete && cascade ? { threadId: t.id as Id<"commentThreads"> } : "skip",
+  )?.events.filter((e) => e.eventType === "replied" && !e.deleted).length;
   const doDelete = useAction(async () => {
     await onDelete();
     setConfirmDelete(false);
@@ -182,20 +188,7 @@ export function ThreadCard({
                   onSelect();
                 }}
               >
-                <M3eIcon
-                  slot="icon"
-                  name={
-                    t.anchor.type === "video_time"
-                      ? "schedule"
-                      : t.anchor.type === "web_element"
-                        ? t.anchor.viewport.width < 600
-                          ? "smartphone"
-                          : "computer"
-                        : t.anchor.type === "figma_node"
-                          ? "design_services"
-                          : "location_on"
-                  }
-                />
+                <M3eIcon slot="icon" name="location_on" />
                 {t.anchor.type === "video_time"
                   ? `${index}・${formatVideoSpan(t.anchor)}`
                   : t.anchor.type === "web_element"
@@ -442,6 +435,7 @@ export function ThreadCard({
         <span slot="header">コメントを削除しますか？</span>
         <div className="dialog-body" tabIndex={0}>
           <p>本文は見えなくなります。元に戻せません</p>
+          {cascade && replyCount ? <p>返信 {replyCount} 件もまとめて削除します</p> : null}
         </div>
         <div slot="actions" className="row">
           <span className="spacer" />

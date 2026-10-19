@@ -2,6 +2,7 @@ import {
   approversOf,
   canSeeNotificationSubject,
   DomainError,
+  isListedThread,
   memberTeamIds,
   type NotificationSubject,
   type Principal,
@@ -80,6 +81,48 @@ function redact(n: Notification): Notification {
   void actorId;
   void preview;
   return { ...rest, ...REDACTED_NOTIFICATION };
+}
+
+/** 削除されたコメントの通知に出す文面。元の本文・抜粋は伏せ、コメントへの手がかり（ID）も返さない */
+export const DELETED_COMMENT_NOTIFICATION = { body: "削除されたコメントの通知です" } as const;
+
+/**
+ * 通知の先のコメントが削除されたか（スレッドごとに 1 回だけ読む）。
+ * "gone": 一覧からも消えた（紙面に印もカードも無い）。"kept": 返信のために「削除されたコメント」として残っている。null: 削除されていない。
+ */
+function deletedThreadLoader(ctx: AppContext) {
+  const cache = new Map<string, Promise<"gone" | "kept" | null>>();
+  return (n: Pick<Notification, "kind" | "threadId">): Promise<"gone" | "kept" | null> => {
+    // feedback_* の threadId はフィードバックのスレッド。それ以外はコメントのスレッド
+    if (n.threadId === undefined || notificationSubjectOf(n.kind) !== "work")
+      return Promise.resolve(null);
+    let hit = cache.get(n.threadId);
+    if (!hit) {
+      hit = ctx.threads
+        .findById(n.threadId)
+        .then((t) =>
+          t === null || t === undefined || t.deletedAt === undefined
+            ? null
+            : isListedThread(t)
+              ? ("kept" as const)
+              : ("gone" as const),
+        )
+        .catch(() => null);
+      cache.set(n.threadId, hit);
+    }
+    return hit;
+  };
+}
+
+/** 削除されたコメントの通知に変える（文面・抜粋を伏せ、消えたコメントへは飛ばさない） */
+function degradeDeletedComment(n: Notification, state: "gone" | "kept"): Notification {
+  const { preview, threadId, ...rest } = n;
+  void preview;
+  return {
+    ...rest,
+    ...DELETED_COMMENT_NOTIFICATION,
+    ...(state === "kept" && threadId !== undefined ? { threadId } : {}),
+  };
 }
 
 type LoadedSubject = { work: Work; grants: WorkPermissionGrant[]; teams: Team[] } | null;
@@ -173,6 +216,7 @@ export async function presentNotifications(
   notifications: readonly Notification[],
 ): Promise<Notification[]> {
   const load = subjectLoader(ctx);
+  const deleted = deletedThreadLoader(ctx);
   const out: Notification[] = [];
   for (const n of notifications) {
     if (n.workId === undefined) {
@@ -187,7 +231,12 @@ export async function presentNotifications(
         grants: loaded.grants,
         principal,
       });
-    out.push(visible ? n : redact(n));
+    if (!visible) {
+      out.push(redact(n));
+      continue;
+    }
+    const state = await deleted(n);
+    out.push(state ? degradeDeletedComment(n, state) : n);
   }
   return out;
 }

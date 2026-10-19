@@ -12,6 +12,7 @@ import {
   postComment,
   replyToThread,
 } from "../usecases/comments.ts";
+import { listMyNotifications, DELETED_COMMENT_NOTIFICATION } from "../usecases/notifications.ts";
 import { assignReviewers } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -249,5 +250,115 @@ describe("システム管理者の削除（利用者指示 2026-10-19）", () =>
     );
     await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
     expect(auditOf(ctx, "commentThread")).toHaveLength(0);
+  });
+});
+
+describe("管理者の削除は返信ごとまとめて消す（利用者決定 2026-10-19）", () => {
+  const auditOf = (ctx: Awaited<ReturnType<typeof setup>>["ctx"], entityType: string) =>
+    ctx.state.audit.filter((a) => a.entityType === entityType);
+
+  it("管理者が返信付きのコメントを削除すると、スレッドと全ての返信が消え、監査は 1 件、件数も更新される", async () => {
+    const { ctx, work, revision, post, replyIds } = await setup();
+    const kept = await post("info");
+    const thread = await post("critical");
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    await replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "お願いします" });
+    const ids = await replyIds(thread.id);
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(2);
+
+    ctx.clock.advance(1000);
+    await deleteThread(ctx, principals.sysadmin, { threadId: thread.id });
+
+    const stored = (await ctx.threads.findById(thread.id))!;
+    expect(stored.deletedAt).toBe(ctx.clock.now());
+    expect(isListedThread(stored)).toBe(false); // 「削除されたコメント」として残らない
+    // 件数・未解決の対象からはスレッドだけが外れる
+    expect((await ctx.threads.listByRevision(revision.id)).map((t) => t.id)).toEqual([kept.id]);
+    // 返信は全て削除済み（原文は履歴に残る）
+    const events = await ctx.threads.listEvents(thread.id);
+    expect(
+      events
+        .filter((e) => e.eventType === "reply_deleted")
+        .map((e) => (e.payload as { replyEventId: string }).replyEventId),
+    ).toEqual(ids);
+    expect(events.filter((e) => e.eventType === "replied")).toHaveLength(2);
+    expect(events.filter((e) => e.eventType === "deleted")).toHaveLength(1);
+    expect(events.find((e) => e.eventType === "deleted")?.payload).toMatchObject({
+      cascade: true,
+      repliesDeleted: 2,
+    });
+    // 返信を 1 件ずつ消す必要はなく、消そうとしても見つからない扱い
+    await expect(
+      deleteReply(ctx, principals.sysadmin, { threadId: thread.id, replyEventId: ids[0]! }),
+    ).rejects.toThrow(code("comment_reply_not_found"));
+    // 重大指摘が消えたので校了を止めない（残りは info のみ）
+    await expect(
+      finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id }),
+    ).resolves.toBeTruthy();
+
+    // 監査はまとめて 1 件（返信ごとには残さない）
+    expect(auditOf(ctx, "commentReply")).toHaveLength(0);
+    const entries = auditOf(ctx, "commentThread");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      entityId: thread.id,
+      operation: "delete",
+      actorId: principals.sysadmin.userId,
+      before: { authorId: principals.reviewer.userId },
+      after: { byAdmin: true, repliesDeleted: 2, afterFinalized: false },
+      at: ctx.clock.now(),
+    });
+  });
+
+  it("校了後の管理者の削除も返信ごと消え、監査に校了後と返信の件数が残る。返信が無ければ 0 件", async () => {
+    const { ctx, work, revision, post } = await setup();
+    const withReply = await post("info");
+    const plain = await post("info");
+    await replyToThread(ctx, principals.creator, { threadId: withReply.id, body: "対応します" });
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    await deleteThread(ctx, principals.sysadmin, { threadId: withReply.id });
+    await deleteThread(ctx, principals.sysadmin, { threadId: plain.id });
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
+    expect(isListedThread((await ctx.threads.findById(withReply.id))!)).toBe(false);
+    expect(auditOf(ctx, "commentThread").map((a) => a.after)).toMatchObject([
+      { repliesDeleted: 1, afterFinalized: true },
+      { repliesDeleted: 0, afterFinalized: true },
+    ]);
+  });
+
+  it("投稿者本人の削除は従来どおり（他の人の返信があれば残り、監査は出ない）。管理者以外の他人は拒否", async () => {
+    const { ctx, revision, post, replyIds } = await setup();
+    const thread = await post();
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    for (const p of [principals.creator, principals.manager, principals.approver])
+      await expect(deleteThread(ctx, p, { threadId: thread.id })).rejects.toThrow(
+        code("comment_delete_not_author"),
+      );
+    await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
+    expect(isListedThread((await ctx.threads.findById(thread.id))!)).toBe(true);
+    const events = await ctx.threads.listEvents(thread.id);
+    expect(events.filter((e) => e.eventType === "reply_deleted")).toHaveLength(0);
+    expect(events.find((e) => e.eventType === "deleted")?.payload).toEqual({ keepsReplies: true });
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
+    expect(await replyIds(thread.id)).toHaveLength(1);
+    expect(auditOf(ctx, "commentThread")).toHaveLength(0);
+  });
+
+  it("削除されたコメントへの通知は文面と抜粋を伏せ、飛び先（threadId）も返さない。残りの通知は変わらない", async () => {
+    const { ctx, post } = await setup();
+    const gone = await post("info");
+    const stays = await post("info");
+    const before = await listMyNotifications(ctx, principals.creator);
+    expect(before.filter((n) => n.threadId === gone.id)).toHaveLength(1);
+    await deleteThread(ctx, principals.sysadmin, { threadId: gone.id });
+    const after = await listMyNotifications(ctx, principals.creator);
+    expect(after).toHaveLength(before.length);
+    const degraded = after.filter((n) => n.threadId === undefined && n.kind === "comment_posted");
+    expect(degraded).toHaveLength(1);
+    expect(degraded[0]).toMatchObject({ body: DELETED_COMMENT_NOTIFICATION.body });
+    expect(degraded[0]!.preview).toBeUndefined();
+    expect(after.find((n) => n.threadId === stays.id)?.body).not.toBe(
+      DELETED_COMMENT_NOTIFICATION.body,
+    );
   });
 });
