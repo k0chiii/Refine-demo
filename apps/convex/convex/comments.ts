@@ -116,6 +116,7 @@ export const events = query({
             await app.threads.listEvents(threadId),
             principal.userId,
             work.lifecycle,
+            principal,
           )
         : [];
       const mentionsOf = (e: (typeof events)[number]): string[] => {
@@ -148,7 +149,7 @@ export const events = query({
   },
 });
 
-/** 自分のコメントの削除（論理削除。原文は履歴に残る）。 */
+/** コメントの削除（本人、またはシステム管理者。論理削除で原文は履歴に残る）。 */
 export const remove = mutation({
   args: { threadId: v.id("commentThreads") },
   handler: async (ctx, args) => {
@@ -160,7 +161,7 @@ export const remove = mutation({
   },
 });
 
-/** 自分の返信の削除（論理削除。元の本文は履歴に残る）。replyEventId は events の返信の id。 */
+/** 返信の削除（本人、またはシステム管理者。論理削除で元の本文は履歴に残る）。replyEventId は events の返信の id。 */
 export const removeReply = mutation({
   args: { threadId: v.id("commentThreads"), replyEventId: v.string() },
   handler: async (ctx, args) => {

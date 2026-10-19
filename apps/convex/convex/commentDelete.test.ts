@@ -49,7 +49,7 @@ async function setup(t: Harness, cast: Cast) {
   return { t, workId, rid, postAs, view };
 }
 
-describe("Convex 統合: コメントの削除（投稿者のみ）", () => {
+describe("Convex 統合: コメントの削除（投稿者・システム管理者）", () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 9, 0, 0), toFake: ["Date"] });
   });
@@ -70,7 +70,7 @@ describe("Convex 統合: コメントの削除（投稿者のみ）", () => {
     const asCreator = await cast.creator.as.query(api.revisions.get, { revisionId: rid });
     expect(asCreator.threads[0]?.can.delete).toBe(false);
 
-    for (const who of [cast.creator, cast.admin, cast.manager, cast.approver]) {
+    for (const who of [cast.creator, cast.manager, cast.approver]) {
       await expect(who.as.mutation(api.comments.remove, { threadId })).rejects.toThrow(
         code("comment_delete_not_author"),
       );
@@ -134,7 +134,7 @@ describe("Convex 統合: コメントの削除（投稿者のみ）", () => {
     const [reply] = (await events()).events.filter((e) => e.eventType === "replied");
     expect(reply!.can).toEqual({ delete: false }); // 見ているのは校正者
 
-    for (const who of [cast.reviewer, cast.admin, cast.manager]) {
+    for (const who of [cast.reviewer, cast.manager]) {
       await expect(
         who.as.mutation(api.comments.removeReply, { threadId, replyEventId: reply!.id }),
       ).rejects.toThrow(code("comment_delete_not_author"));
@@ -166,5 +166,59 @@ describe("Convex 統合: コメントの削除（投稿者のみ）", () => {
     ).rejects.toThrow(code("work_already_finalized"));
     const v = await cast.reviewer.as.query(api.revisions.get, { revisionId: rid });
     expect(v.threads[0]?.can.delete).toBe(false);
+  });
+
+  it("システム管理者は他人のコメント・返信を校了後も削除でき、サーバーが can.delete を返す。監査に残る", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const { workId, rid, postAs } = await setup(t, cast);
+    const first = await postAs(cast.reviewer, "info");
+    const second = await postAs(cast.reviewer, "info");
+    await cast.creator.as.mutation(api.comments.reply, { threadId: first, body: "対応します" });
+    const asAdmin = () => cast.admin.as.query(api.revisions.get, { revisionId: rid });
+    expect((await asAdmin()).threads.map((x) => x.can.delete)).toEqual([true, true]);
+    // 管理者以外の他人は不可のまま
+    expect(
+      (await cast.manager.as.query(api.revisions.get, { revisionId: rid })).threads[0],
+    ).toMatchObject({
+      can: { delete: false },
+    });
+    const [reply] = (
+      await cast.admin.as.query(api.comments.events, { threadId: first })
+    ).events.filter((e) => e.eventType === "replied");
+    expect(reply!.can).toEqual({ delete: true });
+
+    await cast.admin.as.mutation(api.comments.removeReply, {
+      threadId: first,
+      replyEventId: reply!.id,
+    });
+    await cast.approver.as.mutation(api.approvals.finalize, { workId, revisionId: rid });
+    // 校了後: 投稿者は消せないが、管理者は消せる
+    await expect(
+      cast.reviewer.as.mutation(api.comments.remove, { threadId: second }),
+    ).rejects.toThrow(code("work_already_finalized"));
+    expect((await asAdmin()).threads.map((x) => x.can.delete)).toEqual([true, true]);
+    await cast.admin.as.mutation(api.comments.remove, { threadId: second });
+    await cast.admin.as.mutation(api.comments.remove, { threadId: first });
+    expect((await asAdmin()).threads).toHaveLength(0);
+
+    const audits = await t.run((ctx) => ctx.db.query("auditEvents").collect());
+    const mine = audits.filter(
+      (a) => a.operation === "delete" && ["commentThread", "commentReply"].includes(a.entityType),
+    );
+    expect(mine.map((a) => a.entityType).sort()).toEqual([
+      "commentReply",
+      "commentThread",
+      "commentThread",
+    ]);
+    expect(mine.every((a) => a.actorId === cast.admin.id)).toBe(true);
+    expect(mine.find((a) => a.entityType === "commentReply")?.before).toMatchObject({
+      authorId: cast.creator.id,
+    });
+    expect(
+      mine
+        .filter((a) => a.entityType === "commentThread")
+        .every((a) => (a.before as { authorId: string }).authorId === cast.reviewer.id),
+    ).toBe(true);
   });
 });

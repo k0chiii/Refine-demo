@@ -229,7 +229,7 @@ export function NotationPanel({
                 title="該当箇所へ移動"
                 onClick={() => go(f)}
               >
-                <M3eIcon name="my_location" />
+                <M3eIcon name="location_on" />
               </M3eIconButton>
               {!readOnly && f.suggestion ? (
                 <M3eIconButton

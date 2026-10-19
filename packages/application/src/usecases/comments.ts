@@ -26,6 +26,7 @@ import {
   isCarryCandidate,
   mentionableUserIds,
   planCarryForward,
+  replyEntries,
   revisionLabel,
   summarizeCommentReactions,
   toggleReplyReaction,
@@ -373,7 +374,8 @@ export async function editThread(
 }
 
 /**
- * コメントの削除（投稿者本人のみ。校了後は不可）。論理削除で、原文と履歴は CommentEvent に残る。
+ * コメントの削除（投稿者本人は校了前だけ。システム管理者は他人のものも校了後も。利用者指示 2026-10-19）。論理削除で、原文と履歴は CommentEvent に残る。
+ * 管理者の削除は監査に残す（誰が・どのコメントを・いつ・元の投稿者）。
  * 他の人の返信が残るなら一覧に「削除されたコメント」として残し、無ければ一覧からも消す（domain/comment/deletion.ts）。
  */
 export async function deleteThread(
@@ -388,7 +390,14 @@ export async function deleteThread(
   const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
   const now = ctx.clock.now();
   const events = await ctx.threads.listEvents(thread.id);
-  const next = deleteThreadComment(thread, principal.userId, work.lifecycle, events, now);
+  const next = deleteThreadComment(
+    thread,
+    principal.userId,
+    work.lifecycle,
+    events,
+    now,
+    principal,
+  );
   await ctx.threads.update(next);
   await ctx.threads.appendEvent({
     threadId: thread.id,
@@ -397,10 +406,55 @@ export async function deleteThread(
     payload: { keepsReplies: next.deletedKeepsReplies === true },
     createdAt: now,
   });
+  await recordAdminDeletion(ctx, principal, {
+    entityType: "commentThread",
+    entityId: thread.id,
+    authorId: thread.authorId,
+    workId: work.id,
+    revisionId: thread.revisionId,
+    lifecycle: work.lifecycle,
+    at: now,
+  });
   return next;
 }
 
-/** 返信の削除（返信した本人のみ。校了後は不可）。返信の本文は元のイベントに残り、削除は reply_deleted として追記する。 */
+/**
+ * 管理者による他人のコメント・返信の削除を監査に残す（本人の削除は CommentEvent が履歴）。
+ * 校了後の削除かも記録する。
+ */
+async function recordAdminDeletion(
+  ctx: AppContext,
+  principal: Principal,
+  d: {
+    entityType: "commentThread" | "commentReply";
+    entityId: string;
+    authorId: string;
+    workId: string;
+    revisionId: string;
+    lifecycle: string;
+    at: number;
+    threadId?: string;
+  },
+): Promise<void> {
+  if (!principal.isSystemAdmin || d.authorId === principal.userId) return;
+  await ctx.audit.record({
+    entityType: d.entityType,
+    entityId: d.entityId,
+    operation: "delete",
+    actorId: principal.userId,
+    before: { authorId: d.authorId },
+    after: {
+      byAdmin: true,
+      workId: d.workId,
+      revisionId: d.revisionId,
+      ...(d.threadId !== undefined ? { threadId: d.threadId } : {}),
+      afterFinalized: d.lifecycle === "finalized",
+    },
+    at: d.at,
+  });
+}
+
+/** 返信の削除（返信した本人は校了前だけ。システム管理者は他人のものも校了後も）。返信の本文は元のイベントに残り、削除は reply_deleted として追記する。 */
 export async function deleteReply(
   ctx: AppContext,
   principal: Principal,
@@ -418,13 +472,26 @@ export async function deleteReply(
     principal.userId,
     work.lifecycle,
     events,
+    principal,
   );
+  const now = ctx.clock.now();
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "reply_deleted",
     actorId: principal.userId,
     payload: { replyEventId: input.replyEventId },
-    createdAt: ctx.clock.now(),
+    createdAt: now,
+  });
+  const replyAuthor = replyEntries(events).find((r) => r.id === input.replyEventId)!.actorId;
+  await recordAdminDeletion(ctx, principal, {
+    entityType: "commentReply",
+    entityId: input.replyEventId,
+    threadId: thread.id,
+    authorId: replyAuthor,
+    workId: work.id,
+    revisionId: thread.revisionId,
+    lifecycle: work.lifecycle,
+    at: now,
   });
   if (next !== thread) await ctx.threads.update(next);
 }

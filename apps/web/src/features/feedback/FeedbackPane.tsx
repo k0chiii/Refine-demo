@@ -15,6 +15,7 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { FeedbackComposer } from "./FeedbackComposer";
 import { FeedbackConversation } from "./FeedbackConversation";
+import { FeedbackThreadMenu } from "./FeedbackThreadMenu";
 
 export type FeedbackThreadSummary = FunctionReturnType<typeof api.feedback.listThreads>[number];
 
@@ -240,6 +241,9 @@ function FeedbackPaneThread({
             </span>
           ) : null}
         </div>
+        {data ? (
+          <FeedbackThreadMenu threadId={threadId} canDelete={data.can.delete} onDeleted={onBack} />
+        ) : null}
         {expandable ? (
           <Link
             to="/feedback/$threadId"
@@ -264,7 +268,7 @@ function FeedbackPaneThread({
             })
           }
         >
-          <M3eIcon slot="icon" name="my_location" />
+          <M3eIcon slot="icon" name="location_on" />
           紙面の場所を表示{index ? `（${index}）` : ""}
         </M3eButton>
       ) : null}

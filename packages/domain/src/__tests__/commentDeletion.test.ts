@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { CommentEvent } from "../comment/CommentThread.ts";
 import {
   canDeleteComment,
+  commentDeleteAuthority,
   deleteReply,
   deleteThreadComment,
   isActiveThread,
@@ -31,7 +32,7 @@ const replyDeleted = (replyEventId: string, actorId: string): CommentEvent => ({
   createdAt: 20,
 });
 
-describe("コメントの削除（投稿者のみ・校了後は不可）", () => {
+describe("コメントの削除（投稿者は校了前だけ・システム管理者は常に）", () => {
   it("canDeleteComment: 本人かつ校了前だけ", () => {
     expect(canDeleteComment("reviewer", "reviewer", "active")).toBe(true);
     expect(canDeleteComment("reviewer", "creator", "active")).toBe(false);
@@ -45,7 +46,22 @@ describe("コメントの削除（投稿者のみ・校了後は不可）", () =
     expect(isActiveThread(next)).toBe(false);
   });
 
-  it("他の人（制作者・管理者を含む）は削除できない", () => {
+  it("システム管理者は他人のコメントも、校了後も削除できる。権限の種類を区別する", () => {
+    const admin = { isSystemAdmin: true };
+    expect(canDeleteComment("reviewer", "admin", "active", admin)).toBe(true);
+    expect(canDeleteComment("reviewer", "admin", "finalized", admin)).toBe(true);
+    expect(commentDeleteAuthority("reviewer", "admin", "active", admin)).toBe("admin");
+    expect(commentDeleteAuthority("reviewer", "reviewer", "active", admin)).toBe("author");
+    expect(commentDeleteAuthority("reviewer", "reviewer", "finalized", admin)).toBe("admin");
+    expect(commentDeleteAuthority("reviewer", "creator", "active", { isSystemAdmin: false })).toBe(
+      null,
+    );
+    const next = deleteThreadComment(makeThread(), "admin", "finalized", [], NOW, admin);
+    expect(next.deletedAt).toBe(NOW);
+    expect(next.body).toBe("誤字");
+  });
+
+  it("他の人（制作者・管理者でない人）は削除できない", () => {
     for (const actor of ["creator", "admin", "someone"]) {
       expect(() => deleteThreadComment(makeThread(), actor, "active", [], NOW)).toThrowError(
         code("comment_delete_not_author"),
@@ -114,6 +130,15 @@ describe("返信の削除", () => {
     );
   });
 
+  it("システム管理者は他人の返信も、校了後も削除できる", () => {
+    const admin = { isSystemAdmin: true };
+    expect(deleteReply(thread, "e1", "admin", "active", events, admin)).toBe(thread);
+    expect(deleteReply(thread, "e2", "admin", "finalized", events, admin)).toBe(thread);
+    expect(() => deleteReply(thread, "nope", "admin", "active", events, admin)).toThrowError(
+      code("comment_reply_not_found"),
+    );
+  });
+
   it("校了後・存在しない・削除済みの返信は削除できない", () => {
     expect(() => deleteReply(thread, "e1", "creator", "finalized", events)).toThrowError(
       code("work_already_finalized"),
@@ -155,6 +180,13 @@ describe("画面向けの見せ方", () => {
     });
     expect(presentThread(live, "creator", "active").can.delete).toBe(false);
     expect(presentThread(live, "reviewer", "finalized").can.delete).toBe(false);
+    // システム管理者は他人のものも、校了後も削除できる
+    const admin = { isSystemAdmin: true };
+    expect(presentThread(live, "admin", "active", admin).can.delete).toBe(true);
+    expect(presentThread(live, "admin", "finalized", admin).can.delete).toBe(true);
+    expect(presentThread(makeThread({ deletedAt: 5 }), "admin", "active", admin).can.delete).toBe(
+      false,
+    );
 
     const gone = presentThread(
       makeThread({
@@ -195,6 +227,13 @@ describe("画面向けの見せ方", () => {
     expect(projectThreadEvents({}, events, "reviewer", "finalized")[2]!.can).toEqual({
       delete: false,
     });
+    // システム管理者は他人の返信も、校了後も削除できる（削除済みの返信は除く）
+    const admin = { isSystemAdmin: true };
+    for (const lifecycle of ["active", "finalized"] as const) {
+      const v = projectThreadEvents({}, events, "admin", lifecycle, admin);
+      expect(v[1]!.can).toEqual({ delete: false });
+      expect(v[2]!.can).toEqual({ delete: true });
+    }
   });
 
   it("projectThreadEvents: 削除したスレッドの訂正前の本文は見せない", () => {
