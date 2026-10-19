@@ -137,7 +137,7 @@ function Make() {
     const mentions = data.mentions.filter((m) => mine.has(m.workId)).slice(0, 3);
     if (rows.length === 0)
       return (
-        <Empty icon="brush">
+        <Empty icon="edit">
           <span className="title-medium">進行中の制作物はありません</span>
         </Empty>
       );
@@ -148,7 +148,7 @@ function Make() {
             {turn.map((x) => (
               <WorkspaceRow
                 key={x.r.workId}
-                icon={x.target ? submitRouteIcon[x.target.route ?? "upload"] : "brush"}
+                icon={x.target ? submitRouteIcon[x.target.route ?? "upload"] : "edit"}
                 title={x.r.title}
                 suffix={x.action === "respond" || x.r.stage === "lapsed" ? x.r.revisionLabel : null}
                 lines={

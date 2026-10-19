@@ -186,7 +186,7 @@ function AppShell() {
 
   const items = [
     // 入口は仕事で分ける（利用者決定 2026-10-19）: 制作 = 自分が作るもの、校正 = 自分が確かめるもの。どちらもホーム
-    { to: "/make", icon: "brush", label: "制作" },
+    { to: "/make", icon: "edit", label: "制作" },
     { to: "/check", icon: "fact_check", label: "校正" },
     { to: "/works", icon: "folder", label: "制作物" },
     // 制作の議論（表現の FB）。Slack の代わりに MF100 の中でスレッド型で話す（利用者決定 2026-10-15）
