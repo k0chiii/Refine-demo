@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo } from "react";
 import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
-import { Empty, Group, WorkspaceRow, deadlineText } from "@/features/workspace/parts";
+import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
 import { formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
@@ -117,19 +117,23 @@ function Make() {
     />
   );
 
-  const progressLines = (r: Overview): Array<string | false> => [
+  /** 校正中の行の補足 1 行: 校正 m/n 人完了・専門確認 k（あれば）・校了 d/q（校了者が 2 人以上なら） */
+  const progressLine = (r: Overview): string =>
     r.reviewersTotal === 0
       ? "校正者が未割り当て"
-      : `校正 ${r.reviewersDone}/${r.reviewersTotal} 人完了${r.checksPending > 0 ? `・専門確認 ${r.checksPending}` : ""}`,
-    r.approvalQuorum > 0 ? `校了 ${r.approvalDeclared}/${r.approvalQuorum}人` : false,
-  ];
+      : [
+          `校正 ${r.reviewersDone}/${r.reviewersTotal} 人完了`,
+          r.checksPending > 0 ? `専門確認 ${r.checksPending}` : null,
+          r.approvalQuorum > 1 ? `校了 ${r.approvalDeclared}/${r.approvalQuorum}` : null,
+        ]
+          .filter(Boolean)
+          .join("・");
 
   const activeBody = () => {
     if (!data || !rows) return <Loading label="制作を読み込んでいます" />;
     const turn = rows.filter((x) => x.group === "turn");
     const waiting = rows.filter((x) => x.group === "waiting");
     const mine = new Set(rows.map((x) => x.r.workId));
-    const upcoming = data.upcoming.filter((i) => mine.has(i.workId)).slice(0, 3);
     const mentions = data.mentions.filter((m) => mine.has(m.workId)).slice(0, 3);
     if (rows.length === 0)
       return (
@@ -146,23 +150,23 @@ function Make() {
                 key={x.r.workId}
                 icon={x.target ? submitRouteIcon[x.target.route ?? "upload"] : "brush"}
                 title={x.r.title}
-                suffix={x.action === "respond" ? x.r.revisionLabel : null}
+                suffix={x.action === "respond" || x.r.stage === "lapsed" ? x.r.revisionLabel : null}
                 lines={
                   x.action === "respond"
                     ? [
                         `未対応のコメント ${x.toRespond}`,
-                        deadlineText("校正の締切", x.r.reviewDeadlineAt),
+                        deadlineLine("校正の締切", x.r.reviewDeadlineAt),
                       ]
                     : [
                         x.r.stage === "unsubmitted"
                           ? "まだ版がありません"
-                          : `${x.r.revisionLabel ?? ""} は受付終了`,
-                        deadlineText("納期", x.r.deliveryAt),
+                          : `${x.r.revisionLabel ?? "この版"}は受付終了`,
+                        deadlineLine("納期", x.r.deliveryAt),
                       ]
                 }
                 chip={actionLabel[x.action]}
                 chipIcon={actionIcon[x.action]}
-                urgent={x.r.urgency === "overdue"}
+                urgent={x.r.urgency === "overdue" || x.r.stage === "lapsed"}
                 onOpen={() =>
                   x.action === "submit" && x.target
                     ? launcher.start({ workId: x.r.workId, route: x.target.route ?? "upload" })
@@ -181,31 +185,14 @@ function Make() {
                 title={x.r.title}
                 suffix={x.r.revisionLabel}
                 lines={[
-                  ...progressLines(x.r),
-                  deadlineText("校正の締切", x.r.reviewDeadlineAt) ||
-                    deadlineText("納期", x.r.deliveryAt),
+                  progressLine(x.r),
+                  deadlineLine("校正の締切", x.r.reviewDeadlineAt) ||
+                    deadlineLine("納期", x.r.deliveryAt),
                 ]}
                 chip={actionLabel[x.action]}
                 chipIcon={actionIcon[x.action]}
                 urgent={x.r.urgency === "overdue"}
                 onOpen={() => open(x.r.workId, x.r.title, { tab: "comments" })}
-              />
-            ))}
-          </Group>
-        ) : null}
-        {upcoming.length > 0 ? (
-          <Group title="次の締切" side>
-            {upcoming.map((i) => (
-              <WorkspaceRow
-                key={`${i.workId}-${i.deadlineKind}`}
-                icon="schedule"
-                title={i.workTitle}
-                suffix={i.revisionLabel}
-                lines={[
-                  deadlineText(i.deadlineKind === "delivery" ? "納期" : "校正の締切", i.deadlineAt),
-                ]}
-                chip="見る"
-                onOpen={() => open(i.workId, i.workTitle)}
               />
             ))}
           </Group>
@@ -251,7 +238,7 @@ function Make() {
             lines={[
               `${mediaLabel[w.mediaType] ?? w.mediaType}・下書き「${w.draft!.title || "無題"}」・${w.draft!.chars.toLocaleString("ja-JP")} 文字`,
               `${formatJstShort(w.draft!.updatedAt)}${w.draft!.updatedBy ? ` ${w.draft!.updatedBy.name}` : ""}`,
-              deadlineText("納期", w.deadlineAt),
+              deadlineLine("納期", w.deadlineAt),
             ]}
             chip="続きを書く"
             chipIcon="edit"

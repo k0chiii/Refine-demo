@@ -236,4 +236,40 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     const other = await buildDashboard(ctx, a2, await all());
     expect(other.mine.finalize.map((i) => i.taskState)).toEqual(["pending"]);
   });
+
+  it("進み具合の数: 校正は校正者の完了 m/n、校了は宣言 d/q（校了者が 1 人なら付かない）", async () => {
+    const { ctx, works, revision } = await setup();
+    await assignReviewers(ctx, principals.manager, {
+      revisionId: revision.id,
+      reviewerIds: [principals.reviewer.userId, principals.approver.userId],
+      reviewType: "general",
+    });
+    let d = await buildDashboard(ctx, principals.reviewer, await works());
+    expect(d.mine.review.map((i) => i.progress)).toEqual([{ done: 0, total: 2 }]);
+    await completeMyReview(ctx, principals.reviewer, revision.id);
+    d = await buildDashboard(ctx, principals.reviewer, await works());
+    expect(d.done.map((i) => i.progress)).toEqual([{ done: 1, total: 2 }]);
+    // 校了者が 1 人: 宣言の数は付けない（履歴も読まない）
+    const finalize = (await buildDashboard(ctx, principals.approver, await works())).mine.finalize;
+    expect(finalize).toHaveLength(1);
+    expect(finalize[0]!.progress).toBeUndefined();
+  });
+
+  it("進み具合の数: 校了者が 2 人なら宣言 d/q が校了する行にも完了の行にも付く", async () => {
+    const ctx = createInMemoryContext();
+    const a2 = principals.reviewer;
+    const work = await seedWork(ctx, {
+      approverIds: [principals.approver.userId, a2.userId],
+      approvalQuorum: 2,
+    });
+    const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
+    const all = async () => [(await ctx.works.findById(work.id))!];
+    let other = await buildDashboard(ctx, a2, await all());
+    expect(other.mine.finalize.map((i) => i.progress)).toEqual([{ done: 0, total: 2 }]);
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    other = await buildDashboard(ctx, a2, await all());
+    expect(other.mine.finalize.map((i) => i.progress)).toEqual([{ done: 1, total: 2 }]);
+    const declared = await buildDashboard(ctx, principals.approver, await all());
+    expect(declared.done.map((i) => i.progress)).toEqual([{ done: 1, total: 2 }]);
+  });
 });

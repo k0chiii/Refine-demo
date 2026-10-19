@@ -99,16 +99,22 @@ const tabOfState: Record<CheckProgress, CheckTab> = {
 };
 
 export interface CheckEntryLike {
+  /** 仕事の種類。校了する行は一覧の先頭に固める（無ければ締切順だけ） */
+  kind?: CheckKind;
   state: CheckProgress;
   /** 校正の締切（無ければ null） */
   deadlineAt: number | null;
   title: string;
 }
 
-/** 締切の早い順（締切の無いものは後ろ）。同じなら題名順 */
+/**
+ * 校了する行を先頭に（校了は締切の手前の最後の 1 手）、次に締切の早い順（締切の無いものは後ろ）。同じなら題名順
+ */
 export function compareCheckEntries(a: CheckEntryLike, b: CheckEntryLike): number {
   return (
-    (a.deadlineAt ?? Infinity) - (b.deadlineAt ?? Infinity) || a.title.localeCompare(b.title, "ja")
+    Number(b.kind === "finalize") - Number(a.kind === "finalize") ||
+    (a.deadlineAt ?? Infinity) - (b.deadlineAt ?? Infinity) ||
+    a.title.localeCompare(b.title, "ja")
   );
 }
 

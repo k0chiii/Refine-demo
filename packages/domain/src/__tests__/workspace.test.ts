@@ -82,4 +82,14 @@ describe("校正: 未着手・確認中・完了", () => {
     expect(g.doing.map((x) => x.title)).toEqual(["お"]);
     expect(g.done.map((x) => x.title)).toEqual(["か"]);
   });
+
+  it("校了する行は締切より先に、未着手の先頭へ固める", () => {
+    const g = groupCheckEntries([
+      e("あ", "pending", 100),
+      { ...e("い", "pending", 900), kind: "finalize" as const },
+      { ...e("う", "pending", 500), kind: "finalize" as const },
+      { ...e("え", "pending", 50), kind: "review" as const },
+    ]);
+    expect(g.todo.map((x) => x.title)).toEqual(["う", "い", "え", "あ"]);
+  });
 });

@@ -64,6 +64,8 @@ export interface DashboardItem {
   /** 校正の仕事（校正する・専門確認・校了）の種類と進み具合。校正ページの未着手・確認中・完了に使う */
   task?: CheckKind;
   taskState?: CheckProgress;
+  /** 進み具合の数: 校正は 校正者の完了 m/n、校了は 宣言 d/q（校了者が 2 人以上のときだけ） */
+  progress?: { done: number; total: number };
 }
 
 export interface Dashboard {
@@ -314,12 +316,14 @@ export async function buildDashboard(
           ...item(accepting, accepting.deadlineAt, unresolved),
           task: "review",
           taskState: checkStateOfAssignment(mine.state),
+          progress: { done: reviewersDone, total: assignments.length },
         });
       else if (mine)
         out.done.push({
           ...item(accepting, accepting.deadlineAt),
           task: "review",
           taskState: "done",
+          progress: { done: reviewersDone, total: assignments.length },
         });
       if (unresolved > 0 && isAllowed("comment.decide", authz))
         out.mine.respond.push(item(accepting, accepting.deadlineAt, unresolved));
@@ -348,15 +352,13 @@ export async function buildDashboard(
         isAllowed("work.finalize", authz)
       ) {
         // 校了者が複数で、すでに自分が宣言した版は「校了待ち」に出さない（履歴を読むのは人数が 2 以上のときだけ）
-        const declaredByMe =
-          quorum > 1 &&
-          declarationsOf(await approvalsOf(), accepting.id).some(
-            (d) => d.actorId === principal.userId,
-          );
+        const declarations = quorum > 1 ? declarationsOf(await approvalsOf(), accepting.id) : [];
+        const declaredByMe = declarations.some((d) => d.actorId === principal.userId);
         const task = { task: "finalize", taskState: declaredByMe ? "done" : "pending" } as const;
         (declaredByMe ? out.done : out.mine.finalize).push({
           ...item(accepting, accepting.deadlineAt),
           ...task,
+          ...(quorum > 1 ? { progress: { done: declarations.length, total: quorum } } : {}),
         });
       }
       if (assignments.length === 0 && isAllowed("review.assign", authz))
