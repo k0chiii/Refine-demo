@@ -71,12 +71,6 @@
   --mf-warning-container: #ede692;
   --mf-on-warning-container: #363102;
   --mf-warning: #6d5f05;
-  /* 校正の入口（利用者決定 2026-10-19）の色: 制作 = 青（primary）、校正 = ティール。青のテーマの中に収まる補助色で、
-     選択中のナビ・切り替え・行の操作の印に使う。色相は種の青に寄せたティール */
-  --mf-teal: #00696d;
-  --mf-on-teal: #ffffff;
-  --mf-teal-container: #b3ecee;
-  --mf-on-teal-container: #002022;
 
   /* 形（M3 shape scale。M3E の --md-sys-shape-corner-* を経由する） */
   --mf-shape-xs: var(--md-sys-shape-corner-extra-small, 4px);
@@ -1301,6 +1295,12 @@ m3e-dialog [slot="actions"] {
     grid-column: 1 / -1;
   }
 }
+@media (max-width: 599px) {
+  /* compact: 3 枚を 1 列に（2 列だと 3 枚目だけ横長になる） */
+  .kpis--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .kpi {
   --m3e-card-padding: 16px;
   --m3e-card-shape: var(--mf-shape-lg);
@@ -1931,13 +1931,29 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- 入口: 制作 / 校正（ホームの代わり。利用者決定 2026-10-19。docs/UI_M3E.md §79）
- * 制作 = 青（primary 系）、校正 = ティール（--mf-teal）。色は .ws[data-ws] のトークンに集め、部品は同じものを使う。
- * 選択中のナビ・切り替え（ChoiceGroup）・行の操作の印がこの色になる。1 列で、広い画面でも読みやすい幅に収める */
-:root[data-theme="dark"] {
-  --mf-teal: #4fd8dc;
-  --mf-on-teal: #003739;
-  --mf-teal-container: #004f52;
-  --mf-on-teal-container: #9cf0f3;
+ * 色は青 1 つ（§87。ティールは撤回）。色は .hub の --hub-* に集め、部品は同じものを使う。
+ * 切り替え（ChoiceGroup）・行の操作の印がこの色になる。1 列で、広い画面でも読みやすい幅に収める */
+/* 横にはみ出さない: 行とその中身は親の幅より広がらない。固定幅は使わない */
+.hub > *,
+.dash__section,
+.dash__section > *,
+.hub .list__item {
+  min-width: 0;
+  max-width: 100%;
+}
+.hub .list {
+  box-sizing: border-box;
+  width: calc(100% + 32px); /* margin: 0 -16px の分 */
+  max-width: calc(100% + 32px);
+}
+/* 「100nc_デザイン_最終」のような切れ目の無い文字列も折る */
+.hub .list__headline,
+.hub-row__line {
+  overflow-wrap: anywhere;
+}
+.hub-chip {
+  flex: 0 0 auto;
+  max-width: 100%;
 }
 .hub {
   --hub-accent: var(--mf-primary);
@@ -1948,12 +1964,6 @@ m3e-dialog [slot="actions"] {
   gap: 24px;
   max-width: 880px;
   min-width: 0;
-}
-.hub[data-hub="check"] {
-  --hub-accent: var(--mf-teal);
-  --hub-on-accent: var(--mf-on-teal);
-  --hub-container: var(--mf-teal-container);
-  --hub-on-container: var(--mf-on-teal-container);
 }
 /* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: 選んだものを入口の色に */
 .hub__tabs {
@@ -1971,6 +1981,8 @@ m3e-dialog [slot="actions"] {
   --m3e-tonal-button-pressed-selected-icon-color: var(--hub-on-accent);
   justify-self: start;
   max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none; /* 360 で 3 つが入らないときは横に流す（ページは広げない） */
 }
 /* 行の右の「次の操作」の印: 入口の色の丸い印。行全体が押せる（印は見た目） */
 .hub-chip {
@@ -1991,16 +2003,15 @@ m3e-dialog [slot="actions"] {
 .hub-row__line {
   display: block;
 }
+.hub-row__line--action {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: 4px;
+}
 .hub .dash__section--side .hub-chip {
   background: transparent;
   color: var(--hub-accent);
   padding-inline: 0;
-}
-/* ナビ: 校正の選択中はティール（制作は既定の青） */
-m3e-nav-item[data-to="/check"] {
-  --m3e-nav-item-active-container-color: var(--mf-teal-container);
-  --m3e-nav-item-active-icon-color: var(--mf-on-teal-container);
-  --m3e-nav-item-active-label-text-color: var(--mf-on-teal-container);
 }
 /* レールの下の行き先（表記ルール・管理）: 上の 4 つと間を空けて、レールの下端に寄せる */
 .rail__lower--first {

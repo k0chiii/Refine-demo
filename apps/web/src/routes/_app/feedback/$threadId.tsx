@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { useEffect } from "react";
 import { FeedbackConversation } from "@/features/feedback/FeedbackConversation";
 import { anchorPlace } from "@/features/feedback/FeedbackPane";
+import { FeedbackThreadMenu } from "@/features/feedback/FeedbackThreadMenu";
 import { useVisualViewportBox } from "@/lib/useKeyboardInset";
 import { useWindowClass } from "@/lib/useMedia";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -43,16 +44,13 @@ function FeedbackThread() {
       });
   }, [wide, data?.work.id, threadId]);
 
+  const backToWork = () =>
+    void (data
+      ? navigate({ to: "/feedback/w/$workId", params: { workId: data.work.id }, search: {} })
+      : navigate({ to: "/feedback" }));
   const back = (
     <AppBarSlot slot="leading">
-      <M3eIconButton
-        aria-label="この制作物の FB へ戻る"
-        onClick={() =>
-          void (data
-            ? navigate({ to: "/feedback/w/$workId", params: { workId: data.work.id }, search: {} })
-            : navigate({ to: "/feedback" }))
-        }
-      >
+      <M3eIconButton aria-label="この制作物の FB へ戻る" onClick={backToWork}>
         <M3eIcon name="arrow_back" className="icon--mirror" />
       </M3eIconButton>
     </AppBarSlot>
@@ -107,7 +105,7 @@ function FeedbackThread() {
             header={
               <section className="fb-context" aria-label="相談している制作物">
                 <M3eIcon
-                  name={data.thread.anchor ? "my_location" : "description"}
+                  name={data.thread.anchor ? "location_on" : "description"}
                   className="fb-context__icon"
                 />
                 <div className="fb-context__text">
@@ -119,6 +117,11 @@ function FeedbackThread() {
                     {where}・参加 {data.thread.participants.length} 人
                   </span>
                 </div>
+                <FeedbackThreadMenu
+                  threadId={threadId}
+                  canDelete={data.can.delete}
+                  onDeleted={backToWork}
+                />
                 {data.work.canOpen ? (
                   <M3eButton variant="tonal" onClick={openInWork}>
                     <M3eIcon slot="icon" name="open_in_new" />

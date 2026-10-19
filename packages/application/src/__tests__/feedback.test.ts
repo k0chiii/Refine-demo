@@ -10,6 +10,7 @@ import {
   createFeedbackThread,
   listFeedbackSpaces,
   deleteFeedbackPost,
+  deleteFeedbackThread,
   editFeedbackPost,
   expireFeedbackFiles,
   exportWorkStats,
@@ -121,7 +122,7 @@ describe("フィードバックのスレッドと投稿", () => {
     expect(view.posts.map((p) => p.template)).toEqual(["creator_first", "reviewer"]);
     // スレッドでは制作者だけ示す（校正者などの役割は出さない）
     expect(view.posts.map((p) => p.author.isCreator)).toEqual([true, false]);
-    expect(view.can).toEqual({ post: true, editOwn: true, rename: false });
+    expect(view.can).toEqual({ post: true, editOwn: true, rename: false, delete: false });
     // 未読の区切りのため、開いた人が最後に読んだ時刻を返す（読んでいなければ null）
     expect(view.readAt).toBeNull();
     expect((await getFeedbackThread(ctx, creator, t1)).readAt).toBe(ctx.clock.now());
@@ -673,5 +674,115 @@ describe("FB スペース（制作物ごと）", () => {
     });
     await markFeedbackRead(ctx, principals.reviewer, t);
     expect((await listFeedbackSpaces(ctx, principals.reviewer))[0]!.unread).toBe(0);
+  });
+});
+
+describe("システム管理者の削除（利用者指示 2026-10-19）", () => {
+  const audits = (ctx: InMemoryContext, entityType: string) =>
+    ctx.state.audit.filter((a) => a.entityType === entityType && a.operation === "delete");
+
+  it("他人の投稿を削除でき、監査に誰が・どの投稿を・元の投稿者が残る。管理者でない他人は削除できない", async () => {
+    const { ctx, work } = await setup();
+    const t = await createFeedbackThread(ctx, creator, {
+      workId: work.id,
+      title: "配色",
+      body: "a",
+    });
+    const p = await postFeedback(ctx, reviewer, { threadId: t, body: "意見" });
+    expect((await getFeedbackThread(ctx, sysadmin, t)).posts[1]!.can.delete).toBe(true);
+    expect((await getFeedbackThread(ctx, stranger, t)).posts[1]!.can.delete).toBe(false);
+    await expect(deleteFeedbackPost(ctx, stranger, { postId: p })).rejects.toThrow(
+      code("forbidden"),
+    );
+    ctx.clock.advance(1000);
+    await deleteFeedbackPost(ctx, sysadmin, { postId: p });
+    expect(audits(ctx, "feedbackPost")).toEqual([
+      expect.objectContaining({
+        entityId: p,
+        actorId: sysadmin.userId,
+        before: { authorId: reviewer.userId },
+        after: expect.objectContaining({ byAdmin: true, byAuthor: false, threadId: t }),
+        at: ctx.clock.now(),
+      }),
+    ]);
+  });
+
+  it("スレッドは管理者だけが削除でき、一覧・スペース・開く画面・集計・添付から消える。監査に残る", async () => {
+    const { ctx, work } = await setup();
+    const keep = await createFeedbackThread(ctx, creator, {
+      workId: work.id,
+      title: "残す",
+      body: "a",
+    });
+    const [prepared] = await prepareFeedbackFiles(ctx, reviewer, {
+      workId: work.id,
+      files: [{ fileName: "案A.pdf", mimeType: "application/pdf", size: 10 }],
+    });
+    await verifyFile(ctx, reviewer, { fileId: prepared!.fileId, size: 10, sha256: "abc" });
+    const gone = await createFeedbackThread(ctx, reviewer, {
+      workId: work.id,
+      title: "消す",
+      body: "添付つき",
+      fileIds: [prepared!.fileId],
+    });
+    expect((await getFeedbackThread(ctx, sysadmin, gone)).can.delete).toBe(true);
+    expect((await getFeedbackThread(ctx, reviewer, gone)).can.delete).toBe(false);
+    await authorizeFeedbackFile(ctx, creator, prepared!.fileId);
+
+    // 立てた本人・制作者・管理者でない人は削除できない
+    for (const p of [reviewer, creator, manager, stranger])
+      await expect(deleteFeedbackThread(ctx, p, { threadId: gone })).rejects.toThrow(
+        code("forbidden"),
+      );
+    expect(await listFeedbackThreads(ctx, creator, {})).toHaveLength(2);
+
+    ctx.clock.advance(1000);
+    await deleteFeedbackThread(ctx, sysadmin, { threadId: gone });
+
+    expect((await listFeedbackThreads(ctx, creator, {})).map((x) => x.title)).toEqual(["残す"]);
+    expect((await listFeedbackThreads(ctx, creator, { workId: work.id })).map((x) => x.id)).toEqual(
+      [keep],
+    );
+    const space = (await listFeedbackSpaces(ctx, creator)).find((s) => s.workId === work.id);
+    expect(space?.threads).toBe(1);
+    for (const p of [creator, reviewer, sysadmin]) {
+      await expect(getFeedbackThread(ctx, p, gone)).rejects.toThrow(code("feedback_not_found"));
+      await expect(markFeedbackRead(ctx, p, gone)).rejects.toThrow(code("feedback_not_found"));
+      await expect(postFeedback(ctx, p, { threadId: gone, body: "x" })).rejects.toThrow(
+        code("feedback_not_found"),
+      );
+    }
+    await expect(deleteFeedbackThread(ctx, sysadmin, { threadId: gone })).rejects.toThrow(
+      code("feedback_not_found"),
+    );
+    await expect(authorizeFeedbackFile(ctx, creator, prepared!.fileId)).rejects.toThrow(
+      code("forbidden"),
+    );
+    // 行は監査のために残る
+    expect((await ctx.feedback.findThread(gone))?.deletedAt).toBe(ctx.clock.now());
+    expect(audits(ctx, "feedbackThread")).toEqual([
+      expect.objectContaining({
+        entityId: gone,
+        actorId: sysadmin.userId,
+        before: expect.objectContaining({ createdBy: reviewer.userId }),
+        after: expect.objectContaining({ byAdmin: true, workId: work.id }),
+        at: ctx.clock.now(),
+      }),
+    ]);
+  });
+
+  it("閲覧権限は広げない: 見られない非公開の制作物のスレッドは管理者でも削除できない", async () => {
+    const { ctx } = await setup();
+    const secret = await seedWork(ctx, { title: "非公開", confidentiality: "restricted" });
+    const t = await createFeedbackThread(ctx, creator, {
+      workId: secret.id,
+      title: "秘密",
+      body: "相談",
+    });
+    await expect(deleteFeedbackThread(ctx, sysadmin, { threadId: t })).rejects.toThrow(
+      code("feedback_not_found"),
+    );
+    expect((await ctx.feedback.findThread(t))?.deletedAt).toBeUndefined();
+    expect(audits(ctx, "feedbackThread")).toHaveLength(0);
   });
 });

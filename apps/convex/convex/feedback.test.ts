@@ -298,4 +298,64 @@ describe("Convex 統合: 制作のフィードバック", () => {
     expect(view!.posts.map((p) => p.template)).toEqual(["creator_first", "reviewer"]);
     expect(view!.posts[1]!.reactions).toMatchObject([{ emoji: "👍", count: 1, mine: true }]);
   });
+
+  it("システム管理者は他人の投稿とスレッドを削除でき、削除したスレッドは一覧・開く画面から消え、監査に残る", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast, { title: "EVE 企画ポスター" });
+    const keep = await cast.creator.as.mutation(api.feedback.createThread, {
+      workId,
+      title: "残す",
+      body: "a",
+    });
+    const gone = await cast.reviewer.as.mutation(api.feedback.createThread, {
+      workId,
+      title: "消す",
+      body: "b",
+    });
+    const postId = await cast.stranger.as.mutation(api.feedback.post, {
+      threadId: keep,
+      body: "意見",
+    });
+
+    // サーバーが can.delete を返す（管理者だけ真）
+    const asAdmin = await cast.admin.as.query(api.feedback.getThread, { threadId: keep });
+    expect(asAdmin!.can.delete).toBe(true);
+    expect(asAdmin!.posts[1]!.can.delete).toBe(true);
+    expect(
+      (await cast.creator.as.query(api.feedback.getThread, { threadId: keep }))!.can,
+    ).toMatchObject({ delete: false });
+
+    // 管理者でない人（立てた本人を含む）はスレッドを削除できない
+    for (const who of [cast.reviewer, cast.creator, cast.manager, cast.stranger])
+      await expect(who.as.mutation(api.feedback.deleteThread, { threadId: gone })).rejects.toThrow(
+        code("forbidden"),
+      );
+
+    await cast.admin.as.mutation(api.feedback.deletePost, { postId });
+    await cast.admin.as.mutation(api.feedback.deleteThread, { threadId: gone });
+
+    expect(
+      (await cast.creator.as.query(api.feedback.listThreads, { workId })).map((r) => r.id),
+    ).toEqual([keep]);
+    expect((await cast.admin.as.query(api.feedback.listThreads, {})).map((r) => r.id)).toEqual([
+      keep,
+    ]);
+    for (const who of [cast.creator, cast.reviewer, cast.admin])
+      expect(await who.as.query(api.feedback.getThread, { threadId: gone })).toBeNull();
+    const spaces = await cast.creator.as.query(api.feedback.listSpaces, {});
+    expect(spaces.find((s) => s.workId === workId)?.threads).toBe(1);
+
+    const audits = await t.run((ctx) => ctx.db.query("auditEvents").collect());
+    const del = audits.filter((a) => a.operation === "delete");
+    expect(del.map((a) => a.entityType).sort()).toEqual(["feedbackPost", "feedbackThread"]);
+    expect(del.every((a) => a.actorId === cast.admin.id)).toBe(true);
+    expect(del.find((a) => a.entityType === "feedbackPost")?.before).toMatchObject({
+      authorId: cast.stranger.id,
+    });
+    expect(del.find((a) => a.entityType === "feedbackThread")).toMatchObject({
+      entityId: gone,
+      before: { createdBy: cast.reviewer.id },
+    });
+  });
 });

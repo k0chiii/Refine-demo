@@ -48,7 +48,7 @@ async function setup() {
   return { ctx, work, revision, post, replyIds };
 }
 
-describe("コメントの削除（投稿者のみ）", () => {
+describe("コメントの削除（投稿者は校了前だけ・システム管理者は常に）", () => {
   it("投稿者は削除でき、一覧・校了のブロックから外れる。原文と削除の記録は履歴に残る", async () => {
     const { ctx, work, revision, post } = await setup();
     const thread = await post();
@@ -72,14 +72,13 @@ describe("コメントの削除（投稿者のみ）", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("投稿者以外（制作者・管理者・校了権限者・ほかの委員）は削除できない", async () => {
+  it("投稿者以外（制作者・主管・校了権限者・ほかの委員）は削除できない", async () => {
     const { ctx, post } = await setup();
     const thread = await post();
     for (const p of [
       principals.creator,
       principals.manager,
       principals.approver,
-      principals.sysadmin,
       principals.stranger,
     ]) {
       await expect(deleteThread(ctx, p, { threadId: thread.id })).rejects.toThrow(
@@ -154,7 +153,7 @@ describe("コメントの削除（投稿者のみ）", () => {
       deleteReply(ctx, principals.reviewer, { threadId: thread.id, replyEventId: fromCreator! }),
     ).rejects.toThrow(code("comment_delete_not_author"));
     await expect(
-      deleteReply(ctx, principals.sysadmin, { threadId: thread.id, replyEventId: fromReviewer! }),
+      deleteReply(ctx, principals.manager, { threadId: thread.id, replyEventId: fromReviewer! }),
     ).rejects.toThrow(code("comment_delete_not_author"));
 
     await deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: fromCreator! });
@@ -183,5 +182,72 @@ describe("コメントの削除（投稿者のみ）", () => {
     await expect(
       deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: id! }),
     ).rejects.toThrow(code("work_already_finalized"));
+  });
+});
+
+describe("システム管理者の削除（利用者指示 2026-10-19）", () => {
+  const auditOf = (ctx: Awaited<ReturnType<typeof setup>>["ctx"], entityType: string) =>
+    ctx.state.audit.filter((a) => a.entityType === entityType);
+
+  it("他人のコメントを削除でき、校了後でも削除できる。監査に誰が・何を・元の投稿者が残る", async () => {
+    const { ctx, work, revision, post } = await setup();
+    const open = await post();
+    ctx.clock.advance(1000);
+    await deleteThread(ctx, principals.sysadmin, { threadId: open.id });
+    expect((await ctx.threads.findById(open.id))?.deletedAt).toBe(ctx.clock.now());
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
+
+    const later = await post("info");
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    await deleteThread(ctx, principals.sysadmin, { threadId: later.id });
+    expect((await ctx.threads.findById(later.id))?.deletedAt).toBeDefined();
+
+    const entries = auditOf(ctx, "commentThread");
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      entityId: open.id,
+      operation: "delete",
+      actorId: principals.sysadmin.userId,
+      before: { authorId: principals.reviewer.userId },
+      after: { byAdmin: true, workId: work.id, afterFinalized: false },
+      at: expect.any(Number),
+    });
+    expect(entries[1]!.after).toMatchObject({ afterFinalized: true });
+  });
+
+  it("他人の返信を削除でき、校了後でも削除できる。監査に元の返信者が残る", async () => {
+    const { ctx, work, revision, post, replyIds } = await setup();
+    const thread = await post("info");
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    await replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "了解" });
+    const [fromCreator, fromReviewer] = await replyIds(thread.id);
+    await deleteReply(ctx, principals.sysadmin, {
+      threadId: thread.id,
+      replyEventId: fromCreator!,
+    });
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    await deleteReply(ctx, principals.sysadmin, {
+      threadId: thread.id,
+      replyEventId: fromReviewer!,
+    });
+    const events = await ctx.threads.listEvents(thread.id);
+    expect(events.filter((e) => e.eventType === "reply_deleted")).toHaveLength(2);
+    const entries = auditOf(ctx, "commentReply");
+    expect(entries.map((e) => e.entityId)).toEqual([fromCreator, fromReviewer]);
+    expect(entries[0]).toMatchObject({
+      actorId: principals.sysadmin.userId,
+      before: { authorId: principals.creator.userId },
+      after: { byAdmin: true, threadId: thread.id },
+    });
+  });
+
+  it("管理者でない人は引き続き他人のものを削除できず、監査も残らない。本人の削除は監査に出さない", async () => {
+    const { ctx, post } = await setup();
+    const thread = await post();
+    await expect(deleteThread(ctx, principals.manager, { threadId: thread.id })).rejects.toThrow(
+      code("comment_delete_not_author"),
+    );
+    await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
+    expect(auditOf(ctx, "commentThread")).toHaveLength(0);
   });
 });

@@ -203,7 +203,7 @@ export function FeedbackComposer({
           <M3eMenu id={`${id}-tpl`} positionY="above">
             {feedbackTemplates.map((t) => (
               <M3eMenuItem key={t.id} onClick={() => insertTemplate(t.id)}>
-                <M3eIcon slot="icon" name={t.role === "creator" ? "brush" : "rate_review"} />
+                <M3eIcon slot="icon" name={t.role === "creator" ? "edit" : "rate_review"} />
                 {t.label}
               </M3eMenuItem>
             ))}

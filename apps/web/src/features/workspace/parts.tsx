@@ -3,20 +3,30 @@ import { formatDeadlineUntil, remaining } from "@/lib/format";
 import { M3eHeading } from "@m3e/react/heading";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { useWindowClass } from "@/lib/useMedia";
 
 /**
- * 制作・校正の入口（ホームの代わり）の共通部品。入口ごとに色を変える（制作 = 青、校正 = ティール）。
- * 色は `.hub[data-hub]` のトークン（styles.css）で切り替え、部品は同じものを使う。
+ * 制作・校正の入口（ホームの代わり）の共通部品。色は同じ。入口は構造と文言で分ける。
+ * 色は `.hub` の `--hub-*`（styles.css）に 1 か所で定義する。
  */
 
-/** 締切の 1 行（「締切 11/14（土）23:59（残り 3 日）」）。無ければ空 */
-export const deadlineText = (label: string, at: number | null | undefined): string =>
-  at ? `${label} ${formatDeadlineUntil(at)}（${remaining(at)}）` : "";
+/** 締切の 1 行（「校正の締切 残り 3 日・10/22（木）」。相対時間を先に、日付を添える）。無ければ空 */
+export const deadlineLine = (label: string, at: number | null | undefined): string =>
+  at ? `${label} ${remaining(at)}・${formatDeadlineUntil(at)}` : "";
 
 /** 行の右の「次の操作」の印。行全体が押せる（印は見た目だけ。同じ行に操作を二重に入れない） */
-export function ActionChip({ icon, children }: { icon?: string; children: ReactNode }) {
+export function ActionChip({
+  icon,
+  children,
+  trailing = true,
+}: {
+  icon?: string;
+  children: ReactNode;
+  /** 行の右の枠に置く（compact は supporting-text の末尾に置くので false） */
+  trailing?: boolean;
+}) {
   return (
-    <span className="hub-chip" slot="trailing">
+    <span className="hub-chip" {...(trailing ? { slot: "trailing" } : {})}>
       {icon ? <M3eIcon name={icon} /> : null}
       {children}
     </span>
@@ -46,6 +56,8 @@ export function WorkspaceRow({
   onOpen: () => void;
 }) {
   const shown = lines.filter(Boolean) as string[];
+  const compact = useWindowClass() === "compact";
+  const chipProps = chipIcon ? { icon: chipIcon } : {};
   return (
     <M3eListAction
       className={`list__item hub-row ${urgent ? "list__item--urgent" : ""}`}
@@ -62,8 +74,15 @@ export function WorkspaceRow({
             {l}
           </span>
         ))}
+        {compact ? (
+          <span className="hub-row__line hub-row__line--action">
+            <ActionChip trailing={false} {...chipProps}>
+              {chip}
+            </ActionChip>
+          </span>
+        ) : null}
       </span>
-      <ActionChip {...(chipIcon ? { icon: chipIcon } : {})}>{chip}</ActionChip>
+      {compact ? null : <ActionChip {...chipProps}>{chip}</ActionChip>}
     </M3eListAction>
   );
 }

@@ -5,6 +5,7 @@ import {
   discardAttempt,
   assertFeedbackFileAttachable,
   assertFeedbackFileUploadable,
+  canDeleteFeedbackThread,
   canModifyFeedbackPost,
   canPostFeedback,
   canRenameFeedbackThread,
@@ -18,6 +19,7 @@ import {
   FEEDBACK_FILES_MAX,
   feedbackFileType,
   feedbackObjectKey,
+  isLiveFeedbackThread,
   mentionableUserIds,
   revisionLabel,
   summarizeFeedbackReactions,
@@ -87,7 +89,9 @@ async function loadThread(
   threadId: string,
 ): Promise<LoadedFeedbackWork & { thread: FeedbackThread }> {
   const thread = await ctx.feedback.findThread(threadId);
-  if (!thread) throw new DomainError("feedback_not_found", { threadId });
+  // 削除されたスレッド（管理者が削除したもの）は「無い」と同じに見せる。通知などの古いリンクも、見つからない扱いに落ちる
+  if (!thread || !isLiveFeedbackThread(thread))
+    throw new DomainError("feedback_not_found", { threadId });
   try {
     return { thread, ...(await loadFeedbackWork(ctx, principal, thread.workId)) };
   } catch (e) {
@@ -241,6 +245,7 @@ export async function listFeedbackThreads(
   const out: FeedbackThreadSummary[] = [];
   for (const thread of candidates) {
     if (out.length >= limit) break;
+    if (!isLiveFeedbackThread(thread)) continue;
     if (input.mine && !thread.participantIds.includes(principal.userId)) continue;
     if (input.revisionId !== undefined && thread.revisionId !== input.revisionId) continue;
     if (!works.has(thread.workId)) {
@@ -293,7 +298,9 @@ export async function summarizeFeedbackActivity(
 ): Promise<Map<string, { threads: number; unread: number }>> {
   const out = new Map<string, { threads: number; unread: number }>();
   for (const workId of workIds) {
-    const threads = await ctx.feedback.listThreads({ workId, limit: 200 });
+    const threads = (await ctx.feedback.listThreads({ workId, limit: 200 })).filter(
+      isLiveFeedbackThread,
+    );
     let unread = 0;
     for (const t of threads) {
       const readAt = await ctx.feedback.readAt(principal.userId, t.id);
@@ -338,7 +345,9 @@ export async function listFeedbackSpaces(
   for (const work of await ctx.works.list(500)) {
     const grants = await ctx.acl.listByWork(work.id);
     if (!canViewFeedback({ work, grants, principal })) continue;
-    const threads = await ctx.feedback.listThreads({ workId: work.id, limit: 200 });
+    const threads = (await ctx.feedback.listThreads({ workId: work.id, limit: 200 })).filter(
+      isLiveFeedbackThread,
+    );
     let unread = 0;
     let lastPostAt: number | null = null;
     for (const t of threads) {
@@ -428,7 +437,7 @@ export interface FeedbackThreadView {
     canOpen: boolean;
   };
   posts: FeedbackPostView[];
-  can: { post: boolean; editOwn: true; rename: boolean };
+  can: { post: boolean; editOwn: true; rename: boolean; delete: boolean };
   /** 開いた人がこのスレッドを最後に読んだ時刻（未読の区切りを引く。読んだことが無ければ null） */
   readAt: number | null;
 }
@@ -526,6 +535,7 @@ export async function getFeedbackThread(
       post: canPostFeedback({ work, grants, principal }),
       editOwn: true,
       rename: canRenameFeedbackThread(thread, principal),
+      delete: canDeleteFeedbackThread(thread, principal),
     },
     readAt: await ctx.feedback.readAt(principal.userId, thread.id),
   };
@@ -763,7 +773,10 @@ export async function editFeedbackPost(
     });
 }
 
-/** 投稿の削除（本人かシステム管理者）。論理削除で、一覧には「削除された投稿」として残る */
+/**
+ * 投稿の削除（本人かシステム管理者）。論理削除で、一覧には「削除された投稿」として残る。
+ * 監査には誰が・どの投稿を・いつ・元の投稿者を残す（管理者の削除は byAdmin）
+ */
 export async function deleteFeedbackPost(
   ctx: AppContext,
   principal: Principal,
@@ -780,7 +793,39 @@ export async function deleteFeedbackPost(
     entityId: post.id,
     operation: "delete",
     actorId: principal.userId,
-    after: { threadId: thread.id, byAuthor: post.authorId === principal.userId },
+    before: { authorId: post.authorId },
+    after: {
+      threadId: thread.id,
+      workId: thread.workId,
+      authorId: post.authorId,
+      byAuthor: post.authorId === principal.userId,
+      byAdmin: post.authorId !== principal.userId && principal.isSystemAdmin,
+    },
+    at: now,
+  });
+}
+
+/**
+ * スレッドの削除（システム管理者だけ。利用者指示 2026-10-19）。論理削除で、スレッドと中の投稿は一覧・集計・画面から消える。
+ * 行と投稿は監査のために残し、添付は読めなくなる（authorizeFeedbackFile）。見られないスレッド（restricted）は「無い」のまま。
+ */
+export async function deleteFeedbackThread(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string },
+): Promise<void> {
+  const { thread } = await loadThread(ctx, principal, input.threadId);
+  if (!canDeleteFeedbackThread(thread, principal))
+    throw new DomainError("forbidden", { threadId: thread.id });
+  const now = ctx.clock.now();
+  await ctx.feedback.updateThread({ ...thread, deletedAt: now });
+  await ctx.audit.record({
+    entityType: "feedbackThread",
+    entityId: thread.id,
+    operation: "delete",
+    actorId: principal.userId,
+    before: { title: thread.title, createdBy: thread.createdBy, postCount: thread.postCount },
+    after: { workId: thread.workId, byAdmin: true },
     at: now,
   });
 }
@@ -983,6 +1028,8 @@ export async function authorizeFeedbackFile(
   } else {
     const post = await ctx.feedback.findPost(file.postId);
     if (!post || post.deletedAt !== undefined) throw new DomainError("forbidden", { fileId });
+    const thread = await ctx.feedback.findThread(post.threadId);
+    if (!thread || !isLiveFeedbackThread(thread)) throw new DomainError("forbidden", { fileId });
   }
   if (file.status !== "verified" || file.purgedAt !== undefined)
     throw new DomainError("feedback_file_not_ready", { fileId, status: file.status });
@@ -1076,7 +1123,9 @@ export async function exportWorkStats(
               ? await ctx.threads.listEvents(thread.id)
               : [],
         });
-    const fb = await ctx.feedback.listThreads({ workId: work.id, limit: 1000 });
+    const fb = (await ctx.feedback.listThreads({ workId: work.id, limit: 1000 })).filter(
+      isLiveFeedbackThread,
+    );
     rows.push(
       computeWorkStats({
         work,

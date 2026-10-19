@@ -633,6 +633,8 @@ export default defineSchema({
     /** 版の上の場所についての相談（エディタで範囲を選んで立てたもの） */
     revisionId: v.optional(v.string()),
     anchor: v.optional(anchorValidator),
+    /** 管理者による削除（論理削除）。一覧・集計・画面から外し、行と投稿は監査のために残す */
+    deletedAt: v.optional(v.number()),
   })
     .index("by_work", ["workId", "lastPostAt"])
     .index("by_last_post", ["lastPostAt"]),

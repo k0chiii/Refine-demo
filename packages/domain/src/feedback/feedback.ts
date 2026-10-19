@@ -56,6 +56,11 @@ export interface FeedbackThread {
    */
   revisionId?: RevisionId;
   anchor?: Anchor;
+  /**
+   * 削除（論理削除。利用者指示 2026-10-19: システム管理者はスレッドも削除できる）。
+   * 削除したスレッドと中の投稿は、一覧・集計・開く画面のどこにも出さない（行と投稿は監査のために残す）
+   */
+  deletedAt?: Instant;
 }
 
 export type FeedbackReactionEntry = ReactionEntry;
@@ -128,6 +133,19 @@ export function canModifyFeedbackPost(
   if (post.deletedAt !== undefined) return { edit: false, delete: false };
   const own = post.authorId === principal.userId;
   return { edit: own, delete: own || principal.isSystemAdmin };
+}
+
+/** スレッドの削除: システム管理者だけ（運用上の削除。立てた本人にも付けない）。削除済みには何もできない */
+export function canDeleteFeedbackThread(
+  thread: Pick<FeedbackThread, "deletedAt">,
+  principal: Principal,
+): boolean {
+  return thread.deletedAt === undefined && principal.isSystemAdmin;
+}
+
+/** 削除されていない（一覧・集計・画面に出す）スレッドか */
+export function isLiveFeedbackThread(thread: Pick<FeedbackThread, "deletedAt">): boolean {
+  return thread.deletedAt === undefined;
 }
 
 /** スレッドの題名の変更: 立てた本人かシステム管理者 */

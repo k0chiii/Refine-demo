@@ -2,6 +2,7 @@ import {
   authorizeFeedbackFile,
   createFeedbackThread,
   deleteFeedbackPost,
+  deleteFeedbackThread,
   editFeedbackPost,
   beginFeedbackFileUpload,
   completeFeedbackFileUpload,
@@ -132,6 +133,18 @@ export const deletePost = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       await deleteFeedbackPost(createAppContext(ctx), principal, args);
+      return null;
+    });
+  },
+});
+
+/** スレッドの削除（システム管理者だけ。論理削除で、一覧・集計・画面から消える） */
+export const deleteThread = mutation({
+  args: { threadId: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await deleteFeedbackThread(createAppContext(ctx), principal, args);
       return null;
     });
   },

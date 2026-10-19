@@ -4,6 +4,7 @@ import {
   deriveFeedbackThreadTitle,
   feedbackExcerptSource,
   assertFeedbackFileAttachable,
+  canDeleteFeedbackThread,
   canModifyFeedbackPost,
   canPostFeedback,
   canRenameFeedbackThread,
@@ -16,6 +17,7 @@ import {
   feedbackObjectKey,
   feedbackTemplates,
   isFeedbackFileStale,
+  isLiveFeedbackThread,
   summarizeFeedbackReactions,
   toggleFeedbackReaction,
   validateFeedbackBody,
@@ -106,6 +108,13 @@ describe("フィードバックの権限", () => {
     expect(canRenameFeedbackThread({ createdBy: "creator" }, who("creator"))).toBe(true);
     expect(canRenameFeedbackThread({ createdBy: "creator" }, who("other"))).toBe(false);
     expect(canRenameFeedbackThread({ createdBy: "creator" }, who("admin", true))).toBe(true);
+  });
+  it("スレッドの削除はシステム管理者だけ（立てた本人も不可）。削除済みは何もできず、一覧から外れる", () => {
+    expect(canDeleteFeedbackThread({}, who("admin", true))).toBe(true);
+    expect(canDeleteFeedbackThread({}, who("creator"))).toBe(false);
+    expect(canDeleteFeedbackThread({ deletedAt: T0 }, who("admin", true))).toBe(false);
+    expect(isLiveFeedbackThread({})).toBe(true);
+    expect(isLiveFeedbackThread({ deletedAt: T0 })).toBe(false);
   });
 });
 

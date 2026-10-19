@@ -3,13 +3,8 @@ import { workStages } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
-import {
-  formatDeadline,
-  formatDeadlineUntil,
-  formatJstDate,
-  formatJstShort,
-  remaining,
-} from "@/lib/format";
+import { deadlineLine } from "@/features/workspace/parts";
+import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import { rememberWorkHint } from "@/lib/workHint";
 import { stageInfo } from "@/lib/stageInfo";
 import { ColumnHeader, DataTable } from "@/ui/DataTable";
@@ -28,15 +23,11 @@ const backlogGroups: Array<[keyof Data["backlog"], string, (i: Item) => string]>
   [
     "overdue",
     "期限超過",
-    (i) => `締切 ${formatDeadline(i.deadlineAt ?? 0)}${i.count ? `・未対応 ${i.count}` : ""}`,
+    (i) => `${deadlineLine("締切", i.deadlineAt)}${i.count ? `・未対応 ${i.count}` : ""}`,
   ],
-  ["unassigned", "校正者が未割り当て", (i) => `締切 ${formatDeadlineUntil(i.deadlineAt ?? 0)}`],
+  ["unassigned", "校正者が未割り当て", (i) => deadlineLine("締切", i.deadlineAt)],
   ["stale", "14 日間更新なし", (i) => `最終更新 ${formatJstDate(i.deadlineAt ?? 0)}`],
-  [
-    "dueSoon",
-    "納期が近い",
-    (i) => `納期 ${formatDeadline(i.deadlineAt ?? 0)}（${remaining(i.deadlineAt ?? 0)}）`,
-  ],
+  ["dueSoon", "納期が近い", (i) => deadlineLine("納期", i.deadlineAt)],
 ];
 /** 内訳ごとの表示件数（これを超えたら「すべて表示」） */
 const BACKLOG_ROWS = 5;

@@ -7,7 +7,9 @@ import type { CommentEvent, CommentThread } from "./CommentThread.ts";
 /**
  * コメント・返信の削除（利用者決定 2026-10-18「コメントの削除機能欲しい。（投稿者のみ）」）。
  *
- * - 削除できるのは投稿した本人だけ（制作者・システム管理者も他人のコメントは消せない）。校了後は不可（訂正と同じ）。
+ * - 削除できるのは投稿した本人。校了後は不可（訂正と同じ）。
+ * - システム管理者は、利用者指示 2026-10-19「管理者は全てのコメントやFB, スレッドを削除できるようにして欲しい」により、
+ *   他人のコメント・返信も、校了後も削除できる（運用上の削除は常にできる必要がある。DECISIONS 2026-10-19）。閲覧権限は広げない。
  * - 論理削除: 行は消さず、スレッドに deletedAt を付け、CommentEvent("deleted" / "reply_deleted") を追記する。原文は履歴に残る。
  * - 他の人の返信が残るスレッドは一覧に「削除されたコメント」として残し（返信の文脈を保つ）、無ければ一覧からも消す。
  * - 削除済みのスレッドは紙面の印・件数・未解決・校了の判定から外れる。
@@ -28,22 +30,44 @@ export function isListedThread(
   return thread.deletedAt === undefined || thread.deletedKeepsReplies === true;
 }
 
-/** 削除できるか。投稿者本人で、校了前（制作物の状態）に限る */
+/** 削除する人。システム管理者かどうかだけを渡す（本人かの判定は authorId と actorId で行う） */
+export interface DeleteActor {
+  isSystemAdmin?: boolean;
+}
+
+/** 何の権限で削除できるか。本人（校了前）か、システム管理者（他人のものも・校了後も）か、できないか */
+export type CommentDeleteAuthority = "author" | "admin";
+
+export function commentDeleteAuthority(
+  authorId: UserId,
+  actorId: UserId,
+  lifecycle: WorkLifecycle,
+  actor: DeleteActor = {},
+): CommentDeleteAuthority | null {
+  if (authorId === actorId && lifecycle !== "finalized") return "author";
+  return actor.isSystemAdmin === true ? "admin" : null;
+}
+
+/** 削除できるか。投稿者本人で校了前、またはシステム管理者 */
 export function canDeleteComment(
   authorId: UserId,
   actorId: UserId,
   lifecycle: WorkLifecycle,
+  actor: DeleteActor = {},
 ): boolean {
-  return authorId === actorId && lifecycle !== "finalized";
+  return commentDeleteAuthority(authorId, actorId, lifecycle, actor) !== null;
 }
 
 export function assertCanDeleteComment(
   authorId: UserId,
   actorId: UserId,
   lifecycle: WorkLifecycle,
-): void {
+  actor: DeleteActor = {},
+): CommentDeleteAuthority {
+  const authority = commentDeleteAuthority(authorId, actorId, lifecycle, actor);
+  if (authority !== null) return authority;
   if (authorId !== actorId) throw new DomainError("comment_delete_not_author");
-  if (lifecycle === "finalized") throw new DomainError("work_already_finalized");
+  throw new DomainError("work_already_finalized");
 }
 
 /** 返信イベント 1 件の現在の状態（削除されたかは reply_deleted で導く） */
@@ -90,8 +114,9 @@ export function deleteThreadComment(
   lifecycle: WorkLifecycle,
   events: readonly CommentEvent[],
   now: Instant,
+  actor: DeleteActor = {},
 ): CommentThread {
-  assertCanDeleteComment(thread.authorId, actorId, lifecycle);
+  assertCanDeleteComment(thread.authorId, actorId, lifecycle, actor);
   assertThreadNotDeleted(thread);
   return {
     ...thread,
@@ -101,7 +126,7 @@ export function deleteThreadComment(
 }
 
 /**
- * 返信を削除する。対象は返信イベントの ID。投稿者本人だけ（削除済み・返信でないものは見つからない扱い）。
+ * 返信を削除する。対象は返信イベントの ID。投稿者本人かシステム管理者だけ（削除済み・返信でないものは見つからない扱い）。
  * 返す thread は、残っていた他の人の返信が全て無くなった「削除されたコメント」を一覧から外した状態（変わらなければ同じ値）。
  * 呼び出し側が "reply_deleted" イベントを追記する。
  */
@@ -111,11 +136,12 @@ export function deleteReply(
   actorId: UserId,
   lifecycle: WorkLifecycle,
   events: readonly CommentEvent[],
+  actor: DeleteActor = {},
 ): CommentThread {
   const reply = replyEntries(events).find((r) => r.id === replyEventId);
   if (!reply || reply.deleted)
     throw new DomainError("comment_reply_not_found", { threadId: thread.id, replyEventId });
-  assertCanDeleteComment(reply.actorId, actorId, lifecycle);
+  assertCanDeleteComment(reply.actorId, actorId, lifecycle, actor);
   if (thread.deletedAt === undefined || thread.deletedKeepsReplies !== true) return thread;
   // 削除した後に、他の人の返信がまだ残るか
   const remaining = replyEntries(events).some(
@@ -141,6 +167,7 @@ export function projectThreadEvents(
   events: readonly CommentEvent[],
   viewerId: UserId,
   lifecycle: WorkLifecycle,
+  viewer: DeleteActor = {},
 ): ThreadEventView[] {
   const gone = deletedReplyIds(events);
   const out: ThreadEventView[] = [];
@@ -159,7 +186,11 @@ export function projectThreadEvents(
           can: { delete: false },
         });
       } else {
-        out.push({ ...e, id, can: { delete: canDeleteComment(e.actorId, viewerId, lifecycle) } });
+        out.push({
+          ...e,
+          id,
+          can: { delete: canDeleteComment(e.actorId, viewerId, lifecycle, viewer) },
+        });
       }
       continue;
     }
@@ -183,18 +214,19 @@ export type ThreadView<T extends CommentThread = CommentThread> = T & {
 
 /**
  * 画面に渡すスレッド。削除済みは本文・位置・メンション・担当を伏せる（紙面の印も出ない）。
- * 削除できるのは投稿者本人だけで、削除済みには何もできない。
+ * 削除できるのは投稿者本人とシステム管理者で、削除済みには何もできない。
  */
 export function presentThread<T extends CommentThread>(
   thread: T,
   viewerId: UserId,
   lifecycle: WorkLifecycle,
+  viewer: DeleteActor = {},
 ): ThreadView<T> {
   if (thread.deletedAt === undefined) {
     return {
       ...thread,
       deleted: false,
-      can: { delete: canDeleteComment(thread.authorId, viewerId, lifecycle) },
+      can: { delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer) },
     };
   }
   const {
