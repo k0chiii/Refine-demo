@@ -47,13 +47,11 @@ type RevisionData = FunctionReturnType<typeof api.revisions.get>;
 export function InfoTab({
   work,
   revision,
-  isAdmin,
   shownArtifactId = null,
 }: {
   work: WorkData;
   /** 表示中の版（無ければ null） */
   revision: RevisionData | null;
-  isAdmin: boolean;
   /** 紙面に出している添付（この版のファイルの一覧で印を付ける） */
   shownArtifactId?: string | null;
 }) {
@@ -571,10 +569,10 @@ export function InfoTab({
         </section>
       ) : null}
 
-      {isAdmin ? (
+      {can.viewAudit ? (
         <section className="info-tab__section" aria-label="閲覧権限">
           <h2 className="info-tab__h">閲覧権限</h2>
-          <AclPanel workId={w.id} />
+          <AclPanel workId={w.id} readOnly={!can.manageAcl} />
         </section>
       ) : null}
 

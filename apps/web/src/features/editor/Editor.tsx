@@ -1615,12 +1615,7 @@ export function Editor({
         onWrite={openAuthoring}
       />
     ) : d === "info" && workData ? (
-      <InfoTab
-        work={workData}
-        revision={data ?? null}
-        isAdmin={me?.isSystemAdmin ?? false}
-        shownArtifactId={artifactId}
-      />
+      <InfoTab work={workData} revision={data ?? null} shownArtifactId={artifactId} />
     ) : null;
   const desktopDrawer = drawer !== null && !mobile;
   // 「ピンの高さに並べる」では紙面の横にコメントの列（補助ペインと同じ 360 / 412）＋間隔 24 が並ぶので、幅合わせから除く

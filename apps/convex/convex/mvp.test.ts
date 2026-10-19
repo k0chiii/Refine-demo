@@ -152,6 +152,55 @@ describe("Convex 統合: 認可と状態遷移", () => {
     });
   });
 
+  it("コメントは見られる人なら誰でも投稿でき（ACL 不要）、校正への参加は広がらない。ACL 一覧は主管・校了者が有効分だけ読める", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const { sessionId } = await submit(t, cast, workId);
+    const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
+
+    const rev = await cast.stranger.as.query(api.revisions.get, { revisionId });
+    expect(rev.can.comment).toBe(true);
+    expect((await cast.stranger.as.query(api.works.get, { workId })).can).toMatchObject({
+      comment: true,
+      viewAudit: false,
+      manageAcl: false,
+    });
+    await expect(
+      cast.stranger.as.mutation(api.comments.post, {
+        revisionId: revisionId as Id<"revisions">,
+        body: "気づいた点",
+        kind: "question",
+        severity: "info",
+      }),
+    ).resolves.toBeTruthy();
+    // 自動校正・AI 校正の権限は ACL か職責のまま
+    await expect(cast.stranger.as.action(api.ai.proofread, { workId, text: "x" })).rejects.toThrow(
+      code("forbidden"),
+    );
+
+    await cast.admin.as.mutation(api.acl.grant, {
+      workId,
+      principalType: "user",
+      principalId: cast.stranger.id,
+      permission: "view",
+    });
+    await cast.admin.as.mutation(api.acl.revoke, {
+      workId,
+      principalType: "user",
+      principalId: cast.stranger.id,
+    });
+    for (const who of [cast.manager, cast.approver]) {
+      expect((await who.as.query(api.works.get, { workId })).can.viewAudit).toBe(true);
+      const list = await who.as.query(api.acl.list, { workId });
+      expect(list.map((g) => g.principalId)).toEqual([cast.reviewer.id]);
+    }
+    expect(await cast.admin.as.query(api.acl.list, { workId })).toHaveLength(2);
+    for (const who of [cast.creator, cast.stranger]) {
+      await expect(who.as.query(api.acl.list, { workId })).rejects.toThrow(code("forbidden"));
+    }
+  });
+
   it("A-16 / A-17: 失敗した提出は旧版を閉じず、成功した確定は同一処理で旧版を superseded にする", async () => {
     const t = createHarness();
     const cast = await createCast(t);

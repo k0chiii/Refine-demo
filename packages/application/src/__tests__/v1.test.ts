@@ -76,7 +76,10 @@ describe("専門確認（§2.2-4 / C3）", () => {
     await expect(
       finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id }),
     ).rejects.toThrow(code("approval_required_checks_incomplete"));
-    // 担当外の人は完了できない。担当者は完了できる
+    // 担当外の人は完了できない。担当者は完了できる。コメントを書けるだけの人（review 未満）は担当でも完了できない
+    await expect(
+      completeRequiredCheck(ctx, principals.reviewer, { checkId: checks[0]!.id }),
+    ).rejects.toThrow(code("forbidden"));
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       principalType: "user",
