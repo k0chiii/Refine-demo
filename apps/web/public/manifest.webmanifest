@@ -24,18 +24,17 @@
   ],
   "shortcuts": [
     {
-      "name": "あなたの担当",
-      "short_name": "担当",
-      "url": "/",
+      "name": "制作",
+      "url": "/make",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "エディタ",
-      "url": "/write",
+      "name": "校正",
+      "url": "/check",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "制作物一覧",
+      "name": "制作物",
       "url": "/works",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { finalizeWork } from "../usecases/approvals.ts";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { decideThread, postComment } from "../usecases/comments.ts";
 import { buildDashboard, dashboardPolicy } from "../usecases/dashboard.ts";
@@ -34,7 +35,7 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     expect(reviewer.mine.assign).toHaveLength(0);
   });
 
-  it("割当後: 校正者に「校正する」。確認を完了すると消える", async () => {
+  it("割当後: 校正者に「校正する」。校正を完了すると消える", async () => {
     const { ctx, works, revision } = await setup();
     await assignReviewers(ctx, principals.manager, {
       revisionId: revision.id,
@@ -148,7 +149,7 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     expect(o.bureaus).toHaveLength(1);
     expect(o.bureaus[0]).toMatchObject({ works: 2, reviewing: 1, unresolved: 3 });
 
-    // 校正者が確認を完了すると、校正者の完了が 1 になる
+    // 校正者が校正を完了すると、校正者の完了が 1 になる
     await completeMyReview(ctx, principals.reviewer, revision.id);
     const after = await buildDashboard(ctx, principals.manager, all);
     expect(after.overview.reviewers).toEqual({ total: 1, done: 1 });
@@ -184,5 +185,55 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     const d = await buildDashboard(ctx, principals.stranger, await works());
     expect(d.overview.total).toBe(0);
     expect(d.overview.works).toEqual([]);
+  });
+
+  it("校正の仕事: 割当は未着手→確認中→完了の順に進み、完了した分は done に移る（やることの数に入らない）", async () => {
+    const { ctx, works, revision } = await setup();
+    await assignReviewers(ctx, principals.manager, {
+      revisionId: revision.id,
+      reviewerIds: [principals.reviewer.userId],
+      reviewType: "general",
+    });
+    let d = await buildDashboard(ctx, principals.reviewer, await works());
+    expect(d.mine.review.map((i) => [i.task, i.taskState])).toEqual([["review", "pending"]]);
+    expect(d.done).toHaveLength(0);
+    const assignment = (await ctx.assignments.listByRevision(revision.id))[0]!;
+    await ctx.assignments.upsert({ ...assignment, state: "viewed" });
+    d = await buildDashboard(ctx, principals.reviewer, await works());
+    expect(d.mine.review.map((i) => i.taskState)).toEqual(["viewed"]);
+    await completeMyReview(ctx, principals.reviewer, revision.id);
+    d = await buildDashboard(ctx, principals.reviewer, await works());
+    expect(d.mine.review).toHaveLength(0);
+    expect(d.done.map((i) => [i.task, i.taskState, i.revisionId])).toEqual([
+      ["review", "done", revision.id],
+    ]);
+    expect(d.summary.todo).toBe(0);
+  });
+
+  it("制作ページの材料: 制作者の行に制作者の印と校了の進みが付く。校了者が 2 人なら宣言の数を数える", async () => {
+    const ctx = createInMemoryContext();
+    const a2 = principals.reviewer;
+    const work = await seedWork(ctx, {
+      approverIds: [principals.approver.userId, a2.userId],
+      approvalQuorum: 2,
+    });
+    const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
+    const all = async () => [(await ctx.works.findById(work.id))!];
+    let d = await buildDashboard(ctx, principals.creator, await all());
+    expect(d.overview.works[0]).toMatchObject({
+      isCreator: true,
+      approvalQuorum: 2,
+      approvalDeclared: 0,
+    });
+    await finalizeWork(ctx, principals.approver, { workId: work.id, revisionId: revision.id });
+    d = await buildDashboard(ctx, principals.creator, await all());
+    expect(d.overview.works[0]).toMatchObject({ approvalDeclared: 1, approvalQuorum: 2 });
+    // 宣言した校了者本人は「校了する」に出ず、完了（done）に出る。もう 1 人の校了者にはまだ出る
+    const declared = await buildDashboard(ctx, principals.approver, await all());
+    expect(declared.mine.finalize).toHaveLength(0);
+    expect(declared.done.map((i) => [i.task, i.taskState])).toEqual([["finalize", "done"]]);
+    expect(declared.overview.works[0]).toMatchObject({ isCreator: false, approvalDeclared: 0 });
+    const other = await buildDashboard(ctx, a2, await all());
+    expect(other.mine.finalize.map((i) => i.taskState)).toEqual(["pending"]);
   });
 });

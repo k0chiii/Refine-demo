@@ -1,7 +1,9 @@
 import {
+  approvalProgressOf,
   approvalSetupOf,
   bureauNameOf,
   canViewWork,
+  checkStateOfAssignment,
   compareWorkRows,
   declarationsOf,
   effectivePermission,
@@ -17,8 +19,10 @@ import {
   tallyStages,
   workStageOf,
   workUrgency,
+  type ApprovalEvent,
   type BureauSummary,
-  type DashboardWidgetPref,
+  type CheckKind,
+  type CheckProgress,
   type Instant,
   type MediaType,
   type Principal,
@@ -32,12 +36,7 @@ import {
 } from "@mf100/domain";
 import { canView } from "../shared.ts";
 import type { AppContext, NotificationKind } from "../ports.ts";
-import {
-  listSubmitTargets,
-  loadDashboardLayout,
-  submitTargetPolicy,
-  type DashboardRole,
-} from "./home.ts";
+import { listSubmitTargets, submitTargetPolicy, type DashboardRole } from "./home.ts";
 
 /** ダッシュボードの 1 行。押すとエディタの該当版へ行ける情報だけを持つ。 */
 export interface DashboardItem {
@@ -62,6 +61,9 @@ export interface DashboardItem {
   unread?: boolean;
   /** 「自分宛てのコメント」・「最近開いた制作物」: 時刻 */
   at?: number;
+  /** 校正の仕事（校正する・専門確認・校了）の種類と進み具合。校正ページの未着手・確認中・完了に使う */
+  task?: CheckKind;
+  taskState?: CheckProgress;
 }
 
 export interface Dashboard {
@@ -69,7 +71,7 @@ export interface Dashboard {
   mine: {
     /** 提出する: 自分が制作者で版を提出できる進行中の制作物（L-15。FAB「版を提出」と同じ判定） */
     submit: DashboardItem[];
-    /** 校正する: 自分に割り当てられ、まだ確認を完了していない受付中の版 */
+    /** 校正する: 自分に割り当てられ、まだ校正を完了していない受付中の版 */
     review: DashboardItem[];
     /** 返事をする: 採否判断ができる制作物で、受付中の版に未対応のコメントがある */
     respond: DashboardItem[];
@@ -80,14 +82,17 @@ export interface Dashboard {
     /** 割り当てる: 割当権限があり、受付中の版に校正者がいない */
     assign: DashboardItem[];
   };
+  /**
+   * 校正の仕事のうち、自分の分が終わったもの（校正を完了した割当・完了した専門確認・宣言済みの校了）。受付中の版だけ。
+   * `mine` には入れない（「やること」の数に数えない）
+   */
+  done: DashboardItem[];
   /** 次の締切（{@link dashboardPolicy.upcomingWithinMs} 以内。自分が担当の校正の締切と、職責のある制作物の納期） */
   upcoming: DashboardItem[];
   /** 自分宛てのコメント（通知から: メンション・担当・新しいコメント・判断） */
   mentions: DashboardItem[];
-  /** ホームにピン留めした制作物 */
+  /** ピン留めした制作物（制作物のページの「ピン留め」で絞る） */
   pinned: DashboardItem[];
-  /** 最近開いた制作物 */
-  recent: DashboardItem[];
   /** 滞っている制作物（自分が関わる制作物だけ） */
   backlog: {
     /** 期限到来で受付が終わり、そのまま次の版が出ていない */
@@ -103,14 +108,10 @@ export interface Dashboard {
   roles: Record<DashboardRole, number>;
   /** いちばん近い締切（期間に関係なく）。全部が空のときの理由に使う */
   nextDeadline: DashboardItem | null;
-  /** 自分の数字（ホーム上段のカード） */
+  /** 自分の数字（制作物のページの上段のカード） */
   summary: DashboardSummary;
   /** 自分が関わる制作物の全体の状況（数字・表） */
   overview: DashboardOverview;
-  /** 節の並び・表示・件数（保存した構成、無ければ役割から自動） */
-  layout: DashboardWidgetPref[];
-  /** 自分で構成を変えたか（「既定に戻す」を出す） */
-  customized: boolean;
 }
 
 /** 自分の数字 */
@@ -180,12 +181,12 @@ export async function buildDashboard(
   opts: { submitPolicy?: SubmitTargetPolicy } = {},
 ): Promise<Dashboard> {
   const now = ctx.clock.now();
-  const out: Omit<Dashboard, "layout" | "customized" | "summary" | "overview"> = {
+  const out: Omit<Dashboard, "summary" | "overview"> = {
     mine: { submit: [], review: [], respond: [], checks: [], finalize: [], assign: [] },
+    done: [],
     upcoming: [],
     mentions: [],
     pinned: [],
-    recent: [],
     backlog: { overdue: [], unassigned: [], stale: [], dueSoon: [] },
     roles: { creator: 0, reviewer: 0, checker: 0, approver: 0, manager: 0 },
     nextDeadline: null,
@@ -216,6 +217,9 @@ export async function buildDashboard(
       reviewersDone: 0,
       checksPending: 0,
       bureau: bureauNameOf(work.ownerTeamId, teams),
+      isCreator: work.creatorIds.includes(principal.userId),
+      approvalDeclared: 0,
+      approvalQuorum: approvalSetupOf(work).quorum,
       ...part,
     };
     const nextDeadlineAt = nextDeadlineOf(base);
@@ -268,6 +272,10 @@ export async function buildDashboard(
     let lastActivity = latest?.submittedAt ?? null;
     let reviewing = level !== null && permissionIncludes(level, "review") && !roleHolder;
     if (accepting) {
+      // 校了の宣言の履歴は、校了者が 2 人以上のときだけ、必要な人（制作者・校了する人）のために 1 回だけ読む
+      const quorum = approvalSetupOf(work).quorum;
+      let approvalEvents: ApprovalEvent[] | null = null;
+      const approvalsOf = async () => (approvalEvents ??= await ctx.approvals.listByWork(work.id));
       const threads = await ctx.threads.listByRevision(accepting.id);
       const unresolved = threads.filter((t) => isUnresolvedResolution(t.resolution)).length;
       const assignments = await ctx.assignments.listByRevision(accepting.id);
@@ -289,19 +297,50 @@ export async function buildDashboard(
         reviewersTotal: assignments.length,
         reviewersDone,
         checksPending: pendingChecks.length,
+        ...(roles.isCreator && quorum > 1
+          ? {
+              approvalDeclared: approvalProgressOf(work, await approvalsOf(), revisions).declaredIds
+                .length,
+            }
+          : {}),
       });
       for (const t of threads) lastActivity = Math.max(lastActivity ?? 0, t.createdAt);
 
       const mine = assignments.find((a) => a.reviewerId === principal.userId);
       if (mine) reviewing = true;
       const reviewPending = mine && (mine.state === "pending" || mine.state === "viewed");
-      if (reviewPending) out.mine.review.push(item(accepting, accepting.deadlineAt, unresolved));
+      if (reviewPending)
+        out.mine.review.push({
+          ...item(accepting, accepting.deadlineAt, unresolved),
+          task: "review",
+          taskState: checkStateOfAssignment(mine.state),
+        });
+      else if (mine)
+        out.done.push({
+          ...item(accepting, accepting.deadlineAt),
+          task: "review",
+          taskState: "done",
+        });
       if (unresolved > 0 && isAllowed("comment.decide", authz))
         out.mine.respond.push(item(accepting, accepting.deadlineAt, unresolved));
       for (const c of pendingChecks.filter((c) => c.assigneeId === principal.userId)) {
         out.roles.checker++;
-        out.mine.checks.push({ ...item(accepting, accepting.deadlineAt), note: c.label });
+        out.mine.checks.push({
+          ...item(accepting, accepting.deadlineAt),
+          note: c.label,
+          task: "check",
+          taskState: "pending",
+        });
       }
+      for (const c of checks.filter(
+        (c) => c.state !== "pending" && c.assigneeId === principal.userId,
+      ))
+        out.done.push({
+          ...item(accepting, accepting.deadlineAt),
+          note: c.label,
+          task: "check",
+          taskState: "done",
+        });
       if (
         accepting.kind === "standard" &&
         unresolved === 0 &&
@@ -310,11 +349,15 @@ export async function buildDashboard(
       ) {
         // 校了者が複数で、すでに自分が宣言した版は「校了待ち」に出さない（履歴を読むのは人数が 2 以上のときだけ）
         const declaredByMe =
-          approvalSetupOf(work).quorum > 1 &&
-          declarationsOf(await ctx.approvals.listByWork(work.id), accepting.id).some(
+          quorum > 1 &&
+          declarationsOf(await approvalsOf(), accepting.id).some(
             (d) => d.actorId === principal.userId,
           );
-        if (!declaredByMe) out.mine.finalize.push(item(accepting, accepting.deadlineAt));
+        const task = { task: "finalize", taskState: declaredByMe ? "done" : "pending" } as const;
+        (declaredByMe ? out.done : out.mine.finalize).push({
+          ...item(accepting, accepting.deadlineAt),
+          ...task,
+        });
       }
       if (assignments.length === 0 && isAllowed("review.assign", authz))
         out.mine.assign.push(item(accepting, accepting.deadlineAt));
@@ -406,7 +449,7 @@ export async function buildDashboard(
     });
   }
 
-  // ピン留め・最近開いた制作物（見られなくなった制作物は出さない）
+  // ピン留め（見られなくなった制作物は出さない）
   const summarize = async (workId: string, at: number): Promise<DashboardItem | null> => {
     const work = await ctx.works.findById(workId);
     if (!work) return null;
@@ -432,10 +475,6 @@ export async function buildDashboard(
     const i = await summarize(p.workId, p.pinnedAt);
     if (i) out.pinned.push(i);
   }
-  for (const r of await ctx.home.listRecent(principal.userId)) {
-    const i = await summarize(r.workId, r.openedAt);
-    if (i) out.recent.push(i);
-  }
 
   for (const list of [...Object.values(out.mine), ...Object.values(out.backlog)])
     list.sort(byDeadline);
@@ -457,9 +496,5 @@ export async function buildDashboard(
     unread: out.mentions.filter((m) => m.unread).length,
   };
 
-  const held = new Set<DashboardRole>(
-    (Object.keys(out.roles) as DashboardRole[]).filter((r) => out.roles[r] > 0),
-  );
-  const { widgets, customized } = await loadDashboardLayout(ctx, principal, held);
-  return { ...out, summary, overview, layout: widgets, customized };
+  return { ...out, summary, overview };
 }

@@ -1,16 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { WorkPermissionGrant } from "../acl/Permission.ts";
 import {
-  dashboardWidgetIds,
-  limitDashboardItems,
-  moveDashboardWidget,
-  moveDashboardWidgetAmong,
-  dashboardWidgetColumn,
-  normalizeDashboardLayout,
-  updateDashboardWidget,
-  type DashboardWidgetPref,
-} from "../dashboard/layout.ts";
-import {
   matchPerson,
   parseWorkCsv,
   parseWorkDeadline,
@@ -81,69 +71,6 @@ describe("版を提出する制作物（L-15）", () => {
     expect(submitRouteFor("sns")).toBe("post");
     expect(submitRouteFor("pdf")).toBe("upload");
     expect(submitRouteFor("image")).toBe("upload");
-  });
-});
-
-const defaults: DashboardWidgetPref[] = dashboardWidgetIds.map((id) => ({
-  id,
-  visible: true,
-  limit: 5,
-}));
-
-describe("ダッシュボードの構成（W-26）", () => {
-  it("保存が無ければ既定どおり。知らない ID・重複は捨て、足りない節は末尾に既定で足す", () => {
-    expect(normalizeDashboardLayout(null, defaults)).toEqual(defaults);
-    const out = normalizeDashboardLayout(
-      [
-        { id: "mentions", visible: false, limit: 3 },
-        { id: "gone", visible: true, limit: 5 },
-        { id: "mentions", visible: true, limit: null },
-        { id: "review", visible: "yes", limit: 7 },
-      ],
-      defaults,
-    );
-    expect(out[0]).toEqual({ id: "mentions", visible: false, limit: 3 });
-    expect(out[1]).toEqual({ id: "review", visible: true, limit: 5 });
-    expect(out).toHaveLength(defaults.length);
-    expect(out.slice(2).map((w) => w.id)).toEqual(
-      dashboardWidgetIds.filter((id) => id !== "mentions" && id !== "review"),
-    );
-  });
-
-  it("上下に動かす（端ではそのまま）。表示中の節どうしで動かすときは隠した節を飛ばす", () => {
-    const ids = (l: DashboardWidgetPref[]) => l.map((w) => w.id).slice(0, 4);
-    expect(ids(moveDashboardWidget(defaults, "review", -1))).toEqual([
-      "review",
-      "submit",
-      "respond",
-      "checks",
-    ]);
-    expect(ids(moveDashboardWidget(defaults, "submit", -1))).toEqual([
-      "submit",
-      "review",
-      "respond",
-      "checks",
-    ]);
-    const hidden = updateDashboardWidget(defaults, "review", { visible: false });
-    expect(ids(moveDashboardWidgetAmong(hidden, "submit", 1, (w) => w.visible))).toEqual([
-      "review",
-      "respond",
-      "submit",
-      "checks",
-    ]);
-    // 同じ列の節だけを仲間にすると、「やること」の最後は補助の節と入れ替わらない
-    const last = moveDashboardWidgetAmong(
-      defaults,
-      "assign",
-      1,
-      (w) => dashboardWidgetColumn[w.id] === "todo",
-    );
-    expect(last.map((w) => w.id)).toEqual(defaults.map((w) => w.id));
-  });
-
-  it("件数で切る（null はすべて）", () => {
-    expect(limitDashboardItems([1, 2, 3, 4], 3)).toEqual([1, 2, 3]);
-    expect(limitDashboardItems([1, 2, 3, 4], null)).toEqual([1, 2, 3, 4]);
   });
 });
 

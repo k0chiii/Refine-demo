@@ -1,18 +1,10 @@
-import { endOfJstDay, type DashboardWidgetPref } from "@mf100/domain";
+import { endOfJstDay } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { addRequiredCheck } from "../usecases/checks.ts";
 import { postComment } from "../usecases/comments.ts";
 import { buildDashboard, dashboardPolicy } from "../usecases/dashboard.ts";
-import {
-  defaultDashboardLayout,
-  homeListPolicy,
-  listSubmitTargets,
-  recordWorkOpened,
-  resetDashboardLayout,
-  saveDashboardLayout,
-  setWorkPinned,
-} from "../usecases/home.ts";
+import { listSubmitTargets, setWorkPinned } from "../usecases/home.ts";
 import { changeWorkLifecycle, importWorks } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -77,12 +69,9 @@ describe("自分だけのダッシュボード（W-26 段階 1）", () => {
     expect(reviewer.mine.checks).toHaveLength(1);
     expect(reviewer.mine.checks[0]!.note).toBeTruthy();
     expect(reviewer.roles).toMatchObject({ reviewer: 1, checker: 1, creator: 0 });
-    // 既定の構成は持っている役割（校正・専門確認）の節が先
-    expect(reviewer.layout.slice(0, 2).map((w) => w.id)).toEqual(["review", "checks"]);
 
     const creator = await buildDashboard(ctx, principals.creator, await all());
     expect(creator.roles.creator).toBe(3);
-    expect(creator.layout[0]!.id).toBe("submit");
     // 校正の締切（2 日後）と納期（3 日後）。20 日後の納期は 7 日の外
     expect(creator.upcoming.map((i) => [i.workTitle, i.deadlineKind])).toEqual([
       ["A 近い納期", "review"],
@@ -112,64 +101,17 @@ describe("自分だけのダッシュボード（W-26 段階 1）", () => {
     expect((await buildDashboard(ctx, principals.creator, await all())).mentions).toHaveLength(0);
   });
 
-  it("ピン留めと最近開いた制作物。見られない制作物はピン留めできない", async () => {
+  it("ピン留め。見られない制作物はピン留めできない", async () => {
     const { ctx, soon, late, all } = await setup();
     await setWorkPinned(ctx, principals.reviewer, { workId: soon.id, pinned: true });
     await expect(
       setWorkPinned(ctx, principals.reviewer, { workId: late.id, pinned: true }),
     ).rejects.toThrow("forbidden");
-    await recordWorkOpened(ctx, principals.reviewer, soon.id);
     let d = await buildDashboard(ctx, principals.reviewer, await all());
     expect(d.pinned.map((i) => i.workTitle)).toEqual(["A 近い納期"]);
-    expect(d.recent.map((i) => i.workTitle)).toEqual(["A 近い納期"]);
     await setWorkPinned(ctx, principals.reviewer, { workId: soon.id, pinned: false });
     d = await buildDashboard(ctx, principals.reviewer, await all());
     expect(d.pinned).toHaveLength(0);
-  });
-
-  it("最近開いた制作物は同じ制作物を 1 行にし、上限を超えたら古いものから消す", async () => {
-    const ctx = createInMemoryContext();
-    const ids: string[] = [];
-    for (let i = 0; i < homeListPolicy.keepRecent + 2; i++) {
-      ids.push((await seedWork(ctx, { title: `W${i}` })).id);
-      await recordWorkOpened(ctx, principals.creator, ids[i]!);
-      ctx.clock.advance(1000);
-    }
-    await recordWorkOpened(ctx, principals.creator, ids[5]!);
-    const rows = await ctx.home.listRecent(principals.creator.userId);
-    expect(rows).toHaveLength(homeListPolicy.keepRecent);
-    expect(rows[0]!.workId).toBe(ids[5]);
-    expect(rows.some((r) => r.workId === ids[0])).toBe(false);
-  });
-});
-
-describe("ダッシュボードの構成の保存（W-26 段階 2）", () => {
-  it("保存した構成を使い、知らない ID は捨て、足りない節は末尾に足す。既定に戻せる", async () => {
-    const { ctx, all } = await setup();
-    const saved = await saveDashboardLayout(ctx, principals.creator, [
-      { id: "mentions", visible: true, limit: 3 },
-      { id: "submit", visible: false, limit: null },
-      { id: "nope", visible: true, limit: 5 },
-    ]);
-    expect(saved.slice(0, 2)).toEqual<DashboardWidgetPref[]>([
-      { id: "mentions", visible: true, limit: 3 },
-      { id: "submit", visible: false, limit: null },
-    ]);
-    let d = await buildDashboard(ctx, principals.creator, await all());
-    expect(d.customized).toBe(true);
-    expect(d.layout[0]!.id).toBe("mentions");
-    expect(d.layout.find((w) => w.id === ("nope" as never))).toBeUndefined();
-    await resetDashboardLayout(ctx, principals.creator);
-    d = await buildDashboard(ctx, principals.creator, await all());
-    expect(d.customized).toBe(false);
-    expect(d.layout[0]!.id).toBe("submit");
-  });
-
-  it("既定の構成はすべての節を並べ、持っている役割の節を先にする", () => {
-    const l = defaultDashboardLayout(new Set(["approver"]));
-    expect(l[0]!.id).toBe("finalize");
-    expect(new Set(l.map((w) => w.id)).size).toBe(l.length);
-    expect(l.every((w) => w.visible && w.limit === 5)).toBe(true);
   });
 });
 

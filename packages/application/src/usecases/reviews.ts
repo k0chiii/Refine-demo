@@ -67,7 +67,7 @@ export async function assignReviewers(
     body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}。締切は ${formatDeadlineUntil(revision.deadlineAt, ctx.clock.now())}。${
       revision.focusNotes?.trim()
         ? `見てほしい観点: ${excerpt(revision.focusNotes, 80)}`
-        : "校正画面で内容を確かめ、終わったら「確認を完了」を押してください。"
+        : "校正画面で内容を確かめ、終わったら「校正を完了」を押してください。"
     }`,
     workId: work.id,
     revisionId: revision.id,
@@ -129,7 +129,7 @@ export async function remindUpcomingDeadlinesBatch(
         body: `${about(work.title, revisionLabel(revision))}・締切は ${formatDeadlineUntil(
           revision.deadlineAt,
           now,
-        )}。それまでに校正画面で確かめ、「確認を完了」を押してください。締切を過ぎるとコメントできません。`,
+        )}。それまでに校正画面で確かめ、「校正を完了」を押してください。締切を過ぎるとコメントできません。`,
         workId: work.id,
         revisionId: revision.id,
       });
@@ -172,7 +172,7 @@ export async function markRevisionViewed(
   if (next !== a) await ctx.assignments.upsert(next);
 }
 
-/** 校正者が「自分の確認を完了」と明示したとき（A-06: コメント投稿では遷移しない）。 */
+/** 校正者が「自分の校正を完了」と明示したとき（A-06: コメント投稿では遷移しない）。 */
 export async function completeMyReview(
   ctx: AppContext,
   principal: Principal,
