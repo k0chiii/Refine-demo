@@ -29,6 +29,7 @@ export interface UploadAttemptTarget {
  * 実体の転送の 3 段階（版の提出物とフィードバックの添付で同じ）。いずれも利用者の JWT とサービスの秘密を付けて呼ぶ。
  * - begin: 利用者が持ち主の受付中・未検証の項目に、試行のキーを払い出す。
  * - complete: R2 が sha256 を確かめた試行を、項目がまだ受付中・未検証なら原子的に採用する。拒否は GatewayError。
+ *   .ai は実体の先頭を見た結果（PDF の見出しがあるか）を pdfCompatible で添える。true なら PDF として紙面に出せる。
  * - fail: 試行を破棄する（Hono が自分の試行のキーを消した後の記録）。
  */
 export interface UploadOps {
@@ -36,7 +37,7 @@ export interface UploadOps {
   complete(
     token: string,
     attemptId: string,
-    meta: { size: number; sha256: string; figma?: FigmaImportMeta },
+    meta: { size: number; sha256: string; figma?: FigmaImportMeta; pdfCompatible?: boolean },
   ): Promise<{ status: string; failureMessage: string | null }>;
   fail(token: string, attemptId: string, message: string): Promise<void>;
 }

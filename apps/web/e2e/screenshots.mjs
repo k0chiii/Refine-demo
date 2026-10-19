@@ -2196,6 +2196,66 @@ async function webFigmaScenes() {
   await picker.locator('[slot="actions"] m3e-button', { hasText: "キャンセル" }).click();
   await page.waitForTimeout(400);
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 72 グラフィック制作物の原本（利用者指示 2026-10-19「pdf, adobe illustrator, indesign のファイルもあげれるように」）:
+  //    .indd だけでは転送の前に断る → PDF 互換の .ai（中身は PDF）と .indd を一緒に出すと .ai が紙面に出る。
+  //    ファイル一覧に形式の呼び名と保存の操作が出て、.indd は元のファイル名で保存される
+  await signInAs("mock-nogiku-creator");
+  await openWork("EVE 企画ポスター");
+  await pdfReady();
+  await drawer("版");
+  await btn("新しい版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  const fileInput = page.locator('m3e-dialog[open] input[type="file"]');
+  const accept = await fileInput.getAttribute("accept");
+  for (const want of [".ai", ".indd", ".pdf", "image/*"])
+    expectTrue(accept?.includes(want), `ファイル選択の accept に ${want} が無い（${accept}）`);
+  await page.setInputFiles('m3e-dialog[open] input[type="file"]', [
+    resolve(FIXTURES, "poster.indd"),
+  ]);
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "原本の確認");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () =>
+      (document.querySelector('m3e-dialog[open] .mf-live[role="alert"]')?.textContent ?? "") !== "",
+    null,
+    { timeout: 10_000 },
+  );
+  expectTrue(
+    (await page.locator("m3e-dialog[open] .upload-item").count()) === 0,
+    ".indd だけなのに転送が始まった",
+  );
+  await page.setInputFiles('m3e-dialog[open] input[type="file"]', [resolve(FIXTURES, "poster.ai")]);
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll("m3e-dialog[open] .file-drop__files li")].some(
+        (li) => li.textContent.includes("poster.ai") && li.textContent.includes("紙面に表示"),
+      ),
+    null,
+    { timeout: 10_000 },
+  );
+  await shot("72a-submit-ai-indd");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item__state--verified").length >= 2,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/3$/, { timeout: 15_000 });
+  await pdfReady(); // PDF 互換の .ai が紙面に出る
+  await drawer("情報");
+  const filesList = page.locator('[aria-label="この版のファイル"] m3e-list-item');
+  expectTrue((await filesList.count()) === 2, "この版のファイルが 2 件並ばない");
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 10_000 }),
+    page.locator('m3e-icon-button[aria-label="poster.indd をダウンロード"]').click(),
+  ]);
+  expectTrue(
+    download.suggestedFilename() === "poster.indd",
+    ".indd が元のファイル名で保存されない",
+  );
+  await shot("72b-revision-files-ai-indd");
 }
 
 try {

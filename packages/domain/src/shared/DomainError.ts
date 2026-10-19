@@ -24,6 +24,7 @@ export const domainErrorCodes = [
   "revision_deadline_in_past",
   "revision_artifacts_not_verified",
   "revision_no_artifacts",
+  "revision_no_reviewable_file",
   "revision_void_not_allowed",
   "revision_void_reason_required",
   // 専門確認（必須チェック）
@@ -39,6 +40,7 @@ export const domainErrorCodes = [
   "upload_session_expired",
   "upload_attempt_not_found",
   "upload_attempt_closed",
+  "upload_file_too_large",
   "revision_submission_conflict",
   // 指摘
   "comment_reason_required",

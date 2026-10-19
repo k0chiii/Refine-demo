@@ -19,6 +19,10 @@ const messages: Record<string, string> = {
   revision_artifacts_not_verified:
     "確認できていないファイルがあります。確認できなかったファイルをアップロードし直してから提出してください。",
   revision_no_artifacts: "ファイルか外部リンクを 1 件以上追加してください",
+  revision_no_reviewable_file:
+    "校正できるファイルがありません。Illustrator（.ai）と InDesign（.indd）は紙面に出せないことがあるので、書き出した PDF か画像も一緒に出してください。",
+  upload_file_too_large:
+    "ファイルが大きすぎます。1 ファイルは 100 MB までです。書き出しの画質を下げるか、ファイルを分けて出してください。",
   upload_session_not_open: "この提出の準備はもう確定したか、取りやめています",
   upload_session_expired: "この提出の準備は期限が切れました。もう一度提出し直してください。",
   upload_item_not_found: "アップロードするファイルが見つかりません",
@@ -102,6 +106,11 @@ const messages: Record<string, string> = {
     "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
   avatar_invalid: "アバターの設定を保存できませんでした。選び直してからもう一度お試しください。",
 };
+
+/** エラーコードに決まった文言（Worker が返すコードなど、ConvexError 以外で来る失敗に使う） */
+export function messageForCode(code: string): string {
+  return messages[code] ?? genericErrorMessage(code);
+}
 
 /** 失敗の理由が分からないときの文言（内部のコードは問い合わせ用に添える） */
 export function genericErrorMessage(code?: string): string {

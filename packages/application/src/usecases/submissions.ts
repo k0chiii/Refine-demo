@@ -1,6 +1,9 @@
 import {
   adoptAttempt,
   assertAttemptAdoptable,
+  assertGraphicHasReviewableFile,
+  assertUploadSizeWithinLimit,
+  normalizeDeclaredFile,
   assertItemUploadable,
   assertItemsReadyForConfirm,
   assertSessionOpen,
@@ -93,6 +96,9 @@ export async function prepareSubmission(
   const baseRevisions = await ctx.revisions.listByWork(work.id);
   planRevision(baseRevisions, input.kind);
   if (input.items.length === 0) throw new DomainError("revision_no_artifacts");
+  // 1 ファイルの上限（Worker の本文の上限）。超える申告は準備の時点で理由つきで断る
+  for (const it of input.items)
+    if (it.role !== "external") assertUploadSizeWithinLimit(it.fileName, it.declaredSize);
   // SNS 投稿: 記録にある画像がすべて添付にあること（画像の欠けた版を作らない）
   const postProblems = postSubmissionProblems(input.postSnapshot, input.items);
   if (postProblems.length > 0)
@@ -139,7 +145,9 @@ export async function prepareSubmission(
           : {}),
       });
       const items: UploadItem[] = [];
-      for (const [index, it] of input.items.entries()) {
+      for (const [index, declared] of input.items.entries()) {
+        // .ai / .indd は MIME・種類を拡張子から決める（.ai が PDF として紙面に出せるかは、実体の検証で決まる）
+        const it = declared.role === "external" ? declared : normalizeDeclaredFile(declared);
         const base: Omit<UploadItem, "id"> = {
           sessionId: session.id,
           fileName: it.fileName,
@@ -224,6 +232,8 @@ export async function completeItemUpload(
     pageCount?: number;
     /** Figma から取り込んだとき、Figma の応答から埋める値（ノード名・版・フレームの大きさ） */
     figma?: FigmaImportMeta;
+    /** Worker が .ai の先頭を見て PDF の見出しがあったか（.ai 以外では見ない）。true なら PDF として紙面に出せる */
+    pdfCompatible?: boolean;
   },
 ): Promise<UploadItem> {
   const now = ctx.clock.now();
@@ -240,6 +250,7 @@ export async function completeItemUpload(
   };
   if (input.pageCount !== undefined) meta.pageCount = input.pageCount;
   if (input.figma !== undefined) meta.figma = input.figma;
+  if (input.pdfCompatible !== undefined) meta.pdfCompatible = input.pdfCompatible;
   const next = markItemVerified(item, meta);
   await ctx.attempts.update(
     next.status === "verified" ? adoptAttempt(attempt, now) : discardAttempt(attempt, now),
@@ -333,6 +344,8 @@ export async function confirmSubmission(
 
     const items = await ctx.uploads.listItems(session.id);
     assertItemsReadyForConfirm(items);
+    // グラフィック制作物は、紙面に出して校正できるファイルが 1 つ以上要る（.indd や PDF 互換でない .ai だけでは確定しない）
+    assertGraphicHasReviewableFile(work.mediaType, items);
 
     const existingRevisions = await ctx.revisions.listByWork(work.id);
     // 準備した後に別の提出が確定していれば確定しない（同時提出は一件だけ確定する: §5.2-11）
