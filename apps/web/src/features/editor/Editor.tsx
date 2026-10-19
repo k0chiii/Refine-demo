@@ -716,11 +716,9 @@ export function Editor({
     });
   const revision = data?.revision ?? null;
   const can = data?.can ?? null;
-  // 削除されたコメント（他の人の返信のために一覧に残すもの）は件数に入れない
-  const liveThreads = allThreads.filter((t) => !t.deleted);
-  const resolvedCount = liveThreads.filter(isClosed).length;
-  const botCount = liveThreads.filter((t) => t.origin && !isClosed(t)).length;
-  const openCount = liveThreads.length - resolvedCount;
+  const resolvedCount = allThreads.filter(isClosed).length;
+  const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
+  const openCount = allThreads.length - resolvedCount;
   // 表示中の版の紙面にある相談（立てた順に 1, 2, …。コメントの番号とは別に数える）
   const fbPlaced = (fbThreads ?? [])
     .filter((t) => t.anchor && t.revision?.id === revisionId)

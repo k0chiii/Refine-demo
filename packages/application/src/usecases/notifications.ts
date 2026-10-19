@@ -2,7 +2,6 @@ import {
   approversOf,
   canSeeNotificationSubject,
   DomainError,
-  isListedThread,
   memberTeamIds,
   type NotificationSubject,
   type Principal,
@@ -88,26 +87,20 @@ export const DELETED_COMMENT_NOTIFICATION = { body: "削除されたコメント
 
 /**
  * 通知の先のコメントが削除されたか（スレッドごとに 1 回だけ読む）。
- * "gone": 一覧からも消えた（紙面に印もカードも無い）。"kept": 返信のために「削除されたコメント」として残っている。null: 削除されていない。
+ * 削除したコメントは一覧からも消える（紙面に印もカードも無い。返信のために残すこともしない）。
  */
 function deletedThreadLoader(ctx: AppContext) {
-  const cache = new Map<string, Promise<"gone" | "kept" | null>>();
-  return (n: Pick<Notification, "kind" | "threadId">): Promise<"gone" | "kept" | null> => {
+  const cache = new Map<string, Promise<boolean>>();
+  return (n: Pick<Notification, "kind" | "threadId">): Promise<boolean> => {
     // feedback_* の threadId はフィードバックのスレッド。それ以外はコメントのスレッド
     if (n.threadId === undefined || notificationSubjectOf(n.kind) !== "work")
-      return Promise.resolve(null);
+      return Promise.resolve(false);
     let hit = cache.get(n.threadId);
     if (!hit) {
       hit = ctx.threads
         .findById(n.threadId)
-        .then((t) =>
-          t === null || t === undefined || t.deletedAt === undefined
-            ? null
-            : isListedThread(t)
-              ? ("kept" as const)
-              : ("gone" as const),
-        )
-        .catch(() => null);
+        .then((t) => t !== null && t !== undefined && t.deletedAt !== undefined)
+        .catch(() => false);
       cache.set(n.threadId, hit);
     }
     return hit;
@@ -115,14 +108,10 @@ function deletedThreadLoader(ctx: AppContext) {
 }
 
 /** 削除されたコメントの通知に変える（文面・抜粋を伏せ、消えたコメントへは飛ばさない） */
-function degradeDeletedComment(n: Notification, state: "gone" | "kept"): Notification {
+function degradeDeletedComment(n: Notification): Notification {
   const { preview, threadId, ...rest } = n;
-  void preview;
-  return {
-    ...rest,
-    ...DELETED_COMMENT_NOTIFICATION,
-    ...(state === "kept" && threadId !== undefined ? { threadId } : {}),
-  };
+  void [preview, threadId];
+  return { ...rest, ...DELETED_COMMENT_NOTIFICATION };
 }
 
 type LoadedSubject = { work: Work; grants: WorkPermissionGrant[]; teams: Team[] } | null;
@@ -235,8 +224,7 @@ export async function presentNotifications(
       out.push(redact(n));
       continue;
     }
-    const state = await deleted(n);
-    out.push(state ? degradeDeletedComment(n, state) : n);
+    out.push((await deleted(n)) ? degradeDeletedComment(n) : n);
   }
   return out;
 }

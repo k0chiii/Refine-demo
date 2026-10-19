@@ -1,4 +1,3 @@
-import { isListedThread } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { finalizeWork } from "../usecases/approvals.ts";
@@ -61,11 +60,9 @@ describe("コメントの削除（投稿者は校了前だけ・システム管�
     await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
 
     expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
-    expect(await ctx.threads.listByRevision(revision.id, { includeDeleted: true })).toHaveLength(1);
     const stored = await ctx.threads.findById(thread.id);
     expect(stored?.deletedAt).toBe(ctx.clock.now());
     expect(stored?.body).toBe("団体名が誤り");
-    expect(isListedThread(stored!)).toBe(false); // 返信が無ければ一覧にも出さない
     const events = await ctx.threads.listEvents(thread.id);
     expect(events.map((e) => e.eventType)).toEqual(["created", "deleted"]);
     await expect(
@@ -122,24 +119,42 @@ describe("コメントの削除（投稿者は校了前だけ・システム管�
     expect(await listCarryCandidates(ctx, principals.creator, revision.id)).toEqual([]);
   });
 
-  it("他の人の返信があれば一覧に残り（本文は伏せる対象）、その返信が全て削除されると一覧から外れる", async () => {
+  it("他の人の返信があっても、投稿者本人の削除で返信ごと消える（「削除されたコメント」は残らない）", async () => {
     const { ctx, revision, post, replyIds } = await setup();
+    const kept = await post("info");
     const thread = await post();
     await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
     await replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "お願いします" });
+    const ids = await replyIds(thread.id);
+
     await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
 
-    // 件数・未解決の対象からは外れるが、返信の文脈のために一覧には残る
-    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
-    const kept = await ctx.threads.findById(thread.id);
-    expect(isListedThread(kept!)).toBe(true);
-
-    const [creatorReply] = await replyIds(thread.id);
-    await deleteReply(ctx, principals.creator, {
-      threadId: thread.id,
-      replyEventId: creatorReply!,
+    // 一覧に残らない。印も付けない（古い仕様の deletedKeepsReplies は書かない）
+    expect((await ctx.threads.listByRevision(revision.id)).map((t) => t.id)).toEqual([kept.id]);
+    const stored = (await ctx.threads.findById(thread.id))!;
+    expect(stored.deletedAt).toBe(ctx.clock.now());
+    expect(stored.deletedKeepsReplies).toBeUndefined();
+    // 他の人の返信も、自分の返信も削除済み（原文は履歴に残る）
+    const events = await ctx.threads.listEvents(thread.id);
+    expect(
+      events
+        .filter((e) => e.eventType === "reply_deleted")
+        .map((e) => (e.payload as { replyEventId: string }).replyEventId),
+    ).toEqual(ids);
+    expect(events.find((e) => e.eventType === "deleted")?.payload).toEqual({
+      cascade: true,
+      repliesDeleted: 2,
     });
-    expect(isListedThread((await ctx.threads.findById(thread.id))!)).toBe(false);
+    await expect(
+      deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: ids[0]! }),
+    ).rejects.toThrow(code("comment_reply_not_found"));
+  });
+
+  it("古い仕様で「削除されたコメント」として残っていた行（deletedKeepsReplies）も一覧に出さない", async () => {
+    const { ctx, revision, post } = await setup();
+    const thread = await post();
+    await ctx.threads.update({ ...thread, deletedAt: ctx.clock.now(), deletedKeepsReplies: true });
+    expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
   });
 
   it("自分の返信だけを削除でき、元の本文と削除の記録が履歴に残る", async () => {
@@ -271,7 +286,6 @@ describe("管理者の削除は返信ごとまとめて消す（利用者決定 
 
     const stored = (await ctx.threads.findById(thread.id))!;
     expect(stored.deletedAt).toBe(ctx.clock.now());
-    expect(isListedThread(stored)).toBe(false); // 「削除されたコメント」として残らない
     // 件数・未解決の対象からはスレッドだけが外れる
     expect((await ctx.threads.listByRevision(revision.id)).map((t) => t.id)).toEqual([kept.id]);
     // 返信は全て削除済み（原文は履歴に残る）
@@ -319,14 +333,13 @@ describe("管理者の削除は返信ごとまとめて消す（利用者決定 
     await deleteThread(ctx, principals.sysadmin, { threadId: withReply.id });
     await deleteThread(ctx, principals.sysadmin, { threadId: plain.id });
     expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
-    expect(isListedThread((await ctx.threads.findById(withReply.id))!)).toBe(false);
     expect(auditOf(ctx, "commentThread").map((a) => a.after)).toMatchObject([
       { repliesDeleted: 1, afterFinalized: true },
       { repliesDeleted: 0, afterFinalized: true },
     ]);
   });
 
-  it("投稿者本人の削除は従来どおり（他の人の返信があれば残り、監査は出ない）。管理者以外の他人は拒否", async () => {
+  it("投稿者本人の削除も返信ごと消える（監査は管理者の削除だけ）。管理者以外の他人は拒否", async () => {
     const { ctx, revision, post, replyIds } = await setup();
     const thread = await post();
     await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
@@ -335,12 +348,14 @@ describe("管理者の削除は返信ごとまとめて消す（利用者決定 
         code("comment_delete_not_author"),
       );
     await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
-    expect(isListedThread((await ctx.threads.findById(thread.id))!)).toBe(true);
     const events = await ctx.threads.listEvents(thread.id);
-    expect(events.filter((e) => e.eventType === "reply_deleted")).toHaveLength(0);
-    expect(events.find((e) => e.eventType === "deleted")?.payload).toEqual({ keepsReplies: true });
+    expect(events.filter((e) => e.eventType === "reply_deleted")).toHaveLength(1);
+    expect(events.find((e) => e.eventType === "deleted")?.payload).toEqual({
+      cascade: true,
+      repliesDeleted: 1,
+    });
     expect(await ctx.threads.listByRevision(revision.id)).toHaveLength(0);
-    expect(await replyIds(thread.id)).toHaveLength(1);
+    expect(await replyIds(thread.id)).toHaveLength(1); // 原文は履歴に残る
     expect(auditOf(ctx, "commentThread")).toHaveLength(0);
   });
 
@@ -359,6 +374,18 @@ describe("管理者の削除は返信ごとまとめて消す（利用者決定 
     expect(degraded[0]!.preview).toBeUndefined();
     expect(after.find((n) => n.threadId === stays.id)?.body).not.toBe(
       DELETED_COMMENT_NOTIFICATION.body,
+    );
+  });
+
+  it("返信付きのコメントを投稿者本人が削除した場合も、通知は飛び先なしの文面に変わる（返信のために残さない）", async () => {
+    const { ctx, post } = await setup();
+    const thread = await post("info");
+    await replyToThread(ctx, principals.creator, { threadId: thread.id, body: "対応します" });
+    await deleteThread(ctx, principals.reviewer, { threadId: thread.id });
+    const mine = await listMyNotifications(ctx, principals.creator);
+    expect(mine.some((n) => n.threadId === thread.id)).toBe(false);
+    expect(mine.filter((n) => n.body === DELETED_COMMENT_NOTIFICATION.body).length).toBeGreaterThan(
+      0,
     );
   });
 });

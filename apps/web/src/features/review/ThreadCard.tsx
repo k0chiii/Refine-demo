@@ -31,9 +31,7 @@ import { UserPicker } from "@/ui/UserPicker";
 
 export type Thread = FunctionReturnType<typeof api.revisions.get>["threads"][number];
 export const closedResolutions = ["rejected", "resolved", "deferred"];
-/** 削除されたコメント（返信の文脈のために残してある）は解決済みとして数えない */
-export const isClosed = (t: { resolution: string; deleted?: boolean }) =>
-  t.deleted !== true && closedResolutions.includes(t.resolution);
+export const isClosed = (t: { resolution: string }) => closedResolutions.includes(t.resolution);
 
 type Mode = null | "reply" | "rejected" | "deferred" | "assign" | "edit";
 
@@ -110,15 +108,13 @@ export function ThreadCard({
     setMentions([]);
   };
   const menuId = `tm-${t.id}`;
-  const gone = t.deleted;
-  const hasMenu = !gone && (canDecide || canEdit || t.can.delete);
+  const hasMenu = canDecide || canEdit || t.can.delete;
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // 管理者の削除は返信もまとめて消える。確認のときだけ返信の件数を読む
-  const cascade = t.can.cascade;
+  // 削除は返信もまとめて消える。確認のときだけ返信の件数を読む
   const replyCount = useQuery(
     api.comments.events,
-    confirmDelete && cascade ? { threadId: t.id as Id<"commentThreads"> } : "skip",
-  )?.events.filter((e) => e.eventType === "replied" && !e.deleted).length;
+    confirmDelete ? { threadId: t.id as Id<"commentThreads"> } : "skip",
+  )?.events.filter((e) => e.eventType === "replied").length;
   const doDelete = useAction(async () => {
     await onDelete();
     setConfirmDelete(false);
@@ -149,7 +145,7 @@ export function ThreadCard({
     <>
       <M3eCard
         variant={active ? "elevated" : "outlined"}
-        className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${gone ? "thread--deleted" : ""} ${className ?? ""}`}
+        className={`thread ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${className ?? ""}`}
         aria-label={`コメント${index ? ` ${index}` : ""} ${t.author?.name ?? ""}`}
         data-thread-id={t.id}
         onClick={onSelect}
@@ -198,7 +194,7 @@ export function ThreadCard({
                       : index}
               </M3eButton>
             ) : null}
-            {canDecide && !closed && !gone ? (
+            {canDecide && !closed ? (
               <M3eIconButton
                 aria-label="解決済みにする"
                 size="extra-small"
@@ -237,18 +233,15 @@ export function ThreadCard({
               「{t.anchor.selector.textQuote.exact}」
             </blockquote>
           ) : null}
-          <div className={`thread__body ${gone ? "thread__body--deleted" : ""}`}>
-            {gone ? t.body : renderWithMentions(t.body, t.mentionUsers)}
-          </div>
-          {!gone &&
-          (closed ||
-            t.severity === "critical" ||
-            t.carriedFromThreadId ||
-            t.assignee ||
-            t.origin?.needsReview ||
-            t.origin?.textSource === "ocr" ||
-            (placeState && placeState !== "attached") ||
-            t.anchor?.type === "figma_node") ? (
+          <div className="thread__body">{renderWithMentions(t.body, t.mentionUsers)}</div>
+          {closed ||
+          t.severity === "critical" ||
+          t.carriedFromThreadId ||
+          t.assignee ||
+          t.origin?.needsReview ||
+          t.origin?.textSource === "ocr" ||
+          (placeState && placeState !== "attached") ||
+          t.anchor?.type === "figma_node" ? (
             <div className="thread__meta">
               {/* Web のライブ表示: 要素が見つからない（位置が外れた）・文字で見つけた（動いた）。消さずに注記する（WB-05） */}
               {placeState === "detached" ? (
@@ -298,22 +291,18 @@ export function ThreadCard({
               {t.assignee ? <StatusText icon="person">担当 {t.assignee.name}</StatusText> : null}
             </div>
           ) : null}
-          {!gone ? (
-            <ReactionRow
-              id={`tr-${t.id}`}
-              reactions={t.reactions}
-              canReact={canReply}
-              onToggle={(emoji) =>
-                toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })
-              }
-            />
-          ) : null}
+          <ReactionRow
+            id={`tr-${t.id}`}
+            reactions={t.reactions}
+            canReact={canReply}
+            onToggle={(emoji) => toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })}
+          />
           {active ? (
             <ThreadEvents threadId={t.id} canReact={canReply} onDeleteReply={onDeleteReply} />
           ) : null}
           {/* 返信（Google ドキュメントのコメントと同じ流れ）: 開いているカードの下に M3 の outlined text field を 1 つ。
               書き始める（フォーカスする）と「キャンセル」「返信」が出る。ラベルは欄の中（浮かぶラベル） */}
-          {active && canReply && !gone && (mode === null || mode === "reply") ? (
+          {active && canReply && (mode === null || mode === "reply") ? (
             <div className="thread__form" onClick={stop}>
               <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
                 <label slot="label" htmlFor={`${t.id}-reply`}>
@@ -435,7 +424,7 @@ export function ThreadCard({
         <span slot="header">コメントを削除しますか？</span>
         <div className="dialog-body" tabIndex={0}>
           <p>本文は見えなくなります。元に戻せません</p>
-          {cascade && replyCount ? <p>返信 {replyCount} 件もまとめて削除します</p> : null}
+          {replyCount ? <p>返信 {replyCount} 件もまとめて削除します</p> : null}
         </div>
         <div slot="actions" className="row">
           <span className="spacer" />
@@ -607,7 +596,7 @@ function ThreadEvents({
 
 type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["events"][number];
 
-/** 返信 1 件。自分の返信だけ「⋮」から削除できる（削除した返信は本文を伏せて残す） */
+/** 返信 1 件。自分の返信だけ「⋮」から削除できる（削除した返信は並べない） */
 function ReplyItem({
   event: e,
   threadId,
@@ -634,29 +623,25 @@ function ReplyItem({
   const menuId = `rm-${e.id}`;
   const deletable = e.can?.delete === true;
   return (
-    <li className={`thread__replyitem ${e.deleted ? "thread__replyitem--deleted" : ""}`}>
+    <li className="thread__replyitem">
       <UserAvatar seed={e.actor?.email ?? e.actorId} userId={e.actorId} size={24} />
       <div className="thread__replybody">
         <span className="thread__name">{e.actor?.name}</span>
         <span className="thread__time">{formatJstShort(e.createdAt)}</span>
-        <div className={`thread__body ${e.deleted ? "thread__body--deleted" : ""}`}>
-          {e.deleted ? body : renderWithMentions(body, e.mentionUsers)}
-        </div>
-        {!e.deleted ? (
-          <ReactionRow
-            id={`rr-${e.id}`}
-            reactions={e.reactions}
-            canReact={canReact}
-            className="thread__reactions--reply"
-            onToggle={(emoji) =>
-              toggleReaction({
-                threadId: threadId as Id<"commentThreads">,
-                replyEventId: e.id,
-                emoji,
-              })
-            }
-          />
-        ) : null}
+        <div className="thread__body">{renderWithMentions(body, e.mentionUsers)}</div>
+        <ReactionRow
+          id={`rr-${e.id}`}
+          reactions={e.reactions}
+          canReact={canReact}
+          className="thread__reactions--reply"
+          onToggle={(emoji) =>
+            toggleReaction({
+              threadId: threadId as Id<"commentThreads">,
+              replyEventId: e.id,
+              emoji,
+            })
+          }
+        />
       </div>
       {deletable ? (
         <M3eIconButton

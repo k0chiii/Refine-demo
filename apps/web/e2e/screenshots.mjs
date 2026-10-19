@@ -950,6 +950,23 @@ async function main() {
       ?.querySelector(".fb-post__reactions m3e-filter-chip[selected]"),
   );
   await shot("63-feedback-thread");
+  // 63b 自分の投稿を削除: ⋮ →「削除」→ 確認で消す。投稿の数が元に戻り、削除したことを示す行は残らない
+  {
+    const last = page.locator(".fb-post").last();
+    await last.hover({ position: { x: 40, y: 20 } });
+    await last.locator('m3e-icon-button[aria-label="ほかの操作"]').click();
+    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+    await page.waitForSelector('m3e-dialog[open] [slot="actions"] m3e-button');
+    await settle();
+    await page.locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "削除" }).click();
+    await page.waitForFunction((n) => document.querySelectorAll(".fb-post").length === n, before, {
+      timeout: 20_000,
+    });
+    expectTrue(
+      (await page.locator(".fb-post").count()) === before,
+      "削除した投稿が一覧から消えない",
+    );
+  }
   // 64 制作物の中の FB（相談。解決しない話し合い）: 紙面の範囲を選び「FB」に切り替えて立てる →
   // 引き出し「FB」でそのやり取りが開き、紙面には四角い印（コメントの丸い印と見分ける）
   await signInAs("mock-nogiku-reviewer");

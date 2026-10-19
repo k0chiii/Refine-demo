@@ -65,7 +65,7 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
 
     const before = await view();
     expect(before.threads).toHaveLength(1);
-    expect(before.threads[0]).toMatchObject({ deleted: false, can: { delete: true } });
+    expect(before.threads[0]).toMatchObject({ can: { delete: true } });
     // 他の人から見ると削除できない
     const asCreator = await cast.creator.as.query(api.revisions.get, { revisionId: rid });
     expect(asCreator.threads[0]?.can.delete).toBe(false);
@@ -87,7 +87,7 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     expect(events.events).toEqual([]);
   });
 
-  it("他の人の返信があるスレッドは一覧に残り、本文・位置は伏せられ、操作はできない。返信を全て消すと一覧から外れる", async () => {
+  it("他の人の返信があっても、投稿者の削除で返信ごと消える。「削除されたコメント」は残らず、操作もできない", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const { rid, postAs, view } = await setup(t, cast);
@@ -95,36 +95,48 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     await cast.creator.as.mutation(api.comments.reply, { threadId, body: "対応します" });
 
     await cast.reviewer.as.mutation(api.comments.remove, { threadId });
-    const after = await view();
-    expect(after.threads).toHaveLength(1);
-    const th = after.threads[0]!;
-    expect(th).toMatchObject({ id: threadId, deleted: true, can: { delete: false } });
-    expect(th.body).not.toBe("団体名が誤り");
-    expect(th.anchor).toBeUndefined();
-
-    // 返信は見える。削除済みのスレッドには返信・採否ができない
+    expect((await view()).threads).toHaveLength(0);
+    expect(
+      (await cast.creator.as.query(api.revisions.get, { revisionId: rid })).threads,
+    ).toHaveLength(0);
+    // 履歴は返さない。返信・採否はできない
     const ev = await cast.creator.as.query(api.comments.events, { threadId });
+    expect(ev.events).toEqual([]);
     expect(ev.canDecide).toBe(false);
-    const replies = ev.events.filter((e) => e.eventType === "replied");
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.can).toEqual({ delete: true });
     await expect(
       cast.creator.as.mutation(api.comments.reply, { threadId, body: "y" }),
     ).rejects.toThrow(code("comment_thread_deleted"));
     await expect(
       cast.creator.as.mutation(api.comments.decide, { threadId, action: "accepted" }),
     ).rejects.toThrow(code("comment_thread_deleted"));
+    // 返信は削除済み（原文は履歴に残る）
+    const stored = await t.run((ctx) =>
+      ctx.db
+        .query("commentEvents")
+        .filter((q) => q.eq(q.field("threadId"), threadId))
+        .collect(),
+    );
+    expect(stored.filter((e) => e.eventType === "reply_deleted")).toHaveLength(1);
+    expect(stored.filter((e) => e.eventType === "replied")).toHaveLength(1);
+  });
 
-    await cast.creator.as.mutation(api.comments.removeReply, {
-      threadId,
-      replyEventId: replies[0]!.id,
-    });
+  it("古い仕様で「削除されたコメント」として残っていた行（deletedKeepsReplies）も一覧に出ない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const { rid, postAs, view } = await setup(t, cast);
+    const threadId = await postAs(cast.reviewer);
+    await cast.creator.as.mutation(api.comments.reply, { threadId, body: "対応します" });
+    await t.run((ctx) =>
+      ctx.db.patch(threadId, { deletedAt: Date.now(), deletedKeepsReplies: true }),
+    );
+    expect((await view()).threads).toHaveLength(0);
     expect(
       (await cast.creator.as.query(api.revisions.get, { revisionId: rid })).threads,
     ).toHaveLength(0);
+    expect((await cast.creator.as.query(api.comments.events, { threadId })).events).toEqual([]);
   });
 
-  it("返信の削除は返信した本人だけ。削除した返信は本文を伏せて残り、スレッドは生きたまま", async () => {
+  it("返信の削除は返信した本人だけ。削除した返信は履歴に並ばず、スレッドは生きたまま", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const { postAs, view } = await setup(t, cast);
@@ -140,10 +152,8 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
       ).rejects.toThrow(code("comment_delete_not_author"));
     }
     await cast.creator.as.mutation(api.comments.removeReply, { threadId, replyEventId: reply!.id });
-    const [after] = (await events()).events.filter((e) => e.eventType === "replied");
-    expect(after).toMatchObject({ id: reply!.id, deleted: true });
-    expect((after!.payload as { body: string }).body).not.toBe("対応します");
-    expect((await view()).threads[0]).toMatchObject({ deleted: false });
+    expect((await events()).events.filter((e) => e.eventType === "replied")).toEqual([]);
+    expect((await view()).threads).toHaveLength(1);
     await expect(
       cast.creator.as.mutation(api.comments.removeReply, { threadId, replyEventId: reply!.id }),
     ).rejects.toThrow(code("comment_reply_not_found"));
@@ -222,7 +232,7 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     ).toBe(true);
   });
 
-  it("管理者が返信付きのコメントを削除すると、返信ごと一覧・件数・通知から消え、監査は 1 件。本人の削除は従来どおり", async () => {
+  it("管理者が返信付きのコメントを削除すると、返信ごと一覧・件数・通知から消え、監査は 1 件。本人の削除も返信ごと消える（監査は出ない）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const { rid, postAs } = await setup(t, cast);
@@ -232,17 +242,12 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     await cast.reviewer.as.mutation(api.comments.reply, { threadId, body: "お願いします" });
     await cast.creator.as.mutation(api.comments.reply, { threadId: own, body: "了解" });
 
-    // 管理者にだけ cascade が立つ（本人・他人には立たない）
+    // 削除できるのは管理者と本人だけ。削除は常に返信ごと
     const flags = async (who: Cast["admin"]) =>
       (await who.as.query(api.revisions.get, { revisionId: rid })).threads.map((x) => x.can);
-    expect(await flags(cast.admin)).toEqual([
-      { delete: true, cascade: true },
-      { delete: true, cascade: true },
-    ]);
-    expect(await flags(cast.reviewer)).toEqual([
-      { delete: true, cascade: false },
-      { delete: true, cascade: false },
-    ]);
+    expect(await flags(cast.admin)).toEqual([{ delete: true }, { delete: true }]);
+    expect(await flags(cast.reviewer)).toEqual([{ delete: true }, { delete: true }]);
+    expect(await flags(cast.creator)).toEqual([{ delete: false }, { delete: false }]);
 
     await cast.admin.as.mutation(api.comments.remove, { threadId });
     const after = await cast.creator.as.query(api.revisions.get, { revisionId: rid });
@@ -262,11 +267,11 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     const notes = await cast.creator.as.query(api.notifications.list, {});
     expect(notes.some((n) => n.threadId === threadId)).toBe(false);
 
-    // 本人の削除は従来どおり: 他の人の返信が残る
+    // 本人の削除も返信ごと消える（他の人の返信のために残さない）
     await cast.reviewer.as.mutation(api.comments.remove, { threadId: own });
-    const kept = (await cast.creator.as.query(api.revisions.get, { revisionId: rid })).threads;
-    expect(kept).toHaveLength(1);
-    expect(kept[0]).toMatchObject({ id: own, deleted: true });
+    expect(
+      (await cast.creator.as.query(api.revisions.get, { revisionId: rid })).threads,
+    ).toHaveLength(0);
 
     const audits = await t.run((ctx) => ctx.db.query("auditEvents").collect());
     const mine = audits.filter((a) => a.operation === "delete" && a.entityType === "commentThread");

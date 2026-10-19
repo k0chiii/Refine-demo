@@ -78,7 +78,7 @@ export function FeedbackConversation({
       ro.disconnect();
     };
   }, []);
-  const people = data.posts.filter((p) => !p.deleted).map((p) => p.author);
+  const people = data.posts.map((p) => p.author);
   return (
     <>
       <div className="fb-thread__scroll" ref={scrollRef}>

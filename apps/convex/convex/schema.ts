@@ -393,7 +393,7 @@ export default defineSchema({
     mentions: v.optional(v.array(v.string())),
     /** 投稿者が削除した時刻（論理削除。原文と履歴は commentEvents に残る） */
     deletedAt: v.optional(v.number()),
-    /** 削除した時点で他の人の返信が残っていた（一覧に「削除されたコメント」として残す） */
+    /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。保存済みの行との互換のために残す */
     deletedKeepsReplies: v.optional(v.boolean()),
     /** リアクション（絵文字ごとに押した人。FB と同じ形。誰も付けていなければ持たない） */
     reactions: v.optional(vReactionEntries),

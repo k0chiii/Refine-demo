@@ -1979,6 +1979,8 @@ m3e-dialog [slot="actions"] {
   --m3e-tonal-button-hover-selected-icon-color: var(--hub-on-accent);
   --m3e-tonal-button-focus-selected-icon-color: var(--hub-on-accent);
   --m3e-tonal-button-pressed-selected-icon-color: var(--hub-on-accent);
+  /* 横に流す箱（overflow）の中では hover の影が切れるので、影は付けず state layer だけで示す */
+  --m3e-tonal-button-hover-container-elevation: none;
   justify-self: start;
   max-width: 100%;
   overflow-x: auto;
@@ -2041,8 +2043,9 @@ m3e-dialog [slot="actions"] {
 .submit-picker .dialog-body {
   min-width: min(480px, 90vw);
 }
+/* 行は面の端に付けず 8 内側へ（hover の面がダイアログの縁に被らない。文字は見出しと同じ 24） */
 .submit-picker__list {
-  margin: 0 -24px;
+  margin: 0 -16px;
 }
 /* 別の制作物と比べる（利用者指示 2026-10-17）: 検索 → 制作物 → 版。広い画面は基本ダイアログ、compact は全画面（.dialog--full） */
 .cross-picker .dialog-body {
@@ -2057,12 +2060,14 @@ m3e-dialog [slot="actions"] {
   margin: 0;
 }
 .cross-picker__list {
-  margin: 0 -24px;
+  margin: 0 -16px;
   max-height: min(50vh, 480px);
   overflow: auto;
 }
 @media (max-width: 599px) {
+  /* 全画面は端から端まで（行の形は .list__item の compact の規則で角無し） */
   .cross-picker__list {
+    margin: 0 -24px;
     max-height: none;
   }
   /* 全画面のダイアログ: 候補が少なくても画面を満たす（見出し・操作ボタンの分を除いた高さ） */
@@ -2171,6 +2176,8 @@ m3e-dialog [slot="actions"] {
 }
 .notif-list .list__item {
   --m3e-list-item-container-shape: 0;
+  --m3e-list-item-hover-container-shape: 0;
+  --m3e-list-item-focus-container-shape: 0;
 }
 #notif-menu .notif {
   --m3e-menu-item-container-height: auto;
@@ -2791,6 +2798,8 @@ m3e-dialog [slot="actions"] {
 }
 .action-sheet__list .list__item {
   --m3e-list-item-container-shape: 0;
+  --m3e-list-item-hover-container-shape: 0;
+  --m3e-list-item-focus-container-shape: 0;
 }
 .ws__sheet .drawer {
   background: transparent;
@@ -2886,10 +2895,6 @@ m3e-dialog [slot="actions"] {
 .thread__replybody {
   flex: 1;
   min-width: 0;
-}
-.thread__body--deleted {
-  color: var(--mf-on-surface-variant);
-  font-style: italic;
 }
 /* コメント・返信のリアクション（FB と同じ部品: ui/Reactions）。付いているチップの末尾に「付ける」ボタン */
 .thread__reactions {
@@ -3170,10 +3175,12 @@ m3e-dialog [slot="actions"] {
     grid-template-columns: 1fr;
   }
 }
-/* compact のリストは端から端まで（行の角を取る）。.list の後に置く */
+/* compact のリストは端から端まで（行の角を取る。hover・focus の形も同じ 0 にする: M3E は既定で hover = medium・focus = large に変える） */
 @media (max-width: 599px) {
   .list__item {
     --m3e-list-item-container-shape: 0;
+    --m3e-list-item-hover-container-shape: 0;
+    --m3e-list-item-focus-container-shape: 0;
   }
 }
 
@@ -4531,9 +4538,6 @@ m3e-snackbar {
   gap: 12px;
   padding: 12px 8px;
 }
-.fb-post--deleted {
-  align-items: center;
-}
 .fb-post__avatar {
   display: grid;
   place-items: center;
@@ -5282,6 +5286,12 @@ m3e-snackbar {
 }
 .fb-spaces .list {
   margin-inline: 0;
+}
+/* 角丸の面（.fb-space__pane）の中の行は面の端に付けず 8 内側へ（hover・選択の面が面の縁や角に被らない）。文字の位置は 16 のまま */
+.fb-space__spaces .fb-spaces .list {
+  padding-inline: 8px;
+  --m3e-list-item-leading-space: 8px;
+  --m3e-list-item-trailing-space: 8px;
 }
 .fb-space-narrow .fb-spaces .list,
 .shell__content > .fb-spaces .list {

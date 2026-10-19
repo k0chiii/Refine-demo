@@ -332,13 +332,13 @@ export function createAppContext(
         const doc = await db.get("commentThreads", id as Id<"commentThreads">).catch(() => null);
         return doc ? (fromDoc(doc) as CommentThread) : null;
       },
-      async listByRevision(revisionId, options) {
+      async listByRevision(revisionId) {
         const docs = await db
           .query("commentThreads")
           .withIndex("by_revision", (q) => q.eq("revisionId", revisionId as Id<"revisions">))
           .collect();
         return docs
-          .filter((d) => options?.includeDeleted === true || d.deletedAt === undefined)
+          .filter((d) => d.deletedAt === undefined)
           .map((d) => fromDoc(d) as CommentThread);
       },
       async insert(thread) {
