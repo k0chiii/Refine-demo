@@ -502,3 +502,146 @@ describe("版提出: SNS 投稿の内容の記録と添付の対応（PR #1 レ�
     ]);
   });
 });
+
+describe("グラフィック制作物の提出: PDF・画像・Illustrator・InDesign（利用者指示 2026-10-19）", () => {
+  type Item = { fileName: string; mimeType: string; type: "pdf" | "image" | "other" };
+  const AI: Item = { fileName: "poster.ai", mimeType: "application/postscript", type: "other" };
+  const INDD: Item = { fileName: "poster.indd", mimeType: "", type: "other" };
+  const PDF: Item = { fileName: "poster.pdf", mimeType: "application/pdf", type: "pdf" };
+  const PNG: Item = { fileName: "poster.png", mimeType: "image/png", type: "image" };
+
+  /** 準備 → 各ファイルを検証済みに（.ai は Worker が見た PDF 互換の結果を添える）→ 確定の関数を返す */
+  async function submitGraphic(
+    mediaType: "pdf" | "image" | "video",
+    files: Item[],
+    opts: { aiPdfCompatible?: boolean } = {},
+  ) {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { mediaType });
+    const prepared = await prepareSubmission(ctx, principals.creator, {
+      workId: work.id,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+      items: files.map((f) => ({ ...f, role: "source" as const, declaredSize: 1000 })),
+    });
+    for (const item of prepared.items)
+      await uploadVerifiedItem(ctx, principals.creator, {
+        itemId: item.id,
+        size: 1000,
+        sha256: "abc",
+        ...(item.fileName.endsWith(".ai") && opts.aiPdfCompatible !== undefined
+          ? { pdfCompatible: opts.aiPdfCompatible }
+          : {}),
+      });
+    return {
+      ctx,
+      prepared,
+      confirm: () => confirmSubmission(ctx, principals.creator, { sessionId: prepared.session.id }),
+    };
+  }
+
+  it.each(["pdf", "image"] as const)(
+    "%s の制作物: PDF と .ai と .indd を一緒に出せて、.ai・.indd は MIME を拡張子から決めたダウンロード用の原本になる",
+    async (mediaType) => {
+      const { ctx, prepared, confirm } = await submitGraphic(mediaType, [PDF, AI, INDD], {
+        aiPdfCompatible: false,
+      });
+      const { revision } = await confirm();
+      const artifacts = await ctx.artifacts.listByRevision(revision.id);
+      const by = (name: string) => artifacts.find((x) => x.fileName === name)!;
+      expect(by("poster.pdf").type).toBe("pdf");
+      expect(by("poster.ai")).toMatchObject({ type: "other", mimeType: "application/illustrator" });
+      expect(by("poster.indd")).toMatchObject({
+        type: "other",
+        mimeType: "application/x-indesign",
+      });
+      expect(prepared.items.map((i) => i.mimeType)).toEqual([
+        "application/pdf",
+        "application/illustrator",
+        "application/x-indesign",
+      ]);
+    },
+  );
+
+  it("PDF 互換の .ai は検証で PDF の種類になり、元の .ai のファイル名のまま残る", async () => {
+    const { ctx, confirm } = await submitGraphic("pdf", [AI], { aiPdfCompatible: true });
+    const { revision } = await confirm();
+    const [artifact] = await ctx.artifacts.listByRevision(revision.id);
+    expect(artifact).toMatchObject({ type: "pdf", fileName: "poster.ai", status: "verified" });
+  });
+
+  it("PDF 互換と確かめていない .ai は、種類が pdf と申告されていても PDF にならない", async () => {
+    const { ctx, confirm } = await submitGraphic("pdf", [{ ...AI, type: "pdf" }, PNG], {});
+    const { revision } = await confirm();
+    const artifacts = await ctx.artifacts.listByRevision(revision.id);
+    expect(artifacts.find((x) => x.fileName === "poster.ai")?.type).toBe("other");
+  });
+
+  it("紙面に出せるファイルが無い提出（.indd だけ・PDF 互換でない .ai だけ）は確定で断る。旧版の受付は変わらない", async () => {
+    for (const files of [[INDD], [AI, INDD]]) {
+      const { ctx, prepared, confirm } = await submitGraphic("pdf", files, {
+        aiPdfCompatible: false,
+      });
+      await expect(confirm()).rejects.toMatchObject({ code: "revision_no_reviewable_file" });
+      expect(await ctx.revisions.listByWork(prepared.session.workId)).toHaveLength(0);
+      expect((await ctx.uploads.findById(prepared.session.id))?.state).toBe("open");
+    }
+  });
+
+  it("断られても、書き出した PDF か画像を足して出し直せる", async () => {
+    const { ctx, prepared, confirm } = await submitGraphic("image", [INDD]);
+    await expect(confirm()).rejects.toMatchObject({ code: "revision_no_reviewable_file" });
+    const again = await prepareSubmission(ctx, principals.creator, {
+      workId: prepared.session.workId,
+      kind: "standard",
+      reviewType: "general",
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+      items: [INDD, PNG].map((f) => ({ ...f, role: "source" as const })),
+    });
+    for (const item of again.items)
+      await uploadVerifiedItem(ctx, principals.creator, {
+        itemId: item.id,
+        size: 1000,
+        sha256: "abc",
+      });
+    const { revision } = await confirmSubmission(ctx, principals.creator, {
+      sessionId: again.session.id,
+    });
+    expect(revision.sequence).toBe(1);
+  });
+
+  it("グラフィック以外（動画）の制作物には、紙面に出せるファイルの規則を課さない", async () => {
+    const { confirm } = await submitGraphic("video", [INDD]);
+    await expect(confirm()).resolves.toBeDefined();
+  });
+
+  it("1 ファイルの上限を超える申告は準備の時点で断る。数十 MB の原本は通る", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const base = {
+      workId: work.id,
+      kind: "standard" as const,
+      reviewType: "general",
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+    };
+    await expect(
+      prepareSubmission(ctx, principals.creator, {
+        ...base,
+        items: [{ ...INDD, role: "source", declaredSize: 150_000_000 }],
+      }),
+    ).rejects.toMatchObject({ code: "upload_file_too_large" });
+    await expect(
+      prepareSubmission(ctx, principals.creator, {
+        ...base,
+        items: [{ ...INDD, role: "source", declaredSize: 80_000_000 }],
+      }),
+    ).resolves.toBeDefined();
+  });
+});

@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 import { describe, expect, it } from "vite-plus/test";
-import { describeError } from "./errors";
+import { describeError, messageForCode } from "./errors";
 
 describe("describeError（UI_M3E §35 W-02）", () => {
   it("英語のメッセージ（ライブラリ・ネットワーク）はそのまま見せない", () => {
@@ -19,6 +19,12 @@ describe("describeError（UI_M3E §35 W-02）", () => {
     expect(describeError(new ConvexError({ code: "something_new" })).message).toContain(
       "something_new",
     );
+  });
+
+  it("グラフィック制作物の提出で起こる失敗は、決まった案内を出す（コードを見せるだけにしない）", () => {
+    for (const code of ["revision_no_reviewable_file", "upload_file_too_large"])
+      expect(describeError(new ConvexError({ code })).message).not.toContain(code);
+    expect(messageForCode("upload_file_too_large")).not.toContain("コード");
   });
 
   it("状態の変更の失敗には今の状態を入れる", () => {

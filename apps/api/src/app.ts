@@ -1,3 +1,10 @@
+import {
+  hasPdfSignature,
+  isSourceFormatFile,
+  MAX_UPLOAD_BYTES,
+  needsPdfSignatureCheck,
+  PDF_SIGNATURE_WINDOW,
+} from "@mf100/domain";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
@@ -80,6 +87,8 @@ export function createApp(deps: AppDeps) {
     id: string,
     idKey: "itemId" | "fileId",
     ops: UploadOps,
+    /** 版の提出物: .ai は R2 に置いた実体の先頭を見て、PDF 互換（紙面に出せる）かを Convex に伝える */
+    detectPdfCompatible = false,
   ) => {
     const token = c.get("token");
     const sha256Hex = (c.req.header("X-MF100-Sha256") ?? "").toLowerCase();
@@ -89,6 +98,11 @@ export function createApp(deps: AppDeps) {
         400,
       );
     if (!c.req.raw.body) return c.json({ code: "body_required" }, 400);
+    // 1 ファイルの上限。platform の上限（100 MB）を超える本文はここに届く前に断られ、ブラウザには原因の分からない
+    // 通信エラーになる。届いた本文は、読み始める前に理由つきで断る（申告サイズは準備のときに同じ値で断っている）
+    const declaredLength = Number(c.req.header("Content-Length") ?? "");
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BYTES)
+      return c.json(tooLarge(declaredLength), 413);
 
     const target = await ops.begin(token, id);
     /** 採用されていないことが確かな試行を片付ける（自分のキーを消し、破棄を記録する） */
@@ -109,15 +123,34 @@ export function createApp(deps: AppDeps) {
       await discard(message);
       return c.json({ code: "upload_failed", message }, 400);
     }
+    if (size > MAX_UPLOAD_BYTES) {
+      await discard(`ファイルが大きすぎます: ${size}`);
+      return c.json(tooLarge(size), 413);
+    }
     if (target.declaredSize !== null && target.declaredSize !== size) {
       const message = `サイズ不一致: 申告 ${target.declaredSize} / 実体 ${size}`;
       await discard(message);
       return c.json({ code: "size_mismatch", message }, 400);
     }
 
+    let pdfCompatible: boolean | undefined;
+    if (detectPdfCompatible && needsPdfSignatureCheck(target.fileName)) {
+      try {
+        pdfCompatible = await readsAsPdf(deps.store, target.objectKey);
+      } catch (error) {
+        // 先頭を読めないときは PDF 互換とは扱わない（ダウンロード専用として保存される。誤って紙面に出さない）
+        console.error("pdf signature check failed", error);
+        pdfCompatible = false;
+      }
+    }
+
     let result: { status: string; failureMessage: string | null };
     try {
-      result = await ops.complete(token, target.attemptId, { size, sha256: sha256Hex });
+      result = await ops.complete(token, target.attemptId, {
+        size,
+        sha256: sha256Hex,
+        ...(pdfCompatible !== undefined ? { pdfCompatible } : {}),
+      });
     } catch (error) {
       // Convex が拒否した（mutation は巻き戻り、この試行は採用されていない）ときだけ自分の実体を消す
       if (error instanceof GatewayError) await discard(error.code);
@@ -147,7 +180,7 @@ export function createApp(deps: AppDeps) {
     const headersFor = (etag: string | null, contentType: string | null) => {
       const h: Record<string, string> = {
         "Content-Type": access.mimeType || contentType || "application/octet-stream",
-        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(access.fileName)}`,
+        "Content-Disposition": `${dispositionFor(access.fileName)}; filename*=UTF-8''${encodeURIComponent(access.fileName)}`,
         "Cache-Control": "private, no-store, no-transform",
         "Accept-Ranges": "bytes",
         "X-Content-Type-Options": "nosniff",
@@ -243,7 +276,7 @@ export function createApp(deps: AppDeps) {
   };
 
   app.put("/uploads/items/:itemId", (c) =>
-    receiveUpload(c, c.req.param("itemId"), "itemId", deps.gateway.itemUploads),
+    receiveUpload(c, c.req.param("itemId"), "itemId", deps.gateway.itemUploads, true),
   );
 
   app.get("/files/:artifactId", async (c) => {
@@ -327,6 +360,29 @@ export function createApp(deps: AppDeps) {
   });
 
   return app;
+}
+
+/**
+ * Illustrator・InDesign の原本は紙面に出す形式ではないので、ブラウザで開かず保存させる（attachment）。
+ * それ以外（PDF・画像・動画など）は従来どおり inline。拡張子で決めるので、PDF 互換で PDF として紙面に出す .ai も原本のまま保存になる
+ */
+function dispositionFor(fileName: string): "inline" | "attachment" {
+  return isSourceFormatFile(fileName) ? "attachment" : "inline";
+}
+
+function tooLarge(size: number) {
+  return {
+    code: "file_too_large",
+    message: `ファイルが大きすぎます（${Math.ceil(size / 1_000_000)} MB）。上限は ${MAX_UPLOAD_BYTES / 1_000_000} MB です`,
+    limit: MAX_UPLOAD_BYTES,
+  };
+}
+
+/** 保存した実体の先頭（PDF の見出しを探す範囲だけ）を R2 の範囲読みで取り、PDF として始まっているか */
+async function readsAsPdf(store: ObjectStore, key: string): Promise<boolean> {
+  const head = await store.get(key, { offset: 0, length: PDF_SIGNATURE_WINDOW });
+  if (!head) return false;
+  return hasPdfSignature(new Uint8Array(await new Response(head.body).arrayBuffer()));
 }
 
 function requireAuth(deps: AppDeps) {

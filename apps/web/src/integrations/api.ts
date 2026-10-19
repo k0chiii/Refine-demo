@@ -7,6 +7,7 @@ import {
 } from "@/lib/artifactFiles";
 import { defaultFileCachePolicy } from "@/lib/fileCachePolicy";
 import { jwtUser } from "@/lib/jwt";
+import { messageForCode } from "@/lib/errors";
 
 /** Hono API（ファイル提出・配信）。業務データは Convex、ファイルはこちら、の境界を守る。 */
 export const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
@@ -50,7 +51,9 @@ export async function uploadItem(
     throw new Error(
       json.code === "size_mismatch"
         ? "ファイルが途中で欠けました。もう一度アップロードしてください。"
-        : "ファイルをアップロードできませんでした。もう一度お試しください。",
+        : json.code === "file_too_large"
+          ? messageForCode("upload_file_too_large")
+          : "ファイルをアップロードできませんでした。もう一度お試しください。",
     );
   return json as UploadResult;
 }

@@ -109,6 +109,8 @@ export class FakeUploads implements UploadOps {
     { id: string; targetId: string; objectKey: string; state: "reserved" | "adopted" | "discarded" }
   >();
   calls: string[] = [];
+  /** complete で渡された値（.ai の PDF 互換など、呼び出しの文字列に出ない値の確認用） */
+  readonly completeMetas: Array<{ pdfCompatible?: boolean }> = [];
   /** 次の complete を「通信断（採否不明）」にする */
   failNextCompleteWithNetworkError = false;
   private seq = 0;
@@ -144,9 +146,12 @@ export class FakeUploads implements UploadOps {
   async complete(
     token: string,
     attemptId: string,
-    meta: { size: number; sha256: string; figma?: FigmaImportMeta },
+    meta: { size: number; sha256: string; figma?: FigmaImportMeta; pdfCompatible?: boolean },
   ) {
     this.calls.push(`${this.label}complete:${attemptId}:${meta.size}:${meta.sha256}`);
+    this.completeMetas.push(
+      meta.pdfCompatible !== undefined ? { pdfCompatible: meta.pdfCompatible } : {},
+    );
     if (this.failNextCompleteWithNetworkError) {
       this.failNextCompleteWithNetworkError = false;
       throw new Error("network down");

@@ -4,6 +4,7 @@
  * - ファイルは R2 の代わりにメモリ上の Blob。
  * - 用途: UI 開発、スクリーンショット、E2E。業務ロジックは本番と同じ domain/application/convex のコードが動く。
  */
+import { hasPdfSignature, needsPdfSignatureCheck, PDF_SIGNATURE_WINDOW } from "@mf100/domain";
 import type { FunctionReference } from "convex/server";
 import { convexTest, type TestConvex } from "convex-test";
 import schema from "../../../convex/convex/schema";
@@ -239,6 +240,14 @@ class DemoBackend {
         attemptId: target.attemptId,
         size: file.size,
         sha256,
+        // 本番の Worker と同じく、.ai だけ実体の先頭を見て PDF 互換かを伝える
+        ...(needsPdfSignatureCheck(file.name)
+          ? {
+              pdfCompatible: hasPdfSignature(
+                new Uint8Array(await file.slice(0, PDF_SIGNATURE_WINDOW).arrayBuffer()),
+              ),
+            }
+          : {}),
         ...(figma ? { figma } : {}),
       })) as { status: string; failureMessage: string | null };
     } catch (error) {

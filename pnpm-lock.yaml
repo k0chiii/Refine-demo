@@ -50,6 +50,9 @@ importers:
       '@mf100/convex':
         specifier: workspace:*
         version: link:../convex
+      '@mf100/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       convex:
         specifier: 1.46.0
         version: 1.46.0(react@19.3.0)

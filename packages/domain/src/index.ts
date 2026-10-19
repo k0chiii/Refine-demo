@@ -20,6 +20,7 @@ export * from "./dashboard/layout.ts";
 export * from "./dashboard/overview.ts";
 export * from "./revision/Revision.ts";
 export * from "./revision/Artifact.ts";
+export * from "./revision/graphicFiles.ts";
 export * from "./comment/Anchor.ts";
 export * from "./comment/CommentThread.ts";
 export * from "./comment/deletion.ts";

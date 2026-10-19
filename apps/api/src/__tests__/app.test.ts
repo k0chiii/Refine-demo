@@ -157,6 +157,130 @@ describe("PUT /uploads/items/:itemId（F-04 / A-02）", () => {
   });
 });
 
+describe("Illustrator・InDesign の提出と配信（利用者指示 2026-10-19）", () => {
+  const put = async (itemId: string, data: ArrayBuffer, over: Record<string, string> = {}) =>
+    app.request(`/uploads/items/${itemId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer valid:creator",
+        "Content-Type": "application/octet-stream",
+        "X-MF100-Sha256": await sha256Hex(data),
+        ...over,
+      },
+      body: data,
+    });
+  const addItem = (id: string, fileName: string, mimeType: string) =>
+    gateway.itemUploads.targets.set(
+      id,
+      target({ keyPrefix: `works/w1/sessions/s1/${id}`, fileName, mimeType, declaredSize: null }),
+    );
+  const pad = (s: string, n: number) => enc(" ".repeat(n) + s);
+
+  it(".ai は R2 に置いた実体の先頭を見て、PDF 互換かを採用の要求に添える", async () => {
+    addItem("ai-pdf", "poster.ai", "application/illustrator");
+    addItem("ai-ps", "old.ai", "application/illustrator");
+    expect((await put("ai-pdf", enc("%PDF-1.6\n%AI9 private data"))).status).toBe(200);
+    expect((await put("ai-ps", enc("%!PS-Adobe-3.0 EPSF-3.0"))).status).toBe(200);
+    expect(gateway.itemUploads.completeMetas).toEqual([
+      { pdfCompatible: true },
+      { pdfCompatible: false },
+    ]);
+  });
+  it("PDF の見出しが先頭の少し後ろにあっても互換。先頭 1024 バイトの外なら互換としない", async () => {
+    addItem("near", "a.ai", "application/illustrator");
+    addItem("far", "b.ai", "application/illustrator");
+    await put("near", pad("%PDF-1.5", 200));
+    await put("far", pad("%PDF-1.5", 1100));
+    expect(gateway.itemUploads.completeMetas).toEqual([
+      { pdfCompatible: true },
+      { pdfCompatible: false },
+    ]);
+  });
+  it("先頭の確認は R2 の範囲読み 1 回だけ（全体を読まない）。.ai 以外・フィードバックの添付では読まない", async () => {
+    addItem("ai", "poster.ai", "application/illustrator");
+    addItem("indd", "poster.indd", "application/x-indesign");
+    await put("ai", enc("%PDF-1.6 x"));
+    expect(store.gets).toEqual([
+      { key: "works/w1/sessions/s1/ai/attempts/att1", range: { offset: 0, length: 1024 } },
+    ]);
+    store.gets.length = 0;
+    await put("indd", enc("INDD binary"));
+    await put("item1", body);
+    expect(store.gets).toEqual([]);
+    expect(gateway.itemUploads.completeMetas.slice(1)).toEqual([{}, {}]);
+
+    gateway.feedbackUploads.targets.set(
+      "fb-ai",
+      target({ keyPrefix: "feedback/w1/fb/x.ai", fileName: "x.ai" }),
+    );
+    gateway.feedbackViewers.set("fb-ai", ["creator"]);
+    await app.request("/feedback/files/fb-ai", {
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer valid:creator",
+        "X-MF100-Sha256": await sha256Hex(body),
+      },
+      body,
+    });
+    expect(store.gets).toEqual([]);
+    expect(gateway.feedbackUploads.completeMetas).toEqual([{}]);
+  });
+  it("上限（100 MB）を超える本文は、読み始める前に 413 と理由で断る。試行も始めない", async () => {
+    addItem("huge", "huge.indd", "application/x-indesign");
+    const res = await put("huge", enc("x"), { "Content-Length": "150000000" });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ code: "file_too_large", limit: 100_000_000 });
+    expect(gateway.itemUploads.calls).toEqual([]);
+    expect(store.objects.size).toBe(0);
+  });
+  it("数十 MB の原本は断らない（上限内の申告は先へ進む）", async () => {
+    addItem("big", "poster.indd", "application/x-indesign");
+    const res = await put("big", enc("x"), { "Content-Length": "60000000" });
+    expect(res.status).not.toBe(413);
+  });
+
+  describe("配信", () => {
+    const serve = async (id: string, fileName: string, mimeType: string, data: ArrayBuffer) => {
+      const key = `works/w1/rev1/${id}`;
+      await store.put(key, data, { contentType: mimeType, sha256Hex: await sha256Hex(data) });
+      gateway.artifacts.set(id, {
+        objectKey: key,
+        mimeType,
+        fileName,
+        size: data.byteLength,
+        viewers: ["reviewer"],
+      });
+      return app.request(`/files/${id}`, { headers: { Authorization: "Bearer valid:reviewer" } });
+    };
+    it(".ai / .indd は MIME と元のファイル名つきの attachment で返す（開かず保存させる）", async () => {
+      const ai = await serve("a1", "表紙 案.ai", "application/illustrator", enc("%PDF-1.6"));
+      expect(ai.headers.get("Content-Type")).toBe("application/illustrator");
+      const disposition = ai.headers.get("Content-Disposition")!;
+      expect(disposition.startsWith("attachment;")).toBe(true);
+      expect(decodeURIComponent(disposition.split("UTF-8''")[1]!)).toBe("表紙 案.ai");
+      expect(ai.headers.get("X-Content-Type-Options")).toBe("nosniff");
+
+      const indd = await serve("a2", "poster.INDD", "application/x-indesign", enc("INDD"));
+      expect(indd.headers.get("Content-Type")).toBe("application/x-indesign");
+      expect(indd.headers.get("Content-Disposition")!.startsWith("attachment;")).toBe(true);
+    });
+    it("PDF・画像は従来どおり inline", async () => {
+      const pdf = await serve("p1", "a.pdf", "application/pdf", body);
+      expect(pdf.headers.get("Content-Disposition")!.startsWith("inline;")).toBe(true);
+      const png = await serve("p2", "a.png", "image/png", enc("png"));
+      expect(png.headers.get("Content-Disposition")!.startsWith("inline;")).toBe(true);
+    });
+    it("範囲取得（206）の応答も attachment のまま", async () => {
+      await serve("a3", "poster.ai", "application/illustrator", enc("%PDF-1.6 body"));
+      const ranged = await app.request("/files/a3", {
+        headers: { Authorization: "Bearer valid:reviewer", Range: "bytes=0-3" },
+      });
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get("Content-Disposition")!.startsWith("attachment;")).toBe(true);
+    });
+  });
+});
+
 describe("GET /files/:artifactId（§9.1 / A-11）", () => {
   beforeEach(async () => {
     await store.put("works/w1/rev1/a.pdf", body, {
