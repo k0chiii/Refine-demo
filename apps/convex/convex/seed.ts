@@ -227,6 +227,18 @@ export const demo = internalMutation({
         ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
       },
       {
+        // 切れ目の無い長い題名の例（スマホの一覧で横にはみ出さないことの確認用。画面構成 v2）
+        title: "100nc_デザインガイドライン_最終確認用_v3_20261019",
+        purpose: "デザインの基準の共有",
+        category: "印刷物",
+        mediaType: "pdf" as const,
+        legacyId: "DSG-099",
+        notationCategories: ["A1"],
+        genre: "graphic" as const,
+        subGenre: "print_booklet" as const,
+        ...teamsOf("広報局/SNS担当", ["広報局/SNS担当"]),
+      },
+      {
         // 動画の校正（時点・範囲・画面の位置でコメント。利用者指示 2026-10-17）
         title: "MF100 告知動画",
         purpose: "開催告知の 15 秒動画（SNS・会場モニター）",

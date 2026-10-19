@@ -10,12 +10,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo } from "react";
-import { Empty, Group, WorkspaceRow, deadlineText } from "@/features/workspace/parts";
+import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
 import { rememberWorkspace } from "@/lib/workspace";
 import { rememberWorkHint } from "@/lib/workHint";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { Loading } from "@/ui/Loading";
+import { M3eButton } from "@m3e/react/button";
 
 export const Route = createFileRoute("/_app/check")({
   validateSearch: (s: Record<string, unknown>): { show?: Exclude<CheckTab, "todo"> } =>
@@ -45,10 +46,24 @@ const kindChip: Record<CheckKind, string> = {
   check: "確認する",
   finalize: "校了する",
 };
-const kindName: Record<CheckKind, string> = {
-  review: "校正",
-  check: "専門確認",
-  finalize: "校了",
+
+/** 行の印: 校正は 校正する／続ける（開いたが完了していない）／見る。確認する・校了するは完了で「見る」 */
+const chipOf = (kind: CheckKind, state: CheckProgress): string =>
+  state === "done" ? "見る" : kind === "review" && state === "viewed" ? "続ける" : kindChip[kind];
+
+/** 補足 1 行目: 仕事の名前と、進み具合・メモ */
+const detailOf = (e: { kind: CheckKind; item: Item }): string => {
+  const { item } = e;
+  const p = item.progress;
+  if (e.kind === "check") return ["専門確認", item.note].filter(Boolean).join("・");
+  if (e.kind === "finalize") return p ? `校了・${p.done}/${p.total} 人が宣言済み` : "校了";
+  return [
+    "校正",
+    p ? `校正者 ${p.done}/${p.total} 完了` : null,
+    item.count > 0 ? `未解決のコメント ${item.count}` : null,
+  ]
+    .filter(Boolean)
+    .join("・");
 };
 
 const tabLabel: Record<CheckTab, string> = { todo: "未着手", doing: "確認中", done: "完了" };
@@ -72,6 +87,7 @@ function Check() {
 
   const setTab = (next: CheckTab) =>
     void navigate({ to: "/check", search: next === "todo" ? {} : { show: next }, replace: true });
+  /** 専門確認は情報タブ（専門確認の欄がある）、ほかは既定の引き出し */
   const open = (workId: string, title: string, search: { tab?: "info" } = {}) => {
     rememberWorkHint(workId, { title });
     void navigate({ to: "/works/$workId", params: { workId }, search });
@@ -127,6 +143,11 @@ function Check() {
       {list.length === 0 ? (
         <Empty icon={tab === "done" ? "task_alt" : "fact_check"}>
           <span className="title-medium">{emptyText[tab]}</span>
+          {tab === "todo" && groups.doing.length > 0 ? (
+            <M3eButton variant="text" onClick={() => setTab("doing")}>
+              確認中 {groups.doing.length} 件
+            </M3eButton>
+          ) : null}
         </Empty>
       ) : (
         <Group title={tabLabel[tab]} count={list.length} label={`校正（${tabLabel[tab]}）`}>
@@ -136,15 +157,10 @@ function Check() {
               icon={kindIcon[e.kind]}
               title={e.title}
               suffix={e.item.revisionLabel}
-              lines={[
-                [kindName[e.kind], e.item.note, e.kind === "review" ? unresolvedText(e.item) : null]
-                  .filter(Boolean)
-                  .join("・"),
-                deadlineText("校正の締切", e.deadlineAt),
-              ]}
-              chip={e.state === "done" ? "見る" : kindChip[e.kind]}
+              lines={[detailOf(e), deadlineLine("校正の締切", e.deadlineAt)]}
+              chip={chipOf(e.kind, e.state)}
               chipIcon={e.state === "done" ? "visibility" : kindIcon[e.kind]}
-              onOpen={() => open(e.item.workId, e.title)}
+              onOpen={() => open(e.item.workId, e.title, e.kind === "check" ? { tab: "info" } : {})}
             />
           ))}
         </Group>
@@ -157,7 +173,7 @@ function Check() {
               icon="group_add"
               title={i.workTitle}
               suffix={i.revisionLabel}
-              lines={["校正者がいません", deadlineText("校正の締切", i.deadlineAt)]}
+              lines={["校正者がいません", deadlineLine("校正の締切", i.deadlineAt)]}
               chip="割り当てる"
               chipIcon="group_add"
               onOpen={() => open(i.workId, i.workTitle, { tab: "info" })}
@@ -168,6 +184,3 @@ function Check() {
     </div>
   );
 }
-
-/** 校正の行の補足: コメント数（自分が付けたものではなく、その版の未解決の数） */
-const unresolvedText = (i: Item) => (i.count > 0 ? `未解決のコメント ${i.count}` : null);

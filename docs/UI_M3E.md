@@ -2147,7 +2147,7 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 
 ### 色
 
-- 制作 = 青（primary 系）、校正 = ティール（`--mf-teal` 一式。ライト `#00696d`／`#b3ecee`、`:root[data-theme="dark"]` で暗い対）。青のテーマの補助色で、選択中のナビ（`m3e-nav-item[data-to="/check"]` の active 色）・切り替え・行の印だけに使う。色はクラス `.hub[data-hub]` のトークンに集める（`.ws` はエディタの名前なので使わない）。
+- （**§87 で撤回**: 色は青 1 つに統一。ティールは使わない）制作 = 青（primary 系）、校正 = ティール（`--mf-teal` 一式。ライト `#00696d`／`#b3ecee`、`:root[data-theme="dark"]` で暗い対）。青のテーマの補助色で、選択中のナビ（`m3e-nav-item[data-to="/check"]` の active 色）・切り替え・行の印だけに使う。色はクラス `.hub[data-hub]` のトークンに集める（`.ws` はエディタの名前なので使わない）。
 
 ### 制作物（`/works`）
 
@@ -2173,3 +2173,46 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 - ダウンロード専用の原本を gzip している間: そのファイルの行の状態が「転送中」ではなく「圧縮しています」（進捗バーは同じ）。終われば「転送中」→「確認済み」。縮まなかったときは圧縮せずそのまま転送する
 - 上げた後は何も出ない（保存名・サイズ・ダウンロードは元のファイルのまま。ファイル一覧の大きさも元の大きさ）
 - 部品は変えない（M3E の `m3e-button`・`m3e-linear-progress-indicator` を個別 import のまま）。PNG の WASM は最初の PNG のときだけ Worker が読む（本体の JS は増えない）
+
+## 87. 画面構成 v2（色は青 1 つ・行の構造・校正のバッジ・スマホの横はみ出し）（2026-10-19・利用者決定）
+
+利用者の決定（原文）:「強調色のみしか変えられないなら変えない方がまし。元々の青パターンの一つに統一したい」「もう少し画面構成は考えさせたいかも」。前者で §85 の「色」（校正 = ティール）を**撤回**し、後者で 制作・校正・制作物・シェルの構成を見直した（安価なモデルのリサーチ → 設計 → 実装）。
+
+### 色
+
+- **`#1b5fb4`・`variant="vibrant"`（`theme.ts` のまま）の 1 つだけ**。`--mf-teal*` 4 変数（ライト・ダーク）と `.hub[data-hub="check"]` の上書き、`m3e-nav-item[data-to="/check"]` の active 色の上書きを削除。`.hub` の `--hub-*`（primary / secondary-container）と `data-hub` 属性は残す。入口の違いは**構造・見出し・アイコン・行の操作の文言**で出す。
+- 意味を持つ色（error・`--mf-warning`・`--mf-success`・`stageInfo`）は変えない。
+
+### 制作（`/make`）
+
+- 進行中の節は **あなたの番 → 校正中 → 自分宛てのコメント**。「次の締切」の節は外した（行の締切と二重）。節の中は `overview.works` の順（期限超過 → 近い → 余裕、締切の早い順、題名）。
+- 締切行は共通の `deadlineLine(label, at)`（`校正の締切 残り 3 日・10/22（木）`。期限切れは「期限超過」が先頭）。`deadlineText` は廃止。制作物の「滞っている制作物」の 2 行目も同じ書式。
+- 校正中の補足 1 行: `校正 m/n 人完了`・`専門確認 k`（k > 0）・`校了 d/q`（校了者が 2 人以上）。校正者 0 人は `校正者が未割り当て`。受付終了の行（`lapsed`）は題名を error 色に。
+
+### 校正（`/check`）
+
+- 補足 1 行目: `校正・校正者 m/n 完了・未解決のコメント k`／`専門確認・<メモ>`／`校了・d/q 人が宣言済み`（`DashboardItem.progress`。校了者が 1 人なら付けない＝宣言の履歴を読まない）。印: 校正する／続ける（確認中）／見る、確認する／見る、校了する／見る。
+- **校了する行は未着手の先頭**（domain `compareCheckEntries` が `kind === "finalize"` を最優先）。専門確認の行は情報タブ（`?tab=info`）で開く。未着手が 0 で確認中があるときは、空の文の下に text ボタン「確認中 n 件」。
+
+### 校正のナビのバッジ
+
+- シェル（`_app.tsx`）が新しい軽い問い合わせ `dashboard.checkBadge` を購読し、「校正」のアイコンに `NotificationsBell` と同じ作りのバッジ（自分の手が要る数。99 超は「99+」。レール・下部バーの両方）。`aria-label` は「校正（やること n 件）」。
+- 数えるもの: 自分の未完了の割当（`reviewAssignments.by_reviewer_state` の pending・viewed）＋自分担当の未完了の専門確認（`requiredChecks.by_assignee_state` の pending）。**受付中の版（`isAccepting`）だけ**数える。**校了待ちは含めない**（未解決コメント・専門確認の判定が全制作物の購読になるため）。読むのは自分の割当・専門確認とその版だけ（`dashboard.get` を常時購読しない。COST §2.2 の考え方）。
+
+### スマホの横はみ出し
+
+- 原因: `.hub` の子（`.dash__section`・`.list`・行）に `min-width` の制限が無く、nowrap の印（`.hub-chip`）と切れ目の無い長い題名が最小幅を押し上げた。対処: `.hub > *`・`.dash__section`・行に `min-width: 0; max-width: 100%`、`.list` は `width: calc(100% + 32px)`（`margin: 0 -16px` の分。`max-width` も同じ）、題名と補足は `overflow-wrap: anywhere`、切り替え（`.hub__tabs`）は横に流す。
+- compact では行の印を `slot="trailing"` に置かず、補足（`supporting-text`）の最後（`.hub-row__line--action`、右寄せ）に置く。題名に 2 行分の幅を渡す。それ以外の幅は今のまま trailing。M3E の `supporting-text` に行数の上限は無いので、そのまま 4 行になる。
+
+### 制作物
+
+- compact の「制作物の状況」の数字カード 3 枚を 1 列に（`.kpis--three`）。表は `.mf-table__scroll` で横に流れるので、ページは広がらない（確認のみ）。
+
+### 確認
+
+- 単体: domain `workspace.test`（校了を先頭）、application `dashboard.test`（`progress`）、Convex `dashboard.test`（`checkBadge`: 受付中の割当 2 ＋専門確認 1 ＋受付が終わった版の割当 1 → 3）。
+- E2E: 切れ目の無い長い題名のシード（`DSG-099`。`seed.ts`）を 06b で提出・割当し、`/make`・`/check` を 360×780 と 412×915 で測る（`scrollWidth <= clientWidth`、長い題名の行と印が画面内、印は各行 1 つで題名の下）。校正のナビのバッジ（数字）、専門確認の行 → `tab=info`、校了する行が先頭。新しい撮影 `20e-mobile-check-360`。
+
+### 未決（既定で実装。利用者の回答待ち）
+
+校了待ちをバッジに含めるか（既定: 含めない）／compact の印の位置（既定: 締切行の下・右寄せ）／制作の「次の締切」の節（既定: 外す）。

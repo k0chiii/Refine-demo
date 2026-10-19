@@ -450,6 +450,24 @@ async function main() {
     .click();
   await settle();
 
+  // 06b 切れ目の無い長い題名の制作物（シード）にも版を出して校正者を割り当てる。スマホの横はみ出しの確認に使う（制作・校正の両方に出る）
+  await signInAs("mock-nogiku-creator");
+  const longPath = await openWork(LONG_TITLE);
+  await submitRevision("最初の版を提出", [resolve(FIXTURES, "sample.pdf")], "初稿");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await pdfReady();
+  await signInAs("mock-nogiku-manager");
+  await go(longPath);
+  await pdfReady();
+  await drawer("情報");
+  await btn("校正者を割り当てる").click();
+  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
+  await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
+  await settle();
+
   // 07 校正（校正者）: 未着手に割り当てが出る。切り替え（未着手・確認中・完了）と行の操作の印
   await signInAs("mock-nogiku-reviewer");
   await go(`${BASE}/check`);
@@ -468,18 +486,57 @@ async function main() {
     ),
     "校正を開いているのにナビの「校正」が選択されていない",
   );
+  // 校正のナビのバッジ: 自分の手が要る数（割当・専門確認）が数字で出る。色は制作と同じ青（ティールの上書きが無い）
+  expectTrue(
+    /^\d+$/.test(
+      (await page.locator('m3e-nav-item[data-to="/check"] .badge').first().textContent())?.trim() ??
+        "",
+    ),
+    "校正のナビに、やることの数のバッジが出ていない",
+  );
+  expectTrue(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).getPropertyValue("--mf-teal").trim() === "",
+    ),
+    "校正のティールの色が残っている",
+  );
+  // 制作を開いているあいだもバッジは出る（校正者）
+  await go(`${BASE}/make`);
+  await page.waitForSelector(".hub[data-hub='make']");
+  await page.waitForSelector('m3e-nav-item[data-to="/check"] .badge');
+  await go(`${BASE}/check`);
+  await page.waitForSelector(".hub[data-hub='check'] m3e-list-action");
   await shot("07-check-reviewer");
-  // 20c 校正（スマホ）: 同じ校正者で。ティールの選択・切り替え・行の操作の印。ページは横にはみ出さない
+  // 専門確認の行は情報タブで開く（専門確認の欄がある）
+  await page.locator(".hub .hub-row", { hasText: "専門確認" }).first().click();
+  await page.waitForURL(/tab=info/);
+  await go(`${BASE}/check`);
+  await page.waitForSelector(".hub[data-hub='check'] m3e-list-action");
+  // 20c 校正（スマホ）: 同じ校正者で。選択・切り替え・行の操作の印は制作と同じ青。ページは横にはみ出さない
   await page.setViewportSize({ width: 412, height: 915 });
   await page.waitForSelector("m3e-nav-bar");
   await settle();
-  expectTrue(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-    ),
-    "compact の校正がページごと横にはみ出している",
-  );
+  await expectNoOverflow("/check", 412, 915);
   await shot("20c-mobile-check");
+  // 20e 360 幅（小さいスマホ）: 長い題名でも右端で切れない
+  await expectNoOverflow("/check", 360, 780);
+  await shot("20e-mobile-check-360");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settle();
+  // 校了する行は未着手の先頭に固まる（校了者で）
+  await signInAs("mock-nogiku-approver");
+  await go(`${BASE}/check`);
+  await page.waitForSelector(".hub[data-hub='check'] m3e-list-action");
+  expectTrue(
+    ((await page.locator(".hub .hub-row .hub-chip").first().textContent()) ?? "").includes(
+      "校了する",
+    ),
+    "校了する行が未着手の先頭にない",
+  );
+  // 以降は校正者のまま（元の流れ）
+  await signInAs("mock-nogiku-reviewer");
+  await go(`${BASE}/check`);
+  await page.waitForSelector(".hub[data-hub='check'] m3e-list-action");
   await page.setViewportSize({ width: 1440, height: 900 });
   await settle();
   // （36 RTL は外した。日本語だけのアプリなので RTL には対応しない。利用者決定 2026-10-15・UI_M3E §35 L-16）
@@ -1046,12 +1103,12 @@ async function main() {
   );
   await settle();
   await shot("20-mobile-make");
-  expectTrue(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-    ),
-    "compact の制作がページごと横にはみ出している",
-  );
+  await expectNoOverflow("/make", 412, 915);
+  await expectNoOverflow("/make", 360, 780);
+  await page.setViewportSize({ width: 412, height: 915 });
+  await go(`${BASE}/make`);
+  await page.waitForSelector(".submit-fab m3e-fab");
+  await settle();
   // FAB「作る」→ ボトムシート（版を提出・新しく書く）
   await page.locator(".submit-fab m3e-fab").click();
   await page.waitForSelector("m3e-bottom-sheet[open] m3e-list-action");
@@ -1394,6 +1451,43 @@ const openWork = async (title) => {
 };
 const expectTrue = (cond, msg) => {
   if (!cond) throw new Error(msg);
+};
+/**
+ * 画面幅ごとの横はみ出しの測定（画面構成 v2 §3.6）: ページが画面より広くならず、切れ目の無い長い題名の行とその印が画面内に収まる。
+ * 行の印は compact では題名の下（.hub-row__line--action）。測った値は標準出力に残す
+ */
+const LONG_TITLE = "100nc_デザインガイドライン";
+const expectNoOverflow = async (route, width, height) => {
+  await page.setViewportSize({ width, height });
+  await go(`${BASE}${route}`);
+  await page.waitForSelector(".hub .hub-row");
+  await settle();
+  const m = await page.evaluate((long) => {
+    const rows = [...document.querySelectorAll(".hub .hub-row")];
+    const longRows = rows.filter((r) => r.textContent.includes(long));
+    const right = (els) => Math.max(0, ...els.map((e) => e.getBoundingClientRect().right));
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      innerWidth: window.innerWidth,
+      rows: rows.length,
+      chips: document.querySelectorAll(".hub .hub-row .hub-chip").length,
+      actionLines: document.querySelectorAll(".hub .hub-row .hub-row__line--action").length,
+      longRows: longRows.length,
+      longRowRight: right(longRows),
+      longChipRight: right(longRows.flatMap((r) => [...r.querySelectorAll(".hub-chip")])),
+    };
+  }, LONG_TITLE);
+  console.log(`  overflow ${route} ${width}px:`, JSON.stringify(m));
+  const where = `${route} の ${width}px`;
+  expectTrue(m.scrollWidth <= m.clientWidth, `${where}で、ページが横にはみ出している`);
+  expectTrue(m.longRows >= 1, `${where}に、長い題名の行がない`);
+  expectTrue(
+    m.longRowRight <= m.innerWidth && m.longChipRight <= m.innerWidth,
+    `${where}で、長い題名の行か印が画面の右に出ている`,
+  );
+  expectTrue(m.chips === m.rows, `${where}で、行の印が 1 つずつ付いていない`);
+  expectTrue(m.actionLines === m.rows, `${where}で、印が題名の下に置かれていない`);
 };
 
 /** v2: 表記統一・自動校正・版比較・SNS 投稿 */

@@ -77,6 +77,8 @@ const readRailPref = () => {
 function AppShell() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
+  /** 校正のナビのバッジ（自分の手が要る数）。割当・専門確認だけを読む軽い問い合わせ（dashboard.get ではない） */
+  const checkTodo = useQuery(api.dashboard.checkBadge, me ? {} : "skip")?.count ?? 0;
   const navigate = useNavigate();
   const install = useInstallPrompt();
   const { signOut } = useAuthActions();
@@ -213,11 +215,20 @@ function AppShell() {
         className={lower ? `rail__lower ${i === 0 ? "rail__lower--first" : ""}` : ""}
         selected={selected(it.to)}
         data-to={it.to}
-        aria-label={it.label}
+        aria-label={
+          it.to === "/check" && checkTodo > 0 ? `${it.label}（やること ${checkTodo} 件）` : it.label
+        }
         title={it.label}
         onClick={() => void navigate({ to: it.to })}
       >
-        <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
+        {it.to === "/check" && checkTodo > 0 ? (
+          <span slot="icon" className="nav-icon">
+            <M3eIcon name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
+            <span className="badge">{checkTodo > 99 ? "99+" : checkTodo}</span>
+          </span>
+        ) : (
+          <M3eIcon slot="icon" name={it.icon} className={selected(it.to) ? "icon--filled" : ""} />
+        )}
         <span className="nav-label">{short && "short" in it ? it.short : it.label}</span>
       </M3eNavItem>
     ));
