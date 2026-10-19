@@ -2239,3 +2239,12 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 - コメント・FB が指す場所の印は全て `location_on`。文字のラベル（時刻・端末名・フレーム名）は隣に残す。
 - 変えた: `ThreadCard` の位置ボタン（`schedule` / `smartphone` / `computer` / `design_services`）、`ComposePopover` の場所の行（`schedule` / `ads_click` / `design_services` / `format_quote` / `image`。`placeIcon` は廃止）。
 - 変えない: `push_pin`（ピン留め）、Web ライブ表示の端末の切り替え（`computer` / `smartphone` / `tablet_mac`）、Figma のフレームの切り替えと取り込み元の表示（`design_services`）、制作物の種類の印、日付欄（`schedule`）、位置が外れた印（`location_off`）。
+
+## 90. hover の面（state layer）の形と切れ・被りの直し（2026-10-19・利用者指摘「一部ホバーの色付きで枠が被ったり切れてたりするところがある」）
+
+操作して確かめた（1440×900 と 390×844 で全画面の押せるものに hover・キーボードの focus を当て、前後の画像の差分で面の形を見た）。直したのは 4 つ。
+
+- 端から端までのリスト（compact の `.list__item`・`.notif-list`・`.action-sheet__list`）: 行の形は 0 なのに、M3E は hover で medium・focus で large に形を変えるため、画面の端で行の角だけ丸く被っていた。`--m3e-list-item-hover-container-shape` と `--m3e-list-item-focus-container-shape` も 0 にした。
+- FB のスペース一覧（`.fb-space__spaces`、角丸の面）: 行が面の端まで付き、hover・focus の面が面の縁に被っていた。行を 8 内側へ（`padding-inline` 8・`--m3e-list-item-leading-space` / `trailing-space` 8。文字の位置は 16 のまま）。
+- ダイアログの中の候補（版を提出・別の制作物と比べる）: `margin: 0 -24px` で行がダイアログの縁まで付いていた。`-16px` にして 8 内側へ（文字は見出しと同じ 24）。compact の全画面（比べる）は端から端まで（-24px）のまま。
+- 入口の切り替え（`.hub__tabs`、進行中／下書き／校了済み・未着手／確認中／完了）: 横に流す箱（`overflow-x: auto`）の中で tonal ボタンの hover の影が切れていた。`--m3e-tonal-button-hover-container-elevation: none` で影を無くし、state layer だけで示す。
