@@ -1,20 +1,26 @@
 import {
   hasPdfSignature,
+  isGzipAllowed,
   isSourceFormatFile,
+  MAX_ORIGINAL_UPLOAD_BYTES,
   MAX_UPLOAD_BYTES,
   needsPdfSignatureCheck,
+  parseUploadEncoding,
   PDF_SIGNATURE_WINDOW,
 } from "@mf100/domain";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
+import { workersSha256Sink } from "./adapters/sha256Stream.ts";
 import { importFigmaFrames, type FigmaImportItem } from "./figmaImport.ts";
+import { gunzipStream, verifyGzipStream } from "./gzipStream.ts";
 import { matchesIfNoneMatch, parseRange, resolveRange } from "./httpRange.ts";
 import type {
   ArtifactAccess,
   BackendGateway,
   FigmaClient,
   ObjectStore,
+  Sha256Sink,
   StoredObject,
   TokenVerifier,
   UploadOps,
@@ -28,6 +34,8 @@ export interface AppDeps {
   allowedOrigins: string[];
   /** Figma REST API（FIGMA_ACCESS_TOKEN があるときだけ。無ければ null で /figma は「未設定」） */
   figma?: FigmaClient | null;
+  /** gzip の実体を伸長しながら SHA-256 を取る口（既定は Workers の crypto.DigestStream。テストは差し替える） */
+  sha256Sink?: () => Sha256Sink;
   /** Figma の書き出しの倍率（domain の FigmaPolicy.renderScale。既定 2） */
   figmaScale?: number;
 }
@@ -39,6 +47,7 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 /**
  * MF100 HTTP 境界（§8.1）。
  * - PUT /uploads/items/:itemId   ブラウザ → R2 直接転送に相当（Worker 経由ストリーミング）。R2 側で sha256 を検証。
+ *   X-MF100-Encoding: gzip のときは、本文は圧縮のまま R2 に置き、伸長しながら申告の元の大きさ・sha256 に一致することを確かめる。
  *   書込み先は試行ごとに Convex が払い出す別キー。検証の済んだ 1 つだけを Convex が原子的に採用する。
  * - GET  /files/:artifactId       認可付き配信。署名付き URL を発行しない（権限剥奪が即時に効く: A-11）。
  * - PUT / GET /feedback/files/:fileId  フィードバック（表現の議論）の添付。上の 2 つと同じ検証・同じヘッダー。
@@ -98,6 +107,24 @@ export function createApp(deps: AppDeps) {
         400,
       );
     if (!c.req.raw.body) return c.json({ code: "body_required" }, 400);
+    // 符号化: 可逆圧縮（gzip）で上げた本文は、元の大きさ（X-MF100-Original-Size）と元の sha256 を申告させる。
+    // 上げる本文の上限は圧縮後の大きさ（下の Content-Length）。元の大きさは 4 倍までで、伸長の途中でも申告を超えたら止める
+    const encoding = parseUploadEncoding(c.req.header("X-MF100-Encoding"));
+    if (encoding === null)
+      return c.json({ code: "encoding_unsupported", message: "未対応の符号化です" }, 400);
+    const gzip = encoding === "gzip";
+    let originalSize = 0;
+    if (gzip) {
+      const raw = c.req.header("X-MF100-Original-Size") ?? "";
+      if (!/^\d{1,15}$/.test(raw))
+        return c.json(
+          { code: "original_size_required", message: "X-MF100-Original-Size が必要です" },
+          400,
+        );
+      originalSize = Number(raw);
+      if (originalSize > MAX_ORIGINAL_UPLOAD_BYTES)
+        return c.json(tooLarge(originalSize, MAX_ORIGINAL_UPLOAD_BYTES), 413);
+    }
     // 1 ファイルの上限。platform の上限（100 MB）を超える本文はここに届く前に断られ、ブラウザには原因の分からない
     // 通信エラーになる。届いた本文は、読み始める前に理由つきで断る（申告サイズは準備のときに同じ値で断っている）
     const declaredLength = Number(c.req.header("Content-Length") ?? "");
@@ -111,30 +138,80 @@ export function createApp(deps: AppDeps) {
       await ops.fail(token, target.attemptId, message).catch(() => undefined);
     };
 
-    let size: number;
+    if (gzip) {
+      // Range で読む形（PDF・動画・音声）は圧縮して置かない（配信が範囲を返せなくなる）
+      if (!isGzipAllowed({ fileName: target.fileName, mimeType: target.mimeType })) {
+        await discard("この種類のファイルは圧縮して上げられません");
+        return c.json({ code: "encoding_not_allowed" }, 400);
+      }
+      if (target.declaredSize !== null && target.declaredSize !== originalSize) {
+        const message = `サイズ不一致: 申告 ${target.declaredSize} / 実体 ${originalSize}`;
+        await discard(message);
+        return c.json({ code: "size_mismatch", message }, 400);
+      }
+    }
+
+    /** 保存した実体の大きさ（gzip は圧縮後）。Convex に伝える大きさは下の size（gzip は元の大きさ） */
+    let storedSize: number;
     try {
-      const meta = await deps.store.put(target.objectKey, c.req.raw.body, {
-        contentType: target.mimeType,
-        sha256Hex,
-      });
-      size = meta.size;
+      const meta = await deps.store.put(
+        target.objectKey,
+        c.req.raw.body,
+        gzip
+          ? { contentType: target.mimeType, encoding: "gzip", originalSize }
+          : { contentType: target.mimeType, sha256Hex },
+      );
+      storedSize = meta.size;
     } catch (error) {
       const message = error instanceof Error ? error.message : "アップロードに失敗しました";
       await discard(message);
       return c.json({ code: "upload_failed", message }, 400);
     }
-    if (size > MAX_UPLOAD_BYTES) {
-      await discard(`ファイルが大きすぎます: ${size}`);
-      return c.json(tooLarge(size), 413);
+    if (storedSize > MAX_UPLOAD_BYTES) {
+      await discard(`ファイルが大きすぎます: ${storedSize}`);
+      return c.json(tooLarge(storedSize), 413);
     }
-    if (target.declaredSize !== null && target.declaredSize !== size) {
+    let size = storedSize;
+    /** gzip の実体の先頭（伸長したもの）。.ai の PDF 互換の確認に R2 を読み直さずに済む */
+    let pdfCompatible: boolean | undefined;
+    if (gzip) {
+      // R2 に置いた実体を読み戻し、伸長しながら申告の元の大きさ・sha256 に一致することを確かめる（保存されたものそのものを証明する）
+      const stored = await deps.store.get(target.objectKey).catch(() => null);
+      const verdict = stored
+        ? await verifyGzipStream(
+            stored.body,
+            { size: originalSize, sha256Hex },
+            (deps.sha256Sink ?? workersSha256Sink)(),
+          )
+        : ({ ok: false, reason: "corrupt" } as const);
+      if (!verdict.ok) {
+        const message =
+          verdict.reason === "size_mismatch" || verdict.reason === "too_large"
+            ? `サイズ不一致: 申告 ${originalSize} / 伸長後の実体が異なります`
+            : verdict.reason === "sha_mismatch"
+              ? "伸長した実体の sha256 が申告と一致しません"
+              : "圧縮された本文を伸長できません";
+        await discard(message);
+        return verdict.reason === "size_mismatch" || verdict.reason === "too_large"
+          ? c.json({ code: "size_mismatch", message }, 400)
+          : c.json({ code: "upload_failed", message }, 400);
+      }
+      // 伸長した中身が PDF なら、圧縮して置かない（紙面に出す PDF は Range で読む）
+      if (!isGzipAllowed({ fileName: target.fileName, mimeType: target.mimeType }, verdict.head)) {
+        await discard("この種類のファイルは圧縮して上げられません");
+        return c.json({ code: "encoding_not_allowed" }, 400);
+      }
+      size = originalSize;
+      // PDF の見出しが無いと確かめた（isGzipAllowed）ので、.ai は PDF 互換ではない
+      if (detectPdfCompatible && needsPdfSignatureCheck(target.fileName)) pdfCompatible = false;
+    }
+    if (!gzip && target.declaredSize !== null && target.declaredSize !== size) {
       const message = `サイズ不一致: 申告 ${target.declaredSize} / 実体 ${size}`;
       await discard(message);
       return c.json({ code: "size_mismatch", message }, 400);
     }
 
-    let pdfCompatible: boolean | undefined;
-    if (detectPdfCompatible && needsPdfSignatureCheck(target.fileName)) {
+    if (!gzip && detectPdfCompatible && needsPdfSignatureCheck(target.fileName)) {
       try {
         pdfCompatible = await readsAsPdf(deps.store, target.objectKey);
       } catch (error) {
@@ -159,7 +236,13 @@ export function createApp(deps: AppDeps) {
     // 採用されなかった（申告と違う等。Convex 側で破棄済み）なら自分の実体を消す。消し損ねても清掃が消す
     if (result.status !== "verified")
       await deps.store.delete(target.objectKey).catch(() => undefined);
-    return c.json({ [idKey]: id, ...result, size, sha256: sha256Hex });
+    return c.json({
+      [idKey]: id,
+      ...result,
+      size,
+      sha256: sha256Hex,
+      ...(gzip ? { encoding: "gzip", storedSize } : {}),
+    });
   };
 
   /**
@@ -189,13 +272,32 @@ export function createApp(deps: AppDeps) {
       return h;
     };
 
-    const plain = (object: StoredObject) =>
-      new Response(object.body, {
+    /**
+     * gzip で保存した実体は Worker が伸長し、元の実体をそのまま返す（Content-Encoding を付けて経路に伸長を任せない。
+     * 経路や利用者の環境ごとに Content-Length・範囲の扱いが揺れるため）。圧縮した本文は範囲で読めないので範囲は無視して全体を 200 で返す。
+     * ダウンロード専用の原本だけが対象で、元のファイル名で保存させる（attachment）
+     */
+    const decoded = (object: StoredObject) => {
+      const originalSize = object.originalSize ?? access.size;
+      return new Response(gunzipStream(object.body, originalSize), {
         headers: {
           ...headersFor(object.etag, object.contentType),
-          "Content-Length": String(object.size),
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(access.fileName)}`,
+          "Accept-Ranges": "none",
+          ...(originalSize !== null ? { "Content-Length": String(originalSize) } : {}),
         },
       });
+    };
+
+    const plain = (object: StoredObject) =>
+      object.encoding === "gzip"
+        ? decoded(object)
+        : new Response(object.body, {
+            headers: {
+              ...headersFor(object.etag, object.contentType),
+              "Content-Length": String(object.size),
+            },
+          });
 
     // 条件（If-None-Match）が無い取得は R2 を 1 回だけ読む。大きさを知るための HEAD を先に打たない
     // （PDF.js の範囲取得は 1 ファイルで十数本。HEAD＋GET だと R2 の操作（Class B）も往復も倍になる）。
@@ -214,6 +316,12 @@ export function createApp(deps: AppDeps) {
         // 範囲が実体の外などで R2 が断った: 下の HEAD 経由（416 の判定）に任せる
       }
       if (ranged === null) return null;
+      if (ranged !== "retry" && ranged.encoding === "gzip") {
+        // 圧縮して置いた実体は範囲で返せない: 範囲読みを捨て、全体を伸長して返す
+        await ranged.body.cancel().catch(() => undefined);
+        const whole = await deps.store.get(access.objectKey);
+        return whole ? plain(whole) : null;
+      }
       if (ranged !== "retry") {
         const range = resolveRange(rangeHeader, ranged.size);
         // If-Range が今の実体の検証子と違えば、範囲は無視して全体を返す（実体は試行ごとの別キーで上書きされないので、通常は一致する）
@@ -247,6 +355,11 @@ export function createApp(deps: AppDeps) {
     if (!head) return null;
     if (matchesIfNoneMatch(ifNoneMatch, head.etag))
       return new Response(null, { status: 304, headers: headersFor(head.etag, null) });
+
+    if (head.encoding === "gzip") {
+      const whole = await deps.store.get(access.objectKey);
+      return whole ? plain(whole) : null;
+    }
 
     // If-Range が今の実体の検証子と違えば、範囲は無視して全体を返す
     const honorRange = !ifRange || ifRange === head.etag;
@@ -370,11 +483,11 @@ function dispositionFor(fileName: string): "inline" | "attachment" {
   return isSourceFormatFile(fileName) ? "attachment" : "inline";
 }
 
-function tooLarge(size: number) {
+function tooLarge(size: number, limit = MAX_UPLOAD_BYTES) {
   return {
     code: "file_too_large",
-    message: `ファイルが大きすぎます（${Math.ceil(size / 1_000_000)} MB）。上限は ${MAX_UPLOAD_BYTES / 1_000_000} MB です`,
-    limit: MAX_UPLOAD_BYTES,
+    message: `ファイルが大きすぎます（${Math.ceil(size / 1_000_000)} MB）。上限は ${limit / 1_000_000} MB です`,
+    limit,
   };
 }
 

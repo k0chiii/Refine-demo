@@ -94,22 +94,32 @@ export function FeedbackComposer({
     if (!canSend || !token) return;
     try {
       let fileIds: string[] = [];
+      let sendFiles = files;
       if (files.length) {
+        // PNG は画素が変わらない形に作り直してから送る（申告する大きさも作り直した後のもの）。確かめられないときは元のファイル
+        try {
+          const { optimiseFilesForUpload } = await import("@/lib/uploadOptimise");
+          sendFiles = await optimiseFilesForUpload(files, {
+            onStart: () => setSending("圧縮しています…"),
+          });
+        } catch {
+          sendFiles = files;
+        }
         setSending("添付を準備しています…");
         const prepared = await prepareFiles({
           workId: workId,
-          files: files.map((f) => ({
+          files: sendFiles.map((f) => ({
             fileName: f.name,
             mimeType: guessMimeType(f.name, f.type),
             size: f.size,
           })),
         });
         fileIds = prepared.map((p) => p.fileId);
-        for (let i = 0; i < files.length; i++) {
-          setSending(`添付を送っています（${i + 1} / ${files.length}）…`);
-          const r = await uploadFeedbackFile(token, fileIds[i]!, files[i]!);
+        for (let i = 0; i < sendFiles.length; i++) {
+          setSending(`添付を送っています（${i + 1} / ${sendFiles.length}）…`);
+          const r = await uploadFeedbackFile(token, fileIds[i]!, sendFiles[i]!);
           if (r.status !== "verified")
-            throw new Error(r.failureMessage ?? `${files[i]!.name} を送れませんでした`);
+            throw new Error(r.failureMessage ?? `${sendFiles[i]!.name} を送れませんでした`);
         }
       }
       setSending("投稿しています…");

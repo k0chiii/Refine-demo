@@ -2,7 +2,7 @@ import {
   adoptAttempt,
   assertAttemptAdoptable,
   assertGraphicHasReviewableFile,
-  assertUploadSizeWithinLimit,
+  assertDeclaredSizeWithinLimit,
   normalizeDeclaredFile,
   assertItemUploadable,
   assertItemsReadyForConfirm,
@@ -98,7 +98,12 @@ export async function prepareSubmission(
   if (input.items.length === 0) throw new DomainError("revision_no_artifacts");
   // 1 ファイルの上限（Worker の本文の上限）。超える申告は準備の時点で理由つきで断る
   for (const it of input.items)
-    if (it.role !== "external") assertUploadSizeWithinLimit(it.fileName, it.declaredSize);
+    if (it.role !== "external")
+      assertDeclaredSizeWithinLimit({
+        fileName: it.fileName,
+        mimeType: it.mimeType,
+        size: it.declaredSize,
+      });
   // SNS 投稿: 記録にある画像がすべて添付にあること（画像の欠けた版を作らない）
   const postProblems = postSubmissionProblems(input.postSnapshot, input.items);
   if (postProblems.length > 0)
