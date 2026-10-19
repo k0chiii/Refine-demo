@@ -4,6 +4,7 @@
  * 旧版の受付は「確定」が成功するまで変わらない（サーバー側の保証。ここでは UI が誤って確定を促さないことを担保する）。
  */
 import { describeError } from "../../lib/errors";
+import type { UploadPhase } from "../../lib/uploadEncoding";
 
 export type ItemStatus = "pending" | "uploading" | "verified" | "failed";
 
@@ -17,6 +18,8 @@ export interface FlowItem {
   figma?: { fileKey: string; nodeId: string };
   status: ItemStatus;
   progress: number;
+  /** 転送の前の圧縮中（ダウンロード専用の原本の gzip）。画面は「圧縮しています」を出す */
+  phase?: UploadPhase;
   error: string | null;
 }
 
@@ -49,6 +52,7 @@ export interface FlowDeps {
     itemId: string,
     file: File,
     onProgress: (f: number) => void,
+    onPhase?: (phase: UploadPhase) => void,
   ): Promise<{ status: string; failureMessage: string | null }>;
   reset(itemId: string): Promise<void>;
   /** Figma のフレームを取り込む（Worker が Figma API → R2 → 採用）。無ければ Figma の項目は失敗にする */
@@ -212,8 +216,11 @@ export class SubmissionFlow {
     if (!item?.file) return;
     this.patchItem(itemId, { status: "uploading", progress: 0, error: null });
     try {
-      const res = await this.deps.upload(itemId, item.file, (f) =>
-        this.patchItem(itemId, { progress: f }),
+      const res = await this.deps.upload(
+        itemId,
+        item.file,
+        (f) => this.patchItem(itemId, { progress: f }),
+        (phase) => this.patchItem(itemId, { phase }),
       );
       if (res.status === "verified") this.patchItem(itemId, { status: "verified", progress: 1 });
       else

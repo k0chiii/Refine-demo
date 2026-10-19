@@ -4,11 +4,18 @@
  * - ファイルは R2 の代わりにメモリ上の Blob。
  * - 用途: UI 開発、スクリーンショット、E2E。業務ロジックは本番と同じ domain/application/convex のコードが動く。
  */
-import { hasPdfSignature, needsPdfSignatureCheck, PDF_SIGNATURE_WINDOW } from "@mf100/domain";
+import {
+  hasPdfSignature,
+  isGzipAllowed,
+  MAX_ORIGINAL_UPLOAD_BYTES,
+  needsPdfSignatureCheck,
+  PDF_SIGNATURE_WINDOW,
+} from "@mf100/domain";
 import type { FunctionReference } from "convex/server";
 import { convexTest, type TestConvex } from "convex-test";
 import schema from "../../../convex/convex/schema";
 import { api, internal } from "../../../convex/convex/_generated/api";
+import { gunzipBlob, sha256Hex } from "@/lib/uploadEncoding";
 
 type Env = Record<string, string | undefined>;
 const g = globalThis as unknown as { process?: { env: Env } };
@@ -85,6 +92,8 @@ class DemoBackend {
   private version = 0;
   private readonly listeners = new Set<() => void>();
   private readonly blobs = new Map<string, Blob>();
+  /** gzip で上げた実体（キー → 元の MIME）。blobs には圧縮のまま置き、配信で伸長して元の実体を返す（本番の Worker と同じ） */
+  private readonly gzipTypes = new Map<string, string>();
   private seeded: Promise<void> | null = null;
 
   constructor() {
@@ -229,30 +238,37 @@ class DemoBackend {
       lastModified?: string;
       box: { width: number; height: number };
     },
+    /** gzip で上げるとき（本番の X-MF100-Encoding: gzip）。file は元のファイル（名前・種類）、body が圧縮後の本文 */
+    gzip?: { body: Blob; originalSize: number },
   ): Promise<{ status: string; failureMessage: string | null }> {
     const target = (await this.mutation(internal.submissions.beginUpload, { itemId })) as {
       attemptId: string;
       objectKey: string;
     };
-    this.blobs.set(target.objectKey, file);
+    this.blobs.set(target.objectKey, gzip ? gzip.body : file);
+    if (gzip) this.gzipTypes.set(target.objectKey, file.type);
     try {
+      // 本番の Worker と同じ検証: 伸長して、申告した元の大きさ・sha256 と一致する実体であることを確かめる
+      if (gzip) await this.verifyGzip(file, gzip, sha256);
       return (await this.mutation(internal.submissions.completeUpload, {
         attemptId: target.attemptId,
-        size: file.size,
+        size: gzip ? gzip.originalSize : file.size,
         sha256,
-        // 本番の Worker と同じく、.ai だけ実体の先頭を見て PDF 互換かを伝える
+        // 本番の Worker と同じく、.ai だけ実体の先頭を見て PDF 互換かを伝える（gzip で上げた .ai は PDF の見出しが無いと確かめ済み）
         ...(needsPdfSignatureCheck(file.name)
           ? {
-              pdfCompatible: hasPdfSignature(
-                new Uint8Array(await file.slice(0, PDF_SIGNATURE_WINDOW).arrayBuffer()),
-              ),
+              pdfCompatible: gzip
+                ? false
+                : hasPdfSignature(
+                    new Uint8Array(await file.slice(0, PDF_SIGNATURE_WINDOW).arrayBuffer()),
+                  ),
             }
           : {}),
         ...(figma ? { figma } : {}),
       })) as { status: string; failureMessage: string | null };
     } catch (error) {
       // 採用されなかった試行の実体は自分で消す（本番の Hono の補償と同じ）
-      this.blobs.delete(target.objectKey);
+      this.discard(target.objectKey);
       await this.mutation(internal.submissions.failUpload, {
         attemptId: target.attemptId,
         message: error instanceof Error ? error.message : "upload failed",
@@ -266,9 +282,45 @@ class DemoBackend {
     const access = (await this.query(api.artifacts.authorizeAccess, { artifactId })) as {
       objectKey: string;
     };
-    const blob = this.blobs.get(access.objectKey);
+    return this.read(access.objectKey);
+  }
+
+  /** 保持している実体を元の実体として返す（gzip で上げたものは伸長する。本番の Worker の配信と同じ） */
+  private async read(key: string): Promise<Blob> {
+    const blob = this.blobs.get(key);
     if (!blob) throw new Error("object missing");
-    return blob;
+    const type = this.gzipTypes.get(key);
+    return type === undefined ? blob : gunzipBlob(blob, type);
+  }
+
+  private discard(key: string) {
+    this.blobs.delete(key);
+    this.gzipTypes.delete(key);
+  }
+
+  /**
+   * 本番の Worker の verifyGzipStream 相当: 伸長して、申告した元の大きさ・sha256 に一致するか、
+   * Range で読む形（PDF・動画）や PDF の見出しを持つ中身ではないかを確かめる。違えば例外（採用されない）
+   */
+  private async verifyGzip(
+    file: File,
+    gzip: { body: Blob; originalSize: number },
+    sha256: string,
+  ): Promise<void> {
+    if (gzip.originalSize > MAX_ORIGINAL_UPLOAD_BYTES) throw new Error("ファイルが大きすぎます");
+    let original: Blob;
+    try {
+      original = await gunzipBlob(gzip.body, file.type, gzip.originalSize);
+    } catch {
+      throw new Error("圧縮された本文を伸長できません");
+    }
+    if (original.size !== gzip.originalSize)
+      throw new Error(`サイズ不一致: 申告 ${gzip.originalSize} / 実体 ${original.size}`);
+    if ((await sha256Hex(await original.arrayBuffer())) !== sha256)
+      throw new Error("伸長した実体の sha256 が申告と一致しません");
+    const head = new Uint8Array(await original.slice(0, PDF_SIGNATURE_WINDOW).arrayBuffer());
+    if (!isGzipAllowed({ fileName: file.name, mimeType: file.type }, head))
+      throw new Error("この種類のファイルは圧縮して上げられません");
   }
 
   /** Hono PUT /feedback/files/:id 相当: 版の提出と同じく、試行の開始 → 保持 → 検証完了で採用 */
@@ -276,20 +328,24 @@ class DemoBackend {
     fileId: string,
     file: File,
     sha256: string,
+    /** gzip で上げるとき（uploadItem と同じ） */
+    gzip?: { body: Blob; originalSize: number },
   ): Promise<{ status: string; failureMessage: string | null }> {
     const target = (await this.mutation(internal.feedback.beginFileUpload, { fileId })) as {
       attemptId: string;
       objectKey: string;
     };
-    this.blobs.set(target.objectKey, file);
+    this.blobs.set(target.objectKey, gzip ? gzip.body : file);
+    if (gzip) this.gzipTypes.set(target.objectKey, file.type);
     try {
+      if (gzip) await this.verifyGzip(file, gzip, sha256);
       return (await this.mutation(internal.feedback.completeFileUpload, {
         attemptId: target.attemptId,
-        size: file.size,
+        size: gzip ? gzip.originalSize : file.size,
         sha256,
       })) as { status: string; failureMessage: string | null };
     } catch (error) {
-      this.blobs.delete(target.objectKey);
+      this.discard(target.objectKey);
       await this.mutation(internal.feedback.failFileUpload, {
         attemptId: target.attemptId,
         message: error instanceof Error ? error.message : "upload failed",
@@ -303,9 +359,7 @@ class DemoBackend {
     const access = (await this.query(api.feedback.authorizeFile, { fileId })) as {
       objectKey: string;
     };
-    const blob = this.blobs.get(access.objectKey);
-    if (!blob) throw new Error("object missing");
-    return blob;
+    return this.read(access.objectKey);
   }
 }
 

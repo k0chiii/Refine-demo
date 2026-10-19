@@ -150,7 +150,7 @@ describe("Convex 統合: グラフィック制作物の PDF・画像・Illustrat
               mimeType: "",
               type: "other",
               role: "source",
-              declaredSize: 200_000_000,
+              declaredSize: 450_000_000,
             },
           ],
         }),

@@ -4,7 +4,7 @@ import type { Id } from "@mf100/convex/dataModel";
 import {
   artifactFormatLabel,
   assertGraphicHasReviewableFile,
-  assertUploadSizeWithinLimit,
+  assertDeclaredSizeWithinLimit,
   checklistFor,
   checkTypeLabels,
   checkTypes,
@@ -24,7 +24,7 @@ import {
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { figmaStatus, importFigmaFrames, uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
 import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
@@ -205,6 +205,9 @@ export function SubmitDialog({
       });
   };
   const [flow, setFlow] = useState<SubmissionFlow | null>(null);
+  /** PNG を可逆に作り直している間（準備の前。ボタンに「圧縮しています」を出す） */
+  const [compressing, setCompressing] = useState(false);
+  const starting = useRef(false);
   const [state, setState] = useState<FlowState>(initialState);
   // 入力の不足・転送の失敗はスナックバーで知らせる（ダイアログの中に赤い箱を出さない）
   const setError = (m: string | null) => {
@@ -258,7 +261,12 @@ export function SubmitDialog({
     // 1 ファイルの上限（Worker の本文の上限）。超えるファイルは選んだ時点で理由を知らせて受けない
     next = next.filter((f) => {
       try {
-        assertUploadSizeWithinLimit(f.name, f.size);
+        // ダウンロード専用の原本は gzip して上げられるので、元の大きさは本文の上限の 4 倍まで（圧縮後が上限を超えれば送る前に断る）
+        assertDeclaredSizeWithinLimit({
+          fileName: f.name,
+          mimeType: guessMimeType(f.name, f.type),
+          size: f.size,
+        });
         return true;
       } catch (error) {
         setError(`${f.name}: ${describeError(error).message}`);
@@ -299,8 +307,24 @@ export function SubmitDialog({
         return setError(describeError(error).message);
       }
     }
+    // PNG は画素が 1 つも変わらない形に作り直してから準備する（申告する大きさも作り直した後のもの）。
+    // 時間がかかる・得が小さい・確かめられないときは元のファイル。ダウンロード専用の原本の gzip は転送のときに行う
+    if (starting.current) return;
+    starting.current = true;
+    let sendFiles = files;
+    try {
+      if (input.kind === "files" && files.length > 0) {
+        const { optimiseFilesForUpload } = await import("@/lib/uploadOptimise");
+        sendFiles = await optimiseFilesForUpload(files, { onStart: () => setCompressing(true) });
+      }
+    } catch {
+      sendFiles = files;
+    } finally {
+      setCompressing(false);
+      starting.current = false;
+    }
     const items = [
-      ...files.map((f) => ({
+      ...sendFiles.map((f) => ({
         fileName: f.name,
         mimeType: guessMimeType(f.name, f.type),
         type: typeOf(f),
@@ -374,7 +398,8 @@ export function SubmitDialog({
             ...(selfChecks.length > 0 ? { selfChecks } : {}),
             requestId,
           }).then((r) => ({ sessionId: r.sessionId, items: r.items })),
-        upload: (itemId, file, onProgress) => uploadItem(token, itemId, file, onProgress),
+        upload: (itemId, file, onProgress, onPhase) =>
+          uploadItem(token, itemId, file, onProgress, onPhase),
         ...(figmaEnabled ? { importFigma: (its) => importFigmaFrames(token, its) } : {}),
         reset: (itemId) => reset({ itemId: itemId as Id<"uploadItems"> }).then(() => undefined),
         confirm: (sessionId, rid) =>
@@ -385,7 +410,7 @@ export function SubmitDialog({
           }),
         randomId: () => crypto.randomUUID(),
       },
-      files,
+      sendFiles,
       figmaImports.map((f) => ({ fileKey: f.ref.fileKey, nodeId: f.ref.nodeId! })),
     );
     setFlow(f);
@@ -401,6 +426,7 @@ export function SubmitDialog({
   const requiredCount = checkTypes.filter((t) => checks[t]?.on).length;
   const primaryLabel = linkOnly ? "提出する" : "アップロードを開始";
   const startDisabled =
+    compressing ||
     !work ||
     (input.kind === "web"
       ? !form.externalUrl.trim()
@@ -684,7 +710,12 @@ export function SubmitDialog({
                     {
                       {
                         pending: "待機",
-                        uploading: it.source === "figma" ? "Figma から取り込み中" : "転送中",
+                        uploading:
+                          it.phase === "compressing"
+                            ? "圧縮しています"
+                            : it.source === "figma"
+                              ? "Figma から取り込み中"
+                              : "転送中",
                         verified: "確認済み",
                         failed: "失敗",
                       }[it.status]
@@ -723,7 +754,7 @@ export function SubmitDialog({
         </M3eButton>
         {!flow ? (
           <M3eButton variant="filled" disabled={startDisabled} onClick={() => void start()}>
-            {primaryLabel}
+            {compressing ? "圧縮しています" : primaryLabel}
           </M3eButton>
         ) : (
           <M3eButton

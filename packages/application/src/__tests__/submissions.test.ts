@@ -634,7 +634,29 @@ describe("グラフィック制作物の提出: PDF・画像・Illustrator・InD
     await expect(
       prepareSubmission(ctx, principals.creator, {
         ...base,
+        items: [{ ...INDD, role: "source", declaredSize: 450_000_000 }],
+      }),
+    ).rejects.toMatchObject({ code: "upload_file_too_large" });
+    // 原本は gzip して上げられるので、元の大きさは本文の上限の 4 倍（400 MB）まで申告できる
+    await expect(
+      prepareSubmission(ctx, principals.creator, {
+        ...base,
         items: [{ ...INDD, role: "source", declaredSize: 150_000_000 }],
+      }),
+    ).resolves.toBeDefined();
+    // 圧縮できない種類（PDF など）は従来どおり 100 MB まで
+    await expect(
+      prepareSubmission(ctx, principals.creator, {
+        ...base,
+        items: [
+          {
+            fileName: "big.pdf",
+            mimeType: "application/pdf",
+            type: "pdf",
+            role: "source",
+            declaredSize: 150_000_000,
+          },
+        ],
       }),
     ).rejects.toMatchObject({ code: "upload_file_too_large" });
     await expect(

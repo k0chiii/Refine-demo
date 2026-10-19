@@ -26,6 +26,7 @@
     "@humation/assets-humation-1": "^1.0.3",
     "@humation/core": "1.0.3",
     "@humation/react": "1.0.3",
+    "@jsquash/oxipng": "2.3.0",
     "@lit/react": "1.0.8",
     "@m3e/react": "2.9.2",
     "@m3e/web": "2.9.2",
@@ -57,12 +58,14 @@
   },
   "devDependencies": {
     "@tanstack/router-plugin": "1.168.43",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "6.1.2",
     "axe-core": "4.10.3",
     "convex-test": "0.0.61",
     "playwright-core": "^1.58.0",
+    "pngjs": "7.0.0",
     "typescript": "5.9.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
     "vite-plus": "1.2.0"
