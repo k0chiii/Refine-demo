@@ -29,6 +29,7 @@ export interface UploadAttemptTarget {
  * 実体の転送の 3 段階（版の提出物とフィードバックの添付で同じ）。いずれも利用者の JWT とサービスの秘密を付けて呼ぶ。
  * - begin: 利用者が持ち主の受付中・未検証の項目に、試行のキーを払い出す。
  * - complete: R2 が sha256 を確かめた試行を、項目がまだ受付中・未検証なら原子的に採用する。拒否は GatewayError。
+ *   .ai は実体の先頭を見た結果（PDF の見出しがあるか）を pdfCompatible で添える。true なら PDF として紙面に出せる。
  * - fail: 試行を破棄する（Hono が自分の試行のキーを消した後の記録）。
  */
 export interface UploadOps {
@@ -36,7 +37,7 @@ export interface UploadOps {
   complete(
     token: string,
     attemptId: string,
-    meta: { size: number; sha256: string; figma?: FigmaImportMeta },
+    meta: { size: number; sha256: string; figma?: FigmaImportMeta; pdfCompatible?: boolean },
   ): Promise<{ status: string; failureMessage: string | null }>;
   fail(token: string, attemptId: string, message: string): Promise<void>;
 }
@@ -125,9 +126,25 @@ export interface StoredObjectMeta {
   sha256Hex: string | null;
 }
 
+/**
+ * 保存のときの符号化。gzip で上げた実体は圧縮のまま置き、元の大きさをメタデータに残す
+ * （配信で伸長して元の実体を返す。size は保存した実体＝圧縮後の大きさ、originalSize が元の大きさ）
+ */
+export interface StoredEncoding {
+  encoding: "gzip" | null;
+  originalSize: number | null;
+}
+
 /** head の結果。etag は強い検証子（引用符つき。R2 の httpEtag）。無い実装では null */
-export interface StoredObjectHead extends StoredObjectMeta {
+export interface StoredObjectHead extends StoredObjectMeta, StoredEncoding {
   etag: string | null;
+}
+
+/** ストリームのまま SHA-256 を取る口（Workers は crypto.DigestStream。全体をメモリに載せない） */
+export interface Sha256Sink {
+  writable: WritableStream<Uint8Array>;
+  /** writable を閉じたあとに 16 進で返す */
+  digest(): Promise<string>;
 }
 
 /** バイト範囲（両端を含む offset〜offset+length-1）。呼び出し側が実体の大きさに収めて解決した値 */
@@ -142,8 +159,8 @@ export interface ByteRange {
  */
 export type RangeRequest = { offset: number; length?: number } | { suffix: number };
 
-export interface StoredObject {
-  /** range を指定したときは、その範囲だけ */
+export interface StoredObject extends StoredEncoding {
+  /** range を指定したときは、その範囲だけ（gzip の実体は圧縮のままの範囲） */
   body: ReadableStream;
   /** 実体全体の大きさ（範囲を指定しても全体） */
   size: number;
@@ -152,11 +169,20 @@ export interface StoredObject {
 }
 
 export interface ObjectStore {
-  /** sha256 は 16 進。ストア側で検証し、不一致なら例外。 */
+  /**
+   * sha256 は 16 進。ストア側で検証し、不一致なら例外。
+   * encoding が gzip のとき、本文は圧縮のまま保存する。sha256 は元の実体のものでストアでは検証できない（渡さない）。
+   * 呼び出し側が伸長しながら確かめる。originalSize は元の大きさ（メタデータに残す）
+   */
   put(
     key: string,
     body: ReadableStream | ArrayBuffer,
-    opts: { contentType: string; sha256Hex: string },
+    opts: {
+      contentType: string;
+      sha256Hex?: string;
+      encoding?: "gzip";
+      originalSize?: number;
+    },
   ): Promise<StoredObjectMeta>;
   head(key: string): Promise<StoredObjectHead | null>;
   /**

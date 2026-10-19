@@ -7,14 +7,19 @@ import {
 } from "@/lib/artifactFiles";
 import { defaultFileCachePolicy } from "@/lib/fileCachePolicy";
 import { jwtUser } from "@/lib/jwt";
+import { messageForCode } from "@/lib/errors";
+import {
+  UploadTooLargeError,
+  encodeForUpload,
+  encodingHeaders,
+  sha256Hex,
+  type UploadPhase,
+} from "@/lib/uploadEncoding";
 
 /** Hono API（ファイル提出・配信）。業務データは Convex、ファイルはこちら、の境界を守る。 */
 export const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
 
-export async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+export { sha256Hex };
 
 export interface UploadResult {
   itemId: string;
@@ -23,23 +28,27 @@ export interface UploadResult {
   size: number;
 }
 
+/**
+ * 版の提出物を送る。ダウンロード専用の原本は gzip して送る（lib/uploadEncoding）。申告する sha256・大きさは元の実体のもの。
+ * 圧縮している間は onPhase("compressing") を呼ぶ（画面が「圧縮しています」を出す）
+ */
 export async function uploadItem(
   token: string,
   itemId: string,
   file: File,
   onProgress?: (fraction: number) => void,
+  onPhase?: (phase: UploadPhase) => void,
 ): Promise<UploadResult> {
-  const buffer = await file.arrayBuffer();
-  const sha = await sha256Hex(buffer);
+  const upload = await encodeOrExplain(file, onPhase);
   onProgress?.(0.1);
   const res = await fetch(`${API_URL}/uploads/items/${encodeURIComponent(itemId)}`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": file.type || "application/octet-stream",
-      "X-MF100-Sha256": sha,
+      ...encodingHeaders(upload),
     },
-    body: buffer,
+    body: upload.body,
   });
   onProgress?.(1);
   const json = (await res.json().catch(() => ({}))) as Partial<UploadResult> & {
@@ -50,9 +59,24 @@ export async function uploadItem(
     throw new Error(
       json.code === "size_mismatch"
         ? "ファイルが途中で欠けました。もう一度アップロードしてください。"
-        : "ファイルをアップロードできませんでした。もう一度お試しください。",
+        : json.code === "file_too_large"
+          ? messageForCode("upload_file_too_large")
+          : "ファイルをアップロードできませんでした。もう一度お試しください。",
     );
   return json as UploadResult;
+}
+
+/** 送る本文を用意する。圧縮しても上限に収まらないときは、理由のわかる文面で断る */
+async function encodeOrExplain(file: File, onPhase?: (phase: UploadPhase) => void) {
+  try {
+    return await encodeForUpload(file, { onCompressing: () => onPhase?.("compressing") });
+  } catch (error) {
+    if (error instanceof UploadTooLargeError)
+      throw new Error(messageForCode("upload_file_too_large"));
+    throw error;
+  } finally {
+    onPhase?.(null);
+  }
 }
 
 /**
@@ -141,17 +165,16 @@ export async function uploadFeedbackFile(
   file: File,
   onProgress?: (fraction: number) => void,
 ): Promise<FeedbackUploadResult> {
-  const buffer = await file.arrayBuffer();
-  const sha = await sha256Hex(buffer);
+  const upload = await encodeOrExplain(file);
   onProgress?.(0.1);
   const res = await fetch(`${API_URL}/feedback/files/${encodeURIComponent(fileId)}`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": file.type || "application/octet-stream",
-      "X-MF100-Sha256": sha,
+      ...encodingHeaders(upload),
     },
-    body: buffer,
+    body: upload.body,
   });
   onProgress?.(1);
   const json = (await res.json().catch(() => ({}))) as Partial<FeedbackUploadResult> & {

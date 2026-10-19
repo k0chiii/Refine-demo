@@ -53,7 +53,13 @@ export async function seedLegacyCreatorApproverWork(
 export async function uploadVerifiedItem(
   ctx: InMemoryContext,
   principal: Principal,
-  input: { itemId: string; size: number; sha256: string; pageCount?: number },
+  input: {
+    itemId: string;
+    size: number;
+    sha256: string;
+    pageCount?: number;
+    pdfCompatible?: boolean;
+  },
 ) {
   const { attemptId } = await beginItemUpload(ctx, principal, { itemId: input.itemId });
   const { itemId, ...meta } = input;

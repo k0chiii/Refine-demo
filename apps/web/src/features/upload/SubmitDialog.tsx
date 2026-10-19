@@ -3,11 +3,17 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
   artifactFormatLabel,
+  assertGraphicHasReviewableFile,
+  assertDeclaredSizeWithinLimit,
   checklistFor,
   checkTypeLabels,
   checkTypes,
   collectFigmaUrls,
   emptyDeclarations,
+  isGraphicMediaType,
+  isGraphicSubmissionFile,
+  isIllustratorFile,
+  isReviewableArtifact,
   pickReviewArtifact,
   revisionDeclarationItems,
   suggestedChecksFor,
@@ -18,7 +24,7 @@ import {
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { figmaStatus, importFigmaFrames, uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
 import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
@@ -40,14 +46,16 @@ import {
   initialState,
   type FlowState,
 } from "./submissionFlow";
-import { guessArtifactType, guessMimeType } from "./fileKind";
+import { guessArtifactType, guessMimeType, sniffPdfCompatible } from "./fileKind";
 import { toast } from "@/lib/toast";
 
 /**
  * 媒体ごとの提出のしかた（利用者指示 2026-10-17「区分に応じて提出画面を分けたい。web ならリンクだけでいい」）。
  * - web: ファイルは無く、サイトの URL だけ（校正者はライブ表示の上でコメントする）
  * - figma: ファイルは無く、フレームの URL だけ（取り込んで画像の添付にし、URL は外部リンクとしても残す）
- * - pdf・画像・動画: その種類のファイルだけ
+ * - pdf・画像（グラフィック制作物。利用者指示 2026-10-19）: PDF・画像・Illustrator（.ai）・InDesign（.indd）を一緒に。
+ *   校正は紙面に出せる PDF・画像（PDF 互換の .ai を含む）に付け、.indd などはダウンロード用
+ * - 動画: 動画のファイルだけ
  * - 文章・SNS 投稿: ファイル（文章エディタ・投稿の編集が作った下書きを最初から入れて開く）
  * - その他: ファイルと、あれば外部リンク
  */
@@ -72,19 +80,12 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
     case "figma":
       return { kind: "figma" };
     case "pdf":
-      return {
-        kind: "files",
-        accept: ".pdf,application/pdf",
-        noun: "PDF",
-        matches: (f) => guessArtifactType(f.name, f.type) === "pdf",
-        link: false,
-      };
     case "image":
       return {
         kind: "files",
-        accept: "image/*",
-        noun: "画像",
-        matches: (f) => guessArtifactType(f.name, f.type) === "image",
+        accept: ".pdf,application/pdf,image/*,.ai,.indd",
+        noun: "PDF・画像・Illustrator（.ai）・InDesign（.indd）",
+        matches: (f) => isGraphicSubmissionFile({ fileName: f.name, mimeType: f.type }),
         link: false,
       };
     case "video":
@@ -168,13 +169,18 @@ export function SubmitDialog({
     (r) => r.kind === "standard" && r.reviewState !== "void",
   );
   const [files, setFiles] = useState<File[]>([]);
+  // 先頭を見て PDF 互換と分かった .ai（紙面に出せる）。確定する種類は Worker が実体を見て決める（ここは案内と事前の確認）
+  const [pdfAi, setPdfAi] = useState<ReadonlySet<File>>(new Set());
+  const typeOf = (f: File) => (pdfAi.has(f) ? ("pdf" as const) : guessArtifactType(f.name, f.type));
   // 提出したあと紙面に出るファイル（domain の pickReviewArtifact と同じ選び方。PDF → 画像 → 文章 → 動画。
   // 動画の制作物は動画を先に）
-  const shownFile =
-    pickReviewArtifact(
-      files.map((f) => ({ type: guessArtifactType(f.name, f.type), role: "source" as const, f })),
-      data?.work.mediaType === "video" ? "video" : undefined,
-    )?.f ?? null;
+  const graphic = isGraphicMediaType(data?.work.mediaType);
+  const picked = pickReviewArtifact(
+    files.map((f) => ({ type: typeOf(f), role: "source" as const, fileName: f.name, f })),
+    data?.work.mediaType === "video" ? "video" : undefined,
+  );
+  // グラフィック制作物は、紙面に出せるファイルが無ければ「紙面に表示」のファイルは無い（.indd だけ等。提出前に知らせる）
+  const shownFile = picked && (!graphic || isReviewableArtifact(picked)) ? picked.f : null;
   const [dragging, setDragging] = useState(false);
   /** 専門確認（§2.2-4）。種別ごとに要否・担当者を宣言する。校了時に未完了ならブロック（D6）。 */
   const [checks, setChecks] = useState<Record<string, { on: boolean; assignee: string[] }>>(
@@ -199,6 +205,9 @@ export function SubmitDialog({
       });
   };
   const [flow, setFlow] = useState<SubmissionFlow | null>(null);
+  /** PNG を可逆に作り直している間（準備の前。ボタンに「圧縮しています」を出す） */
+  const [compressing, setCompressing] = useState(false);
+  const starting = useRef(false);
   const [state, setState] = useState<FlowState>(initialState);
   // 入力の不足・転送の失敗はスナックバーで知らせる（ダイアログの中に赤い箱を出さない）
   const setError = (m: string | null) => {
@@ -249,8 +258,29 @@ export function SubmitDialog({
       if (ok.length < next.length) setError(`${input.noun} のファイルだけ出せます`);
       next = ok;
     }
+    // 1 ファイルの上限（Worker の本文の上限）。超えるファイルは選んだ時点で理由を知らせて受けない
+    next = next.filter((f) => {
+      try {
+        // ダウンロード専用の原本は gzip して上げられるので、元の大きさは本文の上限の 4 倍まで（圧縮後が上限を超えれば送る前に断る）
+        assertDeclaredSizeWithinLimit({
+          fileName: f.name,
+          mimeType: guessMimeType(f.name, f.type),
+          size: f.size,
+        });
+        return true;
+      } catch (error) {
+        setError(`${f.name}: ${describeError(error).message}`);
+        return false;
+      }
+    });
     if (next.length === 0) return;
+    const added = next.filter((f) => !files.some((c) => c.name === f.name));
     setFiles((cur) => [...cur, ...next.filter((f) => !cur.some((c) => c.name === f.name))]);
+    // .ai は先頭を見て、PDF 互換なら紙面に出せるファイルとして案内する
+    for (const f of added.filter((f) => isIllustratorFile(f.name)))
+      void sniffPdfCompatible(f).then((ok) => {
+        if (ok) setPdfAi((cur) => new Set(cur).add(f));
+      });
   };
 
   const start = async () => {
@@ -265,11 +295,39 @@ export function SubmitDialog({
       return setError("サイトの URL を https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
+    // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
+    // （サーバーも確定のときに同じ規則で断る）
+    if (input.kind === "files" && graphic) {
+      try {
+        assertGraphicHasReviewableFile(
+          work.mediaType,
+          files.map((f) => ({ type: typeOf(f), role: "source" as const, fileName: f.name })),
+        );
+      } catch (error) {
+        return setError(describeError(error).message);
+      }
+    }
+    // PNG は画素が 1 つも変わらない形に作り直してから準備する（申告する大きさも作り直した後のもの）。
+    // 時間がかかる・得が小さい・確かめられないときは元のファイル。ダウンロード専用の原本の gzip は転送のときに行う
+    if (starting.current) return;
+    starting.current = true;
+    let sendFiles = files;
+    try {
+      if (input.kind === "files" && files.length > 0) {
+        const { optimiseFilesForUpload } = await import("@/lib/uploadOptimise");
+        sendFiles = await optimiseFilesForUpload(files, { onStart: () => setCompressing(true) });
+      }
+    } catch {
+      sendFiles = files;
+    } finally {
+      setCompressing(false);
+      starting.current = false;
+    }
     const items = [
-      ...files.map((f) => ({
+      ...sendFiles.map((f) => ({
         fileName: f.name,
         mimeType: guessMimeType(f.name, f.type),
-        type: guessArtifactType(f.name, f.type),
+        type: typeOf(f),
         role: "source" as const,
         declaredSize: f.size,
       })),
@@ -340,7 +398,8 @@ export function SubmitDialog({
             ...(selfChecks.length > 0 ? { selfChecks } : {}),
             requestId,
           }).then((r) => ({ sessionId: r.sessionId, items: r.items })),
-        upload: (itemId, file, onProgress) => uploadItem(token, itemId, file, onProgress),
+        upload: (itemId, file, onProgress, onPhase) =>
+          uploadItem(token, itemId, file, onProgress, onPhase),
         ...(figmaEnabled ? { importFigma: (its) => importFigmaFrames(token, its) } : {}),
         reset: (itemId) => reset({ itemId: itemId as Id<"uploadItems"> }).then(() => undefined),
         confirm: (sessionId, rid) =>
@@ -351,7 +410,7 @@ export function SubmitDialog({
           }),
         randomId: () => crypto.randomUUID(),
       },
-      files,
+      sendFiles,
       figmaImports.map((f) => ({ fileKey: f.ref.fileKey, nodeId: f.ref.nodeId! })),
     );
     setFlow(f);
@@ -367,6 +426,7 @@ export function SubmitDialog({
   const requiredCount = checkTypes.filter((t) => checks[t]?.on).length;
   const primaryLabel = linkOnly ? "提出する" : "アップロードを開始";
   const startDisabled =
+    compressing ||
     !work ||
     (input.kind === "web"
       ? !form.externalUrl.trim()
@@ -471,7 +531,7 @@ export function SubmitDialog({
                           　{formatBytes(f.size)}・
                           {f === shownFile
                             ? "紙面に表示（コメントはこのファイルに）"
-                            : `${artifactFormatLabel({ type: guessArtifactType(f.name, f.type), fileName: f.name })}（ダウンロード用）`}
+                            : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
                         </span>
                         <M3eIconButton
                           className="file-drop__remove"
@@ -483,6 +543,12 @@ export function SubmitDialog({
                       </li>
                     ))}
                   </ul>
+                ) : null}
+                {files.length > 0 && graphic && !shownFile ? (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    Illustrator・InDesign のファイルは紙面に出せません（PDF 互換の .ai
+                    を除く）。校正に使う書き出した PDF か画像も一緒に出してください。
+                  </p>
                 ) : null}
               </div>
             )}
@@ -644,7 +710,12 @@ export function SubmitDialog({
                     {
                       {
                         pending: "待機",
-                        uploading: it.source === "figma" ? "Figma から取り込み中" : "転送中",
+                        uploading:
+                          it.phase === "compressing"
+                            ? "圧縮しています"
+                            : it.source === "figma"
+                              ? "Figma から取り込み中"
+                              : "転送中",
                         verified: "確認済み",
                         failed: "失敗",
                       }[it.status]
@@ -683,7 +754,7 @@ export function SubmitDialog({
         </M3eButton>
         {!flow ? (
           <M3eButton variant="filled" disabled={startDisabled} onClick={() => void start()}>
-            {primaryLabel}
+            {compressing ? "圧縮しています" : primaryLabel}
           </M3eButton>
         ) : (
           <M3eButton

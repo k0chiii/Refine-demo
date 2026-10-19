@@ -110,8 +110,16 @@ const completeArgs = (b: Record<string, unknown>) =>
     : ({ ok: false } as const);
 /** 版の提出物の検証完了: Figma から取り込んだときはノード名などを添える（形が合わなければ無視して保存しない） */
 const itemCompleteArgs = (b: Record<string, unknown>) => {
-  const base = completeArgs(b);
-  if (!base.ok) return base;
+  const parsed = completeArgs(b);
+  if (!parsed.ok) return parsed;
+  // .ai の PDF 互換の判定（Hono が実体の先頭を見た結果）。boolean 以外は無視する
+  const base = {
+    ...parsed,
+    args: {
+      ...parsed.args,
+      ...(typeof b.pdfCompatible === "boolean" ? { pdfCompatible: b.pdfCompatible } : {}),
+    },
+  } as const;
   const f = b.figma;
   if (
     typeof f === "object" &&

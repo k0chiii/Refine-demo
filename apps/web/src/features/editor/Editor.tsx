@@ -65,7 +65,7 @@ import {
 } from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
-import { PinButton, useRecordOpened } from "@/features/home/PinButton";
+import { PinButton } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
@@ -368,8 +368,6 @@ export function Editor({
   /** 「別の制作物と比べる」の相手を選ぶダイアログ */
   const [pickerOpen, setPickerOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
-  // 開いた制作物を「最近開いた制作物」（ホーム）に記録する
-  useRecordOpened(workId);
   const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -1615,12 +1613,7 @@ export function Editor({
         onWrite={openAuthoring}
       />
     ) : d === "info" && workData ? (
-      <InfoTab
-        work={workData}
-        revision={data ?? null}
-        isAdmin={me?.isSystemAdmin ?? false}
-        shownArtifactId={artifactId}
-      />
+      <InfoTab work={workData} revision={data ?? null} shownArtifactId={artifactId} />
     ) : null;
   const desktopDrawer = drawer !== null && !mobile;
   // 「ピンの高さに並べる」では紙面の横にコメントの列（補助ペインと同じ 360 / 412）＋間隔 24 が並ぶので、幅合わせから除く
@@ -1703,7 +1696,7 @@ export function Editor({
               onClick={() => void doComplete.run()}
             >
               <M3eIcon slot="icon" name="task_alt" />
-              確認を完了
+              校正を完了
             </M3eButton>
           ) : data?.myAssignment?.state === "responded" ? (
             <span className="ws__done" role="img" title="校正完了" aria-label="校正完了">

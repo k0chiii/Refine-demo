@@ -83,7 +83,7 @@ export async function completeRequiredCheck(
     ctx,
     principal,
     input.checkId,
-    "comment.post",
+    "review.participate",
   );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });

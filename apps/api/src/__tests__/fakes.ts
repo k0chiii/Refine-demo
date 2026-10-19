@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   ArtifactAccess,
   ByteRange,
@@ -7,6 +8,7 @@ import type {
   FigmaNodeInfo,
   ObjectStore,
   RangeRequest,
+  Sha256Sink,
   TokenVerifier,
   UploadOps,
 } from "../ports.ts";
@@ -23,22 +25,57 @@ async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Workers の crypto.DigestStream の代わり（Node の createHash でストリームのまま SHA-256 を取る） */
+export function nodeSha256Sink(): Sha256Sink {
+  const hash = createHash("sha256");
+  return {
+    writable: new WritableStream<Uint8Array>({
+      write(chunk) {
+        hash.update(chunk);
+      },
+    }),
+    digest: async () => hash.digest("hex"),
+  };
+}
+
+const encodingOf = (o: { encoding?: "gzip"; originalSize?: number }) =>
+  o.encoding
+    ? { encoding: o.encoding, originalSize: o.originalSize ?? null }
+    : { encoding: null, originalSize: null };
+
 export class MemoryStore implements ObjectStore {
-  readonly objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
+  readonly objects = new Map<
+    string,
+    {
+      bytes: Uint8Array;
+      contentType: string;
+      encoding?: "gzip";
+      originalSize?: number;
+    }
+  >();
   /** 書込み直前のフック（遅れて届く PUT の再現に使う） */
   beforeWrite: ((key: string) => Promise<void>) | null = null;
   async put(
     key: string,
     body: ReadableStream | ArrayBuffer,
-    opts: { contentType: string; sha256Hex: string },
+    opts: {
+      contentType: string;
+      sha256Hex?: string;
+      encoding?: "gzip";
+      originalSize?: number;
+    },
   ) {
     const buf = body instanceof ArrayBuffer ? body : await new Response(body).arrayBuffer();
     if (this.beforeWrite) await this.beforeWrite(key);
     const actual = await sha256Hex(buf);
-    if (actual !== opts.sha256Hex)
+    if (opts.sha256Hex !== undefined && actual !== opts.sha256Hex)
       throw new Error("The SHA-256 checksum you specified did not match what we received.");
-    this.objects.set(key, { bytes: new Uint8Array(buf), contentType: opts.contentType });
-    return { size: buf.byteLength, sha256Hex: actual };
+    this.objects.set(key, {
+      bytes: new Uint8Array(buf),
+      contentType: opts.contentType,
+      ...(opts.encoding ? { encoding: opts.encoding, originalSize: opts.originalSize ?? 0 } : {}),
+    });
+    return { size: buf.byteLength, sha256Hex: opts.sha256Hex ? actual : null };
   }
   /** 内容から決まる強い検証子（R2 の httpEtag のまねごと） */
   private etagOf(o: { bytes: Uint8Array }) {
@@ -53,7 +90,9 @@ export class MemoryStore implements ObjectStore {
   async head(key: string) {
     this.heads++;
     const o = this.objects.get(key);
-    return o ? { size: o.bytes.byteLength, sha256Hex: null, etag: this.etagOf(o) } : null;
+    return o
+      ? { size: o.bytes.byteLength, sha256Hex: null, etag: this.etagOf(o), ...encodingOf(o) }
+      : null;
   }
   async get(key: string, range?: ByteRange | RangeRequest) {
     this.gets.push({ key, range });
@@ -74,6 +113,7 @@ export class MemoryStore implements ObjectStore {
       size: o.bytes.byteLength,
       contentType: o.contentType,
       etag: this.etagOf(o),
+      ...encodingOf(o),
     };
   }
   async delete(key: string) {
@@ -109,6 +149,8 @@ export class FakeUploads implements UploadOps {
     { id: string; targetId: string; objectKey: string; state: "reserved" | "adopted" | "discarded" }
   >();
   calls: string[] = [];
+  /** complete で渡された値（.ai の PDF 互換など、呼び出しの文字列に出ない値の確認用） */
+  readonly completeMetas: Array<{ pdfCompatible?: boolean }> = [];
   /** 次の complete を「通信断（採否不明）」にする */
   failNextCompleteWithNetworkError = false;
   private seq = 0;
@@ -144,9 +186,12 @@ export class FakeUploads implements UploadOps {
   async complete(
     token: string,
     attemptId: string,
-    meta: { size: number; sha256: string; figma?: FigmaImportMeta },
+    meta: { size: number; sha256: string; figma?: FigmaImportMeta; pdfCompatible?: boolean },
   ) {
     this.calls.push(`${this.label}complete:${attemptId}:${meta.size}:${meta.sha256}`);
+    this.completeMetas.push(
+      meta.pdfCompatible !== undefined ? { pdfCompatible: meta.pdfCompatible } : {},
+    );
     if (this.failNextCompleteWithNetworkError) {
       this.failNextCompleteWithNetworkError = false;
       throw new Error("network down");

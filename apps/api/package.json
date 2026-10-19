@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@mf100/convex": "workspace:*",
+    "@mf100/domain": "workspace:*",
     "convex": "1.46.0",
     "hono": "4.13.13",
     "jose": "6.2.12"

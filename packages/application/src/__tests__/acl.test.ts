@@ -21,7 +21,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     ).rejects.toThrow(code("forbidden"));
   });
 
-  it("通常の作品はサインインした委員なら誰でも見られる（利用者決定 2026-10-17）。見るだけで、投稿・編集はできない", async () => {
+  it("通常の作品はサインインした委員なら誰でも見られ（利用者決定 2026-10-17）、コメントも書ける（同 2026-10-19）。編集はできない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     await expect(
@@ -32,6 +32,9 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     ).resolves.toBeTruthy();
     await expect(
       loadAuthorizedWork(ctx, principals.stranger, work.id, "comment.post"),
+    ).resolves.toBeTruthy();
+    await expect(
+      loadAuthorizedWork(ctx, principals.stranger, work.id, "review.participate"),
     ).rejects.toThrow(code("forbidden"));
     await expect(
       loadAuthorizedWork(ctx, principals.stranger, work.id, "work.edit"),
@@ -72,8 +75,9 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     await expect(
       loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view"),
     ).rejects.toThrow(code("forbidden"));
-    // 閲覧だけ
-    await expect(loadAuthorizedWork(ctx, member, work.id, "comment.post")).rejects.toThrow(
+    // 閲覧とコメントまで。校正への参加は職責か review 以上の ACL
+    await expect(loadAuthorizedWork(ctx, member, work.id, "comment.post")).resolves.toBeTruthy();
+    await expect(loadAuthorizedWork(ctx, member, work.id, "review.participate")).rejects.toThrow(
       code("forbidden"),
     );
     await expect(

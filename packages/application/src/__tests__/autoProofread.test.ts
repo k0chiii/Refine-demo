@@ -63,7 +63,8 @@ describe("提出時の自動校正", () => {
     expect(run.status).toBe("pending");
     const artifactId = run.artifacts[0]!.artifactId;
 
-    // 権限のない人は担当も送信もできない
+    // コメントを書けるだけの人（校正に加われない人）は担当も送信もできず、実行も進められない
+    expect((await getProofreadingRun(ctx, stranger, rev.id)).canRun).toBe(false);
     await expect(
       claimProofreadArtifact(ctx, stranger, { runId: run.id, artifactId }),
     ).rejects.toEqual(code("forbidden"));

@@ -16,6 +16,7 @@ import { useQuery } from "convex/react";
 import { useStableQuery } from "@/lib/useStableQuery";
 import type { M3eFilterChipElement } from "@m3e/web/chips";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { DashboardOverview } from "@/features/home/DashboardOverview";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { WorksTable, type WorkRow } from "@/features/work/WorksTable";
 import { lifecycleLabel } from "@/lib/labels";
@@ -49,6 +50,7 @@ export const Route = createFileRoute("/_app/works/")({
     owner?: string;
     production?: string;
     genre?: WorkGenre;
+    pinned?: boolean;
     sort?: WorkSortKey;
     dir?: "desc";
   } => ({
@@ -57,6 +59,7 @@ export const Route = createFileRoute("/_app/works/")({
     ...((workGenres as readonly string[]).includes(s.genre as string)
       ? { genre: s.genre as WorkGenre }
       : {}),
+    ...(s.pinned === true || s.pinned === "true" ? { pinned: true } : {}),
     ...(typeof s.owner === "string" && s.owner ? { owner: s.owner } : {}),
     ...(typeof s.production === "string" && s.production ? { production: s.production } : {}),
     ...(SORT_KEYS.includes(s.sort as WorkSortKey) && s.sort !== "accepting"
@@ -68,7 +71,8 @@ export const Route = createFileRoute("/_app/works/")({
 });
 
 /**
- * U-02 制作物一覧。探して開くだけの入口。行（題名のリンク）を押すとエディタ（最新版）が開く。
+ * U-02 制作物（一覧）。探して開くだけの入口。先頭に制作物の状況（数字・滞っている制作物・内訳。管理する人の全体像。
+ * ホームを入口（制作・校正）に分けたとき、ここへ移した。利用者決定 2026-10-19）。ホームにピン留めした制作物は「ピン留め」のチップで絞る。行（題名のリンク）を押すとエディタ（最新版）が開く。
  * 入れ子にせずに 1 つの表で並べ、主管担当・制作担当は絞り込み（`owner`・`production`）と並べ替え（`sort`・`dir`）で使う
  * （利用者決定 2026-10-16。既定は校正の締切が近い順）。絞り込み・並べ替えは M3 のチップ＋メニュー（M3 Chips）と、表の見出し（同じ `sort`）。
  * 表（共通の ui/DataTable。M3 に表の部品が無いので native `<table>`。利用者決定 2026-10-18「制作物一覧も表がいいかも」。§75）。
@@ -85,7 +89,9 @@ function Works() {
   const me = useQuery(api.me.me, {});
   const teams = useQuery(api.teams.list, {});
   const [lifecycle, setLifecycle] = useState<string>("");
-  const compact = useWindowClass() === "compact";
+  const cls = useWindowClass();
+  const compact = cls === "compact";
+  const twoColumns = cls === "expanded" || cls === "large";
   // 「制作物を登録」はレールの FAB にある（compact にはレールが無い）
   const canRegister = !compact;
   // 登録は works:create に加えて、校了者を決める権限（approvers:assign）も要る
@@ -95,6 +101,7 @@ function Works() {
     owner?: string;
     production?: string;
     genre?: WorkGenre | undefined;
+    pinned?: true | undefined;
     sort?: WorkSortKey;
     dir?: "desc" | undefined;
   }) =>
@@ -114,6 +121,9 @@ function Works() {
     ...(lifecycle ? { lifecycle: lifecycle as "active" } : {}),
     ...(search.genre ? { genre: search.genre } : {}),
   });
+  // 制作物の状況とピン留め（ダッシュボードの問い合わせ。制作・校正の入口も同じものを読む）
+  const dash = useQuery(api.dashboard.get, {});
+  const pinnedIds = useMemo(() => new Set((dash?.pinned ?? []).map((p) => p.workId)), [dash]);
   const hasTeams = teams !== undefined && teams.length > 0;
   const owner = hasTeams ? search.owner : undefined;
   const production = hasTeams ? search.production : undefined;
@@ -124,6 +134,7 @@ function Works() {
     const picked: WorkRow[] = works
       .filter(
         (w) =>
+          (!search.pinned || pinnedIds.has(w.id)) &&
           (!owner || workBelongsToTeam(w, teams, "owner", owner)) &&
           (!production || workBelongsToTeam(w, teams, "production", production)),
       )
@@ -136,7 +147,7 @@ function Works() {
         }),
       }));
     return sortWorks(picked, teams, effectiveSort, dir);
-  }, [works, teams, owner, production, effectiveSort, dir]);
+  }, [works, teams, owner, production, effectiveSort, dir, search.pinned, pinnedIds]);
   // 表の見出しを押す: 同じ列なら向きを逆に、別の列なら昇順で（URL の sort・dir。並べ替えのチップと同じ値）
   const onSortColumn = (key: WorkSortKey) =>
     setSearch(
@@ -144,7 +155,7 @@ function Works() {
         ? { dir: dir === "asc" ? "desc" : undefined }
         : { sort: key, dir: undefined },
     );
-  const filtered = Boolean(lifecycle || owner || production || search.genre);
+  const filtered = Boolean(lifecycle || owner || production || search.genre || search.pinned);
   const setCreating = (on: boolean) =>
     void navigate({
       to: "/works",
@@ -157,7 +168,7 @@ function Works() {
 
   return (
     <div className="works">
-      <AppBarSlot slot="title">制作物一覧</AppBarSlot>
+      <AppBarSlot slot="title">制作物</AppBarSlot>
       {canCreate ? (
         <AppBarSlot slot="actions">
           <M3eIconButton
@@ -169,7 +180,19 @@ function Works() {
           </M3eIconButton>
         </AppBarSlot>
       ) : null}
+      {dash ? <DashboardOverview data={dash} twoColumns={twoColumns} collapsed={compact} /> : null}
       <div className="works__controls">
+        {pinnedIds.size > 0 || search.pinned ? (
+          <M3eFilterChipSet aria-label="ピン留めで絞り込み" className="works__filters">
+            <M3eFilterChip
+              selected={search.pinned === true}
+              onClick={() => setSearch({ pinned: search.pinned ? undefined : true })}
+            >
+              <M3eIcon slot="icon" name="push_pin" />
+              ピン留め
+            </M3eFilterChip>
+          </M3eFilterChipSet>
+        ) : null}
         <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
           {(["active", "on_hold", "finalized"] as const).map((k) => (
             <M3eFilterChip
@@ -261,7 +284,16 @@ function Works() {
           teams={teams}
           sort={effectiveSort}
           dir={dir}
-          resetKey={[q, lifecycle, search.genre, owner, production, effectiveSort, dir].join("|")}
+          resetKey={[
+            q,
+            lifecycle,
+            search.genre,
+            search.pinned,
+            owner,
+            production,
+            effectiveSort,
+            dir,
+          ].join("|")}
           compact={compact}
           onSort={onSortColumn}
           onOpen={(workId) => {

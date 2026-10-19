@@ -1,5 +1,6 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { ArtifactId, RevisionId } from "../shared/ids.ts";
+import { isGraphicMediaType, isIllustratorFile, isSourceFormatFile } from "./graphicFiles.ts";
 
 export type ArtifactRole = "source" | "preview" | "external";
 export type ArtifactType = "pdf" | "image" | "document" | "video" | "other" | "external_link";
@@ -107,24 +108,55 @@ export function isReviewableArtifact(a: Pick<Artifact, "type" | "role">): boolea
 }
 
 /**
+ * 紙面に出す候補の並び（pickReviewArtifact）。ふつうの PDF → 画像 → .ai（PDF 互換で PDF として出せるもの）→ 文章 → 動画。
+ * .ai は原本なので、書き出した PDF や画像があればそちらを出す（利用者指示 2026-10-19）
+ */
+type ReviewSlot = "pdf" | "image" | "source_pdf" | "document" | "video";
+const reviewSlots: readonly ReviewSlot[] = ["pdf", "image", "source_pdf", "document", "video"];
+
+function reviewSlotOf(a: Pick<Artifact, "type"> & { fileName?: string }): ReviewSlot | null {
+  if (a.type === "pdf") return a.fileName && isSourceFormatFile(a.fileName) ? "source_pdf" : "pdf";
+  return a.type === "image" || a.type === "document" || a.type === "video" ? a.type : null;
+}
+
+/**
  * 版を開いたときに紙面に出す添付（利用者指示 2026-10-15: 画像の制作物は PDF と .ai を一緒に出すことがあり、
  * コメントは基本 PDF に付ける。.ai は手元で開きたい人がダウンロードする）。
- * 提出の順番によらず PDF → 画像 → 文章 → 動画 の順で選ぶ。`prefer`（制作物の媒体。動画の制作物なら video）が
+ * 提出の順番によらず PDF → 画像 → 文章 → 動画 の順で選ぶ。PDF 互換の .ai（実体が PDF として確かめられたもの。
+ * 利用者指示 2026-10-19）は、ふつうの PDF・画像が無いときだけ選ぶ。`prefer`（制作物の媒体。動画の制作物なら video）が
  * あればその種類を先に選ぶ（動画に表紙の画像や絵コンテの PDF を添えて出しても、動画が出る）。
  * 紙面に出せる添付が無ければ、外部リンク以外の最初の添付。
  */
-export function pickReviewArtifact<A extends Pick<Artifact, "type" | "role">>(
-  artifacts: readonly A[],
-  prefer?: ArtifactType,
-): A | null {
+export function pickReviewArtifact<
+  A extends Pick<Artifact, "type" | "role"> & { fileName?: string },
+>(artifacts: readonly A[], prefer?: ArtifactType): A | null {
   const order = prefer
-    ? [prefer, ...reviewableArtifactTypes.filter((t) => t !== prefer)]
-    : reviewableArtifactTypes;
-  for (const type of order) {
-    const hit = artifacts.find((a) => a.role !== "external" && a.type === type);
+    ? [prefer as ReviewSlot, ...reviewSlots.filter((t) => t !== prefer)]
+    : reviewSlots;
+  for (const slot of order) {
+    const hit = artifacts.find((a) => a.role !== "external" && reviewSlotOf(a) === slot);
     if (hit) return hit;
   }
   return artifacts.find((a) => a.role !== "external") ?? null;
+}
+
+/**
+ * グラフィック制作物（印刷物・画像）の版は、紙面に出して校正できるファイルを 1 つ以上含むこと。
+ * .indd や PDF 互換でない .ai だけの提出は、校正する面が無いので確定しない（書き出した PDF か画像も一緒に出す）。
+ * 確定のとき、実体の検証（.ai の PDF 互換の判定）が済んだあとの種類で判定する。外部リンクは数えない
+ */
+export function assertGraphicHasReviewableFile(
+  mediaType: string | undefined,
+  artifacts: ReadonlyArray<Pick<Artifact, "type" | "role"> & { fileName?: string }>,
+): void {
+  if (!isGraphicMediaType(mediaType)) return;
+  if (artifacts.some(isReviewableArtifact)) return;
+  throw new DomainError("revision_no_reviewable_file", {
+    files: artifacts
+      .filter((a) => a.role !== "external")
+      .map((a) => a.fileName ?? "")
+      .filter(Boolean),
+  });
 }
 
 const SOURCE_FORMATS: Record<string, string> = {
@@ -140,7 +172,8 @@ const SOURCE_FORMATS: Record<string, string> = {
 
 /** 添付の形式の呼び名（ファイル一覧に出す）。拡張子で決め、知らない形式は拡張子を大文字にする */
 export function artifactFormatLabel(a: Pick<Artifact, "type" | "fileName">): string {
-  if (a.type === "pdf") return "PDF";
+  // PDF 互換の .ai は PDF として出せるが、呼び名は原本の形式（ダウンロードで開く人が見分けられるように）
+  if (a.type === "pdf") return isIllustratorFile(a.fileName) ? "Illustrator（PDF 互換）" : "PDF";
   if (a.type === "image") return "画像";
   if (a.type === "document") return "文章";
   if (a.type === "video") return "動画";

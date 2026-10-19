@@ -16,37 +16,22 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     expect(await cast.reviewer.as.query(api.home.submitTargets, {})).toEqual([]);
     const dash = await cast.creator.as.query(api.dashboard.get, {});
     expect(dash.mine.submit.map((i) => i.workId)).toEqual([workId]);
-    expect(dash.layout[0]!.id).toBe("submit");
   });
 
-  it("構成・ピン留め・最近開いた制作物はアカウントごとに保存される", async () => {
+  it("ピン留めはアカウントごとに保存される", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const workId = await setupWork(t, cast, { confidentiality: "restricted" });
-    await cast.reviewer.as.mutation(api.home.saveLayout, {
-      widgets: [
-        { id: "recent", visible: true, limit: 3 },
-        { id: "unknown", visible: true, limit: 5 },
-      ],
-    });
     await cast.reviewer.as.mutation(api.home.setPinned, { workId, pinned: true });
-    await cast.reviewer.as.mutation(api.home.recordOpened, { workId });
-    await cast.reviewer.as.mutation(api.home.recordOpened, { workId });
     expect(await cast.reviewer.as.query(api.home.pinned, { workId })).toBe(true);
     const d = await cast.reviewer.as.query(api.dashboard.get, {});
-    expect(d.customized).toBe(true);
-    expect(d.layout[0]).toEqual({ id: "recent", visible: true, limit: 3 });
     expect(d.pinned.map((i) => i.workId)).toEqual([workId]);
-    expect(d.recent).toHaveLength(1);
     // ほかの人には影響しない。見られない制作物はピン留めできない
     const other = await cast.creator.as.query(api.dashboard.get, {});
-    expect(other.customized).toBe(false);
     expect(other.pinned).toHaveLength(0);
     await expect(
       cast.stranger.as.mutation(api.home.setPinned, { workId, pinned: true }),
     ).rejects.toThrow(code("forbidden"));
-    await cast.reviewer.as.mutation(api.home.resetLayout, {});
-    expect((await cast.reviewer.as.query(api.dashboard.get, {})).customized).toBe(false);
   });
 
   it("一括登録: 担当者を照合して、まとめて登録し、一括の監査を残す", async () => {

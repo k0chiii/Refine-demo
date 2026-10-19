@@ -21,6 +21,7 @@ export type WorkAction =
   | "revision.submit"
   | "comment.post"
   | "comment.reply"
+  | "review.participate"
   | "comment.decide"
   | "review.assign"
   | "work.finalize"
@@ -115,11 +116,16 @@ export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolea
     case "revision.submit":
       return roles.isCreator || hasLevel(ctx, "edit");
     case "comment.post":
-      // 割り当てられた校正者 = review 以上の ACL。制作者・校了者・主管も議論に参加できる。
-      return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "review");
+      // 新しいコメントも、制作物を見られる人なら誰でも（利用者決定 2026-10-19「コメントはみんなできて良い」。
+      // 2026-10-18 の返信に続き、新規スレッドも review ACL を要らなくする）。校了後の拒否・メンションの規則は別で守る。
+      return canViewWork(ctx);
     case "comment.reply":
       // 既存のコメントへの返信は、制作物を見られる人なら誰でも（利用者決定 2026-10-18。D5 の暫定を改める）
       return canViewWork(ctx);
+    case "review.participate":
+      // 校正に加わる人: 割り当てられた校正者 = review 以上の ACL、制作者・校了者・主管。
+      // コメント投稿が広がっても、自動校正・AI 校正・手動のページ対応・担当の確認の完了までは広げない。
+      return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "review");
     case "comment.decide":
       // 校正者はコメント投稿だけで採否を決めない（§2.1）。制作者と明示委任（edit）のみ。
       return roles.isCreator || hasLevel(ctx, "edit");

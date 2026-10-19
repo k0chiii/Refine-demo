@@ -30,7 +30,7 @@
 - **application**: ユースケース関数（`confirmSubmission`, `postComment`, `decideThread`, `finalizeWork`, `reopenWork`, `grantWorkPermission` …）と、それが必要とするポート（`WorkRepository` …、`Clock`, `AuditLogger`, `IdempotencyStore`）。インメモリ実装（`@mf100/application/testing`）で受け入れ条件を単体テストする。
 - **apps/convex**: `convex/lib/adapters.ts` がポートを `ctx.db` で実装。公開関数は「認証 → ユースケース呼出 → ドメイン例外を ConvexError に変換」だけ。1 mutation = 1 トランザクション。
 - **apps/api**: ポート `TokenVerifier` / `BackendGateway` / `ObjectStore` に依存する Hono アプリ。本番は jose / ConvexHttpClient / R2、テストはフェイク。
-- **apps/web**: 画面は ダッシュボード（`/`）／制作物（`/works`）／エディタ（`/works/:id`, `/works/:id/v/N`）／管理（`/admin`）の 4 ルート（要件の U-01〜U-08 はこの中に収める。[`UI_M3E.md`](UI_M3E.md) §11）。アップロードのオーケストレーションは UI 非依存の `SubmissionFlow` に分離してテスト。座標変換はドメインの `toViewportRect / fromViewportRect` を使う。
+- **apps/web**: 画面は 制作（`/make`）／校正（`/check`）／制作物（`/works`）／エディタ（`/works/:id`, `/works/:id/v/N`）／管理（`/admin`）（`/` は最後に使った入口への振り分け。UI_M3E §83）（要件の U-01〜U-08 はこの中に収める。[`UI_M3E.md`](UI_M3E.md) §11）。アップロードのオーケストレーションは UI 非依存の `SubmissionFlow` に分離してテスト。座標変換はドメインの `toViewportRect / fromViewportRect` を使う。
 
 ## 認可の境界
 
@@ -40,14 +40,15 @@
 利用者 ──JWT──▶ Hono ─▶ TokenVerifier(JWKS) ─▶ 利用者本人のトークンで Convex を呼ぶ（Hono は特権を持たない）
 ```
 
-| 操作                                 | 判定                                                                                                |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| 閲覧（一覧・詳細・添付・コメント数） | 職責（制作者・校了者・主管）または有効な ACL `view` 以上。無ければ**存在も返さない**（`forbidden`） |
-| 版提出・確定                         | 制作者 or ACL `edit`                                                                                |
-| 新規指摘                             | 制作者・校了者・主管 or ACL `review` 以上、かつ版が受付中・期限前・最新受付版、作品が校了前         |
-| 採否判断                             | 制作者 or ACL `edit`（校正者は不可）                                                                |
-| 校了・再開                           | 校了者（`approverIds`。無い行は `approverId`）のみ。管理者は不可                                    |
-| ACL 変更                             | `isSystemAdmin` のみ。`group` 主体は拒否（後続）                                                    |
+| 操作                                                     | 判定                                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 閲覧（一覧・詳細・添付・コメント数）                     | 職責（制作者・校了者・主管）または有効な ACL `view` 以上。無ければ**存在も返さない**（`forbidden`）     |
+| 版提出・確定                                             | 制作者 or ACL `edit`                                                                                    |
+| 新規指摘（コメント）                                     | 制作物を見られる人なら誰でも（利用者決定 2026-10-19）、かつ版が受付中・期限前・最新受付版、作品が校了前 |
+| 校正への参加（自動校正・AI・ページ対応・専門確認の完了） | 制作者・校了者・主管 or ACL `review` 以上（`review.participate`）                                       |
+| 採否判断                                                 | 制作者 or ACL `edit`（校正者は不可）                                                                    |
+| 校了・再開                                               | 校了者（`approverIds`。無い行は `approverId`）のみ。管理者は不可                                        |
+| ACL 変更                                                 | `isSystemAdmin` のみ。`group` 主体は拒否（後続）                                                        |
 
 将来の Nogiku Access 連携は `Principal.groupIds` に値を入れるだけで `effectivePermission` が `group` 付与を評価する。
 

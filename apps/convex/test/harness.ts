@@ -63,7 +63,7 @@ export async function createCast(t: Harness) {
 export async function uploadVerified(
   user: TestUser,
   itemId: string,
-  meta: { size: number; sha256: string; pageCount?: number },
+  meta: { size: number; sha256: string; pageCount?: number; pdfCompatible?: boolean },
 ) {
   const { attemptId } = await user.as.mutation(internal.submissions.beginUpload, { itemId });
   return user.as.mutation(internal.submissions.completeUpload, { attemptId, ...meta });

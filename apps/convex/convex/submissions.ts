@@ -104,6 +104,8 @@ export const completeUpload = internalMutation({
     size: v.number(),
     sha256: v.string(),
     pageCount: v.optional(v.number()),
+    /** Hono が .ai の先頭を見て PDF の見出しがあったか（.ai のときだけ） */
+    pdfCompatible: v.optional(v.boolean()),
     /** Figma から取り込んだとき（Hono の /figma/import）に Figma の応答から埋める値 */
     figma: v.optional(vFigmaImportMeta),
   },

@@ -25,12 +25,12 @@ export function compareTargetLabel(
 }
 
 /**
- * 手動のページ対応を直せる人（校正に関わる人 = 版を提出できる人かコメントできる人）。
+ * 手動のページ対応を直せる人（校正に関わる人 = 版を提出できる人か校正に加われる人（review.participate））。
  * 別の制作物との比較では、表示中（右）の制作物でこの条件を満たせばよい。相手（左）の制作物は見られれば足りる。
  * 手動の対応は表示にだけ使い、どちらの制作物の版も変えないため。
  */
 export function canEditAlignment(ctx: AuthorizationContext): boolean {
-  return isAllowed("revision.submit", ctx) || isAllowed("comment.post", ctx);
+  return isAllowed("revision.submit", ctx) || isAllowed("review.participate", ctx);
 }
 
 type ArtifactLike = Pick<Artifact, "type" | "role" | "fileName">;

@@ -130,7 +130,7 @@ const go = async (path) => {
   await settle();
 };
 
-// サインイン画面の「ログイン済みならダッシュボードへ」の効果と競合しないよう、/signin に戻ってからサインインし /queue 到達を待つ
+// サインイン画面の「ログイン済みなら入口（制作・校正）へ」の効果と競合しないよう、/signin に戻ってからサインインし /queue 到達を待つ
 const signInAs = async (sub) => {
   await page.evaluate(() => globalThis.__mf100demo.signOut());
   await go("/signin");
@@ -138,13 +138,16 @@ const signInAs = async (sub) => {
     await globalThis.__mf100demo.ensureSeeded();
     await globalThis.__mf100demo.signIn(s);
   }, sub);
-  await page.waitForURL((u) => new URL(u).pathname === "/", { timeout: 10_000 });
+  // サインイン後は `/` が最後に使った入口（制作・校正）へ振り分ける（初めてなら校正のやり残しで決まる）
+  await page.waitForURL((u) => ["/", "/make", "/check"].includes(new URL(u).pathname), {
+    timeout: 10_000,
+  });
   await settle();
 };
 const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 /** 制作物一覧の行（「局 › 担当」の入れ子のリストの項目） */
-const WORKS_ENTRY = ".works .mf-table tbody tr";
+const WORKS_ENTRY = ".works .works-table tbody tr";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
   const input = scope.locator(".picker__search input").first();
@@ -299,13 +302,13 @@ async function main() {
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
   // 見出しの並べ替え: 既定は校正の締切の昇順。納期を押すと納期の昇順、もう一度で降順（aria-sort と URL の dir）
-  const sortedTh = () => page.locator(".works .mf-table__th[aria-sort]");
+  const sortedTh = () => page.locator(".works .works-table .mf-table__th[aria-sort]");
   expectTrue(
     (await sortedTh().count()) === 1 &&
       (await sortedTh().getAttribute("aria-sort")) === "ascending",
     "制作物一覧の既定の並べ替えが見出しに出ていない",
   );
-  await page.locator(".works .mf-table__th .mf-table__sort").nth(3).click();
+  await page.locator(".works .works-table .mf-table__th .mf-table__sort").nth(3).click();
   await page.waitForURL(/sort=deadline/);
   await settle();
   expectTrue(
@@ -313,7 +316,7 @@ async function main() {
       (await sortedTh().getAttribute("aria-sort")) === "ascending",
     "納期の見出しを押しても、納期の昇順にならない",
   );
-  await page.locator(".works .mf-table__th[aria-sort] .mf-table__sort").click();
+  await page.locator(".works .works-table .mf-table__th[aria-sort] .mf-table__sort").click();
   await page.waitForURL(/dir=desc/);
   await settle();
   expectTrue(
@@ -329,8 +332,12 @@ async function main() {
   await shot("22-account-menu");
   await page.keyboard.press("Escape");
   await settle();
-  // 31b レールの FAB「版を提出」→ 版を提出する制作物を選ぶ（自分が制作者の進行中の制作物を納期順。§36 L-15）
-  await page.locator('m3e-nav-rail m3e-fab[aria-label="版を提出"]').click();
+  // 31b レールの FAB「作る」→ メニュー（版を提出・新しく書く）→ 版を提出する制作物を選ぶ（自分が制作者の進行中の制作物を納期順。§36 L-15）
+  await page.locator('m3e-nav-rail m3e-fab[aria-label="作る"]').click();
+  await page.waitForSelector("#make-menu m3e-menu-item:visible");
+  await settle();
+  await shot("31c-make-fab-menu");
+  await page.locator("#make-menu m3e-menu-item", { hasText: "版を提出" }).click();
   await page.waitForSelector("m3e-dialog.submit-picker[open] m3e-list-action");
   await settle();
   await shot("31b-submit-picker");
@@ -443,10 +450,38 @@ async function main() {
     .click();
   await settle();
 
-  // 07 ダッシュボード（校正者）: 「校正する」に割り当てが出る
+  // 07 校正（校正者）: 未着手に割り当てが出る。切り替え（未着手・確認中・完了）と行の操作の印
   await signInAs("mock-nogiku-reviewer");
-  await page.waitForSelector("m3e-list-action");
-  await shot("07-dashboard-reviewer");
+  await go(`${BASE}/check`);
+  await page.waitForSelector(".hub[data-hub='check'] m3e-list-action");
+  expectTrue(
+    (await page.locator(".hub .hub__tabs m3e-button").count()) === 3,
+    "校正の切り替えが 3 つでない",
+  );
+  expectTrue(
+    (await page.locator(".hub .hub-row .hub-chip").count()) >= 1,
+    "校正の行に次の操作の印がない",
+  );
+  expectTrue(
+    await page.evaluate(
+      () => document.querySelector('m3e-nav-item[data-to="/check"]')?.selected === true,
+    ),
+    "校正を開いているのにナビの「校正」が選択されていない",
+  );
+  await shot("07-check-reviewer");
+  // 20c 校正（スマホ）: 同じ校正者で。ティールの選択・切り替え・行の操作の印。ページは横にはみ出さない
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.waitForSelector("m3e-nav-bar");
+  await settle();
+  expectTrue(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+    "compact の校正がページごと横にはみ出している",
+  );
+  await shot("20c-mobile-check");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settle();
   // （36 RTL は外した。日本語だけのアプリなので RTL には対応しない。利用者決定 2026-10-15・UI_M3E §35 L-16）
   // 29 large（1200 以上）: メニューで標準の展開レール（220）。内容を押す。状態は保存され、既定は折りたたみ
   await railToggle.click();
@@ -457,7 +492,7 @@ async function main() {
   await page.waitForFunction(() => document.querySelector("m3e-nav-rail")?.mode === "compact");
   await settle();
 
-  // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る（ダッシュボードの「校正する」の行から。同じ制作物は「次の締切」にも出る）
+  // 08 エディタ: PDF 上でドラッグするとその場に投稿欄が出る（校正の「未着手」の行から）
   await page.locator("m3e-list-action", { hasText: "MF100 公式パンフレット" }).first().click();
   await page.waitForURL(/\/works\//);
   await pdfReady();
@@ -580,32 +615,46 @@ async function main() {
     expectTrue((await count()) === n0, "削除したコメントが一覧から消えない");
   }
 
-  // 27 ダッシュボード（制作者）: 「提出する」（各行に「版を提出」）・「返事をする」に未対応が出る。広い画面は 2 列（左がやること）
+  // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
   await signInAs("mock-nogiku-creator");
-  await page.waitForSelector("m3e-list-action");
-  await shot("27-dashboard-creator");
-  // 27b ホームの数字と表（§74）: 数字のカード 4 枚・表に行・状態の積み上げ棒と凡例 5 段階。数・構造だけを見る（文言は見ない）
-  expectTrue((await page.locator(".kpis .kpi").count()) === 4, "ホームの数字のカードが 4 枚でない");
+  await go(`${BASE}/make`);
+  await page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
   expectTrue(
-    (await page.locator(".ov .mf-table__table").first().locator("tbody tr").count()) >= 1,
-    "ホームの表に行がない",
+    (await page.locator(".hub .hub__tabs m3e-button").count()) === 3,
+    "制作の切り替えが 3 つでない",
+  );
+  expectTrue(
+    (await page.locator(".hub .hub-row").count()) ===
+      (await page.locator(".hub .hub-row .hub-chip").count()),
+    "制作の行に次の操作の印が 1 つずつ付いていない",
+  );
+  expectTrue(
+    await page.evaluate(
+      () => document.querySelector('m3e-nav-item[data-to="/make"]')?.selected === true,
+    ),
+    "制作を開いているのにナビの「制作」が選択されていない",
+  );
+  await shot("27-make-creator");
+  // 27c 制作の下書き・校了済みの切り替え
+  await page.locator(".hub .hub__tabs m3e-button", { hasText: "下書き" }).click();
+  await page.waitForFunction(() => location.search.includes("show=draft"));
+  await settle();
+  await shot("27c-make-drafts");
+  await page.locator(".hub .hub__tabs m3e-button", { hasText: "進行中" }).click();
+  await settle();
+  // 27b 制作物の先頭の「制作物の状況」（§74）: 数字のカード 3 枚・状態の積み上げ棒と凡例 5 段階。数・構造だけを見る（文言は見ない）
+  await go(`${BASE}/works`);
+  await page.waitForSelector(".ov .legend__item");
+  expectTrue(
+    (await page.locator(".ov .kpis .kpi").count()) === 3,
+    "状況の数字のカードが 3 枚でない",
   );
   expectTrue((await page.locator(".ov .legend__item").count()) === 5, "状態の凡例が 5 段階でない");
   expectTrue(
     (await page.locator(".ov .stagebar__seg").count()) >= 1,
     "状態の積み上げ棒に区間がない",
   );
-  await shot("27b-dashboard-overview", ".ov");
-  // 61 ホームを編集（全画面のダイアログ。節ごとのスイッチと上下のボタン。§36 W-26）
-  await page.locator('.shell__appbar m3e-icon-button[aria-label="ホームを編集"]').click();
-  await page.waitForSelector("m3e-dialog.home-edit[open] m3e-switch");
-  await settle();
-  await shot("61-home-edit");
-  await page
-    .locator('m3e-dialog.home-edit[open] [slot="actions"] m3e-button', { hasText: "キャンセル" })
-    .click();
-  await page.waitForSelector("m3e-dialog.home-edit[open]", { state: "detached" });
-  await settle();
+  await shot("27b-works-overview", ".ov");
 
   // 09 採否判断（制作者）: ⋮ → 不採用（理由）
   await go(revisionUrl);
@@ -984,30 +1033,45 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
 
-  // 20 compact（<600）: ダッシュボード（1 列のリスト。下部ナビ: ダッシュボード・制作物・エディタ・表記ルール）。
-  // 制作者で撮り、右下（下部ナビの上 16）の FAB「版を提出」も写す / 32 アプリバーのベル（アカウントの隣）→ ボトムシート
+  // 20 compact（<600）: 制作（1 列のリスト。下部ナビ: 制作・校正・制作物・FB の 4 つ）。
+  // 制作者で撮り、右下（下部ナビの上 16）の FAB「作る」も写す / 32 アプリバーのベル（アカウントの隣）→ ボトムシート
   await page.setViewportSize({ width: 412, height: 915 });
   await signInAs("mock-nogiku-creator");
-  await go(`${BASE}/`);
+  await go(`${BASE}/make`);
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForSelector(".submit-fab m3e-fab");
+  expectTrue(
+    (await page.locator("m3e-nav-bar m3e-nav-item").count()) === 4,
+    "下部ナビが 4 項目でない",
+  );
   await settle();
-  await shot("20-mobile-dashboard");
-  // ホームの表はページを横に動かさない（表の中だけが横に動く）
+  await shot("20-mobile-make");
   expectTrue(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     ),
-    "compact のホームがページごと横にはみ出している",
+    "compact の制作がページごと横にはみ出している",
   );
-  await shot("20b-mobile-dashboard-overview", ".ov");
+  // FAB「作る」→ ボトムシート（版を提出・新しく書く）
+  await page.locator(".submit-fab m3e-fab").click();
+  await page.waitForSelector("m3e-bottom-sheet[open] m3e-list-action");
+  await settle();
+  await shot("20d-mobile-make-fab");
+  await page.keyboard.press("Escape");
+  await settle();
+  await signInAs("mock-nogiku-creator");
+  await go(`${BASE}/works`);
+  await page.waitForSelector(".ov");
+  await page.evaluate(() => document.querySelector(".ov")?.setAttribute("open", ""));
+  await settle();
+  await shot("20b-mobile-works-overview", ".ov");
   await page.locator(".shell__appbar .bell m3e-icon-button").click();
   await page.waitForSelector("m3e-bottom-sheet.notif-sheet .notif");
   await settle();
   await shot("32-mobile-notifications");
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.notif-sheet").hide());
   await settle();
-  // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う。右下に FAB「版を提出」）
+  // 33 compact の制作物一覧（リストは端から端まで、題名の左端 16 と揃う。FAB は制作だけ）
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
   expectTrue(
@@ -1095,23 +1159,24 @@ async function main() {
     timeout: 15_000,
   });
   await shot("39-write-editor");
-  // 39a サイドレールの「エディタ」: 書ける担当の制作物を選ぶ（最近書いた下書きが上）→ 選ぶとエディタへ
-  await page.locator('m3e-nav-item[data-to="/write"]').first().click();
+  // 39a レールの FAB「作る」→「新しく書く」: 書ける担当の制作物を選ぶ（最近書いた下書きが上）→ 選ぶとエディタへ
+  await page.locator('m3e-nav-rail m3e-fab[aria-label="作る"]').click();
+  await page.locator("#make-menu m3e-menu-item", { hasText: "新しく書く" }).click();
   await page.waitForURL(/\/write$/);
   await page.waitForSelector(".write-picker m3e-list-action");
   const firstPick = await page.locator(".write-picker m3e-list-action").first().innerText();
   expectTrue(
     firstPick.includes("公式サイト トップページ"),
-    `エディタの入口: 最近書いた下書きが上に出ない（${firstPick}）`,
+    `新しく書く: 最近書いた下書きが上に出ない（${firstPick}）`,
   );
   await shot("39a-write-picker");
   await page.locator(".write-picker m3e-list-action").first().click();
   await page.waitForSelector(".doc[contenteditable=true]");
   expectTrue(
     await page.evaluate(
-      () => document.querySelector('m3e-nav-item[data-to="/write"]')?.selected === true,
+      () => document.querySelector('m3e-nav-item[data-to="/make"]')?.selected === true,
     ),
-    "エディタを開いているのにレールの「エディタ」が選択されていない",
+    "文章エディタを開いているのにレールの「制作」が選択されていない",
   );
   // 40 段落スタイル（メニューは各スタイルの見た目で並ぶ。ショートカットも表示）
   await page.locator("#wt-style").click();
@@ -2196,6 +2261,66 @@ async function webFigmaScenes() {
   await picker.locator('[slot="actions"] m3e-button', { hasText: "キャンセル" }).click();
   await page.waitForTimeout(400);
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 72 グラフィック制作物の原本（利用者指示 2026-10-19「pdf, adobe illustrator, indesign のファイルもあげれるように」）:
+  //    .indd だけでは転送の前に断る → PDF 互換の .ai（中身は PDF）と .indd を一緒に出すと .ai が紙面に出る。
+  //    ファイル一覧に形式の呼び名と保存の操作が出て、.indd は元のファイル名で保存される
+  await signInAs("mock-nogiku-creator");
+  await openWork("EVE 企画ポスター");
+  await pdfReady();
+  await drawer("版");
+  await btn("新しい版を提出").click();
+  await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+  const fileInput = page.locator('m3e-dialog[open] input[type="file"]');
+  const accept = await fileInput.getAttribute("accept");
+  for (const want of [".ai", ".indd", ".pdf", "image/*"])
+    expectTrue(accept?.includes(want), `ファイル選択の accept に ${want} が無い（${accept}）`);
+  await page.setInputFiles('m3e-dialog[open] input[type="file"]', [
+    resolve(FIXTURES, "poster.indd"),
+  ]);
+  await page.fill("m3e-dialog[open] textarea >> nth=0", "原本の確認");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () =>
+      (document.querySelector('m3e-dialog[open] .mf-live[role="alert"]')?.textContent ?? "") !== "",
+    null,
+    { timeout: 10_000 },
+  );
+  expectTrue(
+    (await page.locator("m3e-dialog[open] .upload-item").count()) === 0,
+    ".indd だけなのに転送が始まった",
+  );
+  await page.setInputFiles('m3e-dialog[open] input[type="file"]', [resolve(FIXTURES, "poster.ai")]);
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll("m3e-dialog[open] .file-drop__files li")].some(
+        (li) => li.textContent.includes("poster.ai") && li.textContent.includes("紙面に表示"),
+      ),
+    null,
+    { timeout: 10_000 },
+  );
+  await shot("72a-submit-ai-indd");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".upload-item__state--verified").length >= 2,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/3$/, { timeout: 15_000 });
+  await pdfReady(); // PDF 互換の .ai が紙面に出る
+  await drawer("情報");
+  const filesList = page.locator('[aria-label="この版のファイル"] m3e-list-item');
+  expectTrue((await filesList.count()) === 2, "この版のファイルが 2 件並ばない");
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 10_000 }),
+    page.locator('m3e-icon-button[aria-label="poster.indd をダウンロード"]').click(),
+  ]);
+  expectTrue(
+    download.suggestedFilename() === "poster.indd",
+    ".indd が元のファイル名で保存されない",
+  );
+  await shot("72b-revision-files-ai-indd");
 }
 
 try {

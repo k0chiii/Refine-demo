@@ -50,7 +50,7 @@ export const prepare = internalQuery({
       const app = createReadContext(ctx.db);
       const { work, grants } = await loadAuthorizedWork(app, principal, workId, "work.view");
       const authz = { work, grants, principal };
-      if (!isAllowed("revision.submit", authz) && !isAllowed("comment.post", authz))
+      if (!isAllowed("revision.submit", authz) && !isAllowed("review.participate", authz))
         throw new DomainError("forbidden", { reason: "ai_not_allowed" });
       const reason = aiBlockReason(aiConfig().policy, work);
       const set = await resolveRulesForWork(app, principal, workId);

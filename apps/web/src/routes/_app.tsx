@@ -63,13 +63,15 @@ const readRailPref = () => {
 
 /**
  * 認証ガード＋共通レイアウト。M3 のウィンドウサイズクラスで骨格を切り替える（Layout › Window size classes）。
- * - compact（<600）: アプリバーは見出し・通知・アカウント。下部ナビゲーションバー（ホーム・制作物・表記ルール（・管理））。
+ * - compact（<600）: アプリバーは見出し・通知・アカウント。下部ナビゲーションバー（制作・校正・制作物・FB の 4 つ）。
+ *   表記ルールと管理（管理者）はアカウントのメニューへ。ホームは無く、制作と校正がそれぞれホーム（利用者決定 2026-10-19）。
  *   エディタ（`/works/:id`）では下部バーを隠す（詳細画面）。アプリバーはどの幅でも 1 本で、エディタが戻る・題名・操作を差し込む。
  * - medium（600–839）/ expanded（840–1199）: 折りたたみレール（96）。メニューを押すと**モーダル**の展開レールが重なる（スクリム、Esc で閉じる）。
  * - large（1200 以上）: メニューで**標準**の展開レール（220）に広がり内容を押す。状態は保存。既定は折りたたみ。
- * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「版を提出」、その下に行き先。アカウントは右上に残す。
- * FAB は普段のメンバーの主な操作「版の提出」（§36 L-15。利用者決定 2026-10-15）。compact はレールが無いので、ホームと制作物の一覧の
- * 右下（下部ナビの上 16）に同じ FAB を出す。提出できる制作物が無い人には出さない。制作物の登録は制作物の一覧のアプリバー（登録権限のある人だけ）。
+ * レールの中身は M3 の解剖図どおり: 上にメニュー、次に FAB「作る」、その下に行き先（制作・校正・制作物・FB）、レールの下に
+ * 表記ルール（・管理）。アカウントは右上に残す。
+ * FAB は普段のメンバーの主な操作「版の提出」（§36 L-15。利用者決定 2026-10-15）と「新しく書く」の 2 つを開く。compact はレールが無いので、
+ * 制作の右下（下部ナビの上 16）に同じ FAB を出す。提出できる制作物が無い人には出さない。制作物の登録は制作物のアプリバー（登録権限のある人だけ）。
  * 通知は独立した画面を持たず、アカウントの隣のベルのパネル（compact はボトムシート）から対象へ飛ぶ。
  */
 function AppShell() {
@@ -102,6 +104,8 @@ function AppShell() {
   const pushAvailable = usePushAvailable(isAuthenticated && me != null);
   const submitTargets = useSubmitTargets();
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** FAB「作る」のボトムシート（compact）。medium 以上はメニュー */
+  const [fabSheet, setFabSheet] = useState(false);
   const launcher = useSubmitLauncher();
 
   // 下部ナビの実際の高さ（セーフエリアを除く）を --mf-navbar-h に入れる。決め打ちの 80 だと、文字の大きさ（iOS の Dynamic Type）で
@@ -139,7 +143,7 @@ function AppShell() {
     const quiet = () => undefined;
     const cancelFirst = whenIdle(() => {
       warmPdfAssets();
-      for (const to of ["/", "/works", "/feedback", "/notation", "/write"] as const)
+      for (const to of ["/make", "/check", "/works", "/feedback", "/notation", "/write"] as const)
         void router.preloadRoute({ to }).catch(quiet);
     }, 4000);
     let cancelSecond: (() => void) | null = null;
@@ -179,32 +183,34 @@ function AppShell() {
     return isLoading || !isAuthenticated ? null : <EditorPrefetch path={path} />;
 
   const items = [
-    { to: "/", icon: "space_dashboard", label: "ホーム" },
-    { to: "/works", icon: "folder", label: "制作物一覧" },
+    // 入口は仕事で分ける（利用者決定 2026-10-19）: 制作 = 自分が作るもの、校正 = 自分が確かめるもの。どちらもホーム
+    { to: "/make", icon: "brush", label: "制作" },
+    { to: "/check", icon: "fact_check", label: "校正" },
+    { to: "/works", icon: "folder", label: "制作物" },
     // 制作の議論（表現の FB）。Slack の代わりに MF100 の中でスレッド型で話す（利用者決定 2026-10-15）
     { to: "/feedback", icon: "forum", label: "フィードバック", short: "FB" },
-    { to: "/write", icon: "edit_document", label: "エディタ" },
+  ];
+  // たまに使う行き先。下部ナビには置かず、アカウントのメニューへ（広い画面ではレールの下にも）
+  const lowerItems = [
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
     ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
   ];
-  // 文章・投稿のエディタ（/works/:id/write・/post）を開いているあいだは「エディタ」を選択中にする
+  // 文章・投稿のエディタ（/works/:id/write・/post）と書く制作物の選択（/write）を開いているあいだは、入口の「制作」を選択中にする
   const writing = /^\/works\/[^/]+\/(write|post)$/.test(path);
   const selected = (to: string) =>
-    to === "/"
-      ? path === "/"
-      : to === "/write"
-        ? path === "/write" || writing
-        : to === "/works"
-          ? !writing && (path === to || path.startsWith(`${to}/`))
-          : path === to || path.startsWith(`${to}/`);
-  // 先頭の項目は「ホーム」（画面の見出し・「ホームを編集」と揃える。以前の「ダッシュボード」は下部ナビで 2 行に折れていた）。
-  // 下部ナビ（1 項目 75px 前後）では「フィードバック」も 2 行に折れるので、短い名前「FB」を出す（読み上げ・ツールチップは正式名）
+    to === "/make"
+      ? path === "/make" || path === "/write" || writing
+      : to === "/works"
+        ? !writing && (path === to || path.startsWith(`${to}/`))
+        : path === to || path.startsWith(`${to}/`);
+  // 下部ナビ（1 項目 75px 前後）では「フィードバック」が 2 行に折れるので、短い名前「FB」を出す（読み上げ・ツールチップは正式名）
   // 項目は M3eNavItem だけ（ボタン）にし、押したらルーターで移る。外側に <a> を重ねると 1 項目に 2 回止まり、
   // 読み上げも「リンク › ボタン」と入れ子になる。M3eNavItem の href は中に <a> を作り、同じく入れ子になる（§35 A-10）
-  const navItems = (list: typeof items = items, short = false) =>
-    list.map((it) => (
+  const navItems = (list: typeof items = items, short = false, lower = false) =>
+    list.map((it, i) => (
       <M3eNavItem
         key={it.to}
+        className={lower ? `rail__lower ${i === 0 ? "rail__lower--first" : ""}` : ""}
         selected={selected(it.to)}
         data-to={it.to}
         aria-label={it.label}
@@ -241,16 +247,22 @@ function AppShell() {
     } else setModalOpen((o) => !o);
   };
   const canSubmit = (submitTargets?.length ?? 0) > 0;
-  const submitFab = (className?: string) => (
+  // 作る操作: 版を提出（提出できる制作物を選ぶ）と、新しく書く（書く制作物を選ぶ）
+  const makeActions = [
+    { icon: "upload_file", label: "版を提出", onSelect: () => setPickerOpen(true) },
+    { icon: "edit_document", label: "新しく書く", onSelect: () => void navigate({ to: "/write" }) },
+  ];
+  const makeFab = (className?: string) => (
     <M3eFab
       size="small"
-      aria-label="版を提出"
-      title="版を提出"
+      aria-label="作る"
+      title="作る"
       className={className ?? ""}
-      onClick={() => setPickerOpen(true)}
+      {...(cls === "compact" ? { onClick: () => setFabSheet(true) } : {})}
     >
-      <M3eIcon name="upload_file" />
-      <span slot="label">版を提出</span>
+      <M3eIcon name="add" />
+      <span slot="label">作る</span>
+      {cls === "compact" ? null : <M3eMenuTrigger htmlFor="make-menu" />}
     </M3eFab>
   );
   const modal = cls !== "large" && cls !== "compact" && modalOpen;
@@ -258,8 +270,8 @@ function AppShell() {
   // compact の FB スレッドは詳細画面（ベル・アバターを出さず戻るボタン）。下部ナビは残し、返信欄はその上に置く（利用者指示 2026-10-15）
   const chatRoute = cls === "compact" && /^\/feedback\/[^/]+$/.test(path);
   const immersive = (cls === "compact" && editorRoute) || chatRoute;
-  // compact はレールが無いので、ホームと制作物の一覧の右下に FAB（下部ナビの上 16。M3 FAB › Placement）
-  const mobileFab = cls === "compact" && canSubmit && (path === "/" || path === "/works");
+  // compact はレールが無いので、制作の右下に FAB（下部ナビの上 16。M3 FAB › Placement）
+  const mobileFab = cls === "compact" && canSubmit && path === "/make";
   // compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints › Overview の表。§35 L-09）
   const account = (size: number, className?: string) => (
     <M3eIconButton
@@ -295,15 +307,12 @@ function AppShell() {
           },
         ]
       : []),
-    ...(cls === "compact" && me.isSystemAdmin
-      ? [
-          {
-            icon: "admin_panel_settings",
-            label: "管理",
-            onSelect: () => void navigate({ to: "/admin" }),
-          },
-        ]
-      : []),
+    // 表記ルールと管理は下部ナビに置かない（利用者決定 2026-10-19）ので、アカウントのメニューから開く
+    ...lowerItems.map((it) => ({
+      icon: it.icon,
+      label: it.label,
+      onSelect: () => void navigate({ to: it.to }),
+    })),
     ...(install
       ? [
           {
@@ -352,8 +361,9 @@ function AppShell() {
               <M3eIcon name={railExpanded ? "menu_open" : "menu"} />
             </M3eIconButton>
           ) : null}
-          {canSubmit ? submitFab() : null}
+          {canSubmit ? makeFab() : null}
           {navItems()}
+          {navItems(lowerItems, false, true)}
         </M3eNavRail>
       </div>
       {/* モーダルの展開レールを開いている間は、後ろを Tab で選べないようにする（§35 A-06） */}
@@ -421,7 +431,25 @@ function AppShell() {
         <main className="shell__content">
           <Outlet />
         </main>
-        {mobileFab ? <div className="submit-fab">{submitFab()}</div> : null}
+        {mobileFab ? <div className="submit-fab">{makeFab()}</div> : null}
+        {canSubmit && cls !== "compact" ? (
+          <M3eMenu id="make-menu" positionX="after">
+            {makeActions.map((a) => (
+              <M3eMenuItem key={a.label} onClick={a.onSelect}>
+                <M3eIcon slot="icon" name={a.icon} />
+                {a.label}
+              </M3eMenuItem>
+            ))}
+          </M3eMenu>
+        ) : null}
+        {cls === "compact" && canSubmit ? (
+          <ActionSheet
+            open={fabSheet}
+            onClose={() => setFabSheet(false)}
+            title="作る"
+            items={makeActions}
+          />
+        ) : null}
         {canSubmit || pickerOpen ? (
           <SubmitPicker
             open={pickerOpen}
@@ -445,11 +473,8 @@ function AppShell() {
       {/* FB のスレッドでも下部ナビは残す（利用者指示 2026-10-15「ナビゲーションバーを消して欲しいわけじゃない」） */}
       {cls === "compact" && (!immersive || chatRoute) ? (
         <M3eNavBar className="shell__bar" aria-label="主要ナビゲーション" onChange={resync}>
-          {/* 下部ナビは 5 項目まで（M3 Navigation bar）。管理はアカウントのシートへ */}
-          {navItems(
-            items.filter((it) => it.to !== "/admin"),
-            true,
-          )}
+          {/* 下部ナビは 5 項目まで（M3 Navigation bar）。制作・校正・制作物・FB の 4 つ。表記ルールと管理はアカウントのシートへ */}
+          {navItems(items, true)}
         </M3eNavBar>
       ) : null}
     </div>

@@ -131,37 +131,53 @@ describe("閲覧範囲（D3 の細則。利用者決定 2026-10-17「閲覧は�
     ).toBe(false);
   });
 
-  it("関係者・所属は閲覧だけ。コメント・編集・割当・校了・ACL の規則は変わらない", () => {
+  it("関係者・所属は閲覧とコメントまで。校正への参加・編集・割当・校了・ACL の規則は変わらない", () => {
     const work = makeWork({ stakeholderIds: ["stake"], productionTeamIds: ["design"] });
     for (const who of [principal("stake"), principal("member", false, ["design"])]) {
       const ctx = { work, grants: [], principal: who };
-      expect(isAllowed("comment.post", ctx)).toBe(false);
+      expect(isAllowed("comment.post", ctx)).toBe(true);
+      expect(isAllowed("review.participate", ctx)).toBe(false);
       expect(isAllowed("work.edit", ctx)).toBe(false);
       expect(isAllowed("revision.submit", ctx)).toBe(false);
       expect(isAllowed("review.assign", ctx)).toBe(false);
       expect(isAllowed("work.finalize", ctx)).toBe(false);
       expect(isAllowed("acl.manage", ctx)).toBe(false);
     }
-    // 委員なら誰でも見られる通常の制作物でも、指摘の投稿には review 以上の ACL か職責が要る
-    expect(isAllowed("comment.post", { work, grants: [], principal: principal("stranger") })).toBe(
-      false,
-    );
+    // 委員なら誰でも見られる通常の制作物は、コメントも誰でも書ける。校正への参加には review 以上の ACL か職責が要る
+    const stranger = { work, grants: [], principal: principal("stranger") };
+    expect(isAllowed("comment.post", stranger)).toBe(true);
+    expect(isAllowed("review.participate", stranger)).toBe(false);
   });
 });
 
 describe("isAllowed（§7.2 操作権限）", () => {
   const work = makeWork({ confidentiality: "restricted" });
-  it("view 権限では指摘を投稿できない、review なら可", () => {
+  it("コメントは見られる人なら誰でも、見られない人はできない（非公開）", () => {
+    for (const grants of [[grant({})], [grant({ permission: "review" })]]) {
+      expect(isAllowed("comment.post", { work, grants, principal: principal("viewer") })).toBe(
+        true,
+      );
+    }
+    expect(isAllowed("comment.post", { work, grants: [], principal: principal("stranger") })).toBe(
+      false,
+    );
     expect(
-      isAllowed("comment.post", { work, grants: [grant({})], principal: principal("viewer") }),
+      isAllowed("review.participate", { work, grants: [], principal: principal("stranger") }),
     ).toBe(false);
+  });
+  it("校正への参加（review.participate）は review 以上の ACL か職責のみ", () => {
+    const ctxOf = (who: string, grants = [grant({})]) => ({
+      work,
+      grants,
+      principal: principal(who),
+    });
+    expect(isAllowed("review.participate", ctxOf("viewer"))).toBe(false);
     expect(
-      isAllowed("comment.post", {
-        work,
-        grants: [grant({ permission: "review" })],
-        principal: principal("viewer"),
-      }),
+      isAllowed("review.participate", ctxOf("viewer", [grant({ permission: "review" })])),
     ).toBe(true);
+    for (const who of ["creator", "approver", "manager"]) {
+      expect(isAllowed("review.participate", ctxOf(who, []))).toBe(true);
+    }
   });
   it("校正者は採否を決められない、制作者は決められる", () => {
     expect(

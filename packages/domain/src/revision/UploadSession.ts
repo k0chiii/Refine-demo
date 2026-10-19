@@ -4,6 +4,7 @@ import type { Instant } from "../shared/time.ts";
 import type { Artifact, ArtifactOrigin, ArtifactRole, ArtifactType } from "./Artifact.ts";
 import type { Revision, RevisionKind } from "./Revision.ts";
 import type { RevisionDeclarations, SubmissionCheckId } from "../work/metadata.ts";
+import { resolveStoredType } from "./graphicFiles.ts";
 
 /**
  * 版提出の「準備」と「確定」を分離する（F-04 / §8.1 / A-02 / A-16）。
@@ -90,6 +91,20 @@ export function figmaFrameFileName(nodeName: string, nodeId: string): string {
   return `${base}.png`;
 }
 
+/**
+ * 1 ファイルの大きさの上限。実体は Worker の 1 リクエストで受けるため、Cloudflare Workers の本文の上限（100 MB）に収める。
+ * 超える本文は Worker に届く前に platform が断り、ブラウザには原因の分からない通信エラーになるので、
+ * 準備のとき（申告サイズ）・画面で選んだとき・Worker が本文を受ける前に、同じ値で断って理由を返す。
+ * Illustrator・InDesign の原本は数十 MB が普通なので収まる。リンクを貼って運用する大きな原本は上限を超える分だけ別の手段にする
+ */
+export const MAX_UPLOAD_BYTES = 100 * 1000 * 1000;
+
+/** 申告されたサイズが上限内か。超えるときは upload_file_too_large（どのファイルか・上限を details に） */
+export function assertUploadSizeWithinLimit(fileName: string, size: number | undefined): void {
+  if (size !== undefined && size > MAX_UPLOAD_BYTES)
+    throw new DomainError("upload_file_too_large", { fileName, size, limit: MAX_UPLOAD_BYTES });
+}
+
 export function assertSessionOpen(session: UploadSession, now: Instant): void {
   if (session.state !== "open")
     throw new DomainError("upload_session_not_open", {
@@ -141,6 +156,11 @@ export function markItemVerified(
     sha256: string;
     objectKey: string;
     pageCount?: number;
+    /**
+     * Worker が実体の先頭を見た結果（.ai だけ。PDF の見出しがあれば true）。.ai の種類はこれで決まる
+     * （true なら PDF として紙面に出せる。それ以外は other でダウンロードのみ）
+     */
+    pdfCompatible?: boolean;
     /** Figma から取り込んだ項目（origin.kind が figma）にだけ反映する。ノード名がファイル名になる */
     figma?: FigmaImportMeta;
   },
@@ -163,6 +183,7 @@ export function markItemVerified(
     size: meta.size,
     sha256: meta.sha256,
     objectKey: meta.objectKey,
+    type: resolveStoredType(item, meta.pdfCompatible),
   };
   delete next.failureMessage;
   if (meta.pageCount !== undefined) next.pageCount = meta.pageCount;

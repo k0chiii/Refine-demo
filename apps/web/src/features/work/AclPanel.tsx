@@ -27,8 +27,9 @@ import { UserPicker } from "@/ui/UserPicker";
  * U-08 作品ごとの閲覧許可（Nogiku ユーザー単位）。エディタの「情報」に置く。追加・外すと履歴（F-14 / A-19）。
  * 許可は M3 のリスト（アバター・名前・権限）。権限の変更と外すのは行の末尾の ⋮ のメニュー（M3 Menus: 1 つを選ぶ項目と操作）。
  * 変更履歴は読むだけのリスト（M3 に表は無い。§49）。
+ * readOnly は管理者以外（主管・校了者。サーバーの audit.view）に有効な許可の一覧だけを見せる。付与・変更・外すは出さない。
  */
-export function AclPanel({ workId }: { workId: string }) {
+export function AclPanel({ workId, readOnly = false }: { workId: string; readOnly?: boolean }) {
   const grants = useQuery(api.acl.list, { workId });
   const grant = useMutation(api.acl.grant);
   const revoke = useMutation(api.acl.revoke);
@@ -60,9 +61,11 @@ export function AclPanel({ workId }: { workId: string }) {
   const active = grants.filter((g) => g.revokedAt === undefined);
   return (
     <div className="acl">
-      <p className="muted small">
-        通常の制作物は委員なら誰でも見られます。ここで付けるのは、非公開・取扱注意の制作物を見られる人（関係者と担当の所属する人には自動で付きます）と、校正・編集・管理の権限です
-      </p>
+      {readOnly ? null : (
+        <p className="muted small">
+          通常の制作物は委員なら誰でも見られます。ここで付けるのは、非公開・取扱注意の制作物を見られる人（関係者と担当の所属する人には自動で付きます）と、校正・編集・管理の権限です
+        </p>
+      )}
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません</p>
       ) : (
@@ -85,62 +88,68 @@ export function AclPanel({ workId }: { workId: string }) {
                   <span slot="supporting-text">
                     {permissionLabel[g.permission] ?? g.permission}
                   </span>
-                  <M3eIconButton slot="trailing" aria-label={`${name} の権限を変える・外す`}>
-                    <M3eIcon name="more_vert" />
-                    <M3eMenuTrigger htmlFor={menuId} />
-                  </M3eIconButton>
-                  <M3eMenu id={menuId} positionX="before">
-                    <M3eMenuItemGroup aria-label="権限">
-                      {(["view", "review", "edit", "manage"] as const).map((v) => (
-                        <M3eMenuItemRadio
-                          key={v}
-                          checked={g.permission === v}
-                          onClick={() => void change.run(g.principalId, v)}
-                        >
-                          {permissionLabel[v] ?? v}
-                        </M3eMenuItemRadio>
-                      ))}
-                    </M3eMenuItemGroup>
-                    <M3eDivider />
-                    <M3eMenuItem onClick={() => void doRevoke.run(g.principalId)}>
-                      <M3eIcon slot="icon" name="person_remove" />
-                      外す
-                    </M3eMenuItem>
-                  </M3eMenu>
+                  {readOnly ? null : (
+                    <M3eIconButton slot="trailing" aria-label={`${name} の権限を変える・外す`}>
+                      <M3eIcon name="more_vert" />
+                      <M3eMenuTrigger htmlFor={menuId} />
+                    </M3eIconButton>
+                  )}
+                  {readOnly ? null : (
+                    <M3eMenu id={menuId} positionX="before">
+                      <M3eMenuItemGroup aria-label="権限">
+                        {(["view", "review", "edit", "manage"] as const).map((v) => (
+                          <M3eMenuItemRadio
+                            key={v}
+                            checked={g.permission === v}
+                            onClick={() => void change.run(g.principalId, v)}
+                          >
+                            {permissionLabel[v] ?? v}
+                          </M3eMenuItemRadio>
+                        ))}
+                      </M3eMenuItemGroup>
+                      <M3eDivider />
+                      <M3eMenuItem onClick={() => void doRevoke.run(g.principalId)}>
+                        <M3eIcon slot="icon" name="person_remove" />
+                        外す
+                      </M3eMenuItem>
+                    </M3eMenu>
+                  )}
                 </M3eListItem>
               );
             })}
         </M3eList>
       )}
-      <div className="acl__add">
-        <UserPicker
-          label="ユーザーを追加"
-          single
-          value={principal}
-          onChange={setPrincipal}
-          exclude={active.map((g) => g.principalId)}
-        />
-        <Field label="権限">
-          <Select value={permission} onChange={(e) => setPermission(e.target.value as "view")}>
-            {Object.entries(permissionLabel).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="row">
-          <span className="spacer" />
-          <M3eButton
-            variant="tonal"
-            disabled={principal.length === 0 || doGrant.pending}
-            onClick={() => void doGrant.run()}
-          >
-            追加
-          </M3eButton>
+      {readOnly ? null : (
+        <div className="acl__add">
+          <UserPicker
+            label="ユーザーを追加"
+            single
+            value={principal}
+            onChange={setPrincipal}
+            exclude={active.map((g) => g.principalId)}
+          />
+          <Field label="権限">
+            <Select value={permission} onChange={(e) => setPermission(e.target.value as "view")}>
+              {Object.entries(permissionLabel).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="row">
+            <span className="spacer" />
+            <M3eButton
+              variant="tonal"
+              disabled={principal.length === 0 || doGrant.pending}
+              onClick={() => void doGrant.run()}
+            >
+              追加
+            </M3eButton>
+          </div>
         </div>
-      </div>
-      {grants.length > active.length || history ? (
+      )}
+      {!readOnly && (grants.length > active.length || history) ? (
         <M3eExpansionPanel
           className="expansion"
           open={history}

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import {
   decideThread,
+  editThread,
   postComment,
   replyToThread,
   searchMentionCandidates,
@@ -118,7 +119,7 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
     );
   });
 
-  it("view 権限のみのユーザーと無関係者は投稿できない", async () => {
+  it("見られる人は ACL が review 未満でも新しいコメントを投稿できる（利用者決定 2026-10-19）。見られない人はできない", async () => {
     const { ctx, work, revision } = await setup();
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -132,22 +133,21 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
       groupIds: [],
       orgPermissions: ["*"],
     };
+    const input = {
+      revisionId: revision.id,
+      body: "x",
+      kind: "question",
+      severity: "info",
+    } as const;
+    const thread = await postComment(ctx, viewer, input);
+    expect(thread.authorId).toBe(viewer.userId);
+    // 本文の訂正は投稿者だけ
     await expect(
-      postComment(ctx, viewer, {
-        revisionId: revision.id,
-        body: "x",
-        kind: "question",
-        severity: "info",
-      }),
-    ).rejects.toThrow(code("forbidden"));
-    await expect(
-      postComment(ctx, principals.stranger, {
-        revisionId: revision.id,
-        body: "x",
-        kind: "question",
-        severity: "info",
-      }),
-    ).rejects.toThrow(code("forbidden"));
+      editThread(ctx, principals.reviewer, { threadId: thread.id, body: "y" }),
+    ).rejects.toThrow(code("comment_edit_not_author"));
+    await expect(editThread(ctx, viewer, { threadId: thread.id, body: "y" })).resolves.toBeTruthy();
+    // 非公開の制作物を見られない人は投稿できない
+    await expect(postComment(ctx, principals.stranger, input)).rejects.toThrow(code("forbidden"));
   });
 
   it("アンカーは対象版のファイルを指していなければならない", async () => {

@@ -91,6 +91,11 @@ export interface WorkOverviewRow {
   checksPending: number;
   /** 主管担当の局の名前（未設定は ""） */
   bureau: string;
+  /** 自分が制作者の制作物か（制作ページの「進行中」に出す） */
+  isCreator: boolean;
+  /** 校了の進み（宣言の済んだ人数 / 校了とみなす人数）。宣言の数は受付中で校了者が 2 人以上のときだけ数える（それ以外は 0） */
+  approvalDeclared: number;
+  approvalQuorum: number;
   /** 次の締切（{@link nextDeadlineOf}） */
   nextDeadlineAt: Instant | null;
   /** 注意の度合い（{@link workUrgency}） */

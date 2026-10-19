@@ -330,38 +330,21 @@ export interface PeopleDirectory {
 }
 
 /**
- * 自分だけのダッシュボード（W-26）の保存先。アカウントごとの節の構成・ピン留め・最近開いた制作物。
+ * ピン留め（制作物のページの「ピン留め」）の保存先。アカウントごと。
  * 個人の表示設定なので監査ログには残さない（業務データではない）。
+ * 旧ホームの節の構成（dashboardLayouts）・最近開いた制作物（recentWorks）は、入口を制作・校正に分けたときに使わなくなった
+ * （利用者決定 2026-10-19）。保存済みの行があるため、テーブルは schema に残している。
  */
-export interface StoredDashboardLayout {
-  userId: UserId;
-  /** 形は保存時に正規化するが、読むときも信用しない（normalizeDashboardLayout を通す） */
-  widgets: Array<{ id: string; visible: boolean; limit: number | null }>;
-  updatedAt: Instant;
-}
 export interface WorkPin {
   userId: UserId;
   workId: WorkId;
   pinnedAt: Instant;
 }
-export interface RecentWork {
-  userId: UserId;
-  workId: WorkId;
-  openedAt: Instant;
-}
 export interface HomeRepository {
-  findLayout(userId: UserId): Promise<StoredDashboardLayout | null>;
-  saveLayout(layout: StoredDashboardLayout): Promise<void>;
-  removeLayout(userId: UserId): Promise<void>;
   /** 新しい順 */
   listPins(userId: UserId): Promise<WorkPin[]>;
   addPin(pin: WorkPin): Promise<void>;
   removePin(userId: UserId, workId: WorkId): Promise<void>;
-  /** 新しい順 */
-  listRecent(userId: UserId): Promise<RecentWork[]>;
-  /** 同じ制作物は 1 行（開いた時刻を更新） */
-  putRecent(row: RecentWork): Promise<void>;
-  removeRecent(userId: UserId, workId: WorkId): Promise<void>;
 }
 
 /**

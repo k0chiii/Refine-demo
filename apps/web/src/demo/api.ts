@@ -7,14 +7,45 @@ import {
   type OpenOptions,
 } from "@/lib/artifactFiles";
 import { defaultFileCachePolicy } from "@/lib/fileCachePolicy";
+import { messageForCode } from "@/lib/errors";
+import {
+  UploadTooLargeError,
+  encodeForUpload,
+  sha256Hex,
+  type EncodedUpload,
+  type UploadPhase,
+} from "@/lib/uploadEncoding";
 import { demo } from "./backend";
 
 export const API_URL = "demo://";
 
-export async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+export { sha256Hex };
+
+/** 本番と同じ用意（ダウンロード専用の原本は gzip）。圧縮しても上限に収まらないときは理由つきで断る */
+async function encodeOrExplain(
+  file: File,
+  onPhase?: (phase: UploadPhase) => void,
+): Promise<EncodedUpload> {
+  try {
+    return await encodeForUpload(file, { onCompressing: () => onPhase?.("compressing") });
+  } catch (error) {
+    if (error instanceof UploadTooLargeError)
+      throw new Error(messageForCode("upload_file_too_large"));
+    throw error;
+  } finally {
+    onPhase?.(null);
+  }
 }
+/** デモの転送の記録（E2E が「圧縮して上げたか・何バイトで置いたか」を確かめる） */
+const demoUploads: Array<{
+  fileName: string;
+  encoding: string;
+  originalSize: number;
+  storedSize: number;
+}> = [];
+(globalThis as { __mf100DemoUploads?: typeof demoUploads }).__mf100DemoUploads = demoUploads;
+const gzipOf = (u: EncodedUpload) =>
+  u.encoding === "gzip" ? { body: u.body, originalSize: u.originalSize } : undefined;
 
 export interface UploadResult {
   itemId: string;
@@ -28,13 +59,25 @@ export async function uploadItem(
   itemId: string,
   file: File,
   onProgress?: (fraction: number) => void,
+  onPhase?: (phase: UploadPhase) => void,
 ): Promise<UploadResult> {
+  const upload = await encodeOrExplain(file, onPhase);
   onProgress?.(0.3);
-  const sha = await sha256Hex(await file.arrayBuffer());
   await new Promise((r) => setTimeout(r, 300)); // 転送中の表示を見せる
-  const res = await demo.uploadItem(itemId, file, sha);
+  const res = await demo.uploadItem(itemId, file, upload.sha256, undefined, gzipOf(upload));
+  demoUploads.push({
+    fileName: file.name,
+    encoding: upload.encoding,
+    originalSize: upload.originalSize,
+    storedSize: upload.body.size,
+  });
   onProgress?.(1);
-  return { itemId, status: res.status, failureMessage: res.failureMessage, size: file.size };
+  return {
+    itemId,
+    status: res.status,
+    failureMessage: res.failureMessage,
+    size: upload.originalSize,
+  };
 }
 
 /**
@@ -143,12 +186,17 @@ export async function uploadFeedbackFile(
   file: File,
   onProgress?: (fraction: number) => void,
 ): Promise<FeedbackUploadResult> {
+  const upload = await encodeOrExplain(file);
   onProgress?.(0.3);
-  const sha = await sha256Hex(await file.arrayBuffer());
   await new Promise((r) => setTimeout(r, 300)); // 転送中の表示を見せる
-  const res = await demo.uploadFeedbackFile(fileId, file, sha);
+  const res = await demo.uploadFeedbackFile(fileId, file, upload.sha256, gzipOf(upload));
   onProgress?.(1);
-  return { fileId, status: res.status, failureMessage: res.failureMessage, size: file.size };
+  return {
+    fileId,
+    status: res.status,
+    failureMessage: res.failureMessage,
+    size: upload.originalSize,
+  };
 }
 
 export async function fetchFeedbackFileBlob(_token: string, fileId: string): Promise<Blob> {

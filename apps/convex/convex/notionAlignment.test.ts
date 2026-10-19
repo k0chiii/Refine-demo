@@ -71,9 +71,9 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
         patch: { productionTeamIds: [design, web] },
       }),
     ).rejects.toThrow(code("work_invalid"));
-    // 通常の制作物は委員なら誰でも見られる（利用者決定 2026-10-17）。見るだけ
+    // 通常の制作物は委員なら誰でも見られ（利用者決定 2026-10-17）、コメントも書ける（同 2026-10-19）。編集・提出はできない
     const seen = await cast.reviewer.as.query(api.works.get, { workId });
-    expect(seen.can).toMatchObject({ edit: false, comment: false, submit: false });
+    expect(seen.can).toMatchObject({ edit: false, comment: true, submit: false });
     expect((await cast.stranger.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([
       workId,
     ]);
