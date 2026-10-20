@@ -2,28 +2,26 @@ import { useSyncExternalStore } from "react";
 
 /**
  * 紙面に印を付けたとき何を作るか（書き込みのモード）。エディタの下の浮遊ツールバーで切り替える
- * （利用者指示 2026-10-17「コメント/FB/なにもなしを切り替えたい。PDF中のリンクとか押せたらありがたいからね」）。
- * - comment: 範囲・ピンでコメント（解決する指摘）を作る
- * - feedback: 範囲・ピンで FB（解決しない相談）を作る
+ * （利用者指示 2026-10-17「コメント/FB/なにもなしを切り替えたい。PDF中のリンクとか押せたらありがたいからね」。
+ * FB はコメントへ統合したので、今は コメント / 選択 の 2 つ。docs/UI_M3E.md §95）。
+ * - comment: 範囲・ピンでコメントを作る
  * - none: 印を付けない（「選択」・カーソルの絵。利用者指示 2026-10-18「なし」は分かりにくい）。紙面を押す・なぞるはコメントに関係せず、
  *   紙面そのもの（PDF のリンク・文字の選択など）が使える
  * 「このタブのあいだ」覚える（sessionStorage。使えなければこのモジュールの変数）。投稿欄の書きかけ（composeStore）とは別で、
  * 投稿しても戻らない。制作物・版を替えても保つ。
  */
-export type MarkMode = "comment" | "feedback" | "none";
+export type MarkMode = "comment" | "none";
 
-export const markModes: readonly MarkMode[] = ["comment", "feedback", "none"];
+export const markModes: readonly MarkMode[] = ["comment", "none"];
 
 export const markModeLabel: Record<MarkMode, string> = {
   comment: "コメント",
-  feedback: "FB",
   none: "選択",
 };
 
-/** ツールバーのボタンのアイコン（いまのモードを示す。FB の引き出しの forum とは別の絵にする） */
+/** ツールバーのボタンのアイコン（いまのモードを示す） */
 export const markModeIcon: Record<MarkMode, string> = {
   comment: "add_comment",
-  feedback: "chat_add_on",
   none: "arrow_selector_tool",
 };
 
@@ -65,15 +63,7 @@ export function useMarkMode(): [MarkMode, (m: MarkMode) => void] {
   return [useSyncExternalStore(subscribe, getMarkMode, getMarkMode), setMarkMode];
 }
 
-/**
- * 権限を踏まえた、いま実際に効くモード。コメントできない版（受付終了・校了など）では「コメント」を FB に置き換える
- * （FB は解決しない話し合いなので、終わった版でも立てられる）。FB も立てられなければ none。
- */
-export function effectiveMarkMode(
-  mode: MarkMode,
-  allowed: { comment: boolean; feedback: boolean },
-): MarkMode {
-  if (mode === "none") return "none";
-  if (mode === "comment" && allowed.comment) return "comment";
-  return allowed.feedback ? "feedback" : "none";
+/** 権限を踏まえた、いま実際に効くモード。コメントできない版（受付終了・校了など）では印を付けない */
+export function effectiveMarkMode(mode: MarkMode, allowed: { comment: boolean }): MarkMode {
+  return mode === "comment" && allowed.comment ? "comment" : "none";
 }

@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { webViewportLabel } from "@/features/annotation/webBridge";
-import { buildTimeline, type TimelineItem } from "@/features/feedback/timeline";
+import { buildTimeline, type TimelineItem } from "./timeline";
 import { formatJstShort, formatJstTime } from "@/lib/format";
 import { resolutionLabel } from "@/lib/labels";
 import { scrollBehavior } from "@/lib/motion";

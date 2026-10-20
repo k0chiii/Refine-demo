@@ -14,7 +14,7 @@ describe("mentionQueryAt", () => {
 
 describe("activeMentions", () => {
   // 候補から選んだ人の名前は検索先（directory）に控える
-  const dir = createMentionDirectory("w1", "comments");
+  const dir = createMentionDirectory("w1");
   dir.remember({ id: "u1", name: "本郷 校正" });
   dir.remember({ id: "u2", name: "五月 めい" });
   it("本文に @名前 が残っている人だけ", () => {

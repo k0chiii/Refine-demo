@@ -9,7 +9,6 @@ import {
   validateCommentReaction,
 } from "../comment/reactions.ts";
 import { REACTIONS } from "../shared/reactions.ts";
-import { FEEDBACK_REACTIONS } from "../feedback/feedback.ts";
 import { makeThread } from "./fixtures.ts";
 
 const code = (c: string) => expect.objectContaining({ code: c });
@@ -32,8 +31,8 @@ const replyDeleted = (replyEventId: string): CommentEvent => ({
 });
 
 describe("コメントへのリアクション", () => {
-  it("絵文字の種類は FB と同じ。決まったもの以外は拒否", () => {
-    expect([...REACTIONS]).toEqual([...FEEDBACK_REACTIONS]);
+  it("絵文字の種類は決まったものだけ。決まったもの以外は拒否", () => {
+    expect([...REACTIONS]).toEqual(["👍", "🙏", "👀", "🎉", "💡", "❤️"]);
     expect(validateCommentReaction("👍")).toBe("👍");
     expect(() => validateCommentReaction("😀")).toThrow(code("comment_reaction_invalid"));
   });

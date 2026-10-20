@@ -1,14 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { FeedbackSpaceView } from "@/features/feedback/FeedbackSpaceView";
-
-export const Route = createFileRoute("/_app/feedback/")({
-  component: FeedbackSpaces,
-});
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 /**
- * フィードバック（FB。制作の相談・話し合い。解決はしない）の入口: 制作物ごとの FB スペースの一覧。
- * 広い画面は縦に 3 列（スペース・紙面・スレッド）の左だけが埋まり、制作物を選ぶと中央と右が開く。
+ * 旧 FB の入口。FB はコメントへ統合した（docs/UI_M3E.md §95）ので、制作物の一覧へ転送する（古いリンク・ブックマーク用）
  */
-function FeedbackSpaces() {
-  return <FeedbackSpaceView />;
-}
+export const Route = createFileRoute("/_app/feedback/")({
+  beforeLoad: () => {
+    throw redirect({ to: "/works", replace: true });
+  },
+});

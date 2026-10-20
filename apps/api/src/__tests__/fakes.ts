@@ -268,10 +268,6 @@ export class FakeGateway implements BackendGateway {
     },
     "",
   );
-  readonly feedbackUploads = new FakeUploads(
-    { notFound: "feedback_not_found", invalid: "feedback_invalid", closed: "feedback_invalid" },
-    "feedback-",
-  );
   readonly commentUploads = new FakeUploads(
     {
       notFound: "comment_file_not_found",
@@ -287,8 +283,6 @@ export class FakeGateway implements BackendGateway {
     string,
     { viewers: string[]; cacheable: boolean; attachment?: boolean }
   >();
-  /** フィードバックの添付を見られる人 */
-  feedbackViewers = new Map<string, string[]>();
   private subjectOf(token: string) {
     return token.slice(6);
   }
@@ -310,13 +304,6 @@ export class FakeGateway implements BackendGateway {
     if (!a || !a.viewers.includes(this.subjectOf(token)))
       throw new GatewayError("forbidden", { artifactId });
     return a;
-  }
-  async authorizeFeedbackFile(token: string, fileId: string) {
-    const f = this.feedbackUploads.targets.get(fileId);
-    const viewers = this.feedbackViewers.get(fileId) ?? [];
-    if (!f || f.status !== "verified" || !f.objectKey || !viewers.includes(this.subjectOf(token)))
-      throw new GatewayError("forbidden", { fileId });
-    return { objectKey: f.objectKey, mimeType: f.mimeType, fileName: f.fileName, size: f.size };
   }
   async authorizeCommentFile(token: string, fileId: string, variant: "original" | "thumb") {
     const f = this.commentUploads.targets.get(fileId);

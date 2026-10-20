@@ -409,9 +409,15 @@ export default defineSchema({
     lastActivityBy: v.optional(v.string()),
     replyCount: v.optional(v.number()),
     participantIds: v.optional(v.array(v.string())),
+    /**
+     * 移行元の FB（feedbackThreads）のスレッド ID。FB をコメントへ統合した移行（feedbackMigration.ts）で作ったスレッドだけが持つ。
+     * 二重に移さない目印と、古い FB の通知から移し先のコメントを引く索引に使う
+     */
+    migratedFromFeedbackThreadId: v.optional(v.string()),
   })
     .index("by_revision", ["revisionId"])
-    .index("by_revision_resolution", ["revisionId", "resolution"]),
+    .index("by_revision_resolution", ["revisionId", "resolution"])
+    .index("by_migrated_from", ["migratedFromFeedbackThreadId"]),
 
   /** コメントのスレッドを最後に読んだ時刻（人 × スレッドで 1 行。未読の判定。FB の feedbackReads と同じ） */
   commentReads: defineTable({
@@ -678,9 +684,16 @@ export default defineSchema({
     .index("by_userId_and_openedAt", ["userId", "openedAt"])
     .index("by_userId_and_workId", ["userId", "workId"]),
 
-  // ---------------------------------------------------------------- 制作のフィードバック（表現の議論）
+  // ---------------------------------------------------------------- 旧 制作のフィードバック（コメントへ統合済み）
+  /*
+   * FB（表現の議論）はコメントへ統合した（利用者決定 2026-10-20）。機能は廃止し、既存のスレッドは
+   * feedbackMigration.ts でコメントへ移す（本番では Deploy の手動起動から dry-run → migrate → delete の順）。
+   * 以下の 4 つの表（feedbackThreads / feedbackPosts / feedbackFiles / feedbackReads）は、移行と削除のために
+   * 一時的に残しているだけで、本番で delete を流し終えた後の変更で schema から落とす。
+   */
+
   /**
-   * スレッド（制作物ごとに複数）。正式な校正（版・コメント）とは別の表。
+   * スレッド（制作物ごとに複数）。正式な校正（版・コメント）とは別の表だった。
    * 参加者（投稿したことのある人）は通知の宛先。人数は限られるので配列で持つ。
    */
   feedbackThreads: defineTable({
@@ -749,7 +762,10 @@ export default defineSchema({
     userId: v.string(),
     threadId: v.id("feedbackThreads"),
     readAt: v.number(),
-  }).index("by_user_thread", ["userId", "threadId"]),
+  })
+    .index("by_user_thread", ["userId", "threadId"])
+    // 移行でスレッドごとの既読を引く
+    .index("by_thread", ["threadId"]),
 
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({

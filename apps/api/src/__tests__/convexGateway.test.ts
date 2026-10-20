@@ -49,7 +49,7 @@ describe("Convex ゲートウェイ: 実体の転送はサービス境界へ", (
       Response.json({ code: "upload_session_not_open", details: { id: "s" } }, { status: 409 }),
     );
     await expect(
-      gateway().feedbackUploads.complete("t", "a1", { size: 1, sha256: "x" }),
+      gateway().commentUploads.complete("t", "a1", { size: 1, sha256: "x" }),
     ).rejects.toMatchObject({ code: "upload_session_not_open" });
 
     stubFetch(() => new Response("Not Found", { status: 404 }));

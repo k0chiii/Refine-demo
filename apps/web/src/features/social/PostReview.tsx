@@ -125,7 +125,6 @@ export function PostReview({
       const meta = {
         id: t.id,
         index: t.index,
-        ...(t.kind ? { kind: t.kind } : {}),
         severity: t.severity,
       };
       if (at.kind === "text") texts.push({ ...meta, start: at.start, end: at.end });

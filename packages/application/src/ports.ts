@@ -106,6 +106,8 @@ export interface UploadAttemptRepository {
 
 export interface ThreadRepository {
   findById(id: string): Promise<CommentThread | null>;
+  /** FB から移したスレッド（移行元の FB のスレッド ID で引く。無ければ null） */
+  findByMigratedFrom(feedbackThreadId: string): Promise<CommentThread | null>;
   /** 版のスレッド。削除済み（deletedAt あり）は含めない（一覧・件数・未解決・校了の判定はこれで足りる） */
   listByRevision(revisionId: RevisionId): Promise<CommentThread[]>;
   insert(thread: Omit<CommentThread, "id">): Promise<CommentThread>;
@@ -167,7 +169,7 @@ export interface Notification {
   body: string;
   workId?: WorkId;
   revisionId?: RevisionId;
-  /** コメントのスレッド。feedback_* の通知ではフィードバックのスレッド */
+  /** コメントのスレッド。旧 FB の通知（feedback_*）に保存してあるのは FB のスレッドで、読むときに移し先のコメントへ付け替える */
   threadId?: string;
   /** 通知のもとになった操作をした人（端末の通知に「誰が」を出す）。システム起点（締切・自動校正）は無い */
   actorId?: UserId;
@@ -350,30 +352,20 @@ export interface HomeRepository {
 }
 
 /**
- * 制作のフィードバック（表現の議論）。スレッド・投稿・添付・既読の印。
- * 正式な校正（版・コメント）とは別の表で持つ。
+ * 旧 FB（フィードバック）の読み取り。コメントへの移行（usecases/feedbackMigration.ts）だけが使う。
+ * FB の機能は廃止した（利用者決定 2026-10-20）ので、書き込みの口は持たない。
  */
 export interface FeedbackRepository {
-  findThread(id: string): Promise<FeedbackThread | null>;
-  /** 最後の投稿が新しい順。workId を渡すとその制作物のスレッドだけ */
-  listThreads(opts: { workId?: string; limit: number }): Promise<FeedbackThread[]>;
-  insertThread(thread: Omit<FeedbackThread, "id">): Promise<FeedbackThread>;
-  updateThread(thread: FeedbackThread): Promise<void>;
-  findPost(id: string): Promise<FeedbackPost | null>;
-  /** 古い順 */
+  /** 作成順に limit 件。cursor は前の結果の nextCursor（最初は null）。最後まで読んだら nextCursor は null */
+  pageThreads(
+    cursor: number | null,
+    limit: number,
+  ): Promise<{ threads: FeedbackThread[]; nextCursor: number | null }>;
+  /** 古い順（削除された投稿も含む） */
   listPosts(threadId: string): Promise<FeedbackPost[]>;
-  insertPost(post: Omit<FeedbackPost, "id">): Promise<FeedbackPost>;
-  updatePost(post: FeedbackPost): Promise<void>;
   findFile(id: string): Promise<FeedbackFile | null>;
-  insertFile(file: Omit<FeedbackFile, "id">): Promise<FeedbackFile>;
-  updateFile(file: FeedbackFile): Promise<void>;
-  /** 投稿に付いていない・放置扱いでない・createdAt <= before の添付 */
-  listUnattachedFilesBefore(before: Instant, limit: number): Promise<FeedbackFile[]>;
-  /** 放置扱いで、R2 の実体の削除がまだ終わっていない添付 */
-  listAbandonedUnpurgedFiles(limit: number): Promise<FeedbackFile[]>;
-  /** その人がそのスレッドを最後に読んだ時刻（未読の判定） */
-  readAt(userId: UserId, threadId: string): Promise<Instant | null>;
-  markRead(userId: UserId, threadId: string, at: Instant): Promise<void>;
+  /** そのスレッドを最後に読んだ時刻（人ごと） */
+  listReads(threadId: string): Promise<Array<{ userId: UserId; readAt: Instant }>>;
 }
 
 /**

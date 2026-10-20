@@ -174,40 +174,6 @@ export async function downloadArtifact(token: string, artifactId: string, fileNa
   saveBlob(await fetchArtifactBlob(token, artifactId), fileName);
 }
 
-export interface FeedbackUploadResult {
-  fileId: string;
-  status: string;
-  failureMessage: string | null;
-  size: number;
-}
-
-export async function uploadFeedbackFile(
-  _token: string,
-  fileId: string,
-  file: File,
-  onProgress?: (fraction: number) => void,
-): Promise<FeedbackUploadResult> {
-  const upload = await encodeOrExplain(file);
-  onProgress?.(0.3);
-  await new Promise((r) => setTimeout(r, 300)); // 転送中の表示を見せる
-  const res = await demo.uploadFeedbackFile(fileId, file, upload.sha256, gzipOf(upload));
-  onProgress?.(1);
-  return {
-    fileId,
-    status: res.status,
-    failureMessage: res.failureMessage,
-    size: upload.originalSize,
-  };
-}
-
-export async function fetchFeedbackFileBlob(_token: string, fileId: string): Promise<Blob> {
-  return demo.fetchFeedbackFile(fileId);
-}
-
-export async function downloadFeedbackFile(token: string, fileId: string, fileName: string) {
-  saveBlob(await fetchFeedbackFileBlob(token, fileId), fileName);
-}
-
 // ---------------------------------------------------------------- コメント・返信の添付（本番の /comment-files/* と同じ流れ）
 
 export interface CommentUploadResult {

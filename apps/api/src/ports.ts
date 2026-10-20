@@ -132,9 +132,6 @@ export interface BackendGateway {
   /** 版の提出物（PUT /uploads/items/:itemId） */
   itemUploads: UploadOps;
   authorizeArtifact(token: string, artifactId: string): Promise<ArtifactAccess>;
-  /** フィードバックの添付（PUT /feedback/files/:fileId）。版の提出と同じ流れ */
-  feedbackUploads: UploadOps;
-  authorizeFeedbackFile(token: string, fileId: string): Promise<ArtifactAccess>;
   /** コメント・返信の添付（PUT /comment-files/:fileId）。版の提出と同じ流れ */
   commentUploads: UploadOps;
   commentThumbs: ThumbOps;

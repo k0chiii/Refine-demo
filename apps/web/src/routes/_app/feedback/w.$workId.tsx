@@ -1,15 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { FeedbackSpaceView } from "@/features/feedback/FeedbackSpaceView";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** 旧 FB の制作物ごとの画面。FB はコメントへ統合したので、その制作物へ転送する（古いリンク・ブックマーク用） */
 export const Route = createFileRoute("/_app/feedback/w/$workId")({
-  validateSearch: (s: Record<string, unknown>): { thread?: string } =>
-    typeof s.thread === "string" && s.thread ? { thread: s.thread } : {},
-  component: FeedbackSpace,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/works/$workId", params: { workId: params.workId }, replace: true });
+  },
 });
-
-/** 制作物ごとの FB スペース（?thread= で開いているスレッド。広い画面は 紙面 と スレッド を並べる） */
-function FeedbackSpace() {
-  const { workId } = Route.useParams();
-  const { thread } = Route.useSearch();
-  return <FeedbackSpaceView workId={workId} {...(thread ? { threadId: thread } : {})} />;
-}

@@ -1,14 +1,13 @@
 import { canViewWork, type AuthorizationContext } from "../acl/authorize.ts";
 import type { Principal } from "../acl/Permission.ts";
-import { canViewFeedback } from "../feedback/feedback.ts";
 import type { UserId } from "../shared/ids.ts";
 
 /**
  * 通知が伝える保護情報の種類。
  * - work: 制作物の校正情報（作品名・版・締切・確認観点・コメントの抜粋など）。制作物の閲覧権限（canViewWork）で守る
- * - feedback: 制作のフィードバック。フィードバックの閲覧権限（canViewFeedback: restricted 以外は委員なら誰でも）で守る
+ *   （FB の通知もコメントへ移したので work で守る。利用者決定 2026-10-20）
  */
-export type NotificationSubject = "work" | "feedback";
+export type NotificationSubject = "work";
 
 /**
  * 通知本文も認可の対象（§5.2-10）。通知を作るときと読むときの両方でこの判定を通し、
@@ -18,7 +17,8 @@ export function canSeeNotificationSubject(
   subject: NotificationSubject,
   ctx: AuthorizationContext,
 ): boolean {
-  return subject === "feedback" ? canViewFeedback(ctx) : canViewWork(ctx);
+  void subject;
+  return canViewWork(ctx);
 }
 
 /**

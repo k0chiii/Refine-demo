@@ -52,8 +52,8 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
  *   X-MF100-Encoding: gzip のときは、本文は圧縮のまま R2 に置き、伸長しながら申告の元の大きさ・sha256 に一致することを確かめる。
  *   書込み先は試行ごとに Convex が払い出す別キー。検証の済んだ 1 つだけを Convex が原子的に採用する。
  * - GET  /files/:artifactId       認可付き配信。署名付き URL を発行しない（権限剥奪が即時に効く: A-11）。
- * - PUT / GET /feedback/files/:fileId  フィードバック（表現の議論）の添付。上の 2 つと同じ検証・同じヘッダー。
  * - PUT / GET /comment-files/:fileId  コメント・返信の添付。同じ検証・同じヘッダー。
+ *   配信は Convex の認可が返す objectKey の実体を返す（FB から移した添付は feedback/… のキーのまま同じ実体を指す）。
  *   PUT / GET /comment-files/:fileId/thumb  画像の一覧用サムネイル（webp / jpeg、512 KB まで）。
  *   サムネイルの配信だけ、機密でない制作物なら利用者ごとに 1 日 HTTP キャッシュに残してよい（originals は常に no-store）。
  * 業務ルール（版の確定・受付終了・校了）はここに置かない。
@@ -86,13 +86,12 @@ export function createApp(deps: AppDeps) {
   // 認証: Bearer JWT（Convex Auth 発行）。Hono 側でも検証してから Convex に転送する。
   app.use("/uploads/*", requireAuth(deps));
   app.use("/files/*", requireAuth(deps));
-  app.use("/feedback/*", requireAuth(deps));
   app.use("/comment-files/*", requireAuth(deps));
   app.use("/figma/*", requireAuth(deps));
 
   /**
    * R2 へ保存し、sha256（R2 側で検証）と申告サイズを確かめてから Convex に採用を求める。
-   * 版の提出物とフィードバックの添付で同じ手順を使う（呼ぶ Convex 関数だけが違う）。
+   * 版の提出物とコメントの添付で同じ手順を使う（呼ぶ Convex 関数だけが違う）。
    * - 書込み先は試行ごとの別キー。遅れた PUT・負けた PUT が、採用済みの実体を上書きすることはない。
    * - 補償で消すのは自分の試行のキーだけ。それも「採用されていない」と確かなとき（Convex が拒否した等）に限る。
    *   採否が分からない失敗（通信断）では消さない。未採用なら期限後に清掃が消し、採用済みの実体は決して消さない。
@@ -403,15 +402,6 @@ export function createApp(deps: AppDeps) {
 
   app.get("/files/:artifactId", async (c) => {
     const access = await deps.gateway.authorizeArtifact(c.get("token"), c.req.param("artifactId"));
-    return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
-  });
-
-  app.put("/feedback/files/:fileId", (c) =>
-    receiveUpload(c, c.req.param("fileId"), "fileId", deps.gateway.feedbackUploads),
-  );
-
-  app.get("/feedback/files/:fileId", async (c) => {
-    const access = await deps.gateway.authorizeFeedbackFile(c.get("token"), c.req.param("fileId"));
     return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
   });
 

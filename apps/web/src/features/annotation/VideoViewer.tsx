@@ -723,12 +723,12 @@ function Timeline({
         {placed.map(({ x, row }) => {
           const a = x.anchor;
           const name = `${overlayLabel(x)}（${formatVideoSpan(a)}）`;
-          const cls = `vtl__mark ${x.kind === "feedback" ? "vtl__mark--fb" : ""} ${x.id === activeThreadId ? "vtl__mark--active" : ""}`;
+          const cls = `vtl__mark ${x.id === activeThreadId ? "vtl__mark--active" : ""}`;
           return (
             <div key={x.id} className="vtl__item" style={{ top: row * 24 + 4 }}>
               {a.end !== undefined ? (
                 <span
-                  className={`vtl__bar ${x.kind === "feedback" ? "vtl__bar--fb" : ""} ${x.id === activeThreadId ? "vtl__bar--active" : ""}`}
+                  className={`vtl__bar ${x.id === activeThreadId ? "vtl__bar--active" : ""}`}
                   style={{ left: pct(a.start), width: `calc(${pct(a.end)} - ${pct(a.start)})` }}
                   aria-hidden="true"
                 />

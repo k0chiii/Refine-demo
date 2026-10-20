@@ -193,9 +193,9 @@ describe("Web Push の内容", () => {
   });
 
   it("行き先はアプリ内の通知と同じ", () => {
-    expect(notificationPath({ kind: "feedback_posted", threadId: "f 1", workId: "w" })).toBe(
-      "/feedback/f%201",
-    );
+    expect(
+      notificationPath({ kind: "comment_posted", workId: "w", revisionId: "r 1", threadId: "t 1" }),
+    ).toBe("/revisions/r%201?thread=t%201");
     expect(notificationPath({ kind: "work_reopened", workId: "w1" })).toBe("/works/w1");
     expect(notificationPath({ kind: "rule_proposed" })).toBe("/notation?view=proposals");
   });
