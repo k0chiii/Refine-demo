@@ -269,6 +269,31 @@ describe("GET /comment-files/:fileId と …/thumb（配信）", () => {
     expect((await get("/comment-files/cf1", "valid:creator")).status).toBe(403);
     expect((await get("/comment-files/cf1/thumb", "valid:creator")).status).toBe(403);
   });
+  it("FB から移した添付は、認可が返す feedback/… のキーの実体を配信する（サムネイルは無い）", async () => {
+    const FB_KEY = "feedback/w1/fb1/案.pdf/attempts/att9";
+    store.objects.set(FB_KEY, {
+      bytes: new Uint8Array(bytes("%PDF-1.7 migrated")),
+      contentType: "application/pdf",
+    });
+    gateway.commentUploads.targets.set(
+      "cf-migrated",
+      target({
+        keyPrefix: "feedback/w1/fb1/案.pdf",
+        fileName: "案.pdf",
+        mimeType: "application/pdf",
+        status: "verified",
+        objectKey: FB_KEY,
+        open: false,
+      }),
+    );
+    gateway.commentViewers.set("cf-migrated", { viewers: ["creator"], cacheable: false });
+    const res = await get("/comment-files/cf-migrated", "valid:creator");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/pdf");
+    expect(await res.text()).toBe("%PDF-1.7 migrated");
+    expect((await get("/comment-files/cf-migrated", "valid:stranger")).status).toBe(403);
+    expect((await get("/comment-files/cf-migrated/thumb", "valid:creator")).status).toBe(409);
+  });
   it("実体が R2 に無ければ 404", async () => {
     store.objects.delete(`${KEY}/thumb`);
     const res = await get("/comment-files/cf1/thumb", "valid:creator");

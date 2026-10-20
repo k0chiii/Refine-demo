@@ -1,11 +1,7 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
-import {
-  feedbackFileType,
-  type FeedbackFileStatus,
-  type FeedbackFileType,
-} from "../feedback/feedback.ts";
+import type { FeedbackFileStatus, FeedbackFileType } from "../feedback/feedback.ts";
 import { MAX_UPLOAD_BYTES } from "../revision/UploadSession.ts";
 
 /**
@@ -95,9 +91,21 @@ const invalid = (field: string, reason: string, extra: Record<string, unknown> =
   throw new DomainError("comment_file_invalid", { field, reason, ...extra });
 };
 
-/** 添付の種類（FB と同じ分類）: PDF・画像・文書・その他。SVG は中にスクリプトを持てるので画像として扱わない（other） */
+const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
+const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif"]);
+const DOCUMENT_EXT = new Set(["txt", "md", "doc", "docx"]);
+
+/**
+ * 添付の種類: PDF・画像・文書・その他。PDF と画像は投稿の中に表示し、それ以外（.ai など）はダウンロードだけ。
+ * SVG は中にスクリプトを持てるので画像として扱わない（other）
+ */
 export function commentFileType(mimeType: string, fileName: string): CommentFileType {
-  return feedbackFileType(mimeType, fileName);
+  const mime = mimeType.toLowerCase().split(";")[0]!.trim();
+  const ext = /\.([a-z0-9]+)$/i.exec(fileName)?.[1]?.toLowerCase() ?? "";
+  if (mime === "application/pdf" || ext === "pdf") return "pdf";
+  if (IMAGE_MIME.has(mime) || (mime === "" && IMAGE_EXT.has(ext))) return "image";
+  if (mime === "text/plain" || mime === "text/markdown" || DOCUMENT_EXT.has(ext)) return "document";
+  return "other";
 }
 
 /** 添付のファイル名の検査（前後の空白を除いて 1〜200 文字） */

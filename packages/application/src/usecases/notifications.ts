@@ -3,7 +3,6 @@ import {
   canSeeNotificationSubject,
   DomainError,
   memberTeamIds,
-  type NotificationSubject,
   type Principal,
   recipientPrincipal,
   type Team,
@@ -66,9 +65,12 @@ export const REDACTED_NOTIFICATION = {
   body: "この制作物を見る権限がありません。必要なら管理者に閲覧権限を依頼してください。",
 } as const;
 
-/** 通知の種類 → 守る保護情報の種類。feedback_* はフィードバックの閲覧権限、それ以外は制作物の閲覧権限 */
-export function notificationSubjectOf(kind: NotificationKind): NotificationSubject {
-  return kind === "feedback_posted" || kind === "feedback_mentioned" ? "feedback" : "work";
+/**
+ * 旧 FB（フィードバック）の通知か。FB はコメントへ移した（利用者決定 2026-10-20）ので新しくは作らないが、
+ * 既に届いている通知は残る。その threadId は FB のスレッドなので、読むときに移し先のコメントへ付け替える
+ */
+export function isFeedbackNotificationKind(kind: NotificationKind): boolean {
+  return kind === "feedback_posted" || kind === "feedback_mentioned";
 }
 
 /** 見られない人に返す形: 文面を伏せ、制作物・版・スレッドへの手がかり（ID）も返さない */
@@ -92,9 +94,7 @@ export const DELETED_COMMENT_NOTIFICATION = { body: "削除されたコメント
 function deletedThreadLoader(ctx: AppContext) {
   const cache = new Map<string, Promise<boolean>>();
   return (n: Pick<Notification, "kind" | "threadId">): Promise<boolean> => {
-    // feedback_* の threadId はフィードバックのスレッド。それ以外はコメントのスレッド
-    if (n.threadId === undefined || notificationSubjectOf(n.kind) !== "work")
-      return Promise.resolve(false);
+    if (n.threadId === undefined) return Promise.resolve(false);
     let hit = cache.get(n.threadId);
     if (!hit) {
       hit = ctx.threads
@@ -142,7 +142,7 @@ function subjectLoader(ctx: AppContext) {
 
 /**
  * 複数の受信者にアプリ内通知を作る。本人（actor）には送らない。重複受信者は 1 回。
- * 制作物に関する通知は、受信者がその制作物（feedback_* はフィードバック）を今見られるかを確かめ、
+ * 制作物に関する通知は、受信者がその制作物を今見られるかを確かめ、
  * 見られない人には文面を伏せた通知（REDACTED_NOTIFICATION）を作る（§5.2-10）。
  * 例: 非公開の制作物に、職責・閲覧 ACL・関係者・担当の所属の無い人を校正者に割り当てた（割当は ACL を自動で付与しない・D3）。
  * 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）ので伏せない。
@@ -155,7 +155,6 @@ export async function notify(
   input: NotifyInput,
 ): Promise<number> {
   const now = ctx.clock.now();
-  const subject = notificationSubjectOf(input.kind);
   let loaded: LoadedSubject | undefined;
   let count = 0;
   for (const recipientId of new Set(recipients)) {
@@ -166,7 +165,7 @@ export async function notify(
         if (loaded === undefined) loaded = await subjectLoader(ctx)(input.workId);
         visible =
           loaded !== null &&
-          canSeeNotificationSubject(subject, {
+          canSeeNotificationSubject("work", {
             work: loaded.work,
             grants: loaded.grants,
             principal: recipientPrincipal(recipientId, memberTeamIds(loaded.teams, recipientId)),
@@ -215,7 +214,7 @@ export async function presentNotifications(
     const loaded = await load(n.workId);
     const visible =
       loaded !== null &&
-      canSeeNotificationSubject(notificationSubjectOf(n.kind), {
+      canSeeNotificationSubject("work", {
         work: loaded.work,
         grants: loaded.grants,
         principal,
@@ -224,9 +223,22 @@ export async function presentNotifications(
       out.push(redact(n));
       continue;
     }
-    out.push((await deleted(n)) ? degradeDeletedComment(n) : n);
+    const shown = isFeedbackNotificationKind(n.kind) ? await relinkFeedbackNotification(ctx, n) : n;
+    out.push((await deleted(shown)) ? degradeDeletedComment(shown) : shown);
   }
   return out;
+}
+
+/**
+ * 旧 FB の通知を、移し先のコメントへ付け替える（threadId・revisionId を移し先のものにする。通知を押すと /revisions/{版}?thread={コメント} が開く）。
+ * 移していない（移行前・移せなかった・削除済み）FB の通知は、行き先を持たない形にする（FB のスレッドの ID を、コメントの ID として扱わせない）
+ */
+async function relinkFeedbackNotification(ctx: AppContext, n: Notification): Promise<Notification> {
+  const migrated = n.threadId ? await ctx.threads.findByMigratedFrom(n.threadId) : null;
+  if (migrated) return { ...n, threadId: migrated.id, revisionId: migrated.revisionId };
+  const { workId, revisionId, threadId, ...rest } = n;
+  void [workId, revisionId, threadId];
+  return rest;
 }
 
 export async function listMyNotifications(

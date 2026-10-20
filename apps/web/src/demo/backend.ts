@@ -325,37 +325,6 @@ class DemoBackend {
       throw new Error("この種類のファイルは圧縮して上げられません");
   }
 
-  /** Hono PUT /feedback/files/:id 相当: 版の提出と同じく、試行の開始 → 保持 → 検証完了で採用 */
-  async uploadFeedbackFile(
-    fileId: string,
-    file: File,
-    sha256: string,
-    /** gzip で上げるとき（uploadItem と同じ） */
-    gzip?: { body: Blob; originalSize: number },
-  ): Promise<{ status: string; failureMessage: string | null }> {
-    const target = (await this.mutation(internal.feedback.beginFileUpload, { fileId })) as {
-      attemptId: string;
-      objectKey: string;
-    };
-    this.blobs.set(target.objectKey, gzip ? gzip.body : file);
-    if (gzip) this.gzipTypes.set(target.objectKey, file.type);
-    try {
-      if (gzip) await this.verifyGzip(file, gzip, sha256);
-      return (await this.mutation(internal.feedback.completeFileUpload, {
-        attemptId: target.attemptId,
-        size: gzip ? gzip.originalSize : file.size,
-        sha256,
-      })) as { status: string; failureMessage: string | null };
-    } catch (error) {
-      this.discard(target.objectKey);
-      await this.mutation(internal.feedback.failFileUpload, {
-        attemptId: target.attemptId,
-        message: error instanceof Error ? error.message : "upload failed",
-      }).catch(() => undefined);
-      throw error;
-    }
-  }
-
   /** Hono PUT /comment-files/:id 相当: 版の提出と同じく、試行の開始 → 保持 → 検証完了で採用 */
   async uploadCommentFile(
     fileId: string,
@@ -405,14 +374,6 @@ class DemoBackend {
   /** Hono GET /comment-files/:id（と …/thumb）相当: 認可は Convex の commentFiles.authorizeFile */
   async fetchCommentFile(fileId: string, variant: "original" | "thumb"): Promise<Blob> {
     const access = (await this.query(api.commentFiles.authorizeFile, { fileId, variant })) as {
-      objectKey: string;
-    };
-    return this.read(access.objectKey);
-  }
-
-  /** Hono GET /feedback/files/:id 相当: 認可は Convex の authorizeFile */
-  async fetchFeedbackFile(fileId: string): Promise<Blob> {
-    const access = (await this.query(api.feedback.authorizeFile, { fileId })) as {
       objectKey: string;
     };
     return this.read(access.objectKey);

@@ -333,6 +333,15 @@ export function createAppContext(
         const doc = await db.get("commentThreads", id as Id<"commentThreads">).catch(() => null);
         return doc ? (fromDoc(doc) as CommentThread) : null;
       },
+      async findByMigratedFrom(feedbackThreadId) {
+        const doc = await db
+          .query("commentThreads")
+          .withIndex("by_migrated_from", (q) =>
+            q.eq("migratedFromFeedbackThreadId", feedbackThreadId),
+          )
+          .first();
+        return doc ? (fromDoc(doc) as CommentThread) : null;
+      },
       async listByRevision(revisionId) {
         const docs = await db
           .query("commentThreads")
@@ -899,38 +908,18 @@ export function createAppContext(
       },
     },
     feedback: {
-      async findThread(id) {
-        const doc = await db.get("feedbackThreads", id as Id<"feedbackThreads">).catch(() => null);
-        return doc ? (fromDoc(doc) as FeedbackThread) : null;
-      },
-      async listThreads({ workId, limit }) {
-        const docs =
-          workId === undefined
-            ? await db.query("feedbackThreads").withIndex("by_last_post").order("desc").take(limit)
-            : await db
-                .query("feedbackThreads")
-                .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
-                .order("desc")
-                .take(limit);
-        return docs.map((d) => fromDoc(d) as FeedbackThread);
-      },
-      async insertThread(thread) {
-        const id = await db.insert("feedbackThreads", {
-          ...thread,
-          workId: thread.workId as Id<"works">,
-        });
-        return { ...thread, id } as FeedbackThread;
-      },
-      async updateThread(thread) {
-        const { id, ...fields } = thread;
-        await db.replace("feedbackThreads", id as Id<"feedbackThreads">, {
-          ...fields,
-          workId: fields.workId as Id<"works">,
-        });
-      },
-      async findPost(id) {
-        const doc = await db.get("feedbackPosts", id as Id<"feedbackPosts">).catch(() => null);
-        return doc ? (fromDoc(doc) as FeedbackPost) : null;
+      async pageThreads(cursor, limit) {
+        // 作成順（_creationTime）で、前の続きから limit 件。移行の分割実行がこのカーソルで進む
+        const docs = await db
+          .query("feedbackThreads")
+          .withIndex("by_creation_time", (q) =>
+            cursor === null ? q : q.gt("_creationTime", cursor),
+          )
+          .take(limit);
+        return {
+          threads: docs.map((d) => fromDoc(d) as FeedbackThread),
+          nextCursor: docs.length === limit ? docs[docs.length - 1]!._creationTime : null,
+        };
       },
       async listPosts(threadId) {
         const docs = await db
@@ -939,83 +928,16 @@ export function createAppContext(
           .take(2000);
         return docs.map((d) => fromDoc(d) as FeedbackPost);
       },
-      async insertPost(post) {
-        const id = await db.insert(
-          "feedbackPosts",
-          compact({
-            ...post,
-            threadId: post.threadId as Id<"feedbackThreads">,
-            workId: post.workId as Id<"works">,
-          }),
-        );
-        return { ...post, id } as FeedbackPost;
-      },
-      async updatePost(post) {
-        const { id, ...fields } = post;
-        await db.replace(
-          "feedbackPosts",
-          id as Id<"feedbackPosts">,
-          compact({
-            ...fields,
-            threadId: fields.threadId as Id<"feedbackThreads">,
-            workId: fields.workId as Id<"works">,
-          }),
-        );
-      },
       async findFile(id) {
         const doc = await db.get("feedbackFiles", id as Id<"feedbackFiles">).catch(() => null);
         return doc ? (fromDoc(doc) as FeedbackFile) : null;
       },
-      async insertFile(file) {
-        const id = await db.insert(
-          "feedbackFiles",
-          compact({ ...file, workId: file.workId as Id<"works"> }),
-        );
-        return { ...file, id } as FeedbackFile;
-      },
-      async updateFile(file) {
-        const { id, ...fields } = file;
-        await db.replace(
-          "feedbackFiles",
-          id as Id<"feedbackFiles">,
-          compact({ ...fields, workId: fields.workId as Id<"works"> }),
-        );
-      },
-      async listUnattachedFilesBefore(before, limit) {
+      async listReads(threadId) {
         const docs = await db
-          .query("feedbackFiles")
-          .withIndex("by_post_abandoned_created", (q) =>
-            q.eq("postId", undefined).eq("abandonedAt", undefined).lte("createdAt", before),
-          )
-          .take(limit);
-        return docs.map((d) => fromDoc(d) as FeedbackFile);
-      },
-      async listAbandonedUnpurgedFiles(limit) {
-        const docs = await db
-          .query("feedbackFiles")
-          .withIndex("by_purged_and_abandoned", (q) =>
-            q.eq("purgedAt", undefined).gte("abandonedAt", 0),
-          )
-          .take(limit);
-        return docs.map((d) => fromDoc(d) as FeedbackFile);
-      },
-      async readAt(userId, threadId) {
-        const doc = await db
           .query("feedbackReads")
-          .withIndex("by_user_thread", (q) =>
-            q.eq("userId", userId).eq("threadId", threadId as Id<"feedbackThreads">),
-          )
-          .first();
-        return doc?.readAt ?? null;
-      },
-      async markRead(userId, threadId, at) {
-        const tid = threadId as Id<"feedbackThreads">;
-        const doc = await db
-          .query("feedbackReads")
-          .withIndex("by_user_thread", (q) => q.eq("userId", userId).eq("threadId", tid))
-          .first();
-        if (!doc) await db.insert("feedbackReads", { userId, threadId: tid, readAt: at });
-        else if (doc.readAt < at) await db.patch("feedbackReads", doc._id, { readAt: at });
+          .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"feedbackThreads">))
+          .take(5000);
+        return docs.map((d) => ({ userId: d.userId, readAt: d.readAt }));
       },
     },
     commentFiles: {

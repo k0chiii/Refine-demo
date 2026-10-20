@@ -33,8 +33,6 @@ export interface WorkStatsRow {
   rejectedCount: number;
   deferredCount: number;
   decisionReasons: string;
-  feedbackThreadCount: number;
-  feedbackPostCount: number;
 }
 
 export interface WorkStatsInput {
@@ -44,7 +42,6 @@ export interface WorkStatsInput {
   /** この制作物の全ての版のコメント（スレッド）と、それぞれの記録（採否の理由を引く） */
   threads: ReadonlyArray<{ thread: CommentThread; events: readonly CommentEvent[] }>;
   approvals: readonly ApprovalEvent[];
-  feedback: { threadCount: number; postCount: number };
 }
 
 const DAY = 86_400_000;
@@ -131,8 +128,6 @@ export function computeWorkStats(input: WorkStatsInput): WorkStatsRow {
     rejectedCount,
     deferredCount,
     decisionReasons: reasons.join(" / "),
-    feedbackThreadCount: input.feedback.threadCount,
-    feedbackPostCount: input.feedback.postCount,
   };
 }
 
@@ -159,8 +154,6 @@ const statsColumns: ReadonlyArray<[string, (r: WorkStatsRow) => string]> = [
   ["不採用", (r) => String(r.rejectedCount)],
   ["持ち越し", (r) => String(r.deferredCount)],
   ["不採用・持ち越しの理由", (r) => r.decisionReasons],
-  ["フィードバックのスレッド数", (r) => String(r.feedbackThreadCount)],
-  ["フィードバックの投稿数", (r) => String(r.feedbackPostCount)],
 ];
 
 function csvCell(value: string): string {

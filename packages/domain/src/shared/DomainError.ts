@@ -95,10 +95,6 @@ export const domainErrorCodes = [
   "notation_not_manager",
   "notation_category_invalid",
   "notation_proposal_closed",
-  // 制作のフィードバック（表現の議論）
-  "feedback_invalid",
-  "feedback_not_found",
-  "feedback_file_not_ready",
   // コメント・返信の添付
   "comment_file_invalid",
   "comment_file_not_found",

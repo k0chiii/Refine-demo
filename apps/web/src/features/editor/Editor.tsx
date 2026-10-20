@@ -109,7 +109,6 @@ import {
 import { ActionSheet } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { useRevealThread } from "@/features/review/revealThread";
-import { FeedbackPane } from "@/features/feedback/FeedbackPane";
 import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Field, TextArea } from "@/ui/Field";
@@ -279,9 +278,6 @@ export function Editor({
   const removeThread = useMutation(api.comments.remove);
   const removeReply = useMutation(api.comments.removeReply);
   const carryForward = useMutation(api.comments.carryForward);
-  const createFeedback = useMutation(api.feedback.createThread);
-  // 相談（FB）: 解決しない話し合い。この制作物の相談を引き出し「FB」と紙面の印に使う
-  const fbThreads = useQuery(api.feedback.listThreads, { workId });
 
   // M3 の compact/medium（839 以下）: 補助ペインは置けないので、引き出しはツールバーから開くボトムシート（普段は閉じて紙面を全面に）
   const mobile = useMedia("(max-width: 839px)");
@@ -295,6 +291,8 @@ export function Editor({
     search.tab ?? (readLayout() === "panel" ? "comments" : null),
   );
   const [showResolved, setShowResolved] = useState(false);
+  /** コメントの一覧がスクロールされているか（上の見出しの行の下に区切り線を出す） */
+  const [listScrolled, setListScrolled] = useState(false);
   /** コメントの絞り込み: 人のコメントだけ / 自動校正だけ */
   const [who, setWho] = useState<"all" | "human" | "bot">("all");
   /** 利用者が選んだ添付（選んでいなければ既定の添付。下の artifactId） */
@@ -326,10 +324,8 @@ export function Editor({
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
-  /** 引き出し「FB」で開いている相談 */
-  const [fbOpenId, setFbOpenId] = useState<string | null>(search.fb ?? null);
   /**
-   * 紙面に印を付けたとき作るもの: コメント（解決する指摘）・FB（解決しない相談）・なし（印を付けない）。下のツールバーで切り替える。
+   * 紙面に印を付けたとき作るもの: コメント・なし（印を付けない）。下のツールバーで切り替える。
    * このタブのあいだ覚える（features/review/markMode）。権限で使えないモードは下の markMode に置き換える
    */
   const [markPick, setMarkPick] = useMarkMode();
@@ -354,7 +350,7 @@ export function Editor({
   // 投稿欄の書きかけ（本文・メンション）。Editor の state に置かず、投稿欄だけが購読する（1 文字ごとに全体を描き直さない）
   const [composeStore] = useState(createComposeStore);
   // メンションの検索先（候補は「@」に続けて打った文字でサーバーに探させる。名簿は購読しない。§60）
-  const mentionDirectory = useMemo(() => createMentionDirectory(workId, "comments"), [workId]);
+  const mentionDirectory = useMemo(() => createMentionDirectory(workId), [workId]);
   const [requestId, setRequestId] = useState(newRequestId);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -440,10 +436,6 @@ export function Editor({
   useEffect(() => {
     if (search.tab) setDrawer(search.tab);
   }, [search.tab]);
-  // フィードバックの画面・通知から来たとき: 引き出し「FB」でその相談を開く
-  useEffect(() => {
-    if (search.fb) setFbOpenId(search.fb);
-  }, [search.fb]);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -620,19 +612,6 @@ export function Editor({
           ...(draft.figma.nodeName ? { nodeName: draft.figma.nodeName } : {}),
         };
     }
-    if (draftKind === "feedback") {
-      // 相談（FB）: 解決しない話し合いとして、この版の場所に立てる。立てたら引き出し「FB」でそのやり取りを開く
-      const id = await createFeedback({
-        workId,
-        revisionId,
-        ...(anchor ? { anchor } : {}),
-        body,
-        mentions: activeMentions(body, mentions, mentionDirectory),
-      });
-      resetCompose();
-      openFeedback(id);
-      return;
-    }
     // 投稿者は分類しない。内部では「修正提案・重要」で保存し、未解決が残れば理由なしの校了を拒否する（安全側）
     await post({
       revisionId: revisionId as Id<"revisions">,
@@ -789,42 +768,18 @@ export function Editor({
   const resolvedCount = allThreads.filter(isClosed).length;
   const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
   const openCount = allThreads.length - resolvedCount;
-  // 表示中の版の紙面にある相談（立てた順に 1, 2, …。コメントの番号とは別に数える）
-  const fbPlaced = (fbThreads ?? [])
-    .filter((t) => t.anchor && t.revision?.id === revisionId)
-    .sort((a, b) => a.createdAt - b.createdAt);
-  const fbIndex = new Map(fbPlaced.map((t, i) => [t.id, i + 1] as const));
-  const fbUnread = (fbThreads ?? []).filter((t) => t.unread).length;
-  const overlayThreads: OverlayThread[] = [
-    ...threads
-      .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
-      .filter((t) => t.anchor),
-    ...fbPlaced.map((t) => ({
-      id: t.id,
-      anchor: t.anchor as Anchor,
-      severity: "",
-      index: fbIndex.get(t.id)!,
-      kind: "feedback" as const,
-    })),
-  ];
+  const overlayThreads: OverlayThread[] = threads
+    .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
+    .filter((t) => t.anchor);
   const open = revision
     ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
     : false;
   const canComment = can?.comment ?? false;
-  // 相談（FB）は解決しない話し合いなので、受付が終わった版・校了した版の上でも範囲を選んで立てられる
-  const canFeedback = revisionId !== null;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  /** いま効く書き込みのモード（コメントできない版では「コメント」は FB になる） */
-  const markMode = effectiveMarkMode(markPick, { comment: canComment, feedback: canFeedback });
+  /** いま効く書き込みのモード（コメントできない版では印を付けない） */
+  const markMode = effectiveMarkMode(markPick, { comment: canComment });
   /** 紙面に印を付けられるか（なし のときは、押す・なぞるが紙面そのもの（PDF のリンクなど）に届く） */
   const selecting = markMode !== "none";
-  /** 範囲から書くもの: 位置なしのコメントはコメント。それ以外は選んでいるモード（コメントできない版では相談だけ） */
-  const draftKind: "comment" | "feedback" =
-    draft?.free && canComment
-      ? "comment"
-      : markMode === "feedback" || !canComment
-        ? "feedback"
-        : "comment";
   /** モードを替える。印を付けないにしたら、書きかけの位置つきの投稿欄は閉じる（位置なしのコメントは残す）。引き出しは動かさない */
   const changeMarkMode = (m: MarkMode) => {
     setMarkPick(m);
@@ -862,40 +817,6 @@ export function Editor({
       if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor as Anchor))
         setArtifactId(t.anchor.artifactId);
       const p = anchorPage(t.anchor as Anchor);
-      if (p) setPage(p);
-      if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
-      if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
-    }
-  };
-  /** 引き出し「FB」でその相談を開く（狭い画面はシートを FB で開く） */
-  const openFeedback = (id: string | null) => {
-    setFbOpenId(id);
-    if (mobile) {
-      if (!(sheetOpen && drawer === "feedback")) toggleSheet("feedback");
-    } else setDrawer("feedback");
-  };
-  /** 相談の紙面の場所を表示する。別の版の相談ならその版を開く */
-  const showFeedbackPlace = (t: {
-    id: string;
-    anchor: Anchor | null;
-    revisionId: string | null;
-  }) => {
-    if (t.revisionId && t.revisionId !== revisionId) {
-      const rev = workData?.revisions.find((r) => r.id === t.revisionId);
-      if (rev)
-        void navigate({
-          to: "/works/$workId/v/$n",
-          params: { workId, n: String(versionOf(rev)) },
-          search: { tab: "feedback", fb: t.id },
-        });
-      return;
-    }
-    setActiveThreadId(t.id);
-    setPostReveal((n) => n + 1);
-    if (t.anchor) {
-      if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor))
-        setArtifactId(t.anchor.artifactId);
-      const p = anchorPage(t.anchor);
       if (p) setPage(p);
       if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
       if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
@@ -947,7 +868,7 @@ export function Editor({
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || draft.marking || draft.anchor || !(canComment || canFeedback)) return null;
+    if (!draft || draft.marking || draft.anchor || !canComment) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     // 位置なし・動画の時刻だけ（画面の位置なし）・Figma のフレーム単位は、紙面（映像・画面）の右上
@@ -994,7 +915,6 @@ export function Editor({
         onSubmit={(fileIds) => void doPost.run(fileIds)}
         onCancel={resetCompose}
         pending={doPost.pending}
-        kind={draftKind}
         {...(revisionId ? { revisionId } : {})}
         {...(draft.range && text && artifact && revisionId
           ? {
@@ -1023,7 +943,7 @@ export function Editor({
   };
   /** SNS 投稿のプレビューで選んだ位置の投稿欄（PostReview が置く座標を受ける。狭い画面は画面下） */
   const composePost = (at: { x: number; y: number }) => {
-    if (!draft?.anchor || !(canComment || canFeedback)) return null;
+    if (!draft?.anchor || !canComment) return null;
     const place = draft.postPlace;
     return (
       <StoredComposePopover
@@ -1043,7 +963,6 @@ export function Editor({
         onSubmit={(fileIds) => void doPost.run(fileIds)}
         onCancel={resetCompose}
         pending={doPost.pending}
-        kind={draftKind}
         {...(revisionId ? { revisionId } : {})}
       />
     );
@@ -1103,12 +1022,6 @@ export function Editor({
     threads: overlayThreads,
     activeThreadId,
     onSelectThread: (id: string) => {
-      if (fbIndex.has(id)) {
-        // 紙面の相談の印: 引き出し「FB」でそのやり取りを開く
-        setActiveThreadId(id);
-        openFeedback(id);
-        return;
-      }
       const t = threads.find((x) => x.id === id);
       if (!t) return;
       // 紙面のピン: 一覧が引き出し・シートにあるレイアウトでは、スレッドのパネルを開く（ピンの横・高さに並べるレイアウトは
@@ -1185,8 +1098,7 @@ export function Editor({
                 viewerProps.onSelectThread(id);
                 setPostReveal((n) => n + 1);
                 // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
-                if (!mobile && fbIndex.has(id) === false && drawer !== "comments")
-                  openDrawer("comments");
+                if (!mobile && drawer !== "comments") openDrawer("comments");
               },
               onDraft: (d) => {
                 if (!d) {
@@ -1579,7 +1491,7 @@ export function Editor({
     ) : null;
   const commentsPanel = (
     <div
-      className={`comments ${threadPanel ? "comments--thread" : ""} ${mobile ? "comments--sheet" : ""}`}
+      className={`comments ${threadPanel ? "comments--thread" : ""} ${mobile ? "comments--sheet" : ""} ${listScrolled ? "comments--scrolled" : ""}`}
     >
       <div className="comments__split">
         <div className="comments__main">
@@ -1624,7 +1536,10 @@ export function Editor({
               ) : null}
             </M3eFilterChipSet>
           </div>
-          <div className="comments__list">
+          <div
+            className="comments__list"
+            onScroll={(e) => setListScrolled(e.currentTarget.scrollTop > 0)}
+          >
             {carryCandidates && carryCandidates.length > 0 ? (
               <div className="carry-box" aria-label="前版の未解決コメント">
                 <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
@@ -1686,7 +1601,6 @@ export function Editor({
       onChange={onPick}
       items={[
         { id: "comments", label: "コメント", count: openCount },
-        { id: "feedback", label: "FB", count: fbUnread || null },
         { id: "versions", label: "版" },
         { id: "info", label: "情報" },
       ]}
@@ -1715,16 +1629,6 @@ export function Editor({
   const drawerBody = (d: Drawer | null) =>
     d === "comments" ? (
       commentsPanel
-    ) : d === "feedback" ? (
-      <FeedbackPane
-        workId={workId}
-        revisionId={revisionId}
-        threads={fbThreads}
-        indexOf={fbIndex}
-        openId={fbOpenId}
-        onOpen={setFbOpenId}
-        onShowPlace={showFeedbackPlace}
-      />
     ) : d === "versions" && workData ? (
       <VersionsTab
         work={workData}
@@ -1748,7 +1652,6 @@ export function Editor({
   const sheetButtons = (
     [
       ["comments", `コメント（${openCount}）`, "comment"],
-      ["feedback", fbUnread ? `FB（未読 ${fbUnread}）` : "FB", "forum"],
       ["versions", "版", "history"],
       ["info", "情報", "info"],
     ] as const
@@ -1968,13 +1871,13 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {/* 書き込み（印を付けるとき作るもの）: コメント / FB / 選択（印を付けない）。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
-                      引き出しは動かさない（FB を立てると、これまでどおり引き出し「FB」でそのやり取りが開く） */}
-                  {canComment || canFeedback ? (
+                  {/* 書き込み（印を付けるとき作るもの）: コメント / 選択（印を付けない）。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
+                      引き出しは動かさない */}
+                  {canComment ? (
                     <M3eIconButton
                       className="ws__mark-mode"
-                      aria-label="書き込み: コメント / FB / 選択"
-                      title={`書き込み: コメント / FB / 選択（いまは${markModeLabel[markMode]}）`}
+                      aria-label="書き込み: コメント / 選択"
+                      title={`書き込み: コメント / 選択（いまは${markModeLabel[markMode]}）`}
                     >
                       <M3eIcon
                         name={markModeIcon[markMode]}
@@ -2080,21 +1983,19 @@ export function Editor({
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
             ) : null}
-            {canComment || canFeedback ? (
+            {canComment ? (
               <M3eMenu id="mark-mode-menu" positionY="above">
                 <M3eMenuItemGroup aria-label="書き込み（印を付けたとき作るもの）">
-                  {markModes
-                    .filter((m) => m === "none" || (m === "comment" ? canComment : canFeedback))
-                    .map((m) => (
-                      <M3eMenuItemRadio
-                        key={m}
-                        checked={markMode === m}
-                        onClick={() => changeMarkMode(m)}
-                      >
-                        <M3eIcon slot="icon" name={markModeIcon[m]} />
-                        {markModeLabel[m]}
-                      </M3eMenuItemRadio>
-                    ))}
+                  {markModes.map((m) => (
+                    <M3eMenuItemRadio
+                      key={m}
+                      checked={markMode === m}
+                      onClick={() => changeMarkMode(m)}
+                    >
+                      <M3eIcon slot="icon" name={markModeIcon[m]} />
+                      {markModeLabel[m]}
+                    </M3eMenuItemRadio>
+                  ))}
                 </M3eMenuItemGroup>
               </M3eMenu>
             ) : null}
@@ -2152,14 +2053,6 @@ export function Editor({
                   onClick={() => openDrawer("comments")}
                 >
                   <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
-                </M3eIconButton>
-                <M3eIconButton
-                  aria-label={fbUnread ? `FB（未読 ${fbUnread}）` : "FB"}
-                  toggle
-                  selected={drawer === "feedback"}
-                  onClick={() => openDrawer("feedback")}
-                >
-                  <M3eIcon name="forum" className={drawer === "feedback" ? "icon--filled" : ""} />
                 </M3eIconButton>
                 <M3eIconButton
                   aria-label="版"

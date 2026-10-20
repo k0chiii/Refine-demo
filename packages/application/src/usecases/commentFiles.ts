@@ -36,7 +36,7 @@ import { loadAuthorizedWork } from "../shared.ts";
 import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
 
 /*
- * コメント・返信の添付（FB の添付 usecases/feedback.ts と同じ流れ）。
+ * コメント・返信の添付。
  * 準備（R2 のキーを予約）→ Hono が実体を検証して採用 → コメント / 返信に付ける。
  * 試行の開始・採用・破棄とサムネイルの記録は、実体を検証するサービス（Hono）からサービス認証付きの境界を通してだけ呼ばれる。
  */

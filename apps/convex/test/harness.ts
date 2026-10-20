@@ -74,13 +74,3 @@ export async function uploadFailed(user: TestUser, itemId: string, message: stri
   const { attemptId } = await user.as.mutation(internal.submissions.beginUpload, { itemId });
   await user.as.mutation(internal.submissions.failUpload, { attemptId, message });
 }
-
-/** フィードバックの添付で同じ手順（試行の開始 → 検証完了） */
-export async function uploadFeedbackVerified(
-  user: TestUser,
-  fileId: string,
-  meta: { size: number; sha256: string },
-) {
-  const { attemptId } = await user.as.mutation(internal.feedback.beginFileUpload, { fileId });
-  return user.as.mutation(internal.feedback.completeFileUpload, { attemptId, ...meta });
-}

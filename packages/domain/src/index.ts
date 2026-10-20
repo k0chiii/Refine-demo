@@ -41,6 +41,7 @@ export * from "./comparison/index.ts";
 export * from "./notation/index.ts";
 export * from "./social/index.ts";
 export * from "./feedback/feedback.ts";
+export * from "./feedback/migration.ts";
 export * from "./notification/access.ts";
 export * from "./notification/preferences.ts";
 export * from "./notification/push.ts";

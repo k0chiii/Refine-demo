@@ -462,13 +462,11 @@ export function PostText({
           const ids = seg.marks.map((m) => m.id);
           const active = seg.marks.some((m) => m.id === ctx?.activeId);
           const first = seg.marks.filter((m) => m.start >= seg.start && m.start < seg.end);
-          const fbOnly = seg.marks.length > 0 && seg.marks.every((m) => m.kind === "feedback");
           const cls = [
             look,
             seg.marks.length ? "sp-mark-text" : "",
             active ? "is-active" : "",
             seg.marks.some((m) => m.severity === "critical") ? "is-critical" : "",
-            fbOnly ? "is-fb" : "",
             seg.draft ? "is-draft" : "",
           ]
             .filter(Boolean)
@@ -486,9 +484,7 @@ export function PostText({
                     ...(index ? { "data-index": index } : {}),
                     role: "button",
                     tabIndex: 0,
-                    title: seg.marks
-                      .map((m) => `${m.kind === "feedback" ? "FB" : "コメント"} ${m.index}`)
-                      .join("・"),
+                    title: seg.marks.map((m) => `コメント ${m.index}`).join("・"),
                     // 同じ箇所に複数あれば押すたびに次のコメントへ
                     onClick: (e: React.MouseEvent) => {
                       // 文字を選んだ直後のクリックでは開かない

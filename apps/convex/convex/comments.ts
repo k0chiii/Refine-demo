@@ -9,6 +9,7 @@ import {
   listCommentFileViews,
   markCommentRead,
   replyFileIds,
+  resolveMigratedFeedbackThread,
   searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
   replyToThread,
@@ -92,6 +93,20 @@ export const toggleReaction = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() => toggleCommentReaction(createAppContext(ctx), principal, args));
+  },
+});
+
+/**
+ * 旧 FB のスレッドの URL（/feedback/{スレッド}）から、移し先のコメントを引く。FB をコメントへ移した後も、
+ * 古いリンク・ブックマークから辿れるようにする。移していない・見られない・削除された場合は null
+ */
+export const migratedFromFeedback = query({
+  args: { feedbackThreadId: v.string() },
+  handler: async (ctx, { feedbackThreadId }) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() =>
+      resolveMigratedFeedbackThread(createReadContext(ctx.db), principal, feedbackThreadId),
+    );
   },
 });
 

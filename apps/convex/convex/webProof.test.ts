@@ -103,15 +103,6 @@ describe("Convex 統合: Web・Figma の校正（ライブ表示の要素・Figm
         },
       }),
     ).rejects.toThrow(code("anchor_artifact_mismatch"));
-    const fb = await cast.creator.as.mutation(api.feedback.createThread, {
-      workId,
-      revisionId: revisionId as Id<"revisions">,
-      anchor: webAnchor(site.id),
-      body: "スマホの見出しの大きさを相談",
-      mentions: [],
-    });
-    expect(fb).toBeTruthy();
-
     const rev = await cast.reviewer.as.query(api.revisions.get, { revisionId });
     expect(
       rev.threads.map((x) => String(x.anchor?.type)).sort((a, b) => a.localeCompare(b)),

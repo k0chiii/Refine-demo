@@ -227,14 +227,11 @@ export function TextViewer({
               const first = seg.threads.filter((t) => t.anchor.start === seg.start);
               const active = seg.threads.some((t) => t.id === activeThreadId);
               const severity = seg.threads.find((t) => t.severity === "critical") ? "critical" : "";
-              const fbOnly =
-                seg.threads.length > 0 && seg.threads.every((t) => t.kind === "feedback");
               const label = first.map((t) => t.index).join(",");
               const cls = [
                 seg.threads.length > 0 ? "text-anchor" : "",
                 active ? "text-anchor--active" : "",
                 severity ? `text-anchor--${severity}` : "",
-                fbOnly ? "text-anchor--fb" : "",
                 seg.draft ? "text-anchor--draft" : "",
                 diffKindAt(diff, seg.start, seg.end)
                   ? `diff-hl diff-hl--${diffKindAt(diff, seg.start, seg.end)}`

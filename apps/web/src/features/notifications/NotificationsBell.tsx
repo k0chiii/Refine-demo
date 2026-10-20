@@ -51,13 +51,8 @@ function useNotifications() {
   });
   const openOne = useAction(async (n: NonNullable<typeof list>[number]) => {
     if (n.readAt === undefined) await markRead({ notificationId: n.id as Id<"notifications"> });
-    // フィードバック（表現の議論）の通知: threadId はフィードバックのスレッド
-    if ((n.kind === "feedback_posted" || n.kind === "feedback_mentioned") && n.threadId)
-      // /feedback/$threadId は画面側で追加中のルート。型付きのルート一覧に載るまでは文字列のパスで渡す
-      void navigate({
-        to: `/feedback/${encodeURIComponent(n.threadId)}`,
-      } as unknown as Parameters<typeof navigate>[0]);
-    else if (n.revisionId)
+    // 旧 FB の通知は、サーバーが移し先のコメント（版とスレッド）に付け替えて返す。移していないものは行き先を持たない
+    if (n.revisionId)
       void navigate({
         to: "/revisions/$revisionId",
         params: { revisionId: n.revisionId },

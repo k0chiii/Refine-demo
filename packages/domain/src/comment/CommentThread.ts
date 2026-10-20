@@ -70,6 +70,11 @@ export interface CommentThread {
   lastActivityBy?: UserId;
   replyCount?: number;
   participantIds?: UserId[];
+  /**
+   * 移行元の FB（フィードバック）のスレッド ID。FB をコメントへ統合した移行（docs/UI_M3E.md §95）で作ったスレッドだけが持つ。
+   * 二重に移さない目印と、古い FB の通知・リンクからこのスレッドへ辿るために使う
+   */
+  migratedFromFeedbackThreadId?: string;
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;

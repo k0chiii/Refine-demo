@@ -258,6 +258,9 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     },
     threads: {
       findById: async (id) => state.threads.get(id),
+      findByMigratedFrom: async (feedbackThreadId) =>
+        state.threads.all().find((t) => t.migratedFromFeedbackThreadId === feedbackThreadId) ??
+        null,
       listByRevision: async (revisionId) =>
         state.threads.all().filter((t) => t.revisionId === revisionId && t.deletedAt === undefined),
       insert: async (t) => state.threads.insert(t),
@@ -492,43 +495,23 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       update: async (r) => state.runs.put(r),
     },
     feedback: {
-      findThread: async (id) => state.feedbackThreads.get(id),
-      listThreads: async ({ workId, limit }) =>
-        state.feedbackThreads
-          .all()
-          .filter((t) => workId === undefined || t.workId === workId)
-          .sort((a, b) => b.lastPostAt - a.lastPostAt)
-          .slice(0, limit),
-      insertThread: async (t) => state.feedbackThreads.insert(t),
-      updateThread: async (t) => state.feedbackThreads.put(t),
-      findPost: async (id) => state.feedbackPosts.get(id),
+      pageThreads: async (cursor, limit) => {
+        const all = state.feedbackThreads.all();
+        const from = cursor ?? 0;
+        const threads = all.slice(from, from + limit);
+        return { threads, nextCursor: from + limit < all.length ? from + limit : null };
+      },
       listPosts: async (threadId) =>
         state.feedbackPosts
           .all()
           .filter((p) => p.threadId === threadId)
           .sort((a, b) => a.createdAt - b.createdAt),
-      insertPost: async (p) => state.feedbackPosts.insert(p),
-      updatePost: async (p) => state.feedbackPosts.put(p),
       findFile: async (id) => state.feedbackFiles.get(id),
-      insertFile: async (f) => state.feedbackFiles.insert(f),
-      updateFile: async (f) => state.feedbackFiles.put(f),
-      listUnattachedFilesBefore: async (before, limit) =>
-        state.feedbackFiles
-          .all()
-          .filter(
-            (f) => f.postId === undefined && f.abandonedAt === undefined && f.createdAt <= before,
-          )
-          .slice(0, limit),
-      listAbandonedUnpurgedFiles: async (limit) =>
-        state.feedbackFiles
-          .all()
-          .filter((f) => f.abandonedAt !== undefined && f.purgedAt === undefined)
-          .slice(0, limit),
-      readAt: async (userId, threadId) => state.feedbackReads.get(`${userId}|${threadId}`) ?? null,
-      markRead: async (userId, threadId, at) => {
-        const key = `${userId}|${threadId}`;
-        state.feedbackReads.set(key, Math.max(at, state.feedbackReads.get(key) ?? 0));
-      },
+      listReads: async (threadId) =>
+        [...state.feedbackReads.entries()].flatMap(([key, readAt]) => {
+          const [userId, tid] = key.split("|");
+          return tid === threadId && userId ? [{ userId, readAt }] : [];
+        }),
     },
     commentFiles: {
       findFile: async (id) => state.commentFiles.get(id),

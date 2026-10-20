@@ -174,23 +174,6 @@ http.route({
   method: "POST",
   handler: serviceUpload(internal.submissions.failUpload, failArgs),
 });
-http.route({
-  path: "/internal/feedback/files/begin",
-  method: "POST",
-  handler: serviceUpload(internal.feedback.beginFileUpload, (b) =>
-    str(b.fileId) ? { ok: true, args: { fileId: b.fileId } } : { ok: false },
-  ),
-});
-http.route({
-  path: "/internal/feedback/files/complete",
-  method: "POST",
-  handler: serviceUpload(internal.feedback.completeFileUpload, completeArgs),
-});
-http.route({
-  path: "/internal/feedback/files/fail",
-  method: "POST",
-  handler: serviceUpload(internal.feedback.failFileUpload, failArgs),
-});
 
 http.route({
   path: "/internal/comments/files/begin",

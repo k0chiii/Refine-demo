@@ -113,12 +113,6 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
           .catch(translate),
       );
     },
-    feedbackUploads: uploads("/internal/feedback/files", "fileId"),
-    authorizeFeedbackFile(token, fileId) {
-      return coalesceAuthorize(`feedback\n${fileId}\n${token}`, () =>
-        withAuth(token).query(api.feedback.authorizeFile, { fileId }).catch(translate),
-      );
-    },
     commentUploads: uploads("/internal/comments/files", "fileId"),
     commentThumbs: thumbs,
     authorizeCommentFile(token, fileId, variant) {

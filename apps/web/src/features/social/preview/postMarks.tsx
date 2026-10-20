@@ -30,8 +30,6 @@ export interface PostMarkMeta {
   id: string;
   /** コメントの番号（引き出しのカードと同じ） */
   index: number;
-  /** 相談（FB）は色と形（点線・四角）を変える */
-  kind?: "comment" | "feedback";
   severity?: string;
 }
 export interface PostTextMark extends PostMarkMeta {
@@ -96,14 +94,9 @@ const rectStyle = (r: NormalizedRect) => ({
   height: pct(r.h),
 });
 
-/** 印の見た目の種類（クラス）。相談は点線・四角、重大は error 色 */
+/** 印の見た目の種類（クラス）。重大は error 色 */
 const markClass = (m: PostMarkMeta, active: boolean) =>
-  [
-    "sp-mark",
-    active ? "is-active" : "",
-    m.kind === "feedback" ? "is-fb" : "",
-    m.severity === "critical" ? "is-critical" : "",
-  ]
+  ["sp-mark", active ? "is-active" : "", m.severity === "critical" ? "is-critical" : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -439,7 +432,7 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
     >
       {mine.map((m) => {
         const active = m.meta.id === activeId;
-        const label = `${m.meta.kind === "feedback" ? "FB" : "コメント"} ${m.meta.index}（${imageIndex + 1} 枚目の画像${m.meta.point ? "のピン" : "の範囲"}）`;
+        const label = `コメント ${m.meta.index}（${imageIndex + 1} 枚目の画像${m.meta.point ? "のピン" : "の範囲"}）`;
         const button = (
           <button
             type="button"
