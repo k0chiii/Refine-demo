@@ -2780,16 +2780,15 @@ m3e-dialog {
   gap: 8px;
 }
 /* 一覧だけがスクロールする引き出し（シートは全体がスクロールするので対象外）: 見出しの行に引き出しと同じ面を敷き、
-   下を流れるカードが「位置なしでコメント」の下に透けて見えないようにする。スクロールが始まったときだけ細い区切りを出す */
+   下を流れるカードが「位置なしでコメント」の下に透けて見えないようにする。スクロールが始まったら面を 1 段濃くする（線は引かない） */
 .comments:not(.comments--sheet) .comments__header {
   position: relative;
   z-index: 1;
   background: var(--mf-surface-container-low);
-  border-bottom: 1px solid transparent;
-  transition: border-color var(--mf-motion-effects-fast);
+  transition: background-color var(--mf-motion-effects-fast);
 }
 .comments--scrolled:not(.comments--sheet) .comments__header {
-  border-bottom-color: var(--mf-outline-variant);
+  background: var(--mf-surface-container);
 }
 .comments__header:empty {
   display: none;
@@ -2870,8 +2869,13 @@ m3e-dialog {
 .thread {
   position: relative;
 }
-.thread--active {
-  --m3e-outlined-card-container-color: var(--mf-surface-container-high);
+/* 一覧のカードは枠線なしの filled。引き出しの面（container-low）の上では 1 段明るい面で浮かせ、ピンの横・ピンの高さの列（紙面の上）では container-low のまま */
+.comments .thread {
+  --m3e-filled-card-container-color: var(--mf-surface-container-lowest);
+}
+.thread--active,
+.comments .thread--active {
+  --m3e-filled-card-container-color: var(--mf-surface-container-high);
 }
 .thread--active::before {
   content: "";
@@ -3027,13 +3031,15 @@ m3e-dialog {
 .carry-box {
   display: grid;
   gap: 8px;
-  padding: 8px 4px;
+  padding: 0;
 }
+/* 前版の未解決コメント: 線で区切らず、1 件ずつ一段濃い面のブロック */
 .carry {
   display: grid;
   gap: 4px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--mf-outline-variant);
+  padding: 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container);
 }
 
 /* ピンの高さに並べる列（Google ドキュメント式） */
@@ -4517,23 +4523,15 @@ m3e-icon.icon--on {
   outline: 2px solid var(--mf-primary);
   outline-offset: -1px;
 }
+/* @ のメンションの候補: 入力欄（面）の中、本文の下にそのまま伸びて開く。上には出さない・浮かせない（利用者指示 2026-10-20）。
+   欄の面の中の一段濃い面（M3E の list）。高さは 6 行まで、それ以上は中でスクロール */
 .rt__mentions {
-  position: absolute;
-  inset-inline: 0;
-  top: 100%;
-  z-index: 50;
+  margin-top: 8px;
+  cursor: default;
 }
-.rt__mentions .mention-list {
-  top: 0;
-}
-/* 下に出す余白が足りないとき（画面の下に固定した投稿欄・キーボードの上）は入力欄の上に出す */
-.rt__mentions--above {
-  top: auto;
-  bottom: 100%;
-}
-.rt__mentions--above .mention-list {
-  top: auto;
-  bottom: 0;
+/* 候補を出している間は、本文の最小の高さ（行数）を外し、打っている行のすぐ下に候補が来るようにする */
+.rt:has(.rt__mentions) .rt__content {
+  min-height: 1.25rem;
 }
 /* 返信・訂正の欄: M3 の outlined text field と同じ枠（フォーカスで太く・主色） */
 .thread__form .rt,
@@ -4549,15 +4547,16 @@ m3e-icon.icon--on {
 }
 
 .mention-list {
-  position: absolute;
-  inset-inline: 0;
-  top: 100%;
-  z-index: 50;
-  max-height: 240px;
-  overflow: auto;
-  border-radius: var(--mf-shape-sm);
-  background: var(--mf-surface-container);
-  box-shadow: var(--mf-elevation-2);
+  --m3e-list-item-one-line-height: 44px;
+  --m3e-list-item-one-line-top-space: 4px;
+  --m3e-list-item-one-line-bottom-space: 4px;
+  --m3e-list-item-container-color: transparent;
+  max-height: calc(6 * 44px + 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: 8px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-low);
 }
 .mention-list__item--active {
   --m3e-list-item-container-color: var(--mf-secondary-container);

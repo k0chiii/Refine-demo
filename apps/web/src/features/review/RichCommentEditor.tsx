@@ -245,7 +245,7 @@ export function RichCommentEditor({
   );
 }
 
-/** 「@」に続けて打った文字の候補（M3E list。サーバーで検索）。↑↓で選び Enter / Tab で確定 */
+/** 「@」に続けて打った文字の候補（M3E list。サーバーで検索）。入力欄の中、本文の下に開く（上には出さない）。↑↓で選び Enter / Tab で確定 */
 function MentionMenu({
   query,
   onPick,
@@ -260,16 +260,15 @@ function MentionMenu({
   const [index, setIndex] = useState(0);
   const active = Math.min(index, Math.max(0, hits.length - 1));
   const ref = useRef<HTMLDivElement>(null);
-  const [above, setAbove] = useState(false);
   useEffect(() => setIndex(0), [query]);
-  // 下に出す余白が足りなければ上に出す（画面の下に固定した投稿欄・キーボードの上）
+  // 候補は入力欄の中（本文の下）に開く。欄が伸びて隠れたら、欄を載せているスクロール域（返信欄・スレッドの流れ）を動かして見せる
   useLayoutEffect(() => {
-    const host = ref.current?.parentElement;
-    if (!host) return;
-    const r = host.getBoundingClientRect();
-    const vh = window.visualViewport?.height ?? window.innerHeight;
-    const room = 250;
-    setAbove(r.bottom + room > vh && r.top > room);
+    const el = ref.current;
+    const host = el?.closest<HTMLElement>(".thread-panel__composer, .thread-panel__scroll");
+    if (!el || !host) return;
+    const r = el.getBoundingClientRect();
+    const h = host.getBoundingClientRect();
+    if (r.bottom > h.bottom) host.scrollTop += r.bottom - h.bottom + 8;
   }, [hits.length]);
   const state = useRef({ hits, active, onPick });
   state.current = { hits, active, onPick };
@@ -293,7 +292,7 @@ function MentionMenu({
   }, [keyHandler]);
   if (hits.length === 0) return null;
   return (
-    <div ref={ref} className={`rt__mentions ${above ? "rt__mentions--above" : ""}`}>
+    <div ref={ref} className="rt__mentions">
       {/* 候補の数を読み上げる（候補の出入りは live region で伝える） */}
       <span className="sr-only" aria-live="polite">
         {`メンションの候補 ${hits.length} 人。上下で選び Enter で確定`}
