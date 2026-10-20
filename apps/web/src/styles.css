@@ -4489,7 +4489,7 @@ m3e-icon.icon--on {
   display: grid;
   place-items: center;
   /* 読み込みが済んだ入力欄と同じ高さ（本文 + 操作の行 + 余白） */
-  min-height: calc(var(--rt-rows, 2) * 1.25rem + 62px);
+  min-height: calc(var(--rt-rows, 2) * 1.5rem + 68px);
 }
 .rt__toolbar {
   display: flex;
@@ -4533,44 +4533,125 @@ m3e-icon.icon--on {
 .rt:has(.rt__mentions) .rt__content {
   min-height: 1.25rem;
 }
-/* 入力欄: 本文・添付・操作の行を 1 つの枠に収める。枠はほかの入力欄（M3E の outlined・角 4px）と同じ見た目
-   （利用者指示 2026-10-20「入力欄全体の角丸じゃなくてふつうのinputに揃えられるんじゃない？」）。
-   線は outline、マウスを載せると on-surface、フォーカスすると主色の 2px。書式のツールバーは枠の外の上に浮かぶ */
+/* 入力欄: 本文・添付・操作の行を 1 つの枠に収める。枠は M3E の outlined の入力欄（m3e-form-field）と同じ
+   （利用者指示 2026-10-20「もっと本当にm3eのインプットに合わせて欲しい」）: 角 4・線は outline 1px（マウスを載せると on-surface、
+   フォーカスで主色の 2px）・ラベルは空のとき本文の位置（body-large）、フォーカスか中身があると枠の線の切り欠きに乗る（body-small）。
+   本文は body-large、左右 16px・1 行目は高さ 56 の中央。書式のツールバーは枠の外の上に浮かぶ */
 .rt--composer {
+  --rt-outline: var(--mf-outline);
+  --rt-outline-size: 1px;
+  --rt-label: var(--mf-on-surface-variant);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 4px 4px 16px;
+  padding: 16px 4px 4px 16px;
   border-radius: var(--mf-shape-xs);
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--mf-outline);
-  transition: box-shadow var(--mf-motion, 150ms);
 }
-.rt--composer:hover {
-  box-shadow: inset 0 0 0 1px var(--mf-on-surface);
+@media (hover: hover) {
+  .rt--composer:hover {
+    --rt-outline: var(--mf-on-surface);
+  }
 }
 .rt--composer:focus-within {
-  box-shadow: inset 0 0 0 2px var(--mf-primary);
+  --rt-outline: var(--mf-primary);
+  --rt-outline-size: 2px;
+  --rt-label: var(--mf-primary);
 }
-/* 投稿欄（紙の上に浮かぶ）では、枠の中を塗って影を付ける */
+.rt__outline {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+.rt__outline > span {
+  box-sizing: border-box;
+  border: var(--rt-outline-size) none var(--rt-outline);
+  transition: border-color var(--mf-motion, 150ms);
+}
+.rt__outline-start {
+  flex: none;
+  width: 12px;
+  border-style: solid none solid solid !important;
+  border-radius: var(--mf-shape-xs) 0 0 var(--mf-shape-xs);
+}
+.rt__outline-notch {
+  flex: none;
+  max-width: calc(100% - 24px);
+  border-style: solid none !important;
+}
+.rt__outline-end {
+  flex: 1;
+  border-style: solid solid solid none !important;
+  border-radius: 0 var(--mf-shape-xs) var(--mf-shape-xs) 0;
+}
+/* 切り欠きの幅（ラベルの文字ぶん＋左右 4px）。浮かせていないときは 0 */
+.rt__outline-label {
+  display: block;
+  visibility: hidden;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font: var(--mf-type-body-small);
+}
+.rt__label {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  max-width: calc(100% - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  font: var(--mf-type-body-large);
+  color: var(--rt-label);
+  transition:
+    top var(--mf-motion, 150ms),
+    translate var(--mf-motion, 150ms),
+    font-size var(--mf-motion, 150ms);
+}
+:is(.rt--float, .rt--composer:focus-within) > .rt__outline .rt__outline-notch {
+  border-top-style: none !important;
+}
+:is(.rt--float, .rt--composer:focus-within) > .rt__outline .rt__outline-label {
+  max-width: 100%;
+  padding-inline: 4px;
+}
+:is(.rt--float, .rt--composer:focus-within) > .rt__label {
+  top: 0;
+  translate: 0 -50%;
+  font: var(--mf-type-body-small);
+}
+/* ラベルが本文の位置にあるあいだは案内を出さない（M3E と同じ。フォーカスすると出る） */
+.rt--composer:not(:focus-within) .rt__content p.is-editor-empty:first-child::before {
+  opacity: 0;
+}
+.rt--loading > .rt__label {
+  top: 16px;
+}
+/* 投稿欄（紙の上に浮かぶ）では、枠の中を塗る */
 .compose-pop .rt--composer {
   background: var(--mf-surface-container-lowest);
-  box-shadow:
-    var(--mf-elevation-2),
-    inset 0 0 0 1px var(--mf-outline);
 }
-.compose-pop .rt--composer:hover {
-  box-shadow:
-    var(--mf-elevation-2),
-    inset 0 0 0 1px var(--mf-on-surface);
+/* 紙の上では、枠に乗ったラベルの後ろの紙の文字が透けないよう、ラベルにも同じ面を敷く */
+.compose-pop :is(.rt--float, .rt--composer:focus-within) > .rt__label {
+  margin-inline-start: -4px;
+  padding-inline: 4px;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-surface-container-lowest);
 }
-.compose-pop .rt--composer:focus-within {
-  box-shadow:
-    var(--mf-elevation-2),
-    inset 0 0 0 2px var(--mf-primary);
+.compose-pop .rt-wrap {
+  gap: 16px;
 }
 .rt--composer .rt__editor {
-  padding-inline-end: 8px;
+  padding-inline-end: 12px;
+}
+.rt--composer .rt__content {
+  font: var(--mf-type-body-large);
+  min-height: calc(var(--rt-rows, 2) * 1.5rem);
+}
+.rt--composer .rt__bar {
+  margin-inline-start: -8px;
 }
 .rt--composer .rt__content {
   max-height: min(30vh, 200px);
@@ -4589,13 +4670,14 @@ m3e-icon.icon--on {
 .rt-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px; /* 枠に乗るラベル（高さの半分 8px が枠の上へ出る）とツールバーが重ならない */
   min-width: 0;
 }
+/* ツールバーは入力欄の幅の中央（利用者指示 2026-10-20「両サイドの幅が中央揃えになるように真ん中に持ってきて」） */
 .rt-wrap > .rt__toolbar {
-  align-self: flex-start;
+  align-self: center;
   max-width: calc(100% - 8px);
-  margin: 4px 0 0 4px;
+  margin: 4px 0 0;
   /* 入力欄に添える小さな浮遊ツールバー（高さ 40・余白 4・ボタン間 0） */
   --m3e-toolbar-size: 40px;
   --m3e-toolbar-spacing: 0px;
@@ -4613,7 +4695,6 @@ m3e-icon.icon--on {
     margin-inline: -4px;
   }
 }
-/* 投稿欄では囲う面が無いので、ツールバーは入力欄の左端に揃える */
 .compose-pop .rt-wrap > .rt__toolbar {
   margin: 0;
 }

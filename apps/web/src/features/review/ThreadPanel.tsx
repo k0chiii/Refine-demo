@@ -348,7 +348,6 @@ export function ThreadPanel({
               <RichCommentField
                 id={`${t.id}-edit`}
                 ariaLabel="本文の訂正"
-                placeholder="本文の訂正"
                 autoFocus
                 value={text}
                 onValue={setText}

@@ -146,7 +146,7 @@ export function ComposePopover({
           ref={richRef}
           ariaLabel={what}
           // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
-          placeholder={`${label}（改善案には理由も添えて）`}
+          placeholder="改善案には理由も添えて"
           rows={2}
           autoFocus={autoFocus}
           value={value}

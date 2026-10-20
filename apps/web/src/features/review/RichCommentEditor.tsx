@@ -24,6 +24,7 @@ import { M3eToolbar } from "@m3e/react/toolbar";
 import { safeHref } from "./CommentBody";
 import { useMentionDirectory, useMentionSearch, type MentionUser } from "./mentions";
 import type { RichCommentFieldProps } from "./RichCommentField";
+import { FieldOutline } from "./FieldOutline";
 
 /*
  * コメントの書式つき入力欄の本体（TipTap）。RichCommentField が遅延読み込みする。
@@ -285,7 +286,7 @@ export function RichCommentEditor({
         <RichToolbar editor={editor} linkOpen={linkOpen} onLinkOpen={setLinkOpen} />
       ) : null}
       <div
-        className="rt rt--composer"
+        className={`rt rt--composer ${value.trim() !== "" ? "rt--float" : ""}`}
         style={{ "--rt-rows": rows } as CSSProperties}
         // 余白を押しても本文に入る（Slack と同じ）
         onMouseDown={(e) => {
@@ -295,6 +296,7 @@ export function RichCommentEditor({
           }
         }}
       >
+        <FieldOutline label={ariaLabel} />
         <EditorContent editor={editor} className="rt__editor" />
         {mention ? (
           <MentionMenu query={mention.query} onPick={pickMention} keyHandler={menuKey} />

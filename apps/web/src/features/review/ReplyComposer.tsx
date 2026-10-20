@@ -65,7 +65,6 @@ export function ReplyComposer({
         <RichCommentField
           id={`${id}-reply`}
           ariaLabel="返信"
-          placeholder="返信"
           rows={2}
           value={text}
           onValue={setText}
