@@ -363,7 +363,6 @@ const tools: Tool[] = [
     label: "引用",
     run: (e) => e.chain().focus().toggleBlockquote().run(),
   },
-  { key: "code", icon: "code", label: "コード", run: (e) => e.chain().focus().toggleCode().run() },
 ];
 
 function RichToolbar({
