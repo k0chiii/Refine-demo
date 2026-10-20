@@ -66,6 +66,7 @@ import {
   MentionProvider,
 } from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
+import { ThreadPanel } from "@/features/review/ThreadPanel";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PinButton } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
@@ -172,6 +173,9 @@ type Draft = {
 const COMPOSE_W = 300;
 /** 紙面の描き終わりの通知が届かなくても、ファイルが届いてからこの時間で読み込み中の表示を終える */
 const PAINT_TIMEOUT_MS = 8000;
+/** スレッドを開いたときの引き出しの幅（一覧 330 + スレッド 410）と、これ未満しか取れなければ広げない幅（一覧に重ねて出す） */
+const THREAD_PANE_W = 740;
+const THREAD_PANE_MIN = 720;
 
 function anchorTop(anchor: Anchor, vp: Viewport): number | null {
   if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
@@ -317,6 +321,8 @@ export function Editor({
     return () => ro.disconnect();
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くと一覧の隣・シートいっぱいにスレッドが開く） */
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
@@ -415,6 +421,14 @@ export function Editor({
     if (!sheetOpen) el.show?.(0);
     setSheetOpen(true);
   };
+  /** 狭い画面: 引き出しのシートを指定の高さ（0: 半分・1: いっぱい）で開く（開いていれば高さだけ変える） */
+  const showSheet = (d: Drawer, detent: number) => {
+    const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
+    if (!el) return;
+    setDrawer(d);
+    el.show?.(detent);
+    setSheetOpen(true);
+  };
   const openDrawer = (d: Drawer) => {
     if (drawer === d) setDrawer(null);
     else {
@@ -447,6 +461,7 @@ export function Editor({
     setCompareWith(revisionId ? (search.compare ?? null) : null);
     setDraft(null);
     setActiveThreadId(revisionId ? (search.thread ?? null) : null);
+    setOpenThreadId(revisionId ? (search.thread ?? null) : null);
     if (revisionId && search.thread) {
       setDrawer("comments");
       requestReveal(search.thread);
@@ -476,7 +491,11 @@ export function Editor({
     if (!el) return;
     prepareBottomSheet(el);
     const onOpened = () => setSheetOpen(true);
-    const onClosed = () => setSheetOpen(false);
+    // シートを閉じたら、開いていたスレッドも閉じる（開き直すと一覧から。書きかけの返信は残る）
+    const onClosed = () => {
+      setSheetOpen(false);
+      setOpenThreadId(null);
+    };
     el.addEventListener("opened", onOpened);
     el.addEventListener("closed", onClosed);
     return () => {
@@ -661,6 +680,7 @@ export function Editor({
   const doDeleteThread = useAction(async (threadId: string) => {
     await removeThread({ threadId: threadId as Id<"commentThreads"> });
     setActiveThreadId((cur) => (cur === threadId ? null : cur));
+    setOpenThreadId((cur) => (cur === threadId ? null : cur));
   });
   const doDeleteReply = useAction(async (threadId: string, replyEventId: string) => {
     await removeReply({ threadId: threadId as Id<"commentThreads">, replyEventId });
@@ -703,6 +723,27 @@ export function Editor({
     [allThreads, showResolved, activeThreadId, who],
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
+  // 開いているスレッドが版のデータから消えた（削除された・別の版を開いた）ら、パネルを閉じる
+  useEffect(() => {
+    if (openThreadId && data && !allThreads.some((t) => t.id === openThreadId))
+      setOpenThreadId(null);
+  }, [openThreadId, data, allThreads]);
+  // 広い画面でスレッドを開いたら、引き出しを一覧とスレッドが並ぶ幅まで広げる（閉じたら元の幅へ）。入りきらない狭さでは広げず、
+  // スレッドは一覧に重ねて出る（CSS の container query）
+  const paneBeforeThread = useRef<{ w: number | null } | null>(null);
+  const wantWidePane = openThreadId !== null && drawer === "comments" && !mobile;
+  useEffect(() => {
+    if (wantWidePane) {
+      if (!paneBeforeThread.current) paneBeforeThread.current = { w: paneW };
+      const room = Math.max(240, bodyW - 24 - 360);
+      const want = Math.min(THREAD_PANE_W, room);
+      if (want >= THREAD_PANE_MIN && (paneW ?? defaultPane) < want) setPaneW(want);
+    } else if (paneBeforeThread.current) {
+      const before = paneBeforeThread.current.w;
+      paneBeforeThread.current = null;
+      setPaneW(drawer === null ? null : before);
+    }
+  }, [wantWidePane]);
 
   // コメントを選んだら（紙面のピン・範囲、URL の ?thread=、通知）、一覧が見える状態にしてからそのカードまでスクロールする。
   // 一覧の位置合わせは features/review/revealThread。ここでは「一覧を見せる」ところまで（狭い画面はシートを開き、広い画面は
@@ -716,14 +757,18 @@ export function Editor({
     // 絞り込みで隠れているときは外す（解決済みは選択中の分だけ下の threads が出す）
     if (who !== "all" && (who === "bot") !== Boolean(t.origin)) setWho("all");
     if (mobile) {
-      if (!(sheetOpen && drawer === "comments")) toggleSheet("comments");
-    } else if (layout === "panel" && drawer !== "comments") setDrawer("comments");
+      // スレッドを開くときはシートいっぱいに、一覧だけのときは半分に開く
+      if (openThreadId === reveal.id) showSheet("comments", 1);
+      else if (!(sheetOpen && drawer === "comments")) toggleSheet("comments");
+    } else if ((layout === "panel" || openThreadId === reveal.id) && drawer !== "comments")
+      setDrawer("comments");
   }, [reveal, allThreads]);
   useRevealThread(reveal, drawer === "comments" && (!mobile || sheetOpen));
   // 通知などで同じ版の別のコメントへ URL だけが変わったとき
   useEffect(() => {
     if (!revisionId || !search.thread) return;
     setActiveThreadId(search.thread);
+    setOpenThreadId(search.thread);
     setDrawer("comments");
     requestReveal(search.thread);
   }, [search.thread]);
@@ -856,31 +901,49 @@ export function Editor({
       if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
     }
   };
-  const card = (t: Thread & { index: number }, className?: string) => (
-    <ThreadCard
-      key={t.id}
-      thread={t}
-      index={t.index}
-      {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
-      active={t.id === activeThreadId}
-      meId={me?.id ?? null}
-      canDecide={can?.decide ?? false}
-      canReply={can?.reply ?? false}
-      canEdit={work?.lifecycle !== "finalized"}
-      pending={busy}
-      revisionId={revisionId ?? ""}
-      confidentiality={data?.work.confidentiality}
-      {...(className ? { className } : {})}
-      onSelect={() => jumpTo(t, { reveal: false })}
-      onResolve={() => doDecide.run(t.id, "resolved", "")}
-      onDecide={(a, r) => doDecide.run(t.id, a, r)}
-      onReply={(b, ids, fileIds) => doReply.run(t.id, b, ids, fileIds)}
-      onAssign={(ids) => doAssignThread.run(t.id, ids)}
-      onEdit={(b) => doEditThread.run(t.id, b)}
-      onDelete={() => doDeleteThread.run(t.id)}
-      onDeleteReply={(replyEventId) => doDeleteReply.run(t.id, replyEventId)}
-    />
-  );
+  /** カード・パネルに渡す、コメント 1 件への操作（どちらも同じ操作） */
+  const threadActions = (t: Thread) => ({
+    onResolve: () => doDecide.run(t.id, "resolved", ""),
+    onDecide: (a: "rejected" | "deferred", r: string) => doDecide.run(t.id, a, r),
+    onReply: (b: string, ids: string[], fileIds: string[]) => doReply.run(t.id, b, ids, fileIds),
+    onAssign: (ids: string[]) => doAssignThread.run(t.id, ids),
+    onEdit: (b: string) => doEditThread.run(t.id, b),
+    onDelete: () => doDeleteThread.run(t.id),
+    onDeleteReply: (replyEventId: string) => doDeleteReply.run(t.id, replyEventId),
+  });
+  /**
+   * スレッドのパネルを開く（コメントを選んで紙面のピンへ移り、パネルを開く）。広い画面は引き出しの「コメント」に、狭い画面は
+   * シートをいっぱいに開いて。開いたら既読にする（パネルが行う）
+   */
+  const openThread = (t: Thread, opts?: { reveal?: boolean }) => {
+    // 一覧のカードから開くときは一覧を動かさない（今そのカードを見て押している）。紙面のピンから開くときはカードまで送る
+    // （狭い画面の一覧はシートの中に隠れるので送らない）
+    jumpTo(t, { reveal: opts?.reveal === true && !mobile });
+    setOpenThreadId(t.id);
+    if (mobile) showSheet("comments", 1);
+    else if (drawer !== "comments") setDrawer("comments");
+  };
+  const card = (t: Thread & { index: number }, className?: string) => {
+    const { onResolve } = threadActions(t);
+    return (
+      <ThreadCard
+        key={t.id}
+        thread={t}
+        index={t.index}
+        {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
+        active={t.id === activeThreadId}
+        canDecide={can?.decide ?? false}
+        canReply={can?.reply ?? false}
+        pending={busy}
+        confidentiality={data?.work.confidentiality}
+        now={now}
+        {...(className ? { className } : {})}
+        onSelect={() => jumpTo(t, { reveal: false })}
+        onOpen={() => openThread(t)}
+        onResolve={onResolve}
+      />
+    );
+  };
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
@@ -1048,7 +1111,10 @@ export function Editor({
       }
       const t = threads.find((x) => x.id === id);
       if (!t) return;
-      jumpTo(t);
+      // 紙面のピン: 一覧が引き出し・シートにあるレイアウトでは、スレッドのパネルを開く（ピンの横・高さに並べるレイアウトは
+      // カードがその場にあるので、選ぶだけ）
+      if (layout === "panel") openThread(t, { reveal: true });
+      else jumpTo(t);
     },
     selecting,
   };
@@ -1486,98 +1552,130 @@ export function Editor({
     !!artifact.externalUrl &&
     (isWebLiveArtifact(artifact) || isFigmaUrl(artifact.externalUrl));
 
+  /** スレッドのパネルで開いているコメント（版のデータに無い・削除されたら閉じる） */
+  const openedThread = openThreadId
+    ? (allThreads.find((t) => t.id === openThreadId) ?? null)
+    : null;
+  const threadPanel =
+    openedThread && revisionId ? (
+      <ThreadPanel
+        key={openedThread.id}
+        thread={openedThread}
+        index={openedThread.index}
+        {...(webStates.has(openedThread.id) ? { placeState: webStates.get(openedThread.id)! } : {})}
+        variant={mobile ? "sheet" : "pane"}
+        meId={me?.id ?? null}
+        canDecide={can?.decide ?? false}
+        canReply={can?.reply ?? false}
+        canEdit={work?.lifecycle !== "finalized"}
+        revisionId={revisionId}
+        confidentiality={data?.work.confidentiality}
+        pending={busy}
+        now={now}
+        onBack={() => setOpenThreadId(null)}
+        onSelect={() => jumpTo(openedThread, { reveal: false })}
+        {...threadActions(openedThread)}
+      />
+    ) : null;
   const commentsPanel = (
-    <div className="comments">
-      <AutoProofreadStatus auto={auto} />
-      <div className="comments__header">
-        {/* 「位置なしでコメント」はここから（ツールバーの丸いボタンは、印を付けるものを切り替える「書き込み」に譲った） */}
-        {canComment ? (
-          <M3eButton
-            variant="tonal"
-            className="comments__free"
-            onClick={() => {
-              setDraft({ free: true });
-              setActiveThreadId(null);
-            }}
-          >
-            <M3eIcon slot="icon" name="add_comment" />
-            位置なしでコメント
-          </M3eButton>
-        ) : null}
-        <M3eFilterChipSet aria-label="コメントの絞り込み">
-          {botCount > 0 ? (
-            <>
-              <M3eFilterChip
-                selected={who === "human"}
-                onClick={() => setWho((v) => (v === "human" ? "all" : "human"))}
+    <div
+      className={`comments ${threadPanel ? "comments--thread" : ""} ${mobile ? "comments--sheet" : ""}`}
+    >
+      <div className="comments__split">
+        <div className="comments__main">
+          <AutoProofreadStatus auto={auto} />
+          <div className="comments__header">
+            {/* 「位置なしでコメント」はここから（ツールバーの丸いボタンは、印を付けるものを切り替える「書き込み」に譲った） */}
+            {canComment ? (
+              <M3eButton
+                variant="tonal"
+                className="comments__free"
+                onClick={() => {
+                  setDraft({ free: true });
+                  setActiveThreadId(null);
+                }}
               >
-                人のコメント
-              </M3eFilterChip>
-              <M3eFilterChip
-                selected={who === "bot"}
-                onClick={() => setWho((v) => (v === "bot" ? "all" : "bot"))}
-              >
-                <M3eIcon slot="icon" name="smart_toy" />
-                自動校正 {botCount}
-              </M3eFilterChip>
-            </>
-          ) : null}
-          {resolvedCount > 0 ? (
-            <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
-              解決済み {resolvedCount}
-            </M3eFilterChip>
-          ) : null}
-        </M3eFilterChipSet>
-      </div>
-      <div className="comments__list">
-        {carryCandidates && carryCandidates.length > 0 ? (
-          <div className="carry-box" aria-label="前版の未解決コメント">
-            <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
-            {carryCandidates.map((c) => (
-              <div key={c.id} className="carry">
-                <div className="small muted">
-                  {c.revisionLabel}・{resolutionLabel[c.resolution]}・{c.author?.name}
-                </div>
-                <CommentBody className="thread__body" body={c.body} format={c.bodyFormat} />
-                <div className="row">
-                  <span className="spacer" />
-                  <M3eButton
-                    variant="text"
-                    disabled={doCarry.pending}
-                    onClick={() => void doCarry.run(c.id)}
+                <M3eIcon slot="icon" name="add_comment" />
+                位置なしでコメント
+              </M3eButton>
+            ) : null}
+            <M3eFilterChipSet aria-label="コメントの絞り込み">
+              {botCount > 0 ? (
+                <>
+                  <M3eFilterChip
+                    selected={who === "human"}
+                    onClick={() => setWho((v) => (v === "human" ? "all" : "human"))}
                   >
-                    この版へ持ち越す
-                  </M3eButton>
-                </div>
-              </div>
-            ))}
+                    人のコメント
+                  </M3eFilterChip>
+                  <M3eFilterChip
+                    selected={who === "bot"}
+                    onClick={() => setWho((v) => (v === "bot" ? "all" : "bot"))}
+                  >
+                    <M3eIcon slot="icon" name="smart_toy" />
+                    自動校正 {botCount}
+                  </M3eFilterChip>
+                </>
+              ) : null}
+              {resolvedCount > 0 ? (
+                <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
+                  解決済み {resolvedCount}
+                </M3eFilterChip>
+              ) : null}
+            </M3eFilterChipSet>
           </div>
-        ) : null}
-        {!target ? (
-          <p className="muted small comments__empty">版を提出するとコメントできます</p>
-        ) : threads.length === 0 ? (
-          <p className="muted small comments__empty">
-            {canComment
-              ? artifact?.type === "video"
-                ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
-                : artifact && isWebLiveArtifact(artifact)
-                  ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
-                  : artifact?.role === "external" && isLiveExternal
-                    ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
-                    : touch
-                      ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
-                      : "ファイルの上でドラッグすると、その場にコメントできます"
-              : "コメントはありません"}
-          </p>
-        ) : (
-          threads.map((t) => card(t))
-        )}
-      </div>
-      {target && data && !canComment ? (
-        <div className="comments__blocked small muted">
-          {blockedReasonLabel[data.commentBlockedReason ?? "forbidden"]}
+          <div className="comments__list">
+            {carryCandidates && carryCandidates.length > 0 ? (
+              <div className="carry-box" aria-label="前版の未解決コメント">
+                <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
+                {carryCandidates.map((c) => (
+                  <div key={c.id} className="carry">
+                    <div className="small muted">
+                      {c.revisionLabel}・{resolutionLabel[c.resolution]}・{c.author?.name}
+                    </div>
+                    <CommentBody className="thread__body" body={c.body} format={c.bodyFormat} />
+                    <div className="row">
+                      <span className="spacer" />
+                      <M3eButton
+                        variant="text"
+                        disabled={doCarry.pending}
+                        onClick={() => void doCarry.run(c.id)}
+                      >
+                        この版へ持ち越す
+                      </M3eButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {!target ? (
+              <p className="muted small comments__empty">版を提出するとコメントできます</p>
+            ) : threads.length === 0 ? (
+              <p className="muted small comments__empty">
+                {canComment
+                  ? artifact?.type === "video"
+                    ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
+                    : artifact && isWebLiveArtifact(artifact)
+                      ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
+                      : artifact?.role === "external" && isLiveExternal
+                        ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
+                        : touch
+                          ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                          : "ファイルの上でドラッグすると、その場にコメントできます"
+                  : "コメントはありません"}
+              </p>
+            ) : (
+              threads.map((t) => card(t))
+            )}
+          </div>
+          {target && data && !canComment ? (
+            <div className="comments__blocked small muted">
+              {blockedReasonLabel[data.commentBlockedReason ?? "forbidden"]}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+        {threadPanel}
+      </div>
     </div>
   );
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
@@ -2110,7 +2208,10 @@ export function Editor({
             className="ws__sheet"
           >
             <div className="drawer drawer--sheet">
-              {drawerTabs(sheetTab, (d) => setDrawer(d))}
+              {/* スレッドを開いているあいだは、シートいっぱいにスレッドだけを見せる（戻るで一覧へ） */}
+              {threadPanel && sheetTab === "comments"
+                ? null
+                : drawerTabs(sheetTab, (d) => setDrawer(d))}
               <div className="drawer__body">{drawerBody(sheetTab)}</div>
             </div>
           </M3eBottomSheet>

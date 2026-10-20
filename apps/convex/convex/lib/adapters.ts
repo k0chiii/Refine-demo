@@ -378,6 +378,39 @@ export function createAppContext(
           reactions: reactions.length > 0 ? reactions : undefined,
         });
       },
+      async readAt(userId, threadId) {
+        const doc = await db
+          .query("commentReads")
+          .withIndex("by_user_thread", (q) =>
+            q.eq("userId", userId).eq("threadId", threadId as Id<"commentThreads">),
+          )
+          .first();
+        return doc?.readAt ?? null;
+      },
+      async markRead(userId, threadId, at) {
+        const tid = threadId as Id<"commentThreads">;
+        const doc = await db
+          .query("commentReads")
+          .withIndex("by_user_thread", (q) => q.eq("userId", userId).eq("threadId", tid))
+          .first();
+        if (!doc) await db.insert("commentReads", { userId, threadId: tid, readAt: at });
+        else if (doc.readAt < at) await db.patch("commentReads", doc._id, { readAt: at });
+      },
+      async readsOf(userId, threadIds) {
+        const docs = await Promise.all(
+          threadIds.map((id) =>
+            db
+              .query("commentReads")
+              .withIndex("by_user_thread", (q) =>
+                q.eq("userId", userId).eq("threadId", id as Id<"commentThreads">),
+              )
+              .first(),
+          ),
+        );
+        const out = new Map<string, number>();
+        for (const d of docs) if (d) out.set(d.threadId as string, d.readAt);
+        return out;
+      },
     },
     assignments: {
       async listByRevision(revisionId) {

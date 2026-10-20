@@ -115,6 +115,7 @@ export interface InMemoryContext extends AppContext {
     attempts: Table<UploadAttempt>;
     /** `${userId}|${threadId}` → 最後に読んだ時刻 */
     feedbackReads: Map<string, number>;
+    commentReads: Map<string, number>;
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
     /** 表示名（テストで通知の文面を確かめるときに入れる）。ここに居る人を委員（名簿）とみなす */
@@ -161,6 +162,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     commentFiles: new Table<CommentFile>("cf"),
     attempts: new Table<UploadAttempt>("att"),
     feedbackReads: new Map(),
+    commentReads: new Map(),
     audit: [],
     idempotency: new Map(),
     names: new Map(),
@@ -272,6 +274,19 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         if (!e) return;
         if (reactions.length > 0) e.reactions = clone(reactions);
         else delete e.reactions;
+      },
+      readAt: async (userId, threadId) => state.commentReads.get(`${userId}|${threadId}`) ?? null,
+      markRead: async (userId, threadId, at) => {
+        const key = `${userId}|${threadId}`;
+        state.commentReads.set(key, Math.max(at, state.commentReads.get(key) ?? 0));
+      },
+      readsOf: async (userId, threadIds) => {
+        const out = new Map<string, number>();
+        for (const id of threadIds) {
+          const at = state.commentReads.get(`${userId}|${id}`);
+          if (at !== undefined) out.set(id, at);
+        }
+        return out;
       },
     },
     assignments: {

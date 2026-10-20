@@ -30,8 +30,16 @@ const FALLBACK_ORIGINAL_MAX_BYTES = 1_500_000;
 /** 画面の手前この距離に入ったら取りに行く */
 const PRELOAD_MARGIN = "240px";
 
+/** 一覧のカードに並べるサムネイルの数（残りは最後の 1 枚に「+n」で示す） */
+const STRIP_SHOWN = 4;
+
 export interface CommentAttachmentsProps {
   files: readonly CommentFileView[];
+  /**
+   * full: 本文の下に大きく（画像は格子、ほかはチップ）。thumbs: 一覧のカード用に小さなサムネイルを 1 列（最初の数枚だけ。
+   * 押すと拡大・保存。カード全体の選択には伝えない）
+   */
+  variant?: "full" | "thumbs";
   /** 制作物の機密区分。機密（restricted）や不明のときは端末に残さない（メモリだけ） */
   confidentiality?: "normal" | "restricted" | undefined;
   className?: string;
@@ -213,7 +221,12 @@ const PLACEHOLDER: CommentFileView = {
 const iconFor = (type: CommentFileView["type"]) =>
   type === "pdf" ? "picture_as_pdf" : type === "document" ? "article" : "draft";
 
-export function CommentAttachments({ files, confidentiality, className }: CommentAttachmentsProps) {
+export function CommentAttachments({
+  files,
+  confidentiality,
+  className,
+  variant = "full",
+}: CommentAttachmentsProps) {
   const token = useAuthToken();
   const [open, setOpen] = useState<CommentFileView | null>(null);
   const persist = mayPersist(confidentiality);
@@ -221,6 +234,45 @@ export function CommentAttachments({ files, confidentiality, className }: Commen
     if (token) await downloadCommentFile(token, f.id, f.name);
   });
   if (files.length === 0) return null;
+  if (variant === "thumbs") {
+    const shown = files.slice(0, STRIP_SHOWN);
+    const more = files.length - shown.length;
+    return (
+      <div
+        className={
+          className ? `cmt-files cmt-files--thumbs ${className}` : "cmt-files cmt-files--thumbs"
+        }
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="cmt-files__strip">
+          {shown.map((f, i) => (
+            <div key={f.id} className="cmt-files__cell">
+              {f.type === "image" ? (
+                <ImageTile file={f} persist={persist} single={false} onOpen={setOpen} />
+              ) : (
+                <button
+                  type="button"
+                  className="cmt-files__tile"
+                  aria-label={`${f.name} をダウンロード`}
+                  onClick={() => void download.run(f)}
+                >
+                  <M3eIcon name={iconFor(f.type)} aria-hidden="true" />
+                </button>
+              )}
+              {more > 0 && i === shown.length - 1 ? (
+                <span className="cmt-files__more" aria-hidden="true">
+                  +{more}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        {shown.some((f) => f.type === "image") ? (
+          <Lightbox file={open} persist={persist} onClosed={() => setOpen(null)} />
+        ) : null}
+      </div>
+    );
+  }
   const images = files.filter((f) => f.type === "image");
   const others = files.filter((f) => f.type !== "image");
   return (

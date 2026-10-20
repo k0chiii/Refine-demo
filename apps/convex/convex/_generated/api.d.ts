@@ -34,6 +34,7 @@ import type * as lib_principal from "../lib/principal.js";
 import type * as lib_reactions from "../lib/reactions.js";
 import type * as lib_redirect from "../lib/redirect.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
+import type * as lib_threadActivity from "../lib/threadActivity.js";
 import type * as lib_users from "../lib/users.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_webpush from "../lib/webpush.js";
@@ -89,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   "lib/reactions": typeof lib_reactions;
   "lib/redirect": typeof lib_redirect;
   "lib/serviceAuth": typeof lib_serviceAuth;
+  "lib/threadActivity": typeof lib_threadActivity;
   "lib/users": typeof lib_users;
   "lib/validators": typeof lib_validators;
   "lib/webpush": typeof lib_webpush;

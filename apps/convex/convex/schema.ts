@@ -401,9 +401,24 @@ export default defineSchema({
     fileIds: v.optional(v.array(v.string())),
     /** リアクション（絵文字ごとに押した人。FB と同じ形。誰も付けていなければ持たない） */
     reactions: v.optional(vReactionEntries),
+    /**
+     * スレッドのやり取り（最後の動き・返信の件数・参加者）。投稿・返信・返信の削除のたびに更新する。
+     * 無ければ古いスレッドで、画面に渡すときにイベントから導く（移行しない）
+     */
+    lastActivityAt: v.optional(v.number()),
+    lastActivityBy: v.optional(v.string()),
+    replyCount: v.optional(v.number()),
+    participantIds: v.optional(v.array(v.string())),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
+
+  /** コメントのスレッドを最後に読んだ時刻（人 × スレッドで 1 行。未読の判定。FB の feedbackReads と同じ） */
+  commentReads: defineTable({
+    userId: v.string(),
+    threadId: v.id("commentThreads"),
+    readAt: v.number(),
+  }).index("by_user_thread", ["userId", "threadId"]),
 
   /**
    * コメント・返信の添付（R2 の comments/ の下）。準備 → Hono で実体検証 → コメント（返信）に付ける。

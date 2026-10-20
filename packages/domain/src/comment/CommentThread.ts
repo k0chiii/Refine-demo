@@ -62,6 +62,14 @@ export interface CommentThread {
   fileIds?: string[];
   /** リアクション（FB と同じ絵文字・同じ規則。comment/reactions.ts）。誰も付けていなければ持たない */
   reactions?: ReactionEntry[];
+  /**
+   * スレッドのやり取り（最後の動き・返信の件数・参加者。投稿・返信・返信の削除のたびに更新する。comment/activity.ts）。
+   * 持っていない古いスレッドは移行せず、イベントから導く。
+   */
+  lastActivityAt?: Instant;
+  lastActivityBy?: UserId;
+  replyCount?: number;
+  participantIds?: UserId[];
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;

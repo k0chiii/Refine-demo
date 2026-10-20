@@ -657,15 +657,15 @@ async function main() {
       n0,
     );
     const mine = page.locator(".comments .thread", { hasText: "削除の確認用" });
-    await mine.locator(".thread__body").click();
-    await settle();
-    await mine.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    const panel = await openPanel(mine);
+    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
     await settle();
     await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
     await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
     await settle();
     await shot("75-comment-delete-confirm");
     await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await page.waitForSelector(".thread-panel", { state: "detached" });
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length === n,
       n0,
@@ -721,35 +721,44 @@ async function main() {
         ((await card.locator(".thread__body").innerText()) ?? "").includes("<script>"),
       "生の HTML が文字のまま出ていない",
     );
-    await card.locator(".thread__body").click();
-    await settle();
+    // 一覧のカードは本文を 3 行までに縮めて見せる（全文はスレッドのパネルで）
+    const clamp = await card
+      .locator(".thread__body--clamp")
+      .evaluate((el) => getComputedStyle(el).webkitLineClamp);
+    expectTrue(clamp === "3", "一覧のカードの本文が 3 行までに縮められていない");
+    const panel = await openPanel(card);
     // 返信（`コード`）
-    await card.locator(".thread__form .rt__content").click();
+    await panel.locator(".thread-panel__composer .rt__content").click();
     await page.keyboard.type("`inline` で返信");
-    await card.locator("m3e-button", { hasText: "返信" }).click();
-    await card.locator(".thread__replybody code").waitFor();
+    await panel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+    await panel.locator(".thread__replybody code").waitFor();
     // 訂正: 本文を読み込んで追記する
-    await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
     await settle();
     await page.locator("m3e-menu-item:visible", { hasText: "訂正" }).click();
-    await card.locator(".thread__form .rt__content").waitFor();
+    await panel.locator(".thread-panel__root .thread__form .rt__content").waitFor();
     // メニューから開いても、入力欄にフォーカスが移る（メニューが閉じてボタンへ戻したあとで）
-    await page.waitForFunction(() => Boolean(document.activeElement?.closest(".thread__form .rt")));
+    await page.waitForFunction(() =>
+      Boolean(document.activeElement?.closest(".thread-panel__root .thread__form .rt")),
+    );
     await page.keyboard.press("Control+End");
     await page.keyboard.type(" 追記");
-    await card.locator("m3e-button", { hasText: "訂正を保存" }).click();
-    await card.locator(".thread__previous strong").waitFor();
-    expectTrue(
-      ((await card.locator(".thread__body").first().innerText()) ?? "").includes("追記"),
-      "訂正が本文に反映されない",
-    );
+    await panel.locator("m3e-button", { hasText: "訂正を保存" }).click();
+    await page.waitForSelector(".thread-panel .thread__previous strong");
+    // 履歴（原文）と本文は別々に届くので、本文が替わるまで待つ
+    await page
+      .waitForFunction(
+        () =>
+          document.querySelector(".thread-panel__root .thread__body")?.textContent.includes("追記"),
+        null,
+        { timeout: 10_000 },
+      )
+      .catch(() => {
+        throw new Error("訂正が本文に反映されない");
+      });
     await shot("76-comment-markdown");
     // 後片付け: 書式のコメントを削除して件数を戻す
-    await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
-    await settle();
-    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
-    await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
-    await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await deleteFromPanel(panel);
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length === n,
       n0,
@@ -788,31 +797,226 @@ async function main() {
         .evaluate((img) => img.naturalWidth > 0),
       "コメントの添付のサムネイルが描かれない",
     );
-    await card.locator(".thread__body").click();
-    await settle();
-    // 返信に画像を添付（本文は空でも送れる）
-    await card.locator(".thread__form .rt__content").click();
-    await card.locator(".thread__form input[type=file]").setInputFiles([pngFile("shot-b.png", 2)]);
-    await card.locator(".cmt-pending__thumb img").waitFor({ timeout: 20_000 });
-    await page.waitForFunction(
-      () => !document.querySelector(".thread__form .cmt-pending__progress"),
-    );
-    await card.locator(".thread__form m3e-button", { hasText: "返信" }).click();
-    await card.locator(".thread__replyitem .cmt-files__tile img").waitFor({ timeout: 15_000 });
+    // 一覧のカードには添付の小さなサムネイルが並ぶ
     expectTrue(
       await card
+        .locator(".cmt-files--thumbs .cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "一覧のカードにサムネイルが並ばない",
+    );
+    // 返信に画像を添付（本文は空でも送れる）: スレッドのパネルの返信欄で
+    const panel = await openPanel(card);
+    await panel.locator(".thread-panel__composer .rt__content").click();
+    await panel
+      .locator(".thread-panel__composer input[type=file]")
+      .setInputFiles([pngFile("shot-b.png", 2)]);
+    await panel
+      .locator(".thread-panel__composer .cmt-pending__thumb img")
+      .waitFor({ timeout: 20_000 });
+    await page.waitForFunction(
+      () => !document.querySelector(".thread-panel__composer .cmt-pending__progress"),
+    );
+    await panel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+    await panel.locator(".thread__replyitem .cmt-files__tile img").waitFor({ timeout: 15_000 });
+    expectTrue(
+      await panel
         .locator(".thread__replyitem .cmt-files__tile img")
         .first()
         .evaluate((img) => img.naturalWidth > 0),
       "返信の添付のサムネイルが描かれない",
     );
+    expectTrue(
+      await panel
+        .locator(".thread-panel__root .cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "スレッドのパネルの本文の添付のサムネイルが描かれない",
+    );
     await shot("77-comment-attach");
     // 後片付け: コメントを削除して件数を戻す
-    await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await deleteFromPanel(panel);
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
+  }
+
+  // 78 スレッドのパネル（利用者決定 2026-10-20「Slackみたいに別タブで開く感じ？横に開く感じ？」）: 一覧のカードの「返信」の行を押すと、
+  // 一覧の隣にスレッドが開く（引き出しが広がり、一覧は見えたまま）。元のコメントの下に返信の流れ、一番下に返信欄。
+  // 同じ人が続けて書いた返信はまとめる。79 別の人には未読の点が付き、開くと消え、「ここから未読」の線が引かれる
+  {
+    const n0 = await page.locator(".comments .thread").count();
+    await page.locator(".comments__free").click();
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(
+      ".compose-pop .rt__content",
+      "スレッドの確認用です。縦に長くなる議論もここで続けます。",
+    );
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const card = page.locator(".comments .thread", { hasText: "スレッドの確認用" });
+    // 自分の投稿は自分には未読にならない
+    expectTrue((await card.locator(".thread__unread").count()) === 0, "自分の投稿が未読になる");
+    // カードを押すだけではパネルは開かない
+    await card.locator(".thread__body").click();
     await settle();
-    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
-    await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
-    await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    expectTrue(
+      (await page.locator(".thread-panel").count()) === 0,
+      "カードを押しただけでパネルが開く",
+    );
+    const panel = await openPanel(card);
+    // 広い画面では一覧と並ぶ（一覧のカードは見えたまま・パネルは一覧の右）
+    const sides = await page.evaluate(() => {
+      const list = document.querySelector(".comments__list").getBoundingClientRect();
+      const panel = document.querySelector(".thread-panel").getBoundingClientRect();
+      const composer = document.querySelector(".thread-panel__composer").getBoundingClientRect();
+      return {
+        listRight: list.right,
+        panelLeft: panel.left,
+        listVisible: getComputedStyle(document.querySelector(".comments__main")).visibility,
+        composerInside: composer.bottom <= innerHeight && composer.top >= panel.top,
+      };
+    });
+    expectTrue(
+      sides.panelLeft >= sides.listRight - 1 && sides.listVisible === "visible",
+      "広い画面でスレッドが一覧の隣に開かない",
+    );
+    expectTrue(sides.composerInside, "返信欄が見えていない");
+    for (const text of ["一件目の返信です。", "続けて書いた返信です。"]) {
+      await panel.locator(".thread-panel__composer .rt__content").click();
+      await page.keyboard.type(text);
+      await panel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+      await page.waitForFunction(
+        (t) =>
+          [...document.querySelectorAll(".thread-panel .thread__replybody")].some((e) =>
+            e.textContent.includes(t),
+          ),
+        text,
+      );
+    }
+    // 同じ人が 5 分以内に続けた返信は、名前・アバターを省いてまとめる
+    expectTrue(
+      (await panel.locator(".cth-post--continued").count()) === 1 &&
+        (await panel.locator(".cth-post").count()) === 2,
+      "続けての返信がまとまらない",
+    );
+    // 一覧のカードの返信の件数は、返信が済んだあとに届く
+    await page.waitForFunction(
+      () =>
+        [...document.querySelectorAll(".comments .thread")]
+          .find((c) => c.textContent.includes("スレッドの確認用"))
+          ?.querySelector(".thread__replies")
+          ?.textContent.includes("2"),
+      null,
+      { timeout: 10_000 },
+    );
+    // 一覧の中で、開いているスレッドのカード（下の行まで）が見える位置にして撮る
+    await card.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("78-thread-panel");
+    await closePanel();
+    // 79 別の人（制作者）: 一覧のカードに未読の点 → パネルを開くと点が消え、「ここから未読」の線が引かれる
+    await signInAs("mock-nogiku-creator");
+    await go(revisionUrl);
+    await pdfReady();
+    await drawer("コメント");
+    const theirs = page.locator(".comments .thread", { hasText: "スレッドの確認用" });
+    await theirs.waitFor();
+    expectTrue(
+      (await theirs.locator(".thread__unread").count()) === 1,
+      "別の人に未読の点が付かない",
+    );
+    await theirs.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("79-thread-unread");
+    const theirPanel = await openPanel(theirs);
+    await theirPanel.locator(".cth-unread").waitFor();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".comments .thread")]
+        .filter((c) => c.textContent.includes("スレッドの確認用"))
+        .every((c) => !c.querySelector(".thread__unread")),
+    );
+    await shot("79-thread-read");
+    await theirPanel.locator(".thread-panel__composer .rt__content").click();
+    await page.keyboard.type("確認しました。対応します。");
+    await theirPanel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".thread-panel .cth-post").length === 3,
+    );
+    await closePanel();
+    // 元の投稿者に戻ると、制作者の返信で未読の点が付き、開くと消える。後片付けでスレッドを削除する
+    await signInAs("mock-nogiku-reviewer");
+    await go(revisionUrl);
+    await pdfReady();
+    await drawer("コメント");
+    const back = page.locator(".comments .thread", { hasText: "スレッドの確認用" });
+    await back.waitFor();
+    expectTrue(
+      (await back.locator(".thread__unread").count()) === 1,
+      "返信が付いたのに未読の点が付かない",
+    );
+    // 返信した人（制作者）のアバターと返信の件数・未読の点が下の行に並ぶ
+    expectTrue(
+      (await back.locator(".thread__avatars > *").count()) === 1,
+      "返信した人のアバターが下の行に並ばない",
+    );
+    await back.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("79-thread-unread-reply");
+    // 78b スマホ（同じ人・まだ開いていない）: シートを開くと未読の点。カードの「返信」の行を押すと、スレッドがシートいっぱいに開く
+    // （一覧を置き換える。戻るで一覧へ）。返信欄は一番下に見えたまま。開くと未読の点は消える
+    await page.setViewportSize({ width: 412, height: 915 });
+    await settle();
+    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+    await settle();
+    const mobileCard = page.locator("m3e-bottom-sheet.ws__sheet .thread", {
+      hasText: "スレッドの確認用",
+    });
+    await mobileCard.waitFor();
+    expectTrue(
+      (await mobileCard.locator(".thread__unread").count()) === 1,
+      "スマホのカードに未読の点が付かない",
+    );
+    await openPanel(mobileCard);
+    {
+      const m = await page.evaluate(() => {
+        const sh = document.querySelector("m3e-bottom-sheet.ws__sheet").getBoundingClientRect();
+        const panel = document.querySelector(".thread-panel").getBoundingClientRect();
+        const composer = document.querySelector(".thread-panel__composer").getBoundingClientRect();
+        return {
+          sheetHeight: sh.height,
+          panelHeight: panel.height,
+          composerBottom: composer.bottom,
+          innerHeight,
+          listShown: getComputedStyle(document.querySelector(".comments__main")).display,
+          pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+      console.log("mobile thread panel:", JSON.stringify(m));
+      expectTrue(m.listShown === "none", "スマホのスレッドが一覧を置き換えない");
+      expectTrue(m.panelHeight >= m.sheetHeight * 0.8, "スレッドがシートいっぱいに開かない");
+      expectTrue(m.composerBottom <= m.innerHeight + 1, "スマホで返信欄が画面の下に隠れる");
+      expectTrue(m.pageOverflow <= 0, "スマホでスレッドが横にはみ出す");
+    }
+    await shot("78b-mobile-thread-panel");
+    await closePanel();
+    await page.waitForSelector("m3e-bottom-sheet.ws__sheet .comments__list");
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("m3e-bottom-sheet.ws__sheet .thread")]
+        .filter((c) => c.textContent.includes("スレッドの確認用"))
+        .every((c) => !c.querySelector(".thread__unread")),
+    );
+    await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settle();
+    const backPanel = await openPanel(back);
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".comments .thread")]
+        .filter((c) => c.textContent.includes("スレッドの確認用"))
+        .every((c) => !c.querySelector(".thread__unread")),
+    );
+    await deleteFromPanel(backPanel);
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length === n,
       n0,
@@ -864,13 +1068,17 @@ async function main() {
   await go(revisionUrl);
   await page.waitForSelector(".comments .thread");
   const first = page.locator(".comments .thread").first();
-  await first.locator(".thread__body").click();
-  await settle();
-  await first.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+  const decisionPanel = await openPanel(first);
+  await decisionPanel
+    .locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]')
+    .click();
   await settle();
   await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
-  await page.fill(".thread textarea", "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み");
-  await page.locator(".thread m3e-button", { hasText: "不採用" }).click();
+  await page.fill(
+    ".thread-panel textarea",
+    "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み",
+  );
+  await decisionPanel.locator("m3e-button", { hasText: "不採用にする" }).click();
   await page.waitForSelector(".comments .thread--closed");
   await shot("09-decision");
 
@@ -1667,6 +1875,36 @@ const openWork = async (title) => {
 const expectTrue = (cond, msg) => {
   if (!cond) throw new Error(msg);
 };
+/**
+ * 一覧のカード（Slack のスレッド式。1 件を短く見せる）の下の行を押して、スレッドのパネルを開く。パネルの locator を返す。
+ * 一覧のカードを押すだけではパネルは開かない（選んで紙面のピンへ移るだけ）
+ */
+const openPanel = async (card) => {
+  await card.locator(".thread__footer").click();
+  await page.waitForSelector(".thread-panel");
+  await settle();
+  return page.locator(".thread-panel");
+};
+/** スレッドのパネルを閉じる（広い画面は ✕、狭い画面・シートは戻る） */
+const closePanel = async () => {
+  await page
+    .locator(
+      '.thread-panel__bar m3e-icon-button[aria-label="スレッドを閉じる"]:visible, .thread-panel__bar m3e-icon-button[aria-label="コメントの一覧へ戻る"]:visible',
+    )
+    .first()
+    .click();
+  await page.waitForSelector(".thread-panel", { state: "detached" });
+  await settle();
+};
+/** パネルの ⋮ からコメントを削除し（確認まで）、パネルが閉じるまで待つ */
+const deleteFromPanel = async (panel) => {
+  await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+  await settle();
+  await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+  await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
+  await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+  await page.waitForSelector(".thread-panel", { state: "detached" });
+};
 /** 小さな PNG を作る（添付の確認用。斜めのグラデーション。seed で色を変える） */
 const makePng = (w, h, seed) => {
   const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -2208,7 +2446,10 @@ async function v2Scenes() {
   await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
   await settle();
   // ピンのコメントのカード（番号は自動校正のコメントも数えるので、書いた文で探す）を押す
-  await page.locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "画像 2 のピン" }).click();
+  await page
+    .locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "画像 2 のピン" })
+    .locator(".thread__body")
+    .click();
   await page.waitForFunction(
     () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "2/2",
     null,
@@ -2259,7 +2500,10 @@ async function v2Scenes() {
   await page.waitForSelector(".sp-figure .sp-more", { timeout: 20_000 });
   await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
   await settle();
-  await page.locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "続きの本文にも" }).click();
+  await page
+    .locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "続きの本文にも" })
+    .locator(".thread__body")
+    .click();
   await page.waitForFunction(() => document.querySelector(".sp-figure .sp-more") === null, null, {
     timeout: 5000,
   });

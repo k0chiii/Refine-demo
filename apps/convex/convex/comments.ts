@@ -7,6 +7,7 @@ import {
   editThread,
   listCarryCandidates,
   listCommentFileViews,
+  markCommentRead,
   replyFileIds,
   searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
@@ -61,6 +62,18 @@ export const reply = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       await replyToThread(createAppContext(ctx), principal, args);
+      return null;
+    });
+  },
+});
+
+/** スレッドを読んだ印を付ける（パネルを開いたとき・開いている間に新しい返信が来たとき）。 */
+export const markRead = mutation({
+  args: { threadId: v.id("commentThreads") },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await markCommentRead(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -131,6 +144,8 @@ export const events = query({
         ...events.flatMap((e) => reactorIds(e.reactions)),
       ]);
       return {
+        /** 自分がこのスレッドを最後に読んだ時刻（「ここから未読」の線の位置。読んだことが無ければ null） */
+        readAt: await app.threads.readAt(principal.userId, threadId),
         canDecide:
           thread.deletedAt === undefined &&
           isAllowed("comment.decide", { work, grants, principal }) &&

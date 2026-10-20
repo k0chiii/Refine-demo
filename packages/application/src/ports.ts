@@ -115,6 +115,12 @@ export interface ThreadRepository {
   listEvents(threadId: string): Promise<CommentEvent[]>;
   /** 返信（イベント）のリアクションを置き換える（空にすると持たない状態に戻す） */
   setEventReactions(eventId: string, reactions: ReactionEntry[]): Promise<void>;
+  /** その人がスレッドを最後に読んだ時刻（未読の判定。読んだことが無ければ null） */
+  readAt(userId: UserId, threadId: string): Promise<Instant | null>;
+  /** 読んだ印を付ける（すでにそれ以降まで読んでいれば何もしない） */
+  markRead(userId: UserId, threadId: string, at: Instant): Promise<void>;
+  /** その人が最後に読んだ時刻を、まとめて引く（読んだことの無いスレッドは含めない） */
+  readsOf(userId: UserId, threadIds: readonly string[]): Promise<Map<string, Instant>>;
 }
 
 export interface ReviewAssignmentRepository {

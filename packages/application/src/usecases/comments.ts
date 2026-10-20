@@ -2,18 +2,29 @@ import {
   type Anchor,
   anchorFitsArtifact,
   assertCanPostComment,
+  canSeeNotificationSubject,
   type CommentThread,
   type DecisionAction,
   decideThread as decideThreadDomain,
+  deriveThreadActivity,
   DomainError,
+  initialThreadActivity,
   isAccepting,
+  isThreadUnread,
+  memberTeamIds,
   plainTextOf,
   type Principal,
+  recipientPrincipal,
+  replyRecipients,
+  storedThreadActivity,
+  THREAD_PARTICIPANTS_SHOWN,
+  type ThreadActivity,
   type Severity,
   type ThreadKind,
   validateAnchor,
   validateCommentBody,
   validateCommentFileIds,
+  withThreadActivity,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
 import { checkMentions, idempotent, loadAuthorizedWork, searchPeopleByText } from "../shared.ts";
@@ -137,6 +148,7 @@ export async function postComment(
         severity: input.severity,
         resolution: "open",
         createdAt: now,
+        ...initialThreadActivity({ authorId: principal.userId, createdAt: now }),
       };
       if (input.anchor) {
         data.anchor = input.anchor;
@@ -152,6 +164,8 @@ export async function postComment(
         actorId: principal.userId,
         createdAt: now,
       });
+      // 自分の投稿でスレッドを未読にしない
+      await ctx.threads.markRead(principal.userId, thread.id, now);
       await markRevisionViewed(ctx, principal, revision.id);
       // メンションされた人には「メンション」だけを送る（制作者がメンションされたら新しいコメントの通知と重ねない）
       const who = await personName(ctx, principal.userId);
@@ -236,12 +250,97 @@ export async function replyToThread(
     eventId,
     revisionId: thread.revisionId,
   });
+  // 返信の件数・参加者・最後の動きを進める。返信した本人は、自分の返信でスレッドを未読にしない
+  const events = await ctx.threads.listEvents(thread.id);
+  await ctx.threads.update(withThreadActivity(thread, deriveThreadActivity(thread, events)));
+  await ctx.threads.markRead(principal.userId, thread.id, now);
+  const at = { workId: work.id, revisionId: revision.id, threadId: thread.id };
   await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
     body: text,
-    workId: work.id,
-    revisionId: revision.id,
-    threadId: thread.id,
+    ...at,
   });
+  // スレッドの参加者（投稿者とこれまでに返信した人）には「返信」を知らせる。メンションした人には「メンション」だけ
+  const teams = work.confidentiality === "restricted" ? await ctx.teams.list() : [];
+  const participants = replyRecipients(thread, events, principal.userId, mentions).filter((id) =>
+    canSeeNotificationSubject("work", {
+      work,
+      grants,
+      principal: recipientPrincipal(id, memberTeamIds(teams, id)),
+    }),
+  );
+  if (participants.length) {
+    const who = await personName(ctx, principal.userId);
+    await notify(ctx, participants, principal.userId, {
+      kind: "comment_posted",
+      title: "コメントに返信がありました",
+      body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(text)}`,
+      preview: text,
+      ...at,
+    });
+  }
+}
+
+/** 画面に渡すスレッドのやり取りと、閲覧者の未読 */
+export interface ThreadActivityView {
+  /** 閲覧者にとって未読か（読んだ時刻より後に、他の人の動きがある） */
+  unread: boolean;
+  /** 削除されていない返信の件数 */
+  replyCount: number;
+  /** 最後の動き（スレッドを立てた時刻・最後の返信の時刻） */
+  lastActivityAt: number;
+  /** 投稿者・返信した人（投稿者が先頭。一覧は投稿者を除く先頭の人を重ねて見せる） */
+  participantIds: string[];
+}
+
+/**
+ * スレッドごとのやり取りと閲覧者の未読（版の画面の一覧用）。やり取りはスレッドが持っていればそれを、
+ * 無い古いスレッドはイベントから導く（移行しない）。自分の動きと、人の返信が無い自動校正の指摘は、読んだ時刻を引かない。
+ */
+export async function presentThreadActivity(
+  ctx: AppContext,
+  principal: Principal,
+  threads: readonly CommentThread[],
+): Promise<Map<string, ThreadActivityView>> {
+  const activities = new Map<string, ThreadActivity>();
+  for (const t of threads) {
+    const stored = storedThreadActivity(t);
+    activities.set(t.id, stored ?? deriveThreadActivity(t, await ctx.threads.listEvents(t.id)));
+  }
+  // 読んだ時刻は、未読になりうるものだけ引く（自分の動き・人の返信が無い自動校正の指摘は常に既読）
+  const check = threads.filter((t) => {
+    const a = activities.get(t.id)!;
+    return isThreadUnread(t, a, principal.userId, null);
+  });
+  const reads = await ctx.threads.readsOf(
+    principal.userId,
+    check.map((t) => t.id),
+  );
+  const out = new Map<string, ThreadActivityView>();
+  for (const t of threads) {
+    const a = activities.get(t.id)!;
+    out.set(t.id, {
+      unread: isThreadUnread(t, a, principal.userId, reads.get(t.id) ?? null),
+      replyCount: a.replyCount,
+      lastActivityAt: a.lastActivityAt,
+      participantIds: a.participantIds.slice(0, THREAD_PARTICIPANTS_SHOWN + 1),
+    });
+  }
+  return out;
+}
+
+/** スレッドを読んだ印を付ける（スレッドのパネルを開いたとき・開いている間に新しい返信が来たとき）。見られる人だけ */
+export async function markCommentRead(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string },
+): Promise<void> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  assertThreadNotDeleted(thread);
+  await ctx.threads.markRead(principal.userId, thread.id, ctx.clock.now());
 }
 
 /**
@@ -552,6 +651,13 @@ export async function deleteReply(
     createdAt: now,
   });
   await releaseCommentFiles(ctx, thread.id, { eventIds: [input.replyEventId] });
+  // 返信の件数・参加者・最後の動きを、残った返信から数え直す
+  await ctx.threads.update(
+    withThreadActivity(
+      thread,
+      deriveThreadActivity(thread, await ctx.threads.listEvents(thread.id)),
+    ),
+  );
   const replyAuthor = replyEntries(events).find((r) => r.id === input.replyEventId)!.actorId;
   await recordAdminDeletion(ctx, principal, {
     entityType: "commentReply",

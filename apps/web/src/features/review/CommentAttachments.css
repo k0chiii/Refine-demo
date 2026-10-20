@@ -165,3 +165,30 @@
 .cmt-attach {
   color: var(--mf-on-surface-variant);
 }
+
+/* 一覧のカードの小さなサムネイル（variant="thumbs"）: 1 列に最大 4 枚。多いときは最後の 1 枚に「+n」 */
+.cmt-files__strip {
+  display: flex;
+  gap: 6px;
+}
+.cmt-files__cell {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+.cmt-files__cell .cmt-files__tile {
+  width: 56px;
+  height: 56px;
+}
+.cmt-files__more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--mf-shape-sm);
+  background: color-mix(in srgb, var(--mf-inverse-surface) 60%, transparent);
+  color: #fff;
+  font: var(--mf-type-label-large);
+  pointer-events: none;
+}
