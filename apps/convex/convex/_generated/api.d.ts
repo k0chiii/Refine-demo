@@ -15,6 +15,7 @@ import type * as approvals from "../approvals.js";
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
 import type * as checks from "../checks.js";
+import type * as commentFiles from "../commentFiles.js";
 import type * as comments from "../comments.js";
 import type * as comparisons from "../comparisons.js";
 import type * as crons from "../crons.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
   auth: typeof auth;
   checks: typeof checks;
+  commentFiles: typeof commentFiles;
   comments: typeof comments;
   comparisons: typeof comparisons;
   crons: typeof crons;

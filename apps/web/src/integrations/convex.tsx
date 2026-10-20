@@ -31,10 +31,10 @@ function FileSession() {
   useEffect(() => {
     let off: (() => void) | null = null;
     let disposed = false;
-    void import("@/integrations/api").then(({ artifactFiles }) => {
+    void import("@/integrations/api").then(({ setFileTokenProvider }) => {
       if (disposed) return;
-      artifactFiles.setTokenProvider(() => latest.current);
-      off = () => artifactFiles.setTokenProvider(null);
+      setFileTokenProvider(() => latest.current);
+      off = () => setFileTokenProvider(null);
     });
     return () => {
       disposed = true;
@@ -45,8 +45,8 @@ function FileSession() {
     // 認証の読み込み中（トークンがまだ読めていない）は何もしない。確定してから、いまの利用者以外の写しを消す
     if (isLoading) return;
     let cancelled = false;
-    void import("@/integrations/api").then(({ artifactFiles }) => {
-      if (!cancelled) void artifactFiles.clear(token ? artifactFiles.subjectFor(token) : undefined);
+    void import("@/integrations/api").then(({ clearFileStores }) => {
+      if (!cancelled) void clearFileStores(token);
     });
     return () => {
       cancelled = true;

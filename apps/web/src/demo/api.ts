@@ -93,13 +93,13 @@ const demoRequests: Array<{ artifactId: string; start?: number; end?: number; st
   [];
 (globalThis as { __mf100DemoRequests?: typeof demoRequests }).__mf100DemoRequests = demoRequests;
 
-const demoTransport: ArtifactTransport = {
+const createDemoTransport = (fetchBlob: (id: string) => Promise<Blob>): ArtifactTransport => ({
   async request({ artifactId, start, end, ifNoneMatch, ifRange, signal }) {
     const { latencyMs = 0, bytesPerSec = 0 } = demoNet();
     if (latencyMs) await sleep(latencyMs);
     let blob: Blob;
     try {
-      blob = await demo.fetchArtifact(artifactId); // 認可は Convex の authorizeAccess（毎回）
+      blob = await fetchBlob(artifactId); // 認可は Convex の authorize*（毎回）
     } catch {
       demoRequests.push({ artifactId, status: 403 });
       throw new ArtifactError(403);
@@ -146,7 +146,8 @@ const demoTransport: ArtifactTransport = {
       body,
     };
   },
-};
+});
+const demoTransport = createDemoTransport((id) => demo.fetchArtifact(id));
 
 /**
  * デモのデータは読み込みのたびに作り直される（添付 ID が同じでも中身は別）ので、端末の写しの持ち主に読み込みごとの印を足し、
@@ -205,6 +206,111 @@ export async function fetchFeedbackFileBlob(_token: string, fileId: string): Pro
 
 export async function downloadFeedbackFile(token: string, fileId: string, fileName: string) {
   saveBlob(await fetchFeedbackFileBlob(token, fileId), fileName);
+}
+
+// ---------------------------------------------------------------- コメント・返信の添付（本番の /comment-files/* と同じ流れ）
+
+export interface CommentUploadResult {
+  fileId: string;
+  status: string;
+  failureMessage: string | null;
+  size: number;
+  thumb: boolean;
+}
+
+export interface CommentUploadOptions {
+  thumb?: Blob | null;
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
+  onPhase?: (phase: UploadPhase) => void;
+}
+
+export async function uploadCommentFile(
+  _token: string,
+  fileId: string,
+  file: File,
+  options: CommentUploadOptions = {},
+): Promise<CommentUploadResult> {
+  const upload = await encodeOrExplain(file, options.onPhase);
+  options.onProgress?.(0);
+  // 転送中の表示を見せる（本番の XHR の進み具合のまね）
+  for (const step of [0.3, 0.7]) {
+    await new Promise((r) => setTimeout(r, 120));
+    if (options.signal?.aborted) throw new DOMException("aborted", "AbortError");
+    options.onProgress?.(step);
+  }
+  const res = await demo.uploadCommentFile(fileId, file, upload.sha256, gzipOf(upload));
+  demoUploads.push({
+    fileName: file.name,
+    encoding: upload.encoding,
+    originalSize: upload.originalSize,
+    storedSize: upload.body.size,
+  });
+  options.onProgress?.(1);
+  let thumb = false;
+  if (options.thumb && res.status === "verified") {
+    try {
+      await demo.uploadCommentThumb(fileId, options.thumb);
+      thumb = true;
+    } catch {
+      // サムネイルの失敗は添付の失敗にしない
+    }
+  }
+  return {
+    fileId,
+    status: res.status,
+    failureMessage: res.failureMessage,
+    size: upload.originalSize,
+    thumb,
+  };
+}
+
+const demoCommentTransport = createDemoTransport((id) =>
+  id.startsWith("thumb:")
+    ? demo.fetchCommentFile(id.slice(6), "thumb")
+    : demo.fetchCommentFile(id, "original"),
+);
+const commentStore = (revalidate: boolean) =>
+  new ArtifactFiles({
+    transport: demoCommentTransport,
+    persistence: createCacheStorePersistence(),
+    subjectOf: () => `${demo.userId ?? "demo"}@${demoLoadId}`,
+    policy: defaultFileCachePolicy,
+    revalidate,
+  });
+export const commentThumbFiles = commentStore(false);
+export const commentOriginalFiles = commentStore(true);
+
+export function fetchCommentThumbBlob(
+  token: string,
+  fileId: string,
+  opts?: OpenOptions,
+): Promise<Blob> {
+  return commentThumbFiles.blob(token, `thumb:${fileId}`, opts);
+}
+
+export function fetchCommentFileBlob(
+  token: string,
+  fileId: string,
+  opts?: OpenOptions,
+): Promise<Blob> {
+  return commentOriginalFiles.blob(token, fileId, opts);
+}
+
+export async function downloadCommentFile(token: string, fileId: string, fileName: string) {
+  saveBlob(await fetchCommentFileBlob(token, fileId), fileName);
+}
+
+export function setFileTokenProvider(fn: (() => string | null) | null) {
+  for (const files of [artifactFiles, commentThumbFiles, commentOriginalFiles])
+    files.setTokenProvider(fn);
+}
+
+export async function clearFileStores(token: string | null): Promise<void> {
+  const keep = token ? artifactFiles.subjectFor(token) : undefined;
+  await Promise.all(
+    [artifactFiles, commentThumbFiles, commentOriginalFiles].map((files) => files.clear(keep)),
+  );
 }
 
 function saveBlob(blob: Blob, fileName: string) {

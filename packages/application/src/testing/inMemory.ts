@@ -3,6 +3,7 @@ import type {
   ApprovalEvent,
   Artifact,
   CommentEvent,
+  CommentFile,
   CommentThread,
   DocumentDraft,
   FeedbackFile,
@@ -110,6 +111,7 @@ export interface InMemoryContext extends AppContext {
     feedbackThreads: Table<FeedbackThread>;
     feedbackPosts: Table<FeedbackPost>;
     feedbackFiles: Table<FeedbackFile>;
+    commentFiles: Table<CommentFile>;
     attempts: Table<UploadAttempt>;
     /** `${userId}|${threadId}` → 最後に読んだ時刻 */
     feedbackReads: Map<string, number>;
@@ -156,6 +158,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     feedbackThreads: new Table<FeedbackThread>("fbt"),
     feedbackPosts: new Table<FeedbackPost>("fbp"),
     feedbackFiles: new Table<FeedbackFile>("fbf"),
+    commentFiles: new Table<CommentFile>("cf"),
     attempts: new Table<UploadAttempt>("att"),
     feedbackReads: new Map(),
     audit: [],
@@ -258,7 +261,9 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       insert: async (t) => state.threads.insert(t),
       update: async (t) => state.threads.put(t),
       appendEvent: async (e) => {
-        state.events.push({ ...clone(e), id: `evt-${state.events.length + 1}` });
+        const id = `evt-${state.events.length + 1}`;
+        state.events.push({ ...clone(e), id });
+        return id;
       },
       listEvents: async (threadId) =>
         state.events.filter((e) => e.threadId === threadId).map((e) => clone(e)),
@@ -509,6 +514,29 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         const key = `${userId}|${threadId}`;
         state.feedbackReads.set(key, Math.max(at, state.feedbackReads.get(key) ?? 0));
       },
+    },
+    commentFiles: {
+      findFile: async (id) => state.commentFiles.get(id),
+      insertFile: async (f) => state.commentFiles.insert(f),
+      updateFile: async (f) => state.commentFiles.put(f),
+      listByThread: async (threadId) =>
+        state.commentFiles.all().filter((f) => f.threadId === threadId),
+      listUnattachedFilesBefore: async (before, limit) =>
+        state.commentFiles
+          .all()
+          .filter(
+            (f) => f.threadId === undefined && f.abandonedAt === undefined && f.createdAt <= before,
+          )
+          .slice(0, limit),
+      listReleasedUnpurgedFiles: async (limit) =>
+        state.commentFiles
+          .all()
+          .filter(
+            (f) =>
+              (f.abandonedAt !== undefined || f.removedAt !== undefined) &&
+              f.purgedAt === undefined,
+          )
+          .slice(0, limit),
     },
     idempotency: {
       get: async (scope, key) =>

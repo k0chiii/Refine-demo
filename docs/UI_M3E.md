@@ -2320,3 +2320,38 @@ FB の投稿・コメントの返信・コメントのスレッドの、削除�
 
 - ビルドの出力で比べた（変更前 → 後）。アプリの入口（`index`）は 442.55 → 442.72 kB（gzip 116.03 → 116.08）でほぼ増えない。校正画面の塊（`Editor`）は 160.42 → 167.48 kB（gzip 47.98 → 50.49。`CommentBody`・`ThreadCard` の変更ぶん）で、これに `marked`（別の塊 40.13 kB・gzip 12.11 kB。`@tiptap/markdown` と同じ版なので文章ビューアと共有）が静的に付く。CSS は 197.34 → 200.69 kB（gzip 53.73 → 54.40）
 - 入力欄の本体（`RichCommentEditor`）は 35.60 kB・gzip 13.57 kB を遅延で読み込む（TipTap・ProseMirror の本体は文章ビューア・文章エディタと共有の塊）
+
+## 93. コメント・返信の添付（2026-10-20・利用者指示「ファイル添付、画像添付もできると良いが、パフォーマンスとかお願いします」「添付はできる限り圧縮して良い」）
+
+FB をコメントに統合する作業の第 2 段の a。コメントと返信にファイル・画像を添付できる土台を作った（バックエンド・送受信・圧縮・表示部品）。**投稿欄・コメント本文への配線は含まない**（`ComposePopover` / `ThreadCard` を直す別の作業の後に行う）。FB の添付（`feedbackFiles`）と同じ流れを `commentFiles` に写した。
+
+### 流れ
+
+1. `commentFiles.prepare({ revisionId, purpose: "comment" | "reply", files })` が R2 のキー（`comments/{制作物}/{添付}/{名前}`）を予約し、`fileId` を返す。投稿と同じ条件（コメントは受付中・期限前・最新の受付対象版・校了前、返信は閲覧できて校了前）。
+2. ブラウザが `PUT /comment-files/:fileId`（原本）と `PUT /comment-files/:fileId/thumb`（サムネイル）を送る。原本は版の提出と同じ検証（sha256・申告サイズ・試行ごとの別キー・採用）。サムネイルは webp / jpeg の 512 KB まで・添付の名前空間の下の固定キー。
+3. 検証済みになった `fileId` を `comments.post` / `comments.reply` の `fileIds`（任意・10 件まで）に渡す。本人が同じ制作物に上げた検証済みの未使用の添付だけが付く（1 つでも満たさなければ投稿しない）。本文が空でも添付があれば投稿できる。
+4. 画面へは `revisions.get` の各 `threads[].files` と `comments.events` の各返信の `files` で `{ id, name, mime, size, type, width?, height?, hasThumb }` を返す。
+
+### 読み取りと削除
+
+- 読めるのは、その制作物を見られる人で、コメント（返信）が削除されていないとき。付ける前は上げた本人だけ。署名付き URL は出さず、毎回 Hono が Convex に尋ねる。
+- コメントの削除で、そのスレッドの全添付（コメントと返信）が `removedAt` を持って読めなくなる。返信の削除は、その返信の添付だけ。24 時間付かなかった添付は cron（`expire comment files`）で `abandonedAt`。どちらも既存の清掃（`/internal/upload-orphans`）が、原本とサムネイルの両方を R2 から消して `purgedAt` を記録する（項目は `comment:{添付 ID}`、サムネイルのキーは `extraObjectKeys`）。
+- 次版への持ち越しは添付を複製しない（元のコメントに付いたまま）。
+
+### 圧縮（web `lib/attachmentCompress*.ts`）
+
+- 変換は Worker の OffscreenCanvas（使えない環境ではメインスレッドのキャンバス）。1 枚 20 秒を超えたら Worker ごと止めて元のまま送る。変換できなければ元をそのまま送る（圧縮は付加的）。
+- 画像は復号（EXIF の向きを反映）→ 長辺 2560 に縮小 → WebP 品質 0.8 →（AVIF を書き出せる環境で WebP が 64 KB を超えるとき）AVIF → 元を含めて最小のものを採る。縮めていない画像は元より 5% 以上小さいときだけ採る。24 KB 未満で縮める必要の無い画像は作り直さない。HEIC・BMP は画像として見せられないので、小さくならなくても作り直した画像を送る。
+- サムネイルは本体用に縮めた画像から段階的に長辺 480・品質 0.7 の WebP（WebP を書き出せない環境では JPEG）。512 KB を超えたら品質を下げて 1 回作り直す。
+- 取り決め（寸法・採る基準・GIF の判定）は純粋関数（`attachmentCompress.core.ts`）、手順は環境を差し込む `attachmentCompress.engine.ts`、ブラウザ API への結び付けは `attachmentCompress.env.ts`。単体テストは前二者。
+
+### 画面の部品（配線前）
+
+- `features/review/CommentAttachments.tsx`: 画像のサムネイルの格子と、それ以外のファイルのチップ。サムネイルは `IntersectionObserver` で画面の手前 240 px に入ったものだけ取りに行く。添付と同じ端末の写し（Cache Storage。キーは `thumb:{fileId}`。機密の制作物は残さない）から開き、サムネイルは開くたびの権限確認をしない（`ArtifactFiles` の `revalidate: false`。HTTP でも 1 日有効）。押すと M3E のダイアログで拡大し、原本を取得する。サムネイルの無い画像は 1.5 MB 以下なら原本で代える。説明の文は置かない。
+- `features/review/PendingCommentFiles.tsx`: 投稿欄に並ぶこれから添える添付（サムネイル・名前・丸い進み具合・取り除く・やり直す）。
+- `features/review/useCommentFileUploads.ts`: 選ぶ・貼る・落とす → 圧縮 → 準備 → 送信（実際に送れた量の進み具合・同時 3 件）→ 検証済みの `fileIds`。`bind` を投稿欄の要素に渡すと貼り付け・ドロップを受ける。`busy` の間は投稿させない。
+- デモモード（`src/demo/*`）にも同じ関数（`uploadCommentFile` など）と、`/comment-files/*` に当たるメモリ上の実装を足した。
+
+### 確認
+
+domain・application・Convex 統合・Hono（`apps/api`）・web の単体テスト（状態・上限・認可・削除・清掃・キャッシュ方針・圧縮の採る基準。文言は見ない）。

@@ -9,6 +9,7 @@ import type {
   ObjectStore,
   RangeRequest,
   Sha256Sink,
+  ThumbOps,
   TokenVerifier,
   UploadOps,
 } from "../ports.ts";
@@ -224,6 +225,40 @@ export class FakeUploads implements UploadOps {
   }
 }
 
+/** コメントの添付のサムネイル（固定の置き場。付ける前の本人の画像にだけ受ける）をまねるインメモリ実装 */
+export class FakeThumbs implements ThumbOps {
+  readonly files = new Map<
+    string,
+    {
+      keyPrefix: string;
+      fileName: string;
+      owner: string;
+      /** false: コメントに付けた等で、もう受け付けない */
+      open: boolean;
+      thumb?: { size: number; mimeType: string };
+    }
+  >();
+  calls: string[] = [];
+  private own(token: string, id: string) {
+    const f = this.files.get(id);
+    if (!f || f.owner !== token.slice(6)) throw new GatewayError("comment_file_not_found", { id });
+    return f;
+  }
+  async begin(token: string, fileId: string) {
+    const f = this.own(token, fileId);
+    if (!f.open) throw new GatewayError("comment_file_invalid", { fileId });
+    this.calls.push(`thumb-begin:${fileId}`);
+    return { objectKey: `${f.keyPrefix}/thumb`, fileName: f.fileName };
+  }
+  async complete(token: string, fileId: string, meta: { size: number; mimeType: string }) {
+    const f = this.own(token, fileId);
+    if (!f.open) throw new GatewayError("comment_file_invalid", { fileId });
+    this.calls.push(`thumb-complete:${fileId}:${meta.size}:${meta.mimeType}`);
+    f.thumb = meta;
+    return { hasThumb: true };
+  }
+}
+
 export class FakeGateway implements BackendGateway {
   readonly itemUploads = new FakeUploads(
     {
@@ -237,7 +272,21 @@ export class FakeGateway implements BackendGateway {
     { notFound: "feedback_not_found", invalid: "feedback_invalid", closed: "feedback_invalid" },
     "feedback-",
   );
+  readonly commentUploads = new FakeUploads(
+    {
+      notFound: "comment_file_not_found",
+      invalid: "comment_file_invalid",
+      closed: "comment_file_invalid",
+    },
+    "comment-",
+  );
+  readonly commentThumbs = new FakeThumbs();
   artifacts = new Map<string, ArtifactAccess & { viewers: string[] }>();
+  /** コメントの添付を見られる人と、サムネイルを端末に残してよいか（機密でない制作物） */
+  commentViewers = new Map<
+    string,
+    { viewers: string[]; cacheable: boolean; attachment?: boolean }
+  >();
   /** フィードバックの添付を見られる人 */
   feedbackViewers = new Map<string, string[]>();
   private subjectOf(token: string) {
@@ -268,6 +317,33 @@ export class FakeGateway implements BackendGateway {
     if (!f || f.status !== "verified" || !f.objectKey || !viewers.includes(this.subjectOf(token)))
       throw new GatewayError("forbidden", { fileId });
     return { objectKey: f.objectKey, mimeType: f.mimeType, fileName: f.fileName, size: f.size };
+  }
+  async authorizeCommentFile(token: string, fileId: string, variant: "original" | "thumb") {
+    const f = this.commentUploads.targets.get(fileId);
+    const access = this.commentViewers.get(fileId);
+    if (!f || !access || !access.viewers.includes(this.subjectOf(token)))
+      throw new GatewayError("forbidden", { fileId });
+    if (variant === "thumb") {
+      const thumb = this.commentThumbs.files.get(fileId)?.thumb;
+      if (!thumb) throw new GatewayError("comment_file_not_ready", { fileId });
+      return {
+        objectKey: `${f.keyPrefix}/thumb`,
+        mimeType: thumb.mimeType,
+        fileName: f.fileName,
+        size: thumb.size,
+        cacheable: access.cacheable,
+      };
+    }
+    if (f.status !== "verified" || !f.objectKey)
+      throw new GatewayError("comment_file_not_ready", { fileId });
+    return {
+      objectKey: f.objectKey,
+      mimeType: f.mimeType,
+      fileName: f.fileName,
+      size: f.size,
+      cacheable: false,
+      attachment: access.attachment ?? false,
+    };
   }
 }
 

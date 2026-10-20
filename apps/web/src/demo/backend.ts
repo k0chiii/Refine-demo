@@ -5,7 +5,9 @@
  * - 用途: UI 開発、スクリーンショット、E2E。業務ロジックは本番と同じ domain/application/convex のコードが動く。
  */
 import {
+  COMMENT_THUMB_MAX_BYTES,
   hasPdfSignature,
+  isCommentThumbMime,
   isGzipAllowed,
   MAX_ORIGINAL_UPLOAD_BYTES,
   needsPdfSignatureCheck,
@@ -352,6 +354,60 @@ class DemoBackend {
       }).catch(() => undefined);
       throw error;
     }
+  }
+
+  /** Hono PUT /comment-files/:id 相当: 版の提出と同じく、試行の開始 → 保持 → 検証完了で採用 */
+  async uploadCommentFile(
+    fileId: string,
+    file: File,
+    sha256: string,
+    gzip?: { body: Blob; originalSize: number },
+  ): Promise<{ status: string; failureMessage: string | null }> {
+    const target = (await this.mutation(internal.commentFiles.beginFileUpload, { fileId })) as {
+      attemptId: string;
+      objectKey: string;
+    };
+    this.blobs.set(target.objectKey, gzip ? gzip.body : file);
+    if (gzip) this.gzipTypes.set(target.objectKey, file.type);
+    try {
+      if (gzip) await this.verifyGzip(file, gzip, sha256);
+      return (await this.mutation(internal.commentFiles.completeFileUpload, {
+        attemptId: target.attemptId,
+        size: gzip ? gzip.originalSize : file.size,
+        sha256,
+      })) as { status: string; failureMessage: string | null };
+    } catch (error) {
+      this.discard(target.objectKey);
+      await this.mutation(internal.commentFiles.failFileUpload, {
+        attemptId: target.attemptId,
+        message: error instanceof Error ? error.message : "upload failed",
+      }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /** Hono PUT /comment-files/:id/thumb 相当: 形式（webp / jpeg）と大きさ（512 KB）を断ってから、固定の置き場に保持して記録する */
+  async uploadCommentThumb(fileId: string, thumb: Blob): Promise<void> {
+    const mimeType = thumb.type.toLowerCase().split(";")[0]!.trim();
+    if (!isCommentThumbMime(mimeType) || thumb.size <= 0 || thumb.size > COMMENT_THUMB_MAX_BYTES)
+      throw new Error("サムネイルを受け付けられません");
+    const target = (await this.mutation(internal.commentFiles.beginThumbUpload, { fileId })) as {
+      objectKey: string;
+    };
+    this.blobs.set(target.objectKey, thumb);
+    await this.mutation(internal.commentFiles.completeThumbUpload, {
+      fileId,
+      size: thumb.size,
+      mimeType,
+    });
+  }
+
+  /** Hono GET /comment-files/:id（と …/thumb）相当: 認可は Convex の commentFiles.authorizeFile */
+  async fetchCommentFile(fileId: string, variant: "original" | "thumb"): Promise<Blob> {
+    const access = (await this.query(api.commentFiles.authorizeFile, { fileId, variant })) as {
+      objectKey: string;
+    };
+    return this.read(access.objectKey);
   }
 
   /** Hono GET /feedback/files/:id 相当: 認可は Convex の authorizeFile */

@@ -58,6 +58,8 @@ export interface CommentThread {
   deletedAt?: Instant;
   /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。削除したものは一覧に出さない。保存済みの行との互換のために型・スキーマに残す */
   deletedKeepsReplies?: boolean;
+  /** 添付（CommentFile の ID。付けた順）。無ければ持たない。返信の添付は CommentEvent.payload.fileIds */
+  fileIds?: string[];
   /** リアクション（FB と同じ絵文字・同じ規則。comment/reactions.ts）。誰も付けていなければ持たない */
   reactions?: ReactionEntry[];
 }

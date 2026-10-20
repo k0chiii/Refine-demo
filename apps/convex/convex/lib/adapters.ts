@@ -10,6 +10,7 @@ import type {
   ApprovalEvent,
   Artifact,
   CommentEvent,
+  CommentFile,
   CommentThread,
   DocumentDraft,
   FeedbackFile,
@@ -355,7 +356,7 @@ export function createAppContext(
         );
       },
       async appendEvent(event) {
-        await db.insert(
+        return await db.insert(
           "commentEvents",
           compact({ ...event, threadId: event.threadId as Id<"commentThreads"> }),
         );
@@ -982,6 +983,63 @@ export function createAppContext(
           .first();
         if (!doc) await db.insert("feedbackReads", { userId, threadId: tid, readAt: at });
         else if (doc.readAt < at) await db.patch("feedbackReads", doc._id, { readAt: at });
+      },
+    },
+    commentFiles: {
+      async findFile(id) {
+        const doc = await db.get("commentFiles", id as Id<"commentFiles">).catch(() => null);
+        return doc ? (fromDoc(doc) as CommentFile) : null;
+      },
+      async insertFile(file) {
+        const id = await db.insert(
+          "commentFiles",
+          compact({ ...file, workId: file.workId as Id<"works"> }) as Strip<Doc<"commentFiles">>,
+        );
+        return { ...file, id } as CommentFile;
+      },
+      async updateFile(file) {
+        const { id, ...fields } = file;
+        await db.replace(
+          "commentFiles",
+          id as Id<"commentFiles">,
+          compact({ ...fields, workId: fields.workId as Id<"works"> }) as Strip<
+            Doc<"commentFiles">
+          >,
+        );
+      },
+      async listByThread(threadId) {
+        const docs = await db
+          .query("commentFiles")
+          .withIndex("by_thread_abandoned_created", (q) => q.eq("threadId", threadId))
+          .take(2000);
+        return docs.map((d) => fromDoc(d) as CommentFile);
+      },
+      async listUnattachedFilesBefore(before, limit) {
+        const docs = await db
+          .query("commentFiles")
+          .withIndex("by_thread_abandoned_created", (q) =>
+            q.eq("threadId", undefined).eq("abandonedAt", undefined).lte("createdAt", before),
+          )
+          .take(limit);
+        return docs.map((d) => fromDoc(d) as CommentFile);
+      },
+      async listReleasedUnpurgedFiles(limit) {
+        const abandoned = await db
+          .query("commentFiles")
+          .withIndex("by_purged_and_abandoned", (q) =>
+            q.eq("purgedAt", undefined).gte("abandonedAt", 0),
+          )
+          .take(limit);
+        const removed =
+          abandoned.length >= limit
+            ? []
+            : await db
+                .query("commentFiles")
+                .withIndex("by_purged_and_removed", (q) =>
+                  q.eq("purgedAt", undefined).gte("removedAt", 0),
+                )
+                .take(limit - abandoned.length);
+        return [...abandoned, ...removed].map((d) => fromDoc(d) as CommentFile);
       },
     },
     idempotency: {

@@ -3,6 +3,7 @@ import type {
   ApprovalEvent,
   Artifact,
   CommentEvent,
+  CommentFile,
   ReactionEntry,
   CommentThread,
   DocumentDraft,
@@ -109,7 +110,8 @@ export interface ThreadRepository {
   listByRevision(revisionId: RevisionId): Promise<CommentThread[]>;
   insert(thread: Omit<CommentThread, "id">): Promise<CommentThread>;
   update(thread: CommentThread): Promise<void>;
-  appendEvent(event: CommentEvent): Promise<void>;
+  /** イベントを追記する。払い出されたイベントの ID を返す（返信に添付を付けるとき使う） */
+  appendEvent(event: CommentEvent): Promise<string>;
   listEvents(threadId: string): Promise<CommentEvent[]>;
   /** 返信（イベント）のリアクションを置き換える（空にすると持たない状態に戻す） */
   setEventReactions(eventId: string, reactions: ReactionEntry[]): Promise<void>;
@@ -368,6 +370,22 @@ export interface FeedbackRepository {
   markRead(userId: UserId, threadId: string, at: Instant): Promise<void>;
 }
 
+/**
+ * コメント・返信の添付。準備 → Hono で実体検証 → コメント（返信）に付ける。
+ * 付けた先のコメントが削除されたら手放し（removedAt）、付けないまま 24 時間たったら放置扱い（abandonedAt）にして、R2 の清掃の対象にする。
+ */
+export interface CommentFileRepository {
+  findFile(id: string): Promise<CommentFile | null>;
+  insertFile(file: Omit<CommentFile, "id">): Promise<CommentFile>;
+  updateFile(file: CommentFile): Promise<void>;
+  /** そのスレッドに付いた添付すべて（コメント本体と返信の分） */
+  listByThread(threadId: string): Promise<CommentFile[]>;
+  /** どこにも付いていない・放置扱いでない・createdAt <= before の添付 */
+  listUnattachedFilesBefore(before: Instant, limit: number): Promise<CommentFile[]>;
+  /** 放置扱いまたは手放した添付で、R2 の実体の削除がまだ終わっていないもの */
+  listReleasedUnpurgedFiles(limit: number): Promise<CommentFile[]>;
+}
+
 export interface AppContext {
   clock: Clock;
   people: PeopleDirectory;
@@ -392,6 +410,7 @@ export interface AppContext {
   proofreadingRuns: ProofreadingRunRepository;
   home: HomeRepository;
   feedback: FeedbackRepository;
+  commentFiles: CommentFileRepository;
   audit: AuditLogger;
   idempotency: IdempotencyStore;
 }

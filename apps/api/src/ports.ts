@@ -94,6 +94,13 @@ export interface ArtifactAccess {
   mimeType: string;
   fileName: string;
   size: number | null;
+  /**
+   * 端末の HTTP キャッシュに残してよい（コメントの添付のサムネイルで、機密でない制作物のもの）。
+   * 既定は残さない（`private, no-store`）。残すときも利用者ごとの private で、有効期間は 1 日
+   */
+  cacheable?: boolean;
+  /** ブラウザで開かず保存させる（コメントの添付のうち画像・PDF 以外） */
+  attachment?: boolean;
 }
 
 export class GatewayError extends Error {
@@ -106,6 +113,21 @@ export class GatewayError extends Error {
   }
 }
 
+/**
+ * コメントの添付のサムネイル（PUT /comment-files/:fileId/thumb）。実体の転送と違い試行は作らず、
+ * 添付の名前空間の下の固定キーに置く（付加的なもので、付ける前にだけ置ける）。
+ * - begin: 本人の、付ける前の、画像の添付に、置き場を知らせる。
+ * - complete: R2 に置き終えた大きさと形式を記録する（形式・大きさは Convex でも検査する）。
+ */
+export interface ThumbOps {
+  begin(token: string, fileId: string): Promise<{ objectKey: string; fileName: string }>;
+  complete(
+    token: string,
+    fileId: string,
+    meta: { size: number; mimeType: string },
+  ): Promise<{ hasThumb: boolean }>;
+}
+
 export interface BackendGateway {
   /** 版の提出物（PUT /uploads/items/:itemId） */
   itemUploads: UploadOps;
@@ -113,11 +135,23 @@ export interface BackendGateway {
   /** フィードバックの添付（PUT /feedback/files/:fileId）。版の提出と同じ流れ */
   feedbackUploads: UploadOps;
   authorizeFeedbackFile(token: string, fileId: string): Promise<ArtifactAccess>;
+  /** コメント・返信の添付（PUT /comment-files/:fileId）。版の提出と同じ流れ */
+  commentUploads: UploadOps;
+  commentThumbs: ThumbOps;
+  /** 読み取り認可（GET /comment-files/:fileId と …/thumb）。variant でサムネイルの置き場・形式を返す */
+  authorizeCommentFile(
+    token: string,
+    fileId: string,
+    variant: "original" | "thumb",
+  ): Promise<ArtifactAccess>;
 }
 
 /** 清掃（D14）: Convex から孤立オブジェクトを受け取り、R2 から削除して記録する。共有秘密で認証。 */
 export interface CleanupGateway {
-  listOrphans(limit: number): Promise<Array<{ itemId: string; objectKey: string }>>;
+  /** 1 項目が複数の実体を持つとき（コメントの添付の原本とサムネイル）は、残りを extraObjectKeys に載せる */
+  listOrphans(
+    limit: number,
+  ): Promise<Array<{ itemId: string; objectKey: string; extraObjectKeys?: string[] }>>;
   markPurged(itemIds: string[]): Promise<number>;
 }
 

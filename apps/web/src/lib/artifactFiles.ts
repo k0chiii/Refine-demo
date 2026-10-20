@@ -87,6 +87,11 @@ export interface ArtifactFilesOptions {
   policy: FileCachePolicy;
   /** 取得の再試行までの待ち（テストで 0 にする） */
   retryDelayMs?: number;
+  /**
+   * 端末の写しから開いたとき、Worker に今も見られるかを裏で確かめるか（既定 true）。
+   * サムネイルのように、HTTP 側でも有効期間を持たせて配信するものは確かめない（枚数が多く、1 枚ごとの確認は割に合わない）
+   */
+  revalidate?: boolean;
 }
 
 /** 受け取りの購読。end は全部届いた（err 無し）か、失敗・中止（err あり） */
@@ -410,6 +415,7 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 export class ArtifactFiles {
   readonly transport: ArtifactTransport;
   readonly retryDelayMs: number;
+  private readonly revalidating: boolean;
   private readonly persistence: ArtifactPersistence | null;
   private readonly subjectOf: (token: string) => string;
   private readonly policy: FileCachePolicy;
@@ -423,6 +429,7 @@ export class ArtifactFiles {
     this.subjectOf = opts.subjectOf;
     this.policy = opts.policy;
     this.retryDelayMs = opts.retryDelayMs ?? 400;
+    this.revalidating = opts.revalidate ?? true;
   }
 
   /** 最新のトークンを返す関数を登録する（トークンは更新される。取得のたびに最新を使う） */
@@ -508,6 +515,7 @@ export class ArtifactFiles {
    * 見られない（権限剥奪・削除）なら写しを捨て、購読者に知らせる
    */
   revalidate(entry: ArtifactDownload, token: string) {
+    if (!this.revalidating) return;
     void (async () => {
       try {
         const res = await this.transport.request({

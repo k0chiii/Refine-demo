@@ -6,6 +6,8 @@ import {
   deleteThread,
   editThread,
   listCarryCandidates,
+  listCommentFileViews,
+  replyFileIds,
   searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
   replyToThread,
@@ -35,6 +37,8 @@ export const post = mutation({
     anchor: v.optional(anchorValidator),
     requestId: v.optional(v.string()),
     mentions: v.optional(v.array(v.string())),
+    /** 添付（commentFiles.prepare → Hono で検証済みの自分の添付。10 件まで。本文が空でも添付があれば投稿できる） */
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -51,6 +55,7 @@ export const reply = mutation({
     body: v.string(),
     bodyFormat: v.optional(v.string()),
     mentions: v.optional(v.array(v.string())),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -130,17 +135,24 @@ export const events = query({
           thread.deletedAt === undefined &&
           isAllowed("comment.decide", { work, grants, principal }) &&
           work.lifecycle !== "finalized",
-        events: events
-          .map((e) => ({
-            ...e,
-            actor: users.get(e.actorId),
-            reactions: reactionViews(e.reactions, principal.userId, users),
-            mentionUsers: mentionsOf(e).flatMap((id) => {
-              const u = users.get(id);
-              return u ? [u] : [];
-            }),
-          }))
-          .sort((a, b) => a.createdAt - b.createdAt),
+        events: (
+          await Promise.all(
+            events.map(async (e) => ({
+              ...e,
+              actor: users.get(e.actorId),
+              reactions: reactionViews(e.reactions, principal.userId, users),
+              mentionUsers: mentionsOf(e).flatMap((id) => {
+                const u = users.get(id);
+                return u ? [u] : [];
+              }),
+              /** 返信の添付（検証済みで削除されていないもの） */
+              files:
+                e.eventType === "replied"
+                  ? await listCommentFileViews(app, replyFileIds(e.payload))
+                  : [],
+            })),
+          )
+        ).sort((a, b) => a.createdAt - b.createdAt),
       };
     });
   },
