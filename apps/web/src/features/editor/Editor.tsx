@@ -1498,7 +1498,6 @@ export function Editor({
 
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
-  const isPost = artifact?.fileName === POST_MANIFEST_NAME;
   /** Figma の埋め込み（位置を取れず、コメントはフレーム単位。印を置く・隠すものがない） */
   const isFigmaEmbed =
     artifact?.role === "external" && !!artifact.externalUrl && isFigmaUrl(artifact.externalUrl);
@@ -1930,33 +1929,29 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {/* コメントを追加: 押すと次のクリック・ドラッグ 1 回だけ印を付け（カーソルは十字）、置くと戻る。Esc で戻す。
-                      持続するモードではない（紙面のクリックはいつもふつうの操作。なぞる・長押しでもコメントになる）。
-                      文章は選ぶだけでコメントになり、Figma の埋め込みは位置を取れないので置かない */}
-                  {canComment && !isFigmaEmbed && !(artifact.type === "document" && !isPost) ? (
-                    <M3eIconButton
-                      className="ws__arm"
-                      aria-label="コメントを追加"
-                      title="コメントを追加"
-                      toggle
-                      selected={armed}
-                      onClick={() => setMarkArmed(!armed)}
-                    >
-                      <M3eIcon name="add_comment" className={armed ? "icon--filled" : ""} />
-                    </M3eIconButton>
-                  ) : null}
-                  {/* コメントの印を一時的に隠す（紙面をきれいに見る）。コメントも一覧も消さない */}
+                  {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
                   {!isFigmaEmbed ? (
                     <M3eIconButton
                       className="ws__marks-toggle"
-                      aria-label={marksHidden ? "コメントの印を出す" : "コメントの印を隠す"}
-                      title={marksHidden ? "コメントの印を出す" : "コメントの印を隠す"}
+                      aria-label={marksHidden ? "コメントを表示する" : "コメントを隠す"}
+                      title={marksHidden ? "コメントを表示する" : "コメントを隠す"}
                       variant={marksHidden ? "tonal" : "standard"}
                       toggle
                       selected={marksHidden}
                       onClick={() => setMarksHidden((v) => !v)}
                     >
-                      <M3eIcon name={marksHidden ? "location_off" : "location_on"} />
+                      <M3eIcon name={marksHidden ? "comments_disabled" : "comment"} />
+                    </M3eIconButton>
+                  ) : null}
+                  {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
+                  {!mobile ? (
+                    <M3eIconButton
+                      className="ws__more"
+                      aria-label="コメントの表示"
+                      title="コメントの表示"
+                    >
+                      <M3eIcon name="location_on" />
+                      <M3eMenuTrigger htmlFor="viewer-more-menu" />
                     </M3eIconButton>
                   ) : null}
                   {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
@@ -2024,21 +2019,6 @@ export function Editor({
                       <M3eIcon name="attach_file" />
                       {compact ? null : <M3eMenuTrigger htmlFor="artifact-menu" />}
                     </M3eIconButton>
-                  ) : null}
-                  {/* 添付の切り替えとコメントの表示（横に一覧・ピンの高さ・ピンだけ）は、たまにしか使わないので 1 つのメニューにまとめる
-                      （ツールバーのボタンを減らす。監査 E-03） */}
-                  {!mobile ? (
-                    <>
-                      <span className="ws__toolbar-sep" />
-                      <M3eIconButton
-                        className="ws__more"
-                        aria-label="添付・表示"
-                        title="添付・表示"
-                      >
-                        <M3eIcon name="more_vert" />
-                        <M3eMenuTrigger htmlFor="viewer-more-menu" />
-                      </M3eIconButton>
-                    </>
                   ) : null}
                 </div>
               </M3eToolbar>

@@ -179,18 +179,18 @@ const autoProofreadDone = (timeout) =>
     null,
     { timeout },
   );
-/** 添付の切替（下部ツールバーの「添付・表示」メニュー） */
+/** 添付の切替（下部ツールバーのピンのボタンのメニュー） */
 const pickArtifact = async (name) => {
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label="添付・表示"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="コメントの表示"]').click();
   await page
     .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: name })
     .first()
     .click();
   await settle();
 };
-/** コメントの表示（横に一覧・ピンの高さに並べる・ピンだけ）の切替（下部ツールバーの「添付・表示」メニュー） */
+/** コメントの表示（横に一覧・ピンの高さに並べる・ピンだけ）の切替（下部ツールバーのピンのボタンのメニュー） */
 const pickLayout = async (label) => {
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label="添付・表示"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="コメントの表示"]').click();
   await page
     .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: label })
     .first()
@@ -1360,26 +1360,6 @@ async function main() {
     );
     await cancelCompose();
   }
-  // 「コメントを追加」: 次の 1 回だけクリックでも印を付け、置くと元に戻る。Esc でも戻る
-  {
-    const arm = page.locator(".ws__toolbar .ws__arm");
-    await arm.click();
-    await page.waitForSelector(".viewer__page.is-armed");
-    await page.keyboard.press("Escape");
-    await page.waitForSelector(".viewer__page.is-armed", { state: "detached" });
-    await arm.click();
-    const box = await page1().boundingBox();
-    await page.mouse.click(box.x + box.width * 0.92, box.y + box.height * 0.95);
-    await page.waitForSelector(".compose-pop");
-    expectTrue(
-      (await page.locator(".viewer__page.is-armed").count()) === 0,
-      "印を置いても「コメントを追加」の状態が戻らない",
-    );
-    await cancelCompose();
-    await page.mouse.click(box.x + box.width * 0.92, box.y + box.height * 0.95);
-    await page.waitForTimeout(400);
-    expectTrue((await composeCount()) === 0, "2 回目のクリックでもコメントになる（持続している）");
-  }
   // コメントの印を隠す: 紙面の印（ピン・範囲）が消え、戻すと出る。コメントの一覧は残る。カードを押すと印が戻る
   {
     await drawer("コメント");
@@ -1515,11 +1495,6 @@ async function main() {
   expectTrue(
     (await page.locator(".drawer m3e-tab, .ws__drawer m3e-tab", { hasText: "FB" }).count()) === 0,
     "エディタの引き出しに FB のタブが残っている",
-  );
-  // 校了済みの制作物は書き込めないので、「コメントを追加」のボタンも出ない
-  expectTrue(
-    (await page.locator(".ws__toolbar .ws__arm").count()) === 0,
-    "コメントできない版に「コメントを追加」のボタンが出ている",
   );
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
@@ -2812,6 +2787,27 @@ async function webFigmaScenes() {
             }),
           );
       });
+  const holdIn = (selector) =>
+    site
+      .locator(selector)
+      .first()
+      .evaluate(async (el) => {
+        el.scrollIntoView({ block: "center" });
+        const r = el.getBoundingClientRect();
+        const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        for (const type of ["pointerdown", "pointerup"]) {
+          if (type === "pointerup") await new Promise((r) => setTimeout(r, 700));
+          el.dispatchEvent(
+            new PointerEvent(type, {
+              ...at,
+              button: 0,
+              bubbles: true,
+              cancelable: true,
+              pointerId: 1,
+            }),
+          );
+        }
+      });
   // サイトの中のふつうのクリックは、サイトの操作（コメントにならない）
   await clickIn("#events h2");
   await page.waitForTimeout(500);
@@ -2819,10 +2815,8 @@ async function webFigmaScenes() {
     (await page.locator(".compose-pop").count()) === 0,
     "ライブ表示の中をクリックしただけで投稿欄が出た",
   );
-  // 「コメントを追加」の直後の 1 回はクリックした要素にコメントできる
-  await page.locator(".ws__toolbar .ws__arm").click();
-  await page.waitForTimeout(300);
-  await clickIn("#events h2");
+  // 長押しした要素にコメントできる
+  await holdIn("#events h2");
   await page.waitForSelector(".compose-pop__place");
   const place = await page.locator(".compose-pop__place").innerText();
   expectTrue(place.includes("iPhone 17（402px）"), `投稿欄に端末と要素が出ない（${place}）`);
