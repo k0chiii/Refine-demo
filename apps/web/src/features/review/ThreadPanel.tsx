@@ -207,11 +207,13 @@ export function ThreadPanel({
     }
     if (atBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
   }, [loaded, t.id, timeline.length]);
+  const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = () => {
       atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+      setScrolled(el.scrollTop > 0);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
@@ -242,7 +244,7 @@ export function ThreadPanel({
   return (
     <section
       ref={rootRef}
-      className={`thread-panel thread-panel--${variant} ${closed ? "thread--closed" : ""}`}
+      className={`thread-panel thread-panel--${variant} ${scrolled ? "thread-panel--scrolled" : ""} ${closed ? "thread--closed" : ""}`}
       aria-label={`コメント${index ? ` ${index}` : ""}のスレッド`}
       data-thread-panel={t.id}
       tabIndex={-1}
