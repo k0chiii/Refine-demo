@@ -69,6 +69,7 @@ export function ComposePopover({
   docked,
   quote,
   place,
+  autoFocus = true,
 }: {
   x: number;
   y: number;
@@ -90,6 +91,8 @@ export function ComposePopover({
   quote?: string;
   /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。docked でなくても出す。アイコンは種類によらず地図のピン */
   place?: string;
+  /** 開いたとき文字欄にカーソルを移すか。移さないと、選んだ文字（紙面の選択）をそのままコピーできる */
+  autoFocus?: boolean;
 }) {
   const what = label;
   const uploads = useCommentFileUploads({ revisionId: revisionId ?? "", purpose: "comment" });
@@ -147,7 +150,7 @@ export function ComposePopover({
           // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
           placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
           rows={docked ? 2 : 3}
-          autoFocus
+          autoFocus={autoFocus}
           toolbar
           value={value}
           onValue={onChange}

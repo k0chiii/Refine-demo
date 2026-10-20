@@ -76,14 +76,7 @@ import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
-import {
-  effectiveMarkMode,
-  markModeIcon,
-  markModeLabel,
-  markModes,
-  useMarkMode,
-  type MarkMode,
-} from "@/features/review/markMode";
+import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
@@ -155,6 +148,8 @@ type Draft = {
   point?: { x: number; y: number };
   range?: { start: number; end: number };
   box?: { x: number; y: number; w: number; h: number };
+  /** 投稿欄に文字カーソルを移す（キーボード・ボタンで選んだ文字。マウスで選んだときは移さず、コピーできるまま） */
+  focus?: boolean;
   /** 動画の時点（end があれば範囲）。rect・point と一緒なら、その時点の画面の位置 */
   time?: { start: number; end?: number };
   /** 動画で範囲を選んでいる途中（投稿欄はまだ出さない） */
@@ -170,6 +165,12 @@ type Draft = {
   /** 上の位置の呼び名（投稿欄に出す。「本文」「2 枚目の画像」）と、本文の引用文 */
   postPlace?: { label: string; quote?: string };
 };
+
+/**
+ * コメントの印を隠している制作物（このタブのあいだ・メモリだけ）。版・ページを替えても保ち、制作物を離れたら戻す。
+ * 版の URL を替えるとエディタが作り直されることがあるので、モジュールで覚えて作り直しの最初の描画で読む
+ */
+let marksHiddenFor: string | null = null;
 
 const COMPOSE_W = 300;
 /** 紙面の描き終わりの通知が届かなくても、ファイルが届いてからこの時間で読み込み中の表示を終える */
@@ -326,11 +327,17 @@ export function Editor({
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
-  /**
-   * 紙面に印を付けたとき作るもの: コメント・なし（印を付けない）。下のツールバーで切り替える。
-   * このタブのあいだ覚える（features/review/markMode）。権限で使えないモードは下の markMode に置き換える
-   */
-  const [markPick, setMarkPick] = useMarkMode();
+  /** 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける。置くか Esc で戻る） */
+  const armed = useMarkArmed();
+  useEffect(() => () => setMarkArmed(false), []);
+  /** コメントの印（ピン・範囲・文字の強調・動画の印）を一時的に隠している（コメントそのものは消さない・一覧も隠さない） */
+  const [marksHidden, setMarksHidden] = useState(() => marksHiddenFor === workId);
+  useEffect(() => {
+    marksHiddenFor = marksHidden ? workId : null;
+    return () => {
+      marksHiddenFor = null;
+    };
+  }, [marksHidden, workId]);
   const [draft, setDraft] = useState<Draft | null>(null);
   /** SNS のプレビューでコメントの位置へ移して強調する合図（カード・印を押すたびに増える） */
   const [postReveal, setPostReveal] = useState(0);
@@ -770,23 +777,45 @@ export function Editor({
   const resolvedCount = allThreads.filter(isClosed).length;
   const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
   const openCount = allThreads.length - resolvedCount;
-  const overlayThreads: OverlayThread[] = threads
-    .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
-    .filter((t) => t.anchor);
+  const overlayThreads: OverlayThread[] = marksHidden
+    ? []
+    : threads
+        .map((t) => ({
+          id: t.id,
+          anchor: t.anchor as Anchor,
+          severity: t.severity,
+          index: t.index,
+        }))
+        .filter((t) => t.anchor);
   const open = revision
     ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
     : false;
   const canComment = can?.comment ?? false;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  /** いま効く書き込みのモード（コメントできない版では印を付けない） */
-  const markMode = effectiveMarkMode(markPick, { comment: canComment });
-  /** 紙面に印を付けられるか（なし のときは、押す・なぞるが紙面そのもの（PDF のリンクなど）に届く） */
-  const selecting = markMode !== "none";
-  /** モードを替える。印を付けないにしたら、書きかけの位置つきの投稿欄は閉じる（位置なしのコメントは残す）。引き出しは動かさない */
-  const changeMarkMode = (m: MarkMode) => {
-    setMarkPick(m);
-    if (m === "none" && draft && !draft.free) resetCompose();
-  };
+  // 紙面のクリック・タップはいつもふつうの操作で、なぞる（範囲）・長押し（ピン）だけがコメントになる（features/annotation/AnchorOverlay）。
+  // 書き込みのモードはない。「コメントを追加」は、次の 1 回だけクリックでも印を付ける（armed）
+  // コメントを書き始めたら（位置つきの下書きができたら）印を付ける状態は戻し、隠していた印も出す
+  useEffect(() => {
+    if (draft && !draft.free) {
+      setMarkArmed(false);
+      setMarksHidden(false);
+    }
+  }, [draft]);
+  useEffect(() => {
+    if (!canComment) setMarkArmed(false);
+  }, [canComment]);
+  useEffect(() => {
+    if (!armed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMarkArmed(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [armed]);
+  // 隠していても、コメントを選んだ（一覧のカード・URL・通知）ら印を出す（その印へ移れるように）
+  useEffect(() => {
+    if (activeThreadId) setMarksHidden(false);
+  }, [activeThreadId]);
   const busy =
     doPost.pending ||
     doDecide.pending ||
@@ -813,6 +842,7 @@ export function Editor({
    */
   const jumpTo = (t: Thread, opts?: { reveal?: boolean }) => {
     setActiveThreadId(t.id);
+    setMarksHidden(false);
     if (opts?.reveal !== false) requestReveal(t.id);
     setPostReveal((n) => n + 1);
     if (t.anchor) {
@@ -892,6 +922,8 @@ export function Editor({
         x={pos.x}
         y={pos.y}
         docked={compact}
+        // マウスで選んだ文字は、文字カーソルを移さず（コピーできるまま）。書き始めるときは欄を押す
+        autoFocus={!draft.range || draft.focus === true}
         {...(draft.range && text
           ? { quote: text.body.slice(draft.range.start, draft.range.end).slice(0, 80) }
           : {})}
@@ -1031,7 +1063,7 @@ export function Editor({
       if (layout === "panel") openThread(t, { reveal: true });
       else jumpTo(t);
     },
-    selecting,
+    canComment,
   };
   /** 紙面を出してよいか（中身が決まり、PDF・画像・動画は最初の 1 枚を描き終えた） */
   const paperDone = (() => {
@@ -1094,7 +1126,7 @@ export function Editor({
               threads: overlayThreads,
               activeThreadId,
               revealKey: postReveal,
-              selecting,
+              canComment,
               draftAnchor: draft?.anchor ?? null,
               onSelectThread: (id) => {
                 viewerProps.onSelectThread(id);
@@ -1156,7 +1188,7 @@ export function Editor({
               resetCompose();
             }}
             threads={overlayThreads}
-            selecting={selecting}
+            canComment={canComment}
             onCommentFrame={(d) => {
               setDraft({ figma: d });
               setActiveThreadId(null);
@@ -1209,7 +1241,6 @@ export function Editor({
           artifactId={artifact.id}
           onReady={() => setPaintedFor(artifact.id)}
           {...viewerProps}
-          passive={!selecting}
           draft={draft?.page ? (draft as Draft & { page: number }) : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1253,7 +1284,11 @@ export function Editor({
           onDraft={(r) => {
             setDraft(
               r
-                ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) }
+                ? {
+                    range: { start: r.start, end: r.end },
+                    ...(r.box ? { box: r.box } : {}),
+                    ...(r.focus ? { focus: true } : {}),
+                  }
                 : null,
             );
             setActiveThreadId(null);
@@ -1272,7 +1307,11 @@ export function Editor({
           onDraft={(r) => {
             setDraft(
               r
-                ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) }
+                ? {
+                    range: { start: r.start, end: r.end },
+                    ...(r.box ? { box: r.box } : {}),
+                    ...(r.focus ? { focus: true } : {}),
+                  }
                 : null,
             );
             setActiveThreadId(null);
@@ -1290,7 +1329,6 @@ export function Editor({
           onReady={() => setPaintedFor(artifact.id)}
           alt={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
-          passive={!selecting}
           draft={draft?.rect || draft?.point ? draft : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1373,7 +1411,7 @@ export function Editor({
       threads: [],
       activeThreadId: null,
       onSelectThread: () => undefined,
-      selecting: false,
+      canComment: false,
     };
     if (otherArtifact.type === "pdf")
       return (
@@ -1460,6 +1498,10 @@ export function Editor({
 
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
+  const isPost = artifact?.fileName === POST_MANIFEST_NAME;
+  /** Figma の埋め込み（位置を取れず、コメントはフレーム単位。印を置く・隠すものがない） */
+  const isFigmaEmbed =
+    artifact?.role === "external" && !!artifact.externalUrl && isFigmaUrl(artifact.externalUrl);
   /** 外部リンクのうち、紙面として出すもの（Web のライブ表示・Figma の埋め込み） */
   const isLiveExternal =
     artifact?.role === "external" &&
@@ -1499,7 +1541,7 @@ export function Editor({
         <div className="comments__main">
           <AutoProofreadStatus auto={auto} />
           <div className="comments__header">
-            {/* 「位置なしでコメント」はここから（ツールバーの丸いボタンは、印を付けるものを切り替える「書き込み」に譲った） */}
+            {/* 「位置なしでコメント」はここから（紙面の位置に付けるのは、なぞる・長押し・ツールバーの「コメントを追加」） */}
             {canComment ? (
               <M3eButton
                 variant="tonal"
@@ -1888,19 +1930,31 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {/* 書き込み（印を付けるとき作るもの）: コメント / 選択（印を付けない）。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
-                      引き出しは動かさない */}
-                  {canComment ? (
+                  {/* コメントを追加: 押すと次のクリック・ドラッグ 1 回だけ印を付け（カーソルは十字）、置くと戻る。Esc で戻す。
+                      持続するモードではない（紙面のクリックはいつもふつうの操作。なぞる・長押しでもコメントになる）。
+                      文章は選ぶだけでコメントになり、Figma の埋め込みは位置を取れないので置かない */}
+                  {canComment && !isFigmaEmbed && !(artifact.type === "document" && !isPost) ? (
                     <M3eIconButton
-                      className="ws__mark-mode"
-                      aria-label="書き込み: コメント / 選択"
-                      title={`書き込み: コメント / 選択（いまは${markModeLabel[markMode]}）`}
+                      className="ws__arm"
+                      aria-label="コメントを追加"
+                      title="コメントを追加"
+                      toggle
+                      selected={armed}
+                      onClick={() => setMarkArmed(!armed)}
                     >
-                      <M3eIcon
-                        name={markModeIcon[markMode]}
-                        className={markMode === "none" ? "" : "icon--filled"}
-                      />
-                      <M3eMenuTrigger htmlFor="mark-mode-menu" />
+                      <M3eIcon name="add_comment" className={armed ? "icon--filled" : ""} />
+                    </M3eIconButton>
+                  ) : null}
+                  {/* コメントの印を一時的に隠す（紙面をきれいに見る）。コメントも一覧も消さない */}
+                  {!isFigmaEmbed ? (
+                    <M3eIconButton
+                      className="ws__marks-toggle"
+                      aria-label={marksHidden ? "コメントの印を出す" : "コメントの印を隠す"}
+                      toggle
+                      selected={marksHidden}
+                      onClick={() => setMarksHidden((v) => !v)}
+                    >
+                      <M3eIcon name={marksHidden ? "visibility_off" : "visibility"} />
                     </M3eIconButton>
                   ) : null}
                   {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
@@ -1995,22 +2049,6 @@ export function Editor({
               >
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
-            ) : null}
-            {canComment ? (
-              <M3eMenu id="mark-mode-menu" positionY="above">
-                <M3eMenuItemGroup aria-label="書き込み（印を付けたとき作るもの）">
-                  {markModes.map((m) => (
-                    <M3eMenuItemRadio
-                      key={m}
-                      checked={markMode === m}
-                      onClick={() => changeMarkMode(m)}
-                    >
-                      <M3eIcon slot="icon" name={markModeIcon[m]} />
-                      {markModeLabel[m]}
-                    </M3eMenuItemRadio>
-                  ))}
-                </M3eMenuItemGroup>
-              </M3eMenu>
             ) : null}
             {mobile ? (
               <M3eMenu id="zoom-menu" positionY="above">

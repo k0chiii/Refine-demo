@@ -266,21 +266,14 @@ const compareWithRevision = async (label) => {
   await comparePickItem(label);
 };
 /**
- * 下のツールバーの「書き込み」（印を付けたとき作るもの）: コメント / 選択（印を付けない）。押すと小さな Menu。引き出しは動かさない
- * （利用者指示 2026-10-17）。このタブのあいだ覚えるので、使い終わったらコメントに戻す
+ * 紙面のふつうのクリックは投稿欄を出さない（利用者指示 2026-10-20）。なぞる（範囲）と長押し（ピン）だけがコメント。
+ * 押したまま動かさず待つ（マウスの長押しは 500ms）
  */
-const openMarkMenu = async () => {
-  await page.locator(".ws__toolbar .ws__mark-mode").click();
-  await page.waitForSelector("#mark-mode-menu m3e-menu-item-radio:visible");
-  await settle();
-};
-const setMarkMode = async (label) => {
-  await openMarkMenu();
-  await page
-    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: label })
-    .first()
-    .click();
-  await settle();
+const mouseHold = async (x, y, ms = 700) => {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(ms);
+  await page.mouse.up();
 };
 const stopCompare = async () => {
   await openComparePicker();
@@ -1011,7 +1004,7 @@ async function main() {
     // （一覧を置き換える。戻るで一覧へ）。返信欄は一番下に見えたまま。開くと未読の点は消える
     await page.setViewportSize({ width: 412, height: 915 });
     await settle();
-    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
     await settle();
     const mobileCard = page.locator("m3e-bottom-sheet.ws__sheet .thread", {
       hasText: "スレッドの確認用",
@@ -1269,30 +1262,21 @@ async function main() {
     );
   }
 
-  // 64a・73 書き込み（印を付けたとき作るもの）は コメント / 選択 の 2 つ（FB はコメントへ統合した。§95）。
+  // 64a・73 書き込みのモードは無い（利用者指示 2026-10-20）。PC: クリックはふつうのクリック（PDF のリンクを辿れる）、
+  //    なぞる（範囲）と長押し（ピン）だけがコメント。ツールバーの「コメントを追加」は次の 1 回だけ。
   //    第2版は受付中なので、校正者は書き込める（比べているところから戻って）
   await stopCompare();
   await page.waitForFunction(() => document.querySelectorAll(".compare__pane").length === 0);
   await pdfReady();
   await settle();
-  await openMarkMenu();
   expectTrue(
-    (await page.locator("#mark-mode-menu m3e-menu-item-radio").count()) === 2,
-    "書き込みのモードが コメント / 選択 の 2 つでない",
+    (await page.locator(".ws__mark-mode, #mark-mode-menu").count()) === 0,
+    "書き込みのモードの入口が残っている",
   );
-  await shot("64a-mark-mode-menu");
-  await page.keyboard.press("Escape");
-  await settle();
-  // 73 書き込み「なし」（利用者指示 2026-10-17）: 印を付けず、PDF の中のリンクが押せる。外部の URL は新しいタブ（noopener noreferrer）、
-  //    ページ内のリンクはそのページへ。コメントのモードではリンクの層を出さない（印の層がなぞるを受ける）
+  await shot("64a-viewer-toolbar");
   await context.route("https://example.com/**", (route) =>
     route.fulfill({ contentType: "text/html", body: "<title>リンク先</title>" }),
   );
-  expectTrue(
-    (await page.locator(".viewer__page .pdf-link").count()) === 0,
-    "コメントのモードなのに、PDF のリンクの層が出ている",
-  );
-  await setMarkMode("選択");
   await page.waitForSelector('.viewer__page[data-page="1"] a.pdf-link');
   const links = await page
     .locator('.viewer__page[data-page="1"] a.pdf-link')
@@ -1310,20 +1294,13 @@ async function main() {
     `外部リンクが new タブ・noopener noreferrer で出ない: ${JSON.stringify(links)}`,
   );
   await shot("73-pdf-links-no-mark");
-  // 紙面をなぞっても投稿欄は出ない
-  {
-    const box = await page.locator(".viewer__overlay").first().boundingBox();
-    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3, { steps: 6 });
-    await page.mouse.up();
-    await page.waitForTimeout(400);
-    expectTrue(
-      (await page.locator(".compose-pop").count()) === 0,
-      "書き込みが「なし」なのに、紙面をなぞると投稿欄が出る",
-    );
-  }
-  // 外部リンクは新しいタブで開く
+  const page1 = () => page.locator('.viewer__page[data-page="1"]');
+  const composeCount = () => page.locator(".compose-pop").count();
+  const cancelCompose = async () => {
+    await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+  };
+  // 外部リンクは、ふつうのクリックで新しいタブに開く（投稿欄は出ない）
   {
     const [popup] = await Promise.all([
       context.waitForEvent("page"),
@@ -1335,6 +1312,7 @@ async function main() {
       `新しいタブの URL: ${popup.url()}`,
     );
     await popup.close();
+    expectTrue((await composeCount()) === 0, "リンクをクリックしただけで投稿欄が出た");
   }
   // ページ内のリンクはそのページへ
   await page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="#page-"]').click();
@@ -1347,12 +1325,96 @@ async function main() {
     null,
     { timeout: 5000 },
   );
-  // コメントに戻すと、リンクの層は出ない（印の層がなぞるを受ける。リンクは印を付ける操作を奪わない）
-  await setMarkMode("コメント");
-  expectTrue(
-    (await page.locator(".viewer__page .pdf-link").count()) === 0,
-    "コメントのモードに戻しても、PDF のリンクの層が残っている",
-  );
+  expectTrue((await composeCount()) === 0, "ページ内リンクをクリックしただけで投稿欄が出た");
+  await page.locator('.viewer__page[data-page="1"]').scrollIntoViewIfNeeded();
+  await settle();
+  // 紙面のふつうのクリックでは投稿欄が出ない。なぞる（範囲）と長押し（ピン）で出る
+  {
+    const box = await page1().boundingBox();
+    const at = (x, y) => [box.x + box.width * x, box.y + box.height * y];
+    await page.mouse.click(...at(0.92, 0.95));
+    await page.waitForTimeout(500);
+    expectTrue((await composeCount()) === 0, "紙面をクリックしただけで投稿欄が出た");
+    const [jx, jy] = at(0.9, 0.9);
+    await page.mouse.move(jx, jy);
+    await page.mouse.down();
+    await page.mouse.move(jx + 2, jy + 2, { steps: 2 }); // しきい値（4px）より小さいぶれはクリック
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    expectTrue((await composeCount()) === 0, "わずかなぶれでコメントになった");
+    await page.mouse.move(...at(0.2, 0.2));
+    await page.mouse.down();
+    await page.mouse.move(...at(0.5, 0.3), { steps: 6 });
+    await page.mouse.up();
+    await page.waitForSelector(".compose-pop");
+    expectTrue(
+      (await page1().locator(".viewer__overlay .anchor-draft").count()) === 1,
+      "なぞった範囲が下書きとして描かれない",
+    );
+    await cancelCompose();
+    await mouseHold(...at(0.92, 0.95));
+    await page.waitForSelector(".compose-pop");
+    expectTrue(
+      (await page1().locator(".viewer__overlay circle.anchor-draft").count()) === 1,
+      "長押しでピンが置かれない",
+    );
+    await cancelCompose();
+  }
+  // 「コメントを追加」: 次の 1 回だけクリックでも印を付け、置くと元に戻る。Esc でも戻る
+  {
+    const arm = page.locator(".ws__toolbar .ws__arm");
+    await arm.click();
+    await page.waitForSelector(".viewer__page.is-armed");
+    await page.keyboard.press("Escape");
+    await page.waitForSelector(".viewer__page.is-armed", { state: "detached" });
+    await arm.click();
+    const box = await page1().boundingBox();
+    await page.mouse.click(box.x + box.width * 0.92, box.y + box.height * 0.95);
+    await page.waitForSelector(".compose-pop");
+    expectTrue(
+      (await page.locator(".viewer__page.is-armed").count()) === 0,
+      "印を置いても「コメントを追加」の状態が戻らない",
+    );
+    await cancelCompose();
+    await page.mouse.click(box.x + box.width * 0.92, box.y + box.height * 0.95);
+    await page.waitForTimeout(400);
+    expectTrue((await composeCount()) === 0, "2 回目のクリックでもコメントになる（持続している）");
+  }
+  // コメントの印を隠す: 紙面の印（ピン・範囲）が消え、戻すと出る。コメントの一覧は残る。カードを押すと印が戻る
+  {
+    await drawer("コメント");
+    const marks = () => page.locator(".viewer__overlay [data-anchor]").count();
+    const shown = await marks();
+    expectTrue(shown > 0, "印を隠す前に、紙面に印が無い");
+    const cards = await page.locator(".comments .thread").count();
+    const toggle = page.locator(".ws__toolbar .ws__marks-toggle");
+    await toggle.click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".viewer__overlay [data-anchor]").length === 0,
+    );
+    expectTrue(
+      (await page.locator(".comments .thread").count()) === cards,
+      "印を隠したのにコメントの一覧まで隠れた",
+    );
+    await shot("73b-marks-hidden");
+    await toggle.click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".viewer__overlay [data-anchor]").length === n,
+      shown,
+    );
+    await toggle.click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".viewer__overlay [data-anchor]").length === 0,
+    );
+    await page.locator(".comments .thread .thread__body").first().click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".viewer__overlay [data-anchor]").length > 0,
+    );
+    expectTrue(
+      (await page.locator(".ws__toolbar .ws__marks-toggle[selected]").count()) === 0,
+      "カードを押して印が戻っても、隠すボタンが押された状態のまま",
+    );
+  }
 
   // 持ち越したコメントと比較中のコメントを ✓ で反映済みにする（未解決が残ると理由なしでは校了できない。制作者）
   await signInAs("mock-nogiku-creator");
@@ -1454,10 +1516,10 @@ async function main() {
     (await page.locator(".drawer m3e-tab, .ws__drawer m3e-tab", { hasText: "FB" }).count()) === 0,
     "エディタの引き出しに FB のタブが残っている",
   );
-  // 校了済みの制作物は書き込めないので、「書き込み」のボタンも出ない
+  // 校了済みの制作物は書き込めないので、「コメントを追加」のボタンも出ない
   expectTrue(
-    (await page.locator(".ws__toolbar .ws__mark-mode").count()) === 0,
-    "コメントできない版に「書き込み」のボタンが出ている",
+    (await page.locator(".ws__toolbar .ws__arm").count()) === 0,
+    "コメントできない版に「コメントを追加」のボタンが出ている",
   );
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
@@ -1548,7 +1610,7 @@ async function main() {
   await pdfReady();
   await settle();
   // 34 引き出しは普段は閉じていて、ツールバーの「コメント」で半分まで開く
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
   await settle();
   expectTrue(
     await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").open),
@@ -1662,7 +1724,7 @@ async function main() {
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");
   await go(writeWorkUrl);
-  await page.waitForSelector(".ws__toolbar .ws__mark-mode");
+  await page.waitForSelector(".ws__toolbar .ws__marks-toggle");
   await page.waitForSelector(".rich-viewer__page .doc");
   await page.evaluate((needle) => {
     const root = document.querySelector(".rich-viewer__page .doc");
@@ -1685,6 +1747,16 @@ async function main() {
       .dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   }, "百花繚乱");
   await page.waitForSelector(".compose-pop .rt__content");
+  // マウスで選んだ文字は、投稿欄に文字カーソルを移さず、選択も残る（そのまま Ctrl/⌘＋C でコピーできる）
+  await page.waitForTimeout(600);
+  const keep = await page.evaluate(() => ({
+    inPop: !!document.activeElement?.closest(".compose-pop"),
+    selected: getSelection().toString(),
+  }));
+  expectTrue(
+    !keep.inPop && keep.selected.includes("百花繚乱"),
+    `文字を選んだら投稿欄に文字カーソルが移り、選択が外れた（コピーできない）: ${JSON.stringify(keep)}`,
+  );
   await page.fill(
     ".compose-pop .rt__content",
     "テーマ名は公式表記「百花繚乱 ―ひゃっかりょうらん―」に合わせ、ふりがなを付けてください。",
@@ -2170,6 +2242,11 @@ async function v2Scenes() {
       },
       [type, x, y],
     );
+  // タップ（すぐ離す）はふつうのタップ: コメントにならない
+  await touchOn("pointerdown", 80, 120);
+  await touchOn("pointerup", 80, 120);
+  await page.waitForTimeout(700);
+  expectTrue((await page.locator(".compose-pop").count()) === 0, "タップしただけで投稿欄が出た");
   await touchOn("pointerdown", 80, 120);
   await touchOn("pointermove", 80, 60);
   await touchOn("pointerup", 80, 60);
@@ -2317,7 +2394,7 @@ async function v2Scenes() {
   await signInAs("mock-nogiku-reviewer");
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${sns}/v/1`);
-  await page.waitForSelector(".sp-ig__slide .sp-marks.is-drawable", { timeout: 20_000 });
+  await page.waitForSelector(".sp-ig__slide .sp-marks", { timeout: 20_000 });
   await settle();
   // 設定のボタンは共通アプリバーの末尾（浮いた FAB は無い）。スマホの幅でもバーからはみ出さず、全画面は menu から開き ✕ で戻れる
   const barButton = page.locator('#appbar-actions m3e-icon-button[aria-label^="プレビューの設定"]');
@@ -2434,7 +2511,16 @@ async function v2Scenes() {
     () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "2/2",
   );
   await carouselSettled(1);
-  await drag(page.locator(".sp-ig__slide").nth(1).locator(".sp-marks"), 0.7, 0.6);
+  // クリックだけではコメントにならない。押し続ける（長押し）とピン
+  const layer2 = page.locator(".sp-ig__slide").nth(1).locator(".sp-marks");
+  await drag(layer2, 0.7, 0.6);
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page.locator(".compose-pop").count()) === 0,
+    "SNS の画像をクリックしただけで投稿欄が出た",
+  );
+  const lb2 = await layer2.boundingBox();
+  await mouseHold(lb2.x + lb2.width * 0.7, lb2.y + lb2.height * 0.6);
   await postComment("この画像の右下は切れて見えます（画像 2 のピン）");
   await marksShown(".sp-figure .sp-mark--point", "画像のピンが出ない");
   // 1 枚目へ戻して撮る: 本文の強調と 1 枚目の矩形が同時に見える
@@ -2448,7 +2534,7 @@ async function v2Scenes() {
   );
   await shot("59a-sns-anchored-comments");
   // 59b コメントを開くと、その画像へ送って位置を強調する（ピンは 2 枚目。いまは 1 枚目を見ている）
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
   await settle();
   // ピンのコメントのカード（番号は自動校正のコメントも数えるので、書いた文で探す）を押す
   await page
@@ -2503,7 +2589,7 @@ async function v2Scenes() {
   await go("/works");
   await go(`${sns}/v/1`); // 開き直すと、キャプションはまた 2 行で切られている
   await page.waitForSelector(".sp-figure .sp-more", { timeout: 20_000 });
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
   await settle();
   await page
     .locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "続きの本文にも" })
@@ -2540,7 +2626,7 @@ async function v2Scenes() {
   await go(`${sns}/v/1`);
   await page.waitForSelector(".sp-figure .sp-mark--rect", { timeout: 20_000 });
   const openComments = async () => {
-    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
     await settle();
   };
   await openComments();
@@ -2639,6 +2725,19 @@ async function v2Scenes() {
   );
   await shot("66b-video-range-compose");
   await postVideo("この間のテロップが速すぎる");
+  // 映像のクリックは再生・停止（コメントにならない）
+  {
+    const f = await page.locator(".vplayer__frame").boundingBox();
+    const paused = () => page.evaluate(() => document.querySelector(".vplayer video").paused);
+    await page.mouse.click(f.x + f.width * 0.5, f.y + f.height * 0.5);
+    await page.waitForFunction(() => !document.querySelector(".vplayer video").paused);
+    await page.mouse.click(f.x + f.width * 0.5, f.y + f.height * 0.5);
+    await page.waitForFunction(() => document.querySelector(".vplayer video").paused);
+    expectTrue(
+      (await paused()) && (await page.locator(".compose-pop").count()) === 0,
+      "映像のクリックが再生・停止にならない（またはコメントになった）",
+    );
+  }
   // 画面の位置: 1 秒で止めて映像の左上をドラッグ
   await seekTo(1 / 12);
   const fr = await page.locator(".vplayer__frame").boundingBox();
@@ -2692,9 +2791,7 @@ async function webFigmaScenes() {
   await page.waitForSelector(".wlive__frame", { timeout: 15_000 });
   // ブリッジの ready（印の層が出る）
   await page.waitForSelector(".wlive__marks", { timeout: 15_000 });
-  await page.locator(".wlive__mode m3e-button", { hasText: "コメント" }).click();
   await page.waitForTimeout(400);
-  // iframe の中の見出しを押す（縮小表示なので座標ではなく、要素にポインターイベントを送る）
   const site = page.frameLocator(".wlive__frame");
   const clickIn = (selector) =>
     site
@@ -2715,6 +2812,16 @@ async function webFigmaScenes() {
             }),
           );
       });
+  // サイトの中のふつうのクリックは、サイトの操作（コメントにならない）
+  await clickIn("#events h2");
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page.locator(".compose-pop").count()) === 0,
+    "ライブ表示の中をクリックしただけで投稿欄が出た",
+  );
+  // 「コメントを追加」の直後の 1 回はクリックした要素にコメントできる
+  await page.locator(".ws__toolbar .ws__arm").click();
+  await page.waitForTimeout(300);
   await clickIn("#events h2");
   await page.waitForSelector(".compose-pop__place");
   const place = await page.locator(".compose-pop__place").innerText();

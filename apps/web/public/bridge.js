@@ -15,7 +15,11 @@
  * - サイトの内容を外へ送るのは、押した要素のセレクタ・タグ・短い引用文（200 文字まで）・矩形だけ。フォームの値や Cookie は送らない
  * - 依存ライブラリ無し。ページの DOM は書き換えない（枠のハイライト用の要素を 1 つ足すだけ）
  *
- * 親 → 子: {source:"mf100-host", type:"mode", mode:"browse"|"comment"} / {type:"resolve", anchors:[{id, selector, fallback}]} /
+ * 操作（利用者指示 2026-10-20）: クリック・タップはサイトのふつうの操作。範囲をなぞる（ドラッグ。文字の選択も）と長押し（ピン）が
+ * コメントになる。親が mode を "comment" にした直後（「コメントを追加」を押した直後）だけ、クリックした要素もコメントになる。
+ * mode "off" は何もしない（コメントできない版）。
+ *
+ * 親 → 子: {source:"mf100-host", type:"mode", mode:"off"|"browse"|"comment"} / {type:"resolve", anchors:[{id, selector, fallback}]} /
  *          {type:"scrollTo", id | selector, fallback} / {type:"highlight", id|null}
  * 子 → 親: {source:"mf100-bridge", type:"ready", url, title, viewport, scroll, docHeight} /
  *          {type:"hit", url, selector, elementRect, rect?|point?, page, viewport} /
@@ -28,7 +32,7 @@
   var allowAttr = script && script.getAttribute("data-allow-origin");
   var allowed = (allowAttr ? allowAttr.split(/\s+/) : [location.origin]).filter(Boolean);
   var hostOrigin = null; // 最初に正しいメッセージをくれた親に固定する
-  var mode = "browse";
+  var mode = "off"; // off: 何もしない / browse: なぞる・長押しがコメント / comment: クリックもコメント（1 回だけ。親が戻す）
   var anchors = []; // 親から頼まれた再アンカーの対象
   var QUOTE_MAX = 200;
   var V = 1;
@@ -191,7 +195,7 @@
     requestAnimationFrame(sendRects);
   }
 
-  // ---- コメントモードの操作（押す・なぞる・文字を選ぶ）
+  // ---- コメントの操作（なぞる・長押し・文字を選ぶ。「コメントを追加」の直後はクリックも）
   var box = null; // ホバーの枠
   function ensureBox() {
     if (box) return box;
@@ -222,7 +226,12 @@
     b.style.height = r.height + "px";
     b.firstChild.textContent = label || el.tagName.toLowerCase();
   }
-  var press = null;
+  var press = null; // 押している途中 {el, x, y（文書座標）, cx, cy（画面）, id, touch, moved, held, timer}
+  var swallowUntil = 0; // コメントにした直後の click を、サイトのリンク・ボタンへ渡さない
+  var MOUSE_HOLD_MS = 500,
+    TOUCH_HOLD_MS = 320,
+    MOUSE_SLOP = 4,
+    TOUCH_SLOP = 10;
   function targetAt(e) {
     var el = e.target;
     while (el && el.nodeType !== 1) el = el.parentNode;
@@ -230,34 +239,73 @@
     if (el === document.documentElement) el = document.body;
     return el;
   }
+  function clearPress() {
+    if (press) clearTimeout(press.timer);
+    press = null;
+    showBox(null);
+  }
+  function drawRange(e) {
+    var r = pageRect(press.el);
+    var s = scroll();
+    var x0 = Math.min(press.x, e.pageX),
+      y0 = Math.min(press.y, e.pageY);
+    var x1 = Math.max(press.x, e.pageX),
+      y1 = Math.max(press.y, e.pageY);
+    var b = ensureBox();
+    b.style.display = "block";
+    b.style.left = Math.max(x0, r.x) - s.x + "px";
+    b.style.top = Math.max(y0, r.y) - s.y + "px";
+    b.style.width = Math.min(x1, r.x + r.w) - Math.max(x0, r.x) + "px";
+    b.style.height = Math.min(y1, r.y + r.h) - Math.max(y0, r.y) + "px";
+    b.firstChild.textContent = "範囲";
+  }
   function onMove(e) {
-    if (mode !== "comment") return;
-    if (press) {
-      var r = pageRect(press.el);
-      var s = scroll();
-      var x0 = Math.min(press.x, e.pageX),
-        y0 = Math.min(press.y, e.pageY);
-      var x1 = Math.max(press.x, e.pageX),
-        y1 = Math.max(press.y, e.pageY);
-      if (x1 - x0 > 4 || y1 - y0 > 4) {
+    if (mode === "off") return;
+    if (press && press.id === e.pointerId) {
+      if (!press.moved) {
+        var d = Math.hypot(e.clientX - press.cx, e.clientY - press.cy);
+        if (d <= (press.touch ? TOUCH_SLOP : MOUSE_SLOP)) return;
+        // タッチは長押しの前に動いたらスクロール。長押しの後と、マウスは動かしたら範囲
+        if (press.touch && !press.held) {
+          clearPress();
+          return;
+        }
+        clearTimeout(press.timer);
         press.moved = true;
-        var b = ensureBox();
-        b.style.display = "block";
-        b.style.left = Math.max(x0, r.x) - s.x + "px";
-        b.style.top = Math.max(y0, r.y) - s.y + "px";
-        b.style.width = Math.min(x1, r.x + r.w) - Math.max(x0, r.x) + "px";
-        b.style.height = Math.min(y1, r.y + r.h) - Math.max(y0, r.y) + "px";
-        b.firstChild.textContent = "範囲";
       }
+      drawRange(e);
       return;
     }
-    showBox(targetAt(e));
+    if (mode === "comment" && !press) showBox(targetAt(e));
   }
   function onDown(e) {
-    if (mode !== "comment" || e.button !== 0) return;
+    if (mode === "off" || (e.pointerType !== "touch" && e.button !== 0)) return;
     var el = targetAt(e);
     if (!el) return;
-    press = { el: el, x: e.pageX, y: e.pageY, moved: false };
+    clearPress();
+    var touch = e.pointerType === "touch";
+    var p = {
+      el: el,
+      x: e.pageX,
+      y: e.pageY,
+      cx: e.clientX,
+      cy: e.clientY,
+      id: e.pointerId,
+      touch: touch,
+      moved: false,
+      held: false,
+      timer: 0,
+    };
+    // 長押し: 離すとその場にピン（印の枠を出して、押し続けると置けると知らせる）
+    p.timer = setTimeout(
+      function () {
+        if (press !== p) return;
+        p.held = true;
+        showBox(p.el);
+      },
+      touch ? TOUCH_HOLD_MS : MOUSE_HOLD_MS,
+    );
+    press = p;
   }
   function selectionQuote(el) {
     var sel = window.getSelection && window.getSelection();
@@ -283,9 +331,13 @@
     };
   }
   function onUp(e) {
-    if (mode !== "comment" || !press) return;
+    if (mode === "off" || !press || press.id !== e.pointerId) return;
     var p = press;
-    press = null;
+    var wasMoved = p.moved;
+    clearPress();
+    // 押しただけ（クリック・タップ）はサイトのふつうの操作。「コメントを追加」の直後だけ、その要素のピンにする
+    if (!wasMoved && !p.held && mode !== "comment") return;
+    swallowUntil = Date.now() + 400;
     var el = p.el;
     var hit = {
       type: "hit",
@@ -293,7 +345,7 @@
       viewport: viewport(),
       page: { pageX: e.pageX, pageY: e.pageY, scrollY: scroll().y },
     };
-    var quoteInfo = selectionQuote(el);
+    var quoteInfo = wasMoved ? selectionQuote(el) : null;
     var elRect;
     if (quoteInfo) {
       el = quoteInfo.element;
@@ -301,7 +353,7 @@
       hit.rect = relative(elRect, quoteInfo.rect);
     } else {
       elRect = pageRect(el);
-      if (p.moved) {
+      if (wasMoved) {
         var x0 = Math.max(Math.min(p.x, e.pageX), elRect.x),
           y0 = Math.max(Math.min(p.y, e.pageY), elRect.y);
         var x1 = Math.min(Math.max(p.x, e.pageX), elRect.x + elRect.w),
@@ -327,7 +379,6 @@
     };
     hit.elementRect = elRect;
     hit.text = textOf(el);
-    showBox(null);
     if (window.getSelection) window.getSelection().removeAllRanges();
     send(hit);
   }
@@ -340,19 +391,22 @@
       h: r.h / elRect.h,
     };
   }
-  // コメントモードではリンクやボタンの既定の動き（ページ移動・送信）を止める
+  // コメントにした直後の click と、「コメントを追加」の直後のリンクやボタンの既定の動き（ページ移動・送信）は止める
   function swallow(e) {
-    if (mode !== "comment") return;
+    if (mode === "off") return;
+    if (mode !== "comment" && Date.now() > swallowUntil) return;
     e.preventDefault();
     e.stopPropagation();
   }
+  // 長押しのあいだは、ページが動かないようにする（スクロール・ブラウザの文字選択・メニュー）
+  function holdGuard(e) {
+    if (press && press.touch && (press.held || press.moved)) e.preventDefault();
+  }
   function setMode(next) {
-    mode = next === "comment" ? "comment" : "browse";
+    mode = next === "comment" || next === "browse" ? next : "off";
     document.documentElement.style.cursor = mode === "comment" ? "crosshair" : "";
-    if (mode !== "comment") {
-      press = null;
-      showBox(null);
-    }
+    if (mode === "off") clearPress();
+    else if (mode !== "comment" && !press) showBox(null);
   }
   function scrollToAnchor(msg) {
     var a = msg.id
@@ -400,7 +454,7 @@
     b.style.height = r.h + "px";
     b.firstChild.textContent = "コメントの位置";
     hiTimer = setTimeout(function () {
-      if (mode !== "comment") showBox(null);
+      if (mode !== "comment" && !press) showBox(null);
     }, 1600);
   }
 
@@ -420,6 +474,9 @@
   document.addEventListener("pointermove", onMove, true);
   document.addEventListener("pointerdown", onDown, true);
   document.addEventListener("pointerup", onUp, true);
+  document.addEventListener("pointercancel", clearPress, true);
+  document.addEventListener("touchmove", holdGuard, { capture: true, passive: false });
+  document.addEventListener("contextmenu", holdGuard, true);
   document.addEventListener("click", swallow, true);
   document.addEventListener("submit", swallow, true);
   window.addEventListener("scroll", queueRects, { passive: true });

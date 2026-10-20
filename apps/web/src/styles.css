@@ -2584,104 +2584,32 @@ m3e-dialog {
     padding-inline: 16px;
   }
 }
+/* 印の層: 押す・なぞるは下の紙面（PDF のリンクなど）へ通す。印を付ける操作は紙面の枠（.viewer__page）が受ける
+   （AnchorOverlay。クリックはふつうのクリック、なぞる・長押しがコメント）。印そのもの（番号の丸・押せる範囲 48・範囲の面）は押せる */
 .viewer__overlay {
   position: absolute;
   inset: 0;
-  /* タッチはスクロールに任せ、長押ししてから範囲選択（AnchorOverlay）。マウスは従来どおりドラッグで選ぶ */
+  pointer-events: none;
+}
+.viewer__overlay [data-anchor] {
+  pointer-events: auto;
+}
+/* タッチはスクロールに任せ、長押ししてから範囲選択。長押しで出るブラウザのメニュー・選択は出さない */
+.viewer__page {
   touch-action: pan-x pan-y;
+}
+.viewer__page > :is(canvas, img, video) {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
-/* 印を付けないとき（書き込み「なし」。AnchorOverlay の passive）: 印の層は押す・なぞるを下の紙面へ通す。
-   印そのもの（番号の丸・押せる範囲 48）は押してスレッドを開ける。範囲の面は下のリンクを塞がないよう通す */
-.viewer__overlay--passive {
-  pointer-events: none;
-  cursor: default;
+/* 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける）はカーソルを十字に */
+.viewer__page.is-armed,
+.viewer__page.is-armed .pdf-link {
+  cursor: crosshair;
 }
-.viewer__overlay--passive [data-anchor] {
-  pointer-events: auto;
-}
-.viewer__overlay--passive .anchor-rect {
-  pointer-events: none;
-}
-/* PDF の文字の層（PdfTextLayer。書き込み「なし」のときだけ）: canvas とリンクのあいだ。pdf.js の web/pdf_viewer.css の
-   .textLayer から必要な分だけ写した（全部は読み込まない）。文字は透明で、位置・大きさだけ canvas の文字に合わせ、
-   選んだ範囲を主色で見せる。--total-scale-factor（紙の 1pt が何 px か）は PdfTextLayer が入れる */
-.textLayer {
-  position: absolute;
-  inset: 0;
-  overflow: clip;
-  line-height: 1;
-  text-align: initial;
-  letter-spacing: normal;
-  word-spacing: normal;
-  text-size-adjust: none;
-  -webkit-text-size-adjust: none;
-  forced-color-adjust: none;
-  transform-origin: 0 0;
-  --min-font-size: 1;
-  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
-  --min-font-size-inv: calc(1 / var(--min-font-size));
-}
-/* 文字は回す前の向きで組んであるので、紙面の回転に合わせて回す（原点は左上。回したあと紙面の枠に収まるよう寄せる） */
-.textLayer[data-main-rotation="90"] {
-  transform: rotate(90deg) translateY(-100%);
-}
-.textLayer[data-main-rotation="180"] {
-  transform: rotate(180deg) translate(-100%, -100%);
-}
-.textLayer[data-main-rotation="270"] {
-  transform: rotate(270deg) translateX(-100%);
-}
-.textLayer :is(span, br) {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0 0;
-  -webkit-user-select: text;
-  user-select: text;
-}
-.textLayer > :not(.markedContent),
-.textLayer .markedContent span:not(.markedContent) {
-  --font-height: 0;
-  --scale-x: 1;
-  --rotate: 0deg;
-  z-index: 1;
-  font-size: calc(var(--text-scale-factor) * var(--font-height));
-  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
-}
-.textLayer .markedContent {
-  display: contents;
-}
-.textLayer span[role="img"] {
-  -webkit-user-select: none;
-  user-select: none;
-  cursor: default;
-}
-.textLayer ::selection {
-  background: color-mix(in srgb, var(--mf-primary) 32%, transparent);
-  color: transparent;
-}
-.textLayer br::selection {
-  background: transparent;
-}
-/* 文字のない所をなぞっても選択が飛ばないための受け皿（ドラッグ中だけ全面に伸ばす） */
-.textLayer .endOfContent {
-  display: block;
-  position: absolute;
-  inset: 100% 0 0;
-  z-index: 0;
-  cursor: default;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.textLayer.selecting .endOfContent {
-  top: 0;
-}
-/* PDF の中のリンク（PdfLinks）: 文字の層と印の層のあいだ。見た目は何も足さず、触れると薄く示す。
-   層そのものは押す・なぞるを下の文字の層へ通し（文字を選べる）、リンクの箱だけ押せる */
+/* PDF の中のリンク（PdfLinks）: canvas と印の層のあいだ。見た目は何も足さず、触れると薄く示す。
+   層そのものは押す・なぞるを通し、リンクの箱だけ押せる */
 .pdf-links {
   position: absolute;
   inset: 0;
@@ -5062,7 +4990,6 @@ m3e-snackbar {
   background: var(--mf-surface-container);
 }
 .vtl__lane--select {
-  cursor: crosshair;
   /* 指で横になぞると範囲を選ぶ（縦はページのスクロール） */
   touch-action: pan-y;
 }
@@ -5346,17 +5273,11 @@ m3e-snackbar {
   border: 0;
   background: #fff;
 }
-/* 印の層: 面は押させず（下の iframe を操作できるように）、ピン・範囲だけ押せる */
+/* 印の層: 面は押させず（下の iframe を操作できるように）、ピン・範囲だけ押せる（.viewer__overlay の既定） */
 .wlive__marks {
   position: absolute;
   inset: 0;
   pointer-events: none;
-}
-.wlive__marks .viewer__overlay {
-  pointer-events: none;
-}
-.wlive__marks [data-anchor] {
-  pointer-events: auto;
 }
 .wlive__loading {
   position: absolute;
@@ -5543,9 +5464,6 @@ m3e-snackbar {
   .wlive__banner,
   .wlive__caption {
     font-size: 11px;
-  }
-  .wlive__mode m3e-button {
-    min-width: 0;
   }
 }
 

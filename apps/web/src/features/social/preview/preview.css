@@ -908,11 +908,12 @@
   /* タッチはスクロールに任せ、長押ししてから範囲選択（AnchorOverlay と同じ） */
   touch-action: pan-x pan-y;
   -webkit-touch-callout: none;
-}
-.sp-marks.is-drawable {
-  cursor: crosshair;
   -webkit-user-select: none;
   user-select: none;
+}
+/* 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける） */
+.sp-marks.is-drawable {
+  cursor: crosshair;
 }
 .sp-marks:focus-visible {
   outline: 3px solid var(--mf-primary);

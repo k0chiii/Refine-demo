@@ -339,7 +339,7 @@ export function PostText({
     // X の URL は短く省略して見せるので、画面の文字と本文が対応しない（途中で分けない）
     ...extractUrls(text).map((m) => ({ ...m, kind: "url" as const, atomic: platform === "x" })),
   ]);
-  const selecting = ctx?.selecting === true;
+  const canComment = ctx?.canComment === true;
   const segments = buildTextSegments(
     text.length,
     tokens,
@@ -365,7 +365,7 @@ export function PostText({
   /** いまの選択を本文の範囲に直す（この本文の外・空なら null）。画面の座標の範囲も添える */
   const readSelection = useCallback((): TextPick | null => {
     const root = rootRef.current;
-    if (!root || !ctxRef.current?.selecting) return null;
+    if (!root || !ctxRef.current?.canComment) return null;
     const sel = window.getSelection();
     const r = selectionToRange(root, sel, text.length);
     if (!r || !sel) return null;
@@ -379,9 +379,9 @@ export function PostText({
       { left: b.x, top: b.y, right: b.x + b.w, bottom: b.y + b.h },
     );
   };
-  const touchSel = useTouchSelection(selecting, readSelection);
+  const touchSel = useTouchSelection(canComment, readSelection);
   /** マウス・キーボードの端末（文字カーソルを置いて Shift＋矢印で選べるようにする）。タッチは長押しで選ぶ */
-  const finePointer = useMedia("(pointer: fine)") && selecting;
+  const finePointer = useMedia("(pointer: fine)") && canComment;
   useEffect(() => {
     if (!finePointer) return;
     // 本文の外で離しても選び終えた合図になるよう、文書で受ける。投稿欄の中の操作は無視
@@ -691,7 +691,7 @@ function InstagramStory({
         ))}
       </div>
       {/* コメントを付けられるとき、画像の上のクリックは位置の入力に使うので、前後へは矢印で送る */}
-      {marks?.selecting && list.length > 1 ? (
+      {marks?.canComment && list.length > 1 ? (
         <>
           {index > 0 ? (
             <button

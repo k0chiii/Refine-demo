@@ -16,7 +16,15 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { LONG_PRESS_MS, PressLayer } from "@/features/annotation/AnchorOverlay";
+import { PressLayer, type ChargeMark, type PopMark } from "@/features/annotation/AnchorOverlay";
+import { useMarkArmed } from "@/features/annotation/markArm";
+import {
+  holdMs,
+  kindOf,
+  moveOutcome,
+  shapeOf,
+  type PointerKind,
+} from "@/features/annotation/markGesture";
 import { nextStacked } from "@/features/annotation/stacked";
 import { haptic } from "@/lib/haptics";
 import { scrollBehavior } from "@/lib/motion";
@@ -63,7 +71,7 @@ export interface PostMarksValue {
   /** 開くたびに増える（同じコメントを続けて開いても、その位置へ移して強調し直す） */
   revealKey: number;
   /** 位置を選んでコメントできるか */
-  selecting: boolean;
+  canComment: boolean;
   draft: PostDraftView | null;
   onOpen: (id: string) => void;
   onText: (range: { start: number; end: number }, box: ScreenBox) => void;
@@ -77,9 +85,6 @@ export interface PostMarksValue {
 export const PostMarksContext = createContext<PostMarksValue | null>(null);
 export const usePostMarks = () => useContext(PostMarksContext);
 
-/** 指が動いたら選び始めと見なさない距離（スクロールに任せる）と、クリックと見なす距離（px） */
-const LONG_PRESS_SLOP = 10;
-const CLICK_PX = 6;
 /** 印の押せる半径（画面の px） */
 const HIT_R = 18;
 
@@ -110,7 +115,8 @@ interface Placed {
 
 /**
  * 画像の上に重ねる層（切り抜きの範囲 = 層の全体）。`crop` は元画像のうち、いま見えている範囲（cropRect）。
- * - マウス・ペン: ドラッグで範囲、クリックでピン。印（範囲の面・ピン）を押すとそのコメントを開く
+ * - マウス・ペン: ドラッグで範囲、動かさず押し続けるとピン。クリックはふつうのクリックで、印（範囲の面・ピン）を押すと
+ *   そのコメントを開く（「コメントを追加」の直後の 1 回だけ、何もない所のクリックもピン）
  * - タッチ: なぞるとふつうにスクロール。長押しすると選択が始まり、動かすと範囲、離すとピン（AnchorOverlay と同じ）。
  *   短いタップは印を開くだけ
  * - キーボード: 層にフォーカス → 矢印で動かし（Shift で細かく）、Enter で始点・もう一度 Enter で終点（同じ場所ならピン）
@@ -121,12 +127,22 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ a: P; b: P } | null>(null);
   const [kbd, setKbd] = useState<{ at: P; from?: P } | null>(null);
-  const [charge, setCharge] = useState<{ x: number; y: number; key: number } | null>(null);
-  const [pop, setPop] = useState<{ x: number; y: number; key: number } | null>(null);
-  const down = useRef<{ id: number; x: number; y: number; hit: string[] } | null>(null);
-  const press = useRef<{ id: number; timer: number; armed: boolean } | null>(null);
+  const [charge, setCharge] = useState<ChargeMark | null>(null);
+  const [pop, setPop] = useState<PopMark | null>(null);
+  /** 押している途中（hit: 押した所にかかっていた印。held: 長押しが済んだ） */
+  const press = useRef<{
+    id: number;
+    kind: PointerKind;
+    cx: number;
+    cy: number;
+    p: P;
+    hit: string[];
+    held: boolean;
+    timer: number;
+  } | null>(null);
   const handledAt = useRef(0);
-  const selecting = ctx?.selecting ?? false;
+  const armed = useMarkArmed();
+  const canComment = ctx?.canComment ?? false;
 
   const mine: Placed[] = (ctx?.images ?? [])
     .filter((m) => m.imageIndex === imageIndex)
@@ -190,7 +206,7 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
     const el = ref.current;
     if (!el) return;
     const onTouchMove = (e: TouchEvent) => {
-      if (press.current?.armed) e.preventDefault();
+      if (press.current?.held) e.preventDefault();
     };
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     return () => el.removeEventListener("touchmove", onTouchMove);
@@ -274,97 +290,94 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
     if (e.pointerType !== "touch" && e.button !== 0) return;
     // 印のボタンは自分で扱う
     if ((e.target as Element).closest("[data-mark-btn]")) return;
-    const p = toP(e);
-    const hit = hitsAt(p);
-    if (e.pointerType === "touch") {
-      // 2 本目の指（ピンチ）: 長押しの選択はやめる
-      if (press.current && press.current.id !== e.pointerId) {
-        clearPress();
-        setDrag(null);
-        return;
-      }
+    // 2 本目の指（ピンチ）: 長押しの選択はやめる
+    if (press.current && press.current.id !== e.pointerId) {
       clearPress();
-      const id = e.pointerId;
-      down.current = { id, x: e.clientX, y: e.clientY, hit };
-      if (!selecting) return;
-      setCharge({ x: e.clientX, y: e.clientY, key: e.timeStamp });
-      press.current = {
-        id,
-        armed: false,
-        timer: window.setTimeout(() => {
-          const cur = press.current;
-          if (!cur || cur.id !== id) return;
-          cur.armed = true;
-          try {
-            ref.current?.setPointerCapture(id);
-          } catch {
-            // 指がもう離れている
-          }
-          haptic();
-          setCharge(null);
-          setPop({
-            x: down.current?.x ?? e.clientX,
-            y: down.current?.y ?? e.clientY,
-            key: Date.now(),
-          });
-          setDrag({ a: p, b: p });
-        }, LONG_PRESS_MS),
-      };
-      return;
-    }
-    // マウス・ペン: 選ぶとき・印の上のときは、カルーセルのドラッグ送りに渡さない
-    if (!selecting && hit.length === 0) return;
-    e.stopPropagation();
-    down.current = { id: e.pointerId, x: e.clientX, y: e.clientY, hit };
-    ref.current?.setPointerCapture(e.pointerId);
-    if (selecting) setDrag({ a: p, b: p });
-  };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const d = down.current;
-    if (!d || d.id !== e.pointerId) return;
-    if (press.current && !press.current.armed) {
-      // 長押しの前に動いた → スクロール
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > LONG_PRESS_SLOP) clearPress();
-      return;
-    }
-    if (drag) setDrag({ a: drag.a, b: toP(e) });
-  };
-  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    const d = down.current;
-    if (!d || d.id !== e.pointerId) return;
-    down.current = null;
-    const armed = press.current?.armed === true;
-    clearPress();
-    const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
-    const end = toP(e);
-    if (e.pointerType === "touch" && !armed) {
-      // 短いタップ: 印の上なら開く（何も作らない）
-      if (dist < CLICK_PX && d.hit.length) {
-        handledAt.current = performance.now();
-        open(d.hit);
-      }
       setDrag(null);
       return;
     }
-    handledAt.current = performance.now();
-    const a = drag?.a ?? end;
+    clearPress();
+    const p = toP(e);
+    const hit = hitsAt(p);
+    const id = e.pointerId;
+    const kind = kindOf(e.pointerType);
+    if (kind === "mouse") {
+      // マウス・ペン: 付けるとき・印の上のときは、カルーセルのドラッグ送りに渡さない
+      if (!canComment && hit.length === 0) return;
+      e.stopPropagation();
+      ref.current?.setPointerCapture(id);
+    }
+    press.current = { id, kind, cx: e.clientX, cy: e.clientY, p, hit, held: false, timer: 0 };
+    if (!canComment) return;
+    setCharge({ x: e.clientX, y: e.clientY, key: e.timeStamp, kind });
+    press.current.timer = window.setTimeout(() => {
+      const cur = press.current;
+      if (!cur || cur.id !== id) return;
+      cur.held = true;
+      try {
+        ref.current?.setPointerCapture(id);
+      } catch {
+        // 指がもう離れている
+      }
+      haptic();
+      setCharge(null);
+      setPop({ x: cur.cx, y: cur.cy, key: Date.now() });
+      setDrag({ a: p, b: p });
+    }, holdMs(kind));
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const cur = press.current;
+    if (!cur || cur.id !== e.pointerId) return;
+    if (!drag) {
+      const out = moveOutcome(
+        cur.kind,
+        cur.held,
+        Math.hypot(e.clientX - cur.cx, e.clientY - cur.cy),
+      );
+      if (out === "wait") return;
+      if (out === "scroll") {
+        clearPress(); // 長押しの前に動いた → スクロール
+        return;
+      }
+      // マウス: 少し動かしたら、押した所から範囲を始める
+      window.clearTimeout(cur.timer);
+      setCharge(null);
+    }
+    if (canComment) setDrag({ a: drag?.a ?? cur.p, b: toP(e) });
+  };
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    const cur = press.current;
+    if (!cur || cur.id !== e.pointerId) return;
+    clearPress();
+    const end = toP(e);
+    const dist = Math.hypot(e.clientX - cur.cx, e.clientY - cur.cy);
+    const d = drag;
     setDrag(null);
-    if (e.pointerType === "touch") {
-      haptic(); // 位置を置いた手応え
-      commit(a, end, dist < CLICK_PX);
+    if (d && canComment) {
+      // なぞり終えた・長押しで置いた。小さければピン
+      handledAt.current = performance.now();
+      if (cur.held) haptic(); // 位置を置いた手応え
+      const r = rectOf();
+      const small =
+        shapeOf(
+          Math.abs(end.x - d.a.x) * (r?.width ?? 0),
+          Math.abs(end.y - d.a.y) * (r?.height ?? 0),
+        ) === "point";
+      commit(d.a, end, small);
       return;
     }
-    if (dist < CLICK_PX) {
-      // クリック: 印の上ならそのコメントを開く。何もなければピン
-      if (d.hit.length) open(d.hit);
-      else if (selecting) commit(a, a, true);
-      return;
+    // クリック・タップはふつうの操作: 印の上ならそのコメントを開く。「コメントを追加」の直後だけ、何もない所もピン
+    if (moveOutcome(cur.kind, false, dist) !== "wait") return;
+    if (cur.hit.length) {
+      handledAt.current = performance.now();
+      open(cur.hit);
+    } else if (canComment && armed) {
+      handledAt.current = performance.now();
+      commit(cur.p, cur.p, true);
     }
-    if (selecting) commit(a, end, false);
   };
   const onPointerCancel = () => {
     clearPress();
-    down.current = null;
     setDrag(null);
   };
 
@@ -409,9 +422,9 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
   return (
     <div
       ref={ref}
-      className={`sp-marks ${selecting ? "is-drawable" : ""}`}
+      className={`sp-marks ${canComment && armed ? "is-drawable" : ""}`}
       data-mark-layer=""
-      {...(selecting
+      {...(canComment
         ? {
             tabIndex: 0,
             role: "group",
@@ -424,7 +437,7 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
-      onContextMenu={selecting ? (e) => e.preventDefault() : undefined}
+      onContextMenu={canComment ? (e) => e.preventDefault() : undefined}
       onClick={(e) => {
         // 位置を選んだ・印を開いた直後のクリックは、ストーリーズの「タップで送る」などに渡さない
         if (performance.now() - handledAt.current < 400) e.stopPropagation();

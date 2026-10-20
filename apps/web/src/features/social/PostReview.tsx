@@ -61,7 +61,7 @@ export interface PostAnnotate {
   /** コメントを開くたびに増える（同じコメントを続けて開いても、その位置へ移して強調し直す） */
   revealKey: number;
   /** 位置を選んでコメントできるか（コメント・相談を書ける版） */
-  selecting: boolean;
+  canComment: boolean;
   /** 書きかけのコメントの位置 */
   draftAnchor: Anchor | null;
   onSelectThread: (id: string) => void;
@@ -184,7 +184,7 @@ export function PostReview({
         images: marks.images,
         activeId: annotate.activeThreadId,
         revealKey: annotate.revealKey,
-        selecting: annotate.selecting,
+        canComment: annotate.canComment,
         draft: marks.draft,
         onOpen: annotate.onSelectThread,
         onText: (range, box) => {

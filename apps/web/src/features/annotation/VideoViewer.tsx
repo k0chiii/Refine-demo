@@ -56,8 +56,8 @@ interface Props {
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
-  /** コメント（FB）を付けられるか。false なら見るだけ */
-  selecting: boolean;
+  /** コメントを付けられるか。false なら見るだけ */
+  canComment: boolean;
   draft: VideoDraft | null;
   onDraft: (d: VideoDraft | null) => void;
   /** 外から再生位置を移す（コメントのカードを押したときなど）。key が変わるたびに移して止める */
@@ -76,9 +76,10 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), h
 /**
  * 動画のビューア（動画の校正。利用者指示 2026-10-17: タイムライン指定と範囲選択。Frame.io などに倣う。docs/UI_M3E.md §53）。
  *
- * - **時点のコメント**: 「この時点にコメント」（C）で、止めた位置に付ける。映像の上をドラッグ（スマホは長押し）すると
- *   その時点の画面の範囲（矩形）、押すとピンも付けられる（止めているときだけ。再生中に押すと止まる）
- * - **範囲のコメント**: タイムラインの上の帯（印の段）をドラッグする、I（ここから）と O（ここまで）を押す、
+ * - **映像を押す（タップ）**: 再生・停止。コメントにはならない（利用者指示 2026-10-20）
+ * - **時点のコメント**: 「この時点にコメント」（C）で、止めた位置に付ける。映像の上をなぞる（範囲）か長押し（ピン）すると
+ *   その時点の画面の範囲（矩形）・ピンも付けられる（始めると映像が止まる）
+ * - **範囲のコメント**: タイムラインの上の帯（印の段）をなぞる（押すだけなら再生位置を移すだけ）、I（ここから）と O（ここまで）を押す、
  *   ボタン「ここから」「ここまで」を押す、のどれかで範囲を選ぶ。選んだ範囲は両端のつまみで直せる
  * - **印**: タイムラインの上に、時点は番号の丸、範囲は帯（FB は角丸の四角）。押すとその位置へ移って止まり、そのコメントを開く。
  *   画面の範囲・ピンは、止めていてその時刻にあるものだけ映像の上に出す（再生中は隠す）
@@ -92,7 +93,7 @@ export function VideoViewer({
   threads,
   activeThreadId,
   onSelectThread,
-  selecting,
+  canComment,
   draft,
   onDraft,
   seekRequest,
@@ -246,13 +247,13 @@ export function VideoViewer({
   });
   /** この時点にコメント（C） */
   const commentHere = () => {
-    if (!selecting) return;
+    if (!canComment) return;
     videoRef.current?.pause();
     onDraft({ time: { start: now() } });
   };
   /** ここから（I）: 範囲の始め。終わりが始めより後ならそのまま */
   const markIn = () => {
-    if (!selecting) return;
+    if (!canComment) return;
     videoRef.current?.pause();
     const start = now();
     const end = draft?.time?.end;
@@ -264,7 +265,7 @@ export function VideoViewer({
   };
   /** ここまで（O）: 範囲の終わり。始めが無い・後ろなら、少し前（DEFAULT_SPAN 秒）から */
   const markOut = () => {
-    if (!selecting) return;
+    if (!canComment) return;
     videoRef.current?.pause();
     const end = now();
     if (end <= 0) return;
@@ -387,12 +388,10 @@ export function VideoViewer({
             style={
               viewport && !full ? { width: viewport.width, height: viewport.height } : undefined
             }
-            // 再生中に映像を押したら止める（止めているときは、押すとピン・ドラッグで範囲）
-            onPointerDownCapture={() => {
-              if (playing && selecting) videoRef.current?.pause();
-            }}
-            onClick={() => {
-              if (!selecting) togglePlay();
+            // 映像を押す（タップ）と再生・停止。なぞる（範囲）・長押し（ピン）はコメント（AnchorOverlay）で、始めたら映像を止める
+            onClick={(e) => {
+              if ((e.target as Element).closest("[data-anchor], .compose-pop, .thread-pop")) return;
+              togglePlay();
             }}
           >
             <video
@@ -421,7 +420,8 @@ export function VideoViewer({
                   if (hit) seek(hit.anchor.start);
                   onSelectThread(id);
                 }}
-                selecting={selecting && !playing}
+                canComment={canComment}
+                onGestureStart={() => videoRef.current?.pause()}
                 draft={draft?.rect || draft?.point ? draft : null}
                 onDraft={(d) => onDraft({ ...d, time: draft?.time ?? { start: now() } })}
               />
@@ -434,7 +434,7 @@ export function VideoViewer({
             threads={mine}
             activeThreadId={activeThreadId}
             draft={draft?.time ?? null}
-            selecting={selecting}
+            canComment={canComment}
             onSeek={(to) => seek(to)}
             onScrub={(to) => seek(to, false)}
             onPick={(x) => {
@@ -525,7 +525,7 @@ export function VideoViewer({
               <M3eIcon name={full ? "fullscreen_exit" : "fullscreen"} />
             </M3eIconButton>
           </div>
-          {selecting ? (
+          {canComment ? (
             <div className="vplayer__marks" role="group" aria-label="コメントの時点・範囲">
               <M3eButton
                 variant="tonal"
@@ -579,7 +579,7 @@ export function VideoViewer({
 
 /**
  * タイムライン: 上の段にコメントの印（時点は番号の丸、範囲は帯）と選んでいる範囲、下に再生位置のつまみ（M3 Sliders の見た目）。
- * - 上の段をドラッグすると範囲を選ぶ（スマホも指でそのまま）。動かさずに離すとその時点
+ * - 上の段をなぞると範囲を選ぶ（スマホも指でそのまま）。押すだけなら再生位置を移すだけ
  * - 下の段を押す・ドラッグすると再生位置を移す。Shift を押しながらドラッグしても範囲を選べる
  * - 選んでいる範囲は両端のつまみをドラッグ、またはつまみにフォーカスして ← →（Shift で 1 秒）で直せる
  */
@@ -589,7 +589,7 @@ function Timeline({
   threads,
   activeThreadId,
   draft,
-  selecting,
+  canComment,
   onSeek,
   onScrub,
   onPick,
@@ -600,7 +600,7 @@ function Timeline({
   threads: (OverlayThread & { anchor: VideoAnchor })[];
   activeThreadId: string | null;
   draft: { start: number; end?: number } | null;
-  selecting: boolean;
+  canComment: boolean;
   onSeek: (t: number) => void;
   onScrub: (t: number) => void;
   onPick: (x: OverlayThread & { anchor: VideoAnchor }) => void;
@@ -644,8 +644,8 @@ function Timeline({
     const at = timeAt(e.clientX);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     if (kind === "range") {
+      // 押しただけでは再生位置を移すだけ（コメントにならない）。なぞり始めたら範囲
       drag.current = { kind, id: e.pointerId, from: at, moved: false };
-      onDraftTime({ start: at }, true);
       onSeek(at);
     } else {
       drag.current = { kind, id: e.pointerId };
@@ -675,15 +675,15 @@ function Timeline({
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
-    if (d.kind === "range") {
+    if (d.kind === "range" && d.moved) {
       const at = timeAt(e.clientX);
-      // 離したら投稿欄を出す（動かさずに離したらその時点）
+      // なぞり終えたら投稿欄を出す（ほとんど動かさずに離したらその時点）
       onDraftTime(
-        d.moved && Math.abs(at - d.from) >= 0.05
+        Math.abs(at - d.from) >= 0.05
           ? { start: Math.min(d.from, at), end: Math.max(d.from, at) }
           : { start: d.from },
       );
-      onSeek(d.moved ? Math.min(d.from, at) : d.from);
+      onSeek(Math.min(d.from, at));
     }
   };
 
@@ -706,9 +706,9 @@ function Timeline({
     <div className="vtl">
       <div
         ref={laneRef}
-        className={`vtl__lane ${selecting ? "vtl__lane--select" : ""}`}
+        className={`vtl__lane ${canComment ? "vtl__lane--select" : ""}`}
         style={{ height: rowCount * 24 + 8 }}
-        {...(selecting
+        {...(canComment
           ? {
               onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
                 if ((e.target as Element).closest(".vtl__mark, .vtl__edge")) return;
@@ -796,7 +796,7 @@ function Timeline({
               : null}
           </>
         ) : null}
-        {selecting && threads.length === 0 && !draft ? (
+        {canComment && threads.length === 0 && !draft ? (
           <span className="vtl__hint" aria-hidden="true">
             なぞって範囲を選ぶ
           </span>
@@ -812,7 +812,7 @@ function Timeline({
         aria-valuemax={roundVideoTime(duration)}
         aria-valuenow={roundVideoTime(t)}
         aria-valuetext={`${formatVideoTime(t)} / ${formatVideoTime(duration)}`}
-        onPointerDown={(e) => startDrag(e, e.shiftKey && selecting ? "range" : "scrub")}
+        onPointerDown={(e) => startDrag(e, e.shiftKey && canComment ? "range" : "scrub")}
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={() => (drag.current = null)}

@@ -12,7 +12,7 @@ interface Props extends ViewerSyncProps {
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
-  selecting: boolean;
+  canComment: boolean;
   draft: { rect?: NormalizedRect; point?: { x: number; y: number } } | null;
   onDraft: (d: { rect?: NormalizedRect; point?: { x: number; y: number } } | null) => void;
   /** 幅に合わせた大きさに掛ける倍率（1 ＝ 左右の余白が同じになる幅） */
@@ -25,8 +25,6 @@ interface Props extends ViewerSyncProps {
   renderGutter?: (vp: Viewport) => ReactNode;
   /** 画像を読み込み終えて大きさ・倍率が決まった（失敗したときも）。親はそれまで紙面を隠して読み込み中の指標を出す（§65） */
   onReady?: () => void;
-  /** 印を付けないとき（書き込み「なし」）: 印の層は押す・なぞるを通す（画像の長押しなど、紙面そのものの操作が効く） */
-  passive?: boolean;
 }
 
 /**
@@ -40,7 +38,7 @@ export function ImageViewer({
   threads,
   activeThreadId,
   onSelectThread,
-  selecting,
+  canComment,
   draft,
   onDraft,
   scale,
@@ -49,7 +47,6 @@ export function ImageViewer({
   renderInPage,
   renderGutter,
   onReady,
-  passive = false,
   ...sync
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
@@ -90,6 +87,7 @@ export function ImageViewer({
             ref={imgRef}
             src={url}
             alt={alt}
+            draggable={false}
             style={viewport ? { width: viewport.width, height: viewport.height } : undefined}
             onLoad={(e) => {
               const img = e.currentTarget;
@@ -99,12 +97,11 @@ export function ImageViewer({
           />
           {viewport ? (
             <AnchorOverlay
-              passive={passive}
               viewport={viewport}
               threads={mine}
               activeThreadId={activeThreadId}
               onSelectThread={onSelectThread}
-              selecting={selecting}
+              canComment={canComment}
               draft={draft}
               onDraft={onDraft}
             />
