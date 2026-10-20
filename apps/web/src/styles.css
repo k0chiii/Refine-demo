@@ -4629,9 +4629,36 @@ m3e-icon.icon--on {
 .rt--loading > .rt__label {
   top: 16px;
 }
-/* 投稿欄（紙の上に浮かぶ）では、枠の中を塗る */
+/* 投稿欄（紙の上に浮かぶ）では、枠の中を塗り、上の書式のツールバー（M3E の Toolbar elevated = 影 3）と同じ影で浮かせる */
 .compose-pop .rt--composer {
   background: var(--mf-surface-container-lowest);
+  box-shadow: var(--mf-elevation-3);
+}
+/* 開くとき: 入力欄は置いた場所から、ツールバーは少し遅れて、小さく・薄い状態から出る（M3 の空間の動き）。動きを減らす設定では出さない */
+@media (prefers-reduced-motion: no-preference) {
+  .compose-pop .rt--composer {
+    animation: compose-pop-in var(--mf-motion-spatial-fast) both;
+    transform-origin: top left;
+  }
+  .compose-pop .rt-wrap > .rt__toolbar {
+    animation: compose-pop-in var(--mf-motion-spatial-fast) 60ms both;
+    transform-origin: bottom center;
+  }
+}
+@keyframes compose-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.92);
+  }
+}
+/* スマホ（画面下に固定）では、後ろのシートの文字が隙間から透けないよう、下から面の色へのぼかしを敷く（囲う面ではない） */
+.compose-pop--docked::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -32px -16px calc(-8px - env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to bottom, transparent, var(--mf-surface-container-low) 32px);
+  pointer-events: none;
 }
 /* 紙の上では、枠に乗ったラベルの後ろの紙の文字が透けないよう、ラベルにも同じ面を敷く */
 .compose-pop :is(.rt--float, .rt--composer:focus-within) > .rt__label {
@@ -4642,6 +4669,10 @@ m3e-icon.icon--on {
 }
 .compose-pop .rt-wrap {
   gap: 16px;
+}
+/* スマホでは後ろにぼかしの面があるので、ラベルの下の面は要らない */
+.compose-pop--docked :is(.rt--float, .rt--composer:focus-within) > .rt__label {
+  background: transparent;
 }
 .rt--composer .rt__editor {
   padding-inline-end: 12px;

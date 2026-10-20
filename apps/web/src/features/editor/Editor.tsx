@@ -1940,7 +1940,7 @@ export function Editor({
                       selected={marksHidden}
                       onClick={() => setMarksHidden((v) => !v)}
                     >
-                      <M3eIcon name={marksHidden ? "comments_disabled" : "comment"} />
+                      <M3eIcon name={marksHidden ? "visibility_off" : "visibility"} />
                     </M3eIconButton>
                   ) : null}
                   {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
