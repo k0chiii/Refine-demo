@@ -1,5 +1,7 @@
 import {
+  COMMENT_THUMB_MAX_BYTES,
   hasPdfSignature,
+  isCommentThumbMime,
   isGzipAllowed,
   isSourceFormatFile,
   MAX_ORIGINAL_UPLOAD_BYTES,
@@ -51,6 +53,9 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
  *   書込み先は試行ごとに Convex が払い出す別キー。検証の済んだ 1 つだけを Convex が原子的に採用する。
  * - GET  /files/:artifactId       認可付き配信。署名付き URL を発行しない（権限剥奪が即時に効く: A-11）。
  * - PUT / GET /feedback/files/:fileId  フィードバック（表現の議論）の添付。上の 2 つと同じ検証・同じヘッダー。
+ * - PUT / GET /comment-files/:fileId  コメント・返信の添付。同じ検証・同じヘッダー。
+ *   PUT / GET /comment-files/:fileId/thumb  画像の一覧用サムネイル（webp / jpeg、512 KB まで）。
+ *   サムネイルの配信だけ、機密でない制作物なら利用者ごとに 1 日 HTTP キャッシュに残してよい（originals は常に no-store）。
  * 業務ルール（版の確定・受付終了・校了）はここに置かない。
  */
 export function createApp(deps: AppDeps) {
@@ -82,6 +87,7 @@ export function createApp(deps: AppDeps) {
   app.use("/uploads/*", requireAuth(deps));
   app.use("/files/*", requireAuth(deps));
   app.use("/feedback/*", requireAuth(deps));
+  app.use("/comment-files/*", requireAuth(deps));
   app.use("/figma/*", requireAuth(deps));
 
   /**
@@ -263,8 +269,11 @@ export function createApp(deps: AppDeps) {
     const headersFor = (etag: string | null, contentType: string | null) => {
       const h: Record<string, string> = {
         "Content-Type": access.mimeType || contentType || "application/octet-stream",
-        "Content-Disposition": `${dispositionFor(access.fileName)}; filename*=UTF-8''${encodeURIComponent(access.fileName)}`,
-        "Cache-Control": "private, no-store, no-transform",
+        "Content-Disposition": `${access.attachment ? "attachment" : dispositionFor(access.fileName)}; filename*=UTF-8''${encodeURIComponent(access.fileName)}`,
+        // サムネイル（fileId ごとに内容が決まる）だけ、利用者ごとの private で 1 日残してよい。認可は最初の取得で通っている
+        "Cache-Control": access.cacheable
+          ? "private, max-age=86400, immutable, no-transform"
+          : "private, no-store, no-transform",
         "Accept-Ranges": "bytes",
         "X-Content-Type-Options": "nosniff",
       };
@@ -406,6 +415,65 @@ export function createApp(deps: AppDeps) {
     return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
   });
 
+  app.put("/comment-files/:fileId", (c) =>
+    receiveUpload(c, c.req.param("fileId"), "fileId", deps.gateway.commentUploads),
+  );
+
+  /**
+   * サムネイル。形式（webp / jpeg）と大きさ（512 KB）をここで断り、sha256 を R2 側で検証してから Convex に記録させる。
+   * 置き場は添付の名前空間の下の固定キー。小さいので本文は全部読んでから置く（読む途中でも上限を超えたら止める）
+   */
+  app.put("/comment-files/:fileId/thumb", async (c) => {
+    const token = c.get("token");
+    const fileId = c.req.param("fileId");
+    const mimeType = (c.req.header("Content-Type") ?? "").toLowerCase().split(";")[0]!.trim();
+    if (!isCommentThumbMime(mimeType)) return c.json({ code: "thumb_unsupported_type" }, 415);
+    const sha256Hex = (c.req.header("X-MF100-Sha256") ?? "").toLowerCase();
+    if (!SHA256_HEX.test(sha256Hex))
+      return c.json(
+        { code: "sha256_required", message: "X-MF100-Sha256 ヘッダー（16進 64 文字）が必要です" },
+        400,
+      );
+    const stream = c.req.raw.body;
+    if (!stream) return c.json({ code: "body_required" }, 400);
+    const declaredLength = Number(c.req.header("Content-Length") ?? "");
+    if (Number.isFinite(declaredLength) && declaredLength > COMMENT_THUMB_MAX_BYTES)
+      return c.json(thumbTooLarge(), 413);
+    const body = await readAtMost(stream, COMMENT_THUMB_MAX_BYTES);
+    if (body === null) return c.json(thumbTooLarge(), 413);
+    if (body.byteLength === 0) return c.json({ code: "body_required" }, 400);
+
+    const target = await deps.gateway.commentThumbs.begin(token, fileId);
+    let size: number;
+    try {
+      size = (await deps.store.put(target.objectKey, body, { contentType: mimeType, sha256Hex }))
+        .size;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "アップロードに失敗しました";
+      return c.json({ code: "upload_failed", message }, 400);
+    }
+    const result = await deps.gateway.commentThumbs.complete(token, fileId, { size, mimeType });
+    return c.json({ fileId, ...result, size });
+  });
+
+  app.get("/comment-files/:fileId", async (c) => {
+    const access = await deps.gateway.authorizeCommentFile(
+      c.get("token"),
+      c.req.param("fileId"),
+      "original",
+    );
+    return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
+  });
+
+  app.get("/comment-files/:fileId/thumb", async (c) => {
+    const access = await deps.gateway.authorizeCommentFile(
+      c.get("token"),
+      c.req.param("fileId"),
+      "thumb",
+    );
+    return (await serve(access, c.req.raw)) ?? c.json({ code: "object_missing" }, 404);
+  });
+
   /**
    * Figma 連携（docs/FIGMA_WEB_PROOFING.md FG-05。利用者決定 2026-10-17「API が使えるならまずはそっちで試す」）。
    * - GET /figma/status: トークンが設定されているか（UI が「Figma から取り込む」を出すか決める）
@@ -481,6 +549,38 @@ export function createApp(deps: AppDeps) {
  */
 function dispositionFor(fileName: string): "inline" | "attachment" {
   return isSourceFormatFile(fileName) ? "attachment" : "inline";
+}
+
+function thumbTooLarge() {
+  return {
+    code: "file_too_large",
+    message: `サムネイルが大きすぎます。上限は ${COMMENT_THUMB_MAX_BYTES / 1024} KB です`,
+    limit: COMMENT_THUMB_MAX_BYTES,
+  };
+}
+
+/** 本文を最大 max バイトまで読む。超えたら読むのをやめて null（Content-Length の無い本文でも上限を守る） */
+async function readAtMost(stream: ReadableStream<Uint8Array>, max: number) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out.buffer;
 }
 
 function tooLarge(size: number, limit = MAX_UPLOAD_BYTES) {

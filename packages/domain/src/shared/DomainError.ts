@@ -97,6 +97,10 @@ export const domainErrorCodes = [
   "feedback_invalid",
   "feedback_not_found",
   "feedback_file_not_ready",
+  // コメント・返信の添付
+  "comment_file_invalid",
+  "comment_file_not_found",
+  "comment_file_not_ready",
   // 通知の配信（Web Push）
   "push_subscription_invalid",
   "notification_prefs_invalid",

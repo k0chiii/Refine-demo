@@ -3,7 +3,7 @@ import type { Id } from "@mf100/convex/dataModel";
 import { ConvexHttpClient } from "convex/browser";
 import { ConvexError } from "convex/values";
 import { createCoalescer } from "../inflight.ts";
-import type { BackendGateway, UploadAttemptTarget, UploadOps } from "../ports.ts";
+import type { BackendGateway, ThumbOps, UploadAttemptTarget, UploadOps } from "../ports.ts";
 import { GatewayError } from "../ports.ts";
 
 /**
@@ -88,6 +88,22 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
     },
   });
 
+  const thumbs: ThumbOps = {
+    async begin(token, fileId) {
+      const target = await call<{ objectKey: string; fileName: string }>(
+        token,
+        "/internal/comments/thumbs/begin",
+        { fileId },
+      );
+      if (typeof target.objectKey !== "string" || !target.objectKey)
+        throw new Error("upload service returned an invalid target");
+      return target;
+    },
+    async complete(token, fileId, meta) {
+      return call(token, "/internal/comments/thumbs/complete", { fileId, ...meta });
+    },
+  };
+
   return {
     itemUploads: uploads("/internal/uploads/items", "itemId"),
     authorizeArtifact(token, artifactId) {
@@ -101,6 +117,13 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
     authorizeFeedbackFile(token, fileId) {
       return coalesceAuthorize(`feedback\n${fileId}\n${token}`, () =>
         withAuth(token).query(api.feedback.authorizeFile, { fileId }).catch(translate),
+      );
+    },
+    commentUploads: uploads("/internal/comments/files", "fileId"),
+    commentThumbs: thumbs,
+    authorizeCommentFile(token, fileId, variant) {
+      return coalesceAuthorize(`comment\n${variant}\n${fileId}\n${token}`, () =>
+        withAuth(token).query(api.commentFiles.authorizeFile, { fileId, variant }).catch(translate),
       );
     },
   };

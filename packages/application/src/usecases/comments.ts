@@ -11,10 +11,12 @@ import {
   type Severity,
   type ThreadKind,
   validateAnchor,
+  validateCommentFileIds,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
 import { checkMentions, idempotent, loadAuthorizedWork, searchPeopleByText } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
+import { attachCommentFiles, checkCommentFiles, releaseCommentFiles } from "./commentFiles.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
   allMembersCanView,
@@ -52,7 +54,12 @@ export interface PostCommentInput {
   requestId?: string;
   /** 本文でメンションした人（制作物を見られる人だけ。上限 10） */
   mentions?: string[];
+  /** 添付（prepareCommentFiles で準備し、Hono で検証済みになった自分の添付。上限 10。本文が空でも添付があれば投稿できる） */
+  fileIds?: string[];
 }
+
+/** 本文の無いコメント・返信（添付だけ）の通知や一覧に出す代わりの文 */
+const attachmentNote = (count: number) => `（添付ファイル ${count} 件）`;
 
 /**
  * 新しいコメント（要件の「指摘」。F-06 / F-07 / A-04 / A-06）。
@@ -75,7 +82,9 @@ export async function postComment(
   );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const wantedFiles = validateCommentFileIds(input.fileIds);
+  if (input.body.trim() === "" && wantedFiles.length === 0)
+    throw new DomainError("forbidden", { reason: "body_required" });
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
 
   const now = ctx.clock.now();
@@ -104,6 +113,9 @@ export async function postComment(
     `postComment:${revision.id}:${principal.userId}`,
     input.requestId,
     async () => {
+      // 付ける添付の確認（本人が同じ制作物に上げた検証済みの、まだ付けていないもの）。再送のときは投稿が済んでいるので通らない
+      const attach = await checkCommentFiles(ctx, principal, work.id, wantedFiles);
+      const text = input.body.trim() !== "" ? input.body : attachmentNote(attach.ids.length);
       const data: Omit<CommentThread, "id"> = {
         revisionId: revision.id,
         authorId: principal.userId,
@@ -118,7 +130,9 @@ export async function postComment(
         data.artifactId = input.anchor.artifactId;
       }
       if (mentions.length) data.mentions = mentions;
+      if (attach.ids.length) data.fileIds = attach.ids;
       const thread = await ctx.threads.insert(data);
+      await attachCommentFiles(ctx, attach.files, { threadId: thread.id, revisionId: revision.id });
       await ctx.threads.appendEvent({
         threadId: thread.id,
         eventType: "created",
@@ -135,15 +149,15 @@ export async function postComment(
         {
           kind: "comment_posted",
           title: "新しいコメント",
-          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(input.body)}`,
-          preview: input.body,
+          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(text)}`,
+          preview: text,
           workId: work.id,
           revisionId: revision.id,
           threadId: thread.id,
         },
       );
       await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
-        body: input.body,
+        body: text,
         workId: work.id,
         revisionId: revision.id,
         threadId: thread.id,
@@ -160,9 +174,11 @@ export async function postComment(
 export async function replyToThread(
   ctx: AppContext,
   principal: Principal,
-  input: { threadId: string; body: string; mentions?: string[] },
+  input: { threadId: string; body: string; mentions?: string[]; fileIds?: string[] },
 ): Promise<void> {
-  if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const wantedFiles = validateCommentFileIds(input.fileIds);
+  if (input.body.trim() === "" && wantedFiles.length === 0)
+    throw new DomainError("forbidden", { reason: "body_required" });
   const thread = await ctx.threads.findById(input.threadId);
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
   const revision = await ctx.revisions.findById(thread.revisionId);
@@ -178,15 +194,26 @@ export async function replyToThread(
   assertThreadNotDeleted(thread);
   const now = ctx.clock.now();
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
-  await ctx.threads.appendEvent({
+  const attach = await checkCommentFiles(ctx, principal, work.id, wantedFiles);
+  const text = input.body.trim() !== "" ? input.body : attachmentNote(attach.ids.length);
+  const eventId = await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "replied",
     actorId: principal.userId,
-    payload: mentions.length ? { body: input.body, mentions } : { body: input.body },
+    payload: {
+      body: input.body,
+      ...(mentions.length ? { mentions } : {}),
+      ...(attach.ids.length ? { fileIds: attach.ids } : {}),
+    },
     createdAt: now,
   });
+  await attachCommentFiles(ctx, attach.files, {
+    threadId: thread.id,
+    eventId,
+    revisionId: thread.revisionId,
+  });
   await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
-    body: input.body,
+    body: text,
     workId: work.id,
     revisionId: revision.id,
     threadId: thread.id,
@@ -409,6 +436,8 @@ export async function deleteThread(
     payload: { cascade: true, repliesDeleted: plan.cascadeReplyIds.length },
     createdAt: now,
   });
+  // コメントと返信の添付は読めなくなり、R2 の清掃の対象になる
+  await releaseCommentFiles(ctx, thread.id);
   if (plan.authority === "admin")
     await recordAdminDeletion(ctx, principal, {
       entityType: "commentThread",
@@ -491,6 +520,7 @@ export async function deleteReply(
     payload: { replyEventId: input.replyEventId },
     createdAt: now,
   });
+  await releaseCommentFiles(ctx, thread.id, { eventIds: [input.replyEventId] });
   const replyAuthor = replyEntries(events).find((r) => r.id === input.replyEventId)!.actorId;
   await recordAdminDeletion(ctx, principal, {
     entityType: "commentReply",

@@ -6,6 +6,7 @@ export * from "./usecases/submissions.ts";
 export * from "./usecases/uploadAttempts.ts";
 export * from "./usecases/reviews.ts";
 export * from "./usecases/comments.ts";
+export * from "./usecases/commentFiles.ts";
 export * from "./usecases/approvals.ts";
 export * from "./usecases/checks.ts";
 export * from "./usecases/notifications.ts";

@@ -361,7 +361,7 @@ export default defineSchema({
    * 採用・破棄はサービス認証付きの境界（http.ts）からだけ行う。未採用の試行のキーは清掃が消す。
    */
   uploadAttempts: defineTable({
-    target: v.union(v.literal("uploadItem"), v.literal("feedbackFile")),
+    target: v.union(v.literal("uploadItem"), v.literal("feedbackFile"), v.literal("commentFile")),
     targetId: v.string(),
     uploaderId: v.string(),
     objectKey: v.string(),
@@ -395,11 +395,55 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。保存済みの行との互換のために残す */
     deletedKeepsReplies: v.optional(v.boolean()),
+    /** 添付（commentFiles の ID。付けた順）。無ければ持たない。返信の添付は commentEvents.payload.fileIds */
+    fileIds: v.optional(v.array(v.string())),
     /** リアクション（絵文字ごとに押した人。FB と同じ形。誰も付けていなければ持たない） */
     reactions: v.optional(vReactionEntries),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"]),
+
+  /**
+   * コメント・返信の添付（R2 の comments/ の下）。準備 → Hono で実体検証 → コメント（返信）に付ける。
+   * 付けないまま 24 時間たったものは abandonedAt、付けたコメントが削除されたものは removedAt を付け、Hono の清掃で R2 から消す（purgedAt）。
+   * 画像は縮小・再圧縮した実体と、一覧用のサムネイル（thumbObjectKey）を持つ。
+   */
+  commentFiles: defineTable({
+    workId: v.id("works"),
+    revisionId: v.string(),
+    uploaderId: v.string(),
+    fileName: v.string(),
+    originalName: v.string(),
+    mimeType: v.string(),
+    type: v.union(v.literal("pdf"), v.literal("image"), v.literal("document"), v.literal("other")),
+    declaredSize: v.optional(v.number()),
+    size: v.optional(v.number()),
+    originalSize: v.optional(v.number()),
+    sha256: v.optional(v.string()),
+    /** R2 キーの名前空間（試行ごとのキーとサムネイルはこの下） */
+    keyPrefix: v.optional(v.string()),
+    /** 採用された試行のキー（検証済みのときだけ。それまでは空文字） */
+    objectKey: v.string(),
+    status: artifactStatus,
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    thumbObjectKey: v.optional(v.string()),
+    thumbSize: v.optional(v.number()),
+    thumbMime: v.optional(v.string()),
+    /** 付けた先（付けるまでは無い）。返信に付けたときは eventId も */
+    threadId: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    createdAt: v.number(),
+    failureMessage: v.optional(v.string()),
+    abandonedAt: v.optional(v.number()),
+    removedAt: v.optional(v.number()),
+    purgedAt: v.optional(v.number()),
+  })
+    /** スレッドに付いた添付を引く。threadId が無く abandonedAt も無いもの（放置の候補）を createdAt の範囲で引く */
+    .index("by_thread_abandoned_created", ["threadId", "abandonedAt", "createdAt"])
+    .index("by_uploader", ["uploaderId", "createdAt"])
+    .index("by_purged_and_abandoned", ["purgedAt", "abandonedAt"])
+    .index("by_purged_and_removed", ["purgedAt", "removedAt"]),
 
   commentEvents: defineTable({
     threadId: v.id("commentThreads"),

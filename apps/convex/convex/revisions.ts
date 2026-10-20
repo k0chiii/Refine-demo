@@ -1,5 +1,6 @@
 import {
   closeExpiredReviews,
+  listCommentFileViews,
   loadAuthorizedWork,
   markRevisionViewed,
   remindUpcomingDeadlinesBatch,
@@ -87,18 +88,22 @@ export const get = query({
           finalRevisionId: work.finalRevisionId ?? null,
         },
         artifacts,
-        threads: threads
-          .map((t) => ({
-            ...t,
-            author: users.get(t.authorId),
-            assignee: t.assigneeId ? users.get(t.assigneeId) : null,
-            reactions: reactionViews(t.reactions, principal.userId, users),
-            mentionUsers: (t.mentions ?? []).flatMap((id) => {
-              const u = users.get(id);
-              return u ? [u] : [];
-            }),
-          }))
-          .sort((a, b) => a.createdAt - b.createdAt),
+        threads: (
+          await Promise.all(
+            threads.map(async (t) => ({
+              ...t,
+              author: users.get(t.authorId),
+              assignee: t.assigneeId ? users.get(t.assigneeId) : null,
+              reactions: reactionViews(t.reactions, principal.userId, users),
+              mentionUsers: (t.mentions ?? []).flatMap((id) => {
+                const u = users.get(id);
+                return u ? [u] : [];
+              }),
+              /** 添付（検証済みで削除されていないもの。付けた順） */
+              files: await listCommentFileViews(app, t.fileIds),
+            })),
+          )
+        ).sort((a, b) => a.createdAt - b.createdAt),
         assignments: assignments.map((a) => ({ ...a, reviewer: users.get(a.reviewerId) })),
         checks: checks.map((c) => ({
           ...c,

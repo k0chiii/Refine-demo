@@ -21,6 +21,7 @@ export async function purgeOrphanObjects(
   for (const o of orphans) {
     try {
       await deps.store.delete(o.objectKey);
+      for (const key of o.extraObjectKeys ?? []) await deps.store.delete(key);
       done.push(o.itemId);
     } catch (e) {
       failed.push({ itemId: o.itemId, message: e instanceof Error ? e.message : String(e) });

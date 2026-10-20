@@ -27,6 +27,7 @@ export * from "./comment/CommentThread.ts";
 export * from "./comment/deletion.ts";
 export * from "./comment/reactions.ts";
 export * from "./comment/mentions.ts";
+export * from "./comment/attachments.ts";
 export * from "./review/ReviewAssignment.ts";
 export * from "./review/RequiredCheck.ts";
 export * from "./approval/ApprovalPolicy.ts";

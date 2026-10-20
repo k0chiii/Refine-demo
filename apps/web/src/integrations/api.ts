@@ -83,7 +83,7 @@ async function encodeOrExplain(file: File, onPhase?: (phase: UploadPhase) => voi
  * 認可付きの添付の取得（Hono GET /files/:id）。署名付き URL は無いので、毎回 Bearer を付ける（Worker が毎回認可する）。
  * 範囲取得（Range）・条件付き取得（If-None-Match → 304）に対応。応答の本体はストリームのまま渡す。
  */
-const transport: ArtifactTransport = {
+const createTransport = (urlFor: (id: string) => string): ArtifactTransport => ({
   async request({ token, artifactId, start, end, ifNoneMatch, ifRange, signal }) {
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     if (start !== undefined) headers.Range = `bytes=${start}-${end !== undefined ? end : ""}`;
@@ -91,7 +91,7 @@ const transport: ArtifactTransport = {
     if (ifRange) headers["If-Range"] = ifRange;
     let res: Response;
     try {
-      res = await fetch(`${API_URL}/files/${encodeURIComponent(artifactId)}`, {
+      res = await fetch(urlFor(artifactId), {
         headers,
         ...(signal ? { signal } : {}),
       });
@@ -113,7 +113,8 @@ const transport: ArtifactTransport = {
       body: res.body,
     };
   },
-};
+});
+const transport = createTransport((id) => `${API_URL}/files/${encodeURIComponent(id)}`);
 
 /** 添付の取得・写し（二重取得の排除、受け取りながらの利用、端末の写し）。lib/artifactFiles */
 export const artifactFiles = new ArtifactFiles({
@@ -262,4 +263,178 @@ export async function importFigmaFrames(
         : (json.message ?? "Figma から取り込めませんでした。もう一度お試しください。"),
     );
   return json.items ?? [];
+}
+
+// ---------------------------------------------------------------- コメント・返信の添付（Hono /comment-files/*）
+
+export interface CommentUploadResult {
+  fileId: string;
+  status: string;
+  failureMessage: string | null;
+  size: number;
+  /** サムネイルも置けたか（置けなくても添付は有効。一覧は原本で代替する） */
+  thumb: boolean;
+}
+
+export interface CommentUploadOptions {
+  /** 一覧用のサムネイル（attachmentCompress が作る WebP）。無ければ送らない */
+  thumb?: Blob | null;
+  /** 原本の送信の進み具合（0〜1。実際に送った量。圧縮・ハッシュの計算が済んでから動き出す） */
+  onProgress?: (fraction: number) => void;
+  /** 中止（本文の送信を打ち切る） */
+  signal?: AbortSignal;
+  onPhase?: (phase: UploadPhase) => void;
+}
+
+/** PUT を XHR で送り、実際に送れた量を知らせる（fetch は送信の進み具合を取れない） */
+function putWithProgress(
+  url: string,
+  headers: Record<string, string>,
+  body: Blob,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException("aborted", "AbortError"));
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    for (const [key, value] of Object.entries(headers)) xhr.setRequestHeader(key, value);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress?.(Math.min(1, e.loaded / e.total));
+    };
+    xhr.onload = () => {
+      let json: Record<string, unknown> = {};
+      try {
+        json = JSON.parse(xhr.responseText) as Record<string, unknown>;
+      } catch {
+        // 本文が JSON でない応答（経路のエラー）。状態だけで扱う
+      }
+      resolve({ status: xhr.status, json });
+    };
+    xhr.onerror = () => reject(new Error("network"));
+    xhr.onabort = () => reject(new DOMException("aborted", "AbortError"));
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
+/**
+ * コメント・返信の添付を送る（Convex の commentFiles.prepare で受け取った fileId ごと）。
+ * 原本は版の提出と同じく sha256 を添え、Hono が R2 で確かめてから検証済みにする（ダウンロード専用の原本は可逆に gzip）。
+ * サムネイル（画像）は原本の後に送る。サムネイルの失敗は添付の失敗にしない。
+ * 検証済み（status: "verified"）になった fileId を comments.post / reply の fileIds に渡す。
+ */
+export async function uploadCommentFile(
+  token: string,
+  fileId: string,
+  file: File,
+  options: CommentUploadOptions = {},
+): Promise<CommentUploadResult> {
+  const upload = await encodeOrExplain(file, options.onPhase);
+  options.onProgress?.(0);
+  const res = await putWithProgress(
+    `${API_URL}/comment-files/${encodeURIComponent(fileId)}`,
+    {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type || "application/octet-stream",
+      ...encodingHeaders(upload),
+    },
+    upload.body,
+    options.onProgress,
+    options.signal,
+  );
+  if (res.status < 200 || res.status >= 300)
+    throw new Error(
+      res.json.code === "size_mismatch"
+        ? "ファイルが途中で欠けました。もう一度添付してください。"
+        : res.json.code === "file_too_large"
+          ? messageForCode("upload_file_too_large")
+          : "ファイルを添付できませんでした。もう一度お試しください。",
+    );
+  options.onProgress?.(1);
+  const result = res.json as unknown as Omit<CommentUploadResult, "thumb">;
+
+  let thumb = false;
+  if (options.thumb && result.status === "verified") {
+    try {
+      const sha256 = await sha256Hex(await options.thumb.arrayBuffer());
+      const t = await putWithProgress(
+        `${API_URL}/comment-files/${encodeURIComponent(fileId)}/thumb`,
+        {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": options.thumb.type || "image/webp",
+          "X-MF100-Sha256": sha256,
+        },
+        options.thumb,
+        undefined,
+        options.signal,
+      );
+      thumb = t.status >= 200 && t.status < 300;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+    }
+  }
+  return { ...result, thumb };
+}
+
+/**
+ * コメントの添付の取得。サムネイル（`thumb:{fileId}` の名前で端末の写しに残る）は一覧に何枚も並ぶので、
+ * 写しから開くたびの確認はしない（HTTP 側でも 1 日有効）。原本は添付と同じく開くたびに今も見られるかを確かめる
+ */
+const commentTransport = createTransport((id) =>
+  id.startsWith("thumb:")
+    ? `${API_URL}/comment-files/${encodeURIComponent(id.slice(6))}/thumb`
+    : `${API_URL}/comment-files/${encodeURIComponent(id)}`,
+);
+export const commentThumbFiles = new ArtifactFiles({
+  transport: commentTransport,
+  persistence: createCacheStorePersistence(),
+  subjectOf: jwtUser,
+  policy: defaultFileCachePolicy,
+  revalidate: false,
+});
+export const commentOriginalFiles = new ArtifactFiles({
+  transport: commentTransport,
+  persistence: createCacheStorePersistence(),
+  subjectOf: jwtUser,
+  policy: defaultFileCachePolicy,
+});
+
+/** サムネイルを取得する。persist は制作物の機密区分から（lib/fileCachePolicy の mayPersist）。機密なら端末に残さない */
+export function fetchCommentThumbBlob(
+  token: string,
+  fileId: string,
+  opts?: OpenOptions,
+): Promise<Blob> {
+  return commentThumbFiles.blob(token, `thumb:${fileId}`, opts);
+}
+
+/** 原本を取得する（拡大表示・ダウンロード）。同じ添付の取得は共有され、端末の写しがあればそこから */
+export function fetchCommentFileBlob(
+  token: string,
+  fileId: string,
+  opts?: OpenOptions,
+): Promise<Blob> {
+  return commentOriginalFiles.blob(token, fileId, opts);
+}
+
+/** コメントの添付を手元に保存する */
+export async function downloadCommentFile(token: string, fileId: string, fileName: string) {
+  saveBlob(await fetchCommentFileBlob(token, fileId), fileName);
+}
+
+// ---------------------------------------------------------------- 添付の取得の共通の後始末（サインアウト・トークンの更新）
+
+/** 最新のトークンを返す関数を、添付の取得すべて（版の添付・コメントの添付）に登録する */
+export function setFileTokenProvider(fn: (() => string | null) | null) {
+  for (const files of [artifactFiles, commentThumbFiles, commentOriginalFiles])
+    files.setTokenProvider(fn);
+}
+
+/** 利用者が替わった・サインアウトしたとき、keepSubject 以外の写し（メモリと端末）をすべて捨てる */
+export async function clearFileStores(token: string | null): Promise<void> {
+  const keep = token ? artifactFiles.subjectFor(token) : undefined;
+  await Promise.all(
+    [artifactFiles, commentThumbFiles, commentOriginalFiles].map((files) => files.clear(keep)),
+  );
 }

@@ -104,6 +104,10 @@ const messages: Record<string, string> = {
   notification_prefs_invalid: "通知の設定を保存できませんでした。もう一度お試しください。",
   feedback_file_not_ready:
     "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
+  comment_file_invalid: "添付を確かめてください。1 つのコメントに付けられるのは 10 件までです。",
+  comment_file_not_found: "この添付は見つかりません。",
+  comment_file_not_ready:
+    "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
   avatar_invalid: "アバターの設定を保存できませんでした。選び直してからもう一度お試しください。",
 };
 

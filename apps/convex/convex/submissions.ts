@@ -1,5 +1,6 @@
 import {
   ATTEMPT_ORPHAN_PREFIX,
+  COMMENT_ORPHAN_PREFIX,
   FEEDBACK_ORPHAN_PREFIX,
   beginItemUpload,
   completeItemUpload,
@@ -7,9 +8,11 @@ import {
   expireUploadSessions,
   failItemUpload,
   listOrphanAttemptObjects,
+  listOrphanCommentObjects,
   listOrphanFeedbackObjects,
   listOrphanUploadObjects,
   markAttemptObjectsPurged,
+  markCommentObjectsPurged,
   markFeedbackObjectsPurged,
   markUploadObjectsPurged,
   prepareSubmission,
@@ -207,7 +210,7 @@ export const expireSessions = internalMutation({
 
 /**
  * 清掃: abandoned セッションの未削除オブジェクト一覧（Hono の cron が http.ts 経由で取得）。
- * 放置されたフィードバックの添付（itemId は "feedback:{添付 ID}"）と、採用されなかった転送の試行
+ * 放置されたフィードバックの添付（itemId は "feedback:{添付 ID}"）・コメントの添付（"comment:{添付 ID}"。サムネイルのキーは extraObjectKeys）と、採用されなかった転送の試行
  * （itemId は "attempt:{試行 ID}"）も同じ一覧に載せる。Hono には不透明な ID。
  */
 export const listOrphanObjects = internalMutation({
@@ -217,13 +220,14 @@ export const listOrphanObjects = internalMutation({
     const max = Math.min(limit ?? 100, 500);
     const out = await listOrphanUploadObjects(app, max);
     if (out.length < max) out.push(...(await listOrphanFeedbackObjects(app, max - out.length)));
+    if (out.length < max) out.push(...(await listOrphanCommentObjects(app, max - out.length)));
     if (out.length < max) out.push(...(await listOrphanAttemptObjects(app, max - out.length)));
     return out;
   },
 });
 
 /**
- * 清掃: R2 から削除済みの項目を記録（冪等）。"feedback:" で始まるものはフィードバックの添付、
+ * 清掃: R2 から削除済みの項目を記録（冪等）。"feedback:" で始まるものはフィードバックの添付、"comment:" で始まるものはコメントの添付、
  * "attempt:" で始まるものは採用されなかった転送の試行。
  */
 export const markObjectsPurged = internalMutation({
@@ -234,11 +238,15 @@ export const markObjectsPurged = internalMutation({
     const withPrefix = (prefix: string) =>
       ids.filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length));
     const uploads = ids.filter(
-      (id) => !id.startsWith(FEEDBACK_ORPHAN_PREFIX) && !id.startsWith(ATTEMPT_ORPHAN_PREFIX),
+      (id) =>
+        !id.startsWith(FEEDBACK_ORPHAN_PREFIX) &&
+        !id.startsWith(COMMENT_ORPHAN_PREFIX) &&
+        !id.startsWith(ATTEMPT_ORPHAN_PREFIX),
     );
     return (
       (await markUploadObjectsPurged(app, uploads)) +
       (await markFeedbackObjectsPurged(app, withPrefix(FEEDBACK_ORPHAN_PREFIX))) +
+      (await markCommentObjectsPurged(app, withPrefix(COMMENT_ORPHAN_PREFIX))) +
       (await markAttemptObjectsPurged(app, withPrefix(ATTEMPT_ORPHAN_PREFIX)))
     );
   },
