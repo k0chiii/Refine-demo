@@ -286,7 +286,7 @@ export function RichCommentEditor({
         <RichToolbar editor={editor} linkOpen={linkOpen} onLinkOpen={setLinkOpen} />
       ) : null}
       <div
-        className={`rt rt--composer ${value.trim() !== "" ? "rt--float" : ""}`}
+        className="rt rt--composer"
         style={{ "--rt-rows": rows } as CSSProperties}
         // 余白を押しても本文に入る（Slack と同じ）
         onMouseDown={(e) => {
@@ -296,7 +296,7 @@ export function RichCommentEditor({
           }
         }}
       >
-        <FieldOutline label={ariaLabel} />
+        <FieldOutline />
         <EditorContent editor={editor} className="rt__editor" />
         {mention ? (
           <MentionMenu query={mention.query} onPick={pickMention} keyHandler={menuKey} />

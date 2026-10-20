@@ -65,6 +65,7 @@ export function ComposePopover({
   style,
   extra,
   docked,
+  host,
   quote,
   place,
   autoFocus = true,
@@ -85,6 +86,8 @@ export function ComposePopover({
   /** 投稿以外の操作（例: 選んだ文字を表記ルールに提案） */
   extra?: ReactNode;
   docked?: boolean;
+  /** docked のとき、ここ（スマホの開いている引き出しのシートの下）に埋め込む。無ければ画面下に浮かべる */
+  host?: HTMLElement | null;
   /** docked のとき、何に対するコメントかを示す引用（選んだ文字など） */
   quote?: string;
   /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。docked でなくても出す。アイコンは種類によらず地図のピン */
@@ -102,7 +105,9 @@ export function ComposePopover({
     if (canSend && !pending) onSubmit(canAttach ? uploads.fileIds : []);
   };
   const richRef = useRef<RichCommentHandle>(null);
-  const kb = useKeyboardInset(docked === true);
+  // シートが開いているあいだは、浮かべずにシートの中に埋め込む（利用者指示 2026-10-20「ボトムシート？が出てる状態の時はそうじゃなくて埋め込みだといいのかも」）
+  const embedded = docked === true && host != null;
+  const kb = useKeyboardInset(docked === true && !embedded);
   const panelRef = useRef<HTMLDivElement>(null);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
@@ -118,18 +123,20 @@ export function ComposePopover({
   const panel = (
     <div
       ref={panelRef}
-      className={`compose-pop ${docked ? "compose-pop--docked" : ""}`}
+      className={`compose-pop ${embedded ? "compose-pop--embedded" : docked ? "compose-pop--docked" : ""}`}
       role="dialog"
       aria-label={what}
       style={
-        docked
-          ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
-          : {
-              left: x,
-              top: y,
-              ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
-              ...style,
-            }
+        embedded
+          ? undefined
+          : docked
+            ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
+            : {
+                left: x,
+                top: y,
+                ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
+                ...style,
+              }
       }
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -173,6 +180,7 @@ export function ComposePopover({
     </div>
   );
   // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す（要素の全画面の間はその要素の中）
+  if (embedded) return createPortal(panel, host);
   return docked ? createPortal(panel, portalHost()) : panel;
 }
 

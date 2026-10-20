@@ -4533,7 +4533,7 @@ m3e-icon.icon--on {
 }
 /* 入力欄: 本文・添付・操作の行を 1 つの枠に収める。枠は M3E の outlined の入力欄（m3e-form-field）と同じ
    （利用者指示 2026-10-20「もっと本当にm3eのインプットに合わせて欲しい」）: 角 4・線は outline 1px（マウスを載せると on-surface、
-   フォーカスで主色の 2px）・ラベルは空のとき本文の位置（body-large）、フォーカスか中身があると枠の線の切り欠きに乗る（body-small）。
+   フォーカスで主色の 2px）。ラベルは置かない（「コメントって入れなくていいかもな」）。
    本文は body-large、左右 16px・1 行目は高さ 56 の中央。書式のツールバーは枠の外の上に浮かぶ */
 .rt--composer {
   --rt-outline: var(--mf-outline);
@@ -4559,73 +4559,11 @@ m3e-icon.icon--on {
 .rt__outline {
   position: absolute;
   inset: 0;
-  display: flex;
-  pointer-events: none;
-}
-.rt__outline > span {
   box-sizing: border-box;
-  border: var(--rt-outline-size) none var(--rt-outline);
-  transition: border-color var(--mf-motion, 150ms);
-}
-.rt__outline-start {
-  flex: none;
-  width: 12px;
-  border-style: solid none solid solid !important;
-  border-radius: var(--mf-shape-xs) 0 0 var(--mf-shape-xs);
-}
-.rt__outline-notch {
-  flex: none;
-  max-width: calc(100% - 24px);
-  border-style: solid none !important;
-}
-.rt__outline-end {
-  flex: 1;
-  border-style: solid solid solid none !important;
-  border-radius: 0 var(--mf-shape-xs) var(--mf-shape-xs) 0;
-}
-/* 切り欠きの幅（ラベルの文字ぶん＋左右 4px）。浮かせていないときは 0 */
-.rt__outline-label {
-  display: block;
-  visibility: hidden;
-  max-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  font: var(--mf-type-body-small);
-}
-.rt__label {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  max-width: calc(100% - 32px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border: var(--rt-outline-size) solid var(--rt-outline);
+  border-radius: inherit;
   pointer-events: none;
-  font: var(--mf-type-body-large);
-  color: var(--rt-label);
-  transition:
-    top var(--mf-motion, 150ms),
-    translate var(--mf-motion, 150ms),
-    font-size var(--mf-motion, 150ms);
-}
-:is(.rt--float, .rt--composer:focus-within) > .rt__outline .rt__outline-notch {
-  border-top-style: none !important;
-}
-:is(.rt--float, .rt--composer:focus-within) > .rt__outline .rt__outline-label {
-  max-width: 100%;
-  padding-inline: 4px;
-}
-:is(.rt--float, .rt--composer:focus-within) > .rt__label {
-  top: 0;
-  translate: 0 -50%;
-  font: var(--mf-type-body-small);
-}
-/* ラベルが本文の位置にあるあいだは案内を出さない（M3E と同じ。フォーカスすると出る） */
-.rt--composer:not(:focus-within) .rt__content p.is-editor-empty:first-child::before {
-  opacity: 0;
-}
-.rt--loading > .rt__label {
-  top: 16px;
+  transition: border-color var(--mf-motion, 150ms);
 }
 /* 投稿欄（白い面の上）では、枠の中も同じ面の色 */
 .compose-pop .rt--composer {
@@ -4638,6 +4576,36 @@ m3e-icon.icon--on {
   left: 50%;
   translate: -50% 0;
   margin: 0;
+}
+/* スマホで引き出しのシートが開いているあいだは、浮かべずにシートの下に埋め込む（白い面・影・浮くツールバーにしない。
+   スレッドの返信欄と同じ並び）。シートを流しても下に残る */
+.ws__sheet-compose {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--m3e-bottom-sheet-container-color, var(--mf-surface-container-low));
+}
+.ws__sheet-compose:empty {
+  display: none;
+}
+.compose-pop--embedded {
+  position: static;
+  width: auto;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none !important;
+}
+.compose-pop--embedded .rt--composer {
+  background: transparent;
+}
+.compose-pop--embedded .rt-wrap > .rt__toolbar {
+  position: relative; /* M3E の Toolbar の影・面は自分を基準に描く（static にすると親いっぱいに広がる） */
+  inset: auto;
+  translate: none;
+  margin: 0;
+  animation: none !important;
 }
 /* 開くとき: 白い面は置いた場所から、ツールバーは少し遅れて、小さく・薄い状態から出る（M3 の空間の動き）。動きを減らす設定では出さない */
 @media (prefers-reduced-motion: no-preference) {
@@ -4655,14 +4623,6 @@ m3e-icon.icon--on {
     opacity: 0;
     transform: translateY(4px) scale(0.92);
   }
-}
-
-/* 紙の上では、枠に乗ったラベルの後ろの紙の文字が透けないよう、ラベルにも同じ面を敷く */
-.compose-pop :is(.rt--float, .rt--composer:focus-within) > .rt__label {
-  margin-inline-start: -4px;
-  padding-inline: 4px;
-  border-radius: var(--mf-shape-xs);
-  background: var(--mf-surface-container-lowest);
 }
 
 .rt--composer .rt__editor {

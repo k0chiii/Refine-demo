@@ -398,6 +398,8 @@ export function Editor({
   const sheetRef = useRef<HTMLElement | null>(null);
   // 狭い画面の引き出し（ボトムシート）が開いているか。ツールバーのボタンの選択状態に使う
   const [sheetOpen, setSheetOpen] = useState(false);
+  // シートの下の、投稿欄を埋め込む場所（シートが開いているあいだの新規コメント）
+  const [sheetComposeHost, setSheetComposeHost] = useState<HTMLDivElement | null>(null);
 
   const setLayout = (l: Layout) => {
     setLayoutPref(l);
@@ -922,6 +924,7 @@ export function Editor({
         x={pos.x}
         y={pos.y}
         docked={compact}
+        host={sheetOpen ? sheetComposeHost : null}
         // マウスで選んだ文字は、文字カーソルを移さず（コピーできるまま）。書き始めるときは欄を押す
         autoFocus={!draft.range || draft.focus === true}
         {...(draft.range && text
@@ -985,6 +988,7 @@ export function Editor({
         x={at.x}
         y={at.y}
         docked={compact}
+        host={sheetOpen ? sheetComposeHost : null}
         // 狭い画面の投稿欄は引用を別の行で出す。広い画面は場所の行に引用も添える
         {...(place?.quote && compact ? { quote: place.quote.slice(0, 80) } : {})}
         place={
@@ -2183,6 +2187,7 @@ export function Editor({
                 ? null
                 : drawerTabs(sheetTab, (d) => setDrawer(d))}
               <div className="drawer__body">{drawerBody(sheetTab)}</div>
+              <div className="ws__sheet-compose" ref={setSheetComposeHost} />
             </div>
           </M3eBottomSheet>
         ) : null}

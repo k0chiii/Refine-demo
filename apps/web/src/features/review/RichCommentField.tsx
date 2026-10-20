@@ -24,9 +24,9 @@ export interface RichCommentFieldProps {
   /** Esc（メンションの候補を出している間は呼ばない） */
   onEscape?: () => void;
   onFocus?: () => void;
-  /** 読み上げの名前。枠に乗るラベル（M3E の outlined の入力欄と同じ）にも出す */
+  /** 読み上げの名前 */
   ariaLabel: string;
-  /** 空でフォーカスしているときの案内（ラベルとは別。ラベルと同じなら省く） */
+  /** 空のときの案内 */
   placeholder?: string;
   id?: string;
   /** 開いたときにフォーカスして末尾へ */
@@ -71,7 +71,7 @@ export function RichCommentField(props: RichCommentFieldProps) {
           className="rt rt--composer rt--loading"
           style={{ "--rt-rows": props.rows ?? 2 } as CSSProperties}
         >
-          <FieldOutline label={props.ariaLabel} />
+          <FieldOutline />
           <Loading label="入力欄を読み込んでいます" size="small" />
         </div>
       }
