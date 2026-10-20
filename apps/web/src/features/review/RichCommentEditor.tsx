@@ -364,12 +364,6 @@ const tools: Tool[] = [
     run: (e) => e.chain().focus().toggleBlockquote().run(),
   },
   { key: "code", icon: "code", label: "コード", run: (e) => e.chain().focus().toggleCode().run() },
-  {
-    key: "codeBlock",
-    icon: "data_object",
-    label: "コードブロック",
-    run: (e) => e.chain().focus().toggleCodeBlock().run(),
-  },
 ];
 
 function RichToolbar({

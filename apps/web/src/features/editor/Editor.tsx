@@ -1950,11 +1950,13 @@ export function Editor({
                     <M3eIconButton
                       className="ws__marks-toggle"
                       aria-label={marksHidden ? "コメントの印を出す" : "コメントの印を隠す"}
+                      title={marksHidden ? "コメントの印を出す" : "コメントの印を隠す"}
+                      variant={marksHidden ? "tonal" : "standard"}
                       toggle
                       selected={marksHidden}
                       onClick={() => setMarksHidden((v) => !v)}
                     >
-                      <M3eIcon name={marksHidden ? "visibility_off" : "visibility"} />
+                      <M3eIcon name={marksHidden ? "location_off" : "location_on"} />
                     </M3eIconButton>
                   ) : null}
                   {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
