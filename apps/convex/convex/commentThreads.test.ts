@@ -96,7 +96,14 @@ describe("Convex 統合: コメントのスレッド（返信の件数・参加�
     expect((await threadOf(cast.creator, threadId)).unread).toBe(false); // 最後の動きが自分
     expect((await threadOf(cast.approver, threadId)).unread).toBe(true);
 
-    // 返信を削除すると件数が減る
+    // 直近の返信が、投稿者の情報つきで古い順に載る
+    expect(seen.latestReplies.map((r) => [r.body, r.authorId, r.author?.id])).toEqual([
+      ["確認します", cast.approver.id, cast.approver.id],
+      ["対応します", cast.creator.id, cast.creator.id],
+    ]);
+    expect(seen.latestReplies.map((r) => r.unread)).toEqual([true, true]);
+
+    // 返信を削除すると件数が減り、直近の返信からも外れる
     const replies = (await cast.reviewer.as.query(api.comments.events, { threadId })).events.filter(
       (e) => e.eventType === "replied",
     );
@@ -104,7 +111,9 @@ describe("Convex 統合: コメントのスレッド（返信の件数・参加�
       threadId,
       replyEventId: replies[1]!.id,
     });
-    expect(await threadOf(cast.reviewer, threadId)).toMatchObject({ replyCount: 1 });
+    const removed = await threadOf(cast.reviewer, threadId);
+    expect(removed).toMatchObject({ replyCount: 1 });
+    expect(removed.latestReplies.map((r) => r.authorId)).toEqual([cast.approver.id]);
   });
 
   it("やり取りを持たない古いスレッドも、イベントから導いて返す（移行しない）", async () => {

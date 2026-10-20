@@ -16,6 +16,15 @@ export function activityOf(
     replyCount: a?.replyCount ?? 0,
     lastActivityAt: a?.lastActivityAt ?? 0,
     participantIds: a?.participantIds ?? [],
+    /** 直近の返信（古い順）。投稿者の名前・メール付き */
+    latestReplies: (a?.latestReplies ?? []).map((r) => ({
+      ...r,
+      author: users.get(r.authorId),
+      mentionUsers: r.mentionIds.flatMap((id) => {
+        const u = users.get(id);
+        return u ? [u] : [];
+      }),
+    })),
     participants: (a?.participantIds ?? []).flatMap((id) => {
       const u = users.get(id);
       return u ? [u] : [];

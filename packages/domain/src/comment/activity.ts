@@ -1,6 +1,7 @@
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { CommentEvent, CommentThread } from "./CommentThread.ts";
+import { type CommentBodyFormat, isCommentBodyFormat } from "./body.ts";
 import { replyEntries } from "./deletion.ts";
 
 /**
@@ -17,6 +18,9 @@ import { replyEntries } from "./deletion.ts";
 
 /** 一覧で出す参加者の人数の上限（アバターを重ねて並べる） */
 export const THREAD_PARTICIPANTS_SHOWN = 3;
+
+/** 一覧のカードに、元のコメントの下へ並べる直近の返信の数（利用者指示 2026-10-20「コメント欄も返信が見れるようにして欲しい」） */
+export const THREAD_LATEST_REPLIES_SHOWN = 3;
 
 export interface ThreadActivity {
   /** 最後の動き（スレッドを立てた時刻・最後の返信の時刻） */
@@ -68,6 +72,51 @@ export function deriveThreadActivity(
     replyCount: live.length,
     participantIds: [thread.authorId, ...repliers.filter((id) => id !== thread.authorId)],
   };
+}
+
+/** 一覧のカードに見せる返信 1 件（本文は返信イベントの payload のまま） */
+export interface LatestReply {
+  id: string;
+  authorId: UserId;
+  createdAt: Instant;
+  body: string;
+  bodyFormat?: CommentBodyFormat;
+  mentionIds: string[];
+  /** 添付の ID（付けた順。検証・削除済みかは呼び出し側が引く） */
+  fileIds: string[];
+}
+
+/**
+ * 直近の返信（削除されていないものの最後の `limit` 件。古い順）。一覧のカードに、元のコメントの下へ並べる。
+ * 返信の件数・参加者と同じく、削除された返信は含めない。
+ */
+export function latestReplies(
+  events: readonly CommentEvent[],
+  limit: number = THREAD_LATEST_REPLIES_SHOWN,
+): LatestReply[] {
+  const gone = new Set(
+    replyEntries(events)
+      .filter((r) => r.deleted)
+      .map((r) => r.id),
+  );
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const out: LatestReply[] = [];
+  for (const e of events) {
+    if (e.eventType !== "replied" || e.id === undefined || gone.has(e.id)) continue;
+    const p = e.payload ?? {};
+    out.push({
+      id: e.id,
+      authorId: e.actorId,
+      createdAt: e.createdAt,
+      body: typeof p.body === "string" ? p.body : "",
+      ...(isCommentBodyFormat(p.bodyFormat) ? { bodyFormat: p.bodyFormat } : {}),
+      mentionIds: strings(p.mentions),
+      fileIds: strings(p.fileIds),
+    });
+  }
+  out.sort((a, b) => a.createdAt - b.createdAt);
+  return limit > 0 ? out.slice(-limit) : [];
 }
 
 /** スレッドに持たせたやり取り（持っていなければ null） */

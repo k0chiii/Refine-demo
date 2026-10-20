@@ -125,6 +125,47 @@ describe("コメントのスレッド: 返信の件数・参加者・未読", ()
     expect((await view(reviewer, t.id)).unread).toBe(false);
   });
 
+  it("直近の返信は、削除されていない最後の 3 件を古い順に返す。返信が無ければ空。未読は他の人の新しい返信だけ", async () => {
+    const { ctx, post, reply, view } = await setup();
+    const t = await post();
+    expect((await view(creator, t.id)).latestReplies).toEqual([]);
+    const bodies = ["一", "二", "三", "四", "五"];
+    for (const [i, b] of bodies.entries()) {
+      ctx.clock.current += 1000;
+      await reply(t.id, i % 2 === 0 ? manager : creator, b);
+    }
+    const v = await view(reviewer, t.id);
+    expect(v.replyCount).toBe(5);
+    expect(v.latestReplies.map((r) => r.body)).toEqual(["三", "四", "五"]);
+    expect(v.latestReplies.map((r) => r.authorId)).toEqual([
+      manager.userId,
+      creator.userId,
+      manager.userId,
+    ]);
+    expect(v.latestReplies.every((r) => r.fileCount === 0 && r.firstFile === null)).toBe(true);
+    // 投稿者(reviewer)は読んでいない他の人の返信が未読。制作者は自分が返信した時点で読んでいるので、その後の返信だけが未読
+    expect(v.latestReplies.every((r) => r.unread)).toBe(true);
+    expect((await view(creator, t.id)).latestReplies.map((r) => r.unread)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    // 読めば未読は消える
+    ctx.clock.current += 1000;
+    await markCommentRead(ctx, reviewer, { threadId: t.id });
+    expect((await view(reviewer, t.id)).latestReplies.some((r) => r.unread)).toBe(false);
+
+    // 削除した返信は含めず、さかのぼって残りの返信が入る
+    const ids = (await ctx.threads.listEvents(t.id))
+      .filter((e) => e.eventType === "replied")
+      .map((e) => e.id!);
+    ctx.clock.current += 1000;
+    await deleteReply(ctx, creator, { threadId: t.id, replyEventId: ids[3]! });
+    const after = await view(reviewer, t.id);
+    expect(after.replyCount).toBe(4);
+    expect(after.latestReplies.map((r) => r.body)).toEqual(["二", "三", "五"]);
+  });
+
   it("やり取りを持たない古いスレッドはイベントから導く（移行しない）。自分の投稿は未読にならない", async () => {
     const { ctx, revision, view } = await setup();
     const legacy = await ctx.threads.insert({

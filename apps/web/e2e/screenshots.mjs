@@ -904,18 +904,25 @@ async function main() {
         (await panel.locator(".cth-post").count()) === 2,
       "続けての返信がまとまらない",
     );
-    // 一覧のカードの返信の件数は、返信が済んだあとに届く
+    // 一覧のカードにも、返信が済んだあとに返信の本文が届く（元のコメントの下に、古い順）
     await page.waitForFunction(
-      () =>
-        [...document.querySelectorAll(".comments .thread")]
-          .find((c) => c.textContent.includes("スレッドの確認用"))
-          ?.querySelector(".thread__replies")
-          ?.textContent.includes("2"),
+      () => {
+        const c = [...document.querySelectorAll(".comments .thread")].find((x) =>
+          x.textContent.includes("スレッドの確認用"),
+        );
+        const rows = [...(c?.querySelectorAll(".thread__reply") ?? [])];
+        return (
+          rows.length === 2 &&
+          rows[0].textContent.includes("一件目の返信です。") &&
+          rows[1].textContent.includes("続けて書いた返信です。")
+        );
+      },
       null,
       { timeout: 10_000 },
     );
     // 一覧の中で、開いているスレッドのカード（下の行まで）が見える位置にして撮る
     await card.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("78c-thread-card-replies");
     await shot("78-thread-panel");
     await closePanel();
     // 79 別の人（制作者）: 一覧のカードに未読の点 → パネルを開くと点が消え、「ここから未読」の線が引かれる
@@ -957,10 +964,13 @@ async function main() {
       (await back.locator(".thread__unread").count()) === 1,
       "返信が付いたのに未読の点が付かない",
     );
-    // 返信した人（制作者）のアバターと返信の件数・未読の点が下の行に並ぶ
+    // 返信（最新の 3 件まで）がカードに並び、制作者の返信の本文も見える
     expectTrue(
-      (await back.locator(".thread__avatars > *").count()) === 1,
-      "返信した人のアバターが下の行に並ばない",
+      (await back.locator(".thread__reply").count()) === 3 &&
+        (await back
+          .locator(".thread__reply", { hasText: "確認しました。対応します。" })
+          .count()) === 1,
+      "返信がカードに並ばない",
     );
     await back.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
     await shot("79-thread-unread-reply");
@@ -978,6 +988,12 @@ async function main() {
       (await mobileCard.locator(".thread__unread").count()) === 1,
       "スマホのカードに未読の点が付かない",
     );
+    expectTrue(
+      (await mobileCard.locator(".thread__reply").count()) === 3,
+      "スマホのカードに返信が並ばない",
+    );
+    await mobileCard.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("78d-mobile-thread-card-replies");
     await openPanel(mobileCard);
     {
       const m = await page.evaluate(() => {

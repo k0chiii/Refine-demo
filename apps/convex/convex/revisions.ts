@@ -64,6 +64,9 @@ export const get = query({
         ...threads.flatMap((t) => t.mentions ?? []),
         ...threads.flatMap((t) => reactorIds(t.reactions)),
         ...[...activity.values()].flatMap((a) => a.participantIds),
+        ...[...activity.values()].flatMap((a) =>
+          a.latestReplies.flatMap((r) => [r.authorId, ...r.mentionIds]),
+        ),
         ...assignments.map((a) => a.reviewerId),
         ...checks.flatMap((c) => [
           ...(c.assigneeId ? [c.assigneeId] : []),

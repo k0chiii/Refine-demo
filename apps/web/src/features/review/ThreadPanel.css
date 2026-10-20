@@ -243,7 +243,77 @@
 .thread--unread .thread__name {
   font-weight: 700;
 }
-/* 下の行: 返信した人・件数・最後の返信・未読の点。押すとスレッドが開く */
+/* 直近の返信（元のコメントの下。押すとスレッドが開く） */
+.thread__replylist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  margin-inline: -8px;
+  border-radius: var(--mf-shape-sm);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .thread__replylist:hover {
+    background: color-mix(in srgb, var(--mf-on-surface) 6%, transparent);
+  }
+}
+.thread__reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.thread__reply > :first-child {
+  flex: none;
+  margin-top: 1px;
+}
+.thread__reply-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.thread__reply-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.thread__reply-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--mf-type-label-large);
+}
+.thread__reply--unread .thread__reply-name {
+  font-weight: 700;
+}
+.thread__reply-time {
+  flex: none;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
+.thread__reply-main .thread__body {
+  font: var(--mf-type-body-medium);
+}
+.thread__reply-files {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.thread__reply-files .cmt-files__cell,
+.thread__reply-files .cmt-files__cell .cmt-files__tile {
+  width: 40px;
+  height: 40px;
+}
+.thread__reply-filecount {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+/* 下の行: 「ほか n 件の返信」／「返信」・未読の点。押すとスレッドが開く */
 .thread__footer {
   all: unset;
   box-sizing: border-box;
@@ -264,25 +334,9 @@
   outline: var(--mf-focus-ring);
   outline-offset: var(--mf-focus-offset);
 }
-.thread__avatars {
-  display: inline-flex;
-}
-.thread__avatars > * {
-  border-radius: var(--mf-shape-full);
-  box-shadow: 0 0 0 2px var(--mf-surface);
-}
-.thread__avatars > * + * {
-  margin-inline-start: -6px;
-}
-.thread--active .thread__avatars > * {
-  box-shadow: 0 0 0 2px var(--mf-secondary-container);
-}
 .thread__replies {
   font: var(--mf-type-label-large);
   color: var(--mf-primary);
-}
-.thread__last {
-  font: var(--mf-type-body-small);
 }
 .thread__unread {
   flex: none;

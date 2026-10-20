@@ -3,6 +3,9 @@ import {
   anchorFitsArtifact,
   assertCanPostComment,
   canSeeNotificationSubject,
+  COMMENT_UNREAD_TRACKED_SINCE,
+  type CommentBodyFormat,
+  type CommentFileView,
   type CommentThread,
   type DecisionAction,
   decideThread as decideThreadDomain,
@@ -11,6 +14,8 @@ import {
   initialThreadActivity,
   isAccepting,
   isThreadUnread,
+  type LatestReply,
+  latestReplies,
   memberTeamIds,
   plainTextOf,
   type Principal,
@@ -29,7 +34,12 @@ import {
 import type { AppContext, PersonProfile } from "../ports.ts";
 import { checkMentions, idempotent, loadAuthorizedWork, searchPeopleByText } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
-import { attachCommentFiles, checkCommentFiles, releaseCommentFiles } from "./commentFiles.ts";
+import {
+  attachCommentFiles,
+  checkCommentFiles,
+  listCommentFileViews,
+  releaseCommentFiles,
+} from "./commentFiles.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
   allMembersCanView,
@@ -290,6 +300,24 @@ export interface ThreadActivityView {
   lastActivityAt: number;
   /** 投稿者・返信した人（投稿者が先頭。一覧は投稿者を除く先頭の人を重ねて見せる） */
   participantIds: string[];
+  /** 直近の返信（削除されていないものの最後の数件。古い順）。一覧のカードで元のコメントの下に並べる */
+  latestReplies: LatestReplyView[];
+}
+
+/** 一覧のカードに並べる返信 1 件 */
+export interface LatestReplyView {
+  id: string;
+  authorId: string;
+  createdAt: number;
+  body: string;
+  bodyFormat?: CommentBodyFormat;
+  mentionIds: string[];
+  /** 添付の数 */
+  fileCount: number;
+  /** 最初の添付（検証済みで削除されていないもの。無ければ null）。一覧にはこれだけを見せる */
+  firstFile: CommentFileView | null;
+  /** 閲覧者にとって未読の返信か（スレッドが未読で、読んだ時刻より後の他の人の返信） */
+  unread: boolean;
 }
 
 /**
@@ -302,9 +330,14 @@ export async function presentThreadActivity(
   threads: readonly CommentThread[],
 ): Promise<Map<string, ThreadActivityView>> {
   const activities = new Map<string, ThreadActivity>();
+  const replies = new Map<string, LatestReply[]>();
   for (const t of threads) {
     const stored = storedThreadActivity(t);
-    activities.set(t.id, stored ?? deriveThreadActivity(t, await ctx.threads.listEvents(t.id)));
+    // 返信のあるスレッドだけイベントを読む（返信の無いスレッドは読まない。古いスレッドは導くために読む）
+    const events =
+      stored === null || stored.replyCount > 0 ? await ctx.threads.listEvents(t.id) : null;
+    activities.set(t.id, stored ?? deriveThreadActivity(t, events ?? []));
+    if (events !== null) replies.set(t.id, latestReplies(events));
   }
   // 読んだ時刻は、未読になりうるものだけ引く（自分の動き・人の返信が無い自動校正の指摘は常に既読）
   const check = threads.filter((t) => {
@@ -318,11 +351,35 @@ export async function presentThreadActivity(
   const out = new Map<string, ThreadActivityView>();
   for (const t of threads) {
     const a = activities.get(t.id)!;
+    const readAt = reads.get(t.id) ?? null;
+    const unread = isThreadUnread(t, a, principal.userId, readAt);
+    const latest: LatestReplyView[] = [];
+    for (const r of replies.get(t.id) ?? []) {
+      // 添付は最初の 1 件だけ引く（返信 1 件あたり読取 1 回。カードに見せるのは 1 枚）
+      const first = r.fileIds[0];
+      const [firstFile = null] = first ? await listCommentFileViews(ctx, [first]) : [];
+      latest.push({
+        id: r.id,
+        authorId: r.authorId,
+        createdAt: r.createdAt,
+        body: r.body,
+        ...(r.bodyFormat ? { bodyFormat: r.bodyFormat } : {}),
+        mentionIds: r.mentionIds,
+        fileCount: r.fileIds.length,
+        firstFile,
+        unread:
+          unread &&
+          r.authorId !== principal.userId &&
+          r.createdAt >= COMMENT_UNREAD_TRACKED_SINCE &&
+          (readAt === null || r.createdAt > readAt),
+      });
+    }
     out.set(t.id, {
-      unread: isThreadUnread(t, a, principal.userId, reads.get(t.id) ?? null),
+      unread,
       replyCount: a.replyCount,
       lastActivityAt: a.lastActivityAt,
       participantIds: a.participantIds.slice(0, THREAD_PARTICIPANTS_SHOWN + 1),
+      latestReplies: latest,
     });
   }
   return out;

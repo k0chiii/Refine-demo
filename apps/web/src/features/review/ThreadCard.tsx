@@ -1,4 +1,9 @@
-import { formatFigmaPlace, formatVideoSpan, type WebAnchorState } from "@mf100/domain";
+import {
+  formatFigmaPlace,
+  formatVideoSpan,
+  THREAD_LATEST_REPLIES_SHOWN,
+  type WebAnchorState,
+} from "@mf100/domain";
 import { webViewportLabel } from "@/features/annotation/webBridge";
 import { formatJstShort } from "@/lib/format";
 import { formatRelative } from "@/lib/relativeTime";
@@ -18,9 +23,10 @@ export { closedResolutions, isClosed, type Thread } from "./thread";
 
 /**
  * コメントの一覧のカード（Slack のスレッドの一覧のように、1 件を短く見せる）。
- * 投稿者・時刻・本文（3 行まで）・添付のサムネイル（最初の数枚）・状態、下に「返信 n 件」と返信した人のアバター・最後の返信の
- * 時刻・未読の点。押すとコメントを選んで紙面のピンへ移るだけで、カードは開かない。
- * 開く（返信・採否・担当・訂正・削除・リアクションなど全部）のは下の行の「返信」から、スレッドのパネル（ThreadPanel）で。
+ * 投稿者・時刻・本文（3 行まで）・添付のサムネイル（最初の数枚）・状態、その下に直近の返信（Google ドキュメントのコメントのように
+ * 最新の 3 件。アバター・名前・時刻・本文 3 行まで・添付）、返信がそれより多いときは「ほか n 件の返信」、最後に未読の点。
+ * 押すとコメントを選んで紙面のピンへ移るだけで、カードは開かない。
+ * 開く（返信・採否・担当・訂正・削除・リアクションなど全部）のは返信の欄か下の行から、スレッドのパネル（ThreadPanel）で。
  * 手早く済ませる「✓ 解決」と、紙面の位置へ移るボタンだけカードに残す。
  */
 export function ThreadCard({
@@ -60,8 +66,9 @@ export function ThreadCard({
 }) {
   const closed = isClosed(t);
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-  // 返信した人（投稿者は上の行に出ているので除く）。先頭の 3 人を重ねて並べる
-  const repliers = t.participants.filter((u) => u.id !== t.authorId).slice(0, 3);
+  // 直近の返信（古い順）。見せきれない分は「ほか n 件の返信」
+  const replies = t.latestReplies.slice(-THREAD_LATEST_REPLIES_SHOWN);
+  const hidden = Math.max(0, t.replyCount - replies.length);
   return (
     <M3eCard
       variant={active ? "elevated" : "outlined"}
@@ -149,6 +156,53 @@ export function ThreadCard({
           <CommentAttachments files={t.files} confidentiality={confidentiality} variant="thumbs" />
         ) : null}
         <ThreadMeta thread={t} placeState={placeState} />
+        {replies.length > 0 ? (
+          <div
+            className="thread__replylist"
+            role="list"
+            onClick={(e) => {
+              stop(e);
+              onOpen();
+            }}
+          >
+            {replies.map((r) => (
+              <div
+                key={r.id}
+                role="listitem"
+                className={`thread__reply ${r.unread ? "thread__reply--unread" : ""}`}
+                data-reply-id={r.id}
+              >
+                <UserAvatar seed={r.author?.email ?? r.authorId} userId={r.authorId} size={20} />
+                <div className="thread__reply-main">
+                  <div className="thread__reply-head">
+                    <span className="thread__reply-name">{r.author?.name}</span>
+                    <span className="thread__reply-time">{formatRelative(r.createdAt, now)}</span>
+                  </div>
+                  <CommentBody
+                    className="thread__body thread__body--clamp"
+                    body={r.body}
+                    format={r.bodyFormat}
+                    mentionUsers={r.mentionUsers}
+                  />
+                  {r.fileCount > 0 ? (
+                    <div className="thread__reply-files">
+                      {r.firstFile ? (
+                        <CommentAttachments
+                          files={[r.firstFile]}
+                          confidentiality={confidentiality}
+                          variant="thumbs"
+                        />
+                      ) : null}
+                      {r.fileCount > 1 ? (
+                        <span className="thread__reply-filecount">+{r.fileCount - 1}</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <button
           type="button"
           className="thread__footer"
@@ -162,20 +216,10 @@ export function ThreadCard({
             onOpen();
           }}
         >
-          {repliers.length > 0 ? (
-            <span className="thread__avatars" aria-hidden="true">
-              {repliers.map((u) => (
-                <UserAvatar key={u.id} seed={u.email ?? u.id} userId={u.id} size={20} />
-              ))}
-            </span>
-          ) : null}
-          {t.replyCount > 0 ? (
-            <span className="thread__replies">返信 {t.replyCount} 件</span>
+          {hidden > 0 ? (
+            <span className="thread__replies">ほか {hidden} 件の返信</span>
           ) : canReply ? (
             <span className="thread__replies">返信</span>
-          ) : null}
-          {t.replyCount > 0 ? (
-            <span className="thread__last">{formatRelative(t.lastActivityAt, now)}</span>
           ) : null}
           <span className="spacer" />
           {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
