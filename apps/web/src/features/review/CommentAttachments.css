@@ -149,3 +149,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 投稿欄（新規コメント・返信）で、ファイルを貼る・落とす先。ファイルを乗せている間は主色の破線で示す */
+.cmt-drop {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border-radius: var(--mf-shape-sm);
+}
+.cmt-drop--over {
+  outline: 2px dashed var(--mf-primary);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--mf-primary) 6%, transparent);
+}
+.cmt-attach {
+  color: var(--mf-on-surface-variant);
+}

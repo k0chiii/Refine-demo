@@ -6,6 +6,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { deflateSync } from "node:zlib";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -744,6 +745,69 @@ async function main() {
     );
     await shot("76-comment-markdown");
     // 後片付け: 書式のコメントを削除して件数を戻す
+    await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+    await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
+    await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
+  }
+
+  // 77 コメント・返信の添付（利用者指示 2026-10-20）: 新しいコメントに画像を添付して投稿 → カードにサムネイル。
+  // 返信にも画像を添付 → 返信にサムネイル。取り除く操作・送信中は投稿できない
+  {
+    const n0 = await page.locator(".comments .thread").count();
+    await page.locator(".comments__free").click();
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", "添付の確認用のコメントです。");
+    await page.setInputFiles(".compose-pop input[type=file]", [pngFile("shot-a.png", 1)]);
+    await page.waitForSelector(".compose-pop .cmt-pending__item");
+    // 圧縮・送信が済むと丸い進み具合が消えてサムネイルになる
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".compose-pop .cmt-pending__thumb img") &&
+        !document.querySelector(".compose-pop .cmt-pending__progress"),
+      null,
+      { timeout: 20_000 },
+    );
+    await shot("77-comment-attach-compose");
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const card = page.locator(".comments .thread", { hasText: "添付の確認用" });
+    await card.locator(".cmt-files__tile img").waitFor({ timeout: 15_000 });
+    expectTrue(
+      await card
+        .locator(".cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "コメントの添付のサムネイルが描かれない",
+    );
+    await card.locator(".thread__body").click();
+    await settle();
+    // 返信に画像を添付（本文は空でも送れる）
+    await card.locator(".thread__form .rt__content").click();
+    await card.locator(".thread__form input[type=file]").setInputFiles([pngFile("shot-b.png", 2)]);
+    await card.locator(".cmt-pending__thumb img").waitFor({ timeout: 20_000 });
+    await page.waitForFunction(
+      () => !document.querySelector(".thread__form .cmt-pending__progress"),
+    );
+    await card.locator(".thread__form m3e-button", { hasText: "返信" }).click();
+    await card.locator(".thread__replyitem .cmt-files__tile img").waitFor({ timeout: 15_000 });
+    expectTrue(
+      await card
+        .locator(".thread__replyitem .cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "返信の添付のサムネイルが描かれない",
+    );
+    await shot("77-comment-attach");
+    // 後片付け: コメントを削除して件数を戻す
     await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
     await settle();
     await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
@@ -1603,6 +1667,52 @@ const openWork = async (title) => {
 const expectTrue = (cond, msg) => {
   if (!cond) throw new Error(msg);
 };
+/** 小さな PNG を作る（添付の確認用。斜めのグラデーション。seed で色を変える） */
+const makePng = (w, h, seed) => {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (buf) => {
+    let c = 0xffffffff;
+    for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(body));
+    return Buffer.concat([len, body, sum]);
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(w, 0);
+  head.writeUInt32BE(h, 4);
+  head[8] = 8; // 8 bit
+  head[9] = 2; // RGB
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * (w * 3 + 1);
+    for (let x = 0; x < w; x++) {
+      raw[row + 1 + x * 3] = (x * 255) / w;
+      raw[row + 2 + x * 3] = (y * 255) / h;
+      raw[row + 3 + x * 3] = (seed * 70 + (x + y) * 3) % 256;
+    }
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", head),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+};
+const pngFile = (name, seed) => ({
+  name,
+  mimeType: "image/png",
+  buffer: makePng(160, 110, seed),
+});
 /**
  * 画面幅ごとの横はみ出しの測定（画面構成 v2 §3.6）: ページが画面より広くならず、切れ目の無い長い題名の行とその印が画面内に収まる。
  * 行の印は compact では題名の下（.hub-row__line--action）。測った値は標準出力に残す

@@ -11,6 +11,8 @@ import {
 } from "@mf100/domain";
 import { webViewportLabel } from "@/features/annotation/webBridge";
 import { CommentBody, plainToMarkdown } from "./CommentBody";
+import { CommentAttachments } from "./CommentAttachments";
+import { ReplyComposer } from "./ReplyComposer";
 import { RichCommentField } from "./RichCommentField";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
@@ -34,7 +36,7 @@ export type Thread = FunctionReturnType<typeof api.revisions.get>["threads"][num
 export const closedResolutions = ["rejected", "resolved", "deferred"];
 export const isClosed = (t: { resolution: string }) => closedResolutions.includes(t.resolution);
 
-type Mode = null | "reply" | "rejected" | "deferred" | "assign" | "edit";
+type Mode = null | "rejected" | "deferred" | "assign" | "edit";
 
 /** 採否の確定ボタン（動詞）と理由欄の見出し */
 const decisionAction = { rejected: "不採用にする", deferred: "次版へ持ち越す" } as const;
@@ -64,7 +66,13 @@ export function ThreadCard({
   className,
   index,
   placeState,
+  revisionId,
+  confidentiality,
 }: {
+  /** 添付の置き場の版（返信に添付するときの準備に使う） */
+  revisionId: string;
+  /** 制作物の機密区分（添付の写しを端末に残してよいかの判断） */
+  confidentiality?: "normal" | "restricted" | undefined;
   /** 紙面のピンと同じ番号（ピンの名前「コメント N」と対応させる） */
   index?: number;
   /** Web のライブ表示での再アンカーの結果（moved: 文字で見つけた、detached: 位置が外れた） */
@@ -78,7 +86,8 @@ export function ThreadCard({
   onSelect: () => void;
   onResolve: () => Promise<void>;
   onDecide: (action: "rejected" | "deferred", reason: string) => Promise<void>;
-  onReply: (body: string, mentions: string[]) => Promise<void>;
+  /** 返信する。成功したら true */
+  onReply: (body: string, mentions: string[], fileIds: string[]) => Promise<boolean | undefined>;
   onAssign: (ids: string[]) => Promise<void>;
   onEdit: (body: string) => Promise<void>;
   /** 自分のコメントの削除（t.can.delete のときだけ呼ばれる） */
@@ -90,7 +99,6 @@ export function ThreadCard({
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState("");
   const [ids, setIds] = useState<string[]>([]);
-  const [mentions, setMentions] = useState<string[]>([]);
   const closed = isClosed(t);
   const open = (m: Mode, initial = "") => {
     setMode(m);
@@ -100,13 +108,11 @@ export function ThreadCard({
   };
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
   const submit = async () => {
-    if (mode === "reply") await onReply(text, mentions);
-    else if (mode === "rejected" || mode === "deferred") await onDecide(mode, text);
+    if (mode === "rejected" || mode === "deferred") await onDecide(mode, text);
     else if (mode === "assign") await onAssign(ids);
     else if (mode === "edit") await onEdit(text);
     setMode(null);
     setText("");
-    setMentions([]);
   };
   // 訂正の入力欄に読み込む本文（Markdown）。平文のコメントは記号を打ち消して Markdown にする
   const editInitial = t.bodyFormat === "markdown" ? t.body : plainToMarkdown(t.body);
@@ -242,6 +248,9 @@ export function ThreadCard({
             format={t.bodyFormat}
             mentionUsers={t.mentionUsers}
           />
+          {t.files.length > 0 ? (
+            <CommentAttachments files={t.files} confidentiality={confidentiality} />
+          ) : null}
           {closed ||
           t.severity === "critical" ||
           t.carriedFromThreadId ||
@@ -306,61 +315,22 @@ export function ThreadCard({
             onToggle={(emoji) => toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })}
           />
           {active ? (
-            <ThreadEvents threadId={t.id} canReact={canReply} onDeleteReply={onDeleteReply} />
+            <ThreadEvents
+              threadId={t.id}
+              canReact={canReply}
+              confidentiality={confidentiality}
+              onDeleteReply={onDeleteReply}
+            />
           ) : null}
-          {/* 返信（Google ドキュメントのコメントと同じ流れ）: 開いているカードの下に M3 の outlined text field を 1 つ。
-              書き始める（フォーカスする）と「キャンセル」「返信」が出る。ラベルは欄の中（浮かぶラベル） */}
-          {active && canReply && (mode === null || mode === "reply") ? (
-            <div className="thread__form" onClick={stop}>
-              <RichCommentField
-                id={`${t.id}-reply`}
-                ariaLabel="返信"
-                placeholder="返信"
-                rows={mode === "reply" ? 3 : 1}
-                toolbar={mode === "reply"}
-                value={mode === "reply" ? text : ""}
-                onValue={(v) => {
-                  if (mode !== "reply") setMode("reply");
-                  setText(v);
-                }}
-                onMentions={setMentions}
-                onFocus={() => {
-                  if (mode !== "reply") {
-                    setMode("reply");
-                    setText("");
-                  }
-                }}
-                onEscape={() => {
-                  setMode(null);
-                  setText("");
-                  (document.activeElement as HTMLElement | null)?.blur();
-                }}
-                onSubmit={() => {
-                  if (text.trim()) void submit();
-                }}
-              />
-              {mode === "reply" ? (
-                <div className="row thread__form-actions">
-                  <span className="spacer" />
-                  <M3eButton
-                    variant="text"
-                    onClick={() => {
-                      setMode(null);
-                      setText("");
-                    }}
-                  >
-                    キャンセル
-                  </M3eButton>
-                  <M3eButton
-                    variant="filled"
-                    disabled={pending === true || !text.trim()}
-                    onClick={() => void submit()}
-                  >
-                    返信
-                  </M3eButton>
-                </div>
-              ) : null}
-            </div>
+          {/* 返信（Google ドキュメントのコメントと同じ流れ）: 開いているカードの下に入力欄を 1 つ。書き始める（フォーカスする）と
+              書式のツールバーと「キャンセル」「返信」が出る。ファイルは貼り付け・ドロップ・クリップで添付する */}
+          {active && canReply && mode === null ? (
+            <ReplyComposer
+              revisionId={revisionId}
+              id={t.id}
+              {...(pending === true ? { pending: true } : {})}
+              onSubmit={onReply}
+            />
           ) : null}
           {mode === "rejected" || mode === "deferred" || mode === "edit" ? (
             <div className="thread__form" onClick={stop}>
@@ -560,10 +530,12 @@ function ReactionRow({
 function ThreadEvents({
   threadId,
   canReact,
+  confidentiality,
   onDeleteReply,
 }: {
   threadId: string;
   canReact: boolean;
+  confidentiality: "normal" | "restricted" | undefined;
   onDeleteReply: (replyEventId: string) => Promise<void>;
 }) {
   const compact = useWindowClass() === "compact";
@@ -589,6 +561,7 @@ function ThreadEvents({
               event={e}
               threadId={threadId}
               canReact={canReact}
+              confidentiality={confidentiality}
               body={p.body ?? ""}
               bodyFormat={p.bodyFormat}
               compact={compact}
@@ -630,6 +603,7 @@ function ReplyItem({
   event: e,
   threadId,
   canReact,
+  confidentiality,
   body,
   bodyFormat,
   compact,
@@ -638,6 +612,7 @@ function ReplyItem({
   event: ThreadEvent;
   threadId: string;
   canReact: boolean;
+  confidentiality: "normal" | "restricted" | undefined;
   body: string;
   bodyFormat: "markdown" | undefined;
   compact: boolean;
@@ -665,6 +640,9 @@ function ReplyItem({
           format={bodyFormat}
           mentionUsers={e.mentionUsers}
         />
+        {e.files.length > 0 ? (
+          <CommentAttachments files={e.files} confidentiality={confidentiality} />
+        ) : null}
         <ReactionRow
           id={`rr-${e.id}`}
           reactions={e.reactions}

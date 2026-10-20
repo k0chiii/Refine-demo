@@ -568,7 +568,7 @@ export function Editor({
     setDraft(null);
     composeStore.reset();
   };
-  const doPost = useAction(async () => {
+  const doPost = useAction(async (fileIds: string[] = []) => {
     if (!data || !draft || !revisionId) return;
     const { body, mentions } = composeStore.get();
     let anchor: Anchor | undefined;
@@ -624,6 +624,7 @@ export function Editor({
       requestId,
       ...(anchor ? { anchor } : {}),
       mentions: activeMentions(body, mentions, mentionDirectory),
+      ...(fileIds.length ? { fileIds } : {}),
     });
     resetCompose();
     setRequestId(newRequestId());
@@ -635,14 +636,18 @@ export function Editor({
       ...(reason.trim() ? { reason: reason.trim() } : {}),
     });
   });
-  const doReply = useAction(async (threadId: string, b: string, ids: string[]) => {
-    await reply({
-      threadId: threadId as Id<"commentThreads">,
-      body: b,
-      bodyFormat: "markdown",
-      mentions: activeMentions(b, ids, mentionDirectory),
-    });
-  });
+  const doReply = useAction(
+    async (threadId: string, b: string, ids: string[], fileIds: string[] = []) => {
+      await reply({
+        threadId: threadId as Id<"commentThreads">,
+        body: b,
+        bodyFormat: "markdown",
+        mentions: activeMentions(b, ids, mentionDirectory),
+        ...(fileIds.length ? { fileIds } : {}),
+      });
+      return true;
+    },
+  );
   const doAssignThread = useAction(async (threadId: string, ids: string[]) => {
     await assignThread({ threadId: threadId as Id<"commentThreads">, assigneeId: ids[0] ?? null });
   });
@@ -863,11 +868,13 @@ export function Editor({
       canReply={can?.reply ?? false}
       canEdit={work?.lifecycle !== "finalized"}
       pending={busy}
+      revisionId={revisionId ?? ""}
+      confidentiality={data?.work.confidentiality}
       {...(className ? { className } : {})}
       onSelect={() => jumpTo(t, { reveal: false })}
       onResolve={() => doDecide.run(t.id, "resolved", "")}
       onDecide={(a, r) => doDecide.run(t.id, a, r)}
-      onReply={(b, ids) => doReply.run(t.id, b, ids)}
+      onReply={(b, ids, fileIds) => doReply.run(t.id, b, ids, fileIds)}
       onAssign={(ids) => doAssignThread.run(t.id, ids)}
       onEdit={(b) => doEditThread.run(t.id, b)}
       onDelete={() => doDeleteThread.run(t.id)}
@@ -921,10 +928,11 @@ export function Editor({
                   place: formatFigmaPlace({ ...draft.figma, type: "figma_node", artifactId: "" }),
                 }
               : {})}
-        onSubmit={() => void doPost.run()}
+        onSubmit={(fileIds) => void doPost.run(fileIds)}
         onCancel={resetCompose}
         pending={doPost.pending}
         kind={draftKind}
+        {...(revisionId ? { revisionId } : {})}
         {...(draft.range && text && artifact && revisionId
           ? {
               extra: (
@@ -969,10 +977,11 @@ export function Editor({
               : place.label
             : "SNS 投稿"
         }
-        onSubmit={() => void doPost.run()}
+        onSubmit={(fileIds) => void doPost.run(fileIds)}
         onCancel={resetCompose}
         pending={doPost.pending}
         kind={draftKind}
+        {...(revisionId ? { revisionId } : {})}
       />
     );
   };

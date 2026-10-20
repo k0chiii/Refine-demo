@@ -14,7 +14,10 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { MentionTextarea } from "./mentions";
+import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
+import { PendingCommentFiles } from "./PendingCommentFiles";
 import { RichCommentField, type RichCommentHandle } from "./RichCommentField";
+import { useCommentFileUploads } from "./useCommentFileUploads";
 
 /**
  * 書きかけを ComposeStore に置く投稿欄。打つたびに描き直されるのはこの部品だけで、親（Editor）は描き直されない。
@@ -62,6 +65,7 @@ export function ComposePopover({
   onSubmit,
   onCancel,
   pending,
+  revisionId,
   label = "コメント",
   style,
   extra,
@@ -76,9 +80,12 @@ export function ComposePopover({
   onChange: (v: string) => void;
   mentions: readonly string[];
   onMentions: (ids: string[]) => void;
-  onSubmit: () => void;
+  /** 投稿する。添付は検証済みになったものの ID（添付が無ければ空） */
+  onSubmit: (fileIds: string[]) => void;
   onCancel: () => void;
   pending?: boolean;
+  /** コメントを付ける版。あれば添付できる（FB は添付の仕組みが別なので、ここでは添付しない） */
+  revisionId?: string;
   label?: string;
   style?: CSSProperties;
   /** 投稿以外の操作（例: 選んだ文字を表記ルールに提案） */
@@ -96,6 +103,14 @@ export function ComposePopover({
 }) {
   const fb = kind === "feedback";
   const what = fb ? "FB" : label;
+  const uploads = useCommentFileUploads({ revisionId: revisionId ?? "", purpose: "comment" });
+  const canAttach = !fb && revisionId !== undefined;
+  // 本文が空でも添付があれば投稿できる。圧縮・送信の途中、失敗が残っているあいだは投稿させない
+  const hasContent = value.trim() !== "" || (canAttach && uploads.fileIds.length > 0);
+  const canSend = hasContent && !(canAttach && (uploads.busy || uploads.hasError));
+  const send = () => {
+    if (canSend && !pending) onSubmit(canAttach ? uploads.fileIds : []);
+  };
   const ref = useRef<HTMLTextAreaElement>(null);
   const richRef = useRef<RichCommentHandle>(null);
   const kb = useKeyboardInset(docked === true);
@@ -160,38 +175,40 @@ export function ComposePopover({
               if (value.trim()) ref.current?.blur();
               else onCancel();
             }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && value.trim()) onSubmit();
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && value.trim()) send();
           }}
         />
       ) : (
-        <RichCommentField
-          ref={richRef}
-          ariaLabel={what}
-          // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
-          placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
-          rows={docked ? 2 : 3}
-          autoFocus
-          toolbar
-          value={value}
-          onValue={onChange}
-          onMentions={onMentions}
-          // Esc は書いた文字を消さない（§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ
-          onEscape={() => {
-            if (value.trim()) richRef.current?.blur();
-            else onCancel();
-          }}
-          onSubmit={() => {
-            if (value.trim()) onSubmit();
-          }}
-        />
+        <AttachDropZone uploads={uploads} enabled={canAttach} className="compose-pop__drop">
+          <RichCommentField
+            ref={richRef}
+            ariaLabel={what}
+            // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
+            placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
+            rows={docked ? 2 : 3}
+            autoFocus
+            toolbar
+            value={value}
+            onValue={onChange}
+            onMentions={onMentions}
+            // Esc は書いた文字を消さない（§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ
+            onEscape={() => {
+              if (hasContent || uploads.items.length > 0) richRef.current?.blur();
+              else onCancel();
+            }}
+            onSubmit={send}
+          />
+          {canAttach ? <PendingCommentFiles uploads={uploads} /> : null}
+        </AttachDropZone>
       )}
       <div className="compose-pop__actions">
         <M3eIconButton aria-label="キャンセル" onClick={onCancel}>
           <M3eIcon name="close" />
         </M3eIconButton>
+        {canAttach ? <AttachFileButton uploads={uploads} /> : null}
         <span className="spacer" />
         {extra}
-        <M3eButton variant="filled" disabled={pending || !value.trim()} onClick={onSubmit}>
+        <M3eButton variant="filled" disabled={pending || !canSend} onClick={send}>
           {fb ? "FB で相談" : "投稿"}
         </M3eButton>
       </div>
