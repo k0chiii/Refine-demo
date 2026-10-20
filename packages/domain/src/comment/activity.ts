@@ -99,15 +99,24 @@ export function withThreadActivity<T extends CommentThread>(thread: T, a: Thread
 }
 
 /**
+ * 未読を数え始めた時刻（2026-10-20 0:00 JST）。これより前の動きしか無いスレッドは既読として扱う
+ * （読んだ記録が無い既存のコメントが、全員に一斉に未読と出ないように）
+ */
+export const COMMENT_UNREAD_TRACKED_SINCE: Instant = Date.UTC(2026, 9, 19, 15);
+
+/**
  * 未読か。`readAt` はその人がスレッドを最後に読んだ時刻（読んだことが無ければ null）。
  * 自分の動きは未読にしない。自動校正の指摘（origin）は、人の返信が付くまで未読にしない。
+ * `trackedSince` より前の動きしか無いものは既読（既定は数え始めの時刻）。
  */
 export function isThreadUnread(
   thread: Pick<CommentThread, "origin">,
   activity: Pick<ThreadActivity, "lastActivityAt" | "lastActivityBy" | "replyCount">,
   viewerId: UserId,
   readAt: Instant | null,
+  trackedSince: Instant = COMMENT_UNREAD_TRACKED_SINCE,
 ): boolean {
+  if (activity.lastActivityAt < trackedSince) return false;
   if (activity.lastActivityBy === viewerId) return false;
   if (thread.origin !== undefined && activity.replyCount === 0) return false;
   return readAt === null || readAt < activity.lastActivityAt;

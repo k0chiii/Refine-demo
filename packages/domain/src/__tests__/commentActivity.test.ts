@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   deriveThreadActivity,
   initialThreadActivity,
+  COMMENT_UNREAD_TRACKED_SINCE,
   isThreadUnread,
   replyRecipients,
   storedThreadActivity,
@@ -96,23 +97,30 @@ describe("未読（FB と同じ規則: 読んだ時刻が無い、または最�
   const activity = { lastActivityAt: 500, lastActivityBy: "creator", replyCount: 2 };
 
   it("読んだことが無い・読んだ後に動きがあれば未読。読んだ後に動きが無ければ既読", () => {
-    expect(isThreadUnread(thread, activity, "reviewer", null)).toBe(true);
-    expect(isThreadUnread(thread, activity, "reviewer", 499)).toBe(true);
-    expect(isThreadUnread(thread, activity, "reviewer", 500)).toBe(false);
-    expect(isThreadUnread(thread, activity, "reviewer", 900)).toBe(false);
+    expect(isThreadUnread(thread, activity, "reviewer", null, 0)).toBe(true);
+    expect(isThreadUnread(thread, activity, "reviewer", 499, 0)).toBe(true);
+    expect(isThreadUnread(thread, activity, "reviewer", 500, 0)).toBe(false);
+    expect(isThreadUnread(thread, activity, "reviewer", 900, 0)).toBe(false);
   });
 
   it("自分の動きでは未読にしない（読んだ印が無くても）。ほかの人にとっては未読", () => {
     const mine = { ...activity, lastActivityBy: "reviewer" };
-    expect(isThreadUnread(thread, mine, "reviewer", null)).toBe(false);
-    expect(isThreadUnread(thread, mine, "creator", null)).toBe(true);
+    expect(isThreadUnread(thread, mine, "reviewer", null, 0)).toBe(false);
+    expect(isThreadUnread(thread, mine, "creator", null, 0)).toBe(true);
   });
 
   it("自動校正の指摘は、人の返信が付くまで未読にしない", () => {
     const quiet = { lastActivityAt: 100, lastActivityBy: "bot:proofreader", replyCount: 0 };
-    expect(isThreadUnread(botThread, quiet, "reviewer", null)).toBe(false);
+    expect(isThreadUnread(botThread, quiet, "reviewer", null, 0)).toBe(false);
     const replied = { lastActivityAt: 200, lastActivityBy: "creator", replyCount: 1 };
-    expect(isThreadUnread(botThread, replied, "reviewer", null)).toBe(true);
+    expect(isThreadUnread(botThread, replied, "reviewer", null, 0)).toBe(true);
+  });
+
+  it("数え始めより前の動きしか無いものは既読（既定の数え始めの時刻）", () => {
+    const old = { ...activity, lastActivityAt: COMMENT_UNREAD_TRACKED_SINCE - 1 };
+    expect(isThreadUnread(thread, old, "reviewer", null)).toBe(false);
+    const fresh = { ...activity, lastActivityAt: COMMENT_UNREAD_TRACKED_SINCE + 1 };
+    expect(isThreadUnread(thread, fresh, "reviewer", null)).toBe(true);
   });
 });
 

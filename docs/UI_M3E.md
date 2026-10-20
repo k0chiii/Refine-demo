@@ -2386,6 +2386,7 @@ domain・application・Convex 統合・Hono（`apps/api`）・web の単体テ�
 - テーブル `commentReads`（`userId`・`threadId`・`readAt`。索引 `by_user_thread`）を新設（FB の `feedbackReads` と同じ）。
 - スレッドに任意の `lastActivityAt`・`lastActivityBy`・`replyCount`・`participantIds`。投稿・返信・返信の削除のたびに `deriveThreadActivity` で更新する。**持たない古いスレッドは版の画面に渡すときにイベントから導く**（移行しない・スキーマは任意項目だけ）。動きは「スレッドを立てる」と「削除されていない返信」だけ（採否・担当・訂正は、スレッドを開かずに行えるので数えない）。
 - 未読（`isThreadUnread`）: 読んだ時刻が無い、または最後の動きより前。**自分の動きでは未読にしない**（投稿・返信では読んだ印も付ける）。自動校正の指摘は人の返信が付くまで未読にしない。`revisions.get` の各スレッドに `unread`・`replyCount`・`lastActivityAt`・`participantIds`（投稿者が先頭、4 人まで）・`participants`（名前・メール）を返す。`comments.events` は自分の `readAt` も返す。
+- **数え始め**: `COMMENT_UNREAD_TRACKED_SINCE`（2026-10-20 0:00 JST）より前の動きしか無いスレッドは既読として扱う。読んだ記録が無い既存のコメントが、出した直後に全員へ一斉に未読と出ないようにするため（データの移行はしない）。
 
 ### 返信の通知（`replyToThread`）
 
