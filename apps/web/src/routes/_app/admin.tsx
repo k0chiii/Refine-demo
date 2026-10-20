@@ -3,6 +3,8 @@ import type { Id } from "@mf100/convex/dataModel";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
+import { useWindowClass } from "@/lib/useMedia";
+import { ActionSheet } from "@/ui/ActionSheet";
 import { formatJst } from "@/lib/format";
 import { lifecycleLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
@@ -14,6 +16,7 @@ import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 import { M3eActionList, M3eList, M3eListAction, M3eListItem } from "@m3e/react/list";
 import { M3eSearchBar } from "@m3e/react/search";
 import { M3eSwitch } from "@m3e/react/switch";
@@ -71,10 +74,18 @@ function Admin() {
   const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [moreSheet, setMoreSheet] = useState(false);
+  const compact = useWindowClass() === "compact";
   const toggle = useAction(async (userId: string, value: boolean) => {
     await setAdmin({ userId: userId as Id<"users">, value });
   });
   if (!me) return null;
+  const exportActions = [
+    ...(me.canCreateWorks && me.canAssignApprovers
+      ? [{ icon: "download", label: "雛形を書き出す", onSelect: downloadWorkCsvTemplate }]
+      : []),
+    { icon: "query_stats", label: "集計を書き出す", onSelect: () => setExporting(true) },
+  ];
   // 登録は works:create に加えて、校了者を決める権限（approvers:assign）も要る
   const canRegister = me.canCreateWorks && me.canAssignApprovers;
   const title = <AppBarSlot slot="title">管理</AppBarSlot>;
@@ -93,6 +104,7 @@ function Admin() {
         className="page-tabs"
         value={tab}
         onChange={setTab}
+        scroll={compact}
         items={[
           { id: "works", label: "制作物" },
           { id: "teams", label: "担当" },
@@ -103,28 +115,46 @@ function Admin() {
       />
       {tab === "works" ? (
         <section className="stack">
-          {canRegister ? (
-            <div className="row admin-works__actions">
-              <M3eButton variant="filled" onClick={() => setImporting(true)}>
-                <M3eIcon slot="icon" name="upload_file" />
-                CSV で一括登録
-              </M3eButton>
-              <M3eButton variant="outlined" onClick={() => setCreating(true)}>
-                <M3eIcon slot="icon" name="note_add" />1 件ずつ登録
-              </M3eButton>
-              <M3eButton variant="text" onClick={downloadWorkCsvTemplate}>
-                <M3eIcon slot="icon" name="download" />
-                雛形を書き出す
-              </M3eButton>
-            </div>
-          ) : null}
-          <div className="row">
-            <M3eButton variant="outlined" onClick={() => setExporting(true)}>
-              <M3eIcon slot="icon" name="query_stats" />
-              集計を書き出す
-            </M3eButton>
+          {/* 主は 1 つ（塗り）、副は 1 つ（tonal）、書き出し 2 つは more_vert にまとめる（1 行。compact の操作はボトムシート） */}
+          <div className="row admin-works__actions">
+            {canRegister ? (
+              <>
+                <M3eButton variant="filled" onClick={() => setImporting(true)}>
+                  <M3eIcon slot="icon" name="upload_file" />
+                  CSV で一括登録
+                </M3eButton>
+                <M3eButton variant="tonal" onClick={() => setCreating(true)}>
+                  <M3eIcon slot="icon" name="note_add" />1 件ずつ登録
+                </M3eButton>
+              </>
+            ) : null}
+            <M3eIconButton
+              aria-label="書き出し"
+              title="書き出し"
+              {...(compact ? { onClick: () => setMoreSheet(true) } : {})}
+            >
+              <M3eIcon name="more_vert" />
+              {compact ? null : <M3eMenuTrigger htmlFor="admin-works-more" />}
+            </M3eIconButton>
+            {compact ? (
+              <ActionSheet
+                open={moreSheet}
+                onClose={() => setMoreSheet(false)}
+                title="書き出し"
+                items={exportActions}
+              />
+            ) : (
+              <M3eMenu id="admin-works-more">
+                {exportActions.map((a) => (
+                  <M3eMenuItem key={a.label} onClick={a.onSelect}>
+                    <M3eIcon slot="icon" name={a.icon} />
+                    {a.label}
+                  </M3eMenuItem>
+                ))}
+              </M3eMenu>
+            )}
           </div>
-          <p className="muted small">
+          <p className="admin__lead">
             制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます。通常の制作物は委員なら誰でも見られるので、閲覧の権限が要るのは非公開・取扱注意の制作物だけです（関係者と担当の所属する人には自動で付きます）
           </p>
           {works === undefined ? (
@@ -209,6 +239,9 @@ function Admin() {
                         >
                           <M3eIcon name="badge" />
                         </M3eIconButton>
+                        <span className="admin__switch-label" aria-hidden="true">
+                          管理者
+                        </span>
                         <M3eSwitch
                           checked={u.isSystemAdmin}
                           disabled={u.id === me.id || toggle.pending}
@@ -233,7 +266,7 @@ function Admin() {
         <ProfilesAdmin />
       ) : (
         <section className="stack">
-          <p className="muted small">直近 100 件の操作</p>
+          <p className="admin__lead">直近 100 件の操作</p>
           {/* 記録を読むだけのリスト（M3 Lists: non-interactive）。新しい順で届く */}
           {audit === undefined ? (
             <Loading label="監査ログを読み込んでいます" />

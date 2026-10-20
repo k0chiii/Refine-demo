@@ -151,7 +151,7 @@ const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 const WORKS_ENTRY = ".works .works-table tbody tr";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
-  const input = scope.locator(".picker__search input").first();
+  const input = scope.locator(".picker__input").first();
   await input.click();
   await input.fill(name);
   // 候補は M3E autocomplete のメニュー（option ロール）に出る
@@ -179,10 +179,22 @@ const autoProofreadDone = (timeout) =>
     null,
     { timeout },
   );
-/** 添付の切替（下部ツールバーの添付ボタン → メニュー） */
+/** 添付の切替（下部ツールバーの「添付・表示」メニュー） */
 const pickArtifact = async (name) => {
-  await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
-  await page.locator("#artifact-menu m3e-menu-item:visible", { hasText: name }).first().click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="添付・表示"]').click();
+  await page
+    .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: name })
+    .first()
+    .click();
+  await settle();
+};
+/** コメントの表示（横に一覧・ピンの高さに並べる・ピンだけ）の切替（下部ツールバーの「添付・表示」メニュー） */
+const pickLayout = async (label) => {
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="添付・表示"]').click();
+  await page
+    .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: label })
+    .first()
+    .click();
   await settle();
 };
 /** ビューア上でドラッグ（範囲指定）→ その場の投稿欄に本文を入れて投稿 */
@@ -214,10 +226,18 @@ const submitRevision = async (buttonText, files, summary, beforeStart) => {
 };
 /** レール上部のメニュー（展開レールの開閉） */
 const railToggle = page.locator('m3e-nav-rail m3e-icon-button[aria-label^="メニュー"]');
-/** エディタの引き出し（コメント／版／情報）を縦ツールバーから開く */
+/**
+ * エディタの引き出し（コメント／版／情報）を開く。引き出しが開いているあいだは縦の浮遊ツールバーが隠れる
+ * （利用者決定 2026-10-20）ので、開いていれば引き出しのタブで、畳んでいれば縦のツールバーで切り替える
+ */
 const drawer = async (label) => {
-  const b = page.locator(`.ws__side-toolbar m3e-icon-button[aria-label^="${label}"]`);
-  if ((await b.getAttribute("selected")) === null) await b.click();
+  const bar = page.locator(".ws__side-toolbar");
+  if (await bar.isVisible()) {
+    await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click();
+  } else {
+    const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+    if ((await tab.getAttribute("selected")) === null) await tab.click();
+  }
   await page.waitForSelector(".drawer__body");
   await settle();
 };
@@ -591,14 +611,25 @@ async function main() {
     await page.mouse.move(700, 400);
     await settle();
   }
+  // 縦の浮遊ツールバーは右の引き出しが開いているあいだは隠れ、畳むと出る（利用者決定 2026-10-20）。出たツールバーから開き直せる
+  {
+    const bar = page.locator(".ws__side-toolbar");
+    expectTrue(!(await bar.isVisible()), "引き出しが開いているのに縦の浮遊ツールバーが出ている");
+    await page.locator(".ws__handle").focus();
+    await page.keyboard.press("Enter"); // 畳む
+    await settle();
+    expectTrue(await bar.isVisible(), "引き出しを畳んでも縦の浮遊ツールバーが出ない");
+    await drawer("コメント"); // 縦のツールバーから開き直す
+    expectTrue(!(await bar.isVisible()), "引き出しを開き直しても縦の浮遊ツールバーが隠れない");
+  }
   // 23 ピンの高さに並べる（Google ドキュメント式） / 24 ピンだけ（Figma 式）
-  await page.locator('m3e-icon-button[aria-label="ピンの高さに並べる"]').click();
+  await pickLayout("ピンの高さに並べる");
   await page.waitForSelector(".gutter .thread");
   await shot("23-layout-aligned");
-  await page.locator('m3e-icon-button[aria-label="ピンだけ"]').click();
+  await pickLayout("ピンだけ");
   await page.waitForSelector(".thread-pop .thread"); // 選択中のスレッドがピンの横に出る
   await shot("24-layout-pins");
-  await page.locator('m3e-icon-button[aria-label="横に一覧"]').click();
+  await pickLayout("横に一覧");
   await page.waitForSelector(".comments .thread");
   // 16 専門確認を完了（担当の校正者）: 引き出し「情報」
   await drawer("情報");
@@ -1070,17 +1101,34 @@ async function main() {
   await settle();
   // 27b 制作物の先頭の「制作物の状況」（§74）: 数字のカード 3 枚・状態の積み上げ棒と凡例 5 段階。数・構造だけを見る（文言は見ない）
   await go(`${BASE}/works`);
-  await page.waitForSelector(".ov .legend__item");
+  await page.waitForSelector(".ov");
+  // 「制作物の状況」は既定で閉じ、開け閉めを覚える（localStorage。監査 W-01）
+  expectTrue(
+    (await page.locator(".ov").getAttribute("open")) === null,
+    "制作物の状況が既定で閉じていない",
+  );
+  await page.locator(".ov [slot=header]").click();
+  await page.waitForSelector(".ov .legend__item", { state: "visible" });
+  expectTrue(
+    (await page.evaluate(() => localStorage.getItem("mf100.works-overview-open"))) === "1",
+    "制作物の状況を開いたことが覚えられていない",
+  );
   expectTrue(
     (await page.locator(".ov .kpis .kpi").count()) === 3,
     "状況の数字のカードが 3 枚でない",
   );
-  expectTrue((await page.locator(".ov .legend__item").count()) === 5, "状態の凡例が 5 段階でない");
+  // 凡例は 0 件の段階を出さない（棒の区間と同じ数）
+  expectTrue(
+    (await page.locator(".ov .legend__item").count()) ===
+      (await page.locator(".ov .stagebar__seg").count()),
+    "状態の凡例が棒の区間と合っていない（0 件の段階が残っている）",
+  );
   expectTrue(
     (await page.locator(".ov .stagebar__seg").count()) >= 1,
     "状態の積み上げ棒に区間がない",
   );
   await shot("27b-works-overview", ".ov");
+  await page.evaluate(() => localStorage.removeItem("mf100.works-overview-open"));
 
   // 09 採否判断（制作者）: ⋮ → 不採用（理由）
   await go(revisionUrl);

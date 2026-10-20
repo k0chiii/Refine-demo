@@ -266,7 +266,7 @@ function AppShell() {
       aria-label="作る"
       title="作る"
       className={className ?? ""}
-      {...(cls === "compact" ? { onClick: () => setFabSheet(true) } : {})}
+      {...(cls === "compact" ? { extended: true, onClick: () => setFabSheet(true) } : {})}
     >
       <M3eIcon name="add" />
       <span slot="label">作る</span>

@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from "react";
 import { M3eButton } from "@m3e/react/button";
+import { M3eButtonGroup } from "@m3e/react/button-group";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
@@ -535,24 +536,27 @@ export function VideoViewer({
                 <M3eIcon slot="icon" name="add_comment" />
                 この時点にコメント
               </M3eButton>
-              <M3eButton
-                variant="text"
-                className="vplayer__mark"
-                aria-label="範囲の始めをここにする（I）"
-                onClick={markIn}
-              >
-                <M3eIcon slot="icon" name="first_page" />
-                ここから
-              </M3eButton>
-              <M3eButton
-                variant="text"
-                className="vplayer__mark"
-                aria-label="範囲の終わりをここにする（O）"
-                onClick={markOut}
-              >
-                <M3eIcon slot="icon" name="last_page" />
-                ここまで
-              </M3eButton>
+              {/* 範囲の始めと終わりは 1 組のボタン（connected のボタングループ。監査 E-08） */}
+              <M3eButtonGroup variant="connected" size="small" aria-label="範囲">
+                <M3eButton
+                  variant="tonal"
+                  className="vplayer__mark"
+                  aria-label="範囲の始めをここにする（I）"
+                  onClick={markIn}
+                >
+                  <M3eIcon slot="icon" name="first_page" />
+                  ここから
+                </M3eButton>
+                <M3eButton
+                  variant="tonal"
+                  className="vplayer__mark"
+                  aria-label="範囲の終わりをここにする（O）"
+                  onClick={markOut}
+                >
+                  <M3eIcon slot="icon" name="last_page" />
+                  ここまで
+                </M3eButton>
+              </M3eButtonGroup>
               {draft?.marking && draft.time ? (
                 <span className="vplayer__marking" role="status">
                   {formatVideoTime(draft.time.start)} から。終わりの位置で「ここまで」（O）

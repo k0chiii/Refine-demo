@@ -1,7 +1,7 @@
 import { WORK_TAG_LENGTH_MAX, WORK_TAG_MAX, workTagOptions } from "@mf100/domain";
 import type { M3eOptionElement } from "@m3e/web/option";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { QuestionHead } from "@/ui/Field";
+import { M3eFormField } from "@m3e/react/form-field";
 import { M3eInputChip } from "@m3e/react/chips";
 import { M3eOption } from "@m3e/react/option";
 
@@ -173,113 +173,116 @@ export function TagPicker({
   };
 
   return (
-    <div ref={rootRef} className="picker q tag-picker" role="group" aria-labelledby={`${id}-label`}>
-      <QuestionHead
-        htmlFor={inputId}
-        labelId={`${id}-label`}
-        label="タグ"
-        hint="Notion のタグと同じ選択肢から選べます。ほかの語は書いて作れます"
-        hintId={`${id}-hint`}
-      />
-      {/* 欄全体が 1 つの入力に見える（チップと入力が同じ下線の中）。欄のどこを押しても入力にフォーカスして候補を開く */}
-      <div className="tag-anchor">
-        <div
-          className="tag-field"
-          data-open={listShown ? "" : undefined}
-          onPointerDown={(e) => {
-            // チップの「外す」ボタンなどは、その操作に任せる
-            if ((e.target as HTMLElement).closest("m3e-input-chip")) return;
-            if (e.target !== inputRef.current) {
-              e.preventDefault();
-              inputRef.current?.focus();
-            }
-            setOpen(true);
-          }}
-        >
-          {value.length > 0 ? (
-            <div className="tag-field__chips" role="grid" aria-label="選んだタグ">
-              {value.map((t) => (
-                <M3eInputChip
-                  key={t}
-                  variant="elevated"
-                  className={`tag-chip tag-tone-${tagTone(t)}`}
-                  removable
-                  removeLabel={`${t} を外す`}
-                  onRemove={() => remove(t)}
-                >
-                  {t}
-                </M3eInputChip>
-              ))}
-            </div>
-          ) : null}
-          <input
-            ref={inputRef}
-            id={inputId}
-            className="input tag-field__input"
-            role="combobox"
-            aria-expanded={listShown}
-            aria-controls={listId}
-            aria-autocomplete="list"
-            aria-haspopup="listbox"
-            aria-describedby={`${id}-hint`}
-            {...(listShown && activeIndex >= 0
-              ? { "aria-activedescendant": `${id}-opt-${activeIndex}` }
-              : {})}
-            autoComplete="off"
-            value={text}
-            maxLength={WORK_TAG_LENGTH_MAX}
-            placeholder={value.length === 0 ? "タグを選ぶ・書く" : ""}
-            onFocus={() => setOpen(true)}
-            onChange={(e) => {
-              setText(e.target.value);
+    <div ref={rootRef} className="picker tag-picker" role="group" aria-labelledby={`${id}-label`}>
+      <M3eFormField variant="outlined" className="field" floatLabel="always" hideSubscript="never">
+        <label slot="label" htmlFor={inputId} id={`${id}-label`}>
+          タグ
+        </label>
+        {/* 欄全体が 1 つの入力に見える（チップと入力が同じ枠の中）。欄のどこを押しても入力にフォーカスして候補を開く。候補はこの欄の下に開く */}
+        <div className="tag-anchor">
+          <div
+            className="tag-field"
+            data-open={listShown ? "" : undefined}
+            onPointerDown={(e) => {
+              // チップの「外す」ボタンなどは、その操作に任せる
+              if ((e.target as HTMLElement).closest("m3e-input-chip")) return;
+              if (e.target !== inputRef.current) {
+                e.preventDefault();
+                inputRef.current?.focus();
+              }
               setOpen(true);
             }}
-            onKeyDown={onKeyDown}
-            onBlur={(e) => {
-              // 欄の外へ出るとき: 書きかけの語は作って閉じる（押し忘れで消えない）
-              if (rootRef.current?.contains(e.relatedTarget as Node | null)) return;
-              if (typed !== "") add(typed);
-              setOpen(false);
-            }}
-          />
-        </div>
-        {open && (rows.length > 0 || full) ? (
-          <div ref={menuRef} className="tag-menu">
-            {rows.length > 0 ? (
-              <div
-                id={listId}
-                role="listbox"
-                aria-label="タグの候補"
-                // 候補を押してもフォーカスを入力欄から動かさない
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                {rows.map((row, i) => (
-                  <M3eOption
-                    key={`${row.kind}:${row.label}`}
-                    id={`${id}-opt-${i}`}
-                    value={row.label}
-                    ref={(el: M3eOptionElement | null) => {
-                      if (el) optionRefs.current.set(i, el);
-                      else optionRefs.current.delete(i);
-                    }}
-                    className="tag-menu__option"
-                    onClick={() => pick(row)}
-                    onPointerMove={() => setActive(i)}
+          >
+            {value.length > 0 ? (
+              <div className="tag-field__chips" role="grid" aria-label="選んだタグ">
+                {value.map((t) => (
+                  <M3eInputChip
+                    key={t}
+                    variant="elevated"
+                    className={`tag-chip tag-tone-${tagTone(t)}`}
+                    removable
+                    removeLabel={`${t} を外す`}
+                    onRemove={() => remove(t)}
                   >
-                    {row.kind === "create" ? (
-                      <span className="tag-menu__create">「{row.label}」を作成</span>
-                    ) : (
-                      <span className={`tag-dot tag-tone-${tagTone(row.label)}`}>{row.label}</span>
-                    )}
-                  </M3eOption>
+                    {t}
+                  </M3eInputChip>
                 ))}
               </div>
-            ) : (
-              <p className="tag-menu__note">タグは {WORK_TAG_MAX} 個までです</p>
-            )}
+            ) : null}
+            <input
+              ref={inputRef}
+              id={inputId}
+              className="input tag-field__input"
+              role="combobox"
+              aria-expanded={listShown}
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              aria-describedby={`${id}-hint`}
+              {...(listShown && activeIndex >= 0
+                ? { "aria-activedescendant": `${id}-opt-${activeIndex}` }
+                : {})}
+              autoComplete="off"
+              value={text}
+              maxLength={WORK_TAG_LENGTH_MAX}
+              placeholder={value.length === 0 ? "タグを選ぶ・書く" : ""}
+              onFocus={() => setOpen(true)}
+              onChange={(e) => {
+                setText(e.target.value);
+                setOpen(true);
+              }}
+              onKeyDown={onKeyDown}
+              onBlur={(e) => {
+                // 欄の外へ出るとき: 書きかけの語は作って閉じる（押し忘れで消えない）
+                if (rootRef.current?.contains(e.relatedTarget as Node | null)) return;
+                if (typed !== "") add(typed);
+                setOpen(false);
+              }}
+            />
           </div>
-        ) : null}
-      </div>
+          {open && (rows.length > 0 || full) ? (
+            <div ref={menuRef} className="tag-menu">
+              {rows.length > 0 ? (
+                <div
+                  id={listId}
+                  role="listbox"
+                  aria-label="タグの候補"
+                  // 候補を押してもフォーカスを入力欄から動かさない
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  {rows.map((row, i) => (
+                    <M3eOption
+                      key={`${row.kind}:${row.label}`}
+                      id={`${id}-opt-${i}`}
+                      value={row.label}
+                      ref={(el: M3eOptionElement | null) => {
+                        if (el) optionRefs.current.set(i, el);
+                        else optionRefs.current.delete(i);
+                      }}
+                      className="tag-menu__option"
+                      onClick={() => pick(row)}
+                      onPointerMove={() => setActive(i)}
+                    >
+                      {row.kind === "create" ? (
+                        <span className="tag-menu__create">「{row.label}」を作成</span>
+                      ) : (
+                        <span className={`tag-dot tag-tone-${tagTone(row.label)}`}>
+                          {row.label}
+                        </span>
+                      )}
+                    </M3eOption>
+                  ))}
+                </div>
+              ) : (
+                <p className="tag-menu__note">タグは {WORK_TAG_MAX} 個までです</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+        <span slot="hint" id={`${id}-hint`}>
+          Notion のタグと同じ選択肢から選べます。ほかの語は書いて作れます
+        </span>
+      </M3eFormField>
       <span className="sr-only" role="status" aria-live="polite">
         {announce}
       </span>

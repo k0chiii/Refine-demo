@@ -115,6 +115,8 @@ import { Field, TextArea } from "@/ui/Field";
 import { StatusText } from "@/ui/Chip";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
+import { M3eButtonGroup } from "@m3e/react/button-group";
+import { M3eDivider } from "@m3e/react/divider";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -1683,13 +1685,13 @@ export function Editor({
         <AppBarSlot slot="subtitle">
           {revision && work && !initial ? (
             <>
-              {revision.label}・
+              {revision.label} ·{" "}
               {open
-                ? `受付中・${remaining(revision.deadlineAt, now)}`
+                ? `受付中 · ${remaining(revision.deadlineAt, now)}`
                 : revision.reviewClosedReason
                   ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
-              {work.finalRevisionId === revision.id ? "・校了版" : ""}
+              {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
           ) : (
             "\u00A0"
@@ -1809,65 +1811,80 @@ export function Editor({
                 <div className="ws__toolbar-items" tabIndex={0}>
                   {isPdf ? (
                     <>
-                      {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
-                      {compact ? null : (
-                        <M3eIconButton
-                          aria-label="前のページ"
-                          disabled={page <= 1}
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        >
-                          <M3eIcon name="chevron_left" />
-                        </M3eIconButton>
-                      )}
-                      {/* 狭い画面はページの位置をスクロールで見るので省き、引き出しのボタンに場所を譲る */}
+                      {/* ページ送りは connected のボタングループ（前・次）。数値はその左（M3 Button groups。監査 E-03）。
+                          狭い画面はページの位置をスクロールで見るので数値を省き、引き出しのボタンに場所を譲る */}
                       {mobile ? null : (
                         <span className="ws__toolbar-text">
                           {pageCount ? `${page} / ${pageCount}` : "…"}
                         </span>
                       )}
+                      {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
                       {compact ? null : (
-                        <M3eIconButton
-                          aria-label="次のページ"
-                          disabled={page >= pageCount}
-                          onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                        >
-                          <M3eIcon name="chevron_right" />
-                        </M3eIconButton>
+                        <M3eButtonGroup variant="connected" size="small" aria-label="ページ送り">
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="前のページ"
+                            disabled={page <= 1}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          >
+                            <M3eIcon name="chevron_left" />
+                          </M3eIconButton>
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="次のページ"
+                            disabled={page >= pageCount}
+                            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                          >
+                            <M3eIcon name="chevron_right" />
+                          </M3eIconButton>
+                        </M3eButtonGroup>
                       )}
                     </>
                   ) : null}
                   {isPdf || isImage || artifact.type === "document" ? (
                     <>
-                      {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる） */}
-                      {mobile ? null : (
-                        <M3eIconButton
-                          aria-label="縮小"
-                          disabled={atMinZoom}
-                          onClick={() => zoomStep(-1)}
+                      {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる）。
+                          広い画面は − 数値 ＋ を 1 つの connected のボタングループにする（M3 Button groups。監査 E-03） */}
+                      {mobile ? (
+                        <M3eButton
+                          variant="text"
+                          className="ws__toolbar-text ws__zoom"
+                          aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと拡大・縮小）`}
                         >
-                          <M3eIcon name="zoom_out" />
-                        </M3eIconButton>
-                      )}
-                      {/* 実寸比の数値。広い画面は押すと幅に合わせた大きさ（左右の余白が同じ）に戻す。
-                          狭い画面は − ＋ を置かないので、押すと「拡大／縮小／幅に合わせる」のメニュー
-                          （ピンチだけに頼らない。M3 Gestures・WCAG 2.5.1。§35 I-15。利用者決定 2026-10-15） */}
-                      <M3eButton
-                        variant="text"
-                        className="ws__toolbar-text ws__zoom"
-                        aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（${mobile ? "押すと拡大・縮小" : "押すと幅に合わせる"}）`}
-                        {...(mobile ? {} : { onClick: () => setScale(1), title: "幅に合わせる" })}
-                      >
-                        {zoom ? `${Math.round(zoom * 100)}%` : "…"}
-                        {mobile ? <M3eMenuTrigger htmlFor="zoom-menu" /> : null}
-                      </M3eButton>
-                      {mobile ? null : (
-                        <M3eIconButton
-                          aria-label="拡大"
-                          disabled={atMaxZoom}
-                          onClick={() => zoomStep(1)}
-                        >
-                          <M3eIcon name="zoom_in" />
-                        </M3eIconButton>
+                          {zoom ? `${Math.round(zoom * 100)}%` : "…"}
+                          <M3eMenuTrigger htmlFor="zoom-menu" />
+                        </M3eButton>
+                      ) : (
+                        <M3eButtonGroup variant="connected" size="small" aria-label="拡大・縮小">
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="縮小"
+                            disabled={atMinZoom}
+                            onClick={() => zoomStep(-1)}
+                          >
+                            <M3eIcon name="zoom_out" />
+                          </M3eIconButton>
+                          {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す。
+                              狭い画面は − ＋ を置かないので、押すと「拡大／縮小／幅に合わせる」のメニュー
+                              （ピンチだけに頼らない。M3 Gestures・WCAG 2.5.1。§35 I-15。利用者決定 2026-10-15） */}
+                          <M3eButton
+                            variant="tonal"
+                            className="ws__zoom"
+                            aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと幅に合わせる）`}
+                            onClick={() => setScale(1)}
+                            title="幅に合わせる"
+                          >
+                            {zoom ? `${Math.round(zoom * 100)}%` : "…"}
+                          </M3eButton>
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="拡大"
+                            disabled={atMaxZoom}
+                            onClick={() => zoomStep(1)}
+                          >
+                            <M3eIcon name="zoom_in" />
+                          </M3eIconButton>
+                        </M3eButtonGroup>
                       )}
                     </>
                   ) : null}
@@ -1943,7 +1960,7 @@ export function Editor({
                       {sheetButtons}
                     </>
                   ) : null}
-                  {switchable.length > 1 ? (
+                  {mobile && switchable.length > 1 ? (
                     <M3eIconButton
                       aria-label="添付を切り替え"
                       {...(compact ? { onClick: () => setArtifactSheet(true) } : {})}
@@ -1952,23 +1969,19 @@ export function Editor({
                       {compact ? null : <M3eMenuTrigger htmlFor="artifact-menu" />}
                     </M3eIconButton>
                   ) : null}
+                  {/* 添付の切り替えとコメントの表示（横に一覧・ピンの高さ・ピンだけ）は、たまにしか使わないので 1 つのメニューにまとめる
+                      （ツールバーのボタンを減らす。監査 E-03） */}
                   {!mobile ? (
                     <>
                       <span className="ws__toolbar-sep" />
-                      {layouts.map((l) => (
-                        <M3eIconButton
-                          key={l.id}
-                          aria-label={l.label}
-                          toggle
-                          selected={layout === l.id}
-                          onClick={() => setLayout(l.id)}
-                        >
-                          <M3eIcon
-                            name={l.icon}
-                            className={layout === l.id ? "icon--filled" : ""}
-                          />
-                        </M3eIconButton>
-                      ))}
+                      <M3eIconButton
+                        className="ws__more"
+                        aria-label="添付・表示"
+                        title="添付・表示"
+                      >
+                        <M3eIcon name="more_vert" />
+                        <M3eMenuTrigger htmlFor="viewer-more-menu" />
+                      </M3eIconButton>
                     </>
                   ) : null}
                 </div>
@@ -2015,7 +2028,49 @@ export function Editor({
                 </M3eMenuItem>
               </M3eMenu>
             ) : null}
-            {switchable.length > 1 && !compact ? (
+            {!mobile ? (
+              <M3eMenu id="viewer-more-menu" positionY="above">
+                {switchable.length > 1 ? (
+                  <>
+                    <M3eMenuItemGroup aria-label="添付">
+                      {switchable.map((a) => (
+                        <M3eMenuItemRadio
+                          key={a.id}
+                          checked={a.id === artifactId}
+                          onClick={() => {
+                            setArtifactId(a.id);
+                            setPage(1);
+                            resetCompose();
+                          }}
+                        >
+                          <M3eIcon slot="icon" name="draft" />
+                          {a.role === "external"
+                            ? a.externalUrl && isFigmaUrl(a.externalUrl)
+                              ? "Figma: "
+                              : "外部: "
+                            : ""}
+                          {a.fileName}
+                        </M3eMenuItemRadio>
+                      ))}
+                    </M3eMenuItemGroup>
+                    <M3eDivider />
+                  </>
+                ) : null}
+                <M3eMenuItemGroup aria-label="コメントの表示">
+                  {layouts.map((l) => (
+                    <M3eMenuItemRadio
+                      key={l.id}
+                      checked={layout === l.id}
+                      onClick={() => setLayout(l.id)}
+                    >
+                      <M3eIcon slot="icon" name={l.icon} />
+                      {l.label}
+                    </M3eMenuItemRadio>
+                  ))}
+                </M3eMenuItemGroup>
+              </M3eMenu>
+            ) : null}
+            {switchable.length > 1 && mobile && !compact ? (
               <M3eMenu id="artifact-menu" positionY="above">
                 {switchable.map((a) => (
                   <M3eMenuItem
@@ -2038,10 +2093,12 @@ export function Editor({
               </M3eMenu>
             ) : null}
             {!mobile ? (
-              /* ペインの操作は縦の浮遊ツールバー（レールの反対側）。Scaffold の trailing rail 領域 */
+              /* ペインの操作は縦の浮遊ツールバー（レールの反対側。Scaffold の trailing rail 領域）。
+                 右の引き出しが開いているあいだは隠す（引き出しのタブで切り替えられる）。畳んだときだけ出して、開き直す入口にする
+                 （利用者決定 2026-10-20「右の欄が表示されてない時はフローティングバー出したい。表示されてる時は消して良い」） */
               <M3eToolbar
                 vertical
-                className="ws__side-toolbar"
+                className={`ws__side-toolbar ${desktopDrawer ? "ws__side-toolbar--hidden" : ""}`}
                 shape="rounded"
                 elevated
                 aria-label="引き出しの操作"

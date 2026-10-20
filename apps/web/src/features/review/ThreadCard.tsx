@@ -71,7 +71,7 @@ export function ThreadCard({
   const hidden = Math.max(0, t.replyCount - replies.length);
   return (
     <M3eCard
-      variant={active ? "elevated" : "outlined"}
+      variant="outlined"
       className={`thread thread--compact ${active ? "thread--active" : ""} ${closed ? "thread--closed" : ""} ${t.unread ? "thread--unread" : ""} ${className ?? ""}`}
       aria-label={`コメント${index ? ` ${index}` : ""} ${t.author?.name ?? ""}`}
       data-thread-id={t.id}

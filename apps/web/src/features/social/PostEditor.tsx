@@ -78,6 +78,13 @@ const SAVE_DELAY = 1500;
  * - 本文は入力しながら表記の検査をする（端末の中で行い、外部に送らない）
  * - 実際の投稿・予約投稿はしない
  */
+/** 形式の選択のアイコン（フィード・カルーセル・ストーリーズ） */
+const formatIcon: Partial<Record<SocialFormat, string>> = {
+  feed: "crop_square",
+  carousel: "view_carousel",
+  story: "web_stories",
+};
+
 export function PostEditor({ workId }: { workId: string }) {
   const workData = useQuery(api.works.get, { workId });
   const docData = useQuery(api.documents.get, { workId });
@@ -449,7 +456,8 @@ function PostSurface({
           </div>
         </Card>
       )}
-      <Card title="本文">
+      {/* 見出しは付けない（中の欄のラベルと同じことを 2 度書かない。監査 S-01） */}
+      <Card ariaLabel="本文">
         <div className="stack">
           <Field label="投稿する文章（ハッシュタグ・URL を含む）" hint={count}>
             <TextArea
@@ -503,6 +511,7 @@ function PostSurface({
             onChange={(f) => update({ format: f })}
             choices={socialFormats.instagram.map((f) => ({
               value: f,
+              icon: formatIcon[f] ?? "crop_square",
               // 狭い画面では「（1 枚）」などの補足を外す（3 つ並べると画面からはみ出していた）
               label: compact ? socialFormatLabels[f].replace(/（.*）$/, "") : socialFormatLabels[f],
             }))}

@@ -1,6 +1,8 @@
 import {
   Children,
+  cloneElement,
   createContext,
+  Fragment,
   isValidElement,
   useContext,
   useId,
@@ -22,44 +24,20 @@ import { M3eSelect } from "@m3e/react/select";
  * フォーム部品。入力そのものは native の input / textarea を使う（日本語 IME・キーボード操作・ブラウザ標準の検証を優先: §4 デザイン）。
  * 選択は m3e-select + m3e-option、真偽は m3e-checkbox。
  *
- * 見た目は Google フォームの「質問」に合わせる（利用者指示 2026-10-15「入力欄や editor in card が多く見える」）:
- * 質問文（ラベル）を上に普通の文字で置き、説明（hint）をその下に、入力は枠のない下線だけ（M3E form-field の filled を
- * 背景なし・角なしにしたもの）。枠の中に枠が並ばないようにする。
+ * 見た目は M3E の outlined form-field（枠付き・浮くラベル）。Google フォーム風の下線だけの入力（docs §30）は、
+ * 利用者指示 2026-10-20「入力欄を M3E の枠付きに」で取りやめた（DECISIONS）。
+ * ラベルは `slot="label"`、説明は `slot="hint"`、エラーは `slot="error"`。必須の印は M3E が入力の `required` から出す。
  *
  * `Field` が `useId` で生成した id を子の入力に渡す（label[for] と対応。説明は aria-describedby）。
  */
 const FieldContext = createContext<{ id: string; labelId: string; hintId?: string } | null>(null);
 
-/** 質問文と説明（Field・DateField・UserPicker で共通） */
-export function QuestionHead({
-  htmlFor,
-  labelId,
-  label,
-  required,
-  hint,
-  hintId,
-}: {
-  htmlFor: string;
-  labelId: string;
-  label: ReactNode;
-  required?: boolean | undefined;
-  hint?: string | undefined;
-  hintId?: string | undefined;
-}) {
-  return (
-    <>
-      <label className="q__title" htmlFor={htmlFor} id={labelId}>
-        {label}
-        {required ? <span className="field__required"> *</span> : null}
-      </label>
-      {hint ? (
-        <p className="q__help" id={hintId}>
-          {hint}
-        </p>
-      ) : null}
-    </>
-  );
-}
+/**
+ * M3E form-field の subscript の出し方: 説明があれば常に出す / 無ければ畳む（エラーが出たときだけ現れる）。
+ * （auto は「フォーカス中だけ」出る。説明は読み返せるよう常に出す）
+ */
+export const subscriptProps = (hasHint: boolean, error: boolean) =>
+  error ? { error: true } : { hideSubscript: hasHint ? ("never" as const) : ("always" as const) };
 
 export function Field({
   label,
@@ -74,34 +52,38 @@ export function Field({
   /** 指定するとフィールドをエラー表示にし、subscript にこの文言を出す */
   error?: string;
   children: ReactNode;
+  /** 入力側の `required` が必須の印（M3E が描く）の元。ここで指定すると入力にも `required` を足す */
   required?: boolean;
   className?: string;
 }) {
   const id = useId();
   const labelId = `${id}-label`;
   const hintId = `${id}-hint`;
+  const control =
+    required &&
+    isValidElement<{ required?: boolean }>(children) &&
+    children.type !== Fragment &&
+    children.props.required !== true
+      ? cloneElement(children, { required: true })
+      : children;
   return (
     <FieldContext.Provider value={{ id, labelId, ...(hint ? { hintId } : {}) }}>
-      <div className={`q ${className ?? ""}`}>
-        <QuestionHead
-          htmlFor={id}
-          labelId={labelId}
-          label={label}
-          required={required}
-          hint={hint}
-          hintId={hintId}
-        />
-        <M3eFormField
-          variant="filled"
-          className="field q__field"
-          {...(error ? { error: true } : { hideSubscript: "always" })}
-          // 必須の印は質問文の赤い「*」だけ（M3E の印と二重にしない）
-          hideRequiredMarker
-        >
-          {children}
-          {error ? <span slot="error">{error}</span> : null}
-        </M3eFormField>
-      </div>
+      <M3eFormField
+        variant="outlined"
+        className={`field ${className ?? ""}`}
+        {...subscriptProps(Boolean(hint), Boolean(error))}
+      >
+        <label slot="label" htmlFor={id} id={labelId}>
+          {label}
+        </label>
+        {control}
+        {hint ? (
+          <span slot="hint" id={hintId}>
+            {hint}
+          </span>
+        ) : null}
+        {error ? <span slot="error">{error}</span> : null}
+      </M3eFormField>
     </FieldContext.Provider>
   );
 }

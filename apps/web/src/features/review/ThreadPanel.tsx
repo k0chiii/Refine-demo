@@ -595,7 +595,10 @@ function ReactionRow({
   if (reactions.length === 0 && !canReact) return null;
   const menuId = `${id}-menu`;
   return (
-    <div className={`thread__reactions ${className ?? ""}`}>
+    // 付いたものが無いときは「付ける」ボタンだけ。1 行を取らず、投稿の右上に置く（監査 C-02）
+    <div
+      className={`thread__reactions ${reactions.length === 0 ? "thread__reactions--solo" : ""} ${className ?? ""}`}
+    >
       <ReactionChips
         reactions={reactions}
         idPrefix={`${id}-chip`}

@@ -230,6 +230,8 @@ function useFitInside(
       for (const t of document.querySelectorAll<HTMLElement>(".ws__toolbar, .ws__side-toolbar")) {
         const tr = t.getBoundingClientRect();
         if (tr.width === 0 || tr.height === 0) continue;
+        // 引き出しが開いているあいだ隠している縦のツールバーは、よけなくてよい
+        if (getComputedStyle(t).visibility === "hidden") continue;
         const overlapsV = tr.top < base.bottom && tr.bottom > base.top;
         const overlapsH = tr.left < base.right && tr.right > base.left;
         if (tr.height > tr.width && tr.left > mid.x && overlapsV)

@@ -4,13 +4,13 @@ import { M3eHeading } from "@m3e/react/heading";
 
 /**
  * 情報カード（M3E card）。見出しは title-medium、本文は content slot（余白あり）。
- * variant: filled（既定・surface-container-highest 系）/ outlined / elevated。
+ * variant: filled（既定・surface-container-low。カードの方言は 1 つ）/ outlined（選べるカードだけ）/ elevated。
  */
 export function Card({
   title,
   actions,
   children,
-  variant = "outlined",
+  variant = "filled",
   className,
   ariaLabel,
   style,

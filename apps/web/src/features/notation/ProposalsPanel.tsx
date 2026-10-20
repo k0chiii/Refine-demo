@@ -94,7 +94,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
       ) : (
         <div className="proposal-list">
           {list.map((p) => (
-            <M3eCard key={p.id} variant="outlined" className="proposal">
+            <M3eCard key={p.id} variant="filled" className="proposal">
               <div slot="header" className="proposal__head">
                 {p.canDecide ? (
                   <Checkbox
@@ -156,7 +156,7 @@ export function ProposalsPanel({ book }: { book: Book }) {
                     編集して承認
                   </M3eButton>
                   <M3eButton
-                    variant="tonal"
+                    variant="filled"
                     disabled={one.pending || (p.kind === "report" && p.correct.length === 0)}
                     onClick={() => void one.run(p.id, "approve")}
                   >

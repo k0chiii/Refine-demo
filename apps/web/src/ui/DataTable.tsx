@@ -16,6 +16,7 @@ export function DataTable({
   lines,
   dense,
   fixed,
+  flush,
   footer,
   children,
 }: {
@@ -27,13 +28,15 @@ export function DataTable({
   dense?: boolean;
   /** 列の幅を固定する（`<th style={{ width }}>`。幅の無い列は残りを等分する） */
   fixed?: boolean;
+  /** パネルの中に置く表: 外枠・面・角を持たない（見出しは下の線だけ） */
+  flush?: boolean;
   /** 表の下の帯（ページ送りなど） */
   footer?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div
-      className={`mf-table ${lines === 2 ? "mf-table--lines2" : ""} ${dense ? "mf-table--dense" : ""} ${fixed ? "mf-table--fixed" : ""} ${className}`}
+      className={`mf-table ${lines === 2 ? "mf-table--lines2" : ""} ${dense ? "mf-table--dense" : ""} ${fixed ? "mf-table--fixed" : ""} ${flush ? "mf-table--flush" : ""} ${className}`}
     >
       <div className="mf-table__scroll">
         <table className="mf-table__table" aria-label={label}>

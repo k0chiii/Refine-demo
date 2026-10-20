@@ -233,7 +233,21 @@ body {
   padding-top: env(safe-area-inset-top, 0px);
   /* 左のセーフエリアは、レールがある幅（600 以上）ではレールが受け持つ（§35 L-06） */
   padding-inline: 0 env(safe-area-inset-right, 0px);
-  background-color: var(--m3e-app-bar-container-color, var(--mf-surface));
+  /* バーの色は host に塗り、スクロールしたら surface → surface-container へ（本文との境の線の代わり。監査 G-12） */
+  --m3e-app-bar-container-color: transparent;
+  background-color: var(--mf-surface);
+}
+@supports (animation-timeline: scroll()) {
+  .shell__appbar {
+    animation: mf-appbar-edge linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 32px;
+  }
+}
+@keyframes mf-appbar-edge {
+  to {
+    background-color: var(--mf-surface-container);
+  }
 }
 @media (max-width: 599px) {
   .shell__appbar {
@@ -521,15 +535,27 @@ m3e-dialog [slot="actions"] {
 
 /* ---------- カード（m3e-card） */
 /*
- * カード（Google フォームのカードに合わせる。利用者指示 2026-10-15）: 白地・1px の枠・角 8px・内側の余白 24px。
- * 実測（docs.google.com/forms）: 背景 #fff、枠 1px #dadada、角 8px、padding 24px、カードの間 12px
+ * カードの方言は 1 つ（監査 G-03）: filled（surface-container-low）・角 16・内側 16（medium 以上は 24）。
+ * 枠線の outlined は「選べるカード」（コメントのスレッドなど）だけ。
+ * 角の尺度: ペイン・カード 16 / 中の表・入力・サムネイル 12（入力は M3 の 4）/ ボタン・チップ full / ダイアログ 28 / 紙面 2（--mf-shape-paper）
  */
-.card {
-  --m3e-card-shape: 8px;
-  --m3e-card-padding: 24px;
-  --m3e-outlined-card-container-color: var(--mf-surface-container-lowest);
+.card,
+.proposal {
+  --m3e-card-shape: var(--mf-shape-lg);
+  --m3e-card-padding: 16px;
+  --m3e-filled-card-container-color: var(--mf-surface-container-low);
+  --m3e-outlined-card-container-color: var(--mf-surface-container-low);
   --m3e-outlined-card-outline-color: var(--mf-outline-variant);
   display: block;
+}
+@media (min-width: 600px) {
+  .card,
+  .proposal {
+    --m3e-card-padding: 24px;
+  }
+}
+.card + .card {
+  margin-block-start: 16px;
 }
 .card__header {
   display: flex;
@@ -547,11 +573,14 @@ m3e-dialog [slot="actions"] {
 .card__header + .card__content {
   padding-top: 8px;
 }
-/* フォームの画面（Google フォーム風）: カードを 12px 間隔で縦に並べる（ヘッダーの色帯はやりすぎなので付けない） */
+/* フォームの画面: カードを 16px 間隔で縦に並べる（ヘッダーの色帯はやりすぎなので付けない） */
 .gform {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+.gform > .card + .card {
+  margin-block-start: 0;
 }
 .gform .card__content {
   gap: 24px;
@@ -603,37 +632,24 @@ m3e-dialog [slot="actions"] {
   width: 100%;
   --m3e-form-field-width: 100%;
 }
-.field__required {
-  color: var(--mf-error);
-}
 /*
- * 質問（Google フォーム風。利用者指示 2026-10-15）: 質問文を上に普通の文字で、説明をその下に、入力は下線だけ。
- * 実測（docs.google.com/forms の回答画面）: 質問文 16/24・#1f1f1f、説明 14/20 の補足色、回答欄は下線 1px、選択中は 2px のテーマ色。
- * 入力の文字は iOS の自動拡大を避けるため 16px のまま（Google フォームは 14px）
+ * 入力欄は M3E の outlined form-field（枠付き・浮くラベル。利用者指示 2026-10-20「入力欄を M3E の枠付きに」。docs/DECISIONS）。
+ * 角は 4px（M3 の text field）。必須の印・説明・エラーは M3E の slot が出す。
  */
-.q {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.field {
+  --m3e-outlined-form-field-container-shape: var(--mf-shape-xs);
 }
-.q__title {
-  font: var(--mf-type-body-large);
-  color: var(--mf-on-surface);
-}
-.q__help {
-  margin: 4px 0 0;
-  font: var(--mf-type-body-medium);
+/* 日付欄の下の「確定する日時」（form-field の subscript と同じ字・インデント） */
+.field__summary {
+  margin: 4px 16px 0;
+  font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
-/* M3E の filled を、背景なし・角なしにして下線（active indicator）だけを残す */
-.q__field {
-  /* filled は浮くラベルの分だけ上を空けているので、質問文との間を少し詰める */
-  margin-top: -6px;
-  --m3e-form-field-disabled-container-opacity: 0;
-  --m3e-form-field-container-color: transparent;
-  --m3e-form-field-hover-container-color: transparent;
-  --m3e-form-field-hover-container-opacity: 0;
-  --m3e-form-field-container-shape: 0;
+.date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 .field__hint,
 .field__label {
@@ -746,6 +762,8 @@ m3e-dialog [slot="actions"] {
 }
 .search {
   min-width: min(360px, 100%);
+  /* 検索バーは広げすぎない（監査 G-15） */
+  max-width: 560px;
 }
 .search input {
   font: var(--mf-type-body-large);
@@ -781,13 +799,22 @@ m3e-dialog [slot="actions"] {
   flex: none;
   font-size: 20px;
 }
+/* 空の表示は 1 つ: 48 のアイコン（primary 40%）・title-medium の見出し・body-medium の補足（監査 L-03） */
 .empty {
   padding: 48px 24px;
   text-align: center;
   color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-medium);
   display: grid;
   justify-items: center;
   gap: 8px;
+}
+.empty > m3e-icon {
+  font-size: 48px;
+  color: color-mix(in srgb, var(--mf-primary) 40%, transparent);
+}
+.empty > .title-medium {
+  color: var(--mf-on-surface);
 }
 /* 読み込み中（ui/Loading.tsx）: M3 Expressive Loading indicator を区画の中央に。
    ごく短い読み込みで点滅しないよう 150ms 待って現れる（キャッシュ済みのデモでは見えないことが多い） */
@@ -840,7 +867,19 @@ m3e-dialog [slot="actions"] {
 .dialog-body {
   display: grid;
   gap: 16px;
-  min-width: min(520px, 90vw);
+  /* 基本のダイアログの中身の幅は 560 − 余白 24×2 = 512（520 だと右が 8px はみ出し、枠付きの入力欄の右の余白が左と合わない） */
+  min-width: min(512px, 90vw);
+  /* 先頭の入力欄の浮くラベル（枠の上辺にまたがる）が、本文のスクロール境界で切れないように */
+  padding-top: 8px;
+}
+/* ダイアログの説明の段落は body-medium（14）で、1 行を 60 字ほどに収める（監査 D-03） */
+.dialog-body p.small {
+  font: var(--mf-type-body-medium);
+  max-width: 60ch;
+}
+/* ダイアログの高さ: 長いフォームは 720 まで・画面の 90% まで（本文だけがスクロールする。監査 D-02。compact の全画面は .dialog--full が上書き） */
+m3e-dialog {
+  --m3e-dialog-max-height: min(720px, 90dvh);
 }
 /* 版提出: 広い画面はダイアログ、狭い画面は全画面 */
 .dialog--full {
@@ -880,16 +919,12 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- アップロード項目（版提出） */
-.upload-item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
 .upload-item__bar {
-  grid-column: 1 / -1;
+  display: block;
+  margin-block-start: 4px;
+}
+.upload-item__error {
+  color: var(--mf-error);
 }
 .upload-item__state--verified {
   color: var(--mf-success);
@@ -915,6 +950,10 @@ m3e-dialog [slot="actions"] {
 .signin__card .card__content {
   gap: 24px;
   padding: 32px 24px 24px;
+}
+/* 折りたたみの中の先頭の入力欄のラベルが切れないように */
+.signin__card .stack {
+  padding-top: 8px;
 }
 .signin__brand {
   display: flex;
@@ -942,13 +981,27 @@ m3e-dialog [slot="actions"] {
   display: grid;
   gap: 8px;
 }
-.picker__chips {
+/* 担当者・タグの欄: 枠の中にチップと検索の入力が並ぶ（折り返す） */
+.picker__inner {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  min-height: 56px;
+  padding: 8px 0;
+  min-width: 0;
 }
-.picker__search {
-  position: relative;
+.picker__chips {
+  display: contents;
+}
+.picker__input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  width: auto;
+  padding: 4px 0;
+}
+.picker__input::placeholder {
+  color: var(--mf-on-surface-variant);
 }
 
 /* ---------- 専門確認・持越・通知（v1） */
@@ -1081,6 +1134,17 @@ m3e-dialog [slot="actions"] {
 .nav-icon .badge {
   inset-inline-start: 12px; /* RTL では左上に鏡映（Bidirectionality › Badges） */
   top: -2px;
+  /* 赤は通知のベルだけ。校正のやること件数は primary（選択中の secondary-container の上でも見える。監査 L-04） */
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+}
+/* 展開レールはアイコンの右にラベルが並ぶ。ラベルとの間を 12 に広げ、バッジはアイコンの角に寄せてラベルに重ならないようにする（監査 G-11） */
+.shell__rail:not(.shell__rail--collapsed) {
+  --m3e-nav-item-spacing: 12px;
+}
+.shell__rail:not(.shell__rail--collapsed) .nav-icon .badge {
+  inset-inline-start: 14px;
+  top: -6px;
 }
 /* アプリバーのベル: ボタン（48 のタッチ領域、アイコンは 12,12 から 24）の外にバッジを置く */
 .bell {
@@ -1125,8 +1189,14 @@ m3e-dialog [slot="actions"] {
 #account-menu {
   --m3e-menu-container-max-width: 360px;
 }
+/* メールが長くてもメニューの幅を広げない（省略記号。監査 H-02） */
+.account-menu__header > div {
+  min-width: 0;
+}
 .account-menu__header .small {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /*
@@ -1237,6 +1307,11 @@ m3e-dialog [slot="actions"] {
   align-items: center;
   gap: 8px;
 }
+/* 件数のバッジ（あなたの番 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
+.dash__badge {
+  --m3e-badge-container-color: var(--mf-secondary-container);
+  --m3e-badge-color: var(--mf-on-secondary-container);
+}
 .dash__count {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
@@ -1287,9 +1362,12 @@ m3e-dialog [slot="actions"] {
   }
 }
 @media (max-width: 599px) {
-  /* compact: 3 枚を 1 列に（2 列だと 3 枚目だけ横長になる） */
   .kpis--three {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .kpis--three > :last-child {
+    grid-column: auto;
   }
 }
 .kpi {
@@ -1304,7 +1382,7 @@ m3e-dialog [slot="actions"] {
   grid-template-rows: auto auto 1fr;
   align-content: start;
   gap: 4px;
-  min-height: 104px;
+  min-height: 72px;
 }
 .kpi__label {
   font: var(--mf-type-label-large);
@@ -1334,12 +1412,23 @@ m3e-dialog [slot="actions"] {
   align-self: end;
 }
 @media (max-width: 599px) {
+  /* compact: 3 枚を 1 行に（数だけ。補足は出さない。監査 W-02） */
+  .kpi {
+    --m3e-card-padding: 12px;
+  }
   .kpi__body {
-    min-height: 96px;
+    min-height: 0;
+  }
+  .kpi__label {
+    font: var(--mf-type-label-medium);
   }
   .kpi__num {
     font-size: 2rem;
     line-height: 2.5rem;
+  }
+  .kpi__sub,
+  .kpi .meter__text {
+    display: none;
   }
 }
 
@@ -1461,9 +1550,6 @@ m3e-dialog [slot="actions"] {
   font: var(--mf-type-body-medium);
   min-height: 28px;
 }
-.legend__item--zero {
-  color: var(--mf-on-surface-variant);
-}
 .legend__swatch {
   flex: none;
   width: 12px;
@@ -1485,7 +1571,7 @@ m3e-dialog [slot="actions"] {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: baseline;
-  gap: 6px 8px;
+  gap: 4px 8px;
   font: var(--mf-type-body-medium);
 }
 .progress-row__text {
@@ -1515,6 +1601,15 @@ m3e-dialog [slot="actions"] {
   border-radius: var(--mf-shape-md);
   overflow: hidden;
   container-type: inline-size;
+}
+/* パネルの中に置く表（局別など）: 外枠・面・角を持たず、見出しは下の線だけ（監査 G-04・W-06。囲みの中の囲みにしない） */
+.mf-table--flush {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.mf-table--flush .mf-table__th {
+  background: transparent;
 }
 .mf-table--lines2 {
   --mf-table-row-h: 64px;
@@ -1649,7 +1744,7 @@ m3e-dialog [slot="actions"] {
 .mf-table__link:focus-visible {
   outline: var(--mf-focus-ring);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--mf-shape-xs);
 }
 /* セルの 2 行目（補足） */
 .mf-table__sub {
@@ -1814,7 +1909,7 @@ m3e-dialog [slot="actions"] {
   display: grid;
   justify-items: center;
   gap: 4px;
-  padding: 8px 4px 6px;
+  padding: 8px 4px;
   border: 2px solid transparent;
   border-radius: var(--mf-shape-md);
   background: transparent;
@@ -1853,7 +1948,7 @@ m3e-dialog [slot="actions"] {
 }
 .avatar-colors__row {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 .avatar-colors__choices {
   display: flex;
@@ -1864,7 +1959,7 @@ m3e-dialog [slot="actions"] {
 .avatar-swatches {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 .avatar-swatch {
   width: 32px;
@@ -1888,7 +1983,7 @@ m3e-dialog [slot="actions"] {
 .avatar-colors__custom {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--mf-on-surface-variant);
 }
 .avatar-colors__custom input[type="color"] {
@@ -1956,20 +2051,8 @@ m3e-dialog [slot="actions"] {
   max-width: 880px;
   min-width: 0;
 }
-/* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: 選んだものを入口の色に */
+/* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: M3E の connected button group の toggle（色は M3E の既定。上書きしない。監査 G-06） */
 .hub__tabs {
-  /* 選んでいるものは入口の色で塗り、ほかは中立の面（どちらも tonal のままだと色相でしか区別できない） */
-  --m3e-tonal-button-unselected-container-color: var(--mf-surface-container-high);
-  --m3e-tonal-button-unselected-label-text-color: var(--mf-on-surface-variant);
-  --m3e-tonal-button-selected-container-color: var(--hub-accent);
-  --m3e-tonal-button-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-selected-icon-color: var(--hub-on-accent);
-  --m3e-tonal-button-hover-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-focus-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-pressed-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-hover-selected-icon-color: var(--hub-on-accent);
-  --m3e-tonal-button-focus-selected-icon-color: var(--hub-on-accent);
-  --m3e-tonal-button-pressed-selected-icon-color: var(--hub-on-accent);
   /* 横に流す箱（overflow）の中では hover の影が切れるので、影は付けず state layer だけで示す */
   --m3e-tonal-button-hover-container-elevation: none;
   justify-self: start;
@@ -1981,7 +2064,7 @@ m3e-dialog [slot="actions"] {
 .hub-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 32px;
   padding-inline: 12px;
   border-radius: var(--mf-shape-full);
@@ -2124,6 +2207,17 @@ m3e-dialog [slot="actions"] {
 .admin-works__actions {
   flex-wrap: wrap;
 }
+/* 管理の説明: body-medium・on-surface-variant・読みやすい行長（監査 A-02） */
+.admin__lead {
+  margin: 0;
+  max-width: 72ch;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+}
+.admin__switch-label {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
 .import-miss {
   color: var(--mf-error);
   display: inline-flex;
@@ -2138,6 +2232,8 @@ m3e-dialog [slot="actions"] {
 /* 通知パネル（medium 以上）: Scaffold の「浮遊する一時的なペイン」。幅は推奨値 360 */
 #notif-menu {
   --m3e-menu-container-max-width: 360px;
+  /* 項目の途中で切れない高さ（監査 H-01）。縦に長い通知は 3 行で省略する */
+  --m3e-menu-container-max-height: min(560px, 80dvh);
 }
 @media (min-width: 600px) {
   #notif-menu,
@@ -2209,6 +2305,13 @@ m3e-dialog [slot="actions"] {
   background: var(--mf-primary);
   vertical-align: middle;
 }
+/* 長い本文は 3 行で省略（メニューが縦に伸びすぎない。監査 H-01） */
+.notif__sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .notif__sub,
 .notif__time {
   font: var(--mf-type-body-small);
@@ -2226,12 +2329,14 @@ m3e-dialog [slot="actions"] {
   grid-template-columns: 3.5em 1fr;
   gap: 8px;
 }
+/* 項目名は label-medium・on-surface-variant、値は body-medium（監査 E-05） */
 .info dt {
-  font: var(--mf-type-body-medium);
+  font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
 }
 .info dd {
   margin: 0;
+  font: var(--mf-type-body-medium);
   overflow-wrap: anywhere;
 }
 .info__history {
@@ -2254,6 +2359,16 @@ m3e-dialog [slot="actions"] {
 .shell--editor .shell__content {
   padding-top: 0;
   padding-bottom: 0;
+}
+/* エディタのアプリバー: 題名は 18（title-medium より少し大きい 1 行）、副題は題名に詰める（監査 E-04） */
+.shell--editor .shell__appbar {
+  --m3e-app-bar-small-title-text-font-size: 1.125rem;
+  --m3e-app-bar-small-title-text-line-height: 1.5rem;
+  --m3e-app-bar-small-title-text-font-weight: 500;
+  --m3e-app-bar-small-subtitle-text-line-height: 1rem;
+}
+.shell--editor .appbar-slot--subtitle {
+  margin-block-start: 0;
 }
 .appbar-slot {
   display: contents;
@@ -2297,6 +2412,26 @@ m3e-dialog [slot="actions"] {
   top: 50%;
   transform: translateY(-50%);
   z-index: 20;
+  transition:
+    opacity var(--mf-motion),
+    transform var(--mf-motion);
+}
+/* 右の引き出しが開いているあいだは隠す（visibility で操作・読み上げからも外す。切り替えは引き出しのタブ） */
+.ws__side-toolbar--hidden {
+  opacity: 0;
+  transform: translateY(-50%) translateX(16px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--mf-motion),
+    transform var(--mf-motion),
+    visibility 0s linear 200ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws__side-toolbar,
+  .ws__side-toolbar--hidden {
+    transition: none;
+  }
 }
 .ws__checks {
   padding: 0 4px;
@@ -2556,7 +2691,7 @@ m3e-dialog [slot="actions"] {
   position: absolute;
   display: block;
   pointer-events: auto;
-  border-radius: 2px;
+  border-radius: var(--mf-shape-paper);
   cursor: pointer;
 }
 .pdf-link:hover {
@@ -2795,8 +2930,24 @@ m3e-dialog [slot="actions"] {
 .thread {
   scroll-margin-block: 12px 16px;
 }
+/* 選んだカード: 面を 1 段濃く（surface-container-high）し、先頭に 3px の primary の帯。中の部品は塗り替えない（監査 C-03） */
+.thread {
+  position: relative;
+}
 .thread--active {
-  --m3e-elevated-card-container-color: var(--mf-secondary-container);
+  --m3e-outlined-card-container-color: var(--mf-surface-container-high);
+}
+.thread--active::before {
+  content: "";
+  position: absolute;
+  inset-block: 12px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+  /* カードの中身（shadow の面）の上に出す */
+  z-index: 1;
+  pointer-events: none;
 }
 .thread--closed .thread__body {
   color: var(--mf-on-surface-variant);
@@ -2817,9 +2968,8 @@ m3e-dialog [slot="actions"] {
   line-height: 1.2;
   min-width: 0;
 }
+/* 位置へ飛ぶボタン: M3E の text button の既定（label-large・primary。監査 C-04） */
 .thread__index {
-  --m3e-text-button-label-text-color: var(--mf-on-surface-variant);
-  --m3e-button-icon-color: var(--mf-on-surface-variant);
   /* 端末名・フレーム名が長くてもカードを広げない（§55）。% だと最小幅の計算に効かず列が広がるので px で */
   min-width: 0;
   max-width: 180px;
@@ -2883,6 +3033,29 @@ m3e-dialog [slot="actions"] {
 }
 .thread__reactions--reply {
   margin-top: 4px;
+}
+/* 付いたリアクションが無いとき: 「付ける」ボタンだけを投稿の右上に（行を取らない。監査 C-02）。返信ではマウスを乗せたときだけ */
+.thread__reactions--solo {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+}
+.thread-panel__root {
+  position: relative;
+}
+.cth-post:has(.thread__reply-more) .thread__reactions--solo {
+  inset-inline-end: 36px;
+}
+@media (hover: hover) {
+  .cth-post .thread__reactions--solo {
+    opacity: 0;
+    transition: opacity var(--mf-motion);
+  }
+  .cth-post:hover .thread__reactions--solo,
+  .cth-post:focus-within .thread__reactions--solo {
+    opacity: 1;
+  }
 }
 .thread__react {
   color: var(--mf-on-surface-variant);
@@ -3019,7 +3192,8 @@ m3e-dialog [slot="actions"] {
 }
 /* 縦の浮遊ツールバー（窓端から 24）が新しい版の紙面に重ならないよう、比較の末尾側を空ける（840 以上だけ出る） */
 @media (min-width: 840px) {
-  .ws--compare .compare {
+  /* 縦のツールバーが出ているとき（右の引き出しを畳んだとき）だけ、その分を空ける */
+  .ws__body--handle .compare {
     padding-inline-end: var(--ws-side-toolbar-space, 88px);
   }
 }
@@ -3068,7 +3242,8 @@ m3e-dialog [slot="actions"] {
 /* 引き出し「情報」 */
 .info-tab {
   display: grid;
-  gap: 20px;
+  /* 節の間は 24（見出しが前の節の続きに見えない。監査 E-05） */
+  gap: 24px;
   padding: 16px;
   align-content: start;
 }
@@ -3690,7 +3865,7 @@ m3e-icon.icon--on {
   min-height: 0;
 }
 .compare-status {
-  font: var(--mf-type-label-medium);
+  font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
   padding: 4px 4px 0;
 }
@@ -3843,20 +4018,39 @@ m3e-icon.icon--on {
 }
 .notation__toolbar {
   margin-bottom: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
 }
+/* 検索は広げすぎない（監査 G-15。560 まで） */
 .notation__search {
   flex: 1 1 160px;
   min-width: 0;
-}
-.notation__toolbar {
-  flex-wrap: nowrap;
+  max-width: 560px;
 }
 .notation__filters {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
+/* 絞り込みのセレクトは詰めた高さ（40。密度 -4）。ツールバーの行になじませる（監査 N-01） */
 .notation__cat {
   width: 240px;
   flex: none;
+  --md-sys-density-scale: -4;
+}
+/* compact: 検索は 1 行目いっぱい、追加は 2 行目（操作の more_vert はアプリバーへ。監査 N-02） */
+@media (max-width: 599px) {
+  .notation__toolbar {
+    flex-wrap: wrap;
+  }
+  .notation__search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .notation__add {
+    flex: 1 1 100%;
+  }
 }
 /* 2 ペイン: 表は残り全部、詳細は右に 360（1200 以上は 412）・間 24（M3 Supporting pane）。ペインは surface-container-low の面で囲う */
 .notation__ld--two {
@@ -4005,7 +4199,7 @@ m3e-icon.icon--on {
 .proposal-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 .proposal__head {
   display: flex;
@@ -4085,9 +4279,19 @@ m3e-icon.icon--on {
   display: inline-flex;
 }
 /* 件数のバッジは secondary（エラーの赤は通知のベルだけ。件数は誤りではない。M3 Badges・Color roles。§43） */
+/* タッチ端末では、指を離したあとにタブへ hover の薄い面が残らない（監査 M-04） */
+@media (hover: none) {
+  m3e-tab {
+    --m3e-tab-selected-container-hover-color: transparent;
+    --m3e-tab-unselected-container-hover-color: transparent;
+  }
+}
+.pane-tabs__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .pane-tabs__badge {
-  margin-inline-start: 4px;
-  vertical-align: middle;
   --m3e-badge-container-color: var(--mf-secondary-container);
   --m3e-badge-color: var(--mf-on-secondary-container);
 }
@@ -4138,9 +4342,11 @@ m3e-icon.icon--on {
 }
 .post-image__fields {
   display: grid;
-  grid-template-columns: 1fr 140px;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  align-items: start;
   gap: 8px;
-  margin-top: 8px;
+  /* 枠付きの入力欄の浮くラベルが上にはみ出す分 */
+  margin-top: 12px;
 }
 .post-image__actions {
   display: inline-flex;
@@ -4233,7 +4439,7 @@ m3e-icon.icon--on {
 .comment-body ol + pre,
 .comment-body ul + blockquote,
 .comment-body ol + blockquote {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .comment-body ul,
 .comment-body ol {
@@ -4394,12 +4600,14 @@ m3e-icon.icon--on {
   bottom: 0;
 }
 /* 返信・訂正の欄: M3 の outlined text field と同じ枠（フォーカスで太く・主色） */
-.thread__form .rt {
+.thread__form .rt,
+.compose-pop .rt {
   padding: 8px 12px;
   border: 1px solid var(--mf-outline);
   border-radius: var(--mf-shape-xs);
 }
-.thread__form .rt:focus-within {
+.thread__form .rt:focus-within,
+.compose-pop .rt:focus-within {
   padding: 7px 11px;
   border: 2px solid var(--mf-primary);
 }
@@ -4430,6 +4638,11 @@ m3e-icon.icon--on {
 m3e-snackbar {
   top: auto;
   bottom: var(--mf-snackbar-bottom, calc(16px + env(safe-area-inset-bottom, 0px)));
+  /* 色: M3 の inverse surface。vibrant の既定（#000b2f / 文字 #909bc6）は黒に近く、文字が沈むので、青みの濃い灰に明るい文字を置く（監査 G-05） */
+  --m3e-snackbar-container-color: #2e3350;
+  --m3e-snackbar-supporting-text-color: #eef0ff;
+  --m3e-snackbar-action-text-color: #b3c6ff;
+  --m3e-snackbar-close-icon-color: #eef0ff;
 }
 /* SNS アカウント（管理） */
 .profile-avatar {
@@ -4472,9 +4685,17 @@ m3e-snackbar {
   }
 }
 @media (max-width: 599px) {
+  /* スマホの一覧は端から端まで。表の外枠・角・面は付けない（行の線だけ。監査 W-07） */
   .works-table {
-    --mf-table-pad: 12px;
+    --mf-table-pad: 16px;
     margin-top: 16px;
+    margin-inline: -16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .works-table .mf-table__th {
+    background: transparent;
   }
 }
 /* 題名のセル: 媒体のアイコン + 題名（2 行まで）+ 題名の下の補足 */
@@ -5007,7 +5228,7 @@ m3e-snackbar {
 .compose-pop__place {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 12px 0;
   font: var(--mf-type-label-medium);
   font-variant-numeric: tabular-nums;
@@ -5086,7 +5307,7 @@ m3e-snackbar {
 .wlive__frame-name {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
 }
@@ -5155,7 +5376,7 @@ m3e-snackbar {
   pointer-events: auto;
 }
 .wlive__pc {
-  border-radius: 12px;
+  border-radius: var(--mf-shape-md);
   overflow: hidden;
   background: #fff;
   box-shadow:
@@ -5167,7 +5388,7 @@ m3e-snackbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 14px;
+  padding: 0 16px;
   background: #e9ecf3;
   color: #4b5565;
   font: 500 13px/1 var(--mf-font);
@@ -5184,7 +5405,7 @@ m3e-snackbar {
   flex: 1;
   min-width: 0;
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--mf-shape-sm);
   background: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -5277,7 +5498,7 @@ m3e-snackbar {
   gap: 8px;
   height: 40px;
   padding: 0 16px 0 12px;
-  border-radius: 20px;
+  border-radius: var(--mf-shape-full);
   font: var(--mf-type-label-large);
   color: var(--mf-primary);
   text-decoration: none;
@@ -5346,21 +5567,16 @@ m3e-snackbar {
 /* タグ（Notion の multi-select 風）: チップと入力が 1 つの下線の中に並び、欄を押すと候補が開く */
 .tag-anchor {
   position: relative;
+  min-width: 0;
 }
 .tag-field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
-  min-height: 48px;
-  padding: 8px 0 7px;
-  border-bottom: 1px solid var(--mf-outline);
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 0;
   cursor: text;
-  transition: border-color var(--mf-motion);
-}
-.tag-field:focus-within {
-  border-bottom-color: var(--mf-primary);
-  box-shadow: 0 1px 0 0 var(--mf-primary);
 }
 .tag-field__chips {
   display: contents;
@@ -5376,10 +5592,10 @@ m3e-snackbar {
 }
 .tag-menu {
   position: absolute;
-  inset-inline: 0;
+  inset-inline: -16px;
   top: 100%;
   z-index: 20;
-  margin-top: 4px;
+  margin-top: 8px;
   max-height: min(280px, 50dvh);
   overflow-y: auto;
   padding: 4px;
@@ -5425,7 +5641,7 @@ m3e-snackbar {
   --m3e-chip-icon-color: var(--tag-fg);
 }
 .tag-dot {
-  padding: 2px 10px;
+  padding: 2px 12px;
   border-radius: var(--mf-shape-full);
   background: var(--tag-bg);
   color: var(--tag-fg);
@@ -5461,5 +5677,5 @@ m3e-snackbar {
 .teams-admin__code {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
-  margin-left: 6px;
+  margin-left: 8px;
 }

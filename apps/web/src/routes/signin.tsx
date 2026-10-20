@@ -48,7 +48,7 @@ function SignIn() {
 
   return (
     <main className="signin">
-      <Card variant="elevated" className="signin__card">
+      <Card variant="filled" className="signin__card">
         <div className="signin__brand">
           <img src="/icons/icon-192.png" alt="" width={64} height={64} className="signin__logo" />
           <M3eHeading variant="headline" size="small" level={1} emphasized style={{ margin: 0 }}>
