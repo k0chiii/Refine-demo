@@ -454,6 +454,8 @@ m3e-search-bar {
     calc(64px + env(safe-area-inset-bottom, 0px)) 24px;
   width: 100%;
   box-sizing: border-box;
+  /* 中身の幅（cqi）を、左寄せの列の中の空の表示を画面の中央に置くのに使う */
+  container-type: inline-size;
 }
 .shell__bar {
   display: none;
@@ -808,6 +810,12 @@ m3e-dialog [slot="actions"] {
   display: grid;
   justify-items: center;
   gap: 8px;
+}
+/* 制作・校正の左寄せの列（.hub）の中でも、空の表示だけは中身の領域の中央に置く（利用者指示 2026-10-20） */
+.hub .empty {
+  width: 100cqi;
+  box-sizing: border-box;
+  justify-self: start;
 }
 .empty > m3e-icon {
   font-size: 48px;
