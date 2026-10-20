@@ -1,0 +1,365 @@
+/*
+ * コメントの一覧のカード（ThreadCard）と、スレッドのパネル（ThreadPanel）。色・形・動きは styles.css のトークンだけを使う。
+ * 引き出し「コメント」は container（.comments）で、幅が足りれば一覧とスレッドを並べ、足りなければスレッドを一覧に重ねる。
+ * 区切りに細い線は使わない（利用者指示 2026-10-20）: ペインは余白（8px）と面の濃さ・角（16）で分け、
+ * パネルの中の元のコメント・返信欄は一段濃い面の角丸のブロック（--tp-block）にする。docs/UI_M3E.md §98。
+ */
+
+/* ---------- 引き出し「コメント」: 一覧（.comments__main）とスレッド（.thread-panel） */
+.comments {
+  container: comments / inline-size;
+}
+.comments__split {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.comments__main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+/* 狭いとき（引き出しの幅が足りない・スマホのシート）: スレッドは一覧に重ねて出し、戻るボタンで一覧へ */
+.thread-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* 面とその中のブロックの色（狭いとき・シート: 引き出し／シートの面の上なので 1 段濃いブロック。広いときは下で白い面に替える） */
+  --tp-surface: var(--mf-surface-container-low);
+  --tp-block: var(--mf-surface-container);
+  background: var(--tp-surface);
+  /* 横からすっと入る（空間の動き。「動きを減らす」では動かさない） */
+  animation: thread-panel-in var(--mf-motion-spatial-fast) both;
+}
+@keyframes thread-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-panel {
+    animation: none;
+  }
+}
+.thread-panel:focus {
+  outline: none; /* フォーカスはパネルを開いたことの合図（読み上げ）だけ。枠は出さない */
+}
+.thread-panel__close {
+  display: none;
+}
+/* 一覧は重なって見えなくなる。キーボード・読み上げの対象から外す（動きが終わってから） */
+@container comments (max-width: 719px) {
+  .comments--thread:not(.comments--sheet) .comments__main {
+    visibility: hidden;
+    transition: visibility 0s linear 350ms;
+  }
+}
+/* 広いとき: 一覧は見えたまま、隣の列にスレッドが入る */
+@container comments (min-width: 720px) {
+  .comments--thread:not(.comments--sheet) .comments__split {
+    grid-template-columns: minmax(300px, 9fr) minmax(0, 11fr);
+    /* 一覧（引き出しの面）とスレッドのパネルは線でなく余白で分ける。パネルは引き出しの中の角丸の面 */
+    gap: 8px;
+    padding: 4px 8px 8px 0;
+  }
+  .comments:not(.comments--sheet) .thread-panel {
+    position: static;
+    --tp-surface: var(--mf-surface-container-lowest);
+    --tp-block: var(--mf-surface-container-low);
+    border-radius: var(--mf-shape-lg);
+    overflow: hidden;
+  }
+  .comments:not(.comments--sheet) .thread-panel__back {
+    display: none;
+  }
+  .comments:not(.comments--sheet) .thread-panel__close {
+    display: inline-flex;
+  }
+}
+/* スマホのシート: シートいっぱいにスレッドだけを見せる（高さは ThreadPanel が測ってそろえる） */
+.comments--sheet.comments--thread .comments__main {
+  display: none;
+}
+.thread-panel--sheet {
+  position: static;
+}
+
+/* ---------- スレッドのパネル */
+.thread-panel__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 4px 8px;
+  /* 下に線は引かない。スクロールが始まったら面を 1 段濃くする（アプリバーと同じ） */
+  transition: background-color var(--mf-motion-effects-fast);
+}
+.thread-panel--scrolled .thread-panel__bar {
+  background: var(--tp-block);
+}
+.thread-panel__title {
+  font: var(--mf-type-title-small);
+  margin-inline-start: 4px;
+}
+.thread-panel__scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* 元のコメントは、線でなく一段濃い面の角丸のブロックで返信と分ける */
+.thread-panel__root {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--tp-block);
+}
+.thread-panel__root .thread__reactions--solo {
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+}
+.thread-panel__root .thread__head {
+  min-height: 40px;
+}
+.thread-panel__replies {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* 返信欄は一番下に固定する（返信が長くなってもスクロールするのは上の流れだけ） */
+.thread-panel__composer {
+  flex: none;
+  max-height: 55%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 線も影も無い、角丸のブロック。メンションの候補など欄が伸びたら、このブロックが伸びて上の流れが縮む */
+  margin: 0 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 12px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--tp-block);
+}
+.thread-panel__composer .thread__form {
+  margin-top: 0;
+}
+.thread-panel .thread__form .rt {
+  background: var(--mf-surface-container-lowest);
+}
+
+/* 日付の区切り（中央の札だけ。線は引かない。スクロール中も上に残る） */
+.cth-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 4px;
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+.cth-day__label {
+  padding: 4px 12px;
+  border-radius: var(--mf-shape-full);
+  background: var(--tp-block);
+}
+/* 「ここから未読」（色と文言の両方で示す） */
+.cth-unread {
+  scroll-margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+  font: var(--mf-type-label-medium);
+}
+.cth-unread__label {
+  padding: 4px 12px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-error-container);
+  color: var(--mf-on-error-container);
+}
+
+/* 返信 1 件。続けての返信は名前・アバターを省き、左の余白に時刻（マウスを乗せたときだけ） */
+.cth-post {
+  position: relative;
+  padding: 4px 8px;
+  margin-inline: -8px;
+  border-radius: var(--mf-shape-md);
+}
+.cth-post--continued {
+  padding-block: 2px;
+}
+.cth-post__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cth-post__time {
+  flex: none;
+  width: 28px;
+  padding-top: 0.2em;
+  text-align: center;
+  font: var(--mf-type-label-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+  opacity: 0;
+}
+.cth-post:hover .cth-post__time,
+.cth-post:focus-within .cth-post__time {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .cth-post:hover {
+    background: color-mix(in srgb, var(--mf-on-surface) 6%, transparent);
+  }
+}
+.thread-panel .thread__event {
+  padding: 4px 0;
+}
+
+/* ---------- 一覧のカード */
+.thread--compact .thread__content {
+  gap: 8px;
+}
+/* 本文は 3 行まで（全文はスレッドのパネルで） */
+.thread__body--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.thread__quote--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.thread--unread .thread__name {
+  font-weight: 700;
+}
+/* 直近の返信（元のコメントの下。押すとスレッドが開く） */
+.thread__replylist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  margin-inline: -8px;
+  border-radius: var(--mf-shape-sm);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .thread__replylist:hover {
+    background: color-mix(in srgb, var(--mf-on-surface) 6%, transparent);
+  }
+}
+.thread__reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.thread__reply > :first-child {
+  flex: none;
+  margin-top: 1px;
+}
+.thread__reply-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.thread__reply-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.thread__reply-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--mf-type-label-large);
+}
+.thread__reply--unread .thread__reply-name {
+  font-weight: 700;
+}
+.thread__reply-time {
+  flex: none;
+  font: var(--mf-type-body-small);
+  color: var(--mf-on-surface-variant);
+}
+.thread__reply-main .thread__body {
+  font: var(--mf-type-body-medium);
+}
+.thread__reply-files {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.thread__reply-files .cmt-files__cell,
+.thread__reply-files .cmt-files__cell .cmt-files__tile {
+  width: 40px;
+  height: 40px;
+}
+.thread__reply-filecount {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
+/* 下の行: 「ほか n 件の返信」／「返信」・未読の点。押すとスレッドが開く */
+.thread__footer {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
+  margin-inline: -8px;
+  border-radius: var(--mf-shape-sm);
+  cursor: pointer;
+  color: var(--mf-on-surface-variant);
+}
+.thread__footer:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.thread__footer:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.thread__replies {
+  font: var(--mf-type-label-large);
+  color: var(--mf-primary);
+}
+.thread__unread {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+}
+.thread__chevron {
+  flex: none;
+}

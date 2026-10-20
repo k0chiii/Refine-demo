@@ -86,8 +86,6 @@ export function notificationPath(n: {
   threadId?: string;
 }): string {
   const enc = encodeURIComponent;
-  if ((n.kind === "feedback_posted" || n.kind === "feedback_mentioned") && n.threadId)
-    return `/feedback/${enc(n.threadId)}`;
   if (n.revisionId)
     return `/revisions/${enc(n.revisionId)}${n.threadId ? `?thread=${enc(n.threadId)}` : ""}`;
   if (n.workId) return `/works/${enc(n.workId)}`;

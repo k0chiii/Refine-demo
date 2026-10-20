@@ -85,8 +85,13 @@ try {
 
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
   await page.waitForURL(/\/v\/\d+$/, { timeout: 15_000 });
-  const infoButton = page.locator('.ws__side-toolbar m3e-icon-button[aria-label^="情報"]');
-  if ((await infoButton.getAttribute("selected")) === null) await infoButton.click();
+  // 右の引き出しが開いているあいだは縦のツールバーが隠れるので、開いていれば引き出しのタブで、畳んでいれば縦のツールバーで開く
+  const bar = page.locator(".ws__side-toolbar");
+  if (await bar.isVisible()) await bar.locator('m3e-icon-button[aria-label^="情報"]').click();
+  else {
+    const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: "情報" }).first();
+    if ((await tab.getAttribute("selected")) === null) await tab.click();
+  }
   await page.waitForSelector('[aria-label="この版のファイル"] m3e-list-item');
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 10_000 }),

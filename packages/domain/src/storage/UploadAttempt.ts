@@ -3,7 +3,7 @@ import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 
 /**
- * R2 への 1 回の転送（試行）。版の提出物とフィードバックの添付で共通に使う（§8.1 / A-02）。
+ * R2 への 1 回の転送（試行）。版の提出物・フィードバックの添付・コメントの添付で共通に使う（§8.1 / A-02）。
  * - 試行ごとに別のオブジェクトキーを払い出す。同じ項目に PUT が 2 つ並んでも、互いの実体を上書きしない。
  * - 実体の検証が済んだ試行を 1 つだけ、項目の状態と同じトランザクションで「採用」する。
  *   提出物（Artifact）・添付が参照するのは採用された試行のキーだけ。
@@ -11,13 +11,13 @@ import type { Instant } from "../shared/time.ts";
  *   採用された実体を、古い PUT や補償の削除が変更することはない（キーが違うため）。
  * - 採否を決められるのは、実体を検証したサービス（Hono）からの呼出しだけ（利用者の自己申告では決めない）。
  */
-export type UploadAttemptTarget = "uploadItem" | "feedbackFile";
+export type UploadAttemptTarget = "uploadItem" | "feedbackFile" | "commentFile";
 export type UploadAttemptState = "reserved" | "adopted" | "discarded";
 
 export interface UploadAttempt {
   id: string;
   target: UploadAttemptTarget;
-  /** 版の提出物の項目 ID、またはフィードバックの添付 ID */
+  /** 版の提出物の項目 ID、またはフィードバック・コメントの添付 ID */
   targetId: string;
   /** 試行を始めた人（項目の持ち主と同じであることを begin で確かめている） */
   uploaderId: UserId;

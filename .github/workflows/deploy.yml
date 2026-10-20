@@ -2,7 +2,8 @@
 # - デモ版（ブラウザ内で動く Convex。実データなし）: main に入ったら Cloudflare Pages の本番、PR ごとにプレビューへ配る。
 #   リポジトリの Secrets に CLOUDFLARE_API_TOKEN・CLOUDFLARE_ACCOUNT_ID が無いあいだは、配らずに飛ばす
 # - 本番（Convex・Workers・Web）: CLAUDE.md「本番デプロイは明示承認まで行わない」に従い、自動では走らせない。
-#   Actions の画面から手で起動し（workflow_dispatch）、さらに GitHub の Environment「production」の承認者が承認してから進む
+#   Actions の画面から手で起動し（workflow_dispatch）、さらに GitHub の Environment「production」の承認者が承認してから進む。
+#   データの移行・削除（表記ルールの初期データ seed_notation、FB のコメントへの移行 fb_migration）も、この手動起動の入力で指定したときだけ流す
 name: Deploy
 
 on:
@@ -20,6 +21,15 @@ on:
         description: 本番に表記ルールの初期データ（デモ版と同じ）を入れる。既にある ruleId は飛ばす
         type: boolean
         default: false
+      fb_migration:
+        description: >-
+          FB（フィードバック）をコメントへ移す。配り終えてから Convex の内部関数 feedbackMigration:run を流し、結果を実行のまとめに出す。
+          dry-run=件数を数えるだけ（何も書かない）、migrate=コメントへ移す（何度流しても増えない）、
+          delete=移行済みを確かめてから FB の行を全て消す（移っていないスレッドがあれば何も消さない）。
+          順番は dry-run → migrate → delete。none は何もしない
+        type: choice
+        options: [none, dry-run, migrate, delete]
+        default: none
 
 concurrency:
   group: deploy-${{ github.ref }}-${{ inputs.target || 'demo' }}
@@ -107,3 +117,19 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: pnpm exec convex run notationSeed:importSamples
+      - name: FB のコメントへの移行（指定したときだけ。配り終えてから流すので、失敗しても配る処理は止まらない。内部関数をデプロイキーで呼ぶ）
+        if: inputs.fb_migration != 'none'
+        working-directory: apps/convex
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          FB_MIGRATION: ${{ inputs.fb_migration }}
+        run: |
+          set -euo pipefail
+          pnpm exec convex run feedbackMigration:run "{\"mode\":\"${FB_MIGRATION}\"}" | tee "$RUNNER_TEMP/fb-migration.json"
+          {
+            echo "### FB のコメントへの移行（${FB_MIGRATION}）"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/fb-migration.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

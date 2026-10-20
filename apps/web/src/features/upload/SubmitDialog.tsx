@@ -37,6 +37,7 @@ import { M3eButton } from "@m3e/react/button";
 import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eList, M3eListItem } from "@m3e/react/list";
 import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 import { UserPicker } from "@/ui/UserPicker";
 import {
@@ -683,67 +684,68 @@ export function SubmitDialog({
           </>
         ) : (
           <div className="stack">
-            {state.items.map((it) => (
-              <div key={it.itemId} className="upload-item">
-                <div>
-                  {it.fileName}
-                  {it.file ? (
-                    <span className="muted small">　{formatBytes(it.file.size)}</span>
-                  ) : null}
-                  {it.error ? (
-                    <div className="small" style={{ color: "var(--mf-error)" }}>
-                      失敗: {it.error}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="row">
-                  <StatusText
-                    tone={
-                      it.status === "verified"
-                        ? "success"
-                        : it.status === "failed"
-                          ? "error"
-                          : "neutral"
-                    }
-                    className={`upload-item__state upload-item__state--${it.status}`}
-                  >
-                    {
-                      {
-                        pending: "待機",
-                        uploading:
-                          it.phase === "compressing"
-                            ? "圧縮しています"
-                            : it.source === "figma"
-                              ? "Figma から取り込み中"
-                              : "転送中",
-                        verified: "確認済み",
-                        failed: "失敗",
-                      }[it.status]
-                    }
-                  </StatusText>
-                  {it.status === "failed" ? (
-                    <M3eButton
-                      variant="tonal"
-                      onClick={() =>
-                        void flow
-                          .retry(it.itemId)
-                          .catch((e: unknown) => setError(describeError(e).message))
+            {/* 転送のようす: 2 行のリスト（ファイル名 / 大きさ・転送の進み・失敗の理由）と、末尾に状態（確認済みはチェック）。監査 D-04 */}
+            <M3eList className="list upload-list" aria-label="アップロード">
+              {state.items.map((it) => (
+                <M3eListItem key={it.itemId} className="list__item upload-item">
+                  <M3eIcon slot="leading" name="draft" />
+                  <span className="list__headline">{it.fileName}</span>
+                  <span slot="supporting-text">
+                    {it.file ? formatBytes(it.file.size) : "\u00A0"}
+                    {it.error ? (
+                      <span className="upload-item__error">　失敗: {it.error}</span>
+                    ) : null}
+                    {it.status === "uploading" ? (
+                      <M3eLinearProgressIndicator
+                        className="upload-item__bar"
+                        value={Math.round(it.progress * 100)}
+                        max={100}
+                        aria-label={`${it.fileName} の転送`}
+                      />
+                    ) : null}
+                  </span>
+                  <span slot="trailing" className="row">
+                    <StatusText
+                      tone={
+                        it.status === "verified"
+                          ? "success"
+                          : it.status === "failed"
+                            ? "error"
+                            : "neutral"
                       }
+                      {...(it.status === "verified" ? { icon: "check_circle" } : {})}
+                      className={`upload-item__state upload-item__state--${it.status}`}
                     >
-                      {it.source === "figma" ? "再取り込み" : "再アップロード"}
-                    </M3eButton>
-                  ) : null}
-                </div>
-                {it.status === "uploading" ? (
-                  <M3eLinearProgressIndicator
-                    className="upload-item__bar"
-                    value={Math.round(it.progress * 100)}
-                    max={100}
-                    aria-label={`${it.fileName} の転送`}
-                  />
-                ) : null}
-              </div>
-            ))}
+                      {
+                        {
+                          pending: "待機",
+                          uploading:
+                            it.phase === "compressing"
+                              ? "圧縮しています"
+                              : it.source === "figma"
+                                ? "Figma から取り込み中"
+                                : "転送中",
+                          verified: "確認済み",
+                          failed: "失敗",
+                        }[it.status]
+                      }
+                    </StatusText>
+                    {it.status === "failed" ? (
+                      <M3eButton
+                        variant="tonal"
+                        onClick={() =>
+                          void flow
+                            .retry(it.itemId)
+                            .catch((e: unknown) => setError(describeError(e).message))
+                        }
+                      >
+                        {it.source === "figma" ? "再取り込み" : "再アップロード"}
+                      </M3eButton>
+                    ) : null}
+                  </span>
+                </M3eListItem>
+              ))}
+            </M3eList>
             {state.confirming ? <M3eLinearProgressIndicator aria-label="確定処理中" /> : null}
           </div>
         )}

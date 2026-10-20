@@ -175,7 +175,8 @@ function Notation() {
                 />
               </M3eSearchBar>
               <M3eButton
-                variant="filled"
+                variant={win === "compact" ? "tonal" : "filled"}
+                className="notation__add"
                 onClick={() => {
                   setSelected(null);
                   setCreating(emptyDraft(cat || book.categories[0]?.code || "A1"));
@@ -184,31 +185,40 @@ function Notation() {
                 <M3eIcon slot="icon" name="add" />
                 {canEditAny ? "追加" : "追加を提案"}
               </M3eButton>
-              {/* compact の「操作」はボトムシート、medium 以上はメニュー（M3 Breakpoints。§35 L-09） */}
-              <M3eIconButton
-                aria-label="取り込み・書き出し"
-                title="取り込み・書き出し"
-                {...(win === "compact" ? { onClick: () => setMoreSheet(true) } : {})}
-              >
-                <M3eIcon name="more_vert" />
-                {win === "compact" ? null : <M3eMenuTrigger htmlFor="notation-more" />}
-              </M3eIconButton>
+              {/* compact の「操作」はボトムシート（ボタンはアプリバーの操作）、medium 以上はメニュー（M3 Breakpoints。§35 L-09） */}
               {win === "compact" ? (
-                <ActionSheet
-                  open={moreSheet}
-                  onClose={() => setMoreSheet(false)}
-                  title="取り込み・書き出し"
-                  items={moreActions}
-                />
+                <>
+                  <AppBarSlot slot="actions">
+                    <M3eIconButton
+                      aria-label="取り込み・書き出し"
+                      title="取り込み・書き出し"
+                      onClick={() => setMoreSheet(true)}
+                    >
+                      <M3eIcon name="more_vert" />
+                    </M3eIconButton>
+                  </AppBarSlot>
+                  <ActionSheet
+                    open={moreSheet}
+                    onClose={() => setMoreSheet(false)}
+                    title="取り込み・書き出し"
+                    items={moreActions}
+                  />
+                </>
               ) : (
-                <M3eMenu id="notation-more">
-                  {moreActions.map((a) => (
-                    <M3eMenuItem key={a.label} onClick={a.onSelect}>
-                      <M3eIcon slot="icon" name={a.icon} />
-                      {a.label}
-                    </M3eMenuItem>
-                  ))}
-                </M3eMenu>
+                <>
+                  <M3eIconButton aria-label="取り込み・書き出し" title="取り込み・書き出し">
+                    <M3eIcon name="more_vert" />
+                    <M3eMenuTrigger htmlFor="notation-more" />
+                  </M3eIconButton>
+                  <M3eMenu id="notation-more">
+                    {moreActions.map((a) => (
+                      <M3eMenuItem key={a.label} onClick={a.onSelect}>
+                        <M3eIcon slot="icon" name={a.icon} />
+                        {a.label}
+                      </M3eMenuItem>
+                    ))}
+                  </M3eMenu>
+                </>
               )}
             </div>
             <div className="row notation__filters">

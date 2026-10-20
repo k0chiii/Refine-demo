@@ -174,22 +174,40 @@ http.route({
   method: "POST",
   handler: serviceUpload(internal.submissions.failUpload, failArgs),
 });
+
 http.route({
-  path: "/internal/feedback/files/begin",
+  path: "/internal/comments/files/begin",
   method: "POST",
-  handler: serviceUpload(internal.feedback.beginFileUpload, (b) =>
+  handler: serviceUpload(internal.commentFiles.beginFileUpload, (b) =>
     str(b.fileId) ? { ok: true, args: { fileId: b.fileId } } : { ok: false },
   ),
 });
 http.route({
-  path: "/internal/feedback/files/complete",
+  path: "/internal/comments/files/complete",
   method: "POST",
-  handler: serviceUpload(internal.feedback.completeFileUpload, completeArgs),
+  handler: serviceUpload(internal.commentFiles.completeFileUpload, completeArgs),
 });
 http.route({
-  path: "/internal/feedback/files/fail",
+  path: "/internal/comments/files/fail",
   method: "POST",
-  handler: serviceUpload(internal.feedback.failFileUpload, failArgs),
+  handler: serviceUpload(internal.commentFiles.failFileUpload, failArgs),
+});
+/** サムネイル（PUT /comment-files/:fileId/thumb）。試行は作らず、固定の置き場に置く */
+http.route({
+  path: "/internal/comments/thumbs/begin",
+  method: "POST",
+  handler: serviceUpload(internal.commentFiles.beginThumbUpload, (b) =>
+    str(b.fileId) ? { ok: true, args: { fileId: b.fileId } } : { ok: false },
+  ),
+});
+http.route({
+  path: "/internal/comments/thumbs/complete",
+  method: "POST",
+  handler: serviceUpload(internal.commentFiles.completeThumbUpload, (b) =>
+    str(b.fileId) && num(b.size) && str(b.mimeType)
+      ? { ok: true, args: { fileId: b.fileId, size: b.size, mimeType: b.mimeType } }
+      : { ok: false },
+  ),
 });
 
 export default http;

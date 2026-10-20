@@ -1,5 +1,4 @@
 import {
-  summarizeFeedbackActivity,
   changeWorkLifecycle,
   createWork,
   importWorks,
@@ -395,12 +394,6 @@ export const listMine = query({
     );
     // 一覧から校了者を直せるか: 校了者を決める権限（approvers:assign）がある人。判定の本体は更新（updateWork）
     const canAssignApprovers = hasOrgPermission(principal, orgPermissions.approversAssign);
-    // 制作物ごとの FB（相談）の数と未読（一覧から制作物の FB へ直接入れるように）
-    const fb = await summarizeFeedbackActivity(
-      app,
-      principal,
-      picked.map((p) => p.work.id),
-    );
     const out = picked.map(({ work, latest, accepting, declared }) => ({
       ...summarize(
         work,
@@ -418,7 +411,6 @@ export const listMine = query({
       /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
       creatorIds: [...work.creatorIds],
       canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
-      fb: fb.get(work.id) ?? { threads: 0, unread: 0 },
     }));
     return out.sort(
       (a, b) =>

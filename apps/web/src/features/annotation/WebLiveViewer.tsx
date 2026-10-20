@@ -30,7 +30,6 @@ import {
 } from "@/features/social/preview/devices";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet } from "@/ui/ActionSheet";
-import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { Loading } from "@/ui/Loading";
 import { M3eButton } from "@m3e/react/button";
 import { M3eCard } from "@m3e/react/card";
@@ -39,6 +38,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
+import { useMarkArmed } from "./markArm";
 import { useWebBridge, webDeviceLabel, type BridgeHit, type BridgeRects } from "./webBridge";
 
 /** コメントの下書き（ブリッジが返した要素と、付けたときの端末） */
@@ -72,8 +72,8 @@ interface Props {
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
-  /** コメント（FB）を付けられるか */
-  selecting: boolean;
+  /** コメントを付けられるか */
+  canComment: boolean;
   draft: WebDraft | null;
   onDraft: (d: WebDraft | null) => void;
   /** カードを押したとき、その要素へ移す（必要なら端末も合わせる）。key が変わるたびに */
@@ -100,8 +100,8 @@ function readDevice(): string {
  * Web サイトのライブ表示（docs/FIGMA_WEB_PROOFING.md WB-03〜WB-07・WB-12。利用者指示 2026-10-17）。
  * - 端末プリセット（SNS プレビューの機種＋タブレット・PC の幅）で iframe を実機の CSS ピクセルで組み、置き場所に収まるよう縮める。
  *   スマホは実機のベゼル（PostPreview の DeviceFrame）。回転と、PC は幅の直接指定もできる
- * - 「閲覧／コメント」: コメントでは iframe の中のブリッジが押した要素（セレクタ・引用文・要素の中の位置）を返し、
- *   その場に投稿欄が出る。印は要素の今の位置に親が描く（スクロール・端末の切り替えに追随）
+ * - コメント: クリックはサイトのふつうの操作。サイトの中でなぞる（範囲・文字の選択）か長押し（ピン）すると、iframe の中のブリッジが
+ *   その要素（セレクタ・引用文・要素の中の位置）を返し、その場に投稿欄が出る（「コメントを追加」の直後だけ、クリックも）。印は要素の今の位置に親が描く（スクロール・端末の切り替えに追随）
  * - ブリッジが `ready` を返さないサイト（埋め込み拒否・スニペット未設置）は、理由と「新しいタブで開く」を出す
  * - ライブ表示は今の内容（CM-03）。実機の UA・DPR・タッチは再現されない（WB-12）
  */
@@ -112,7 +112,7 @@ export function WebLiveViewer({
   threads,
   activeThreadId,
   onSelectThread,
-  selecting,
+  canComment,
   draft,
   onDraft,
   focusRequest,
@@ -122,11 +122,11 @@ export function WebLiveViewer({
   onReady,
 }: Props) {
   const compact = useWindowClass() === "compact";
+  const armed = useMarkArmed();
   const [deviceId, setDeviceId] = useState(readDevice);
   const [landscape, setLandscape] = useState(false);
   /** PC の幅の直接指定（端末を選ぶと消える） */
   const [customWidth, setCustomWidth] = useState<number | null>(null);
-  const [mode, setMode] = useState<"browse" | "comment">("browse");
   const [sheet, setSheet] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<HTMLDivElement>(null);
@@ -223,8 +223,10 @@ export function WebLiveViewer({
   const targetsKey = mine.map((t) => t.id).join(",");
   useEffect(() => {
     if (state !== "ready") return;
-    sendMode(selecting ? mode : "browse");
-  }, [state, readyKey, mode, selecting, sendMode]);
+    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作）。
+    // 「コメントを追加」の直後だけ、クリックした要素もコメントになる
+    sendMode(!canComment ? "off" : armed ? "comment" : "browse");
+  }, [state, readyKey, armed, canComment, sendMode]);
   useEffect(() => {
     if (state !== "ready") return;
     resolve(
@@ -236,9 +238,6 @@ export function WebLiveViewer({
     setRects(null);
     onDraft(null);
   }, [spec.id, customWidth, landscape]);
-  useEffect(() => {
-    if (!selecting) setMode("browse");
-  }, [selecting]);
   useEffect(() => {
     if (state === "ready") highlight(activeThreadId);
   }, [activeThreadId, state, highlight]);
@@ -384,7 +383,7 @@ export function WebLiveViewer({
   const screen = (
     <div
       ref={screenRef}
-      className={`wlive__screen ${mode === "comment" ? "wlive__screen--comment" : ""}`}
+      className="wlive__screen"
       style={{
         width: screenW,
         height: screenH,
@@ -412,7 +411,7 @@ export function WebLiveViewer({
             threads={overlayThreads}
             activeThreadId={activeThreadId}
             onSelectThread={onSelectThread}
-            selecting={false}
+            canComment={false}
             draft={draftUnit}
             onDraft={() => undefined}
           />
@@ -503,19 +502,6 @@ export function WebLiveViewer({
             </M3eIconButton>
           )}
           <span className="spacer" />
-          {selecting && !noBridge ? (
-            <ChoiceGroup
-              label="操作"
-              className="wlive__mode"
-              value={mode}
-              onChange={setMode}
-              disabled={state !== "ready"}
-              choices={[
-                { value: "browse", label: "閲覧", icon: "visibility" },
-                { value: "comment", label: "コメント", icon: "add_comment" },
-              ]}
-            />
-          ) : null}
           <M3eIconButton aria-label="再読み込み" onClick={reload}>
             <M3eIcon name="refresh" />
           </M3eIconButton>

@@ -8,7 +8,9 @@ export function createConvexCleanupGateway(siteUrl: string, secret: string): Cle
     async listOrphans(limit) {
       const res = await fetch(`${base}/internal/upload-orphans?limit=${limit}`, { headers });
       if (!res.ok) throw new Error(`cleanup list failed: ${res.status}`);
-      const body = (await res.json()) as { items: Array<{ itemId: string; objectKey: string }> };
+      const body = (await res.json()) as {
+        items: Array<{ itemId: string; objectKey: string; extraObjectKeys?: string[] }>;
+      };
       return body.items;
     },
     async markPurged(itemIds) {

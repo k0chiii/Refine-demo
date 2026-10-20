@@ -122,7 +122,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
     expect(note?.body).toContain("極秘ポスター");
   });
 
-  it("フィードバックの通知は restricted 以外なら制作物の ACL が無くても見られる", async () => {
+  it("旧フィードバックの通知も制作物の閲覧権限で守る（コメントへ統合したため）。restricted の制作物は伏せる", async () => {
     const ctx = createInMemoryContext();
     const open = await seedWork(ctx, { title: "公開チラシ" });
     const secret = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
@@ -134,7 +134,8 @@ describe("通知の本文と制作物の閲覧権限", () => {
         workId: w.id,
         threadId: `t_${w.id}`,
       });
-    const bodies = (await listMyNotifications(ctx, principals.stranger)).map((n) => n.body);
+    const list = await listMyNotifications(ctx, principals.stranger);
+    const bodies = list.map((n) => n.body);
     expect(bodies).toContain("「公開チラシ」のスレッド");
     expect(bodies).toContain(REDACTED_NOTIFICATION.body);
     expect(bodies.join()).not.toContain("極秘ポスター");

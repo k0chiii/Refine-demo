@@ -6,6 +6,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { deflateSync } from "node:zlib";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -150,7 +151,7 @@ const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 const WORKS_ENTRY = ".works .works-table tbody tr";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
-  const input = scope.locator(".picker__search input").first();
+  const input = scope.locator(".picker__input").first();
   await input.click();
   await input.fill(name);
   // 候補は M3E autocomplete のメニュー（option ロール）に出る
@@ -178,10 +179,22 @@ const autoProofreadDone = (timeout) =>
     null,
     { timeout },
   );
-/** 添付の切替（下部ツールバーの添付ボタン → メニュー） */
+/** 添付の切替（下部ツールバーのピンのボタンのメニュー） */
 const pickArtifact = async (name) => {
-  await page.locator('m3e-icon-button[aria-label="添付を切り替え"]').click();
-  await page.locator("#artifact-menu m3e-menu-item:visible", { hasText: name }).first().click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="コメントの表示"]').click();
+  await page
+    .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: name })
+    .first()
+    .click();
+  await settle();
+};
+/** コメントの表示（横に一覧・ピンの高さに並べる・ピンだけ）の切替（下部ツールバーのピンのボタンのメニュー） */
+const pickLayout = async (label) => {
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="コメントの表示"]').click();
+  await page
+    .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: label })
+    .first()
+    .click();
   await settle();
 };
 /** ビューア上でドラッグ（範囲指定）→ その場の投稿欄に本文を入れて投稿 */
@@ -192,8 +205,8 @@ const commentOnRect = async (x0, y0, x1, y1, body) => {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * x1, box.y + box.height * y1, { steps: 8 });
   await page.mouse.up();
-  await page.waitForSelector(".compose-pop textarea");
-  await page.fill(".compose-pop textarea", body);
+  await page.waitForSelector(".compose-pop .rt__content");
+  await page.fill(".compose-pop .rt__content", body);
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
 };
@@ -213,10 +226,18 @@ const submitRevision = async (buttonText, files, summary, beforeStart) => {
 };
 /** レール上部のメニュー（展開レールの開閉） */
 const railToggle = page.locator('m3e-nav-rail m3e-icon-button[aria-label^="メニュー"]');
-/** エディタの引き出し（コメント／版／情報）を縦ツールバーから開く */
+/**
+ * エディタの引き出し（コメント／版／情報）を開く。引き出しが開いているあいだは縦の浮遊ツールバーが隠れる
+ * （利用者決定 2026-10-20）ので、開いていれば引き出しのタブで、畳んでいれば縦のツールバーで切り替える
+ */
 const drawer = async (label) => {
-  const b = page.locator(`.ws__side-toolbar m3e-icon-button[aria-label^="${label}"]`);
-  if ((await b.getAttribute("selected")) === null) await b.click();
+  const bar = page.locator(".ws__side-toolbar");
+  if (await bar.isVisible()) {
+    await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click();
+  } else {
+    const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+    if ((await tab.getAttribute("selected")) === null) await tab.click();
+  }
   await page.waitForSelector(".drawer__body");
   await settle();
 };
@@ -245,21 +266,14 @@ const compareWithRevision = async (label) => {
   await comparePickItem(label);
 };
 /**
- * 下のツールバーの「書き込み」（印を付けたとき作るもの）: コメント / FB / なし。押すと小さな Menu。引き出しは動かさない
- * （利用者指示 2026-10-17）。このタブのあいだ覚えるので、使い終わったらコメントに戻す
+ * 紙面のふつうのクリックは投稿欄を出さない（利用者指示 2026-10-20）。なぞる（範囲）と長押し（ピン）だけがコメント。
+ * 押したまま動かさず待つ（マウスの長押しは 500ms）
  */
-const openMarkMenu = async () => {
-  await page.locator(".ws__toolbar .ws__mark-mode").click();
-  await page.waitForSelector("#mark-mode-menu m3e-menu-item-radio:visible");
-  await settle();
-};
-const setMarkMode = async (label) => {
-  await openMarkMenu();
-  await page
-    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: label })
-    .first()
-    .click();
-  await settle();
+const mouseHold = async (x, y, ms = 700) => {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(ms);
+  await page.mouse.up();
 };
 const stopCompare = async () => {
   await openComparePicker();
@@ -567,7 +581,7 @@ async function main() {
   // 2 件目（位置なし）は未対応のまま残し、次版への持ち越し候補にする
   await page.locator(".comments__free").click();
   await page.fill(
-    ".compose-pop textarea",
+    ".compose-pop .rt__content",
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
   );
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
@@ -590,14 +604,25 @@ async function main() {
     await page.mouse.move(700, 400);
     await settle();
   }
+  // 縦の浮遊ツールバーは右の引き出しが開いているあいだは隠れ、畳むと出る（利用者決定 2026-10-20）。出たツールバーから開き直せる
+  {
+    const bar = page.locator(".ws__side-toolbar");
+    expectTrue(!(await bar.isVisible()), "引き出しが開いているのに縦の浮遊ツールバーが出ている");
+    await page.locator(".ws__handle").focus();
+    await page.keyboard.press("Enter"); // 畳む
+    await settle();
+    expectTrue(await bar.isVisible(), "引き出しを畳んでも縦の浮遊ツールバーが出ない");
+    await drawer("コメント"); // 縦のツールバーから開き直す
+    expectTrue(!(await bar.isVisible()), "引き出しを開き直しても縦の浮遊ツールバーが隠れない");
+  }
   // 23 ピンの高さに並べる（Google ドキュメント式） / 24 ピンだけ（Figma 式）
-  await page.locator('m3e-icon-button[aria-label="ピンの高さに並べる"]').click();
+  await pickLayout("ピンの高さに並べる");
   await page.waitForSelector(".gutter .thread");
   await shot("23-layout-aligned");
-  await page.locator('m3e-icon-button[aria-label="ピンだけ"]').click();
+  await pickLayout("ピンだけ");
   await page.waitForSelector(".thread-pop .thread"); // 選択中のスレッドがピンの横に出る
   await shot("24-layout-pins");
-  await page.locator('m3e-icon-button[aria-label="横に一覧"]').click();
+  await pickLayout("横に一覧");
   await page.waitForSelector(".comments .thread");
   // 16 専門確認を完了（担当の校正者）: 引き出し「情報」
   await drawer("情報");
@@ -628,12 +653,12 @@ async function main() {
     }
     body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
-  await page.waitForSelector(".compose-pop textarea");
+  await page.waitForSelector(".compose-pop .rt__content");
   // 「@」で制作物を見られる人をメンション（候補から選ぶ）
-  await page.fill(".compose-pop textarea", "@五月");
+  await page.fill(".compose-pop .rt__content", "@五月");
   await page.locator(".mention-list m3e-list-action", { hasText: "五月 めい" }).click();
   await settle(); // 選択後のキャレット移動（requestAnimationFrame）が済む前に打つと文字が前に入り込む
-  await page.locator(".compose-pop textarea").press("End");
+  await page.locator(".compose-pop .rt__content").press("End");
   await page.keyboard.type(
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
   );
@@ -649,27 +674,395 @@ async function main() {
     const count = () => page.locator(".comments .thread").count();
     const n0 = await count();
     await page.locator(".comments__free").click();
-    await page.fill(".compose-pop textarea", "削除の確認用のコメントです。");
+    await page.fill(".compose-pop .rt__content", "削除の確認用のコメントです。");
     await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length > n,
       n0,
     );
     const mine = page.locator(".comments .thread", { hasText: "削除の確認用" });
-    await mine.locator(".thread__body").click();
-    await settle();
-    await mine.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    const panel = await openPanel(mine);
+    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
     await settle();
     await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
     await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
     await settle();
     await shot("75-comment-delete-confirm");
     await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await page.waitForSelector(".thread-panel", { state: "detached" });
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length === n,
       n0,
     );
     expectTrue((await count()) === n0, "削除したコメントが一覧から消えない");
+  }
+
+  // 76 コメントの書式（Markdown）: 太字と URL と箇条書きを書いて投稿 → カードに strong・a・li が出る（HTML は作らず、リンクは安全な属性つき）。
+  // 返信は `コード`、訂正は元の本文を読み込んで追記し、原文は履歴（書式つき）に残る。生の HTML は文字のまま出る
+  {
+    const n0 = await page.locator(".comments .thread").count();
+    await page.locator(".comments__free").click();
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.locator(".compose-pop .rt__content").click();
+    // 入力規則は打ちながら効く: **太字**・URL の自動リンク・「- 」の箇条書き
+    await page.keyboard.type("**太字**の確認です https://example.com/proof を見てください ");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("- 一つ目");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("二つ目");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("<script>alert(1)</script>");
+    expectTrue(
+      (await page.locator(".compose-pop .rt__toolbar m3e-icon-button").count()) === 7,
+      "書式のツールバーのボタンが 7 つでない",
+    );
+    expectTrue(
+      (await page.locator(".compose-pop .rt__content strong").count()) === 1 &&
+        (await page.locator(".compose-pop .rt__content a").count()) === 1 &&
+        (await page.locator(".compose-pop .rt__content li").count()) === 2,
+      "入力欄で太字・リンク・箇条書きにならない",
+    );
+    await shot("76-comment-markdown-compose");
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const card = page.locator(".comments .thread", { hasText: "太字" });
+    await card.locator(".thread__body strong").waitFor();
+    expectTrue((await card.locator(".thread__body strong").count()) === 1, "strong が無い");
+    const link = card.locator('.thread__body a[href^="https://"]');
+    expectTrue((await link.count()) === 1, "https のリンクが無い");
+    expectTrue(
+      (await link.getAttribute("rel")) === "noopener noreferrer nofollow" &&
+        (await link.getAttribute("target")) === "_blank",
+      "リンクの rel / target が違う",
+    );
+    expectTrue((await card.locator(".thread__body li").count()) === 2, "箇条書きが 2 件でない");
+    expectTrue(
+      (await card.locator(".thread__body script").count()) === 0 &&
+        ((await card.locator(".thread__body").innerText()) ?? "").includes("<script>"),
+      "生の HTML が文字のまま出ていない",
+    );
+    // 一覧のカードは本文を 3 行までに縮めて見せる（全文はスレッドのパネルで）
+    const clamp = await card
+      .locator(".thread__body--clamp")
+      .evaluate((el) => getComputedStyle(el).webkitLineClamp);
+    expectTrue(clamp === "3", "一覧のカードの本文が 3 行までに縮められていない");
+    const panel = await openPanel(card);
+    // 返信（`コード`）
+    await panel.locator(".thread-panel__composer .rt__content").click();
+    await page.keyboard.type("`inline` で返信");
+    await panel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+    await panel.locator(".thread__replybody code").waitFor();
+    // 訂正: 本文を読み込んで追記する
+    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+    await settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "訂正" }).click();
+    await panel.locator(".thread-panel__root .thread__form .rt__content").waitFor();
+    // メニューから開いても、入力欄にフォーカスが移る（メニューが閉じてボタンへ戻したあとで）
+    await page.waitForFunction(() =>
+      Boolean(document.activeElement?.closest(".thread-panel__root .thread__form .rt")),
+    );
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(" 追記");
+    await panel.locator("m3e-button", { hasText: "訂正を保存" }).click();
+    await page.waitForSelector(".thread-panel .thread__previous strong");
+    // 履歴（原文）と本文は別々に届くので、本文が替わるまで待つ
+    await page
+      .waitForFunction(
+        () =>
+          document.querySelector(".thread-panel__root .thread__body")?.textContent.includes("追記"),
+        null,
+        { timeout: 10_000 },
+      )
+      .catch(() => {
+        throw new Error("訂正が本文に反映されない");
+      });
+    await shot("76-comment-markdown");
+    // 後片付け: 書式のコメントを削除して件数を戻す
+    await deleteFromPanel(panel);
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
+  }
+
+  // 77 コメント・返信の添付（利用者指示 2026-10-20）: 新しいコメントに画像を添付して投稿 → カードにサムネイル。
+  // 返信にも画像を添付 → 返信にサムネイル。取り除く操作・送信中は投稿できない
+  {
+    const n0 = await page.locator(".comments .thread").count();
+    await page.locator(".comments__free").click();
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", "添付の確認用のコメントです。");
+    await page.setInputFiles(".compose-pop input[type=file]", [pngFile("shot-a.png", 1)]);
+    await page.waitForSelector(".compose-pop .cmt-pending__item");
+    // 圧縮・送信が済むと丸い進み具合が消えてサムネイルになる
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".compose-pop .cmt-pending__thumb img") &&
+        !document.querySelector(".compose-pop .cmt-pending__progress"),
+      null,
+      { timeout: 20_000 },
+    );
+    await shot("77-comment-attach-compose");
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const card = page.locator(".comments .thread", { hasText: "添付の確認用" });
+    // サムネイルは画面に入ったものだけ取りに行く。新しいコメントは一覧の末尾なので、見える位置へ送る
+    await card.scrollIntoViewIfNeeded();
+    await card.locator(".cmt-files__tile img").waitFor({ timeout: 15_000 });
+    expectTrue(
+      await card
+        .locator(".cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "コメントの添付のサムネイルが描かれない",
+    );
+    // 一覧のカードには添付の小さなサムネイルが並ぶ
+    expectTrue(
+      await card
+        .locator(".cmt-files--thumbs .cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "一覧のカードにサムネイルが並ばない",
+    );
+    // 返信に画像を添付（本文は空でも送れる）: スレッドのパネルの返信欄で
+    const panel = await openPanel(card);
+    await panel.locator(".thread-panel__composer .rt__content").click();
+    await panel
+      .locator(".thread-panel__composer input[type=file]")
+      .setInputFiles([pngFile("shot-b.png", 2)]);
+    await panel
+      .locator(".thread-panel__composer .cmt-pending__thumb img")
+      .waitFor({ timeout: 20_000 });
+    await page.waitForFunction(
+      () => !document.querySelector(".thread-panel__composer .cmt-pending__progress"),
+    );
+    await panel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+    await panel.locator(".thread__replyitem .cmt-files__tile img").waitFor({ timeout: 15_000 });
+    expectTrue(
+      await panel
+        .locator(".thread__replyitem .cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "返信の添付のサムネイルが描かれない",
+    );
+    expectTrue(
+      await panel
+        .locator(".thread-panel__root .cmt-files__tile img")
+        .first()
+        .evaluate((img) => img.naturalWidth > 0),
+      "スレッドのパネルの本文の添付のサムネイルが描かれない",
+    );
+    await shot("77-comment-attach");
+    // 後片付け: コメントを削除して件数を戻す
+    await deleteFromPanel(panel);
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
+  }
+
+  // 78 スレッドのパネル（利用者決定 2026-10-20「Slackみたいに別タブで開く感じ？横に開く感じ？」）: 一覧のカードの「返信」の行を押すと、
+  // 一覧の隣にスレッドが開く（引き出しが広がり、一覧は見えたまま）。元のコメントの下に返信の流れ、一番下に返信欄。
+  // 同じ人が続けて書いた返信はまとめる。79 別の人には未読の点が付き、開くと消え、「ここから未読」の線が引かれる
+  {
+    const n0 = await page.locator(".comments .thread").count();
+    await page.locator(".comments__free").click();
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(
+      ".compose-pop .rt__content",
+      "スレッドの確認用です。縦に長くなる議論もここで続けます。",
+    );
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const card = page.locator(".comments .thread", { hasText: "スレッドの確認用" });
+    // 自分の投稿は自分には未読にならない
+    expectTrue((await card.locator(".thread__unread").count()) === 0, "自分の投稿が未読になる");
+    // カードを押すだけではパネルは開かない
+    await card.locator(".thread__body").click();
+    await settle();
+    expectTrue(
+      (await page.locator(".thread-panel").count()) === 0,
+      "カードを押しただけでパネルが開く",
+    );
+    const panel = await openPanel(card);
+    // 広い画面では一覧と並ぶ（一覧のカードは見えたまま・パネルは一覧の右）
+    const sides = await page.evaluate(() => {
+      const list = document.querySelector(".comments__list").getBoundingClientRect();
+      const panel = document.querySelector(".thread-panel").getBoundingClientRect();
+      const composer = document.querySelector(".thread-panel__composer").getBoundingClientRect();
+      return {
+        listRight: list.right,
+        panelLeft: panel.left,
+        listVisible: getComputedStyle(document.querySelector(".comments__main")).visibility,
+        composerInside: composer.bottom <= innerHeight && composer.top >= panel.top,
+      };
+    });
+    expectTrue(
+      sides.panelLeft >= sides.listRight - 1 && sides.listVisible === "visible",
+      "広い画面でスレッドが一覧の隣に開かない",
+    );
+    expectTrue(sides.composerInside, "返信欄が見えていない");
+    for (const text of ["一件目の返信です。", "続けて書いた返信です。"]) {
+      await panel.locator(".thread-panel__composer .rt__content").click();
+      await page.keyboard.type(text);
+      await panel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+      await page.waitForFunction(
+        (t) =>
+          [...document.querySelectorAll(".thread-panel .thread__replybody")].some((e) =>
+            e.textContent.includes(t),
+          ),
+        text,
+      );
+    }
+    // 同じ人が 5 分以内に続けた返信は、名前・アバターを省いてまとめる
+    expectTrue(
+      (await panel.locator(".cth-post--continued").count()) === 1 &&
+        (await panel.locator(".cth-post").count()) === 2,
+      "続けての返信がまとまらない",
+    );
+    // 一覧のカードにも、返信が済んだあとに返信の本文が届く（元のコメントの下に、古い順）
+    await page.waitForFunction(
+      () => {
+        const c = [...document.querySelectorAll(".comments .thread")].find((x) =>
+          x.textContent.includes("スレッドの確認用"),
+        );
+        const rows = [...(c?.querySelectorAll(".thread__reply") ?? [])];
+        return (
+          rows.length === 2 &&
+          rows[0].textContent.includes("一件目の返信です。") &&
+          rows[1].textContent.includes("続けて書いた返信です。")
+        );
+      },
+      null,
+      { timeout: 10_000 },
+    );
+    // 一覧の中で、開いているスレッドのカード（下の行まで）が見える位置にして撮る
+    await card.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("78c-thread-card-replies");
+    await shot("78-thread-panel");
+    await closePanel();
+    // 79 別の人（制作者）: 一覧のカードに未読の点 → パネルを開くと点が消え、「ここから未読」の線が引かれる
+    await signInAs("mock-nogiku-creator");
+    await go(revisionUrl);
+    await pdfReady();
+    await drawer("コメント");
+    const theirs = page.locator(".comments .thread", { hasText: "スレッドの確認用" });
+    await theirs.waitFor();
+    expectTrue(
+      (await theirs.locator(".thread__unread").count()) === 1,
+      "別の人に未読の点が付かない",
+    );
+    await theirs.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("79-thread-unread");
+    const theirPanel = await openPanel(theirs);
+    await theirPanel.locator(".cth-unread").waitFor();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".comments .thread")]
+        .filter((c) => c.textContent.includes("スレッドの確認用"))
+        .every((c) => !c.querySelector(".thread__unread")),
+    );
+    await shot("79-thread-read");
+    await theirPanel.locator(".thread-panel__composer .rt__content").click();
+    await page.keyboard.type("確認しました。対応します。");
+    await theirPanel.locator(".thread-panel__composer m3e-button", { hasText: "返信" }).click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".thread-panel .cth-post").length === 3,
+    );
+    await closePanel();
+    // 元の投稿者に戻ると、制作者の返信で未読の点が付き、開くと消える。後片付けでスレッドを削除する
+    await signInAs("mock-nogiku-reviewer");
+    await go(revisionUrl);
+    await pdfReady();
+    await drawer("コメント");
+    const back = page.locator(".comments .thread", { hasText: "スレッドの確認用" });
+    await back.waitFor();
+    expectTrue(
+      (await back.locator(".thread__unread").count()) === 1,
+      "返信が付いたのに未読の点が付かない",
+    );
+    // 返信（最新の 3 件まで）がカードに並び、制作者の返信の本文も見える
+    expectTrue(
+      (await back.locator(".thread__reply").count()) === 3 &&
+        (await back
+          .locator(".thread__reply", { hasText: "確認しました。対応します。" })
+          .count()) === 1,
+      "返信がカードに並ばない",
+    );
+    await back.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("79-thread-unread-reply");
+    // 78b スマホ（同じ人・まだ開いていない）: シートを開くと未読の点。カードの「返信」の行を押すと、スレッドがシートいっぱいに開く
+    // （一覧を置き換える。戻るで一覧へ）。返信欄は一番下に見えたまま。開くと未読の点は消える
+    await page.setViewportSize({ width: 412, height: 915 });
+    await settle();
+    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
+    await settle();
+    const mobileCard = page.locator("m3e-bottom-sheet.ws__sheet .thread", {
+      hasText: "スレッドの確認用",
+    });
+    await mobileCard.waitFor();
+    expectTrue(
+      (await mobileCard.locator(".thread__unread").count()) === 1,
+      "スマホのカードに未読の点が付かない",
+    );
+    expectTrue(
+      (await mobileCard.locator(".thread__reply").count()) === 3,
+      "スマホのカードに返信が並ばない",
+    );
+    await mobileCard.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+    await shot("78d-mobile-thread-card-replies");
+    await openPanel(mobileCard);
+    {
+      const m = await page.evaluate(() => {
+        const sh = document.querySelector("m3e-bottom-sheet.ws__sheet").getBoundingClientRect();
+        const panel = document.querySelector(".thread-panel").getBoundingClientRect();
+        const composer = document.querySelector(".thread-panel__composer").getBoundingClientRect();
+        return {
+          sheetHeight: sh.height,
+          panelHeight: panel.height,
+          composerBottom: composer.bottom,
+          innerHeight,
+          listShown: getComputedStyle(document.querySelector(".comments__main")).display,
+          pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+      console.log("mobile thread panel:", JSON.stringify(m));
+      expectTrue(m.listShown === "none", "スマホのスレッドが一覧を置き換えない");
+      expectTrue(m.panelHeight >= m.sheetHeight * 0.8, "スレッドがシートいっぱいに開かない");
+      expectTrue(m.composerBottom <= m.innerHeight + 1, "スマホで返信欄が画面の下に隠れる");
+      expectTrue(m.pageOverflow <= 0, "スマホでスレッドが横にはみ出す");
+    }
+    await shot("78b-mobile-thread-panel");
+    await closePanel();
+    await page.waitForSelector("m3e-bottom-sheet.ws__sheet .comments__list");
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("m3e-bottom-sheet.ws__sheet .thread")]
+        .filter((c) => c.textContent.includes("スレッドの確認用"))
+        .every((c) => !c.querySelector(".thread__unread")),
+    );
+    await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settle();
+    const backPanel = await openPanel(back);
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".comments .thread")]
+        .filter((c) => c.textContent.includes("スレッドの確認用"))
+        .every((c) => !c.querySelector(".thread__unread")),
+    );
+    await deleteFromPanel(backPanel);
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
   }
 
   // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
@@ -701,29 +1094,50 @@ async function main() {
   await settle();
   // 27b 制作物の先頭の「制作物の状況」（§74）: 数字のカード 3 枚・状態の積み上げ棒と凡例 5 段階。数・構造だけを見る（文言は見ない）
   await go(`${BASE}/works`);
-  await page.waitForSelector(".ov .legend__item");
+  await page.waitForSelector(".ov");
+  // 「制作物の状況」は既定で閉じ、開け閉めを覚える（localStorage。監査 W-01）
+  expectTrue(
+    (await page.locator(".ov").getAttribute("open")) === null,
+    "制作物の状況が既定で閉じていない",
+  );
+  await page.locator(".ov [slot=header]").click();
+  await page.waitForSelector(".ov .legend__item", { state: "visible" });
+  expectTrue(
+    (await page.evaluate(() => localStorage.getItem("mf100.works-overview-open"))) === "1",
+    "制作物の状況を開いたことが覚えられていない",
+  );
   expectTrue(
     (await page.locator(".ov .kpis .kpi").count()) === 3,
     "状況の数字のカードが 3 枚でない",
   );
-  expectTrue((await page.locator(".ov .legend__item").count()) === 5, "状態の凡例が 5 段階でない");
+  // 凡例は 0 件の段階を出さない（棒の区間と同じ数）
+  expectTrue(
+    (await page.locator(".ov .legend__item").count()) ===
+      (await page.locator(".ov .stagebar__seg").count()),
+    "状態の凡例が棒の区間と合っていない（0 件の段階が残っている）",
+  );
   expectTrue(
     (await page.locator(".ov .stagebar__seg").count()) >= 1,
     "状態の積み上げ棒に区間がない",
   );
   await shot("27b-works-overview", ".ov");
+  await page.evaluate(() => localStorage.removeItem("mf100.works-overview-open"));
 
   // 09 採否判断（制作者）: ⋮ → 不採用（理由）
   await go(revisionUrl);
   await page.waitForSelector(".comments .thread");
   const first = page.locator(".comments .thread").first();
-  await first.locator(".thread__body").click();
-  await settle();
-  await first.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+  const decisionPanel = await openPanel(first);
+  await decisionPanel
+    .locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]')
+    .click();
   await settle();
   await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
-  await page.fill(".thread textarea", "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み");
-  await page.locator(".thread m3e-button", { hasText: "不採用" }).click();
+  await page.fill(
+    ".thread-panel textarea",
+    "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み",
+  );
+  await decisionPanel.locator("m3e-button", { hasText: "不採用にする" }).click();
   await page.waitForSelector(".comments .thread--closed");
   await shot("09-decision");
 
@@ -831,9 +1245,9 @@ async function main() {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 8 });
     await page.mouse.up();
-    await page.waitForSelector(".compose-pop textarea");
+    await page.waitForSelector(".compose-pop .rt__content");
     await page.fill(
-      ".compose-pop textarea",
+      ".compose-pop .rt__content",
       "第1版より凡例が小さくなっています。8pt 以上に戻してください。",
     );
     await shot("38-compare-comment");
@@ -845,6 +1259,140 @@ async function main() {
       (n) => document.querySelectorAll(".compare__pane:last-child .anchor-pin").length > n,
       before,
       { timeout: 10_000 },
+    );
+  }
+
+  // 64a・73 書き込みのモードは無い（利用者指示 2026-10-20）。PC: クリックはふつうのクリック（PDF のリンクを辿れる）、
+  //    なぞる（範囲）と長押し（ピン）だけがコメント。ツールバーの「コメントを追加」は次の 1 回だけ。
+  //    第2版は受付中なので、校正者は書き込める（比べているところから戻って）
+  await stopCompare();
+  await page.waitForFunction(() => document.querySelectorAll(".compare__pane").length === 0);
+  await pdfReady();
+  await settle();
+  expectTrue(
+    (await page.locator(".ws__mark-mode, #mark-mode-menu").count()) === 0,
+    "書き込みのモードの入口が残っている",
+  );
+  await shot("64a-viewer-toolbar");
+  await context.route("https://example.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<title>リンク先</title>" }),
+  );
+  await page.waitForSelector('.viewer__page[data-page="1"] a.pdf-link');
+  const links = await page
+    .locator('.viewer__page[data-page="1"] a.pdf-link')
+    .evaluateAll((els) =>
+      els.map((e) => ({ href: e.getAttribute("href"), target: e.target, rel: e.rel })),
+    );
+  expectTrue(
+    links.some(
+      (l) =>
+        l.href === "https://example.com/mf100" &&
+        l.target === "_blank" &&
+        /noopener/.test(l.rel) &&
+        /noreferrer/.test(l.rel),
+    ),
+    `外部リンクが new タブ・noopener noreferrer で出ない: ${JSON.stringify(links)}`,
+  );
+  await shot("73-pdf-links-no-mark");
+  const page1 = () => page.locator('.viewer__page[data-page="1"]');
+  const composeCount = () => page.locator(".compose-pop").count();
+  const cancelCompose = async () => {
+    await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+  };
+  // 外部リンクは、ふつうのクリックで新しいタブに開く（投稿欄は出ない）
+  {
+    const [popup] = await Promise.all([
+      context.waitForEvent("page"),
+      page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="https://"]').click(),
+    ]);
+    await popup.waitForLoadState("domcontentloaded");
+    expectTrue(
+      popup.url().startsWith("https://example.com/mf100"),
+      `新しいタブの URL: ${popup.url()}`,
+    );
+    await popup.close();
+    expectTrue((await composeCount()) === 0, "リンクをクリックしただけで投稿欄が出た");
+  }
+  // ページ内のリンクはそのページへ
+  await page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="#page-"]').click();
+  await page.waitForFunction(
+    () => {
+      const st = document.querySelector(".viewer__stage").getBoundingClientRect();
+      const p2 = document.querySelector('.viewer__page[data-page="2"]').getBoundingClientRect();
+      return Math.abs(p2.top - st.top) < 80;
+    },
+    null,
+    { timeout: 5000 },
+  );
+  expectTrue((await composeCount()) === 0, "ページ内リンクをクリックしただけで投稿欄が出た");
+  await page.locator('.viewer__page[data-page="1"]').scrollIntoViewIfNeeded();
+  await settle();
+  // 紙面のふつうのクリックでは投稿欄が出ない。なぞる（範囲）と長押し（ピン）で出る
+  {
+    const box = await page1().boundingBox();
+    const at = (x, y) => [box.x + box.width * x, box.y + box.height * y];
+    await page.mouse.click(...at(0.92, 0.95));
+    await page.waitForTimeout(500);
+    expectTrue((await composeCount()) === 0, "紙面をクリックしただけで投稿欄が出た");
+    const [jx, jy] = at(0.9, 0.9);
+    await page.mouse.move(jx, jy);
+    await page.mouse.down();
+    await page.mouse.move(jx + 2, jy + 2, { steps: 2 }); // しきい値（4px）より小さいぶれはクリック
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    expectTrue((await composeCount()) === 0, "わずかなぶれでコメントになった");
+    await page.mouse.move(...at(0.2, 0.2));
+    await page.mouse.down();
+    await page.mouse.move(...at(0.5, 0.3), { steps: 6 });
+    await page.mouse.up();
+    await page.waitForSelector(".compose-pop");
+    expectTrue(
+      (await page1().locator(".viewer__overlay .anchor-draft").count()) === 1,
+      "なぞった範囲が下書きとして描かれない",
+    );
+    await cancelCompose();
+    await mouseHold(...at(0.92, 0.95));
+    await page.waitForSelector(".compose-pop");
+    expectTrue(
+      (await page1().locator(".viewer__overlay circle.anchor-draft").count()) === 1,
+      "長押しでピンが置かれない",
+    );
+    await cancelCompose();
+  }
+  // コメントの印を隠す: 紙面の印（ピン・範囲）が消え、戻すと出る。コメントの一覧は残る。カードを押すと印が戻る
+  {
+    await drawer("コメント");
+    const marks = () => page.locator(".viewer__overlay [data-anchor]").count();
+    const shown = await marks();
+    expectTrue(shown > 0, "印を隠す前に、紙面に印が無い");
+    const cards = await page.locator(".comments .thread").count();
+    const toggle = page.locator(".ws__toolbar .ws__marks-toggle");
+    await toggle.click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".viewer__overlay [data-anchor]").length === 0,
+    );
+    expectTrue(
+      (await page.locator(".comments .thread").count()) === cards,
+      "印を隠したのにコメントの一覧まで隠れた",
+    );
+    await shot("73b-marks-hidden");
+    await toggle.click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".viewer__overlay [data-anchor]").length === n,
+      shown,
+    );
+    await toggle.click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".viewer__overlay [data-anchor]").length === 0,
+    );
+    await page.locator(".comments .thread .thread__body").first().click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".viewer__overlay [data-anchor]").length > 0,
+    );
+    expectTrue(
+      (await page.locator(".ws__toolbar .ws__marks-toggle[selected]").count()) === 0,
+      "カードを押して印が戻っても、隠すボタンが押された状態のまま",
     );
   }
 
@@ -912,180 +1460,41 @@ async function main() {
   await page.locator("m3e-tab", { hasText: "担当" }).click();
   await page.waitForSelector(".teams-admin__team");
   await shot("13d-admin-teams");
-  // 62・63 フィードバック（制作物ごとの FB スペース。委員なら誰でも見て書ける）: スペースの一覧 → スペース（紙面・スレッド）→
-  // スレッド → テンプレと画像を付けて返信 → リアクション
-  await page.locator("m3e-nav-item", { hasText: "フィードバック" }).first().click();
-  await page.waitForSelector(".fb-spaces__list m3e-list-action");
-  await shot("62-feedback-list");
-  await page.locator(".fb-spaces__list m3e-list-action", { hasText: "EVE 企画ポスター" }).click();
-  await page.locator(".fb-pane__list m3e-list-action", { hasText: "配色の方向性" }).click();
-  await page.waitForSelector(".fb-post");
-  const before = await page.locator(".fb-post").count();
-  await page.locator('.fb-composer m3e-icon-button[aria-label="テンプレート"]').click();
-  await page.locator("m3e-menu-item:visible", { hasText: "校正er" }).click();
-  await page.setInputFiles('.fb-composer input[type="file"]', [resolve(FIXTURES, "poster.png")]);
-  await page.locator('.fb-composer m3e-icon-button[aria-label="送信"]').click();
-  await page.waitForFunction((n) => document.querySelectorAll(".fb-post").length > n, before, {
-    timeout: 20_000,
-  });
-  await page.waitForSelector(".fb-post:last-of-type .fb-thumb img");
-  // 投稿の操作はマウスを乗せたときに出る（Slack の操作バー）。投稿の頭を見える位置に送ってから
-  await page
-    .locator(".fb-post")
-    .last()
-    .evaluate((el) => el.scrollIntoView({ block: "start" }));
-  await page
-    .locator(".fb-post")
-    .last()
-    .hover({ position: { x: 40, y: 20 } });
-  await page
-    .locator(".fb-post")
-    .last()
-    .locator('m3e-icon-button[aria-label="リアクションを付ける"]')
-    .click();
-  await page.locator("m3e-menu-item:visible", { hasText: "👍" }).click();
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll(".fb-post")]
-      .at(-1)
-      ?.querySelector(".fb-post__reactions m3e-filter-chip[selected]"),
-  );
-  await shot("63-feedback-thread");
-  // 63b 自分の投稿を削除: ⋮ →「削除」→ 確認で消す。投稿の数が元に戻り、削除したことを示す行は残らない
+  // 62 FB はコメントへ統合して撤去した（docs/UI_M3E.md §95）: ナビは 制作 · 校正 · 制作物 の 3 つだけで、旧 FB の URL は転送される
   {
-    const last = page.locator(".fb-post").last();
-    await last.hover({ position: { x: 40, y: 20 } });
-    await last.locator('m3e-icon-button[aria-label="ほかの操作"]').click();
-    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
-    await page.waitForSelector('m3e-dialog[open] [slot="actions"] m3e-button');
-    await settle();
-    await page.locator('m3e-dialog[open] [slot="actions"] m3e-button', { hasText: "削除" }).click();
-    await page.waitForFunction((n) => document.querySelectorAll(".fb-post").length === n, before, {
-      timeout: 20_000,
-    });
+    const main = page.locator("m3e-nav-rail m3e-nav-item:not(.rail__lower)");
     expectTrue(
-      (await page.locator(".fb-post").count()) === before,
-      "削除した投稿が一覧から消えない",
+      JSON.stringify(await main.evaluateAll((els) => els.map((e) => e.dataset.to))) ===
+        JSON.stringify(["/make", "/check", "/works"]),
+      "ナビの主な項目が 制作・校正・制作物 の 3 つでない",
     );
-  }
-  // 64 制作物の中の FB（相談。解決しない話し合い）: 紙面の範囲を選び「FB」に切り替えて立てる →
-  // 引き出し「FB」でそのやり取りが開き、紙面には四角い印（コメントの丸い印と見分ける）
-  await signInAs("mock-nogiku-reviewer");
-  await go(revisionUrl);
-  await pdfReady();
-  await settle();
-  // 下のツールバーの「書き込み」を FB にして、紙面の範囲を選ぶ（投稿欄の右上の切り替えは無くした）
-  await openMarkMenu();
-  await shot("64a-mark-mode-menu");
-  await page
-    .locator("#mark-mode-menu m3e-menu-item-radio:visible", { hasText: "FB" })
-    .first()
-    .click();
-  await settle();
-  {
-    const box = await page.locator(".viewer__overlay").first().boundingBox();
-    await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.3);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.4, { steps: 8 });
-    await page.mouse.up();
-  }
-  await page.waitForSelector(".compose-pop textarea");
-  expectTrue(
-    (await page.locator(".compose-pop__kind").count()) === 0,
-    "投稿欄にコメント／FB の切り替えが残っている",
-  );
-  expectTrue(
-    (await page.locator(".compose-pop__note").innerText()).includes("FB"),
-    "FB のモードなのに、投稿欄が FB と示さない",
-  );
-  await page.fill(".compose-pop textarea", "ここの余白、もう少し詰めても良さそう？ 迷っています");
-  await page.locator(".compose-pop m3e-button", { hasText: "FB で相談" }).click();
-  await page.waitForSelector(".fb-pane--thread .fb-post");
-  await page.waitForSelector(".anchor-pin--fb");
-  await shot("64-editor-fb");
-  // 書き込みはこのタブのあいだ覚えている（受付終了のこの版では「コメント」は選べない）。コメントに戻すのは、コメントできる版で（下の 39 の前）
-  // 64b FB スペース（縦に 3 列: スペース・紙面・スレッド）。紙面の FB の印から、そのスレッドを開いて話す
-  {
+    expectTrue(
+      (await page.locator("m3e-nav-item", { hasText: "フィードバック" }).count()) === 0,
+      "ナビに FB の項目が残っている",
+    );
     const workId = new URL(revisionUrl).pathname.split("/")[2];
+    await go(`${BASE}/feedback`);
+    await page.waitForURL(/\/works$/);
     await go(`${BASE}/feedback/w/${workId}`);
-    await pdfReady();
-    // 紙面は最新の版（第2版）。第1版の範囲についての FB を開くと、紙面がその版・場所へ移り印が出る
-    await page.locator(".fb-pane__list m3e-list-action", { hasText: "余白" }).click();
-    await page.waitForSelector(".fb-space__threads .fb-pane--thread .fb-post");
-    await page.waitForSelector(".fb-stage .anchor-pin--fb");
-    await shot("64b-feedback-space");
+    await page.waitForURL(new RegExp(`/works/${workId}(/|$)`));
+    // 移していない（見つからない）旧 FB のスレッドは制作物の一覧へ
+    await go(`${BASE}/feedback/no-such-thread`);
+    await page.waitForURL(/\/works$/, { timeout: 15_000 });
+    await page.waitForSelector(WORKS_ENTRY);
   }
 
-  // 73 書き込み「なし」（利用者指示 2026-10-17）: 印を付けず、PDF の中のリンクが押せる。外部の URL は新しいタブ（noopener noreferrer）、
-  //    ページ内のリンクはそのページへ。コメント・FB のモードではリンクの層を出さない（印の層がなぞるを受ける）
-  await go(revisionUrl);
+  // 64 エディタに FB の入口は無い
+  await signInAs("mock-nogiku-reviewer");
+  await go(revision2Url);
   await pdfReady();
-  await context.route("https://example.com/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: "<title>リンク先</title>" }),
+  await settle();
+  expectTrue(
+    (await page.locator('.ws__side-toolbar m3e-icon-button[aria-label^="FB"]').count()) === 0,
+    "エディタの縦のツールバーに FB の入口が残っている",
   );
   expectTrue(
-    (await page.locator(".viewer__page .pdf-link").count()) === 0,
-    "FB のモードなのに、PDF のリンクの層が出ている",
-  );
-  await setMarkMode("選択");
-  await page.waitForSelector('.viewer__page[data-page="1"] a.pdf-link');
-  const links = await page
-    .locator('.viewer__page[data-page="1"] a.pdf-link')
-    .evaluateAll((els) =>
-      els.map((e) => ({ href: e.getAttribute("href"), target: e.target, rel: e.rel })),
-    );
-  expectTrue(
-    links.some(
-      (l) =>
-        l.href === "https://example.com/mf100" &&
-        l.target === "_blank" &&
-        /noopener/.test(l.rel) &&
-        /noreferrer/.test(l.rel),
-    ),
-    `外部リンクが new タブ・noopener noreferrer で出ない: ${JSON.stringify(links)}`,
-  );
-  await shot("73-pdf-links-no-mark");
-  // 紙面をなぞっても投稿欄（コメント・FB）は出ない
-  {
-    const box = await page.locator(".viewer__overlay").first().boundingBox();
-    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3, { steps: 6 });
-    await page.mouse.up();
-    await page.waitForTimeout(400);
-    expectTrue(
-      (await page.locator(".compose-pop").count()) === 0,
-      "書き込みが「なし」なのに、紙面をなぞると投稿欄が出る",
-    );
-  }
-  // 外部リンクは新しいタブで開く
-  {
-    const [popup] = await Promise.all([
-      context.waitForEvent("page"),
-      page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="https://"]').click(),
-    ]);
-    await popup.waitForLoadState("domcontentloaded");
-    expectTrue(
-      popup.url().startsWith("https://example.com/mf100"),
-      `新しいタブの URL: ${popup.url()}`,
-    );
-    await popup.close();
-  }
-  // ページ内のリンクはそのページへ
-  await page.locator('.viewer__page[data-page="1"] a.pdf-link[href^="#page-"]').click();
-  await page.waitForFunction(
-    () => {
-      const st = document.querySelector(".viewer__stage").getBoundingClientRect();
-      const p2 = document.querySelector('.viewer__page[data-page="2"]').getBoundingClientRect();
-      return Math.abs(p2.top - st.top) < 80;
-    },
-    null,
-    { timeout: 5000 },
-  );
-  // FB に戻すと、リンクの層は出ない（印の層がなぞるを受ける。リンクは印を付ける操作を奪わない）
-  await setMarkMode("FB");
-  expectTrue(
-    (await page.locator(".viewer__page .pdf-link").count()) === 0,
-    "FB のモードに戻しても、PDF のリンクの層が残っている",
+    (await page.locator(".drawer m3e-tab, .ws__drawer m3e-tab", { hasText: "FB" }).count()) === 0,
+    "エディタの引き出しに FB のタブが残っている",
   );
 
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
@@ -1107,7 +1516,7 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".shell__scrim", { state: "detached" });
 
-  // 20 compact（<600）: 制作（1 列のリスト。下部ナビ: 制作・校正・制作物・FB の 4 つ）。
+  // 20 compact（<600）: 制作（1 列のリスト。下部ナビ: 制作・校正・制作物の 3 つ）。
   // 制作者で撮り、右下（下部ナビの上 16）の FAB「作る」も写す / 32 アプリバーのベル（アカウントの隣）→ ボトムシート
   await page.setViewportSize({ width: 412, height: 915 });
   await signInAs("mock-nogiku-creator");
@@ -1115,8 +1524,8 @@ async function main() {
   await page.waitForSelector("m3e-nav-bar");
   await page.waitForSelector(".submit-fab m3e-fab");
   expectTrue(
-    (await page.locator("m3e-nav-bar m3e-nav-item").count()) === 4,
-    "下部ナビが 4 項目でない",
+    (await page.locator("m3e-nav-bar m3e-nav-item").count()) === 3,
+    "下部ナビが 3 項目でない",
   );
   await settle();
   await shot("20-mobile-make");
@@ -1176,7 +1585,7 @@ async function main() {
   await pdfReady();
   await settle();
   // 34 引き出しは普段は閉じていて、ツールバーの「コメント」で半分まで開く
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
   await settle();
   expectTrue(
     await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").open),
@@ -1191,18 +1600,8 @@ async function main() {
     "引き出しのシートにハンドル・止まる高さが無い",
   );
   await shot("34-mobile-sheet-half");
-  // 65 狭い画面の FB: シートのタブで「FB」に切り替える（制作物の相談の一覧）
-  await page.locator("m3e-bottom-sheet.ws__sheet m3e-tab", { hasText: "FB" }).click();
-  await page.waitForSelector("m3e-bottom-sheet.ws__sheet .fb-pane");
-  await settle();
-  await shot("65-mobile-editor-fb");
   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
-  await settle();
-  // 65b 狭い画面のツールバーにも「書き込み」（コメント / FB / なし）。押すと小さな Menu
-  await openMarkMenu();
-  await shot("65b-mobile-mark-mode");
-  await page.keyboard.press("Escape");
   await settle();
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -1300,9 +1699,7 @@ async function main() {
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");
   await go(writeWorkUrl);
-  // 書き込みはこのタブのあいだ覚えていて、64 で FB にしたまま。ここはコメントできる版なので、コメントに戻す
-  await page.waitForSelector(".ws__toolbar .ws__mark-mode");
-  await setMarkMode("コメント");
+  await page.waitForSelector(".ws__toolbar .ws__marks-toggle");
   await page.waitForSelector(".rich-viewer__page .doc");
   await page.evaluate((needle) => {
     const root = document.querySelector(".rich-viewer__page .doc");
@@ -1324,9 +1721,19 @@ async function main() {
       .querySelector(".rich-viewer__wrap")
       .dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   }, "百花繚乱");
-  await page.waitForSelector(".compose-pop textarea");
+  await page.waitForSelector(".compose-pop .rt__content");
+  // マウスで選んだ文字は、投稿欄に文字カーソルを移さず、選択も残る（そのまま Ctrl/⌘＋C でコピーできる）
+  await page.waitForTimeout(600);
+  const keep = await page.evaluate(() => ({
+    inPop: !!document.activeElement?.closest(".compose-pop"),
+    selected: getSelection().toString(),
+  }));
+  expectTrue(
+    !keep.inPop && keep.selected.includes("百花繚乱"),
+    `文字を選んだら投稿欄に文字カーソルが移り、選択が外れた（コピーできない）: ${JSON.stringify(keep)}`,
+  );
   await page.fill(
-    ".compose-pop textarea",
+    ".compose-pop .rt__content",
     "テーマ名は公式表記「百花繚乱 ―ひゃっかりょうらん―」に合わせ、ふりがなを付けてください。",
   );
   await shot("43-write-review-select");
@@ -1385,6 +1792,57 @@ async function main() {
     "投稿欄に選んだ文字の引用が出ない",
   );
   await shot("44a-mobile-text-comment");
+  // 44b 書式つきの入力欄はボトムシートの中でも使え、ツールバーが横にはみ出さない
+  await page.locator(".compose-pop--docked .rt__content").click();
+  await page.keyboard.type("**太字** と https://example.com/mobile ");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("- 項目");
+  {
+    const m = await page.evaluate(() => {
+      const bar = document.querySelector(".compose-pop--docked .rt__toolbar");
+      const pop = document.querySelector(".compose-pop--docked").getBoundingClientRect();
+      return {
+        scrollWidth: bar.scrollWidth,
+        clientWidth: bar.clientWidth,
+        // ボタンを横に並べた幅（390px の画面でも、投稿欄の内側 = 390 - 余白 16×2 - 内側の余白 12×2 = 334 に収まること）
+        need: [...bar.children].reduce((n, c) => n + c.getBoundingClientRect().width, 0),
+        popRight: pop.right,
+        popLeft: pop.left,
+        innerWidth: window.innerWidth,
+        strong: document.querySelectorAll(".compose-pop--docked .rt__content strong").length,
+      };
+    });
+    console.log("mobile compose toolbar:", JSON.stringify(m));
+    expectTrue(m.scrollWidth <= m.clientWidth, "モバイルの書式ツールバーが横にはみ出す");
+    expectTrue(m.need <= 334, "書式ツールバーが 390px の画面の投稿欄に収まらない");
+    expectTrue(m.popLeft >= 0 && m.popRight <= m.innerWidth, "モバイルの投稿欄が画面からはみ出す");
+    expectTrue(m.strong === 1, "モバイルの入力欄で太字にならない");
+  }
+  await shot("44b-mobile-compose-markdown");
+  // 44c 390px（小さいスマホ）でも同じ: ツールバーも投稿欄も画面内に収まる
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settle();
+  {
+    const m = await page.evaluate(() => {
+      const bar = document.querySelector(".compose-pop--docked .rt__toolbar");
+      const pop = document.querySelector(".compose-pop--docked").getBoundingClientRect();
+      return {
+        scrollWidth: bar.scrollWidth,
+        clientWidth: bar.clientWidth,
+        popLeft: pop.left,
+        popRight: pop.right,
+        innerWidth: window.innerWidth,
+        pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    console.log("390 compose toolbar:", JSON.stringify(m));
+    expectTrue(m.scrollWidth <= m.clientWidth, "390px で書式ツールバーが横にはみ出す");
+    expectTrue(m.popLeft >= 0 && m.popRight <= m.innerWidth, "390px で投稿欄が画面からはみ出す");
+    expectTrue(m.pageOverflow <= 0, "390px でページが横にはみ出す");
+  }
+  await shot("44c-mobile-compose-390");
+  await page.setViewportSize({ width: 412, height: 915 });
+  await settle();
   await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
   await page.evaluate(() => {
     window.matchMedia = window.__origMatchMedia;
@@ -1469,6 +1927,82 @@ const openWork = async (title) => {
 const expectTrue = (cond, msg) => {
   if (!cond) throw new Error(msg);
 };
+/**
+ * 一覧のカード（Slack のスレッド式。1 件を短く見せる）の下の行を押して、スレッドのパネルを開く。パネルの locator を返す。
+ * 一覧のカードを押すだけではパネルは開かない（選んで紙面のピンへ移るだけ）
+ */
+const openPanel = async (card) => {
+  await card.locator(".thread__footer").click();
+  await page.waitForSelector(".thread-panel");
+  await settle();
+  return page.locator(".thread-panel");
+};
+/** スレッドのパネルを閉じる（広い画面は ✕、狭い画面・シートは戻る） */
+const closePanel = async () => {
+  await page
+    .locator(
+      '.thread-panel__bar m3e-icon-button[aria-label="スレッドを閉じる"]:visible, .thread-panel__bar m3e-icon-button[aria-label="コメントの一覧へ戻る"]:visible',
+    )
+    .first()
+    .click();
+  await page.waitForSelector(".thread-panel", { state: "detached" });
+  await settle();
+};
+/** パネルの ⋮ からコメントを削除し（確認まで）、パネルが閉じるまで待つ */
+const deleteFromPanel = async (panel) => {
+  await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+  await settle();
+  await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+  await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
+  await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+  await page.waitForSelector(".thread-panel", { state: "detached" });
+};
+/** 小さな PNG を作る（添付の確認用。斜めのグラデーション。seed で色を変える） */
+const makePng = (w, h, seed) => {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (buf) => {
+    let c = 0xffffffff;
+    for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(body));
+    return Buffer.concat([len, body, sum]);
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(w, 0);
+  head.writeUInt32BE(h, 4);
+  head[8] = 8; // 8 bit
+  head[9] = 2; // RGB
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * (w * 3 + 1);
+    for (let x = 0; x < w; x++) {
+      raw[row + 1 + x * 3] = (x * 255) / w;
+      raw[row + 2 + x * 3] = (y * 255) / h;
+      raw[row + 3 + x * 3] = (seed * 70 + (x + y) * 3) % 256;
+    }
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", head),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+};
+const pngFile = (name, seed) => ({
+  name,
+  mimeType: "image/png",
+  buffer: makePng(160, 110, seed),
+});
 /**
  * 画面幅ごとの横はみ出しの測定（画面構成 v2 §3.6）: ページが画面より広くならず、切れ目の無い長い題名の行とその印が画面内に収まる。
  * 行の印は compact では題名の下（.hub-row__line--action）。測った値は標準出力に残す
@@ -1683,6 +2217,11 @@ async function v2Scenes() {
       },
       [type, x, y],
     );
+  // タップ（すぐ離す）はふつうのタップ: コメントにならない
+  await touchOn("pointerdown", 80, 120);
+  await touchOn("pointerup", 80, 120);
+  await page.waitForTimeout(700);
+  expectTrue((await page.locator(".compose-pop").count()) === 0, "タップしただけで投稿欄が出た");
   await touchOn("pointerdown", 80, 120);
   await touchOn("pointermove", 80, 60);
   await touchOn("pointerup", 80, 60);
@@ -1830,7 +2369,7 @@ async function v2Scenes() {
   await signInAs("mock-nogiku-reviewer");
   await page.setViewportSize({ width: 412, height: 915 });
   await go(`${sns}/v/1`);
-  await page.waitForSelector(".sp-ig__slide .sp-marks.is-drawable", { timeout: 20_000 });
+  await page.waitForSelector(".sp-ig__slide .sp-marks", { timeout: 20_000 });
   await settle();
   // 設定のボタンは共通アプリバーの末尾（浮いた FAB は無い）。スマホの幅でもバーからはみ出さず、全画面は menu から開き ✕ で戻れる
   const barButton = page.locator('#appbar-actions m3e-icon-button[aria-label^="プレビューの設定"]');
@@ -1873,8 +2412,8 @@ async function v2Scenes() {
       { timeout: 5000 },
     );
   const postComment = async (body) => {
-    await page.waitForSelector(".compose-pop textarea");
-    await page.fill(".compose-pop textarea", body);
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", body);
     await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
     await page.waitForSelector(".compose-pop", { state: "detached" });
     await settle();
@@ -1947,7 +2486,16 @@ async function v2Scenes() {
     () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "2/2",
   );
   await carouselSettled(1);
-  await drag(page.locator(".sp-ig__slide").nth(1).locator(".sp-marks"), 0.7, 0.6);
+  // クリックだけではコメントにならない。押し続ける（長押し）とピン
+  const layer2 = page.locator(".sp-ig__slide").nth(1).locator(".sp-marks");
+  await drag(layer2, 0.7, 0.6);
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page.locator(".compose-pop").count()) === 0,
+    "SNS の画像をクリックしただけで投稿欄が出た",
+  );
+  const lb2 = await layer2.boundingBox();
+  await mouseHold(lb2.x + lb2.width * 0.7, lb2.y + lb2.height * 0.6);
   await postComment("この画像の右下は切れて見えます（画像 2 のピン）");
   await marksShown(".sp-figure .sp-mark--point", "画像のピンが出ない");
   // 1 枚目へ戻して撮る: 本文の強調と 1 枚目の矩形が同時に見える
@@ -1961,10 +2509,13 @@ async function v2Scenes() {
   );
   await shot("59a-sns-anchored-comments");
   // 59b コメントを開くと、その画像へ送って位置を強調する（ピンは 2 枚目。いまは 1 枚目を見ている）
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
   await settle();
   // ピンのコメントのカード（番号は自動校正のコメントも数えるので、書いた文で探す）を押す
-  await page.locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "画像 2 のピン" }).click();
+  await page
+    .locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "画像 2 のピン" })
+    .locator(".thread__body")
+    .click();
   await page.waitForFunction(
     () => document.querySelector(".sp-figure .sp-ig__count")?.textContent === "2/2",
     null,
@@ -2013,9 +2564,12 @@ async function v2Scenes() {
   await go("/works");
   await go(`${sns}/v/1`); // 開き直すと、キャプションはまた 2 行で切られている
   await page.waitForSelector(".sp-figure .sp-more", { timeout: 20_000 });
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
   await settle();
-  await page.locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "続きの本文にも" }).click();
+  await page
+    .locator("m3e-bottom-sheet.ws__sheet .thread", { hasText: "続きの本文にも" })
+    .locator(".thread__body")
+    .click();
   await page.waitForFunction(() => document.querySelector(".sp-figure .sp-more") === null, null, {
     timeout: 5000,
   });
@@ -2047,7 +2601,7 @@ async function v2Scenes() {
   await go(`${sns}/v/1`);
   await page.waitForSelector(".sp-figure .sp-mark--rect", { timeout: 20_000 });
   const openComments = async () => {
-    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント"]').click();
+    await page.locator('.ws__toolbar m3e-icon-button[aria-label^="コメント（"]').click();
     await settle();
   };
   await openComments();
@@ -2112,8 +2666,8 @@ async function v2Scenes() {
     );
   await videoReady();
   const postVideo = async (body) => {
-    await page.waitForSelector(".compose-pop textarea");
-    await page.fill(".compose-pop textarea", body);
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", body);
     await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
     await page.waitForSelector(".compose-pop", { state: "detached" });
   };
@@ -2146,6 +2700,19 @@ async function v2Scenes() {
   );
   await shot("66b-video-range-compose");
   await postVideo("この間のテロップが速すぎる");
+  // 映像のクリックは再生・停止（コメントにならない）
+  {
+    const f = await page.locator(".vplayer__frame").boundingBox();
+    const paused = () => page.evaluate(() => document.querySelector(".vplayer video").paused);
+    await page.mouse.click(f.x + f.width * 0.5, f.y + f.height * 0.5);
+    await page.waitForFunction(() => !document.querySelector(".vplayer video").paused);
+    await page.mouse.click(f.x + f.width * 0.5, f.y + f.height * 0.5);
+    await page.waitForFunction(() => document.querySelector(".vplayer video").paused);
+    expectTrue(
+      (await paused()) && (await page.locator(".compose-pop").count()) === 0,
+      "映像のクリックが再生・停止にならない（またはコメントになった）",
+    );
+  }
   // 画面の位置: 1 秒で止めて映像の左上をドラッグ
   await seekTo(1 / 12);
   const fr = await page.locator(".vplayer__frame").boundingBox();
@@ -2199,9 +2766,7 @@ async function webFigmaScenes() {
   await page.waitForSelector(".wlive__frame", { timeout: 15_000 });
   // ブリッジの ready（印の層が出る）
   await page.waitForSelector(".wlive__marks", { timeout: 15_000 });
-  await page.locator(".wlive__mode m3e-button", { hasText: "コメント" }).click();
   await page.waitForTimeout(400);
-  // iframe の中の見出しを押す（縮小表示なので座標ではなく、要素にポインターイベントを送る）
   const site = page.frameLocator(".wlive__frame");
   const clickIn = (selector) =>
     site
@@ -2222,11 +2787,40 @@ async function webFigmaScenes() {
             }),
           );
       });
+  const holdIn = (selector) =>
+    site
+      .locator(selector)
+      .first()
+      .evaluate(async (el) => {
+        el.scrollIntoView({ block: "center" });
+        const r = el.getBoundingClientRect();
+        const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        for (const type of ["pointerdown", "pointerup"]) {
+          if (type === "pointerup") await new Promise((r) => setTimeout(r, 700));
+          el.dispatchEvent(
+            new PointerEvent(type, {
+              ...at,
+              button: 0,
+              bubbles: true,
+              cancelable: true,
+              pointerId: 1,
+            }),
+          );
+        }
+      });
+  // サイトの中のふつうのクリックは、サイトの操作（コメントにならない）
   await clickIn("#events h2");
+  await page.waitForTimeout(500);
+  expectTrue(
+    (await page.locator(".compose-pop").count()) === 0,
+    "ライブ表示の中をクリックしただけで投稿欄が出た",
+  );
+  // 長押しした要素にコメントできる
+  await holdIn("#events h2");
   await page.waitForSelector(".compose-pop__place");
   const place = await page.locator(".compose-pop__place").innerText();
   expectTrue(place.includes("iPhone 17（402px）"), `投稿欄に端末と要素が出ない（${place}）`);
-  await page.fill(".compose-pop textarea", "見出し「企画一覧」は「企画をさがす」に揃える");
+  await page.fill(".compose-pop .rt__content", "見出し「企画一覧」は「企画をさがす」に揃える");
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
   await page.waitForFunction(
@@ -2295,7 +2889,7 @@ async function webFigmaScenes() {
   await page.waitForSelector(".figma-embed__iframe");
   await page.locator("m3e-button", { hasText: "このフレームにコメント" }).click();
   await page.waitForSelector(".compose-pop__place");
-  await page.fill(".compose-pop textarea", "このフレーム全体の余白を見直したい");
+  await page.fill(".compose-pop .rt__content", "このフレーム全体の余白を見直したい");
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
   await page.waitForTimeout(500);

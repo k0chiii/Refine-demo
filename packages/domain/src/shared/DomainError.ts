@@ -52,6 +52,8 @@ export const domainErrorCodes = [
   "comment_thread_deleted",
   "comment_reply_not_found",
   "comment_reaction_invalid",
+  "comment_body_format_invalid",
+  "comment_body_too_long",
   "comment_carry_target_not_accepting",
   "comment_already_carried",
   "comment_carry_same_revision",
@@ -93,10 +95,10 @@ export const domainErrorCodes = [
   "notation_not_manager",
   "notation_category_invalid",
   "notation_proposal_closed",
-  // 制作のフィードバック（表現の議論）
-  "feedback_invalid",
-  "feedback_not_found",
-  "feedback_file_not_ready",
+  // コメント・返信の添付
+  "comment_file_invalid",
+  "comment_file_not_found",
+  "comment_file_not_ready",
   // 通知の配信（Web Push）
   "push_subscription_invalid",
   "notification_prefs_invalid",

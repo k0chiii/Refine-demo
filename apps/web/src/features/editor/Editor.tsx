@@ -56,7 +56,9 @@ import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { mayPersist } from "@/lib/fileCachePolicy";
 import { defaultArtifactId } from "./defaultArtifact";
 import { documentView } from "@/features/writing/documentView";
+import { CommentBody } from "@/features/review/CommentBody";
 import { StoredComposePopover } from "@/features/review/ComposePopover";
+import { preloadRichComment } from "@/features/review/RichCommentField";
 import { createComposeStore } from "@/features/review/composeStore";
 import {
   activeMentions,
@@ -64,6 +66,7 @@ import {
   MentionProvider,
 } from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
+import { ThreadPanel } from "@/features/review/ThreadPanel";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { PinButton } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
@@ -73,14 +76,7 @@ import { PostReview } from "@/features/social/PostReview";
 import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
-import {
-  effectiveMarkMode,
-  markModeIcon,
-  markModeLabel,
-  markModes,
-  useMarkMode,
-  type MarkMode,
-} from "@/features/review/markMode";
+import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
 import { ImageSwipe } from "@/features/compare/ImageSwipe";
@@ -106,13 +102,14 @@ import {
 import { ActionSheet } from "@/ui/ActionSheet";
 import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { useRevealThread } from "@/features/review/revealThread";
-import { FeedbackPane } from "@/features/feedback/FeedbackPane";
 import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Field, TextArea } from "@/ui/Field";
 import { StatusText } from "@/ui/Chip";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
+import { M3eButtonGroup } from "@m3e/react/button-group";
+import { M3eDivider } from "@m3e/react/divider";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -151,6 +148,8 @@ type Draft = {
   point?: { x: number; y: number };
   range?: { start: number; end: number };
   box?: { x: number; y: number; w: number; h: number };
+  /** 投稿欄に文字カーソルを移す（キーボード・ボタンで選んだ文字。マウスで選んだときは移さず、コピーできるまま） */
+  focus?: boolean;
   /** 動画の時点（end があれば範囲）。rect・point と一緒なら、その時点の画面の位置 */
   time?: { start: number; end?: number };
   /** 動画で範囲を選んでいる途中（投稿欄はまだ出さない） */
@@ -167,9 +166,18 @@ type Draft = {
   postPlace?: { label: string; quote?: string };
 };
 
+/**
+ * コメントの印を隠している制作物（このタブのあいだ・メモリだけ）。版・ページを替えても保ち、制作物を離れたら戻す。
+ * 版の URL を替えるとエディタが作り直されることがあるので、モジュールで覚えて作り直しの最初の描画で読む
+ */
+let marksHiddenFor: string | null = null;
+
 const COMPOSE_W = 300;
 /** 紙面の描き終わりの通知が届かなくても、ファイルが届いてからこの時間で読み込み中の表示を終える */
 const PAINT_TIMEOUT_MS = 8000;
+/** スレッドを開いたときの引き出しの幅（一覧 330 + スレッド 410）と、これ未満しか取れなければ広げない幅（一覧に重ねて出す） */
+const THREAD_PANE_W = 740;
+const THREAD_PANE_MIN = 720;
 
 function anchorTop(anchor: Anchor, vp: Viewport): number | null {
   if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
@@ -247,6 +255,18 @@ export function Editor({
   useEffect(() => {
     if (mediaType) preloadViewers(mediaType as MediaType);
   }, [mediaType]);
+  // 書式つきの入力欄（TipTap）は、画面が落ち着いてから読み込んでおく（最初の読み込みは増やさない。初めて開くときの待ちを短くする）
+  useEffect(() => {
+    // データ節約の設定のときは先読みしない（初めて開くときに読み込む）
+    if ((navigator as { connection?: { saveData?: boolean } }).connection?.saveData) return;
+    const idle = window.requestIdleCallback;
+    if (idle) {
+      const h = idle(() => preloadRichComment(), { timeout: 4000 });
+      return () => window.cancelIdleCallback(h);
+    }
+    const h = window.setTimeout(preloadRichComment, 2000);
+    return () => window.clearTimeout(h);
+  }, []);
   const dataRaw = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   // 版を切り替えた直後に前の版の結果が残ることがあるので、表示中の版のものだけを使う
   const data = dataRaw && revisionId && dataRaw.revision.id === revisionId ? dataRaw : undefined;
@@ -261,9 +281,6 @@ export function Editor({
   const removeThread = useMutation(api.comments.remove);
   const removeReply = useMutation(api.comments.removeReply);
   const carryForward = useMutation(api.comments.carryForward);
-  const createFeedback = useMutation(api.feedback.createThread);
-  // 相談（FB）: 解決しない話し合い。この制作物の相談を引き出し「FB」と紙面の印に使う
-  const fbThreads = useQuery(api.feedback.listThreads, { workId });
 
   // M3 の compact/medium（839 以下）: 補助ペインは置けないので、引き出しはツールバーから開くボトムシート（普段は閉じて紙面を全面に）
   const mobile = useMedia("(max-width: 839px)");
@@ -277,6 +294,8 @@ export function Editor({
     search.tab ?? (readLayout() === "panel" ? "comments" : null),
   );
   const [showResolved, setShowResolved] = useState(false);
+  /** コメントの一覧がスクロールされているか（上の見出しの行の下に区切り線を出す） */
+  const [listScrolled, setListScrolled] = useState(false);
   /** コメントの絞り込み: 人のコメントだけ / 自動校正だけ */
   const [who, setWho] = useState<"all" | "human" | "bot">("all");
   /** 利用者が選んだ添付（選んでいなければ既定の添付。下の artifactId） */
@@ -303,16 +322,22 @@ export function Editor({
     return () => ro.disconnect();
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くと一覧の隣・シートいっぱいにスレッドが開く） */
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
-  /** 引き出し「FB」で開いている相談 */
-  const [fbOpenId, setFbOpenId] = useState<string | null>(search.fb ?? null);
-  /**
-   * 紙面に印を付けたとき作るもの: コメント（解決する指摘）・FB（解決しない相談）・なし（印を付けない）。下のツールバーで切り替える。
-   * このタブのあいだ覚える（features/review/markMode）。権限で使えないモードは下の markMode に置き換える
-   */
-  const [markPick, setMarkPick] = useMarkMode();
+  /** 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける。置くか Esc で戻る） */
+  const armed = useMarkArmed();
+  useEffect(() => () => setMarkArmed(false), []);
+  /** コメントの印（ピン・範囲・文字の強調・動画の印）を一時的に隠している（コメントそのものは消さない・一覧も隠さない） */
+  const [marksHidden, setMarksHidden] = useState(() => marksHiddenFor === workId);
+  useEffect(() => {
+    marksHiddenFor = marksHidden ? workId : null;
+    return () => {
+      marksHiddenFor = null;
+    };
+  }, [marksHidden, workId]);
   const [draft, setDraft] = useState<Draft | null>(null);
   /** SNS のプレビューでコメントの位置へ移して強調する合図（カード・印を押すたびに増える） */
   const [postReveal, setPostReveal] = useState(0);
@@ -334,7 +359,7 @@ export function Editor({
   // 投稿欄の書きかけ（本文・メンション）。Editor の state に置かず、投稿欄だけが購読する（1 文字ごとに全体を描き直さない）
   const [composeStore] = useState(createComposeStore);
   // メンションの検索先（候補は「@」に続けて打った文字でサーバーに探させる。名簿は購読しない。§60）
-  const mentionDirectory = useMemo(() => createMentionDirectory(workId, "comments"), [workId]);
+  const mentionDirectory = useMemo(() => createMentionDirectory(workId), [workId]);
   const [requestId, setRequestId] = useState(newRequestId);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -401,6 +426,14 @@ export function Editor({
     if (!sheetOpen) el.show?.(0);
     setSheetOpen(true);
   };
+  /** 狭い画面: 引き出しのシートを指定の高さ（0: 半分・1: いっぱい）で開く（開いていれば高さだけ変える） */
+  const showSheet = (d: Drawer, detent: number) => {
+    const el = sheetRef.current as (HTMLElement & { show?: (detent?: number) => void }) | null;
+    if (!el) return;
+    setDrawer(d);
+    el.show?.(detent);
+    setSheetOpen(true);
+  };
   const openDrawer = (d: Drawer) => {
     if (drawer === d) setDrawer(null);
     else {
@@ -412,10 +445,6 @@ export function Editor({
   useEffect(() => {
     if (search.tab) setDrawer(search.tab);
   }, [search.tab]);
-  // フィードバックの画面・通知から来たとき: 引き出し「FB」でその相談を開く
-  useEffect(() => {
-    if (search.fb) setFbOpenId(search.fb);
-  }, [search.fb]);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -433,6 +462,7 @@ export function Editor({
     setCompareWith(revisionId ? (search.compare ?? null) : null);
     setDraft(null);
     setActiveThreadId(revisionId ? (search.thread ?? null) : null);
+    setOpenThreadId(revisionId ? (search.thread ?? null) : null);
     if (revisionId && search.thread) {
       setDrawer("comments");
       requestReveal(search.thread);
@@ -462,7 +492,11 @@ export function Editor({
     if (!el) return;
     prepareBottomSheet(el);
     const onOpened = () => setSheetOpen(true);
-    const onClosed = () => setSheetOpen(false);
+    // シートを閉じたら、開いていたスレッドも閉じる（開き直すと一覧から。書きかけの返信は残る）
+    const onClosed = () => {
+      setSheetOpen(false);
+      setOpenThreadId(null);
+    };
     el.addEventListener("opened", onOpened);
     el.addEventListener("closed", onClosed);
     return () => {
@@ -554,7 +588,7 @@ export function Editor({
     setDraft(null);
     composeStore.reset();
   };
-  const doPost = useAction(async () => {
+  const doPost = useAction(async (fileIds: string[] = []) => {
     if (!data || !draft || !revisionId) return;
     const { body, mentions } = composeStore.get();
     let anchor: Anchor | undefined;
@@ -587,28 +621,17 @@ export function Editor({
           ...(draft.figma.nodeName ? { nodeName: draft.figma.nodeName } : {}),
         };
     }
-    if (draftKind === "feedback") {
-      // 相談（FB）: 解決しない話し合いとして、この版の場所に立てる。立てたら引き出し「FB」でそのやり取りを開く
-      const id = await createFeedback({
-        workId,
-        revisionId,
-        ...(anchor ? { anchor } : {}),
-        body,
-        mentions: activeMentions(body, mentions, mentionDirectory),
-      });
-      resetCompose();
-      openFeedback(id);
-      return;
-    }
     // 投稿者は分類しない。内部では「修正提案・重要」で保存し、未解決が残れば理由なしの校了を拒否する（安全側）
     await post({
       revisionId: revisionId as Id<"revisions">,
       body,
+      bodyFormat: "markdown",
       kind: "correction",
       severity: "major",
       requestId,
       ...(anchor ? { anchor } : {}),
       mentions: activeMentions(body, mentions, mentionDirectory),
+      ...(fileIds.length ? { fileIds } : {}),
     });
     resetCompose();
     setRequestId(newRequestId());
@@ -620,22 +643,32 @@ export function Editor({
       ...(reason.trim() ? { reason: reason.trim() } : {}),
     });
   });
-  const doReply = useAction(async (threadId: string, b: string, ids: string[]) => {
-    await reply({
-      threadId: threadId as Id<"commentThreads">,
-      body: b,
-      mentions: activeMentions(b, ids, mentionDirectory),
-    });
-  });
+  const doReply = useAction(
+    async (threadId: string, b: string, ids: string[], fileIds: string[] = []) => {
+      await reply({
+        threadId: threadId as Id<"commentThreads">,
+        body: b,
+        bodyFormat: "markdown",
+        mentions: activeMentions(b, ids, mentionDirectory),
+        ...(fileIds.length ? { fileIds } : {}),
+      });
+      return true;
+    },
+  );
   const doAssignThread = useAction(async (threadId: string, ids: string[]) => {
     await assignThread({ threadId: threadId as Id<"commentThreads">, assigneeId: ids[0] ?? null });
   });
   const doEditThread = useAction(async (threadId: string, b: string) => {
-    await editThread({ threadId: threadId as Id<"commentThreads">, body: b });
+    await editThread({
+      threadId: threadId as Id<"commentThreads">,
+      body: b,
+      bodyFormat: "markdown",
+    });
   });
   const doDeleteThread = useAction(async (threadId: string) => {
     await removeThread({ threadId: threadId as Id<"commentThreads"> });
     setActiveThreadId((cur) => (cur === threadId ? null : cur));
+    setOpenThreadId((cur) => (cur === threadId ? null : cur));
   });
   const doDeleteReply = useAction(async (threadId: string, replyEventId: string) => {
     await removeReply({ threadId: threadId as Id<"commentThreads">, replyEventId });
@@ -678,6 +711,27 @@ export function Editor({
     [allThreads, showResolved, activeThreadId, who],
   );
   const auto = useAutoProofread(revisionId ?? null, data?.artifacts ?? []);
+  // 開いているスレッドが版のデータから消えた（削除された・別の版を開いた）ら、パネルを閉じる
+  useEffect(() => {
+    if (openThreadId && data && !allThreads.some((t) => t.id === openThreadId))
+      setOpenThreadId(null);
+  }, [openThreadId, data, allThreads]);
+  // 広い画面でスレッドを開いたら、引き出しを一覧とスレッドが並ぶ幅まで広げる（閉じたら元の幅へ）。入りきらない狭さでは広げず、
+  // スレッドは一覧に重ねて出る（CSS の container query）
+  const paneBeforeThread = useRef<{ w: number | null } | null>(null);
+  const wantWidePane = openThreadId !== null && drawer === "comments" && !mobile;
+  useEffect(() => {
+    if (wantWidePane) {
+      if (!paneBeforeThread.current) paneBeforeThread.current = { w: paneW };
+      const room = Math.max(240, bodyW - 24 - 360);
+      const want = Math.min(THREAD_PANE_W, room);
+      if (want >= THREAD_PANE_MIN && (paneW ?? defaultPane) < want) setPaneW(want);
+    } else if (paneBeforeThread.current) {
+      const before = paneBeforeThread.current.w;
+      paneBeforeThread.current = null;
+      setPaneW(drawer === null ? null : before);
+    }
+  }, [wantWidePane]);
 
   // コメントを選んだら（紙面のピン・範囲、URL の ?thread=、通知）、一覧が見える状態にしてからそのカードまでスクロールする。
   // 一覧の位置合わせは features/review/revealThread。ここでは「一覧を見せる」ところまで（狭い画面はシートを開き、広い画面は
@@ -691,14 +745,18 @@ export function Editor({
     // 絞り込みで隠れているときは外す（解決済みは選択中の分だけ下の threads が出す）
     if (who !== "all" && (who === "bot") !== Boolean(t.origin)) setWho("all");
     if (mobile) {
-      if (!(sheetOpen && drawer === "comments")) toggleSheet("comments");
-    } else if (layout === "panel" && drawer !== "comments") setDrawer("comments");
+      // スレッドを開くときはシートいっぱいに、一覧だけのときは半分に開く
+      if (openThreadId === reveal.id) showSheet("comments", 1);
+      else if (!(sheetOpen && drawer === "comments")) toggleSheet("comments");
+    } else if ((layout === "panel" || openThreadId === reveal.id) && drawer !== "comments")
+      setDrawer("comments");
   }, [reveal, allThreads]);
   useRevealThread(reveal, drawer === "comments" && (!mobile || sheetOpen));
   // 通知などで同じ版の別のコメントへ URL だけが変わったとき
   useEffect(() => {
     if (!revisionId || !search.thread) return;
     setActiveThreadId(search.thread);
+    setOpenThreadId(search.thread);
     setDrawer("comments");
     requestReveal(search.thread);
   }, [search.thread]);
@@ -719,47 +777,45 @@ export function Editor({
   const resolvedCount = allThreads.filter(isClosed).length;
   const botCount = allThreads.filter((t) => t.origin && !isClosed(t)).length;
   const openCount = allThreads.length - resolvedCount;
-  // 表示中の版の紙面にある相談（立てた順に 1, 2, …。コメントの番号とは別に数える）
-  const fbPlaced = (fbThreads ?? [])
-    .filter((t) => t.anchor && t.revision?.id === revisionId)
-    .sort((a, b) => a.createdAt - b.createdAt);
-  const fbIndex = new Map(fbPlaced.map((t, i) => [t.id, i + 1] as const));
-  const fbUnread = (fbThreads ?? []).filter((t) => t.unread).length;
-  const overlayThreads: OverlayThread[] = [
-    ...threads
-      .map((t) => ({ id: t.id, anchor: t.anchor as Anchor, severity: t.severity, index: t.index }))
-      .filter((t) => t.anchor),
-    ...fbPlaced.map((t) => ({
-      id: t.id,
-      anchor: t.anchor as Anchor,
-      severity: "",
-      index: fbIndex.get(t.id)!,
-      kind: "feedback" as const,
-    })),
-  ];
+  const overlayThreads: OverlayThread[] = marksHidden
+    ? []
+    : threads
+        .map((t) => ({
+          id: t.id,
+          anchor: t.anchor as Anchor,
+          severity: t.severity,
+          index: t.index,
+        }))
+        .filter((t) => t.anchor);
   const open = revision
     ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
     : false;
   const canComment = can?.comment ?? false;
-  // 相談（FB）は解決しない話し合いなので、受付が終わった版・校了した版の上でも範囲を選んで立てられる
-  const canFeedback = revisionId !== null;
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  /** いま効く書き込みのモード（コメントできない版では「コメント」は FB になる） */
-  const markMode = effectiveMarkMode(markPick, { comment: canComment, feedback: canFeedback });
-  /** 紙面に印を付けられるか（なし のときは、押す・なぞるが紙面そのもの（PDF のリンクなど）に届く） */
-  const selecting = markMode !== "none";
-  /** 範囲から書くもの: 位置なしのコメントはコメント。それ以外は選んでいるモード（コメントできない版では相談だけ） */
-  const draftKind: "comment" | "feedback" =
-    draft?.free && canComment
-      ? "comment"
-      : markMode === "feedback" || !canComment
-        ? "feedback"
-        : "comment";
-  /** モードを替える。印を付けないにしたら、書きかけの位置つきの投稿欄は閉じる（位置なしのコメントは残す）。引き出しは動かさない */
-  const changeMarkMode = (m: MarkMode) => {
-    setMarkPick(m);
-    if (m === "none" && draft && !draft.free) resetCompose();
-  };
+  // 紙面のクリック・タップはいつもふつうの操作で、なぞる（範囲）・長押し（ピン）だけがコメントになる（features/annotation/AnchorOverlay）。
+  // 書き込みのモードはない。「コメントを追加」は、次の 1 回だけクリックでも印を付ける（armed）
+  // コメントを書き始めたら（位置つきの下書きができたら）印を付ける状態は戻し、隠していた印も出す
+  useEffect(() => {
+    if (draft && !draft.free) {
+      setMarkArmed(false);
+      setMarksHidden(false);
+    }
+  }, [draft]);
+  useEffect(() => {
+    if (!canComment) setMarkArmed(false);
+  }, [canComment]);
+  useEffect(() => {
+    if (!armed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMarkArmed(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [armed]);
+  // 隠していても、コメントを選んだ（一覧のカード・URL・通知）ら印を出す（その印へ移れるように）
+  useEffect(() => {
+    if (activeThreadId) setMarksHidden(false);
+  }, [activeThreadId]);
   const busy =
     doPost.pending ||
     doDecide.pending ||
@@ -786,6 +842,7 @@ export function Editor({
    */
   const jumpTo = (t: Thread, opts?: { reveal?: boolean }) => {
     setActiveThreadId(t.id);
+    setMarksHidden(false);
     if (opts?.reveal !== false) requestReveal(t.id);
     setPostReveal((n) => n + 1);
     if (t.anchor) {
@@ -797,67 +854,53 @@ export function Editor({
       if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
     }
   };
-  /** 引き出し「FB」でその相談を開く（狭い画面はシートを FB で開く） */
-  const openFeedback = (id: string | null) => {
-    setFbOpenId(id);
-    if (mobile) {
-      if (!(sheetOpen && drawer === "feedback")) toggleSheet("feedback");
-    } else setDrawer("feedback");
+  /** カード・パネルに渡す、コメント 1 件への操作（どちらも同じ操作） */
+  const threadActions = (t: Thread) => ({
+    onResolve: () => doDecide.run(t.id, "resolved", ""),
+    onDecide: (a: "rejected" | "deferred", r: string) => doDecide.run(t.id, a, r),
+    onReply: (b: string, ids: string[], fileIds: string[]) => doReply.run(t.id, b, ids, fileIds),
+    onAssign: (ids: string[]) => doAssignThread.run(t.id, ids),
+    onEdit: (b: string) => doEditThread.run(t.id, b),
+    onDelete: () => doDeleteThread.run(t.id),
+    onDeleteReply: (replyEventId: string) => doDeleteReply.run(t.id, replyEventId),
+  });
+  /**
+   * スレッドのパネルを開く（コメントを選んで紙面のピンへ移り、パネルを開く）。広い画面は引き出しの「コメント」に、狭い画面は
+   * シートをいっぱいに開いて。開いたら既読にする（パネルが行う）
+   */
+  const openThread = (t: Thread, opts?: { reveal?: boolean }) => {
+    // 一覧のカードから開くときは一覧を動かさない（今そのカードを見て押している）。紙面のピンから開くときはカードまで送る
+    // （狭い画面の一覧はシートの中に隠れるので送らない）
+    jumpTo(t, { reveal: opts?.reveal === true && !mobile });
+    setOpenThreadId(t.id);
+    if (mobile) showSheet("comments", 1);
+    else if (drawer !== "comments") setDrawer("comments");
   };
-  /** 相談の紙面の場所を表示する。別の版の相談ならその版を開く */
-  const showFeedbackPlace = (t: {
-    id: string;
-    anchor: Anchor | null;
-    revisionId: string | null;
-  }) => {
-    if (t.revisionId && t.revisionId !== revisionId) {
-      const rev = workData?.revisions.find((r) => r.id === t.revisionId);
-      if (rev)
-        void navigate({
-          to: "/works/$workId/v/$n",
-          params: { workId, n: String(versionOf(rev)) },
-          search: { tab: "feedback", fb: t.id },
-        });
-      return;
-    }
-    setActiveThreadId(t.id);
-    setPostReveal((n) => n + 1);
-    if (t.anchor) {
-      if (t.anchor.artifactId !== artifactId && !staysInPostPreview(t.anchor))
-        setArtifactId(t.anchor.artifactId);
-      const p = anchorPage(t.anchor);
-      if (p) setPage(p);
-      if (t.anchor.type === "video_time") setVideoSeek({ t: t.anchor.start, key: Date.now() });
-      if (t.anchor.type === "web_element") setWebFocus({ anchor: t.anchor, key: Date.now() });
-    }
+  const card = (t: Thread & { index: number }, className?: string) => {
+    const { onResolve } = threadActions(t);
+    return (
+      <ThreadCard
+        key={t.id}
+        thread={t}
+        index={t.index}
+        {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
+        active={t.id === activeThreadId}
+        canDecide={can?.decide ?? false}
+        canReply={can?.reply ?? false}
+        pending={busy}
+        confidentiality={data?.work.confidentiality}
+        now={now}
+        {...(className ? { className } : {})}
+        onSelect={() => jumpTo(t, { reveal: false })}
+        onOpen={() => openThread(t)}
+        onResolve={onResolve}
+      />
+    );
   };
-  const card = (t: Thread & { index: number }, className?: string) => (
-    <ThreadCard
-      key={t.id}
-      thread={t}
-      index={t.index}
-      {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
-      active={t.id === activeThreadId}
-      meId={me?.id ?? null}
-      canDecide={can?.decide ?? false}
-      canReply={can?.reply ?? false}
-      canEdit={work?.lifecycle !== "finalized"}
-      pending={busy}
-      {...(className ? { className } : {})}
-      onSelect={() => jumpTo(t, { reveal: false })}
-      onResolve={() => doDecide.run(t.id, "resolved", "")}
-      onDecide={(a, r) => doDecide.run(t.id, a, r)}
-      onReply={(b, ids) => doReply.run(t.id, b, ids)}
-      onAssign={(ids) => doAssignThread.run(t.id, ids)}
-      onEdit={(b) => doEditThread.run(t.id, b)}
-      onDelete={() => doDeleteThread.run(t.id)}
-      onDeleteReply={(replyEventId) => doDeleteReply.run(t.id, replyEventId)}
-    />
-  );
 
   /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || draft.marking || draft.anchor || !(canComment || canFeedback)) return null;
+    if (!draft || draft.marking || draft.anchor || !canComment) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     // 位置なし・動画の時刻だけ（画面の位置なし）・Figma のフレーム単位は、紙面（映像・画面）の右上
@@ -879,6 +922,8 @@ export function Editor({
         x={pos.x}
         y={pos.y}
         docked={compact}
+        // マウスで選んだ文字は、文字カーソルを移さず（コピーできるまま）。書き始めるときは欄を押す
+        autoFocus={!draft.range || draft.focus === true}
         {...(draft.range && text
           ? { quote: text.body.slice(draft.range.start, draft.range.end).slice(0, 80) }
           : {})}
@@ -901,10 +946,10 @@ export function Editor({
                   place: formatFigmaPlace({ ...draft.figma, type: "figma_node", artifactId: "" }),
                 }
               : {})}
-        onSubmit={() => void doPost.run()}
+        onSubmit={(fileIds) => void doPost.run(fileIds)}
         onCancel={resetCompose}
         pending={doPost.pending}
-        kind={draftKind}
+        {...(revisionId ? { revisionId } : {})}
         {...(draft.range && text && artifact && revisionId
           ? {
               extra: (
@@ -932,7 +977,7 @@ export function Editor({
   };
   /** SNS 投稿のプレビューで選んだ位置の投稿欄（PostReview が置く座標を受ける。狭い画面は画面下） */
   const composePost = (at: { x: number; y: number }) => {
-    if (!draft?.anchor || !(canComment || canFeedback)) return null;
+    if (!draft?.anchor || !canComment) return null;
     const place = draft.postPlace;
     return (
       <StoredComposePopover
@@ -949,10 +994,10 @@ export function Editor({
               : place.label
             : "SNS 投稿"
         }
-        onSubmit={() => void doPost.run()}
+        onSubmit={(fileIds) => void doPost.run(fileIds)}
         onCancel={resetCompose}
         pending={doPost.pending}
-        kind={draftKind}
+        {...(revisionId ? { revisionId } : {})}
       />
     );
   };
@@ -1011,17 +1056,14 @@ export function Editor({
     threads: overlayThreads,
     activeThreadId,
     onSelectThread: (id: string) => {
-      if (fbIndex.has(id)) {
-        // 紙面の相談の印: 引き出し「FB」でそのやり取りを開く
-        setActiveThreadId(id);
-        openFeedback(id);
-        return;
-      }
       const t = threads.find((x) => x.id === id);
       if (!t) return;
-      jumpTo(t);
+      // 紙面のピン: 一覧が引き出し・シートにあるレイアウトでは、スレッドのパネルを開く（ピンの横・高さに並べるレイアウトは
+      // カードがその場にあるので、選ぶだけ）
+      if (layout === "panel") openThread(t, { reveal: true });
+      else jumpTo(t);
     },
-    selecting,
+    canComment,
   };
   /** 紙面を出してよいか（中身が決まり、PDF・画像・動画は最初の 1 枚を描き終えた） */
   const paperDone = (() => {
@@ -1084,14 +1126,13 @@ export function Editor({
               threads: overlayThreads,
               activeThreadId,
               revealKey: postReveal,
-              selecting,
+              canComment,
               draftAnchor: draft?.anchor ?? null,
               onSelectThread: (id) => {
                 viewerProps.onSelectThread(id);
                 setPostReveal((n) => n + 1);
                 // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
-                if (!mobile && fbIndex.has(id) === false && drawer !== "comments")
-                  openDrawer("comments");
+                if (!mobile && drawer !== "comments") openDrawer("comments");
               },
               onDraft: (d) => {
                 if (!d) {
@@ -1147,7 +1188,7 @@ export function Editor({
               resetCompose();
             }}
             threads={overlayThreads}
-            selecting={selecting}
+            canComment={canComment}
             onCommentFrame={(d) => {
               setDraft({ figma: d });
               setActiveThreadId(null);
@@ -1200,7 +1241,6 @@ export function Editor({
           artifactId={artifact.id}
           onReady={() => setPaintedFor(artifact.id)}
           {...viewerProps}
-          passive={!selecting}
           draft={draft?.page ? (draft as Draft & { page: number }) : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1244,7 +1284,11 @@ export function Editor({
           onDraft={(r) => {
             setDraft(
               r
-                ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) }
+                ? {
+                    range: { start: r.start, end: r.end },
+                    ...(r.box ? { box: r.box } : {}),
+                    ...(r.focus ? { focus: true } : {}),
+                  }
                 : null,
             );
             setActiveThreadId(null);
@@ -1263,7 +1307,11 @@ export function Editor({
           onDraft={(r) => {
             setDraft(
               r
-                ? { range: { start: r.start, end: r.end }, ...(r.box ? { box: r.box } : {}) }
+                ? {
+                    range: { start: r.start, end: r.end },
+                    ...(r.box ? { box: r.box } : {}),
+                    ...(r.focus ? { focus: true } : {}),
+                  }
                 : null,
             );
             setActiveThreadId(null);
@@ -1281,7 +1329,6 @@ export function Editor({
           onReady={() => setPaintedFor(artifact.id)}
           alt={`${data.revision?.label ?? "この版"}の添付「${artifact.fileName}」`}
           {...viewerProps}
-          passive={!selecting}
           draft={draft?.rect || draft?.point ? draft : null}
           onDraft={(d) => {
             setDraft(d);
@@ -1364,7 +1411,7 @@ export function Editor({
       threads: [],
       activeThreadId: null,
       onSelectThread: () => undefined,
-      selecting: false,
+      canComment: false,
     };
     if (otherArtifact.type === "pdf")
       return (
@@ -1451,104 +1498,142 @@ export function Editor({
 
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
+  /** Figma の埋め込み（位置を取れず、コメントはフレーム単位。印を置く・隠すものがない） */
+  const isFigmaEmbed =
+    artifact?.role === "external" && !!artifact.externalUrl && isFigmaUrl(artifact.externalUrl);
   /** 外部リンクのうち、紙面として出すもの（Web のライブ表示・Figma の埋め込み） */
   const isLiveExternal =
     artifact?.role === "external" &&
     !!artifact.externalUrl &&
     (isWebLiveArtifact(artifact) || isFigmaUrl(artifact.externalUrl));
 
+  /** スレッドのパネルで開いているコメント（版のデータに無い・削除されたら閉じる） */
+  const openedThread = openThreadId
+    ? (allThreads.find((t) => t.id === openThreadId) ?? null)
+    : null;
+  const threadPanel =
+    openedThread && revisionId ? (
+      <ThreadPanel
+        key={openedThread.id}
+        thread={openedThread}
+        index={openedThread.index}
+        {...(webStates.has(openedThread.id) ? { placeState: webStates.get(openedThread.id)! } : {})}
+        variant={mobile ? "sheet" : "pane"}
+        meId={me?.id ?? null}
+        canDecide={can?.decide ?? false}
+        canReply={can?.reply ?? false}
+        canEdit={work?.lifecycle !== "finalized"}
+        revisionId={revisionId}
+        confidentiality={data?.work.confidentiality}
+        pending={busy}
+        now={now}
+        onBack={() => setOpenThreadId(null)}
+        onSelect={() => jumpTo(openedThread, { reveal: false })}
+        {...threadActions(openedThread)}
+      />
+    ) : null;
   const commentsPanel = (
-    <div className="comments">
-      <AutoProofreadStatus auto={auto} />
-      <div className="comments__header">
-        {/* 「位置なしでコメント」はここから（ツールバーの丸いボタンは、印を付けるものを切り替える「書き込み」に譲った） */}
-        {canComment ? (
-          <M3eButton
-            variant="tonal"
-            className="comments__free"
-            onClick={() => {
-              setDraft({ free: true });
-              setActiveThreadId(null);
-            }}
-          >
-            <M3eIcon slot="icon" name="add_comment" />
-            位置なしでコメント
-          </M3eButton>
-        ) : null}
-        <M3eFilterChipSet aria-label="コメントの絞り込み">
-          {botCount > 0 ? (
-            <>
-              <M3eFilterChip
-                selected={who === "human"}
-                onClick={() => setWho((v) => (v === "human" ? "all" : "human"))}
+    <div
+      className={`comments ${threadPanel ? "comments--thread" : ""} ${mobile ? "comments--sheet" : ""} ${listScrolled ? "comments--scrolled" : ""}`}
+    >
+      <div className="comments__split">
+        <div className="comments__main">
+          <AutoProofreadStatus auto={auto} />
+          <div className="comments__header">
+            {/* 「位置なしでコメント」はここから（紙面の位置に付けるのは、なぞる・長押し・ツールバーの「コメントを追加」） */}
+            {canComment ? (
+              <M3eButton
+                variant="tonal"
+                className="comments__free"
+                onClick={() => {
+                  setDraft({ free: true });
+                  setActiveThreadId(null);
+                }}
               >
-                人のコメント
-              </M3eFilterChip>
-              <M3eFilterChip
-                selected={who === "bot"}
-                onClick={() => setWho((v) => (v === "bot" ? "all" : "bot"))}
-              >
-                <M3eIcon slot="icon" name="smart_toy" />
-                自動校正 {botCount}
-              </M3eFilterChip>
-            </>
-          ) : null}
-          {resolvedCount > 0 ? (
-            <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
-              解決済み {resolvedCount}
-            </M3eFilterChip>
-          ) : null}
-        </M3eFilterChipSet>
-      </div>
-      <div className="comments__list">
-        {carryCandidates && carryCandidates.length > 0 ? (
-          <div className="carry-box" aria-label="前版の未解決コメント">
-            <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
-            {carryCandidates.map((c) => (
-              <div key={c.id} className="carry">
-                <div className="small muted">
-                  {c.revisionLabel}・{resolutionLabel[c.resolution]}・{c.author?.name}
-                </div>
-                <div className="thread__body">{c.body}</div>
-                <div className="row">
-                  <span className="spacer" />
-                  <M3eButton
-                    variant="text"
-                    disabled={doCarry.pending}
-                    onClick={() => void doCarry.run(c.id)}
+                <M3eIcon slot="icon" name="add_comment" />
+                位置なしでコメント
+              </M3eButton>
+            ) : null}
+            <M3eFilterChipSet aria-label="コメントの絞り込み">
+              {botCount > 0 ? (
+                <>
+                  <M3eFilterChip
+                    selected={who === "human"}
+                    onClick={() => setWho((v) => (v === "human" ? "all" : "human"))}
                   >
-                    この版へ持ち越す
-                  </M3eButton>
-                </div>
-              </div>
-            ))}
+                    人のコメント
+                  </M3eFilterChip>
+                  <M3eFilterChip
+                    selected={who === "bot"}
+                    onClick={() => setWho((v) => (v === "bot" ? "all" : "bot"))}
+                  >
+                    <M3eIcon slot="icon" name="smart_toy" />
+                    自動校正 {botCount}
+                  </M3eFilterChip>
+                </>
+              ) : null}
+              {resolvedCount > 0 ? (
+                <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
+                  解決済み {resolvedCount}
+                </M3eFilterChip>
+              ) : null}
+            </M3eFilterChipSet>
           </div>
-        ) : null}
-        {!target ? (
-          <p className="muted small comments__empty">版を提出するとコメントできます</p>
-        ) : threads.length === 0 ? (
-          <p className="muted small comments__empty">
-            {canComment
-              ? artifact?.type === "video"
-                ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
-                : artifact && isWebLiveArtifact(artifact)
-                  ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
-                  : artifact?.role === "external" && isLiveExternal
-                    ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
-                    : touch
-                      ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
-                      : "ファイルの上でドラッグすると、その場にコメントできます"
-              : "コメントはありません"}
-          </p>
-        ) : (
-          threads.map((t) => card(t))
-        )}
-      </div>
-      {target && data && !canComment ? (
-        <div className="comments__blocked small muted">
-          {blockedReasonLabel[data.commentBlockedReason ?? "forbidden"]}
+          <div
+            className="comments__list"
+            onScroll={(e) => setListScrolled(e.currentTarget.scrollTop > 0)}
+          >
+            {carryCandidates && carryCandidates.length > 0 ? (
+              <div className="carry-box" aria-label="前版の未解決コメント">
+                <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
+                {carryCandidates.map((c) => (
+                  <div key={c.id} className="carry">
+                    <div className="small muted">
+                      {c.revisionLabel}・{resolutionLabel[c.resolution]}・{c.author?.name}
+                    </div>
+                    <CommentBody className="thread__body" body={c.body} format={c.bodyFormat} />
+                    <div className="row">
+                      <span className="spacer" />
+                      <M3eButton
+                        variant="text"
+                        disabled={doCarry.pending}
+                        onClick={() => void doCarry.run(c.id)}
+                      >
+                        この版へ持ち越す
+                      </M3eButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {!target ? (
+              <p className="muted small comments__empty">版を提出するとコメントできます</p>
+            ) : threads.length === 0 ? (
+              <p className="muted small comments__empty">
+                {canComment
+                  ? artifact?.type === "video"
+                    ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
+                    : artifact && isWebLiveArtifact(artifact)
+                      ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
+                      : artifact?.role === "external" && isLiveExternal
+                        ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
+                        : touch
+                          ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                          : "ファイルの上でドラッグすると、その場にコメントできます"
+                  : "コメントはありません"}
+              </p>
+            ) : (
+              threads.map((t) => card(t))
+            )}
+          </div>
+          {target && data && !canComment ? (
+            <div className="comments__blocked small muted">
+              {blockedReasonLabel[data.commentBlockedReason ?? "forbidden"]}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+        {threadPanel}
+      </div>
     </div>
   );
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
@@ -1559,7 +1644,6 @@ export function Editor({
       onChange={onPick}
       items={[
         { id: "comments", label: "コメント", count: openCount },
-        { id: "feedback", label: "FB", count: fbUnread || null },
         { id: "versions", label: "版" },
         { id: "info", label: "情報" },
       ]}
@@ -1588,16 +1672,6 @@ export function Editor({
   const drawerBody = (d: Drawer | null) =>
     d === "comments" ? (
       commentsPanel
-    ) : d === "feedback" ? (
-      <FeedbackPane
-        workId={workId}
-        revisionId={revisionId}
-        threads={fbThreads}
-        indexOf={fbIndex}
-        openId={fbOpenId}
-        onOpen={setFbOpenId}
-        onShowPlace={showFeedbackPlace}
-      />
     ) : d === "versions" && workData ? (
       <VersionsTab
         work={workData}
@@ -1621,7 +1695,6 @@ export function Editor({
   const sheetButtons = (
     [
       ["comments", `コメント（${openCount}）`, "comment"],
-      ["feedback", fbUnread ? `FB（未読 ${fbUnread}）` : "FB", "forum"],
       ["versions", "版", "history"],
       ["info", "情報", "info"],
     ] as const
@@ -1653,13 +1726,13 @@ export function Editor({
         <AppBarSlot slot="subtitle">
           {revision && work && !initial ? (
             <>
-              {revision.label}・
+              {revision.label} ·{" "}
               {open
-                ? `受付中・${remaining(revision.deadlineAt, now)}`
+                ? `受付中 · ${remaining(revision.deadlineAt, now)}`
                 : revision.reviewClosedReason
                   ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
-              {work.finalRevisionId === revision.id ? "・校了版" : ""}
+              {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
           ) : (
             "\u00A0"
@@ -1779,81 +1852,106 @@ export function Editor({
                 <div className="ws__toolbar-items" tabIndex={0}>
                   {isPdf ? (
                     <>
-                      {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
-                      {compact ? null : (
-                        <M3eIconButton
-                          aria-label="前のページ"
-                          disabled={page <= 1}
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        >
-                          <M3eIcon name="chevron_left" />
-                        </M3eIconButton>
-                      )}
-                      {/* 狭い画面はページの位置をスクロールで見るので省き、引き出しのボタンに場所を譲る */}
+                      {/* ページ送りは connected のボタングループ（前・次）。数値はその左（M3 Button groups。監査 E-03）。
+                          狭い画面はページの位置をスクロールで見るので数値を省き、引き出しのボタンに場所を譲る */}
                       {mobile ? null : (
                         <span className="ws__toolbar-text">
                           {pageCount ? `${page} / ${pageCount}` : "…"}
                         </span>
                       )}
+                      {/* compact はページを連続でスクロールして読むので、送りボタンは省いて数値だけ残す（ツールバーを幅に収める） */}
                       {compact ? null : (
-                        <M3eIconButton
-                          aria-label="次のページ"
-                          disabled={page >= pageCount}
-                          onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                        >
-                          <M3eIcon name="chevron_right" />
-                        </M3eIconButton>
+                        <M3eButtonGroup variant="connected" size="small" aria-label="ページ送り">
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="前のページ"
+                            disabled={page <= 1}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          >
+                            <M3eIcon name="chevron_left" />
+                          </M3eIconButton>
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="次のページ"
+                            disabled={page >= pageCount}
+                            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                          >
+                            <M3eIcon name="chevron_right" />
+                          </M3eIconButton>
+                        </M3eButtonGroup>
                       )}
                     </>
                   ) : null}
                   {isPdf || isImage || artifact.type === "document" ? (
                     <>
-                      {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる） */}
-                      {mobile ? null : (
-                        <M3eIconButton
-                          aria-label="縮小"
-                          disabled={atMinZoom}
-                          onClick={() => zoomStep(-1)}
+                      {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる）。
+                          広い画面は − 数値 ＋ を 1 つの connected のボタングループにする（M3 Button groups。監査 E-03） */}
+                      {mobile ? (
+                        <M3eButton
+                          variant="text"
+                          className="ws__toolbar-text ws__zoom"
+                          aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと拡大・縮小）`}
                         >
-                          <M3eIcon name="zoom_out" />
-                        </M3eIconButton>
-                      )}
-                      {/* 実寸比の数値。広い画面は押すと幅に合わせた大きさ（左右の余白が同じ）に戻す。
-                          狭い画面は − ＋ を置かないので、押すと「拡大／縮小／幅に合わせる」のメニュー
-                          （ピンチだけに頼らない。M3 Gestures・WCAG 2.5.1。§35 I-15。利用者決定 2026-10-15） */}
-                      <M3eButton
-                        variant="text"
-                        className="ws__toolbar-text ws__zoom"
-                        aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（${mobile ? "押すと拡大・縮小" : "押すと幅に合わせる"}）`}
-                        {...(mobile ? {} : { onClick: () => setScale(1), title: "幅に合わせる" })}
-                      >
-                        {zoom ? `${Math.round(zoom * 100)}%` : "…"}
-                        {mobile ? <M3eMenuTrigger htmlFor="zoom-menu" /> : null}
-                      </M3eButton>
-                      {mobile ? null : (
-                        <M3eIconButton
-                          aria-label="拡大"
-                          disabled={atMaxZoom}
-                          onClick={() => zoomStep(1)}
-                        >
-                          <M3eIcon name="zoom_in" />
-                        </M3eIconButton>
+                          {zoom ? `${Math.round(zoom * 100)}%` : "…"}
+                          <M3eMenuTrigger htmlFor="zoom-menu" />
+                        </M3eButton>
+                      ) : (
+                        <M3eButtonGroup variant="connected" size="small" aria-label="拡大・縮小">
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="縮小"
+                            disabled={atMinZoom}
+                            onClick={() => zoomStep(-1)}
+                          >
+                            <M3eIcon name="zoom_out" />
+                          </M3eIconButton>
+                          {/* 実寸比の数値。押すと幅に合わせた大きさ（左右の余白が同じ）に戻す。
+                              狭い画面は − ＋ を置かないので、押すと「拡大／縮小／幅に合わせる」のメニュー
+                              （ピンチだけに頼らない。M3 Gestures・WCAG 2.5.1。§35 I-15。利用者決定 2026-10-15） */}
+                          <M3eButton
+                            variant="tonal"
+                            className="ws__zoom"
+                            aria-label={`表示倍率 ${zoom ? Math.round(zoom * 100) : "…"}%（押すと幅に合わせる）`}
+                            onClick={() => setScale(1)}
+                            title="幅に合わせる"
+                          >
+                            {zoom ? `${Math.round(zoom * 100)}%` : "…"}
+                          </M3eButton>
+                          <M3eIconButton
+                            variant="tonal"
+                            aria-label="拡大"
+                            disabled={atMaxZoom}
+                            onClick={() => zoomStep(1)}
+                          >
+                            <M3eIcon name="zoom_in" />
+                          </M3eIconButton>
+                        </M3eButtonGroup>
                       )}
                     </>
                   ) : null}
-                  {/* 書き込み（印を付けるとき作るもの）: コメント / FB / 選択（印を付けない）。押すと小さなメニュー。アイコンといま選んでいる名前で示す。
-                      引き出しは動かさない（FB を立てると、これまでどおり引き出し「FB」でそのやり取りが開く） */}
-                  {canComment || canFeedback ? (
+                  {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
+                  {!isFigmaEmbed ? (
                     <M3eIconButton
-                      className="ws__mark-mode"
-                      aria-label="書き込み: コメント / FB / 選択"
-                      title={`書き込み: コメント / FB / 選択（いまは${markModeLabel[markMode]}）`}
+                      className="ws__marks-toggle"
+                      aria-label={marksHidden ? "コメントを表示する" : "コメントを隠す"}
+                      title={marksHidden ? "コメントを表示する" : "コメントを隠す"}
+                      variant={marksHidden ? "tonal" : "standard"}
+                      toggle
+                      selected={marksHidden}
+                      onClick={() => setMarksHidden((v) => !v)}
                     >
-                      <M3eIcon
-                        name={markModeIcon[markMode]}
-                        className={markMode === "none" ? "" : "icon--filled"}
-                      />
-                      <M3eMenuTrigger htmlFor="mark-mode-menu" />
+                      <M3eIcon name={marksHidden ? "comments_disabled" : "comment"} />
+                    </M3eIconButton>
+                  ) : null}
+                  {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
+                  {!mobile ? (
+                    <M3eIconButton
+                      className="ws__more"
+                      aria-label="コメントの表示"
+                      title="コメントの表示"
+                    >
+                      <M3eIcon name="location_on" />
+                      <M3eMenuTrigger htmlFor="viewer-more-menu" />
                     </M3eIconButton>
                   ) : null}
                   {/* 同期（スクロール・拡大縮小の視点）は PDF・文章・画像（左右に並べるとき）。差分は PDF・文章 */}
@@ -1913,7 +2011,7 @@ export function Editor({
                       {sheetButtons}
                     </>
                   ) : null}
-                  {switchable.length > 1 ? (
+                  {mobile && switchable.length > 1 ? (
                     <M3eIconButton
                       aria-label="添付を切り替え"
                       {...(compact ? { onClick: () => setArtifactSheet(true) } : {})}
@@ -1921,25 +2019,6 @@ export function Editor({
                       <M3eIcon name="attach_file" />
                       {compact ? null : <M3eMenuTrigger htmlFor="artifact-menu" />}
                     </M3eIconButton>
-                  ) : null}
-                  {!mobile ? (
-                    <>
-                      <span className="ws__toolbar-sep" />
-                      {layouts.map((l) => (
-                        <M3eIconButton
-                          key={l.id}
-                          aria-label={l.label}
-                          toggle
-                          selected={layout === l.id}
-                          onClick={() => setLayout(l.id)}
-                        >
-                          <M3eIcon
-                            name={l.icon}
-                            className={layout === l.id ? "icon--filled" : ""}
-                          />
-                        </M3eIconButton>
-                      ))}
-                    </>
                   ) : null}
                 </div>
               </M3eToolbar>
@@ -1952,24 +2031,6 @@ export function Editor({
               >
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
-            ) : null}
-            {canComment || canFeedback ? (
-              <M3eMenu id="mark-mode-menu" positionY="above">
-                <M3eMenuItemGroup aria-label="書き込み（印を付けたとき作るもの）">
-                  {markModes
-                    .filter((m) => m === "none" || (m === "comment" ? canComment : canFeedback))
-                    .map((m) => (
-                      <M3eMenuItemRadio
-                        key={m}
-                        checked={markMode === m}
-                        onClick={() => changeMarkMode(m)}
-                      >
-                        <M3eIcon slot="icon" name={markModeIcon[m]} />
-                        {markModeLabel[m]}
-                      </M3eMenuItemRadio>
-                    ))}
-                </M3eMenuItemGroup>
-              </M3eMenu>
             ) : null}
             {mobile ? (
               <M3eMenu id="zoom-menu" positionY="above">
@@ -1987,7 +2048,49 @@ export function Editor({
                 </M3eMenuItem>
               </M3eMenu>
             ) : null}
-            {switchable.length > 1 && !compact ? (
+            {!mobile ? (
+              <M3eMenu id="viewer-more-menu" positionY="above">
+                {switchable.length > 1 ? (
+                  <>
+                    <M3eMenuItemGroup aria-label="添付">
+                      {switchable.map((a) => (
+                        <M3eMenuItemRadio
+                          key={a.id}
+                          checked={a.id === artifactId}
+                          onClick={() => {
+                            setArtifactId(a.id);
+                            setPage(1);
+                            resetCompose();
+                          }}
+                        >
+                          <M3eIcon slot="icon" name="draft" />
+                          {a.role === "external"
+                            ? a.externalUrl && isFigmaUrl(a.externalUrl)
+                              ? "Figma: "
+                              : "外部: "
+                            : ""}
+                          {a.fileName}
+                        </M3eMenuItemRadio>
+                      ))}
+                    </M3eMenuItemGroup>
+                    <M3eDivider />
+                  </>
+                ) : null}
+                <M3eMenuItemGroup aria-label="コメントの表示">
+                  {layouts.map((l) => (
+                    <M3eMenuItemRadio
+                      key={l.id}
+                      checked={layout === l.id}
+                      onClick={() => setLayout(l.id)}
+                    >
+                      <M3eIcon slot="icon" name={l.icon} />
+                      {l.label}
+                    </M3eMenuItemRadio>
+                  ))}
+                </M3eMenuItemGroup>
+              </M3eMenu>
+            ) : null}
+            {switchable.length > 1 && mobile && !compact ? (
               <M3eMenu id="artifact-menu" positionY="above">
                 {switchable.map((a) => (
                   <M3eMenuItem
@@ -2010,10 +2113,12 @@ export function Editor({
               </M3eMenu>
             ) : null}
             {!mobile ? (
-              /* ペインの操作は縦の浮遊ツールバー（レールの反対側）。Scaffold の trailing rail 領域 */
+              /* ペインの操作は縦の浮遊ツールバー（レールの反対側。Scaffold の trailing rail 領域）。
+                 右の引き出しが開いているあいだは隠す（引き出しのタブで切り替えられる）。畳んだときだけ出して、開き直す入口にする
+                 （利用者決定 2026-10-20「右の欄が表示されてない時はフローティングバー出したい。表示されてる時は消して良い」） */
               <M3eToolbar
                 vertical
-                className="ws__side-toolbar"
+                className={`ws__side-toolbar ${desktopDrawer ? "ws__side-toolbar--hidden" : ""}`}
                 shape="rounded"
                 elevated
                 aria-label="引き出しの操作"
@@ -2025,14 +2130,6 @@ export function Editor({
                   onClick={() => openDrawer("comments")}
                 >
                   <M3eIcon name="comment" className={drawer === "comments" ? "icon--filled" : ""} />
-                </M3eIconButton>
-                <M3eIconButton
-                  aria-label={fbUnread ? `FB（未読 ${fbUnread}）` : "FB"}
-                  toggle
-                  selected={drawer === "feedback"}
-                  onClick={() => openDrawer("feedback")}
-                >
-                  <M3eIcon name="forum" className={drawer === "feedback" ? "icon--filled" : ""} />
                 </M3eIconButton>
                 <M3eIconButton
                   aria-label="版"
@@ -2081,7 +2178,10 @@ export function Editor({
             className="ws__sheet"
           >
             <div className="drawer drawer--sheet">
-              {drawerTabs(sheetTab, (d) => setDrawer(d))}
+              {/* スレッドを開いているあいだは、シートいっぱいにスレッドだけを見せる（戻るで一覧へ） */}
+              {threadPanel && sheetTab === "comments"
+                ? null
+                : drawerTabs(sheetTab, (d) => setDrawer(d))}
               <div className="drawer__body">{drawerBody(sheetTab)}</div>
             </div>
           </M3eBottomSheet>

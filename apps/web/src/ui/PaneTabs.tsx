@@ -12,6 +12,7 @@ export function PaneTabs<T extends string>({
   label,
   className,
   stretch,
+  scroll,
 }: {
   items: Array<{ id: T; label: string; count?: number | null; icon?: string }>;
   value: T;
@@ -19,22 +20,26 @@ export function PaneTabs<T extends string>({
   label: string;
   className?: string;
   stretch?: boolean;
+  /** ページ送りの矢印を出さず、あふれたら横にスクロールさせる（狭い幅でタブが多いとき） */
+  scroll?: boolean;
 }) {
   return (
     <M3eTabs
       aria-label={label}
       className={`pane-tabs ${className ?? ""}`}
-      disablePagination="auto"
+      disablePagination={scroll ? true : "auto"}
       {...(stretch ? { stretch: true } : {})}
     >
       {items.map((it) => (
         <M3eTab key={it.id} selected={value === it.id} onClick={() => onChange(it.id)}>
-          {it.label}
-          {it.count ? (
-            <M3eBadge size="medium" className="pane-tabs__badge">
-              {it.count}
-            </M3eBadge>
-          ) : null}
+          <span className="pane-tabs__label">
+            {it.label}
+            {it.count ? (
+              <M3eBadge size="medium" className="pane-tabs__badge">
+                {it.count}
+              </M3eBadge>
+            ) : null}
+          </span>
         </M3eTab>
       ))}
     </M3eTabs>

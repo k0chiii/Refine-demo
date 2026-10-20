@@ -4,6 +4,7 @@ import type { Instant } from "../shared/time.ts";
 import type { Anchor } from "./Anchor.ts";
 import type { BotOrigin } from "../notation/autoProofread.ts";
 import type { ReactionEntry } from "../shared/reactions.ts";
+import { type CommentBodyFormat, validateCommentBody } from "./body.ts";
 
 /** スレッド種別（§9.1 設計案） */
 export const threadKinds = ["correction", "question", "discussion", "decision"] as const;
@@ -31,6 +32,8 @@ export interface CommentThread {
   authorId: UserId;
   /** 原文は不変。訂正は CommentEvent として別に記録する。 */
   body: string;
+  /** 本文の書式。無ければ旧来の平文（保存済みの行はすべてこれ。移行しない） */
+  bodyFormat?: CommentBodyFormat;
   kind: ThreadKind;
   severity: Severity;
   anchor?: Anchor;
@@ -55,8 +58,23 @@ export interface CommentThread {
   deletedAt?: Instant;
   /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。削除したものは一覧に出さない。保存済みの行との互換のために型・スキーマに残す */
   deletedKeepsReplies?: boolean;
+  /** 添付（CommentFile の ID。付けた順）。無ければ持たない。返信の添付は CommentEvent.payload.fileIds */
+  fileIds?: string[];
   /** リアクション（FB と同じ絵文字・同じ規則。comment/reactions.ts）。誰も付けていなければ持たない */
   reactions?: ReactionEntry[];
+  /**
+   * スレッドのやり取り（最後の動き・返信の件数・参加者。投稿・返信・返信の削除のたびに更新する。comment/activity.ts）。
+   * 持っていない古いスレッドは移行せず、イベントから導く。
+   */
+  lastActivityAt?: Instant;
+  lastActivityBy?: UserId;
+  replyCount?: number;
+  participantIds?: UserId[];
+  /**
+   * 移行元の FB（フィードバック）のスレッド ID。FB をコメントへ統合した移行（docs/UI_M3E.md §95）で作ったスレッドだけが持つ。
+   * 二重に移さない目印と、古い FB の通知・リンクからこのスレッドへ辿るために使う
+   */
+  migratedFromFeedbackThreadId?: string;
 }
 
 export type DecisionAction = Exclude<Resolution, "open">;
@@ -118,11 +136,15 @@ export type CommentEventType =
   /** 返信の削除（payload.replyEventId が削除した返信。返信の本文は元のイベントに残す） */
   | "reply_deleted";
 
-/** 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。 */
+/**
+ * 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。
+ * 書式は訂正後の本文の書式に置き換わる（指定が無ければ平文）。
+ */
 export function editThreadBody(
   thread: CommentThread,
   actorId: UserId,
   body: string,
+  bodyFormat?: string,
 ): CommentThread {
   if (thread.authorId !== actorId)
     throw new DomainError("comment_edit_not_author", { threadId: thread.id });
@@ -133,7 +155,15 @@ export function editThreadBody(
     });
   }
   if (body.trim() === "") throw new DomainError("comment_reason_required", { action: "edit" });
-  return { ...thread, body, editCount: (thread.editCount ?? 0) + 1 };
+  const format = validateCommentBody(body, bodyFormat);
+  const { bodyFormat: _previous, ...rest } = thread;
+  void _previous;
+  return {
+    ...rest,
+    body,
+    ...(format ? { bodyFormat: format } : {}),
+    editCount: (thread.editCount ?? 0) + 1,
+  };
 }
 
 /**
@@ -159,6 +189,7 @@ export function planCarryForward(
     revisionId: targetRevisionId,
     authorId: source.authorId,
     body: source.body,
+    ...(source.bodyFormat ? { bodyFormat: source.bodyFormat } : {}),
     kind: source.kind,
     severity: source.severity,
     resolution: "open",

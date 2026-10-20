@@ -61,7 +61,7 @@ export interface PostAnnotate {
   /** コメントを開くたびに増える（同じコメントを続けて開いても、その位置へ移して強調し直す） */
   revealKey: number;
   /** 位置を選んでコメントできるか（コメント・相談を書ける版） */
-  selecting: boolean;
+  canComment: boolean;
   /** 書きかけのコメントの位置 */
   draftAnchor: Anchor | null;
   onSelectThread: (id: string) => void;
@@ -125,7 +125,6 @@ export function PostReview({
       const meta = {
         id: t.id,
         index: t.index,
-        ...(t.kind ? { kind: t.kind } : {}),
         severity: t.severity,
       };
       if (at.kind === "text") texts.push({ ...meta, start: at.start, end: at.end });
@@ -185,7 +184,7 @@ export function PostReview({
         images: marks.images,
         activeId: annotate.activeThreadId,
         revealKey: annotate.revealKey,
-        selecting: annotate.selecting,
+        canComment: annotate.canComment,
         draft: marks.draft,
         onOpen: annotate.onSelectThread,
         onText: (range, box) => {

@@ -1,7 +1,9 @@
 import {
   closeExpiredReviews,
+  listCommentFileViews,
   loadAuthorizedWork,
   markRevisionViewed,
+  presentThreadActivity,
   remindUpcomingDeadlinesBatch,
 } from "@mf100/application";
 import {
@@ -21,6 +23,7 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { reactionViews, reactorIds } from "./lib/reactions.ts";
+import { activityOf } from "./lib/threadActivity.ts";
 import { resolveUsers } from "./lib/users.ts";
 
 /**
@@ -47,9 +50,12 @@ export const get = query({
       const now = Date.now();
       const artifacts = await app.artifacts.listByRevision(revision.id);
       // 削除されたコメントは出さない（listByRevision は削除済みを含めない。deletedKeepsReplies の古い行も同じ）
-      const threads = (await app.threads.listByRevision(revision.id)).map((t) =>
+      const stored = await app.threads.listByRevision(revision.id);
+      const threads = stored.map((t) =>
         presentThread(t, principal.userId, work.lifecycle, principal),
       );
+      // 返信の件数・参加者・最後の動きと、自分にとっての未読（スレッドごと）
+      const activity = await presentThreadActivity(app, principal, stored);
       const assignments = await app.assignments.listByRevision(revision.id);
       const checks = await app.checks.listByRevision(revision.id);
       const users = await resolveUsers(ctx.db, [
@@ -57,6 +63,10 @@ export const get = query({
         ...threads.flatMap((t) => (t.assigneeId ? [t.assigneeId] : [])),
         ...threads.flatMap((t) => t.mentions ?? []),
         ...threads.flatMap((t) => reactorIds(t.reactions)),
+        ...[...activity.values()].flatMap((a) => a.participantIds),
+        ...[...activity.values()].flatMap((a) =>
+          a.latestReplies.flatMap((r) => [r.authorId, ...r.mentionIds]),
+        ),
         ...assignments.map((a) => a.reviewerId),
         ...checks.flatMap((c) => [
           ...(c.assigneeId ? [c.assigneeId] : []),
@@ -87,18 +97,23 @@ export const get = query({
           finalRevisionId: work.finalRevisionId ?? null,
         },
         artifacts,
-        threads: threads
-          .map((t) => ({
-            ...t,
-            author: users.get(t.authorId),
-            assignee: t.assigneeId ? users.get(t.assigneeId) : null,
-            reactions: reactionViews(t.reactions, principal.userId, users),
-            mentionUsers: (t.mentions ?? []).flatMap((id) => {
-              const u = users.get(id);
-              return u ? [u] : [];
-            }),
-          }))
-          .sort((a, b) => a.createdAt - b.createdAt),
+        threads: (
+          await Promise.all(
+            threads.map(async (t) => ({
+              ...t,
+              ...activityOf(activity, t.id, users),
+              author: users.get(t.authorId),
+              assignee: t.assigneeId ? users.get(t.assigneeId) : null,
+              reactions: reactionViews(t.reactions, principal.userId, users),
+              mentionUsers: (t.mentions ?? []).flatMap((id) => {
+                const u = users.get(id);
+                return u ? [u] : [];
+              }),
+              /** 添付（検証済みで削除されていないもの。付けた順） */
+              files: await listCommentFileViews(app, t.fileIds),
+            })),
+          )
+        ).sort((a, b) => a.createdAt - b.createdAt),
         assignments: assignments.map((a) => ({ ...a, reviewer: users.get(a.reviewerId) })),
         checks: checks.map((c) => ({
           ...c,

@@ -43,7 +43,7 @@ export function RichTextViewer({
   threads,
   activeThreadId,
   onSelectThread,
-  selecting,
+  canComment,
   scale = 1,
   draft,
   onDraft,
@@ -58,7 +58,7 @@ export function RichTextViewer({
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
-  selecting: boolean;
+  canComment: boolean;
   /** 表示倍率（ピンチ・拡大ボタン）。CSS の zoom で本文だけを拡大し、位置の計算は変えない */
   scale?: number;
   draft: TextRangeDraft | null;
@@ -95,7 +95,7 @@ export function RichTextViewer({
   );
 
   // 指摘の範囲と下書き範囲を強調する
-  const key = `${mine.map((t) => `${t.id}:${t.anchor.start}-${t.anchor.end}:${t.severity}:${t.kind ?? ""}`).join("|")}|${activeThreadId}|${draft?.start}-${draft?.end}|${(diff ?? []).map((d) => `${d.kind}${d.start}-${d.end}`).join(",")}`;
+  const key = `${mine.map((t) => `${t.id}:${t.anchor.start}-${t.anchor.end}:${t.severity}`).join("|")}|${activeThreadId}|${draft?.start}-${draft?.end}|${(diff ?? []).map((d) => `${d.kind}${d.start}-${d.end}`).join(",")}`;
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const doc = editor.state.doc;
@@ -108,7 +108,6 @@ export function RichTextViewer({
         "text-anchor",
         t.id === activeThreadId ? "text-anchor--active" : "",
         t.severity === "critical" ? "text-anchor--critical" : "",
-        t.kind === "feedback" ? "text-anchor--fb" : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -130,6 +129,23 @@ export function RichTextViewer({
       });
     }
     setHighlights(editor, ranges);
+    // 下書きの強調で文字が分かれても、マウスで選んだ文字の選択は残す（そのままコピーできるように）
+    if (draft && !draft.focus) {
+      const cur = computeSelection();
+      if (cur?.start === draft.start && cur.end === draft.end) return;
+      try {
+        const from = editor.view.domAtPos(offsetToPos(index, draft.start, size));
+        const to = editor.view.domAtPos(offsetToPos(index, draft.end, size));
+        const range = document.createRange();
+        range.setStart(from.node, from.offset);
+        range.setEnd(to.node, to.offset);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {
+        // 位置が決まらないときは、強調だけ
+      }
+    }
   }, [editor, key]);
 
   useEffect(() => {
@@ -188,7 +204,7 @@ export function RichTextViewer({
 
   /** いまの選択を本文の位置に直す（本文の外・空なら null） */
   const computeSelection = useCallback((): TextRangeDraft | null => {
-    if (!selecting || !editor || !wrapRef.current) return null;
+    if (!canComment || !editor || !wrapRef.current) return null;
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
     const range = sel.getRangeAt(0);
@@ -213,20 +229,26 @@ export function RichTextViewer({
       end,
       box: { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height },
     };
-  }, [selecting, editor]);
+  }, [canComment, editor]);
 
-  const touchSel = useTouchSelection(selecting, computeSelection);
-  const readSelection = () => {
+  const touchSel = useTouchSelection(canComment, computeSelection);
+  /**
+   * マウスで選び終えたら投稿欄を出すが、文字カーソルは移さない（選んだ文字をそのままコピーできる。Ctrl/⌘＋C）。
+   * キーボードで選んだ・ボタンで確定したときは、続けて書けるよう移す（focus）
+   */
+  const readSelection = (focus: boolean) => {
     // 指の操作では選び終えた合図が取れないので、ボタン（TouchCommentButton）で確定する
     if (touchSel.touch) return;
     const d = computeSelection();
-    if (d) onDraft(d);
+    // 同じ選択のまま（Ctrl/⌘＋C を離したときなど）は何もしない
+    if (d && !(draft?.start === d.start && draft.end === d.end))
+      onDraft(focus ? { ...d, focus } : d);
   };
   const commitTouch = () => {
     const d = touchSel.candidate;
     touchSel.clear();
     window.getSelection()?.removeAllRanges();
-    if (d) onDraft(d);
+    if (d) onDraft({ ...d, focus: true });
   };
 
   return (
@@ -243,8 +265,8 @@ export function RichTextViewer({
         <div
           className="text-viewer__wrap rich-viewer__wrap"
           ref={wrapRef}
-          onMouseUp={readSelection}
-          onKeyUp={readSelection}
+          onMouseUp={() => readSelection(false)}
+          onKeyUp={() => readSelection(true)}
           onClick={(e) => {
             // 重なった範囲は入れ子の装飾になるので、押した位置を含むコメントをすべて集め、押すたびに次へ
             const ids: string[] = [];

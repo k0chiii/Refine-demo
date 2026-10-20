@@ -361,7 +361,7 @@ export default defineSchema({
    * 採用・破棄はサービス認証付きの境界（http.ts）からだけ行う。未採用の試行のキーは清掃が消す。
    */
   uploadAttempts: defineTable({
-    target: v.union(v.literal("uploadItem"), v.literal("feedbackFile")),
+    target: v.union(v.literal("uploadItem"), v.literal("feedbackFile"), v.literal("commentFile")),
     targetId: v.string(),
     uploaderId: v.string(),
     objectKey: v.string(),
@@ -378,6 +378,8 @@ export default defineSchema({
     artifactId: v.optional(v.string()),
     authorId: v.string(),
     body: v.string(),
+    /** 本文の書式（domain の CommentBodyFormat）。無ければ旧来の平文。保存済みの行は移行しない */
+    bodyFormat: v.optional(v.literal("markdown")),
     kind: threadKind,
     severity,
     anchor: v.optional(anchorValidator),
@@ -395,11 +397,76 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。保存済みの行との互換のために残す */
     deletedKeepsReplies: v.optional(v.boolean()),
+    /** 添付（commentFiles の ID。付けた順）。無ければ持たない。返信の添付は commentEvents.payload.fileIds */
+    fileIds: v.optional(v.array(v.string())),
     /** リアクション（絵文字ごとに押した人。FB と同じ形。誰も付けていなければ持たない） */
     reactions: v.optional(vReactionEntries),
+    /**
+     * スレッドのやり取り（最後の動き・返信の件数・参加者）。投稿・返信・返信の削除のたびに更新する。
+     * 無ければ古いスレッドで、画面に渡すときにイベントから導く（移行しない）
+     */
+    lastActivityAt: v.optional(v.number()),
+    lastActivityBy: v.optional(v.string()),
+    replyCount: v.optional(v.number()),
+    participantIds: v.optional(v.array(v.string())),
+    /**
+     * 移行元の FB（feedbackThreads）のスレッド ID。FB をコメントへ統合した移行（feedbackMigration.ts）で作ったスレッドだけが持つ。
+     * 二重に移さない目印と、古い FB の通知から移し先のコメントを引く索引に使う
+     */
+    migratedFromFeedbackThreadId: v.optional(v.string()),
   })
     .index("by_revision", ["revisionId"])
-    .index("by_revision_resolution", ["revisionId", "resolution"]),
+    .index("by_revision_resolution", ["revisionId", "resolution"])
+    .index("by_migrated_from", ["migratedFromFeedbackThreadId"]),
+
+  /** コメントのスレッドを最後に読んだ時刻（人 × スレッドで 1 行。未読の判定。FB の feedbackReads と同じ） */
+  commentReads: defineTable({
+    userId: v.string(),
+    threadId: v.id("commentThreads"),
+    readAt: v.number(),
+  }).index("by_user_thread", ["userId", "threadId"]),
+
+  /**
+   * コメント・返信の添付（R2 の comments/ の下）。準備 → Hono で実体検証 → コメント（返信）に付ける。
+   * 付けないまま 24 時間たったものは abandonedAt、付けたコメントが削除されたものは removedAt を付け、Hono の清掃で R2 から消す（purgedAt）。
+   * 画像は縮小・再圧縮した実体と、一覧用のサムネイル（thumbObjectKey）を持つ。
+   */
+  commentFiles: defineTable({
+    workId: v.id("works"),
+    revisionId: v.string(),
+    uploaderId: v.string(),
+    fileName: v.string(),
+    originalName: v.string(),
+    mimeType: v.string(),
+    type: v.union(v.literal("pdf"), v.literal("image"), v.literal("document"), v.literal("other")),
+    declaredSize: v.optional(v.number()),
+    size: v.optional(v.number()),
+    originalSize: v.optional(v.number()),
+    sha256: v.optional(v.string()),
+    /** R2 キーの名前空間（試行ごとのキーとサムネイルはこの下） */
+    keyPrefix: v.optional(v.string()),
+    /** 採用された試行のキー（検証済みのときだけ。それまでは空文字） */
+    objectKey: v.string(),
+    status: artifactStatus,
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    thumbObjectKey: v.optional(v.string()),
+    thumbSize: v.optional(v.number()),
+    thumbMime: v.optional(v.string()),
+    /** 付けた先（付けるまでは無い）。返信に付けたときは eventId も */
+    threadId: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    createdAt: v.number(),
+    failureMessage: v.optional(v.string()),
+    abandonedAt: v.optional(v.number()),
+    removedAt: v.optional(v.number()),
+    purgedAt: v.optional(v.number()),
+  })
+    /** スレッドに付いた添付を引く。threadId が無く abandonedAt も無いもの（放置の候補）を createdAt の範囲で引く */
+    .index("by_thread_abandoned_created", ["threadId", "abandonedAt", "createdAt"])
+    .index("by_uploader", ["uploaderId", "createdAt"])
+    .index("by_purged_and_abandoned", ["purgedAt", "abandonedAt"])
+    .index("by_purged_and_removed", ["purgedAt", "removedAt"]),
 
   commentEvents: defineTable({
     threadId: v.id("commentThreads"),
@@ -617,9 +684,16 @@ export default defineSchema({
     .index("by_userId_and_openedAt", ["userId", "openedAt"])
     .index("by_userId_and_workId", ["userId", "workId"]),
 
-  // ---------------------------------------------------------------- 制作のフィードバック（表現の議論）
+  // ---------------------------------------------------------------- 旧 制作のフィードバック（コメントへ統合済み）
+  /*
+   * FB（表現の議論）はコメントへ統合した（利用者決定 2026-10-20）。機能は廃止し、既存のスレッドは
+   * feedbackMigration.ts でコメントへ移す（本番では Deploy の手動起動から dry-run → migrate → delete の順）。
+   * 以下の 4 つの表（feedbackThreads / feedbackPosts / feedbackFiles / feedbackReads）は、移行と削除のために
+   * 一時的に残しているだけで、本番で delete を流し終えた後の変更で schema から落とす。
+   */
+
   /**
-   * スレッド（制作物ごとに複数）。正式な校正（版・コメント）とは別の表。
+   * スレッド（制作物ごとに複数）。正式な校正（版・コメント）とは別の表だった。
    * 参加者（投稿したことのある人）は通知の宛先。人数は限られるので配列で持つ。
    */
   feedbackThreads: defineTable({
@@ -688,7 +762,10 @@ export default defineSchema({
     userId: v.string(),
     threadId: v.id("feedbackThreads"),
     readAt: v.number(),
-  }).index("by_user_thread", ["userId", "threadId"]),
+  })
+    .index("by_user_thread", ["userId", "threadId"])
+    // 移行でスレッドごとの既読を引く
+    .index("by_thread", ["threadId"]),
 
   /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
   notifications: defineTable({

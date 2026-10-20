@@ -49,6 +49,9 @@ const messages: Record<string, string> = {
   team_in_use: "制作物が使っている、または担当がある局は削除できません",
   team_not_found: "選んだ局・担当が見つかりません。画面を更新してから選び直してください",
   mention_too_many: "一度にメンションできるのは 10 人までです",
+  comment_body_too_long: "本文が長すぎます。5000 文字までです",
+  comment_body_format_invalid:
+    "本文の書式を読み取れませんでした。画面を更新してもう一度お試しください",
   mention_not_allowed: "この制作物を見られない人はメンションできません",
   anchor_invalid:
     "コメントの位置を選び直してください。文章は 1 文字以上、引用は 200 文字までです。",
@@ -96,13 +99,12 @@ const messages: Record<string, string> = {
     "カテゴリの設定を確かめてください。存在しない継承元や、継承の循環があります。",
   notation_proposal_closed: "この提案はもう処理されています",
   idempotency_conflict: "同じ操作はもう処理されています",
-  feedback_invalid:
-    "投稿の内容を確かめてください。題名は 80 文字まで、本文は 5000 文字まで、添付は 10 件までです。",
-  feedback_not_found: "このスレッドや投稿は見つかりません。削除されたか、閲覧の権限がありません。",
   push_subscription_invalid:
     "この端末への通知を設定できませんでした。ブラウザを更新してやり直してください。",
   notification_prefs_invalid: "通知の設定を保存できませんでした。もう一度お試しください。",
-  feedback_file_not_ready:
+  comment_file_invalid: "添付を確かめてください。1 つのコメントに付けられるのは 10 件までです。",
+  comment_file_not_found: "この添付は見つかりません。",
+  comment_file_not_ready:
     "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
   avatar_invalid: "アバターの設定を保存できませんでした。選び直してからもう一度お試しください。",
 };
@@ -130,19 +132,6 @@ function withDetails(code: string, details: unknown): string | null {
     max?: unknown;
     problems?: unknown;
   };
-  if (code === "feedback_invalid") {
-    const field = (details as { field?: unknown } | null)?.field;
-    if (field === "title")
-      return d.reason === "required"
-        ? "スレッドの題名を書いてください"
-        : `スレッドの題名は ${typeof d.max === "number" ? d.max : 80} 文字までです`;
-    if (field === "body")
-      return d.reason === "required"
-        ? "本文を書くか、ファイルを添付してください"
-        : `本文は ${typeof d.max === "number" ? d.max : 5000} 文字までです`;
-    if (field === "files" && d.reason === "too_many")
-      return `添付は 1 つの投稿に ${typeof d.max === "number" ? d.max : 10} 件までです`;
-  }
   if (code === "work_invalid") return workInvalidMessage(details);
   if (code === "forbidden") {
     const permission = (details as { orgPermission?: unknown } | null)?.orgPermission;

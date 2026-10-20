@@ -6,6 +6,10 @@ import {
   deleteThread,
   editThread,
   listCarryCandidates,
+  listCommentFileViews,
+  markCommentRead,
+  replyFileIds,
+  resolveMigratedFeedbackThread,
   searchMentionCandidates as searchMentionCandidatesUseCase,
   postComment,
   replyToThread,
@@ -28,11 +32,15 @@ export const post = mutation({
   args: {
     revisionId: v.id("revisions"),
     body: v.string(),
+    /** 本文の書式（"markdown"）。無ければ平文。許す値の検査は domain（validateCommentBody） */
+    bodyFormat: v.optional(v.string()),
     kind: vThreadKind,
     severity: vSeverity,
     anchor: v.optional(anchorValidator),
     requestId: v.optional(v.string()),
     mentions: v.optional(v.array(v.string())),
+    /** 添付（commentFiles.prepare → Hono で検証済みの自分の添付。10 件まで。本文が空でも添付があれば投稿できる） */
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
@@ -47,12 +55,26 @@ export const reply = mutation({
   args: {
     threadId: v.id("commentThreads"),
     body: v.string(),
+    bodyFormat: v.optional(v.string()),
     mentions: v.optional(v.array(v.string())),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       await replyToThread(createAppContext(ctx), principal, args);
+      return null;
+    });
+  },
+});
+
+/** スレッドを読んだ印を付ける（パネルを開いたとき・開いている間に新しい返信が来たとき）。 */
+export const markRead = mutation({
+  args: { threadId: v.id("commentThreads") },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await markCommentRead(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -71,6 +93,20 @@ export const toggleReaction = mutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() => toggleCommentReaction(createAppContext(ctx), principal, args));
+  },
+});
+
+/**
+ * 旧 FB のスレッドの URL（/feedback/{スレッド}）から、移し先のコメントを引く。FB をコメントへ移した後も、
+ * 古いリンク・ブックマークから辿れるようにする。移していない・見られない・削除された場合は null
+ */
+export const migratedFromFeedback = query({
+  args: { feedbackThreadId: v.string() },
+  handler: async (ctx, { feedbackThreadId }) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() =>
+      resolveMigratedFeedbackThread(createReadContext(ctx.db), principal, feedbackThreadId),
+    );
   },
 });
 
@@ -123,21 +159,30 @@ export const events = query({
         ...events.flatMap((e) => reactorIds(e.reactions)),
       ]);
       return {
+        /** 自分がこのスレッドを最後に読んだ時刻（「ここから未読」の線の位置。読んだことが無ければ null） */
+        readAt: await app.threads.readAt(principal.userId, threadId),
         canDecide:
           thread.deletedAt === undefined &&
           isAllowed("comment.decide", { work, grants, principal }) &&
           work.lifecycle !== "finalized",
-        events: events
-          .map((e) => ({
-            ...e,
-            actor: users.get(e.actorId),
-            reactions: reactionViews(e.reactions, principal.userId, users),
-            mentionUsers: mentionsOf(e).flatMap((id) => {
-              const u = users.get(id);
-              return u ? [u] : [];
-            }),
-          }))
-          .sort((a, b) => a.createdAt - b.createdAt),
+        events: (
+          await Promise.all(
+            events.map(async (e) => ({
+              ...e,
+              actor: users.get(e.actorId),
+              reactions: reactionViews(e.reactions, principal.userId, users),
+              mentionUsers: mentionsOf(e).flatMap((id) => {
+                const u = users.get(id);
+                return u ? [u] : [];
+              }),
+              /** 返信の添付（検証済みで削除されていないもの） */
+              files:
+                e.eventType === "replied"
+                  ? await listCommentFileViews(app, replyFileIds(e.payload))
+                  : [],
+            })),
+          )
+        ).sort((a, b) => a.createdAt - b.createdAt),
       };
     });
   },
@@ -181,7 +226,11 @@ export const assign = mutation({
 
 /** 自分の指摘本文の訂正（v1）。原文は履歴イベントに残る。 */
 export const edit = mutation({
-  args: { threadId: v.id("commentThreads"), body: v.string() },
+  args: {
+    threadId: v.id("commentThreads"),
+    body: v.string(),
+    bodyFormat: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {

@@ -1,4 +1,4 @@
-import { QuestionHead } from "./Field";
+import { subscriptProps } from "./Field";
 import { useId, useMemo, useState } from "react";
 import {
   deadlineFromJst,
@@ -50,7 +50,6 @@ export function DateField({
   value,
   onChange,
   required,
-  hint,
   min,
   kind = "deadline",
 }: {
@@ -58,7 +57,6 @@ export function DateField({
   value: number | null;
   onChange: (epoch: number | null) => void;
   required?: boolean;
-  hint?: string;
   /** この日より前の日付は選べない（epoch ms。その JST 暦日に丸める） */
   min?: number;
   /**
@@ -104,22 +102,11 @@ export function DateField({
 
   return (
     <>
-      <div className="q">
-        <QuestionHead
-          htmlFor={inputId}
-          labelId={`${id}-label`}
-          label={label}
-          required={required}
-          hint={hint}
-          hintId={`${id}-hint`}
-        />
-        <M3eFormField
-          variant="filled"
-          className="field q__field"
-          hideSubscript="always"
-          // 必須の印は質問文の赤い「*」だけ（M3E の印と二重にしない）
-          hideRequiredMarker
-        >
+      <div className="date-field">
+        <M3eFormField variant="outlined" className="field" {...subscriptProps(false, false)}>
+          <label slot="label" id={`${id}-label`} htmlFor={inputId}>
+            {label}
+          </label>
           <M3eDateInput
             id={inputId}
             type="date"
@@ -152,7 +139,7 @@ export function DateField({
           </label>
         </span>
         {showTime ? (
-          <M3eFormField variant="filled" className="field q__field" hideSubscript="always">
+          <M3eFormField variant="outlined" className="field" hideSubscript="always">
             <label slot="label" id={timeLabelId} htmlFor={timeId}>
               時刻
             </label>
@@ -175,7 +162,7 @@ export function DateField({
             </M3eIconButton>
           </M3eFormField>
         ) : null}
-        <p className="q__help" id={summaryId} aria-live="polite">
+        <p className="field__summary" id={summaryId} aria-live="polite">
           {kind === "date"
             ? value === null
               ? "日付だけでも、時刻を付けてもよい"

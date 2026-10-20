@@ -159,7 +159,7 @@ export function useWebBridge(
     () => ({
       post,
       reload,
-      setMode: (mode: "browse" | "comment") => post({ type: "mode", mode }),
+      setMode: (mode: "off" | "browse" | "comment") => post({ type: "mode", mode }),
       resolve: (anchors: ResolveTarget[]) => post({ type: "resolve", anchors }),
       scrollTo: (id: string) => post({ type: "scrollTo", id }),
       highlight: (id: string | null) => post({ type: "highlight", id }),

@@ -8,7 +8,7 @@ import type { PngWorkerRequest, PngWorkerResponse } from "./pngOptimise.core";
 /**
  * アップロード前の可逆な最適化のうち、ファイルの中身を作り直すもの（PNG）。利用者指示 2026-10-19「劣化ゼロだけ」。
  * 画素が 1 つも変わらない PNG に作り直し、時間の上限・小さくなった割合の閾値を満たさなければ元のファイルを上げる。
- * - 動的 import で読む呼び出し側（SubmitDialog・FeedbackComposer）から使う。WASM は最初の PNG のときだけ Worker が読む
+ * - 動的 import で読む呼び出し側（SubmitDialog・コメントの添付）から使う。WASM は最初の PNG のときだけ Worker が読む
  * - 作り直した File は元と同じ名前・MIME で、準備（申告サイズ）の前に差し替える。申告も実体も作り直した後の PNG になる
  * gzip は転送のときに行う（uploadEncoding.ts。申告サイズは元のまま）。
  */

@@ -3,7 +3,6 @@ import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
 import { PdfLinks } from "./PdfLinks";
-import { PdfTextLayer } from "./PdfTextLayer";
 import type { ArtifactDownload } from "@/lib/artifactFiles";
 import { openPdfFromDownload, pdfDocumentParams, pdfjs } from "./pdfjs";
 import { useStageWidth } from "./useStageWidth";
@@ -43,14 +42,8 @@ interface Props extends ViewerSyncProps {
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
-  /** ドラッグで範囲、クリックでピンを指定できるか（投稿権限があれば常時） */
-  selecting: boolean;
-  /**
-   * 印を付けないとき（書き込み「なし」）: 紙面そのものを押せるようにする。印の層は押す・なぞるを通し（印そのものは押せる）、
-   * PDF の中のリンクを `<a>` として出し（外部 URL は新しいタブ、ページ内のリンクはそのページへ）、文字の層（PdfTextLayer）で
-   * 文字を選んでコピーできる。コメント・FB のモードでは出さない
-   */
-  passive?: boolean;
+  /** なぞって範囲、長押しでピンを指定できるか（投稿権限があれば常時。クリックはふつうのクリックで、PDF のリンクを辿れる） */
+  canComment: boolean;
   draft: PdfDraft | null;
   onDraft: (d: PdfDraft | null) => void;
   /** 表示中のページ。親が変えるとそのページまで送る。読み手がスクロールすると `onPageChange` で返す */
@@ -95,8 +88,7 @@ export function PdfViewer({
   threads,
   activeThreadId,
   onSelectThread,
-  selecting,
-  passive = false,
+  canComment,
   draft,
   onDraft,
   page,
@@ -313,26 +305,14 @@ export function PdfViewer({
                       onNear={onNear}
                       onPainted={onPainted}
                     />
-                    {passive ? (
-                      <PdfTextLayer
-                        doc={doc}
-                        n={n}
-                        scale={renderScale}
-                        rotation={rotation}
-                        root={stageRef}
-                      />
-                    ) : null}
-                    {passive ? (
-                      <PdfLinks
-                        doc={doc}
-                        n={n}
-                        rotation={rotation}
-                        numPages={sizes.length}
-                        onGoto={goToPage}
-                      />
-                    ) : null}
+                    <PdfLinks
+                      doc={doc}
+                      n={n}
+                      rotation={rotation}
+                      numPages={sizes.length}
+                      onGoto={goToPage}
+                    />
                     <AnchorOverlay
-                      passive={passive}
                       viewport={viewport}
                       threads={threads.filter(
                         (t) =>
@@ -342,7 +322,7 @@ export function PdfViewer({
                       )}
                       activeThreadId={activeThreadId}
                       onSelectThread={onSelectThread}
-                      selecting={selecting}
+                      canComment={canComment}
                       draft={draft && draft.page === n ? draft : null}
                       onDraft={(d) => onDraft({ page: n, ...d })}
                     />

@@ -2,19 +2,44 @@ import {
   type Anchor,
   anchorFitsArtifact,
   assertCanPostComment,
+  canSeeNotificationSubject,
+  COMMENT_UNREAD_TRACKED_SINCE,
+  type CommentBodyFormat,
+  type CommentFileView,
   type CommentThread,
   type DecisionAction,
   decideThread as decideThreadDomain,
+  deriveThreadActivity,
   DomainError,
+  initialThreadActivity,
   isAccepting,
+  isThreadUnread,
+  type LatestReply,
+  latestReplies,
+  memberTeamIds,
+  plainTextOf,
   type Principal,
+  recipientPrincipal,
+  replyRecipients,
+  storedThreadActivity,
+  THREAD_PARTICIPANTS_SHOWN,
+  type ThreadActivity,
   type Severity,
   type ThreadKind,
   validateAnchor,
+  validateCommentBody,
+  validateCommentFileIds,
+  withThreadActivity,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
 import { checkMentions, idempotent, loadAuthorizedWork, searchPeopleByText } from "../shared.ts";
 import { markRevisionViewed } from "./reviews.ts";
+import {
+  attachCommentFiles,
+  checkCommentFiles,
+  listCommentFileViews,
+  releaseCommentFiles,
+} from "./commentFiles.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 import {
   allMembersCanView,
@@ -43,16 +68,27 @@ const resolutionLabels: Record<string, string> = {
   resolved: "反映済み",
 };
 
+/** 通知の抜粋・端末の通知に載せるスレッドの本文（書式の記号を除いた平文） */
+const threadText = (t: Pick<CommentThread, "body" | "bodyFormat">) =>
+  plainTextOf(t.body, t.bodyFormat);
+
 export interface PostCommentInput {
   revisionId: string;
   body: string;
+  /** 本文の書式。無ければ平文（旧来）。Web の入力欄は "markdown" を送る */
+  bodyFormat?: string;
   kind: ThreadKind;
   severity: Severity;
   anchor?: Anchor;
   requestId?: string;
   /** 本文でメンションした人（制作物を見られる人だけ。上限 10） */
   mentions?: string[];
+  /** 添付（prepareCommentFiles で準備し、Hono で検証済みになった自分の添付。上限 10。本文が空でも添付があれば投稿できる） */
+  fileIds?: string[];
 }
+
+/** 本文の無いコメント・返信（添付だけ）の通知や一覧に出す代わりの文 */
+const attachmentNote = (count: number) => `（添付ファイル ${count} 件）`;
 
 /**
  * 新しいコメント（要件の「指摘」。F-06 / F-07 / A-04 / A-06）。
@@ -75,7 +111,10 @@ export async function postComment(
   );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const wantedFiles = validateCommentFileIds(input.fileIds);
+  if (input.body.trim() === "" && wantedFiles.length === 0)
+    throw new DomainError("forbidden", { reason: "body_required" });
+  const bodyFormat = validateCommentBody(input.body, input.bodyFormat);
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
 
   const now = ctx.clock.now();
@@ -104,27 +143,39 @@ export async function postComment(
     `postComment:${revision.id}:${principal.userId}`,
     input.requestId,
     async () => {
+      // 付ける添付の確認（本人が同じ制作物に上げた検証済みの、まだ付けていないもの）。再送のときは投稿が済んでいるので通らない
+      const attach = await checkCommentFiles(ctx, principal, work.id, wantedFiles);
+      const text =
+        input.body.trim() !== ""
+          ? plainTextOf(input.body, bodyFormat)
+          : attachmentNote(attach.ids.length);
       const data: Omit<CommentThread, "id"> = {
         revisionId: revision.id,
         authorId: principal.userId,
         body: input.body,
+        ...(bodyFormat ? { bodyFormat } : {}),
         kind: input.kind,
         severity: input.severity,
         resolution: "open",
         createdAt: now,
+        ...initialThreadActivity({ authorId: principal.userId, createdAt: now }),
       };
       if (input.anchor) {
         data.anchor = input.anchor;
         data.artifactId = input.anchor.artifactId;
       }
       if (mentions.length) data.mentions = mentions;
+      if (attach.ids.length) data.fileIds = attach.ids;
       const thread = await ctx.threads.insert(data);
+      await attachCommentFiles(ctx, attach.files, { threadId: thread.id, revisionId: revision.id });
       await ctx.threads.appendEvent({
         threadId: thread.id,
         eventType: "created",
         actorId: principal.userId,
         createdAt: now,
       });
+      // 自分の投稿でスレッドを未読にしない
+      await ctx.threads.markRead(principal.userId, thread.id, now);
       await markRevisionViewed(ctx, principal, revision.id);
       // メンションされた人には「メンション」だけを送る（制作者がメンションされたら新しいコメントの通知と重ねない）
       const who = await personName(ctx, principal.userId);
@@ -135,15 +186,15 @@ export async function postComment(
         {
           kind: "comment_posted",
           title: "新しいコメント",
-          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(input.body)}`,
-          preview: input.body,
+          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(text)}`,
+          preview: text,
           workId: work.id,
           revisionId: revision.id,
           threadId: thread.id,
         },
       );
       await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
-        body: input.body,
+        body: text,
         workId: work.id,
         revisionId: revision.id,
         threadId: thread.id,
@@ -160,9 +211,18 @@ export async function postComment(
 export async function replyToThread(
   ctx: AppContext,
   principal: Principal,
-  input: { threadId: string; body: string; mentions?: string[] },
+  input: {
+    threadId: string;
+    body: string;
+    bodyFormat?: string;
+    mentions?: string[];
+    fileIds?: string[];
+  },
 ): Promise<void> {
-  if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const wantedFiles = validateCommentFileIds(input.fileIds);
+  if (input.body.trim() === "" && wantedFiles.length === 0)
+    throw new DomainError("forbidden", { reason: "body_required" });
+  const bodyFormat = validateCommentBody(input.body, input.bodyFormat);
   const thread = await ctx.threads.findById(input.threadId);
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
   const revision = await ctx.revisions.findById(thread.revisionId);
@@ -178,19 +238,166 @@ export async function replyToThread(
   assertThreadNotDeleted(thread);
   const now = ctx.clock.now();
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
-  await ctx.threads.appendEvent({
+  const attach = await checkCommentFiles(ctx, principal, work.id, wantedFiles);
+  const text =
+    input.body.trim() !== ""
+      ? plainTextOf(input.body, bodyFormat)
+      : attachmentNote(attach.ids.length);
+  const eventId = await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "replied",
     actorId: principal.userId,
-    payload: mentions.length ? { body: input.body, mentions } : { body: input.body },
+    payload: {
+      body: input.body,
+      ...(bodyFormat ? { bodyFormat } : {}),
+      ...(mentions.length ? { mentions } : {}),
+      ...(attach.ids.length ? { fileIds: attach.ids } : {}),
+    },
     createdAt: now,
   });
-  await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
-    body: input.body,
-    workId: work.id,
-    revisionId: revision.id,
+  await attachCommentFiles(ctx, attach.files, {
     threadId: thread.id,
+    eventId,
+    revisionId: thread.revisionId,
   });
+  // 返信の件数・参加者・最後の動きを進める。返信した本人は、自分の返信でスレッドを未読にしない
+  const events = await ctx.threads.listEvents(thread.id);
+  await ctx.threads.update(withThreadActivity(thread, deriveThreadActivity(thread, events)));
+  await ctx.threads.markRead(principal.userId, thread.id, now);
+  const at = { workId: work.id, revisionId: revision.id, threadId: thread.id };
+  await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
+    body: text,
+    ...at,
+  });
+  // スレッドの参加者（投稿者とこれまでに返信した人）には「返信」を知らせる。メンションした人には「メンション」だけ
+  const teams = work.confidentiality === "restricted" ? await ctx.teams.list() : [];
+  const participants = replyRecipients(thread, events, principal.userId, mentions).filter((id) =>
+    canSeeNotificationSubject("work", {
+      work,
+      grants,
+      principal: recipientPrincipal(id, memberTeamIds(teams, id)),
+    }),
+  );
+  if (participants.length) {
+    const who = await personName(ctx, principal.userId);
+    await notify(ctx, participants, principal.userId, {
+      kind: "comment_posted",
+      title: "コメントに返信がありました",
+      body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(text)}`,
+      preview: text,
+      ...at,
+    });
+  }
+}
+
+/** 画面に渡すスレッドのやり取りと、閲覧者の未読 */
+export interface ThreadActivityView {
+  /** 閲覧者にとって未読か（読んだ時刻より後に、他の人の動きがある） */
+  unread: boolean;
+  /** 削除されていない返信の件数 */
+  replyCount: number;
+  /** 最後の動き（スレッドを立てた時刻・最後の返信の時刻） */
+  lastActivityAt: number;
+  /** 投稿者・返信した人（投稿者が先頭。一覧は投稿者を除く先頭の人を重ねて見せる） */
+  participantIds: string[];
+  /** 直近の返信（削除されていないものの最後の数件。古い順）。一覧のカードで元のコメントの下に並べる */
+  latestReplies: LatestReplyView[];
+}
+
+/** 一覧のカードに並べる返信 1 件 */
+export interface LatestReplyView {
+  id: string;
+  authorId: string;
+  createdAt: number;
+  body: string;
+  bodyFormat?: CommentBodyFormat;
+  mentionIds: string[];
+  /** 添付の数 */
+  fileCount: number;
+  /** 最初の添付（検証済みで削除されていないもの。無ければ null）。一覧にはこれだけを見せる */
+  firstFile: CommentFileView | null;
+  /** 閲覧者にとって未読の返信か（スレッドが未読で、読んだ時刻より後の他の人の返信） */
+  unread: boolean;
+}
+
+/**
+ * スレッドごとのやり取りと閲覧者の未読（版の画面の一覧用）。やり取りはスレッドが持っていればそれを、
+ * 無い古いスレッドはイベントから導く（移行しない）。自分の動きと、人の返信が無い自動校正の指摘は、読んだ時刻を引かない。
+ */
+export async function presentThreadActivity(
+  ctx: AppContext,
+  principal: Principal,
+  threads: readonly CommentThread[],
+): Promise<Map<string, ThreadActivityView>> {
+  const activities = new Map<string, ThreadActivity>();
+  const replies = new Map<string, LatestReply[]>();
+  for (const t of threads) {
+    const stored = storedThreadActivity(t);
+    // 返信のあるスレッドだけイベントを読む（返信の無いスレッドは読まない。古いスレッドは導くために読む）
+    const events =
+      stored === null || stored.replyCount > 0 ? await ctx.threads.listEvents(t.id) : null;
+    activities.set(t.id, stored ?? deriveThreadActivity(t, events ?? []));
+    if (events !== null) replies.set(t.id, latestReplies(events));
+  }
+  // 読んだ時刻は、未読になりうるものだけ引く（自分の動き・人の返信が無い自動校正の指摘は常に既読）
+  const check = threads.filter((t) => {
+    const a = activities.get(t.id)!;
+    return isThreadUnread(t, a, principal.userId, null);
+  });
+  const reads = await ctx.threads.readsOf(
+    principal.userId,
+    check.map((t) => t.id),
+  );
+  const out = new Map<string, ThreadActivityView>();
+  for (const t of threads) {
+    const a = activities.get(t.id)!;
+    const readAt = reads.get(t.id) ?? null;
+    const unread = isThreadUnread(t, a, principal.userId, readAt);
+    const latest: LatestReplyView[] = [];
+    for (const r of replies.get(t.id) ?? []) {
+      // 添付は最初の 1 件だけ引く（返信 1 件あたり読取 1 回。カードに見せるのは 1 枚）
+      const first = r.fileIds[0];
+      const [firstFile = null] = first ? await listCommentFileViews(ctx, [first]) : [];
+      latest.push({
+        id: r.id,
+        authorId: r.authorId,
+        createdAt: r.createdAt,
+        body: r.body,
+        ...(r.bodyFormat ? { bodyFormat: r.bodyFormat } : {}),
+        mentionIds: r.mentionIds,
+        fileCount: r.fileIds.length,
+        firstFile,
+        unread:
+          unread &&
+          r.authorId !== principal.userId &&
+          r.createdAt >= COMMENT_UNREAD_TRACKED_SINCE &&
+          (readAt === null || r.createdAt > readAt),
+      });
+    }
+    out.set(t.id, {
+      unread,
+      replyCount: a.replyCount,
+      lastActivityAt: a.lastActivityAt,
+      participantIds: a.participantIds.slice(0, THREAD_PARTICIPANTS_SHOWN + 1),
+      latestReplies: latest,
+    });
+  }
+  return out;
+}
+
+/** スレッドを読んだ印を付ける（スレッドのパネルを開いたとき・開いている間に新しい返信が来たとき）。見られる人だけ */
+export async function markCommentRead(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string },
+): Promise<void> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  assertThreadNotDeleted(thread);
+  await ctx.threads.markRead(principal.userId, thread.id, ctx.clock.now());
 }
 
 /**
@@ -296,7 +503,7 @@ export async function decideThread(
       title: "コメントの採否が決まりました",
       body: `${about(work.title, revisionLabel(revision), who)}が「${label}」にしました${
         input.reason?.trim() ? `（理由: ${excerpt(input.reason, 60)}）` : ""
-      }: ${excerpt(thread.body, 60)}`,
+      }: ${excerpt(threadText(thread), 60)}`,
       preview: `「${label}」にしました`,
       workId: work.id,
       revisionId: revision.id,
@@ -337,8 +544,8 @@ export async function assignThread(
     await notify(ctx, [input.assigneeId], principal.userId, {
       kind: "comment_assigned",
       title: "コメントの対応担当になりました",
-      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${excerpt(thread.body)}`,
-      preview: thread.body,
+      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${excerpt(threadText(thread))}`,
+      preview: threadText(thread),
       workId: work.id,
       revisionId: revision.id,
       threadId: thread.id,
@@ -347,11 +554,14 @@ export async function assignThread(
   return next;
 }
 
-/** コメント本文の訂正（§5.2-9）。投稿者本人・未判断の間のみ。訂正前の本文をイベントに残す。 */
+/**
+ * コメント本文の訂正（§5.2-9）。投稿者本人・未判断の間のみ。訂正前の本文（と書式）をイベントに残す。
+ * 書式は訂正後の本文のもの（旧来の平文のコメントを Web から訂正すると Markdown になる）。
+ */
 export async function editThread(
   ctx: AppContext,
   principal: Principal,
-  input: { threadId: string; body: string },
+  input: { threadId: string; body: string; bodyFormat?: string },
 ): Promise<CommentThread> {
   const thread = await ctx.threads.findById(input.threadId);
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
@@ -361,13 +571,17 @@ export async function editThread(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   assertThreadNotDeleted(thread);
-  const next = editThreadBody(thread, principal.userId, input.body);
+  const next = editThreadBody(thread, principal.userId, input.body, input.bodyFormat);
   await ctx.threads.update(next);
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "edited",
     actorId: principal.userId,
-    payload: { previousBody: thread.body },
+    payload: {
+      previousBody: thread.body,
+      ...(thread.bodyFormat ? { previousBodyFormat: thread.bodyFormat } : {}),
+      ...(next.bodyFormat ? { bodyFormat: next.bodyFormat } : {}),
+    },
     createdAt: ctx.clock.now(),
   });
   return next;
@@ -409,6 +623,8 @@ export async function deleteThread(
     payload: { cascade: true, repliesDeleted: plan.cascadeReplyIds.length },
     createdAt: now,
   });
+  // コメントと返信の添付は読めなくなり、R2 の清掃の対象になる
+  await releaseCommentFiles(ctx, thread.id);
   if (plan.authority === "admin")
     await recordAdminDeletion(ctx, principal, {
       entityType: "commentThread",
@@ -491,6 +707,14 @@ export async function deleteReply(
     payload: { replyEventId: input.replyEventId },
     createdAt: now,
   });
+  await releaseCommentFiles(ctx, thread.id, { eventIds: [input.replyEventId] });
+  // 返信の件数・参加者・最後の動きを、残った返信から数え直す
+  await ctx.threads.update(
+    withThreadActivity(
+      thread,
+      deriveThreadActivity(thread, await ctx.threads.listEvents(thread.id)),
+    ),
+  );
   const replyAuthor = replyEntries(events).find((r) => r.id === input.replyEventId)!.actorId;
   await recordAdminDeletion(ctx, principal, {
     entityType: "commentReply",
@@ -562,8 +786,8 @@ export async function carryForwardThread(
   await notify(ctx, [source.authorId], principal.userId, {
     kind: "comment_posted",
     title: "コメントが次の版へ持ち越されました",
-    body: `${about(work.title, revisionLabel(target), who)}: ${excerpt(source.body)}`,
-    preview: source.body,
+    body: `${about(work.title, revisionLabel(target), who)}: ${excerpt(threadText(source))}`,
+    preview: threadText(source),
     workId: work.id,
     revisionId: target.id,
     threadId: created.id,

@@ -908,11 +908,12 @@
   /* タッチはスクロールに任せ、長押ししてから範囲選択（AnchorOverlay と同じ） */
   touch-action: pan-x pan-y;
   -webkit-touch-callout: none;
-}
-.sp-marks.is-drawable {
-  cursor: crosshair;
   -webkit-user-select: none;
   user-select: none;
+}
+/* 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける） */
+.sp-marks.is-drawable {
+  cursor: crosshair;
 }
 .sp-marks:focus-visible {
   outline: 3px solid var(--mf-primary);
@@ -924,10 +925,7 @@
   position: absolute;
   pointer-events: none;
 }
-.sp-mark.is-fb {
-  --mk: var(--mf-secondary);
-  --mk-on: var(--mf-on-secondary, #fff);
-}
+
 .sp-mark.is-critical {
   --mk: var(--mf-error);
   --mk-on: var(--mf-on-error, #fff);
@@ -937,9 +935,7 @@
   border: 2px solid var(--mk);
   border-radius: 2px;
 }
-.sp-mark--rect.is-fb {
-  border-style: dashed;
-}
+
 .sp-mark--rect.is-active {
   border-width: 3px;
 }
@@ -991,9 +987,7 @@
   left: calc(var(--sz) / -2 - 1px);
   top: calc(var(--sz) / -2 - 1px);
 }
-.sp-mark.is-fb .sp-mark__pin {
-  border-radius: calc(7px * var(--sp-k, 1));
-}
+
 .sp-mark.is-draft .sp-mark__pin {
   border-style: dashed;
   background: color-mix(in srgb, var(--mk) 40%, transparent);
@@ -1100,10 +1094,7 @@
   background: color-mix(in srgb, var(--mf-error) 18%, transparent);
   border-bottom-color: var(--mf-error);
 }
-.sp-mark-text.is-fb {
-  background: color-mix(in srgb, var(--mf-secondary) 12%, transparent);
-  border-bottom: 2px dashed var(--mf-secondary);
-}
+
 .sp-mark-text.is-active {
   background: color-mix(in srgb, var(--mf-primary) 34%, transparent);
   border-bottom-width: 4px;
@@ -1112,9 +1103,7 @@
 .sp-mark-text.is-active.is-critical {
   background: color-mix(in srgb, var(--mf-error) 34%, transparent);
 }
-.sp-mark-text.is-active.is-fb {
-  background: color-mix(in srgb, var(--mf-secondary) 28%, transparent);
-}
+
 @keyframes sp-mark-text-flash {
   from {
     box-shadow: 0 0 0 6px color-mix(in srgb, var(--mf-primary) 55%, transparent);
@@ -1147,10 +1136,7 @@
   pointer-events: none;
   user-select: none;
 }
-.sp-mark-text.is-fb[data-index]::before {
-  background: var(--mf-secondary);
-  color: var(--mf-on-secondary, #fff);
-}
+
 .sp-mark-text.is-critical[data-index]::before {
   background: var(--mf-error);
   color: var(--mf-on-error, #fff);

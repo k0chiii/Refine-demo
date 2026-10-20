@@ -233,7 +233,21 @@ body {
   padding-top: env(safe-area-inset-top, 0px);
   /* 左のセーフエリアは、レールがある幅（600 以上）ではレールが受け持つ（§35 L-06） */
   padding-inline: 0 env(safe-area-inset-right, 0px);
-  background-color: var(--m3e-app-bar-container-color, var(--mf-surface));
+  /* バーの色は host に塗り、スクロールしたら surface → surface-container へ（本文との境の線の代わり。監査 G-12） */
+  --m3e-app-bar-container-color: transparent;
+  background-color: var(--mf-surface);
+}
+@supports (animation-timeline: scroll()) {
+  .shell__appbar {
+    animation: mf-appbar-edge linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 32px;
+  }
+}
+@keyframes mf-appbar-edge {
+  to {
+    background-color: var(--mf-surface-container);
+  }
 }
 @media (max-width: 599px) {
   .shell__appbar {
@@ -440,6 +454,8 @@ m3e-search-bar {
     calc(64px + env(safe-area-inset-bottom, 0px)) 24px;
   width: 100%;
   box-sizing: border-box;
+  /* 中身の幅（cqi）を、左寄せの列の中の空の表示を画面の中央に置くのに使う */
+  container-type: inline-size;
 }
 .shell__bar {
   display: none;
@@ -521,15 +537,27 @@ m3e-dialog [slot="actions"] {
 
 /* ---------- カード（m3e-card） */
 /*
- * カード（Google フォームのカードに合わせる。利用者指示 2026-10-15）: 白地・1px の枠・角 8px・内側の余白 24px。
- * 実測（docs.google.com/forms）: 背景 #fff、枠 1px #dadada、角 8px、padding 24px、カードの間 12px
+ * カードの方言は 1 つ（監査 G-03）: filled（surface-container-low）・角 16・内側 16（medium 以上は 24）。
+ * 枠線の outlined は「選べるカード」（コメントのスレッドなど）だけ。
+ * 角の尺度: ペイン・カード 16 / 中の表・入力・サムネイル 12（入力は M3 の 4）/ ボタン・チップ full / ダイアログ 28 / 紙面 2（--mf-shape-paper）
  */
-.card {
-  --m3e-card-shape: 8px;
-  --m3e-card-padding: 24px;
-  --m3e-outlined-card-container-color: var(--mf-surface-container-lowest);
+.card,
+.proposal {
+  --m3e-card-shape: var(--mf-shape-lg);
+  --m3e-card-padding: 16px;
+  --m3e-filled-card-container-color: var(--mf-surface-container-low);
+  --m3e-outlined-card-container-color: var(--mf-surface-container-low);
   --m3e-outlined-card-outline-color: var(--mf-outline-variant);
   display: block;
+}
+@media (min-width: 600px) {
+  .card,
+  .proposal {
+    --m3e-card-padding: 24px;
+  }
+}
+.card + .card {
+  margin-block-start: 16px;
 }
 .card__header {
   display: flex;
@@ -547,11 +575,14 @@ m3e-dialog [slot="actions"] {
 .card__header + .card__content {
   padding-top: 8px;
 }
-/* フォームの画面（Google フォーム風）: カードを 12px 間隔で縦に並べる（ヘッダーの色帯はやりすぎなので付けない） */
+/* フォームの画面: カードを 16px 間隔で縦に並べる（ヘッダーの色帯はやりすぎなので付けない） */
 .gform {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+.gform > .card + .card {
+  margin-block-start: 0;
 }
 .gform .card__content {
   gap: 24px;
@@ -603,37 +634,24 @@ m3e-dialog [slot="actions"] {
   width: 100%;
   --m3e-form-field-width: 100%;
 }
-.field__required {
-  color: var(--mf-error);
-}
 /*
- * 質問（Google フォーム風。利用者指示 2026-10-15）: 質問文を上に普通の文字で、説明をその下に、入力は下線だけ。
- * 実測（docs.google.com/forms の回答画面）: 質問文 16/24・#1f1f1f、説明 14/20 の補足色、回答欄は下線 1px、選択中は 2px のテーマ色。
- * 入力の文字は iOS の自動拡大を避けるため 16px のまま（Google フォームは 14px）
+ * 入力欄は M3E の outlined form-field（枠付き・浮くラベル。利用者指示 2026-10-20「入力欄を M3E の枠付きに」。docs/DECISIONS）。
+ * 角は 4px（M3 の text field）。必須の印・説明・エラーは M3E の slot が出す。
  */
-.q {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.field {
+  --m3e-outlined-form-field-container-shape: var(--mf-shape-xs);
 }
-.q__title {
-  font: var(--mf-type-body-large);
-  color: var(--mf-on-surface);
-}
-.q__help {
-  margin: 4px 0 0;
-  font: var(--mf-type-body-medium);
+/* 日付欄の下の「確定する日時」（form-field の subscript と同じ字・インデント） */
+.field__summary {
+  margin: 4px 16px 0;
+  font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
-/* M3E の filled を、背景なし・角なしにして下線（active indicator）だけを残す */
-.q__field {
-  /* filled は浮くラベルの分だけ上を空けているので、質問文との間を少し詰める */
-  margin-top: -6px;
-  --m3e-form-field-disabled-container-opacity: 0;
-  --m3e-form-field-container-color: transparent;
-  --m3e-form-field-hover-container-color: transparent;
-  --m3e-form-field-hover-container-opacity: 0;
-  --m3e-form-field-container-shape: 0;
+.date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 .field__hint,
 .field__label {
@@ -746,6 +764,8 @@ m3e-dialog [slot="actions"] {
 }
 .search {
   min-width: min(360px, 100%);
+  /* 検索バーは広げすぎない（監査 G-15） */
+  max-width: 560px;
 }
 .search input {
   font: var(--mf-type-body-large);
@@ -781,13 +801,28 @@ m3e-dialog [slot="actions"] {
   flex: none;
   font-size: 20px;
 }
+/* 空の表示は 1 つ: 48 のアイコン（primary 40%）・title-medium の見出し・body-medium の補足（監査 L-03） */
 .empty {
   padding: 48px 24px;
   text-align: center;
   color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-medium);
   display: grid;
   justify-items: center;
   gap: 8px;
+}
+/* 制作・校正の左寄せの列（.hub）の中でも、空の表示だけは中身の領域の中央に置く（利用者指示 2026-10-20） */
+.hub .empty {
+  width: 100cqi;
+  box-sizing: border-box;
+  justify-self: start;
+}
+.empty > m3e-icon {
+  font-size: 48px;
+  color: color-mix(in srgb, var(--mf-primary) 40%, transparent);
+}
+.empty > .title-medium {
+  color: var(--mf-on-surface);
 }
 /* 読み込み中（ui/Loading.tsx）: M3 Expressive Loading indicator を区画の中央に。
    ごく短い読み込みで点滅しないよう 150ms 待って現れる（キャッシュ済みのデモでは見えないことが多い） */
@@ -840,7 +875,19 @@ m3e-dialog [slot="actions"] {
 .dialog-body {
   display: grid;
   gap: 16px;
-  min-width: min(520px, 90vw);
+  /* 基本のダイアログの中身の幅は 560 − 余白 24×2 = 512（520 だと右が 8px はみ出し、枠付きの入力欄の右の余白が左と合わない） */
+  min-width: min(512px, 90vw);
+  /* 先頭の入力欄の浮くラベル（枠の上辺にまたがる）が、本文のスクロール境界で切れないように */
+  padding-top: 8px;
+}
+/* ダイアログの説明の段落は body-medium（14）で、1 行を 60 字ほどに収める（監査 D-03） */
+.dialog-body p.small {
+  font: var(--mf-type-body-medium);
+  max-width: 60ch;
+}
+/* ダイアログの高さ: 長いフォームは 720 まで・画面の 90% まで（本文だけがスクロールする。監査 D-02。compact の全画面は .dialog--full が上書き） */
+m3e-dialog {
+  --m3e-dialog-max-height: min(720px, 90dvh);
 }
 /* 版提出: 広い画面はダイアログ、狭い画面は全画面 */
 .dialog--full {
@@ -880,16 +927,12 @@ m3e-dialog [slot="actions"] {
 }
 
 /* ---------- アップロード項目（版提出） */
-.upload-item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
 .upload-item__bar {
-  grid-column: 1 / -1;
+  display: block;
+  margin-block-start: 4px;
+}
+.upload-item__error {
+  color: var(--mf-error);
 }
 .upload-item__state--verified {
   color: var(--mf-success);
@@ -915,6 +958,10 @@ m3e-dialog [slot="actions"] {
 .signin__card .card__content {
   gap: 24px;
   padding: 32px 24px 24px;
+}
+/* 折りたたみの中の先頭の入力欄のラベルが切れないように */
+.signin__card .stack {
+  padding-top: 8px;
 }
 .signin__brand {
   display: flex;
@@ -942,13 +989,27 @@ m3e-dialog [slot="actions"] {
   display: grid;
   gap: 8px;
 }
-.picker__chips {
+/* 担当者・タグの欄: 枠の中にチップと検索の入力が並ぶ（折り返す） */
+.picker__inner {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  min-height: 56px;
+  padding: 8px 0;
+  min-width: 0;
 }
-.picker__search {
-  position: relative;
+.picker__chips {
+  display: contents;
+}
+.picker__input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  width: auto;
+  padding: 4px 0;
+}
+.picker__input::placeholder {
+  color: var(--mf-on-surface-variant);
 }
 
 /* ---------- 専門確認・持越・通知（v1） */
@@ -1034,14 +1095,7 @@ m3e-dialog [slot="actions"] {
 .text-anchor--critical.text-anchor--active {
   background: color-mix(in srgb, var(--mf-error) 30%, transparent);
 }
-/* FB（相談）の範囲: secondary・点線の下線（コメントは primary・実線） */
-.text-anchor--fb {
-  background: color-mix(in srgb, var(--mf-secondary) 10%, transparent);
-  border-bottom: 2px dashed var(--mf-secondary);
-}
-.text-anchor--fb.text-anchor--active {
-  background: color-mix(in srgb, var(--mf-secondary) 24%, transparent);
-}
+
 .text-anchor--draft {
   background: color-mix(in srgb, var(--mf-primary) 28%, transparent);
 }
@@ -1088,6 +1142,17 @@ m3e-dialog [slot="actions"] {
 .nav-icon .badge {
   inset-inline-start: 12px; /* RTL では左上に鏡映（Bidirectionality › Badges） */
   top: -2px;
+  /* 赤は通知のベルだけ。校正のやること件数は primary（選択中の secondary-container の上でも見える。監査 L-04） */
+  background: var(--mf-primary);
+  color: var(--mf-on-primary);
+}
+/* 展開レールはアイコンの右にラベルが並ぶ。ラベルとの間を 12 に広げ、バッジはアイコンの角に寄せてラベルに重ならないようにする（監査 G-11） */
+.shell__rail:not(.shell__rail--collapsed) {
+  --m3e-nav-item-spacing: 12px;
+}
+.shell__rail:not(.shell__rail--collapsed) .nav-icon .badge {
+  inset-inline-start: 14px;
+  top: -6px;
 }
 /* アプリバーのベル: ボタン（48 のタッチ領域、アイコンは 12,12 から 24）の外にバッジを置く */
 .bell {
@@ -1132,8 +1197,14 @@ m3e-dialog [slot="actions"] {
 #account-menu {
   --m3e-menu-container-max-width: 360px;
 }
+/* メールが長くてもメニューの幅を広げない（省略記号。監査 H-02） */
+.account-menu__header > div {
+  min-width: 0;
+}
 .account-menu__header .small {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /*
@@ -1244,6 +1315,11 @@ m3e-dialog [slot="actions"] {
   align-items: center;
   gap: 8px;
 }
+/* 件数のバッジ（あなたの番 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
+.dash__badge {
+  --m3e-badge-container-color: var(--mf-secondary-container);
+  --m3e-badge-color: var(--mf-on-secondary-container);
+}
 .dash__count {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
@@ -1267,9 +1343,7 @@ m3e-dialog [slot="actions"] {
   border-radius: var(--mf-shape-full);
   background: var(--mf-primary);
 }
-.list__item--unread .list__headline {
-  font-weight: 500;
-}
+
 /* ---------- ホームの数字と表（features/home/DashboardOverview.tsx。§74）
  * 上から: 数字のカード（左上が最重要）→ やること（上の .dash）→ 制作物の状況（表 + 内訳）。
  * 表と内訳は上の .dash--columns と同じ 2 列（主 + 右の固定幅のペイン）に載せ、列の縁を揃える */
@@ -1296,9 +1370,12 @@ m3e-dialog [slot="actions"] {
   }
 }
 @media (max-width: 599px) {
-  /* compact: 3 枚を 1 列に（2 列だと 3 枚目だけ横長になる） */
   .kpis--three {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .kpis--three > :last-child {
+    grid-column: auto;
   }
 }
 .kpi {
@@ -1313,7 +1390,7 @@ m3e-dialog [slot="actions"] {
   grid-template-rows: auto auto 1fr;
   align-content: start;
   gap: 4px;
-  min-height: 104px;
+  min-height: 72px;
 }
 .kpi__label {
   font: var(--mf-type-label-large);
@@ -1343,12 +1420,23 @@ m3e-dialog [slot="actions"] {
   align-self: end;
 }
 @media (max-width: 599px) {
+  /* compact: 3 枚を 1 行に（数だけ。補足は出さない。監査 W-02） */
+  .kpi {
+    --m3e-card-padding: 12px;
+  }
   .kpi__body {
-    min-height: 96px;
+    min-height: 0;
+  }
+  .kpi__label {
+    font: var(--mf-type-label-medium);
   }
   .kpi__num {
     font-size: 2rem;
     line-height: 2.5rem;
+  }
+  .kpi__sub,
+  .kpi .meter__text {
+    display: none;
   }
 }
 
@@ -1470,9 +1558,6 @@ m3e-dialog [slot="actions"] {
   font: var(--mf-type-body-medium);
   min-height: 28px;
 }
-.legend__item--zero {
-  color: var(--mf-on-surface-variant);
-}
 .legend__swatch {
   flex: none;
   width: 12px;
@@ -1494,7 +1579,7 @@ m3e-dialog [slot="actions"] {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: baseline;
-  gap: 6px 8px;
+  gap: 4px 8px;
   font: var(--mf-type-body-medium);
 }
 .progress-row__text {
@@ -1524,6 +1609,15 @@ m3e-dialog [slot="actions"] {
   border-radius: var(--mf-shape-md);
   overflow: hidden;
   container-type: inline-size;
+}
+/* パネルの中に置く表（局別など）: 外枠・面・角を持たず、見出しは下の線だけ（監査 G-04・W-06。囲みの中の囲みにしない） */
+.mf-table--flush {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.mf-table--flush .mf-table__th {
+  background: transparent;
 }
 .mf-table--lines2 {
   --mf-table-row-h: 64px;
@@ -1658,7 +1752,7 @@ m3e-dialog [slot="actions"] {
 .mf-table__link:focus-visible {
   outline: var(--mf-focus-ring);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--mf-shape-xs);
 }
 /* セルの 2 行目（補足） */
 .mf-table__sub {
@@ -1823,7 +1917,7 @@ m3e-dialog [slot="actions"] {
   display: grid;
   justify-items: center;
   gap: 4px;
-  padding: 8px 4px 6px;
+  padding: 8px 4px;
   border: 2px solid transparent;
   border-radius: var(--mf-shape-md);
   background: transparent;
@@ -1862,7 +1956,7 @@ m3e-dialog [slot="actions"] {
 }
 .avatar-colors__row {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 .avatar-colors__choices {
   display: flex;
@@ -1873,7 +1967,7 @@ m3e-dialog [slot="actions"] {
 .avatar-swatches {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 .avatar-swatch {
   width: 32px;
@@ -1897,7 +1991,7 @@ m3e-dialog [slot="actions"] {
 .avatar-colors__custom {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--mf-on-surface-variant);
 }
 .avatar-colors__custom input[type="color"] {
@@ -1965,20 +2059,8 @@ m3e-dialog [slot="actions"] {
   max-width: 880px;
   min-width: 0;
 }
-/* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: 選んだものを入口の色に */
+/* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: M3E の connected button group の toggle（色は M3E の既定。上書きしない。監査 G-06） */
 .hub__tabs {
-  /* 選んでいるものは入口の色で塗り、ほかは中立の面（どちらも tonal のままだと色相でしか区別できない） */
-  --m3e-tonal-button-unselected-container-color: var(--mf-surface-container-high);
-  --m3e-tonal-button-unselected-label-text-color: var(--mf-on-surface-variant);
-  --m3e-tonal-button-selected-container-color: var(--hub-accent);
-  --m3e-tonal-button-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-selected-icon-color: var(--hub-on-accent);
-  --m3e-tonal-button-hover-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-focus-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-pressed-selected-label-text-color: var(--hub-on-accent);
-  --m3e-tonal-button-hover-selected-icon-color: var(--hub-on-accent);
-  --m3e-tonal-button-focus-selected-icon-color: var(--hub-on-accent);
-  --m3e-tonal-button-pressed-selected-icon-color: var(--hub-on-accent);
   /* 横に流す箱（overflow）の中では hover の影が切れるので、影は付けず state layer だけで示す */
   --m3e-tonal-button-hover-container-elevation: none;
   justify-self: start;
@@ -1990,7 +2072,7 @@ m3e-dialog [slot="actions"] {
 .hub-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 32px;
   padding-inline: 12px;
   border-radius: var(--mf-shape-full);
@@ -2133,6 +2215,17 @@ m3e-dialog [slot="actions"] {
 .admin-works__actions {
   flex-wrap: wrap;
 }
+/* 管理の説明: body-medium・on-surface-variant・読みやすい行長（監査 A-02） */
+.admin__lead {
+  margin: 0;
+  max-width: 72ch;
+  font: var(--mf-type-body-medium);
+  color: var(--mf-on-surface-variant);
+}
+.admin__switch-label {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
 .import-miss {
   color: var(--mf-error);
   display: inline-flex;
@@ -2147,6 +2240,8 @@ m3e-dialog [slot="actions"] {
 /* 通知パネル（medium 以上）: Scaffold の「浮遊する一時的なペイン」。幅は推奨値 360 */
 #notif-menu {
   --m3e-menu-container-max-width: 360px;
+  /* 項目の途中で切れない高さ（監査 H-01）。縦に長い通知は 3 行で省略する */
+  --m3e-menu-container-max-height: min(560px, 80dvh);
 }
 @media (min-width: 600px) {
   #notif-menu,
@@ -2218,6 +2313,13 @@ m3e-dialog [slot="actions"] {
   background: var(--mf-primary);
   vertical-align: middle;
 }
+/* 長い本文は 3 行で省略（メニューが縦に伸びすぎない。監査 H-01） */
+.notif__sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .notif__sub,
 .notif__time {
   font: var(--mf-type-body-small);
@@ -2235,12 +2337,14 @@ m3e-dialog [slot="actions"] {
   grid-template-columns: 3.5em 1fr;
   gap: 8px;
 }
+/* 項目名は label-medium・on-surface-variant、値は body-medium（監査 E-05） */
 .info dt {
-  font: var(--mf-type-body-medium);
+  font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
 }
 .info dd {
   margin: 0;
+  font: var(--mf-type-body-medium);
   overflow-wrap: anywhere;
 }
 .info__history {
@@ -2263,6 +2367,16 @@ m3e-dialog [slot="actions"] {
 .shell--editor .shell__content {
   padding-top: 0;
   padding-bottom: 0;
+}
+/* エディタのアプリバー: 題名は 18（title-medium より少し大きい 1 行）、副題は題名に詰める（監査 E-04） */
+.shell--editor .shell__appbar {
+  --m3e-app-bar-small-title-text-font-size: 1.125rem;
+  --m3e-app-bar-small-title-text-line-height: 1.5rem;
+  --m3e-app-bar-small-title-text-font-weight: 500;
+  --m3e-app-bar-small-subtitle-text-line-height: 1rem;
+}
+.shell--editor .appbar-slot--subtitle {
+  margin-block-start: 0;
 }
 .appbar-slot {
   display: contents;
@@ -2306,6 +2420,26 @@ m3e-dialog [slot="actions"] {
   top: 50%;
   transform: translateY(-50%);
   z-index: 20;
+  transition:
+    opacity var(--mf-motion),
+    transform var(--mf-motion);
+}
+/* 右の引き出しが開いているあいだは隠す（visibility で操作・読み上げからも外す。切り替えは引き出しのタブ） */
+.ws__side-toolbar--hidden {
+  opacity: 0;
+  transform: translateY(-50%) translateX(16px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--mf-motion),
+    transform var(--mf-motion),
+    visibility 0s linear 200ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws__side-toolbar,
+  .ws__side-toolbar--hidden {
+    transition: none;
+  }
 }
 .ws__checks {
   padding: 0 4px;
@@ -2458,104 +2592,32 @@ m3e-dialog [slot="actions"] {
     padding-inline: 16px;
   }
 }
+/* 印の層: 押す・なぞるは下の紙面（PDF のリンクなど）へ通す。印を付ける操作は紙面の枠（.viewer__page）が受ける
+   （AnchorOverlay。クリックはふつうのクリック、なぞる・長押しがコメント）。印そのもの（番号の丸・押せる範囲 48・範囲の面）は押せる */
 .viewer__overlay {
   position: absolute;
   inset: 0;
-  /* タッチはスクロールに任せ、長押ししてから範囲選択（AnchorOverlay）。マウスは従来どおりドラッグで選ぶ */
+  pointer-events: none;
+}
+.viewer__overlay [data-anchor] {
+  pointer-events: auto;
+}
+/* タッチはスクロールに任せ、長押ししてから範囲選択。長押しで出るブラウザのメニュー・選択は出さない */
+.viewer__page {
   touch-action: pan-x pan-y;
+}
+.viewer__page > :is(canvas, img, video) {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
-/* 印を付けないとき（書き込み「なし」。AnchorOverlay の passive）: 印の層は押す・なぞるを下の紙面へ通す。
-   印そのもの（番号の丸・押せる範囲 48）は押してスレッドを開ける。範囲の面は下のリンクを塞がないよう通す */
-.viewer__overlay--passive {
-  pointer-events: none;
-  cursor: default;
+/* 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける）はカーソルを十字に */
+.viewer__page.is-armed,
+.viewer__page.is-armed .pdf-link {
+  cursor: crosshair;
 }
-.viewer__overlay--passive [data-anchor] {
-  pointer-events: auto;
-}
-.viewer__overlay--passive .anchor-rect {
-  pointer-events: none;
-}
-/* PDF の文字の層（PdfTextLayer。書き込み「なし」のときだけ）: canvas とリンクのあいだ。pdf.js の web/pdf_viewer.css の
-   .textLayer から必要な分だけ写した（全部は読み込まない）。文字は透明で、位置・大きさだけ canvas の文字に合わせ、
-   選んだ範囲を主色で見せる。--total-scale-factor（紙の 1pt が何 px か）は PdfTextLayer が入れる */
-.textLayer {
-  position: absolute;
-  inset: 0;
-  overflow: clip;
-  line-height: 1;
-  text-align: initial;
-  letter-spacing: normal;
-  word-spacing: normal;
-  text-size-adjust: none;
-  -webkit-text-size-adjust: none;
-  forced-color-adjust: none;
-  transform-origin: 0 0;
-  --min-font-size: 1;
-  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
-  --min-font-size-inv: calc(1 / var(--min-font-size));
-}
-/* 文字は回す前の向きで組んであるので、紙面の回転に合わせて回す（原点は左上。回したあと紙面の枠に収まるよう寄せる） */
-.textLayer[data-main-rotation="90"] {
-  transform: rotate(90deg) translateY(-100%);
-}
-.textLayer[data-main-rotation="180"] {
-  transform: rotate(180deg) translate(-100%, -100%);
-}
-.textLayer[data-main-rotation="270"] {
-  transform: rotate(270deg) translateX(-100%);
-}
-.textLayer :is(span, br) {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0 0;
-  -webkit-user-select: text;
-  user-select: text;
-}
-.textLayer > :not(.markedContent),
-.textLayer .markedContent span:not(.markedContent) {
-  --font-height: 0;
-  --scale-x: 1;
-  --rotate: 0deg;
-  z-index: 1;
-  font-size: calc(var(--text-scale-factor) * var(--font-height));
-  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
-}
-.textLayer .markedContent {
-  display: contents;
-}
-.textLayer span[role="img"] {
-  -webkit-user-select: none;
-  user-select: none;
-  cursor: default;
-}
-.textLayer ::selection {
-  background: color-mix(in srgb, var(--mf-primary) 32%, transparent);
-  color: transparent;
-}
-.textLayer br::selection {
-  background: transparent;
-}
-/* 文字のない所をなぞっても選択が飛ばないための受け皿（ドラッグ中だけ全面に伸ばす） */
-.textLayer .endOfContent {
-  display: block;
-  position: absolute;
-  inset: 100% 0 0;
-  z-index: 0;
-  cursor: default;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.textLayer.selecting .endOfContent {
-  top: 0;
-}
-/* PDF の中のリンク（PdfLinks）: 文字の層と印の層のあいだ。見た目は何も足さず、触れると薄く示す。
-   層そのものは押す・なぞるを下の文字の層へ通し（文字を選べる）、リンクの箱だけ押せる */
+/* PDF の中のリンク（PdfLinks）: canvas と印の層のあいだ。見た目は何も足さず、触れると薄く示す。
+   層そのものは押す・なぞるを通し、リンクの箱だけ押せる */
 .pdf-links {
   position: absolute;
   inset: 0;
@@ -2565,7 +2627,7 @@ m3e-dialog [slot="actions"] {
   position: absolute;
   display: block;
   pointer-events: auto;
-  border-radius: 2px;
+  border-radius: var(--mf-shape-paper);
   cursor: pointer;
 }
 .pdf-link:hover {
@@ -2612,30 +2674,7 @@ m3e-dialog [slot="actions"] {
 .anchor-pin--active {
   fill: var(--mf-on-primary-container);
 }
-/* FB（相談）の位置: 解決するコメント（primary・丸・実線）と、形と線で見分ける（M3: 色だけに頼らない。利用者は配色の
-   追加を望まないので青系の secondary を使い、四角い印・点線にする。§43） */
-.anchor-rect--fb {
-  fill: color-mix(in srgb, var(--mf-secondary) 10%, transparent);
-  stroke: var(--mf-secondary);
-  stroke-dasharray: 6 4;
-}
-.anchor-rect--fb.anchor-rect--active {
-  fill: color-mix(in srgb, var(--mf-secondary) 24%, transparent);
-}
-.anchor-pin--fb {
-  fill: var(--mf-secondary-container);
-  stroke: var(--mf-on-secondary-container);
-  stroke-width: 1.5;
-}
-.anchor-pin--fb.anchor-pin--active {
-  fill: var(--mf-secondary);
-}
-[data-anchor]:has(.anchor-pin--fb) .anchor-label {
-  fill: var(--mf-on-secondary-container);
-}
-[data-anchor]:has(.anchor-pin--fb.anchor-pin--active) .anchor-label {
-  fill: var(--mf-on-secondary, #fff);
-}
+
 .anchor-draft {
   fill: color-mix(in srgb, var(--mf-primary) 18%, transparent);
   stroke: var(--mf-primary);
@@ -2734,11 +2773,22 @@ m3e-dialog [slot="actions"] {
   flex: 1;
 }
 .comments__header {
-  padding: 8px 12px 0;
+  padding: 8px 12px 4px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+/* 一覧だけがスクロールする引き出し（シートは全体がスクロールするので対象外）: 見出しの行に引き出しと同じ面を敷き、
+   下を流れるカードが「位置なしでコメント」の下に透けて見えないようにする。スクロールが始まったら面を 1 段濃くする（線は引かない） */
+.comments:not(.comments--sheet) .comments__header {
+  position: relative;
+  z-index: 1;
+  background: var(--mf-surface-container-low);
+  transition: background-color var(--mf-motion-effects-fast);
+}
+.comments--scrolled:not(.comments--sheet) .comments__header {
+  background: var(--mf-surface-container);
 }
 .comments__header:empty {
   display: none;
@@ -2815,8 +2865,29 @@ m3e-dialog [slot="actions"] {
 .thread {
   scroll-margin-block: 12px 16px;
 }
-.thread--active {
-  --m3e-elevated-card-container-color: var(--mf-secondary-container);
+/* 選んだカード: 面を 1 段濃く（surface-container-high）し、先頭に 3px の primary の帯。中の部品は塗り替えない（監査 C-03） */
+.thread {
+  position: relative;
+}
+/* 一覧のカードは枠線なしの filled。引き出しの面（container-low）の上では 1 段明るい面で浮かせ、ピンの横・ピンの高さの列（紙面の上）では container-low のまま */
+.comments .thread {
+  --m3e-filled-card-container-color: var(--mf-surface-container-lowest);
+}
+.thread--active,
+.comments .thread--active {
+  --m3e-filled-card-container-color: var(--mf-surface-container-high);
+}
+.thread--active::before {
+  content: "";
+  position: absolute;
+  inset-block: 12px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-primary);
+  /* カードの中身（shadow の面）の上に出す */
+  z-index: 1;
+  pointer-events: none;
 }
 .thread--closed .thread__body {
   color: var(--mf-on-surface-variant);
@@ -2837,9 +2908,8 @@ m3e-dialog [slot="actions"] {
   line-height: 1.2;
   min-width: 0;
 }
+/* 位置へ飛ぶボタン: M3E の text button の既定（label-large・primary。監査 C-04） */
 .thread__index {
-  --m3e-text-button-label-text-color: var(--mf-on-surface-variant);
-  --m3e-button-icon-color: var(--mf-on-surface-variant);
   /* 端末名・フレーム名が長くてもカードを広げない（§55）。% だと最小幅の計算に効かず列が広がるので px で */
   min-width: 0;
   max-width: 180px;
@@ -2863,8 +2933,6 @@ m3e-dialog [slot="actions"] {
   color: var(--mf-primary);
 }
 .thread__body {
-  white-space: pre-wrap;
-  word-break: break-word;
   font: var(--mf-type-body-medium);
 }
 .thread__quote {
@@ -2896,7 +2964,7 @@ m3e-dialog [slot="actions"] {
   flex: 1;
   min-width: 0;
 }
-/* コメント・返信のリアクション（FB と同じ部品: ui/Reactions）。付いているチップの末尾に「付ける」ボタン */
+/* コメント・返信のリアクション（ui/Reactions）。付いているチップの末尾に「付ける」ボタン */
 .thread__reactions {
   display: flex;
   flex-wrap: wrap;
@@ -2905,6 +2973,29 @@ m3e-dialog [slot="actions"] {
 }
 .thread__reactions--reply {
   margin-top: 4px;
+}
+/* 付いたリアクションが無いとき: 「付ける」ボタンだけを投稿の右上に（行を取らない。監査 C-02）。返信ではマウスを乗せたときだけ */
+.thread__reactions--solo {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+}
+.thread-panel__root {
+  position: relative;
+}
+.cth-post:has(.thread__reply-more) .thread__reactions--solo {
+  inset-inline-end: 36px;
+}
+@media (hover: hover) {
+  .cth-post .thread__reactions--solo {
+    opacity: 0;
+    transition: opacity var(--mf-motion);
+  }
+  .cth-post:hover .thread__reactions--solo,
+  .cth-post:focus-within .thread__reactions--solo {
+    opacity: 1;
+  }
 }
 .thread__react {
   color: var(--mf-on-surface-variant);
@@ -2940,13 +3031,15 @@ m3e-dialog [slot="actions"] {
 .carry-box {
   display: grid;
   gap: 8px;
-  padding: 8px 4px;
+  padding: 0;
 }
+/* 前版の未解決コメント: 線で区切らず、1 件ずつ一段濃い面のブロック */
 .carry {
   display: grid;
   gap: 4px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--mf-outline-variant);
+  padding: 12px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container);
 }
 
 /* ピンの高さに並べる列（Google ドキュメント式） */
@@ -3041,7 +3134,8 @@ m3e-dialog [slot="actions"] {
 }
 /* 縦の浮遊ツールバー（窓端から 24）が新しい版の紙面に重ならないよう、比較の末尾側を空ける（840 以上だけ出る） */
 @media (min-width: 840px) {
-  .ws--compare .compare {
+  /* 縦のツールバーが出ているとき（右の引き出しを畳んだとき）だけ、その分を空ける */
+  .ws__body--handle .compare {
     padding-inline-end: var(--ws-side-toolbar-space, 88px);
   }
 }
@@ -3090,7 +3184,8 @@ m3e-dialog [slot="actions"] {
 /* 引き出し「情報」 */
 .info-tab {
   display: grid;
-  gap: 20px;
+  /* 節の間は 24（見出しが前の節の続きに見えない。監査 E-05） */
+  gap: 24px;
   padding: 16px;
   align-content: start;
 }
@@ -3712,7 +3807,7 @@ m3e-icon.icon--on {
   min-height: 0;
 }
 .compare-status {
-  font: var(--mf-type-label-medium);
+  font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
   padding: 4px 4px 0;
 }
@@ -3865,20 +3960,39 @@ m3e-icon.icon--on {
 }
 .notation__toolbar {
   margin-bottom: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
 }
+/* 検索は広げすぎない（監査 G-15。560 まで） */
 .notation__search {
   flex: 1 1 160px;
   min-width: 0;
-}
-.notation__toolbar {
-  flex-wrap: nowrap;
+  max-width: 560px;
 }
 .notation__filters {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
+/* 絞り込みのセレクトは詰めた高さ（40。密度 -4）。ツールバーの行になじませる（監査 N-01） */
 .notation__cat {
   width: 240px;
   flex: none;
+  --md-sys-density-scale: -4;
+}
+/* compact: 検索は 1 行目いっぱい、追加は 2 行目（操作の more_vert はアプリバーへ。監査 N-02） */
+@media (max-width: 599px) {
+  .notation__toolbar {
+    flex-wrap: wrap;
+  }
+  .notation__search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .notation__add {
+    flex: 1 1 100%;
+  }
 }
 /* 2 ペイン: 表は残り全部、詳細は右に 360（1200 以上は 412）・間 24（M3 Supporting pane）。ペインは surface-container-low の面で囲う */
 .notation__ld--two {
@@ -4027,7 +4141,7 @@ m3e-icon.icon--on {
 .proposal-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 .proposal__head {
   display: flex;
@@ -4107,9 +4221,19 @@ m3e-icon.icon--on {
   display: inline-flex;
 }
 /* 件数のバッジは secondary（エラーの赤は通知のベルだけ。件数は誤りではない。M3 Badges・Color roles。§43） */
+/* タッチ端末では、指を離したあとにタブへ hover の薄い面が残らない（監査 M-04） */
+@media (hover: none) {
+  m3e-tab {
+    --m3e-tab-selected-container-hover-color: transparent;
+    --m3e-tab-unselected-container-hover-color: transparent;
+  }
+}
+.pane-tabs__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .pane-tabs__badge {
-  margin-inline-start: 4px;
-  vertical-align: middle;
   --m3e-badge-container-color: var(--mf-secondary-container);
   --m3e-badge-color: var(--mf-on-secondary-container);
 }
@@ -4160,9 +4284,11 @@ m3e-icon.icon--on {
 }
 .post-image__fields {
   display: grid;
-  grid-template-columns: 1fr 140px;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  align-items: start;
   gap: 8px;
-  margin-top: 8px;
+  /* 枠付きの入力欄の浮くラベルが上にはみ出す分 */
+  margin-top: 12px;
 }
 .post-image__actions {
   display: inline-flex;
@@ -4216,25 +4342,221 @@ m3e-icon.icon--on {
   z-index: 35;
 }
 
-/* ---------- メンション */
-.mention-wrap {
-  position: relative;
-  display: block;
+/* ---------- コメントの本文（Markdown の描画・書式つき入力欄の中身で共通。features/review/CommentBody・RichCommentEditor） */
+.comment-body {
+  min-width: 0;
+  overflow-wrap: anywhere; /* 長い URL・英数字の連なりもカードからはみ出さず折り返す */
+  word-break: break-word;
+  font: var(--mf-type-body-medium);
 }
-.mention-wrap > textarea {
-  width: 100%;
-  box-sizing: border-box;
+/* 書式なし（旧来の平文）は改行をそのまま見せる */
+.comment-body--plain {
+  white-space: pre-wrap;
 }
-.mention-list {
-  position: absolute;
-  inset-inline: 0;
-  top: 100%;
-  z-index: 50;
-  max-height: 240px;
-  overflow: auto;
+.comment-body > :first-child {
+  margin-top: 0;
+}
+.comment-body > :last-child {
+  margin-bottom: 0;
+}
+.comment-body p {
+  margin: 0;
+}
+.comment-body p + p,
+.comment-body p + ul,
+.comment-body p + ol,
+.comment-body p + pre,
+.comment-body p + blockquote,
+.comment-body ul + p,
+.comment-body ol + p,
+.comment-body pre + p,
+.comment-body blockquote + p,
+.comment-body blockquote + ul,
+.comment-body blockquote + ol,
+.comment-body blockquote + pre,
+.comment-body pre + ul,
+.comment-body pre + ol,
+.comment-body pre + blockquote,
+.comment-body ul + pre,
+.comment-body ol + pre,
+.comment-body ul + blockquote,
+.comment-body ol + blockquote {
+  margin-top: 8px;
+}
+.comment-body ul,
+.comment-body ol {
+  margin: 0;
+  padding-inline-start: 1.5em;
+}
+.comment-body li > p {
+  margin: 0;
+}
+.comment-body li > ul,
+.comment-body li > ol {
+  margin-top: 2px;
+}
+.comment-body li + li {
+  margin-top: 2px;
+}
+.comment-body blockquote {
+  margin: 0;
+  padding: 0 0 0 12px;
+  border-inline-start: 3px solid var(--mf-outline-variant);
+  color: var(--mf-on-surface-variant);
+}
+.comment-body code {
+  padding: 1px 4px;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-surface-container);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.comment-body pre {
+  margin: 0;
+  padding: 8px 12px;
   border-radius: var(--mf-shape-sm);
   background: var(--mf-surface-container);
-  box-shadow: var(--mf-elevation-2);
+  overflow-x: auto; /* 長い行はコードの枠の中でスクロール（カードを広げない） */
+  max-width: 100%;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.comment-body pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+}
+.comment-body del {
+  color: var(--mf-on-surface-variant);
+}
+.comment-body__link,
+.comment-body a {
+  color: var(--mf-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.thread--closed .comment-body code,
+.thread--closed .comment-body pre {
+  color: inherit;
+}
+/* 訂正の履歴に残る原文 */
+.thread__previous {
+  margin-top: 2px;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--mf-outline-variant);
+  font: var(--mf-type-body-small);
+}
+
+/* ---------- 書式つきの入力欄（features/review/RichCommentEditor） */
+.rt {
+  position: relative;
+  display: block;
+  min-width: 0;
+  cursor: text;
+}
+.rt__editor {
+  min-width: 0;
+}
+.rt__content {
+  /* 最小の高さは行数（--rt-rows）× 1 行（body-medium の 20px） */
+  min-height: calc(var(--rt-rows, 3) * 1.25rem);
+  max-height: min(40vh, 240px);
+  overflow-y: auto;
+  outline: none;
+  cursor: text;
+  white-space: pre-wrap; /* ProseMirror が空白を保つ */
+  color: var(--mf-on-surface);
+}
+/* 空のときの案内（placeholder）。長くても欄の幅で折り返す */
+.rt__content p.is-editor-empty:first-child {
+  position: relative;
+}
+.rt__content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset: 0 0 auto 0;
+  pointer-events: none;
+  color: var(--mf-on-surface-variant);
+}
+.rt__content pre {
+  white-space: pre-wrap;
+}
+.rt__content a {
+  cursor: text;
+}
+.rt--loading {
+  display: grid;
+  place-items: center;
+  min-height: calc(var(--rt-rows, 3) * 1.25rem);
+}
+.rt__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+  min-width: 0;
+  margin-bottom: 4px;
+  cursor: default;
+}
+.rt__tool {
+  display: inline-flex;
+  flex: none;
+}
+.rt__linkrow {
+  gap: 4px;
+}
+.rt__linkinput {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--mf-outline);
+  border-radius: var(--mf-shape-full);
+  background: transparent;
+  color: var(--mf-on-surface);
+  font: var(--mf-type-body-medium);
+}
+.rt__linkinput:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: -1px;
+}
+/* @ のメンションの候補: 入力欄（面）の中、本文の下にそのまま伸びて開く。上には出さない・浮かせない（利用者指示 2026-10-20）。
+   欄の面の中の一段濃い面（M3E の list）。高さは 6 行まで、それ以上は中でスクロール */
+.rt__mentions {
+  margin-top: 8px;
+  cursor: default;
+}
+/* 候補を出している間は、本文の最小の高さ（行数）を外し、打っている行のすぐ下に候補が来るようにする */
+.rt:has(.rt__mentions) .rt__content {
+  min-height: 1.25rem;
+}
+/* 返信・訂正の欄: M3 の outlined text field と同じ枠（フォーカスで太く・主色） */
+.thread__form .rt,
+.compose-pop .rt {
+  padding: 8px 12px;
+  border: 1px solid var(--mf-outline);
+  border-radius: var(--mf-shape-xs);
+}
+.thread__form .rt:focus-within,
+.compose-pop .rt:focus-within {
+  padding: 7px 11px;
+  border: 2px solid var(--mf-primary);
+}
+
+.mention-list {
+  --m3e-list-item-one-line-height: 44px;
+  --m3e-list-item-one-line-top-space: 4px;
+  --m3e-list-item-one-line-bottom-space: 4px;
+  --m3e-list-item-container-color: transparent;
+  max-height: calc(6 * 44px + 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: 8px;
+  border-radius: var(--mf-shape-md);
+  background: var(--mf-surface-container-low);
 }
 .mention-list__item--active {
   --m3e-list-item-container-color: var(--mf-secondary-container);
@@ -4251,6 +4573,11 @@ m3e-icon.icon--on {
 m3e-snackbar {
   top: auto;
   bottom: var(--mf-snackbar-bottom, calc(16px + env(safe-area-inset-bottom, 0px)));
+  /* 色: M3 の inverse surface。vibrant の既定（#000b2f / 文字 #909bc6）は黒に近く、文字が沈むので、青みの濃い灰に明るい文字を置く（監査 G-05） */
+  --m3e-snackbar-container-color: #2e3350;
+  --m3e-snackbar-supporting-text-color: #eef0ff;
+  --m3e-snackbar-action-text-color: #b3c6ff;
+  --m3e-snackbar-close-icon-color: #eef0ff;
 }
 /* SNS アカウント（管理） */
 .profile-avatar {
@@ -4273,525 +4600,6 @@ m3e-snackbar {
   align-self: stretch;
 }
 
-/* ---------- フィードバック（FB。制作の相談・話し合い。解決はしない。利用者決定 2026-10-15。§43）
- * 受信箱 /feedback: 広い画面（840 以上）は一覧・詳細（M3 list-detail: 一覧 360–412、間 24、詳細は残り全部）。
- * スレッドは Slack のメッセージ列（アバター・名前・時刻・本文・添付・リアクション）。下に返信の欄（面で囲う）。
- * 一覧の行は M3 リスト（3 行: 制作物・題名・最後の投稿）。先頭はアバターで頭を揃え、未読は題名の強調＋末尾の点 */
-/*
- * 広い画面の一覧・詳細（M3 list-detail: 一覧は 360、1200 以上は 412。間は 24。§46）。
- * 2 つのペインを画面の高さに収め、ページ全体はスクロールしない（Gmail の読む欄・Slack と同じ）。
- * 一覧は自分でスクロールし、詳細は見出しと返信欄を止めて投稿だけがスクロールする
- */
-.shell__content:has(> .fb-layout) {
-  padding-bottom: 24px;
-}
-.fb-layout {
-  display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 24px;
-  height: calc(100dvh - var(--mf-appbar-h, 64px) - 40px);
-  min-height: 420px;
-}
-@media (min-width: 1200px) {
-  .fb-layout {
-    grid-template-columns: 412px minmax(0, 1fr);
-  }
-}
-.fb-layout__list,
-.fb-layout__detail {
-  min-width: 0;
-  min-height: 0;
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-surface-container-low);
-}
-.fb-layout__list {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 12px 0 8px;
-}
-.fb-layout__detail {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.fb-layout__loading {
-  padding: 24px;
-}
-.fb-layout__detail--empty {
-  display: grid;
-  flex-direction: unset;
-  justify-items: center;
-  align-content: center;
-  gap: 8px;
-  min-height: 50vh;
-  text-align: center;
-  color: var(--mf-on-surface-variant);
-}
-.fb-layout__detail--empty m3e-icon {
-  font-size: 48px;
-}
-.fb-list-pane {
-  display: grid;
-  gap: 8px;
-}
-.fb-list-pane__controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  /* 画面の余白（16）にそのまま揃える。行のアバターも同じ 16 から始まる（.list の -16 と行の 16） */
-  padding: 0;
-}
-.fb-layout__list .fb-list-pane__controls {
-  padding: 4px 16px 0;
-}
-.fb-list__empty {
-  padding: 24px 16px;
-}
-/* 一覧ペイン（角丸の面）の中では端まで広げない（.list の -16px で頭と時刻が切れていた） */
-.fb-layout__list .list,
-.fb-pane .fb-pane__list {
-  margin-inline: 0;
-}
-.fb-list__item {
-  --m3e-list-item-three-line-top-offset: 12px;
-}
-/* 最後の投稿は 2 行まで（一覧は見分けるためのもの。全文はスレッドで） */
-.fb-list__item [slot="supporting-text"],
-.fb-pane__list [slot="supporting-text"] {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.fb-pane__list [slot="trailing"] {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-/* 選んでいるスレッド（一覧・詳細）: secondary-container の地（M3 Lists: selected） */
-.fb-list__item--selected {
-  --m3e-list-item-container-color: var(--mf-secondary-container);
-  border-radius: var(--mf-shape-lg);
-}
-.fb-list__avatar {
-  display: grid;
-  place-items: center;
-}
-.fb-list__trailing {
-  white-space: nowrap;
-  display: grid;
-  justify-items: end;
-  gap: 6px;
-  font: var(--mf-type-body-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--mf-on-surface-variant);
-}
-.fb-list__dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--mf-primary);
-}
-/* 何の制作物の相談か（スレッドの上。outlined card。「紙面で見る」で制作物の中の同じ相談へ） */
-.fb-context {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-  padding: 12px 16px;
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: var(--mf-shape-md);
-  background: var(--mf-surface);
-}
-.fb-context__icon {
-  color: var(--mf-secondary);
-}
-.fb-context__text {
-  display: grid;
-  gap: 2px;
-  flex: 1 1 240px;
-  min-width: 0;
-}
-.fb-context__work {
-  font: var(--mf-type-title-small);
-}
-.fb-context__where {
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
-}
-.fb-thread {
-  display: grid;
-  gap: 16px;
-  max-width: 960px;
-}
-.fb-thread__title {
-  margin: 0;
-  font: var(--mf-type-title-large);
-  font-feature-settings: "palt" 1;
-  letter-spacing: 0.02em;
-}
-/* 投稿の上の「何の相談か」と投稿をまとめる箱。ふだんは箱を作らない（スマホのスレッドだけ、ここがスクロールする） */
-.fb-thread__scroll {
-  display: contents;
-}
-/* 最後の投稿（リアクション）が返信の欄に隠れないよう下に余白 */
-.fb-thread__posts {
-  display: grid;
-  gap: 4px;
-  padding-bottom: 8px;
-}
-/* 返信の欄: 面（surface-container）で囲い、上の角を丸める（線 1 本で区切らない。M3: 区切りは色の面で） */
-.fb-thread__composer {
-  position: sticky;
-  bottom: 0;
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
-  background: var(--mf-surface-container);
-  border-radius: var(--mf-shape-xl) var(--mf-shape-xl) 0 0;
-}
-/* compact: 下部ナビ（固定）の上に止める（セーフエリアはナビが持つ） */
-@media (max-width: 599px) {
-  .fb-thread__composer {
-    bottom: calc(var(--mf-navbar-h) + env(safe-area-inset-bottom, 0px));
-    padding-bottom: 12px;
-    margin-inline: -16px;
-  }
-}
-/*
- * スマホの FB スレッド（Slack のスレッドと同じ形。利用者指示 2026-10-15「Slack に近い UI に」）:
- * 画面を見えている範囲（visual viewport。useVisualViewportBox）に固定し、上からアプリバー・投稿（ここだけスクロール）・
- * 返信欄・下部ナビの順に縦に並べる。キーボードが出ている間は下部ナビをキーボードの下に隠し、返信欄をキーボードのすぐ上に置く
- * （ナビがキーボードと一緒に持ち上がらない。利用者指示「ナビゲーションバーまで動くのは嫌」「ナビは消さない」）。
- */
-.shell--chat {
-  position: fixed;
-  inset-inline: 0;
-  top: var(--mf-vv-top, 0px);
-  height: var(--mf-vvh, 100dvh);
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.shell--chat .shell__main {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-}
-.shell--chat .shell__bar {
-  position: static;
-  flex: none;
-}
-:root.mf-kb-open .shell--chat .shell__bar {
-  display: none;
-}
-.shell--chat .shell__content {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-.shell--chat .fb-thread,
-.fb-thread--fill {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  max-width: none;
-}
-.shell--chat .fb-thread__scroll,
-.fb-thread--fill .fb-thread__scroll {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 8px 16px;
-}
-/* 下部ナビの上（セーフエリアはナビが持つ）。キーボードが出ている間はキーボードのすぐ上 */
-.shell--chat .fb-thread__composer {
-  position: static;
-  margin: 0;
-  border-radius: 0;
-  padding: 8px 12px;
-}
-/* 詰めた返信欄（Slack の返信欄）: 1 行から伸びる欄と、アイコンだけの行 */
-.fb-composer--dense {
-  gap: 4px;
-}
-.fb-composer--dense .fb-composer__input {
-  min-height: 2.75rem;
-  max-height: 30vh;
-  padding: 10px 16px;
-  border-radius: var(--mf-shape-xl);
-}
-.fb-composer--dense .fb-composer__bar {
-  gap: 0;
-}
-.fb-post {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px 8px;
-}
-.fb-post__avatar {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  color: var(--mf-on-surface-variant);
-}
-/* スマホの投稿: Slack と同じく詰める（アバター 36・行間を少し狭く） */
-@media (max-width: 599px) {
-  .fb-post {
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 10px;
-    padding: 8px 0;
-  }
-  .fb-post__avatar {
-    width: 36px;
-    height: 36px;
-  }
-  .fb-post .fb-post__body {
-    line-height: 1.6;
-  }
-}
-.fb-post__main {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-.fb-post__head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  min-height: 32px;
-}
-.fb-post__name {
-  font: var(--mf-type-title-small);
-}
-/* 時刻・テンプレは本文の太さ（400）。区別は色と大きさで */
-.fb-post__time {
-  font: var(--mf-type-body-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--mf-on-surface-variant);
-}
-.fb-post__tpl {
-  font: var(--mf-type-label-small);
-  color: var(--mf-on-secondary-container);
-  background: var(--mf-secondary-container);
-  border-radius: var(--mf-shape-xs);
-  padding: 1px 6px;
-}
-.fb-post__body {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font: var(--mf-type-body-large);
-  line-height: 1.75;
-  letter-spacing: 0.02em;
-}
-.fb-post__reactions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-}
-.fb-files {
-  display: grid;
-  gap: 8px;
-}
-.fb-files__images {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.fb-thumb {
-  all: unset;
-  cursor: zoom-in;
-  width: 160px;
-  height: 120px;
-  border-radius: var(--mf-shape-sm);
-  overflow: hidden;
-  background: var(--mf-surface-container);
-  border: 1px solid var(--mf-outline-variant);
-}
-.fb-thumb:focus-visible {
-  outline: var(--mf-focus-ring);
-  outline-offset: var(--mf-focus-offset);
-}
-.fb-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.fb-thumb__loading {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.fb-image-dialog img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-  margin: 0 auto;
-}
-.fb-file-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 4px 0 12px;
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: var(--mf-shape-sm);
-  max-width: 480px;
-}
-.fb-file-chip__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fb-composer {
-  display: grid;
-  gap: 8px;
-}
-/* 書く欄: M3 の filled テキストフィールドの面（surface-container-highest・角丸）。書いた分だけ伸びる。
-   使い方（メンション・送信のキー）は欄の下の補助の文に出す（プレースホルダーだけに頼らない） */
-.fb-composer__input {
-  width: 100%;
-  box-sizing: border-box;
-  resize: none;
-  field-sizing: content;
-  min-height: 3.5rem;
-  max-height: 40vh;
-  padding: 12px 16px;
-  border: 0;
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-surface-container-highest);
-  color: var(--mf-on-surface);
-  font: var(--mf-type-body-large);
-  line-height: 1.6;
-}
-.fb-composer__input:focus-visible {
-  outline: 2px solid var(--mf-primary);
-  outline-offset: 0;
-}
-.fb-composer__files {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.fb-composer__bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* ---------- エディタの引き出し「FB」（制作物の中の相談。§43） */
-.fb-pane {
-  display: grid;
-  gap: 12px;
-  padding: 12px 12px 16px;
-  align-content: start;
-}
-.fb-pane__intro {
-  display: grid;
-  gap: 8px;
-  justify-items: start;
-  padding: 0 4px;
-}
-.fb-pane__lead {
-  margin: 0;
-  font: var(--mf-type-body-medium);
-  color: var(--mf-on-surface-variant);
-}
-.fb-pane__new {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border-radius: var(--mf-shape-md);
-  background: var(--mf-surface-container);
-}
-.fb-pane__empty {
-  padding: 8px 4px;
-}
-.fb-pane__head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: -4px -4px 0;
-}
-.fb-pane__heading {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-}
-.fb-pane__title {
-  font: var(--mf-type-title-medium);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fb-pane__sub {
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
-}
-.fb-pane__expand {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  color: var(--mf-on-surface-variant);
-}
-.fb-pane__expand:hover {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-.fb-pane__expand:focus-visible {
-  outline: var(--mf-focus-ring);
-}
-.fb-pane__place {
-  justify-self: start;
-}
-.fb-pane .fb-thread__composer {
-  margin: 0 -12px -16px;
-  bottom: 0;
-}
-.fb-pane .fb-post {
-  padding-inline: 0;
-}
-/* 紙面の FB の番号（紙面の印と同じ: secondary-container の角丸の四角） */
-.fb-mark {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-  font: var(--mf-type-label-medium);
-  font-variant-numeric: tabular-nums;
-}
-/* 範囲から書く欄が何を書くか（FB のときだけ小さく示す。切り替えはツールバーの「書き込み」） */
-.compose-pop__note {
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
-  padding: 0 4px 4px;
-}
-.compose-pop--fb {
-  outline: 2px dashed var(--mf-secondary);
-  outline-offset: -2px;
-}
-
 /* 「情報」の校了者の一覧（誰が宣言したか + 「n 人中 q 人で校了」） */
 .info-tab__approvers {
   display: flex;
@@ -4802,7 +4610,7 @@ m3e-snackbar {
 
 /* 制作物一覧の表（features/work/WorksTable.tsx。共通の .mf-table に、制作物だけの列・隠し方を足す。§75）
  * medium 以上は一覧を縦に収め（見出しが貼り付き、ページ送りが下に残る）、スマホはページごとスクロール。
- * 狭いと列を右から隠し（コンテナクエリ）、状態・版・FB は題名の下へ移る。 */
+ * 狭いと列を右から隠し（コンテナクエリ）、状態・版は題名の下へ移る。 */
 .works-table {
   --mf-table-max-h: none;
 }
@@ -4812,9 +4620,17 @@ m3e-snackbar {
   }
 }
 @media (max-width: 599px) {
+  /* スマホの一覧は端から端まで。表の外枠・角・面は付けない（行の線だけ。監査 W-07） */
   .works-table {
-    --mf-table-pad: 12px;
+    --mf-table-pad: 16px;
     margin-top: 16px;
+    margin-inline: -16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .works-table .mf-table__th {
+    background: transparent;
   }
 }
 /* 題名のセル: 媒体のアイコン + 題名（2 行まで）+ 題名の下の補足 */
@@ -4863,16 +4679,6 @@ m3e-snackbar {
   min-width: 0;
   line-height: 1.3;
 }
-/* FB（相談）の数と未読の点 */
-.works-table__fb {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-variant-numeric: tabular-nums;
-}
-.works-table__fb m3e-icon {
-  font-size: 20px;
-}
 /* 表のセルの中の状態の文字は本文と同じ大きさ（題名の下の補足では小さいまま） */
 .mf-table__td > .meta {
   font: inherit;
@@ -4880,7 +4686,7 @@ m3e-snackbar {
 .mf-table__td > .meta .chip__icon {
   font-size: 18px;
 }
-/* 列が隠れる幅では、その内容を題名の下に出す（状態・版・FB）。出ているあいだは出さない */
+/* 列が隠れる幅では、その内容を題名の下に出す（状態・版）。出ているあいだは出さない */
 .works-table__inline {
   display: flex;
   flex-wrap: wrap;
@@ -4923,14 +4729,7 @@ m3e-snackbar {
     display: none;
   }
 }
-@container (max-width: 539px) {
-  .works-table__col--fb {
-    display: none;
-  }
-  .works-table__in--fb {
-    display: inline-flex;
-  }
-}
+
 @container (max-width: 469px) {
   .works-table__col--stage {
     display: none;
@@ -4972,433 +4771,6 @@ m3e-snackbar {
 .notif-push__hint {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
-}
-
-/* ---------- 広い画面の FB スレッド（Slack・Gmail・M3E を調べた見直し。UI_M3E §46） */
-/* 見出し: 題名・制作物と版・場所・参加者・紙面で見る（スクロールしても上に残る） */
-.fb-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 24px 12px;
-  border-bottom: 1px solid var(--mf-outline-variant);
-}
-.fb-head__text {
-  display: grid;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.fb-head__title {
-  margin: 0;
-  font: var(--mf-type-title-large);
-  font-feature-settings: "palt" 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fb-head__sub {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  min-width: 0;
-  font: var(--mf-type-body-medium);
-  color: var(--mf-on-surface-variant);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.fb-head__icon {
-  --m3e-icon-size: 18px;
-  flex: none;
-  color: var(--mf-secondary);
-}
-.fb-head__work {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* 参加者: 重ねたアバター（ペインの色の縁で区切る） */
-.fb-head__people {
-  display: flex;
-  align-items: center;
-  flex: none;
-}
-.fb-head__person {
-  display: grid;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--mf-surface-container-low);
-}
-.fb-head__person + .fb-head__person {
-  margin-inline-start: -8px;
-}
-.fb-head__more {
-  margin-inline-start: 4px;
-  font: var(--mf-type-label-medium);
-  color: var(--mf-on-surface-variant);
-}
-.fb-thread--fill {
-  max-width: none;
-}
-.fb-thread--fill .fb-thread__scroll {
-  padding: 8px 16px 16px;
-  gap: 0;
-}
-.fb-thread--fill .fb-thread__composer {
-  position: static;
-  margin: 0;
-  padding: 0 16px 16px;
-  border-radius: 0;
-  background: transparent;
-}
-
-/* 日付の区切り（中央の札と細い線。スクロール中も上に残る） */
-.fb-day {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  pointer-events: none; /* 見た目の手がかり。上に止まっている間も下の投稿を押せるように */
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 12px 0 4px;
-  font: var(--mf-type-label-medium);
-  color: var(--mf-on-surface-variant);
-}
-.fb-day::before,
-.fb-day::after {
-  content: "";
-  flex: 1;
-  border-top: 1px solid var(--mf-outline-variant);
-}
-.fb-day__label {
-  padding: 4px 12px;
-  border: 1px solid var(--mf-outline-variant);
-  border-radius: var(--mf-shape-full);
-  background: var(--mf-surface);
-}
-/* 「ここから未読」（Slack の New の線。色と文言の両方で示す） */
-.fb-unread {
-  scroll-margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0;
-  font: var(--mf-type-label-medium);
-  color: var(--mf-error);
-}
-.fb-unread::before {
-  content: "";
-  flex: 1;
-  border-top: 1px solid var(--mf-error);
-}
-
-/* 投稿: 続きの投稿は名前・アバターを省き、左の余白に時刻（マウスを乗せたときだけ） */
-.fb-post {
-  position: relative;
-  border-radius: var(--mf-shape-md);
-  scroll-margin-top: 40px; /* 上に止まる日付の札の分 */
-}
-.fb-post--continued {
-  padding-top: 2px;
-  padding-bottom: 2px;
-}
-.fb-post__gutter-time {
-  align-self: start;
-  padding-top: 0.45em;
-  text-align: center;
-  font: var(--mf-type-label-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--mf-on-surface-variant);
-  opacity: 0;
-}
-.fb-post:hover .fb-post__gutter-time,
-.fb-post:focus-within .fb-post__gutter-time {
-  opacity: 1;
-}
-.fb-post__reactions--empty {
-  display: contents;
-}
-/* 操作（すぐ付けるリアクション・リアクション・⋮）: マウスを乗せたとき・キーボードで中に入ったときに右上に浮かぶ */
-@media (hover: hover) {
-  .fb-post:hover {
-    background: var(--mf-surface-container);
-  }
-  .fb-post__actions {
-    /* 投稿の内側の右上（上にはみ出すと、スクロールの端や日付の札に隠れる） */
-    position: absolute;
-    top: 4px;
-    inset-inline-end: 8px;
-    z-index: 2;
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border: 1px solid var(--mf-outline-variant);
-    border-radius: var(--mf-shape-full);
-    background: var(--mf-surface);
-    box-shadow: var(--mf-elevation-1, 0 1px 2px rgb(0 0 0 / 0.15));
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity var(--mf-motion-effects-fast);
-  }
-  .fb-post:hover .fb-post__actions,
-  .fb-post:focus-within .fb-post__actions,
-  .fb-post:has([aria-expanded="true"]) .fb-post__actions {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-/* タッチの端末: リアクションの行の末尾に常に出す（すぐ付けるリアクションは出さない） */
-@media (hover: none) {
-  .fb-post__actions {
-    display: flex;
-    margin-inline-start: auto;
-  }
-  .fb-post__quick {
-    display: none;
-  }
-  .fb-post__reactions--empty {
-    display: flex;
-    justify-content: flex-end;
-  }
-}
-.fb-post__emoji {
-  font-size: 18px;
-  line-height: 1;
-}
-
-/* 返信欄（Slack の形）: 欄と操作の行を 1 つの枠に。枠に入ったら枠を強調する */
-.fb-composer:not(.fb-composer--dense) {
-  gap: 0;
-  padding: 4px 8px 4px;
-  border: 1px solid var(--mf-outline);
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-surface);
-}
-.fb-composer:not(.fb-composer--dense):focus-within {
-  border-color: var(--mf-primary);
-  box-shadow: 0 0 0 1px var(--mf-primary);
-}
-.fb-composer:not(.fb-composer--dense) .fb-composer__input {
-  min-height: 2.75rem;
-  padding: 10px 8px 4px;
-  border-radius: 0;
-  background: transparent;
-}
-.fb-composer:not(.fb-composer--dense) .fb-composer__input:focus-visible {
-  outline: none;
-}
-.fb-composer:not(.fb-composer--dense) .fb-composer__bar {
-  gap: 0;
-}
-.fb-composer__hint {
-  margin-inline-start: 8px;
-  font: var(--mf-type-label-small);
-  color: var(--mf-on-surface-variant);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.fb-list-pane__search {
-  margin: 0 16px;
-}
-.fb-layout__list .fb-list-pane {
-  gap: 12px;
-}
-
-/* ---------- FB スペース（制作物ごと。縦に 3 列: スペース・紙面・スレッド。§47） */
-.shell__content:has(> .fb-space) {
-  padding-bottom: 24px;
-}
-.fb-space {
-  display: grid;
-  gap: 0;
-  height: calc(100dvh - var(--mf-appbar-h, 64px) - 40px);
-  min-height: 480px;
-}
-.fb-space--three {
-  grid-template-columns: 300px minmax(360px, 1fr) 400px;
-}
-.fb-space--two {
-  grid-template-columns: minmax(0, 1fr) 380px;
-}
-.fb-space--list {
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 24px;
-}
-/* ペインの間のスペーサー（24）。中のドラッグハンドルで左右のペインの幅を変え、押すと折りたたむ */
-.fb-space__spacer {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-}
-.fb-space__pane {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-surface-container-low);
-}
-.fb-space__spaces,
-.fb-space__threads {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.fb-space__head {
-  display: grid;
-  gap: 2px;
-  padding: 16px 16px 4px;
-}
-.fb-space__title {
-  font: var(--mf-type-title-medium);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fb-space__sub {
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
-}
-.fb-space__threads .fb-pane {
-  padding: 4px 12px 0;
-}
-.fb-space-narrow .fb-pane {
-  padding: 0;
-}
-/* スペースの一覧 */
-.fb-spaces {
-  display: grid;
-  gap: 12px;
-  padding: 12px 0 8px;
-}
-.fb-spaces__search,
-.fb-spaces__filters {
-  width: auto;
-  margin: 0 16px;
-  min-width: 0;
-}
-.fb-spaces__empty {
-  padding: 8px 16px;
-}
-.fb-spaces .list {
-  margin-inline: 0;
-}
-/* 角丸の面（.fb-space__pane）の中の行は面の端に付けず 8 内側へ（hover・選択の面が面の縁や角に被らない）。文字の位置は 16 のまま */
-.fb-space__spaces .fb-spaces .list {
-  padding-inline: 8px;
-  --m3e-list-item-leading-space: 8px;
-  --m3e-list-item-trailing-space: 8px;
-}
-.fb-space-narrow .fb-spaces .list,
-.shell__content > .fb-spaces .list {
-  margin-inline: -16px;
-}
-.shell__content > .fb-spaces {
-  padding-top: 0;
-}
-.shell__content > .fb-spaces .fb-spaces__search,
-.shell__content > .fb-spaces .fb-spaces__filters {
-  margin: 0;
-}
-.fb-spaces__icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--mf-shape-md);
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-}
-.fb-spaces__badge {
-  --m3e-badge-container-color: var(--mf-secondary);
-  --m3e-badge-label-text-color: var(--mf-on-secondary);
-}
-/* 紙面（FB の印だけ。範囲を選ぶとその場所の FB を立てる） */
-.fb-stage {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.fb-stage__bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 8px 0 12px;
-}
-.fb-stage__page {
-  min-width: 4em;
-  text-align: center;
-  font: var(--mf-type-label-large);
-  font-variant-numeric: tabular-nums;
-}
-.fb-stage__open {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--mf-shape-full);
-  color: var(--mf-on-surface-variant);
-}
-.fb-stage__open:hover {
-  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
-}
-.fb-stage__hint {
-  margin: 0;
-  padding: 0 16px 8px;
-  font: var(--mf-type-body-small);
-  color: var(--mf-on-surface-variant);
-}
-.fb-stage__viewer {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-}
-/* ビューア（.viewer）は紙面の枠の高さに収め、中の .viewer__stage だけがスクロールする（エディタの .ws__viewer > .viewer と同じ）。
-   枠に収めないと、紙面の中身の高さまで伸びて .viewer__stage はスクロールせず、外の枠がスクロールする。
-   すると PdfViewer が .viewer__stage の scrollTop で行うページ送り・「紙面の場所を表示」・表示中のページの判定・ピンチの焦点保持が効かない */
-.fb-stage__viewer > .viewer {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-/* 読み込み中（§65）: 指標は紙面の中央にひとつだけ。操作の行・説明・紙面は最初の 1 枚が描き終わるまで隠し、いっぺんに出す */
-.fb-stage__viewer > .fb-stage__loading {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  padding: 0;
-  pointer-events: none;
-}
-.fb-stage--pending .fb-stage__bar > :not(.fb-stage__open),
-.fb-stage--pending .fb-stage__hint,
-.fb-stage--pending .fb-stage__viewer > :not(.fb-stage__loading) {
-  visibility: hidden;
-}
-.fb-stage__empty {
-  flex: 1 1 auto;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 8px;
-  padding: 24px;
-  text-align: center;
-}
-/* 狭い列（FB スペースのスレッドの列・エディタの引き出し）では、すぐ付けるリアクションを省いて操作バーを短くする */
-.fb-post {
-  container-type: inline-size;
-}
-@container (max-width: 440px) {
-  .fb-post__quick {
-    display: none;
-  }
 }
 
 /* ---------- 取り込みのプレビュー（表記ルール・制作物の CSV）: 件数の要約は文字、行は M3 リスト（§49） */
@@ -5610,7 +4982,7 @@ m3e-snackbar {
   }
 }
 
-/* タイムライン: 上の段がコメントの印（時点は番号の丸、範囲は帯。FB は角丸の四角）、下が再生位置 */
+/* タイムライン: 上の段がコメントの印（時点は番号の丸、範囲は帯）、下が再生位置 */
 .vtl {
   display: flex;
   flex-direction: column;
@@ -5625,7 +4997,6 @@ m3e-snackbar {
   background: var(--mf-surface-container);
 }
 .vtl__lane--select {
-  cursor: crosshair;
   /* 指で横になぞると範囲を選ぶ（縦はページのスクロール） */
   touch-action: pan-y;
 }
@@ -5642,10 +5013,7 @@ m3e-snackbar {
   border-radius: var(--mf-shape-full);
   background: color-mix(in srgb, var(--mf-primary) 45%, transparent);
 }
-.vtl__bar--fb {
-  background: color-mix(in srgb, var(--mf-secondary) 35%, transparent);
-  outline: 1px dashed var(--mf-secondary);
-}
+
 .vtl__bar--active {
   background: var(--mf-primary);
 }
@@ -5672,21 +5040,12 @@ m3e-snackbar {
   position: absolute;
   inset: -6px;
 }
-.vtl__mark--fb {
-  border-radius: var(--mf-shape-xs);
-  background: var(--mf-secondary-container);
-  color: var(--mf-on-secondary-container);
-  border-color: var(--mf-on-secondary-container);
-  border-width: 1.5px;
-}
+
 .vtl__mark--active {
   background: var(--mf-on-primary-container);
   outline: 2px solid var(--mf-primary);
 }
-.vtl__mark--fb.vtl__mark--active {
-  background: var(--mf-secondary);
-  color: var(--mf-on-secondary, #fff);
-}
+
 .vtl__mark:focus-visible {
   outline: var(--mf-focus-ring);
   outline-offset: 2px;
@@ -5803,7 +5162,7 @@ m3e-snackbar {
 .compose-pop__place {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 12px 0;
   font: var(--mf-type-label-medium);
   font-variant-numeric: tabular-nums;
@@ -5882,7 +5241,7 @@ m3e-snackbar {
 .wlive__frame-name {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font: var(--mf-type-label-large);
   color: var(--mf-on-surface-variant);
 }
@@ -5921,17 +5280,11 @@ m3e-snackbar {
   border: 0;
   background: #fff;
 }
-/* 印の層: 面は押させず（下の iframe を操作できるように）、ピン・範囲だけ押せる */
+/* 印の層: 面は押させず（下の iframe を操作できるように）、ピン・範囲だけ押せる（.viewer__overlay の既定） */
 .wlive__marks {
   position: absolute;
   inset: 0;
   pointer-events: none;
-}
-.wlive__marks .viewer__overlay {
-  pointer-events: none;
-}
-.wlive__marks [data-anchor] {
-  pointer-events: auto;
 }
 .wlive__loading {
   position: absolute;
@@ -5951,7 +5304,7 @@ m3e-snackbar {
   pointer-events: auto;
 }
 .wlive__pc {
-  border-radius: 12px;
+  border-radius: var(--mf-shape-md);
   overflow: hidden;
   background: #fff;
   box-shadow:
@@ -5963,7 +5316,7 @@ m3e-snackbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 14px;
+  padding: 0 16px;
   background: #e9ecf3;
   color: #4b5565;
   font: 500 13px/1 var(--mf-font);
@@ -5980,7 +5333,7 @@ m3e-snackbar {
   flex: 1;
   min-width: 0;
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--mf-shape-sm);
   background: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -6073,7 +5426,7 @@ m3e-snackbar {
   gap: 8px;
   height: 40px;
   padding: 0 16px 0 12px;
-  border-radius: 20px;
+  border-radius: var(--mf-shape-full);
   font: var(--mf-type-label-large);
   color: var(--mf-primary);
   text-decoration: none;
@@ -6119,9 +5472,6 @@ m3e-snackbar {
   .wlive__caption {
     font-size: 11px;
   }
-  .wlive__mode m3e-button {
-    min-width: 0;
-  }
 }
 
 /* ---------- 制作物の登録・編集（Notion の制作物 DB に揃えた節。§58） */
@@ -6142,21 +5492,16 @@ m3e-snackbar {
 /* タグ（Notion の multi-select 風）: チップと入力が 1 つの下線の中に並び、欄を押すと候補が開く */
 .tag-anchor {
   position: relative;
+  min-width: 0;
 }
 .tag-field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
-  min-height: 48px;
-  padding: 8px 0 7px;
-  border-bottom: 1px solid var(--mf-outline);
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 0;
   cursor: text;
-  transition: border-color var(--mf-motion);
-}
-.tag-field:focus-within {
-  border-bottom-color: var(--mf-primary);
-  box-shadow: 0 1px 0 0 var(--mf-primary);
 }
 .tag-field__chips {
   display: contents;
@@ -6172,10 +5517,10 @@ m3e-snackbar {
 }
 .tag-menu {
   position: absolute;
-  inset-inline: 0;
+  inset-inline: -16px;
   top: 100%;
   z-index: 20;
-  margin-top: 4px;
+  margin-top: 8px;
   max-height: min(280px, 50dvh);
   overflow-y: auto;
   padding: 4px;
@@ -6221,7 +5566,7 @@ m3e-snackbar {
   --m3e-chip-icon-color: var(--tag-fg);
 }
 .tag-dot {
-  padding: 2px 10px;
+  padding: 2px 12px;
   border-radius: var(--mf-shape-full);
   background: var(--tag-bg);
   color: var(--tag-fg);
@@ -6257,5 +5602,5 @@ m3e-snackbar {
 .teams-admin__code {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
-  margin-left: 6px;
+  margin-left: 8px;
 }

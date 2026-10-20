@@ -41,7 +41,7 @@ const DEFAULT_PAGE_SIZE = 25;
  * 並べる順と絞り込みは呼び出し側（domain の sortWorks・workBelongsToTeam）。見出しを押すと `onSort`（題名・状態・校正の締切・納期・
  * 主管担当・制作担当。もう一度押すと向きが逆）。校了者のセルは、編集できる人には押せて、校了者の選択を開く（ApproversCell）。
  * - 題名は制作物へのリンク（Tab・Enter で開ける）。行のほかの場所を押しても開く（`onOpen`）
- * - 狭い幅では列を隠す（コンテナクエリ）。状態・版・FB は題名の下に移る。スマホは 題名 + 校正の締切 の 2 列
+ * - 狭い幅では列を隠す（コンテナクエリ）。状態・版は題名の下に移る。スマホは 題名 + 校正の締切 の 2 列
  * - 件数が多いときは M3E の paginator（最小の 10 件を超えるとき）。並べ替え・絞り込みが変わったら 1 ページ目へ戻る
  * - 縦に収める（medium 以上）と見出しが貼り付き、ページ送りは表の下に残る
  */
@@ -105,9 +105,6 @@ export function WorksTable({
           {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
           <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
           <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
-          <ColumnHeader numeric className="works-table__col--fb" label="フィードバック">
-            FB
-          </ColumnHeader>
         </tr>
       </thead>
       <tbody>
@@ -141,17 +138,6 @@ function Row({
   ) : (
     <span className="meta">{lifecycleLabel[w.lifecycle] ?? w.lifecycle}</span>
   );
-  const fb = w.fb.threads ? (
-    <span
-      className="works-table__fb"
-      role="img"
-      aria-label={`FB ${w.fb.threads} 件${w.fb.unread ? `（未読 ${w.fb.unread}）` : ""}`}
-    >
-      <M3eIcon name="forum" />
-      {w.fb.threads}
-      {w.fb.unread ? <span className="dash__unread" /> : null}
-    </span>
-  ) : null;
   return (
     <tr
       className={`mf-table__row mf-table__row--action ${done ? "mf-table__row--off" : ""}`}
@@ -182,7 +168,7 @@ function Row({
                 />
               ) : null}
             </Link>
-            {/* 状態・版・FB の列が隠れる幅では、題名の下に出す */}
+            {/* 状態・版の列が隠れる幅では、題名の下に出す */}
             <span className="mf-table__sub works-table__inline">
               <span className="works-table__in works-table__in--stage">{stage}</span>
               {w.latestRevisionLabel ? (
@@ -190,7 +176,6 @@ function Row({
                   {w.latestRevisionLabel}
                 </span>
               ) : null}
-              {fb ? <span className="works-table__in works-table__in--fb">{fb}</span> : null}
             </span>
           </span>
         </div>
@@ -238,9 +223,6 @@ function Row({
       </td>
       <td className="mf-table__td works-table__col--approvers">
         <ApproversCell w={w} />
-      </td>
-      <td className="mf-table__td mf-table__num works-table__col--fb">
-        {fb ?? <span className="muted">0</span>}
       </td>
     </tr>
   );

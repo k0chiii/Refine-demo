@@ -48,15 +48,6 @@ describe("Convex 統合: 動画の校正（時点・範囲・画面の位置）"
       }),
     ).rejects.toThrow(code("anchor_invalid"));
 
-    const fb = await cast.creator.as.mutation(api.feedback.createThread, {
-      workId,
-      revisionId: revisionId as Id<"revisions">,
-      anchor: { type: "video_time", artifactId: video.id, start: 1, end: 3 },
-      body: "この間のテンポを相談したい",
-      mentions: [],
-    });
-    expect(fb).toBeTruthy();
-
     const rev = await cast.reviewer.as.query(api.revisions.get, { revisionId });
     expect(rev.work.mediaType).toBe("video");
     expect(rev.threads.map((x) => x.anchor)).toEqual(

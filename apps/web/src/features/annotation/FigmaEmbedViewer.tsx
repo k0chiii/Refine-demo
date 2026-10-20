@@ -32,7 +32,7 @@ interface Props {
   currentId: string;
   onSwitch: (artifactId: string) => void;
   threads: OverlayThread[];
-  selecting: boolean;
+  canComment: boolean;
   /** 「このフレームにコメント」 */
   onCommentFrame: (d: FigmaDraft) => void;
   renderInPage?: (vp: Viewport) => ReactNode;
@@ -59,7 +59,7 @@ export function FigmaEmbedViewer({
   currentId,
   onSwitch,
   threads,
-  selecting,
+  canComment,
   onCommentFrame,
   renderInPage,
   footer,
@@ -132,7 +132,7 @@ export function FigmaEmbedViewer({
             </span>
           )}
           <span className="spacer" />
-          {selecting && ref?.nodeId ? (
+          {canComment && ref?.nodeId ? (
             <M3eButton
               variant="tonal"
               onClick={() =>

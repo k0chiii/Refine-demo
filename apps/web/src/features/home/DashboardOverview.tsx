@@ -32,6 +32,24 @@ const backlogGroups: Array<[keyof Data["backlog"], string, (i: Item) => string]>
 /** 内訳ごとの表示件数（これを超えたら「すべて表示」） */
 const BACKLOG_ROWS = 5;
 
+const OPEN_KEY = "mf100.works-overview-open";
+/** 前回の開け閉め（既定は閉じる）。localStorage が使えない環境でも壊れない */
+function readOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function remember(set: (open: boolean) => void, open: boolean) {
+  set(open);
+  try {
+    localStorage.setItem(OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // 覚えられなくても動く
+  }
+}
+
 /**
  * 上段の数字（自分が関わる制作物の期限と、全体の未解決のコメント）。
  * 大きな数を左上から、基準の数（次の締切・解決済みの割合）を添える。色は意味のあるときだけ（期限超過 = error）
@@ -115,19 +133,13 @@ function Meter({
 
 /**
  * 制作物の状況（制作物のページの先頭。管理する人のための全体像）: 上に数字、左に滞っている制作物、右に内訳
- * （段階の積み上げ棒・解決と校正の進み・局別）。compact は折りたたみで閉じておく（その下の表に早く届くように）。
+ * （段階の積み上げ棒・解決と校正の進み・局別）。既定は閉じておく（その下の表に早く届くように。監査 W-01）。
+ * 開け閉めは覚える（localStorage。使えないときは閉じたまま）。
  * 全部が空（制作物が 1 件も無い）のときは出さない
  */
-export function DashboardOverview({
-  data,
-  twoColumns,
-  collapsed,
-}: {
-  data: Data;
-  twoColumns: boolean;
-  collapsed: boolean;
-}) {
+export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns: boolean }) {
   const o = data.overview;
+  const [open, setOpen] = useState(readOpen);
   if (o.total === 0) return null;
   const hasBacklog = backlogGroups.some(([k]) => data.backlog[k].length > 0);
   const breakdown = (
@@ -138,9 +150,14 @@ export function DashboardOverview({
     </>
   );
   return (
-    <M3eExpansionPanel open={!collapsed} className="expansion ov">
+    <M3eExpansionPanel
+      open={open}
+      className="expansion ov"
+      onOpening={() => remember(setOpen, true)}
+      onClosing={() => remember(setOpen, false)}
+    >
       <span slot="header" className="ov__header">
-        <M3eHeading variant="title" size="large" level={2} emphasized id="ov-title">
+        <M3eHeading variant="title" size="medium" level={2} emphasized id="ov-title">
           制作物の状況
         </M3eHeading>
         <time className="ov__asof" dateTime={new Date(o.asOf).toISOString()}>
@@ -254,8 +271,8 @@ function StageBreakdown({ data }: { data: Data }) {
         ))}
       </div>
       <ul className="legend">
-        {workStages.map((s) => (
-          <li key={s} className={`legend__item ${stages[s] === 0 ? "legend__item--zero" : ""}`}>
+        {present.map((s) => (
+          <li key={s} className="legend__item">
             <span className={`legend__swatch stagebar__seg--${s}`} aria-hidden="true" />
             <span className="legend__label">{stageInfo[s].label}</span>
             <span className="legend__num">{stages[s]}</span>
@@ -341,7 +358,7 @@ function BureauTable({ data }: { data: Data }) {
       >
         局別
       </M3eHeading>
-      <DataTable label="局別の制作物" dense>
+      <DataTable label="局別の制作物" dense flush>
         <thead>
           <tr>
             <ColumnHeader>局</ColumnHeader>

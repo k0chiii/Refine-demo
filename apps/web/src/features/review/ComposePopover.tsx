@@ -13,7 +13,10 @@ import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { useComposeState, type ComposeStore } from "./composeStore";
-import { MentionTextarea } from "./mentions";
+import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
+import { PendingCommentFiles } from "./PendingCommentFiles";
+import { RichCommentField, type RichCommentHandle } from "./RichCommentField";
+import { useCommentFileUploads } from "./useCommentFileUploads";
 
 /**
  * 書きかけを ComposeStore に置く投稿欄。打つたびに描き直されるのはこの部品だけで、親（Editor）は描き直されない。
@@ -24,15 +27,14 @@ export function StoredComposePopover({
   ...rest
 }: { store: ComposeStore } & Omit<
   Parameters<typeof ComposePopover>[0],
-  "value" | "onChange" | "mentions" | "onMentions"
+  "value" | "onChange" | "onMentions"
 >) {
-  const { body, mentions } = useComposeState(store);
+  const { body } = useComposeState(store);
   return (
     <ComposePopover
       {...rest}
       value={body}
       onChange={store.setBody}
-      mentions={mentions}
       onMentions={store.setMentions}
     />
   );
@@ -42,6 +44,7 @@ export function StoredComposePopover({
  * 範囲・ピンのそばに出る投稿欄（Google ドキュメント / Figma の「コメントを追加」）。
  * 位置を選んだ瞬間に出るので、モード切替やパネルへの移動が要らない。
  * Enter（Ctrl/⌘）で投稿、Escape で取消。「@」で制作物を見られる人をメンションできる。
+ * 本文は書式つきの入力欄（Markdown。太字・リスト・引用・コード・リンク。RichCommentField）。
  *
  * docked（compact）: 選んだ位置のそばではなく、画面下（キーボードが出ていればそのすぐ上）に全幅で出す。
  * 小さい画面では位置のそばの欄がキーボードや指に隠れるため。何に対するコメントかは引用で示す。
@@ -55,28 +58,30 @@ export function ComposePopover({
   y,
   value,
   onChange,
-  mentions,
   onMentions,
   onSubmit,
   onCancel,
   pending,
+  revisionId,
   label = "コメント",
   style,
   extra,
   docked,
   quote,
   place,
-  kind = "comment",
+  autoFocus = true,
 }: {
   x: number;
   y: number;
   value: string;
   onChange: (v: string) => void;
-  mentions: readonly string[];
   onMentions: (ids: string[]) => void;
-  onSubmit: () => void;
+  /** 投稿する。添付は検証済みになったものの ID（添付が無ければ空） */
+  onSubmit: (fileIds: string[]) => void;
   onCancel: () => void;
   pending?: boolean;
+  /** コメントを付ける版。あれば添付できる */
+  revisionId?: string;
   label?: string;
   style?: CSSProperties;
   /** 投稿以外の操作（例: 選んだ文字を表記ルールに提案） */
@@ -86,22 +91,26 @@ export function ComposePopover({
   quote?: string;
   /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。docked でなくても出す。アイコンは種類によらず地図のピン */
   place?: string;
-  /**
-   * 書くもの: コメント（指摘して解決する）か FB（解決しない相談）。利用者決定 2026-10-15。
-   * 切り替えはエディタの下のツールバーの「書き込み」（利用者指示 2026-10-17）。ここは何を書いているかを示すだけ
-   */
-  kind?: "comment" | "feedback";
+  /** 開いたとき文字欄にカーソルを移すか。移さないと、選んだ文字（紙面の選択）をそのままコピーできる */
+  autoFocus?: boolean;
 }) {
-  const fb = kind === "feedback";
-  const what = fb ? "FB" : label;
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const what = label;
+  const uploads = useCommentFileUploads({ revisionId: revisionId ?? "", purpose: "comment" });
+  const canAttach = revisionId !== undefined;
+  // 本文が空でも添付があれば投稿できる。圧縮・送信の途中、失敗が残っているあいだは投稿させない
+  const hasContent = value.trim() !== "" || (canAttach && uploads.fileIds.length > 0);
+  const canSend = hasContent && !(canAttach && (uploads.busy || uploads.hasError));
+  const send = () => {
+    if (canSend && !pending) onSubmit(canAttach ? uploads.fileIds : []);
+  };
+  const richRef = useRef<RichCommentHandle>(null);
   const kb = useKeyboardInset(docked === true);
   const panelRef = useRef<HTMLDivElement>(null);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
     // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
     const opener = document.activeElement as HTMLElement | null;
-    ref.current?.focus({ preventScroll: true });
+    // 書式つきの欄は読み込みが済んでから自分でフォーカスする（autoFocus）
     return () => {
       const now = document.activeElement;
       if ((!now || now === document.body) && opener?.isConnected)
@@ -111,7 +120,7 @@ export function ComposePopover({
   const panel = (
     <div
       ref={panelRef}
-      className={`compose-pop ${docked ? "compose-pop--docked" : ""} ${fb ? "compose-pop--fb" : ""}`}
+      className={`compose-pop ${docked ? "compose-pop--docked" : ""}`}
       role="dialog"
       aria-label={what}
       style={
@@ -127,8 +136,6 @@ export function ComposePopover({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* 切り替えは下のツールバーの「書き込み」。ここは書いているものを小さく示すだけ（押せない） */}
-      {fb ? <div className="compose-pop__note">FB（相談）として書きます</div> : null}
       {docked && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}
       {place ? (
         <div className="compose-pop__place">
@@ -136,41 +143,36 @@ export function ComposePopover({
           {place}
         </div>
       ) : null}
-      <MentionTextarea
-        ref={ref}
-        className="compose-pop__input"
-        aria-label={what}
-        // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）。
-        // FB は解決しない相談・意見（迷っていること、ほかの案など）
-        placeholder={
-          fb
-            ? "FB（相談・意見。解決はしません。@ でメンション）"
-            : `${label}（改善案には理由も添えて。@ でメンション）`
-        }
-        rows={docked ? 2 : 3}
-        value={value}
-        onValue={onChange}
-        mentions={mentions}
-        onMentions={onMentions}
-        onKeyDown={(e) => {
-          // Esc は書いた文字を消さない（M3 Inputs › Escape key。§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ。
-          // IME の変換を取り消す Esc では何もしない
-          if (e.key === "Escape" && !e.nativeEvent.isComposing) {
-            e.stopPropagation();
-            if (value.trim()) ref.current?.blur();
+      <AttachDropZone uploads={uploads} enabled={canAttach} className="compose-pop__drop">
+        <RichCommentField
+          ref={richRef}
+          ariaLabel={what}
+          // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
+          placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
+          rows={docked ? 2 : 3}
+          autoFocus={autoFocus}
+          toolbar
+          value={value}
+          onValue={onChange}
+          onMentions={onMentions}
+          // Esc は書いた文字を消さない（§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ
+          onEscape={() => {
+            if (hasContent || uploads.items.length > 0) richRef.current?.blur();
             else onCancel();
-          }
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && value.trim()) onSubmit();
-        }}
-      />
+          }}
+          onSubmit={send}
+        />
+        {canAttach ? <PendingCommentFiles uploads={uploads} /> : null}
+      </AttachDropZone>
       <div className="compose-pop__actions">
         <M3eIconButton aria-label="キャンセル" onClick={onCancel}>
           <M3eIcon name="close" />
         </M3eIconButton>
+        {canAttach ? <AttachFileButton uploads={uploads} /> : null}
         <span className="spacer" />
         {extra}
-        <M3eButton variant="filled" disabled={pending || !value.trim()} onClick={onSubmit}>
-          {fb ? "FB で相談" : "投稿"}
+        <M3eButton variant="filled" disabled={pending || !canSend} onClick={send}>
+          投稿
         </M3eButton>
       </div>
     </div>
@@ -231,6 +233,8 @@ function useFitInside(
       for (const t of document.querySelectorAll<HTMLElement>(".ws__toolbar, .ws__side-toolbar")) {
         const tr = t.getBoundingClientRect();
         if (tr.width === 0 || tr.height === 0) continue;
+        // 引き出しが開いているあいだ隠している縦のツールバーは、よけなくてよい
+        if (getComputedStyle(t).visibility === "hidden") continue;
         const overlapsV = tr.top < base.bottom && tr.bottom > base.top;
         const overlapsH = tr.left < base.right && tr.right > base.left;
         if (tr.height > tr.width && tr.left > mid.x && overlapsV)

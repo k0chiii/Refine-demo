@@ -12,6 +12,8 @@ export interface TextRangeDraft {
   end: number;
   /** 選択範囲の表示位置（本文コンテナ基準 px）。投稿欄をそのそばに出すために使う */
   box?: { x: number; y: number; w: number; h: number };
+  /** 投稿欄に文字カーソルを移すか（キーボード・ボタンで選んだとき。マウスで選んだときは移さず、コピーできるまま） */
+  focus?: boolean;
 }
 
 interface Props extends TextCompareProps {
@@ -21,7 +23,7 @@ interface Props extends TextCompareProps {
   threads: OverlayThread[];
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
-  selecting: boolean;
+  canComment: boolean;
   /** 表示倍率（ピンチ・拡大ボタン）。CSS の zoom で本文だけを拡大し、位置の計算は変えない */
   scale?: number;
   draft: TextRangeDraft | null;
@@ -30,6 +32,24 @@ interface Props extends TextCompareProps {
   inPage?: ReactNode;
   /** 本文の右に並べるもの。各スレッドの縦位置（本文コンテナ基準 px）を渡す */
   renderGutter?: (positions: Map<string, number>, height: number) => ReactNode;
+}
+
+/** 本文（DOM の文字は版の文字と 1:1）の文字オフセットを、DOM の位置にする。end: 終わりの側（文字の境目なら前の文字の末尾） */
+function domPointAt(
+  root: HTMLElement,
+  offset: number,
+  end: boolean,
+): { node: Text; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let acc = 0;
+  let last: Text | null = null;
+  for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+    last = n;
+    if (end ? offset <= acc + n.length : offset < acc + n.length)
+      return { node: n, offset: offset - acc };
+    acc += n.length;
+  }
+  return last ? { node: last, offset: last.length } : null;
 }
 
 type TextThread = OverlayThread & { anchor: Extract<Anchor, { type: "text_range" }> };
@@ -47,7 +67,7 @@ export function TextViewer({
   threads,
   activeThreadId,
   onSelectThread,
-  selecting,
+  canComment,
   scale = 1,
   draft,
   onDraft,
@@ -148,7 +168,7 @@ export function TextViewer({
 
   /** いまの選択を本文の位置に直す（本文の外・空なら null） */
   const computeSelection = useCallback((): TextRangeDraft | null => {
-    if (!selecting || !bodyRef.current || !wrapRef.current) return null;
+    if (!canComment || !bodyRef.current || !wrapRef.current) return null;
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
     const range = sel.getRangeAt(0);
@@ -168,22 +188,45 @@ export function TextViewer({
       end,
       box: { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height },
     };
-  }, [selecting]);
+  }, [canComment]);
 
-  const touchSel = useTouchSelection(selecting, computeSelection);
+  // 下書きの強調で本文の文字が分かれても、マウスで選んだ文字の選択は残す（そのままコピーできるように）
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!draft || draft.focus || !body) return;
+    const cur = computeSelection();
+    if (cur?.start === draft.start && cur.end === draft.end) return;
+    const from = domPointAt(body, draft.start, false);
+    const to = domPointAt(body, draft.end, true);
+    if (!from || !to) return;
+    const range = document.createRange();
+    range.setStart(from.node, from.offset);
+    range.setEnd(to.node, to.offset);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }, [draft?.start, draft?.end, draft?.focus]);
+
+  const touchSel = useTouchSelection(canComment, computeSelection);
   /** マウス・キーボードの端末（文字カーソルを置いて Shift＋矢印で選べるようにする） */
-  const finePointer = useMedia("(pointer: fine)") && selecting;
-  const readSelection = () => {
+  const finePointer = useMedia("(pointer: fine)") && canComment;
+  /**
+   * マウスで選び終えたら投稿欄を出すが、文字カーソルは移さない（選んだ文字をそのままコピーできる。Ctrl/⌘＋C）。
+   * キーボードで選んだ・ボタンで確定したときは、続けて書けるよう移す（focus）
+   */
+  const readSelection = (focus: boolean) => {
     // 指の操作では選び終えた合図が取れないので、ボタン（TouchCommentButton）で確定する
     if (touchSel.touch) return;
     const d = computeSelection();
-    if (d) onDraft(d);
+    // 同じ選択のまま（Ctrl/⌘＋C を離したときなど）は何もしない
+    if (d && !(draft?.start === d.start && draft.end === d.end))
+      onDraft(focus ? { ...d, focus } : d);
   };
   const commitTouch = () => {
     const d = touchSel.candidate;
     touchSel.clear();
     window.getSelection()?.removeAllRanges();
-    if (d) onDraft(d);
+    if (d) onDraft({ ...d, focus: true });
   };
 
   return (
@@ -220,21 +263,18 @@ export function TextViewer({
                   onCut: (e: React.ClipboardEvent) => e.preventDefault(),
                 }
               : {})}
-            onMouseUp={readSelection}
-            onKeyUp={readSelection}
+            onMouseUp={() => readSelection(false)}
+            onKeyUp={() => readSelection(true)}
           >
             {segments.map((seg) => {
               const first = seg.threads.filter((t) => t.anchor.start === seg.start);
               const active = seg.threads.some((t) => t.id === activeThreadId);
               const severity = seg.threads.find((t) => t.severity === "critical") ? "critical" : "";
-              const fbOnly =
-                seg.threads.length > 0 && seg.threads.every((t) => t.kind === "feedback");
               const label = first.map((t) => t.index).join(",");
               const cls = [
                 seg.threads.length > 0 ? "text-anchor" : "",
                 active ? "text-anchor--active" : "",
                 severity ? `text-anchor--${severity}` : "",
-                fbOnly ? "text-anchor--fb" : "",
                 seg.draft ? "text-anchor--draft" : "",
                 diffKindAt(diff, seg.start, seg.end)
                   ? `diff-hl diff-hl--${diffKindAt(diff, seg.start, seg.end)}`

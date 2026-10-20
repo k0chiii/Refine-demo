@@ -180,7 +180,7 @@ function Works() {
           </M3eIconButton>
         </AppBarSlot>
       ) : null}
-      {dash ? <DashboardOverview data={dash} twoColumns={twoColumns} collapsed={compact} /> : null}
+      {dash ? <DashboardOverview data={dash} twoColumns={twoColumns} /> : null}
       <div className="works__controls">
         {pinnedIds.size > 0 || search.pinned ? (
           <M3eFilterChipSet aria-label="ピン留めで絞り込み" className="works__filters">

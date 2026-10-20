@@ -1,0 +1,194 @@
+/* コメント・返信の添付（CommentAttachments / PendingCommentFiles）。色・形は styles.css のトークンだけを使う */
+.cmt-files {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.cmt-files__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+  max-width: 480px;
+}
+.cmt-files__grid--one {
+  display: block;
+  max-width: min(100%, 360px);
+}
+.cmt-files__tile {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  border-radius: var(--mf-shape-sm);
+  border: 1px solid var(--mf-outline-variant);
+  background: var(--mf-surface-container);
+  color: var(--mf-on-surface-variant);
+}
+.cmt-files__tile--single {
+  width: 100%;
+  max-height: 280px;
+}
+.cmt-files__tile:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.cmt-files__tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* 1 枚だけのときは切らずに全体を見せる（横長のスクリーンショットの端が欠けない） */
+.cmt-files__tile--single img {
+  object-fit: contain;
+}
+.cmt-files__loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cmt-files__chip {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  max-width: 480px;
+  padding: 0 12px;
+  cursor: pointer;
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-sm);
+  color: var(--mf-on-surface);
+}
+.cmt-files__chip:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
+.cmt-files__chip:focus-visible {
+  outline: var(--mf-focus-ring);
+  outline-offset: var(--mf-focus-offset);
+}
+.cmt-files__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmt-files__meta {
+  flex: none;
+  color: var(--mf-on-surface-variant);
+  font: var(--mf-type-body-small);
+}
+.cmt-files__dialog img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+/* 原本が届くまでの間に見せるサムネイル（引き伸ばしたものなので、少しぼかす） */
+.cmt-files__preview {
+  filter: blur(2px);
+}
+
+/* 投稿欄に並ぶ添付（PendingCommentFiles） */
+.cmt-pending {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cmt-pending__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 240px;
+  padding: 4px 4px 4px 4px;
+  border: 1px solid var(--mf-outline-variant);
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-surface-container);
+}
+.cmt-pending__item--error {
+  border-color: var(--mf-error);
+}
+.cmt-pending__thumb {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: var(--mf-shape-xs, 4px);
+  background: var(--mf-surface-container-high);
+  color: var(--mf-on-surface-variant);
+}
+.cmt-pending__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cmt-pending__progress {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--mf-surface) 60%, transparent);
+}
+.cmt-pending__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 投稿欄（新規コメント・返信）で、ファイルを貼る・落とす先。ファイルを乗せている間は主色の破線で示す */
+.cmt-drop {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border-radius: var(--mf-shape-sm);
+}
+.cmt-drop--over {
+  outline: 2px dashed var(--mf-primary);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--mf-primary) 6%, transparent);
+}
+.cmt-attach {
+  color: var(--mf-on-surface-variant);
+}
+
+/* 一覧のカードの小さなサムネイル（variant="thumbs"）: 1 列に最大 4 枚。多いときは最後の 1 枚に「+n」 */
+.cmt-files__strip {
+  display: flex;
+  gap: 6px;
+}
+.cmt-files__cell {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+.cmt-files__cell .cmt-files__tile {
+  width: 56px;
+  height: 56px;
+}
+.cmt-files__more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--mf-shape-sm);
+  background: color-mix(in srgb, var(--mf-inverse-surface) 60%, transparent);
+  color: #fff;
+  font: var(--mf-type-label-large);
+  pointer-events: none;
+}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { formatDeadlineUntil, remaining } from "@/lib/format";
+import { M3eBadge } from "@m3e/react/badge";
 import { M3eHeading } from "@m3e/react/heading";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
@@ -108,14 +109,18 @@ export function Group({
       <div className="dash__head">
         <M3eHeading
           variant="title"
-          size={side ? "small" : "large"}
+          size={side ? "small" : "medium"}
           level={2}
           {...(side ? {} : { emphasized: true })}
           className={side ? "dash__title dash__title--side" : "dash__title"}
         >
           {title}
         </M3eHeading>
-        {count !== undefined ? <span className="dash__count">{count}</span> : null}
+        {count !== undefined ? (
+          <M3eBadge size="medium" className="dash__badge" aria-label={`${count} 件`}>
+            {count}
+          </M3eBadge>
+        ) : null}
       </div>
       <M3eActionList className="list" aria-label={label ?? title}>
         {children}

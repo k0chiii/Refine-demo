@@ -196,7 +196,7 @@ describe("Illustrator・InDesign の提出と配信（利用者指示 2026-10-19
       { pdfCompatible: false },
     ]);
   });
-  it("先頭の確認は R2 の範囲読み 1 回だけ（全体を読まない）。.ai 以外・フィードバックの添付では読まない", async () => {
+  it("先頭の確認は R2 の範囲読み 1 回だけ（全体を読まない）。.ai 以外・コメントの添付では読まない", async () => {
     addItem("ai", "poster.ai", "application/illustrator");
     addItem("indd", "poster.indd", "application/x-indesign");
     await put("ai", enc("%PDF-1.6 x"));
@@ -209,12 +209,12 @@ describe("Illustrator・InDesign の提出と配信（利用者指示 2026-10-19
     expect(store.gets).toEqual([]);
     expect(gateway.itemUploads.completeMetas.slice(1)).toEqual([{}, {}]);
 
-    gateway.feedbackUploads.targets.set(
-      "fb-ai",
-      target({ keyPrefix: "feedback/w1/fb/x.ai", fileName: "x.ai" }),
+    gateway.commentUploads.targets.set(
+      "cf-ai",
+      target({ keyPrefix: "comments/w1/cf/x.ai", fileName: "x.ai" }),
     );
-    gateway.feedbackViewers.set("fb-ai", ["creator"]);
-    await app.request("/feedback/files/fb-ai", {
+    gateway.commentViewers.set("cf-ai", { viewers: ["creator"], cacheable: false });
+    await app.request("/comment-files/cf-ai", {
       method: "PUT",
       headers: {
         Authorization: "Bearer valid:creator",
@@ -223,7 +223,7 @@ describe("Illustrator・InDesign の提出と配信（利用者指示 2026-10-19
       body,
     });
     expect(store.gets).toEqual([]);
-    expect(gateway.feedbackUploads.completeMetas).toEqual([{}]);
+    expect(gateway.commentUploads.completeMetas).toEqual([{}]);
   });
   it("上限（100 MB）を超える本文は、読み始める前に 413 と理由で断る。試行も始めない", async () => {
     addItem("huge", "huge.indd", "application/x-indesign");
@@ -451,97 +451,5 @@ describe("GET /files/:artifactId（§9.1 / A-11）", () => {
       headers: { Origin: "https://evil.example", "Access-Control-Request-Method": "GET" },
     });
     expect(ng.headers.get("Access-Control-Allow-Origin")).toBeNull();
-  });
-});
-
-describe("フィードバックの添付 PUT / GET /feedback/files/:fileId", () => {
-  beforeEach(() => {
-    gateway.feedbackUploads.targets.set(
-      "fb1",
-      target({ keyPrefix: "feedback/w1/fb1/案.pdf", fileName: "案.pdf" }),
-    );
-    gateway.feedbackViewers.set("fb1", ["creator", "member"]);
-  });
-  const putFeedback = async (token: string, data: ArrayBuffer, sha?: string) =>
-    app.request("/feedback/files/fb1", {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/pdf",
-        "X-MF100-Sha256": sha ?? (await sha256Hex(data)),
-      },
-      body: data,
-    });
-
-  it("未認証は 401、他人の添付は 404、sha256 が合えば保存して verified", async () => {
-    expect((await app.request("/feedback/files/fb1", { method: "PUT", body })).status).toBe(401);
-    expect((await putFeedback("valid:member", body)).status).toBe(404);
-    const res = await putFeedback("valid:creator", body);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ fileId: "fb1", status: "verified" });
-    expect([...store.objects.keys()]).toEqual(["feedback/w1/fb1/案.pdf/attempts/att1"]);
-    expect(gateway.feedbackUploads.calls).toEqual([
-      "feedback-begin:fb1:att1",
-      `feedback-complete:att1:${body.byteLength}:${await sha256Hex(body)}`,
-    ]);
-    // 検証済みには上書きできない
-    expect((await putFeedback("valid:creator", body)).status).toBe(409);
-  });
-
-  it("sha256 不一致は保存せず failed を記録する", async () => {
-    const res = await putFeedback("valid:creator", body, "0".repeat(64));
-    expect(res.status).toBe(400);
-    expect(store.objects.size).toBe(0);
-    expect(gateway.feedbackUploads.targets.get("fb1")?.status).toBe("failed");
-  });
-
-  it("遅れた PUT は採用済みの添付の実体を変更できない（試行ごとに別キー）", async () => {
-    let arrived!: () => void;
-    let release!: () => void;
-    const bArrived = new Promise<void>((r) => (arrived = r));
-    const held = new Promise<void>((r) => (release = r));
-    let first = true;
-    store.beforeWrite = async () => {
-      if (!first) return;
-      first = false;
-      arrived();
-      await held;
-    };
-    const pendingB = putFeedback("valid:creator", enc("%B02"));
-    await bArrived;
-    expect((await putFeedback("valid:creator", enc("%A01"))).status).toBe(200);
-    release();
-    const resB = await pendingB;
-    expect(resB.status).toBe(409);
-    const adopted = gateway.feedbackUploads.targets.get("fb1")!.objectKey!;
-    expect([...store.objects.keys()]).toEqual([adopted]);
-    const res = await app.request("/feedback/files/fb1", {
-      headers: { Authorization: "Bearer valid:member" },
-    });
-    expect(await res.text()).toBe("%A01");
-  });
-
-  it("見られる人にだけ配信し、/files と同じヘッダーを付ける", async () => {
-    await putFeedback("valid:creator", body);
-    const res = await app.request("/feedback/files/fb1", {
-      headers: { Authorization: "Bearer valid:member" },
-    });
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toContain("no-store");
-    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    const part = await app.request("/feedback/files/fb1", {
-      headers: { Authorization: "Bearer valid:member", Range: "bytes=0-3" },
-    });
-    expect(part.status).toBe(206);
-    expect(part.headers.get("Content-Range")).toBe(`bytes 0-3/${body.byteLength}`);
-    expect(res.headers.get("Content-Disposition")).toContain(encodeURIComponent("案.pdf"));
-    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(body));
-    expect(
-      (
-        await app.request("/feedback/files/fb1", {
-          headers: { Authorization: "Bearer valid:stranger" },
-        })
-      ).status,
-    ).toBe(403);
   });
 });
