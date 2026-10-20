@@ -3072,12 +3072,10 @@ m3e-dialog {
   position: absolute;
   width: 320px;
   z-index: 25; /* 書いているあいだはビューアの浮遊ツールバー（20）より手前 */
-  background: var(--mf-surface-container-lowest);
-  border-radius: var(--mf-shape-md);
-  box-shadow: var(--mf-elevation-2);
-  padding: 8px;
+  /* 全体を囲う面は置かない（利用者指示 2026-10-20「コメントのフローティングで全体を囲うのもできれば辞めたい」）。
+     浮遊する書式のツールバーと入力欄が、それぞれ自分の面と影を持つ */
   display: grid;
-  gap: 4px;
+  gap: 8px;
   cursor: default;
 }
 .compose-pop__input {
@@ -4322,7 +4320,13 @@ m3e-icon.icon--on {
   z-index: 40;
 }
 .compose-pop__quote {
-  padding: 8px 12px 0;
+  justify-self: start;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-surface-container-lowest);
+  box-shadow: var(--mf-elevation-1);
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
   overflow: hidden;
@@ -4529,21 +4533,41 @@ m3e-icon.icon--on {
 .rt:has(.rt__mentions) .rt__content {
   min-height: 1.25rem;
 }
-/* 入力欄（Slack 式 + M3E）: 本文・添付・操作の行を、角丸の 1 つの面に収める。
-   面は一段濃い色（surface-container-high）、輪郭は薄い線で、フォーカスすると主色の 2px になる（黒い枠は使わない）。
-   書式のツールバーは既定で隠し、操作の行の「Aa」で本文のすぐ上に出す */
+/* 入力欄: 本文・添付・操作の行を 1 つの枠に収める。枠はほかの入力欄（M3E の outlined・角 4px）と同じ見た目
+   （利用者指示 2026-10-20「入力欄全体の角丸じゃなくてふつうのinputに揃えられるんじゃない？」）。
+   線は outline、マウスを載せると on-surface、フォーカスすると主色の 2px。書式のツールバーは枠の外の上に浮かぶ */
 .rt--composer {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 6px 4px 14px;
-  border-radius: 20px;
-  background: var(--mf-surface-container-high);
-  box-shadow: inset 0 0 0 1px var(--mf-outline-variant);
+  padding: 12px 4px 4px 16px;
+  border-radius: var(--mf-shape-xs);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--mf-outline);
   transition: box-shadow var(--mf-motion, 150ms);
+}
+.rt--composer:hover {
+  box-shadow: inset 0 0 0 1px var(--mf-on-surface);
 }
 .rt--composer:focus-within {
   box-shadow: inset 0 0 0 2px var(--mf-primary);
+}
+/* 投稿欄（紙の上に浮かぶ）では、枠の中を塗って影を付ける */
+.compose-pop .rt--composer {
+  background: var(--mf-surface-container-lowest);
+  box-shadow:
+    var(--mf-elevation-2),
+    inset 0 0 0 1px var(--mf-outline);
+}
+.compose-pop .rt--composer:hover {
+  box-shadow:
+    var(--mf-elevation-2),
+    inset 0 0 0 1px var(--mf-on-surface);
+}
+.compose-pop .rt--composer:focus-within {
+  box-shadow:
+    var(--mf-elevation-2),
+    inset 0 0 0 2px var(--mf-primary);
 }
 .rt--composer .rt__editor {
   padding-inline-end: 8px;
@@ -4559,7 +4583,7 @@ m3e-icon.icon--on {
   padding-inline-end: 8px;
 }
 .rt--composer .cmt-pending__item {
-  background: var(--mf-surface-container-lowest);
+  background: var(--mf-surface-container);
 }
 /* 入力欄と、その上に浮かぶ書式のツールバー（M3E の Toolbar・丸い形・影。ビューアの拡大縮小のツールバーと同じ見た目） */
 .rt-wrap {
@@ -4588,6 +4612,10 @@ m3e-icon.icon--on {
   .rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
     margin-inline: -4px;
   }
+}
+/* 投稿欄では囲う面が無いので、ツールバーは入力欄の左端に揃える */
+.compose-pop .rt-wrap > .rt__toolbar {
+  margin: 0;
 }
 .compose-pop .rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
   margin-inline: -4px;
@@ -5240,10 +5268,14 @@ m3e-snackbar {
   white-space: nowrap;
 }
 .compose-pop__place {
+  justify-self: start;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px 0;
+  padding: 6px 12px;
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-surface-container-lowest);
+  box-shadow: var(--mf-elevation-1);
   font: var(--mf-type-label-medium);
   font-variant-numeric: tabular-nums;
   color: var(--mf-primary);
