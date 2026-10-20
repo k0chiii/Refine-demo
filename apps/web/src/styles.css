@@ -3070,12 +3070,12 @@ m3e-dialog {
 }
 .compose-pop {
   position: absolute;
-  width: 300px;
+  width: 320px;
   z-index: 25; /* 書いているあいだはビューアの浮遊ツールバー（20）より手前 */
   background: var(--mf-surface-container-lowest);
   border-radius: var(--mf-shape-md);
   box-shadow: var(--mf-elevation-2);
-  padding: 12px 12px 8px;
+  padding: 8px;
   display: grid;
   gap: 4px;
   cursor: default;
@@ -3090,11 +3090,6 @@ m3e-dialog {
   font-family: var(--mf-font);
   color: var(--mf-on-surface);
   min-height: 60px;
-}
-.compose-pop__actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 /* 版比較 */
@@ -4461,7 +4456,7 @@ m3e-icon.icon--on {
 }
 .rt__content {
   /* 最小の高さは行数（--rt-rows）× 1 行（body-medium の 20px） */
-  min-height: calc(var(--rt-rows, 3) * 1.25rem);
+  min-height: calc(var(--rt-rows, 2) * 1.25rem);
   max-height: min(40vh, 240px);
   overflow-y: auto;
   outline: none;
@@ -4489,7 +4484,8 @@ m3e-icon.icon--on {
 .rt--loading {
   display: grid;
   place-items: center;
-  min-height: calc(var(--rt-rows, 3) * 1.25rem);
+  /* 読み込みが済んだ入力欄と同じ高さ（本文 + 操作の行 + 余白） */
+  min-height: calc(var(--rt-rows, 2) * 1.25rem + 62px);
 }
 .rt__toolbar {
   display: flex;
@@ -4533,17 +4529,68 @@ m3e-icon.icon--on {
 .rt:has(.rt__mentions) .rt__content {
   min-height: 1.25rem;
 }
-/* 返信・訂正の欄: M3 の outlined text field と同じ枠（フォーカスで太く・主色） */
-.thread__form .rt,
-.compose-pop .rt {
-  padding: 8px 12px;
-  border: 1px solid var(--mf-outline);
-  border-radius: var(--mf-shape-xs);
+/* 入力欄（Slack 式 + M3E）: 本文・添付・操作の行を、角丸の 1 つの面に収める。
+   面は一段濃い色（surface-container-high）、輪郭は薄い線で、フォーカスすると主色の 2px になる（黒い枠は使わない）。
+   書式のツールバーは既定で隠し、操作の行の「Aa」で本文のすぐ上に出す */
+.rt--composer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px 4px 14px;
+  border-radius: 20px;
+  background: var(--mf-surface-container-high);
+  box-shadow: inset 0 0 0 1px var(--mf-outline-variant);
+  transition: box-shadow var(--mf-motion, 150ms);
 }
-.thread__form .rt:focus-within,
-.compose-pop .rt:focus-within {
-  padding: 7px 11px;
-  border: 2px solid var(--mf-primary);
+.rt--composer:focus-within {
+  box-shadow: inset 0 0 0 2px var(--mf-primary);
+}
+.rt--composer .rt__editor {
+  padding-inline-end: 8px;
+}
+.rt--composer .rt__content {
+  max-height: min(30vh, 200px);
+}
+.rt--composer .rt__mentions {
+  margin-top: 4px;
+  margin-inline-end: 8px;
+}
+.rt--composer .cmt-pending {
+  padding-inline-end: 8px;
+}
+.rt--composer .cmt-pending__item {
+  background: var(--mf-surface-container-lowest);
+}
+.rt--composer .rt__toolbar {
+  margin: 0 0 0 -8px;
+  padding-inline-end: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.rt__bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  margin-inline-start: -8px;
+  cursor: default;
+}
+.rt__bar > m3e-icon-button {
+  flex: none;
+  color: var(--mf-on-surface-variant);
+}
+.rt__bar > .rt__send {
+  color: unset;
+}
+.rt__bar-spacer {
+  flex: 1;
+}
+.rt__bar > m3e-button {
+  flex: none;
+  margin-inline-start: 4px;
+}
+.rt__bar > .rt__send {
+  margin-inline-end: 2px;
 }
 
 .mention-list {

@@ -17,6 +17,7 @@ import {
 import { UserAvatar } from "@/ui/UserAvatar";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { M3eIcon } from "@m3e/react/icon";
+import { M3eButton } from "@m3e/react/button";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eTooltip } from "@m3e/react/tooltip";
 import { safeHref } from "./CommentBody";
@@ -96,6 +97,15 @@ function mentionIds(doc: JSONContent): string[] {
   return [...ids];
 }
 
+const FORMAT_KEY = "mf100.comment.format";
+const readFormatOpen = () => {
+  try {
+    return localStorage.getItem(FORMAT_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 export function RichCommentEditor({
   value,
   onValue,
@@ -107,8 +117,13 @@ export function RichCommentEditor({
   placeholder,
   id,
   autoFocus,
-  toolbar,
-  rows = 3,
+  rows = 2,
+  attach,
+  attachments,
+  extra,
+  onCancel,
+  cancelLabel,
+  send,
   className,
   ref,
 }: RichCommentFieldProps) {
@@ -138,6 +153,16 @@ export function RichCommentEditor({
     onKeyDown: (e) => menuKey.current(e),
   }));
 
+  // 書式のツールバーは既定で隠し、「Aa」で出す。開閉は覚えておく（見る人ごとの便宜。保存できなくても動く）
+  const [fmtOpen, setFmtOpenState] = useState(readFormatOpen);
+  const setFmtOpen = (open: boolean) => {
+    setFmtOpenState(open);
+    try {
+      localStorage.setItem(FORMAT_KEY, open ? "1" : "0");
+    } catch {
+      // 保存できない環境（プライベートウィンドウなど）では覚えない
+    }
+  };
   const [linkOpen, setLinkOpen] = useState(false);
   const linkOpenRef = useRef(setLinkOpen);
   linkOpenRef.current = setLinkOpen;
@@ -232,15 +257,119 @@ export function RichCommentEditor({
     [dir, mention],
   );
 
+  const fmtId = useId();
+  const mentionBtnId = useId();
+  const sendId = useId();
+  // 「@」を打つのと同じ。直前が文字なら空白を挟む（メールアドレスの途中とは区別するため）
+  const insertAt = () => {
+    if (!editor) return;
+    const before = editor.state.doc.textBetween(
+      Math.max(0, editor.state.selection.from - 1),
+      editor.state.selection.from,
+      "\n",
+      "\n",
+    );
+    const needSpace = before !== "" && before !== "\n" && !MENTION_PREFIXES.includes(before);
+    editor
+      .chain()
+      .focus()
+      .insertContent(needSpace ? " @" : "@")
+      .run();
+  };
+  const showToolbar = editor && (fmtOpen || linkOpen);
   return (
-    <div className={`rt ${className ?? ""}`} style={{ "--rt-rows": rows } as CSSProperties}>
-      {toolbar && editor ? (
-        <RichToolbar editor={editor} linkOpen={linkOpen} onLinkOpen={setLinkOpen} />
-      ) : null}
+    <div
+      className={`rt rt--composer ${className ?? ""}`}
+      style={{ "--rt-rows": rows } as CSSProperties}
+      // 余白を押しても本文に入る（Slack と同じ）
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          editor?.commands.focus("end");
+        }
+      }}
+    >
       <EditorContent editor={editor} className="rt__editor" />
       {mention ? (
         <MentionMenu query={mention.query} onPick={pickMention} keyHandler={menuKey} />
       ) : null}
+      {attachments}
+      {showToolbar ? (
+        <RichToolbar editor={editor} linkOpen={linkOpen} onLinkOpen={setLinkOpen} />
+      ) : null}
+      <div
+        className="rt__bar"
+        // 押してもエディタの選択範囲を失わない
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        {onCancel && !cancelLabel ? (
+          <M3eIconButton size="extra-small" aria-label="キャンセル" onClick={onCancel}>
+            <M3eIcon name="close" />
+          </M3eIconButton>
+        ) : null}
+        {attach}
+        <M3eIconButton
+          id={mentionBtnId}
+          size="extra-small"
+          className="rt__mention"
+          aria-label="メンション"
+          disabled={!editor}
+          onClick={insertAt}
+        >
+          <M3eIcon name="alternate_email" />
+        </M3eIconButton>
+        <M3eTooltip htmlFor={mentionBtnId}>メンション</M3eTooltip>
+        <M3eIconButton
+          id={fmtId}
+          size="extra-small"
+          className="rt__fmt"
+          toggle
+          selected={fmtOpen}
+          aria-label="書式"
+          aria-expanded={fmtOpen}
+          onClick={() => {
+            setFmtOpen(!fmtOpen);
+            if (fmtOpen) setLinkOpen(false);
+            editor?.commands.focus();
+          }}
+        >
+          <M3eIcon name="text_format" />
+        </M3eIconButton>
+        <M3eTooltip htmlFor={fmtId}>書式</M3eTooltip>
+        <span className="rt__bar-spacer" />
+        {extra}
+        {onCancel && cancelLabel ? (
+          <M3eButton variant="text" size="small" onClick={onCancel}>
+            {cancelLabel}
+          </M3eButton>
+        ) : null}
+        {send.text ? (
+          <M3eButton
+            variant="filled"
+            size="small"
+            className="rt__send"
+            disabled={send.disabled}
+            onClick={send.onSend}
+          >
+            {send.label}
+          </M3eButton>
+        ) : (
+          <>
+            <M3eIconButton
+              id={sendId}
+              size="extra-small"
+              variant={send.ready ? "filled" : "tonal"}
+              className="rt__send"
+              aria-label={send.label}
+              disabled={send.disabled}
+              onClick={send.onSend}
+            >
+              <M3eIcon name="send" />
+            </M3eIconButton>
+            <M3eTooltip htmlFor={sendId}>{send.label}</M3eTooltip>
+          </>
+        )}
+      </div>
     </div>
   );
 }
