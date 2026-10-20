@@ -154,8 +154,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   /* 入力欄そのものが角丸の 1 つの面（RichCommentEditor）。メンションの候補など欄が伸びたら、ここが伸びて上の流れが縮む */
-  margin: 0 8px calc(8px + env(safe-area-inset-bottom, 0px));
-  padding: 4px 0 0;
+  /* 左右の余白は padding で取る（スクロールの枠で、上に浮かぶ書式のツールバーの影が切れないように） */
+  margin: 0 0 calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 8px 0;
 }
 .thread-panel__composer .thread__form {
   margin-top: 0;

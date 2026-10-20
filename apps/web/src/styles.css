@@ -4561,9 +4561,42 @@ m3e-icon.icon--on {
 .rt--composer .cmt-pending__item {
   background: var(--mf-surface-container-lowest);
 }
-.rt--composer .rt__toolbar {
-  margin: -4px 0 4px -8px;
-  padding-inline-end: 4px;
+/* 入力欄と、その上に浮かぶ書式のツールバー（M3E の Toolbar・丸い形・影。ビューアの拡大縮小のツールバーと同じ見た目） */
+.rt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.rt-wrap > .rt__toolbar {
+  align-self: flex-start;
+  max-width: calc(100% - 8px);
+  margin: 4px 0 0 4px;
+  /* 入力欄に添える小さな浮遊ツールバー（高さ 40・余白 4・ボタン間 0） */
+  --m3e-toolbar-size: 40px;
+  --m3e-toolbar-spacing: 0px;
+  --m3e-toolbar-rounded-leading-space: 4px;
+  --m3e-toolbar-rounded-trailing-space: 4px;
+  --m3e-toolbar-rounded-top-space: 4px;
+  --m3e-toolbar-rounded-bottom-space: 4px;
+}
+/* ボタンの当たり判定（48）を重ねて間を詰め、7 個を欄の幅に収める。指の画面は 44 まで、マウスの画面と投稿欄（幅 320）は 40 まで */
+.rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
+  margin-inline: -2px;
+}
+@media (pointer: fine) {
+  .rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
+    margin-inline: -4px;
+  }
+}
+.compose-pop .rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
+  margin-inline: -4px;
+}
+.rt__toolbar-items {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
