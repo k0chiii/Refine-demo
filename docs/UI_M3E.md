@@ -2443,7 +2443,7 @@ Deploy を手で起動し（`target: production`）、入力 `fb_migration` を�
 
 1. `dry-run`: 何も書かず、`scanned`（走査したスレッド）・`threads`（移すスレッド）・`replies`・`files`・`filesSkipped`・`reads`・`skippedNoRevision`・`skippedNotLive`・`alreadyMigrated`・`willBeOpen`・`willBeResolved` と、移すスレッドが多い制作物の上位 20（`topWorks`。ID のみ）を返す。件数を確かめる。
 2. `migrate`: コメントへ移す。10 スレッドずつトランザクションを分けて最後まで進む（1 回の呼び出しで終わる。5 分を超えるときは自分を予約して続け、結果は関数のログに出る）。**何度流しても増えない**（移行済みは `alreadyMigrated`）。dry-run と同じ内訳（`open` / `resolved`）を返す。
-3. `delete`: **全ての生きている FB のスレッドが（版が無いものを除いて）移行済みであることを確かめてから**、`feedbackReads`・`feedbackFiles`・`feedbackPosts`・`feedbackThreads` の行を全て消す。移っていないスレッドが 1 つでもあれば、何も消さず `refused: true` と `unsettledThreads` を返す。R2 の実体には触れない。
+3. `delete`: **全ての生きている FB のスレッドが移行済みであることを確かめてから**（版の無い制作物の FB など、移せなかった生きたスレッドが 1 つでも残っていれば消さない。利用者指示 2026-10-20「コメントとFBは消えないようにmigrateしたい」）、`feedbackReads`・`feedbackFiles`・`feedbackPosts`・`feedbackThreads` の行を全て消す。移っていないスレッドが 1 つでもあれば、何も消さず `refused: true` と `unsettledThreads` を返す。R2 の実体には触れない。
 
 FB の 4 つの表は、この変更では schema に残す（移行と削除のため）。`delete` を本番で流し終えた後の変更で、schema から落とす。
 

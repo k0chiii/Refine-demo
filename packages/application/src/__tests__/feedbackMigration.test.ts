@@ -201,7 +201,8 @@ describe("FB のスレッドをコメントへ移す", () => {
       status: "skipped",
       reason: "no_revision",
     });
-    expect(await isFeedbackThreadSettled(ctx, t0)).toBe(true);
+    // 移せなかった生きたスレッドが残っているあいだは、FB を消さない
+    expect(await isFeedbackThreadSettled(ctx, t0)).toBe(false);
 
     const t1 = addThread(ctx, work.id, {
       revisionId: "no-such-revision",

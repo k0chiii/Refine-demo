@@ -211,14 +211,17 @@ export async function resolveMigratedFeedbackThread(
 }
 
 /**
- * 削除してよい状態か（FB のスレッド 1 つぶん）。生きていて、移し先の版があるのに、まだコメントへ移していないなら false。
- * 版が無い制作物のスレッド・削除済みのスレッドは移さないので、削除を止めない。
+ * 削除してよい状態か（FB のスレッド 1 つぶん）。コメントへ移し終えたか、もともと削除済み・生きた投稿の無いものだけ true。
+ * 版が無い制作物のスレッドなど、生きているのに移せなかったものが 1 つでもあれば削除を止める（コメント・FB を消さない。利用者指示 2026-10-20）。
  */
 export async function isFeedbackThreadSettled(
   ctx: AppContext,
   thread: FeedbackThread,
 ): Promise<boolean> {
-  return (await prepare(ctx, thread)).kind !== "plan";
+  const p = await prepare(ctx, thread);
+  if (p.kind === "plan") return false;
+  const r = p.result;
+  return r.status === "already_migrated" || (r.status === "skipped" && r.reason !== "no_revision");
 }
 
 // ---------------------------------------------------------------- 集計（dry-run と本番の実行で同じ数え方）

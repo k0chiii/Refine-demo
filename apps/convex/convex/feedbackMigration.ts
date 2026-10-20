@@ -26,7 +26,7 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
  * `convex run feedbackMigration:run '{"mode":"dry-run"|"migrate"|"delete"}'` として流す。
  * - dry-run: 何も書かず、移したときの件数を返す。
  * - migrate: コメントへ移す。何度流しても増えない（移行済みは飛ばす）。
- * - delete: 全ての FB のスレッドの移行が済んでいることを確かめてから、FB の行を全て消す。済んでいなければ何も消さない。
+ * - delete: 全ての FB のスレッドの移行が済んでいることを確かめてから、FB の行を全て消す。移せなかった生きたスレッド（版の無い制作物など）が 1 つでもあれば何も消さない。
  * 1 回の呼び出し（run は action）が、バッチを順に進めて最後までやり、まとめを返す。時間が長くかかるときは
  * 自分を予約して続きを流し（continued: true）、続きの結果は関数のログに出る。
  */

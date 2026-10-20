@@ -352,15 +352,22 @@ describe("Convex 統合: FB のコメントへの移行", () => {
   });
 
   it("delete は、移っていないスレッドがあれば何も消さない。移した後は FB の行を全て消し、コメントと添付の実体は残す", async () => {
-    const { t, cast } = await seedFeedback();
+    const { t, cast, ids } = await seedFeedback();
     const refused = await summary(t, "delete");
-    expect(refused).toMatchObject({ refused: true, unsettledThreads: 3 });
+    expect(refused).toMatchObject({ refused: true, unsettledThreads: 4 });
     expect(refused).not.toHaveProperty("deleted");
     const rows = (table: "feedbackThreads" | "feedbackPosts" | "feedbackFiles" | "feedbackReads") =>
       t.run(async (ctx) => (await ctx.db.query(table).collect()).length);
     expect(await rows("feedbackThreads")).toBe(5);
 
     await summary(t, "migrate");
+    // 版の無い制作物の FB は移せないので、残っているあいだは消さない（コメント・FB を失わない）
+    expect(await summary(t, "delete")).toMatchObject({ refused: true, unsettledThreads: 1 });
+    expect(await rows("feedbackThreads")).toBe(5);
+    // 扱いを決めて（ここでは削除済みにして）から消す
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ids.noRevision, { deletedAt: T + 9_000 });
+    });
     const done = await summary(t, "delete");
     expect(done).toMatchObject({
       completed: true,
@@ -413,8 +420,9 @@ describe("Convex 統合: FB のコメントへの移行", () => {
   });
 
   it("バッチをまたいでも全部移る（カーソルで続きから。削除も複数のバッチで消しきる）", async () => {
-    const { t, workId, users } = await seedFeedback();
+    const { t, workId, users, ids } = await seedFeedback();
     await t.run(async (ctx) => {
+      await ctx.db.patch(ids.noRevision, { deletedAt: T + 9_000 });
       for (let i = 0; i < 27; i++) {
         const id = await ctx.db.insert("feedbackThreads", {
           workId,
