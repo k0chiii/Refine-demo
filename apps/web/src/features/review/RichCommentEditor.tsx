@@ -100,9 +100,9 @@ function mentionIds(doc: JSONContent): string[] {
 const FORMAT_KEY = "mf100.comment.format";
 const readFormatOpen = () => {
   try {
-    return localStorage.getItem(FORMAT_KEY) === "1";
+    return localStorage.getItem(FORMAT_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 };
 
@@ -289,14 +289,15 @@ export function RichCommentEditor({
         }
       }}
     >
+      {/* 書式のツールバーは本文の上（Slack と同じ）。「Aa」で隠せる */}
+      {showToolbar ? (
+        <RichToolbar editor={editor} linkOpen={linkOpen} onLinkOpen={setLinkOpen} />
+      ) : null}
       <EditorContent editor={editor} className="rt__editor" />
       {mention ? (
         <MentionMenu query={mention.query} onPick={pickMention} keyHandler={menuKey} />
       ) : null}
       {attachments}
-      {showToolbar ? (
-        <RichToolbar editor={editor} linkOpen={linkOpen} onLinkOpen={setLinkOpen} />
-      ) : null}
       <div
         className="rt__bar"
         // 押してもエディタの選択範囲を失わない

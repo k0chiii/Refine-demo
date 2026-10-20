@@ -713,12 +713,7 @@ async function main() {
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
     await page.keyboard.type("<script>alert(1)</script>");
-    // 書式のツールバーは既定で隠れている。「Aa」で開くと本文のすぐ上に 7 つのボタンが出る
-    expectTrue(
-      (await page.locator(".compose-pop .rt__toolbar").count()) === 0,
-      "書式のツールバーが既定で開いている",
-    );
-    await page.locator(".compose-pop .rt__fmt").click();
+    // 書式のツールバーは本文の上に既定で出ている（7 つのボタン）。「Aa」で隠せる
     await page.locator(".compose-pop .rt__toolbar").waitFor();
     expectTrue(
       (await page.locator(".compose-pop .rt__toolbar m3e-icon-button").count()) === 7,

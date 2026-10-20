@@ -4562,7 +4562,7 @@ m3e-icon.icon--on {
   background: var(--mf-surface-container-lowest);
 }
 .rt--composer .rt__toolbar {
-  margin: 0 0 0 -8px;
+  margin: -4px 0 4px -8px;
   padding-inline-end: 4px;
   overflow-x: auto;
   scrollbar-width: none;
