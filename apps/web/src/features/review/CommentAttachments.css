@@ -155,7 +155,7 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  border-radius: var(--mf-shape-sm);
+  border-radius: 20px;
 }
 .cmt-drop--over {
   outline: 2px dashed var(--mf-primary);

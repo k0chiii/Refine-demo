@@ -1,11 +1,12 @@
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import { dragHasFiles } from "@/lib/attachmentQueue";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
+import { M3eTooltip } from "@m3e/react/tooltip";
 import type { CommentFileUploads } from "./useCommentFileUploads";
 
 /**
- * 投稿欄の「ファイルを添付」ボタン（M3E のアイコンボタン + 隠した input）。選んだファイルは useCommentFileUploads に渡す。
+ * 投稿欄の下の操作の行に置く「ファイルを添付」ボタン（M3E のアイコンボタン + 隠した input）。選んだファイルは useCommentFileUploads に渡す。
  * 上限（10 件）に達したら押せない。説明の文は置かない。
  */
 export function AttachFileButton({
@@ -16,9 +17,12 @@ export function AttachFileButton({
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const bid = useId();
   return (
     <>
       <M3eIconButton
+        id={bid}
+        size="extra-small"
         aria-label="ファイルを添付"
         className="cmt-attach"
         disabled={disabled === true || uploads.full}
@@ -26,6 +30,7 @@ export function AttachFileButton({
       >
         <M3eIcon name="attach_file" />
       </M3eIconButton>
+      <M3eTooltip htmlFor={bid}>ファイルを添付</M3eTooltip>
       <input
         ref={input}
         type="file"

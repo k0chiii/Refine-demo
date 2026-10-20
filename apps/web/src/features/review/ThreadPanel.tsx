@@ -343,42 +343,50 @@ export function ThreadPanel({
             canReact={canReply}
             onToggle={(emoji) => toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })}
           />
-          {mode === "rejected" || mode === "deferred" || mode === "edit" ? (
+          {mode === "edit" ? (
             <div className="thread__form">
-              {mode === "edit" ? (
-                <RichCommentField
-                  id={`${t.id}-edit`}
-                  ariaLabel="本文の訂正"
-                  placeholder="本文の訂正"
+              <RichCommentField
+                id={`${t.id}-edit`}
+                ariaLabel="本文の訂正"
+                placeholder="本文の訂正"
+                autoFocus
+                value={text}
+                onValue={setText}
+                onEscape={() => setMode(null)}
+                onSubmit={() => {
+                  if (text.trim()) void submit();
+                }}
+                onCancel={() => setMode(null)}
+                cancelLabel="キャンセル"
+                send={{
+                  label: "訂正を保存",
+                  text: true,
+                  ready: text.trim() !== "",
+                  disabled: pending === true || !text.trim(),
+                  onSend: () => void submit(),
+                }}
+              />
+            </div>
+          ) : null}
+          {mode === "rejected" || mode === "deferred" ? (
+            <div className="thread__form">
+              <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
+                <label slot="label" htmlFor={`${t.id}-${mode}`}>
+                  {`${decisionLabel[mode]}理由（必須）`}
+                </label>
+                <textarea
+                  id={`${t.id}-${mode}`}
                   autoFocus
-                  toolbar
+                  rows={3}
+                  className="thread__input"
                   value={text}
-                  onValue={setText}
-                  onEscape={() => setMode(null)}
-                  onSubmit={() => {
-                    if (text.trim()) void submit();
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setMode(null);
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
                   }}
                 />
-              ) : (
-                <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
-                  <label slot="label" htmlFor={`${t.id}-${mode}`}>
-                    {`${decisionLabel[mode]}理由（必須）`}
-                  </label>
-                  <textarea
-                    id={`${t.id}-${mode}`}
-                    autoFocus
-                    rows={3}
-                    className="thread__input"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") setMode(null);
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim())
-                        void submit();
-                    }}
-                  />
-                </M3eFormField>
-              )}
+              </M3eFormField>
               <div className="row thread__form-actions">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setMode(null)}>
@@ -389,7 +397,7 @@ export function ThreadPanel({
                   disabled={pending === true || !text.trim()}
                   onClick={() => void submit()}
                 >
-                  {mode === "edit" ? "訂正を保存" : decisionAction[mode]}
+                  {decisionAction[mode]}
                 </M3eButton>
               </div>
             </div>

@@ -9,9 +9,7 @@ import {
 import { createPortal } from "react-dom";
 import { portalHost } from "@/lib/portalHost";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
-import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eIconButton } from "@m3e/react/icon-button";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
 import { PendingCommentFiles } from "./PendingCommentFiles";
@@ -148,10 +146,9 @@ export function ComposePopover({
           ref={richRef}
           ariaLabel={what}
           // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
-          placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
-          rows={docked ? 2 : 3}
+          placeholder={`${label}（改善案には理由も添えて）`}
+          rows={2}
           autoFocus={autoFocus}
-          toolbar
           value={value}
           onValue={onChange}
           onMentions={onMentions}
@@ -161,20 +158,18 @@ export function ComposePopover({
             else onCancel();
           }}
           onSubmit={send}
+          onCancel={onCancel}
+          attach={canAttach ? <AttachFileButton uploads={uploads} /> : null}
+          attachments={canAttach ? <PendingCommentFiles uploads={uploads} /> : null}
+          extra={extra}
+          send={{
+            label: "投稿",
+            ready: hasContent,
+            disabled: pending === true || !canSend,
+            onSend: send,
+          }}
         />
-        {canAttach ? <PendingCommentFiles uploads={uploads} /> : null}
       </AttachDropZone>
-      <div className="compose-pop__actions">
-        <M3eIconButton aria-label="キャンセル" onClick={onCancel}>
-          <M3eIcon name="close" />
-        </M3eIconButton>
-        {canAttach ? <AttachFileButton uploads={uploads} /> : null}
-        <span className="spacer" />
-        {extra}
-        <M3eButton variant="filled" disabled={pending || !canSend} onClick={send}>
-          投稿
-        </M3eButton>
-      </div>
     </div>
   );
   // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す（要素の全画面の間はその要素の中）
