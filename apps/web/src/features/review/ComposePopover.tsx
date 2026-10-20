@@ -221,7 +221,9 @@ function useFitInside(
       const area = parent?.getBoundingClientRect();
       let left = Math.max(area?.left ?? 0, 0) + GAP;
       let right = Math.min(area?.right ?? window.innerWidth, window.innerWidth) - GAP;
-      const top = Math.max(area?.top ?? 0, 0) + GAP;
+      // 面の上に浮かぶ書式のツールバーのぶんも空ける
+      const above = el.querySelector<HTMLElement>(".rt-wrap > .rt__toolbar")?.offsetHeight ?? 0;
+      const top = Math.max(area?.top ?? 0, 0) + GAP + (above ? above + GAP : 0);
       let bottom = Math.min(area?.bottom ?? window.innerHeight, window.innerHeight) - GAP;
       // 浮遊ツールバー: 縦長（右の縦のツールバー）は左へ、横長（下のツールバー）は上へよける
       const mid = { x: (left + right) / 2, y: (top + bottom) / 2 };

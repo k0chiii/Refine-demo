@@ -3072,8 +3072,12 @@ m3e-dialog {
   position: absolute;
   width: 320px;
   z-index: 25; /* 書いているあいだはビューアの浮遊ツールバー（20）より手前 */
-  /* 全体を囲う面は置かない（利用者指示 2026-10-20「コメントのフローティングで全体を囲うのもできれば辞めたい」）。
-     浮遊する書式のツールバーと入力欄が、それぞれ自分の面と影を持つ */
+  /* 白い面（影 2）に入力欄を収める。いったん面を外したが戻した（利用者指示 2026-10-20「フローティングには白い枠あって良かったのかも。ツールバーは良い」）。
+     書式のツールバーは面の外、すぐ上の中央に浮かぶ */
+  background: var(--mf-surface-container-lowest);
+  border-radius: var(--mf-shape-md);
+  box-shadow: var(--mf-elevation-2);
+  padding: 12px;
   display: grid;
   gap: 8px;
   cursor: default;
@@ -4320,13 +4324,7 @@ m3e-icon.icon--on {
   z-index: 40;
 }
 .compose-pop__quote {
-  justify-self: start;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: 6px 12px;
-  border-radius: var(--mf-shape-full);
-  background: var(--mf-surface-container-lowest);
-  box-shadow: var(--mf-elevation-1);
+  padding: 0 4px;
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
   overflow: hidden;
@@ -4629,14 +4627,21 @@ m3e-icon.icon--on {
 .rt--loading > .rt__label {
   top: 16px;
 }
-/* 投稿欄（紙の上に浮かぶ）では、枠の中を塗り、上の書式のツールバー（M3E の Toolbar elevated = 影 3）と同じ影で浮かせる */
+/* 投稿欄（白い面の上）では、枠の中も同じ面の色 */
 .compose-pop .rt--composer {
   background: var(--mf-surface-container-lowest);
-  box-shadow: var(--mf-elevation-3);
 }
-/* 開くとき: 入力欄は置いた場所から、ツールバーは少し遅れて、小さく・薄い状態から出る（M3 の空間の動き）。動きを減らす設定では出さない */
+/* 書式のツールバーは白い面の外、すぐ上の中央に浮かぶ */
+.compose-pop .rt-wrap > .rt__toolbar {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+}
+/* 開くとき: 白い面は置いた場所から、ツールバーは少し遅れて、小さく・薄い状態から出る（M3 の空間の動き）。動きを減らす設定では出さない */
 @media (prefers-reduced-motion: no-preference) {
-  .compose-pop .rt--composer {
+  .compose-pop {
     animation: compose-pop-in var(--mf-motion-spatial-fast) both;
     transform-origin: top left;
   }
@@ -4651,15 +4656,7 @@ m3e-icon.icon--on {
     transform: translateY(4px) scale(0.92);
   }
 }
-/* スマホ（画面下に固定）では、後ろのシートの文字が隙間から透けないよう、下から面の色へのぼかしを敷く（囲う面ではない） */
-.compose-pop--docked::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: -32px -16px calc(-8px - env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to bottom, transparent, var(--mf-surface-container-low) 32px);
-  pointer-events: none;
-}
+
 /* 紙の上では、枠に乗ったラベルの後ろの紙の文字が透けないよう、ラベルにも同じ面を敷く */
 .compose-pop :is(.rt--float, .rt--composer:focus-within) > .rt__label {
   margin-inline-start: -4px;
@@ -4667,13 +4664,7 @@ m3e-icon.icon--on {
   border-radius: var(--mf-shape-xs);
   background: var(--mf-surface-container-lowest);
 }
-.compose-pop .rt-wrap {
-  gap: 16px;
-}
-/* スマホでは後ろにぼかしの面があるので、ラベルの下の面は要らない */
-.compose-pop--docked :is(.rt--float, .rt--composer:focus-within) > .rt__label {
-  background: transparent;
-}
+
 .rt--composer .rt__editor {
   padding-inline-end: 12px;
 }
@@ -4725,9 +4716,6 @@ m3e-icon.icon--on {
   .rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
     margin-inline: -4px;
   }
-}
-.compose-pop .rt-wrap > .rt__toolbar {
-  margin: 0;
 }
 .compose-pop .rt-wrap > .rt__toolbar .rt__tool > m3e-icon-button {
   margin-inline: -4px;
@@ -5380,14 +5368,10 @@ m3e-snackbar {
   white-space: nowrap;
 }
 .compose-pop__place {
-  justify-self: start;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  border-radius: var(--mf-shape-full);
-  background: var(--mf-surface-container-lowest);
-  box-shadow: var(--mf-elevation-1);
+  padding: 0 4px;
   font: var(--mf-type-label-medium);
   font-variant-numeric: tabular-nums;
   color: var(--mf-primary);
