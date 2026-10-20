@@ -153,16 +153,16 @@
   max-height: 55%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* 線も影も無い、角丸のブロック。メンションの候補など欄が伸びたら、このブロックが伸びて上の流れが縮む */
-  margin: 0 8px calc(8px + env(safe-area-inset-bottom, 0px));
-  padding: 12px;
-  border-radius: var(--mf-shape-lg);
-  background: var(--tp-block);
+  /* 入力欄そのものが角丸の 1 つの面（RichCommentEditor）。メンションの候補など欄が伸びたら、ここが伸びて上の流れが縮む */
+  /* 左右の余白は padding で取る（スクロールの枠で、上に浮かぶ書式のツールバーの影が切れないように） */
+  margin: 0 0 calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 8px 0;
 }
 .thread-panel__composer .thread__form {
   margin-top: 0;
 }
-.thread-panel .thread__form .rt {
+/* 訂正の欄は元のコメントの面（--tp-block）の中なので、一段明るい面にして区別する */
+.thread-panel__root .thread__form .rt--composer {
   background: var(--mf-surface-container-lowest);
 }
 

@@ -1,5 +1,6 @@
-import { lazy, Suspense, type CSSProperties, type Ref } from "react";
+import { lazy, Suspense, type CSSProperties, type ReactNode, type Ref } from "react";
 import { Loading } from "@/ui/Loading";
+import { FieldOutline } from "./FieldOutline";
 
 /**
  * コメント・返信・訂正の入力欄（Slack 式の書式つき入力。TipTap）。
@@ -25,14 +26,31 @@ export interface RichCommentFieldProps {
   onFocus?: () => void;
   /** 読み上げの名前 */
   ariaLabel: string;
+  /** 空のときの案内 */
   placeholder?: string;
   id?: string;
   /** 開いたときにフォーカスして末尾へ */
   autoFocus?: boolean;
-  /** 書式のツールバーを出す */
-  toolbar?: boolean;
-  /** 最小の高さ（行数）。既定は 3 行 */
+  /** 最小の高さ（行数）。既定は 2 行 */
   rows?: number;
+  /** 下の操作の行（左）に並べる、ファイルを添付するボタン */
+  attach?: ReactNode;
+  /** 本文と下の操作の行のあいだに並べる、これから添える添付 */
+  attachments?: ReactNode;
+  /** 下の操作の行（右・送る前）に置く、投稿以外の操作 */
+  extra?: ReactNode;
+  /** やめる。文字（cancelLabel）があれば右の文字のボタン、無ければ左の閉じるアイコン。省くと出さない */
+  onCancel?: () => void;
+  cancelLabel?: string;
+  /** 送る。text なら文字のボタン（label が文字）、無ければ送信アイコン（label は読み上げの名前） */
+  send: {
+    label: string;
+    text?: boolean;
+    /** 送れる内容がある（アイコンを主色で塗る） */
+    ready: boolean;
+    disabled: boolean;
+    onSend: () => void;
+  };
   className?: string;
   ref?: Ref<RichCommentHandle>;
 }
@@ -49,7 +67,11 @@ export function RichCommentField(props: RichCommentFieldProps) {
   return (
     <Suspense
       fallback={
-        <div className="rt rt--loading" style={{ "--rt-rows": props.rows ?? 3 } as CSSProperties}>
+        <div
+          className="rt rt--composer rt--loading"
+          style={{ "--rt-rows": props.rows ?? 2 } as CSSProperties}
+        >
+          <FieldOutline />
           <Loading label="入力欄を読み込んでいます" size="small" />
         </div>
       }

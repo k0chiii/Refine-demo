@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { M3eButton } from "@m3e/react/button";
 import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
 import { PendingCommentFiles } from "./PendingCommentFiles";
 import { RichCommentField } from "./RichCommentField";
@@ -12,7 +11,7 @@ const drafts = new Map<string, string>();
  * スレッドのパネルの下に固定する返信欄（書式つきの入力欄 + ファイルの添付）。
  * - 貼り付け・ドロップ・「ファイルを添付」で添付する（useCommentFileUploads）。圧縮・送信の途中と失敗が残るあいだは送れない
  * - 本文が空でも添付があれば送れる。送れたら欄と添付を空にする（失敗したら書きかけを残す）
- * - 書式のツールバーは書き始めたら（フォーカスしたら）出す。操作は 1 行（添付・返信）
+ * - 欄の中に操作の行がある（添付・メンション・書式・送信。Slack 式）。書式のツールバーは「Aa」で出し入れする
  * - 書きかけの本文は `draftKey`（スレッドの ID）ごとに覚え、パネルを閉じて開き直しても戻す
  */
 export function ReplyComposer({
@@ -39,7 +38,6 @@ export function ReplyComposer({
     }
   };
   const [mentions, setMentions] = useState<string[]>([]);
-  const [focused, setFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const canSend =
     (text.trim() !== "" || uploads.fileIds.length > 0) &&
@@ -55,7 +53,6 @@ export function ReplyComposer({
       if (ok) {
         setText("");
         setMentions([]);
-        setFocused(false);
         uploads.reset();
       }
     } finally {
@@ -70,26 +67,21 @@ export function ReplyComposer({
           ariaLabel="返信"
           placeholder="返信"
           rows={2}
-          toolbar={focused || text.trim() !== ""}
           value={text}
           onValue={setText}
           onMentions={setMentions}
-          onFocus={() => setFocused(true)}
-          onEscape={() => {
-            if (text.trim() === "" && uploads.items.length === 0) setFocused(false);
-            (document.activeElement as HTMLElement | null)?.blur();
-          }}
+          onEscape={() => (document.activeElement as HTMLElement | null)?.blur()}
           onSubmit={() => void send()}
+          attach={<AttachFileButton uploads={uploads} />}
+          attachments={<PendingCommentFiles uploads={uploads} />}
+          send={{
+            label: "返信を送る",
+            ready: text.trim() !== "" || uploads.fileIds.length > 0,
+            disabled: !canSend,
+            onSend: () => void send(),
+          }}
         />
-        <PendingCommentFiles uploads={uploads} />
       </AttachDropZone>
-      <div className="row thread__form-actions">
-        <AttachFileButton uploads={uploads} />
-        <span className="spacer" />
-        <M3eButton variant="filled" disabled={!canSend} onClick={() => void send()}>
-          返信
-        </M3eButton>
-      </div>
     </div>
   );
 }

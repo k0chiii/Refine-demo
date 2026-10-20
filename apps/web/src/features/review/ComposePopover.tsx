@@ -9,9 +9,7 @@ import {
 import { createPortal } from "react-dom";
 import { portalHost } from "@/lib/portalHost";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
-import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eIconButton } from "@m3e/react/icon-button";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
 import { PendingCommentFiles } from "./PendingCommentFiles";
@@ -67,6 +65,7 @@ export function ComposePopover({
   style,
   extra,
   docked,
+  host,
   quote,
   place,
   autoFocus = true,
@@ -87,6 +86,8 @@ export function ComposePopover({
   /** 投稿以外の操作（例: 選んだ文字を表記ルールに提案） */
   extra?: ReactNode;
   docked?: boolean;
+  /** docked のとき、ここ（スマホの開いている引き出しのシートの下）に埋め込む。無ければ画面下に浮かべる */
+  host?: HTMLElement | null;
   /** docked のとき、何に対するコメントかを示す引用（選んだ文字など） */
   quote?: string;
   /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。docked でなくても出す。アイコンは種類によらず地図のピン */
@@ -104,7 +105,9 @@ export function ComposePopover({
     if (canSend && !pending) onSubmit(canAttach ? uploads.fileIds : []);
   };
   const richRef = useRef<RichCommentHandle>(null);
-  const kb = useKeyboardInset(docked === true);
+  // シートが開いているあいだは、浮かべずにシートの中に埋め込む（利用者指示 2026-10-20「ボトムシート？が出てる状態の時はそうじゃなくて埋め込みだといいのかも」）
+  const embedded = docked === true && host != null;
+  const kb = useKeyboardInset(docked === true && !embedded);
   const panelRef = useRef<HTMLDivElement>(null);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
@@ -120,18 +123,20 @@ export function ComposePopover({
   const panel = (
     <div
       ref={panelRef}
-      className={`compose-pop ${docked ? "compose-pop--docked" : ""}`}
+      className={`compose-pop ${embedded ? "compose-pop--embedded" : docked ? "compose-pop--docked" : ""}`}
       role="dialog"
       aria-label={what}
       style={
-        docked
-          ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
-          : {
-              left: x,
-              top: y,
-              ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
-              ...style,
-            }
+        embedded
+          ? undefined
+          : docked
+            ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
+            : {
+                left: x,
+                top: y,
+                ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
+                ...style,
+              }
       }
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -148,10 +153,9 @@ export function ComposePopover({
           ref={richRef}
           ariaLabel={what}
           // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
-          placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
-          rows={docked ? 2 : 3}
+          placeholder="改善案には理由も添えて"
+          rows={2}
           autoFocus={autoFocus}
-          toolbar
           value={value}
           onValue={onChange}
           onMentions={onMentions}
@@ -161,23 +165,22 @@ export function ComposePopover({
             else onCancel();
           }}
           onSubmit={send}
+          onCancel={onCancel}
+          attach={canAttach ? <AttachFileButton uploads={uploads} /> : null}
+          attachments={canAttach ? <PendingCommentFiles uploads={uploads} /> : null}
+          extra={extra}
+          send={{
+            label: "投稿",
+            ready: hasContent,
+            disabled: pending === true || !canSend,
+            onSend: send,
+          }}
         />
-        {canAttach ? <PendingCommentFiles uploads={uploads} /> : null}
       </AttachDropZone>
-      <div className="compose-pop__actions">
-        <M3eIconButton aria-label="キャンセル" onClick={onCancel}>
-          <M3eIcon name="close" />
-        </M3eIconButton>
-        {canAttach ? <AttachFileButton uploads={uploads} /> : null}
-        <span className="spacer" />
-        {extra}
-        <M3eButton variant="filled" disabled={pending || !canSend} onClick={send}>
-          投稿
-        </M3eButton>
-      </div>
     </div>
   );
   // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す（要素の全画面の間はその要素の中）
+  if (embedded) return createPortal(panel, host);
   return docked ? createPortal(panel, portalHost()) : panel;
 }
 
@@ -226,7 +229,9 @@ function useFitInside(
       const area = parent?.getBoundingClientRect();
       let left = Math.max(area?.left ?? 0, 0) + GAP;
       let right = Math.min(area?.right ?? window.innerWidth, window.innerWidth) - GAP;
-      const top = Math.max(area?.top ?? 0, 0) + GAP;
+      // 面の上に浮かぶ書式のツールバーのぶんも空ける
+      const above = el.querySelector<HTMLElement>(".rt-wrap > .rt__toolbar")?.offsetHeight ?? 0;
+      const top = Math.max(area?.top ?? 0, 0) + GAP + (above ? above + GAP : 0);
       let bottom = Math.min(area?.bottom ?? window.innerHeight, window.innerHeight) - GAP;
       // 浮遊ツールバー: 縦長（右の縦のツールバー）は左へ、横長（下のツールバー）は上へよける
       const mid = { x: (left + right) / 2, y: (top + bottom) / 2 };
