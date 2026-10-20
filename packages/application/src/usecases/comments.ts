@@ -7,10 +7,12 @@ import {
   decideThread as decideThreadDomain,
   DomainError,
   isAccepting,
+  plainTextOf,
   type Principal,
   type Severity,
   type ThreadKind,
   validateAnchor,
+  validateCommentBody,
 } from "@mf100/domain";
 import type { AppContext, PersonProfile } from "../ports.ts";
 import { checkMentions, idempotent, loadAuthorizedWork, searchPeopleByText } from "../shared.ts";
@@ -43,9 +45,15 @@ const resolutionLabels: Record<string, string> = {
   resolved: "反映済み",
 };
 
+/** 通知の抜粋・端末の通知に載せるスレッドの本文（書式の記号を除いた平文） */
+const threadText = (t: Pick<CommentThread, "body" | "bodyFormat">) =>
+  plainTextOf(t.body, t.bodyFormat);
+
 export interface PostCommentInput {
   revisionId: string;
   body: string;
+  /** 本文の書式。無ければ平文（旧来）。Web の入力欄は "markdown" を送る */
+  bodyFormat?: string;
   kind: ThreadKind;
   severity: Severity;
   anchor?: Anchor;
@@ -76,6 +84,8 @@ export async function postComment(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const bodyFormat = validateCommentBody(input.body, input.bodyFormat);
+  const text = plainTextOf(input.body, bodyFormat);
   const mentions = await checkMentions(ctx, work, grants, input.mentions);
 
   const now = ctx.clock.now();
@@ -108,6 +118,7 @@ export async function postComment(
         revisionId: revision.id,
         authorId: principal.userId,
         body: input.body,
+        ...(bodyFormat ? { bodyFormat } : {}),
         kind: input.kind,
         severity: input.severity,
         resolution: "open",
@@ -135,15 +146,15 @@ export async function postComment(
         {
           kind: "comment_posted",
           title: "新しいコメント",
-          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(input.body)}`,
-          preview: input.body,
+          body: `${about(work.title, revisionLabel(revision), who)}: ${excerpt(text)}`,
+          preview: text,
           workId: work.id,
           revisionId: revision.id,
           threadId: thread.id,
         },
       );
       await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
-        body: input.body,
+        body: text,
         workId: work.id,
         revisionId: revision.id,
         threadId: thread.id,
@@ -160,9 +171,10 @@ export async function postComment(
 export async function replyToThread(
   ctx: AppContext,
   principal: Principal,
-  input: { threadId: string; body: string; mentions?: string[] },
+  input: { threadId: string; body: string; bodyFormat?: string; mentions?: string[] },
 ): Promise<void> {
   if (input.body.trim() === "") throw new DomainError("forbidden", { reason: "body_required" });
+  const bodyFormat = validateCommentBody(input.body, input.bodyFormat);
   const thread = await ctx.threads.findById(input.threadId);
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
   const revision = await ctx.revisions.findById(thread.revisionId);
@@ -182,11 +194,15 @@ export async function replyToThread(
     threadId: thread.id,
     eventType: "replied",
     actorId: principal.userId,
-    payload: mentions.length ? { body: input.body, mentions } : { body: input.body },
+    payload: {
+      body: input.body,
+      ...(bodyFormat ? { bodyFormat } : {}),
+      ...(mentions.length ? { mentions } : {}),
+    },
     createdAt: now,
   });
   await notifyMentions(ctx, principal.userId, mentions, work.title, revisionLabel(revision), {
-    body: input.body,
+    body: plainTextOf(input.body, bodyFormat),
     workId: work.id,
     revisionId: revision.id,
     threadId: thread.id,
@@ -296,7 +312,7 @@ export async function decideThread(
       title: "コメントの採否が決まりました",
       body: `${about(work.title, revisionLabel(revision), who)}が「${label}」にしました${
         input.reason?.trim() ? `（理由: ${excerpt(input.reason, 60)}）` : ""
-      }: ${excerpt(thread.body, 60)}`,
+      }: ${excerpt(threadText(thread), 60)}`,
       preview: `「${label}」にしました`,
       workId: work.id,
       revisionId: revision.id,
@@ -337,8 +353,8 @@ export async function assignThread(
     await notify(ctx, [input.assigneeId], principal.userId, {
       kind: "comment_assigned",
       title: "コメントの対応担当になりました",
-      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${excerpt(thread.body)}`,
-      preview: thread.body,
+      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}: ${excerpt(threadText(thread))}`,
+      preview: threadText(thread),
       workId: work.id,
       revisionId: revision.id,
       threadId: thread.id,
@@ -347,11 +363,14 @@ export async function assignThread(
   return next;
 }
 
-/** コメント本文の訂正（§5.2-9）。投稿者本人・未判断の間のみ。訂正前の本文をイベントに残す。 */
+/**
+ * コメント本文の訂正（§5.2-9）。投稿者本人・未判断の間のみ。訂正前の本文（と書式）をイベントに残す。
+ * 書式は訂正後の本文のもの（旧来の平文のコメントを Web から訂正すると Markdown になる）。
+ */
 export async function editThread(
   ctx: AppContext,
   principal: Principal,
-  input: { threadId: string; body: string },
+  input: { threadId: string; body: string; bodyFormat?: string },
 ): Promise<CommentThread> {
   const thread = await ctx.threads.findById(input.threadId);
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
@@ -361,13 +380,17 @@ export async function editThread(
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
   assertThreadNotDeleted(thread);
-  const next = editThreadBody(thread, principal.userId, input.body);
+  const next = editThreadBody(thread, principal.userId, input.body, input.bodyFormat);
   await ctx.threads.update(next);
   await ctx.threads.appendEvent({
     threadId: thread.id,
     eventType: "edited",
     actorId: principal.userId,
-    payload: { previousBody: thread.body },
+    payload: {
+      previousBody: thread.body,
+      ...(thread.bodyFormat ? { previousBodyFormat: thread.bodyFormat } : {}),
+      ...(next.bodyFormat ? { bodyFormat: next.bodyFormat } : {}),
+    },
     createdAt: ctx.clock.now(),
   });
   return next;
@@ -562,8 +585,8 @@ export async function carryForwardThread(
   await notify(ctx, [source.authorId], principal.userId, {
     kind: "comment_posted",
     title: "コメントが次の版へ持ち越されました",
-    body: `${about(work.title, revisionLabel(target), who)}: ${excerpt(source.body)}`,
-    preview: source.body,
+    body: `${about(work.title, revisionLabel(target), who)}: ${excerpt(threadText(source))}`,
+    preview: threadText(source),
     workId: work.id,
     revisionId: target.id,
     threadId: created.id,

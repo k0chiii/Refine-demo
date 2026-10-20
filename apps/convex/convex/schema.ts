@@ -378,6 +378,8 @@ export default defineSchema({
     artifactId: v.optional(v.string()),
     authorId: v.string(),
     body: v.string(),
+    /** 本文の書式（domain の CommentBodyFormat）。無ければ旧来の平文。保存済みの行は移行しない */
+    bodyFormat: v.optional(v.literal("markdown")),
     kind: threadKind,
     severity,
     anchor: v.optional(anchorValidator),

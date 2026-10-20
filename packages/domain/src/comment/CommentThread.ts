@@ -4,6 +4,7 @@ import type { Instant } from "../shared/time.ts";
 import type { Anchor } from "./Anchor.ts";
 import type { BotOrigin } from "../notation/autoProofread.ts";
 import type { ReactionEntry } from "../shared/reactions.ts";
+import { type CommentBodyFormat, validateCommentBody } from "./body.ts";
 
 /** スレッド種別（§9.1 設計案） */
 export const threadKinds = ["correction", "question", "discussion", "decision"] as const;
@@ -31,6 +32,8 @@ export interface CommentThread {
   authorId: UserId;
   /** 原文は不変。訂正は CommentEvent として別に記録する。 */
   body: string;
+  /** 本文の書式。無ければ旧来の平文（保存済みの行はすべてこれ。移行しない） */
+  bodyFormat?: CommentBodyFormat;
   kind: ThreadKind;
   severity: Severity;
   anchor?: Anchor;
@@ -118,11 +121,15 @@ export type CommentEventType =
   /** 返信の削除（payload.replyEventId が削除した返信。返信の本文は元のイベントに残す） */
   | "reply_deleted";
 
-/** 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。 */
+/**
+ * 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。
+ * 書式は訂正後の本文の書式に置き換わる（指定が無ければ平文）。
+ */
 export function editThreadBody(
   thread: CommentThread,
   actorId: UserId,
   body: string,
+  bodyFormat?: string,
 ): CommentThread {
   if (thread.authorId !== actorId)
     throw new DomainError("comment_edit_not_author", { threadId: thread.id });
@@ -133,7 +140,15 @@ export function editThreadBody(
     });
   }
   if (body.trim() === "") throw new DomainError("comment_reason_required", { action: "edit" });
-  return { ...thread, body, editCount: (thread.editCount ?? 0) + 1 };
+  const format = validateCommentBody(body, bodyFormat);
+  const { bodyFormat: _previous, ...rest } = thread;
+  void _previous;
+  return {
+    ...rest,
+    body,
+    ...(format ? { bodyFormat: format } : {}),
+    editCount: (thread.editCount ?? 0) + 1,
+  };
 }
 
 /**
@@ -159,6 +174,7 @@ export function planCarryForward(
     revisionId: targetRevisionId,
     authorId: source.authorId,
     body: source.body,
+    ...(source.bodyFormat ? { bodyFormat: source.bodyFormat } : {}),
     kind: source.kind,
     severity: source.severity,
     resolution: "open",

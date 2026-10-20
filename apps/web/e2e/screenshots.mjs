@@ -192,8 +192,8 @@ const commentOnRect = async (x0, y0, x1, y1, body) => {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * x1, box.y + box.height * y1, { steps: 8 });
   await page.mouse.up();
-  await page.waitForSelector(".compose-pop textarea");
-  await page.fill(".compose-pop textarea", body);
+  await page.waitForSelector(".compose-pop .rt__content");
+  await page.fill(".compose-pop .rt__content", body);
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
 };
@@ -567,7 +567,7 @@ async function main() {
   // 2 件目（位置なし）は未対応のまま残し、次版への持ち越し候補にする
   await page.locator(".comments__free").click();
   await page.fill(
-    ".compose-pop textarea",
+    ".compose-pop .rt__content",
     "地図ページの凡例の文字が小さく、印刷時に読めない可能性があります。",
   );
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
@@ -628,12 +628,12 @@ async function main() {
     }
     body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
-  await page.waitForSelector(".compose-pop textarea");
+  await page.waitForSelector(".compose-pop .rt__content");
   // 「@」で制作物を見られる人をメンション（候補から選ぶ）
-  await page.fill(".compose-pop textarea", "@五月");
+  await page.fill(".compose-pop .rt__content", "@五月");
   await page.locator(".mention-list m3e-list-action", { hasText: "五月 めい" }).click();
   await settle(); // 選択後のキャレット移動（requestAnimationFrame）が済む前に打つと文字が前に入り込む
-  await page.locator(".compose-pop textarea").press("End");
+  await page.locator(".compose-pop .rt__content").press("End");
   await page.keyboard.type(
     "「皆さま」が同一段落で 3 回続くので、ここは「各位」に言い換えるか文を分けてください。",
   );
@@ -649,7 +649,7 @@ async function main() {
     const count = () => page.locator(".comments .thread").count();
     const n0 = await count();
     await page.locator(".comments__free").click();
-    await page.fill(".compose-pop textarea", "削除の確認用のコメントです。");
+    await page.fill(".compose-pop .rt__content", "削除の確認用のコメントです。");
     await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length > n,
@@ -670,6 +670,89 @@ async function main() {
       n0,
     );
     expectTrue((await count()) === n0, "削除したコメントが一覧から消えない");
+  }
+
+  // 76 コメントの書式（Markdown）: 太字と URL と箇条書きを書いて投稿 → カードに strong・a・li が出る（HTML は作らず、リンクは安全な属性つき）。
+  // 返信は `コード`、訂正は元の本文を読み込んで追記し、原文は履歴（書式つき）に残る。生の HTML は文字のまま出る
+  {
+    const n0 = await page.locator(".comments .thread").count();
+    await page.locator(".comments__free").click();
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.locator(".compose-pop .rt__content").click();
+    // 入力規則は打ちながら効く: **太字**・URL の自動リンク・「- 」の箇条書き
+    await page.keyboard.type("**太字**の確認です https://example.com/proof を見てください ");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("- 一つ目");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("二つ目");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("<script>alert(1)</script>");
+    expectTrue(
+      (await page.locator(".compose-pop .rt__toolbar m3e-icon-button").count()) === 9,
+      "書式のツールバーのボタンが 9 つでない",
+    );
+    expectTrue(
+      (await page.locator(".compose-pop .rt__content strong").count()) === 1 &&
+        (await page.locator(".compose-pop .rt__content a").count()) === 1 &&
+        (await page.locator(".compose-pop .rt__content li").count()) === 2,
+      "入力欄で太字・リンク・箇条書きにならない",
+    );
+    await shot("76-comment-markdown-compose");
+    await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length > n,
+      n0,
+    );
+    const card = page.locator(".comments .thread", { hasText: "太字" });
+    await card.locator(".thread__body strong").waitFor();
+    expectTrue((await card.locator(".thread__body strong").count()) === 1, "strong が無い");
+    const link = card.locator('.thread__body a[href^="https://"]');
+    expectTrue((await link.count()) === 1, "https のリンクが無い");
+    expectTrue(
+      (await link.getAttribute("rel")) === "noopener noreferrer nofollow" &&
+        (await link.getAttribute("target")) === "_blank",
+      "リンクの rel / target が違う",
+    );
+    expectTrue((await card.locator(".thread__body li").count()) === 2, "箇条書きが 2 件でない");
+    expectTrue(
+      (await card.locator(".thread__body script").count()) === 0 &&
+        ((await card.locator(".thread__body").innerText()) ?? "").includes("<script>"),
+      "生の HTML が文字のまま出ていない",
+    );
+    await card.locator(".thread__body").click();
+    await settle();
+    // 返信（`コード`）
+    await card.locator(".thread__form .rt__content").click();
+    await page.keyboard.type("`inline` で返信");
+    await card.locator("m3e-button", { hasText: "返信" }).click();
+    await card.locator(".thread__replybody code").waitFor();
+    // 訂正: 本文を読み込んで追記する
+    await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "訂正" }).click();
+    await card.locator(".thread__form .rt__content").waitFor();
+    // メニューから開いても、入力欄にフォーカスが移る（メニューが閉じてボタンへ戻したあとで）
+    await page.waitForFunction(() => Boolean(document.activeElement?.closest(".thread__form .rt")));
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(" 追記");
+    await card.locator("m3e-button", { hasText: "訂正を保存" }).click();
+    await card.locator(".thread__previous strong").waitFor();
+    expectTrue(
+      ((await card.locator(".thread__body").first().innerText()) ?? "").includes("追記"),
+      "訂正が本文に反映されない",
+    );
+    await shot("76-comment-markdown");
+    // 後片付け: 書式のコメントを削除して件数を戻す
+    await card.locator('m3e-icon-button[aria-label="その他の操作"]').click();
+    await settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "削除" }).click();
+    await page.waitForSelector("m3e-dialog[open] .thread__confirm-delete");
+    await page.locator("m3e-dialog[open] .thread__confirm-delete").click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".comments .thread").length === n,
+      n0,
+    );
   }
 
   // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
@@ -831,9 +914,9 @@ async function main() {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 8 });
     await page.mouse.up();
-    await page.waitForSelector(".compose-pop textarea");
+    await page.waitForSelector(".compose-pop .rt__content");
     await page.fill(
-      ".compose-pop textarea",
+      ".compose-pop .rt__content",
       "第1版より凡例が小さくなっています。8pt 以上に戻してください。",
     );
     await shot("38-compare-comment");
@@ -1324,9 +1407,9 @@ async function main() {
       .querySelector(".rich-viewer__wrap")
       .dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   }, "百花繚乱");
-  await page.waitForSelector(".compose-pop textarea");
+  await page.waitForSelector(".compose-pop .rt__content");
   await page.fill(
-    ".compose-pop textarea",
+    ".compose-pop .rt__content",
     "テーマ名は公式表記「百花繚乱 ―ひゃっかりょうらん―」に合わせ、ふりがなを付けてください。",
   );
   await shot("43-write-review-select");
@@ -1385,6 +1468,57 @@ async function main() {
     "投稿欄に選んだ文字の引用が出ない",
   );
   await shot("44a-mobile-text-comment");
+  // 44b 書式つきの入力欄はボトムシートの中でも使え、ツールバーが横にはみ出さない
+  await page.locator(".compose-pop--docked .rt__content").click();
+  await page.keyboard.type("**太字** と https://example.com/mobile ");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("- 項目");
+  {
+    const m = await page.evaluate(() => {
+      const bar = document.querySelector(".compose-pop--docked .rt__toolbar");
+      const pop = document.querySelector(".compose-pop--docked").getBoundingClientRect();
+      return {
+        scrollWidth: bar.scrollWidth,
+        clientWidth: bar.clientWidth,
+        // ボタンを横に並べた幅（390px の画面でも、投稿欄の内側 = 390 - 余白 16×2 - 内側の余白 12×2 = 334 に収まること）
+        need: [...bar.children].reduce((n, c) => n + c.getBoundingClientRect().width, 0),
+        popRight: pop.right,
+        popLeft: pop.left,
+        innerWidth: window.innerWidth,
+        strong: document.querySelectorAll(".compose-pop--docked .rt__content strong").length,
+      };
+    });
+    console.log("mobile compose toolbar:", JSON.stringify(m));
+    expectTrue(m.scrollWidth <= m.clientWidth, "モバイルの書式ツールバーが横にはみ出す");
+    expectTrue(m.need <= 334, "書式ツールバーが 390px の画面の投稿欄に収まらない");
+    expectTrue(m.popLeft >= 0 && m.popRight <= m.innerWidth, "モバイルの投稿欄が画面からはみ出す");
+    expectTrue(m.strong === 1, "モバイルの入力欄で太字にならない");
+  }
+  await shot("44b-mobile-compose-markdown");
+  // 44c 390px（小さいスマホ）でも同じ: ツールバーも投稿欄も画面内に収まる
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settle();
+  {
+    const m = await page.evaluate(() => {
+      const bar = document.querySelector(".compose-pop--docked .rt__toolbar");
+      const pop = document.querySelector(".compose-pop--docked").getBoundingClientRect();
+      return {
+        scrollWidth: bar.scrollWidth,
+        clientWidth: bar.clientWidth,
+        popLeft: pop.left,
+        popRight: pop.right,
+        innerWidth: window.innerWidth,
+        pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    console.log("390 compose toolbar:", JSON.stringify(m));
+    expectTrue(m.scrollWidth <= m.clientWidth, "390px で書式ツールバーが横にはみ出す");
+    expectTrue(m.popLeft >= 0 && m.popRight <= m.innerWidth, "390px で投稿欄が画面からはみ出す");
+    expectTrue(m.pageOverflow <= 0, "390px でページが横にはみ出す");
+  }
+  await shot("44c-mobile-compose-390");
+  await page.setViewportSize({ width: 412, height: 915 });
+  await settle();
   await page.locator('.compose-pop m3e-icon-button[aria-label="キャンセル"]').click();
   await page.evaluate(() => {
     window.matchMedia = window.__origMatchMedia;
@@ -1873,8 +2007,8 @@ async function v2Scenes() {
       { timeout: 5000 },
     );
   const postComment = async (body) => {
-    await page.waitForSelector(".compose-pop textarea");
-    await page.fill(".compose-pop textarea", body);
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", body);
     await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
     await page.waitForSelector(".compose-pop", { state: "detached" });
     await settle();
@@ -2112,8 +2246,8 @@ async function v2Scenes() {
     );
   await videoReady();
   const postVideo = async (body) => {
-    await page.waitForSelector(".compose-pop textarea");
-    await page.fill(".compose-pop textarea", body);
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", body);
     await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
     await page.waitForSelector(".compose-pop", { state: "detached" });
   };
@@ -2226,7 +2360,7 @@ async function webFigmaScenes() {
   await page.waitForSelector(".compose-pop__place");
   const place = await page.locator(".compose-pop__place").innerText();
   expectTrue(place.includes("iPhone 17（402px）"), `投稿欄に端末と要素が出ない（${place}）`);
-  await page.fill(".compose-pop textarea", "見出し「企画一覧」は「企画をさがす」に揃える");
+  await page.fill(".compose-pop .rt__content", "見出し「企画一覧」は「企画をさがす」に揃える");
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
   await page.waitForFunction(
@@ -2295,7 +2429,7 @@ async function webFigmaScenes() {
   await page.waitForSelector(".figma-embed__iframe");
   await page.locator("m3e-button", { hasText: "このフレームにコメント" }).click();
   await page.waitForSelector(".compose-pop__place");
-  await page.fill(".compose-pop textarea", "このフレーム全体の余白を見直したい");
+  await page.fill(".compose-pop .rt__content", "このフレーム全体の余白を見直したい");
   await page.locator(".compose-pop m3e-button", { hasText: "投稿" }).click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
   await page.waitForTimeout(500);

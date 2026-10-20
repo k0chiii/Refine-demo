@@ -2863,8 +2863,6 @@ m3e-dialog [slot="actions"] {
   color: var(--mf-primary);
 }
 .thread__body {
-  white-space: pre-wrap;
-  word-break: break-word;
   font: var(--mf-type-body-medium);
 }
 .thread__quote {
@@ -4214,6 +4212,216 @@ m3e-icon.icon--on {
   inset-inline-end: 16px;
   bottom: calc(160px + env(safe-area-inset-bottom, 0px));
   z-index: 35;
+}
+
+/* ---------- コメントの本文（Markdown の描画・書式つき入力欄の中身で共通。features/review/CommentBody・RichCommentEditor） */
+.comment-body {
+  min-width: 0;
+  overflow-wrap: anywhere; /* 長い URL・英数字の連なりもカードからはみ出さず折り返す */
+  word-break: break-word;
+  font: var(--mf-type-body-medium);
+}
+/* 書式なし（旧来の平文）は改行をそのまま見せる */
+.comment-body--plain {
+  white-space: pre-wrap;
+}
+.comment-body > :first-child {
+  margin-top: 0;
+}
+.comment-body > :last-child {
+  margin-bottom: 0;
+}
+.comment-body p {
+  margin: 0;
+}
+.comment-body p + p,
+.comment-body p + ul,
+.comment-body p + ol,
+.comment-body p + pre,
+.comment-body p + blockquote,
+.comment-body ul + p,
+.comment-body ol + p,
+.comment-body pre + p,
+.comment-body blockquote + p,
+.comment-body blockquote + ul,
+.comment-body blockquote + ol,
+.comment-body blockquote + pre,
+.comment-body pre + ul,
+.comment-body pre + ol,
+.comment-body pre + blockquote,
+.comment-body ul + pre,
+.comment-body ol + pre,
+.comment-body ul + blockquote,
+.comment-body ol + blockquote {
+  margin-top: 6px;
+}
+.comment-body ul,
+.comment-body ol {
+  margin: 0;
+  padding-inline-start: 1.5em;
+}
+.comment-body li > p {
+  margin: 0;
+}
+.comment-body li > ul,
+.comment-body li > ol {
+  margin-top: 2px;
+}
+.comment-body li + li {
+  margin-top: 2px;
+}
+.comment-body blockquote {
+  margin: 0;
+  padding: 0 0 0 12px;
+  border-inline-start: 3px solid var(--mf-outline-variant);
+  color: var(--mf-on-surface-variant);
+}
+.comment-body code {
+  padding: 1px 4px;
+  border-radius: var(--mf-shape-xs);
+  background: var(--mf-surface-container);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.comment-body pre {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--mf-shape-sm);
+  background: var(--mf-surface-container);
+  overflow-x: auto; /* 長い行はコードの枠の中でスクロール（カードを広げない） */
+  max-width: 100%;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.comment-body pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+}
+.comment-body del {
+  color: var(--mf-on-surface-variant);
+}
+.comment-body__link,
+.comment-body a {
+  color: var(--mf-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.thread--closed .comment-body code,
+.thread--closed .comment-body pre {
+  color: inherit;
+}
+/* 訂正の履歴に残る原文 */
+.thread__previous {
+  margin-top: 2px;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--mf-outline-variant);
+  font: var(--mf-type-body-small);
+}
+
+/* ---------- 書式つきの入力欄（features/review/RichCommentEditor） */
+.rt {
+  position: relative;
+  display: block;
+  min-width: 0;
+  cursor: text;
+}
+.rt__editor {
+  min-width: 0;
+}
+.rt__content {
+  /* 最小の高さは行数（--rt-rows）× 1 行（body-medium の 20px） */
+  min-height: calc(var(--rt-rows, 3) * 1.25rem);
+  max-height: min(40vh, 240px);
+  overflow-y: auto;
+  outline: none;
+  cursor: text;
+  white-space: pre-wrap; /* ProseMirror が空白を保つ */
+  color: var(--mf-on-surface);
+}
+/* 空のときの案内（placeholder）。長くても欄の幅で折り返す */
+.rt__content p.is-editor-empty:first-child {
+  position: relative;
+}
+.rt__content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset: 0 0 auto 0;
+  pointer-events: none;
+  color: var(--mf-on-surface-variant);
+}
+.rt__content pre {
+  white-space: pre-wrap;
+}
+.rt__content a {
+  cursor: text;
+}
+.rt--loading {
+  display: grid;
+  place-items: center;
+  min-height: calc(var(--rt-rows, 3) * 1.25rem);
+}
+.rt__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+  min-width: 0;
+  margin-bottom: 4px;
+  cursor: default;
+}
+.rt__tool {
+  display: inline-flex;
+  flex: none;
+}
+.rt__linkrow {
+  gap: 4px;
+}
+.rt__linkinput {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--mf-outline);
+  border-radius: var(--mf-shape-full);
+  background: transparent;
+  color: var(--mf-on-surface);
+  font: var(--mf-type-body-medium);
+}
+.rt__linkinput:focus-visible {
+  outline: 2px solid var(--mf-primary);
+  outline-offset: -1px;
+}
+.rt__mentions {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  z-index: 50;
+}
+.rt__mentions .mention-list {
+  top: 0;
+}
+/* 下に出す余白が足りないとき（画面の下に固定した投稿欄・キーボードの上）は入力欄の上に出す */
+.rt__mentions--above {
+  top: auto;
+  bottom: 100%;
+}
+.rt__mentions--above .mention-list {
+  top: auto;
+  bottom: 0;
+}
+/* 返信・訂正の欄: M3 の outlined text field と同じ枠（フォーカスで太く・主色） */
+.thread__form .rt {
+  padding: 8px 12px;
+  border: 1px solid var(--mf-outline);
+  border-radius: var(--mf-shape-xs);
+}
+.thread__form .rt:focus-within {
+  padding: 7px 11px;
+  border: 2px solid var(--mf-primary);
 }
 
 /* ---------- メンション */

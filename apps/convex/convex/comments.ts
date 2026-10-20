@@ -28,6 +28,8 @@ export const post = mutation({
   args: {
     revisionId: v.id("revisions"),
     body: v.string(),
+    /** 本文の書式（"markdown"）。無ければ平文。許す値の検査は domain（validateCommentBody） */
+    bodyFormat: v.optional(v.string()),
     kind: vThreadKind,
     severity: vSeverity,
     anchor: v.optional(anchorValidator),
@@ -47,6 +49,7 @@ export const reply = mutation({
   args: {
     threadId: v.id("commentThreads"),
     body: v.string(),
+    bodyFormat: v.optional(v.string()),
     mentions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
@@ -181,7 +184,11 @@ export const assign = mutation({
 
 /** 自分の指摘本文の訂正（v1）。原文は履歴イベントに残る。 */
 export const edit = mutation({
-  args: { threadId: v.id("commentThreads"), body: v.string() },
+  args: {
+    threadId: v.id("commentThreads"),
+    body: v.string(),
+    bodyFormat: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {

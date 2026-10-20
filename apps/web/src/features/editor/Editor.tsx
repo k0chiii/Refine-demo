@@ -56,7 +56,9 @@ import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { mayPersist } from "@/lib/fileCachePolicy";
 import { defaultArtifactId } from "./defaultArtifact";
 import { documentView } from "@/features/writing/documentView";
+import { CommentBody } from "@/features/review/CommentBody";
 import { StoredComposePopover } from "@/features/review/ComposePopover";
+import { preloadRichComment } from "@/features/review/RichCommentField";
 import { createComposeStore } from "@/features/review/composeStore";
 import {
   activeMentions,
@@ -247,6 +249,18 @@ export function Editor({
   useEffect(() => {
     if (mediaType) preloadViewers(mediaType as MediaType);
   }, [mediaType]);
+  // 書式つきの入力欄（TipTap）は、画面が落ち着いてから読み込んでおく（最初の読み込みは増やさない。初めて開くときの待ちを短くする）
+  useEffect(() => {
+    // データ節約の設定のときは先読みしない（初めて開くときに読み込む）
+    if ((navigator as { connection?: { saveData?: boolean } }).connection?.saveData) return;
+    const idle = window.requestIdleCallback;
+    if (idle) {
+      const h = idle(() => preloadRichComment(), { timeout: 4000 });
+      return () => window.cancelIdleCallback(h);
+    }
+    const h = window.setTimeout(preloadRichComment, 2000);
+    return () => window.clearTimeout(h);
+  }, []);
   const dataRaw = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   // 版を切り替えた直後に前の版の結果が残ることがあるので、表示中の版のものだけを使う
   const data = dataRaw && revisionId && dataRaw.revision.id === revisionId ? dataRaw : undefined;
@@ -604,6 +618,7 @@ export function Editor({
     await post({
       revisionId: revisionId as Id<"revisions">,
       body,
+      bodyFormat: "markdown",
       kind: "correction",
       severity: "major",
       requestId,
@@ -624,6 +639,7 @@ export function Editor({
     await reply({
       threadId: threadId as Id<"commentThreads">,
       body: b,
+      bodyFormat: "markdown",
       mentions: activeMentions(b, ids, mentionDirectory),
     });
   });
@@ -631,7 +647,11 @@ export function Editor({
     await assignThread({ threadId: threadId as Id<"commentThreads">, assigneeId: ids[0] ?? null });
   });
   const doEditThread = useAction(async (threadId: string, b: string) => {
-    await editThread({ threadId: threadId as Id<"commentThreads">, body: b });
+    await editThread({
+      threadId: threadId as Id<"commentThreads">,
+      body: b,
+      bodyFormat: "markdown",
+    });
   });
   const doDeleteThread = useAction(async (threadId: string) => {
     await removeThread({ threadId: threadId as Id<"commentThreads"> });
@@ -1509,7 +1529,7 @@ export function Editor({
                 <div className="small muted">
                   {c.revisionLabel}・{resolutionLabel[c.resolution]}・{c.author?.name}
                 </div>
-                <div className="thread__body">{c.body}</div>
+                <CommentBody className="thread__body" body={c.body} format={c.bodyFormat} />
                 <div className="row">
                   <span className="spacer" />
                   <M3eButton

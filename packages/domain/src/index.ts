@@ -23,6 +23,7 @@ export * from "./revision/Artifact.ts";
 export * from "./revision/graphicFiles.ts";
 export * from "./revision/uploadOptimisation.ts";
 export * from "./comment/Anchor.ts";
+export * from "./comment/body.ts";
 export * from "./comment/CommentThread.ts";
 export * from "./comment/deletion.ts";
 export * from "./comment/reactions.ts";

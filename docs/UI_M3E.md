@@ -2275,3 +2275,48 @@ FB の投稿・コメントの返信・コメントのスレッドの、削除�
 - FB のスペース一覧（`.fb-space__spaces`、角丸の面）: 行が面の端まで付き、hover・focus の面が面の縁に被っていた。行を 8 内側へ（`padding-inline` 8・`--m3e-list-item-leading-space` / `trailing-space` 8。文字の位置は 16 のまま）。
 - ダイアログの中の候補（版を提出・別の制作物と比べる）: `margin: 0 -24px` で行がダイアログの縁まで付いていた。`-16px` にして 8 内側へ（文字は見出しと同じ 24）。compact の全画面（比べる）は端から端まで（-24px）のまま。
 - 入口の切り替え（`.hub__tabs`、進行中／下書き／校了済み・未着手／確認中／完了）: 横に流す箱（`overflow-x: auto`）の中で tonal ボタンの hover の影が切れていた。`--m3e-tonal-button-hover-container-elevation: none` で影を無くし、state layer だけで示す。
+
+## 92. コメントの書式（Markdown）: FB を取り込んでコメントに一本化する・第 1 段（2026-10-20・利用者決定）
+
+利用者の指示（原文）:「FBとコメントの使い分けは難しいので、統合したい。が、文章入力の媒体としてFBはかなり良かったので、コメントにそれを持ち込みつつ、議論がしやすいコメントに一本で統合したい。例えば本文中でのリンク有効化とか、markdownサポートとか。」
+
+確認への答え:「1.A 校了は全コメントが解決で閉じるまでできない（今のまま）」「2.A 校了でコメントは閉じる（今のまま）」「3.B 既存の FB はコメントへ移す（過去の FB データは消して良い）」「添付はできる限り圧縮して良い」。
+
+全 4 段で進める: **(1) コメントの書式（この節）**、(2) 添付、(3) Slack 式のスレッドのパネルと未読、(4) FB の撤去。第 1 段は FB のコードに触れない（FB の投稿・FB のスレッドは今のまま。投稿欄の FB モードも平文の欄のまま）。
+
+### 本文の書式（移行なし・後方互換）
+
+- コメントのスレッドと、返信（`replied`）・訂正（`edited`）のイベントに、任意の `bodyFormat?: "markdown"` を持たせる。**無い = 旧来の平文**（保存済みの行はすべてこれ。移行しない。平文は Markdown として読まない）。Web は新しい投稿・返信・訂正を `markdown` で送る
+- 訂正は、訂正後の本文の書式にスレッドの `bodyFormat` が置き換わる（平文のコメントを訂正すると Markdown になる）。訂正のイベントに `previousBody` と `previousBodyFormat`（原文の書式。平文なら無し）を残し、履歴の原文を原文の書式で描く。持ち越したコメントも書式を引き継ぐ
+- domain `comment/body.ts`: `commentBodyFormats`・`validateCommentBodyFormat`（知らない値は `comment_body_format_invalid`）・本文の長さの上限 `COMMENT_BODY_MAX = 5000`（FB と同じ。それまでコメントに上限は無かった。超えると `comment_body_too_long`）。投稿・返信・訂正のすべてで `validateCommentBody` を通す。Convex の引数は `bodyFormat: v.optional(v.string())` で受け、許す値の検査は domain（スキーマの保存は `v.literal("markdown")`）
+- 通知の抜粋・端末の通知（`preview`）は `plainTextOf(body, format)`（domain）で書式の記号を除いた平文にする（太字・斜体・取り消し線・コードの記号、見出し・引用・箇条書きの行頭、リンクは文字だけ、コードのフェンス、`&lt;` など。平文はそのまま）。コメントの投稿・返信・メンション・担当の指定・採否・持ち越しの通知が対象
+
+### 入力欄（Slack 式・TipTap）
+
+- 新しいコメント（`ComposePopover`）・返信・訂正（`ThreadCard`）は、書式つきの 1 つの入力欄 `RichCommentField` を使う（TipTap の WYSIWYG。Markdown の入力規則が効く: `**太字**`・`*斜体*`・`~~取り消し~~`・`` `コード` ``・「- 」「1. 」の箇条書き・「> 」の引用・``` のコードブロック）。見出し・水平線・下線は作らない（コメントには要らない。Markdown に下線は無い）
+- 小さなツールバー 1 行（太字・斜体・取り消し線・リンク・箇条書き・番号つきリスト・引用・コード・コードブロックの 9 つ。M3E icon button の toggle。名前は aria-label と tooltip。説明の文は置かない）。リンクは同じ行が宛先の入力に替わる（Enter で付ける・Esc でやめる・⌘/Ctrl+K）。390px の投稿欄（ボトムシート）でも 1 行に収まる
+- 本文中の URL は打っている間に自動でリンクになる。リンクは http・https・mailto だけ。⌘/Ctrl+Enter で送信（投稿・返信・訂正）。Esc は従来どおり（書きかけならフォーカスを外すだけ、空なら取消）。メンションの候補を出している間の Esc は候補だけ閉じる
+- 「@」のメンションは `@tiptap/extension-mention` + `@tiptap/suggestion`（TipTap と同じ 3.31.3）。候補は従来どおり `comments.searchMentionCandidates`（サーバー検索・名前順・6 人まで表示）を `MentionMenu`（M3E list）が引く。選ぶと本文に「@名前」と書かれ、選んだ人の ID は本文に残っているものだけを `mentions[]` で返す（`activeMentions` の検査も従来どおり）。ノードの Markdown は `@名前`。下に出す余白が足りないとき（画面の下の投稿欄・キーボードの上）は上に出す
+- 出力は `@tiptap/markdown`（`editor.getMarkdown()`）。親が本文を差し替えたとき（投稿後に空にする・訂正の初期値）は中身を置き換える。**平文のコメントを訂正するとき**は `plainToMarkdown` で記号を打ち消して読み込む（`*` や `1.` が Markdown として解釈されて本文が変わらないように）
+- **遅延読み込み**: 入力欄の本体（`RichCommentEditor`。TipTap・ProseMirror・mention・markdown）は動的 import。初めて出すまで読み込まず、待つ間は `Loading`（small）。校正画面が落ち着いたあと（`requestIdleCallback`）に先読みする（`saveData` のときはしない）。メニューから訂正を開いたとき、メニューが閉じてフォーカスをボタンへ戻すので、そのあとにもう一度入力欄へフォーカスを合わせる
+
+### 描画（`CommentBody`）
+
+- 書式が `markdown`: `marked`（`@tiptap/markdown` と同じ 17.0.6 を直接の依存にした）の字句から React の要素を組む。**`dangerouslySetInnerHTML` は使わない**。生の HTML（`<script>`・イベント属性つきの要素・`<iframe>` など）は解釈せず、書かれたとおりの文字で出す。画像は読み込まず代替文字だけ、見出しは太字の段落、表は文字のまま
+- 対応: 段落・改行（単一の改行も改行）・太字・斜体・取り消し線・インラインコード・コードブロック・箇条書き／番号つき（入れ子）・引用・リンク。リンクは `http:`・`https:`・`mailto:` だけ（`javascript:`・`data:`・相対は文字のまま。`new URL` で検査した正規化後の URL を出す）で `target="_blank" rel="noopener noreferrer nofollow"`。本文中の URL は自動でリンク（日本語の句読点・対にならない閉じ括弧の手前で切る。リンクの中にリンクは作らない。marked の自動リンクは日本語の句読点を含めてしまうので止め、自前で見つける）。marked は `&lt;` を文字参照のまま残す（入力欄の書き出しも `<` を `&lt;` にする）ので、文字へ戻す
+- 書式なし（旧来の平文）: Markdown の記号は解釈せず、URL だけリンクにする（`white-space: pre-wrap` は平文のときだけ）
+- 「@名前」はメンションされた人のものだけ強調（従来どおり。`mentionText.tsx` に分けて FB と共有）。用途: コメントの本文・返信・訂正の履歴の原文・前版から持ち越す候補
+
+### 見た目
+
+- `comment-body`（描画と入力欄の中身で共通）: M3 のタイプスケール（body-medium）、段落の間 6px、箇条書きは 1.5em の字下げ、引用は左の 3px の線、コードは等幅＋ `surface-container` の面（コードブロックは横スクロールで枠の中に収める）、長い URL は折り返す。返信・訂正の欄は M3 の outlined text field と同じ枠（フォーカスで 2px・主色）
+
+### 確認
+
+- domain（`bodyFormat` の検査・長さ・`plainTextOf`・訂正と持ち越しの書式）、application（投稿・返信・訂正が書式を保存・書式なしの行がそのまま使える・拒否・通知の文面）、Convex 統合（保存・一覧と履歴に載る・拒否）、web（描画の構造: `javascript:` のリンクが `<a>` にならない・`<script>` が文字として出る・リンクの属性・平文は記号を解釈しない・入れ子のリンクを作らない。文言は見ない）
+- E2E: 76（太字と URL と箇条書きを書いて投稿 → カードに `strong`・`a[href^="https://"]`・`li`、生の HTML は文字のまま。返信は `code`、訂正は原文を書式つきで履歴に残す。ツールバーのボタンは 9 つ）。画像: `76-comment-markdown-compose`・`76-comment-markdown`。44b・44c（ボトムシートの入力欄を 412px・390px で。ツールバーのボタンの幅が投稿欄の内側 334px に収まり、画面からはみ出さない）
+
+### 規模
+
+- ビルドの出力で比べた（変更前 → 後）。アプリの入口（`index`）は 442.55 → 442.72 kB（gzip 116.03 → 116.08）でほぼ増えない。校正画面の塊（`Editor`）は 160.42 → 167.48 kB（gzip 47.98 → 50.49。`CommentBody`・`ThreadCard` の変更ぶん）で、これに `marked`（別の塊 40.13 kB・gzip 12.11 kB。`@tiptap/markdown` と同じ版なので文章ビューアと共有）が静的に付く。CSS は 197.34 → 200.69 kB（gzip 53.73 → 54.40）
+- 入力欄の本体（`RichCommentEditor`）は 35.60 kB・gzip 13.57 kB を遅延で読み込む（TipTap・ProseMirror の本体は文章ビューア・文章エディタと共有の塊）

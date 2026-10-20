@@ -1,13 +1,6 @@
 import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
-import {
-  createContext,
-  useContext,
-  useRef,
-  useState,
-  type ReactNode,
-  type TextareaHTMLAttributes,
-} from "react";
+import { createContext, useContext, useRef, useState, type TextareaHTMLAttributes } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
@@ -52,7 +45,7 @@ export const MentionProvider = MentionContext.Provider;
 export const useMentionDirectory = () => useContext(MentionContext);
 
 /** 「@」に続けて打った文字でサーバーに候補を探させる（打っていない間は購読しない） */
-function useMentionSearch(dir: MentionDirectory | null, text: string | null): MentionUser[] {
+export function useMentionSearch(dir: MentionDirectory | null, text: string | null): MentionUser[] {
   // 速く打っているときは打ち止めてから検索する（1 文字ごとに購読を作り直さない）。「@」を打った直後（空の検索語）と閉じたときはすぐ
   const deferred = useDebouncedValue(text, 150, (t) => t === null || t === "");
   const args = dir && deferred !== null ? { workId: dir.workId, text: deferred } : "skip";
@@ -92,29 +85,7 @@ export function activeMentions(
   });
 }
 
-/** 本文の「@名前」を強調して描く（メンションされた人の名前だけ） */
-export function renderWithMentions(
-  body: string,
-  users: readonly MentionUser[] | undefined,
-): ReactNode {
-  if (!users?.length) return body;
-  const names = [...new Set(users.map((u) => u.name))].sort((a, b) => b.length - a.length);
-  const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const re = new RegExp(`@(?:${escaped.join("|")})`, "g");
-  const out: ReactNode[] = [];
-  let last = 0;
-  for (const m of body.matchAll(re)) {
-    if (m.index > last) out.push(body.slice(last, m.index));
-    out.push(
-      <span key={m.index} className="mention">
-        {m[0]}
-      </span>,
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < body.length) out.push(body.slice(last));
-  return out;
-}
+export { renderWithMentions } from "./mentionText";
 
 /**
  * メンションできる入力欄。「@」に続けて名前を打つと、その制作物を見られる人の候補が下に出る（M3E list。サーバーで検索）。

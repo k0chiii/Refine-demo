@@ -10,7 +10,8 @@ import {
   type WebAnchorState,
 } from "@mf100/domain";
 import { webViewportLabel } from "@/features/annotation/webBridge";
-import { MentionTextarea, renderWithMentions } from "./mentions";
+import { CommentBody, plainToMarkdown } from "./CommentBody";
+import { RichCommentField } from "./RichCommentField";
 import { useWindowClass } from "@/lib/useMedia";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { formatJstShort } from "@/lib/format";
@@ -107,6 +108,8 @@ export function ThreadCard({
     setText("");
     setMentions([]);
   };
+  // 訂正の入力欄に読み込む本文（Markdown）。平文のコメントは記号を打ち消して Markdown にする
+  const editInitial = t.bodyFormat === "markdown" ? t.body : plainToMarkdown(t.body);
   const menuId = `tm-${t.id}`;
   const hasMenu = canDecide || canEdit || t.can.delete;
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -134,7 +137,7 @@ export function ThreadCard({
       ? [{ icon: "person_pin", label: "担当者を指定", onSelect: () => open("assign") }]
       : []),
     ...(canEdit && t.authorId === meId
-      ? [{ icon: "edit", label: "訂正", onSelect: () => open("edit", t.body) }]
+      ? [{ icon: "edit", label: "訂正", onSelect: () => open("edit", editInitial) }]
       : []),
     ...(t.can.delete
       ? [{ icon: "delete", label: "削除", onSelect: () => setConfirmDelete(true) }]
@@ -233,7 +236,12 @@ export function ThreadCard({
               「{t.anchor.selector.textQuote.exact}」
             </blockquote>
           ) : null}
-          <div className="thread__body">{renderWithMentions(t.body, t.mentionUsers)}</div>
+          <CommentBody
+            className="thread__body"
+            body={t.body}
+            format={t.bodyFormat}
+            mentionUsers={t.mentionUsers}
+          />
           {closed ||
           t.severity === "critical" ||
           t.carriedFromThreadId ||
@@ -304,38 +312,33 @@ export function ThreadCard({
               書き始める（フォーカスする）と「キャンセル」「返信」が出る。ラベルは欄の中（浮かぶラベル） */}
           {active && canReply && (mode === null || mode === "reply") ? (
             <div className="thread__form" onClick={stop}>
-              <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
-                <label slot="label" htmlFor={`${t.id}-reply`}>
-                  返信
-                </label>
-                <MentionTextarea
-                  id={`${t.id}-reply`}
-                  rows={mode === "reply" ? 3 : 1}
-                  className="thread__input"
-                  placeholder="@ でメンション"
-                  value={mode === "reply" ? text : ""}
-                  onValue={(v) => {
-                    if (mode !== "reply") setMode("reply");
-                    setText(v);
-                  }}
-                  mentions={mentions}
-                  onMentions={setMentions}
-                  onFocus={() => {
-                    if (mode !== "reply") {
-                      setMode("reply");
-                      setText("");
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      setMode(null);
-                      setText("");
-                      (e.currentTarget as HTMLTextAreaElement).blur();
-                    }
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
-                  }}
-                />
-              </M3eFormField>
+              <RichCommentField
+                id={`${t.id}-reply`}
+                ariaLabel="返信"
+                placeholder="返信"
+                rows={mode === "reply" ? 3 : 1}
+                toolbar={mode === "reply"}
+                value={mode === "reply" ? text : ""}
+                onValue={(v) => {
+                  if (mode !== "reply") setMode("reply");
+                  setText(v);
+                }}
+                onMentions={setMentions}
+                onFocus={() => {
+                  if (mode !== "reply") {
+                    setMode("reply");
+                    setText("");
+                  }
+                }}
+                onEscape={() => {
+                  setMode(null);
+                  setText("");
+                  (document.activeElement as HTMLElement | null)?.blur();
+                }}
+                onSubmit={() => {
+                  if (text.trim()) void submit();
+                }}
+              />
               {mode === "reply" ? (
                 <div className="row thread__form-actions">
                   <span className="spacer" />
@@ -361,24 +364,40 @@ export function ThreadCard({
           ) : null}
           {mode === "rejected" || mode === "deferred" || mode === "edit" ? (
             <div className="thread__form" onClick={stop}>
-              <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
-                <label slot="label" htmlFor={`${t.id}-${mode}`}>
-                  {mode === "edit" ? "本文の訂正" : `${decisionLabel[mode]}理由（必須）`}
-                </label>
-                <textarea
-                  id={`${t.id}-${mode}`}
+              {mode === "edit" ? (
+                <RichCommentField
+                  id={`${t.id}-edit`}
+                  ariaLabel="本文の訂正"
+                  placeholder="本文の訂正"
                   autoFocus
-                  rows={3}
-                  className="thread__input"
-                  placeholder={mode === "edit" ? "原文は履歴に残ります" : ""}
+                  toolbar
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setMode(null);
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) void submit();
+                  onValue={setText}
+                  onEscape={() => setMode(null)}
+                  onSubmit={() => {
+                    if (text.trim()) void submit();
                   }}
                 />
-              </M3eFormField>
+              ) : (
+                <M3eFormField variant="outlined" hideSubscript="always" className="thread__field">
+                  <label slot="label" htmlFor={`${t.id}-${mode}`}>
+                    {`${decisionLabel[mode]}理由（必須）`}
+                  </label>
+                  <textarea
+                    id={`${t.id}-${mode}`}
+                    autoFocus
+                    rows={3}
+                    className="thread__input"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setMode(null);
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim())
+                        void submit();
+                    }}
+                  />
+                </M3eFormField>
+              )}
               <div className="row thread__form-actions">
                 <span className="spacer" />
                 <M3eButton variant="text" onClick={() => setMode(null)}>
@@ -470,7 +489,7 @@ export function ThreadCard({
             </M3eMenuItem>
           ) : null}
           {canEdit && t.authorId === meId ? (
-            <M3eMenuItem onClick={() => open("edit", t.body)}>
+            <M3eMenuItem onClick={() => open("edit", editInitial)}>
               <M3eIcon slot="icon" name="edit" />
               訂正
             </M3eMenuItem>
@@ -560,6 +579,8 @@ function ThreadEvents({
           body?: string;
           assigneeId?: string | null;
           previousBody?: string;
+          previousBodyFormat?: "markdown";
+          bodyFormat?: "markdown";
         };
         if (e.eventType === "replied")
           return (
@@ -569,6 +590,7 @@ function ThreadEvents({
               threadId={threadId}
               canReact={canReact}
               body={p.body ?? ""}
+              bodyFormat={p.bodyFormat}
               compact={compact}
               onDelete={() => onDeleteReply(e.id)}
             />
@@ -582,11 +604,18 @@ function ThreadEvents({
                   ? "担当者を指定"
                   : "担当者を解除"
                 : e.eventType === "edited"
-                  ? `本文を訂正（原文: ${p.previousBody ?? ""}）`
+                  ? "本文を訂正（原文）"
                   : e.eventType === "carried_forward"
                     ? "次版へ持ち越し"
                     : e.eventType}
             <span className="thread__time">{` ・ ${e.actor?.name ?? ""}・${formatJstShort(e.createdAt)}`}</span>
+            {e.eventType === "edited" ? (
+              <CommentBody
+                className="thread__previous"
+                body={p.previousBody ?? ""}
+                format={p.previousBodyFormat}
+              />
+            ) : null}
           </li>
         );
       })}
@@ -602,6 +631,7 @@ function ReplyItem({
   threadId,
   canReact,
   body,
+  bodyFormat,
   compact,
   onDelete,
 }: {
@@ -609,6 +639,7 @@ function ReplyItem({
   threadId: string;
   canReact: boolean;
   body: string;
+  bodyFormat: "markdown" | undefined;
   compact: boolean;
   onDelete: () => Promise<void>;
 }) {
@@ -628,7 +659,12 @@ function ReplyItem({
       <div className="thread__replybody">
         <span className="thread__name">{e.actor?.name}</span>
         <span className="thread__time">{formatJstShort(e.createdAt)}</span>
-        <div className="thread__body">{renderWithMentions(body, e.mentionUsers)}</div>
+        <CommentBody
+          className="thread__body"
+          body={body}
+          format={bodyFormat}
+          mentionUsers={e.mentionUsers}
+        />
         <ReactionRow
           id={`rr-${e.id}`}
           reactions={e.reactions}

@@ -49,6 +49,9 @@ const messages: Record<string, string> = {
   team_in_use: "制作物が使っている、または担当がある局は削除できません",
   team_not_found: "選んだ局・担当が見つかりません。画面を更新してから選び直してください",
   mention_too_many: "一度にメンションできるのは 10 人までです",
+  comment_body_too_long: "本文が長すぎます。5000 文字までです",
+  comment_body_format_invalid:
+    "本文の書式を読み取れませんでした。画面を更新してもう一度お試しください",
   mention_not_allowed: "この制作物を見られない人はメンションできません",
   anchor_invalid:
     "コメントの位置を選び直してください。文章は 1 文字以上、引用は 200 文字までです。",

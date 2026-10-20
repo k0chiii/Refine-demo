@@ -14,6 +14,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { MentionTextarea } from "./mentions";
+import { RichCommentField, type RichCommentHandle } from "./RichCommentField";
 
 /**
  * 書きかけを ComposeStore に置く投稿欄。打つたびに描き直されるのはこの部品だけで、親（Editor）は描き直されない。
@@ -42,6 +43,7 @@ export function StoredComposePopover({
  * 範囲・ピンのそばに出る投稿欄（Google ドキュメント / Figma の「コメントを追加」）。
  * 位置を選んだ瞬間に出るので、モード切替やパネルへの移動が要らない。
  * Enter（Ctrl/⌘）で投稿、Escape で取消。「@」で制作物を見られる人をメンションできる。
+ * 本文は書式つきの入力欄（Markdown。太字・リスト・引用・コード・リンク。RichCommentField）。FB（kind=feedback）は従来の平文の欄。
  *
  * docked（compact）: 選んだ位置のそばではなく、画面下（キーボードが出ていればそのすぐ上）に全幅で出す。
  * 小さい画面では位置のそばの欄がキーボードや指に隠れるため。何に対するコメントかは引用で示す。
@@ -95,12 +97,14 @@ export function ComposePopover({
   const fb = kind === "feedback";
   const what = fb ? "FB" : label;
   const ref = useRef<HTMLTextAreaElement>(null);
+  const richRef = useRef<RichCommentHandle>(null);
   const kb = useKeyboardInset(docked === true);
   const panelRef = useRef<HTMLDivElement>(null);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
     // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
     const opener = document.activeElement as HTMLElement | null;
+    // 書式つきの欄は読み込みが済んでから自分でフォーカスする（autoFocus）。FB の平文の欄はここで
     ref.current?.focus({ preventScroll: true });
     return () => {
       const now = document.activeElement;
@@ -136,33 +140,51 @@ export function ComposePopover({
           {place}
         </div>
       ) : null}
-      <MentionTextarea
-        ref={ref}
-        className="compose-pop__input"
-        aria-label={what}
-        // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）。
-        // FB は解決しない相談・意見（迷っていること、ほかの案など）
-        placeholder={
-          fb
-            ? "FB（相談・意見。解決はしません。@ でメンション）"
-            : `${label}（改善案には理由も添えて。@ でメンション）`
-        }
-        rows={docked ? 2 : 3}
-        value={value}
-        onValue={onChange}
-        mentions={mentions}
-        onMentions={onMentions}
-        onKeyDown={(e) => {
-          // Esc は書いた文字を消さない（M3 Inputs › Escape key。§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ。
-          // IME の変換を取り消す Esc では何もしない
-          if (e.key === "Escape" && !e.nativeEvent.isComposing) {
-            e.stopPropagation();
-            if (value.trim()) ref.current?.blur();
+      {fb ? (
+        <MentionTextarea
+          ref={ref}
+          className="compose-pop__input"
+          aria-label={what}
+          // FB は解決しない相談・意見（迷っていること、ほかの案など）
+          placeholder="FB（相談・意見。解決はしません。@ でメンション）"
+          rows={docked ? 2 : 3}
+          value={value}
+          onValue={onChange}
+          mentions={mentions}
+          onMentions={onMentions}
+          onKeyDown={(e) => {
+            // Esc は書いた文字を消さない（M3 Inputs › Escape key。§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ。
+            // IME の変換を取り消す Esc では何もしない
+            if (e.key === "Escape" && !e.nativeEvent.isComposing) {
+              e.stopPropagation();
+              if (value.trim()) ref.current?.blur();
+              else onCancel();
+            }
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && value.trim()) onSubmit();
+          }}
+        />
+      ) : (
+        <RichCommentField
+          ref={richRef}
+          ariaLabel={what}
+          // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
+          placeholder={`${label}（改善案には理由も添えて。@ でメンション）`}
+          rows={docked ? 2 : 3}
+          autoFocus
+          toolbar
+          value={value}
+          onValue={onChange}
+          onMentions={onMentions}
+          // Esc は書いた文字を消さない（§35 I-07）。空なら取消、書きかけならフォーカスを外すだけ
+          onEscape={() => {
+            if (value.trim()) richRef.current?.blur();
             else onCancel();
-          }
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && value.trim()) onSubmit();
-        }}
-      />
+          }}
+          onSubmit={() => {
+            if (value.trim()) onSubmit();
+          }}
+        />
+      )}
       <div className="compose-pop__actions">
         <M3eIconButton aria-label="キャンセル" onClick={onCancel}>
           <M3eIcon name="close" />

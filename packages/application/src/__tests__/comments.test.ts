@@ -397,6 +397,107 @@ describe("メンション", () => {
   });
 });
 
+describe("本文の書式（markdown。書式なしは旧来の平文）", () => {
+  const at = { kind: "correction" as const, severity: "minor" as const };
+  const repliedEvents = async (ctx: Awaited<ReturnType<typeof setup>>["ctx"], threadId: string) =>
+    (await ctx.threads.listEvents(threadId)).filter((e) => e.eventType === "replied");
+
+  it("投稿・返信・訂正が書式を保存する。書式なしの行（旧来）はそのまま使える", async () => {
+    const { ctx, revision } = await setup();
+    const md = await postComment(ctx, principals.reviewer, {
+      ...at,
+      revisionId: revision.id,
+      body: "**太字** と https://example.com",
+      bodyFormat: "markdown",
+    });
+    expect((await ctx.threads.findById(md.id))?.bodyFormat).toBe("markdown");
+    // 書式なし: 保存した行に bodyFormat は付かない
+    const legacy = await postComment(ctx, principals.reviewer, {
+      ...at,
+      revisionId: revision.id,
+      body: "**そのまま**",
+    });
+    expect((await ctx.threads.findById(legacy.id))?.bodyFormat).toBeUndefined();
+
+    await replyToThread(ctx, principals.creator, {
+      threadId: md.id,
+      body: "- 直しました",
+      bodyFormat: "markdown",
+    });
+    await replyToThread(ctx, principals.creator, { threadId: md.id, body: "平文の返信" });
+    const [r1, r2] = await repliedEvents(ctx, md.id);
+    expect(r1?.payload).toMatchObject({ body: "- 直しました", bodyFormat: "markdown" });
+    expect(r2?.payload).not.toHaveProperty("bodyFormat");
+
+    // 訂正: 訂正前の本文と書式を履歴に残し、スレッドは新しい書式になる
+    await editThread(ctx, principals.reviewer, {
+      threadId: legacy.id,
+      body: "> 引用",
+      bodyFormat: "markdown",
+    });
+    expect((await ctx.threads.findById(legacy.id))?.bodyFormat).toBe("markdown");
+    await editThread(ctx, principals.reviewer, { threadId: legacy.id, body: "平文に戻した" });
+    expect((await ctx.threads.findById(legacy.id))?.bodyFormat).toBeUndefined();
+    const edits = (await ctx.threads.listEvents(legacy.id)).filter((e) => e.eventType === "edited");
+    expect(edits[0]?.payload).toEqual({
+      previousBody: "**そのまま**",
+      bodyFormat: "markdown",
+    });
+    expect(edits[1]?.payload).toEqual({ previousBody: "> 引用", previousBodyFormat: "markdown" });
+  });
+
+  it("知らない書式・5000 文字を超える本文は投稿・返信・訂正のどれも拒否する", async () => {
+    const { ctx, revision } = await setup();
+    const input = { ...at, revisionId: revision.id, body: "x" };
+    await expect(
+      postComment(ctx, principals.reviewer, { ...input, bodyFormat: "html" }),
+    ).rejects.toThrow(code("comment_body_format_invalid"));
+    await expect(
+      postComment(ctx, principals.reviewer, { ...input, body: "あ".repeat(5001) }),
+    ).rejects.toThrow(code("comment_body_too_long"));
+    const long = await postComment(ctx, principals.reviewer, {
+      ...input,
+      body: "あ".repeat(5000),
+      bodyFormat: "markdown",
+    });
+    await expect(
+      replyToThread(ctx, principals.creator, { threadId: long.id, body: "x", bodyFormat: "html" }),
+    ).rejects.toThrow(code("comment_body_format_invalid"));
+    await expect(
+      replyToThread(ctx, principals.creator, { threadId: long.id, body: "あ".repeat(5001) }),
+    ).rejects.toThrow(code("comment_body_too_long"));
+    await expect(
+      editThread(ctx, principals.reviewer, { threadId: long.id, body: "あ".repeat(5001) }),
+    ).rejects.toThrow(code("comment_body_too_long"));
+  });
+
+  it("通知の抜粋と端末の通知の文面は書式の記号を除いた平文（書式なしはそのまま）", async () => {
+    const { ctx, revision } = await setup();
+    const thread = await postComment(ctx, principals.reviewer, {
+      ...at,
+      revisionId: revision.id,
+      body: "**重要**: [規約](https://example.com/a) を確認\n- 一つ目",
+      bodyFormat: "markdown",
+      mentions: [principals.approver.userId],
+    });
+    const notified = ctx.state.notifications.all().filter((n) => n.threadId === thread.id);
+    expect(notified.length).toBeGreaterThan(0);
+    for (const n of notified) {
+      expect(n.preview).toBe("重要: 規約 を確認 一つ目");
+      expect(n.body).toContain("重要: 規約 を確認 一つ目");
+      expect(n.body).not.toContain("**");
+    }
+    // 書式なしは記号を触らない
+    const plain = await postComment(ctx, principals.reviewer, {
+      ...at,
+      revisionId: revision.id,
+      body: "**そのまま**",
+    });
+    const n = ctx.state.notifications.all().find((x) => x.threadId === plain.id);
+    expect(n?.preview).toBe("**そのまま**");
+  });
+});
+
 describe("SNS 投稿の版の位置（本文の範囲・画像の矩形とピン。端末の枠のプレビューで付ける）", () => {
   /** 本文（30 バイト）・画像 2 枚・内容の記録の 4 添付を提出した版 */
   async function snsSetup() {
