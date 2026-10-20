@@ -714,8 +714,8 @@ async function main() {
     await page.keyboard.press("Enter");
     await page.keyboard.type("<script>alert(1)</script>");
     expectTrue(
-      (await page.locator(".compose-pop .rt__toolbar m3e-icon-button").count()) === 9,
-      "書式のツールバーのボタンが 9 つでない",
+      (await page.locator(".compose-pop .rt__toolbar m3e-icon-button").count()) === 7,
+      "書式のツールバーのボタンが 7 つでない",
     );
     expectTrue(
       (await page.locator(".compose-pop .rt__content strong").count()) === 1 &&
