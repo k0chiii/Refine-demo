@@ -1,29 +1,30 @@
-import { parseAvatarConfig, type AvatarConfig } from "@mf100/domain";
+import { parseAvatarConfig, personMatchesText, type AvatarConfig } from "@mf100/domain";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { requireUser } from "./lib/principal.ts";
-import { resolveUsers } from "./lib/users.ts";
+import { resolveUsers, userDisplayName } from "./lib/users.ts";
 
 /**
  * ユーザー選択 UI 用の検索（v1）。サインイン済みの利用者なら誰でも、
- * 一度でもログインした Nogiku ユーザー（＝委員）を名前・メールで検索できる。
+ * 一度でもログインした Nogiku ユーザー（＝委員）を名前（ふりがな・漢字）・メールで検索できる。
+ * 名前はふりがな（ひらがな）で返し、ふりがなの順に並べる（利用者指示 2026-10-21）。
  * 返すのは表示名とメールのみ（権限や管理者フラグは返さない）。
  */
 export const search = query({
   args: { text: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, { text, limit }) => {
     await requireUser(ctx);
-    const q = text.trim().toLowerCase();
     const users = await ctx.db.query("users").take(500);
     return users
       .filter((u) => u.nogikuSubject !== undefined)
-      .filter((u) => q === "" || `${u.name ?? ""} ${u.email ?? ""}`.toLowerCase().includes(q))
-      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ja"))
+      .filter((u) => personMatchesText(u, text))
+      .map((u) => ({ u, name: userDisplayName(u) }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ja"))
       .slice(0, Math.min(limit ?? 20, 50))
-      .map((u) => ({
+      .map(({ u, name }) => ({
         id: u._id,
-        name: u.name ?? "",
+        name,
         email: u.email ?? null,
         /** 代（Notion のユーザ DB「代」。同名の人を見分ける手がかり） */
         generation: u.generation ?? null,

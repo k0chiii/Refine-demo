@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
+import { userDisplayName } from "./lib/users.ts";
 import { vBureauCode } from "./lib/validators.ts";
 
 /**
@@ -111,8 +112,14 @@ export const importDirectory = query({
       .filter(
         (u) =>
           wanted.has(normalizePersonKey(u.name ?? "")) ||
+          wanted.has(normalizePersonKey(userDisplayName(u))) ||
           (u.email !== undefined && wanted.has(normalizePersonKey(u.email))),
       )
-      .map((u) => ({ id: u._id, name: u.name ?? "", email: u.email ?? null }));
+      .map((u) => ({
+        id: u._id,
+        name: userDisplayName(u),
+        email: u.email ?? null,
+        ...(u.name ? { otherNames: [u.name] } : {}),
+      }));
   },
 });

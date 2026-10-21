@@ -460,20 +460,27 @@ export function parseWorkCsv(
 /** 照合に使う利用者（一度サインインした委員） */
 export interface DirectoryUser {
   id: string;
+  /** 表示名（ふりがな。無い人は漢字の名前） */
   name: string;
   email: string | null;
+  /** 表示名のほかに照合に使う名前（Nogiku の漢字の名前。CSV には漢字で書かれることが多い） */
+  otherNames?: readonly string[];
 }
 
 export type PersonMatch =
   | { key: string; user: DirectoryUser }
   | { key: string; user: null; reason: "not_found" | "ambiguous"; candidates: DirectoryUser[] };
 
-/** メールアドレス（@ を含む）は大文字小文字を区別せず完全一致、それ以外は名前の完全一致（空白のゆれは無視） */
+/** メールアドレス（@ を含む）は大文字小文字を区別せず完全一致、それ以外は名前（表示名か漢字の名前）の完全一致（空白のゆれは無視） */
 export function matchPerson(key: string, directory: readonly DirectoryUser[]): PersonMatch {
   const k = normalizePersonKey(key);
   const hits = k.includes("@")
     ? directory.filter((u) => u.email !== null && normalizePersonKey(u.email) === k)
-    : directory.filter((u) => normalizePersonKey(u.name) === k);
+    : directory.filter(
+        (u) =>
+          normalizePersonKey(u.name) === k ||
+          (u.otherNames ?? []).some((n) => normalizePersonKey(n) === k),
+      );
   const unique = Array.from(new Map(hits.map((u) => [u.id, u])).values());
   if (unique.length === 1) return { key, user: unique[0]! };
   return {

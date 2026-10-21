@@ -17,6 +17,7 @@ import type { NogikuOAuthProfile } from "./nogiku.ts";
 export const MOCK_DEFAULT = {
   sub: "mock-nogiku-creator",
   name: "五月 めい",
+  hurigana: "さつき めい",
   email: "mock-creator@example.invalid",
 } as const;
 
@@ -36,6 +37,11 @@ export default function NogikuMock() {
         sub,
         name: typeof credentials.name === "string" ? credentials.name : MOCK_DEFAULT.name,
         email: typeof credentials.email === "string" ? credentials.email : `${sub}@example.invalid`,
+        ...(typeof credentials.hurigana === "string" && credentials.hurigana !== ""
+          ? { hurigana: credentials.hurigana }
+          : sub === MOCK_DEFAULT.sub
+            ? { hurigana: MOCK_DEFAULT.hurigana }
+            : {}),
       };
       try {
         const { user } = await retrieveAccount(ctx, { provider: "nogiku", account: { id: sub } });

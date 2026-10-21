@@ -11,17 +11,25 @@ import {
   replyFileIds,
   resolveMigratedFeedbackThread,
   searchMentionCandidates as searchMentionCandidatesUseCase,
+  searchMentionGroups as searchMentionGroupsUseCase,
   postComment,
   replyToThread,
   toggleCommentReaction,
 } from "@mf100/application";
-import { DomainError, isAllowed, projectThreadEvents, revisionLabel } from "@mf100/domain";
+import {
+  DomainError,
+  groupMentionToken,
+  isAllowed,
+  projectThreadEvents,
+  revisionLabel,
+} from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { reactionViews, reactorIds } from "./lib/reactions.ts";
+import { loadGroupNames, mentionViews } from "./lib/threadActivity.ts";
 import { resolveUsers } from "./lib/users.ts";
 import { vDecision, vSeverity, vThreadKind } from "./lib/validators.ts";
 import { anchorValidator } from "./schema.ts";
@@ -153,6 +161,11 @@ export const events = query({
         const m = (e.payload as { mentions?: unknown } | undefined)?.mentions;
         return Array.isArray(m) ? m.filter((x): x is string => typeof x === "string") : [];
       };
+      const groupsOf = (e: (typeof events)[number]): string[] => {
+        const m = (e.payload as { mentionGroupIds?: unknown } | undefined)?.mentionGroupIds;
+        return Array.isArray(m) ? m.filter((x): x is string => typeof x === "string") : [];
+      };
+      const groupNames = await loadGroupNames(ctx.db, events.flatMap(groupsOf));
       const users = await resolveUsers(ctx.db, [
         ...events.map((e) => e.actorId),
         ...events.flatMap(mentionsOf),
@@ -171,10 +184,7 @@ export const events = query({
               ...e,
               actor: users.get(e.actorId),
               reactions: reactionViews(e.reactions, principal.userId, users),
-              mentionUsers: mentionsOf(e).flatMap((id) => {
-                const u = users.get(id);
-                return u ? [u] : [];
-              }),
+              mentionUsers: mentionViews(mentionsOf(e), groupsOf(e), users, groupNames),
               /** 返信の添付（検証済みで削除されていないもの） */
               files:
                 e.eventType === "replied"
@@ -285,13 +295,25 @@ export const carryForward = mutation({
 /**
  * メンションの候補を「@」に続けて打った文字で探す（その制作物を見られる人のうち名前・メールが一致する人。名前順・20 人まで）。
  * 候補を取れるのも見られる人だけ。画面は候補の一覧を丸ごと購読せず、打っている間だけこの検索を購読する（docs/UI_M3E.md §60）
+ * 名前が当たるグループ（利用者指示 2026-10-21）は人より前に並べる。グループの ID は「group:ID」で返し、memberCount（知らせる人数）を添える
  */
 export const searchMentionCandidates = query({
   args: { workId: v.string(), text: v.string() },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    return runUseCase(() =>
-      searchMentionCandidatesUseCase(createReadContext(ctx.db), principal, args),
-    );
+    return runUseCase(async () => {
+      const app = createReadContext(ctx.db);
+      const groups = await searchMentionGroupsUseCase(app, principal, args);
+      const people = await searchMentionCandidatesUseCase(app, principal, args);
+      return [
+        ...groups.map((g) => ({
+          id: groupMentionToken(g.id),
+          name: g.name,
+          email: null,
+          memberCount: g.memberCount,
+        })),
+        ...people.map((p) => ({ id: p.id, name: p.name, email: p.email })),
+      ];
+    });
   },
 });

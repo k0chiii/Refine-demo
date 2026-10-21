@@ -32,7 +32,7 @@ import { mutation, query, type DatabaseReader } from "./_generated/server";
 import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser, teamIdsOf } from "./lib/principal.ts";
-import { resolveUsers } from "./lib/users.ts";
+import { resolveUsers, userDisplayName } from "./lib/users.ts";
 import {
   vConfidentiality,
   vLifecycleTarget,
@@ -166,9 +166,15 @@ export const importDirectory = query({
       .filter(
         (u) =>
           wanted.has(normalizePersonKey(u.name ?? "")) ||
+          wanted.has(normalizePersonKey(userDisplayName(u))) ||
           (u.email !== undefined && wanted.has(normalizePersonKey(u.email))),
       )
-      .map((u) => ({ id: u._id, name: u.name ?? "", email: u.email ?? null }));
+      .map((u) => ({
+        id: u._id,
+        name: userDisplayName(u),
+        email: u.email ?? null,
+        ...(u.name ? { otherNames: [u.name] } : {}),
+      }));
   },
 });
 

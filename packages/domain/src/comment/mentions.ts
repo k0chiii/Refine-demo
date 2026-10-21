@@ -1,12 +1,38 @@
 import { allMembersCanView, canViewWork, workTeamIdsOf } from "../acl/authorize.ts";
 import { isGrantActive, type WorkPermissionGrant } from "../acl/Permission.ts";
+import { expandMemberGroups, type MemberGroup } from "../org/group.ts";
 import { memberTeamIds, type Team } from "../org/team.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import { approversOf } from "../work/approvers.ts";
 import type { Work } from "../work/Work.ts";
 
-/** 1 つのコメント・返信でメンションできる人数の上限（通知の大量送信を防ぐ） */
+/** 1 つのコメント・返信でメンションできる人数の上限（通知の大量送信を防ぐ。グループで知らせる人は数えない） */
 export const MENTION_MAX = 10;
+/** 1 つのコメント・返信でメンションできるグループの数の上限（ポリシー値） */
+export const MENTION_GROUP_MAX = 3;
+/**
+ * メンションの書き方のうち、グループを指すもの（「group:」＋グループの ID）。人の ID（Convex の users の ID）とは紛れない。
+ * 画面の入力欄はグループを選ぶとこの形で送り、サーバーが所属する人に広げる（{@link resolveGroupMentions}）
+ */
+export const MENTION_GROUP_PREFIX = "group:";
+
+export const groupMentionToken = (groupId: string) => `${MENTION_GROUP_PREFIX}${groupId}`;
+
+/** 送られたメンションを、人の ID とグループの ID に分ける（重なりは除く） */
+export function splitMentionTokens(mentions: readonly string[] | undefined): {
+  userIds: string[];
+  groupIds: string[];
+} {
+  const userIds = new Set<string>();
+  const groupIds = new Set<string>();
+  for (const m of mentions ?? []) {
+    if (m.startsWith(MENTION_GROUP_PREFIX)) {
+      const id = m.slice(MENTION_GROUP_PREFIX.length).trim();
+      if (id !== "") groupIds.add(id);
+    } else userIds.add(m);
+  }
+  return { userIds: [...userIds], groupIds: [...groupIds] };
+}
 
 /** 所属の判定に要る担当の項目（Team の部分） */
 export type TeamMembership = Pick<Team, "id" | "memberIds">;
@@ -67,4 +93,31 @@ export function validateMentions(
   for (const id of ids)
     if (!allowed.has(id)) throw new DomainError("mention_not_allowed", { userId: id });
   return ids;
+}
+
+/**
+ * グループのメンションを、知らせる人に広げる（利用者指示 2026-10-21）。
+ * - グループは {@link MENTION_GROUP_MAX} まで。知らないグループは mention_not_allowed（groupId）
+ * - 所属する人のうち、その制作物を見られる人だけに知らせる（見られない人は黙って外す。グループの中身は書く人が決められないので
+ *   投稿を止めない）。通常の制作物を委員の誰でも見られる設定では、所属する人全員（名簿の確認はアプリケーション層）
+ * - 書いた本人も外す（自分には知らせない）
+ */
+export function resolveGroupMentions(
+  groupIds: readonly string[],
+  groups: readonly Pick<MemberGroup, "id" | "memberIds">[],
+  work: Work,
+  grants: readonly WorkPermissionGrant[],
+  teams: readonly TeamMembership[] = [],
+  authorId?: string,
+): string[] {
+  const ids = [...new Set(groupIds)];
+  if (ids.length > MENTION_GROUP_MAX)
+    throw new DomainError("mention_too_many", { groups: ids.length, max: MENTION_GROUP_MAX });
+  const known = new Set(groups.map((g) => g.id));
+  for (const id of ids)
+    if (!known.has(id)) throw new DomainError("mention_not_allowed", { groupId: id });
+  const members = expandMemberGroups(ids, groups).filter((id) => id !== authorId);
+  if (allMembersCanView(work)) return members;
+  const allowed = new Set(mentionableUserIds(work, grants, teams));
+  return members.filter((id) => allowed.has(id));
 }

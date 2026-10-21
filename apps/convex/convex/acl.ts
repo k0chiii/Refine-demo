@@ -1,10 +1,11 @@
 import { grantWorkPermission, listWorkPermissions, revokeWorkPermission } from "@mf100/application";
+import { personMatchesText } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase, unauthenticated } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { resolveUsers } from "./lib/users.ts";
+import { resolveUsers, userDisplayName } from "./lib/users.ts";
 import { vPermissionLevel, vPrincipalType } from "./lib/validators.ts";
 
 /** 作品の閲覧 ACL 付与（U-08 / A-19）。システム管理者のみ。 */
@@ -64,15 +65,14 @@ export const searchUsers = query({
   handler: async (ctx, { text }) => {
     const { principal } = await requireUser(ctx);
     if (!principal.isSystemAdmin) unauthenticated();
-    const q = text.trim().toLowerCase();
     const users = await ctx.db.query("users").take(500);
     return users
       .filter((u) => u.nogikuSubject !== undefined)
-      .filter((u) => q === "" || `${u.name ?? ""} ${u.email ?? ""}`.toLowerCase().includes(q))
+      .filter((u) => personMatchesText(u, text))
       .slice(0, 20)
       .map((u) => ({
         id: u._id,
-        name: u.name ?? "",
+        name: userDisplayName(u),
         email: u.email ?? null,
         isSystemAdmin: u.isSystemAdmin ?? false,
         /** 代（Notion のユーザ DB「代」） */

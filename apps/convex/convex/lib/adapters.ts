@@ -18,6 +18,7 @@ import type {
   FeedbackThread,
   SocialProfile,
   Team,
+  MemberGroup,
   NotationRule,
   ProofreadingRun,
   RequiredCheck,
@@ -39,6 +40,7 @@ import { internal } from "../_generated/api";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
 import type { Scheduler } from "convex/server";
 import { vapidKeysFromEnv } from "./webpush.ts";
+import { personProfileOf, userDisplayName } from "./users.ts";
 
 /**
  * application 層のポートを Convex の ctx.db で実装するアダプタ。
@@ -129,21 +131,18 @@ export function createAppContext(
     people: {
       async displayName(id) {
         const doc = await db.get("users", id as Id<"users">).catch(() => null);
-        return doc?.name?.trim() || null;
+        return (doc && userDisplayName(doc)) || null;
       },
       // 委員 = 一度でもサインインした Nogiku ユーザー（users.search と同じ範囲）
       async listMembers(limit) {
         const users = await db.query("users").take(Math.min(limit, 5000));
-        return users
-          .filter((u) => u.nogikuSubject !== undefined)
-          .map((u) => ({ id: u._id as string, name: u.name ?? "", email: u.email ?? null }));
+        return users.filter((u) => u.nogikuSubject !== undefined).map(personProfileOf);
       },
       async profiles(ids) {
         const out = [];
         for (const id of new Set(ids)) {
           const u = await db.get("users", id as Id<"users">).catch(() => null);
-          if (u && u.nogikuSubject !== undefined)
-            out.push({ id: u._id as string, name: u.name ?? "", email: u.email ?? null });
+          if (u && u.nogikuSubject !== undefined) out.push(personProfileOf(u));
         }
         return out;
       },
@@ -576,6 +575,25 @@ export function createAppContext(
           )
           .take(100);
         return docs.length;
+      },
+    },
+    groups: {
+      async list() {
+        return (await db.query("memberGroups").take(1000)).map((d) => fromDoc(d) as MemberGroup);
+      },
+      async findById(id) {
+        const doc = await db.get("memberGroups", id as Id<"memberGroups">).catch(() => null);
+        return doc ? (fromDoc(doc) as MemberGroup) : null;
+      },
+      async insert(group) {
+        const id = await db.insert("memberGroups", compact(group));
+        return { ...group, id } as MemberGroup;
+      },
+      async update(group) {
+        await db.replace(group.id as Id<"memberGroups">, compact(toFields(group)));
+      },
+      async remove(id) {
+        await db.delete(id as Id<"memberGroups">);
       },
     },
     home: {

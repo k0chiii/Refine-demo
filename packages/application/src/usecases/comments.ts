@@ -50,6 +50,8 @@ import {
   editThreadBody,
   isCarryCandidate,
   mentionableUserIds,
+  resolveGroupMentions,
+  searchMemberGroups,
   planCarryForward,
   replyEntries,
   revisionLabel,
@@ -81,7 +83,7 @@ export interface PostCommentInput {
   severity: Severity;
   anchor?: Anchor;
   requestId?: string;
-  /** 本文でメンションした人（制作物を見られる人だけ。上限 10） */
+  /** 本文でメンションした人（制作物を見られる人だけ。上限 10）と、グループ（「group:ID」。上限 3） */
   mentions?: string[];
   /** 添付（prepareCommentFiles で準備し、Hono で検証済みになった自分の添付。上限 10。本文が空でも添付があれば投稿できる） */
   fileIds?: string[];
@@ -115,7 +117,8 @@ export async function postComment(
   if (input.body.trim() === "" && wantedFiles.length === 0)
     throw new DomainError("forbidden", { reason: "body_required" });
   const bodyFormat = validateCommentBody(input.body, input.bodyFormat);
-  const mentions = await checkMentions(ctx, work, grants, input.mentions);
+  const checked = await checkMentions(ctx, work, grants, input.mentions, principal.userId);
+  const mentions = checked.userIds;
 
   const now = ctx.clock.now();
   const siblings = await ctx.revisions.listByWork(work.id);
@@ -165,6 +168,7 @@ export async function postComment(
         data.artifactId = input.anchor.artifactId;
       }
       if (mentions.length) data.mentions = mentions;
+      if (checked.groupIds.length) data.mentionGroupIds = checked.groupIds;
       if (attach.ids.length) data.fileIds = attach.ids;
       const thread = await ctx.threads.insert(data);
       await attachCommentFiles(ctx, attach.files, { threadId: thread.id, revisionId: revision.id });
@@ -237,7 +241,8 @@ export async function replyToThread(
     throw new DomainError("work_already_finalized", { workId: work.id });
   assertThreadNotDeleted(thread);
   const now = ctx.clock.now();
-  const mentions = await checkMentions(ctx, work, grants, input.mentions);
+  const checked = await checkMentions(ctx, work, grants, input.mentions, principal.userId);
+  const mentions = checked.userIds;
   const attach = await checkCommentFiles(ctx, principal, work.id, wantedFiles);
   const text =
     input.body.trim() !== ""
@@ -251,6 +256,7 @@ export async function replyToThread(
       body: input.body,
       ...(bodyFormat ? { bodyFormat } : {}),
       ...(mentions.length ? { mentions } : {}),
+      ...(checked.groupIds.length ? { mentionGroupIds: checked.groupIds } : {}),
       ...(attach.ids.length ? { fileIds: attach.ids } : {}),
     },
     createdAt: now,
@@ -312,6 +318,8 @@ export interface LatestReplyView {
   body: string;
   bodyFormat?: CommentBodyFormat;
   mentionIds: string[];
+  /** メンションしたグループ */
+  mentionGroupIds: string[];
   /** 添付の数 */
   fileCount: number;
   /** 最初の添付（検証済みで削除されていないもの。無ければ null）。一覧にはこれだけを見せる */
@@ -365,6 +373,7 @@ export async function presentThreadActivity(
         body: r.body,
         ...(r.bodyFormat ? { bodyFormat: r.bodyFormat } : {}),
         mentionIds: r.mentionIds,
+        mentionGroupIds: r.mentionGroupIds,
         fileCount: r.fileIds.length,
         firstFile,
         unread:
@@ -812,4 +821,44 @@ export async function searchMentionCandidates(
     ? await ctx.people.listMembers(500)
     : await ctx.people.profiles(mentionableUserIds(work, grants, await ctx.teams.list()));
   return searchPeopleByText(people, input.text, input.limit);
+}
+
+/** メンションの候補に出すグループ（名前と、知らせる人数） */
+export interface MentionGroupCandidate {
+  id: string;
+  name: string;
+  /** 知らせる人数（所属する人のうち、この制作物を見られる人。自分は除く） */
+  memberCount: number;
+}
+
+/** 候補に出すグループの数の上限（人の候補より前に並べる） */
+const MENTION_GROUP_SEARCH_LIMIT = 3;
+
+/**
+ * メンションの候補のグループ（利用者指示 2026-10-21）: 名前が打った文字に当たるグループのうち、知らせる人が 1 人以上いるもの。
+ * 候補を取れるのは制作物を見られる人だけ（人の候補と同じ）
+ */
+export async function searchMentionGroups(
+  ctx: AppContext,
+  principal: Principal,
+  input: { workId: string; text: string },
+): Promise<MentionGroupCandidate[]> {
+  const { work, grants } = await loadAuthorizedWork(ctx, principal, input.workId, "work.view");
+  const groups = await ctx.groups.list();
+  if (groups.length === 0) return [];
+  const teams = await ctx.teams.list();
+  const out: MentionGroupCandidate[] = [];
+  for (const g of searchMemberGroups(groups, input.text)) {
+    const memberCount = resolveGroupMentions(
+      [g.id],
+      groups,
+      work,
+      grants,
+      teams,
+      principal.userId,
+    ).length;
+    if (memberCount > 0) out.push({ id: g.id, name: g.name, memberCount });
+    if (out.length >= MENTION_GROUP_SEARCH_LIMIT) break;
+  }
+  return out;
 }

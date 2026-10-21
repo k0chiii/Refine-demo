@@ -15,11 +15,11 @@ export const Route = createFileRoute("/signin")({ component: SignIn });
 
 /** モック環境で切り替えられる委員（apps/convex/convex/seed.ts と同じ sub）。 */
 const MOCK_USERS = [
-  { sub: "mock-nogiku-admin", name: "五月 管理（システム管理者）" },
-  { sub: "mock-nogiku-manager", name: "五月 主管（制作統括）" },
-  { sub: "mock-nogiku-creator", name: "五月 めい（制作者）" },
-  { sub: "mock-nogiku-reviewer", name: "本郷 校正（校正者）" },
-  { sub: "mock-nogiku-approver", name: "駒場 校了（校了権限者）" },
+  { sub: "mock-nogiku-admin", name: "さつき かんり（システム管理者）" },
+  { sub: "mock-nogiku-manager", name: "さつき しゅかん（制作統括）" },
+  { sub: "mock-nogiku-creator", name: "さつき めい（制作者）" },
+  { sub: "mock-nogiku-reviewer", name: "ほんごう こうせい（校正者）" },
+  { sub: "mock-nogiku-approver", name: "こまば こうりょう（校了権限者）" },
 ];
 
 function SignIn() {

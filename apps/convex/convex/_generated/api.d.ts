@@ -22,6 +22,7 @@ import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as documents from "../documents.js";
 import type * as feedbackMigration from "../feedbackMigration.js";
+import type * as groups from "../groups.js";
 import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as lib_adapters from "../lib/adapters.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   documents: typeof documents;
   feedbackMigration: typeof feedbackMigration;
+  groups: typeof groups;
   home: typeof home;
   http: typeof http;
   "lib/adapters": typeof lib_adapters;

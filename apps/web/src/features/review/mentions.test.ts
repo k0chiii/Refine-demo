@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { activeMentions, createMentionDirectory, mentionQueryAt } from "./mentions";
+import { activeMentions, createMentionDirectory, isGroupMention, mentionQueryAt } from "./mentions";
 
 describe("mentionQueryAt", () => {
   it("カーソル直前の @よみ を拾う", () => {
@@ -22,5 +22,16 @@ describe("activeMentions", () => {
     expect(activeMentions("名前を消した", ["u1"], dir)).toEqual([]);
     // 控えの無い人（候補から選んでいない ID）は数えない
     expect(activeMentions("@誰か", ["u9"], dir)).toEqual([]);
+  });
+});
+
+describe("グループのメンション", () => {
+  it("候補から選んだグループも、本文に「@グループ名」が残っていれば送る", () => {
+    const dir = createMentionDirectory("w1");
+    dir.remember({ id: "group:g1", name: "こうせいはん", memberCount: 2 });
+    expect(isGroupMention({ id: "group:g1" })).toBe(true);
+    expect(isGroupMention({ id: "u1" })).toBe(false);
+    expect(activeMentions("@こうせいはん お願いします", ["group:g1"], dir)).toEqual(["group:g1"]);
+    expect(activeMentions("お願いします", ["group:g1"], dir)).toEqual([]);
   });
 });

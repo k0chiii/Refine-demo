@@ -1,6 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
-import { PROOFREADER_ID, PROOFREADER_NAME } from "@mf100/domain";
+import { personDisplayName, PROOFREADER_ID, PROOFREADER_NAME } from "@mf100/domain";
 
 export interface UserSummary {
   id: string;
@@ -8,8 +8,27 @@ export interface UserSummary {
   email: string | null;
 }
 
+/** 画面・通知に出す名前（ふりがな。無い人は漢字の名前。利用者指示 2026-10-21。domain の personDisplayName） */
+export function userDisplayName(user: Pick<Doc<"users">, "name" | "hurigana">): string {
+  return personDisplayName(user);
+}
+
+/** 名簿の行（application の PersonProfile）。漢字の名前は検索のためだけに添える */
+export function personProfileOf(user: Doc<"users">) {
+  return {
+    id: user._id as string,
+    name: userDisplayName(user),
+    email: user.email ?? null,
+    nameKanji: user.name ?? null,
+  };
+}
+
 export function summarizeUser(user: Doc<"users"> | null, fallbackId: string): UserSummary {
-  return { id: fallbackId, name: user?.name ?? "（不明なユーザー）", email: user?.email ?? null };
+  return {
+    id: fallbackId,
+    name: (user && userDisplayName(user)) || "（不明なユーザー）",
+    email: user?.email ?? null,
+  };
 }
 
 export async function resolveUsers(

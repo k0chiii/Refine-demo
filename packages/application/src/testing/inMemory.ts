@@ -25,6 +25,7 @@ import type {
   WorkPermissionGrant,
   SocialProfile,
   Team,
+  MemberGroup,
 } from "@mf100/domain";
 import type {
   AlignmentOverride,
@@ -100,6 +101,7 @@ export interface InMemoryContext extends AppContext {
     documents: Table<DocumentDraft>;
     socialProfiles: Table<SocialProfile>;
     teams: Table<Team>;
+    groups: Table<MemberGroup>;
     alignments: Table<AlignmentOverride>;
     categories: Map<string, RuleCategory>;
     rules: Map<string, NotationRule>;
@@ -148,6 +150,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     documents: new Table<DocumentDraft>("doc"),
     socialProfiles: new Table<SocialProfile>("sp"),
     teams: new Table<Team>("team"),
+    groups: new Table<MemberGroup>("grp"),
     alignments: new Table<AlignmentOverride>("aln"),
     categories: new Map(),
     rules: new Map(),
@@ -427,6 +430,15 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       countWorksUsing: async (id) =>
         state.works.all().filter((w) => w.ownerTeamId === id || w.productionTeamIds.includes(id))
           .length,
+    },
+    groups: {
+      list: async () => state.groups.all(),
+      findById: async (id) => state.groups.get(id),
+      insert: async (g) => state.groups.insert(g),
+      update: async (g) => state.groups.put(g),
+      remove: async (id) => {
+        state.groups.rows.delete(id);
+      },
     },
     home: {
       listPins: async (userId) =>
