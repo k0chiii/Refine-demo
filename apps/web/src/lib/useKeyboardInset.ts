@@ -18,23 +18,85 @@ export function keyboardInset(
 
 /** ソフトウェアキーボードの高さ（px。出ていなければ 0）。enabled が false のあいだは監視しない */
 export function useKeyboardInset(enabled = true): number {
-  const [inset, setInset] = useState(0);
+  return useKeyboard(enabled).inset;
+}
+
+/**
+ * ソフトウェアキーボードの高さ（inset）と、出ているか（open）。
+ * iPhone のホーム画面アプリ（standalone）はキーボードでレイアウトの高さも縮むので、inset が 0 でも出ていることがある
+ * （そのときは画面の下端がもうキーボードの上。下のセーフエリアの余白を足すと、キーボードとのあいだに隙間ができる）
+ */
+export function useKeyboard(enabled = true): { inset: number; open: boolean } {
+  const [state, setState] = useState({ inset: 0, open: false });
   useEffect(() => {
     const vv = typeof window === "undefined" ? undefined : window.visualViewport;
     if (!enabled || !vv) {
-      setInset(0);
+      setState({ inset: 0, open: false });
       return;
     }
-    const update = () => setInset(keyboardInset(window.innerHeight, vv.height, vv.offsetTop));
+    // 同じ幅（向き）で見た、いちばん高い見えている高さ（キーボードが出ていないときの高さ）
+    let baseline = { width: vv.width, height: vv.height };
+    const update = () => {
+      if (Math.abs(vv.width - baseline.width) > 1)
+        baseline = { width: vv.width, height: vv.height };
+      else if (vv.height > baseline.height) baseline = { ...baseline, height: vv.height };
+      const inset = keyboardInset(window.innerHeight, vv.height, vv.offsetTop);
+      const open = isKeyboardOpen({
+        editing: isEditing(document.activeElement),
+        baselineHeight: baseline.height,
+        visualHeight: vv.height,
+        layoutHeight: window.innerHeight,
+        visualTop: vv.offsetTop,
+      });
+      setState((s) => (s.inset === inset && s.open === open ? s : { inset, open }));
+    };
+    // フォーカスの出入り（キーボードの出入りの前後）でも確かめる。キーボードが出きるまで少し待ってもう一度
+    const timers: number[] = [];
+    const onFocus = () => {
+      requestAnimationFrame(update);
+      timers.push(window.setTimeout(update, 350));
+    };
     update();
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
+    document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusout", onFocus);
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusout", onFocus);
+      for (const t of timers) window.clearTimeout(t);
     };
   }, [enabled]);
-  return inset;
+  return state;
+}
+
+/**
+ * enabled のあいだ、ページ（と外枠）のスクロールの位置を留め、終わったら元に戻す。
+ * iOS は画面下に固定した入力欄にフォーカスすると、見せようとしてページごと上へずらし、閉じても戻さない
+ * （アプリバーが上に消えたまま。2026-10-21 の画面収録で確認）。欄はキーボードのすぐ上に自分で置くので、ずらしは要らない
+ */
+export function usePinPageScroll(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return;
+    const boxes = [...document.querySelectorAll<HTMLElement>(".shell__main, .shell__content")];
+    const saved = { x: window.scrollX, y: window.scrollY, tops: boxes.map((b) => b.scrollTop) };
+    const restore = () => {
+      if (window.scrollX !== saved.x || window.scrollY !== saved.y)
+        window.scrollTo(saved.x, saved.y);
+      boxes.forEach((b, i) => {
+        if (b.scrollTop !== saved.tops[i]) b.scrollTop = saved.tops[i]!;
+      });
+    };
+    window.addEventListener("scroll", restore, { passive: true });
+    for (const b of boxes) b.addEventListener("scroll", restore, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", restore);
+      for (const b of boxes) b.removeEventListener("scroll", restore);
+      restore();
+    };
+  }, [enabled]);
 }
 
 /** 文字を入力中か（キーボードを出す要素にフォーカスがある） */

@@ -4618,6 +4618,19 @@ m3e-icon.icon--on {
     transform-origin: bottom center;
   }
 }
+/* スマホの画面下の投稿欄は、下から短く上がって出る。キーボードの出入りで位置が変わるときも跳ばずに動く */
+@media (prefers-reduced-motion: no-preference) {
+  .compose-pop--docked {
+    animation-name: compose-dock-in;
+    transition: bottom var(--mf-motion-effects);
+  }
+}
+@keyframes compose-dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
 @keyframes compose-pop-in {
   from {
     opacity: 0;
