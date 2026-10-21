@@ -3,6 +3,16 @@
  *   1) pnpm build:demo && pnpm exec vp preview --mode demo --outDir dist-demo --port 4173
  *   2) BASE_URL=http://127.0.0.1:4173 pnpm screenshots
  * Chromium は PLAYWRIGHT_BROWSERS_PATH（または `npx playwright-core install chromium`）で解決する。
+ *
+ * E2E_PART で流す範囲を選ぶ（既定 all = 全部を順に）。CI は PR で smoke（主要な流れだけ・数分）、main では
+ * core / late / compact / v2 / web を別々のジョブで同時に流す（それぞれ新しいデモのデータから始まる。前の部の状態が要るものは
+ * その部の頭で用意する）。
+ *   smoke   … 01–08（サインイン → 一覧 → 登録 → 版の提出 → 割り当て → 校正 → 紙面にコメント）
+ *   core    … 01–79（全体の前半: 一覧・提出・校正・コメント・スレッド）
+ *   late    … 27–64（制作・採否・第2版と持ち越し・比較・校了・通知・管理）※ core の続き。core と同じジョブで流す
+ *   compact … 30・20・33・26・37・34・39–47（広さごとの画面・スマホ・文章エディタ）
+ *   v2      … 50–66（表記ルール・自動校正・SNS・動画）
+ *   web     … 67–72（Web のライブ表示・Figma・アバター・原本）
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -13,6 +23,7 @@ import { chromium } from "playwright-core";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";
+const PART = process.env.E2E_PART ?? "all";
 const OUT = process.env.OUT_DIR ?? resolve(here, "out/screenshots");
 const FIXTURES = process.env.FIXTURES_DIR ?? resolve(here, "fixtures");
 mkdirSync(OUT, { recursive: true });
@@ -280,6 +291,72 @@ const stopCompare = async () => {
   await comparePickItem("比べるのをやめる");
 };
 
+/** 部をまたいで使う、core で登録・提出した制作物（公式パンフレット）の URL と校正者 */
+let workUrl, reviewer, revisionUrl, revision2Url;
+
+/**
+ * compact を単独で流すとき、core と late が作るもの（公式パンフレットの第1版・第2版と校正者）を、撮影なしで手早く用意する。
+ * 第1版は添付が複数（37 の添付の切り替えで使う）
+ */
+async function prepareRevisions() {
+  await signInAs("mock-nogiku-creator");
+  await go(`${BASE}/works`);
+  await page.locator(WORKS_ENTRY, { hasText: "MF100 公式パンフレット" }).first().click();
+  await page.waitForURL(/\/works\/[^/]+$/);
+  workUrl = page.url();
+  reviewer = (await users()).find((u) => u.sub === "mock-nogiku-reviewer");
+  await submitRevision(
+    "最初の版を提出",
+    [
+      resolve(FIXTURES, "sample.pdf"),
+      resolve(FIXTURES, "poster.png"),
+      resolve(FIXTURES, "greeting.txt"),
+    ],
+    "初稿。表紙と地図ページ。",
+    async () => {
+      for (const id of ["theme_font", "balance", "committee_output"])
+        await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+    },
+  );
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  revisionUrl = page.url();
+  await pdfReady();
+  await drawer("版");
+  await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+  revision2Url = page.url();
+  await pdfReady();
+  // 制作者に通知を 1 件（32 のベル）: 校正者が第2版に位置なしのコメントを付ける
+  await signInAs("mock-nogiku-reviewer");
+  await go(revision2Url);
+  await pdfReady();
+  await drawer("コメント");
+  await page.locator(".comments__free").click();
+  await page.fill(".compose-pop .rt__content", "凡例の文字の大きさを確認してください。");
+  await page.locator(".compose-pop .rt__send").click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+}
+
+/** web を単独で流すとき、72 で第3版を出す EVE 企画ポスターに第1版・第2版を用意する（全部を流すときは前の部で出している） */
+async function prepareWeb() {
+  await signInAs("mock-nogiku-creator");
+  await openWork("EVE 企画ポスター");
+  await submitRevision("最初の版を提出", [resolve(FIXTURES, "sample.pdf")], "初稿。", async () => {
+    for (const id of ["theme_font", "balance", "committee_output"])
+      await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+  });
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await pdfReady();
+  await drawer("版");
+  await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+  await pdfReady();
+}
+
 async function main() {
   // 01 サインイン
   await page.goto(`${BASE}/signin`);
@@ -376,13 +453,13 @@ async function main() {
   // 03 エディタ（版なし）
   await page.locator(WORKS_ENTRY, { hasText: "MF100 公式パンフレット" }).first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
-  const workUrl = page.url();
+  workUrl = page.url();
   await page.waitForSelector(".editor__empty");
   await shot("03-editor-empty");
 
   // 04 版提出（ダイアログ）: ファイル → 専門確認 → 転送 → 検証済み → 確定
   const all = await users();
-  const reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
+  reviewer = all.find((u) => u.sub === "mock-nogiku-reviewer");
   await submitRevision(
     "最初の版を提出",
     [
@@ -428,7 +505,7 @@ async function main() {
   await shot("04-submit-verified");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
-  const revisionUrl = page.url();
+  revisionUrl = page.url();
   await pdfReady();
   // 自動校正（OCR）が終わってから撮る。固定 sleep が減ると「読み込んでいます」の途中を撮ってしまう
   await autoProofreadDone(90_000);
@@ -588,6 +665,7 @@ async function main() {
   await page.waitForFunction(() => document.querySelectorAll(".thread").length >= 2);
   await page.locator(".thread .thread__body").first().click();
   await shot("08-workspace-comment");
+  if (PART === "smoke") return;
   // 35 ドラッグハンドル（Scaffold › Pane expansion & resizing）: スペーサーのハンドルで固定ペインを 412 → 360 にスナップ
   {
     const hb = await page.locator(".ws__handle").boundingBox();
@@ -1067,6 +1145,11 @@ async function main() {
     );
   }
 
+  if (PART === "all" || PART === "core") await lateScenes();
+}
+
+/** 27–64: 制作・採否・第2版と持ち越し・比較・校了・通知・管理（core の続き。core で付けたコメント・版を使う） */
+async function lateScenes() {
   // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/make`);
@@ -1152,7 +1235,7 @@ async function main() {
   );
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
-  const revision2Url = page.url();
+  revision2Url = page.url();
   await pdfReady();
   await drawer("コメント");
   await page.waitForSelector('[aria-label="前版の未解決コメント"]');
@@ -1499,6 +1582,11 @@ async function main() {
     "エディタの引き出しに FB のタブが残っている",
   );
 
+  if (PART === "all") await compactScenes();
+}
+
+/** 30・20・33・26・37・34・39–47: 広さごとの画面・スマホ・文章エディタ */
+async function compactScenes() {
   // 30 expanded（840–1199）: 折りたたみレール。メニューを押すとモーダルの展開レールが重なる（スクリム、Esc で閉じる）。
   // 制作物を開いた画面（下の階層）ではレールを隠すので、一覧で確かめる
   await signInAs("mock-nogiku-reviewer");
@@ -1912,7 +2000,7 @@ async function main() {
   await shot("47-write-compact-more");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
-  await v2Scenes();
+  if (PART === "all") await v2Scenes();
 }
 
 /** 制作物一覧から名前で開き、その URL を返す */
@@ -2742,7 +2830,7 @@ async function v2Scenes() {
   expectTrue(Math.abs(at - 1) < 0.05, `カードの時刻へ移らない（${at}）`);
   expectTrue((await page.locator(".vplayer .anchor-rect").count()) === 1, "画面の範囲が重ならない");
   await shot("66-video-review");
-  await webFigmaScenes();
+  if (PART === "all") await webFigmaScenes();
 }
 
 /** 67 Web サイトのライブ表示・68 Figma の取り込みと埋め込み（利用者指示 2026-10-17）。E2E は小さく: 提出 → コメント → 端末の切り替え → 撮影 */
@@ -3030,8 +3118,25 @@ async function webFigmaScenes() {
   await shot("72b-revision-files-ai-indd");
 }
 
+/** 部を単独で流すときの入口: サインイン画面を開いてデモのデータを用意する（各部は自分でサインインする） */
+async function startFresh() {
+  await page.goto(`${BASE}/signin`);
+  await ready();
+  await page.evaluate(() => globalThis.__mf100demo.ensureSeeded());
+}
+
+const PARTS = {
+  all: main,
+  smoke: main,
+  core: main,
+  compact: async () => (await startFresh(), await prepareRevisions(), compactScenes()),
+  v2: async () => (await startFresh(), await prepareRevisions(), v2Scenes()),
+  web: async () => (await startFresh(), await prepareWeb(), webFigmaScenes()),
+};
+if (!PARTS[PART]) throw new Error(`E2E_PART が不明: ${PART}（${Object.keys(PARTS).join(" / ")}）`);
+
 try {
-  await main();
+  await PARTS[PART]();
 } catch (e) {
   console.error("FAILED:", e?.message ?? e);
   try {
@@ -3044,7 +3149,11 @@ try {
 }
 await browser.close();
 if (A11Y) {
-  const path = resolve(here, "../../../docs/a11y-report.json");
+  // 全部を流したときだけ docs の報告を書き換える。部ごとのときは撮影の出力先に部の名前で置く
+  const path =
+    PART === "all"
+      ? resolve(here, "../../../docs/a11y-report.json")
+      : resolve(OUT, `a11y-report-${PART}.json`);
   writeFileSync(path, JSON.stringify(a11yReport, null, 2));
   console.log("a11y report ->", path);
 }
