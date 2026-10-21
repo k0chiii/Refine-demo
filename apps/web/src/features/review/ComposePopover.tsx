@@ -8,7 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { portalHost } from "@/lib/portalHost";
-import { useKeyboard, usePinPageScroll } from "@/lib/useKeyboardInset";
+import { useRestorePageScroll, useVisualBottom } from "@/lib/useKeyboardInset";
 import { M3eIcon } from "@m3e/react/icon";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
@@ -108,9 +108,10 @@ export function ComposePopover({
   // シートが開いているあいだは、浮かべずにシートの中に埋め込む（利用者指示 2026-10-20「ボトムシート？が出てる状態の時はそうじゃなくて埋め込みだといいのかも」）
   const embedded = docked === true && host != null;
   const floating = docked === true && !embedded;
-  const kb = useKeyboard(floating);
-  usePinPageScroll(floating);
   const panelRef = useRef<HTMLDivElement>(null);
+  // 画面下の欄は見えている範囲の下端に置く（キーボードの上・iOS のずらしに追従）。閉じたらページの位置を戻す
+  const vb = useVisualBottom(panelRef, floating);
+  useRestorePageScroll(floating);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
     // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
@@ -132,13 +133,14 @@ export function ComposePopover({
         embedded
           ? undefined
           : docked
-            ? // キーボードが出ていればそのすぐ上（下のセーフエリアはキーボードの下なので足さない）
-              {
-                bottom:
-                  kb.open || kb.inset > 0
-                    ? kb.inset + 8
-                    : "calc(8px + env(safe-area-inset-bottom, 0px))",
-              }
+            ? // 見えている範囲の下端から 8px 上。キーボードが出ていなければ下のセーフエリアも空ける
+              vb.top === null
+              ? { bottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }
+              : {
+                  top: vb.open
+                    ? vb.top - 8
+                    : `calc(${vb.top - 8}px - env(safe-area-inset-bottom, 0px))`,
+                }
             : {
                 left: x,
                 top: y,
