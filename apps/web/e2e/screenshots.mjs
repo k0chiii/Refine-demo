@@ -339,7 +339,7 @@ async function prepareRevisions() {
   await page.waitForSelector(".compose-pop", { state: "detached" });
 }
 
-/** web を単独で流すとき、72 で新しい版を出す EVE 企画ポスターに最初の版を用意する（core・v2 の途中で出している） */
+/** web を単独で流すとき、72 で第3版を出す EVE 企画ポスターに第1版・第2版を用意する（全部を流すときは前の部で出している） */
 async function prepareWeb() {
   await signInAs("mock-nogiku-creator");
   await openWork("EVE 企画ポスター");
@@ -349,6 +349,11 @@ async function prepareWeb() {
   });
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await pdfReady();
+  await drawer("版");
+  await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   await pdfReady();
 }
 
