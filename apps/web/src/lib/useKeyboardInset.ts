@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type RefObject, useEffect, useState } from "react";
 
 /** 画面下に出ているソフトウェアキーボードの高さとみなす最小値（ブラウザのツールバーの出入りを拾わない） */
 const MIN_KEYBOARD = 120;
@@ -73,11 +73,79 @@ export function useKeyboard(enabled = true): { inset: number; open: boolean } {
 }
 
 /**
- * enabled のあいだ、ページ（と外枠）のスクロールの位置を留め、終わったら元に戻す。
- * iOS は画面下に固定した入力欄にフォーカスすると、見せようとしてページごと上へずらし、閉じても戻さない
- * （アプリバーが上に消えたまま。2026-10-21 の画面収録で確認）。欄はキーボードのすぐ上に自分で置くので、ずらしは要らない
+ * 画面下に固定する欄（ref）を、見えている範囲（visual viewport）の下端の gap 上に置くための top（px。layout viewport 基準）。
+ * iOS はキーボードを出すとき、レイアウトの高さを縮めたり（ホーム画面アプリ）、見えている範囲ごと上へずらしたり（offsetTop）する。
+ * どちらでも「見えている範囲の下端」は visualViewport.offsetTop + height なので、そこから欄の高さを引いて置く
+ * （bottom で置くと、ずらした分だけキーボードの裏に隠れる。2026-10-21 の画面収録で確認）。
+ * open: キーボードが出ているか（出ていれば下のセーフエリアはキーボードの下なので、余白に足さない）
  */
-export function usePinPageScroll(enabled: boolean) {
+export function useVisualBottom(
+  ref: RefObject<HTMLElement | null>,
+  enabled: boolean,
+): { top: number | null; open: boolean } {
+  const [state, setState] = useState<{ top: number | null; open: boolean }>({
+    top: null,
+    open: false,
+  });
+  useEffect(() => {
+    const vv = typeof window === "undefined" ? undefined : window.visualViewport;
+    const el = ref.current;
+    if (!enabled || !vv || !el) {
+      setState({ top: null, open: false });
+      return;
+    }
+    let baseline = { width: vv.width, height: vv.height };
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (Math.abs(vv.width - baseline.width) > 1)
+          baseline = { width: vv.width, height: vv.height };
+        else if (vv.height > baseline.height) baseline = { ...baseline, height: vv.height };
+        const open = isKeyboardOpen({
+          editing: isEditing(document.activeElement),
+          baselineHeight: baseline.height,
+          visualHeight: vv.height,
+          layoutHeight: window.innerHeight,
+          visualTop: vv.offsetTop,
+        });
+        const top = Math.round(vv.offsetTop + vv.height - el.offsetHeight);
+        setState((s) => (s.top === top && s.open === open ? s : { top, open }));
+      });
+    };
+    const timers: number[] = [];
+    const onFocus = () => {
+      update();
+      timers.push(window.setTimeout(update, 350));
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusout", onFocus);
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusout", onFocus);
+      ro.disconnect();
+      for (const t of timers) window.clearTimeout(t);
+    };
+  }, [enabled, ref]);
+  return state;
+}
+
+/**
+ * enabled になったときのページ（と外枠）のスクロールの位置を覚え、終わったら戻す。
+ * iOS は画面下の欄にフォーカスすると見せようとしてページをずらし、閉じても戻さないことがある（アプリバーが上に消えたまま）。
+ * 開いているあいだは iOS のずらしと争わない（争うと画面が揺れる。2026-10-21 の画面収録で確認）。閉じたあとだけ戻す
+ */
+export function useRestorePageScroll(enabled: boolean) {
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
     const boxes = [...document.querySelectorAll<HTMLElement>(".shell__main, .shell__content")];
@@ -86,15 +154,13 @@ export function usePinPageScroll(enabled: boolean) {
       if (window.scrollX !== saved.x || window.scrollY !== saved.y)
         window.scrollTo(saved.x, saved.y);
       boxes.forEach((b, i) => {
-        if (b.scrollTop !== saved.tops[i]) b.scrollTop = saved.tops[i]!;
+        if (b.isConnected && b.scrollTop !== saved.tops[i]) b.scrollTop = saved.tops[i]!;
       });
     };
-    window.addEventListener("scroll", restore, { passive: true });
-    for (const b of boxes) b.addEventListener("scroll", restore, { passive: true });
     return () => {
-      window.removeEventListener("scroll", restore);
-      for (const b of boxes) b.removeEventListener("scroll", restore);
       restore();
+      // キーボードが引っ込みきってからもう一度
+      window.setTimeout(restore, 400);
     };
   }, [enabled]);
 }

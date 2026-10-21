@@ -4622,7 +4622,7 @@ m3e-icon.icon--on {
 @media (prefers-reduced-motion: no-preference) {
   .compose-pop--docked {
     animation-name: compose-dock-in;
-    transition: bottom var(--mf-motion-effects);
+    transition: top var(--mf-motion-effects-fast);
   }
 }
 @keyframes compose-dock-in {
