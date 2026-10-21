@@ -8,7 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { portalHost } from "@/lib/portalHost";
-import { useKeyboardInset } from "@/lib/useKeyboardInset";
+import { useKeyboard, usePinPageScroll } from "@/lib/useKeyboardInset";
 import { M3eIcon } from "@m3e/react/icon";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
@@ -107,7 +107,9 @@ export function ComposePopover({
   const richRef = useRef<RichCommentHandle>(null);
   // シートが開いているあいだは、浮かべずにシートの中に埋め込む（利用者指示 2026-10-20「ボトムシート？が出てる状態の時はそうじゃなくて埋め込みだといいのかも」）
   const embedded = docked === true && host != null;
-  const kb = useKeyboardInset(docked === true && !embedded);
+  const floating = docked === true && !embedded;
+  const kb = useKeyboard(floating);
+  usePinPageScroll(floating);
   const panelRef = useRef<HTMLDivElement>(null);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
@@ -130,7 +132,13 @@ export function ComposePopover({
         embedded
           ? undefined
           : docked
-            ? { bottom: kb > 0 ? kb + 8 : "calc(8px + env(safe-area-inset-bottom, 0px))" }
+            ? // キーボードが出ていればそのすぐ上（下のセーフエリアはキーボードの下なので足さない）
+              {
+                bottom:
+                  kb.open || kb.inset > 0
+                    ? kb.inset + 8
+                    : "calc(8px + env(safe-area-inset-bottom, 0px))",
+              }
             : {
                 left: x,
                 top: y,
