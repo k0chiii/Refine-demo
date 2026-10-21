@@ -2,6 +2,9 @@
 # - verify: 整形・lint（vp check）、型、単体テスト（domain・application・Convex・api・web）、全パッケージのビルド
 # - e2e: デモ版（ブラウザ内の Convex）を建てて、画面の撮影・操作の検証・a11y（axe）と PWA の検証を回す。
 #   撮影した画面はリポジトリには入れず、Actions の成果物として残す（利用者方針: スクリーンショットはコミットしない）
+#   全部を 1 本で流すと 20 分を超えるので（画面 1 つに約 12 秒 × 約 120。利用者指示 2026-10-21「CIがそんなに時間かかるのもおかしい」）:
+#   - PR: smoke（サインイン → 提出 → 割り当て → 紙面にコメントまで）と PWA だけ。数分
+#   - main への push・手動: 全部を部（core・compact・v2・web）に分けて同時に流し、a11y も見る
 name: CI
 
 on:
@@ -46,9 +49,10 @@ jobs:
           pnpm codegen
           git diff --exit-code -- apps/convex/convex/_generated
 
-  e2e:
+  e2e-smoke:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -59,25 +63,73 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: デモ版をビルド
         run: pnpm --filter @mf100/web build:demo
-      - name: 画面の検証（撮影・操作・a11y）と PWA
+      - name: 主要な流れ（smoke）と PWA
         working-directory: apps/web
         env:
           BASE_URL: http://127.0.0.1:4173
           # ubuntu-latest に入っている Chrome を使う（playwright のブラウザは落とさない）
           CHROMIUM_PATH: /usr/bin/google-chrome
           TZ: Asia/Tokyo
+          E2E_PART: smoke
+        run: |
+          pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 > preview.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null "$BASE_URL/" && break; sleep 1; done
+          node e2e/screenshots.mjs
+          node e2e/pwa.mjs
+      - name: 撮影した画面を残す
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke
+          path: |
+            apps/web/e2e/out
+            apps/web/preview.log
+          retention-days: 14
+
+  e2e:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 部ごとに新しいデモのデータから流す（screenshots.mjs の E2E_PART）
+        part: [core, compact, v2, web]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: デモ版をビルド
+        run: pnpm --filter @mf100/web build:demo
+      - name: 画面の検証（撮影・操作・a11y）
+        working-directory: apps/web
+        env:
+          BASE_URL: http://127.0.0.1:4173
+          CHROMIUM_PATH: /usr/bin/google-chrome
+          TZ: Asia/Tokyo
+          E2E_PART: ${{ matrix.part }}
         run: |
           pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 > preview.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null "$BASE_URL/" && break; sleep 1; done
           A11Y=1 node e2e/screenshots.mjs
-          node e2e/pwa.mjs
+      - name: PWA
+        if: matrix.part == 'web'
+        working-directory: apps/web
+        env:
+          BASE_URL: http://127.0.0.1:4173
+          CHROMIUM_PATH: /usr/bin/google-chrome
+          TZ: Asia/Tokyo
+        run: node e2e/pwa.mjs
       - name: 撮影した画面と a11y の結果を残す
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-screenshots
+          name: e2e-${{ matrix.part }}
           path: |
             apps/web/e2e/out
-            docs/a11y-report.json
             apps/web/preview.log
           retention-days: 14

@@ -328,6 +328,28 @@ async function prepareRevisions() {
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   revision2Url = page.url();
   await pdfReady();
+  // 制作者に通知を 1 件（32 のベル）: 校正者が第2版に位置なしのコメントを付ける
+  await signInAs("mock-nogiku-reviewer");
+  await go(revision2Url);
+  await pdfReady();
+  await drawer("コメント");
+  await page.locator(".comments__free").click();
+  await page.fill(".compose-pop .rt__content", "凡例の文字の大きさを確認してください。");
+  await page.locator(".compose-pop .rt__send").click();
+  await page.waitForSelector(".compose-pop", { state: "detached" });
+}
+
+/** web を単独で流すとき、72 で新しい版を出す EVE 企画ポスターに最初の版を用意する（core・v2 の途中で出している） */
+async function prepareWeb() {
+  await signInAs("mock-nogiku-creator");
+  await openWork("EVE 企画ポスター");
+  await submitRevision("最初の版を提出", [resolve(FIXTURES, "sample.pdf")], "初稿。", async () => {
+    for (const id of ["theme_font", "balance", "committee_output"])
+      await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+  });
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+  await pdfReady();
 }
 
 async function main() {
@@ -3103,8 +3125,8 @@ const PARTS = {
   smoke: main,
   core: main,
   compact: async () => (await startFresh(), await prepareRevisions(), compactScenes()),
-  v2: async () => (await startFresh(), v2Scenes()),
-  web: async () => (await startFresh(), webFigmaScenes()),
+  v2: async () => (await startFresh(), await prepareRevisions(), v2Scenes()),
+  web: async () => (await startFresh(), await prepareWeb(), webFigmaScenes()),
 };
 if (!PARTS[PART]) throw new Error(`E2E_PART が不明: ${PART}（${Object.keys(PARTS).join(" / ")}）`);
 
