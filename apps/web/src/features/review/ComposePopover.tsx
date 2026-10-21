@@ -116,11 +116,15 @@ export function ComposePopover({
   // 画面下の欄は見えている範囲の下端に置く（キーボードの上・iOS のずらしに追従）。閉じたらページの位置を戻す
   const vb = useVisualBottom(panelRef, floating);
   useRestorePageScroll(floating);
-  // 指で本文を押した瞬間（キーボードが出る前）に、欄をキーボードの見込みの高さより上へ上げておく。
+  // 本文にフォーカスが入った瞬間（キーボードが出る前）に、欄をキーボードの見込みの高さより上へ上げておく。
   // 下のままだと iOS が欄を見せようと画面ごと上へずらし、選んだ範囲（紙面）まで動く（利用者指示 2026-10-21
   // 「範囲選択した箇所が動かないようにしたい」）。キーボードが出たら、見えている範囲の下端の位置に戻す
   const [raise, setRaise] = useState(false);
-  const tapStart = useRef<{ x: number; y: number } | null>(null);
+  // 指で本文を押した時刻。指で押してフォーカスが入ったときだけ上げる（開いたときの自動のフォーカスでは上げない）
+  const touchedAt = useRef(0);
+  // 指の画面では、浮かぶ欄を開いたときに自動でフォーカスしない（iOS はキーボードを出さず、次に押してもフォーカスの出入りが無い）
+  const coarse =
+    typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
   const kbOpen = useRef(vb.open);
   kbOpen.current = vb.open;
   useEffect(() => {
@@ -173,23 +177,20 @@ export function ComposePopover({
               }
       }
       onPointerDown={(e) => e.stopPropagation()}
-      // 本文を指で軽く押したら（動かさずに離したら）、ブラウザのフォーカスを止め、欄を上げてから自分でフォーカスする。
-      // 押した瞬間に欄を動かすと、離した位置が紙面になってフォーカスが紙面へ行く
-      onTouchStart={(e) => {
-        const t = e.touches[0];
-        tapStart.current =
-          floating && !vb.open && t && (e.target as Element).closest(".rt__content")
-            ? { x: t.clientX, y: t.clientY }
-            : null;
+      // 本文にフォーカスが入った瞬間（キーボードが出る前）に欄を上げる。押した指の操作には手を出さない
+      // （ブラウザのフォーカスを止めて自分でフォーカスすると、iOS はキーボードを出さない。2026-10-21 利用者指摘）。
+      // 押した瞬間に上げると、離した位置が紙面になってフォーカスが紙面へ行く
+      onTouchStartCapture={(e) => {
+        if ((e.target as Element).closest(".rt__content")) touchedAt.current = Date.now();
       }}
-      onTouchEnd={(e) => {
-        const start = tapStart.current;
-        tapStart.current = null;
-        const t = e.changedTouches[0];
-        if (!start || !t || Math.hypot(t.clientX - start.x, t.clientY - start.y) > 10) return;
-        e.preventDefault();
-        flushSync(() => setRaise(true));
-        richRef.current?.focus();
+      onFocusCapture={(e) => {
+        if (
+          floating &&
+          !vb.open &&
+          Date.now() - touchedAt.current < 1000 &&
+          (e.target as Element).closest(".rt__content")
+        )
+          flushSync(() => setRaise(true));
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -207,7 +208,7 @@ export function ComposePopover({
           // 改善の提案には理由も添えてもらう（必須にはせず案内だけ。利用者決定 2026-10-15 A-5）
           placeholder="改善案には理由も添えて"
           rows={2}
-          autoFocus={autoFocus}
+          autoFocus={autoFocus && !(floating && coarse)}
           value={value}
           onValue={onChange}
           onMentions={onMentions}
