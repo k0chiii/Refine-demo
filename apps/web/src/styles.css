@@ -4622,7 +4622,6 @@ m3e-icon.icon--on {
 @media (prefers-reduced-motion: no-preference) {
   .compose-pop--docked {
     animation-name: compose-dock-in;
-    transition: top var(--mf-motion-effects-fast);
   }
 }
 @keyframes compose-dock-in {
@@ -4644,6 +4643,18 @@ m3e-icon.icon--on {
 .rt--composer .rt__content {
   font: var(--mf-type-body-large);
   min-height: calc(var(--rt-rows, 2) * 1.5rem);
+}
+/* iPhone は 16px 未満の入力欄にフォーカスすると画面を拡大する。本文の大きさは iOS の文字サイズの設定に従う（rem）ので、
+   小さくしている人は 16px 未満になる。ほかの入力欄と同じく 16px を下限にする（利用者指示 2026-10-21「入力しようとすると画面が拡大されるのもやめて」） */
+@supports (-webkit-touch-callout: none) {
+  .rt--composer .rt__content {
+    font-size: max(16px, 1rem);
+  }
+}
+@media (max-width: 599px) {
+  .rt--composer .rt__content {
+    font-size: max(16px, 1rem);
+  }
 }
 .rt--composer .rt__bar {
   margin-inline-start: -8px;

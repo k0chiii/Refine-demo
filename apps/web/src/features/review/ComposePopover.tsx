@@ -6,9 +6,13 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { portalHost } from "@/lib/portalHost";
-import { useRestorePageScroll, useVisualBottom } from "@/lib/useKeyboardInset";
+import {
+  expectedKeyboardHeight,
+  useRestorePageScroll,
+  useVisualBottom,
+} from "@/lib/useKeyboardInset";
 import { M3eIcon } from "@m3e/react/icon";
 import { useComposeState, type ComposeStore } from "./composeStore";
 import { AttachDropZone, AttachFileButton } from "./AttachFileButton";
@@ -112,6 +116,24 @@ export function ComposePopover({
   // 画面下の欄は見えている範囲の下端に置く（キーボードの上・iOS のずらしに追従）。閉じたらページの位置を戻す
   const vb = useVisualBottom(panelRef, floating);
   useRestorePageScroll(floating);
+  // 指で本文を押した瞬間（キーボードが出る前）に、欄をキーボードの見込みの高さより上へ上げておく。
+  // 下のままだと iOS が欄を見せようと画面ごと上へずらし、選んだ範囲（紙面）まで動く（利用者指示 2026-10-21
+  // 「範囲選択した箇所が動かないようにしたい」）。キーボードが出たら、見えている範囲の下端の位置に戻す
+  const [raise, setRaise] = useState(false);
+  const tapStart = useRef<{ x: number; y: number } | null>(null);
+  const kbOpen = useRef(vb.open);
+  kbOpen.current = vb.open;
+  useEffect(() => {
+    if (vb.open) setRaise(false);
+  }, [vb.open]);
+  useEffect(() => {
+    if (!raise) return;
+    // キーボードが出なかった（押しただけ・ボタンだった）ら戻す
+    const t = window.setTimeout(() => {
+      if (!kbOpen.current) setRaise(false);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [raise]);
   const shift = useFitInside(panelRef, !docked, x, y);
   useEffect(() => {
     // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
@@ -139,7 +161,9 @@ export function ComposePopover({
               : {
                   top: vb.open
                     ? vb.top - 8
-                    : `calc(${vb.top - 8}px - env(safe-area-inset-bottom, 0px))`,
+                    : raise
+                      ? vb.top - expectedKeyboardHeight() - 8
+                      : `calc(${vb.top - 8}px - env(safe-area-inset-bottom, 0px))`,
                 }
             : {
                 left: x,
@@ -149,6 +173,24 @@ export function ComposePopover({
               }
       }
       onPointerDown={(e) => e.stopPropagation()}
+      // 本文を指で軽く押したら（動かさずに離したら）、ブラウザのフォーカスを止め、欄を上げてから自分でフォーカスする。
+      // 押した瞬間に欄を動かすと、離した位置が紙面になってフォーカスが紙面へ行く
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        tapStart.current =
+          floating && !vb.open && t && (e.target as Element).closest(".rt__content")
+            ? { x: t.clientX, y: t.clientY }
+            : null;
+      }}
+      onTouchEnd={(e) => {
+        const start = tapStart.current;
+        tapStart.current = null;
+        const t = e.changedTouches[0];
+        if (!start || !t || Math.hypot(t.clientX - start.x, t.clientY - start.y) > 10) return;
+        e.preventDefault();
+        flushSync(() => setRaise(true));
+        richRef.current?.focus();
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {docked && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}

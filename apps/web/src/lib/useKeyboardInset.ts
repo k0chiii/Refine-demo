@@ -72,6 +72,30 @@ export function useKeyboard(enabled = true): { inset: number; open: boolean } {
   return state;
 }
 
+const KEYBOARD_KEY = "mf100.keyboardHeight";
+let lastKeyboard = 0;
+
+/**
+ * これから出るキーボードの高さの見込み（px）。前に出たときの高さ（タブを開いているあいだ覚える）、無ければ画面の 45%。
+ * 画面下の欄を、フォーカスする前にキーボードより上へ上げておくのに使う（下にあると iOS が画面ごとずらす）
+ */
+export function expectedKeyboardHeight(): number {
+  if (lastKeyboard > 0) return lastKeyboard;
+  try {
+    const v = Number(sessionStorage.getItem(KEYBOARD_KEY));
+    if (v > 0) return (lastKeyboard = v);
+  } catch {}
+  return Math.round(window.innerHeight * 0.45);
+}
+
+function rememberKeyboard(height: number) {
+  if (height < MIN_KEYBOARD || height === lastKeyboard) return;
+  lastKeyboard = height;
+  try {
+    sessionStorage.setItem(KEYBOARD_KEY, String(height));
+  } catch {}
+}
+
 /**
  * 画面下に固定する欄（ref）を、見えている範囲（visual viewport）の下端の gap 上に置くための top（px。layout viewport 基準）。
  * iOS はキーボードを出すとき、レイアウトの高さを縮めたり（ホーム画面アプリ）、見えている範囲ごと上へずらしたり（offsetTop）する。
@@ -109,6 +133,13 @@ export function useVisualBottom(
           layoutHeight: window.innerHeight,
           visualTop: vv.offsetTop,
         });
+        if (open)
+          rememberKeyboard(
+            Math.max(
+              Math.round(baseline.height - vv.height),
+              keyboardInset(window.innerHeight, vv.height, vv.offsetTop),
+            ),
+          );
         const top = Math.round(vv.offsetTop + vv.height - el.offsetHeight);
         setState((s) => (s.top === top && s.open === open ? s : { top, open }));
       });
