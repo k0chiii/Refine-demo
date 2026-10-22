@@ -33,12 +33,19 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.event_name }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-${{ github.sha }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.event_name }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-
       # ビルドが TanStack Router のルートの型（apps/web/src/routeTree.gen.ts。コミットしない）を作る。
       # これが無いと lint の型検査が 13 件落ちるので、整形・lint より先に建てる
       - name: ビルド
@@ -48,27 +55,60 @@ jobs:
       # vp run -r typecheck が web（tsc。spec の型も）を含む。web だけをもう一度流さない
       - name: 型
         run: pnpm typecheck
+      - name: Worker の生成型とバックアップ検証ツール
+        run: |
+          pnpm --filter @mf100/api types:check
+          python3 -B scripts/test_verify_backup.py
       - name: 単体テスト
-        run: pnpm test
+        run: pnpm test:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: coverage
+          retention-days: 7
       - name: Convex の _generated がコミットと一致するか
         run: |
           pnpm codegen
           git diff --exit-code -- apps/convex/convex/_generated
 
+  build-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - run: pnpm --filter @mf100/web build:demo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-web-${{ github.sha }}
+          path: apps/web/dist-demo
+          include-hidden-files: true
+          retention-days: 1
+
   e2e-smoke:
+    needs: [build-demo]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: デモ版をビルド
-        run: pnpm --filter @mf100/web build:demo
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/download-artifact@v5
+        with:
+          name: demo-web-${{ github.sha }}
+          path: apps/web/dist-demo
       - name: 主要な流れ（@smoke）
         working-directory: apps/web
         env:
@@ -94,6 +134,7 @@ jobs:
           retention-days: 14
 
   e2e:
+    needs: [build-demo]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -103,14 +144,17 @@ jobs:
         shard: [1/2, 2/2]
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: デモ版をビルド
-        run: pnpm --filter @mf100/web build:demo
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/download-artifact@v5
+        with:
+          name: demo-web-${{ github.sha }}
+          path: apps/web/dist-demo
       - name: 機能の E2E（shard ${{ matrix.shard }}）
         working-directory: apps/web
         env:
@@ -131,12 +175,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
       - uses: actions/download-artifact@v5
         with:
           path: apps/web/all-blob-reports
@@ -152,6 +197,7 @@ jobs:
           retention-days: 14
 
   visual:
+    needs: [build-demo]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -162,14 +208,17 @@ jobs:
         part: [core, compact, v2, web]
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: デモ版をビルド
-        run: pnpm --filter @mf100/web build:demo
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/download-artifact@v5
+        with:
+          name: demo-web-${{ github.sha }}
+          path: apps/web/dist-demo
       - name: 画面の撮影・操作の検証・a11y（区間計測は実行のまとめへ）
         working-directory: apps/web
         env:

@@ -13,4 +13,6 @@ crons.interval("remind upcoming deadlines", { hours: 1 }, internal.revisions.rem
 crons.interval("expire upload sessions", { hours: 1 }, internal.submissions.expireSessions, {});
 /** コメントに付けないまま 24 時間たった添付を放置扱いにする（R2 の削除は上と同じ Hono の清掃）。 */
 crons.interval("expire comment files", { hours: 1 }, internal.commentFiles.expireFiles, {});
+crons.interval("expire temporary AI results", { minutes: 5 }, internal.aiWorkflow.expire, {});
+crons.interval("expire processing jobs", { hours: 1 }, internal.processing.expire, {});
 export default crons;

@@ -1,3 +1,4 @@
+import { multipartUpload } from "@/lib/multipartUpload";
 import { createCacheStorePersistence } from "@/lib/artifactCacheStore";
 import {
   ArtifactError,
@@ -40,6 +41,15 @@ export async function uploadItem(
   onPhase?: (phase: UploadPhase) => void,
 ): Promise<UploadResult> {
   const upload = await encodeOrExplain(file, onPhase);
+  if (upload.encoding === "identity" && upload.body.size >= 16 * 1024 * 1024)
+    return multipartUpload({
+      apiUrl: API_URL,
+      token,
+      itemId,
+      body: upload.body,
+      sha256: upload.sha256,
+      ...(onProgress ? { onProgress } : {}),
+    });
   onProgress?.(0.1);
   const res = await fetch(`${API_URL}/uploads/items/${encodeURIComponent(itemId)}`, {
     method: "PUT",
@@ -163,14 +173,14 @@ export interface FigmaImportItemResult {
 }
 
 /** Figma 連携が使えるか（Worker にトークンがあるか）。失敗したら使えないものとして扱う */
-export async function figmaStatus(token: string): Promise<{ enabled: boolean }> {
+export async function figmaStatus(token: string): Promise<{ enabled: boolean; queued?: boolean }> {
   try {
     const res = await fetch(`${API_URL}/figma/status`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { enabled: false };
-    const json = (await res.json()) as { enabled?: unknown };
-    return { enabled: json.enabled === true };
+    const json = (await res.json()) as { enabled?: unknown; queued?: unknown };
+    return { enabled: json.enabled === true, ...(json.queued === true ? { queued: true } : {}) };
   } catch {
     return { enabled: false };
   }
@@ -184,6 +194,50 @@ export async function importFigmaFrames(
   token: string,
   items: FigmaImportItemInput[],
 ): Promise<FigmaImportItemResult[]> {
+  if ((await figmaStatus(token)).queued) {
+    const results: FigmaImportItemResult[] = [];
+    for (const item of items) {
+      try {
+        const started = await fetch(`${API_URL}/processing/figma`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId: item.itemId }),
+        });
+        if (!started.ok) throw new Error("取り込みを開始できませんでした");
+        const { jobId } = (await started.json()) as { jobId: string };
+        let done = false;
+        for (let attempt = 0; attempt < 120; attempt++) {
+          const response = await fetch(`${API_URL}/processing/jobs/${jobId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!response.ok) throw new Error("取り込みの状態を取得できませんでした");
+          const job = (await response.json()) as { state: string; error: string | null };
+          if (job.state === "ready") {
+            done = true;
+            break;
+          }
+          if (["failed", "cancelled"].includes(job.state))
+            throw new Error(job.error ?? "取り込みを完了できませんでした");
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        if (!done) throw new Error("取り込みは継続中です。時間をおいて再試行してください");
+        results.push({
+          itemId: item.itemId,
+          status: "verified",
+          failureMessage: null,
+          nodeName: null,
+        });
+      } catch (error) {
+        results.push({
+          itemId: item.itemId,
+          status: "failed",
+          failureMessage: error instanceof Error ? error.message : "取り込みに失敗しました",
+          nodeName: null,
+        });
+      }
+    }
+    return results;
+  }
   const res = await fetch(`${API_URL}/figma/import`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

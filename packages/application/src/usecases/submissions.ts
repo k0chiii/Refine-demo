@@ -222,6 +222,37 @@ export async function beginItemUpload(
   };
 }
 
+/** Resume only the caller's original attempt; authorization is checked for every part and completion. */
+export async function resumeItemUpload(
+  ctx: AppContext,
+  principal: Principal,
+  input: { attemptId: string },
+) {
+  const attempt = await loadOwnUploadAttempt(ctx, principal, input.attemptId, "uploadItem");
+  const { item, session } = await loadOwnItem(ctx, principal, attempt.targetId);
+  await loadAuthorizedWork(ctx, principal, session.workId, "revision.submit");
+  if (attempt.state === "adopted")
+    return {
+      attemptId: attempt.id,
+      objectKey: attempt.objectKey,
+      mimeType: item.mimeType,
+      declaredSize: item.declaredSize ?? null,
+      fileName: item.fileName,
+      adopted: true,
+    };
+  assertSessionOpen(session, ctx.clock.now());
+  assertItemUploadable(item);
+  assertAttemptAdoptable(attempt, ctx.clock.now());
+  return {
+    attemptId: attempt.id,
+    objectKey: attempt.objectKey,
+    mimeType: item.mimeType,
+    declaredSize: item.declaredSize ?? null,
+    fileName: item.fileName,
+    adopted: false,
+  };
+}
+
 /**
  * 実体の検証完了（Hono が R2 で sha256 を確かめた後に、サービス認証付きの境界から呼ぶ）。
  * 項目がまだ受付中・未検証で、試行が予約中・期限内のときだけ、この試行を原子的に採用する。

@@ -76,6 +76,9 @@ function serviceUpload<F extends FunctionReference<"mutation", "internal">>(
       return new Response("Not Found", { status: 404 });
     if (!(await ctx.auth.getUserIdentity()))
       return Response.json({ code: "unauthenticated", details: {} }, { status: 401 });
+    const requestId = request.headers.get("X-Request-ID");
+    if (requestId && /^[0-9a-f-]{36}$/.test(requestId))
+      console.log(JSON.stringify({ event: "upload_service", requestId }));
     const body = (await request.json().catch(() => null)) as unknown;
     const parsed =
       body !== null && typeof body === "object" && !Array.isArray(body)
@@ -165,6 +168,13 @@ http.route({
   ),
 });
 http.route({
+  path: "/internal/uploads/items/resume",
+  method: "POST",
+  handler: serviceUpload(internal.submissions.resumeUpload, (b) =>
+    str(b.attemptId) ? { ok: true, args: { attemptId: b.attemptId } } : { ok: false },
+  ),
+});
+http.route({
   path: "/internal/uploads/items/complete",
   method: "POST",
   handler: serviceUpload(internal.submissions.completeUpload, itemCompleteArgs),
@@ -211,3 +221,68 @@ http.route({
 });
 
 export default http;
+
+/** Queue/Workflow workers carry a job reference, never an expiring application JWT. */
+http.route({
+  path: "/internal/processing",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const secret = process.env.PROCESSING_SECRET;
+    if (
+      !secret ||
+      secret.length < 32 ||
+      !verifyServiceSecret(bearerValue(request.headers.get("authorization")), secret)
+    )
+      return new Response(null, { status: 404 });
+    const body = (await request.json()) as { operation?: string; args?: unknown };
+    try {
+      let result: unknown;
+      switch (body.operation) {
+        case "cleanupCandidates":
+          result = await ctx.runQuery(internal.processing.cleanupCandidates, {});
+          break;
+        case "markCleaned":
+          result = await ctx.runMutation(
+            internal.processing.markCleaned,
+            body.args as FunctionArgs<typeof internal.processing.markCleaned>,
+          );
+          break;
+        case "inspect":
+          result = await ctx.runQuery(
+            internal.processing.inspect,
+            body.args as FunctionArgs<typeof internal.processing.inspect>,
+          );
+          break;
+        case "complete":
+          result = await ctx.runMutation(
+            internal.processing.complete,
+            body.args as FunctionArgs<typeof internal.processing.complete>,
+          );
+          break;
+        case "fail":
+          result = await ctx.runMutation(
+            internal.processing.fail,
+            body.args as FunctionArgs<typeof internal.processing.fail>,
+          );
+          break;
+        case "figmaComplete":
+          result = await ctx.runMutation(
+            internal.processing.figmaComplete,
+            body.args as FunctionArgs<typeof internal.processing.figmaComplete>,
+          );
+          break;
+        case "streamSession":
+          result = await ctx.runMutation(
+            internal.processing.streamSession,
+            body.args as FunctionArgs<typeof internal.processing.streamSession>,
+          );
+          break;
+        default:
+          return new Response(null, { status: 400 });
+      }
+      return Response.json(result ?? null, { headers: { "Cache-Control": "no-store" } });
+    } catch {
+      return Response.json({ code: "processing_rejected" }, { status: 409 });
+    }
+  }),
+});

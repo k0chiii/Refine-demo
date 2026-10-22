@@ -1,3 +1,4 @@
+import { processingKind, processingOptions, processingOutput } from "./lib/processingValidators";
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -199,7 +200,15 @@ export default defineSchema({
     .index("email", ["email"])
     .index("by_nogikuSubject", ["nogikuSubject"]),
 
+  collaborativeDrafts: defineTable({ workId: v.string(), snapshotVersion: v.number() }).index(
+    "by_work",
+    ["workId"],
+  ),
+
   works: defineTable({
+    rolesVersion: v.optional(v.number()),
+    searchTokens: v.optional(v.string()),
+    aggregateVersion: v.optional(v.number()),
     legacyId: v.optional(v.string()),
     year: v.number(),
     title: v.string(),
@@ -235,6 +244,15 @@ export default defineSchema({
     slackChannelId: v.optional(v.string()),
     version: v.number(),
   })
+    .index("by_aggregate_version", ["aggregateVersion"])
+    .index("by_aggregate_version_confidentiality", ["aggregateVersion", "confidentiality"])
+    .index("by_search_tokens", ["searchTokens"])
+    .searchIndex("search_substring", {
+      searchField: "searchTokens",
+      filterFields: ["year", "lifecycle"],
+    })
+    .index("by_roles_version", ["rolesVersion"])
+    .index("by_year_and_lifecycle", ["year", "lifecycle"])
     .index("by_year", ["year"])
     .index("by_social_profile", ["socialProfileId"])
     .index("by_owner_team", ["ownerTeamId"])
@@ -244,6 +262,74 @@ export default defineSchema({
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
   /** 職責（制作者・校了者・主管）を「ユーザー → 作品」で引くための派生テーブル。works 書込み時に同期する。 */
+  processingJobs: defineTable({
+    kind: processingKind,
+    options: processingOptions,
+    workId: v.id("works"),
+    userId: v.id("users"),
+    state: v.union(
+      v.literal("queued"),
+      v.literal("running"),
+      v.literal("ready"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+    ),
+    attemptId: v.optional(v.string()),
+    output: v.optional(processingOutput),
+    error: v.optional(v.string()),
+    streamUid: v.optional(v.string()),
+    streamUploadUrl: v.optional(v.string()),
+    createdAt: v.number(),
+    cleaned: v.optional(v.boolean()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_state_cleaned", ["state", "cleaned", "createdAt"])
+    .index("by_state", ["state", "createdAt"])
+    .index("by_item", ["options.itemId"]),
+
+  ruleEmbeddings: defineTable({
+    ruleId: v.string(),
+    revision: v.number(),
+    vector: v.array(v.number()),
+    model: v.string(),
+  })
+    .index("by_rule", ["ruleId"])
+    .vectorIndex("by_vector", { vectorField: "vector", dimensions: 1024 }),
+
+  aiJobs: defineTable({
+    workId: v.string(),
+    userId: v.id("users"),
+    draftVersion: v.number(),
+    state: v.union(
+      v.literal("queued"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+    ),
+    workflowId: v.optional(v.string()),
+    result: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_expiry", ["expiresAt"])
+    .index("by_user_work", ["userId", "workId"]),
+
+  workAggregateEntries: defineTable({
+    workId: v.id("works"),
+    year: v.number(),
+    lifecycle: v.string(),
+    confidentiality: v.string(),
+  }).index("by_work", ["workId"]),
+
+  workSummaries: defineTable({
+    workId: v.id("works"),
+    latestId: v.union(v.string(), v.null()),
+    acceptingId: v.union(v.string(), v.null()),
+    declared: v.number(),
+  }).index("by_work", ["workId"]),
+
   workRoles: defineTable({
     workId: v.id("works"),
     userId: v.string(),
@@ -812,6 +898,13 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
 
   /** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意（利用者決定 2026-10-15） */
+  pushDeliveries: defineTable({
+    notificationId: v.string(),
+    subscriptionId: v.string(),
+    status: v.number(),
+    deliveredAt: v.number(),
+  }).index("by_notification_and_subscription", ["notificationId", "subscriptionId"]),
+
   pushSubscriptions: defineTable({
     userId: v.string(),
     endpoint: v.string(),

@@ -1,17 +1,24 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mf100-api",
+  "name": "mf100-api-development",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "ratelimits": [
+    {
+      "name": "EXPENSIVE_REQUESTS",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 },
+    },
+  ],
   // 放置アップロードセッションの孤立 R2 オブジェクト清掃（D14）。Convex 側の abandoned 化（毎時）の後に走る
   "triggers": { "crons": ["23 * * * *"] },
   "r2_buckets": [
     {
       "binding": "ASSETS",
       // 非公開バケット。公開 URL は設定しない（§13 / §14 やってはいけないこと）
-      "bucket_name": "mf100-assets",
+      "bucket_name": "mf100-assets-development",
       "preview_bucket_name": "mf100-assets-dev",
     },
   ],
@@ -26,9 +33,32 @@
     "ALLOWED_ORIGINS": "http://localhost:5173",
   },
   "env": {
+    "staging": {
+      "name": "mf100-api-staging",
+      "ratelimits": [
+        {
+          "name": "EXPENSIVE_REQUESTS",
+          "namespace_id": "1002",
+          "simple": { "limit": 30, "period": 60 },
+        },
+      ],
+      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-assets-staging" }],
+      "vars": {
+        "CONVEX_URL": "http://127.0.0.1:3210",
+        "CONVEX_SITE_URL": "http://127.0.0.1:3211",
+        "ALLOWED_ORIGINS": "http://localhost:5173",
+      },
+    },
     // vars と r2_buckets は環境に引き継がれないので、ここに書き直す。ダッシュボードで変えた vars は deploy のたびに上書きされる
     "production": {
       "name": "mf100-api",
+      "ratelimits": [
+        {
+          "name": "EXPENSIVE_REQUESTS",
+          "namespace_id": "1003",
+          "simple": { "limit": 30, "period": 60 },
+        },
+      ],
       "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-assets" }],
       "vars": {
         "CONVEX_URL": "https://rosy-egret-142.convex.cloud",

@@ -4,7 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { listMyWorks } from "./works.ts";
+import { listSubmissionCandidates } from "./works.ts";
 
 /**
  * ピン留め（W-26）と「版を提出」（L-15）のアダプタ。業務の判定は application / domain。
@@ -15,7 +15,7 @@ export const submitTargets = query({
   args: {},
   handler: async (ctx) => {
     const { principal } = await requireUser(ctx);
-    const works = await listMyWorks(ctx.db, principal);
+    const works = await listSubmissionCandidates(ctx.db, principal);
     return runUseCase(() => listSubmitTargets(createReadContext(ctx.db), principal, works));
   },
 });

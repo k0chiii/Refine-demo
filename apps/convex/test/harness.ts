@@ -1,3 +1,4 @@
+import { registerComponents } from "./components";
 import { convexTest, type TestConvex } from "convex-test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -17,7 +18,9 @@ process.env.FRONTEND_URL ??= "http://localhost:5173";
 export type Harness = TestConvex<typeof schema>;
 
 export function createHarness(): Harness {
-  return convexTest(schema, modules);
+  const t = convexTest(schema, modules);
+  registerComponents(t);
+  return t;
 }
 
 export interface TestUser {

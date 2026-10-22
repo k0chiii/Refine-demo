@@ -1,0 +1,55 @@
+name: Staging
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fixed-staging
+  cancel-in-progress: false
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+    env:
+      STAGING_CONVEX_URL: ${{ vars.STAGING_CONVEX_URL }}
+      STAGING_CONVEX_SITE_URL: ${{ vars.STAGING_CONVEX_SITE_URL }}
+      STAGING_ALLOWED_ORIGINS: ${{ vars.STAGING_ALLOWED_ORIGINS }}
+      VITE_API_URL: ${{ vars.STAGING_API_URL }}
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - name: 接続先と鍵の対象を確認（書き込む前）
+        working-directory: apps/convex
+        run: |
+          set -euo pipefail
+          test -n "$CONVEX_DEPLOY_KEY"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$VITE_API_URL"
+          node -e 'const u = new URL(process.env.STAGING_CONVEX_URL); if (u.protocol !== "https:" || !u.hostname.endsWith(".convex.cloud") || u.hostname === "rosy-egret-142.convex.cloud") process.exit(1)'
+          test "$(pnpm exec convex env get CONVEX_SITE_ORIGIN)" = "$STAGING_CONVEX_SITE_URL"
+      - name: ローカル検証
+        run: |
+          pnpm build
+          pnpm check
+          pnpm typecheck
+          pnpm exec vp test run
+      - name: 隔離した Convex と Web のビルド
+        working-directory: apps/convex
+        run: pnpm exec convex deploy --cmd 'test "$VITE_CONVEX_URL" = "$STAGING_CONVEX_URL" && pnpm --filter @mf100/web build' --cmd-url-env-var-name VITE_CONVEX_URL
+      - name: 隔離した Worker
+        working-directory: apps/api
+        run: pnpm deploy staging
+      - name: 隔離した Pages
+        working-directory: apps/api
+        run: pnpm exec wrangler pages deploy ../web/dist --project-name mf100-refine-staging --branch main --commit-hash "$GITHUB_SHA"

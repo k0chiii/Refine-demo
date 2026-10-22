@@ -1,3 +1,4 @@
+import { ProcessingTools } from "@/features/processing/ProcessingTools";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
@@ -68,6 +69,7 @@ import {
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { ThreadPanel } from "@/features/review/ThreadPanel";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
+import { WorkPresence } from "@/features/presence/WorkPresence";
 import { PinButton } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { Loading } from "@/ui/Loading";
@@ -1758,6 +1760,13 @@ export function Editor({
               onStop={stopCompare}
             />
           ) : null}
+          {workData ? <WorkPresence workId={workId} /> : null}
+          <ProcessingTools
+            key={artifact?.id ?? workId}
+            workId={workId}
+            artifactId={artifact?.id ?? null}
+            {...(artifact?.mimeType ? { mimeType: artifact.mimeType } : {})}
+          />
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
           {initial ? null : can?.completeReview ? (
