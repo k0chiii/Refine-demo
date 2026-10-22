@@ -33,6 +33,15 @@ const axeSource = A11Y
   ? readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8")
   : null;
 const a11yReport = [];
+/**
+ * 区間計測（どこに時間がかかっているか）。画面ごとに「前の撮影からの操作・待ち」「描画待ち（settle）」「撮影」「axe」「固定待ち」を測り、
+ * out/timings-<部>.json に書く。CI では遅い順の上位を実行のまとめ（GITHUB_STEP_SUMMARY）にも出す
+ */
+const timing = { settle: 0, sleep: 0, scenes: [] };
+let sceneStart = performance.now();
+let sceneSettle = 0;
+let sceneSleep = 0;
+const runStart = performance.now();
 
 const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
@@ -52,8 +61,11 @@ page.on("console", (m) => {
 /**
  * 固定 sleep の代わりに、画面が落ち着くまで待つ（2 フレーム経過し、有限の animation / transition が終わるまで。Shadow DOM 内も見る）。
  * スピナーなど無限に繰り返すものは無視する。想定外の animation で止まらないよう 3 秒で打ち切る。
+ * スクロールに連動する animation（アプリバーの縁 mf-appbar-edge の animation-timeline: scroll()）は時間では終わらず
+ * ずっと running なので、文書の時間軸（document.timeline）で動くものだけを見る。見ないと毎回 3 秒の打ち切りまで待つ
+ * （計測 2026-10-22: smoke 251 秒のうち 232 秒がこの待ち）
  */
-const settle = () =>
+const settleRaw = () =>
   page.evaluate(
     () =>
       new Promise((done) => {
@@ -66,7 +78,12 @@ const settle = () =>
           return roots.some((r) =>
             r.getAnimations().some((a) => {
               const t = a.effect?.getComputedTiming();
-              return a.playState === "running" && t && t.iterations !== Infinity;
+              return (
+                a.timeline === document.timeline &&
+                a.playState === "running" &&
+                t &&
+                t.iterations !== Infinity
+              );
             }),
           );
         };
@@ -76,6 +93,21 @@ const settle = () =>
       }),
   );
 
+const settle = async () => {
+  const t0 = performance.now();
+  await settleRaw();
+  const ms = performance.now() - t0;
+  timing.settle += ms;
+  sceneSettle += ms;
+};
+// 固定の待ち（waitForTimeout）も数える。auto-wait に置き換える候補を見つけるため
+const rawWaitForTimeout = page.waitForTimeout.bind(page);
+page.waitForTimeout = async (ms) => {
+  timing.sleep += ms;
+  sceneSleep += ms;
+  return rawWaitForTimeout(ms);
+};
+
 const shot = async (name, scrollTo) => {
   await page.evaluate(async (sel) => {
     window.scrollTo(0, 0);
@@ -83,9 +115,13 @@ const shot = async (name, scrollTo) => {
     await document.fonts.load('400 24px "Material Symbols Outlined"');
   }, scrollTo ?? null);
   await settle();
+  const t0 = performance.now();
   await page.screenshot({ path: resolve(OUT, `${name}.png`), fullPage: false });
+  const screenshotMs = performance.now() - t0;
   console.log("saved", name);
+  let axeMs = 0;
   if (A11Y) {
+    const a0 = performance.now();
     await page.evaluate(axeSource);
     const result = await page.evaluate(async () =>
       // eslint-disable-next-line no-undef
@@ -104,7 +140,22 @@ const shot = async (name, scrollTo) => {
       `  a11y: ${violations.length} violation(s)`,
       violations.map((v) => `${v.id}(${v.impact}×${v.nodes.length})`).join(" "),
     );
+    axeMs = performance.now() - a0;
   }
+  const now = performance.now();
+  const total = now - sceneStart;
+  timing.scenes.push({
+    screen: name,
+    totalMs: Math.round(total),
+    actionMs: Math.round(total - sceneSettle - sceneSleep - screenshotMs - axeMs),
+    settleMs: Math.round(sceneSettle),
+    sleepMs: Math.round(sceneSleep),
+    screenshotMs: Math.round(screenshotMs),
+    axeMs: Math.round(axeMs),
+  });
+  sceneStart = now;
+  sceneSettle = 0;
+  sceneSleep = 0;
 };
 const ready = () =>
   page.waitForFunction(() => Boolean(globalThis.__mf100demo && globalThis.__mf100router), null, {
@@ -3176,6 +3227,44 @@ const PARTS = {
 };
 if (!PARTS[PART]) throw new Error(`E2E_PART が不明: ${PART}（${Object.keys(PARTS).join(" / ")}）`);
 
+function writeTimings() {
+  const sum = (k) => timing.scenes.reduce((a, x) => a + x[k], 0);
+  const report = {
+    part: PART,
+    a11y: A11Y,
+    wallMs: Math.round(performance.now() - runStart),
+    screens: timing.scenes.length,
+    totals: {
+      actionMs: sum("actionMs"),
+      settleMs: Math.round(timing.settle),
+      sleepMs: Math.round(timing.sleep),
+      screenshotMs: sum("screenshotMs"),
+      axeMs: sum("axeMs"),
+    },
+    slowest: [...timing.scenes].sort((a, b) => b.totalMs - a.totalMs),
+  };
+  writeFileSync(resolve(OUT, `../timings-${PART}.json`), JSON.stringify(report, null, 2));
+  const s = (ms) => `${(ms / 1000).toFixed(1)}s`;
+  const md = [
+    `### E2E 区間計測（${PART}${A11Y ? "・a11y" : ""}）: 合計 ${s(report.wallMs)}・${report.screens} 画面`,
+    "",
+    `操作 ${s(report.totals.actionMs)} / 描画待ち ${s(report.totals.settleMs)} / 固定待ち ${s(report.totals.sleepMs)} / 撮影 ${s(report.totals.screenshotMs)} / axe ${s(report.totals.axeMs)}`,
+    "",
+    "| 画面 | 合計 | 操作 | 描画待ち | 固定待ち | 撮影 | axe |",
+    "| --- | --: | --: | --: | --: | --: | --: |",
+    ...report.slowest
+      .slice(0, 15)
+      .map(
+        (x) =>
+          `| ${x.screen} | ${s(x.totalMs)} | ${s(x.actionMs)} | ${s(x.settleMs)} | ${s(x.sleepMs)} | ${s(x.screenshotMs)} | ${s(x.axeMs)} |`,
+      ),
+    "",
+  ].join("\n");
+  console.log(md);
+  if (process.env.GITHUB_STEP_SUMMARY)
+    writeFileSync(process.env.GITHUB_STEP_SUMMARY, md, { flag: "a" });
+}
+
 try {
   await PARTS[PART]();
 } catch (e) {
@@ -3198,4 +3287,5 @@ if (A11Y) {
   writeFileSync(path, JSON.stringify(a11yReport, null, 2));
   console.log("a11y report ->", path);
 }
+writeTimings();
 console.log("done ->", OUT);
