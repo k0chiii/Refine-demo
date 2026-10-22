@@ -1,10 +1,12 @@
 # CI: 変更ごとに、手元で回しているのと同じ確認を走らせる（CLAUDE.md: pnpm check / pnpm test / pnpm typecheck）。
-# - verify: 整形・lint（vp check）、型、単体テスト（domain・application・Convex・api・web）、全パッケージのビルド
-# - e2e: デモ版（ブラウザ内の Convex）を建てて、画面の撮影・操作の検証・a11y（axe）と PWA の検証を回す。
+# 方針は docs/TESTING_AGENT_POLICY.md、時間の内訳は docs/CI_CD.md。
+# - verify: 整形・lint（vp check）、型（web は spec の型も）、単体テスト（domain・application・Convex・api・web）、全パッケージのビルド
+# - e2e-smoke（PR）: 機能の E2E（Playwright Test の @smoke）と PWA。デモ版（ブラウザ内の Convex）で流す
+# - e2e（main への push・手動）: 機能の E2E 全部を shard に分けて流し、報告（HTML・失敗の trace）を 1 つにまとめる
+# - visual（main への push・手動）: e2e/screenshots.mjs で画面の撮影・操作の検証・a11y（axe）。部（core・compact・v2・web）ごとに同時に流す。
 #   撮影した画面はリポジトリには入れず、Actions の成果物として残す（利用者方針: スクリーンショットはコミットしない）
-#   全部を 1 本で流すと 20 分を超えるので（画面 1 つに約 12 秒 × 約 120。利用者指示 2026-10-21「CIがそんなに時間かかるのもおかしい」）:
-#   - PR: smoke（サインイン → 提出 → 割り当て → 紙面にコメントまで）と PWA だけ。数分
-#   - main への push・手動: 全部を部（core・compact・v2・web）に分けて同時に流し、a11y も見る
+# 以前は 1 画面に約 12 秒かかっていたが、原因は描画待ち（settle）がスクロール連動の animation を「終わらない animation」として
+# 毎回 3 秒の打ち切りまで待っていたこと。直して smoke は 251 秒 → 35 秒（2026-10-22 の計測。docs/CI_CD.md）
 name: CI
 
 on:
@@ -19,6 +21,11 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  # ubuntu-latest に入っている Chrome を使う（Playwright のブラウザは落とさない）
+  CHROMIUM_PATH: /usr/bin/google-chrome
+  TZ: Asia/Tokyo
 
 jobs:
   verify:
@@ -38,10 +45,9 @@ jobs:
         run: pnpm build
       - name: 整形と lint
         run: pnpm check
+      # vp run -r typecheck が web（tsc。spec の型も）を含む。web だけをもう一度流さない
       - name: 型
-        run: |
-          pnpm typecheck
-          pnpm --filter @mf100/web typecheck
+        run: pnpm typecheck
       - name: 単体テスト
         run: pnpm test
       - name: Convex の _generated がコミットと一致するか
@@ -63,25 +69,26 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: デモ版をビルド
         run: pnpm --filter @mf100/web build:demo
-      - name: 主要な流れ（smoke）と PWA
+      - name: 主要な流れ（@smoke）
+        working-directory: apps/web
+        env:
+          E2E_PREBUILT: "1"
+        run: pnpm exec playwright test --grep @smoke --reporter=github,list,html
+      - name: PWA
         working-directory: apps/web
         env:
           BASE_URL: http://127.0.0.1:4173
-          # ubuntu-latest に入っている Chrome を使う（playwright のブラウザは落とさない）
-          CHROMIUM_PATH: /usr/bin/google-chrome
-          TZ: Asia/Tokyo
-          E2E_PART: smoke
         run: |
           pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 > preview.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null "$BASE_URL/" && break; sleep 1; done
-          node e2e/screenshots.mjs
           node e2e/pwa.mjs
-      - name: 撮影した画面を残す
-        if: always()
+      - name: 報告と失敗の trace を残す
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-smoke
           path: |
+            apps/web/playwright-report
             apps/web/e2e/out
             apps/web/preview.log
           retention-days: 14
@@ -89,7 +96,65 @@ jobs:
   e2e:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/2, 2/2]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: デモ版をビルド
+        run: pnpm --filter @mf100/web build:demo
+      - name: 機能の E2E（shard ${{ matrix.shard }}）
+        working-directory: apps/web
+        env:
+          E2E_PREBUILT: "1"
+        run: pnpm exec playwright test --shard=${{ matrix.shard }}
+      - name: blob の報告を残す（あとでまとめる）
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ strategy.job-index }}
+          path: apps/web/e2e/out/blob-report
+          retention-days: 3
+
+  e2e-report:
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v5
+        with:
+          path: apps/web/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      - name: shard の報告を 1 つの HTML にまとめる（失敗の trace も入る）
+        working-directory: apps/web
+        run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+  visual:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -105,12 +170,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: デモ版をビルド
         run: pnpm --filter @mf100/web build:demo
-      - name: 画面の検証（撮影・操作・a11y）
+      - name: 画面の撮影・操作の検証・a11y（区間計測は実行のまとめへ）
         working-directory: apps/web
         env:
           BASE_URL: http://127.0.0.1:4173
-          CHROMIUM_PATH: /usr/bin/google-chrome
-          TZ: Asia/Tokyo
           E2E_PART: ${{ matrix.part }}
         run: |
           pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 > preview.log 2>&1 &
@@ -121,14 +184,12 @@ jobs:
         working-directory: apps/web
         env:
           BASE_URL: http://127.0.0.1:4173
-          CHROMIUM_PATH: /usr/bin/google-chrome
-          TZ: Asia/Tokyo
         run: node e2e/pwa.mjs
-      - name: 撮影した画面と a11y の結果を残す
+      - name: 撮影した画面・a11y の結果・区間計測を残す
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-${{ matrix.part }}
+          name: visual-${{ matrix.part }}
           path: |
             apps/web/e2e/out
             apps/web/preview.log

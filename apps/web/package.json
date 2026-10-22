@@ -9,12 +9,14 @@
     "build": "vp build",
     "preview": "vp preview",
     "test": "vp test run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json",
     "dev:demo": "vp dev --mode demo",
     "build:demo": "vp build --mode demo --outDir dist-demo",
     "screenshots": "node e2e/screenshots.mjs",
     "a11y": "A11Y=1 node e2e/screenshots.mjs",
     "e2e:pwa": "node e2e/pwa.mjs",
+    "e2e": "playwright test",
+    "e2e:smoke": "playwright test --grep @smoke",
     "pwa:icons": "node scripts/pwa-icons.mjs",
     "icons": "python3 scripts/subset-icons.py"
   },
@@ -60,7 +62,9 @@
     "tesseract.js": "7.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@tanstack/router-plugin": "1.168.43",
+    "@types/node": "^22.20.5",
     "@types/pngjs": "^6.0.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.2.0",

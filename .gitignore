@@ -33,8 +33,12 @@ node_modules/.vite-plus/
 .logs/
 apps/web/public/ocr/
 
-# 撮影の出力（画像はリポジトリに置かない）
+# 撮影の出力（画像はリポジトリに置かない）と Playwright Test の報告・trace
 apps/web/e2e/out/
+apps/web/playwright-report/
+apps/web/all-blob-reports/
+# verify-mf100-web の一時的な spec
+apps/web/e2e/specs/_verify-*
 
 # Claude Code の作業用ワークツリー
 .claude/worktrees/
