@@ -6,11 +6,18 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node ../../scripts/deploy-api.mjs",
     "test": "vp test run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "vp run verify-types",
+    "types": "wrangler types worker-configuration.d.ts --config wrangler.jsonc",
+    "types:check": "node ../../scripts/check-worker-types.mjs",
+    "dev:vite": "vp dev --host 127.0.0.1 --port 8788",
+    "build:worker": "vp build",
+    "preview:worker": "vp preview --host 127.0.0.1 --port 8788"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
+    "@cloudflare/puppeteer": "^1.4.0",
     "@mf100/convex": "workspace:*",
     "@mf100/domain": "workspace:*",
     "convex": "1.46.0",
@@ -18,9 +25,9 @@
     "jose": "6.2.12"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261010.1",
+    "@cloudflare/vite-plugin": "^1.64.0",
     "typescript": "5.9.3",
     "vite-plus": "1.2.0",
-    "wrangler": "^4.149.0"
+    "wrangler": "^4.151.3"
   }
 }

@@ -5,7 +5,7 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { resolveUsers } from "./lib/users.ts";
-import { listMyWorks } from "./works.ts";
+import { listSubmissionCandidates } from "./works.ts";
 
 /**
  * 文章の下書き（エディタ `/works/:id/write`）。読むのは閲覧権限、書くのは版を提出できる人。
@@ -21,10 +21,16 @@ export const get = query({
         principal,
         workId,
       );
-      if (!draft) return { draft: null, canEdit };
+      const collaborative =
+        (await ctx.db
+          .query("collaborativeDrafts")
+          .withIndex("by_work", (q) => q.eq("workId", workId))
+          .unique()) !== null;
+      if (!draft) return { draft: null, canEdit, collaborative };
       const users = await resolveUsers(ctx.db, [draft.updatedBy]);
       return {
         canEdit,
+        collaborative,
         draft: {
           title: draft.title,
           content: draft.content,
@@ -54,6 +60,13 @@ export const save = mutation({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
+    if (
+      await ctx.db
+        .query("collaborativeDrafts")
+        .withIndex("by_work", (q) => q.eq("workId", args.workId))
+        .unique()
+    )
+      throw new Error("collaborative_draft_requires_sync");
     return runUseCase(() => saveDocumentDraft(createAppContext(ctx), principal, args));
   },
 });
@@ -66,7 +79,7 @@ export const writable = query({
   args: {},
   handler: async (ctx) => {
     const { principal } = await requireUser(ctx);
-    const works = await listMyWorks(ctx.db, principal);
+    const works = await listSubmissionCandidates(ctx.db, principal);
     return runUseCase(async () => {
       const list = await listWritableWorks(createReadContext(ctx.db), principal, works);
       const users = await resolveUsers(

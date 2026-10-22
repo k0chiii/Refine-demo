@@ -73,3 +73,25 @@ FB（フィードバック）を廃止してコメントへ移した（docs/UI_M
 3. `delete`: 全て移行済みであることを確かめてから、FB の行を全て消す。移っていないスレッドがあれば何も消さず `refused: true` を返す。R2 の実体には触れない。
 
 `none`（既定）は何も流さない。順番は dry-run → 件数を確かめる → migrate → 画面で確かめる → delete。FB の表は、delete を流し終えた後の変更で schema から落とす。
+
+## 基盤の追加改善
+
+- Node は CI/CD とも `.node-version` を使う。Vite+ と pnpm は lockfile / packageManager の版を使い、最新版へ無条件で migrate しない。
+- `pnpm check` は `verify-static` タスクの依存として Web build と Convex codegen を先に実行する。`pnpm typecheck` も生成物の依存を明示する。型対応 lint と tsc は完全互換とは判断せず、Convex・Web・E2E の tsc を残す。
+- `bundle-web`・`bundle-demo`・`verify-types`・`generate-convex` は決定的なタスクとしてキャッシュする。接続先の VITE 変数、lockfile、共有ソース、設定を fingerprint し、routeTree・OCR・dist と生成 API を復元する。サービス・テスト・デプロイはキャッシュしない。
+- CI をまたぐ experimental cache とデモ成果物の転送は導入しない。現行の数秒の build に対して、成果物転送・失効の管理を増やす効果をまだ計測できないため。1 タスク内の warm cache をまず確認する。
+- 任意の commit hook は `pnpm exec vp hooks enable` で有効化できる。`.vite-hooks/pre-commit` は `pnpm staged` の読み取り専用検査を実行し、ステージ外の変更を自動修正・取り込みしない。通常の CI は引き続き全体を検査する。
+- 対象別単体テストは `pnpm test:domain` / `test:application` / `test:convex` / `test:api` / `test:web`。E2E と PWA は別に実行する。
+- `pnpm --filter @mf100/api types` で Wrangler の環境・compatibility date/flags に対応する型を生成する。`types:check` は一時ファイルと比較し、追跡ファイルを書き換えない。
+- ファイル API は従来の `wrangler dev` に加えて `pnpm --filter @mf100/api dev:vite` / `build:worker` / `preview:worker` を使える。R2 はローカル。cron は従来どおり `wrangler dev --test-scheduled` でも確認できる。Cloudflare plugin の生成設定に引きずられないよう、配信と型生成では `--config wrangler.jsonc` を明示する。
+
+### 固定 staging（手動のみ）
+
+`.github/workflows/staging.yml` は GitHub environment `staging` の独立した鍵と URL を使う。production の値を複製して動かさない。Cloudflare の R2 `mf100-assets-staging`、Worker `mf100-api-staging`、Pages `mf100-refine-staging` を事前に管理者が用意する。
+
+必要な Variables: `STAGING_CONVEX_URL`、`STAGING_CONVEX_SITE_URL`、`STAGING_ALLOWED_ORIGINS`（staging Web の HTTPS origin）、`STAGING_API_URL`。
+Secrets は staging 専用 `CONVEX_DEPLOY_KEY`、`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。Convex の `CONVEX_SITE_ORIGIN` とキーの対象を読み取りで照合してから配信する。Nogiku mock/redirect、共有 upload secret、CORS を staging ごとに設定し、本番データを取り込まない。
+
+`apps/api` の `pnpm deploy staging` は未設定・本番の URL を拒否する。staging 用設定の loopback URL はローカル用の無効な初期値であり、配信には上記の変数が必須。Cloudflare Access を使う場合は `ACCESS_TEAM`（team slug）と `ACCESS_AUDIENCE` を両方設定する。Access JWT の issuer/audience/署名を確認した後も、アプリの JWT と作品 ACL を確認する。公開デモには設定しない。
+
+実クラウドでの staging 配信・SSO・R2 と Convex の連携は、専用資源と鍵を設定した後の検証が必要。このリポジトリ内のデモ E2E の成功はその代わりにならない。復旧と配信版 ID は [RECOVERY.md](RECOVERY.md) を参照。

@@ -211,7 +211,14 @@ async function showPush(data) {
   let count = 1;
 
   const prev = await shownWithTag(tag);
-  if (prev) {
+  const duplicate = prev && id && Array.isArray(prev.data.ids) && prev.data.ids.includes(id);
+  if (duplicate) {
+    title = prev.title || title;
+    body = prev.body;
+    lines = prev.data.lines;
+    ids = prev.data.ids;
+    count = prev.data.count;
+  } else if (prev) {
     // 題名はそのまま、本文は最新の 1 行に「N件の新着」を付ける
     title = prev.title || title;
     lines = [...prev.data.lines, line].slice(-MERGE_LINES);
@@ -220,7 +227,7 @@ async function showPush(data) {
     body = `${count}件の新着: ${line}`;
   }
 
-  const quiet = await appInFront();
+  const quiet = duplicate || (await appInFront());
   await self.registration.showNotification(title, {
     body,
     // 同じ印の通知は置き換える。renotify: 置き換えでも知らせる（印があるときだけ指定できる）

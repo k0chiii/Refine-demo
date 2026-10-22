@@ -33,6 +33,7 @@ export interface UploadAttemptTarget {
  * - fail: 試行を破棄する（Hono が自分の試行のキーを消した後の記録）。
  */
 export interface UploadOps {
+  resume?(token: string, attemptId: string): Promise<UploadAttemptTarget & { adopted: boolean }>;
   begin(token: string, id: string): Promise<UploadAttemptTarget>;
   complete(
     token: string,

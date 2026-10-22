@@ -5,6 +5,8 @@ import {
   subscribePush,
   unsubscribePush,
 } from "@mf100/application";
+import { internal } from "./_generated/api";
+import { pushPool } from "./lib/pushPool.ts";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
@@ -73,4 +75,52 @@ export const recordResult = internalMutation({
   args: { subscriptionId: v.string(), status: v.number() },
   handler: async (ctx, { subscriptionId, status }) =>
     recordPushResult(createAppContext(ctx), subscriptionId, status),
+});
+
+/** Enqueued in the notification transaction; workpool bounds concurrency and retries transient failures. */
+export const enqueue = internalMutation({
+  args: { notificationId: v.string() },
+  handler: async (ctx, args) => {
+    await pushPool.enqueueAction(ctx, internal.pushNode.deliver, args, {
+      onComplete: internal.push.completed,
+      context: args,
+    });
+  },
+});
+
+export const delivered = internalQuery({
+  args: { notificationId: v.string(), subscriptionId: v.string() },
+  handler: async (ctx, args) =>
+    (await ctx.db
+      .query("pushDeliveries")
+      .withIndex("by_notification_and_subscription", (q) =>
+        q.eq("notificationId", args.notificationId).eq("subscriptionId", args.subscriptionId),
+      )
+      .unique()) !== null,
+});
+
+export const recordDelivery = internalMutation({
+  args: { notificationId: v.string(), subscriptionId: v.string(), status: v.number() },
+  handler: async (ctx, args) => {
+    const previous = await ctx.db
+      .query("pushDeliveries")
+      .withIndex("by_notification_and_subscription", (q) =>
+        q.eq("notificationId", args.notificationId).eq("subscriptionId", args.subscriptionId),
+      )
+      .unique();
+    if (!previous) await ctx.db.insert("pushDeliveries", { ...args, deliveredAt: Date.now() });
+  },
+});
+
+export const completed = pushPool.defineOnComplete({
+  context: v.object({ notificationId: v.string() }),
+  handler: async (_ctx, { context, result }) => {
+    console.log(
+      JSON.stringify({
+        event: "push_complete",
+        notificationId: context.notificationId,
+        outcome: result.kind,
+      }),
+    );
+  },
 });

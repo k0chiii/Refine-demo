@@ -1,3 +1,4 @@
+import { substringQuery, workSearchText } from "./lib/workSearch";
 import {
   changeWorkLifecycle,
   createWork,
@@ -27,8 +28,9 @@ import {
   type WorkViewPolicy,
 } from "@mf100/domain";
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type DatabaseReader } from "./_generated/server";
+import { mutation, query, type DatabaseReader, type QueryCtx } from "./_generated/server";
 import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser, teamIdsOf } from "./lib/principal.ts";
@@ -364,65 +366,8 @@ export const listMine = query({
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
-    const app = createReadContext(ctx.db);
     const mine = await listMyWorks(ctx.db, principal);
-    const text = args.text?.trim().toLowerCase() ?? "";
-    const picked = [];
-    for (const work of mine) {
-      if (args.year !== undefined && work.year !== args.year) continue;
-      if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
-      if (args.genre !== undefined && work.genre !== args.genre) continue;
-      if (
-        text &&
-        !`${work.title} ${work.legacyId ?? ""} ${work.category} ${work.purpose} ${(work.tags ?? []).join(" ")}`
-          .toLowerCase()
-          .includes(text)
-      )
-        continue;
-      const revisions = await app.revisions.listByWork(work.id);
-      const accepting = revisions.find(isAccepting) ?? null;
-      const latest =
-        revisions
-          .filter((r) => r.reviewState !== "void")
-          .sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
-      // 校了者が 2 人以上いる進行中の制作物だけ、宣言の数を数える（履歴を読むのはそのときだけ）
-      const declared =
-        work.lifecycle === "active" && approvalSetupOf(work).quorum > 1
-          ? approvalProgressOf(work, await app.approvals.listByWork(work.id), revisions).declaredIds
-              .length
-          : 0;
-      picked.push({ work, latest, accepting, declared });
-    }
-    // 制作者・校了者の表示名（一覧で「担当別」に並べたとき、誰の制作物か分かるように）
-    const users = await resolveUsers(
-      ctx.db,
-      picked.flatMap((p) => [...p.work.creatorIds, ...approversOf(p.work)]),
-    );
-    // 一覧から校了者を直せるか: 校了者を決める権限（approvers:assign）がある人。判定の本体は更新（updateWork）
-    const canAssignApprovers = hasOrgPermission(principal, orgPermissions.approversAssign);
-    const out = picked.map(({ work, latest, accepting, declared }) => ({
-      ...summarize(
-        work,
-        latest,
-        accepting,
-        work.creatorIds.map((id) => users.get(id)?.name ?? "（不明なユーザー）"),
-      ),
-      /** 校了者の全員（先頭が approverId）と校了とみなす人数、宣言の済んだ人数（2 人以上の進行中のみ） */
-      approvers: approversOf(work).map((id) => ({
-        id,
-        name: users.get(id)?.name ?? "（不明なユーザー）",
-      })),
-      approvalQuorum: approvalSetupOf(work).quorum,
-      approvalDeclared: declared,
-      /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
-      creatorIds: [...work.creatorIds],
-      canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
-    }));
-    return out.sort(
-      (a, b) =>
-        (a.acceptingDeadlineAt ?? Infinity) - (b.acceptingDeadlineAt ?? Infinity) ||
-        a.title.localeCompare(b.title, "ja"),
-    );
+    return summarizeWorkList(ctx, principal, mine, args);
   },
 });
 
@@ -506,3 +451,215 @@ function summarize(
     creators,
   };
 }
+
+/** Submission candidates from transactional role rows and explicit ACL; legacy rows remain a safe fallback until backfilled. */
+export async function listSubmissionCandidates(
+  db: DatabaseReader,
+  principal: Principal,
+): Promise<Work[]> {
+  const ids = new Set<Id<"works">>();
+  const roles = db.query("workRoles").withIndex("by_user", (q) => q.eq("userId", principal.userId));
+  for await (const row of roles) ids.add(row.workId);
+  for (const [principalType, principalId] of [
+    ["user", principal.userId] as const,
+    ...principal.groupIds.map((id) => ["group", id] as const),
+  ]) {
+    for await (const grant of db
+      .query("workPermissions")
+      .withIndex("by_principal", (q) =>
+        q.eq("principalType", principalType).eq("principalId", principalId),
+      )) {
+      if (
+        grant.revokedAt === undefined &&
+        (grant.permission === "edit" || grant.permission === "manage")
+      )
+        ids.add(grant.workId);
+    }
+  }
+  // Old installations never lose candidates while their derived index is repaired.
+  for await (const work of db
+    .query("works")
+    .withIndex("by_roles_version", (q) => q.eq("rolesVersion", undefined)))
+    ids.add(work._id);
+  const works: Work[] = [];
+  for (const id of ids) {
+    const doc = await db.get(id);
+    if (doc && doc.lifecycle === "active") works.push(workFromDoc(doc));
+  }
+  return works;
+}
+
+type WorkFilters = {
+  year?: number;
+  lifecycle?: Work["lifecycle"];
+  text?: string;
+  genre?: Work["genre"];
+};
+async function summarizeWorkList(
+  ctx: QueryCtx,
+  principal: Principal,
+  mine: Work[],
+  args: WorkFilters,
+) {
+  const app = createReadContext(ctx.db);
+  const text = args.text?.trim().toLowerCase() ?? "";
+  const picked = [];
+  for (const work of mine) {
+    if (args.year !== undefined && work.year !== args.year) continue;
+    if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
+    if (args.genre !== undefined && work.genre !== args.genre) continue;
+    if (text && !workSearchText(work).includes(text)) continue;
+    const derived = await ctx.db
+      .query("workSummaries")
+      .withIndex("by_work", (q) => q.eq("workId", work.id as Id<"works">))
+      .unique();
+    const revisions = derived ? [] : await app.revisions.listByWork(work.id);
+    const accepting = derived
+      ? derived.acceptingId
+        ? await app.revisions.findById(derived.acceptingId)
+        : null
+      : (revisions.find(isAccepting) ?? null);
+    const latest = derived
+      ? derived.latestId
+        ? await app.revisions.findById(derived.latestId)
+        : null
+      : (revisions
+          .filter((r) => r.reviewState !== "void")
+          .sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null);
+    const declared = derived
+      ? derived.declared
+      : work.lifecycle === "active" && approvalSetupOf(work).quorum > 1
+        ? approvalProgressOf(work, await app.approvals.listByWork(work.id), revisions).declaredIds
+            .length
+        : 0;
+    picked.push({ work, latest, accepting, declared });
+  }
+  // 制作者・校了者の表示名（一覧で「担当別」に並べたとき、誰の制作物か分かるように）
+  const users = await resolveUsers(
+    ctx.db,
+    picked.flatMap((p) => [...p.work.creatorIds, ...approversOf(p.work)]),
+  );
+  // 一覧から校了者を直せるか: 校了者を決める権限（approvers:assign）がある人。判定の本体は更新（updateWork）
+  const canAssignApprovers = hasOrgPermission(principal, orgPermissions.approversAssign);
+  const out = picked.map(({ work, latest, accepting, declared }) => ({
+    ...summarize(
+      work,
+      latest,
+      accepting,
+      work.creatorIds.map((id) => users.get(id)?.name ?? "（不明なユーザー）"),
+    ),
+    /** 校了者の全員（先頭が approverId）と校了とみなす人数、宣言の済んだ人数（2 人以上の進行中のみ） */
+    approvers: approversOf(work).map((id) => ({
+      id,
+      name: users.get(id)?.name ?? "（不明なユーザー）",
+    })),
+    approvalQuorum: approvalSetupOf(work).quorum,
+    approvalDeclared: declared,
+    /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
+    creatorIds: [...work.creatorIds],
+    canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
+  }));
+  return out.sort(
+    (a, b) =>
+      (a.acceptingDeadlineAt ?? Infinity) - (b.acceptingDeadlineAt ?? Infinity) ||
+      a.title.localeCompare(b.title, "ja"),
+  );
+}
+
+/** Native cursor continues even when ACL/search filtering produces an empty page. */
+export const listMinePage = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    year: v.optional(v.number()),
+    lifecycle: v.optional(
+      v.union(
+        v.literal("draft"),
+        v.literal("active"),
+        v.literal("on_hold"),
+        v.literal("finalized"),
+        v.literal("cancelled"),
+      ),
+    ),
+    text: v.optional(v.string()),
+    genre: v.optional(vWorkGenre),
+  },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    const source =
+      args.year !== undefined
+        ? args.lifecycle !== undefined
+          ? ctx.db
+              .query("works")
+              .withIndex("by_year_and_lifecycle", (q) =>
+                q.eq("year", args.year!).eq("lifecycle", args.lifecycle!),
+              )
+          : ctx.db.query("works").withIndex("by_year", (q) => q.eq("year", args.year!))
+        : args.lifecycle !== undefined
+          ? ctx.db
+              .query("works")
+              .withIndex("by_lifecycle", (q) => q.eq("lifecycle", args.lifecycle!))
+          : ctx.db.query("works");
+    const search = args.text?.trim();
+    let result;
+    if (search) {
+      type SearchCursor = { phase: "search" | "legacy"; cursor: string | null };
+      const cursor: SearchCursor = args.paginationOpts.cursor
+        ? JSON.parse(args.paginationOpts.cursor)
+        : { phase: "search", cursor: null };
+      if (cursor.phase !== "search" && cursor.phase !== "legacy") throw new Error("invalid_cursor");
+      if (cursor.phase === "search") {
+        const indexed = ctx.db.query("works").withSearchIndex("search_substring", (q) => {
+          const query = q.search("searchTokens", substringQuery(search));
+          if (args.year !== undefined && args.lifecycle !== undefined)
+            return query.eq("year", args.year).eq("lifecycle", args.lifecycle);
+          if (args.year !== undefined) return query.eq("year", args.year);
+          if (args.lifecycle !== undefined) return query.eq("lifecycle", args.lifecycle);
+          return query;
+        });
+        const page = await indexed.paginate({ ...args.paginationOpts, cursor: cursor.cursor });
+        result = {
+          ...page,
+          isDone: false,
+          continueCursor: JSON.stringify(
+            page.isDone
+              ? { phase: "legacy", cursor: null }
+              : { phase: "search", cursor: page.continueCursor },
+          ),
+        };
+      } else {
+        const page = await ctx.db
+          .query("works")
+          .withIndex("by_search_tokens", (q) => q.eq("searchTokens", undefined))
+          .paginate({ ...args.paginationOpts, cursor: cursor.cursor });
+        result = {
+          ...page,
+          continueCursor: JSON.stringify({ phase: "legacy", cursor: page.continueCursor }),
+        };
+      }
+    } else result = await source.paginate(args.paginationOpts);
+    const visible: Work[] = [];
+    let member: Principal | null = null;
+    const app = createReadContext(ctx.db);
+    for (const doc of result.page) {
+      const work = workFromDoc(doc);
+      if (
+        work.confidentiality === "normal" &&
+        defaultWorkViewPolicy.normalWorks === "all_members"
+      ) {
+        visible.push(work);
+        continue;
+      }
+      const grants = await app.acl.listByWork(work.id);
+      if (canViewWork({ work, grants, principal })) {
+        visible.push(work);
+        continue;
+      }
+      member ??= {
+        ...principal,
+        teamIds: await teamIdsOf(ctx.db, principal.userId as Id<"users">),
+      };
+      if (canViewWork({ work, grants, principal: member })) visible.push(work);
+    }
+    return { ...result, page: await summarizeWorkList(ctx, principal, visible, args) };
+  },
+});

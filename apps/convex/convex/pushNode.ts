@@ -17,11 +17,36 @@ export const deliver = internalAction({
     const plan = await ctx.runQuery(internal.push.plan, { notificationId });
     if (!plan) return 0;
     let sent = 0;
+    let retry = false;
     for (const target of plan.targets) {
-      const status = await sendWebPush(target, plan.payload, keys, { now: Date.now() });
+      if (
+        await ctx.runQuery(internal.push.delivered, { notificationId, subscriptionId: target.id })
+      )
+        continue;
+      // Recheck authorization/read status immediately before each external send.
+      const current = await ctx.runQuery(internal.push.plan, { notificationId });
+      if (!current || !current.targets.some((t) => t.id === target.id)) continue;
+      let status: number;
+      try {
+        status = await sendWebPush(target, current.payload, keys, { now: Date.now() });
+      } catch {
+        retry = true;
+        continue;
+      }
+      if (status === 429 || status >= 500) {
+        retry = true;
+        continue;
+      }
+      // A crash between send and record is at-least-once; the browser uses notificationId as tag.
+      await ctx.runMutation(internal.push.recordDelivery, {
+        notificationId,
+        subscriptionId: target.id,
+        status,
+      });
       if (status >= 200 && status < 300) sent++;
       await ctx.runMutation(internal.push.recordResult, { subscriptionId: target.id, status });
     }
+    if (retry) throw new Error("push_transient_failure");
     return sent;
   },
 });

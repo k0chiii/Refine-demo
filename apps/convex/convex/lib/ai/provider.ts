@@ -27,10 +27,14 @@ export interface AiConfig {
 /** 環境変数から設定を読む。キーが無ければ無効 */
 export function aiConfig(): AiConfig {
   const provider = process.env.AI_PROVIDER ?? "anthropic";
-  const hasKey = provider === "anthropic" && !!process.env.ANTHROPIC_API_KEY;
+  const hasKey =
+    (provider === "anthropic" && !!process.env.ANTHROPIC_API_KEY) ||
+    (provider === "workers-ai" && !!process.env.WORKERS_AI_URL && !!process.env.WORKERS_AI_SECRET);
   return {
     provider,
-    model: process.env.AI_MODEL ?? "claude-opus-5-5",
+    model:
+      process.env.AI_MODEL ??
+      (provider === "workers-ai" ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : "claude-opus-5-5"),
     policy: {
       enabled: hasKey && process.env.AI_PROOFREAD_ENABLED !== "false",
       allowRestricted: process.env.AI_ALLOW_RESTRICTED === "true",
@@ -44,6 +48,10 @@ export async function createProvider(config: AiConfig): Promise<AiProofreadProvi
   if (config.provider === "anthropic") {
     const { AnthropicProofreader } = await import("./anthropic.ts");
     return new AnthropicProofreader(config.model);
+  }
+  if (config.provider === "workers-ai") {
+    const { WorkersAiProofreader } = await import("./workersAi");
+    return new WorkersAiProofreader(config.model);
   }
   throw new Error(`unknown AI provider: ${config.provider}`);
 }

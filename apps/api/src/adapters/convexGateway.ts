@@ -13,6 +13,7 @@ import { GatewayError } from "../ports.ts";
 const coalesceAuthorize = createCoalescer();
 
 export interface ConvexGatewayConfig {
+  requestId?: string;
   /** Convex deployment URL（公開 query の呼出し） */
   convexUrl: string;
   /** Convex の HTTP actions の URL（サービス認証付きの /internal エンドポイント） */
@@ -28,7 +29,13 @@ export interface ConvexGatewayConfig {
  */
 export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway {
   const withAuth = (token: string) => {
-    const client = new ConvexHttpClient(config.convexUrl);
+    const client = new ConvexHttpClient(config.convexUrl, {
+      fetch: (input, init) => {
+        const headers = new Headers(init?.headers);
+        if (config.requestId) headers.set("X-Request-ID", config.requestId);
+        return fetch(input, { ...init, headers });
+      },
+    });
     client.setAuth(token);
     return client;
   };
@@ -53,6 +60,7 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
       headers: {
         Authorization: `Bearer ${token}`,
         "X-MF100-Service-Key": config.uploadSecret,
+        ...(config.requestId ? { "X-Request-ID": config.requestId } : {}),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -79,6 +87,9 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
       )
         throw new Error("upload service returned an invalid target");
       return target;
+    },
+    async resume(token, attemptId) {
+      return call(token, `${prefix}/resume`, { attemptId });
     },
     async complete(token, attemptId, meta) {
       return call(token, `${prefix}/complete`, { attemptId, ...meta });

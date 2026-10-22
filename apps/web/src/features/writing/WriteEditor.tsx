@@ -1,7 +1,10 @@
+import { useAction } from "@/lib/useAction";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { countText, draftFormatFor, draftFormatOf } from "@mf100/domain";
-import { Extension, type Editor, type JSONContent } from "@tiptap/core";
+import { useTiptapSync } from "@convex-dev/prosemirror-sync/tiptap";
+import { getVersion, sendableSteps } from "prosemirror-collab";
+import { Extension, type AnyExtension, type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -81,7 +84,7 @@ export function WriteEditor({ workId }: { workId: string }) {
         canEdit={docData.canEdit}
       />
     );
-  return (
+  const surface = (
     <WriteSurface
       key={`${reloadKey}`}
       workId={workId}
@@ -94,6 +97,26 @@ export function WriteEditor({ workId }: { workId: string }) {
       }
       doc={docData}
       onReload={() => setReloadKey((k) => k + 1)}
+    />
+  );
+  if (docData.collaborative && import.meta.env.MODE !== "demo")
+    return <CollaborativeWrite workId={workId} surface={surface} />;
+  return surface;
+}
+
+function CollaborativeWrite({
+  workId,
+  surface,
+}: {
+  workId: string;
+  surface: React.ReactElement<React.ComponentProps<typeof WriteSurface>>;
+}) {
+  const sync = useTiptapSync(api.collaboration, workId);
+  if (sync.isLoading || !sync.extension) return <Loading label="共同原稿を読み込んでいます" />;
+  return (
+    <WriteSurface
+      {...surface.props}
+      collaboration={{ extension: sync.extension, initialContent: sync.initialContent }}
     />
   );
 }
@@ -115,6 +138,7 @@ function WriteSurface({
   acceptingRevisionId,
   doc,
   onReload,
+  collaboration,
 }: {
   workId: string;
   workTitle: string;
@@ -122,9 +146,12 @@ function WriteSurface({
   acceptingRevisionId: string | null;
   doc: DocData;
   onReload: () => void;
+  collaboration?: { extension: AnyExtension; initialContent: string | JSONContent | JSONContent[] };
 }) {
   const navigate = useNavigate();
   const save = useMutation(api.documents.save);
+  const enableCollaboration = useMutation(api.collaboration.enable);
+  const saveSnapshot = useMutation(api.collaboration.submitSnapshot);
   const cls = useWindowClass();
   const compact = cls === "compact";
   const kb = useKeyboardInset(compact);
@@ -228,8 +255,9 @@ function WriteSurface({
       SearchReplace,
       NotationMarks,
       shortcuts,
+      ...(collaboration ? [collaboration.extension] : []),
     ],
-    content: initial,
+    content: collaboration?.initialContent ?? initial,
     editable: canEdit,
     editorProps: {
       attributes: {
@@ -263,6 +291,30 @@ function WriteSurface({
   const flush = useCallback(async () => {
     window.clearTimeout(timer.current);
     if (!editor || saving.current || !dirty.current || conflict.current || !canEdit) return;
+    if (collaboration) {
+      if (sendableSteps(editor.state)) {
+        setStatus({ kind: "dirty" });
+        schedule();
+        return;
+      }
+      saving.current = true;
+      dirty.current = false;
+      try {
+        await saveSnapshot({
+          id: workId,
+          version: getVersion(editor.state),
+          content: JSON.stringify(editor.getJSON()),
+        });
+        setStatus(dirty.current ? { kind: "dirty" } : { kind: "saved", at: Date.now() });
+      } catch (error) {
+        dirty.current = true;
+        setStatus({ kind: "error", message: describeError(error).message });
+      } finally {
+        saving.current = false;
+        if (dirty.current) schedule();
+      }
+      return;
+    }
     saving.current = true;
     dirty.current = false;
     setStatus({ kind: "saving" });
@@ -287,7 +339,13 @@ function WriteSurface({
       saving.current = false;
       if (dirty.current && !conflict.current) schedule();
     }
-  }, [editor, save, workId, workTitle, canEdit]);
+  }, [editor, save, saveSnapshot, collaboration, workId, workTitle, canEdit]);
+  const beginCollaboration = useAction(async () => {
+    await flush();
+    if (saving.current || dirty.current || conflict.current)
+      throw new Error("原稿を保存してから共同編集を開始してください");
+    await enableCollaboration({ workId });
+  });
   const flushRef = useRef(flush);
   flushRef.current = flush;
   function schedule() {
@@ -388,6 +446,7 @@ function WriteSurface({
     if (!editor) return;
     dirty.current = dirty.current || false;
     await flush();
+    if (collaboration && (dirty.current || sendableSteps(editor.state))) return;
     const html = documentHtml(workTitle, editor.getHTML());
     setSubmitFiles([new File([html], `${workTitle}.html`, { type: "text/html" })]);
   };
@@ -509,6 +568,15 @@ function WriteSurface({
         </span>
       </AppBarSlot>
       <AppBarSlot slot="actions">
+        {canEdit && !doc.collaborative && import.meta.env.MODE !== "demo" ? (
+          <M3eButton
+            variant="text"
+            disabled={beginCollaboration.pending || status.kind === "saving"}
+            onClick={() => void beginCollaboration.run()}
+          >
+            共同編集を開始
+          </M3eButton>
+        ) : null}
         {canEdit && canSubmit ? (
           compact ? (
             <M3eIconButton
@@ -686,7 +754,7 @@ function WriteSurface({
           <p style={{ margin: 0 }}>
             {doc.draft?.updatedBy?.name ?? "別の人"} さんが{" "}
             {doc.draft ? formatJstShort(doc.draft.updatedAt) : ""} に保存した内容があります。
-            同時に書くことはまだできません。
+            この原稿では通常の保存を使用しています。
           </p>
           <p className="small muted" style={{ margin: 0 }}>
             最新を読み込むまで、この画面の変更は保存されません。読み込むと、まだ保存していない変更は消えます。残したい文章は先にコピーしてください。

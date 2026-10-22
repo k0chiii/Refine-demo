@@ -1,3 +1,7 @@
+import { syncWorkAggregate } from "./workAggregate";
+import type { MutationCtx } from "../_generated/server";
+import { substringTokens, workSearchText } from "./workSearch";
+import { syncWorkSummary } from "./workSummary";
 import type {
   AlignmentOverride,
   AppContext,
@@ -57,7 +61,11 @@ function fromDoc<T extends TableNames, D extends Doc<T>>(doc: D): Strip<D> & { i
 }
 
 /** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks） */
-export const workFromDoc = (doc: Doc<"works">): Work => fromDoc(doc) as Work;
+export const workFromDoc = (doc: Doc<"works">): Work => {
+  const { searchTokens: _tokens, ...work } = doc;
+  void _tokens;
+  return fromDoc(work as Doc<"works">) as Work;
+};
 
 /** id を持たない行（ruleId などの業務キーで引く表） */
 function strip<D extends { _id: unknown; _creationTime: number }>(
@@ -97,6 +105,31 @@ export function pushConfigured(): boolean {
  * mutation の ctx（または db だけ）から業務の文脈を作る。ctx を渡すと、通知を作ったときに
  * 受信者の端末への送信（Web Push）を予約する。db だけ（テスト・読取）なら予約しない。
  */
+export async function syncWorkRoles(db: DatabaseWriter, work: Work) {
+  const workId = work.id as Id<"works">;
+  const existing = await db
+    .query("workRoles")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .collect();
+  for (const row of existing) await db.delete(row._id);
+  const rows: Array<{ userId: string; role: "creator" | "approver" | "manager" }> = [
+    ...work.creatorIds.map((userId) => ({ userId, role: "creator" as const })),
+    ...work.managerIds.map((userId) => ({ userId, role: "manager" as const })),
+    // 校了者は全員（複数の校了者。古い行は approverId の 1 人）
+    ...approversOf(work).map((userId) => ({ userId, role: "approver" as const })),
+  ];
+  // 同じ人が同じ職責に重ねて入らないようにする
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const key = `${r.role}:${r.userId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await db.insert("workRoles", { workId, ...r });
+  }
+  await db.patch(workId, { rolesVersion: 1, searchTokens: substringTokens(workSearchText(work)) });
+  await syncWorkSummary(db, work.id);
+}
+
 export function createAppContext(
   dbOrCtx: DatabaseWriter | { db: DatabaseWriter; scheduler?: Scheduler },
   clock: { now(): number } = new ConvexClock(),
@@ -104,26 +137,9 @@ export function createAppContext(
   const db: DatabaseWriter = "db" in dbOrCtx ? dbOrCtx.db : dbOrCtx;
   const scheduler = "db" in dbOrCtx ? dbOrCtx.scheduler : undefined;
   const syncRoles = async (work: Work) => {
-    const workId = work.id as Id<"works">;
-    const existing = await db
-      .query("workRoles")
-      .withIndex("by_work", (q) => q.eq("workId", workId))
-      .collect();
-    for (const row of existing) await db.delete(row._id);
-    const rows: Array<{ userId: string; role: "creator" | "approver" | "manager" }> = [
-      ...work.creatorIds.map((userId) => ({ userId, role: "creator" as const })),
-      ...work.managerIds.map((userId) => ({ userId, role: "manager" as const })),
-      // 校了者は全員（複数の校了者。古い行は approverId の 1 人）
-      ...approversOf(work).map((userId) => ({ userId, role: "approver" as const })),
-    ];
-    // 同じ人が同じ職責に重ねて入らないようにする
-    const seen = new Set<string>();
-    for (const r of rows) {
-      const key = `${r.role}:${r.userId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      await db.insert("workRoles", { workId, ...r });
-    }
+    await syncWorkRoles(db, work);
+    if ("db" in dbOrCtx && "runMutation" in dbOrCtx)
+      await syncWorkAggregate(dbOrCtx as MutationCtx, work);
   };
 
   return {
@@ -150,7 +166,7 @@ export function createAppContext(
     works: {
       async findById(id) {
         const doc = await db.get("works", id as Id<"works">).catch(() => null);
-        return doc ? (fromDoc(doc) as Work) : null;
+        return doc ? workFromDoc(doc) : null;
       },
       async insert(work) {
         const id = await db.insert("works", compact(work as Strip<Doc<"works">>));
@@ -164,7 +180,7 @@ export function createAppContext(
       },
       async list(limit) {
         const docs = await db.query("works").take(limit);
-        return docs.map((d) => fromDoc(d) as Work);
+        return docs.map(workFromDoc);
       },
     },
     revisions: {
@@ -181,6 +197,7 @@ export function createAppContext(
       },
       async insert(revision) {
         const id = await db.insert("revisions", compact(revision as Strip<Doc<"revisions">>));
+        await syncWorkSummary(db, revision.workId);
         return { ...revision, id } as Revision;
       },
       async update(revision) {
@@ -188,6 +205,7 @@ export function createAppContext(
           revision.id as Id<"revisions">,
           compact(toFields(revision) as Strip<Doc<"revisions">>),
         );
+        await syncWorkSummary(db, revision.workId);
       },
       async listOpenExpired(now, limit) {
         const docs = await db
@@ -538,8 +556,7 @@ export function createAppContext(
             .query("pushSubscriptions")
             .withIndex("by_user", (q) => q.eq("userId", n.recipientId))
             .first();
-          if (hasDevice)
-            await scheduler.runAfter(0, internal.pushNode.deliver, { notificationId: id });
+          if (hasDevice) await scheduler.runAfter(0, internal.push.enqueue, { notificationId: id });
         }
         return { ...n, id } as Notification;
       },
@@ -673,6 +690,8 @@ export function createAppContext(
       },
       async insertRule(rule) {
         await db.insert("notationRules", compact(rule));
+        if (scheduler && process.env.RULE_EMBEDDINGS_ENABLED === "true")
+          await scheduler.runAfter(0, internal.semanticRules.indexRule, { ruleId: rule.ruleId });
       },
       async updateRule(rule) {
         const d = await db
@@ -681,6 +700,8 @@ export function createAppContext(
           .unique();
         if (!d) throw new Error(`rule not found: ${rule.ruleId}`);
         await db.replace(d._id, compact(rule));
+        if (scheduler && process.env.RULE_EMBEDDINGS_ENABLED === "true")
+          await scheduler.runAfter(0, internal.semanticRules.indexRule, { ruleId: rule.ruleId });
       },
       async appendRevision(r) {
         await db.insert("ruleRevisions", compact({ ...r, rule: compact(r.rule) }));
@@ -888,6 +909,7 @@ export function createAppContext(
           "approvalEvents",
           compact({ ...event, workId: event.workId as Id<"works"> }),
         );
+        await syncWorkSummary(db, event.workId);
       },
       async listByWork(workId) {
         const docs = await db

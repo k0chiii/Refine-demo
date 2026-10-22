@@ -1,3 +1,4 @@
+import { taskCache } from "../../scripts/task-cache.ts";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { createHash } from "node:crypto";
@@ -6,6 +7,21 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, type Plugin } from "vite-plus";
+
+/** Component test registries also glob their own Node-only tests; only runtime modules belong in the browser demo. */
+function browserComponentModules(): Plugin {
+  return {
+    name: "browser-component-modules",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.includes("/@convex-dev/") || !id.endsWith("/src/test.ts")) return;
+      return code.replaceAll(
+        'import.meta.glob("./component/**/*.ts")',
+        'import.meta.glob(["./component/**/*.ts", "!./component/**/*.test.ts", "!./component/**/*.spec.ts", "!./component/**/*.helpers.ts"])',
+      );
+    },
+  };
+}
 
 /**
  * OCR（tesseract.js）の実行ファイルと日本語の学習データを public/ocr に置く（自前で配信し、外部 CDN を使わない）。
@@ -144,7 +160,28 @@ function preconnect(): Plugin {
  * src/demo/* に差し替え、apps/convex の実際の関数を convex-test でブラウザ内実行する（UI 開発・E2E・スクショ用）。
  */
 export default defineConfig(({ mode }) => ({
+  run: {
+    tasks: {
+      "bundle-web": {
+        command: "vp build",
+        dependsOn: ["@mf100/convex#generate-convex"],
+        cache: taskCache(["dist/**", "src/routeTree.gen.ts", "public/ocr/**"]),
+      },
+      "bundle-demo": {
+        command: "vp build --mode demo --outDir dist-demo",
+        dependsOn: ["@mf100/convex#generate-convex"],
+        cache: taskCache(["dist-demo/**", "src/routeTree.gen.ts", "public/ocr/**"]),
+      },
+      "verify-types": {
+        command: "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json",
+        dependsOn: ["bundle-web"],
+        cache: taskCache(),
+      },
+    },
+  },
+
   plugins: [
+    ...(mode === "demo" ? [browserComponentModules()] : []),
     // ルートツリーは src/routeTree.gen.ts に自動生成（gitignore）。react() より前に置く。
     tanstackRouter({
       target: "react",
@@ -175,9 +212,27 @@ export default defineConfig(({ mode }) => ({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
-  optimizeDeps: mode === "demo" ? { exclude: ["convex-test"] } : {},
+  optimizeDeps:
+    mode === "demo"
+      ? {
+          exclude: [
+            "convex-test",
+            "@convex-dev/presence/test",
+            "@convex-dev/prosemirror-sync/test",
+            "@convex-dev/workflow/test",
+            "@convex-dev/aggregate/test",
+            "@convex-dev/migrations/test",
+            "@convex-dev/rate-limiter/test",
+            "@convex-dev/workpool/test",
+            "@convex-dev/batch-worker/test",
+          ],
+        }
+      : {},
   // convex-test / @auth/core が参照する Node グローバルをブラウザで解決する（デモモードのみ）
-  define: mode === "demo" ? { global: "globalThis", "process.env": "globalThis.process.env" } : {},
+  define:
+    mode === "demo"
+      ? { global: "globalThis", "process.env": "(globalThis.process ??= { env: {} }).env" }
+      : {},
   server: { port: 5173, fs: { allow: [fileURLToPath(new URL("../..", import.meta.url))] } },
   build: {
     target: "es2022",

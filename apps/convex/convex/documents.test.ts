@@ -34,6 +34,7 @@ describe("Convex 統合: 文章の下書き", () => {
     expect(await cast.creator.as.query(api.documents.get, { workId })).toEqual({
       draft: null,
       canEdit: true,
+      collaborative: false,
     });
     const saved = await cast.creator.as.mutation(api.documents.save, {
       workId,

@@ -1,3 +1,4 @@
+import { useWorkSummaries } from "@/lib/useWorkSummaries";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { classifyMakeRow, isMakeTab, type MakeAction, type MakeTab } from "@mf100/domain";
@@ -56,10 +57,7 @@ function Make() {
   const data = useQuery(api.dashboard.get, {});
   const me = useQuery(api.me.me, {});
   const drafts = useQuery(api.documents.writable, tab === "draft" ? {} : "skip");
-  const finished = useQuery(
-    api.works.listMine,
-    tab === "done" ? { lifecycle: "finalized" as const } : "skip",
-  );
+  const finished = useWorkSummaries(tab === "done" ? { lifecycle: "finalized" as const } : "skip");
   const launcher = useSubmitLauncher();
   const markRead = useMutation(api.notifications.markRead);
 

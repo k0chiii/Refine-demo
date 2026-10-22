@@ -125,7 +125,7 @@ export class App {
     await this.settle();
   }
 
-  /** 別の人としてサインインし直す（最後に使った入口 / ・/make・/check に着くまで待つ） */
+  /** 別の人としてサインインし直す（入口の振り分けが終わり /make・/check に着くまで待つ） */
   async signInAs(sub: DemoUser) {
     await this.page.evaluate(() => globalThis.__mf100demo!.signOut());
     await this.go("/signin");
@@ -133,7 +133,7 @@ export class App {
       await globalThis.__mf100demo!.ensureSeeded();
       await globalThis.__mf100demo!.signIn(s);
     }, sub);
-    await this.page.waitForURL((u) => ["/", "/make", "/check"].includes(u.pathname), {
+    await this.page.waitForURL((u) => ["/make", "/check"].includes(u.pathname), {
       timeout: 10_000,
     });
     await this.settle();

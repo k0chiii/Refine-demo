@@ -1,3 +1,5 @@
+import { SemanticRuleSearch } from "./SemanticRuleSearch";
+import { AiBackground } from "./AiBackground";
 import { api } from "@mf100/convex/api";
 import type { Finding } from "@mf100/domain";
 import { useAction as useConvexAction, useQuery } from "convex/react";
@@ -44,6 +46,8 @@ export function AiAssist({
   const chars = getText().length;
   return (
     <div className="stack ai-assist">
+      <AiBackground workId={workId} getText={getText} />
+      {status.semanticSearch ? <SemanticRuleSearch workId={workId} /> : null}
       {/* 処理中はボタンの文言を変えず、無効にして横に進捗と状態を出す（M3 Content design: ボタンは操作の名前のまま） */}
       <div className="row">
         <M3eButton
