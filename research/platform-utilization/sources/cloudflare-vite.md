@@ -1,0 +1,63 @@
+---
+description: A full-featured integration between Vite and the Workers runtime
+title: Vite plugin
+image: https://developers.cloudflare.com/workers/vite-plugin/og.png?v=e1b8c6ccd311410c
+---
+
+[Skip to content](#main-content)
+
+> Documentation Index  
+> Fetch the complete documentation index at: https://developers.cloudflare.com/workers/llms.txt  
+> Use this file to discover all available pages before exploring further.
+
+# Vite plugin
+
+Last updated Oct 18, 2026|Copy as Markdown| [View as Markdown](https://developers.cloudflare.com/workers/vite-plugin/index.md)| [Agent setup](https://developers.cloudflare.com/agent-setup/)
+
+The Cloudflare Vite plugin enables a full-featured integration between [Vite ↗︎](https://vite.dev/) and the [Workers runtime](https://developers.cloudflare.com/workers/runtime-apis/). Your Worker code runs inside a local [`workerd` ↗︎](https://github.com/cloudflare/workerd) process, which closely matches the runtime APIs and behavior of deployed Workers.
+
+Miniflare is not a hardened sandbox
+
+Do not use Miniflare to run untrusted or potentially malicious Worker code directly on your machine. Run the entire development process inside an appropriate secure sandbox, such as a virtual machine.
+
+Miniflare starts a local [`workerd` ↗︎](https://github.com/cloudflare/workerd#warning-workerd-is-not-a-hardened-sandbox) process. This warning applies to default local execution with `wrangler dev`, `vite dev`, `vite preview`, direct Miniflare use, and Miniflare-based testing tools. Setting `remote: true` on a binding changes which resource your code accesses, but your Worker code still executes locally. By contrast, legacy `wrangler dev --remote` executes your Worker code on Cloudflare.
+
+Miniflare is not a security boundary for untrusted code. Although `workerd` attempts to restrict Worker code to configured resources, an implementation bug could allow code to escape those restrictions. The hosted Workers platform applies [additional layers of defense in depth](https://developers.cloudflare.com/workers/reference/security-model/) that Miniflare does not provide locally.
+
+## Features
+
+- Uses the Vite [Environment API ↗︎](https://vite.dev/guide/api-environment) to integrate Vite with the Workers runtime
+- Provides direct access to [Workers runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/) and [bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/)
+- Builds your front-end assets for deployment to Cloudflare, enabling you to build static sites, SPAs, and full-stack applications
+- Produces standard Build Output for `cf build` and `cf deploy`
+- Official support for [TanStack Start ↗︎](https://tanstack.com/start/) and [React Router v8 ↗︎](https://reactrouter.com/) with server-side rendering
+- Leverages Vite's hot module replacement for consistently fast updates
+- Supports `vite preview` for previewing your build output in the Workers runtime prior to deployment
+
+## Use cases
+
+- [TanStack Start ↗︎](https://tanstack.com/start/)
+- [React Router v8 ↗︎](https://reactrouter.com/)
+- Static sites, such as single-page applications, with or without an integrated backend API
+- Standalone Workers
+- Multi-Worker applications
+
+## Get started
+
+To create a new application from a ready-to-go template, refer to the [TanStack Start](https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/), [React Router](https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/), [React](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/) or [Vue](https://developers.cloudflare.com/workers/framework-guides/web-apps/vue/) framework guides.
+
+To create a standalone Worker from scratch, refer to [Get started](https://developers.cloudflare.com/workers/vite-plugin/get-started/).
+
+For a more in-depth look at adapting an existing Vite project and an introduction to key concepts, refer to the [Tutorial](https://developers.cloudflare.com/workers/vite-plugin/tutorial/).
+
+Was this helpful?
+
+YesNo
+
+## On this page
+
+[![](https://developers.cloudflare.com/_astro/logo.te5VL_aD.svg)Docs](https://developers.cloudflare.com/)
+
+```json
+{"@context":"https://schema.org","@type":"WebPage","@id":"https://developers.cloudflare.com/workers/vite-plugin/#page","headline":"Vite plugin","description":"A full-featured integration between Vite and the Workers runtime","url":"https://developers.cloudflare.com/workers/vite-plugin/","inLanguage":"en","image":"https://developers.cloudflare.com/workers/vite-plugin/og.png?v=e1b8c6ccd311410c","dateModified":"2026-10-18","publisher":{"@type":"Organization","name":"Cloudflare","description":"One platform for your apps, agents, and workforce. Build, secure, and scale without managing infrastructure","url":"https://www.cloudflare.com/","sameAs":["https://github.com/cloudflare","https://www.linkedin.com/company/cloudflare","https://x.com/cloudflare"],"logo":{"@type":"ImageObject","url":"https://developers.cloudflare.com/logo.svg"},"address":{"@type":"PostalAddress","streetAddress":"101 Townsend St","addressLocality":"San Francisco","addressRegion":"CA","postalCode":"94107","addressCountry":"US"},"contactPoint":[{"@type":"ContactPoint","contactType":"Customer Support","url":"https://support.cloudflare.com/","availableLanguage":["English"]},{"@type":"ContactPoint","contactType":"Sales","url":"https://www.cloudflare.com/contact/","availableLanguage":["English"]}]},"isPartOf":{"@type":"WebSite","@id":"https://developers.cloudflare.com/#website","name":"Cloudflare Docs","url":"https://developers.cloudflare.com/"}}
+```

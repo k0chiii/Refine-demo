@@ -1,3 +1,4 @@
+import { multipartRequest } from "./multipart";
 import {
   COMMENT_THUMB_MAX_BYTES,
   hasPdfSignature,
@@ -28,8 +29,15 @@ import type {
   UploadOps,
 } from "./ports.ts";
 import { GatewayError } from "./ports.ts";
+import { requestTelemetry, type RequestMetric } from "./telemetry.ts";
 
 export interface AppDeps {
+  processing?: (request: Request, token: string) => Promise<Response>;
+  multipartBucket?: Pick<R2Bucket, "createMultipartUpload" | "resumeMultipartUpload" | "get">;
+  authorizeAccess?: (request: Request) => Promise<boolean>;
+  requestId?: string;
+  allowExpensiveRequest?: (subject: string, operation: "upload" | "figma") => Promise<boolean>;
+  reportRequest?: (metric: RequestMetric) => void;
   verifier: TokenVerifier;
   gateway: BackendGateway;
   store: ObjectStore;
@@ -61,30 +69,53 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
 
+  app.use("*", requestTelemetry(deps.reportRequest, deps.requestId));
+
   app.use(
     "*",
     cors({
       origin: (origin) => (deps.allowedOrigins.includes(origin) ? origin : null),
       // Range / If-None-Match / If-Range: 配信の部分取得（PDF.js の逐次読み込み）と、手元の写しが今も有効かの確認
       allowHeaders: [
+        "X-Multipart-Upload-ID",
+        "X-Content-SHA256",
         "Authorization",
         "Content-Type",
         "X-MF100-Sha256",
+        "X-MF100-Encoding",
+        "X-MF100-Original-Size",
+        "X-Request-ID",
         "Range",
         "If-None-Match",
         "If-Range",
       ],
       allowMethods: ["GET", "HEAD", "PUT", "POST", "OPTIONS"],
       // ブラウザの JS から読めるようにする応答ヘッダー（範囲の取得に Content-Range・Accept-Ranges が要る）
-      exposeHeaders: ["Content-Range", "Accept-Ranges", "Content-Length", "ETag"],
+      exposeHeaders: ["Content-Range", "Accept-Ranges", "Content-Length", "ETag", "X-Request-ID"],
       maxAge: 7200,
     }),
   );
+
+  app.use("*", async (c, next) => {
+    if (
+      c.req.method !== "OPTIONS" &&
+      deps.authorizeAccess &&
+      !(await deps.authorizeAccess(c.req.raw))
+    )
+      return c.json({ code: "access_denied" }, 403);
+    await next();
+  });
 
   app.get("/health", (c) => c.json({ ok: true }));
 
   // 認証: Bearer JWT（Convex Auth 発行）。Hono 側でも検証してから Convex に転送する。
   app.use("/uploads/*", requireAuth(deps));
+  app.use("/processing/*", requireAuth(deps));
+  app.all("/processing/*", async (c: Context<AppEnv>): Promise<Response> =>
+    deps.processing
+      ? deps.processing(c.req.raw, c.get("token"))
+      : c.json({ code: "processing_unavailable" }, 503),
+  );
   app.use("/files/*", requireAuth(deps));
   app.use("/comment-files/*", requireAuth(deps));
   app.use("/figma/*", requireAuth(deps));
@@ -219,9 +250,9 @@ export function createApp(deps: AppDeps) {
     if (!gzip && detectPdfCompatible && needsPdfSignatureCheck(target.fileName)) {
       try {
         pdfCompatible = await readsAsPdf(deps.store, target.objectKey);
-      } catch (error) {
+      } catch {
         // 先頭を読めないときは PDF 互換とは扱わない（ダウンロード専用として保存される。誤って紙面に出さない）
-        console.error("pdf signature check failed", error);
+        console.error("pdf_signature_check_failed");
         pdfCompatible = false;
       }
     }
@@ -396,6 +427,16 @@ export function createApp(deps: AppDeps) {
     });
   };
 
+  app.all("/uploads/multipart/*", async (c: Context<AppEnv>): Promise<Response> => {
+    if (!deps.multipartBucket) return c.json({ code: "multipart_unavailable" }, 503);
+    return multipartRequest(c.req.raw, {
+      token: c.get("token"),
+      ops: deps.gateway.itemUploads,
+      bucket: deps.multipartBucket,
+      sink: deps.sha256Sink ?? workersSha256Sink,
+    });
+  });
+
   app.put("/uploads/items/:itemId", (c) =>
     receiveUpload(c, c.req.param("itemId"), "itemId", deps.gateway.itemUploads, true),
   );
@@ -470,7 +511,9 @@ export function createApp(deps: AppDeps) {
    * - POST /figma/import: 準備済みの項目（由来 figma）に、Figma から書き出した PNG を入れる。
    *   トークンはこの Worker の秘密で、ブラウザへは渡さない。項目の持ち主か・受付中かは Convex が確かめる
    */
-  app.get("/figma/status", (c) => c.json({ enabled: Boolean(deps.figma) }));
+  app.get("/figma/status", (c) =>
+    c.json({ enabled: Boolean(deps.figma), ...(deps.processing ? { queued: true } : {}) }),
+  );
   app.post("/figma/import", async (c) => {
     if (!deps.figma)
       return c.json(
@@ -526,7 +569,7 @@ export function createApp(deps: AppDeps) {
                   : 409;
       return c.json({ code: error.code, details: error.details }, status);
     }
-    console.error("unhandled", error);
+    console.error("http_unhandled_error");
     return c.json({ code: "internal_error" }, 500);
   });
 
@@ -595,6 +638,22 @@ function requireAuth(deps: AppDeps) {
     const token = match[1]!;
     const verified = await deps.verifier.verify(token);
     if (!verified) return c.json({ code: "unauthenticated" }, 401);
+    if (
+      c.req.method !== "OPTIONS" &&
+      ((c.req.method === "PUT" &&
+        (c.req.path.startsWith("/uploads/") || c.req.path.startsWith("/comment-files/"))) ||
+        c.req.path === "/figma/import" ||
+        (c.req.method === "POST" && ["/processing/jobs"].includes(c.req.path)))
+    ) {
+      const operation = c.req.path.startsWith("/figma/") ? "figma" : "upload";
+      if (
+        deps.allowExpensiveRequest &&
+        !(await deps.allowExpensiveRequest(verified.subject, operation))
+      ) {
+        c.header("Retry-After", "60");
+        return c.json({ code: "rate_limited" }, 429);
+      }
+    }
     c.set("token", token);
     c.set("subject", verified.subject);
     await next();

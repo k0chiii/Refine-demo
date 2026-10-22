@@ -15,6 +15,7 @@ import {
   personDisplayName,
 } from "@mf100/domain";
 import type { FunctionReference } from "convex/server";
+import { registerComponents } from "../../../convex/test/components";
 import { convexTest, type TestConvex } from "convex-test";
 import schema from "../../../convex/convex/schema";
 import { api, internal } from "../../../convex/convex/_generated/api";
@@ -30,7 +31,10 @@ Object.assign(g.process.env, {
   FRONTEND_URL: location.origin,
 });
 
-const modules = import.meta.glob("../../../convex/convex/**/*.*s");
+const modules = import.meta.glob([
+  "../../../convex/convex/**/*.*s",
+  "!../../../convex/convex/**/*.test.ts",
+]);
 
 /**
  * convex-test は globalThis の Math・Date・performance・setTimeout など（下の一覧）を、構築時と関数呼び出しのたびに
@@ -100,6 +104,7 @@ class DemoBackend {
   private seeded: Promise<void> | null = null;
 
   constructor() {
+    registerComponents(this.t);
     // convexTest() が差し替えた globalThis のプロパティを戻す（上の restoreGlobals）
     restoreGlobals();
   }

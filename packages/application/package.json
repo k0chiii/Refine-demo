@@ -16,7 +16,7 @@
   },
   "scripts": {
     "test": "vp test run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "vp run verify-types"
   },
   "dependencies": {
     "@mf100/domain": "workspace:*"

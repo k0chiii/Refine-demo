@@ -4,14 +4,49 @@ GitHub Actions で回す。設定は `.github/workflows/`。
 
 ## CI（`ci.yml`）
 
-PR と `main` への push で走る。手で起動することもできる。
+PR と `main` への push で走る。手で起動することもできる（手動は main と同じジョブ）。テストの方針は `docs/TESTING_AGENT_POLICY.md`。
 
-| ジョブ   | 内容                                                                                                                                                                                                                                                                                                                                              | 目安     |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `verify` | `pnpm build`（TanStack Router のルートの型 `routeTree.gen.ts` もここで作る。コミットしないので、無いと lint の型検査が落ちる）→ `pnpm check`（整形・lint）→ `pnpm typecheck` と Web の `tsc` → `pnpm test`（domain・application・Convex・api・web）。`pnpm codegen` をやり直して、コミットした `convex/_generated` と食い違っていないかも確かめる | 数分     |
-| `e2e`    | デモ版（ブラウザ内の Convex）を建てて `e2e/screenshots.mjs`（撮影・操作の検証・axe の a11y）と `e2e/pwa.mjs` を回す。撮った画面と a11y の結果は Actions の成果物（14 日）に残し、リポジトリには入れない                                                                                                                                           | 4 分前後 |
+| ジョブ       | いつ       | 内容                                                                                                                                                                                                                                                                                                          |
+| ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `verify`     | PR・main   | `pnpm build`（TanStack Router のルートの型 `routeTree.gen.ts` もここで作る。コミットしないので、無いと lint の型検査が落ちる）→ `pnpm check`（整形・lint）→ `pnpm typecheck`（web は spec の型も）→ `pnpm test`。`pnpm codegen` をやり直して、コミットした `convex/_generated` と食い違っていないかも確かめる |
+| `e2e-smoke`  | PR         | デモ版を建てて、機能の E2E（Playwright Test の `@smoke`）と `e2e/pwa.mjs`。失敗したときだけ HTML の報告と trace を成果物に残す                                                                                                                                                                                |
+| `e2e`        | main・手動 | 機能の E2E（`e2e/specs` の全部）を 2 つの shard に分けて同時に。報告は blob で残す                                                                                                                                                                                                                            |
+| `e2e-report` | main・手動 | shard の blob を `playwright merge-reports` で 1 つの HTML 報告（失敗の trace 入り）にまとめて成果物に                                                                                                                                                                                                        |
+| `visual`     | main・手動 | `e2e/screenshots.mjs` で画面の撮影・操作の検証・a11y（axe）を部（core・compact・v2・web）ごとに。web の部では PWA も。撮った画面・a11y の結果・区間計測（`timings-<部>.json`）は成果物（14 日）に残し、リポジトリには入れない。区間計測の遅い順は実行のまとめ（Summary）にも出る                              |
 
-ブラウザは runner に入っている Chrome（`/usr/bin/google-chrome`）を使い、Playwright のブラウザは落とさない。
+ブラウザは runner に入っている Chrome（`/usr/bin/google-chrome`）を使い、Playwright のブラウザは落とさない（`CHROMIUM_PATH`）。
+
+### 時間の内訳と見直し（2026-10-22）
+
+e-dash の記事（CI を 18 分 → 4 分台）に倣い、まず時間を分けて測った。記事で効いた Vitest のワーカー・DB の初期化のキャッシュ・node_modules のキャッシュは、ここでは効かない（依存の導入は 9 秒、デモ版のビルドは 5 秒、単体テストは 15 秒前後）。遅いのは E2E の中身だけだった。
+
+`screenshots.mjs` に区間計測（画面ごとの 操作 / 描画待ち / 固定待ち / 撮影 / axe）を入れて測ると、**smoke の 251 秒のうち 232 秒が描画待ち（`settle()`）**だった。`settle()` は「有限の animation が終わるまで（最大 3 秒）」待つが、アプリバーの縁の animation（`mf-appbar-edge`、`animation-timeline: scroll()`）はスクロール連動で時間では終わらず、常に running に見える。そのため**ほぼ毎回 3 秒の打ち切りまで待っていた**。文書の時間軸（`document.timeline`）で動く animation だけを見るように直した。a11y の結果は既存の `docs/a11y-report.json` と重なる全画面で一致（違反は日付ピッカーの 1 件のまま）。
+
+手元（クラウド環境・同じデモ版）での計測:
+
+| 対象                             | 直す前                            | 直した後                                                   |
+| -------------------------------- | --------------------------------- | ---------------------------------------------------------- |
+| smoke（23 画面）                 | 251 秒（描画待ち 232 秒）         | 35 秒（描画待ち 17 秒）                                    |
+| core（a11y あり・62 画面）       | CI で 11 分 50 秒（ブラウザの段） | 124 秒（操作 39・描画待ち 49・axe 25・固定待ち 7・撮影 5） |
+| compact（a11y あり・25 画面）    | CI で約 5 分                      | 58 秒                                                      |
+| v2（a11y あり・24 画面）         | CI で約 6 分                      | 122 秒（操作 68 秒の多くは自動校正・OCR の待ち）           |
+| web（a11y あり・8 画面）         | CI で約 2 分                      | 42 秒                                                      |
+| 機能の E2E（spec 15 本・4 並列） | —                                 | 約 50 秒（`--repeat-each=2` の 30 本で 1 分 44 秒）        |
+
+CI の壁時計（GitHub Actions）:
+
+| 実行                  | 直す前（2026-10-22 の main・PR）                                                       | 直した後                                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR                    | 5 分 05 秒（Smoke E2E 5 分 05 秒・verify 2 分 12 秒）                                  | **2 分 34 秒**（verify 2 分 32 秒・e2e-smoke 1 分 50 秒。律速は verify）                                                                                               |
+| main 相当（手動起動） | 12 分 30 秒（E2E core 12 分 26 秒・v2 6 分 54 秒・compact 5 分 41 秒・web 2 分 47 秒） | **2 分 46 秒**（visual: v2 2 分 42 秒・core 2 分 33 秒・compact 1 分 48 秒・web 1 分 18 秒、e2e: 1/2 1 分 53 秒・2/2 1 分 40 秒、e2e-report 30 秒、verify 2 分 28 秒） |
+
+目標（PR は 3 分 30 秒以内、main は 6 分以内）はどちらも達成（PR #35 の実行 39766175645・手動の実行 39766186452）。PR の律速は verify の型（48 秒）と単体テスト（51 秒）になった。
+
+残っている時間の大きいもの（次に手を入れるなら）:
+
+- v2 の操作の多くは自動校正（ブラウザ内の OCR）を待つ時間。撮影が要らない検証は spec に移し、OCR を待たない前提（自動校正の結果を前提づくりで入れる）にできる。
+- core の axe は 25 秒（1 画面 0.4 秒）。全画面ではなく、画面の種類ごとに 1 回にできる。
+- `screenshots.mjs` の固定待ち（`waitForTimeout`、29 か所。v2 で 17 秒）。長押しの再現など意図があるものを除いて、状態を待つ形に置き換えられる。
 
 ## CD（`deploy.yml`）
 
@@ -38,3 +73,25 @@ FB（フィードバック）を廃止してコメントへ移した（docs/UI_M
 3. `delete`: 全て移行済みであることを確かめてから、FB の行を全て消す。移っていないスレッドがあれば何も消さず `refused: true` を返す。R2 の実体には触れない。
 
 `none`（既定）は何も流さない。順番は dry-run → 件数を確かめる → migrate → 画面で確かめる → delete。FB の表は、delete を流し終えた後の変更で schema から落とす。
+
+## 基盤の追加改善
+
+- Node は CI/CD とも `.node-version` を使う。Vite+ と pnpm は lockfile / packageManager の版を使い、最新版へ無条件で migrate しない。
+- `pnpm check` は `verify-static` タスクの依存として Web build と Convex codegen を先に実行する。`pnpm typecheck` も生成物の依存を明示する。型対応 lint と tsc は完全互換とは判断せず、Convex・Web・E2E の tsc を残す。
+- `bundle-web`・`bundle-demo`・`verify-types`・`generate-convex` は決定的なタスクとしてキャッシュする。接続先の VITE 変数、lockfile、共有ソース、設定を fingerprint し、routeTree・OCR・dist と生成 API を復元する。サービス・テスト・デプロイはキャッシュしない。
+- CI をまたぐ experimental cache とデモ成果物の転送は導入しない。現行の数秒の build に対して、成果物転送・失効の管理を増やす効果をまだ計測できないため。1 タスク内の warm cache をまず確認する。
+- 任意の commit hook は `pnpm exec vp hooks enable` で有効化できる。`.vite-hooks/pre-commit` は `pnpm staged` の読み取り専用検査を実行し、ステージ外の変更を自動修正・取り込みしない。通常の CI は引き続き全体を検査する。
+- 対象別単体テストは `pnpm test:domain` / `test:application` / `test:convex` / `test:api` / `test:web`。E2E と PWA は別に実行する。
+- `pnpm --filter @mf100/api types` で Wrangler の環境・compatibility date/flags に対応する型を生成する。`types:check` は一時ファイルと比較し、追跡ファイルを書き換えない。
+- ファイル API は従来の `wrangler dev` に加えて `pnpm --filter @mf100/api dev:vite` / `build:worker` / `preview:worker` を使える。R2 はローカル。cron は従来どおり `wrangler dev --test-scheduled` でも確認できる。Cloudflare plugin の生成設定に引きずられないよう、配信と型生成では `--config wrangler.jsonc` を明示する。
+
+### 固定 staging（手動のみ）
+
+`.github/workflows/staging.yml` は GitHub environment `staging` の独立した鍵と URL を使う。production の値を複製して動かさない。Cloudflare の R2 `mf100-assets-staging`、Worker `mf100-api-staging`、Pages `mf100-refine-staging` を事前に管理者が用意する。
+
+必要な Variables: `STAGING_CONVEX_URL`、`STAGING_CONVEX_SITE_URL`、`STAGING_ALLOWED_ORIGINS`（staging Web の HTTPS origin）、`STAGING_API_URL`。
+Secrets は staging 専用 `CONVEX_DEPLOY_KEY`、`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。Convex の `CONVEX_SITE_ORIGIN` とキーの対象を読み取りで照合してから配信する。Nogiku mock/redirect、共有 upload secret、CORS を staging ごとに設定し、本番データを取り込まない。
+
+`apps/api` の `pnpm deploy staging` は未設定・本番の URL を拒否する。staging 用設定の loopback URL はローカル用の無効な初期値であり、配信には上記の変数が必須。Cloudflare Access を使う場合は `ACCESS_TEAM`（team slug）と `ACCESS_AUDIENCE` を両方設定する。Access JWT の issuer/audience/署名を確認した後も、アプリの JWT と作品 ACL を確認する。公開デモには設定しない。
+
+実クラウドでの staging 配信・SSO・R2 と Convex の連携は、専用資源と鍵を設定した後の検証が必要。このリポジトリ内のデモ E2E の成功はその代わりにならない。復旧と配信版 ID は [RECOVERY.md](RECOVERY.md) を参照。

@@ -2,6 +2,7 @@ import {
   ATTEMPT_ORPHAN_PREFIX,
   COMMENT_ORPHAN_PREFIX,
   beginItemUpload,
+  resumeItemUpload,
   completeItemUpload,
   confirmSubmission,
   expireUploadSessions,
@@ -97,6 +98,14 @@ export const beginUpload = internalMutation({
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() => beginItemUpload(createAppContext(ctx), principal, args));
+  },
+});
+
+export const resumeUpload = internalMutation({
+  args: { attemptId: v.string() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() => resumeItemUpload(createAppContext(ctx), principal, args));
   },
 });
 

@@ -15,15 +15,22 @@
   },
   "scripts": {
     "dev": "convex dev",
-    "codegen": "node scripts/codegen.mjs",
+    "codegen": "vp run generate-convex",
     "test": "vp test run",
-    "typecheck": "tsc -p convex/tsconfig.json --noEmit",
+    "typecheck": "vp run verify-types",
     "deploy": "convex deploy"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@auth/core": "0.41.3",
+    "@convex-dev/aggregate": "^0.3.4",
     "@convex-dev/auth": "0.0.96",
+    "@convex-dev/migrations": "^0.3.7",
+    "@convex-dev/presence": "^0.4.0",
+    "@convex-dev/prosemirror-sync": "^0.2.7",
+    "@convex-dev/rate-limiter": "^0.4.2",
+    "@convex-dev/workflow": "^0.4.10",
+    "@convex-dev/workpool": "^0.4.14",
     "@mf100/application": "workspace:*",
     "@mf100/domain": "workspace:*",
     "convex": "1.46.0"

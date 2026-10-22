@@ -10,7 +10,10 @@ import { M3eIconButton } from "@m3e/react/icon-button";
  */
 export function PinButton({ workId }: { workId: string }) {
   const pinned = useQuery(api.home.pinned, { workId });
-  const setPinned = useMutation(api.home.setPinned);
+  const setPinned = useMutation(api.home.setPinned).withOptimisticUpdate((store, args) => {
+    if (store.getQuery(api.home.pinned, { workId: args.workId }) !== undefined)
+      store.setQuery(api.home.pinned, { workId: args.workId }, args.pinned);
+  });
   const toggle = useAction(async () => {
     const next = !pinned;
     await setPinned({ workId, pinned: next });

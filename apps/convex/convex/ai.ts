@@ -5,10 +5,18 @@ import {
   isAllowed,
   placeAiCandidates,
   type Finding,
+  type Principal,
 } from "@mf100/domain";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
-import { action, internalMutation, internalQuery, query } from "./_generated/server";
+import { RateLimiter, MINUTE, DAY } from "@convex-dev/rate-limiter";
+import { components, internal } from "./_generated/api";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  query,
+  type MutationCtx,
+} from "./_generated/server";
 import { aiConfig, createProvider } from "./lib/ai/provider.ts";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
@@ -34,8 +42,14 @@ export const status = query({
       return {
         available: reason === null,
         reason,
-        provider: config.provider === "anthropic" ? "Anthropic" : config.provider,
+        provider:
+          config.provider === "anthropic"
+            ? "Anthropic"
+            : config.provider === "workers-ai"
+              ? "Workers AI"
+              : config.provider,
         maxChars: config.policy.maxChars,
+        semanticSearch: process.env.RULE_EMBEDDINGS_ENABLED === "true",
       };
     });
   },
@@ -96,6 +110,20 @@ export const recordUse = internalMutation({
   },
 });
 
+/** Quota is consumed before external work and retained on provider failure (no automatic retry). */
+const limiter = new RateLimiter(components.rateLimiter, {
+  aiUser: { kind: "token bucket", rate: 6, period: MINUTE, capacity: 2 },
+  aiWork: { kind: "token bucket", rate: 12, period: MINUTE, capacity: 3 },
+  aiCharacters: { kind: "fixed window", rate: 200_000, period: DAY },
+});
+export const reserve = internalMutation({
+  args: { workId: v.string(), chars: v.number() },
+  handler: async (ctx, { workId, chars }) => {
+    const { principal } = await requireUser(ctx);
+    return reserveAi(ctx, principal, workId, chars);
+  },
+});
+
 interface ProofreadResult {
   candidates: Finding[];
   provider: string;
@@ -128,6 +156,14 @@ export const proofread = action({
         blocked: `AI に送れるのは ${config.policy.maxChars} 文字までです（${text.length} 文字）`,
       };
     if (!text.trim()) return { candidates: [], provider: "", model: "", blocked: null };
+    const quota = await ctx.runMutation(internal.ai.reserve, { workId, chars: text.length });
+    if (!quota.ok)
+      return {
+        candidates: [],
+        provider: "",
+        model: "",
+        blocked: quota.blocked ?? "AI の利用上限に達しました。時間をおいて再試行してください",
+      };
     const provider = await createProvider(config);
     const raw = await provider.proofread({ text, rules: prep.rules });
     // 候補を本文に当てはめて確かめる（本文に無いものは捨てる）
@@ -147,3 +183,32 @@ export const proofread = action({
     return { candidates, provider: provider.name, model: provider.model, blocked: null };
   },
 });
+
+export async function reserveAi(
+  ctx: MutationCtx,
+  principal: Principal,
+  workId: string,
+  chars: number,
+) {
+  const { work } = await loadAuthorizedWork(
+    createReadContext(ctx.db),
+    principal,
+    workId,
+    "review.participate",
+  );
+  const blocked = aiBlockReason(aiConfig().policy, work);
+  if (blocked) return { ok: false, retryAfter: 0, blocked };
+  if (!Number.isInteger(chars) || chars < 1 || chars > aiConfig().policy.maxChars)
+    throw new DomainError("forbidden");
+  const requests = [
+    { name: "aiUser" as const, key: principal.userId, count: 1 },
+    { name: "aiWork" as const, key: workId, count: 1 },
+    { name: "aiCharacters" as const, key: principal.userId, count: chars },
+  ];
+  for (const { name, ...options } of requests) {
+    const status = await limiter.check(ctx, name, options);
+    if (!status.ok) return { ok: false, retryAfter: status.retryAfter ?? 0 };
+  }
+  for (const { name, ...options } of requests) await limiter.limit(ctx, name, options);
+  return { ok: true, retryAfter: 0 };
+}

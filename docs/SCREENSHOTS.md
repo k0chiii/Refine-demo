@@ -110,3 +110,18 @@
 50〜60 は v2（表記統一・自動校正・高度な版比較・SNS 投稿）。詳細は [`FEATURES_V2.md`](FEATURES_V2.md)。
 
 M3E 適用の経緯と検証は [`UI_M3E.md`](UI_M3E.md)。
+
+## 使い方の紹介動画（モーショングラフィックス）
+
+上の撮影結果を素材に、使い方を 95 秒で紹介する動画を `apps/web/e2e/motion/` で生成する（動画・音声はリポジトリに置かない）。
+
+- `composition.html` … 1920×1080 のコンポジション。動きはすべて時刻 t の純関数で `window.__seek(t)` から任意のフレームへ飛べる。ブラウザで `?play` を付けて開くと再生、`?t=12.5` でその時刻の静止画。章: イントロ → 行き先（制作／校正／制作物）→ 01 版を提出 → 02 校正する → 03 採否を決める → 04 次の版へ（受付終了・持ち越し・版比較）→ 05 校了する → スマホ・通知 → まとめ。
+- `audio.mjs` … 外部音源に依存しない合成のサウンドトラック（パッド・アルペジオ・効果音）を `e2e/out/motion/soundtrack.wav` に書く。
+- `render.mjs` … Playwright で 1 フレームずつ撮って ffmpeg で H.264 の mp4 に（`--fps`・`--from`・`--to`・`--stills 3,12.5`・`--sheet`）。
+
+```bash
+# 1) 素材の撮影（core と compact の両方。前節の手順）
+# 2) 生成
+pnpm --filter @mf100/web motion            # → apps/web/e2e/out/motion/mf100-howto.mp4
+pnpm --filter @mf100/web motion:stills 20,35   # 確認用の静止画
+```

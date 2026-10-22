@@ -1,3 +1,4 @@
+import { useWorkSummaries } from "@/lib/useWorkSummaries";
 import { api } from "@mf100/convex/api";
 import { useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
@@ -50,7 +51,7 @@ export function CrossWorkPicker({
     setRevisionId(null);
   }, [open]);
   const text = query.trim();
-  const works = useQuery(api.works.listMine, open ? (text ? { text } : {}) : "skip");
+  const works = useWorkSummaries(open ? (text ? { text } : {}) : "skip");
   const candidates = useMemo(
     () => (works ?? []).filter((w) => w.id !== currentWorkId),
     [works, currentWorkId],

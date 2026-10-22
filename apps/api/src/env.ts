@@ -1,6 +1,14 @@
 /** Workers バインディングと環境変数。wrangler.jsonc と対応。 */
-export interface Bindings {
-  ASSETS: R2Bucket;
+export interface Bindings extends Omit<
+  Cloudflare.Env,
+  "CONVEX_URL" | "CONVEX_SITE_URL" | "ALLOWED_ORIGINS"
+> {
+  STATIC_ASSETS?: Fetcher;
+  AI?: import("./workersAi").AiBinding;
+  WORKERS_AI_SECRET?: string;
+  WORKERS_AI_MODEL?: string;
+  ACCESS_TEAM?: string;
+  ACCESS_AUDIENCE?: string;
   /** Convex deployment URL（例: https://xxx.convex.cloud） */
   CONVEX_URL: string;
   /** Convex Auth の issuer（例: https://xxx.convex.site） */

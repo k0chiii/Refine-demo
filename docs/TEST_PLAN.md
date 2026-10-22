@@ -51,7 +51,26 @@
 - 文言を手がかりに操作する locator（`hasText: "版として提出"` など）は、操作を見つけるための手がかりなので残してよい。a11y の名前でしか見つけられない操作も同じ。
 - 迷ったら、消すより要素・状態・数の確認へ置き換える。
 
+## E2E の構成（2026-10-22）
+
+- 機能の E2E: `apps/web/e2e/specs/*.spec.ts`（Playwright Test）。1 本 1 つの業務の流れで、前提は spec ごとに自分で用意する（ほかの spec に頼らない）。`@smoke` は PR、全部は main。`pnpm --filter @mf100/web e2e`。
+- 画面の撮影と a11y: `apps/web/e2e/screenshots.mjs`（main と手動）。上の表の「画面」「a11y」の欄はこちら。
+- 書き方・流す範囲・エージェントの手順は `docs/TESTING_AGENT_POLICY.md`、CI と時間の内訳は `docs/CI_CD.md`。
+
+| 旧 smoke（screenshots.mjs）                 | spec（@smoke）                       |
+| ------------------------------------------- | ------------------------------------ |
+| 02・02b・02c 制作物一覧の絞り込み・並べ替え | `works-list.spec.ts`                 |
+| 03・04・14・71b・05 最初の版の提出          | `submit-revision.spec.ts`            |
+| 06・13c・07 校正者の割り当てと「校正」      | `assign-reviewer.spec.ts`            |
+| 08 紙面へのコメント                         | `comment.spec.ts`                    |
+| 20c・20e スマホの「校正」                   | `mobile-check.spec.ts`（@core）      |
+| 01・21・22・29・31・31b・31c・15・71 など   | 撮影だけ（`screenshots.mjs` に残す） |
+
+late の主要な流れは @core: 09 採否 `decision`、17 持ち越し `carry-forward`、25 比較 `compare`、10・11 校了 `finalize`（A-08 の例外校了も）、18・32 通知 `notifications`。
+
 ## 未実施・手動確認が必要なもの
+
+**優先**: E2E を増やすより先に、3 の A-13（負荷）と A-14（バックアップからの復元）。本番運用での影響が大きく、いまは自動の検証が無い（`docs/TESTING_AGENT_POLICY.md`）。
 
 1. 実 Convex deployment・実 Nogiku Auth との接続（本セッションはクラウド未接続。モック provider と convex-test で代替）
 2. 実 Convex / Hono 経由でのブラウザ動作（デモモードでは M3E 表示・PDF.js 描画・ドラッグ位置指定を確認済み）

@@ -97,7 +97,15 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  prosemirrorSync: import("@convex-dev/prosemirror-sync/_generated/component.js").ComponentApi<"prosemirrorSync">;
+  workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
+  aggregate: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregate">;
+  presence: import("@convex-dev/presence/_generated/component.js").ComponentApi<"presence">;
+  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+  pushPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"pushPool">;
+};
 `,
 );
 

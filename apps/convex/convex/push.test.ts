@@ -39,7 +39,7 @@ async function device(n: number) {
 async function scheduledDeliveries(t: ReturnType<typeof createHarness>) {
   return t.run(async (ctx) =>
     (await ctx.db.system.query("_scheduled_functions").collect()).filter((f) =>
-      f.name.startsWith("pushNode"),
+      f.name.startsWith("push:enqueue"),
     ),
   );
 }
@@ -149,4 +149,39 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
       true,
     );
   });
+});
+
+it("transient push failure retries only undelivered devices", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  await vapidEnv();
+  const t = createHarness();
+  const cast = await createCast(t);
+  const d1 = await device(11);
+  const d2 = await device(12);
+  await cast.reviewer.as.mutation(api.push.subscribe, d1);
+  await cast.reviewer.as.mutation(api.push.subscribe, d2);
+  const workId = await setupWork(t, cast);
+  const { revisionId } = await submitFiles(cast, workId, pdf);
+  await cast.manager.as.mutation(api.reviews.assign, {
+    revisionId,
+    reviewerIds: [cast.reviewer.id],
+    reviewType: "general",
+  });
+  const scheduled = await scheduledDeliveries(t);
+  const notificationId = (scheduled[0]!.args[0] as { notificationId: string }).notificationId;
+  let failed = false;
+  const fetch = vi.fn(async (url: string) => {
+    if (url === d2.endpoint && !failed) {
+      failed = true;
+      return new Response(null, { status: 503 });
+    }
+    return new Response(null, { status: 201 });
+  });
+  vi.stubGlobal("fetch", fetch);
+  await expect(t.action(internal.pushNode.deliver, { notificationId })).rejects.toThrow(
+    "push_transient_failure",
+  );
+  expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
+  expect(fetch.mock.calls.filter(([url]) => url === d1.endpoint)).toHaveLength(1);
+  expect(fetch.mock.calls.filter(([url]) => url === d2.endpoint)).toHaveLength(2);
 });

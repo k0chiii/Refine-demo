@@ -1,3 +1,4 @@
+import { gatewayOptions } from "./gateway.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import type { AiCandidate } from "@mf100/domain";
 import type { AiProofreadInput, AiProofreadProvider } from "./provider.ts";
@@ -35,7 +36,10 @@ const SCHEMA = {
 /** Anthropic（Claude）による校正の候補。結果は候補だけで、保存や自動の反映はしない */
 export class AnthropicProofreader implements AiProofreadProvider {
   readonly name = "Anthropic";
-  private readonly client = new Anthropic();
+  private readonly client = new Anthropic({
+    ...gatewayOptions(process.env.AI_GATEWAY_URL),
+    maxRetries: 0,
+  });
   constructor(readonly model: string) {}
 
   async proofread(input: AiProofreadInput): Promise<AiCandidate[]> {
