@@ -37,6 +37,8 @@ apps/web/public/ocr/
 apps/web/e2e/out/
 apps/web/playwright-report/
 apps/web/all-blob-reports/
+# verify-mf100-web の一時的な spec
+apps/web/e2e/specs/_verify-*
 
 # Claude Code の作業用ワークツリー
 .claude/worktrees/
