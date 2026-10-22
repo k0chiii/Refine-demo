@@ -11,30 +11,35 @@ export const MOCK_USERS = [
   {
     sub: "mock-nogiku-admin",
     name: "五月 管理",
+    hurigana: "さつき かんり",
     email: "mock-admin@example.invalid",
     isSystemAdmin: true,
   },
   {
     sub: "mock-nogiku-manager",
     name: "五月 主管",
+    hurigana: "さつき しゅかん",
     email: "mock-manager@example.invalid",
     isSystemAdmin: false,
   },
   {
     sub: "mock-nogiku-creator",
     name: "五月 めい",
+    hurigana: "さつき めい",
     email: "mock-creator@example.invalid",
     isSystemAdmin: false,
   },
   {
     sub: "mock-nogiku-reviewer",
     name: "本郷 校正",
+    hurigana: "ほんごう こうせい",
     email: "mock-reviewer@example.invalid",
     isSystemAdmin: false,
   },
   {
     sub: "mock-nogiku-approver",
     name: "駒場 校了",
+    hurigana: "こまば こうりょう",
     email: "mock-approver@example.invalid",
     isSystemAdmin: false,
   },
@@ -54,6 +59,7 @@ export const demo = internalMutation({
       if (existing) {
         await ctx.db.patch(existing._id, {
           name: u.name,
+          hurigana: u.hurigana,
           email: u.email,
           isSystemAdmin: u.isSystemAdmin,
           source: "nogiku_mock",
@@ -63,6 +69,7 @@ export const demo = internalMutation({
       } else {
         ids[u.sub] = await ctx.db.insert("users", {
           name: u.name,
+          hurigana: u.hurigana,
           email: u.email,
           nogikuSubject: u.sub,
           source: "nogiku_mock",
@@ -150,6 +157,21 @@ export const demo = internalMutation({
         const parent = t.parentId ? byId.get(t.parentId) : undefined;
         teamIds[parent ? `${parent.name}/${t.name}` : t.name] = t._id;
       }
+    }
+    // メンバーのグループのサンプル（校正者の割り当て・「@こうせいはん」のメンション）。1 件も無いときだけ入れる
+    if (!(await ctx.db.query("memberGroups").first())) {
+      const groups: Array<[string, string[]]> = [
+        ["こうせいはん", ["mock-nogiku-reviewer", "mock-nogiku-approver"]],
+        ["こうほうきょく", ["mock-nogiku-creator", "mock-nogiku-manager"]],
+      ];
+      for (const [i, [name, members]] of groups.entries())
+        await ctx.db.insert("memberGroups", {
+          name,
+          memberIds: members.map((sub) => ids[sub]!),
+          order: i + 1,
+          updatedAt: now,
+          updatedBy: ids["mock-nogiku-admin"]!,
+        });
     }
     /** 主管担当・制作担当（サンプルの組織が無いときは付けない） */
     const teamsOf = (owner: string | null, production: string[]) => {

@@ -12,6 +12,7 @@ import {
   MAX_ORIGINAL_UPLOAD_BYTES,
   needsPdfSignatureCheck,
   PDF_SIGNATURE_WINDOW,
+  personDisplayName,
 } from "@mf100/domain";
 import type { FunctionReference } from "convex/server";
 import { convexTest, type TestConvex } from "convex-test";
@@ -158,7 +159,8 @@ class DemoBackend {
           .map((u) => ({
             id: u._id as string,
             sub: u.nogikuSubject!,
-            name: u.name ?? "",
+            // 画面に出る名前（ふりがな）。E2E は候補をこの名前で探す
+            name: personDisplayName(u),
             email: u.email ?? "",
           }));
       }),

@@ -23,7 +23,7 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { reactionViews, reactorIds } from "./lib/reactions.ts";
-import { activityOf } from "./lib/threadActivity.ts";
+import { activityOf, loadGroupNames, mentionViews } from "./lib/threadActivity.ts";
 import { resolveUsers } from "./lib/users.ts";
 
 /**
@@ -74,6 +74,10 @@ export const get = query({
         ]),
         revision.submittedBy,
       ]);
+      const groupNames = await loadGroupNames(ctx.db, [
+        ...threads.flatMap((t) => t.mentionGroupIds ?? []),
+        ...[...activity.values()].flatMap((a) => a.latestReplies.flatMap((r) => r.mentionGroupIds)),
+      ]);
       const myAssignment = assignments.find((a) => a.reviewerId === principal.userId) ?? null;
       const canManageChecks = isAllowed("work.edit", authz) || isAllowed("work.finalize", authz);
       const canPostNow =
@@ -101,14 +105,11 @@ export const get = query({
           await Promise.all(
             threads.map(async (t) => ({
               ...t,
-              ...activityOf(activity, t.id, users),
+              ...activityOf(activity, t.id, users, groupNames),
               author: users.get(t.authorId),
               assignee: t.assigneeId ? users.get(t.assigneeId) : null,
               reactions: reactionViews(t.reactions, principal.userId, users),
-              mentionUsers: (t.mentions ?? []).flatMap((id) => {
-                const u = users.get(id);
-                return u ? [u] : [];
-              }),
+              mentionUsers: mentionViews(t.mentions ?? [], t.mentionGroupIds, users, groupNames),
               /** 添付（検証済みで削除されていないもの。付けた順） */
               files: await listCommentFileViews(app, t.fileIds),
             })),

@@ -193,6 +193,8 @@ export default defineSchema({
     avatar: v.optional(vStoredAvatarConfig),
     /** 代（Notion のユーザ DB「代」。例: 100。システム管理者が付ける） */
     generation: v.optional(v.number()),
+    /** ふりがな（Nogiku の userinfo の hurigana）。表示名と検索に使う（利用者指示 2026-10-21。domain の personDisplayName） */
+    hurigana: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("by_nogikuSubject", ["nogikuSubject"]),
@@ -393,6 +395,8 @@ export default defineSchema({
     origin: v.optional(vBotOrigin),
     /** 本文でメンションした人（制作物を見られる人だけ） */
     mentions: v.optional(v.array(v.string())),
+    /** 本文でメンションしたグループ（memberGroups の ID）。知らせた人は mentions に広げて入れる */
+    mentionGroupIds: v.optional(v.array(v.string())),
     /** 投稿者が削除した時刻（論理削除。原文と履歴は commentEvents に残る） */
     deletedAt: v.optional(v.number()),
     /** 旧仕様の名残（削除時に他の人の返信が残っていた）。今は読まない・書かない。保存済みの行との互換のために残す */
@@ -562,6 +566,18 @@ export default defineSchema({
     updatedAt: v.number(),
     updatedBy: v.string(),
   }).index("by_parent", ["parentId"]),
+
+  /**
+   * メンバーのグループ（利用者指示 2026-10-21）。校正者の割り当てとメンションで、所属する人をまとめて選ぶ。
+   * 局・担当とは別で、閲覧の権限には関わらない（domain の org/group.ts）
+   */
+  memberGroups: defineTable({
+    name: v.string(),
+    memberIds: v.array(v.string()),
+    order: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }),
 
   documentDrafts: defineTable({
     workId: v.id("works"),

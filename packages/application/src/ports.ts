@@ -34,6 +34,7 @@ import type {
   WorkPermissionGrant,
   SocialProfile,
   Team,
+  MemberGroup,
 } from "@mf100/domain";
 
 /**
@@ -290,6 +291,15 @@ export interface TeamRepository {
   countWorksUsing(id: string): Promise<number>;
 }
 
+/** メンバーのグループ（校正者の割り当て・メンションでまとめて選ぶ人の集まり）。管理画面で管理する */
+export interface MemberGroupRepository {
+  list(): Promise<MemberGroup[]>;
+  findById(id: string): Promise<MemberGroup | null>;
+  insert(g: Omit<MemberGroup, "id">): Promise<MemberGroup>;
+  update(g: MemberGroup): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
 /** 文章の下書き（1 制作物に 1 つ） */
 export interface DocumentDraftRepository {
   findByWork(workId: WorkId): Promise<DocumentDraft | null>;
@@ -316,8 +326,11 @@ export interface AlignmentOverrideRepository {
 /** 委員（一度でもサインインした人）の名簿の行 */
 export interface PersonProfile {
   id: UserId;
+  /** 表示名（ふりがな。無い人は漢字の名前。domain の personDisplayName） */
   name: string;
   email: string | null;
+  /** Nogiku の name（漢字の名前）。検索で漢字でも当たるように持つ。表示には使わない */
+  nameKanji?: string | null;
 }
 
 /** 人の表示名（通知の本文に「誰が」を書くため）と、委員の名簿（メンションの候補） */
@@ -403,6 +416,7 @@ export interface AppContext {
   documents: DocumentDraftRepository;
   socialProfiles: SocialProfileRepository;
   teams: TeamRepository;
+  groups: MemberGroupRepository;
   alignments: AlignmentOverrideRepository;
   notation: NotationRepository;
   proofreadingRuns: ProofreadingRunRepository;

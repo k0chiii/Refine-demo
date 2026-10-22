@@ -4,8 +4,11 @@ import {
   DomainError,
   isAllowed,
   memberTeamIds,
+  personMatchesText,
   recipientPrincipal,
   requireAllowed,
+  resolveGroupMentions,
+  splitMentionTokens,
   validateMentions,
   workTeamIdsOf,
   type Principal,
@@ -81,7 +84,7 @@ export const PEOPLE_SEARCH_LIMIT = 20;
 const PEOPLE_SEARCH_LIMIT_MAX = 50;
 
 /**
- * 名簿を打った文字で絞る（名前・メールの部分一致。空なら全員）。名前順に並べ、limit 人まで。
+ * 名簿を打った文字で絞る（ふりがな・漢字の名前・メールの部分一致。空なら全員）。名前順に並べ、limit 人まで。
  * メンションの候補は名簿を丸ごと画面に渡さず、「@」に続けて打った文字でサーバー側で絞る（users.search と同じ形）。
  */
 export function searchPeopleByText(
@@ -89,11 +92,15 @@ export function searchPeopleByText(
   text: string,
   limit: number = PEOPLE_SEARCH_LIMIT,
 ): PersonProfile[] {
-  const q = text.trim().toLowerCase();
-  return people
-    .filter((p) => q === "" || `${p.name} ${p.email ?? ""}`.toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name, "ja"))
-    .slice(0, Math.max(0, Math.min(limit, PEOPLE_SEARCH_LIMIT_MAX)));
+  return (
+    people
+      // 表示名（ふりがな）・漢字の名前・メールのどれでも当たる（ひらがなとカタカナは区別しない）
+      .filter((p) =>
+        personMatchesText({ hurigana: p.name, name: p.nameKanji, email: p.email }, text),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+      .slice(0, Math.max(0, Math.min(limit, PEOPLE_SEARCH_LIMIT_MAX)))
+  );
 }
 
 /**
@@ -104,24 +111,51 @@ export function principalOf(userId: string, teams: readonly Team[]): Principal {
   return recipientPrincipal(userId, memberTeamIds(teams, userId));
 }
 
+/** メンションを確かめた結果 */
+export interface CheckedMentions {
+  /** 知らせる人: 直接メンションした人と、メンションしたグループの所属する人（見られる人だけ。重なりなし） */
+  userIds: string[];
+  /** メンションしたグループの ID（本文の「@グループ名」の強調に使う） */
+  groupIds: string[];
+}
+
 /**
  * コメント・返信のメンションの検査（domain の validateMentions ＋ 名簿）。
  * 非公開の制作物は見られる人（職責・ACL・関係者・担当の所属）だけ。
  * 通常の制作物は委員なら誰でも見られる（WorkViewPolicy）ので、名簿にいる人なら誰でもメンションできる。
+ * 「group:ID」はグループのメンション（利用者指示 2026-10-21）。所属する人のうち見られる人に広げる（domain の resolveGroupMentions）。
+ * 直接メンションした人の上限（MENTION_MAX）にグループで知らせる人は数えない。
  */
 export async function checkMentions(
   ctx: AppContext,
   work: Work,
   grants: readonly WorkPermissionGrant[],
   mentions: readonly string[] | undefined,
-): Promise<string[]> {
-  const ids = validateMentions(mentions, work, grants, await ctx.teams.list());
+  authorId?: string,
+): Promise<CheckedMentions> {
+  const { userIds: direct, groupIds } = splitMentionTokens(mentions);
+  const teams = await ctx.teams.list();
+  const ids = validateMentions(direct, work, grants, teams);
   if (ids.length > 0 && allMembersCanView(work)) {
     const known = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
     for (const id of ids)
       if (!known.has(id)) throw new DomainError("mention_not_allowed", { userId: id });
   }
-  return ids;
+  if (groupIds.length === 0) return { userIds: ids, groupIds: [] };
+  let members = resolveGroupMentions(
+    groupIds,
+    await ctx.groups.list(),
+    work,
+    grants,
+    teams,
+    authorId,
+  );
+  // 名簿にいない人（消えた人）はグループに残っていても知らせない
+  if (members.length > 0 && allMembersCanView(work)) {
+    const known = new Set((await ctx.people.profiles(members)).map((p) => p.id));
+    members = members.filter((id) => known.has(id));
+  }
+  return { userIds: [...new Set([...ids, ...members])], groupIds };
 }
 
 /** 冪等実行。同じ scope+key の再送には保存済み結果を返す（二重版・二重校了・二重通知を防ぐ）。 */

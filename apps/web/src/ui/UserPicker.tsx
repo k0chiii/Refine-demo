@@ -1,5 +1,7 @@
 import { subscriptProps } from "./Field";
 import { api } from "@mf100/convex/api";
+import { expandMemberGroups, searchMemberGroups } from "@mf100/domain";
+import { useQuery } from "convex/react";
 import { useId, useRef, useState } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useStableQuery } from "@/lib/useStableQuery";
@@ -23,10 +25,19 @@ export interface UserPickerProps {
   placeholder?: string;
   /** 見るだけ（外す・追加はできない。権限が無い人に、いまの選択だけを見せる） */
   readOnly?: boolean;
+  /**
+   * グループも候補に出す（利用者指示 2026-10-21）。グループを選ぶと、そのときの所属する人をまとめて加える
+   * （まだ選んでいない・除外していない人だけ）。複数選択のときだけ
+   */
+  groups?: boolean;
 }
 
+/** 候補の値のうちグループを指すもの（人の ID とは紛れない） */
+const GROUP_OPTION = "group:";
+
 /**
- * ユーザー選択 UI（v1）。一度でもログインした Nogiku ユーザーを名前・メールで検索して選ぶ。
+ * ユーザー選択 UI（v1）。一度でもログインした Nogiku ユーザーを名前（ふりがな・漢字）・メールで検索して選ぶ。
+ * `groups` を付けると、グループを選んで所属する人をまとめて加えられる（校正者の割り当て）。
  * 外観: M3E の outlined form-field（浮くラベル）の中に、選択済みの M3E input chip（removable）と検索の native input を並べる。
  * 候補は listbox（キーボード: Enter で先頭候補、Esc で閉じる）。
  * Nogiku Access のユーザー一覧連携後も `users.search` の差し替えだけで済むようにここに閉じる。
@@ -41,6 +52,7 @@ export function UserPicker({
   exclude = [],
   placeholder,
   readOnly,
+  groups: withGroups,
 }: UserPickerProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
@@ -62,8 +74,18 @@ export function UserPicker({
   const candidates = rawCandidates ?? [];
   const hidden = new Set([...value, ...exclude]);
   const visible = candidates.filter((u) => !hidden.has(u.id));
+  // グループ（数は多くないので一覧を丸ごと引き、画面で絞る）。加えられる人が残っているグループだけ出す
+  const allGroups = useQuery(api.groups.list, withGroups && !single && open ? {} : "skip");
+  const groupHits = searchMemberGroups(allGroups ?? [], text)
+    .map((g) => ({ ...g, adds: g.memberIds.filter((id) => !hidden.has(id)) }))
+    .filter((g) => g.adds.length > 0)
+    .slice(0, 3);
   const pick = (id: string) => {
-    onChange(single ? [id] : [...value, id]);
+    if (id.startsWith(GROUP_OPTION)) {
+      const gid = id.slice(GROUP_OPTION.length);
+      const adds = expandMemberGroups([gid], allGroups ?? []).filter((m) => !hidden.has(m));
+      onChange([...value, ...adds]);
+    } else onChange(single ? [id] : [...value, id]);
     setText("");
   };
   const remove = (id: string) => onChange(value.filter((v) => v !== id));
@@ -108,7 +130,10 @@ export function UserPicker({
               id={inputId}
               className="input picker__input"
               value={text}
-              placeholder={placeholder ?? "名前・メールで検索"}
+              placeholder={
+                placeholder ??
+                (withGroups && !single ? "名前・メール・グループで検索" : "名前・メールで検索")
+              }
               {...(required && value.length === 0 ? { required: true } : {})}
               {...(hint ? { "aria-describedby": `${listId}-hint` } : {})}
               onFocus={() => setOpen(true)}
@@ -141,6 +166,19 @@ export function UserPicker({
               if (id) pick(id);
             }}
           >
+            {groupHits.map((g) => (
+              <M3eOption key={g.id} value={`${GROUP_OPTION}${g.id}`} className="picker__option">
+                <M3eIcon name="group" className="picker__group-icon" />
+                {g.name}
+                <span className="muted small">
+                  {" "}
+                  グループ・
+                  {g.adds.length < g.memberIds.length
+                    ? `あと ${g.adds.length} 人`
+                    : `${g.memberIds.length} 人`}
+                </span>
+              </M3eOption>
+            ))}
             {visible.map((u) => (
               <M3eOption key={u.id} value={u.id} className="picker__option">
                 {u.name}

@@ -1,13 +1,20 @@
 import { api } from "@mf100/convex/api";
+import { MENTION_GROUP_PREFIX } from "@mf100/domain";
 import { useQuery } from "convex/react";
 import { createContext, useContext, useRef } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 export interface MentionUser {
+  /** 人の ID か、グループなら「group:ID」（サーバーが所属する人に広げて知らせる） */
   id: string;
   name: string;
   email?: string | null;
+  /** グループのときだけ: 知らせる人数 */
+  memberCount?: number;
 }
+
+/** 候補がグループか（「@グループ名」で所属する人にまとめて知らせる。利用者指示 2026-10-21） */
+export const isGroupMention = (u: Pick<MentionUser, "id">) => u.id.startsWith(MENTION_GROUP_PREFIX);
 
 /**
  * メンションの検索先と、候補から選んだ人の名前の控え。

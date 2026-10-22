@@ -518,7 +518,34 @@ async function main() {
   await drawer("情報");
   await btn("校正者を割り当てる").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
-  await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
+  // 13c 校正者をグループでまとめて加える（利用者指示 2026-10-21）: 候補にグループが出て、選ぶと所属する人のチップが並ぶ。
+  // サンプルの「こうせいはん」は校正者と校了者。校了者は外して、校正者だけを割り当てる
+  {
+    const dialog = page.locator("m3e-dialog[open]");
+    const input = dialog.locator(".picker__input").first();
+    await input.click();
+    await input.fill("こうせい");
+    await page
+      .getByRole("option", { name: /こうせいはん/ })
+      .first()
+      .click();
+    await settle();
+    expectTrue(
+      (await dialog.locator("m3e-input-chip").count()) === 2,
+      "グループを選んでも所属する人のチップが並ばない",
+    );
+    await shot("13c-assign-group");
+    await dialog
+      .locator("m3e-input-chip", { hasText: "こうりょう" })
+      .locator('[aria-label$="を外す"]')
+      .click();
+    await settle();
+    expectTrue(
+      (await dialog.locator("m3e-input-chip").count()) === 1 &&
+        (await dialog.locator("m3e-input-chip", { hasText: reviewer.name }).count()) === 1,
+      "グループから加えた校正者だけを残せない",
+    );
+  }
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   // 基本情報が長くなった（§58）ので、引き出しを上端に戻してから撮る
@@ -734,7 +761,7 @@ async function main() {
   await page.waitForSelector(".compose-pop .rt__content");
   // 「@」で制作物を見られる人をメンション（候補から選ぶ）
   await page.fill(".compose-pop .rt__content", "@五月");
-  await page.locator(".mention-list m3e-list-action", { hasText: "五月 めい" }).click();
+  await page.locator(".mention-list m3e-list-action", { hasText: "さつき めい" }).click();
   await settle(); // 選択後のキャレット移動（requestAnimationFrame）が済む前に打つと文字が前に入り込む
   await page.locator(".compose-pop .rt__content").press("End");
   await page.keyboard.type(
@@ -752,8 +779,22 @@ async function main() {
     const count = () => page.locator(".comments .thread").count();
     const n0 = await count();
     await page.locator(".comments__free").click();
-    await page.fill(".compose-pop .rt__content", "削除の確認用のコメントです。");
+    // 19b グループのメンション（利用者指示 2026-10-21）: 「@」に続けて打つと、名前が当たるグループが人より先に出る。
+    // 選ぶと「@グループ名」が入り、所属する人（見られる人）に知らせる。本文の「@グループ名」も強調する
+    await page.fill(".compose-pop .rt__content", "@こうせい");
+    const group = page.locator(".mention-list m3e-list-action", { hasText: "こうせいはん" });
+    await group.waitFor();
+    expectTrue(
+      (await group.textContent()).includes("グループ"),
+      "メンションの候補にグループの印が無い",
+    );
+    await shot("19b-mention-group");
+    await group.click();
+    await settle();
+    await page.locator(".compose-pop .rt__content").press("End");
+    await page.keyboard.type("削除の確認用のコメントです。");
     await page.locator(".compose-pop .rt__send").click();
+    await page.waitForSelector(".comments .thread .mention >> text=@こうせいはん");
     await page.waitForFunction(
       (n) => document.querySelectorAll(".comments .thread").length > n,
       n0,

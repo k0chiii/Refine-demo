@@ -82,6 +82,8 @@ export interface LatestReply {
   body: string;
   bodyFormat?: CommentBodyFormat;
   mentionIds: string[];
+  /** メンションしたグループ（本文の「@グループ名」の強調に使う） */
+  mentionGroupIds: string[];
   /** 添付の ID（付けた順。検証・削除済みかは呼び出し側が引く） */
   fileIds: string[];
 }
@@ -112,6 +114,7 @@ export function latestReplies(
       body: typeof p.body === "string" ? p.body : "",
       ...(isCommentBodyFormat(p.bodyFormat) ? { bodyFormat: p.bodyFormat } : {}),
       mentionIds: strings(p.mentions),
+      mentionGroupIds: strings(p.mentionGroupIds),
       fileIds: strings(p.fileIds),
     });
   }

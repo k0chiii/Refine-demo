@@ -49,8 +49,10 @@ export interface CommentThread {
   editCount?: number;
   /** 自動校正の指摘（投稿者はシステム）。人の投稿では設定しない */
   origin?: BotOrigin;
-  /** 本文でメンションした人（制作物を見られる人だけ。validateMentions） */
+  /** 本文でメンションした人（制作物を見られる人だけ。validateMentions）。グループで知らせた人も含む */
   mentions?: UserId[];
+  /** 本文でメンションしたグループ（MemberGroup の ID。本文の「@グループ名」を強調するために持つ） */
+  mentionGroupIds?: string[];
   /**
    * 投稿者が削除した時刻（論理削除。原文と履歴は CommentEvent に残す）。
    * 削除済みのスレッドは件数・未解決・校了の判定・紙面の印から外れる（deletion.ts）。

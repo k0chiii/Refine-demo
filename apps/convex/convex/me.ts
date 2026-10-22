@@ -8,6 +8,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { runUseCase } from "./lib/errors.ts";
 import { optionalUser, requireUser } from "./lib/principal.ts";
+import { userDisplayName } from "./lib/users.ts";
 import { vAvatarConfig } from "./lib/validators.ts";
 
 /** ログイン中のユーザー。未ログインなら null（UI はサインイン画面へ）。 */
@@ -19,7 +20,7 @@ export const me = query({
     const { user, principal } = auth;
     return {
       id: user._id,
-      name: user.name ?? "",
+      name: userDisplayName(user),
       email: user.email ?? null,
       isSystemAdmin: user.isSystemAdmin ?? false,
       /** 制作物を登録する権限（Nogiku の組織権限 works:create）。登録の入口は、これに canAssignApprovers も要る。認可はサーバーで別に確かめる */

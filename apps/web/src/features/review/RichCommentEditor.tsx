@@ -22,7 +22,12 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eTooltip } from "@m3e/react/tooltip";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { safeHref } from "./CommentBody";
-import { useMentionDirectory, useMentionSearch, type MentionUser } from "./mentions";
+import {
+  isGroupMention,
+  useMentionDirectory,
+  useMentionSearch,
+  type MentionUser,
+} from "./mentions";
 import type { RichCommentFieldProps } from "./RichCommentField";
 import { FieldOutline } from "./FieldOutline";
 
@@ -430,7 +435,7 @@ function MentionMenu({
     <div ref={ref} className="rt__mentions">
       {/* 候補の数を読み上げる（候補の出入りは live region で伝える） */}
       <span className="sr-only" aria-live="polite">
-        {`メンションの候補 ${hits.length} 人。上下で選び Enter で確定`}
+        {`メンションの候補 ${hits.length} 件。上下で選び Enter で確定`}
       </span>
       <M3eActionList className="mention-list" aria-label="メンションする人">
         {hits.map((u, i) => (
@@ -441,9 +446,16 @@ function MentionMenu({
             onClick={() => onPick(u)}
           >
             <span slot="leading">
-              <UserAvatar seed={u.email ?? u.id} userId={u.id} size={24} />
+              {isGroupMention(u) ? (
+                <M3eIcon name="group" className="mention-list__group" />
+              ) : (
+                <UserAvatar seed={u.email ?? u.id} userId={u.id} size={24} />
+              )}
             </span>
             {u.name}
+            {isGroupMention(u) ? (
+              <span className="muted small"> グループ・{u.memberCount ?? 0} 人</span>
+            ) : null}
           </M3eListAction>
         ))}
       </M3eActionList>

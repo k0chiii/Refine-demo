@@ -51,6 +51,8 @@ export async function upsertNogikuUser(
   const name = asString(args.profile.name);
   const email = asString(args.profile.email);
   const image = asString(args.profile.image);
+  // ふりがな（表示名と検索に使う。利用者指示 2026-10-21）
+  const hurigana = asString(args.profile.hurigana);
   const fields = {
     nogikuSubject: subject,
     source: (isMock ? "nogiku_mock" : "nogiku") as "nogiku" | "nogiku_mock",
@@ -58,6 +60,7 @@ export async function upsertNogikuUser(
     ...(name !== undefined ? { name } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(image !== undefined ? { image } : {}),
+    ...(hurigana !== undefined ? { hurigana } : {}),
     ...(orgPermissions !== undefined ? { orgPermissions } : {}),
   };
   const bootstrapAdmin = bootstrapAdminSubjects().has(subject);

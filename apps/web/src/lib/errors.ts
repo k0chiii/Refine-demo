@@ -48,6 +48,10 @@ const messages: Record<string, string> = {
   team_duplicate: "同じ局の中に同じ名前があります。別の名前にしてください",
   team_in_use: "制作物が使っている、または担当がある局は削除できません",
   team_not_found: "選んだ局・担当が見つかりません。画面を更新してから選び直してください",
+  group_invalid:
+    "グループの内容を確かめてください。名前は 30 文字まで（「@」は使えません）、所属する人は 100 人までです。",
+  group_duplicate: "同じ名前のグループがあります。別の名前にしてください",
+  group_not_found: "選んだグループが見つかりません。画面を更新してから選び直してください",
   mention_too_many: "一度にメンションできるのは 10 人までです",
   comment_body_too_long: "本文が長すぎます。5000 文字までです",
   comment_body_format_invalid:
@@ -131,6 +135,8 @@ function withDetails(code: string, details: unknown): string | null {
     reason?: unknown;
     max?: unknown;
     problems?: unknown;
+    groups?: unknown;
+    groupId?: unknown;
   };
   if (code === "work_invalid") return workInvalidMessage(details);
   if (code === "forbidden") {
@@ -158,6 +164,12 @@ function withDetails(code: string, details: unknown): string | null {
     const first = d.problems.find((p): p is string => typeof p === "string");
     if (first) return `提出できません: ${first}。画像をそろえ直してから提出してください。`;
   }
+  if (code === "mention_too_many" && typeof d.groups === "number")
+    return `一度にメンションできるグループは ${typeof d.max === "number" ? d.max : 3} つまでです`;
+  if (code === "mention_not_allowed" && typeof d.groupId === "string")
+    return "メンションしたグループが見つかりません。画面を更新してから選び直してください";
+  if (code === "group_invalid" && d.reason === "limit")
+    return `グループはこれ以上作れません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {

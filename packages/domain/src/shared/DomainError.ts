@@ -71,6 +71,9 @@ export const domainErrorCodes = [
   "team_duplicate",
   "team_in_use",
   "team_not_found",
+  "group_invalid",
+  "group_duplicate",
+  "group_not_found",
   // 校了
   "approval_not_approver",
   "approval_already_declared",

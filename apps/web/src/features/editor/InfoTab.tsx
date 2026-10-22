@@ -739,7 +739,13 @@ export function InfoTab({
           <p className="small muted" style={{ margin: 0 }}>
             対象: {revision?.revision.label ?? accepting?.label}
           </p>
-          <UserPicker label="校正者" value={reviewerIds} onChange={setReviewerIds} />
+          <UserPicker
+            label="校正者"
+            hint="グループを選ぶと、所属する人をまとめて加えます"
+            groups
+            value={reviewerIds}
+            onChange={setReviewerIds}
+          />
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setAssignOpen(false)}>
