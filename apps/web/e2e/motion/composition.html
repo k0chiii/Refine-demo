@@ -1,0 +1,2079 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>MF100 校正システム — 使い方（モーショングラフィックス）</title>
+    <!--
+  使い方の紹介動画のコンポジション。すべての動きは時刻 t（秒）の純関数で、window.__seek(t) で任意のフレームへ
+  飛べる（render.mjs が 1 フレームずつ撮って ffmpeg へ渡す）。ブラウザで開くと ?play で再生、?t=12.5 でその時刻の静止画。
+  画面の素材は e2e/screenshots.mjs の出力（e2e/out/screenshots/*.png。git 管理外）。
+-->
+    <link rel="stylesheet" href="../../node_modules/@fontsource-variable/noto-sans-jp/index.css" />
+    <link
+      rel="stylesheet"
+      href="../../node_modules/@fontsource-variable/material-symbols-outlined/full.css"
+    />
+    <style>
+      :root {
+        --primary: #1b5fb4;
+        --primary-dim: #0f4a94;
+        --on-primary: #ffffff;
+        --primary-container: #d7e3ff;
+        --on-primary-container: #001b3f;
+        --primary-fixed-dim: #a9c7ff;
+        --surface: #f8f9ff;
+        --surface-low: #f1f3fb;
+        --surface-container: #e9ecf5;
+        --surface-high: #e1e5ee;
+        --on-surface: #191c20;
+        --on-surface-variant: #44474f;
+        --outline: #74777f;
+        --outline-variant: #c4c6d0;
+        --navy: #061329;
+        --navy-2: #0b2047;
+        --ok: #1d7a4a;
+        --ok-container: #cdeedb;
+        --warn: #8a5a00;
+        --warn-container: #ffe3b3;
+        --err: #ba1a1a;
+        --err-container: #ffdad6;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #000;
+      }
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        font-family: "Noto Sans JP Variable", "Noto Sans JP", sans-serif;
+        color: var(--on-surface);
+        background: var(--navy);
+        -webkit-font-smoothing: antialiased;
+        font-feature-settings: "palt";
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        visibility: hidden;
+        will-change: transform, opacity;
+      }
+      .abs {
+        position: absolute;
+      }
+      .ic {
+        font-family: "Material Symbols Outlined Variable";
+        font-weight: normal;
+        font-style: normal;
+        line-height: 1;
+        letter-spacing: normal;
+        display: inline-block;
+        white-space: nowrap;
+        direction: ltr;
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 48;
+      }
+      .ic.fill {
+        font-variation-settings:
+          "FILL" 1,
+          "wght" 500,
+          "GRAD" 0,
+          "opsz" 48;
+      }
+      .mask {
+        overflow: hidden;
+        display: inline-block;
+        vertical-align: top;
+      }
+      .ch {
+        display: inline-block;
+        will-change: transform, opacity;
+      }
+
+      /* 背景 */
+      .bg {
+        position: absolute;
+        inset: 0;
+      }
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+        will-change: transform, opacity;
+      }
+
+      /* 共通の見出し（STEP） */
+      .step {
+        position: absolute;
+        left: 96px;
+        top: 72px;
+        display: flex;
+        align-items: flex-end;
+        gap: 28px;
+      }
+      .step .num {
+        font-size: 132px;
+        font-weight: 200;
+        line-height: 0.9;
+        letter-spacing: -0.04em;
+        color: var(--primary);
+      }
+      .step .ttl {
+        padding-bottom: 10px;
+      }
+      .step .kicker {
+        font-size: 20px;
+        font-weight: 500;
+        letter-spacing: 0.32em;
+        color: var(--primary);
+        text-transform: uppercase;
+      }
+      .step .name {
+        font-size: 56px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.15;
+        margin-top: 4px;
+      }
+
+      /* 画面（ブラウザ風の窓） */
+      .win {
+        position: absolute;
+        background: #fff;
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow:
+          0 30px 80px rgba(6, 19, 41, 0.22),
+          0 2px 6px rgba(6, 19, 41, 0.08);
+        will-change: transform, opacity;
+      }
+      .win .bar {
+        height: 36px;
+        background: var(--surface-high);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 8px;
+      }
+      .win .bar i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #c9ccd6;
+        display: block;
+      }
+      .win .bar .url {
+        margin-left: 18px;
+        height: 22px;
+        border-radius: 11px;
+        background: #fff;
+        flex: 0 0 360px;
+        font-size: 12px;
+        color: var(--outline);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0.04em;
+      }
+      .win .view {
+        position: relative;
+        overflow: hidden;
+      }
+      .win .cont {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+        will-change: transform;
+      }
+      .win .cont img {
+        display: block;
+        width: 1440px;
+        height: 900px;
+      }
+      .win .cont img.mobile {
+        width: 412px;
+        height: 915px;
+      }
+
+      /* コールアウト（画像座標に置く） */
+      .co {
+        position: absolute;
+        border: 3px solid var(--primary);
+        border-radius: 14px;
+        box-shadow: 0 0 0 6px rgba(27, 95, 180, 0.16);
+        will-change: transform, opacity;
+      }
+      .co .lbl {
+        position: absolute;
+        left: 0;
+        white-space: nowrap;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 20px;
+        font-weight: 600;
+        background: var(--primary);
+        color: #fff;
+        box-shadow: 0 8px 24px rgba(27, 95, 180, 0.35);
+        letter-spacing: 0.02em;
+      }
+      .co .lbl.top {
+        bottom: calc(100% + 12px);
+      }
+      .co .lbl.bot {
+        top: calc(100% + 12px);
+      }
+      .co .lbl.right {
+        left: calc(100% + 14px);
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      .co .lbl.left {
+        right: calc(100% + 14px);
+        left: auto;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
+      /* 右の説明の列 */
+      .col {
+        position: absolute;
+        left: 1304px;
+        top: 276px;
+        width: 540px;
+      }
+      .bul {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+        margin-bottom: 30px;
+        will-change: transform, opacity;
+      }
+      .bul .dot {
+        flex: 0 0 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: var(--primary-container);
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+      }
+      .bul .tx {
+        font-size: 26px;
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: 0.01em;
+      }
+      .bul .tx small {
+        display: block;
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--on-surface-variant);
+        margin-top: 4px;
+      }
+      .note {
+        position: absolute;
+        border-radius: 20px;
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+        padding: 18px 24px;
+        font-size: 22px;
+        font-weight: 500;
+        line-height: 1.5;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        will-change: transform, opacity;
+      }
+      .note .ic {
+        font-size: 30px;
+        color: var(--primary);
+      }
+
+      /* ページャー */
+      .pager {
+        position: absolute;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 10px;
+        z-index: 50;
+      }
+      .pager i {
+        display: block;
+        height: 8px;
+        width: 8px;
+        border-radius: 4px;
+        background: rgba(27, 95, 180, 0.28);
+        will-change: width, background;
+      }
+
+      /* 行き先カード */
+      .dest {
+        position: absolute;
+        width: 400px;
+        height: 300px;
+        border-radius: 28px;
+        background: #fff;
+        padding: 32px 34px;
+        box-sizing: border-box;
+        box-shadow: 0 18px 50px rgba(6, 19, 41, 0.1);
+        will-change: transform, opacity;
+      }
+      .dest .ic {
+        font-size: 52px;
+        color: var(--primary);
+        background: var(--primary-container);
+        border-radius: 18px;
+        padding: 10px;
+      }
+      .dest h3 {
+        margin: 22px 0 8px;
+        font-size: 38px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .dest p {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.55;
+        color: var(--on-surface-variant);
+      }
+
+      /* レール */
+      .rail {
+        position: absolute;
+        left: 96px;
+        top: 168px;
+        width: 104px;
+        height: 760px;
+        border-radius: 32px;
+        background: var(--surface-container);
+        will-change: transform, opacity;
+      }
+      .rail .fab {
+        position: absolute;
+        left: 24px;
+        top: 28px;
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        box-shadow: 0 6px 18px rgba(27, 95, 180, 0.25);
+      }
+      .rail .it {
+        position: absolute;
+        left: 0;
+        width: 104px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--on-surface-variant);
+        will-change: transform, opacity;
+      }
+      .rail .it .pill {
+        width: 56px;
+        height: 32px;
+        border-radius: 16px;
+        margin: 0 auto 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: var(--on-surface-variant);
+      }
+      .rail .it.on .pill {
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+      }
+      .rail .it.on {
+        color: var(--on-surface);
+      }
+      .rail .ring {
+        position: absolute;
+        left: 24px;
+        top: 28px;
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        border: 3px solid var(--primary);
+        opacity: 0;
+      }
+
+      /* チップ（採否） */
+      .chip {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 26px 16px 18px;
+        border-radius: 20px;
+        font-size: 30px;
+        font-weight: 700;
+        will-change: transform, opacity;
+      }
+      .chip .ic {
+        font-size: 34px;
+      }
+      .chip small {
+        font-size: 18px;
+        font-weight: 500;
+        opacity: 0.8;
+        margin-left: 4px;
+      }
+
+      /* 版のタイムライン */
+      .rev {
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 18px 50px rgba(6, 19, 41, 0.12);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        will-change: transform, opacity;
+      }
+      .rev b {
+        font-size: 44px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .rev span {
+        font-size: 18px;
+        color: var(--on-surface-variant);
+        margin-top: -2px;
+      }
+      .tag {
+        position: absolute;
+        padding: 8px 18px;
+        border-radius: 999px;
+        font-size: 20px;
+        font-weight: 600;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        will-change: transform, opacity;
+      }
+      .tag .ic {
+        font-size: 22px;
+      }
+      .card {
+        position: absolute;
+        width: 250px;
+        padding: 14px 18px;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 10px 30px rgba(6, 19, 41, 0.1);
+        font-size: 18px;
+        line-height: 1.4;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        will-change: transform, opacity;
+      }
+      .card .ic {
+        font-size: 24px;
+        flex: 0 0 auto;
+      }
+      .card em {
+        font-style: normal;
+        font-weight: 700;
+      }
+
+      /* 校了のチェック */
+      .guard {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 26px;
+        will-change: transform, opacity;
+      }
+      .guard svg {
+        flex: 0 0 48px;
+      }
+      .guard .tx {
+        font-size: 26px;
+        font-weight: 600;
+      }
+      .guard .tx small {
+        display: block;
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--on-surface-variant);
+        margin-top: 2px;
+      }
+      .stamp {
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        border: 8px solid var(--primary);
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 86px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        background: rgba(255, 255, 255, 0.85);
+        box-shadow: 0 30px 80px rgba(27, 95, 180, 0.35);
+        will-change: transform, opacity;
+      }
+
+      /* スマホ */
+      .phone {
+        position: absolute;
+        transform-origin: 50% 0;
+        width: 412px;
+        height: 915px;
+        border-radius: 52px;
+        background: #0d1626;
+        padding: 14px;
+        box-sizing: content-box;
+        box-shadow: 0 40px 100px rgba(6, 19, 41, 0.35);
+        will-change: transform, opacity;
+      }
+      .phone .scr {
+        width: 412px;
+        height: 915px;
+        border-radius: 40px;
+        overflow: hidden;
+        position: relative;
+        background: #fff;
+      }
+      .phone .scr img {
+        display: block;
+        width: 412px;
+        height: 915px;
+      }
+      .phone .notch {
+        position: absolute;
+        left: 50%;
+        top: 14px;
+        transform: translateX(-50%);
+        width: 120px;
+        height: 34px;
+        border-radius: 20px;
+        background: #0d1626;
+      }
+
+      /* 流れ（最後） */
+      .flow {
+        position: absolute;
+        padding: 18px 34px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1.5px solid rgba(169, 199, 255, 0.5);
+        color: #fff;
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        will-change: transform, opacity;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script>
+      /* ---------- 小さなタイムラインのエンジン ---------- */
+      const FPS = 60;
+      /** 章の開始時刻（秒）。audio.mjs と合わせる */
+      const C = {
+        s1: 7.4,
+        s2: 16.2,
+        s3: 30.7,
+        s4: 43.9,
+        s5: 54.0,
+        s6: 66.6,
+        s7: 78.0,
+        s8: 87.4,
+        end: 95,
+      };
+      const SCENES = [];
+      function scene(start, end, root, update) {
+        SCENES.push({ start, end, root, update });
+      }
+      const W = 1920,
+        H = 1080;
+      const stage = document.getElementById("stage");
+      const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const E = {
+        lin: (t) => t,
+        out: (t) => 1 - Math.pow(1 - t, 3),
+        outQuint: (t) => 1 - Math.pow(1 - t, 5),
+        outExpo: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)),
+        in: (t) => t * t * t,
+        inOut: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+        inOutQuint: (t) => (t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2),
+        back: (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2),
+        // M3 expressive の spatial spring 風（約 9% の行き過ぎ）
+        spring: (t) => (t >= 1 ? 1 : 1 - Math.exp(-6.5 * t) * Math.cos(7.5 * t)),
+        springSoft: (t) => (t >= 1 ? 1 : 1 - Math.exp(-7 * t) * Math.cos(5.2 * t)),
+      };
+      /** 0..1 の進み具合（start から dur 秒） */
+      const P = (t, start, dur, ease = E.out) => ease(clamp((t - start) / dur, 0, 1));
+      /** 入って（in）、出る（out）。範囲外は 0 */
+      const IO = (t, start, inDur, end, outDur, easeIn = E.out, easeOut = E.in) =>
+        Math.min(P(t, start, inDur, easeIn), 1 - P(t, end - outDur, outDur, easeOut));
+
+      const el = (cls, html = "", parent = stage, style = {}) => {
+        const d = document.createElement("div");
+        d.className = cls;
+        d.innerHTML = html;
+        Object.assign(d.style, style);
+        parent.appendChild(d);
+        return d;
+      };
+      const px = (n) => `${n}px`;
+      /** transform/opacity を一度に */
+      const set = (e, { x = 0, y = 0, s = 1, sx, sy, r = 0, o = 1, blur } = {}) => {
+        e.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${sx ?? s}, ${sy ?? s}) rotate(${r}deg)`;
+        e.style.opacity = o;
+        if (blur !== undefined) e.style.filter = blur > 0.05 ? `blur(${blur}px)` : "";
+      };
+      const hide = (e) => (e.style.opacity = 0);
+
+      /** 文字ごとに span に割る（マスクの中で下から上へ現れる） */
+      const chars = (e) => {
+        const text = e.textContent;
+        e.textContent = "";
+        const out = [];
+        for (const c of text) {
+          const m = document.createElement("span");
+          m.className = "mask";
+          const s = document.createElement("span");
+          s.className = "ch";
+          s.textContent = c === " " ? " " : c;
+          m.appendChild(s);
+          e.appendChild(m);
+          out.push(s);
+        }
+        return out;
+      };
+      const revealChars = (
+        spans,
+        t,
+        start,
+        { stagger = 0.028, dur = 0.7, dy = 1.1, ease = E.outQuint, out, outDur = 0.4 } = {},
+      ) => {
+        spans.forEach((s, i) => {
+          let p = P(t, start + i * stagger, dur, ease);
+          let o = p;
+          if (out !== undefined) {
+            const q = P(t, out + i * stagger * 0.4, outDur, E.in);
+            o = Math.min(o, 1 - q);
+            s.style.transform = `translateY(${(1 - p) * dy * 100 - q * 60}%)`;
+          } else s.style.transform = `translateY(${(1 - p) * dy * 100}%)`;
+          s.style.opacity = o;
+        });
+      };
+      /** 単語（要素）単位のふわっとした登場 */
+      const rise = (
+        e,
+        t,
+        start,
+        { dur = 0.8, dy = 40, ease = E.outQuint, out, outDur = 0.45, dyOut = -24, s0 = 1 } = {},
+      ) => {
+        const p = P(t, start, dur, ease);
+        let o = p,
+          y = (1 - p) * dy,
+          s = lerp(s0, 1, p);
+        if (out !== undefined) {
+          const q = P(t, out, outDur, E.in);
+          o = Math.min(o, 1 - q);
+          y += q * dyOut;
+        }
+        set(e, { y, o, s });
+        return p;
+      };
+
+      /* ---------- 画面（ブラウザ風の窓） ---------- */
+      const IMG = (name) => `../out/screenshots/${name}.png`;
+      const makeWin = (
+        parent,
+        { x, y, w, h, src, mobile = false, url = "MF100 校正システム（デモ）" },
+      ) => {
+        const win = el(
+          "win",
+          `<div class="bar"><i></i><i></i><i></i><div class="url">${url}</div></div><div class="view"><div class="cont"><img ${mobile ? 'class="mobile"' : ""} src="${IMG(src)}"></div></div>`,
+          parent,
+          { left: px(x), top: px(y), width: px(w), height: px(h) },
+        );
+        const view = win.querySelector(".view");
+        const vh = h - 36;
+        view.style.height = px(vh);
+        const cont = win.querySelector(".cont");
+        const img = win.querySelector("img");
+        const iw = mobile ? 412 : 1440,
+          ih = mobile ? 915 : 900;
+        const fitS = w / iw;
+        const api = {
+          el: win,
+          cont,
+          img,
+          w,
+          vh,
+          iw,
+          ih,
+          fitS,
+          /** 画像の点 (px, py) を窓の中央に、倍率 s で */
+          look(pX, pY, s) {
+            const tx = clamp(w / 2 - s * pX, Math.min(0, w - s * iw), 0);
+            const ty = clamp(vh / 2 - s * pY, Math.min(0, vh - s * ih), 0);
+            cont.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`;
+          },
+          /** 窓に収める（上端合わせ） */
+          fit() {
+            api.look(iw / 2, vh / (2 * fitS), fitS);
+          },
+          /** キーフレーム {t, x, y, s} の列を補間（t は窓のローカル時刻） */
+          cam(t, keys, ease = E.inOutQuint) {
+            let a = keys[0],
+              b = keys[0];
+            for (let i = 0; i < keys.length; i++) {
+              if (keys[i].t <= t) {
+                a = keys[i];
+                b = keys[Math.min(i + 1, keys.length - 1)];
+              }
+            }
+            const span = Math.max(0.001, b.t - a.t);
+            const p = a === b ? 1 : ease(clamp((t - a.t) / span, 0, 1));
+            const f = (k) => (k.fit ? { x: iw / 2, y: vh / (2 * fitS), s: fitS } : k);
+            const A = f(a),
+              B = f(b);
+            api.look(lerp(A.x, B.x, p), lerp(A.y, B.y, p), lerp(A.s, B.s, p));
+          },
+          /** 画像座標のコールアウト */
+          callout({ x, y, w, h, label, pos = "top" }) {
+            const c = el("co", label ? `<div class="lbl ${pos}">${label}</div>` : "", cont, {
+              left: px(x),
+              top: px(y),
+              width: px(w),
+              height: px(h),
+            });
+            c.style.transformOrigin = "center";
+            hide(c);
+            return c;
+          },
+          /** 画像座標のピン（番号の丸と波紋） */
+          pin({ x, y, n }) {
+            const p = el(
+              "abs",
+              `<div class="abs rip"></div><div class="abs dotn">${n}</div>`,
+              cont,
+              { left: px(x), top: px(y), width: "0", height: "0" },
+            );
+            const rip = p.querySelector(".rip"),
+              d = p.querySelector(".dotn");
+            Object.assign(rip.style, {
+              left: "-28px",
+              top: "-28px",
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              border: "3px solid var(--primary)",
+            });
+            Object.assign(d.style, {
+              left: "-18px",
+              top: "-18px",
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              background: "var(--primary)",
+              color: "#fff",
+              fontWeight: "700",
+              fontSize: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 6px 16px rgba(27,95,180,.4)",
+            });
+            return { el: p, rip, dot: d };
+          },
+        };
+        api.fit();
+        return api;
+      };
+      const calloutIn = (c, t, start, { out } = {}) => {
+        const p = P(t, start, 0.6, E.spring);
+        let o = P(t, start, 0.25);
+        if (out !== undefined) o = Math.min(o, 1 - P(t, out, 0.3, E.in));
+        set(c, { s: lerp(1.12, 1, p), o });
+        const l = c.querySelector(".lbl");
+        if (l) {
+          const q = P(t, start + 0.25, 0.5, E.spring);
+          l.style.opacity = o * P(t, start + 0.25, 0.2);
+          l.style.transform =
+            (l.classList.contains("right") || l.classList.contains("left")
+              ? "translateY(-50%) "
+              : "") + `translateY(${(1 - q) * 10}px)`;
+        }
+      };
+      const winIn = (win, t, start, { out, dur = 1.0, dy = 140 } = {}) => {
+        const p = P(t, start, dur, E.springSoft);
+        const o = P(t, start, 0.35);
+        let y = (1 - p) * dy,
+          oo = o;
+        if (out !== undefined) {
+          const q = P(t, out, 0.5, E.in);
+          oo = Math.min(oo, 1 - q);
+          y -= q * 60;
+        }
+        set(win.el, { y, o: oo, s: lerp(0.96, 1, p) });
+      };
+
+      /* ---------- 背景 ---------- */
+      const bg = el("bg");
+      const bgLight = el("abs", "", bg, { inset: 0, background: "var(--surface)" });
+      const blobs = [
+        el("blob", "", bg, {
+          width: "1100px",
+          height: "1100px",
+          background:
+            "radial-gradient(circle, rgba(27,95,180,.6) 0%, rgba(27,95,180,.35) 30%, rgba(27,95,180,0) 68%)",
+        }),
+        el("blob", "", bg, {
+          width: "900px",
+          height: "900px",
+          background:
+            "radial-gradient(circle, rgba(90,200,250,.5) 0%, rgba(90,200,250,.28) 30%, rgba(90,200,250,0) 68%)",
+        }),
+        el("blob", "", bg, {
+          width: "1000px",
+          height: "1000px",
+          background:
+            "radial-gradient(circle, rgba(120,80,220,.4) 0%, rgba(120,80,220,.22) 30%, rgba(120,80,220,0) 68%)",
+        }),
+      ];
+      const noise = el("abs", "", bg, {
+        inset: 0,
+        opacity: 0.04,
+        backgroundImage: `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 1 0"/></filter><rect width="240" height="240" filter="url(%23n)"/></svg>')}")`,
+      });
+      const grain = el("abs", "", bg, {
+        inset: 0,
+        background:
+          "radial-gradient(1200px 700px at 50% 40%, rgba(255,255,255,.06), transparent 60%)",
+      });
+      /** 背景: dark は濃紺に鮮やかな blob、light は面の色に淡い blob。mode 0..1 */
+      const drawBg = (t, mode) => {
+        bgLight.style.opacity = mode;
+        const a = 1 - mode * 0.86;
+        const o = [
+          [0.26, 0.3, 1.0],
+          [0.72, 0.65, 0.9],
+          [0.55, 0.15, 0.7],
+        ];
+        blobs.forEach((b, i) => {
+          const ph = t * 0.11 + i * 2.1;
+          const sz = [1100, 900, 1000][i] / 2;
+          const x = W * o[i][0] + Math.cos(ph) * 220 - sz + Math.sin(t * 0.07 + i) * 60;
+          const y = H * o[i][1] + Math.sin(ph * 0.8) * 160 - sz;
+          set(b, { x, y, s: 1 + 0.08 * Math.sin(t * 0.19 + i), o: a * o[i][2] });
+        });
+        grain.style.opacity = 1 - mode;
+      };
+
+      /* ---------- ページャー ---------- */
+      const CHAPTERS = [0, C.s1, C.s2, C.s3, C.s4, C.s5, C.s6, C.s7, C.s8];
+      const pager = el("pager");
+      const pagerDots = CHAPTERS.slice(1).map(() => {
+        const i = document.createElement("i");
+        pager.appendChild(i);
+        return i;
+      });
+      const drawPager = (t, dark) => {
+        let cur = 0;
+        CHAPTERS.forEach((c, i) => {
+          if (t >= c) cur = i;
+        });
+        const idx = Math.max(0, cur - 1);
+        pagerDots.forEach((d, i) => {
+          const on = i === idx;
+          const p = P(t, CHAPTERS[i + 1] ?? 0, 0.5, E.spring);
+          d.style.width = px(on ? 8 + 24 * p : 8);
+          d.style.background = on
+            ? dark
+              ? "#a9c7ff"
+              : "var(--primary)"
+            : dark
+              ? "rgba(169,199,255,.3)"
+              : "rgba(27,95,180,.25)";
+        });
+        pager.style.opacity = t < C.s1 || t > C.end - 1.4 ? 0 : 1;
+      };
+
+      /* =====================================================================
+   シーン 0: イントロ（0–7.6）
+   ===================================================================== */
+      const s0 = el("scene");
+      {
+        const ring = el("abs", "", s0, {
+          left: px(W / 2 - 300),
+          top: px(H / 2 - 300),
+          width: "600px",
+          height: "600px",
+          borderRadius: "50%",
+          border: "2px solid rgba(169,199,255,.9)",
+        });
+        const ring2 = el("abs", "", s0, {
+          left: px(W / 2 - 300),
+          top: px(H / 2 - 300),
+          width: "600px",
+          height: "600px",
+          borderRadius: "50%",
+          border: "1px solid rgba(169,199,255,.5)",
+        });
+        // 浮かぶガラスのカード（制作物のメタファ）
+        const glass = [0, 1, 2, 3].map((i) =>
+          el("abs", "", s0, {
+            width: px([220, 170, 260, 150][i]),
+            height: px([300, 230, 180, 200][i]),
+            borderRadius: "26px",
+            background: "linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.03))",
+            border: "1px solid rgba(255,255,255,.18)",
+          }),
+        );
+        const glassPos = [
+          [220, 180, -8],
+          [1500, 160, 10],
+          [1450, 720, -6],
+          [300, 760, 7],
+        ];
+        const brand = el("abs", "MF100", s0, {
+          left: 0,
+          right: 0,
+          top: "330px",
+          textAlign: "center",
+          fontSize: "34px",
+          fontWeight: "500",
+          color: "#a9c7ff",
+          letterSpacing: ".5em",
+        });
+        const brandCh = [...brand.textContent].map((c) => {
+          const s = document.createElement("span");
+          s.textContent = c;
+          s.className = "ch";
+          return s;
+        });
+        brand.textContent = "";
+        brandCh.forEach((s) => brand.appendChild(s));
+        const title = el("abs", "校正システム", s0, {
+          left: 0,
+          right: 0,
+          top: "390px",
+          textAlign: "center",
+          fontSize: "150px",
+          fontWeight: "700",
+          color: "#fff",
+          letterSpacing: ".04em",
+          lineHeight: 1.2,
+        });
+        const titleCh = chars(title);
+        const refine = el("abs", "refine", s0, {
+          left: 0,
+          right: 0,
+          top: "586px",
+          textAlign: "center",
+          fontSize: "36px",
+          fontWeight: "300",
+          color: "#a9c7ff",
+          letterSpacing: ".6em",
+          textIndent: ".6em",
+        });
+        const tag = el("abs", "提出から校了まで、ひとつの流れに。", s0, {
+          left: 0,
+          right: 0,
+          top: "690px",
+          textAlign: "center",
+          fontSize: "40px",
+          fontWeight: "400",
+          color: "rgba(255,255,255,.92)",
+          letterSpacing: ".06em",
+        });
+        const tagCh = chars(tag);
+        const sub = el("abs", "東京大学五月祭常任委員会 MF100 ／ 制作物の校正・校了", s0, {
+          left: 0,
+          right: 0,
+          top: "770px",
+          textAlign: "center",
+          fontSize: "20px",
+          fontWeight: "400",
+          color: "rgba(169,199,255,.8)",
+          letterSpacing: ".18em",
+        });
+        const line = el("abs", "", s0, {
+          left: px(W / 2 - 1),
+          top: "656px",
+          width: "2px",
+          height: "20px",
+          background: "#a9c7ff",
+          transformOrigin: "top",
+        });
+        const wipe = el("abs", "", s0, {
+          left: px(W / 2 - 60),
+          top: px(H / 2 - 60),
+          width: "120px",
+          height: "120px",
+          borderRadius: "50%",
+          background: "var(--primary)",
+        });
+
+        scene(0, C.s1 + 0.5, s0, (t) => {
+          drawBg(t, 0);
+          // 波紋
+          const r1 = P(t, 0.15, 2.4, E.outExpo);
+          set(ring, { s: 0.2 + r1 * 2.6, o: (1 - r1) * 0.9 });
+          const r2 = P(t, 0.55, 2.6, E.outExpo);
+          set(ring2, { s: 0.2 + r2 * 2.8, o: (1 - r2) * 0.6 });
+          // ガラスのカード
+          glass.forEach((g, i) => {
+            const [gx, gy, gr] = glassPos[i];
+            const p = P(t, 0.3 + i * 0.12, 1.6, E.outQuint);
+            const fl = Math.sin(t * 0.7 + i * 1.7) * 14;
+            const q = P(t, 6.3, 0.8, E.in);
+            set(g, {
+              x: gx + (1 - p) * (i % 2 ? 160 : -160),
+              y: gy + fl + q * 120,
+              r: gr + Math.sin(t * 0.4 + i) * 2,
+              o: p * (1 - q) * 0.9,
+              s: lerp(0.8, 1, p),
+            });
+          });
+          // MF100: 字間が締まりながら
+          brandCh.forEach((c, i) => {
+            const p = P(t, 0.5 + i * 0.07, 0.9, E.outQuint);
+            c.style.opacity = p;
+            c.style.transform = `translateX(${(1 - p) * (i - 2) * 26}px)`;
+          });
+          revealChars(titleCh, t, 1.05, { stagger: 0.06, dur: 0.95, out: 6.35, outDur: 0.5 });
+          {
+            const p = P(t, 1.9, 1.0, E.outQuint);
+            set(refine, { o: p, y: (1 - p) * 16 });
+          }
+          {
+            const p = P(t, 2.55, 0.6, E.outQuint);
+            line.style.transform = `scaleY(${p})`;
+            line.style.opacity = p;
+          }
+          revealChars(tagCh, t, 2.75, { stagger: 0.035, dur: 0.75, out: 6.45, outDur: 0.45 });
+          {
+            const p = P(t, 4.1, 1.0, E.outQuint);
+            set(sub, { o: p * 0.95, y: (1 - p) * 12 });
+          }
+          {
+            const q = P(t, 6.3, 0.7, E.in);
+            [brand, refine, line, sub].forEach((e) => {
+              e.style.opacity = Math.min(parseFloat(e.style.opacity || 1), 1 - q);
+            });
+          }
+          // 円の拡張（container transform）
+          const wp = P(t, 6.65, 1.15, E.inOutQuint);
+          set(wipe, { s: wp * 24, o: wp > 0 ? 1 : 0 });
+        });
+      }
+
+      /* =====================================================================
+   シーン 1: 行き先は 3 つ（7.4–16.6）
+   ===================================================================== */
+      const s1 = el("scene");
+      {
+        const cover = el("abs", "", s1, { inset: 0, background: "var(--primary)" });
+        const h = el("abs", "行き先は、3 つ。", s1, {
+          left: "640px",
+          top: "150px",
+          fontSize: "72px",
+          fontWeight: "700",
+          letterSpacing: ".03em",
+        });
+        const hCh = chars(h);
+        const hs = el(
+          "abs",
+          "制作（自分が作るもの）と校正（自分が確かめるもの）が、それぞれのホーム。",
+          s1,
+          {
+            left: "644px",
+            top: "250px",
+            fontSize: "24px",
+            color: "var(--on-surface-variant)",
+            letterSpacing: ".02em",
+          },
+        );
+        const rail = el(
+          "rail",
+          `<div class="fab"><span class="ic">edit</span></div><div class="ring"></div>`,
+          s1,
+        );
+        const items = [
+          ["edit", "制作", 1],
+          ["fact_check", "校正", 0],
+          ["folder_open", "制作物", 0],
+          ["admin_panel_settings", "管理", 0],
+        ].map(([ic, nm, on], i) =>
+          el(
+            `it${on ? " on" : ""}`,
+            `<div class="pill"><span class="ic">${ic}</span></div>${nm}`,
+            rail,
+            { top: px(130 + i * 96 + (i === 3 ? 380 : 0)) },
+          ),
+        );
+        const ring = rail.querySelector(".ring");
+        const fabLbl = el("abs", "作る", s1, {
+          left: "220px",
+          top: "212px",
+          fontSize: "22px",
+          fontWeight: "600",
+          color: "var(--primary)",
+          whiteSpace: "nowrap",
+        });
+        const dests = [
+          ["edit", "制作", "自分が作るもの。<br>「あなたの番」と次の締切、自分宛てのコメント。"],
+          [
+            "fact_check",
+            "校正",
+            "自分が確かめるもの。<br>未着手・確認中・完了。やることの数はバッジに。",
+          ],
+          [
+            "folder_open",
+            "制作物",
+            "すべての制作物。<br>締切順の 1 本のリスト。状態・担当で絞り込み。",
+          ],
+        ].map(([ic, nm, ds], i) =>
+          el("dest", `<span class="ic">${ic}</span><h3>${nm}</h3><p>${ds}</p>`, s1, {
+            left: px(640 + i * 424),
+            top: "330px",
+          }),
+        );
+        const note = el(
+          "note",
+          `<span class="ic">arrow_outward</span><span>管理と表記ルールは、アカウントのメニューから。</span>`,
+          s1,
+          { left: "640px", top: "680px" },
+        );
+        const note2 = el(
+          "note",
+          `<span class="ic">edit</span><span>書くときは、制作の「作る」から。版を提出／新しく書く。</span>`,
+          s1,
+          {
+            left: "640px",
+            top: "770px",
+            background: "#fff",
+            boxShadow: "0 14px 40px rgba(6,19,41,.10)",
+          },
+        );
+
+        scene(C.s1, C.s2 + 0.05, s1, (t, g) => {
+          drawBg(g, 1);
+          cover.style.opacity = 1 - P(t, 0.35, 0.7, E.inOut);
+          const out = C.s2 - C.s1 - 0.5; // 出る
+          const q = P(t, out, 0.6, E.in);
+          revealChars(hCh, t, 0.6, { stagger: 0.045, dur: 0.8, out });
+          rise(hs, t, 1.1, { out, dy: 20 });
+          rise(rail, t, 0.55, { dur: 1.1, dy: 60, ease: E.springSoft, out: out + 0.05, dyOut: 60 });
+          items.forEach((it, i) => {
+            const p = P(t, 1.0 + i * 0.12, 0.7, E.spring);
+            it.style.opacity = Math.min(p, 1 - q);
+            it.style.transform = `translateX(${(1 - p) * -30}px)`;
+          });
+          dests.forEach((d, i) =>
+            rise(d, t, 1.35 + i * 0.18, {
+              dur: 1.1,
+              dy: 90,
+              ease: E.springSoft,
+              out: out + i * 0.05,
+              dyOut: -40,
+              s0: 0.94,
+            }),
+          );
+          rise(note, t, 3.1, { dur: 0.9, dy: 30, out });
+          rise(note2, t, 5.2, { dur: 0.9, dy: 30, out });
+          // FAB の強調
+          const fp = P(t, 5.4, 0.7, E.spring),
+            pulse = 0.5 + 0.5 * Math.sin((t - 5.4) * 5);
+          set(ring, {
+            s: lerp(0.8, 1.35 + 0.1 * pulse, fp),
+            o: t > 5.4 ? Math.min(0.9 * (1 - 0.5 * pulse), 1 - q) : 0,
+          });
+          const fl = P(t, 5.6, 0.6, E.outQuint);
+          set(fabLbl, { x: (1 - fl) * -12, o: Math.min(fl, 1 - q) });
+        });
+      }
+
+      /* =====================================================================
+   シーン 2: STEP 01 版を提出（16.2–28.6）
+   ===================================================================== */
+      const stepHeader = (parent, num, name, kicker) =>
+        el(
+          "step",
+          `<div class="num">${num}</div><div class="ttl"><div class="kicker">${kicker}</div><div class="name">${name}</div></div>`,
+          parent,
+        );
+      const stepIn = (hd, t, start, out) => {
+        const num = hd.querySelector(".num"),
+          ttl = hd.querySelector(".ttl");
+        const p = P(t, start, 0.9, E.outQuint),
+          q = out !== undefined ? P(t, out, 0.45, E.in) : 0;
+        set(num, { x: (1 - p) * -40, o: Math.min(p, 1 - q) });
+        const p2 = P(t, start + 0.15, 0.9, E.outQuint);
+        set(ttl, { y: (1 - p2) * 24, o: Math.min(p2, 1 - q) });
+      };
+      const bullets = (parent, list) =>
+        list.map(([ic, tx, sm]) =>
+          el(
+            "bul",
+            `<div class="dot"><span class="ic">${ic}</span></div><div class="tx">${tx}${sm ? `<small>${sm}</small>` : ""}</div>`,
+            parent,
+          ),
+        );
+      const WINX = 96,
+        WINY = 262,
+        WINW = 1130,
+        WINH = 36 + Math.round((1130 * 900) / 1440); // 36 + 706
+
+      const s2 = el("scene");
+      {
+        const hd = stepHeader(s2, "01", "版を提出する", "Step 01 · Submit");
+        const geo = { x: WINX, y: WINY, w: WINW, h: WINH };
+        const w1 = makeWin(s2, { ...geo, src: "02-works-list" });
+        const w2 = makeWin(s2, { ...geo, src: "31b-submit-picker" });
+        const w3 = makeWin(s2, { ...geo, src: "14-submit-required-checks" });
+        const w4 = makeWin(s2, { ...geo, src: "04-submit-verified" });
+        // 画像座標は 1440×900
+        const c1 = w1.callout({
+          x: 10,
+          y: 58,
+          w: 76,
+          h: 134,
+          label: "「作る」→ 版を提出",
+          pos: "right",
+        });
+        const c2 = w2.callout({
+          x: 470,
+          y: 344,
+          w: 500,
+          h: 64,
+          label: "版を提出する制作物を選ぶ",
+          pos: "top",
+        });
+        const c3 = w3.callout({
+          x: 404,
+          y: 416,
+          w: 634,
+          h: 70,
+          label: "専門確認の宣言 → 担当者を指名",
+          pos: "top",
+        });
+        const c4 = w4.callout({
+          x: 948,
+          y: 346,
+          w: 116,
+          h: 194,
+          label: "全ファイル検証済み",
+          pos: "left",
+        });
+        const c5 = w4.callout({
+          x: 894,
+          y: 572,
+          w: 154,
+          h: 56,
+          label: "提出を確定する",
+          pos: "right",
+        });
+        const col = el("col", "", s2);
+        const b = bullets(col, [
+          ["add", "制作の「作る」→ 版を提出", "レール（スマホは右下）の FAB。制作者だけに出る"],
+          ["list", "版を提出する制作物を選ぶ", "自分が制作者の、進行中の制作物を納期順に"],
+          ["verified_user", "専門確認を宣言する", "写真・めい・外国語など。担当者も指名できる"],
+          [
+            "send",
+            "検証が済んだら、提出を確定",
+            "重いファイルも直接 R2 へ。第 0 版はラフ、第 1 版からが通常の版",
+          ],
+        ]);
+        scene(C.s2, C.s3 + 0.05, s2, (t, g) => {
+          drawBg(g, 1);
+          const out = C.s3 - C.s2 - 0.5;
+          stepIn(hd, t, 0.25, out);
+          const k1 = 3.9,
+            k2 = 6.9,
+            k3 = 10.1; // 窓の切り替え
+          winIn(w1, t, 0.45, { out: k1 });
+          w1.cam(t, [
+            { t: 0, fit: true },
+            { t: 1.2, fit: true },
+            { t: 2.5, x: 420, y: 300, s: 1.45 },
+          ]);
+          calloutIn(c1, t, 2.3, { out: k1 - 0.1 });
+          winIn(w2, t, k1, { out: k2, dy: 100 });
+          w2.cam(t, [
+            { t: k1, fit: true },
+            { t: k1 + 0.3, fit: true },
+            { t: k1 + 1.4, x: 720, y: 430, s: 1.2 },
+          ]);
+          calloutIn(c2, t, 5.1, { out: k2 - 0.1 });
+          winIn(w3, t, k2, { out: k3, dy: 100 });
+          w3.cam(t, [
+            { t: k2, fit: true },
+            { t: k2 + 0.3, fit: true },
+            { t: k2 + 1.4, x: 720, y: 440, s: 1.25 },
+          ]);
+          calloutIn(c3, t, 8.0, { out: k3 - 0.1 });
+          winIn(w4, t, k3, { out, dy: 100 });
+          w4.cam(t, [
+            { t: k3, fit: true },
+            { t: k3 + 0.3, fit: true },
+            { t: k3 + 1.4, x: 720, y: 450, s: 1.3 },
+          ]);
+          calloutIn(c4, t, 11.2, { out });
+          calloutIn(c5, t, 12.4, { out });
+          const bt = [0.9, 5.1, 8.0, 11.2];
+          b.forEach((e, i) => rise(e, t, bt[i], { dur: 0.9, dy: 30, out: out + i * 0.04 }));
+        });
+      }
+
+      /* =====================================================================
+   シーン 3: STEP 02 校正する（28.2–41.4）
+   ===================================================================== */
+      const s3 = el("scene");
+      {
+        const hd = stepHeader(s3, "02", "校正する", "Step 02 · Review");
+        const w1 = makeWin(s3, { x: WINX, y: WINY, w: WINW, h: WINH, src: "07-check-reviewer" });
+        const w2 = makeWin(s3, { x: WINX, y: WINY, w: WINW, h: WINH, src: "08-workspace-comment" });
+        const F3 = window.FOCUS?.s3 ?? {};
+        const c1 = w1.callout({
+          x: 112,
+          y: 74,
+          w: 288,
+          h: 54,
+          label: "未着手・確認中・完了",
+          pos: "right",
+        });
+        const c2 = w1.callout({
+          x: 108,
+          y: 200,
+          w: 912,
+          h: 92,
+          label: "「校正する」の行を開く（専門確認は「確認する」）",
+          pos: "bot",
+        });
+        const sel = el("abs", "", w2.cont, {
+          border: "2px solid var(--primary)",
+          background: "rgba(27,95,180,.16)",
+          borderRadius: "4px",
+          transformOrigin: "0 0",
+        });
+        const selR = { x: 316, y: 200, w: 302, h: 88 };
+        Object.assign(sel.style, {
+          left: px(selR.x),
+          top: px(selR.y),
+          width: px(selR.w),
+          height: px(selR.h),
+        });
+        const pin = w2.pin({ x: selR.x, y: selR.y, n: 1 });
+        const c3 = w2.callout({
+          x: 1012,
+          y: 216,
+          w: 396,
+          h: 174,
+          label: "投稿はその場で。コメントは横に一覧",
+          pos: "left",
+        });
+        const col = el("col", "", s3);
+        const b = bullets(col, [
+          ["checklist", "校正の一覧から開く", "未着手・確認中・完了。校了する行が先頭に"],
+          [
+            "highlight_alt",
+            "紙面をドラッグして範囲を指定",
+            "PDF・画像は範囲や位置。文章は文字を選ぶ。動画は時点と区間",
+          ],
+          ["alternate_email", "@ でメンション", "人も、グループ（校正者など）もまとめて"],
+          ["pin_drop", "印の番号 = コメントの番号", "カードを開くと、その場所へ移動する"],
+        ]);
+        scene(C.s3, C.s4 + 0.05, s3, (t, g) => {
+          drawBg(g, 1);
+          const out = C.s4 - C.s3 - 0.5;
+          stepIn(hd, t, 0.25, out);
+          const sw = 4.6;
+          winIn(w1, t, 0.45, { out: sw });
+          w1.cam(t, [
+            { t: 0, fit: true },
+            { t: 1.2, fit: true },
+            { t: 2.6, x: 560, y: 260, s: 1.3 },
+          ]);
+          calloutIn(c1, t, 1.4, { out: sw - 0.1 });
+          calloutIn(c2, t, 2.7, { out: sw - 0.1 });
+          winIn(w2, t, sw, { out, dy: 100 });
+          w2.cam(t, [
+            { t: sw, fit: true },
+            { t: sw + 0.4, fit: true },
+            { t: sw + 1.6, x: 560, y: 330, s: 1.5 },
+            { t: sw + 5.0, x: 560, y: 330, s: 1.5 },
+            { t: sw + 6.2, x: 1060, y: 330, s: 1.3 },
+          ]);
+          // 範囲の選択が描かれる → ピン
+          const ds = P(t, sw + 1.7, 0.9, E.inOut);
+          sel.style.transform = `scale(${ds}, ${P(t, sw + 1.7, 0.9, E.out)})`;
+          sel.style.opacity = Math.min(1, P(t, sw + 1.7, 0.2) * (1 - P(t, out, 0.3, E.in)));
+          const pp = P(t, sw + 2.7, 0.7, E.spring);
+          set(pin.dot, { s: pp, o: Math.min(pp, 1 - P(t, out, 0.3, E.in)) });
+          const rp = P(t, sw + 2.75, 1.1, E.outExpo);
+          set(pin.rip, { s: 0.4 + rp * 2.2, o: t > sw + 2.75 ? (1 - rp) * 0.9 : 0 });
+          calloutIn(c3, t, sw + 6.4, { out });
+          const bt = [1.3, sw + 1.8, sw + 4.4, sw + 6.4];
+          b.forEach((e, i) => rise(e, t, bt[i], { dur: 0.9, dy: 30, out: out + i * 0.04 }));
+        });
+      }
+
+      /* =====================================================================
+   シーン 4: STEP 03 採否を決める（41–50.8）
+   ===================================================================== */
+      const s4 = el("scene");
+      {
+        const hd = stepHeader(s4, "03", "採否を決める", "Step 03 · Decide");
+        const w1 = makeWin(s4, { x: WINX, y: WINY, w: WINW, h: WINH, src: "09-decision" });
+        const F4 = window.FOCUS?.s4 ?? {};
+        const c1 = w1.callout({
+          x: 1014,
+          y: 380,
+          w: 388,
+          h: 80,
+          label: "⋮ から採否。理由は履歴に残る",
+          pos: "bot",
+        });
+        const c0 = w1.callout({ x: 1360, y: 136, w: 48, h: 36, label: "⋮", pos: "left" });
+        const chips = [
+          ["check_circle", "採用", "直して次の版へ", "var(--ok-container)", "var(--ok)"],
+          ["cancel", "不採用", "理由を残す", "var(--err-container)", "var(--err)"],
+          ["redo", "持ち越し", "次の版で対応", "var(--warn-container)", "var(--warn)"],
+        ].map(([ic, nm, sm, bgc, fg], i) =>
+          el("chip", `<span class="ic fill">${ic}</span>${nm}<small>${sm}</small>`, s4, {
+            left: "1304px",
+            top: px(290 + i * 112),
+            background: bgc,
+            color: fg,
+          }),
+        );
+        const l1 = el("abs", "採否は、制作者が決める。", s4, {
+          left: "1304px",
+          top: "660px",
+          fontSize: "34px",
+          fontWeight: "700",
+          letterSpacing: ".02em",
+        });
+        const l1c = chars(l1);
+        const l2 = el(
+          "abs",
+          "理由と参照は残り、履歴から追える。<br>コメントしただけでは、完了にならない。",
+          s4,
+          {
+            left: "1306px",
+            top: "724px",
+            fontSize: "22px",
+            lineHeight: 1.6,
+            color: "var(--on-surface-variant)",
+          },
+        );
+        scene(C.s4, C.s5 + 0.05, s4, (t, g) => {
+          drawBg(g, 1);
+          const out = C.s5 - C.s4 - 0.5;
+          stepIn(hd, t, 0.25, out);
+          winIn(w1, t, 0.45, { out });
+          w1.cam(t, [
+            { t: 0, fit: true },
+            { t: 1.2, fit: true },
+            { t: 2.6, x: 1060, y: 330, s: 1.25 },
+          ]);
+          calloutIn(c0, t, 2.2, { out });
+          calloutIn(c1, t, 3.2, { out });
+          chips.forEach((c, i) => {
+            const p = P(t, 1.2 + i * 0.35, 0.9, E.spring);
+            const q = P(t, out + i * 0.04, 0.4, E.in);
+            set(c, { x: (1 - p) * 60, s: lerp(0.85, 1, p), o: Math.min(p, 1 - q) });
+          });
+          revealChars(l1c, t, 3.4, { stagger: 0.035, out });
+          rise(l2, t, 4.3, { dy: 20, out });
+        });
+      }
+
+      /* =====================================================================
+   シーン 5: STEP 04 次の版へ（50.4–63）
+   ===================================================================== */
+      const s5 = el("scene");
+      {
+        const hd2 = stepHeader(s5, "04", "次の版へ", "Step 04 · Next revision");
+        const cx = 960,
+          cy = 480,
+          X1 = cx - 430,
+          X2 = cx + 430;
+        const track = el("abs", "", s5, {
+          left: px(X1),
+          top: px(cy - 3),
+          width: px(X2 - X1),
+          height: "6px",
+          borderRadius: "3px",
+          background: "var(--outline-variant)",
+          transformOrigin: "0 50%",
+        });
+        const trackOn = el("abs", "", s5, {
+          left: px(X1),
+          top: px(cy - 3),
+          width: px(X2 - X1),
+          height: "6px",
+          borderRadius: "3px",
+          background: "var(--primary)",
+          transformOrigin: "0 50%",
+        });
+        const r1 = el("rev", "<b>第1版</b><span>通常版</span>", s5, {
+          left: px(X1 - 75),
+          top: px(cy - 75),
+        });
+        const r2 = el("rev", "<b>第2版</b><span>通常版</span>", s5, {
+          left: px(X2 - 75),
+          top: px(cy - 75),
+        });
+        const t1a = el("tag", '<span class="ic">schedule</span>校正を受付中', s5, {
+          left: px(X1 - 96),
+          top: px(cy - 150),
+          background: "var(--primary-container)",
+          color: "var(--on-primary-container)",
+        });
+        const t1b = el("tag", '<span class="ic">lock</span>受付終了（superseded）', s5, {
+          left: px(X1 - 140),
+          top: px(cy - 150),
+          background: "var(--surface-high)",
+          color: "var(--on-surface-variant)",
+        });
+        const t2 = el("tag", '<span class="ic">check</span>提出を確定', s5, {
+          left: px(X2 - 82),
+          top: px(cy - 150),
+          background: "var(--primary)",
+          color: "#fff",
+        });
+        const cards = [
+          ["check_circle", "var(--ok)", "<em>採用</em> 見出しの表記"],
+          ["cancel", "var(--err)", "<em>不採用</em> 色の変更（理由あり）"],
+          ["radio_button_unchecked", "var(--warn)", "<em>未解決</em> 写真の許諾"],
+        ].map(([ic, c, tx], i) =>
+          el("card", `<span class="ic" style="color:${c}">${ic}</span><span>${tx}</span>`, s5, {
+            left: px(X1 - 143),
+            top: px(cy + 110 + i * 70),
+          }),
+        );
+        const carry = el("tag", '<span class="ic">redo</span>持ち越し（人が確認）', s5, {
+          left: px(X2 - 118),
+          top: px(cy + 128),
+          background: "var(--warn-container)",
+          color: "var(--warn)",
+        });
+        const cap = el("abs", "新しい版の確定で、前の版の受付は終わる。", s5, {
+          left: 0,
+          right: 0,
+          top: "820px",
+          textAlign: "center",
+          fontSize: "38px",
+          fontWeight: "700",
+          letterSpacing: ".02em",
+        });
+        const capC = chars(cap);
+        const cap2 = el(
+          "abs",
+          "確定に失敗したら何も変わらない（原子的）。未解決の指摘は消えず、人が確認して持ち越す。",
+          s5,
+          {
+            left: 0,
+            right: 0,
+            top: "888px",
+            textAlign: "center",
+            fontSize: "22px",
+            color: "var(--on-surface-variant)",
+          },
+        );
+        // 版比較の窓
+        const CW = 1400,
+          CH = 36 + 760;
+        const w = makeWin(s5, { x: (W - CW) / 2, y: 236, w: CW, h: CH, src: "25-compare" });
+        const F5 = window.FOCUS?.s5 ?? {};
+        const c1 = w.callout({
+          x: 560,
+          y: 108,
+          w: 420,
+          h: 30,
+          label: "新しい版が右。こちらにコメントできる",
+          pos: "right",
+        });
+        const c2 = w.callout({
+          x: 118,
+          y: 72,
+          w: 180,
+          h: 30,
+          label: "ページの自動対応",
+          pos: "right",
+        });
+        const c3 = w.callout({
+          x: 252,
+          y: 806,
+          w: 598,
+          h: 60,
+          label: "ページ・倍率を共有、同期と差分",
+          pos: "top",
+        });
+        const cap3 = el(
+          "note",
+          '<span class="ic">compare</span><span>アプリバーの「比べる」: この制作物の版・ほかの制作物。比べながら新しい版にコメントもできる。</span>',
+          s5,
+          {
+            left: "320px",
+            top: "960px",
+            width: "1280px",
+            boxSizing: "border-box",
+            boxShadow: "0 18px 50px rgba(6,19,41,.14)",
+          },
+        );
+        scene(C.s5, C.s6 + 0.05, s5, (t, g) => {
+          drawBg(g, 1);
+          const out = C.s6 - C.s5 - 0.5,
+            sw = 7.0; // 図 → 比較の窓
+          stepIn(hd2, t, 0.25, out);
+          const q = P(t, sw - 0.1, 0.5, E.in);
+          const fade = (e) =>
+            (e.style.opacity = Math.min(parseFloat(e.style.opacity || "1"), 1 - q));
+          track.style.transform = `scaleX(${P(t, 0.9, 1.0, E.outQuint)})`;
+          fade(track);
+          trackOn.style.transform = `scaleX(${P(t, 2.6, 1.0, E.inOutQuint)})`;
+          fade(trackOn);
+          rise(r1, t, 0.7, { dy: 30, ease: E.springSoft, s0: 0.7, out: sw });
+          rise(t1a, t, 1.2, { dy: 16, out: Math.min(sw, 3.5) });
+          cards.forEach((c, i) =>
+            rise(c, t, 1.5 + i * 0.16, { dy: 24, ease: E.springSoft, out: sw }),
+          );
+          rise(r2, t, 2.9, { dy: 30, ease: E.springSoft, s0: 0.7, out: sw });
+          rise(t2, t, 3.3, { dy: 16, ease: E.spring, out: sw });
+          rise(t1b, t, 3.7, { dy: -16, ease: E.spring, out: sw });
+          // 未解決のカードが右へ飛ぶ（放物線）
+          {
+            const p = P(t, 4.2, 1.1, E.inOutQuint);
+            const c = cards[2];
+            set(c, {
+              x: p * (X2 - X1),
+              y: -Math.sin(p * Math.PI) * 70,
+              r: Math.sin(p * Math.PI) * 6,
+              o: Math.min(1, 1 - q),
+            });
+          }
+          rise(carry, t, 5.0, { dy: 16, ease: E.spring, out: sw });
+          revealChars(capC, t, 4.9, { stagger: 0.03, out: sw });
+          rise(cap2, t, 5.7, { dy: 16, out: sw });
+          // 比較
+          winIn(w, t, sw, { out, dy: 120 });
+          w.cam(t, [
+            { t: sw, fit: true },
+            { t: sw + 0.4, fit: true },
+            { t: sw + 1.8, x: 560, y: 380, s: 1.1 },
+            { t: sw + 3.2, x: 560, y: 380, s: 1.1 },
+            { t: sw + 4.2, x: 560, y: 560, s: 1.1 },
+          ]);
+          calloutIn(c2, t, sw + 1.4, { out });
+          calloutIn(c1, t, sw + 2.2, { out });
+          calloutIn(c3, t, sw + 4.2, { out });
+          rise(cap3, t, sw + 3.4, { dy: 24, out });
+        });
+      }
+
+      /* =====================================================================
+   シーン 6: STEP 05 校了（62.4–74）
+   ===================================================================== */
+      const s6 = el("scene");
+      {
+        const hd = stepHeader(s6, "05", "校了する", "Step 05 · Final approval");
+        const w1 = makeWin(s6, { x: WINX, y: WINY, w: WINW, h: WINH, src: "10-finalize-dialog" });
+        const w2 = makeWin(s6, { x: WINX, y: WINY, w: WINW, h: WINH, src: "11-work-finalized" });
+        const F6 = window.FOCUS?.s6 ?? {};
+        const c1 = w1.callout({
+          x: 452,
+          y: 296,
+          w: 536,
+          h: 96,
+          label: "対象の版と宣言者を明示して宣言",
+          pos: "top",
+        });
+        const c1b = w1.callout({
+          x: 464,
+          y: 400,
+          w: 512,
+          h: 128,
+          label: "例外のときだけ理由を書く",
+          pos: "bot",
+        });
+        const c2 = w2.callout({
+          x: 1014,
+          y: 696,
+          w: 390,
+          h: 136,
+          label: "校了履歴。再開は理由付きで",
+          pos: "left",
+        });
+        const c2b = w2.callout({ x: 146, y: 34, w: 216, h: 24, label: "校了版", pos: "bot" });
+        const col = el("col", "", s6);
+        const mk = (tx, sm) =>
+          el(
+            "guard",
+            `<svg viewBox="0 0 48 48" width="48" height="48"><circle cx="24" cy="24" r="21" fill="var(--ok-container)" stroke="var(--ok)" stroke-width="3"/><path d="M14 25 L21 32 L34 17" fill="none" stroke="var(--ok)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg><div class="tx">${tx}<small>${sm}</small></div>`,
+            col,
+          );
+        const guards = [
+          mk("必須の専門確認: 完了", "写真・めい・外国語の担当者が確認済み"),
+          mk("未解決の重大な指摘: なし", "残るときは原則ブロック。例外は理由と権限で"),
+          mk(
+            "校了者の宣言: 2 / 2",
+            "「校了とみなす人数」に届いたとき校了。制作者は校了者になれない",
+          ),
+        ];
+        const stamp = el("stamp", "校了", s6, {
+          left: px(WINX + WINW / 2 - 110),
+          top: px(WINY + WINH / 2 - 110),
+        });
+        const sring = el("abs", "", s6, {
+          left: px(WINX + WINW / 2 - 110),
+          top: px(WINY + WINH / 2 - 110),
+          width: "220px",
+          height: "220px",
+          borderRadius: "50%",
+          border: "4px solid var(--primary)",
+        });
+        const cap = el(
+          "note",
+          '<span class="ic">history</span><span>再開は理由付き。版も判断も履歴として残り、消えない。</span>',
+          s6,
+          { left: "1304px", top: "700px", width: "540px", boxSizing: "border-box" },
+        );
+        scene(C.s6, C.s7 + 0.05, s6, (t, g) => {
+          drawBg(g, 1);
+          const out = C.s7 - C.s6 - 0.5,
+            sw = 7.4;
+          stepIn(hd, t, 0.25, out);
+          winIn(w1, t, 0.45, { out: sw });
+          w1.cam(t, [
+            { t: 0, fit: true },
+            { t: 1.2, fit: true },
+            { t: 2.6, x: 720, y: 450, s: 1.22 },
+          ]);
+          calloutIn(c1, t, 1.6, { out: sw - 0.2 });
+          calloutIn(c1b, t, 3.0, { out: sw - 0.2 });
+          guards.forEach((gd, i) => {
+            const st = 2.2 + i * 1.1;
+            rise(gd, t, st, { dy: 24, out: out + i * 0.04 });
+            const path = gd.querySelector("path");
+            path.style.strokeDashoffset = 1 - P(t, st + 0.35, 0.5, E.inOut);
+            const circ = gd.querySelector("circle");
+            const b = P(t, st + 0.3, 0.6, E.spring);
+            circ.setAttribute("r", 21 * lerp(0.6, 1, b));
+          });
+          // 判子
+          const sp = P(t, 5.9, 0.75, E.outExpo),
+            sq = P(t, sw, 0.4, E.in);
+          set(stamp, {
+            s: lerp(2.4, 1, sp),
+            r: lerp(-14, -6, sp),
+            o: Math.min(P(t, 5.9, 0.25), 1 - sq),
+          });
+          const rr = P(t, 6.2, 1.2, E.outExpo);
+          set(sring, { s: 1 + rr * 2.4, o: t > 6.2 ? (1 - rr) * 0.8 * (1 - sq) : 0 });
+          winIn(w2, t, sw, { out, dy: 100 });
+          w2.cam(t, [
+            { t: sw, fit: true },
+            { t: sw + 0.4, fit: true },
+            { t: sw + 1.6, x: 980, y: 560, s: 1.25 },
+          ]);
+          calloutIn(c2b, t, sw + 0.9, { out });
+          calloutIn(c2, t, sw + 1.9, { out });
+          rise(cap, t, sw + 0.8, { dy: 24, out });
+        });
+      }
+
+      /* =====================================================================
+   シーン 7: どこでも（73.4–83）
+   ===================================================================== */
+      const s7 = el("scene");
+      {
+        const h = el("abs", "スマホでも、同じ流れ。", s7, {
+          left: "1040px",
+          top: "160px",
+          fontSize: "66px",
+          fontWeight: "700",
+          letterSpacing: ".03em",
+        });
+        const hc = chars(h);
+        const ph1 = el(
+          "phone",
+          `<div class="scr"><img src="${IMG("20-mobile-make")}"></div><div class="notch"></div>`,
+          s7,
+          { left: "230px", top: "140px" },
+        );
+        const ph2 = el(
+          "phone",
+          `<div class="scr"><img src="${IMG("26-mobile-workspace")}"></div><div class="notch"></div>`,
+          s7,
+          { left: "590px", top: "210px" },
+        );
+        const col = el("col", "", s7, { left: "1044px", top: "300px", width: "780px" });
+        const b = bullets(col, [
+          ["install_mobile", "PWA としてホーム画面に", "オフラインでも起動。更新は自動"],
+          [
+            "touch_app",
+            "長押しでなぞると範囲、なぞるだけならスクロール",
+            "指の周りの輪が満ちると選択が始まる",
+          ],
+          [
+            "notifications",
+            "通知はベルに集まる",
+            "あなたの番・割り当て・メンション。開くと通知シート",
+          ],
+        ]);
+        const bell = el(
+          "abs",
+          '<span class="ic" style="font-size:72px;color:var(--primary)">notifications</span>',
+          s7,
+          { left: "1560px", top: "700px" },
+        );
+        const badge = el("abs", "3", s7, {
+          left: "1612px",
+          top: "694px",
+          minWidth: "34px",
+          height: "34px",
+          padding: "0 8px",
+          boxSizing: "border-box",
+          borderRadius: "17px",
+          background: "var(--err)",
+          color: "#fff",
+          fontSize: "20px",
+          fontWeight: "700",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        });
+        const bring = el("abs", "", s7, {
+          left: "1556px",
+          top: "696px",
+          width: "80px",
+          height: "80px",
+          borderRadius: "50%",
+          border: "3px solid var(--primary)",
+        });
+        scene(C.s7, C.s8 + 0.05, s7, (t, g) => {
+          drawBg(g, 1);
+          const out = C.s8 - C.s7 - 0.5;
+          revealChars(hc, t, 0.5, { stagger: 0.04, out });
+          [ph1, ph2].forEach((p, i) => {
+            const pp = P(t, 0.3 + i * 0.25, 1.3, E.springSoft);
+            const q = P(t, out + i * 0.05, 0.5, E.in);
+            const fl = Math.sin(t * 0.9 + i) * 6;
+            set(p, {
+              y: (1 - pp) * 260 + fl + q * 120,
+              r: lerp(i ? 5 : -7, i ? 2.5 : -3.5, pp),
+              o: Math.min(pp, 1 - q),
+              s: lerp(0.8, 0.9, pp),
+            });
+          });
+          b.forEach((e, i) => rise(e, t, 1.4 + i * 0.9, { dy: 30, out: out + i * 0.04 }));
+          const bp = P(t, 3.6, 0.8, E.spring),
+            q = P(t, out, 0.4, E.in);
+          set(bell, {
+            s: bp,
+            o: Math.min(bp, 1 - q),
+            r: Math.sin(Math.max(0, t - 4.0) * 14) * 12 * Math.exp(-Math.max(0, t - 4.0) * 2.2),
+          });
+          const bb = P(t, 4.2, 0.6, E.spring);
+          set(badge, { s: bb, o: Math.min(bb, 1 - q) });
+          badge.textContent = String(Math.max(1, Math.round(lerp(1, 3, P(t, 4.2, 1.0)))));
+          const br = P(t, 4.2, 1.2, E.outExpo);
+          set(bring, { s: 1 + br * 1.8, o: t > 4.2 ? (1 - br) * 0.7 : 0 });
+        });
+      }
+
+      /* =====================================================================
+   シーン 8: アウトロ（82.6–90）
+   ===================================================================== */
+      const s8 = el("scene");
+      {
+        const cover = el("abs", "", s8, {
+          left: px(W / 2 - 60),
+          top: px(H / 2 - 60),
+          width: "120px",
+          height: "120px",
+          borderRadius: "50%",
+          background: "var(--primary)",
+        });
+        const steps = ["登録", "提出", "校正", "採否", "次版", "校了"];
+        const N = steps.length,
+          gap = 262,
+          x0 = W / 2 - (gap * (N - 1)) / 2;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        Object.assign(svg.style, { position: "absolute", inset: 0, width: px(W), height: px(H) });
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute(
+          "d",
+          `M ${x0} 470 ${steps.map((_, i) => `L ${x0 + i * gap} 470`).join(" ")}`,
+        );
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "rgba(169,199,255,.7)");
+        path.setAttribute("stroke-width", "3");
+        path.setAttribute("pathLength", "1");
+        path.setAttribute("stroke-dasharray", "1");
+        svg.appendChild(path);
+        s8.appendChild(svg);
+        const pills = steps.map((s, i) =>
+          el("flow", s, s8, {
+            left: px(x0 + i * gap),
+            top: "470px",
+            transform: "translate(-50%,-50%)",
+          }),
+        );
+        // 「次版 → 校正」の戻り矢印
+        const loop = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        loop.setAttribute(
+          "d",
+          `M ${x0 + 4 * gap} 520 C ${x0 + 4 * gap} 620, ${x0 + 2 * gap} 620, ${x0 + 2 * gap} 520`,
+        );
+        loop.setAttribute("fill", "none");
+        loop.setAttribute("stroke", "rgba(169,199,255,.55)");
+        loop.setAttribute("stroke-width", "2.5");
+        loop.setAttribute("stroke-dasharray", "1");
+        loop.setAttribute("pathLength", "1");
+        loop.setAttribute("marker-end", "");
+        svg.appendChild(loop);
+        const loopLbl = el("abs", "直して、次の版へ", s8, {
+          left: 0,
+          right: 0,
+          top: "628px",
+          textAlign: "center",
+          fontSize: "20px",
+          color: "rgba(169,199,255,.9)",
+          letterSpacing: ".1em",
+        });
+        const tag = el("abs", "判断と責任が、追える。", s8, {
+          left: 0,
+          right: 0,
+          top: "250px",
+          textAlign: "center",
+          fontSize: "64px",
+          fontWeight: "700",
+          color: "#fff",
+          letterSpacing: ".05em",
+        });
+        const tagC = chars(tag);
+        const brand = el(
+          "abs",
+          'MF100 校正システム <span style="font-weight:300;color:#a9c7ff;letter-spacing:.3em;margin-left:.6em">refine</span>',
+          s8,
+          {
+            left: 0,
+            right: 0,
+            top: "790px",
+            textAlign: "center",
+            fontSize: "36px",
+            fontWeight: "600",
+            color: "#fff",
+            letterSpacing: ".08em",
+          },
+        );
+        const foot = el(
+          "abs",
+          "要件の正本 docs/REQUIREMENTS.md v1.1 ・ Material 3 Expressive ・ Web / PWA ・ Convex + Cloudflare",
+          s8,
+          {
+            left: 0,
+            right: 0,
+            top: "860px",
+            textAlign: "center",
+            fontSize: "18px",
+            color: "rgba(169,199,255,.7)",
+            letterSpacing: ".12em",
+          },
+        );
+        const black = el("abs", "", s8, { inset: 0, background: "#000" });
+        scene(C.s8, C.end, s8, (t, g) => {
+          drawBg(g, 0);
+          const wp = P(t, 0, 1.0, E.inOutQuint);
+          set(cover, { s: wp * 24, o: 1 - P(t, 0.95, 0.5, E.inOut) });
+          pills.forEach((p, i) => {
+            const q = P(t, 1.2 + i * 0.16, 0.8, E.spring);
+            p.style.opacity = q;
+            p.style.transform = `translate(-50%,-50%) scale(${lerp(0.6, 1, q)})`;
+          });
+          path.style.strokeDashoffset = 1 - P(t, 1.3, 1.4, E.inOutQuint);
+          loop.style.strokeDashoffset = 1 - P(t, 2.6, 0.9, E.inOut);
+          rise(loopLbl, t, 3.0, { dy: 10 });
+          revealChars(tagC, t, 2.2, { stagger: 0.04 });
+          rise(brand, t, 3.6, { dy: 16 });
+          rise(foot, t, 4.0, { dy: 10 });
+          black.style.opacity = P(t, C.end - C.s8 - 1.1, 0.9, E.inOut);
+        });
+      }
+
+      /* ---------- 組み立て ---------- */
+      const DURATION = C.end;
+      window.__duration = DURATION;
+      window.__seek = (t) => {
+        for (const s of SCENES) {
+          const on = t >= s.start && t < s.end;
+          s.root.style.visibility = on ? "visible" : "hidden";
+          if (on) s.update(t - s.start, t);
+        }
+        const dark = t < C.s1 + 0.2 || t >= C.s8 + 0.4;
+        drawPager(t, dark);
+      };
+      // 素材とフォントがそろったら true
+      window.__ready = (async () => {
+        await document.fonts.ready;
+        await Promise.all(
+          [
+            '400 24px "Noto Sans JP Variable"',
+            '700 24px "Noto Sans JP Variable"',
+            '200 24px "Noto Sans JP Variable"',
+            '400 24px "Material Symbols Outlined Variable"',
+          ].map((f) => document.fonts.load(f)),
+        );
+        await Promise.all(
+          [...document.images].map((i) =>
+            i.complete
+              ? Promise.resolve()
+              : new Promise((r) => {
+                  i.onload = r;
+                  i.onerror = r;
+                }),
+          ),
+        );
+        return true;
+      })();
+
+      const q = new URLSearchParams(location.search);
+      if (q.has("play")) {
+        const t0 = performance.now() - parseFloat(q.get("t") || "0") * 1000;
+        const loop = () => {
+          window.__seek(((performance.now() - t0) / 1000) % DURATION);
+          requestAnimationFrame(loop);
+        };
+        window.__ready.then(loop);
+      } else {
+        window.__ready.then(() => window.__seek(parseFloat(q.get("t") || "0")));
+      }
+    </script>
+  </body>
+</html>

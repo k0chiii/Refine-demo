@@ -17,6 +17,8 @@
     "e2e:pwa": "node e2e/pwa.mjs",
     "e2e": "playwright test",
     "e2e:smoke": "playwright test --grep @smoke",
+    "motion": "node e2e/motion/audio.mjs && node e2e/motion/render.mjs",
+    "motion:stills": "node e2e/motion/render.mjs --stills",
     "pwa:icons": "node scripts/pwa-icons.mjs",
     "icons": "python3 scripts/subset-icons.py"
   },
