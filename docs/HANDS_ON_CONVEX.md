@@ -56,8 +56,8 @@ npx convex env list   # 確認
 | 変数                          | 意味                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `CONVEX_SITE_ORIGIN`          | Convex Auth の issuer。`auth.config.ts` が参照                                                         |
-| `FRONTEND_URL`                | ログイン後に戻る Web の URL（本番例 `https://mf100-refine.pages.dev`）。未設定だと callback が 500      |
-| `SITE_URL`                    | `@convex-dev/auth` 用。通常は `FRONTEND_URL` と同じ。片方だけなら起動時に揃える                         |
+| `FRONTEND_URL`                | ログイン後に戻る Web の URL（本番例 `https://mf100-refine.pages.dev`）。未設定だと callback が 500     |
+| `SITE_URL`                    | `@convex-dev/auth` 用。通常は `FRONTEND_URL` と同じ。片方だけなら起動時に揃える                        |
 | `NOGIKU_MOCK_ENABLED`         | `true`: Nogiku OIDC を呼ばず、モック委員でサインイン                                                   |
 | `MF100_SYSTEM_ADMIN_SUBJECTS` | 校正システム管理者にする Nogiku sub（モックは `mock-nogiku-admin`）                                    |
 | `MF100_UPLOAD_SECRET`         | Hono だけが実体の検証完了を記録できる共有秘密（16 文字以上）。未設定ならファイルを提出できない         |
