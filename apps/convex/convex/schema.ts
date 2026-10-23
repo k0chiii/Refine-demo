@@ -372,6 +372,10 @@ export default defineSchema({
     /** 提出時の申告と本人の確認（Notion の版 DB のチェックボックス） */
     declarations: v.optional(vRevisionDeclarations),
     selfChecks: v.optional(v.array(v.string())),
+    /** 指摘件数（書込み時更新。無い古い行は works.get がスレッドから数える） */
+    unresolvedCount: v.optional(v.number()),
+    openBotCount: v.optional(v.number()),
+    threadCount: v.optional(v.number()),
   })
     .index("by_work", ["workId"])
     .index("by_work_state", ["workId", "reviewState"])

@@ -22,6 +22,8 @@ import {
   isAllowed,
   isGrantActive,
   revisionLabel,
+  revisionThreadStatsFromRevision,
+  revisionThreadStatsOf,
   workTeamIdsOf,
   type Principal,
   type Work,
@@ -238,35 +240,20 @@ export const get = query({
       const openCounts = new Map<string, number>();
       const openBotCounts = new Map<string, number>();
       const pendingChecks = new Map<string, string[]>();
-      // 版ごとの読み取りは互いに独立なので並べて待つ（版の数だけ順番に往復しない）
+      // 版ごとの読み取りは互いに独立なので並べて待つ（版の数だけ順番に往復しない）。
+      // 指摘件数は版の派生フィールドを優先し、無い古い行だけスレッドを読む（docs/COST.md 推奨 3）
       await Promise.all(
         revisions.map(async (r) => {
-          const [checks, threads] = await Promise.all([
-            app.checks.listByRevision(r.id),
-            app.threads.listByRevision(r.id),
-          ]);
+          const checks = await app.checks.listByRevision(r.id);
           pendingChecks.set(
             r.id,
             checks.filter((c) => c.state === "pending").map((c) => c.label),
           );
-          // 自動校正の未確認（校了時に確認メモを求める。校了は止めない）
-          openBotCounts.set(
-            r.id,
-            threads.filter(
-              (t) =>
-                t.origin?.kind === "bot" &&
-                (t.resolution === "open" || t.resolution === "acknowledged"),
-            ).length,
-          );
-          openCounts.set(
-            r.id,
-            threads.filter(
-              (t) =>
-                t.resolution === "open" ||
-                t.resolution === "acknowledged" ||
-                t.resolution === "accepted",
-            ).length,
-          );
+          const cached = revisionThreadStatsFromRevision(r);
+          const stats =
+            cached ?? revisionThreadStatsOf(await app.threads.listByRevision(r.id));
+          openCounts.set(r.id, stats.unresolved);
+          openBotCounts.set(r.id, stats.openBot);
         }),
       );
       // 既定で開く版（受付中、無ければ最新の有効な版）の添付の要約。校正画面は版 → 添付の順に 2 回の問い合わせを待ってからファイルを

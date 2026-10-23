@@ -1,5 +1,6 @@
 import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
+import { syncRevisionThreadStats } from "./revisionThreadStats";
 import { substringTokens, workSearchText } from "./workSearch";
 import { syncWorkSummary } from "./workSummary";
 import type {
@@ -373,6 +374,7 @@ export function createAppContext(
           "commentThreads",
           compact(thread as Strip<Doc<"commentThreads">>),
         );
+        await syncRevisionThreadStats(db, thread.revisionId);
         return { ...thread, id } as CommentThread;
       },
       async update(thread) {
@@ -380,6 +382,7 @@ export function createAppContext(
           thread.id as Id<"commentThreads">,
           compact(toFields(thread) as Strip<Doc<"commentThreads">>),
         );
+        await syncRevisionThreadStats(db, thread.revisionId);
       },
       async appendEvent(event) {
         return await db.insert(
