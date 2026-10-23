@@ -1,5 +1,5 @@
 import { isAllowed, rolesOf, type AuthorizationContext } from "../acl/authorize.ts";
-import { isAccepting, type Revision } from "../revision/Revision.ts";
+import type { RevisionHeads } from "../dashboard/workSummary.ts";
 import type { MediaType } from "./Work.ts";
 
 /**
@@ -44,12 +44,12 @@ export function submitRouteFor(mediaType: MediaType): SubmitRoute {
  */
 export function isSubmitTarget(
   authz: AuthorizationContext,
-  revisions: readonly Revision[],
+  heads: Pick<RevisionHeads, "accepting">,
   policy: SubmitTargetPolicy = defaultSubmitTargetPolicy,
 ): boolean {
   if (!isAllowed("revision.submit", authz)) return false;
   if (authz.work.lifecycle !== "active") return false;
   if (policy.creatorOnly && !rolesOf(authz.work, authz.principal).isCreator) return false;
-  if (!policy.includeAccepting && revisions.some(isAccepting)) return false;
+  if (!policy.includeAccepting && heads.accepting !== null) return false;
   return true;
 }

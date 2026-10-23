@@ -7,16 +7,15 @@ import {
   compareWorkRows,
   declarationsOf,
   effectivePermission,
-  isAccepting,
+  focusRevisionIdOf,
   isAllowed,
-  isUnresolvedResolution,
   nextDeadlineOf,
   permissionIncludes,
-  revisionLabel,
+  revisionHeadsOf,
   rolesOf,
   summarizeByBureau,
-  tallyResolutions,
   tallyStages,
+  threadTallyOf,
   workStageOf,
   workUrgency,
   type ApprovalEvent,
@@ -26,10 +25,11 @@ import {
   type Instant,
   type MediaType,
   type Principal,
-  type Resolution,
   type Revision,
+  type RevisionGlance,
   type SubmitRoute,
   type SubmitTargetPolicy,
+  type ThreadTally,
   type Work,
   type WorkOverviewRow,
   type WorkStage,
@@ -198,7 +198,11 @@ export async function buildDashboard(
   // 全体の状況（表・内訳）。下書き・取消は数えない
   const teams = await ctx.teams.list();
   const rows: WorkOverviewRow[] = [];
-  const resolutions: Resolution[] = [];
+  const threadTotals = { open: 0, done: 0 };
+  const countThreads = (t: ThreadTally) => {
+    threadTotals.open += t.unresolved;
+    threadTotals.done += t.total - t.unresolved;
+  };
   const reviewers = { total: 0, done: 0 };
   let checksPending = 0;
   const overviewRow = (
@@ -254,16 +258,24 @@ export async function buildDashboard(
     if (roles.isCreator) out.roles.creator++;
     if (roles.isApprover) out.roles.approver++;
     if (roles.isManager) out.roles.manager++;
-    const revisions = (await ctx.revisions.listByWork(work.id)).filter(
-      (r) => r.reviewState !== "void",
-    );
-    const accepting = revisions.find(isAccepting) ?? null;
-    const latest = revisions.sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
-    const item = (r: Revision | null, deadlineAt: number | null, count = 0): DashboardItem => ({
+    // 要約が揃っていれば版の全件もスレッドも読まない。揃っていない制作物だけ、全件から同じ値を数え直す
+    const summary = await ctx.workSummaries.findByWork(work.id);
+    let revisions: Revision[] | null = null;
+    const revisionsOf = async () => (revisions ??= await ctx.revisions.listByWork(work.id));
+    const heads = summary ?? revisionHeadsOf(await revisionsOf());
+    const { accepting, latest } = heads;
+    const focusId = focusRevisionIdOf(heads);
+    const tally =
+      summary?.threads ?? threadTallyOf(focusId ? await ctx.threads.listByRevision(focusId) : []);
+    const item = (
+      r: RevisionGlance | null,
+      deadlineAt: number | null,
+      count = 0,
+    ): DashboardItem => ({
       workId: work.id,
       workTitle: work.title,
       revisionId: r?.id ?? null,
-      revisionLabel: r ? revisionLabel(r) : null,
+      revisionLabel: r?.label ?? null,
       deadlineAt,
       count,
     });
@@ -278,35 +290,37 @@ export async function buildDashboard(
       const quorum = approvalSetupOf(work).quorum;
       let approvalEvents: ApprovalEvent[] | null = null;
       const approvalsOf = async () => (approvalEvents ??= await ctx.approvals.listByWork(work.id));
-      const threads = await ctx.threads.listByRevision(accepting.id);
-      const unresolved = threads.filter((t) => isUnresolvedResolution(t.resolution)).length;
+      const { unresolved } = tally;
       const assignments = await ctx.assignments.listByRevision(accepting.id);
       const checks = await ctx.checks.listByRevision(accepting.id);
       const pendingChecks = checks.filter((c) => c.state === "pending");
       const reviewersDone = assignments.filter(
         (a) => a.state === "responded" || a.state === "excused",
       ).length;
-      for (const t of threads) resolutions.push(t.resolution);
+      countThreads(tally);
       reviewers.total += assignments.length;
       reviewers.done += reviewersDone;
       checksPending += pendingChecks.length;
       Object.assign(detail, {
         revisionId: accepting.id,
-        revisionLabel: revisionLabel(accepting),
+        revisionLabel: accepting.label,
         reviewDeadlineAt: accepting.deadlineAt,
         unresolved,
-        threads: threads.length,
+        threads: tally.total,
         reviewersTotal: assignments.length,
         reviewersDone,
         checksPending: pendingChecks.length,
         ...(roles.isCreator && quorum > 1
           ? {
-              approvalDeclared: approvalProgressOf(work, await approvalsOf(), revisions).declaredIds
-                .length,
+              approvalDeclared:
+                summary?.declared ??
+                approvalProgressOf(work, await approvalsOf(), await revisionsOf()).declaredIds
+                  .length,
             }
           : {}),
       });
-      for (const t of threads) lastActivity = Math.max(lastActivity ?? 0, t.createdAt);
+      if (tally.lastCreatedAt !== null)
+        lastActivity = Math.max(lastActivity ?? 0, tally.lastCreatedAt);
 
       const mine = assignments.find((a) => a.reviewerId === principal.userId);
       if (mine) reviewing = true;
@@ -371,27 +385,21 @@ export async function buildDashboard(
           ...item(accepting, accepting.deadlineAt, unresolved),
           deadlineKind: "review",
         });
-    } else if (
-      latest &&
-      latest.reviewState === "closed" &&
-      latest.reviewClosedReason === "deadline"
-    ) {
-      const lapsedThreads = await ctx.threads.listByRevision(latest.id);
-      const unresolved = lapsedThreads.filter((t) => isUnresolvedResolution(t.resolution)).length;
-      out.backlog.overdue.push(item(latest, latest.deadlineAt, unresolved));
-      for (const t of lapsedThreads) resolutions.push(t.resolution);
+    } else if (latest?.lapsed) {
+      out.backlog.overdue.push(item(latest, latest.deadlineAt, tally.unresolved));
+      countThreads(tally);
       Object.assign(detail, {
         revisionId: latest.id,
-        revisionLabel: revisionLabel(latest),
+        revisionLabel: latest.label,
         reviewDeadlineAt: latest.deadlineAt,
-        unresolved,
-        threads: lapsedThreads.length,
+        unresolved: tally.unresolved,
+        threads: tally.total,
       });
     }
     const stage = workStageOf({
       lifecycle: work.lifecycle,
       accepting: accepting !== null,
-      hasRevision: revisions.length > 0,
+      hasRevision: latest !== null,
     });
     if (stage) rows.push(overviewRow(work, stage, { reviewDeadlineAt: null, ...detail }));
     if (reviewing) out.roles.reviewer++;
@@ -470,16 +478,14 @@ export async function buildDashboard(
     if (!work) return null;
     const grants = await ctx.acl.listByWork(work.id);
     if (!(await canView(ctx, principal, work, grants))) return null;
-    const revisions = (await ctx.revisions.listByWork(work.id)).filter(
-      (r) => r.reviewState !== "void",
-    );
-    const accepting = revisions.find(isAccepting) ?? null;
-    const latest = revisions.sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null;
+    const { accepting, latest } =
+      (await ctx.workSummaries.findByWork(work.id)) ??
+      revisionHeadsOf(await ctx.revisions.listByWork(work.id));
     return {
       workId: work.id,
       workTitle: work.title,
       revisionId: (accepting ?? latest)?.id ?? null,
-      revisionLabel: latest ? revisionLabel(latest) : null,
+      revisionLabel: latest?.label ?? null,
       deadlineAt: accepting?.deadlineAt ?? work.deadlineAt ?? null,
       deadlineKind: accepting ? "review" : "delivery",
       count: 0,
@@ -498,7 +504,7 @@ export async function buildDashboard(
     asOf: now,
     total: rows.length,
     stages: tallyStages(rows.map((r) => r.stage)),
-    threads: tallyResolutions(resolutions),
+    threads: threadTotals,
     reviewers,
     checksPending,
     works: rows.filter((r) => r.stage !== "finalized").sort(compareWorkRows),
