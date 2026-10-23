@@ -16,6 +16,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
+import { ReviewersDialog } from "@/features/work/ReviewersDialog";
 import { EditWorkDialog } from "@/features/work/EditWorkDialog";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
@@ -57,7 +58,6 @@ export function InfoTab({
 }) {
   const finalize = useMutation(api.approvals.finalize);
   const reopen = useMutation(api.approvals.reopen);
-  const assign = useMutation(api.reviews.assign);
   const changeLifecycle = useMutation(api.works.changeLifecycle);
   const completeCheck = useMutation(api.checks.complete);
   const waiveCheck = useMutation(api.checks.waive);
@@ -65,7 +65,7 @@ export function InfoTab({
   const confirmIndependently = useMutation(api.approvals.confirm);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
+  const [reviewersOpen, setReviewersOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState("");
@@ -73,7 +73,6 @@ export function InfoTab({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmNote, setConfirmNote] = useState("");
   const [reopenReason, setReopenReason] = useState("");
-  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const [waiveDraft, setWaiveDraft] = useState<{ checkId: string; reason: string } | null>(null);
   const [addCheckDraft, setAddCheckDraft] = useState<{ type: string; assignee: string[] } | null>(
     null,
@@ -94,7 +93,6 @@ export function InfoTab({
   // 独立確認が要るのは、制作者本人でもある校了者が宣言するとき（ほかの校了者の宣言は止めない）
   const needsConfirmation = confirmation?.requiredForMe === true && confirmation.valid === null;
   const candidate = work.revisions.find((r) => r.kind === "standard") ?? null; // 並び順は最新 standard が先頭
-  const accepting = work.revisions.find((r) => r.id === work.acceptingRevisionId) ?? null;
   const checks = revision?.checks ?? [];
   const reviewers = revision?.assignments ?? [];
   const reviewersDone = reviewers.filter(
@@ -138,13 +136,6 @@ export function InfoTab({
   const doReopen = useAction(async () => {
     await reopen({ workId: w.id as Id<"works">, reason: reopenReason, expectedVersion: w.version });
     setReopenOpen(false);
-  });
-  const doAssign = useAction(async () => {
-    const target = revision?.revision.id ?? accepting?.id;
-    if (!target) return;
-    await assign({ revisionId: target as Id<"revisions">, reviewerIds, reviewType: "general" });
-    setAssignOpen(false);
-    setReviewerIds([]);
   });
   const doLifecycle = useAction(async (to: "active" | "on_hold" | "cancelled") => {
     await changeLifecycle({ workId: w.id as Id<"works">, to, expectedVersion: w.version });
@@ -326,8 +317,8 @@ export function InfoTab({
             理由付きで再開
           </M3eButton>
         ) : null}
-        {can.assign && (revision || accepting) && w.lifecycle === "active" ? (
-          <M3eButton variant="outlined" onClick={() => setAssignOpen(true)}>
+        {can.editReviewers ? (
+          <M3eButton variant="outlined" onClick={() => setReviewersOpen(true)}>
             校正者を割り当てる
           </M3eButton>
         ) : null}
@@ -733,33 +724,14 @@ export function InfoTab({
         </div>
       </M3eDialog>
 
-      <M3eDialog open={assignOpen} onClosed={() => setAssignOpen(false)} closeLabel="閉じる">
-        <span slot="header">校正者を割り当て</span>
-        <div className="dialog-body">
-          <p className="small muted" style={{ margin: 0 }}>
-            対象: {revision?.revision.label ?? accepting?.label}
-          </p>
-          <UserPicker
-            label="校正者"
-            hint="グループを選ぶと、所属する人をまとめて加えます"
-            groups
-            value={reviewerIds}
-            onChange={setReviewerIds}
-          />
-        </div>
-        <div slot="actions" className="row">
-          <M3eButton variant="text" onClick={() => setAssignOpen(false)}>
-            キャンセル
-          </M3eButton>
-          <M3eButton
-            variant="filled"
-            disabled={doAssign.pending || reviewerIds.length === 0}
-            onClick={() => void doAssign.run()}
-          >
-            割り当てる
-          </M3eButton>
-        </div>
-      </M3eDialog>
+      {reviewersOpen ? (
+        <ReviewersDialog
+          workId={w.id}
+          title={w.title}
+          initialIds={w.reviewerIds ?? []}
+          onClose={() => setReviewersOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
