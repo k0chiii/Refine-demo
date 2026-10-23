@@ -36,6 +36,13 @@ export interface Revision {
   declarations?: RevisionDeclarations;
   /** 提出前に本人が確認した項目（Notion の版 DB のチェックボックス） */
   selfChecks?: readonly SubmissionCheckId[];
+  /**
+   * 指摘の件数（投稿・採否・削除と同じ transaction で更新。無い古い行は works.get がスレッドから数える）。
+   * unresolved = 未対応・確認済み・採用済み未反映。openBot = 自動校正の未確認（open / acknowledged）。
+   */
+  unresolvedCount?: number;
+  openBotCount?: number;
+  threadCount?: number;
 }
 
 export function isAccepting(revision: Revision): boolean {
@@ -112,6 +119,9 @@ export function createRevision(input: NewRevisionInput, plan: RevisionPlan): New
     reviewState: "open",
     changeSummary: input.changeSummary,
     focusNotes: input.focusNotes,
+    unresolvedCount: 0,
+    openBotCount: 0,
+    threadCount: 0,
   };
   if (input.snapshotHash !== undefined) revision.snapshotHash = input.snapshotHash;
   if (input.declarations !== undefined) revision.declarations = { ...input.declarations };

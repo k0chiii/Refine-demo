@@ -1,4 +1,4 @@
-import type { Resolution } from "../comment/CommentThread.ts";
+import type { CommentThread, Resolution } from "../comment/CommentThread.ts";
 import type { Team } from "../org/team.ts";
 import type { Instant } from "../shared/time.ts";
 import type { WorkLifecycle } from "../work/Work.ts";
@@ -49,6 +49,48 @@ export function tallyStages(stages: Iterable<WorkStage>): Record<WorkStage, numb
 /** 指摘がまだ片付いていないか（未対応・確認済み・採用済み未反映。反映済み・不採用・持越は片付いた扱い） */
 export function isUnresolvedResolution(resolution: Resolution): boolean {
   return resolution === "open" || resolution === "acknowledged" || resolution === "accepted";
+}
+
+/** 版に載せる指摘の件数（works.get / 校了判定。削除済みは呼び出し側で除く） */
+export interface RevisionThreadStats {
+  unresolved: number;
+  openBot: number;
+  total: number;
+}
+
+/** works.get がスレッドを全読みしていたときの数え方と同じ */
+export function revisionThreadStatsOf(
+  threads: Iterable<Pick<CommentThread, "resolution" | "origin">>,
+): RevisionThreadStats {
+  let unresolved = 0;
+  let openBot = 0;
+  let total = 0;
+  for (const t of threads) {
+    total++;
+    if (isUnresolvedResolution(t.resolution)) unresolved++;
+    if (t.origin?.kind === "bot" && (t.resolution === "open" || t.resolution === "acknowledged"))
+      openBot++;
+  }
+  return { unresolved, openBot, total };
+}
+
+/** 版に件数が揃っていればスレッドを読まずに使える */
+export function revisionThreadStatsFromRevision(revision: {
+  unresolvedCount?: number;
+  openBotCount?: number;
+  threadCount?: number;
+}): RevisionThreadStats | null {
+  if (
+    revision.unresolvedCount === undefined ||
+    revision.openBotCount === undefined ||
+    revision.threadCount === undefined
+  )
+    return null;
+  return {
+    unresolved: revision.unresolvedCount,
+    openBot: revision.openBotCount,
+    total: revision.threadCount,
+  };
 }
 
 /** 指摘の数: 未解決と、片付いたもの */
