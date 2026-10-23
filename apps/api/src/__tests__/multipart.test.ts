@@ -94,3 +94,75 @@ it("multipart は全体を検証して一度だけ採用し、採用後の part 
   );
   expect(upload.uploadPart).toHaveBeenCalledTimes(2);
 });
+
+it("multipart は part 受信時に SHA を積み、完了で sink の全文消化を使わない", async () => {
+  let part = "";
+  let exists = false;
+  let meta: Record<string, string> = {};
+  let getBodyReads = 0;
+  const target = {
+    attemptId: "attempt",
+    objectKey: "private/attempt",
+    mimeType: "text/plain",
+    declaredSize: 5,
+    fileName: "a.txt",
+  };
+  const upload = {
+    uploadId: "upload",
+    uploadPart: vi.fn(async (_n: number, body: Uint8Array | ReadableStream) => {
+      part = await new Response(body).text();
+      return { partNumber: 1, etag: "etag" };
+    }),
+    complete: vi.fn(async () => {
+      exists = true;
+    }),
+    abort: vi.fn(),
+  };
+  const bucket = {
+    createMultipartUpload: async (_key: string, o: { customMetadata: Record<string, string> }) => {
+      meta = o.customMetadata;
+      return upload;
+    },
+    resumeMultipartUpload: () => upload,
+    get: async () => {
+      if (!exists) return null;
+      getBodyReads += 1;
+      return {
+        body: new Response(part).body!,
+        customMetadata: meta,
+      };
+    },
+  };
+  const digest = vi.fn(async () => hash("hello"));
+  const ops: UploadOps = {
+    begin: async () => target,
+    resume: async () => ({ ...target, adopted: false }),
+    complete: async () => ({ status: "verified", failureMessage: null }),
+    fail: async () => undefined,
+  };
+  const call = (path: string, method: string, body?: string, headers: Record<string, string> = {}) =>
+    multipartRequest(
+      new Request(`https://test/uploads/multipart/${path}`, {
+        method,
+        headers: { "X-Multipart-Upload-ID": "upload", ...headers },
+        ...(body ? { body } : {}),
+      }),
+      {
+        token: "jwt",
+        ops,
+        bucket: bucket as unknown as Parameters<typeof multipartRequest>[1]["bucket"],
+        sink: () => ({
+          writable: new WritableStream({ write() {} }),
+          digest,
+        }),
+      },
+    );
+  await call("start/item", "POST", undefined, { "X-Content-SHA256": hash("hello") });
+  await call("part/attempt/1", "PUT", "hello", { "Content-Length": "5" });
+  expect((await call("complete/attempt", "POST", JSON.stringify({ parts: [{ partNumber: 1, etag: "etag" }] }))).status).toBe(
+    200,
+  );
+  expect(digest).not.toHaveBeenCalled();
+  // existence probe cancels the body without hashing through sink
+  expect(getBodyReads).toBe(1);
+});

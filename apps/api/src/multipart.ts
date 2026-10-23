@@ -1,3 +1,4 @@
+import { createHash, type Hash } from "node:crypto";
 import { boundedText } from "./boundedBody";
 import {
   MAX_UPLOAD_BYTES,
@@ -9,6 +10,37 @@ import type { Sha256Sink, UploadOps } from "./ports";
 
 export const MULTIPART_PART_SIZE = 8 * 1024 * 1024;
 type MultipartStore = Pick<R2Bucket, "createMultipartUpload" | "resumeMultipartUpload" | "get">;
+
+/**
+ * Running SHA-256 across parts in this isolate. Same-upload parts usually stay here;
+ * a miss on complete falls back to a full-object read so integrity never weakens.
+ */
+type PartAccumulator = { hash: Hash; size: number; head: number[] };
+const partAccumulators = new Map<string, PartAccumulator>();
+
+function accKey(objectKey: string, uploadId: string) {
+  return `${objectKey}\n${uploadId}`;
+}
+
+function takeAccumulator(objectKey: string, uploadId: string): PartAccumulator {
+  const key = accKey(objectKey, uploadId);
+  let acc = partAccumulators.get(key);
+  if (!acc) {
+    acc = { hash: createHash("sha256"), size: 0, head: [] };
+    partAccumulators.set(key, acc);
+  }
+  return acc;
+}
+
+function dropAccumulator(objectKey: string, uploadId: string) {
+  partAccumulators.delete(accKey(objectKey, uploadId));
+}
+
+/** Exposed for tests that assert the fast path avoided a full body digest. */
+export function multipartAccumulatorCountForTests() {
+  return partAccumulators.size;
+}
+
 /** No completed object is deleted here: orphan cleanup decides deletion after atomic adoption/failure. */
 export async function multipartRequest(
   request: Request,
@@ -73,10 +105,19 @@ export async function multipartRequest(
       !request.body
     )
       return Response.json({ code: "invalid_part" }, { status: 400 });
-    const part = await upload.uploadPart(partNumber, request.body);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.byteLength !== expectedSize)
+      return Response.json({ code: "invalid_part" }, { status: 400 });
+    const acc = takeAccumulator(target.objectKey, uploadId);
+    acc.hash.update(bytes);
+    acc.size += bytes.byteLength;
+    if (acc.head.length < PDF_SIGNATURE_WINDOW)
+      acc.head.push(...bytes.slice(0, PDF_SIGNATURE_WINDOW - acc.head.length));
+    const part = await upload.uploadPart(partNumber, bytes);
     return Response.json(part);
   }
   if (action === "abort" && request.method === "POST") {
+    dropAccumulator(target.objectKey, uploadId);
     await upload.abort();
     await args.ops.fail(args.token, id, "multipart cancelled");
     return new Response(null, { status: 204 });
@@ -102,31 +143,53 @@ export async function multipartRequest(
   const existing = await args.bucket.get(target.objectKey);
   if (existing) await existing.body.cancel();
   else await upload.complete(data.parts);
-  const object = await args.bucket.get(target.objectKey);
-  if (!object) throw new Error("multipart_object_missing");
-  const sink = args.sink();
-  const writer = sink.writable.getWriter();
-  let size = 0;
-  const head: number[] = [];
-  const reader = object.body.getReader();
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    size += chunk.value.length;
-    if (size > MAX_UPLOAD_BYTES) {
-      await reader.cancel();
-      throw new Error("multipart_too_large");
+
+  const declared = target.declaredSize ?? 0;
+  const acc = partAccumulators.get(accKey(target.objectKey, uploadId));
+  let size: number;
+  let sha256: string;
+  let head: number[];
+  let meta: Record<string, string> | undefined;
+
+  if (acc && acc.size === declared) {
+    size = acc.size;
+    sha256 = acc.hash.digest("hex");
+    head = acc.head;
+    dropAccumulator(target.objectKey, uploadId);
+    const probe = await args.bucket.get(target.objectKey);
+    if (!probe) throw new Error("multipart_object_missing");
+    meta = probe.customMetadata as Record<string, string> | undefined;
+    await probe.body.cancel();
+  } else {
+    dropAccumulator(target.objectKey, uploadId);
+    const object = await args.bucket.get(target.objectKey);
+    if (!object) throw new Error("multipart_object_missing");
+    meta = object.customMetadata as Record<string, string> | undefined;
+    const sink = args.sink();
+    const writer = sink.writable.getWriter();
+    size = 0;
+    head = [];
+    const reader = object.body.getReader();
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.length;
+      if (size > MAX_UPLOAD_BYTES) {
+        await reader.cancel();
+        throw new Error("multipart_too_large");
+      }
+      if (head.length < PDF_SIGNATURE_WINDOW)
+        head.push(...chunk.value.slice(0, PDF_SIGNATURE_WINDOW - head.length));
+      await writer.write(chunk.value);
     }
-    if (head.length < PDF_SIGNATURE_WINDOW)
-      head.push(...chunk.value.slice(0, PDF_SIGNATURE_WINDOW - head.length));
-    await writer.write(chunk.value);
+    await writer.close();
+    sha256 = await sink.digest();
   }
-  await writer.close();
-  const sha256 = await sink.digest();
+
   if (
-    size !== target.declaredSize ||
-    sha256 !== object.customMetadata?.["mf100-sha256"] ||
-    String(size) !== object.customMetadata?.["mf100-size"]
+    size !== declared ||
+    sha256 !== (meta?.["mf100-sha256"] ?? "").toLowerCase() ||
+    String(size) !== meta?.["mf100-size"]
   ) {
     await args.ops.fail(args.token, id, "multipart full-object verification failed");
     return Response.json({ code: "integrity_mismatch" }, { status: 400 });
