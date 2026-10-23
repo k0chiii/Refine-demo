@@ -32,6 +32,7 @@ import type * as lib_ai_anthropic from "../lib/ai/anthropic.js";
 import type * as lib_ai_gateway from "../lib/ai/gateway.js";
 import type * as lib_ai_provider from "../lib/ai/provider.js";
 import type * as lib_ai_workersAi from "../lib/ai/workersAi.js";
+import type * as lib_authEnv from "../lib/authEnv.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_nogikuAccess from "../lib/nogikuAccess.js";
 import type * as lib_notationSamples from "../lib/notationSamples.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "lib/ai/gateway": typeof lib_ai_gateway;
   "lib/ai/provider": typeof lib_ai_provider;
   "lib/ai/workersAi": typeof lib_ai_workersAi;
+  "lib/authEnv": typeof lib_authEnv;
   "lib/errors": typeof lib_errors;
   "lib/nogikuAccess": typeof lib_nogikuAccess;
   "lib/notationSamples": typeof lib_notationSamples;

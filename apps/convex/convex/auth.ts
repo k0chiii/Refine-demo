@@ -1,10 +1,14 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 import type { DatabaseWriter, MutationCtx } from "./_generated/server";
+import { ensureAuthSiteUrl } from "./lib/authEnv.ts";
 import { readNogikuAccessConfig } from "./lib/nogikuAccess.ts";
 import { resolveRedirectTo } from "./lib/redirect.ts";
 import Nogiku from "./providers/nogiku.ts";
 import NogikuMock from "./providers/nogikuMock.ts";
+
+// @convex-dev/auth の SITE_URL と本アプリの FRONTEND_URL を揃える（未設定だと callback が 500）
+ensureAuthSiteUrl();
 
 function requireEnv(name: string): string {
   const value = process.env[name];
