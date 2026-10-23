@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { BotOrigin } from "../notation/autoProofread.ts";
-import {
-  revisionThreadStatsFromRevision,
-  revisionThreadStatsOf,
-} from "../dashboard/overview.ts";
+import { revisionThreadStatsFromRevision, revisionThreadStatsOf } from "../dashboard/overview.ts";
 
 describe("revisionThreadStatsOf", () => {
   it("未解決・自動校正未確認・全件を works.get と同じ規則で数える", () => {

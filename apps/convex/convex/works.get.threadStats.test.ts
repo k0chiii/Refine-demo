@@ -102,7 +102,9 @@ describe("works.get thread stats (perf)", () => {
         threadCount: undefined,
       });
     });
-    expect(revisionThreadStatsFromRevision((await t.run((ctx) => ctx.db.get(revisionId)))!)).toBeNull();
+    expect(
+      revisionThreadStatsFromRevision((await t.run((ctx) => ctx.db.get(revisionId)))!),
+    ).toBeNull();
     const fallback = await cast.reviewer.as.query(api.works.get, { workId });
     expect(fallback.revisions.find((r) => r.id === revisionId)?.unresolvedCount).toBe(THREADS);
   });

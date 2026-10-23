@@ -40,6 +40,7 @@ import type * as lib_processingValidators from "../lib/processingValidators.js";
 import type * as lib_pushPool from "../lib/pushPool.js";
 import type * as lib_reactions from "../lib/reactions.js";
 import type * as lib_redirect from "../lib/redirect.js";
+import type * as lib_revisionThreadStats from "../lib/revisionThreadStats.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
 import type * as lib_threadActivity from "../lib/threadActivity.js";
 import type * as lib_users from "../lib/users.js";
@@ -111,6 +112,7 @@ declare const fullApi: ApiFromModules<{
   "lib/pushPool": typeof lib_pushPool;
   "lib/reactions": typeof lib_reactions;
   "lib/redirect": typeof lib_redirect;
+  "lib/revisionThreadStats": typeof lib_revisionThreadStats;
   "lib/serviceAuth": typeof lib_serviceAuth;
   "lib/threadActivity": typeof lib_threadActivity;
   "lib/users": typeof lib_users;

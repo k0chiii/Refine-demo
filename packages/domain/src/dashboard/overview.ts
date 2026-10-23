@@ -68,10 +68,7 @@ export function revisionThreadStatsOf(
   for (const t of threads) {
     total++;
     if (isUnresolvedResolution(t.resolution)) unresolved++;
-    if (
-      t.origin?.kind === "bot" &&
-      (t.resolution === "open" || t.resolution === "acknowledged")
-    )
+    if (t.origin?.kind === "bot" && (t.resolution === "open" || t.resolution === "acknowledged"))
       openBot++;
   }
   return { unresolved, openBot, total };

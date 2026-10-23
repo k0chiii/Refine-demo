@@ -250,8 +250,7 @@ export const get = query({
             checks.filter((c) => c.state === "pending").map((c) => c.label),
           );
           const cached = revisionThreadStatsFromRevision(r);
-          const stats =
-            cached ?? revisionThreadStatsOf(await app.threads.listByRevision(r.id));
+          const stats = cached ?? revisionThreadStatsOf(await app.threads.listByRevision(r.id));
           openCounts.set(r.id, stats.unresolved);
           openBotCounts.set(r.id, stats.openBot);
         }),
