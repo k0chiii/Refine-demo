@@ -17,18 +17,14 @@ import type { AppContext } from "../ports.ts";
 import { loadAuthorizedWork } from "../shared.ts";
 import { about, excerpt, notify, personName } from "./notifications.ts";
 
-/** 名簿から作る割当の種別。版の提出種別（revision.reviewType）とは別。 */
-const ROSTER_REVIEW_TYPE = "general";
-
 export interface SetWorkReviewersInput {
   workId: string;
-  /** 名簿の全体。グループは画面で人に展開済み。 */
   reviewerIds: string[];
 }
 
 export interface SetWorkReviewersResult {
   work: Work;
-  /** 受付中の版に適用した差。受付中の版が無ければ null。 */
+  /** 受付中の版が無いときは null。差が空でもオブジェクトは返す。 */
   applied: { revisionId: string; sync: AssignmentSync } | null;
 }
 
@@ -87,10 +83,6 @@ export async function setWorkReviewers(
   return { work: next, applied };
 }
 
-/**
- * 1 つの版の割当を名簿に揃える。setWorkReviewers と confirmSubmission だけが呼ぶ。
- * パッケージの公開面には出さない。
- */
 export async function syncRevisionToRoster(
   ctx: AppContext,
   work: Work,
@@ -99,7 +91,7 @@ export async function syncRevisionToRoster(
   actorId: UserId,
 ): Promise<AssignmentSync> {
   const current = await ctx.assignments.listByRevision(revision.id);
-  const sync = planAssignmentSync(rosterIds, current, revision.id, ROSTER_REVIEW_TYPE);
+  const sync = planAssignmentSync(rosterIds, current, revision.id);
   if (isEmptySync(sync)) return sync;
   for (const a of sync.add) await ctx.assignments.upsert(a);
   for (const a of sync.remove) await ctx.assignments.delete(a.revisionId, a.reviewerId);

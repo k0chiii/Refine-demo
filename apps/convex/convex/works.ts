@@ -22,7 +22,6 @@ import {
   isAllowed,
   isGrantActive,
   mayAssignReviewers,
-  reviewerRosterOf,
   revisionLabel,
   revisionThreadStatsFromRevision,
   revisionThreadStatsOf,
@@ -557,13 +556,10 @@ async function summarizeWorkList(
     /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
     creatorIds: [...work.creatorIds],
     canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
-    reviewers:
-      reviewerRosterOf(work).kind === "unset"
-        ? null
-        : (work.reviewerIds ?? []).map((id) => ({
-            id,
-            name: users.get(id)?.name ?? "（不明なユーザー）",
-          })),
+    reviewers: (work.reviewerIds ?? []).map((id) => ({
+      id,
+      name: users.get(id)?.name ?? "（不明なユーザー）",
+    })),
     canEditReviewers:
       work.lifecycle !== "finalized" &&
       work.lifecycle !== "cancelled" &&

@@ -27,7 +27,7 @@ function applied(
   current: readonly ReviewAssignment[],
   roster: readonly string[],
 ): ReviewAssignment[] {
-  const plan = planAssignmentSync(roster, current, revisionId, reviewType);
+  const plan = planAssignmentSync(roster, current, revisionId);
   const removed = new Set(plan.remove.map((a) => a.reviewerId));
   return [...current.filter((a) => !removed.has(a.reviewerId)), ...plan.add];
 }
@@ -58,13 +58,13 @@ describe("校正者の名簿", () => {
       assignment({ reviewerId: "c", state: "viewed" }),
     ];
     expect(rosterForNewRevision({ kind: "unset" }, previous)).toEqual({
+      kind: "derived",
       ids: ["a", "c"],
-      materialize: true,
     });
-    expect(rosterForNewRevision({ kind: "unset" }, [])).toEqual({ ids: [], materialize: true });
+    expect(rosterForNewRevision({ kind: "unset" }, [])).toEqual({ kind: "derived", ids: [] });
     expect(rosterForNewRevision({ kind: "set", ids: [] }, previous)).toEqual({
+      kind: "saved",
       ids: [],
-      materialize: false,
     });
   });
 
@@ -76,17 +76,15 @@ describe("校正者の名簿", () => {
       assignment({ reviewerId: "gone-done", state: "responded", respondedAt: 3 }),
       assignment({ reviewerId: "excused", state: "excused" }),
     ];
-    const plan = planAssignmentSync(["keep", "fresh"], current, revisionId, reviewType);
+    const plan = planAssignmentSync(["keep", "fresh"], current, revisionId);
     expect(plan.add).toEqual([
       { revisionId, reviewerId: "fresh", reviewType: "general", state: "pending" },
     ]);
     expect(plan.remove.map((a) => a.reviewerId)).toEqual(["drop-pending", "drop-viewed"]);
     expect(plan.remove.some((a) => a.state === "excused" || a.state === "responded")).toBe(false);
     const next = applied(current, ["keep", "fresh"]);
-    expect(isEmptySync(planAssignmentSync(["keep", "fresh"], next, revisionId, reviewType))).toBe(
-      true,
-    );
-    const back = planAssignmentSync(["keep", "fresh", "drop-viewed"], next, revisionId, reviewType);
+    expect(isEmptySync(planAssignmentSync(["keep", "fresh"], next, revisionId))).toBe(true);
+    const back = planAssignmentSync(["keep", "fresh", "drop-viewed"], next, revisionId);
     expect(back.add).toEqual([
       { revisionId, reviewerId: "drop-viewed", reviewType: "general", state: "pending" },
     ]);
@@ -95,7 +93,7 @@ describe("校正者の名簿", () => {
 
   it("同じ名簿をもう一度計画しても差は空", () => {
     const current = [assignment({ reviewerId: "a", state: "viewed", viewedAt: 9 })];
-    expect(isEmptySync(planAssignmentSync(["a"], current, revisionId, reviewType))).toBe(true);
+    expect(isEmptySync(planAssignmentSync(["a"], current, revisionId))).toBe(true);
   });
 
   it("制作物の変更は名簿を書き換えず、版の番号だけ進む", () => {

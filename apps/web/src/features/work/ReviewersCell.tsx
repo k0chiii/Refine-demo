@@ -6,13 +6,12 @@ import { ReviewersDialog } from "./ReviewersDialog";
 export interface ReviewersCellWork {
   id: string;
   title: string;
-  /** null は名簿が未設定の古い行 */
-  reviewers: ReadonlyArray<{ id: string; name: string }> | null;
+  reviewers: ReadonlyArray<{ id: string; name: string }>;
   canEditReviewers: boolean;
 }
 
 export function reviewersSummary(reviewers: ReviewersCellWork["reviewers"]): string {
-  const [first, ...rest] = reviewers ?? [];
+  const [first, ...rest] = reviewers;
   if (!first) return "";
   return rest.length > 0 ? `${first.name} ほか${rest.length}人` : first.name;
 }
@@ -20,7 +19,7 @@ export function reviewersSummary(reviewers: ReviewersCellWork["reviewers"]): str
 export function ReviewersCell({ w }: { w: ReviewersCellWork }) {
   const [open, setOpen] = useState(false);
   const text = reviewersSummary(w.reviewers);
-  const names = (w.reviewers ?? []).map((r) => r.name).join("、");
+  const names = w.reviewers.map((r) => r.name).join("、");
   const label = <span className="mf-table__clip works-table__clip">{text || "—"}</span>;
   return (
     <>
@@ -48,7 +47,7 @@ export function ReviewersCell({ w }: { w: ReviewersCellWork }) {
           <ReviewersDialog
             workId={w.id}
             title={w.title}
-            initialIds={(w.reviewers ?? []).map((r) => r.id)}
+            initialIds={w.reviewers.map((r) => r.id)}
             onClose={() => setOpen(false)}
           />
         </span>

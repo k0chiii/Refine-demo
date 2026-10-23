@@ -10,6 +10,10 @@ export type ReviewerRoster =
   | { readonly kind: "set"; readonly ids: readonly UserId[] }
   | { readonly kind: "unset" };
 
+/** 名簿から起こす割当の種別。版の提出種別（Revision.reviewType）とは別の定数。 */
+export const ROSTER_REVIEW_TYPE = "general" as const;
+export type RosterReviewType = typeof ROSTER_REVIEW_TYPE;
+
 export interface WorkReviewerFields {
   reviewerIds?: readonly UserId[] | undefined;
 }
@@ -20,23 +24,27 @@ export function reviewerRosterOf(work: WorkReviewerFields): ReviewerRoster {
 }
 
 /**
- * 新しい版に載せる名簿。保存済みならそれを使う。未設定なら直前の版の校正者（excused を除く）を引き継ぎ、
- * materialize が true のとき呼び出し側が同じトランザクションで Work に書き戻す。
+ * 新しい版に載せる名簿。
+ * saved は保存済み名簿。derived は未設定から直前の版の割当（excused を除く）を導いたものなので、
+ * 呼び出し側は同じトランザクションで Work.reviewerIds に書き戻す。
  */
+export type RosterForNewRevision =
+  | { readonly kind: "saved"; readonly ids: readonly UserId[] }
+  | { readonly kind: "derived"; readonly ids: readonly UserId[] };
+
 export function rosterForNewRevision(
   roster: ReviewerRoster,
   previousAssignments: readonly Pick<ReviewAssignment, "reviewerId" | "state">[],
-): { ids: readonly UserId[]; materialize: boolean } {
-  if (roster.kind === "set") return { ids: roster.ids, materialize: false };
+): RosterForNewRevision {
+  if (roster.kind === "set") return { kind: "saved", ids: roster.ids };
   const ids: UserId[] = [];
   for (const a of previousAssignments) {
     if (a.state === "excused") continue;
     if (!ids.includes(a.reviewerId)) ids.push(a.reviewerId);
   }
-  return { ids, materialize: true };
+  return { kind: "derived", ids };
 }
 
-/** 書き込む名簿。空白は work_invalid。重なりは先に選んだ 1 人。空配列は「校正者なし」。 */
 export function normalizeReviewerIds(input: readonly string[]): UserId[] {
   const ids: UserId[] = [];
   for (const raw of input) {
@@ -48,21 +56,15 @@ export function normalizeReviewerIds(input: readonly string[]): UserId[] {
   return ids;
 }
 
-/** ある版の割当を名簿へ揃える差。remove はまだ終えていない行（pending / viewed）だけ。 */
 export interface AssignmentSync {
   readonly add: readonly ReviewAssignment[];
   readonly remove: readonly ReviewAssignment[];
 }
 
-/**
- * 名簿と版の割当の差。responded と excused は消さない。名簿に戻した人は、行が無いので新しい pending になる。
- * 同じ入力にこの結果を適用してもう一度計算すると空になる。
- */
 export function planAssignmentSync(
   rosterIds: readonly UserId[],
   current: readonly ReviewAssignment[],
   revisionId: RevisionId,
-  reviewType: string,
 ): AssignmentSync {
   const wanted: UserId[] = [];
   for (const id of rosterIds) if (!wanted.includes(id)) wanted.push(id);
@@ -71,7 +73,12 @@ export function planAssignmentSync(
   const add: ReviewAssignment[] = [];
   for (const reviewerId of wanted) {
     if (present.has(reviewerId)) continue;
-    add.push({ revisionId, reviewerId, reviewType, state: "pending" });
+    add.push({
+      revisionId,
+      reviewerId,
+      reviewType: ROSTER_REVIEW_TYPE,
+      state: "pending",
+    });
   }
   const remove = current.filter(
     (a) => !wantedSet.has(a.reviewerId) && (a.state === "pending" || a.state === "viewed"),

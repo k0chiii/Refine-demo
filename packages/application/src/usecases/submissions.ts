@@ -441,7 +441,7 @@ export async function confirmSubmission(
     await syncRevisionToRoster(ctx, work, revision, rosterPlan.ids, principal.userId);
     await ctx.works.update({
       ...work,
-      ...(rosterPlan.materialize ? { reviewerIds: [...rosterPlan.ids] } : {}),
+      ...(rosterPlan.kind === "derived" ? { reviewerIds: [...rosterPlan.ids] } : {}),
       version: work.version + 1,
     });
     await ctx.audit.record({
