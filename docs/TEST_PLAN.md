@@ -28,7 +28,7 @@
 | A-11 | ACL 解除後                                       | application `acl.test` / convex `mvp.test` / api `app.test`（配信 403）                             | ✅ 署名 URL を発行しないため即時に効く                                                                                                   |
 | A-12 | Figma / frame.io URL 登録                        | application `submissions.test`（external item）/ web ワークスペース UI で「同期していない」旨を明示 | ✅ 外部リンクの保存はテスト済み。v1 で「合意事項として記録」フォームを追加（デモモードで表示確認）                                       |
 | A-13 | 600×6×5×10 負荷                                  | —                                                                                                   | ❌ 未実施。`listMine` は職責＋ACL 由来の ID から読み、全件購読しない設計。p95 は PoC で計測                                              |
-| A-14 | バックアップ復元                                 | —                                                                                                   | ❌ 未実施（Convex エクスポート＋R2 の整合手順は HANDOVER 参照）                                                                          |
+| A-14 | バックアップ復元                                 | `scripts/verify-backup.py` / `test_verify_backup.py` / `restore_backup_dryrun.py`（夜間 `backup-verify.yml`）。実 export+R2 の復元は手動（RECOVERY） | ⚠️ 照合と dry-run は自動。実クラウドからの復元は未実施 |
 | A-15 | キーボード操作                                   | `pnpm a11y`（axe-core、58 画面）                                                                    | ⚠️ 自動検査の残りは日付ピッカーの 1 件（M3E 内部）。キーボードのみ操作・スクリーンリーダーの実機検証は未実施                             |
 | A-16 | 第 2 版のアップロード失敗                        | application / convex                                                                                | ✅ 第 1 版の受付維持                                                                                                                     |
 | A-17 | 第 2 版の確定成功                                | application / convex                                                                                | ✅ 同一処理で第 1 版 superseded、第 1 版への新規コメント拒否                                                                             |
@@ -63,10 +63,12 @@
 | 03・04・14・71b・05 最初の版の提出          | `submit-revision.spec.ts`            |
 | 06・13c・07 校正者の割り当てと「校正」      | `assign-reviewer.spec.ts`            |
 | 08 紙面へのコメント                         | `comment.spec.ts`                    |
+| 09 採否                                     | `decision.spec.ts`                   |
+| 10・11 校了（例外校了含む）                 | `finalize.spec.ts`                   |
 | 20c・20e スマホの「校正」                   | `mobile-check.spec.ts`（@core）      |
 | 01・21・22・29・31・31b・31c・15・71 など   | 撮影だけ（`screenshots.mjs` に残す） |
 
-late の主要な流れは @core: 09 採否 `decision`、17 持ち越し `carry-forward`、25 比較 `compare`、10・11 校了 `finalize`（A-08 の例外校了も）、18・32 通知 `notifications`。
+@core に残す主要な流れ: 17 持ち越し `carry-forward`、25 比較 `compare`、18・32 通知 `notifications`、スマホ `mobile-check`。
 
 ## 未実施・手動確認が必要なもの
 

@@ -13,7 +13,7 @@ async function expectFinalizedForCreator(app: App) {
   await expect(app.page.getByRole("button", { name: /MF100 公式パンフレット/ })).toBeVisible();
 }
 
-test.describe("校了", { tag: "@core" }, () => {
+test.describe("校了", { tag: "@smoke" }, () => {
   test("校了者が校了を確定すると、制作者の「制作」の校了済みに出る", async ({ app }) => {
     const { workPath } = await submitFirstRevision(app);
 

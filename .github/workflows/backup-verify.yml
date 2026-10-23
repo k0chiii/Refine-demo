@@ -1,0 +1,26 @@
+# A-14 の自動側。照合スクリプトと単体を夜間に流す。
+# 実 Convex export / 実 R2 からの復元は専用環境と鍵が要るため、ここでは fixture による照合のみ。
+# 本番の復元手順は docs/HANDOVER.md / docs/RECOVERY.md。
+name: Backup verify
+
+on:
+  schedule:
+    - cron: "17 15 * * *" # 毎日 00:17 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: バックアップ照合の単体（fixture）
+        run: python3 -B scripts/test_verify_backup.py
+      - name: 照合 CLI の自己検査（一時ディレクトリで export+R2 を組み立てて verify）
+        run: python3 -B scripts/restore_backup_dryrun.py

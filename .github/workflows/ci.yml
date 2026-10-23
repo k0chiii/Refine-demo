@@ -1,12 +1,9 @@
 # CI: 変更ごとに、手元で回しているのと同じ確認を走らせる（CLAUDE.md: pnpm check / pnpm test / pnpm typecheck）。
 # 方針は docs/TESTING_AGENT_POLICY.md、時間の内訳は docs/CI_CD.md。
-# - verify: 整形・lint（vp check）、型（web は spec の型も）、単体テスト（domain・application・Convex・api・web）、全パッケージのビルド
-# - e2e-smoke（PR）: 機能の E2E（Playwright Test の @smoke）と PWA。デモ版（ブラウザ内の Convex）で流す
-# - e2e（main への push・手動）: 機能の E2E 全部を shard に分けて流し、報告（HTML・失敗の trace）を 1 つにまとめる
-# - visual（main への push・手動）: e2e/screenshots.mjs で画面の撮影・操作の検証・a11y（axe）。部（core・compact・v2・web）ごとに同時に流す。
-#   撮影した画面はリポジトリには入れず、Actions の成果物として残す（利用者方針: スクリーンショットはコミットしない）
-# 以前は 1 画面に約 12 秒かかっていたが、原因は描画待ち（settle）がスクロール連動の animation を「終わらない animation」として
-# 毎回 3 秒の打ち切りまで待っていたこと。直して smoke は 251 秒 → 35 秒（2026-10-22 の計測。docs/CI_CD.md）
+# - verify-* : 整形・lint、型、単体テスト、codegen 差分を並列。集約ジョブ verify が必須チェック用。
+# - PR の単体は pnpm test。main / 手動は pnpm test:coverage（成果物）。
+# - e2e-smoke（PR）: 各ジョブ内でデモ版をビルドしてから @smoke と PWA。
+# - e2e（main・手動）: 全 spec を shard。visual: screenshots.mjs（部ごと）と a11y。
 name: CI
 
 on:
@@ -23,14 +20,13 @@ permissions:
   contents: read
 
 env:
-  # ubuntu-latest に入っている Chrome を使う（Playwright のブラウザは落とさない）
   CHROMIUM_PATH: /usr/bin/google-chrome
   TZ: Asia/Tokyo
 
 jobs:
-  verify:
+  verify-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
@@ -43,57 +39,15 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: node_modules/.vite/task-cache
-          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.event_name }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-${{ github.sha }}
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-${{ github.sha }}
           restore-keys: |
-            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.event_name }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-
-      # ビルドが TanStack Router のルートの型（apps/web/src/routeTree.gen.ts。コミットしない）を作る。
-      # これが無いと lint の型検査が 13 件落ちるので、整形・lint より先に建てる
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-
       - name: ビルド
         run: pnpm build
       - name: 整形と lint
         run: pnpm check
-      # vp run -r typecheck が web（tsc。spec の型も）を含む。web だけをもう一度流さない
-      - name: 型
-        run: pnpm typecheck
-      - name: Worker の生成型とバックアップ検証ツール
-        run: |
-          pnpm --filter @mf100/api types:check
-          python3 -B scripts/test_verify_backup.py
-      - name: 単体テスト
-        run: pnpm test:coverage
-      - uses: actions/upload-artifact@v4
-        with:
-          name: unit-coverage
-          path: coverage
-          retention-days: 7
-      - name: Convex の _generated がコミットと一致するか
-        run: |
-          pnpm codegen
-          git diff --exit-code -- apps/convex/convex/_generated
 
-  build-demo:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
-        with:
-          version: "1.2.0"
-          node-version-file: .node-version
-          cache: true
-          run-install: |
-            - args: ['--frozen-lockfile']
-      - run: pnpm --filter @mf100/web build:demo
-      - uses: actions/upload-artifact@v4
-        with:
-          name: demo-web-${{ github.sha }}
-          path: apps/web/dist-demo
-          include-hidden-files: true
-          retention-days: 1
-
-  e2e-smoke:
-    needs: [build-demo]
-    if: github.event_name == 'pull_request'
+  verify-typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -105,10 +59,109 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
-      - uses: actions/download-artifact@v5
+      - uses: actions/cache@v4
         with:
-          name: demo-web-${{ github.sha }}
-          path: apps/web/dist-demo
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-${{ github.sha }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-
+      - name: ビルド
+        run: pnpm build
+      - name: 型
+        run: pnpm typecheck
+      - name: Worker の生成型とバックアップ検証ツール
+        run: |
+          pnpm --filter @mf100/api types:check
+          python3 -B scripts/test_verify_backup.py
+
+  verify-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-${{ github.sha }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-
+      - name: ビルド
+        run: pnpm build
+      - name: 単体テスト（PR は coverage なし）
+        if: github.event_name == 'pull_request'
+        run: pnpm test
+      - name: 単体テスト（coverage）
+        if: github.event_name != 'pull_request'
+        run: pnpm test:coverage
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: unit-coverage
+          path: coverage
+          retention-days: 7
+
+  verify-codegen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-${{ github.sha }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.node-version') }}-
+      - name: Convex の _generated がコミットと一致するか
+        run: |
+          pnpm codegen
+          git diff --exit-code -- apps/convex/convex/_generated
+
+  # ブランチ保護の必須チェック名を verify のまま使えるようにする集約ジョブ
+  verify:
+    needs: [verify-check, verify-typecheck, verify-test, verify-codegen]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: verify レーンがすべて成功したか
+        run: |
+          echo "check=${{ needs.verify-check.result }}"
+          echo "typecheck=${{ needs.verify-typecheck.result }}"
+          echo "test=${{ needs.verify-test.result }}"
+          echo "codegen=${{ needs.verify-codegen.result }}"
+          test "${{ needs.verify-check.result }}" = success
+          test "${{ needs.verify-typecheck.result }}" = success
+          test "${{ needs.verify-test.result }}" = success
+          test "${{ needs.verify-codegen.result }}" = success
+
+  e2e-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.2.0"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - name: デモ版をビルド
+        run: pnpm --filter @mf100/web build:demo
       - name: 主要な流れ（@smoke）
         working-directory: apps/web
         env:
@@ -134,14 +187,9 @@ jobs:
           retention-days: 14
 
   e2e:
-    needs: [build-demo]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1/2, 2/2]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
@@ -151,60 +199,28 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
-      - uses: actions/download-artifact@v5
-        with:
-          name: demo-web-${{ github.sha }}
-          path: apps/web/dist-demo
-      - name: 機能の E2E（shard ${{ matrix.shard }}）
+      - name: デモ版をビルド
+        run: pnpm --filter @mf100/web build:demo
+      - name: 機能の E2E（全 spec・1 ジョブで並列。shard の偏りを避ける）
         working-directory: apps/web
         env:
           E2E_PREBUILT: "1"
-        run: pnpm exec playwright test --shard=${{ matrix.shard }}
-      - name: blob の報告を残す（あとでまとめる）
+        run: pnpm exec playwright test --reporter=github,list,html
+      - name: 報告（失敗の trace 入り）を残す
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
-        with:
-          name: blob-report-${{ strategy.job-index }}
-          path: apps/web/e2e/out/blob-report
-          retention-days: 3
-
-  e2e-report:
-    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
-    needs: [e2e]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
-        with:
-          version: "1.2.0"
-          node-version-file: .node-version
-          cache: true
-          run-install: |
-            - args: ['--frozen-lockfile']
-      - uses: actions/download-artifact@v5
-        with:
-          path: apps/web/all-blob-reports
-          pattern: blob-report-*
-          merge-multiple: true
-      - name: shard の報告を 1 つの HTML にまとめる（失敗の trace も入る）
-        working-directory: apps/web
-        run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
-      - uses: actions/upload-artifact@v4
         with:
           name: e2e-report
           path: apps/web/playwright-report
           retention-days: 14
 
   visual:
-    needs: [build-demo]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        # 部ごとに新しいデモのデータから流す（screenshots.mjs の E2E_PART）
         part: [core, compact, v2, web]
     steps:
       - uses: actions/checkout@v5
@@ -215,10 +231,8 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
-      - uses: actions/download-artifact@v5
-        with:
-          name: demo-web-${{ github.sha }}
-          path: apps/web/dist-demo
+      - name: デモ版をビルド
+        run: pnpm --filter @mf100/web build:demo
       - name: 画面の撮影・操作の検証・a11y（区間計測は実行のまとめへ）
         working-directory: apps/web
         env:
