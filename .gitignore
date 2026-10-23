@@ -51,3 +51,6 @@ apps/api/wrangler.platform.generated.json
 
 coverage/
 *.tgz
+
+# pstack / show-me-your-work の決定ログ（既定は手元のみ。必要なときだけ明示してコミット）
+.audit/
