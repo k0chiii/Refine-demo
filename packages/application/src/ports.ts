@@ -32,6 +32,7 @@ import type {
   Work,
   WorkId,
   WorkPermissionGrant,
+  WorkSummary,
   SocialProfile,
   Team,
   MemberGroup,
@@ -357,6 +358,13 @@ export interface WorkPin {
   workId: WorkId;
   pinnedAt: Instant;
 }
+/**
+ * 制作物ごとの要約（書込みの側が作り直す派生データ）。揃っていない制作物は null を返し、呼び出し側が版とスレッドから数え直す。
+ */
+export interface WorkSummaryRepository {
+  findByWork(workId: WorkId): Promise<WorkSummary | null>;
+}
+
 export interface HomeRepository {
   /** 新しい順 */
   listPins(userId: UserId): Promise<WorkPin[]>;
@@ -421,6 +429,7 @@ export interface AppContext {
   notation: NotationRepository;
   proofreadingRuns: ProofreadingRunRepository;
   home: HomeRepository;
+  workSummaries: WorkSummaryRepository;
   feedback: FeedbackRepository;
   commentFiles: CommentFileRepository;
   audit: AuditLogger;

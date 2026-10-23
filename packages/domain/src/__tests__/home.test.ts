@@ -8,10 +8,12 @@ import {
   workCsvTemplate,
   WORK_IMPORT_MAX_ROWS,
 } from "../work/bulkImport.ts";
+import { revisionHeadsOf } from "../dashboard/workSummary.ts";
 import { defaultSubmitTargetPolicy, isSubmitTarget, submitRouteFor } from "../work/submitTarget.ts";
 import { endOfJstDate } from "../shared/deadline.ts";
 import { makeRevision, makeWork, T0 } from "./fixtures.ts";
 
+const none = { accepting: null };
 const principal = (userId: string) => ({
   userId,
   isSystemAdmin: false,
@@ -31,10 +33,10 @@ describe("版を提出する制作物（L-15）", () => {
   it("制作者で進行中なら出す。受付中の版があっても既定では出す", () => {
     const work = makeWork();
     const authz = { work, grants: [], principal: principal("creator") };
-    expect(isSubmitTarget(authz, [])).toBe(true);
-    expect(isSubmitTarget(authz, [makeRevision()])).toBe(true);
+    expect(isSubmitTarget(authz, none)).toBe(true);
+    expect(isSubmitTarget(authz, revisionHeadsOf([makeRevision()]))).toBe(true);
     expect(
-      isSubmitTarget(authz, [makeRevision()], {
+      isSubmitTarget(authz, revisionHeadsOf([makeRevision()]), {
         ...defaultSubmitTargetPolicy,
         includeAccepting: false,
       }),
@@ -43,13 +45,17 @@ describe("版を提出する制作物（L-15）", () => {
 
   it("提出の権限が無い人・進行中でない制作物には出さない", () => {
     const work = makeWork();
-    expect(isSubmitTarget({ work, grants: [], principal: principal("reviewer") }, [])).toBe(false);
-    expect(isSubmitTarget({ work, grants: [], principal: principal("approver") }, [])).toBe(false);
+    expect(isSubmitTarget({ work, grants: [], principal: principal("reviewer") }, none)).toBe(
+      false,
+    );
+    expect(isSubmitTarget({ work, grants: [], principal: principal("approver") }, none)).toBe(
+      false,
+    );
     for (const lifecycle of ["draft", "on_hold", "finalized", "cancelled"] as const)
       expect(
         isSubmitTarget(
           { work: makeWork({ lifecycle }), grants: [], principal: principal("creator") },
-          [],
+          none,
         ),
       ).toBe(false);
   });
@@ -60,8 +66,8 @@ describe("版を提出する制作物（L-15）", () => {
       grants: [editGrant("delegate")],
       principal: principal("delegate"),
     };
-    expect(isSubmitTarget(authz, [])).toBe(false);
-    expect(isSubmitTarget(authz, [], { ...defaultSubmitTargetPolicy, creatorOnly: false })).toBe(
+    expect(isSubmitTarget(authz, none)).toBe(false);
+    expect(isSubmitTarget(authz, none, { ...defaultSubmitTargetPolicy, creatorOnly: false })).toBe(
       true,
     );
   });

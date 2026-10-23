@@ -18,14 +18,18 @@ import {
   approvalProgressOf,
   approvalSetupOf,
   approversOf,
+  countsDeclarations,
+  glanceOf,
   isAccepting,
   isAllowed,
   isGrantActive,
+  revisionHeadsOf,
   revisionLabel,
   revisionThreadStatsFromRevision,
   revisionThreadStatsOf,
   workTeamIdsOf,
   type Principal,
+  type RevisionGlance,
   type Work,
   type WorkViewPolicy,
 } from "@mf100/domain";
@@ -37,6 +41,7 @@ import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser, teamIdsOf } from "./lib/principal.ts";
 import { resolveUsers, userDisplayName } from "./lib/users.ts";
+import { workSummaryFromDoc } from "./lib/workSummary.ts";
 import {
   vConfidentiality,
   vLifecycleTarget,
@@ -410,8 +415,8 @@ export async function listMyWorks(
 
 function summarize(
   work: Work,
-  latest: { kind: "rough" | "standard"; sequence: number } | null,
-  accepting: { id: string; deadlineAt: number } | null,
+  latest: RevisionGlance | null,
+  accepting: RevisionGlance | null,
   creators: string[],
 ) {
   return {
@@ -427,7 +432,7 @@ function summarize(
     lifecycle: work.lifecycle,
     confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
-    latestRevisionLabel: latest ? revisionLabel(latest) : null,
+    latestRevisionLabel: latest?.label ?? null,
     acceptingRevisionId: accepting?.id ?? null,
     acceptingDeadlineAt: accepting?.deadlineAt ?? null,
     /** 主管担当・制作担当（teams の ID。担当別の表示に使う） */
@@ -495,26 +500,28 @@ async function summarizeWorkList(
     if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
     if (args.genre !== undefined && work.genre !== args.genre) continue;
     if (text && !workSearchText(work).includes(text)) continue;
+    // 要約が揃っていれば版を読まない。id だけの古い行は 2 件の版を、行が無ければ版の全件を読む
     const derived = await ctx.db
       .query("workSummaries")
       .withIndex("by_work", (q) => q.eq("workId", work.id as Id<"works">))
       .unique();
+    const summary = derived && workSummaryFromDoc(derived);
+    const glanceById = async (id: string | null) => {
+      const r = id ? await app.revisions.findById(id) : null;
+      return r && glanceOf(r);
+    };
     const revisions = derived ? [] : await app.revisions.listByWork(work.id);
-    const accepting = derived
-      ? derived.acceptingId
-        ? await app.revisions.findById(derived.acceptingId)
-        : null
-      : (revisions.find(isAccepting) ?? null);
-    const latest = derived
-      ? derived.latestId
-        ? await app.revisions.findById(derived.latestId)
-        : null
-      : (revisions
-          .filter((r) => r.reviewState !== "void")
-          .sort((a, b) => b.submittedAt - a.submittedAt)[0] ?? null);
+    const { latest, accepting } =
+      summary ??
+      (derived
+        ? {
+            latest: await glanceById(derived.latestId),
+            accepting: await glanceById(derived.acceptingId),
+          }
+        : revisionHeadsOf(revisions));
     const declared = derived
       ? derived.declared
-      : work.lifecycle === "active" && approvalSetupOf(work).quorum > 1
+      : countsDeclarations(work)
         ? approvalProgressOf(work, await app.approvals.listByWork(work.id), revisions).declaredIds
             .length
         : 0;

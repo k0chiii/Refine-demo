@@ -1,8 +1,7 @@
 import {
   defaultSubmitTargetPolicy,
-  isAccepting,
   isSubmitTarget,
-  revisionLabel,
+  revisionHeadsOf,
   rolesOf,
   submitRouteFor,
   type MediaType,
@@ -93,22 +92,21 @@ export async function listSubmitTargets(
     const grants = await ctx.acl.listByWork(work.id);
     const authz = { work, grants, principal };
     // 版を読む前に、版に依らない条件（提出の権限）だけで落とす
-    if (!isSubmitTarget(authz, [], { ...policy, includeAccepting: true })) continue;
+    if (!isSubmitTarget(authz, { accepting: null }, { ...policy, includeAccepting: true }))
+      continue;
     if (!(await canView(ctx, principal, work, grants))) continue;
-    const revisions = await ctx.revisions.listByWork(work.id);
-    if (!isSubmitTarget(authz, revisions, policy)) continue;
-    const live = revisions
-      .filter((r) => r.reviewState !== "void")
-      .sort((a, b) => b.submittedAt - a.submittedAt);
-    const accepting = live.find(isAccepting) ?? null;
+    const heads =
+      (await ctx.workSummaries.findByWork(work.id)) ??
+      revisionHeadsOf(await ctx.revisions.listByWork(work.id));
+    if (!isSubmitTarget(authz, heads, policy)) continue;
     out.push({
       workId: work.id,
       workTitle: work.title,
       mediaType: work.mediaType,
       route: submitRouteFor(work.mediaType),
       deadlineAt: work.deadlineAt ?? null,
-      latestLabel: live[0] ? revisionLabel(live[0]) : null,
-      acceptingLabel: accepting ? revisionLabel(accepting) : null,
+      latestLabel: heads.latest?.label ?? null,
+      acceptingLabel: heads.accepting?.label ?? null,
     });
   }
   return out.sort(

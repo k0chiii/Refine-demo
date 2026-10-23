@@ -61,6 +61,14 @@ const reviewState = v.union(
   v.literal("void"),
 );
 const closedReason = v.union(v.literal("deadline"), v.literal("superseded"), v.literal("void"));
+const vRevisionGlance = v.object({
+  id: v.string(),
+  label: v.string(),
+  kind: revisionKind,
+  submittedAt: v.number(),
+  deadlineAt: v.number(),
+  lapsed: v.boolean(),
+});
 const artifactRole = v.union(v.literal("source"), v.literal("preview"), v.literal("external"));
 const artifactType = v.union(
   v.literal("pdf"),
@@ -323,11 +331,22 @@ export default defineSchema({
     confidentiality: v.string(),
   }).index("by_work", ["workId"]),
 
+  /** 制作物ごとの要約（lib/workSummary.ts）。summaryVersion の無い古い行は id だけを持ち、読む側が版から数え直す */
   workSummaries: defineTable({
     workId: v.id("works"),
     latestId: v.union(v.string(), v.null()),
     acceptingId: v.union(v.string(), v.null()),
     declared: v.number(),
+    summaryVersion: v.optional(v.number()),
+    latest: v.optional(v.union(vRevisionGlance, v.null())),
+    accepting: v.optional(v.union(vRevisionGlance, v.null())),
+    threads: v.optional(
+      v.object({
+        unresolved: v.number(),
+        total: v.number(),
+        lastCreatedAt: v.union(v.number(), v.null()),
+      }),
+    ),
   }).index("by_work", ["workId"]),
 
   workRoles: defineTable({
