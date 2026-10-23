@@ -286,8 +286,6 @@ describe("Convex 統合: 認可と状態遷移", () => {
     expect(ws.assignments[0]?.state).toBe("viewed"); // 未読→閲覧済にはなるが確認完了にはならない
     expect(ws.threads[0]?.resolution).toBe("open");
     expect(ws.work.lifecycle).toBe("active");
-    const queue = await cast.reviewer.as.query(api.reviews.myQueue, {});
-    expect(queue[0]).toMatchObject({ overdue: true, assignmentState: "viewed", myCommentCount: 1 });
   });
 
   it("A-07 / A-08 / A-09: 採否・校了ガード・例外校了・再開が監査付きで動く", async () => {

@@ -33,9 +33,11 @@ export function preloadViewers(kind: MediaType | ArtifactType): void {
   const tasks: Array<() => Promise<unknown>> = [];
   switch (kind) {
     case "pdf":
+      tasks.push(() => import("./PdfViewer"));
+      break;
     case "image":
     case "other":
-      tasks.push(() => import("./PdfViewer"));
+      // 添付が pdf と分かってから PdfViewer を読む。媒体の見込みでは先に取らない。
       break;
     case "document":
       tasks.push(
@@ -50,10 +52,7 @@ export function preloadViewers(kind: MediaType | ArtifactType): void {
       tasks.push(() => import("./WebLiveViewer"));
       break;
     case "figma":
-      tasks.push(
-        () => import("./FigmaEmbedViewer"),
-        () => import("./PdfViewer"),
-      );
+      tasks.push(() => import("./FigmaEmbedViewer"));
       break;
     case "sns":
     case "external_link":

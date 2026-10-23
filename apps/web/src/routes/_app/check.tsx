@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_app/check")({
   component: Check,
 });
 
-type Data = FunctionReturnType<typeof api.dashboard.get>;
+type Data = FunctionReturnType<typeof api.dashboard.check>;
 type Item = Data["done"][number];
 
 interface Entry {
@@ -75,7 +75,7 @@ const emptyText: Record<CheckTab, string> = {
 
 /**
  * 校正（自分が確かめるもの）の入口。割り当てられた校正・専門確認・校了を 未着手 / 確認中 / 完了 で見る（利用者決定 2026-10-19）。
- * 材料はダッシュボードの問い合わせ（dashboard.get）の「校正する」（mine.review。未着手 = pending・確認中 = viewed）・「専門確認をする」
+ * 材料はダッシュボードの校正の節（dashboard.check）の「校正する」（mine.review。未着手 = pending・確認中 = viewed）・「専門確認をする」
  * （mine.checks）・「校了する」（mine.finalize）と、自分の分が終わったもの（done）。分け方と締切順は domain の groupCheckEntries。
  * 「割り当てる」（校正者がいない版。割当権限のある人）は小さなまとまりで下に。行を押すとエディタが開く（既定のコメントの引き出し）
  */
@@ -83,7 +83,7 @@ function Check() {
   const { show: tab = "todo" } = Route.useSearch();
   const navigate = useNavigate();
   useEffect(() => rememberWorkspace("check"), []);
-  const data = useQuery(api.dashboard.get, {});
+  const data = useQuery(api.dashboard.check, {});
 
   const setTab = (next: CheckTab) =>
     void navigate({ to: "/check", search: next === "todo" ? {} : { show: next }, replace: true });

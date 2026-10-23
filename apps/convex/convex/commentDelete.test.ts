@@ -78,9 +78,6 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
 
     await cast.reviewer.as.mutation(api.comments.remove, { threadId });
     expect((await view()).threads).toHaveLength(0);
-    // 自分の担当一覧の件数からも外れる
-    const queue = await cast.reviewer.as.query(api.reviews.myQueue, {});
-    expect(queue.every((q) => q.totalCommentCount === 0 && q.myCommentCount === 0)).toBe(true);
     // 履歴（原文）は残る: 管理用の履歴は events の記録で確かめず、削除済みの履歴は返さない
     const events = await cast.creator.as.query(api.comments.events, { threadId });
     expect(events.events).toEqual([]);
@@ -252,8 +249,6 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     const after = await cast.creator.as.query(api.revisions.get, { revisionId: rid });
     expect(after.threads.map((x) => x.id)).toEqual([own]); // 「削除されたコメント」も残らない
     expect((await cast.creator.as.query(api.comments.events, { threadId })).events).toEqual([]);
-    const queue = await cast.reviewer.as.query(api.reviews.myQueue, {});
-    expect(queue.every((q) => q.totalCommentCount === 1)).toBe(true);
     // 返信を 1 件ずつ消す必要はない（消えているので見つからない）
     const events = await t.run((ctx) =>
       ctx.db

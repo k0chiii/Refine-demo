@@ -14,7 +14,7 @@ import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
 /** ポートの呼び出し回数を数える（結果は変えない） */
 function counted(ctx: InMemoryContext) {
-  const calls = { acl: 0, revisions: 0, rulesAll: 0, rulesIn: [] as string[][] };
+  const calls = { acl: 0, revisions: 0, summaries: 0, rulesAll: 0, rulesIn: [] as string[][] };
   const acl = ctx.acl.listByWork.bind(ctx.acl);
   ctx.acl.listByWork = (id) => {
     calls.acl++;
@@ -24,6 +24,11 @@ function counted(ctx: InMemoryContext) {
   ctx.revisions.listByWork = (id) => {
     calls.revisions++;
     return revisions(id);
+  };
+  const summaries = ctx.workSummaries.findByWork.bind(ctx.workSummaries);
+  ctx.workSummaries.findByWork = (id) => {
+    calls.summaries++;
+    return summaries(id);
   };
   const all = ctx.notation.listRules.bind(ctx.notation);
   ctx.notation.listRules = () => {
@@ -58,7 +63,8 @@ describe("提出先の候補（常時購読）は、候補にならない制作�
     expect(targets.map((t) => t.workTitle)).toEqual(["自分の制作物"]);
     // 読んだのは候補の 1 件ぶんだけ（他の 6 件は制作物そのものの値で除外）
     expect(calls.acl).toBe(1);
-    expect(calls.revisions).toBe(1);
+    expect(calls.summaries).toBe(1);
+    expect(calls.revisions).toBe(0);
   });
 });
 

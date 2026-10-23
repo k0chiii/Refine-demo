@@ -78,7 +78,8 @@ async function ocrWorker(onProgress?: (ratio: number) => void): Promise<OcrWorke
   const base = `${location.origin}${import.meta.env.BASE_URL}ocr/`;
   return createWorker("jpn", OEM.LSTM_ONLY, {
     workerPath: `${base}worker.min.js`,
-    corePath: `${base}core/`,
+    // ディレクトリだと relaxed SIMD / SIMD / 非 SIMD の 3 本を取りに行く。配るのはこの 1 本。
+    corePath: `${base}core/tesseract-core-simd-lstm.wasm.js`,
     langPath: `${base}lang/`,
     gzip: true,
     logger: (m: { status: string; progress: number }) => {

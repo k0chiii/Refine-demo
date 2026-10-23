@@ -20,6 +20,7 @@ export * from "./org/team.ts";
 export * from "./org/group.ts";
 export * from "./dashboard/overview.ts";
 export * from "./dashboard/workspace.ts";
+export * from "./dashboard/workSummary.ts";
 export * from "./revision/Revision.ts";
 export * from "./revision/Artifact.ts";
 export * from "./revision/graphicFiles.ts";

@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, type Plugin } from "vite-plus";
+import { shellPrecache } from "./pwa/shellPrecache.ts";
 
 /** Component test registries also glob their own Node-only tests; only runtime modules belong in the browser demo. */
 function browserComponentModules(): Plugin {
@@ -45,19 +46,15 @@ function ocrAssets(): Plugin {
         const core = dirname(
           createRequire(require.resolve("tesseract.js")).resolve("tesseract.js-core/package.json"),
         );
-        for (const f of [
-          "tesseract-core-lstm.wasm.js",
-          "tesseract-core-simd-lstm.wasm.js",
-          "tesseract-core-relaxedsimd-lstm.wasm.js",
-        ])
-          copy(join(core, f), join("core", f));
-        for (const lang of ["jpn", "jpn_vert"]) {
-          const dir = dirname(require.resolve(`@tesseract.js-data/${lang}/package.json`));
-          copy(
-            join(dir, "4.0.0_best_int", `${lang}.traineddata.gz`),
-            join("lang", `${lang}.traineddata.gz`),
-          );
-        }
+        // LSTM の SIMD を 1 本だけ。extract.ts がこのファイルを直接指定する。
+        const wasm = "tesseract-core-simd-lstm.wasm.js";
+        copy(join(core, wasm), join("core", wasm));
+        const lang = "jpn";
+        const dir = dirname(require.resolve(`@tesseract.js-data/${lang}/package.json`));
+        copy(
+          join(dir, "4.0.0_best_int", `${lang}.traineddata.gz`),
+          join("lang", `${lang}.traineddata.gz`),
+        );
       } catch (e) {
         this.warn(`OCR のファイルを用意できませんでした（OCR は使えません）: ${String(e)}`);
       }
@@ -67,8 +64,8 @@ function ocrAssets(): Plugin {
 
 /**
  * PWA: ビルドのときだけ Service Worker（pwa/sw.template.js）を sw.js として書き出す。
- * 外枠（index.html・JS・CSS・PDF.js のワーカー・マニフェスト・アイコン）を先にキャッシュする一覧と、
- * その一覧から作った版（中身が変わると版が変わり、画面に「更新」が出る）を埋め込む。
+ * install で先に取るのは外枠だけ（index.html、エントリとその静的 import、その CSS、マニフェストとアイコン）。
+ * 画面のチャンクはここには入れない。sw.template.js が /assets/ を実行時にキャッシュ優先で残す。
  * フォント（日本語は数百の分割ファイル）は先読みせず、使ったものだけキャッシュする。
  */
 function pwa(): Plugin {
@@ -87,11 +84,7 @@ function pwa(): Plugin {
     apply: "build",
     generateBundle(_options, bundle) {
       // index.html は HTML の処理（vite:build-html）がこの後で書き出すため、bundle にまだ無いことがある。明示的に入れる
-      const built = Object.keys(bundle)
-        .filter((f) => /\.(?:m?js|css)$/.test(f))
-        .map((f) => `/${f}`)
-        .sort();
-      const precache = ["/index.html", ...built, ...fromPublic];
+      const precache = shellPrecache(bundle, fromPublic);
       const version = createHash("sha256")
         .update(precache.join("\n"))
         .update(
