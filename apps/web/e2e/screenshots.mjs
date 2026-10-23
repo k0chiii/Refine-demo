@@ -33,6 +33,12 @@ const axeSource = A11Y
   ? readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8")
   : null;
 const a11yReport = [];
+/** serious / critical の違反は実行を失敗にする。a11yKnown に挙げた既知のものだけ除く */
+const a11yBlocking = [];
+/** 既知: M3E の日付ピッカーの日のボタンに名前が無い（部品の Shadow DOM の中。docs/a11y-report.json の 21-date-picker） */
+const a11yKnown = (screen, id, target) =>
+  id === "aria-command-name" &&
+  (screen.includes("date-picker") || /m3e-calendar|m3e-month-view/.test(JSON.stringify(target)));
 /**
  * 区間計測（どこに時間がかかっているか）。画面ごとに「前の撮影からの操作・待ち」「描画待ち（settle）」「撮影」「axe」「固定待ち」を測り、
  * out/timings-<部>.json に書く。CI では遅い順の上位を実行のまとめ（GITHUB_STEP_SUMMARY）にも出す
@@ -136,6 +142,11 @@ const shot = async (name, scrollTo) => {
       nodes: v.nodes.slice(0, 5).map((n) => ({ target: n.target, summary: n.failureSummary })),
     }));
     a11yReport.push({ screen: name, violations });
+    for (const v of result.violations)
+      if (v.impact === "serious" || v.impact === "critical")
+        for (const n of v.nodes)
+          if (!a11yKnown(name, v.id, n.target))
+            a11yBlocking.push(`${name}: ${v.id}(${v.impact}) ${JSON.stringify(n.target)}`);
     console.log(
       `  a11y: ${violations.length} violation(s)`,
       violations.map((v) => `${v.id}(${v.impact}×${v.nodes.length})`).join(" "),
@@ -231,16 +242,23 @@ const pdfReady = () =>
     null,
     { timeout: 30_000 },
   );
-/** 自動校正の状態表示が「進行中でも失敗でもない」ところまで待つ（文言ではなく、進捗の部品とエラー表示の有無で見る） */
-const autoProofreadDone = (timeout) =>
-  page.waitForFunction(
+/**
+ * 自動校正の状態表示が「進行中でも失敗でもない」ところまで待つ（文言ではなく、進捗の部品とエラー表示の有無で見る）。
+ * 長い猶予（OCR の学習データの初回の読み込み）は 1 回の実行で 1 度だけ。2 度目（all の 54。別の版なので待ちは省けない）は
+ * 学習データがブラウザのキャッシュにあるので短く打ち切る
+ */
+let ocrWarm = false;
+const autoProofreadDone = async (coldTimeout) => {
+  await page.waitForFunction(
     () => {
       const s = document.querySelector(".auto-status");
       return Boolean(s) && !s.querySelector("m3e-linear-progress-indicator, .error-text");
     },
     null,
-    { timeout },
+    { timeout: ocrWarm ? 60_000 : coldTimeout },
   );
+  ocrWarm = true;
+};
 /** 添付の切替（下部ツールバーのピンのボタンのメニュー） */
 const pickArtifact = async (name) => {
   await page.locator('.ws__toolbar m3e-icon-button[aria-label="コメントの表示"]').click();
@@ -420,9 +438,7 @@ async function main() {
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
   await shot("02-works-list");
-  const siteRows = () => page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).count();
-  expectTrue((await siteRows()) === 1, "制作物一覧で、制作物が 1 か所にない");
-  const allRows = await page.locator(WORKS_ENTRY).count();
+  // 絞り込み・並べ替えの振る舞いは specs/works-list.spec.ts で確かめる。ここは撮るだけ
   await page.locator(".works__team--production").click();
   await settle();
   await page
@@ -430,11 +446,6 @@ async function main() {
     .click();
   await page.waitForURL(/production=/);
   await settle();
-  const designRows = await page.locator(WORKS_ENTRY).count();
-  expectTrue(
-    (await siteRows()) === 1 && designRows < allRows,
-    "制作担当で絞り込んでも、その担当の制作物だけにならない",
-  );
   await page.locator(".works__sort").click();
   await settle();
   await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "主管担当順" }).click();
@@ -443,28 +454,13 @@ async function main() {
   await shot("02b-works-filtered");
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
-  // 見出しの並べ替え: 既定は校正の締切の昇順。納期を押すと納期の昇順、もう一度で降順（aria-sort と URL の dir）
-  const sortedTh = () => page.locator(".works .works-table .mf-table__th[aria-sort]");
-  expectTrue(
-    (await sortedTh().count()) === 1 &&
-      (await sortedTh().getAttribute("aria-sort")) === "ascending",
-    "制作物一覧の既定の並べ替えが見出しに出ていない",
-  );
+  // 見出しの並べ替え: 納期を押すと納期の昇順、もう一度で降順
   await page.locator(".works .works-table .mf-table__th .mf-table__sort").nth(3).click();
   await page.waitForURL(/sort=deadline/);
   await settle();
-  expectTrue(
-    (await sortedTh().count()) === 1 &&
-      (await sortedTh().getAttribute("aria-sort")) === "ascending",
-    "納期の見出しを押しても、納期の昇順にならない",
-  );
   await page.locator(".works .works-table .mf-table__th[aria-sort] .mf-table__sort").click();
   await page.waitForURL(/dir=desc/);
   await settle();
-  expectTrue(
-    (await sortedTh().getAttribute("aria-sort")) === "descending",
-    "同じ見出しをもう一度押しても、降順にならない",
-  );
   await shot("02c-works-sorted");
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
@@ -581,21 +577,12 @@ async function main() {
       .first()
       .click();
     await settle();
-    expectTrue(
-      (await dialog.locator("m3e-input-chip").count()) === 2,
-      "グループを選んでも所属する人のチップが並ばない",
-    );
     await shot("13c-assign-group");
     await dialog
       .locator("m3e-input-chip", { hasText: "こうりょう" })
       .locator('[aria-label$="を外す"]')
       .click();
     await settle();
-    expectTrue(
-      (await dialog.locator("m3e-input-chip").count()) === 1 &&
-        (await dialog.locator("m3e-input-chip", { hasText: reviewer.name }).count()) === 1,
-      "グループから加えた校正者だけを残せない",
-    );
   }
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
@@ -641,28 +628,7 @@ async function main() {
   await signInAs("mock-nogiku-reviewer");
   await go(`${BASE}/check`);
   await page.waitForSelector(".hub[data-hub='check'] m3e-list-action");
-  expectTrue(
-    (await page.locator(".hub .hub__tabs m3e-button").count()) === 3,
-    "校正の切り替えが 3 つでない",
-  );
-  expectTrue(
-    (await page.locator(".hub .hub-row .hub-chip").count()) >= 1,
-    "校正の行に次の操作の印がない",
-  );
-  expectTrue(
-    await page.evaluate(
-      () => document.querySelector('m3e-nav-item[data-to="/check"]')?.selected === true,
-    ),
-    "校正を開いているのにナビの「校正」が選択されていない",
-  );
-  // 校正のナビのバッジ: 自分の手が要る数（割当・専門確認）が数字で出る。色は制作と同じ青（ティールの上書きが無い）
-  expectTrue(
-    /^\d+$/.test(
-      (await page.locator('m3e-nav-item[data-to="/check"] .badge').first().textContent())?.trim() ??
-        "",
-    ),
-    "校正のナビに、やることの数のバッジが出ていない",
-  );
+  // 切り替え・行の印・ナビの選択とバッジは specs/assign-reviewer.spec.ts で確かめる。色は制作と同じ青（ティールの上書きが無い）
   expectTrue(
     await page.evaluate(
       () => getComputedStyle(document.documentElement).getPropertyValue("--mf-teal").trim() === "",
@@ -1579,13 +1545,12 @@ async function lateScenes() {
   await pdfReady();
   await drawer("コメント");
   for (let i = 0; i < 5; i++) {
-    const resolveBtn = page
-      .locator('.comments .thread m3e-icon-button[aria-label^="解決"]')
-      .first();
-    if ((await resolveBtn.count()) === 0) break;
+    const sel = '.comments .thread m3e-icon-button[aria-label^="解決"]';
+    const left = await page.locator(sel).count();
+    if (left === 0) break;
     await page.locator(".comments .thread .thread__body").first().click();
-    await resolveBtn.click();
-    await page.waitForTimeout(500);
+    await page.locator(sel).first().click();
+    await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
   }
   await page.waitForSelector(".comments .thread--closed");
 
@@ -2106,8 +2071,12 @@ const openWork = async (title) => {
   await settle();
   return new URL(page.url()).pathname;
 };
+/** 外れても止めずに集め、最後にまとめて失敗にする（1 回の実行で落ちた確認を全部見る） */
+const failures = [];
 const expectTrue = (cond, msg) => {
-  if (!cond) throw new Error(msg);
+  if (cond) return;
+  failures.push(msg);
+  console.error("  NG:", msg);
 };
 /**
  * 一覧のカード（Slack のスレッド式。1 件を短く見せる）の下の行を押して、スレッドのパネルを開く。パネルの locator を返す。
@@ -2788,13 +2757,12 @@ async function v2Scenes() {
   };
   await openComments();
   for (let i = 0; i < 10; i++) {
-    const resolveBtn = page
-      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]')
-      .first();
-    if ((await resolveBtn.count()) === 0) break;
+    const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]';
+    const left = await page.locator(sel).count();
+    if (left === 0) break;
     await page.locator("m3e-bottom-sheet.ws__sheet .thread .thread__body").first().click();
-    await resolveBtn.click();
-    await page.waitForTimeout(500);
+    await page.locator(sel).first().click();
+    await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
   }
   expectTrue(
     (await page
@@ -3074,7 +3042,11 @@ async function webFigmaScenes() {
   await page.fill(".compose-pop .rt__content", "このフレーム全体の余白を見直したい");
   await page.locator(".compose-pop .rt__send").click();
   await page.waitForSelector(".compose-pop", { state: "detached" });
-  await page.waitForTimeout(500);
+  await page
+    .locator(".thread", { hasText: "フレーム全体" })
+    .locator(".thread__link")
+    .first()
+    .waitFor();
   expectTrue(
     (await page
       .locator(".thread", { hasText: "フレーム全体" })
@@ -3094,7 +3066,7 @@ async function webFigmaScenes() {
   await page.locator("m3e-menu-item", { hasText: "アバターを変える" }).click();
   const picker = page.locator("m3e-dialog.avatar-picker[open]");
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
-  await page.waitForTimeout(400);
+  await picker.locator("m3e-tab").nth(4).waitFor();
   // アイコンに映らないボトムスの部位・色は出さない（利用者指示 2026-10-17）。タブは髪型・トップス・小物・めがね・色
   expectTrue(
     (await picker.locator("m3e-tab").count()) === 5,
@@ -3143,10 +3115,9 @@ async function webFigmaScenes() {
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-part", { timeout: 20_000 });
   await picker.locator("m3e-tab", { hasText: "色" }).click();
   await page.waitForSelector("m3e-dialog.avatar-picker[open] .avatar-swatches");
-  await page.waitForTimeout(400);
   await shot("70b-avatar-picker-compact");
   await picker.locator('[slot="actions"] m3e-button', { hasText: "キャンセル" }).click();
-  await page.waitForTimeout(400);
+  await page.waitForSelector("m3e-dialog.avatar-picker[open]", { state: "detached" });
   await page.setViewportSize({ width: 1440, height: 900 });
 
   // 72 グラフィック制作物の原本（利用者指示 2026-10-19「pdf, adobe illustrator, indesign のファイルもあげれるように」）:
@@ -3265,6 +3236,12 @@ function writeTimings() {
     writeFileSync(process.env.GITHUB_STEP_SUMMARY, md, { flag: "a" });
 }
 
+const reportFailures = () => {
+  if (!failures.length) return;
+  console.error(`NG ${failures.length} 件:`);
+  for (const f of failures) console.error("  -", f);
+};
+
 try {
   await PARTS[PART]();
 } catch (e) {
@@ -3275,6 +3252,7 @@ try {
     await page.screenshot({ path: resolve(OUT, "zz-failure.png") });
   } catch {}
   await browser.close();
+  reportFailures();
   process.exit(1);
 }
 await browser.close();
@@ -3289,3 +3267,8 @@ if (A11Y) {
 }
 writeTimings();
 console.log("done ->", OUT);
+for (const m of a11yBlocking) failures.push(`a11y ${m}`);
+if (failures.length) {
+  reportFailures();
+  process.exit(1);
+}

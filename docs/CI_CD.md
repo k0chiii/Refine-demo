@@ -6,13 +6,13 @@ GitHub Actions で回す。設定は `.github/workflows/`。
 
 PR と `main` への push で走る。手で起動することもできる（手動は main と同じジョブ）。テストの方針は `docs/TESTING_AGENT_POLICY.md`。
 
-| ジョブ       | いつ       | 内容                                                                                                                                                                                                                                                                                                          |
-| ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `verify`     | PR・main   | `pnpm build`（TanStack Router のルートの型 `routeTree.gen.ts` もここで作る。コミットしないので、無いと lint の型検査が落ちる）→ `pnpm check`（整形・lint）→ `pnpm typecheck`（web は spec の型も）→ `pnpm test`。`pnpm codegen` をやり直して、コミットした `convex/_generated` と食い違っていないかも確かめる |
-| `e2e-smoke`  | PR         | デモ版を建てて、機能の E2E（Playwright Test の `@smoke`）と `e2e/pwa.mjs`。失敗したときだけ HTML の報告と trace を成果物に残す                                                                                                                                                                                |
-| `e2e`        | main・手動 | 機能の E2E（`e2e/specs` の全部）を 2 つの shard に分けて同時に。報告は blob で残す                                                                                                                                                                                                                            |
-| `e2e-report` | main・手動 | shard の blob を `playwright merge-reports` で 1 つの HTML 報告（失敗の trace 入り）にまとめて成果物に                                                                                                                                                                                                        |
-| `visual`     | main・手動 | `e2e/screenshots.mjs` で画面の撮影・操作の検証・a11y（axe）を部（core・compact・v2・web）ごとに。web の部では PWA も。撮った画面・a11y の結果・区間計測（`timings-<部>.json`）は成果物（14 日）に残し、リポジトリには入れない。区間計測の遅い順は実行のまとめ（Summary）にも出る                              |
+| ジョブ                                                                 | いつ       | 内容                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `verify-check` / `verify-typecheck` / `verify-test` / `verify-codegen` | PR・main   | 並列。各ジョブが `pnpm build` のあと、整形 lint・型（＋ Worker 型とバックアップ照合単体）・単体テスト・codegen 差分のどれかを流す。PR の単体は `pnpm test`、main / 手動は `pnpm test:coverage`（成果物）。task-cache の鍵に `event_name` は入れない（PR が main のキャッシュを復元できる） |
+| `verify`                                                               | PR・main   | 上 4 レーンの集約。必須チェック名を `verify` のままにするためのジョブ                                                                                                                                                                                                                      |
+| `e2e-smoke`                                                            | PR         | ジョブ内でデモ版をビルドしてから `@smoke` と `e2e/pwa.mjs`。失敗時だけ HTML 報告と trace                                                                                                                                                                                                   |
+| `e2e`                                                                  | main・手動 | ジョブ内でデモ版をビルドしてから全 spec（1 ジョブ・Playwright 並列。shard は使わない）。HTML 報告を成果物に                                                                                                                                                                                |
+| `visual`                                                               | main・手動 | ジョブ内でデモ版をビルドしてから `e2e/screenshots.mjs`（部ごと）。a11y は serious / critical で落とす（日付ピッカーの既知違反は除外）。振る舞いの失敗は最後にまとめて落とす。撮った画面は成果物のみ                                                                                        |
 
 ブラウザは runner に入っている Chrome（`/usr/bin/google-chrome`）を使い、Playwright のブラウザは落とさない（`CHROMIUM_PATH`）。
 
@@ -42,18 +42,28 @@ CI の壁時計（GitHub Actions）:
 
 目標（PR は 3 分 30 秒以内、main は 6 分以内）はどちらも達成（PR #35 の実行 39766175645・手動の実行 39766186452）。PR の律速は verify の型（48 秒）と単体テスト（51 秒）になった。
 
-残っている時間の大きいもの（次に手を入れるなら）:
+2026-10-23 の見直し（実装）:
 
-- v2 の操作の多くは自動校正（ブラウザ内の OCR）を待つ時間。撮影が要らない検証は spec に移し、OCR を待たない前提（自動校正の結果を前提づくりで入れる）にできる。
-- core の axe は 25 秒（1 画面 0.4 秒）。全画面ではなく、画面の種類ごとに 1 回にできる。
-- `screenshots.mjs` の固定待ち（`waitForTimeout`、29 か所。v2 で 17 秒）。長押しの再現など意図があるものを除いて、状態を待つ形に置き換えられる。
+- `verify` を並列レーン＋集約に分けた。PR の律速だった直列の型＋単体を同時に流す。
+- PR では coverage を取らない。main だけ `test:coverage`。
+- `build-demo` 成果物ジョブをやめ、e2e / visual が各自でデモ版をビルドする（直列の固定費を外す）。
+- e2e の shard をやめ、1 ジョブにまとめた（偏りと二重の setup を避ける）。
+- `screenshots.mjs` は確認（`expectTrue`）が外れても止まらず、最後まで撮ってから外れた確認を全部並べて失敗にする。操作そのものが落ちたとき（要素が出ない等）はその場で止まる。
+- a11y（`A11Y=1`）は serious / critical の違反があれば実行を失敗にする。除外は既知の 1 件だけ（日付ピッカー `21-date-picker` の `aria-command-name`。M3E の `m3e-calendar` / `m3e-month-view` の中。`a11yKnown`）。違反の一覧は従来どおり `a11y-report*.json` に書く。
+- 自動校正（OCR）の待ちの長い猶予（90 秒）は 1 回の実行で 1 度だけ。2 度目（`all` の 54。別の版）は 60 秒で打ち切る。部ごとに流す CI では各部 1 度しか待たない。
+- spec と重なる振る舞いの確認（制作物一覧の絞り込み・並べ替え、割り当てのグループ、校正の切り替え・ナビ）は `screenshots.mjs` から外し、撮影だけ残した。校了・採否の spec は `@smoke` に上げ、PR で走る。
+- 壁時計の表（上）は 0103e17 前後の旧計測のまま。新しい壁時計は次の PR / main 実行で測り直す。
 
 ## CD（`deploy.yml`）
 
-| 先                     | いつ                                                                                                                                                                                                | 必要な設定                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| デモ版（実データなし） | `main` に入ったら Cloudflare Pages の本番（`mf100-refine-demo`）、PR ごとにブランチのプレビュー。Secrets が無いあいだは配らずに飛ばす（失敗にはしない）                                             | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                                                                                                                                       |
-| 本番                   | **自動では走らない**。Actions の「Deploy」を手で起動し、配る先に `production` を選ぶ。さらに Environment `production` の承認者が承認してから進む（CLAUDE.md「本番デプロイは明示承認まで行わない」） | Environment `production`（承認者を設定）に Secrets: `CONVEX_DEPLOY_KEY`（Convex の Production deploy key）・`CLOUDFLARE_API_TOKEN`（Workers・Pages・R2）・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`（Workers の URL）。Pages のプロジェクト `mf100-refine`、R2 バケット `mf100-assets` を一度だけ作る |
+| 先                     | いつ                                                                                                                                                                                                                                 | 必要な設定                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| デモ版（実データなし） | CI が success になったあと（`workflow_run`）。手動のデモ配布も、その SHA の `verify` が success であること。Secrets が無いあいだは配らずに飛ばす                                                                                     | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                                                                                                                                       |
+| 本番                   | **自動では走らない**。Actions の「Deploy」を手で起動し、配る先に `production` を選ぶ。Environment `production` の承認に加え、その SHA の CI ジョブ `verify` が success であること（CLAUDE.md「本番デプロイは明示承認まで行わない」） | Environment `production`（承認者を設定）に Secrets: `CONVEX_DEPLOY_KEY`（Convex の Production deploy key）・`CLOUDFLARE_API_TOKEN`（Workers・Pages・R2）・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`（Workers の URL）。Pages のプロジェクト `mf100-refine`、R2 バケット `mf100-assets` を一度だけ作る |
+
+## バックアップ照合（`backup-verify.yml`）
+
+夜間と手動で `scripts/test_verify_backup.py` と `scripts/restore_backup_dryrun.py` を流す（A-14 の自動側。fixture のみ。実 export / 実 R2 の復元は RECOVERY.md）。
 
 本番の順番: 型・単体テスト → `convex deploy`（Convex を配り、その URL を `VITE_CONVEX_URL` にして Web をビルド）→ `wrangler deploy --env production`（Workers）→ `wrangler pages deploy`（Web）。Convex の環境変数（Nogiku・`MF100_UPLOAD_SECRET`・`MF100_CLEANUP_SECRET` など）と Workers の秘密（`wrangler secret put --env production` で `MF100_UPLOAD_SECRET`・`MF100_CLEANUP_SECRET`。Convex と同じ値、16 文字以上）は README の表のとおり先に設定する。Workers の本番の `vars`（`CONVEX_URL`・`CONVEX_SITE_URL`・`ALLOWED_ORIGINS`）は `apps/api/wrangler.jsonc` の `env.production` に書く（ダッシュボードで変えても deploy で上書きされる）。`MF100_UPLOAD_SECRET` が無いと本番でファイルを提出できない。
 
@@ -79,7 +89,7 @@ FB（フィードバック）を廃止してコメントへ移した（docs/UI_M
 - Node は CI/CD とも `.node-version` を使う。Vite+ と pnpm は lockfile / packageManager の版を使い、最新版へ無条件で migrate しない。
 - `pnpm check` は `verify-static` タスクの依存として Web build と Convex codegen を先に実行する。`pnpm typecheck` も生成物の依存を明示する。型対応 lint と tsc は完全互換とは判断せず、Convex・Web・E2E の tsc を残す。
 - `bundle-web`・`bundle-demo`・`verify-types`・`generate-convex` は決定的なタスクとしてキャッシュする。接続先の VITE 変数、lockfile、共有ソース、設定を fingerprint し、routeTree・OCR・dist と生成 API を復元する。サービス・テスト・デプロイはキャッシュしない。
-- CI をまたぐ experimental cache とデモ成果物の転送は導入しない。現行の数秒の build に対して、成果物転送・失効の管理を増やす効果をまだ計測できないため。1 タスク内の warm cache をまず確認する。
+- Vite task-cache は Actions の `actions/cache` で commit をまたいで残す。鍵に `event_name` は入れない。デモ版の dist をジョブ間で転送しない（各 e2e / visual ジョブが `build:demo` する）。
 - 任意の commit hook は `pnpm exec vp hooks enable` で有効化できる。`.vite-hooks/pre-commit` は `pnpm staged` の読み取り専用検査を実行し、ステージ外の変更を自動修正・取り込みしない。通常の CI は引き続き全体を検査する。
 - 対象別単体テストは `pnpm test:domain` / `test:application` / `test:convex` / `test:api` / `test:web`。E2E と PWA は別に実行する。
 - `pnpm --filter @mf100/api types` で Wrangler の環境・compatibility date/flags に対応する型を生成する。`types:check` は一時ファイルと比較し、追跡ファイルを書き換えない。

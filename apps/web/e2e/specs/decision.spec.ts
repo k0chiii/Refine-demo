@@ -2,7 +2,7 @@ import { expect, test } from "../support/app";
 import { reviewerComments, submitFirstRevision } from "../support/scenarios";
 
 // 旧 screenshots.mjs の 09（採否判断）
-test.describe("コメントの採否", { tag: "@core" }, () => {
+test.describe("コメントの採否", { tag: "@smoke" }, () => {
   test("制作者が理由を付けて不採用にすると、スレッドが閉じる", async ({ app, page }) => {
     const { revisionPath } = await submitFirstRevision(app);
     await reviewerComments(app, revisionPath, "団体名の表記が規約と違います。");
