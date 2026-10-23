@@ -6,6 +6,15 @@ import { isWorkspace, type Workspace } from "@mf100/domain";
  */
 const KEY = "mf100.workspace";
 
+/**
+ * Nogiku OAuth の戻り（`/?code=`）。Convex Auth がトークンに換える前に入口へ飛ばすと
+ * TanStack Router がクエリを捨て、ログインが完了しない（.audit/auth-bounce-how.md H1）。
+ */
+export function hasOAuthReturnCode(searchStr: string): boolean {
+  const q = searchStr.startsWith("?") ? searchStr.slice(1) : searchStr;
+  return new URLSearchParams(q).has("code");
+}
+
 export function readWorkspace(): Workspace | null {
   try {
     const v = localStorage.getItem(KEY);
