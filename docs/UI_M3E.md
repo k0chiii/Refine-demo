@@ -2024,7 +2024,7 @@ SNS 投稿の版（§28・§31・§44〜47・§52・§56）は、校正画面に
 - 接続先への `preconnect` / `dns-prefetch` をビルド時に `index.html` へ差し込む（`vite.config.ts` の `preconnect()`。`VITE_CONVEX_URL`・`VITE_API_URL` から。デモでは何も足さない）
 - Convex クライアントを `initialAuthTokenReuse: true` に: 保存済みのトークンが有効なら、そのまま使い、直後の更新を打たない（有効期限の手前に予定を立てて更新）。期限切れの保存済みトークンは従来どおり（サーバーが拒否 → 更新）で、**更新が要る場面（期限切れ）の往復は消せない**。サインインの経路は変えていない。WebSocket は `integrations/convex.tsx` の評価時（React の描画より前）に張り始める
 - Service Worker: アプリ画面の移動を**キャッシュの index.html から即座に**返す（`docs/PWA.md`）。iframe・拡張子つき・デモのサイトは従来どおりネットワーク優先
-- 校正画面 `/works/:id` の先取り: `me` の取得と並行して制作物（`works.get`）を購読し、**既定で開く版の添付の要約**（`defaultArtifacts`）でファイルを先に取りに行く（`features/editor/EditorPrefetch.tsx`。版の問い合わせの 1 往復ぶん早く始まる）。URL が校正画面なら PDF ビューア（PDF.js）と cmap を、Service Worker が効いているときに限り起動直後に先読み（`lib/earlyPreload.ts`）。cmap は遊びの時間にも取っておく（`warmPdfAssets`。Service Worker が版をまたいで残す）
+- 校正画面 `/works/:id` の先取り: `me` の取得と並行して制作物（`works.get`）を購読し、**既定で開く版の添付の要約**（`defaultArtifacts`）でファイルを先に取りに行く（`features/editor/EditorPrefetch.tsx`。版の問い合わせの 1 往復ぶん早く始まる）。PDF の cmap は PDF.js を読み込んだときに取る（`warmPdfAssets`。Service Worker が版をまたいで残す）。ログイン直後の全ルート先読みは行わない
 - Convex: `works.get` の版ごとの読み取りを並列に、`resolveUsers` の利用者の読み取りを並列に（順番の往復をやめた）。索引の追加は不要だった（`listMyWorks` は §60 で索引化済み、`artifacts`・`commentThreads` は `by_revision` で引いている）
 
 ### 計測（デモビルド、CDP 回線制限 遅延 400ms・1.6Mbps、8MB・16 ページの PDF、擬似回線は `__mf100DemoNet`）
