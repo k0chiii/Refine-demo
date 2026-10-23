@@ -15,8 +15,8 @@ import { M3eHeading } from "@m3e/react/heading";
 import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
-type Data = FunctionReturnType<typeof api.dashboard.get>;
-type Item = Data["upcoming"][number];
+type Data = FunctionReturnType<typeof api.dashboard.works>;
+type Item = Data["pinned"][number];
 
 /** 滞っている制作物の内訳（application の backlog）と、行の 2 行目 */
 const backlogGroups: Array<[keyof Data["backlog"], string, (i: Item) => string]> = [

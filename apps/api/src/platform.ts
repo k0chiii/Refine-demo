@@ -82,6 +82,7 @@ async function processingRequest(
       job.output.streamUid,
       id,
       path.slice(3).join("/") || "manifest/video.m3u8",
+      token,
     );
   if (request.method === "GET" && path[1] === "files" && job.state === "ready" && job.output?.key) {
     const object = await env.ASSETS.get(job.output.key);

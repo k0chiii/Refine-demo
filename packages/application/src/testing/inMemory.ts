@@ -27,6 +27,7 @@ import type {
   Team,
   MemberGroup,
 } from "@mf100/domain";
+import { focusRevisionIdOf, revisionHeadsOf, workSummaryOf } from "@mf100/domain";
 import type {
   AlignmentOverride,
   AppContext,
@@ -444,6 +445,22 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       update: async (g) => state.groups.put(g),
       remove: async (id) => {
         state.groups.rows.delete(id);
+      },
+    },
+    workSummaries: {
+      async findByWork(workId) {
+        const work = state.works.get(workId);
+        if (!work) return null;
+        const revisions = state.revisions.all().filter((r) => r.workId === workId);
+        const focus = focusRevisionIdOf(revisionHeadsOf(revisions));
+        return workSummaryOf({
+          work,
+          revisions,
+          focusThreads: state.threads
+            .all()
+            .filter((t) => t.revisionId === focus && t.deletedAt === undefined),
+          approvalEvents: state.approvals.filter((e) => e.workId === workId),
+        });
       },
     },
     home: {
