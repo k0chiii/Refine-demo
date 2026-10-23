@@ -1,3 +1,4 @@
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { COMMENT_FILE_TTL_MS, COMMENT_THUMB_MAX_BYTES, type Principal } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
@@ -18,7 +19,6 @@ import {
 } from "../usecases/commentFiles.ts";
 import { deleteReply, deleteThread, postComment, replyToThread } from "../usecases/comments.ts";
 import { listMyNotifications } from "../usecases/notifications.ts";
-import { assignReviewers } from "../usecases/reviews.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -31,14 +31,12 @@ async function setup(over: { confidentiality?: "normal" | "restricted" } = {}) {
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: reviewer.userId,
+    userIds: [reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, manager, {
-    revisionId: revision.id,
+  await setWorkReviewers(ctx, manager, {
+    workId: revision.workId,
     reviewerIds: [reviewer.userId],
-    reviewType: "general",
   });
   return { ctx, work, revision };
 }

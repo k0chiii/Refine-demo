@@ -10,6 +10,7 @@ export * from "./acl/authorize.ts";
 export * from "./acl/OrgPermission.ts";
 export * from "./work/Work.ts";
 export * from "./work/approvers.ts";
+export * from "./work/reviewers.ts";
 export * from "./work/workInput.ts";
 export * from "./work/metadata.ts";
 export * from "./work/submitTarget.ts";

@@ -1,3 +1,4 @@
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { finalizeWork } from "../usecases/approvals.ts";
@@ -8,7 +9,6 @@ import {
   replyToThread,
   toggleCommentReaction,
 } from "../usecases/comments.ts";
-import { assignReviewers } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -20,14 +20,12 @@ async function setup(over: Parameters<typeof seedWork>[1] = {}) {
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, principals.manager, {
-    revisionId: revision.id,
+  await setWorkReviewers(ctx, principals.manager, {
+    workId: revision.workId,
     reviewerIds: [principals.reviewer.userId],
-    reviewType: "general",
   });
   const post = (severity: "critical" | "info" = "info") =>
     postComment(ctx, principals.reviewer, {
@@ -115,10 +113,10 @@ describe("コメント・返信へのリアクション", () => {
   it("コメントを見られて返信できる人なら誰でも付けられる。見られない人は付けられない", async () => {
     const { ctx, work, post } = await setup({ confidentiality: "restricted" });
     const thread = await post();
+    ctx.state.members.add("u_viewer");
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: "u_viewer",
+      userIds: ["u_viewer"],
       permission: "view",
     });
     const viewer = {

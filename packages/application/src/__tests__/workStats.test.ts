@@ -44,8 +44,7 @@ describe("制作物ごとの集計（A-4）", () => {
     const revision = await submitRevision(ctx, designed.id);
     await grantWorkPermission(ctx, sysadmin, {
       workId: designed.id,
-      principalType: "user",
-      principalId: reviewer.userId,
+      userIds: [reviewer.userId],
       permission: "review",
     });
     const c = await postComment(ctx, reviewer, {

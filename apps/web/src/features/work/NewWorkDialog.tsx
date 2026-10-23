@@ -1,9 +1,11 @@
 import { api } from "@mf100/convex/api";
+import type { Id } from "@mf100/convex/dataModel";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { M3eDialog } from "@/ui/LazyDialog";
+import { UserPicker } from "@/ui/UserPicker";
 import { M3eButton } from "@m3e/react/button";
 import {
   approversFromForm,
@@ -22,6 +24,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
   const navigate = useNavigate();
   const create = useMutation(api.works.create);
   const [form, setForm] = useState(emptyWorkForm);
+  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const { run, pending } = useAction(async () => {
     const meta = withoutNulls(workFormToFields(form));
     const id = await create({
@@ -40,6 +43,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
       ...(form.ownerTeam[0] ? { ownerTeamId: form.ownerTeam[0] } : {}),
       productionTeamIds: form.productionTeamIds,
       relatedTeamIds: form.relatedTeamIds,
+      reviewerIds: reviewerIds as Id<"users">[],
       ...meta,
     });
     onClose();
@@ -50,6 +54,13 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
       <span slot="header">制作物を登録</span>
       <div className="dialog-body work-form">
         <WorkFormFields form={form} setForm={setForm} mode="create" />
+        <UserPicker
+          label="校正者"
+          groups
+          hint="グループを選ぶと、所属する人をまとめて加えます"
+          value={reviewerIds}
+          onChange={setReviewerIds}
+        />
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>

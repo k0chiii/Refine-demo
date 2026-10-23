@@ -6,7 +6,8 @@ import {
   notify,
   REDACTED_NOTIFICATION,
 } from "../usecases/notifications.ts";
-import { assignReviewers, remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { saveTeam } from "../usecases/teams.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -17,10 +18,9 @@ describe("通知の本文と制作物の閲覧権限", () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
     const revision = await submitRevision(ctx, work.id);
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.stranger.userId],
-      reviewType: "general",
     });
     const [note] = await listMyNotifications(ctx, principals.stranger);
     expect(note?.kind).toBe("review_assigned");
@@ -42,14 +42,12 @@ describe("通知の本文と制作物の閲覧権限", () => {
     const revision = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     const [before] = await listMyNotifications(ctx, principals.reviewer);
     expect(before?.body).toContain("極秘ポスター");
@@ -57,8 +55,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
 
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userId: principals.reviewer.userId,
     });
     const [after] = await listMyNotifications(ctx, principals.reviewer);
     expect(after).toMatchObject({ id: before!.id, kind: "review_assigned" });
@@ -69,8 +66,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
 
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "view",
     });
     const [again] = await listMyNotifications(ctx, principals.reviewer);
@@ -81,10 +77,9 @@ describe("通知の本文と制作物の閲覧権限", () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, { title: "公開チラシ" });
     const revision = await submitRevision(ctx, work.id);
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.stranger.userId],
-      reviewType: "general",
     });
     const [note] = await listMyNotifications(ctx, principals.stranger);
     expect(note?.body).toContain("公開チラシ");
@@ -106,10 +101,9 @@ describe("通知の本文と制作物の閲覧権限", () => {
       productionTeamIds: [design.id],
     });
     const revision = await submitRevision(ctx, work.id);
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.stranger.userId],
-      reviewType: "general",
     });
     const stored = ctx.state.notifications
       .all()
@@ -201,14 +195,12 @@ describe("期限接近リマインドの対象", () => {
     const current = await submitRevision(ctx, work.id, { deadlineInHours: 12 });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: current.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: current.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     expect(await remindUpcomingDeadlines(ctx)).toBe(1);
     expect(await remindUpcomingDeadlines(ctx)).toBe(0);

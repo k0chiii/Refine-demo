@@ -34,11 +34,10 @@ describe("Convex 統合: 通知の認可（§5.2-10）", () => {
       title: "極秘ポスター",
       confidentiality: "restricted",
     });
-    const { revisionId } = await submitFiles(cast, workId, pdf);
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId,
+    await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.stranger.id, cast.reviewer.id],
-      reviewType: "general",
     });
     // stranger は ACL も職責も無い（作品は forbidden）
     const strangers = await cast.stranger.as.query(api.notifications.list, {});
@@ -54,8 +53,7 @@ describe("Convex 統合: 通知の認可（§5.2-10）", () => {
     expect(before[0]?.body).toContain("極秘ポスター");
     await cast.admin.as.mutation(api.acl.revoke, {
       workId,
-      principalType: "user",
-      principalId: cast.reviewer.id,
+      userId: cast.reviewer.id,
     });
     const after = await cast.reviewer.as.query(api.notifications.list, {});
     expect(JSON.stringify(after)).not.toContain("極秘ポスター");
@@ -108,11 +106,10 @@ describe("Convex 統合: 期限接近リマインドの対象", () => {
         reviewClosedAt: NOW,
       });
     });
-    const current = await submitFiles(cast, workId, pdf); // 締切は 48 時間後
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId: current.revisionId,
+    await submitFiles(cast, workId, pdf); // 締切は 48 時間後
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     vi.setSystemTime(NOW + 30 * HOUR); // 締切まで 18 時間
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);

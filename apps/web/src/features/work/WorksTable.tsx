@@ -17,6 +17,7 @@ import { StatusText } from "@/ui/Chip";
 import { ColumnHeader, DataTable, pageSlice, TablePager } from "@/ui/DataTable";
 import { M3eIcon } from "@m3e/react/icon";
 import { ApproversCell } from "./ApproversCell";
+import { ReviewersCell } from "./ReviewersCell";
 
 export type WorkRow = FunctionReturnType<typeof api.works.listMine>[number] & {
   /** 段階（domain の workStageOf。下書き・中止は null） */
@@ -104,6 +105,7 @@ export function WorksTable({
           {hasTeams ? header("owner", "主管担当", "works-table__col--owner") : null}
           {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
           <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
+          <ColumnHeader className="works-table__col--reviewers">校正者</ColumnHeader>
           <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
         </tr>
       </thead>
@@ -220,6 +222,9 @@ function Row({
       ) : null}
       <td className="mf-table__td works-table__col--creators">
         <Clip text={w.creators.join("、") || null} />
+      </td>
+      <td className="mf-table__td works-table__col--reviewers">
+        <ReviewersCell w={w} />
       </td>
       <td className="mf-table__td works-table__col--approvers">
         <ApproversCell w={w} />

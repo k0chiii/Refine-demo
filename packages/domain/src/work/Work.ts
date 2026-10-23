@@ -69,6 +69,11 @@ export interface Work {
   subGenre?: WorkSubGenre;
   /** 関係者（職責ではない。閲覧権限は付かない） */
   stakeholderIds?: readonly UserId[];
+  /**
+   * 校正者の名簿（制作物ごと）。undefined は一度も保存していない古い行。[] は明示的に誰もいない。
+   * 読むのは reviewerRosterOf。書くのは登録、名簿の保存、未設定の行を版の確定で書き戻すときだけ。
+   */
+  reviewerIds?: readonly UserId[];
   /** 入稿日・投稿日・印刷日（時刻を含むことがある） */
   publishAt?: Instant;
   /** 入稿の有無（印刷所などへ入稿する制作物か） */

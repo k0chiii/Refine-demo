@@ -21,6 +21,7 @@ import {
   isAccepting,
   isAllowed,
   isGrantActive,
+  mayAssignReviewers,
   revisionLabel,
   revisionThreadStatsFromRevision,
   revisionThreadStatsOf,
@@ -91,6 +92,7 @@ export const create = mutation({
     deadlineAt: v.optional(v.number()),
     confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
+    reviewerIds: v.optional(v.array(v.id("users"))),
     activate: v.optional(v.boolean()),
     /** Notion の制作物 DB に揃えた項目 */
     ...vWorkMetadataFields,
@@ -233,6 +235,7 @@ export const get = query({
         ...work.creatorIds,
         ...work.managerIds,
         ...(work.stakeholderIds ?? []),
+        ...(work.reviewerIds ?? []),
         ...approvers.approverIds,
         ...revisions.map((r) => r.submittedBy),
         ...approvals.map((a) => a.actorId),
@@ -321,6 +324,10 @@ export const get = query({
           decide: isAllowed("comment.decide", authz),
           comment: isAllowed("comment.post", authz),
           assign: isAllowed("review.assign", authz),
+          editReviewers:
+            mayAssignReviewers(authz) &&
+            work.lifecycle !== "finalized" &&
+            work.lifecycle !== "cancelled",
           finalize: isAllowed("work.finalize", authz),
           reopen: isAllowed("work.reopen", authz),
           manageAcl: isAllowed("acl.manage", authz),
@@ -523,8 +530,13 @@ async function summarizeWorkList(
   // 制作者・校了者の表示名（一覧で「担当別」に並べたとき、誰の制作物か分かるように）
   const users = await resolveUsers(
     ctx.db,
-    picked.flatMap((p) => [...p.work.creatorIds, ...approversOf(p.work)]),
+    picked.flatMap((p) => [
+      ...p.work.creatorIds,
+      ...approversOf(p.work),
+      ...(p.work.reviewerIds ?? []),
+    ]),
   );
+  const canAssignReviewers = hasOrgPermission(principal, orgPermissions.reviewsAssign);
   // 一覧から校了者を直せるか: 校了者を決める権限（approvers:assign）がある人。判定の本体は更新（updateWork）
   const canAssignApprovers = hasOrgPermission(principal, orgPermissions.approversAssign);
   const out = picked.map(({ work, latest, accepting, declared }) => ({
@@ -544,6 +556,16 @@ async function summarizeWorkList(
     /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
     creatorIds: [...work.creatorIds],
     canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
+    reviewers: (work.reviewerIds ?? []).map((id) => ({
+      id,
+      name: users.get(id)?.name ?? "（不明なユーザー）",
+    })),
+    canEditReviewers:
+      work.lifecycle !== "finalized" &&
+      work.lifecycle !== "cancelled" &&
+      (canAssignReviewers ||
+        work.creatorIds.includes(principal.userId) ||
+        work.managerIds.includes(principal.userId)),
   }));
   return out.sort(
     (a, b) =>
