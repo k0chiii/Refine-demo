@@ -1,3 +1,4 @@
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { notificationCategoryOf } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission, revokeWorkPermission } from "../usecases/acl.ts";
@@ -10,7 +11,6 @@ import {
   presentThreadActivity,
   replyToThread,
 } from "../usecases/comments.ts";
-import { assignReviewers } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -23,14 +23,12 @@ async function setup(confidentiality: "normal" | "restricted" = "normal") {
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: reviewer.userId,
+    userIds: [reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, manager, {
-    revisionId: revision.id,
+  await setWorkReviewers(ctx, manager, {
+    workId: revision.workId,
     reviewerIds: [reviewer.userId],
-    reviewType: "general",
   });
   /** コメントを立てたときまでに届いていた通知（「新しいコメント」。返信の通知と分ける） */
   const baseline = new Set<string>();
@@ -270,8 +268,7 @@ describe("返信の通知: スレッドの参加者へ", () => {
     const t = await post();
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: reviewer.userId,
+      userId: reviewer.userId,
     });
     await reply(t.id, creator);
     expect(replyNotes(t.id)).toEqual([]);

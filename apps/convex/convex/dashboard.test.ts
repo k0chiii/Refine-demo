@@ -19,10 +19,9 @@ describe("Convex 統合: ダッシュボードの節ごとの問い合わせ", (
     const workId = await setupWork(t, cast, { title: "A" });
     const { revisionId } = await submitFiles(cast, workId, pdf);
     await setupWork(t, cast, { title: "B" });
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId,
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     await cast.reviewer.as.mutation(api.comments.post, {
       revisionId,
@@ -72,10 +71,9 @@ describe("Convex 統合: 校正のナビのバッジ", () => {
 
     const assign = async (workId: Parameters<typeof submitFiles>[1]) => {
       const { revisionId } = await submitFiles(cast, workId, pdf);
-      await cast.manager.as.mutation(api.reviews.assign, {
-        revisionId,
+      await cast.manager.as.mutation(api.reviews.setReviewers, {
+        workId,
         reviewerIds: [cast.reviewer.id],
-        reviewType: "general",
       });
       return revisionId;
     };

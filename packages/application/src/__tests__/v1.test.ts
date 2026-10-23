@@ -13,11 +13,8 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "../usecases/notifications.ts";
-import {
-  assignReviewers,
-  closeExpiredReviews,
-  remindUpcomingDeadlines,
-} from "../usecases/reviews.ts";
+import { closeExpiredReviews, remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import {
   confirmSubmission,
   expireUploadSessions,
@@ -82,8 +79,7 @@ describe("専門確認（§2.2-4 / C3）", () => {
     ).rejects.toThrow(code("forbidden"));
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     await expect(
@@ -148,8 +144,7 @@ describe("指摘の担当・訂正・次版への引き継ぎ（F-07）", () => 
     const rev = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     const t = await postComment(ctx, principals.reviewer, {
@@ -180,8 +175,7 @@ describe("指摘の担当・訂正・次版への引き継ぎ（F-07）", () => 
     const rev = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     const t = await postComment(ctx, principals.reviewer, {
@@ -211,8 +205,7 @@ describe("指摘の担当・訂正・次版への引き継ぎ（F-07）", () => 
     const r1 = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     const open = await postComment(ctx, principals.reviewer, {
@@ -261,10 +254,9 @@ describe("誤提出の無効化・提出準備の清掃", () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     const r1 = await submitRevision(ctx, work.id);
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: r1.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: r1.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     await expect(
       voidRevisionUseCase(ctx, principals.reviewer, { revisionId: r1.id, reason: "x" }),
@@ -371,14 +363,12 @@ describe("アプリ内通知（F-11）", () => {
     ]);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: rev.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: rev.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     expect((await listMyNotifications(ctx, principals.reviewer)).map((n) => n.kind)).toEqual([
       "review_assigned",
@@ -421,10 +411,9 @@ describe("アプリ内通知（F-11）", () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     const rev = await submitRevision(ctx, work.id, { deadlineInHours: 48 });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: rev.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: rev.workId,
       reviewerIds: [principals.reviewer.userId, principals.stranger.userId],
-      reviewType: "general",
     });
     expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 48h 前はまだ
     ctx.clock.advance(30 * HOUR);

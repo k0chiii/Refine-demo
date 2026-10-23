@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { createWork, importWorks, updateWork } from "../usecases/works.ts";
-import { assignReviewers } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -164,20 +164,18 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
     const assigner = { ...nobody, userId: "u_assigner", orgPermissions: ["reviews:assign"] };
     // 組織権限があっても作品の閲覧権限（職責/ACL）が無ければ存在を漏らさない
     await expect(
-      assignReviewers(ctx, assigner, {
-        revisionId: rev.id,
+      setWorkReviewers(ctx, assigner, {
+        workId: rev.workId,
         reviewerIds: ["r"],
-        reviewType: "general",
       }),
     ).rejects.toThrow(code("forbidden"));
     const creatorNoOrg = { ...principals.creator, orgPermissions: [] as string[] };
     await expect(
-      assignReviewers(ctx, creatorNoOrg, {
-        revisionId: rev.id,
-        reviewerIds: ["r"],
-        reviewType: "general",
+      setWorkReviewers(ctx, creatorNoOrg, {
+        workId: rev.workId,
+        reviewerIds: [principals.reviewer.userId],
       }),
-    ).resolves.toHaveLength(1);
+    ).resolves.toMatchObject({ work: { reviewerIds: [principals.reviewer.userId] } });
     const reviewerNoOrg = { ...principals.reviewer, orgPermissions: [] as string[] };
     await ctx.acl.insert({
       workId: work.id,
@@ -188,18 +186,17 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
       grantedAt: 0,
     });
     await expect(
-      assignReviewers(ctx, reviewerNoOrg, {
-        revisionId: rev.id,
+      setWorkReviewers(ctx, reviewerNoOrg, {
+        workId: rev.workId,
         reviewerIds: ["r2"],
-        reviewType: "general",
       }),
     ).rejects.toThrow(code("forbidden"));
     await expect(
-      assignReviewers(
+      setWorkReviewers(
         ctx,
         { ...reviewerNoOrg, orgPermissions: ["reviews:assign"] },
-        { revisionId: rev.id, reviewerIds: ["r2"], reviewType: "general" },
+        { workId: rev.workId, reviewerIds: [principals.stranger.userId] },
       ),
-    ).resolves.toHaveLength(1);
+    ).resolves.toMatchObject({ work: { reviewerIds: [principals.stranger.userId] } });
   });
 });

@@ -33,27 +33,25 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
   const grants = useQuery(api.acl.list, { workId });
   const grant = useMutation(api.acl.grant);
   const revoke = useMutation(api.acl.revoke);
-  const [principal, setPrincipal] = useState<string[]>([]);
+  const [userIds, setUserIds] = useState<string[]>([]);
   const [permission, setPermission] = useState<"view" | "review" | "edit" | "manage">("review");
   const [history, setHistory] = useState(false);
   const doGrant = useAction(async () => {
-    if (!principal[0]) return;
+    if (userIds.length === 0) return;
     await grant({
       workId: workId as Id<"works">,
-      principalType: "user",
-      principalId: principal[0],
+      userIds: userIds as Id<"users">[],
       permission,
     });
-    setPrincipal([]);
+    setUserIds([]);
   });
   const doRevoke = useAction(async (id: string) => {
-    await revoke({ workId: workId as Id<"works">, principalType: "user", principalId: id });
+    await revoke({ workId: workId as Id<"works">, userId: id as Id<"users"> });
   });
   const change = useAction(async (id: string, p: "view" | "review" | "edit" | "manage") => {
     await grant({
       workId: workId as Id<"works">,
-      principalType: "user",
-      principalId: id,
+      userIds: [id as Id<"users">],
       permission: p,
     });
   });
@@ -123,9 +121,9 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
         <div className="acl__add">
           <UserPicker
             label="ユーザーを追加"
-            single
-            value={principal}
-            onChange={setPrincipal}
+            groups
+            value={userIds}
+            onChange={setUserIds}
             exclude={active.map((g) => g.principalId)}
           />
           <Field label="権限">
@@ -141,7 +139,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
             <span className="spacer" />
             <M3eButton
               variant="tonal"
-              disabled={principal.length === 0 || doGrant.pending}
+              disabled={userIds.length === 0 || doGrant.pending}
               onClick={() => void doGrant.run()}
             >
               追加

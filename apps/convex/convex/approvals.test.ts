@@ -36,8 +36,7 @@ describe("Convex 統合: 独立確認と制作物の不変条件（PR #1 レビ�
     );
     await cast.admin.as.mutation(api.acl.grant, {
       workId,
-      principalType: "user",
-      principalId: cast.reviewer.id,
+      userIds: [cast.reviewer.id],
       permission: "review",
     });
     const { revisionId } = await submitFiles(cast, workId, [

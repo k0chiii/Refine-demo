@@ -26,8 +26,7 @@ async function setup() {
   await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: soon.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
   const all = async () =>

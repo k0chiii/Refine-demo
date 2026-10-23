@@ -131,6 +131,8 @@ export interface ReviewAssignmentRepository {
   listByRevision(revisionId: RevisionId): Promise<ReviewAssignment[]>;
   find(revisionId: RevisionId, reviewerId: UserId): Promise<ReviewAssignment | null>;
   upsert(assignment: ReviewAssignment): Promise<void>;
+  /** 名簿から外れた未完了の割当を消す。行が無くても成功する。 */
+  delete(revisionId: RevisionId, reviewerId: UserId): Promise<void>;
 }
 
 export interface RequiredCheckRepository {

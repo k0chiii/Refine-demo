@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import { hasOrgPermission, orgPermissions } from "./OrgPermission.ts";
 import { isApproverOf } from "../work/approvers.ts";
 import type { Work } from "../work/Work.ts";
 import {
@@ -145,6 +146,13 @@ export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolea
     case "audit.view":
       return ctx.principal.isSystemAdmin || roles.isManager || roles.isApprover;
   }
+}
+
+/** 校正者の名簿を決められるか。作品の review.assign（主管・制作者・edit）か、組織権限 reviews:assign。 */
+export function mayAssignReviewers(ctx: AuthorizationContext): boolean {
+  return (
+    isAllowed("review.assign", ctx) || hasOrgPermission(ctx.principal, orgPermissions.reviewsAssign)
+  );
 }
 
 export function requireAllowed(action: WorkAction, ctx: AuthorizationContext): void {

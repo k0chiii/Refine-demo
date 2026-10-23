@@ -584,7 +584,7 @@ async function main() {
       .click();
     await settle();
   }
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   // 基本情報が長くなった（§58）ので、引き出しを上端に戻してから撮る
   await page.evaluate(() => document.querySelector(".drawer__body")?.scrollTo(0, 0));
@@ -620,7 +620,7 @@ async function main() {
   await btn("校正者を割り当てる").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   await settle();
 
@@ -1841,7 +1841,7 @@ async function compactScenes() {
   await btn("校正者を割り当てる").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "割り当てる" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");

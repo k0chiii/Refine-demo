@@ -15,10 +15,9 @@ async function seed(t: Harness) {
   await t.mutation(internal.revisions.closeExpired, {});
   const reviewing = await setupWork(t, cast, { title: "受付中" });
   const { revisionId } = await submitFiles(cast, reviewing, pdf);
-  await cast.manager.as.mutation(api.reviews.assign, {
-    revisionId,
+  await cast.manager.as.mutation(api.reviews.setReviewers, {
+    workId: reviewing,
     reviewerIds: [cast.reviewer.id],
-    reviewType: "general",
   });
   const post = (body: string) =>
     cast.reviewer.as.mutation(api.comments.post, {

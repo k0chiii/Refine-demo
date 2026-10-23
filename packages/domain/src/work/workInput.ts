@@ -274,12 +274,14 @@ export function applyWorkPatch(
 type PeopleFields = Pick<Work, "creatorIds" | "approverId" | "managerIds"> & {
   approverIds?: readonly UserId[] | undefined;
   stakeholderIds?: readonly UserId[] | undefined;
+  reviewerIds?: readonly UserId[] | undefined;
 };
 
 const peopleOf = (w: PeopleFields) => [
   ...w.creatorIds,
   ...approversOf(w),
   ...w.managerIds,
+  ...(w.reviewerIds ?? []),
   ...(w.stakeholderIds ?? []),
 ];
 

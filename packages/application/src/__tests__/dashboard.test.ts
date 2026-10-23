@@ -3,7 +3,8 @@ import { finalizeWork } from "../usecases/approvals.ts";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { decideThread, postComment } from "../usecases/comments.ts";
 import { buildDashboard, dashboardPolicy } from "../usecases/dashboard.ts";
-import { assignReviewers, closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
+import { closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -15,8 +16,7 @@ async function setup() {
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
   const works = async () => [(await ctx.works.findById(work.id))!];
@@ -37,10 +37,9 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("割当後: 校正者に「校正する」。校正を完了すると消える", async () => {
     const { ctx, works, revision } = await setup();
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     let d = await buildDashboard(ctx, principals.reviewer, await works());
     expect(d.mine.review.map((i) => i.revisionLabel)).toEqual(["第1版"]);
@@ -54,10 +53,9 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("未対応の指摘があると制作者に「返事をする」、無くなると校了権限者に「校了する」", async () => {
     const { ctx, works, revision } = await setup();
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     expect(
       (await buildDashboard(ctx, principals.approver, await works())).mine.finalize,
@@ -111,10 +109,9 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
       title: "ポスター",
       deadlineAt: ctx.clock.now() + 40 * DAY,
     });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     for (const body of ["誤字", "表記ゆれ", "数字"])
       await postComment(ctx, principals.reviewer, {
@@ -189,10 +186,9 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("校正の仕事: 割当は未着手→確認中→完了の順に進み、完了した分は done に移る（やることの数に入らない）", async () => {
     const { ctx, works, revision } = await setup();
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     let d = await buildDashboard(ctx, principals.reviewer, await works());
     expect(d.mine.review.map((i) => [i.task, i.taskState])).toEqual([["review", "pending"]]);
@@ -239,10 +235,9 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("進み具合の数: 校正は校正者の完了 m/n、校了は宣言 d/q（校了者が 1 人なら付かない）", async () => {
     const { ctx, works, revision } = await setup();
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId, principals.approver.userId],
-      reviewType: "general",
     });
     let d = await buildDashboard(ctx, principals.reviewer, await works());
     expect(d.mine.review.map((i) => i.progress)).toEqual([{ done: 0, total: 2 }]);

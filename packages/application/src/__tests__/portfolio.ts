@@ -2,7 +2,8 @@ import { finalizeWork } from "../usecases/approvals.ts";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { decideThread, postComment } from "../usecases/comments.ts";
 import { setWorkPinned } from "../usecases/home.ts";
-import { assignReviewers, closeExpiredReviews } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
+import { closeExpiredReviews } from "../usecases/reviews.ts";
 import { changeWorkLifecycle } from "../usecases/works.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -28,14 +29,12 @@ export async function seedPortfolio() {
   const quorumRevision = await submitRevision(ctx, quorum.id, { deadlineInHours: 48 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: reviewing.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, principals.manager, {
-    revisionId: open.id,
+  await setWorkReviewers(ctx, principals.manager, {
+    workId: reviewing.id,
     reviewerIds: [principals.reviewer.userId],
-    reviewType: "general",
   });
   for (const [revisionId, body] of [
     [open.id, "誤字"],

@@ -25,7 +25,7 @@ test.describe("校正者の割り当て", { tag: "@smoke" }, () => {
       .click();
     await expect(dialog.locator("m3e-input-chip")).toHaveCount(1);
     await expect(dialog.locator("m3e-input-chip", { hasText: reviewer.name })).toHaveCount(1);
-    await dialog.locator("m3e-button", { hasText: "割り当てる" }).click();
+    await dialog.locator("m3e-button", { hasText: "保存" }).click();
     await expect(dialog).toHaveCount(0);
 
     await app.signInAs("mock-nogiku-reviewer");

@@ -94,20 +94,19 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       groupIds: [],
       orgPermissions: ["*"],
     };
+    ctx.state.members.add(viewer.userId);
 
     await expect(
       grantWorkPermission(ctx, principals.manager, {
         workId: work.id,
-        principalType: "user",
-        principalId: viewer.userId,
+        userIds: [viewer.userId],
         permission: "view",
       }),
     ).rejects.toThrow(code("acl_requires_system_admin"));
 
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: viewer.userId,
+      userIds: [viewer.userId],
       permission: "view",
     });
     await expect(loadAuthorizedWork(ctx, viewer, work.id, "work.view")).resolves.toBeTruthy();
@@ -115,8 +114,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     // レベル変更は旧付与の取消＋新付与として履歴に残る
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: viewer.userId,
+      userIds: [viewer.userId],
       permission: "review",
     });
     const history = await listWorkPermissions(ctx, principals.sysadmin, work.id);
@@ -126,8 +124,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
 
     const revoked = await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: viewer.userId,
+      userId: viewer.userId,
     });
     expect(revoked).toBe(1);
     await expect(loadAuthorizedWork(ctx, viewer, work.id, "work.view")).rejects.toThrow(
@@ -144,8 +141,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     const rev = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     await expect(
@@ -158,8 +154,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     ).resolves.toBeTruthy();
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userId: principals.reviewer.userId,
     });
     await expect(
       postComment(ctx, principals.reviewer, {
@@ -174,17 +169,34 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     ).rejects.toThrow(code("forbidden"));
   });
 
-  it("A-20: グループ主体は MVP では付与できない（将来拡張点）。個人 ACL だけで運用できる", async () => {
+  it("付与は人だけ。知らない人が一人でもいれば、誰の行も書かない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     await expect(
       grantWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
-        principalType: "group",
-        principalId: "nogiku-group",
+        userIds: [principals.reviewer.userId, "missing-user"],
         permission: "view",
       }),
-    ).rejects.toThrow(code("acl_group_principal_not_enabled"));
+    ).rejects.toThrow(code("acl_invalid"));
+    expect(ctx.state.grants).toEqual([]);
+    await expect(
+      grantWorkPermission(ctx, principals.sysadmin, {
+        workId: work.id,
+        userIds: [],
+        permission: "view",
+      }),
+    ).rejects.toThrow(code("acl_invalid"));
+    const granted = await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.reviewer.userId, principals.stranger.userId, principals.reviewer.userId],
+      permission: "review",
+    });
+    expect(granted.map((g) => g.principalType)).toEqual(["user", "user"]);
+    expect(granted.map((g) => g.principalId)).toEqual([
+      principals.reviewer.userId,
+      principals.stranger.userId,
+    ]);
   });
 
   it("システム管理者であっても ACL/職責の無い非公開の作品は閲覧できない（§7.2）", async () => {

@@ -57,8 +57,7 @@ describe("グループのメンション", () => {
     const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     const group = await saveMemberGroup(ctx, principals.sysadmin, {

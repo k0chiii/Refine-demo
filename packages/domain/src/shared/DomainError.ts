@@ -8,6 +8,7 @@ export const domainErrorCodes = [
   "acl_requires_system_admin",
   "acl_group_principal_not_enabled",
   "acl_cannot_revoke_role_holder",
+  "acl_invalid",
   // 制作物
   "work_not_active",
   "work_already_finalized",
@@ -15,6 +16,7 @@ export const domainErrorCodes = [
   "work_invalid_lifecycle_transition",
   "work_import_invalid",
   "work_invalid",
+  "work_not_editable",
   // 版
   "revision_rough_after_standard",
   "revision_sequence_conflict",

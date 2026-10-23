@@ -18,8 +18,7 @@ async function setup(t: Harness, cast: Cast) {
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
-    principalType: "user",
-    principalId: cast.reviewer.id,
+    userIds: [cast.reviewer.id],
     permission: "review",
   });
   const prepared = await cast.creator.as.mutation(api.submissions.prepare, {

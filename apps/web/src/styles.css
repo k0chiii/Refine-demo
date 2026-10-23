@@ -4857,11 +4857,13 @@ m3e-snackbar {
 .works-table__col--owner,
 .works-table__col--production,
 .works-table__col--creators,
+.works-table__col--reviewers,
 .works-table__col--approvers {
   white-space: nowrap;
 }
 /* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える */
-.works-table__approvers {
+.works-table__approvers,
+.works-table__reviewers {
   margin-inline-start: -12px;
   max-width: 100%;
   text-align: start;
@@ -4889,7 +4891,8 @@ m3e-snackbar {
   display: none;
 }
 @container (max-width: 1239px) {
-  .works-table__col--creators {
+  .works-table__col--creators,
+  .works-table__col--reviewers {
     display: none;
   }
 }

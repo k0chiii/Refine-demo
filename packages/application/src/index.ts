@@ -5,6 +5,7 @@ export * from "./usecases/acl.ts";
 export * from "./usecases/submissions.ts";
 export * from "./usecases/uploadAttempts.ts";
 export * from "./usecases/reviews.ts";
+export { setWorkReviewers } from "./usecases/reviewers.ts";
 export * from "./usecases/comments.ts";
 export * from "./usecases/commentFiles.ts";
 export * from "./usecases/approvals.ts";

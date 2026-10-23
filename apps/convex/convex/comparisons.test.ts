@@ -81,8 +81,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     // 表示中の制作物だけ見られる人: 相手が見られないので対応も読めない
     await cast.admin.as.mutation(api.acl.grant, {
       workId: current,
-      principalType: "user",
-      principalId: cast.stranger.id,
+      userIds: [cast.stranger.id],
       permission: "view",
     });
     await expect(cast.stranger.as.query(api.comparisons.getOverride, args)).rejects.toThrow(
@@ -91,8 +90,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     // 両方を見られるようになれば読める。閲覧だけの人は直せない
     await cast.admin.as.mutation(api.acl.grant, {
       workId: otherWork,
-      principalType: "user",
-      principalId: cast.stranger.id,
+      userIds: [cast.stranger.id],
       permission: "view",
     });
     expect(await cast.stranger.as.query(api.comparisons.getOverride, args)).toBeNull();

@@ -26,8 +26,7 @@ describe("Convex 統合: 文章の下書き", () => {
     })) as Id<"works">;
     await cast.admin.as.mutation(api.acl.grant, {
       workId,
-      principalType: "user",
-      principalId: cast.reviewer.id,
+      userIds: [cast.reviewer.id],
       permission: "review",
     });
 
@@ -101,8 +100,7 @@ describe("Convex 統合: エディタの入口", () => {
     const b = await create("会場案内");
     await cast.admin.as.mutation(api.acl.grant, {
       workId: a,
-      principalType: "user",
-      principalId: cast.reviewer.id,
+      userIds: [cast.reviewer.id],
       permission: "review",
     });
     await cast.creator.as.mutation(api.documents.save, {

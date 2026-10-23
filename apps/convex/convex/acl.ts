@@ -6,14 +6,13 @@ import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase, unauthenticated } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { resolveUsers, userDisplayName } from "./lib/users.ts";
-import { vPermissionLevel, vPrincipalType } from "./lib/validators.ts";
+import { vPermissionLevel } from "./lib/validators.ts";
 
 /** 作品の閲覧 ACL 付与（U-08 / A-19）。システム管理者のみ。 */
 export const grant = mutation({
   args: {
     workId: v.id("works"),
-    principalType: vPrincipalType,
-    principalId: v.string(),
+    userIds: v.array(v.id("users")),
     permission: vPermissionLevel,
   },
   handler: async (ctx, args) => {
@@ -26,7 +25,7 @@ export const grant = mutation({
 });
 
 export const revoke = mutation({
-  args: { workId: v.id("works"), principalType: vPrincipalType, principalId: v.string() },
+  args: { workId: v.id("works"), userId: v.id("users") },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() => revokeWorkPermission(createAppContext(ctx), principal, args));

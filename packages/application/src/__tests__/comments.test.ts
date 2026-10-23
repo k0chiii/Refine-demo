@@ -8,12 +8,8 @@ import {
   replyToThread,
   searchMentionCandidates,
 } from "../usecases/comments.ts";
-import {
-  assignReviewers,
-  closeExpiredReviews,
-  completeMyReview,
-  markRevisionViewed,
-} from "../usecases/reviews.ts";
+import { closeExpiredReviews, completeMyReview, markRevisionViewed } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { confirmSubmission, prepareSubmission } from "../usecases/submissions.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import {
@@ -33,14 +29,12 @@ async function setup() {
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, principals.manager, {
-    revisionId: revision.id,
+  await setWorkReviewers(ctx, principals.manager, {
+    workId: revision.workId,
     reviewerIds: [principals.reviewer.userId],
-    reviewType: "general",
   });
   return { ctx, work, revision };
 }
@@ -121,10 +115,10 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
 
   it("見られる人は ACL が review 未満でも新しいコメントを投稿できる（利用者決定 2026-10-19）。見られない人はできない", async () => {
     const { ctx, work, revision } = await setup();
+    ctx.state.members.add("u_viewer");
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: "u_viewer",
+      userIds: ["u_viewer"],
       permission: "view",
     });
     const viewer = {
@@ -290,10 +284,10 @@ describe("採否判断（A-07, D5）", () => {
   });
   it("返信は制作物を見られる人なら誰でもできる（view 権限のみでも可）。無関係者は不可", async () => {
     const { ctx, work, revision } = await setup();
+    ctx.state.members.add("u_viewer");
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: "u_viewer",
+      userIds: ["u_viewer"],
       permission: "view",
     });
     const viewer = {
@@ -386,8 +380,7 @@ describe("メンション", () => {
     const { ctx, revision } = await setup();
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: revision.workId,
-      principalType: "user",
-      principalId: principals.manager.userId,
+      userIds: [principals.manager.userId],
       permission: "review",
     });
     const at = { revisionId: revision.id, kind: "correction" as const, severity: "minor" as const };
@@ -553,14 +546,12 @@ describe("SNS 投稿の版の位置（本文の範囲・画像の矩形とピン
     });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     const artifacts = await ctx.artifacts.listByRevision(revision.id);
     const by = (name: string) => artifacts.find((a) => a.fileName === name)!;
