@@ -36,7 +36,7 @@ export async function assignReviewer(app: App, workPath: string) {
   await app.btn("校正者を割り当てる").click();
   await app.page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
   await app.pickUser(app.dialog(), reviewer.name);
-  await app.dialog().locator("m3e-button", { hasText: "割り当てる" }).click();
+  await app.dialog().locator("m3e-button", { hasText: "保存" }).click();
   await app.page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   return reviewer;
 }
