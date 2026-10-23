@@ -56,3 +56,8 @@
 2. `dashboard.get` 要約化の設計だけ切る（実装は Feature / TDD）。
 3. SW precache とログイン先読みの差分を Prototype で測る。
 4. 入口の二重と「後続」画面の製品スコープを決める（正本と DECISIONS の食い違いの解消）。
+
+## 実装状況（2026-10-23）
+
+- 入った: SW shell precache、idle 先読み削除、Editor lazy、PDF modern、OCR SIMD 1本、workSummaries v2＋フォールバック、Stream トークン再利用、sampling 0.1、myQueue 削除、COST 事実修正。
+- 見送り: 機能削除、入口統合、dashboard 節分割、本番バックフィル、multipart 全文再読の撤廃、Noto サブセット、Insights、Pages プレビュー停止。
