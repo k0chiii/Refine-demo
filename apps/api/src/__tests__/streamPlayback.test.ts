@@ -41,8 +41,7 @@ function stubPlayback(rejectStatus?: number) {
       if (url.startsWith("https://videodelivery.net/")) {
         media.push(url);
         mediaCalls += 1;
-        if (rejectStatus && mediaCalls === 2)
-          return new Response("no", { status: rejectStatus });
+        if (rejectStatus && mediaCalls === 2) return new Response("no", { status: rejectStatus });
         if (url.endsWith("missing.ts")) return new Response(null, { status: 404 });
         const manifest = url.endsWith(".m3u8");
         return new Response(manifest ? "#EXTM3U\nseg.ts\n" : "media", {

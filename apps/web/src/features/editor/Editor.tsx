@@ -1140,39 +1140,39 @@ export function Editor({
       return (
         <div className="post-review-wrap">
           <Suspense fallback={<ViewerLoading />}>
-          <PostReview
-            manifestArtifactId={artifact.id}
-            artifacts={data.artifacts}
-            isFinal={workData.work.finalRevisionId === data.revision.id}
-            workTitle={workData.work.title}
-            socialProfileId={workData.work.socialProfileId}
-            revisionLabel={data.revision.label}
-            annotate={{
-              threads: overlayThreads,
-              activeThreadId,
-              revealKey: postReveal,
-              canComment,
-              draftAnchor: draft?.anchor ?? null,
-              onSelectThread: (id) => {
-                viewerProps.onSelectThread(id);
-                setPostReveal((n) => n + 1);
-                // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
-                if (!mobile && drawer !== "comments") openDrawer("comments");
-              },
-              onDraft: (d) => {
-                if (!d) {
-                  resetCompose();
-                  return;
-                }
-                setDraft({
-                  anchor: d.anchor,
-                  postPlace: { label: d.label, ...(d.quote ? { quote: d.quote } : {}) },
-                });
-                setActiveThreadId(null);
-              },
-              renderCompose: composePost,
-            }}
-          />
+            <PostReview
+              manifestArtifactId={artifact.id}
+              artifacts={data.artifacts}
+              isFinal={workData.work.finalRevisionId === data.revision.id}
+              workTitle={workData.work.title}
+              socialProfileId={workData.work.socialProfileId}
+              revisionLabel={data.revision.label}
+              annotate={{
+                threads: overlayThreads,
+                activeThreadId,
+                revealKey: postReveal,
+                canComment,
+                draftAnchor: draft?.anchor ?? null,
+                onSelectThread: (id) => {
+                  viewerProps.onSelectThread(id);
+                  setPostReveal((n) => n + 1);
+                  // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
+                  if (!mobile && drawer !== "comments") openDrawer("comments");
+                },
+                onDraft: (d) => {
+                  if (!d) {
+                    resetCompose();
+                    return;
+                  }
+                  setDraft({
+                    anchor: d.anchor,
+                    postPlace: { label: d.label, ...(d.quote ? { quote: d.quote } : {}) },
+                  });
+                  setActiveThreadId(null);
+                },
+                renderCompose: composePost,
+              }}
+            />
           </Suspense>
         </div>
       );

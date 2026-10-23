@@ -110,7 +110,10 @@ it("multipart は part 受信時に SHA を積み、完了で sink の全文消�
   const upload = {
     uploadId: "upload",
     uploadPart: vi.fn(async (_n: number, body: Uint8Array | ReadableStream) => {
-      part = await new Response(body).text();
+      part =
+        body instanceof Uint8Array
+          ? new TextDecoder().decode(body)
+          : await new Response(body).text();
       return { partNumber: 1, etag: "etag" };
     }),
     complete: vi.fn(async () => {
@@ -140,7 +143,12 @@ it("multipart は part 受信時に SHA を積み、完了で sink の全文消�
     complete: async () => ({ status: "verified", failureMessage: null }),
     fail: async () => undefined,
   };
-  const call = (path: string, method: string, body?: string, headers: Record<string, string> = {}) =>
+  const call = (
+    path: string,
+    method: string,
+    body?: string,
+    headers: Record<string, string> = {},
+  ) =>
     multipartRequest(
       new Request(`https://test/uploads/multipart/${path}`, {
         method,
@@ -159,9 +167,15 @@ it("multipart は part 受信時に SHA を積み、完了で sink の全文消�
     );
   await call("start/item", "POST", undefined, { "X-Content-SHA256": hash("hello") });
   await call("part/attempt/1", "PUT", "hello", { "Content-Length": "5" });
-  expect((await call("complete/attempt", "POST", JSON.stringify({ parts: [{ partNumber: 1, etag: "etag" }] }))).status).toBe(
-    200,
-  );
+  expect(
+    (
+      await call(
+        "complete/attempt",
+        "POST",
+        JSON.stringify({ parts: [{ partNumber: 1, etag: "etag" }] }),
+      )
+    ).status,
+  ).toBe(200);
   expect(digest).not.toHaveBeenCalled();
   // existence probe cancels the body without hashing through sink
   expect(getBodyReads).toBe(1);
