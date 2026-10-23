@@ -47,8 +47,7 @@ async function setup() {
   const work = await seedWork(ctx, { notationCategories: ["A1"] });
   await grantWorkPermission(ctx, sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: reviewer.userId,
+    userIds: [reviewer.userId],
     permission: "review",
   });
   const rev = await submitRevision(ctx, work.id);

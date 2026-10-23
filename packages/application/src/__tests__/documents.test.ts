@@ -30,8 +30,7 @@ describe("文章の下書き", () => {
     expect(saved.version).toBe(1);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     const view = await getDocumentDraft(ctx, principals.reviewer, work.id);
@@ -182,8 +181,7 @@ describe("エディタの入口（書ける担当の制作物）", () => {
     // 校正の権限だけの人には出ない
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: a.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     expect(

@@ -52,8 +52,7 @@ describe("端末への通知（Web Push）", () => {
     const work = await seedWork(ctx, { title: "夏のポスター" });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.stranger.userId,
+      userIds: [principals.stranger.userId],
       permission: "view",
     });
     await subscribePush(ctx, principals.stranger, sub(1));
@@ -84,8 +83,7 @@ describe("端末への通知（Web Push）", () => {
     });
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.stranger.userId,
+      userId: principals.stranger.userId,
     });
     const hidden = await planPushDelivery(ctx, n.id);
     expect(JSON.stringify(hidden?.payload)).not.toContain("夏のポスター");
@@ -99,8 +97,7 @@ describe("端末への通知（Web Push）", () => {
       const work = await seedWork(ctx, { title: "夏のポスター" });
       await grantWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
-        principalType: "user",
-        principalId: principals.stranger.userId,
+        userIds: [principals.stranger.userId],
         permission: "view",
       });
       await subscribePush(ctx, principals.stranger, sub());
@@ -174,8 +171,7 @@ describe("端末への通知（Web Push）", () => {
       // ACL が外れて見られなくなった
       await revokeWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
-        principalType: "user",
-        principalId: principals.stranger.userId,
+        userId: principals.stranger.userId,
       });
       const hidden = (await planPushDelivery(ctx, n.id))!.payload;
       expect(JSON.stringify(hidden)).not.toMatch(/夏のポスター|本郷|相談です|thr-1/);

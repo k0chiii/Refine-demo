@@ -2,7 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { postComment } from "../usecases/comments.ts";
 import { excerpt, jstMonthDay, listMyNotifications } from "../usecases/notifications.ts";
-import { assignReviewers, remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -26,14 +27,12 @@ describe("通知の文面（UI_M3E §35 W-14）", () => {
     const revision = await submitRevision(ctx, work.id, { deadlineInHours: 20 });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
-    await assignReviewers(ctx, principals.manager, {
-      revisionId: revision.id,
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: revision.workId,
       reviewerIds: [principals.reviewer.userId],
-      reviewType: "general",
     });
     const assigned = (await listMyNotifications(ctx, principals.reviewer)).find(
       (n) => n.kind === "review_assigned",

@@ -3,11 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { postComment } from "../usecases/comments.ts";
 import { listMyNotifications } from "../usecases/notifications.ts";
-import {
-  assignReviewers,
-  closeExpiredReviews,
-  remindUpcomingDeadlines,
-} from "../usecases/reviews.ts";
+import { closeExpiredReviews, remindUpcomingDeadlines } from "../usecases/reviews.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -23,14 +20,12 @@ async function setup() {
   });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, principals.manager, {
-    revisionId: revision.id,
+  await setWorkReviewers(ctx, principals.manager, {
+    workId: revision.workId,
     reviewerIds: [principals.reviewer.userId],
-    reviewType: "general",
   });
   return { ctx, revision };
 }

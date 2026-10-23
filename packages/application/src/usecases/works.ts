@@ -8,6 +8,7 @@ import {
   DomainError,
   type MediaType,
   newlyReferencedPeople,
+  normalizeReviewerIds,
   normalizeProductionTeamIds,
   normalizeWorkEssentials,
   normalizeWorkMetadata,
@@ -58,6 +59,8 @@ export interface CreateWorkInput extends WorkMetadataInput {
    * 主管は CSV の「主管」列だけ（利用者決定 2026-10-15・UI_M3E §36）
    */
   addRegistrantAsManager?: boolean;
+  /** 校正者の名簿。省略は空（校正者なし）。グループは画面で人に展開済み。 */
+  reviewerIds?: string[];
 }
 
 /**
@@ -91,8 +94,13 @@ export async function createWork(
   );
   // Notion に揃えた任意の項目（大ジャンル・小ジャンル・関係者・入稿・タグ・リンク）はドメインで整える
   const meta = normalizeWorkMetadata(pickMetadata(input));
-  // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責・関係者の人は委員の名簿にいること
-  await assertPeopleExist(ctx, { ...essentials, stakeholderIds: meta.stakeholderIds ?? [] });
+  const reviewerIds = normalizeReviewerIds(input.reviewerIds ?? []);
+  // 登録した本人（主管に自動で入る）は確かめない。それ以外の職責・関係者・校正者は委員の名簿にいること
+  await assertPeopleExist(ctx, {
+    ...essentials,
+    stakeholderIds: meta.stakeholderIds ?? [],
+    reviewerIds,
+  });
   const ownerTeamId = input.ownerTeamId?.trim() || undefined;
   // 制作担当は 1 つまで（ポリシー値 WorkTeamPolicy）。関係担当は複数
   const productionTeamIds = normalizeProductionTeamIds(input.productionTeamIds ?? []);
@@ -111,6 +119,7 @@ export async function createWork(
     approverId: essentials.approverId,
     approverIds: essentials.approverIds,
     approvalQuorum: essentials.approvalQuorum,
+    reviewerIds,
     lifecycle: input.activate === false ? "draft" : "active",
     confidentiality: input.confidentiality ?? "normal",
     version: 1,
@@ -306,6 +315,7 @@ async function assertPeopleExist(
     approverIds?: readonly UserId[] | undefined;
     managerIds: readonly UserId[];
     stakeholderIds?: readonly UserId[] | undefined;
+    reviewerIds?: readonly UserId[] | undefined;
   },
   before: Work | null = null,
 ): Promise<void> {
@@ -320,7 +330,9 @@ async function assertPeopleExist(
       ? "approverIds"
       : after.managerIds.includes(missing[0]!)
         ? "managerIds"
-        : "stakeholderIds";
+        : after.reviewerIds?.includes(missing[0]!)
+          ? "reviewerIds"
+          : "stakeholderIds";
   throw new DomainError("work_invalid", { field, reason: "unknown_user", userIds: missing });
 }
 

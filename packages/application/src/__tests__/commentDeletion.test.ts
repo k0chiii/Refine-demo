@@ -1,3 +1,4 @@
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { finalizeWork } from "../usecases/approvals.ts";
@@ -12,7 +13,6 @@ import {
   replyToThread,
 } from "../usecases/comments.ts";
 import { listMyNotifications, DELETED_COMMENT_NOTIFICATION } from "../usecases/notifications.ts";
-import { assignReviewers } from "../usecases/reviews.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -24,14 +24,12 @@ async function setup() {
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
-    principalType: "user",
-    principalId: principals.reviewer.userId,
+    userIds: [principals.reviewer.userId],
     permission: "review",
   });
-  await assignReviewers(ctx, principals.manager, {
-    revisionId: revision.id,
+  await setWorkReviewers(ctx, principals.manager, {
+    workId: revision.workId,
     reviewerIds: [principals.reviewer.userId],
-    reviewType: "general",
   });
   const post = (severity: "critical" | "info" = "critical") =>
     postComment(ctx, principals.reviewer, {

@@ -16,6 +16,8 @@ import {
   markItemVerified,
   planRevision,
   postSubmissionProblems,
+  reviewerRosterOf,
+  rosterForNewRevision,
   type Principal,
   type Revision,
   type RevisionKind,
@@ -39,6 +41,7 @@ import {
 import type { AppContext } from "../ports.ts";
 import { idempotent, loadAuthorizedWork } from "../shared.ts";
 import { about, excerpt, notify, personName, workStakeholders } from "./notifications.ts";
+import { syncRevisionToRoster } from "./reviewers.ts";
 import { currentRuleSet } from "./notation.ts";
 import { createProofreadingRun } from "./autoProofread.ts";
 import { loadOwnUploadAttempt, reserveUploadAttempt } from "./uploadAttempts.ts";
@@ -431,7 +434,16 @@ export async function confirmSubmission(
       supersededRevisionId = closed.id;
     }
     await ctx.uploads.update({ ...session, state: "confirmed", confirmedRevisionId: revision.id });
-    await ctx.works.update({ ...work, version: work.version + 1 });
+    const previousAssignments = plan.toSupersede
+      ? await ctx.assignments.listByRevision(plan.toSupersede.id)
+      : [];
+    const rosterPlan = rosterForNewRevision(reviewerRosterOf(work), previousAssignments);
+    await syncRevisionToRoster(ctx, work, revision, rosterPlan.ids, principal.userId);
+    await ctx.works.update({
+      ...work,
+      ...(rosterPlan.materialize ? { reviewerIds: [...rosterPlan.ids] } : {}),
+      version: work.version + 1,
+    });
     await ctx.audit.record({
       entityType: "revision",
       entityId: revision.id,

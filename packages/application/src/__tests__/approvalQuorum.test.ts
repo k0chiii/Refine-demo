@@ -115,8 +115,7 @@ describe("校了者が複数のときの校了（利用者決定 2026-10-18）",
     const { grantWorkPermission } = await import("../usecases/acl.ts");
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.creator.userId,
+      userIds: [principals.creator.userId],
       permission: "review",
     });
     await postComment(ctx, principals.creator, {

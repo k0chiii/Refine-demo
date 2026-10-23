@@ -311,6 +311,12 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         if (i >= 0) state.assignments[i] = clone(a);
         else state.assignments.push(clone(a));
       },
+      delete: async (revisionId, reviewerId) => {
+        const i = state.assignments.findIndex(
+          (x) => x.revisionId === revisionId && x.reviewerId === reviewerId,
+        );
+        if (i >= 0) state.assignments.splice(i, 1);
+      },
     },
     acl: {
       listByWork: async (workId) =>

@@ -73,6 +73,8 @@ export async function submitRevision(
   workId: string,
   opts: {
     kind?: "rough" | "standard";
+    /** 版の提出種別。名簿から作る割当の種別とは別。 */
+    reviewType?: string;
     deadlineInHours?: number;
     /** 締切の時刻を直接指定する（deadlineInHours より優先） */
     deadlineAt?: number;
@@ -86,7 +88,7 @@ export async function submitRevision(
   const prepared = await prepareSubmission(ctx, principal, {
     workId,
     kind: opts.kind ?? "standard",
-    reviewType: "general",
+    reviewType: opts.reviewType ?? "general",
     deadlineAt: opts.deadlineAt ?? ctx.clock.now() + (opts.deadlineInHours ?? 24) * HOUR,
     changeSummary: "初稿",
     focusNotes: "表紙の配色",

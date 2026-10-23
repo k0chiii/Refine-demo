@@ -25,8 +25,7 @@ describe("校了と再開（A-08, A-09, A-10）", () => {
     const rev = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     await postComment(ctx, principals.reviewer, {
@@ -65,8 +64,7 @@ describe("校了と再開（A-08, A-09, A-10）", () => {
     const rev = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     const t = await postComment(ctx, principals.reviewer, {
@@ -162,8 +160,7 @@ describe("独立確認（D2。決定前に保存された自己校了の行だ�
     const rev = await submitRevision(ctx, work.id, { principal: principals.approver });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
-      principalType: "user",
-      principalId: principals.reviewer.userId,
+      userIds: [principals.reviewer.userId],
       permission: "review",
     });
     return { ctx, work, rev };
