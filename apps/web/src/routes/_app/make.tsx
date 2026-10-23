@@ -25,8 +25,8 @@ export const Route = createFileRoute("/_app/make")({
   component: Make,
 });
 
-type Data = FunctionReturnType<typeof api.dashboard.get>;
-type Overview = Data["overview"]["works"][number];
+type Data = FunctionReturnType<typeof api.dashboard.make>;
+type Overview = Data["works"][number];
 
 const actionLabel: Record<MakeAction, string> = {
   respond: "対応する",
@@ -45,7 +45,7 @@ const inProgress = new Set(["unsubmitted", "reviewing", "lapsed"]);
 /**
  * 制作（自分が作るもの）の入口。制作者になっている制作物を 進行中 / 下書き / 校了済み で見る（利用者決定 2026-10-19）。
  * - 進行中: 「あなたの番」（未対応のコメントに返事をする・次の版を出す）と「校正中」（校正と校了を待っている）。
- *   材料はダッシュボードの問い合わせ（dashboard.get。「返事をする」「提出する」と制作者の行）。分け方は domain の classifyMakeRow
+ *   材料はダッシュボードの制作の節（dashboard.make。「返事をする」「提出する」と制作者の行）。分け方は domain の classifyMakeRow
  * - 下書き: 文章・SNS 投稿の下書き（documents.writable）。校了済み: 自分が制作者の校了した制作物（works.listMine）。どちらも開いたときだけ読む
  * - 行は 1 つの「次の操作」の印を持ち、押すとエディタが開く（返事をする・見るは、未解決のコメントが並ぶコメントの引き出しで）。
  *   版を出す行だけは提出の入口（添付は版提出ダイアログ、文章・SNS はそれぞれのエディタ）へ
@@ -54,7 +54,7 @@ function Make() {
   const { show: tab = "active" } = Route.useSearch();
   const navigate = useNavigate();
   useEffect(() => rememberWorkspace("make"), []);
-  const data = useQuery(api.dashboard.get, {});
+  const data = useQuery(api.dashboard.make, {});
   const me = useQuery(api.me.me, {});
   const drafts = useQuery(api.documents.writable, tab === "draft" ? {} : "skip");
   const finished = useWorkSummaries(tab === "done" ? { lifecycle: "finalized" as const } : "skip");
@@ -74,9 +74,9 @@ function Make() {
 
   const rows = useMemo(() => {
     if (!data) return null;
-    const respond = new Map(data.mine.respond.map((i) => [i.workId, i.count]));
-    const submit = new Map(data.mine.submit.map((i) => [i.workId, i]));
-    return data.overview.works
+    const respond = new Map(data.respond.map((i) => [i.workId, i.count]));
+    const submit = new Map(data.submit.map((i) => [i.workId, i]));
+    return data.works
       .filter((r) => r.isCreator && inProgress.has(r.stage))
       .map((r) => {
         const target = submit.get(r.workId);

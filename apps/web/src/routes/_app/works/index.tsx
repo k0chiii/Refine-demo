@@ -121,8 +121,8 @@ function Works() {
     ...(lifecycle ? { lifecycle: lifecycle as "active" } : {}),
     ...(search.genre ? { genre: search.genre } : {}),
   });
-  // 制作物の状況とピン留め（ダッシュボードの問い合わせ。制作・校正の入口も同じものを読む）
-  const dash = useQuery(api.dashboard.get, {});
+  // 制作物の状況とピン留め（ダッシュボードの制作物の節）
+  const dash = useQuery(api.dashboard.works, {});
   const pinnedIds = useMemo(() => new Set((dash?.pinned ?? []).map((p) => p.workId)), [dash]);
   const hasTeams = teams !== undefined && teams.length > 0;
   const owner = hasTeams ? search.owner : undefined;

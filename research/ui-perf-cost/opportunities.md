@@ -60,4 +60,5 @@
 ## 実装状況（2026-10-23）
 
 - 入った: SW shell precache、idle 先読み削除、Editor lazy、PDF modern、OCR SIMD 1本、workSummaries v2＋フォールバック、Stream トークン再利用、sampling 0.1、myQueue 削除、COST 事実修正。
-- 見送り: 機能削除、入口統合、dashboard 節分割、本番バックフィル、multipart 全文再読の撤廃、Noto サブセット、Insights、Pages プレビュー停止。
+- 追加で入れた: dashboard 節分割（check/make/works）、backfillWorkSummaries、multipart の isolate 内ハッシュ（全文 GET はフォールバック）。
+- 見送りのまま: 機能削除、入口統合、Noto サブセット、Insights、Pages プレビュー停止。multipart の横断 isolate 永続ハッシュは未着手。

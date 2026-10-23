@@ -44,6 +44,9 @@ async function readAll(cast: Cast) {
     out.push({
       list: await who.as.query(api.works.listMine, {}),
       dashboard: await who.as.query(api.dashboard.get, {}),
+      check: await who.as.query(api.dashboard.check, {}),
+      make: await who.as.query(api.dashboard.make, {}),
+      works: await who.as.query(api.dashboard.works, {}),
       submit: await who.as.query(api.home.submitTargets, {}),
     });
   return out;

@@ -9,7 +9,7 @@ import { Loading } from "@/ui/Loading";
  * `/` はホームではなく、入口（制作・校正）への振り分け（利用者決定 2026-10-19「ホームいらなくね？制作（ホーム）/校正（ホーム）」）。
  * - この端末で最後に使った入口があれば、読み込みを待たずにそこへ（beforeLoad）
  * - 初めてなら、校正のやり残し（割当の未完了・専門確認・校了待ち）があれば校正、無ければ制作（domain の defaultWorkspace）。
- *   材料はダッシュボードの問い合わせ（入口の画面も同じものを読む）
+ *   材料は校正の入口と同じ問い合わせ（dashboard.check）
  */
 export const Route = createFileRoute("/_app/")({
   beforeLoad: () => {
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_app/")({
 });
 
 function Landing() {
-  const data = useQuery(api.dashboard.get, {});
+  const data = useQuery(api.dashboard.check, {});
   const target = landingWorkspace(
     null,
     data && {

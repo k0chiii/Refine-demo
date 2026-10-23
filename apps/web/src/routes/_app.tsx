@@ -70,7 +70,7 @@ const readRailPref = () => {
 function AppShell() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.me.me, isAuthenticated ? {} : "skip");
-  /** 校正のナビのバッジ（自分の手が要る数）。割当・専門確認だけを読む軽い問い合わせ（dashboard.get ではない） */
+  /** 校正のナビのバッジ（自分の手が要る数）。割当・専門確認だけを読む軽い問い合わせ（dashboard.check ではない） */
   const checkTodo = useQuery(api.dashboard.checkBadge, me ? {} : "skip")?.count ?? 0;
   const navigate = useNavigate();
   const install = useInstallPrompt();
