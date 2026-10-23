@@ -474,6 +474,15 @@ export function createAppContext(
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
       },
+      async delete(revisionId, reviewerId) {
+        const existing = await db
+          .query("reviewAssignments")
+          .withIndex("by_revision_reviewer", (q) =>
+            q.eq("revisionId", revisionId as Id<"revisions">).eq("reviewerId", reviewerId),
+          )
+          .unique();
+        if (existing) await db.delete(existing._id);
+      },
     },
     checks: {
       async findById(id) {

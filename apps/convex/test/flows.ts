@@ -29,8 +29,7 @@ export async function setupWork(
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
-    principalType: "user",
-    principalId: cast.reviewer.id,
+    userIds: [cast.reviewer.id],
     permission: "review",
   });
   return workId;

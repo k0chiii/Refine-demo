@@ -226,6 +226,8 @@ export default defineSchema({
     approverIds: v.optional(v.array(v.string())),
     /** 校了とみなす人数（1..校了者の数）。無い行は 1 */
     approvalQuorum: v.optional(v.number()),
+    /** 校正者の名簿。無い行は未設定（次の版の確定で直前の版から作る）。空配列は校正者なし。 */
+    reviewerIds: v.optional(v.array(v.id("users"))),
     deadlineAt: v.optional(v.number()),
     lifecycle,
     confidentiality,

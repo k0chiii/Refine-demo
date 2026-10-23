@@ -13,10 +13,9 @@ describe("Convex 統合: 校正のナビのバッジ", () => {
 
     const assign = async (workId: Parameters<typeof submitFiles>[1]) => {
       const { revisionId } = await submitFiles(cast, workId, pdf);
-      await cast.manager.as.mutation(api.reviews.assign, {
-        revisionId,
+      await cast.manager.as.mutation(api.reviews.setReviewers, {
+        workId,
         reviewerIds: [cast.reviewer.id],
-        reviewType: "general",
       });
       return revisionId;
     };

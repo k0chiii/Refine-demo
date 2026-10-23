@@ -1,4 +1,4 @@
-import { assignReviewers, completeMyReview } from "@mf100/application";
+import { completeMyReview, setWorkReviewers } from "@mf100/application";
 import { isApproverOf, isBeforeDeadline, isDeadlineReached, revisionLabel } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
@@ -6,13 +6,13 @@ import { createAppContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 
-export const assign = mutation({
-  args: { revisionId: v.id("revisions"), reviewerIds: v.array(v.string()), reviewType: v.string() },
+export const setReviewers = mutation({
+  args: { workId: v.id("works"), reviewerIds: v.array(v.id("users")) },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
-      const out = await assignReviewers(createAppContext(ctx), principal, args);
-      return out.length;
+      await setWorkReviewers(createAppContext(ctx), principal, args);
+      return null;
     });
   },
 });

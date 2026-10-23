@@ -29,8 +29,7 @@ async function setupWork(
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
-    principalType: "user",
-    principalId: cast.reviewer.id,
+    userIds: [cast.reviewer.id],
     permission: "review",
   });
   return workId;
@@ -110,8 +109,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await expect(
       cast.manager.as.mutation(api.acl.grant, {
         workId,
-        principalType: "user",
-        principalId: cast.stranger.id,
+        userIds: [cast.stranger.id],
         permission: "view",
       }),
     ).rejects.toThrow(code("acl_requires_system_admin"));
@@ -127,8 +125,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
 
     await cast.admin.as.mutation(api.acl.revoke, {
       workId,
-      principalType: "user",
-      principalId: cast.reviewer.id,
+      userId: cast.reviewer.id,
     });
     await expect(cast.reviewer.as.query(api.works.get, { workId })).rejects.toThrow(
       code("forbidden"),
@@ -181,14 +178,12 @@ describe("Convex 統合: 認可と状態遷移", () => {
 
     await cast.admin.as.mutation(api.acl.grant, {
       workId,
-      principalType: "user",
-      principalId: cast.stranger.id,
+      userIds: [cast.stranger.id],
       permission: "view",
     });
     await cast.admin.as.mutation(api.acl.revoke, {
       workId,
-      principalType: "user",
-      principalId: cast.stranger.id,
+      userId: cast.stranger.id,
     });
     for (const who of [cast.manager, cast.approver]) {
       expect((await who.as.query(api.works.get, { workId })).can.viewAudit).toBe(true);
@@ -265,10 +260,9 @@ describe("Convex 統合: 認可と状態遷移", () => {
     const { sessionId } = await submit(t, cast, workId, { hours: 1 });
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
     const deadline = Date.now() + HOUR;
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId: revisionId as Id<"revisions">,
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     const post = () =>
       cast.reviewer.as.mutation(api.comments.post, {
@@ -512,10 +506,9 @@ describe("Convex 統合: 認可と状態遷移", () => {
     expect(r3.sequence).toBe(3);
 
     // 期限リマインド: 第 3 版の割当者に 1 回だけ
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId: r3.revisionId as Id<"revisions">,
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(0);

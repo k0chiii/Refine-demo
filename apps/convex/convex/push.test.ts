@@ -51,11 +51,10 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
     expect(await cast.reviewer.as.query(api.push.config, {})).toBeNull();
     await cast.reviewer.as.mutation(api.push.subscribe, await device(1));
     const workId = await setupWork(t, cast);
-    const { revisionId } = await submitFiles(cast, workId, pdf);
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId,
+    await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     expect(await scheduledDeliveries(t)).toHaveLength(0);
   });
@@ -77,11 +76,10 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
     expect(await cast.stranger.as.query(api.push.status, { endpoint: d1.endpoint })).toBe(false);
 
     const workId = await setupWork(t, cast, { title: "夏のポスター" });
-    const { revisionId } = await submitFiles(cast, workId, pdf);
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId,
+    await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     const scheduled = await scheduledDeliveries(t);
     expect(scheduled).toHaveLength(1); // 端末を登録したのは reviewer だけ
@@ -115,11 +113,10 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
       mutedCategories: ["assignment"],
     });
     const workId = await setupWork(t, cast);
-    const { revisionId } = await submitFiles(cast, workId, pdf);
-    await cast.manager.as.mutation(api.reviews.assign, {
-      revisionId,
+    await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
       reviewerIds: [cast.reviewer.id],
-      reviewType: "general",
     });
     const [scheduled] = await scheduledDeliveries(t);
     const notificationId = (scheduled!.args[0] as { notificationId: string }).notificationId;
@@ -161,11 +158,10 @@ it("transient push failure retries only undelivered devices", async () => {
   await cast.reviewer.as.mutation(api.push.subscribe, d1);
   await cast.reviewer.as.mutation(api.push.subscribe, d2);
   const workId = await setupWork(t, cast);
-  const { revisionId } = await submitFiles(cast, workId, pdf);
-  await cast.manager.as.mutation(api.reviews.assign, {
-    revisionId,
+  await submitFiles(cast, workId, pdf);
+  await cast.manager.as.mutation(api.reviews.setReviewers, {
+    workId,
     reviewerIds: [cast.reviewer.id],
-    reviewType: "general",
   });
   const scheduled = await scheduledDeliveries(t);
   const notificationId = (scheduled[0]!.args[0] as { notificationId: string }).notificationId;
