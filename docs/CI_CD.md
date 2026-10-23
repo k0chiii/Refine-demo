@@ -2,17 +2,27 @@
 
 GitHub Actions で回す。設定は `.github/workflows/`。
 
+## ブランチ（`main ← develop ← feat-*`）
+
+| ブランチ  | 役割             | PR の向き                      | 配布                                  |
+| --------- | ---------------- | ------------------------------ | ------------------------------------- |
+| `feat-*`  | 機能・修正の作業 | → `develop`                    | なし（CI のみ）                       |
+| `develop` | 統合。デモの正   | ← feat、→ `main` へ昇格        | デモ Pages（`mf100-refine-demo`）     |
+| `main`    | 本番の正         | ← `develop` のみ（運用で守る） | 本番（Convex / Workers / Pages 本番） |
+
+GitHub の Settings › Branches / Rulesets で、`develop` と `main` に PR 必須・`verify` 必須を置く。`main` への PR の base は `develop` に限る運用にする（Rulesets の制限は利用者が設定する）。
+
 ## CI（`ci.yml`）
 
-PR と `main` への push で走る。手で起動することもできる（手動は main と同じジョブ）。テストの方針は `docs/TESTING_AGENT_POLICY.md`。
+PR と `main` / `develop` への push で走る。手で起動することもできる（手動は push と同じジョブ）。テストの方針は `docs/TESTING_AGENT_POLICY.md`。
 
-| ジョブ                                                                 | いつ       | 内容                                                                                                                                                                                                                                                                                       |
-| ---------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `verify-check` / `verify-typecheck` / `verify-test` / `verify-codegen` | PR・main   | 並列。各ジョブが `pnpm build` のあと、整形 lint・型（＋ Worker 型とバックアップ照合単体）・単体テスト・codegen 差分のどれかを流す。PR の単体は `pnpm test`、main / 手動は `pnpm test:coverage`（成果物）。task-cache の鍵に `event_name` は入れない（PR が main のキャッシュを復元できる） |
-| `verify`                                                               | PR・main   | 上 4 レーンの集約。必須チェック名を `verify` のままにするためのジョブ                                                                                                                                                                                                                      |
-| `e2e-smoke`                                                            | PR         | ジョブ内でデモ版をビルドしてから `@smoke` と `e2e/pwa.mjs`。失敗時だけ HTML 報告と trace                                                                                                                                                                                                   |
-| `e2e`                                                                  | main・手動 | ジョブ内でデモ版をビルドしてから全 spec（1 ジョブ・Playwright 並列。shard は使わない）。HTML 報告を成果物に                                                                                                                                                                                |
-| `visual`                                                               | main・手動 | ジョブ内でデモ版をビルドしてから `e2e/screenshots.mjs`（部ごと）。a11y は serious / critical で落とす（日付ピッカーの既知違反は除外）。振る舞いの失敗は最後にまとめて落とす。撮った画面は成果物のみ                                                                                        |
+| ジョブ                                                                 | いつ                | 内容                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `verify-check` / `verify-typecheck` / `verify-test` / `verify-codegen` | PR・main・develop   | 並列。各ジョブが `pnpm build` のあと、整形 lint・型（＋ Worker 型とバックアップ照合単体）・単体テスト・codegen 差分のどれかを流す。PR の単体は `pnpm test`、push / 手動は `pnpm test:coverage`（成果物）。task-cache の鍵に `event_name` は入れない |
+| `verify`                                                               | PR・main・develop   | 上 4 レーンの集約。必須チェック名を `verify` のままにするためのジョブ                                                                                                                                                                               |
+| `e2e-smoke`                                                            | PR                  | ジョブ内でデモ版をビルドしてから `@smoke` と `e2e/pwa.mjs`。失敗時だけ HTML 報告と trace                                                                                                                                                            |
+| `e2e`                                                                  | main・develop・手動 | ジョブ内でデモ版をビルドしてから全 spec（1 ジョブ・Playwright 並列。shard は使わない）。HTML 報告を成果物に                                                                                                                                         |
+| `visual`                                                               | main・develop・手動 | ジョブ内でデモ版をビルドしてから `e2e/screenshots.mjs`（部ごと）。a11y は serious / critical で落とす（日付ピッカーの既知違反は除外）。振る舞いの失敗は最後にまとめて落とす。撮った画面は成果物のみ                                                 |
 
 ブラウザは runner に入っている Chrome（`/usr/bin/google-chrome`）を使い、Playwright のブラウザは落とさない（`CHROMIUM_PATH`）。
 
@@ -56,10 +66,10 @@ CI の壁時計（GitHub Actions）:
 
 ## CD（`deploy.yml`）
 
-| 先                     | いつ                                                                                                                                                                                                                                 | 必要な設定                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| デモ版（実データなし） | CI が success になったあと（`workflow_run`）。手動のデモ配布も、その SHA の `verify` が success であること。Secrets が無いあいだは配らずに飛ばす                                                                                     | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                                                                                                                                       |
-| 本番                   | **自動では走らない**。Actions の「Deploy」を手で起動し、配る先に `production` を選ぶ。Environment `production` の承認に加え、その SHA の CI ジョブ `verify` が success であること（CLAUDE.md「本番デプロイは明示承認まで行わない」） | Environment `production`（承認者を設定）に Secrets: `CONVEX_DEPLOY_KEY`（Convex の Production deploy key）・`CLOUDFLARE_API_TOKEN`（Workers・Pages・R2）・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`（Workers の URL）。Pages のプロジェクト `mf100-refine`、R2 バケット `mf100-assets` を一度だけ作る |
+| 先                     | いつ                                                                                                                                                                                                                                                       | 必要な設定                                                                                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| デモ版（実データなし） | **`develop` への push** で CI 完了後、集約ジョブ `verify` が success なら配る（e2e / visual の成否は問わない）。手動のデモ配布も同じ門。Secrets が無いあいだは配らずに飛ばす                                                                               | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                     |
+| 本番                   | **`main` への push**（通常は develop→main の merge）で CI 完了後、`verify` が success なら配る。Environment `production` に承認者を置けば配布前に止まる。手動 `workflow_dispatch`（`target: production`）も可。`seed_notation` / `fb_migration` は手動のみ | Environment `production` に Secrets: `CONVEX_DEPLOY_KEY`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`。Pages `mf100-refine`、R2 `mf100-assets` を一度だけ作る |
 
 ## バックアップ照合（`backup-verify.yml`）
 

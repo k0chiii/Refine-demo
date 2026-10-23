@@ -1,6 +1,8 @@
-# CD
-# - デモ版: CI が成功したあとにだけ配る（workflow_run）。Secrets が無いあいだは飛ばす。
-# - 本番: 手で起動し、Environment production の承認後。配る前にその SHA で CI が成功していることを確かめる。
+# CD（ブランチ: main ← develop ← feat-*）
+# - デモ: develop への push で CI が終わったあと、verify が success なら配る。
+# - 本番: main への push（develop からの merge）で CI が終わったあと、verify が success なら配る。
+#   Environment production に承認者を置いていれば、そこで止まる（Settings › Environments）。
+# - 手動: workflow_dispatch で demo / production を選べる。seed_notation / fb_migration は手動本番のみ。
 name: Deploy
 
 on:
@@ -29,7 +31,7 @@ on:
         default: none
 
 concurrency:
-  group: deploy-${{ github.event.workflow_run.head_branch || github.ref }}-${{ inputs.target || 'demo' }}
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref }}-${{ inputs.target || 'auto' }}
   cancel-in-progress: false
 
 permissions:
@@ -41,7 +43,7 @@ permissions:
 jobs:
   demo:
     if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'develop') ||
       (github.event_name == 'workflow_dispatch' && inputs.target == 'demo')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -51,26 +53,35 @@ jobs:
       - name: Cloudflare の設定が無ければ飛ばす
         if: env.HAS_CLOUDFLARE != 'true'
         run: echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID が未設定なので、デモ版は配りません"
-      - name: 手動デモ配布でも CI verify が success であること
-        if: env.HAS_CLOUDFLARE == 'true' && github.event_name == 'workflow_dispatch'
+      - name: CI ジョブ verify が success であること
+        id: gate
+        if: env.HAS_CLOUDFLARE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          REQUIRE: ${{ github.event_name == 'workflow_dispatch' && 'hard' || 'soft' }}
         run: |
           set -euo pipefail
-          sha="$GITHUB_SHA"
+          sha="$SHA"
           conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
             --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
-          echo "verify conclusion=${conclusion:-missing}"
-          if [ "$conclusion" != "success" ]; then
+          echo "verify conclusion=${conclusion:-missing} sha=${sha}"
+          if [ "$conclusion" = "success" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          if [ "$REQUIRE" = "hard" ]; then
             echo "::error::SHA ${sha} の CI ジョブ verify が success ではありません（${conclusion:-missing}）。デモは配りません。"
             exit 1
           fi
+          echo "::notice::SHA ${sha} の verify が success ではない（${conclusion:-missing}）のでデモは配りません"
       - uses: actions/checkout@v5
-        if: env.HAS_CLOUDFLARE == 'true'
+        if: env.HAS_CLOUDFLARE == 'true' && steps.gate.outputs.ok == 'true'
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
-        if: env.HAS_CLOUDFLARE == 'true'
+        if: env.HAS_CLOUDFLARE == 'true' && steps.gate.outputs.ok == 'true'
         with:
           version: "1.2.0"
           node-version-file: .node-version
@@ -78,39 +89,54 @@ jobs:
           run-install: |
             - args: ['--frozen-lockfile']
       - name: デモ版をビルド
-        if: env.HAS_CLOUDFLARE == 'true'
+        if: env.HAS_CLOUDFLARE == 'true' && steps.gate.outputs.ok == 'true'
         run: pnpm --filter @mf100/web build:demo
-      - name: Cloudflare Pages へ配る（main は本番、それ以外はブランチごとのプレビュー）
-        if: env.HAS_CLOUDFLARE == 'true'
+      - name: Cloudflare Pages へ配る（develop の統合デモ）
+        if: env.HAS_CLOUDFLARE == 'true' && steps.gate.outputs.ok == 'true'
         working-directory: apps/api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || (github.event_name == 'pull_request' && github.head_ref || 'main') }}
-        run: pnpm exec wrangler pages deploy ../web/dist-demo --project-name mf100-refine-demo --branch "$BRANCH" --commit-dirty=true
+        run: pnpm exec wrangler pages deploy ../web/dist-demo --project-name mf100-refine-demo --branch develop --commit-dirty=true
 
   production:
-    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     steps:
-      - uses: actions/checkout@v5
-      - name: この SHA で CI が成功していること
+      - name: CI ジョブ verify が success であること
+        id: gate
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          REQUIRE: ${{ github.event_name == 'workflow_dispatch' && 'hard' || 'soft' }}
         run: |
           set -euo pipefail
-          sha="$GITHUB_SHA"
-          # 必須チェック名 verify（集約ジョブ）が success であること
+          sha="$SHA"
           conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
             --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
-          echo "verify conclusion=${conclusion:-missing}"
-          if [ "$conclusion" != "success" ]; then
+          echo "verify conclusion=${conclusion:-missing} sha=${sha}"
+          if [ "$conclusion" = "success" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          if [ "$REQUIRE" = "hard" ]; then
             echo "::error::SHA ${sha} の CI ジョブ verify が success ではありません（${conclusion:-missing}）。本番は配りません。"
             exit 1
           fi
+          echo "::notice::SHA ${sha} の verify が success ではない（${conclusion:-missing}）ので本番は配りません"
+      - uses: actions/checkout@v5
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          ref: ${{ steps.gate.outputs.sha }}
       - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        if: steps.gate.outputs.ok == 'true'
         with:
           version: "1.2.0"
           node-version-file: .node-version
@@ -118,52 +144,59 @@ jobs:
           run-install: |
             - args: ['--frozen-lockfile']
       - name: 確認（型・単体テスト）
+        if: steps.gate.outputs.ok == 'true'
         run: |
           pnpm build
           pnpm typecheck
           pnpm test
       - name: 配信する版の記録
+        if: steps.gate.outputs.ok == 'true'
         run: node scripts/release-manifest.mjs production
       - name: Convex を配り、その URL で Web をビルド
+        if: steps.gate.outputs.ok == 'true'
         working-directory: apps/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: pnpm exec convex deploy --cmd "pnpm --filter @mf100/web build" --cmd-url-env-var-name VITE_CONVEX_URL
       - name: Workers（ファイルの提出と配信）を配る
+        if: steps.gate.outputs.ok == 'true'
         working-directory: apps/api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_SHA: ${{ steps.gate.outputs.sha }}
         run: |
           set -euo pipefail
           pnpm exec wrangler deploy --config wrangler.jsonc --env production | tee ../../.logs/worker-deploy.log
-          node ../../scripts/record-deployment.mjs worker "../../.logs/releases/production-${GITHUB_SHA}.json" ../../.logs/worker-deploy.log
+          node ../../scripts/record-deployment.mjs worker "../../.logs/releases/production-${DEPLOY_SHA}.json" ../../.logs/worker-deploy.log
       - name: Web を Cloudflare Pages へ配る
+        if: steps.gate.outputs.ok == 'true'
         working-directory: apps/api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_SHA: ${{ steps.gate.outputs.sha }}
         run: |
           set -euo pipefail
-          pnpm exec wrangler pages deploy ../web/dist --project-name mf100-refine --branch main --commit-hash "$GITHUB_SHA" | tee ../../.logs/pages-deploy.log
-          node ../../scripts/record-deployment.mjs pages "../../.logs/releases/production-${GITHUB_SHA}.json" ../../.logs/pages-deploy.log
+          pnpm exec wrangler pages deploy ../web/dist --project-name mf100-refine --branch main --commit-hash "$DEPLOY_SHA" | tee ../../.logs/pages-deploy.log
+          node ../../scripts/record-deployment.mjs pages "../../.logs/releases/production-${DEPLOY_SHA}.json" ../../.logs/pages-deploy.log
       - name: 配信版の対応を保存
-        if: always()
+        if: always() && steps.gate.outputs.ok == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: production-release-${{ github.sha }}
+          name: production-release-${{ steps.gate.outputs.sha }}
           path: .logs/releases/
           if-no-files-found: ignore
           retention-days: 90
-      - name: 表記ルールの初期データを入れる（指定したときだけ。配り終えてから流すので、失敗しても配る処理は止まらない）
-        if: inputs.seed_notation
+      - name: 表記ルールの初期データを入れる（手動本番・指定したときだけ）
+        if: github.event_name == 'workflow_dispatch' && inputs.seed_notation && steps.gate.outputs.ok == 'true'
         working-directory: apps/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: pnpm exec convex run notationSeed:importSamples
-      - name: FB のコメントへの移行（指定したときだけ。配り終えてから流すので、失敗しても配る処理は止まらない。内部関数をデプロイキーで呼ぶ）
-        if: inputs.fb_migration != 'none'
+      - name: FB のコメントへの移行（手動本番・指定したときだけ）
+        if: github.event_name == 'workflow_dispatch' && inputs.fb_migration != 'none' && steps.gate.outputs.ok == 'true'
         working-directory: apps/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
