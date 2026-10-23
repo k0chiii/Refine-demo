@@ -101,4 +101,32 @@ describe("Platform controls", () => {
     expect(after.work).toMatchObject({ rolesVersion: 1, version: original });
     expect(after.roles).toHaveLength(count);
   });
+
+  it("backfills workSummaries to summaryVersion 2 without changing the business version", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const before = await t.run(async (ctx) => {
+      const work = await ctx.db.get(workId);
+      for (const row of await ctx.db
+        .query("workSummaries")
+        .withIndex("by_work", (q) => q.eq("workId", workId))
+        .collect())
+        await ctx.db.delete(row._id);
+      return work!.version;
+    });
+    await t.mutation(internal.migrations.backfillWorkSummaries, {
+      cursor: null,
+      oneBatchOnly: true,
+    });
+    const after = await t.run(async (ctx) => ({
+      work: await ctx.db.get(workId),
+      summary: await ctx.db
+        .query("workSummaries")
+        .withIndex("by_work", (q) => q.eq("workId", workId))
+        .unique(),
+    }));
+    expect(after.work?.version).toBe(before);
+    expect(after.summary).toMatchObject({ workId, summaryVersion: 2 });
+  });
 });

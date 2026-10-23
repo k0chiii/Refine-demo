@@ -4,6 +4,7 @@ import { components } from "./_generated/api";
 import type { GenericDataModel } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { syncWorkRoles, workFromDoc } from "./lib/adapters.ts";
+import { syncWorkSummary } from "./lib/workSummary";
 import schema from "./schema";
 
 const migrations = new Migrations<GenericDataModel, typeof schema>(components.migrations, {
@@ -17,5 +18,16 @@ export const backfillWorkRoles = migrations.define({
   migrateOne: async (ctx, doc) => {
     await syncWorkRoles(ctx.db, workFromDoc(doc));
     await syncWorkAggregate(ctx, workFromDoc(doc));
+  },
+});
+
+/**
+ * Fill `workSummaries` to summaryVersion 2 for every work.
+ * Idempotent. Operator-approved only (CLAUDE.md). Run via Migrations component / dashboard, not deploy.
+ */
+export const backfillWorkSummaries = migrations.define({
+  table: "works",
+  migrateOne: async (ctx, doc) => {
+    await syncWorkSummary(ctx.db, doc._id);
   },
 });

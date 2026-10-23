@@ -2,7 +2,7 @@ import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats } from "./revisionThreadStats";
 import { substringTokens, workSearchText } from "./workSearch";
-import { syncWorkSummary } from "./workSummary";
+import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
 import type {
   AlignmentOverride,
   AppContext,
@@ -614,6 +614,15 @@ export function createAppContext(
       },
       async remove(id) {
         await db.delete(id as Id<"memberGroups">);
+      },
+    },
+    workSummaries: {
+      async findByWork(workId) {
+        const doc = await db
+          .query("workSummaries")
+          .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+          .unique();
+        return doc && workSummaryFromDoc(doc);
       },
     },
     home: {

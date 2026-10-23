@@ -1,4 +1,3 @@
-import { ProcessingTools } from "@/features/processing/ProcessingTools";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import {
@@ -27,6 +26,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
+  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -68,21 +68,15 @@ import {
 } from "@/features/review/mentions";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { ThreadPanel } from "@/features/review/ThreadPanel";
-import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { WorkPresence } from "@/features/presence/WorkPresence";
 import { PinButton } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
 import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
-import { PostReview } from "@/features/social/PostReview";
-import { ProposeDialog } from "@/features/notation/ProposeDialog";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { CompareButton } from "@/features/compare/CompareButton";
-import { CrossWorkPicker } from "@/features/compare/CrossWorkPicker";
-import { ImageSwipe } from "@/features/compare/ImageSwipe";
-import { PageMappingDialog } from "@/features/compare/PageMappingDialog";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { remaining } from "@/lib/format";
 import { workHint } from "@/lib/workHint";
@@ -126,6 +120,28 @@ import { M3eToolbar } from "@m3e/react/toolbar";
 import { InfoTab } from "./InfoTab";
 import { LeaveReviewPrompt } from "./LeaveReviewPrompt";
 import { VersionsTab } from "./VersionsTab";
+
+const ProcessingTools = lazy(() =>
+  import("@/features/processing/ProcessingTools").then((m) => ({ default: m.ProcessingTools })),
+);
+const SubmitDialog = lazy(() =>
+  import("@/features/upload/SubmitDialog").then((m) => ({ default: m.SubmitDialog })),
+);
+const PostReview = lazy(() =>
+  import("@/features/social/PostReview").then((m) => ({ default: m.PostReview })),
+);
+const ProposeDialog = lazy(() =>
+  import("@/features/notation/ProposeDialog").then((m) => ({ default: m.ProposeDialog })),
+);
+const CrossWorkPicker = lazy(() =>
+  import("@/features/compare/CrossWorkPicker").then((m) => ({ default: m.CrossWorkPicker })),
+);
+const ImageSwipe = lazy(() =>
+  import("@/features/compare/ImageSwipe").then((m) => ({ default: m.ImageSwipe })),
+);
+const PageMappingDialog = lazy(() =>
+  import("@/features/compare/PageMappingDialog").then((m) => ({ default: m.PageMappingDialog })),
+);
 
 export type { Drawer, EditorSearch } from "./search";
 
@@ -394,7 +410,9 @@ export function Editor({
   const [compareWith, setCompareWith] = useState<string | null>(null);
   /** 「別の制作物と比べる」の相手を選ぶダイアログ */
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMounted, setPickerMounted] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitMounted, setSubmitMounted] = useState(false);
   const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -1121,39 +1139,41 @@ export function Editor({
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
         <div className="post-review-wrap">
-          <PostReview
-            manifestArtifactId={artifact.id}
-            artifacts={data.artifacts}
-            isFinal={workData.work.finalRevisionId === data.revision.id}
-            workTitle={workData.work.title}
-            socialProfileId={workData.work.socialProfileId}
-            revisionLabel={data.revision.label}
-            annotate={{
-              threads: overlayThreads,
-              activeThreadId,
-              revealKey: postReveal,
-              canComment,
-              draftAnchor: draft?.anchor ?? null,
-              onSelectThread: (id) => {
-                viewerProps.onSelectThread(id);
-                setPostReveal((n) => n + 1);
-                // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
-                if (!mobile && drawer !== "comments") openDrawer("comments");
-              },
-              onDraft: (d) => {
-                if (!d) {
-                  resetCompose();
-                  return;
-                }
-                setDraft({
-                  anchor: d.anchor,
-                  postPlace: { label: d.label, ...(d.quote ? { quote: d.quote } : {}) },
-                });
-                setActiveThreadId(null);
-              },
-              renderCompose: composePost,
-            }}
-          />
+          <Suspense fallback={<ViewerLoading />}>
+            <PostReview
+              manifestArtifactId={artifact.id}
+              artifacts={data.artifacts}
+              isFinal={workData.work.finalRevisionId === data.revision.id}
+              workTitle={workData.work.title}
+              socialProfileId={workData.work.socialProfileId}
+              revisionLabel={data.revision.label}
+              annotate={{
+                threads: overlayThreads,
+                activeThreadId,
+                revealKey: postReveal,
+                canComment,
+                draftAnchor: draft?.anchor ?? null,
+                onSelectThread: (id) => {
+                  viewerProps.onSelectThread(id);
+                  setPostReveal((n) => n + 1);
+                  // 「ピンの高さに並べる」「ピンだけ」のレイアウトでも、開いたコメントのカードが見えるように
+                  if (!mobile && drawer !== "comments") openDrawer("comments");
+                },
+                onDraft: (d) => {
+                  if (!d) {
+                    resetCompose();
+                    return;
+                  }
+                  setDraft({
+                    anchor: d.anchor,
+                    postPlace: { label: d.label, ...(d.quote ? { quote: d.quote } : {}) },
+                  });
+                  setActiveThreadId(null);
+                },
+                renderCompose: composePost,
+              }}
+            />
+          </Suspense>
         </div>
       );
     if (artifact.role === "external") {
@@ -1713,6 +1733,9 @@ export function Editor({
     );
   });
 
+  if (submitOpen && !submitMounted) setSubmitMounted(true);
+  if (pickerOpen && !pickerMounted) setPickerMounted(true);
+
   return (
     <MentionProvider value={mentionDirectory}>
       <div className={`ws ws--${layout} ${compareWith ? "ws--compare" : ""}`}>
@@ -1761,12 +1784,14 @@ export function Editor({
             />
           ) : null}
           {workData ? <WorkPresence workId={workId} /> : null}
-          <ProcessingTools
-            key={artifact?.id ?? workId}
-            workId={workId}
-            artifactId={artifact?.id ?? null}
-            {...(artifact?.mimeType ? { mimeType: artifact.mimeType } : {})}
-          />
+          <Suspense fallback={null}>
+            <ProcessingTools
+              key={artifact?.id ?? workId}
+              workId={workId}
+              artifactId={artifact?.id ?? null}
+              {...(artifact?.mimeType ? { mimeType: artifact.mimeType } : {})}
+            />
+          </Suspense>
           <PinButton workId={workId} />
           {/* 校正者の「いまやる 1 つ」は文字付きの filled（アイコンだけでは弱い。M3 Usability。§35 A-20。利用者決定 2026-10-15） */}
           {initial ? null : can?.completeReview ? (
@@ -1822,12 +1847,14 @@ export function Editor({
                   otherWork={crossWork ? (other?.work.title ?? null) : null}
                 />
                 {swipe && cmp.kind === "image" && otherBlob.url && blob.url ? (
-                  <ImageSwipe
-                    leftUrl={otherBlob.url}
-                    rightUrl={blob.url}
-                    leftLabel={otherLabel ?? "旧版"}
-                    rightLabel={revision?.label ?? "新版"}
-                  />
+                  <Suspense fallback={<ViewerLoading />}>
+                    <ImageSwipe
+                      leftUrl={otherBlob.url}
+                      rightUrl={blob.url}
+                      leftLabel={otherLabel ?? "旧版"}
+                      rightLabel={revision?.label ?? "新版"}
+                    />
+                  </Suspense>
                 ) : (
                   <div className="compare">
                     <div className="compare__pane">
@@ -2201,41 +2228,53 @@ export function Editor({
           </M3eBottomSheet>
         ) : null}
 
-        <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+        {submitMounted ? (
+          <Suspense fallback={null}>
+            <SubmitDialog workId={workId} open={submitOpen} onClose={() => setSubmitOpen(false)} />
+          </Suspense>
+        ) : null}
         <LeaveReviewPrompt
           workId={workId}
           revisionId={revisionId}
           needsCompletion={can?.completeReview === true}
         />
-        <CrossWorkPicker
-          open={pickerOpen}
-          onClose={() => setPickerOpen(false)}
-          currentWorkId={workId}
-          onPick={(id) => {
-            setScale(1);
-            resetCompose();
-            setCompareWith(id);
-          }}
-        />
+        {pickerMounted ? (
+          <Suspense fallback={null}>
+            <CrossWorkPicker
+              open={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              currentWorkId={workId}
+              onPick={(id) => {
+                setScale(1);
+                resetCompose();
+                setCompareWith(id);
+              }}
+            />
+          </Suspense>
+        ) : null}
         {proposeFrom ? (
-          <ProposeDialog
-            open
-            onClose={() => setProposeFrom(null)}
-            quote={proposeFrom.quote}
-            surrounding={proposeFrom.surrounding}
-            workId={workId}
-            revisionId={proposeFrom.revisionId}
-            artifactId={proposeFrom.artifactId}
-          />
+          <Suspense fallback={null}>
+            <ProposeDialog
+              open
+              onClose={() => setProposeFrom(null)}
+              quote={proposeFrom.quote}
+              surrounding={proposeFrom.surrounding}
+              workId={workId}
+              revisionId={proposeFrom.revisionId}
+              artifactId={proposeFrom.artifactId}
+            />
+          </Suspense>
         ) : null}
         {compareWith && cmp.kind === "pdf" ? (
-          <PageMappingDialog
-            open={mappingOpen}
-            pdf={cmp.pdf}
-            leftLabel={otherLabel ?? "旧版"}
-            rightLabel={revision?.label ?? "新版"}
-            onClose={() => setMappingOpen(false)}
-          />
+          <Suspense fallback={null}>
+            <PageMappingDialog
+              open={mappingOpen}
+              pdf={cmp.pdf}
+              leftLabel={otherLabel ?? "旧版"}
+              rightLabel={revision?.label ?? "新版"}
+              onClose={() => setMappingOpen(false)}
+            />
+          </Suspense>
         ) : null}
       </div>
     </MentionProvider>
