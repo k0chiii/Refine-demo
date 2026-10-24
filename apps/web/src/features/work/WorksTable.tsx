@@ -117,8 +117,9 @@ export function WorksTable({
             <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
             <ColumnHeader className="works-table__col--reviewers">校正者</ColumnHeader>
             <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
-            <ColumnHeader className="works-table__col--actions" label="操作">
-              <span aria-hidden="true" />
+            {/* 見出しの文字は読み上げだけ（aria-label は span に付けられない: aria-prohibited-attr） */}
+            <ColumnHeader className="works-table__col--actions">
+              <span className="sr-only">操作</span>
             </ColumnHeader>
           </tr>
         </thead>
