@@ -14,17 +14,35 @@ import {
   WorkFormFields,
   workFormReady,
   workFormToFields,
+  type WorkFormState,
 } from "./WorkForm";
 
 /**
  * 制作物登録（UC-01）のダイアログ。項目は Notion の制作物 DB に揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。
- * 登録者は主管担当として自動的に含まれる。登録後はそのままエディタへ。
+ * 登録者は主管担当として自動的に含まれる。登録後はそのままエディタへ（`onCreated` を渡せば、そちらに任せる。複製で使う）。
+ * `initial` を渡すと、その値で埋めた状態から始める（複製。DuplicateWorkDialog）
  */
-export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NewWorkDialog({
+  open,
+  onClose,
+  header = "制作物を登録",
+  submitLabel = "登録",
+  initial,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  header?: string;
+  submitLabel?: string;
+  /** 最初に入っている値（複製の元）。省略すると空 */
+  initial?: { form: WorkFormState; reviewerIds: readonly string[] } | undefined;
+  /** 登録できたあと（省略すると新しい制作物のエディタへ移る） */
+  onCreated?: ((workId: Id<"works">) => void | Promise<void>) | undefined;
+}) {
   const navigate = useNavigate();
   const create = useMutation(api.works.create);
-  const [form, setForm] = useState(emptyWorkForm);
-  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
+  const [form, setForm] = useState<WorkFormState>(() => initial?.form ?? emptyWorkForm());
+  const [reviewerIds, setReviewerIds] = useState<string[]>(() => [...(initial?.reviewerIds ?? [])]);
   const { run, pending } = useAction(async () => {
     const meta = withoutNulls(workFormToFields(form));
     const id = await create({
@@ -47,11 +65,12 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
       ...meta,
     });
     onClose();
-    void navigate({ to: "/works/$workId", params: { workId: id } });
+    if (onCreated) await onCreated(id as Id<"works">);
+    else void navigate({ to: "/works/$workId", params: { workId: id } });
   });
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
-      <span slot="header">制作物を登録</span>
+      <span slot="header">{header}</span>
       <div className="dialog-body work-form">
         <WorkFormFields form={form} setForm={setForm} mode="create" />
         <UserPicker
@@ -71,7 +90,7 @@ export function NewWorkDialog({ open, onClose }: { open: boolean; onClose: () =>
           disabled={pending || !workFormReady(form)}
           onClick={() => void run()}
         >
-          登録
+          {submitLabel}
         </M3eButton>
       </div>
     </M3eDialog>

@@ -66,6 +66,7 @@ import {
   createMentionDirectory,
   MentionProvider,
 } from "@/features/review/mentions";
+import { CreatorNoteCard, hasCreatorNote } from "@/features/review/CreatorNoteCard";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
 import { ThreadPanel } from "@/features/review/ThreadPanel";
 import { WorkPresence } from "@/features/presence/WorkPresence";
@@ -1632,6 +1633,8 @@ export function Editor({
                 ))}
               </div>
             ) : null}
+            {/* 制作者からのコメント（提出時の意図・見てほしい点）は、校正のコメントと同じ一覧の先頭に留める（位置なし） */}
+            {revision && hasCreatorNote(revision) ? <CreatorNoteCard note={revision} /> : null}
             {!target ? (
               <p className="muted small comments__empty">版を提出するとコメントできます</p>
             ) : threads.length === 0 ? (

@@ -295,6 +295,7 @@ function Works() {
             dir,
           ].join("|")}
           compact={compact}
+          canDuplicate={canCreate === true}
           onSort={onSortColumn}
           onOpen={(workId) => {
             // 開く画面が works.get を待つあいだも題名を出せるように、行の値を渡しておく（§65）
