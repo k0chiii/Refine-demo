@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#f6f5ff" />
     <title>校正システム</title>
     <meta name="description" content="制作物の提出・校正・校了" />
-    <!-- リンクを Slack などに貼ったときのプレビュー（OGP）。アプリ全体の名前と説明だけ。制作物ごとの題名は出さない:
-         Slack の取得は未サインインで、制作物の題名を出すには公開の応答が要る（委員だけが見られる情報を外に出す判断。docs/DECISIONS.md「制作物ごとの OGP」） -->
+    <!-- リンクを Slack などに貼ったときのプレビュー（OGP）。ここはアプリ全体の名前と説明。
+         /works/:id では Pages の Worker（pages/_worker.template.js）が og:title と title を制作物の題名に差し替える（docs/DECISIONS.md「制作物ごとの OGP」） -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="MF100 校正システム" />
     <meta property="og:title" content="MF100 校正システム" />
