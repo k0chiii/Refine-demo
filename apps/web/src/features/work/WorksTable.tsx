@@ -17,7 +17,10 @@ import { StatusText } from "@/ui/Chip";
 import { ColumnHeader, DataTable, pageSlice, TablePager } from "@/ui/DataTable";
 import { M3eIcon } from "@m3e/react/icon";
 import { ApproversCell } from "./ApproversCell";
+import { DuplicateWorkDialog } from "./DuplicateWorkDialog";
+import { EditWorkById } from "./EditWorkDialog";
 import { ReviewersCell } from "./ReviewersCell";
+import { WorkRowMenu } from "./WorkRowMenu";
 
 export type WorkRow = FunctionReturnType<typeof api.works.listMine>[number] & {
   /** 段階（domain の workStageOf。下書き・中止は null） */
@@ -45,6 +48,7 @@ const DEFAULT_PAGE_SIZE = 25;
  * - 狭い幅では列を隠す（コンテナクエリ）。状態・版は題名の下に移る。スマホは 題名 + 校正の締切 の 2 列
  * - 件数が多いときは M3E の paginator（最小の 10 件を超えるとき）。並べ替え・絞り込みが変わったら 1 ページ目へ戻る
  * - 縦に収める（medium 以上）と見出しが貼り付き、ページ送りは表の下に残る
+ * - 行の末尾に「⋮」（WorkRowMenu）: 情報の編集（主管）と複製（登録の権限のある人。`canDuplicate`）。ダイアログは表の外に 1 つずつ置く
  */
 export function WorksTable({
   works,
@@ -53,6 +57,7 @@ export function WorksTable({
   dir,
   resetKey,
   compact,
+  canDuplicate = false,
   onSort,
   onOpen,
 }: {
@@ -63,10 +68,14 @@ export function WorksTable({
   /** これが変わったら 1 ページ目に戻す（絞り込み・検索・並べ替えの組） */
   resetKey: string;
   compact: boolean;
+  /** 行メニューに「複製」を出す（制作物を登録できる人） */
+  canDuplicate?: boolean;
   onSort: (key: WorkSortKey) => void;
   onOpen: (workId: string) => void;
 }) {
   const [page, setPage] = useState({ index: 0, size: DEFAULT_PAGE_SIZE });
+  /** 行メニューから開いているダイアログ（編集・複製）。表の外に 1 つだけ置く */
+  const [dialog, setDialog] = useState<{ kind: "edit" | "duplicate"; workId: string } | null>(null);
   useEffect(() => setPage((p) => (p.index === 0 ? p : { ...p, index: 0 })), [resetKey]);
   const { index, rows } = pageSlice(works, page.index, page.size);
   const now = Date.now();
@@ -80,41 +89,67 @@ export function WorksTable({
     </ColumnHeader>
   );
   return (
-    <DataTable
-      label="制作物一覧"
-      className="works-table"
-      footer={
-        works.length > 10 ? (
-          <TablePager
-            length={works.length}
-            pageIndex={index}
-            pageSize={page.size}
-            compact={compact}
-            onPage={(i, size) => setPage({ index: i, size })}
-          />
-        ) : null
-      }
-    >
-      <thead>
-        <tr>
-          {header("title", "題名")}
-          {header("stage", "状態", "works-table__col--stage")}
-          <ColumnHeader className="works-table__col--version">版</ColumnHeader>
-          {header("accepting", "校正の締切")}
-          {header("deadline", "納期", "works-table__col--delivery")}
-          {hasTeams ? header("owner", "主管担当", "works-table__col--owner") : null}
-          {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
-          <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
-          <ColumnHeader className="works-table__col--reviewers">校正者</ColumnHeader>
-          <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((w) => (
-          <Row key={w.id} w={w} teams={teams} hasTeams={hasTeams} now={now} onOpen={onOpen} />
-        ))}
-      </tbody>
-    </DataTable>
+    <>
+      <DataTable
+        label="制作物一覧"
+        className="works-table"
+        footer={
+          works.length > 10 ? (
+            <TablePager
+              length={works.length}
+              pageIndex={index}
+              pageSize={page.size}
+              compact={compact}
+              onPage={(i, size) => setPage({ index: i, size })}
+            />
+          ) : null
+        }
+      >
+        <thead>
+          <tr>
+            {header("title", "題名")}
+            {header("stage", "状態", "works-table__col--stage")}
+            <ColumnHeader className="works-table__col--version">版</ColumnHeader>
+            {header("accepting", "校正の締切")}
+            {header("deadline", "納期", "works-table__col--delivery")}
+            {hasTeams ? header("owner", "主管担当", "works-table__col--owner") : null}
+            {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
+            <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
+            <ColumnHeader className="works-table__col--reviewers">校正者</ColumnHeader>
+            <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
+            <ColumnHeader className="works-table__col--actions" label="操作">
+              <span aria-hidden="true" />
+            </ColumnHeader>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((w) => (
+            <Row
+              key={w.id}
+              w={w}
+              teams={teams}
+              hasTeams={hasTeams}
+              now={now}
+              compact={compact}
+              canDuplicate={canDuplicate}
+              onOpen={onOpen}
+              onEdit={() => setDialog({ kind: "edit", workId: w.id })}
+              onDuplicate={() => setDialog({ kind: "duplicate", workId: w.id })}
+            />
+          ))}
+        </tbody>
+      </DataTable>
+      {dialog?.kind === "edit" ? (
+        <EditWorkById key={dialog.workId} workId={dialog.workId} onClose={() => setDialog(null)} />
+      ) : null}
+      {dialog?.kind === "duplicate" ? (
+        <DuplicateWorkDialog
+          key={dialog.workId}
+          sourceWorkId={dialog.workId}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -123,13 +158,21 @@ function Row({
   teams,
   hasTeams,
   now,
+  compact,
+  canDuplicate,
   onOpen,
+  onEdit,
+  onDuplicate,
 }: {
   w: WorkRow;
   teams: readonly Team[];
   hasTeams: boolean;
   now: number;
+  compact: boolean;
+  canDuplicate: boolean;
   onOpen: (workId: string) => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
 }) {
   const done = w.lifecycle === "finalized" || w.lifecycle === "cancelled";
   const info = w.stage ? stageInfo[w.stage] : null;
@@ -144,8 +187,9 @@ function Row({
     <tr
       className={`mf-table__row mf-table__row--action ${done ? "mf-table__row--off" : ""}`}
       onClick={(e) => {
-        // リンク（題名）はそれ自身で開く。行のほかの場所を押したときだけ開く
-        if ((e.target as HTMLElement).closest("a, button")) return;
+        // リンク（題名）はそれ自身で開く。行の中のボタン・メニュー（校了者・校正者・⋮）は自分の操作をする。
+        // 行のほかの場所を押したときだけ開く
+        if ((e.target as HTMLElement).closest("a, button, m3e-icon-button, m3e-menu")) return;
         onOpen(w.id);
       }}
     >
@@ -228,6 +272,15 @@ function Row({
       </td>
       <td className="mf-table__td works-table__col--approvers">
         <ApproversCell w={w} />
+      </td>
+      <td className="mf-table__td works-table__col--actions" onClick={(e) => e.stopPropagation()}>
+        <WorkRowMenu
+          w={w}
+          canDuplicate={canDuplicate}
+          compact={compact}
+          onEdit={onEdit}
+          onDuplicate={onDuplicate}
+        />
       </td>
     </tr>
   );

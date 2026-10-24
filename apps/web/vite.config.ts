@@ -132,6 +132,51 @@ function pwa(): Plugin {
 }
 
 /**
+ * リンクのプレビュー（OGP）に制作物の題名を出す Pages の Worker（pages/_worker.template.js → dist/_worker.js）と、
+ * その Worker を `/works/*` だけに当てる `_routes.json` を、バックエンドのあるビルドでだけ書き出す。
+ * Convex の HTTP の URL は `VITE_CONVEX_SITE_URL`、無ければ `VITE_CONVEX_URL` の `.convex.cloud` を `.convex.site` に読み替える。
+ * デモ（バックエンド無し）と、接続先の無いビルドでは何も書き出さない（Pages は静的ファイルだけを配る）
+ */
+function ogWorker(): Plugin {
+  const template = fileURLToPath(new URL("./pages/_worker.template.js", import.meta.url));
+  let siteUrl: string | null = null;
+  return {
+    name: "mf100-og-worker",
+    apply: "build",
+    configResolved(config) {
+      siteUrl = null;
+      if (config.mode === "demo") return;
+      const explicit = config.env.VITE_CONVEX_SITE_URL;
+      const cloud = config.env.VITE_CONVEX_URL;
+      const value =
+        typeof explicit === "string" && explicit
+          ? explicit
+          : typeof cloud === "string" && cloud
+            ? cloud.replace(/\.convex\.cloud(\/|$)/, ".convex.site$1")
+            : "";
+      try {
+        siteUrl = value ? new URL(value).origin : null;
+      } catch {
+        siteUrl = null;
+      }
+    },
+    generateBundle() {
+      if (!siteUrl) return;
+      const source = readFileSync(template, "utf8").replace(
+        "__CONVEX_SITE_URL__",
+        JSON.stringify(siteUrl),
+      );
+      this.emitFile({ type: "asset", fileName: "_worker.js", source });
+      this.emitFile({
+        type: "asset",
+        fileName: "_routes.json",
+        source: JSON.stringify({ version: 1, include: ["/works/*"], exclude: [] }),
+      });
+    },
+  };
+}
+
+/**
  * 接続先（Convex のデプロイ・ファイル API）への事前接続。HTML を読んだ時点で DNS・TCP・TLS を始めておくと、
  * JS を読み終えて WebSocket / fetch を張るときには接続が済んでいる（往復の遅い回線ではここだけで 1 秒以上違う）。
  * 接続先はビルド時の環境変数（VITE_CONVEX_URL・VITE_API_URL）から。デモ（バックエンド無し）では何も足さない。
@@ -229,6 +274,7 @@ export default defineConfig(({ mode }) => ({
     ocrAssets(),
     pdfjsCodecAssets(),
     pwa(),
+    ogWorker(),
   ],
   resolve: {
     alias: {

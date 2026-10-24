@@ -261,8 +261,9 @@ export class App {
     await page.waitForSelector(".compose-pop", { state: "detached" });
   }
 
+  /** コメントの一覧のカード（校正のコメント。先頭に留まる「制作者からのコメント」のカードは数えない） */
   threads() {
-    return this.page.locator(".comments .thread");
+    return this.page.locator(".comments .thread:not(.thread--note)");
   }
 
   /** 一覧のカードの下の行を押してスレッドのパネルを開く */
