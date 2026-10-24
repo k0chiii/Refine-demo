@@ -27,14 +27,15 @@ export function hasCreatorNote(note: Pick<CreatorNote, "changeSummary" | "focusN
  * 位置なしのコメントとして置く（利用者 QA 2026-10-24「制作者コメントは校正コメントと並列で置かれててほしい。
  * ピン留めされてるみたいな表示」。それまでは情報タブの「観点」の行だった）。
  * 校正のコメントと同じカード（M3E filled card。ThreadCard と同じ組み）で、押しても選ばない・返信も採否もない。
- * 先頭に留めている印（push_pin）を付ける。本文は提出のダイアログの平文なので、コメントと同じ書式（plainToMarkdown）で描く
+ * 先頭に留めている印（push_pin）を付ける。本文は提出のダイアログの平文なので、コメントと同じ書式（plainToMarkdown）で描く。
+ * 根のクラスは `creator-note`（`thread` ではない）: コメントの数を数える・先頭のカードを押す撮影や E2E の `.thread` に紛れない
  */
 export function CreatorNoteCard({ note }: { note: CreatorNote }) {
   const name = note.submitter?.name ?? "制作者";
   return (
     <M3eCard
       variant="filled"
-      className="thread thread--compact thread--note"
+      className="creator-note"
       aria-label={`制作者からのコメント ${name}`}
       data-creator-note
     >

@@ -2862,12 +2862,16 @@ m3e-dialog {
   color: var(--mf-on-surface);
 }
 /* 制作者からのコメント（提出時の意図・見てほしい点。features/review/CreatorNoteCard）: 一覧の先頭に留める。
-   押しても選ばないので、カードの指の形は出さない。留めている印は on-surface-variant の push_pin */
-.thread--note {
-  cursor: default;
-}
-.comments .thread--note {
+   コメントのカード（.thread）と同じ組みだが、根は .creator-note（押しても選ばない: 指の形は出さない）。
+   留めている印は on-surface-variant の push_pin */
+.creator-note {
+  display: block;
+  position: relative;
+  color: var(--mf-on-surface);
   --m3e-filled-card-container-color: var(--mf-surface-container);
+}
+.creator-note .thread__content {
+  gap: 8px;
 }
 .thread__pinned {
   display: inline-flex;

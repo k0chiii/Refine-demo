@@ -12,10 +12,10 @@ test.describe("制作者からのコメント", { tag: "@smoke" }, () => {
     const note = page.locator(".comments__list [data-creator-note]");
     await expect(note).toHaveCount(1);
     await expect(note).toContainText("初稿。");
-    // 一覧の先頭（ほかのカードより前）に留まっている
-    await expect(page.locator(".comments__list .thread").first()).toHaveAttribute(
-      "data-creator-note",
-      "",
-    );
+    // 一覧の先頭（校正のコメントのカードより前）に留まっている。コメントのカード（.thread）には数えない
+    await expect(
+      page.locator(".comments__list .creator-note, .comments__list .thread").first(),
+    ).toHaveAttribute("data-creator-note", "");
+    await expect(page.locator(".comments__list .thread")).toHaveCount(0);
   });
 });
