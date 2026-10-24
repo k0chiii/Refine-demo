@@ -63,6 +63,36 @@ function ocrAssets(): Plugin {
 }
 
 /**
+ * PDF.js 5+ の画像コーデック（JPEG2000 / JBIG2）と ICC（CMYK）。リポジトリには入れず、開発・ビルド開始時に写す。
+ * 大きい JS フォールバックは写さない（wasm が使えれば足りる）。
+ */
+function pdfjsCodecAssets(): Plugin {
+  const require = createRequire(import.meta.url);
+  const root = fileURLToPath(new URL("./public/pdfjs", import.meta.url));
+  const copyFile = (from: string, to: string) => {
+    if (existsSync(to) && statSync(to).size === statSync(from).size) return;
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(from, to);
+  };
+  return {
+    name: "mf100-pdfjs-codec-assets",
+    buildStart() {
+      try {
+        const pkg = dirname(require.resolve("pdfjs-dist/package.json"));
+        for (const name of ["openjpeg.wasm", "jbig2.wasm", "qcms_bg.wasm"] as const)
+          copyFile(join(pkg, "wasm", name), join(root, "wasm", name));
+        const iccDir = join(pkg, "iccs");
+        if (existsSync(iccDir))
+          for (const name of ["CGATS001Compat-v2-micro.icc"] as const)
+            copyFile(join(iccDir, name), join(root, "iccs", name));
+      } catch (e) {
+        this.warn(`PDF.js の画像コーデックを用意できませんでした: ${String(e)}`);
+      }
+    },
+  };
+}
+
+/**
  * PWA: ビルドのときだけ Service Worker（pwa/sw.template.js）を sw.js として書き出す。
  * install で先に取るのは外枠だけ（index.html、エントリとその静的 import、その CSS、マニフェストとアイコン）。
  * 画面のチャンクはここには入れない。sw.template.js が /assets/ を実行時にキャッシュ優先で残す。
@@ -203,12 +233,24 @@ export default defineConfig(({ mode }) => ({
       "bundle-web": {
         command: "vp build",
         dependsOn: ["@mf100/convex#generate-convex"],
-        cache: taskCache(["dist/**", "src/routeTree.gen.ts", "public/ocr/**"]),
+        cache: taskCache([
+          "dist/**",
+          "src/routeTree.gen.ts",
+          "public/ocr/**",
+          "public/pdfjs/wasm/**",
+          "public/pdfjs/iccs/**",
+        ]),
       },
       "bundle-demo": {
         command: "vp build --mode demo --outDir dist-demo",
         dependsOn: ["@mf100/convex#generate-convex"],
-        cache: taskCache(["dist-demo/**", "src/routeTree.gen.ts", "public/ocr/**"]),
+        cache: taskCache([
+          "dist-demo/**",
+          "src/routeTree.gen.ts",
+          "public/ocr/**",
+          "public/pdfjs/wasm/**",
+          "public/pdfjs/iccs/**",
+        ]),
       },
       "verify-types": {
         command: "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json",
@@ -230,6 +272,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     preconnect(),
     ocrAssets(),
+    pdfjsCodecAssets(),
     pwa(),
     ogWorker(),
   ],
