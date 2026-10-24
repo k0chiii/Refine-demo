@@ -2861,6 +2861,32 @@ m3e-dialog {
   cursor: pointer;
   color: var(--mf-on-surface);
 }
+/* 制作者からのコメント（提出時の意図・見てほしい点。features/review/CreatorNoteCard）: 一覧の先頭に留める。
+   コメントのカード（.thread）と同じ組みだが、根は .creator-note（押しても選ばない: 指の形は出さない）。
+   留めている印は on-surface-variant の push_pin */
+.creator-note {
+  display: block;
+  position: relative;
+  color: var(--mf-on-surface);
+  --m3e-filled-card-container-color: var(--mf-surface-container);
+}
+.creator-note .thread__content {
+  gap: 8px;
+}
+.thread__pinned {
+  display: inline-flex;
+  align-items: center;
+  color: var(--mf-on-surface-variant);
+  font-size: 18px;
+}
+.thread__note-focus {
+  display: grid;
+  gap: 2px;
+}
+.thread__note-label {
+  font: var(--mf-type-label-medium);
+  color: var(--mf-on-surface-variant);
+}
 /* 選んだコメントを一覧へスクロールするときの余白（features/review/revealThread が読む）。選択中は面の色で示す */
 .thread {
   scroll-margin-block: 12px 16px;
@@ -4858,8 +4884,19 @@ m3e-snackbar {
 .works-table__col--production,
 .works-table__col--creators,
 .works-table__col--reviewers,
-.works-table__col--approvers {
+.works-table__col--approvers,
+.works-table__col--actions {
   white-space: nowrap;
+}
+/* 行の「⋮」（WorkRowMenu）: 列は幅を取らず、ボタンの余白ぶん右へ寄せて端から 16 に揃える。どの幅でも隠さない */
+.works-table__col--actions {
+  width: 0;
+  padding-inline-start: 0;
+  text-align: end;
+}
+.works-table__more {
+  margin: -4px -8px -4px 0;
+  vertical-align: middle;
 }
 /* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える */
 .works-table__approvers,
