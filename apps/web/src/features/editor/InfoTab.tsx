@@ -181,9 +181,7 @@ export function InfoTab({
         ...optional("小ジャンル", workSubGenreLabel(w.subGenre)),
         ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
         ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
-        ...(revision?.revision.focusNotes
-          ? ([["観点", revision.revision.focusNotes]] as Row[])
-          : []),
+        // 提出時の「見てほしい点」はここではなく、コメントの一覧の先頭（制作者からのコメント。CreatorNoteCard）に出す
         ["制作物 ID", w.legacyId || "なし"] as Row,
         ...(w.confidentiality === "restricted" ? ([["機密", "非公開・取扱注意"]] as Row[]) : []),
       ],
