@@ -32,6 +32,9 @@ node_modules/.vite-plus/
 # pnpm dev がサービスごとに書くログ
 .logs/
 apps/web/public/ocr/
+# PDF.js 画像コーデック（wasm）と ICC。ビルド開始時に node_modules から写す
+apps/web/public/pdfjs/wasm/
+apps/web/public/pdfjs/iccs/
 
 # 撮影の出力（画像はリポジトリに置かない）と Playwright Test の報告・trace
 apps/web/e2e/out/
