@@ -9,6 +9,7 @@
  * - 新しい版（sw.js の VERSION を一時的に書き換える）が届くと「更新」が出て、押すと切り替わり古いキャッシュが消える
  * - 本番（Cloudflare Pages）と同じ /index.html → / のリダイレクトを挟んでも、画面の移動が止まらない
  * - 新しい版の外枠は、前の版にあるハッシュ付きファイル（/assets/*）を通信せずに写して用意する（取り直さない。index.html などは取り直す）
+ * - 外枠の外で実行時にキャッシュしたハッシュ付きファイル（画面のチャンク・フォント）も、新しい版のキャッシュへ写されて残る
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
@@ -173,6 +174,15 @@ try {
     const before = await page.evaluate(async () =>
       (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")),
     );
+    // ここまでに画面が実行時にキャッシュした、外枠の外の /assets/*（サインイン画面のチャンクなど）
+    const precache = JSON.parse(/const PRECACHE = (\[.*?\]);/s.exec(original)[1]);
+    const runtimeCached = (
+      await page.evaluate(
+        async (name) =>
+          (await (await caches.open(name)).keys()).map((r) => new URL(r.url).pathname),
+        before[0],
+      )
+    ).filter((p) => p.startsWith("/assets/") && !precache.includes(p));
     writeFileSync(
       swPath,
       original.replace(/const VERSION = "([0-9a-f]+)"/, 'const VERSION = "$1e2e"'),
@@ -214,7 +224,6 @@ try {
       `新しい版: 切り替わり古い外枠のキャッシュが消える（${before.join()} → ${after.join()}）`,
     );
     // 新しい版の外枠が揃っている（写したものを含めて、一覧のすべてがキャッシュにある）
-    const precache = JSON.parse(/const PRECACHE = (\[.*?\]);/s.exec(original)[1]);
     const cached = await page.evaluate(
       async (name) => (await (await caches.open(name)).keys()).map((r) => new URL(r.url).pathname),
       after[0],
@@ -230,6 +239,11 @@ try {
       `新しい版: ハッシュ付きの /assets/* を取り直さない（通信 ${assetsFetched.length} 本）`,
     );
     check(installFetched.includes("/index.html"), "新しい版: index.html は取り直す");
+    const lost = runtimeCached.filter((p) => !cached.includes(p));
+    check(
+      runtimeCached.length > 0 && lost.length === 0,
+      `新しい版: 実行時にキャッシュした外枠の外の /assets/* ${runtimeCached.length} 本が写されて残る（消えた ${lost.length}）`,
+    );
   } finally {
     writeFileSync(swPath, original);
   }

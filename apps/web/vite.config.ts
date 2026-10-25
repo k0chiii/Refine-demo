@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, type Plugin } from "vite-plus";
-import { shellPrecache } from "./pwa/shellPrecache.ts";
+import { carriedAssets, shellPrecache } from "./pwa/shellPrecache.ts";
 
 /** Component test registries also glob their own Node-only tests; only runtime modules belong in the browser demo. */
 function browserComponentModules(): Plugin {
@@ -96,6 +96,8 @@ function pdfjsCodecAssets(): Plugin {
  * PWA: ビルドのときだけ Service Worker（pwa/sw.template.js）を sw.js として書き出す。
  * install で先に取るのは外枠だけ（index.html、エントリとその静的 import、その CSS、マニフェストとアイコン）。
  * 画面のチャンクはここには入れない。sw.template.js が /assets/ を実行時にキャッシュ優先で残す。
+ * 外枠の外のハッシュ付きファイル（画面のチャンク・PDF.js・フォント）はこの版の一覧（CARRY）だけ埋め、新しい版の install で
+ * 前の版のキャッシュから写す（取りに行かない）。
  * フォント（日本語は数百の分割ファイル）は先読みせず、使ったものだけキャッシュする。
  */
 function pwa(): Plugin {
@@ -115,8 +117,10 @@ function pwa(): Plugin {
     generateBundle(_options, bundle) {
       // index.html は HTML の処理（vite:build-html）がこの後で書き出すため、bundle にまだ無いことがある。明示的に入れる
       const precache = shellPrecache(bundle, fromPublic);
+      const carry = carriedAssets(bundle, precache);
       const version = createHash("sha256")
         .update(precache.join("\n"))
+        .update(carry.join("\n"))
         .update(
           readFileSync(fileURLToPath(new URL("./public/manifest.webmanifest", import.meta.url))),
         )
@@ -125,7 +129,8 @@ function pwa(): Plugin {
         .slice(0, 12);
       const source = readFileSync(template, "utf8")
         .replace("__VERSION__", JSON.stringify(version))
-        .replace("__PRECACHE__", JSON.stringify(precache));
+        .replace("__PRECACHE__", JSON.stringify(precache))
+        .replace("__CARRY__", JSON.stringify(carry));
       this.emitFile({ type: "asset", fileName: "sw.js", source });
     },
   };
