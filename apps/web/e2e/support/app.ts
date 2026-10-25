@@ -166,6 +166,24 @@ export class App {
     await this.settle();
   }
 
+  /**
+   * 日本語入力の「確定」キーを押す（iPhone・Mac の Safari の形）。Safari は変換を閉じてから確定の keydown を送るので、
+   * isComposing は false で keyCode が 229。Playwright の press では作れないので、その形の keydown を入力欄に送る
+   */
+  async imeConfirm(input: Locator) {
+    await input.evaluate((el) => {
+      const e = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+      });
+      Object.defineProperty(e, "keyCode", { get: () => 229 });
+      el.dispatchEvent(e);
+    });
+  }
+
   /** PDF の最初のページが描かれるまで待つ */
   pdfReady() {
     return this.page.waitForFunction(
