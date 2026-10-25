@@ -59,6 +59,7 @@
 
 ## 実装状況（2026-10-23）
 
-- 入った: SW shell precache、idle 先読み削除、Editor lazy、PDF modern、OCR SIMD 1本、workSummaries v2＋フォールバック、Stream トークン再利用、sampling 0.1、myQueue 削除、COST 事実修正。
+- 入った: SW shell precache、idle 先読み削除、Editor lazy、PDF modern（**2026-10-25 に legacy へ戻した**。modern ビルドは `Iterator` グローバル・`Uint8Array.prototype.toHex` を無条件に使い、Safari 18.3 以前・Chrome 139 以前で PDF が一切描けなくなった。差は圧縮後約 36KB。`apps/web/src/features/annotation/pdfjs.ts`）、OCR SIMD 1本、workSummaries v2＋フォールバック、Stream トークン再利用、sampling 0.1、myQueue 削除、COST 事実修正。
+- 追加（2026-10-25）: SW が外枠の外のハッシュ付きファイル（画面のチャンク・PDF.js・フォント）を版をまたいで写す（shell-only precache で版ごとに消えていた分。更新のたびの PDF.js 約 540KB＋フォントの取り直しが無くなる）。`warmPdfAssets` は Data Saver では取らない。
 - 追加で入れた: dashboard 節分割（check/make/works）、backfillWorkSummaries、multipart の isolate 内ハッシュ（全文 GET はフォールバック）。
 - 見送りのまま: 機能削除、入口統合、Noto サブセット、Insights、Pages プレビュー停止。multipart の横断 isolate 永続ハッシュは未着手。

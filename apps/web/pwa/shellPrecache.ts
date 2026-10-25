@@ -30,3 +30,21 @@ export function shellPrecache(
   const built = [...seen].map(href).sort();
   return ["/index.html", ...built, ...fromPublic];
 }
+
+/**
+ * 外枠には入れないが、この版が使うハッシュ付きのファイル（画面ごとのチャンク・PDF.js の本体とワーカー・フォントの分割ファイル）。
+ * sw.template.js が新しい版の install で、前の版のキャッシュにあるものを通信せずに写す（取りに行かない。無ければ使うときに取る）。
+ * 以前は版が替わるたびに前の版ごと消していたので、更新のたびに PDF.js（圧縮後およそ 540KB）や使ったフォントの分割ファイルを取り直していた。
+ * 一覧はこの版のものだけなので、前の版だけが使っていたファイルは写されず、版ごとのキャッシュと一緒に消える（溜まらない）
+ */
+export function carriedAssets(
+  bundle: Record<string, ShellChunk>,
+  precache: readonly string[],
+): string[] {
+  const shell = new Set(precache);
+  return Object.keys(bundle)
+    .filter((f) => f.startsWith("assets/"))
+    .map(href)
+    .filter((p) => !shell.has(p))
+    .sort();
+}
