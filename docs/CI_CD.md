@@ -75,6 +75,8 @@ CI の壁時計（GitHub Actions）:
 
 夜間と手動で `scripts/test_verify_backup.py` と `scripts/restore_backup_dryrun.py` を流す（A-14 の自動側。fixture のみ。実 export / 実 R2 の復元は RECOVERY.md）。
 
+Web のビルドは、`VITE_CONVEX_URL` があるとき `dist/_worker.js` と `_routes.json`（制作物のリンクのプレビューに題名を出す Pages の Worker。`/works/*` だけ）も書き出す。`wrangler pages deploy` はそれをそのまま Pages の Functions として配る（デモのビルドには無い）。
+
 本番の順番: 型・単体テスト → `convex deploy`（Convex を配り、その URL を `VITE_CONVEX_URL` にして Web をビルド）→ `wrangler deploy --env production`（Workers）→ `wrangler pages deploy`（Web）。Convex の環境変数（Nogiku・`MF100_UPLOAD_SECRET`・`MF100_CLEANUP_SECRET` など）と Workers の秘密（`wrangler secret put --env production` で `MF100_UPLOAD_SECRET`・`MF100_CLEANUP_SECRET`。Convex と同じ値、16 文字以上）は README の表のとおり先に設定する。Workers の本番の `vars`（`CONVEX_URL`・`CONVEX_SITE_URL`・`ALLOWED_ORIGINS`）は `apps/api/wrangler.jsonc` の `env.production` に書く（ダッシュボードで変えても deploy で上書きされる）。`MF100_UPLOAD_SECRET` が無いと本番でファイルを提出できない。
 
 トークンや鍵はチャットやリポジトリに書かず、GitHub の Settings › Secrets and variables（本番は Settings › Environments › production）に入れる。

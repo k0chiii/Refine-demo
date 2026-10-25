@@ -65,7 +65,7 @@ X01〜X07 は資料の非採用境界を維持する。基盤の全製品を利�
 
 - AI: 利用者 6 回/分（burst 2）、作品 12 回/分（burst 3）、利用者 200,000 文字/日。1 回の文字数上限は既存 AI_MAX_CHARS。失敗時も外部呼出し前の確保を戻さず、別ユーザーの消費と混ぜない。金額保証はしない。
 - Push: Workpool 最大並列 8、最大 4 attempts、初回 backoff 1 秒、倍率 2。配送記録だけでは送信直後の crash による重複をゼロにできない。
-- Presence: heartbeat 15 秒、room の一覧は最大 100 人。共有は同じ作品の閲覧権限がある相手に限る。
+- Presence: heartbeat 30 秒（2026-10-25 に 15 秒から。心拍の mutation を半分に）、room の一覧は最大 100 人。共有は同じ作品の閲覧権限がある相手に限る。
 - Gateway: Convex の `AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic` で有効化。本文ログ/キャッシュ禁止の header だけに頼らず、管理画面側の設定も確認する。シークレットは Git/チャットに書かない。
 
 検証結果と実クラウドで未実施の項目は、変更の報告でも区別する。

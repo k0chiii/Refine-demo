@@ -77,14 +77,25 @@ export const recordResult = internalMutation({
     recordPushResult(createAppContext(ctx), subscriptionId, status),
 });
 
-/** Enqueued in the notification transaction; workpool bounds concurrency and retries transient failures. */
+/**
+ * 通知を作ったトランザクションが予約する（1 トランザクションに 1 本。adapters の pushBatch）。workpool が同時数を抑え、
+ * 一時的な失敗をやり直す。同じ予約の中で複数の通知を積むので、workpool の起動（batch-worker への ping）は 1 回で済む。
+ * `notificationId`（単数）は、この形に替える前に予約されていた分のため
+ */
 export const enqueue = internalMutation({
-  args: { notificationId: v.string() },
-  handler: async (ctx, args) => {
-    await pushPool.enqueueAction(ctx, internal.pushNode.deliver, args, {
-      onComplete: internal.push.completed,
-      context: args,
-    });
+  args: {
+    notificationIds: v.optional(v.array(v.string())),
+    notificationId: v.optional(v.string()),
+  },
+  handler: async (ctx, { notificationIds = [], notificationId }) => {
+    const ids = notificationId ? [...notificationIds, notificationId] : notificationIds;
+    for (const id of ids) {
+      const args = { notificationId: id };
+      await pushPool.enqueueAction(ctx, internal.pushNode.deliver, args, {
+        onComplete: internal.push.completed,
+        context: args,
+      });
+    }
   },
 });
 

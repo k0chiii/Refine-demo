@@ -220,6 +220,26 @@ http.route({
   ),
 });
 
+/**
+ * リンクのプレビュー（OGP）用の公開の応答: 機密区分が通常の制作物の題名だけを返す（works.ogSummary）。
+ * Pages の `_worker.js`（apps/web/pages/_worker.template.js）が `/works/:id` の HTML を返す前にここを引き、`og:title` に入れる。
+ * 認証なし（Slack などの取得はサインインしていない）。ほかの項目は返さない。5 分の共有キャッシュ可
+ */
+http.route({
+  path: "/og/work",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const id = new URL(request.url).searchParams.get("id") ?? "";
+    const found =
+      id.length <= 64 ? await ctx.runQuery(internal.works.ogSummary, { workId: id }) : null;
+    if (!found)
+      return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
+    return Response.json(found, {
+      headers: { "Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff" },
+    });
+  }),
+});
+
 export default http;
 
 /** Queue/Workflow workers carry a job reference, never an expiring application JWT. */

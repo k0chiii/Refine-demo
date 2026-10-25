@@ -3,6 +3,7 @@ import { api } from "@mf100/convex/api";
 import { expandMemberGroups, searchMemberGroups } from "@mf100/domain";
 import { useQuery } from "convex/react";
 import { useId, useRef, useState } from "react";
+import { isImeKeyEvent } from "@/lib/ime";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useStableQuery } from "@/lib/useStableQuery";
 import { M3eAutocomplete } from "@m3e/react/autocomplete";
@@ -39,7 +40,7 @@ const GROUP_OPTION = "group:";
  * ユーザー選択 UI（v1）。一度でもログインした Nogiku ユーザーを名前（ふりがな・漢字）・メールで検索して選ぶ。
  * `groups` を付けると、グループを選んで所属する人をまとめて加えられる（校正者の割り当て）。
  * 外観: M3E の outlined form-field（浮くラベル）の中に、選択済みの M3E input chip（removable）と検索の native input を並べる。
- * 候補は listbox（キーボード: Enter で先頭候補、Esc で閉じる）。
+ * 候補は listbox（キーボード: Enter で先頭候補、Esc で閉じる）。日本語入力の確定の Enter は候補の決定にしない（下の onKeyDownCapture）。
  * Nogiku Access のユーザー一覧連携後も `users.search` の差し替えだけで済むようにここに閉じる。
  */
 export function UserPicker({
@@ -93,7 +94,17 @@ export function UserPicker({
 
   // <label> で全体を包まない: label 内の最初の labelable 要素（チップの「外す」ボタン）にクリックが転送されるため。
   return (
-    <div className="picker" role="group" aria-labelledby={`${listId}-label`}>
+    <div
+      className="picker"
+      role="group"
+      aria-labelledby={`${listId}-label`}
+      // M3E の autocomplete は入力欄の Enter で選んでいる候補を決めるが、日本語入力の確定の Enter と区別しない。
+      // iPhone はひらがなを「確定」キーで確定するので、打ち終えた直後の古い候補の先頭（別の人・グループ）が入っていた
+      // （利用者報告 2026-10-25）。確定のキーは入力欄（M3E の listener）まで届かせない。既定の動き（確定そのもの）は止めない
+      onKeyDownCapture={(e) => {
+        if (isImeKeyEvent(e.nativeEvent)) e.stopPropagation();
+      }}
+    >
       <M3eFormField
         variant="outlined"
         className="field"

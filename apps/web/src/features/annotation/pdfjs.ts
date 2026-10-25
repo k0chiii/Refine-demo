@@ -24,7 +24,9 @@ warmPdfAssets();
 export { pdfjs };
 
 /**
- * 文字・フォントのデータの置き場（自前配信。SW が版をまたいで残す）。
+ * 文字・フォント・画像コーデックの置き場（自前配信。SW が版をまたいで残す）。
+ * PDF.js 5+ は JPEG2000 / JBIG2 / ICC（CMYK）を wasm に分けた。wasmUrl / iccUrl が無いと
+ * 文字は出ても写真だけ空白になる（modern ビルド切替後の回帰）。
  * 範囲取得の単位（rangeChunkSize）は PDF.js の既定（64KB）のまま: 平らなページ木の PDF では全ページの定義を一斉に要求し、
  * 大きい単位だと要求のたびに余分なバイトを運ぶ（256KB にして計測したところ、1 ページ目までの時間は同じで転送量だけ増えた）
  */
@@ -32,6 +34,8 @@ export const pdfDocumentParams = {
   cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
   cMapPacked: true,
   standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
+  wasmUrl: `${import.meta.env.BASE_URL}pdfjs/wasm/`,
+  iccUrl: `${import.meta.env.BASE_URL}pdfjs/iccs/`,
   useSystemFonts: true,
 } as const;
 

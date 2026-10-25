@@ -63,6 +63,36 @@ function ocrAssets(): Plugin {
 }
 
 /**
+ * PDF.js 5+ の画像コーデック（JPEG2000 / JBIG2）と ICC（CMYK）。リポジトリには入れず、開発・ビルド開始時に写す。
+ * 大きい JS フォールバックは写さない（wasm が使えれば足りる）。
+ */
+function pdfjsCodecAssets(): Plugin {
+  const require = createRequire(import.meta.url);
+  const root = fileURLToPath(new URL("./public/pdfjs", import.meta.url));
+  const copyFile = (from: string, to: string) => {
+    if (existsSync(to) && statSync(to).size === statSync(from).size) return;
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(from, to);
+  };
+  return {
+    name: "mf100-pdfjs-codec-assets",
+    buildStart() {
+      try {
+        const pkg = dirname(require.resolve("pdfjs-dist/package.json"));
+        for (const name of ["openjpeg.wasm", "jbig2.wasm", "qcms_bg.wasm"] as const)
+          copyFile(join(pkg, "wasm", name), join(root, "wasm", name));
+        const iccDir = join(pkg, "iccs");
+        if (existsSync(iccDir))
+          for (const name of ["CGATS001Compat-v2-micro.icc"] as const)
+            copyFile(join(iccDir, name), join(root, "iccs", name));
+      } catch (e) {
+        this.warn(`PDF.js の画像コーデックを用意できませんでした: ${String(e)}`);
+      }
+    },
+  };
+}
+
+/**
  * PWA: ビルドのときだけ Service Worker（pwa/sw.template.js）を sw.js として書き出す。
  * install で先に取るのは外枠だけ（index.html、エントリとその静的 import、その CSS、マニフェストとアイコン）。
  * 画面のチャンクはここには入れない。sw.template.js が /assets/ を実行時にキャッシュ優先で残す。
@@ -102,6 +132,51 @@ function pwa(): Plugin {
         .replace("__PRECACHE__", JSON.stringify(precache))
         .replace("__CARRY__", JSON.stringify(carry));
       this.emitFile({ type: "asset", fileName: "sw.js", source });
+    },
+  };
+}
+
+/**
+ * リンクのプレビュー（OGP）に制作物の題名を出す Pages の Worker（pages/_worker.template.js → dist/_worker.js）と、
+ * その Worker を `/works/*` だけに当てる `_routes.json` を、バックエンドのあるビルドでだけ書き出す。
+ * Convex の HTTP の URL は `VITE_CONVEX_SITE_URL`、無ければ `VITE_CONVEX_URL` の `.convex.cloud` を `.convex.site` に読み替える。
+ * デモ（バックエンド無し）と、接続先の無いビルドでは何も書き出さない（Pages は静的ファイルだけを配る）
+ */
+function ogWorker(): Plugin {
+  const template = fileURLToPath(new URL("./pages/_worker.template.js", import.meta.url));
+  let siteUrl: string | null = null;
+  return {
+    name: "mf100-og-worker",
+    apply: "build",
+    configResolved(config) {
+      siteUrl = null;
+      if (config.mode === "demo") return;
+      const explicit = config.env.VITE_CONVEX_SITE_URL;
+      const cloud = config.env.VITE_CONVEX_URL;
+      const value =
+        typeof explicit === "string" && explicit
+          ? explicit
+          : typeof cloud === "string" && cloud
+            ? cloud.replace(/\.convex\.cloud(\/|$)/, ".convex.site$1")
+            : "";
+      try {
+        siteUrl = value ? new URL(value).origin : null;
+      } catch {
+        siteUrl = null;
+      }
+    },
+    generateBundle() {
+      if (!siteUrl) return;
+      const source = readFileSync(template, "utf8").replace(
+        "__CONVEX_SITE_URL__",
+        JSON.stringify(siteUrl),
+      );
+      this.emitFile({ type: "asset", fileName: "_worker.js", source });
+      this.emitFile({
+        type: "asset",
+        fileName: "_routes.json",
+        source: JSON.stringify({ version: 1, include: ["/works/*"], exclude: [] }),
+      });
     },
   };
 }
@@ -163,12 +238,24 @@ export default defineConfig(({ mode }) => ({
       "bundle-web": {
         command: "vp build",
         dependsOn: ["@mf100/convex#generate-convex"],
-        cache: taskCache(["dist/**", "src/routeTree.gen.ts", "public/ocr/**"]),
+        cache: taskCache([
+          "dist/**",
+          "src/routeTree.gen.ts",
+          "public/ocr/**",
+          "public/pdfjs/wasm/**",
+          "public/pdfjs/iccs/**",
+        ]),
       },
       "bundle-demo": {
         command: "vp build --mode demo --outDir dist-demo",
         dependsOn: ["@mf100/convex#generate-convex"],
-        cache: taskCache(["dist-demo/**", "src/routeTree.gen.ts", "public/ocr/**"]),
+        cache: taskCache([
+          "dist-demo/**",
+          "src/routeTree.gen.ts",
+          "public/ocr/**",
+          "public/pdfjs/wasm/**",
+          "public/pdfjs/iccs/**",
+        ]),
       },
       "verify-types": {
         command: "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json",
@@ -190,7 +277,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     preconnect(),
     ocrAssets(),
+    pdfjsCodecAssets(),
     pwa(),
+    ogWorker(),
   ],
   resolve: {
     alias: {

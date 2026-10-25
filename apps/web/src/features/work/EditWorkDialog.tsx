@@ -91,3 +91,13 @@ export function EditWorkDialog({
     </M3eDialog>
   );
 }
+
+/**
+ * 制作物一覧の行メニュー「編集」から開く編集（利用者 QA 2026-10-24「用途とか後から書きたい」）。
+ * 一覧の行には全部の項目が無いので、制作物（works.get）を読んでから同じ編集のダイアログを開く
+ */
+export function EditWorkById({ workId, onClose }: { workId: string; onClose: () => void }) {
+  const data = useQuery(api.works.get, { workId });
+  if (!data) return null;
+  return <EditWorkDialog work={data.work} open onClose={onClose} />;
+}

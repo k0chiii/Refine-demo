@@ -33,9 +33,10 @@ function LiveWorkPresence({ workId }: { workId: string }) {
       }
     };
     void send();
+    // 間隔はサーバー（convex/presence.ts の INTERVAL）と合わせる。部品は 2.5 倍の間、心拍が無ければ切れたとみなす
     const timer = window.setInterval(() => {
       void send();
-    }, 15_000);
+    }, 30_000);
     return () => {
       stopped = true;
       window.clearInterval(timer);

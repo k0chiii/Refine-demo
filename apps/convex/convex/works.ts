@@ -37,7 +37,13 @@ import {
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type DatabaseReader, type QueryCtx } from "./_generated/server";
+import {
+  internalQuery,
+  mutation,
+  query,
+  type DatabaseReader,
+  type QueryCtx,
+} from "./_generated/server";
 import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser, teamIdsOf } from "./lib/principal.ts";
@@ -216,6 +222,22 @@ export const changeLifecycle = mutation({
       await changeWorkLifecycle(createAppContext(ctx), principal, input);
       return null;
     });
+  },
+});
+
+/**
+ * リンクのプレビュー（OGP）に出す題名（http.ts の `GET /og/work`。Pages の `_worker.js` が `/works/:id` の HTML の meta に入れる）。
+ * サインインしていない取得（Slack など）に返すので、機密区分が通常の制作物の題名だけ（利用者決定 2026-10-24「題名は出していいよ」）。
+ * 非公開・取扱注意、無い ID、形の違う ID は null（存在も返さない）。目的・人・状態は出さない
+ */
+export const ogSummary = internalQuery({
+  args: { workId: v.string() },
+  handler: async (ctx, { workId }): Promise<{ title: string } | null> => {
+    const id = ctx.db.normalizeId("works", workId);
+    if (!id) return null;
+    const doc = await ctx.db.get(id);
+    if (!doc || doc.confidentiality !== "normal") return null;
+    return { title: doc.title };
   },
 });
 
@@ -563,6 +585,12 @@ async function summarizeWorkList(
     /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
     creatorIds: [...work.creatorIds],
     canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
+    /**
+     * 一覧の行メニューから制作物の情報を編集できるか（利用者 QA 2026-10-24「制作物の情報変更ってどこからやればいい？」）。
+     * 主管（work.edit の職責）に限る。ACL の manage を持つ人の判定には制作物ごとの ACL の読み取りが要るので一覧では行わず、
+     * その人は制作物の画面（情報）から編集する。校了後は編集できない（updateWork と同じ）
+     */
+    canEdit: work.lifecycle !== "finalized" && work.managerIds.includes(principal.userId),
     reviewers: (work.reviewerIds ?? []).map((id) => ({
       id,
       name: users.get(id)?.name ?? "（不明なユーザー）",
