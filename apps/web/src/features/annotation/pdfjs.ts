@@ -1,14 +1,22 @@
-import * as pdfjs from "pdfjs-dist";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { warmPdfAssets } from "@/lib/preload";
 import type { ArtifactDownload } from "@/lib/artifactFiles";
 
 /**
  * PDF.js 本体とワーカーの設定を 1 か所で。PDF を使うコード（PdfViewer・版比較の特徴抽出・自動校正の文字抜き出し）は
- * ここを（多くは動的に）import する。本体は約 400KB あるので、PDF の添付を開くまで読み込まない（lazyViewers）。
+ * ここを（多くは動的に）import する。本体は約 500KB あるので、PDF の添付を開くまで読み込まない（lazyViewers）。
  * ワーカーの URL は Vite が別ファイルとして配信する。どこから最初に読み込まれても設定済みになるよう、ここで一度だけ設定する
+ *
+ * **legacy ビルドを使う**（本体・ワーカーとも。2026-10-25）。modern ビルド（`pdfjs-dist` の既定）は最新のブラウザだけが対象で、
+ * 読み込んだ瞬間に `Iterator` グローバル（Safari 18.4 以降・Chrome 122 以降）を無条件に触り、ワーカーは文書を開くたびに
+ * `Uint8Array.prototype.toHex`（Safari 18.2 以降・Chrome 140 以降）を呼ぶ。それより古い端末では PDF が一切描けず
+ * 「PDF を読み込めませんでした」になる（2026-10-23 の軽量化で modern に替えたあとの報告）。legacy ビルドはこれらを埋めてあり、
+ * 差は本体＋ワーカーで圧縮後およそ 36KB（端末ごとに 1 回。/assets/ は SW が版をまたいで残す）。
+ * どちらのビルドも `Promise.withResolvers`（Safari 17.4 以降・Chrome 119 以降）は要る。これより古い端末は PDF の対象外。
+ * 回帰の確認: e2e/specs/pdf-legacy-browser.spec.ts（`Iterator` の無いブラウザを模して PDF を描く）
  */
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
+  "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
   import.meta.url,
 ).toString();
 warmPdfAssets();

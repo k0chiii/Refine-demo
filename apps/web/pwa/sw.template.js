@@ -9,6 +9,8 @@
  */
 const VERSION = __VERSION__;
 const PRECACHE = __PRECACHE__;
+/** 外枠の外で、この版が使うハッシュ付きのファイル。前の版のキャッシュにあれば写す（無くても取りに行かない。使うときに取る） */
+const CARRY = __CARRY__;
 const SHELL = `mf100-shell-${VERSION}`;
 /**
  * キャッシュを先に見るファイル（中身が変わらない）。
@@ -26,6 +28,9 @@ const BYPASS_PREFIXES = ["/api/", "/auth/", "/.well-known/"];
  * 前の版のキャッシュにあるものはそこから写し、通信しない（リリースで変わるのは数本のチャンクだけ。
  * 以前は 250 本あまり・合計 6MB 超を毎回すべて取り直していた）。それ以外（index.html・マニフェスト・アイコン）は必ず取り直す。
  * 前の版が無い（初回）、写せなかったときは、これまでどおり通信で取る。
+ * 外枠の外のハッシュ付きファイル（CARRY: 画面のチャンク・PDF.js の本体とワーカー・使ったフォントの分割ファイル）も、
+ * 前の版のキャッシュにあるものは写す。無ければ取りに行かない（使うときに取る）。以前は版が替わるたびに前の版ごと消していたので、
+ * 更新のたびに PDF.js（圧縮後およそ 540KB）やフォントを取り直していた。
  */
 async function precache() {
   const cache = await caches.open(SHELL);
@@ -36,21 +41,24 @@ async function precache() {
   } catch {
     // 前の版が読めなければ全部通信で取る
   }
-  await Promise.all(
-    PRECACHE.map(async (p) => {
-      if (p.startsWith("/assets/")) {
-        for (const old of olds) {
-          // Vary（配信側が Origin などを付けていると、画面からの要求で入れ直したものに合わなくなる）は無視する: 名前が同じなら中身は同じ
-          const hit = await old.match(p, { ignoreVary: true }).catch(() => undefined);
-          if (hit && hit.ok && hit.status === 200) {
-            await cache.put(p, hit);
-            return;
-          }
-        }
+  // Vary（配信側が Origin などを付けていると、画面からの要求で入れ直したものに合わなくなる）は無視する: 名前が同じなら中身は同じ
+  const copyFromOld = async (p) => {
+    for (const old of olds) {
+      const hit = await old.match(p, { ignoreVary: true }).catch(() => undefined);
+      if (hit && hit.ok && hit.status === 200) {
+        await cache.put(p, hit);
+        return true;
       }
+    }
+    return false;
+  };
+  await Promise.all([
+    ...PRECACHE.map(async (p) => {
+      if (p.startsWith("/assets/") && (await copyFromOld(p))) return;
       await cache.add(new Request(p, { cache: "reload" }));
     }),
-  );
+    ...CARRY.map((p) => copyFromOld(p).catch(() => false)),
+  ]);
 }
 
 self.addEventListener("install", (event) => {

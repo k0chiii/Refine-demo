@@ -137,6 +137,16 @@ export function createAppContext(
 ): AppContext {
   const db: DatabaseWriter = "db" in dbOrCtx ? dbOrCtx.db : dbOrCtx;
   const scheduler = "db" in dbOrCtx ? dbOrCtx.scheduler : undefined;
+  /**
+   * このトランザクションで端末へ送る通知の ID と、それを運ぶ予約（push.enqueue）。
+   * 1 件の操作が複数の人に通知を作っても、予約は 1 本にまとめる（前の予約を取り消して ID を足した予約に置き換える。
+   * 同じトランザクション内なので取り消した予約は走らない）。以前は通知 1 件ごとに予約していたので、同時に走った予約が
+   * workpool の起動（batch-worker の `workers`）で書き込み競合を起こし、やり直しになっていた（Convex Insights 2026-10-25）
+   */
+  const pushBatch: { ids: string[]; scheduled: Id<"_scheduled_functions"> | null } = {
+    ids: [],
+    scheduled: null,
+  };
   const syncRoles = async (work: Work) => {
     await syncWorkRoles(db, work);
     if ("db" in dbOrCtx && "runMutation" in dbOrCtx)
@@ -568,7 +578,13 @@ export function createAppContext(
             .query("pushSubscriptions")
             .withIndex("by_user", (q) => q.eq("userId", n.recipientId))
             .first();
-          if (hasDevice) await scheduler.runAfter(0, internal.push.enqueue, { notificationId: id });
+          if (hasDevice) {
+            pushBatch.ids.push(id);
+            if (pushBatch.scheduled) await scheduler.cancel(pushBatch.scheduled);
+            pushBatch.scheduled = await scheduler.runAfter(0, internal.push.enqueue, {
+              notificationIds: [...pushBatch.ids],
+            });
+          }
         }
         return { ...n, id } as Notification;
       },

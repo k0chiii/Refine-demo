@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { shellPrecache } from "../../pwa/shellPrecache";
+import { carriedAssets, shellPrecache } from "../../pwa/shellPrecache";
 
 describe("service worker shell precache", () => {
   it("installs the entry shell and leaves route chunks to the runtime cache", () => {
@@ -36,6 +36,28 @@ describe("service worker shell precache", () => {
       "/assets/vendor-def.js",
       "/manifest.webmanifest",
       "/icons/icon-192.png",
+    ]);
+  });
+
+  it("carries the hashed files outside the shell over from the previous version", () => {
+    const bundle = {
+      "assets/index-abc.js": {
+        type: "chunk",
+        isEntry: true,
+        imports: [],
+        viteMetadata: { importedCss: new Set(["assets/index-abc.css"]) },
+      },
+      "assets/index-abc.css": { type: "asset" },
+      "assets/route-make-ghi.js": { type: "chunk", isEntry: false, imports: [] },
+      "assets/pdf.worker-xyz.mjs": { type: "asset" },
+      "assets/noto-sans-jp-12-uvw.woff2": { type: "asset" },
+      "sw.js": { type: "asset" },
+    };
+    const precache = shellPrecache(bundle, ["/manifest.webmanifest"]);
+    expect(carriedAssets(bundle, precache)).toEqual([
+      "/assets/noto-sans-jp-12-uvw.woff2",
+      "/assets/pdf.worker-xyz.mjs",
+      "/assets/route-make-ghi.js",
     ]);
   });
 });
