@@ -30,6 +30,7 @@ import {
 } from "./mentions";
 import type { RichCommentFieldProps } from "./RichCommentField";
 import { FieldOutline } from "./FieldOutline";
+import { isImeKeyEvent } from "@/lib/ime";
 
 /*
  * コメントの書式つき入力欄の本体（TipTap）。RichCommentField が遅延読み込みする。
@@ -420,7 +421,8 @@ function MentionMenu({
         setIndex((cur) => (cur + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length);
         return true;
       }
-      if ((e.key === "Enter" || e.key === "Tab") && !e.isComposing) {
+      // 日本語入力の確定の Enter（iPhone の Safari は isComposing が false で来る）は候補の決定にしない
+      if ((e.key === "Enter" || e.key === "Tab") && !isImeKeyEvent(e)) {
         pick(list[i]!);
         return true;
       }

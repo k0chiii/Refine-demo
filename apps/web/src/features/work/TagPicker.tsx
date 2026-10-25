@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { M3eFormField } from "@m3e/react/form-field";
 import { M3eInputChip } from "@m3e/react/chips";
 import { M3eOption } from "@m3e/react/option";
+import { isImeKeyEvent } from "@/lib/ime";
 
 /** タグの色の数（M3 のトーナル container 5 色。tag-tone-0〜4。styles.css） */
 const TONES = 5;
@@ -138,7 +139,7 @@ export function TagPicker({
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     // 日本語入力の変換確定の Enter / 矢印は触らない
-    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (isImeKeyEvent(e.nativeEvent)) return;
     switch (e.key) {
       case "Enter": {
         e.preventDefault();
