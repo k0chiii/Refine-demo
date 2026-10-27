@@ -152,6 +152,20 @@ export function ThreadPanel({
 
   const data = useQuery(api.comments.events, { threadId: t.id as Id<"commentThreads"> });
   const replyCount = data?.events.filter((e) => e.eventType === "replied").length ?? t.replyCount;
+  const setSubscription = useMutation(api.comments.setSubscription).withOptimisticUpdate(
+    (store, args) => {
+      const cur = store.getQuery(api.comments.events, { threadId: args.threadId });
+      if (cur)
+        store.setQuery(
+          api.comments.events,
+          { threadId: args.threadId },
+          { ...cur, subscribed: args.on },
+        );
+    },
+  );
+  const subscribe = useAction(() =>
+    setSubscription({ threadId: t.id as Id<"commentThreads">, on: !data?.subscribed }),
+  );
 
   // 開いた時点の「前に読んだ時刻」を覚える（開くとすぐ既読にするので、その後の値では未読の線が引けない）。
   // 履歴が届いてから決める（届く前に既読にすると、読んだ時刻が新しくなった値を覚えてしまう）
@@ -273,6 +287,19 @@ export function ThreadPanel({
           <span className="thread-panel__title">コメント{index ? ` ${index}` : ""}</span>
         )}
         <span className="spacer" />
+        <M3eIconButton
+          toggle
+          selected={data?.subscribed === true}
+          aria-label="返信の通知を受け取る"
+          title="返信の通知を受け取る"
+          size="extra-small"
+          className="thread-panel__subscribe"
+          disabled={data === undefined || subscribe.pending}
+          onClick={() => void subscribe.run()}
+        >
+          <M3eIcon name="notifications" />
+          <M3eIcon slot="selected" name="notifications_active" className="icon--filled" />
+        </M3eIconButton>
         {canDecide && !closed ? (
           <M3eIconButton
             aria-label="解決済みにする"

@@ -314,6 +314,20 @@ export class App {
     await expect(panel.locator(".thread__replyitem")).toHaveCount(replies + 1);
   }
 
+  /** スレッドのパネルのバーにある、返信の通知を受け取るトグル（aria-pressed が購読しているか） */
+  subscribeToggle(panel: Locator) {
+    return panel.locator(".thread-panel__bar m3e-icon-button.thread-panel__subscribe");
+  }
+
+  /** アプリバーのベルから通知の一覧を開き、並ぶまで待って項目を返す（届いた通知が 1 件以上ある前提） */
+  async openNotifications() {
+    await this.page.locator('.bell m3e-icon-button[aria-label^="通知"]').click();
+    const items = this.page.locator("#notif-menu .notif");
+    await expect(items.first()).toBeVisible();
+    await this.settle();
+    return items;
+  }
+
   /** 元のコメントを訂正する（パネルの「その他の操作」→「訂正」で本文を入れ替えて保存） */
   async editComment(panel: Locator, body: string) {
     await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
