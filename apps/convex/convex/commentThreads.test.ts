@@ -181,4 +181,41 @@ describe("Convex 統合: コメントのスレッド（返信の件数・参加�
     // 返信した本人には送らない
     expect((await notes(cast.manager)).length).toBe(0);
   });
+
+  it("スレッドを購読した人は、返信していなくても「返信」の通知を受け取り、外すと受け取らない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const { post } = await setup(t, cast);
+    const threadId = await post();
+    const notes = () =>
+      cast.stranger.as
+        .query(api.notifications.list, {})
+        .then((list) => list.filter((n) => n.threadId === threadId));
+    const subscribed = async () =>
+      (await cast.stranger.as.query(api.comments.events, { threadId })).subscribed;
+    const rows = () =>
+      t.run((ctx) =>
+        ctx.db
+          .query("threadSubscriptions")
+          .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+          .collect(),
+      );
+
+    expect(await subscribed()).toBe(false);
+    await cast.creator.as.mutation(api.comments.reply, { threadId, body: "対応します" });
+    expect(await notes()).toHaveLength(0);
+
+    await cast.stranger.as.mutation(api.comments.setSubscription, { threadId, on: true });
+    await cast.stranger.as.mutation(api.comments.setSubscription, { threadId, on: true });
+    expect(await subscribed()).toBe(true);
+    expect(await rows()).toHaveLength(1);
+    await cast.creator.as.mutation(api.comments.reply, { threadId, body: "直しました" });
+    expect(await notes()).toMatchObject([{ kind: "comment_posted", threadId }]);
+
+    await cast.stranger.as.mutation(api.comments.setSubscription, { threadId, on: false });
+    expect(await subscribed()).toBe(false);
+    expect(await rows()).toHaveLength(0);
+    await cast.creator.as.mutation(api.comments.reply, { threadId, body: "もう一度" });
+    expect(await notes()).toHaveLength(1);
+  });
 });

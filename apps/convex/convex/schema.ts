@@ -541,6 +541,15 @@ export default defineSchema({
     readAt: v.number(),
   }).index("by_user_thread", ["userId", "threadId"]),
 
+  /** コメントのスレッドの購読（人 × スレッドで 1 行）。購読した人は、返信していなくても返信の通知を受け取る */
+  threadSubscriptions: defineTable({
+    userId: v.string(),
+    threadId: v.id("commentThreads"),
+    subscribedAt: v.number(),
+  })
+    .index("by_user_thread", ["userId", "threadId"])
+    .index("by_thread", ["threadId"]),
+
   /**
    * コメント・返信の添付（R2 の comments/ の下）。準備 → Hono で実体検証 → コメント（返信）に付ける。
    * 付けないまま 24 時間たったものは abandonedAt、付けたコメントが削除されたものは removedAt を付け、Hono の清掃で R2 から消す（purgedAt）。
@@ -794,14 +803,15 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
-  /** ピン留めした制作物（アカウントごと。制作物のページの「ピン留め」で絞る） */
+  /** ピン留めした制作物（アカウントごと。制作物の購読を兼ね、新しい版の通知が届き、校正の入口の「ピン留め」に出る） */
   workPins: defineTable({
     userId: v.string(),
     workId: v.id("works"),
     pinnedAt: v.number(),
   })
     .index("by_userId_and_pinnedAt", ["userId", "pinnedAt"])
-    .index("by_userId_and_workId", ["userId", "workId"]),
+    .index("by_userId_and_workId", ["userId", "workId"])
+    .index("by_workId", ["workId"]),
 
   /** 旧ホームの「最近開いた制作物」。読み書きをやめた（dashboardLayouts と同じ理由で、テーブルは残している） */
   recentWorks: defineTable({

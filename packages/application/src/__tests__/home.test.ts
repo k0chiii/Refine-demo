@@ -1,10 +1,16 @@
 import { endOfJstDay } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
-import { grantWorkPermission } from "../usecases/acl.ts";
+import { grantWorkPermission, revokeWorkPermission } from "../usecases/acl.ts";
 import { addRequiredCheck } from "../usecases/checks.ts";
 import { postComment } from "../usecases/comments.ts";
 import { buildDashboard, dashboardPolicy } from "../usecases/dashboard.ts";
-import { listSubmitTargets, setWorkPinned } from "../usecases/home.ts";
+import {
+  homeListPolicy,
+  isWorkPinned,
+  listSubmitTargets,
+  setWorkPinned,
+} from "../usecases/home.ts";
+import { listMyNotifications, REDACTED_NOTIFICATION } from "../usecases/notifications.ts";
 import { changeWorkLifecycle, importWorks } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -111,6 +117,81 @@ describe("自分だけのダッシュボード（W-26 段階 1）", () => {
     await setWorkPinned(ctx, principals.reviewer, { workId: soon.id, pinned: false });
     d = await buildDashboard(ctx, principals.reviewer, await all());
     expect(d.pinned).toHaveLength(0);
+  });
+});
+
+describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", () => {
+  const submitted = async (
+    ctx: ReturnType<typeof createInMemoryContext>,
+    who: (typeof principals)[keyof typeof principals],
+  ) => (await listMyNotifications(ctx, who)).filter((n) => n.kind === "revision_submitted");
+
+  it("ピン留めした人は、職責も割当も無くても新しい版の通知を受け取る。外せば届かない", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    await submitRevision(ctx, work.id);
+    expect(await submitted(ctx, principals.stranger)).toHaveLength(0);
+    await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: true });
+    await setWorkPinned(ctx, principals.approver, { workId: work.id, pinned: true });
+    await setWorkPinned(ctx, principals.creator, { workId: work.id, pinned: true });
+
+    const second = await submitRevision(ctx, work.id);
+    const got = await submitted(ctx, principals.stranger);
+    expect(got).toHaveLength(1);
+    expect(got[0]).toMatchObject({ workId: work.id, revisionId: second.id });
+    expect(got[0]!.title).not.toBe(REDACTED_NOTIFICATION.title);
+    expect(await submitted(ctx, principals.approver)).toHaveLength(2);
+    expect(await submitted(ctx, principals.creator)).toHaveLength(0);
+
+    await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: false });
+    await submitRevision(ctx, work.id);
+    expect(await submitted(ctx, principals.stranger)).toHaveLength(1);
+  });
+
+  it("非公開の制作物は、ピン留めした後に見られなくなった人には伏せた通知を送る", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.stranger.userId],
+      permission: "view",
+    });
+    await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: true });
+    await submitRevision(ctx, work.id);
+    const [shown] = await submitted(ctx, principals.stranger);
+    expect(shown?.body).toContain("極秘ポスター");
+
+    await revokeWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userId: principals.stranger.userId,
+    });
+    const second = await submitRevision(ctx, work.id);
+    const stored = ctx.state.notifications
+      .all()
+      .filter((n) => n.recipientId === principals.stranger.userId && n.revisionId === second.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      kind: "revision_submitted",
+      title: REDACTED_NOTIFICATION.title,
+      body: REDACTED_NOTIFICATION.body,
+    });
+  });
+
+  it("ピン留めは 100 件まで。超えたら古いものから外す", async () => {
+    const ctx = createInMemoryContext();
+    const works = [];
+    for (let i = 0; i <= 100; i++) works.push(await seedWork(ctx, { title: `制作物 ${i}` }));
+    for (const w of works) {
+      ctx.clock.advance(1000);
+      await setWorkPinned(ctx, principals.stranger, { workId: w.id, pinned: true });
+    }
+    const pinned = [];
+    for (const w of works)
+      if (await isWorkPinned(ctx, principals.stranger, w.id)) pinned.push(w.title);
+    expect(homeListPolicy.maxPins).toBe(100);
+    expect(pinned).toHaveLength(100);
+    expect(pinned).not.toContain("制作物 0");
+    expect(pinned).toContain("制作物 100");
   });
 });
 

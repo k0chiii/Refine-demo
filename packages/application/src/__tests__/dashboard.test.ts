@@ -2,7 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { finalizeWork } from "../usecases/approvals.ts";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { decideThread, postComment } from "../usecases/comments.ts";
-import { buildDashboard, dashboardPolicy } from "../usecases/dashboard.ts";
+import { buildCheckDashboard, buildDashboard, dashboardPolicy } from "../usecases/dashboard.ts";
+import { setWorkPinned } from "../usecases/home.ts";
 import { closeExpiredReviews, completeMyReview } from "../usecases/reviews.ts";
 import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
@@ -266,5 +267,48 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     expect(other.mine.finalize.map((i) => i.progress)).toEqual([{ done: 1, total: 2 }]);
     const declared = await buildDashboard(ctx, principals.approver, await all());
     expect(declared.done.map((i) => i.progress)).toEqual([{ done: 1, total: 2 }]);
+  });
+});
+
+describe("校正の入口のピン留め（利用者決定 2026-10-27）", () => {
+  it("ピン留めした制作物のうち、自分の校正の行が無いものを出す（関わっていない制作物も）", async () => {
+    const { ctx, work: assigned, revision, works } = await setup();
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: assigned.id,
+      reviewerIds: [principals.reviewer.userId],
+    });
+    const followed = await seedWork(ctx, { title: "追いかける制作物" });
+    const latest = await submitRevision(ctx, followed.id, { deadlineInHours: 48 });
+    for (const workId of [assigned.id, followed.id])
+      await setWorkPinned(ctx, principals.reviewer, { workId, pinned: true });
+
+    let d = await buildCheckDashboard(ctx, principals.reviewer, await works());
+    expect(d.mine.review.map((i) => i.revisionId)).toEqual([revision.id]);
+    expect(d.pinned.map((i) => [i.workId, i.revisionId, i.deadlineKind])).toEqual([
+      [followed.id, latest.id, "review"],
+    ]);
+    expect(d.pinned[0]!.deadlineAt).toBe(latest.deadlineAt);
+
+    await completeMyReview(ctx, principals.reviewer, revision.id);
+    d = await buildCheckDashboard(ctx, principals.reviewer, await works());
+    expect(d.done.map((i) => i.workId)).toEqual([assigned.id]);
+    expect(d.pinned.map((i) => i.workId)).toEqual([followed.id]);
+
+    const other = await buildCheckDashboard(ctx, principals.stranger, await works());
+    expect(other.pinned).toEqual([]);
+  });
+
+  it("受付中の版が無ければ最新の版と納期を出す", async () => {
+    const { ctx, works } = await setup();
+    const deadlineAt = ctx.clock.now() + 20 * DAY;
+    const followed = await seedWork(ctx, { title: "受付の終わった制作物", deadlineAt });
+    const latest = await submitRevision(ctx, followed.id, { deadlineInHours: 1 });
+    ctx.clock.advance(2 * HOUR);
+    await closeExpiredReviews(ctx);
+    await setWorkPinned(ctx, principals.stranger, { workId: followed.id, pinned: true });
+    const d = await buildCheckDashboard(ctx, principals.stranger, await works());
+    expect(d.pinned).toMatchObject([
+      { workId: followed.id, revisionId: latest.id, deadlineKind: "delivery", deadlineAt },
+    ]);
   });
 });
