@@ -1,7 +1,7 @@
 import { expect, test } from "../support/app";
 import { reviewerComments, submitFirstRevision } from "../support/scenarios";
 
-// 利用者指示 2026-10-27「スレッドを購読　メンションされてなくてもそのスレッドの通知が来るようにしたい」
+// 利用者指示 2026-10-27「スレッドを購読。メンションされてなくてもそのスレッドの通知が来るようにしたい」
 test.describe("スレッドの購読", { tag: "@core" }, () => {
   test("返信していない制作者は、スレッドを購読した後の返信だけをベルで受け取り、通知からそのスレッドへ行ける", async ({
     app,
@@ -18,7 +18,7 @@ test.describe("スレッドの購読", { tag: "@core" }, () => {
     };
     const creatorNotifications = async () => {
       await app.signInAs("mock-nogiku-creator");
-      const items = await app.openNotifications();
+      const items = await app.notifications();
       const count = await items.count();
       await page.keyboard.press("Escape");
       return count;
@@ -41,7 +41,7 @@ test.describe("スレッドの購読", { tag: "@core" }, () => {
 
     await reviewerReplies("4 ページ目もお願いします。");
     await app.signInAs("mock-nogiku-creator");
-    const items = await app.openNotifications();
+    const items = await app.notifications();
     await expect(items).toHaveCount(before + 1);
     await items.first().click();
     await page.waitForURL((u) => u.searchParams.get("thread") === threadId);
