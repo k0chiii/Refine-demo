@@ -213,6 +213,11 @@
   align-items: baseline;
   gap: 8px;
 }
+.thread__edited {
+  display: block;
+  font: var(--mf-type-label-small);
+  color: var(--mf-on-surface-variant);
+}
 .cth-post__time {
   flex: none;
   width: 28px;

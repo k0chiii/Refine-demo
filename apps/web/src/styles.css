@@ -4464,14 +4464,6 @@ m3e-icon.icon--on {
 .thread--closed .comment-body pre {
   color: inherit;
 }
-/* 訂正の履歴に残る原文 */
-.thread__previous {
-  margin-top: 2px;
-  padding-inline-start: 8px;
-  border-inline-start: 2px solid var(--mf-outline-variant);
-  font: var(--mf-type-body-small);
-}
-
 /* ---------- 書式つきの入力欄（features/review/RichCommentEditor） */
 .rt {
   position: relative;

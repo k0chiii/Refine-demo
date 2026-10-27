@@ -688,6 +688,15 @@ export function Editor({
       bodyFormat: "markdown",
     });
   });
+  const editReply = useMutation(api.comments.editReply);
+  const doEditReply = useAction(async (threadId: string, replyEventId: string, b: string) => {
+    await editReply({
+      threadId: threadId as Id<"commentThreads">,
+      replyEventId,
+      body: b,
+      bodyFormat: "markdown",
+    });
+  });
   const doDeleteThread = useAction(async (threadId: string) => {
     await removeThread({ threadId: threadId as Id<"commentThreads"> });
     setActiveThreadId((cur) => (cur === threadId ? null : cur));
@@ -886,6 +895,7 @@ export function Editor({
     onEdit: (b: string) => doEditThread.run(t.id, b),
     onDelete: () => doDeleteThread.run(t.id),
     onDeleteReply: (replyEventId: string) => doDeleteReply.run(t.id, replyEventId),
+    onEditReply: (replyEventId: string, b: string) => doEditReply.run(t.id, replyEventId, b),
   });
   /**
    * スレッドのパネルを開く（コメントを選んで紙面のピンへ移り、パネルを開く）。広い画面は引き出しの「コメント」に、狭い画面は
@@ -1549,7 +1559,6 @@ export function Editor({
         meId={me?.id ?? null}
         canDecide={can?.decide ?? false}
         canReply={can?.reply ?? false}
-        canEdit={work?.lifecycle !== "finalized"}
         revisionId={revisionId}
         confidentiality={data?.work.confidentiality}
         pending={busy}

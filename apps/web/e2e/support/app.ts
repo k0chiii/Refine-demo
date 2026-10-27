@@ -292,6 +292,36 @@ export class App {
     return this.page.locator(".thread-panel");
   }
 
+  /** スレッドのパネルの返信欄から返信し、流れに載るまで待つ */
+  async replyInPanel(panel: Locator, body: string) {
+    const replies = await panel.locator(".thread__replyitem").count();
+    const composer = panel.locator(".thread-panel__composer");
+    await composer.locator(".rt__content").fill(body);
+    await composer.locator(".rt__send").click();
+    await expect(panel.locator(".thread__replyitem")).toHaveCount(replies + 1);
+  }
+
+  /** 元のコメントを訂正する（パネルの「その他の操作」→「訂正」で本文を入れ替えて保存） */
+  async editComment(panel: Locator, body: string) {
+    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+    await this.saveEdit(panel.locator(".thread-panel__root"), body);
+  }
+
+  /** 返信を訂正する（返信の「返信の操作」→「訂正」で本文を入れ替えて保存） */
+  async editReply(reply: Locator, body: string) {
+    await reply.locator('m3e-icon-button[aria-label="返信の操作"]').click();
+    await this.saveEdit(reply, body);
+  }
+
+  private async saveEdit(scope: Locator, body: string) {
+    await this.settle();
+    await this.page.locator("m3e-menu-item:visible", { hasText: "訂正" }).click();
+    const form = scope.locator(".thread__form");
+    await form.locator(".rt__content").fill(body);
+    await form.locator("m3e-button", { hasText: "訂正を保存" }).click();
+    await expect(form).toHaveCount(0);
+  }
+
   /** アプリバーの「比べる」から版や操作を選ぶ（広い画面は Menu、compact は Bottom sheet） */
   async compareWith(label: string) {
     const page = this.page;

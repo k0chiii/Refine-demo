@@ -55,7 +55,6 @@ export function ThreadPanel({
   meId,
   canDecide,
   canReply,
-  canEdit,
   revisionId,
   confidentiality,
   pending,
@@ -70,6 +69,7 @@ export function ThreadPanel({
   onEdit,
   onDelete,
   onDeleteReply,
+  onEditReply,
 }: {
   thread: Thread;
   /** 紙面のピンと同じ番号 */
@@ -78,7 +78,6 @@ export function ThreadPanel({
   meId: string | null;
   canDecide: boolean;
   canReply: boolean;
-  canEdit: boolean;
   revisionId: string;
   confidentiality?: "normal" | "restricted" | undefined;
   pending?: boolean;
@@ -94,6 +93,7 @@ export function ThreadPanel({
   onEdit: (body: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onDeleteReply: (replyEventId: string) => Promise<void>;
+  onEditReply: (replyEventId: string, body: string) => Promise<void>;
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState("");
@@ -122,14 +122,11 @@ export function ThreadPanel({
   const submit = async () => {
     if (mode === "rejected" || mode === "deferred") await onDecide(mode, text);
     else if (mode === "assign") await onAssign(ids);
-    else if (mode === "edit") await onEdit(text);
     setMode(null);
     setText("");
   };
-  // 訂正の入力欄に読み込む本文（Markdown）。平文のコメントは記号を打ち消して Markdown にする
-  const editInitial = t.bodyFormat === "markdown" ? t.body : plainToMarkdown(t.body);
   const menuId = `tm-${t.id}`;
-  const hasMenu = canDecide || canEdit || t.can.delete;
+  const hasMenu = canDecide || t.can.edit || t.can.delete;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const doDelete = useAction(async () => {
     await onDelete();
@@ -147,9 +144,7 @@ export function ThreadPanel({
     ...(canDecide
       ? [{ icon: "person_pin", label: "担当者を指定", onSelect: () => openMode("assign") }]
       : []),
-    ...(canEdit && t.authorId === meId
-      ? [{ icon: "edit", label: "訂正", onSelect: () => openMode("edit", editInitial) }]
-      : []),
+    ...(t.can.edit ? [{ icon: "edit", label: "訂正", onSelect: () => openMode("edit") }] : []),
     ...(t.can.delete
       ? [{ icon: "delete", label: "削除", onSelect: () => setConfirmDelete(true) }]
       : []),
@@ -333,6 +328,7 @@ export function ThreadPanel({
             format={t.bodyFormat}
             mentionUsers={t.mentionUsers}
           />
+          {(t.editCount ?? 0) > 0 ? <EditedMark /> : null}
           {t.files.length > 0 ? (
             <CommentAttachments files={t.files} confidentiality={confidentiality} />
           ) : null}
@@ -344,29 +340,17 @@ export function ThreadPanel({
             onToggle={(emoji) => toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })}
           />
           {mode === "edit" ? (
-            <div className="thread__form">
-              <RichCommentField
-                id={`${t.id}-edit`}
-                ariaLabel="本文の訂正"
-                placeholder="本文の訂正"
-                autoFocus
-                value={text}
-                onValue={setText}
-                onEscape={() => setMode(null)}
-                onSubmit={() => {
-                  if (text.trim()) void submit();
-                }}
-                onCancel={() => setMode(null)}
-                cancelLabel="キャンセル"
-                send={{
-                  label: "訂正を保存",
-                  text: true,
-                  ready: text.trim() !== "",
-                  disabled: pending === true || !text.trim(),
-                  onSend: () => void submit(),
-                }}
-              />
-            </div>
+            <BodyEditForm
+              id={`${t.id}-edit`}
+              body={t.body}
+              format={t.bodyFormat}
+              pending={pending === true}
+              onSave={async (body) => {
+                await onEdit(body);
+                setMode(null);
+              }}
+              onClose={() => setMode(null)}
+            />
           ) : null}
           {mode === "rejected" || mode === "deferred" ? (
             <div className="thread__form">
@@ -452,6 +436,7 @@ export function ThreadPanel({
                       confidentiality={confidentiality}
                       compact={compact}
                       onDeleteReply={onDeleteReply}
+                      onEditReply={onEditReply}
                     />
                   ) : null,
                 )}
@@ -523,8 +508,8 @@ export function ThreadPanel({
               担当者を指定
             </M3eMenuItem>
           ) : null}
-          {canEdit && t.authorId === meId ? (
-            <M3eMenuItem onClick={() => openMode("edit", editInitial)}>
+          {t.can.edit ? (
+            <M3eMenuItem onClick={() => openMode("edit")}>
               <M3eIcon slot="icon" name="edit" />
               訂正
             </M3eMenuItem>
@@ -637,7 +622,7 @@ function ReactionRow({
   );
 }
 
-/** 返信の流れの 1 行: 返信は会話として、採否・担当・訂正は 1 行の記録として */
+/** 返信の流れの 1 行: 返信は会話として、採否・担当・持越は 1 行の記録として（訂正の記録は流れに来ない） */
 function TimelineRow({
   event: e,
   threadId,
@@ -646,6 +631,7 @@ function TimelineRow({
   confidentiality,
   compact,
   onDeleteReply,
+  onEditReply,
 }: {
   event: ThreadEvent;
   threadId: string;
@@ -654,13 +640,12 @@ function TimelineRow({
   confidentiality: "normal" | "restricted" | undefined;
   compact: boolean;
   onDeleteReply: (replyEventId: string) => Promise<void>;
+  onEditReply: (replyEventId: string, body: string) => Promise<void>;
 }) {
   const p = (e.payload ?? {}) as {
     to?: string;
     body?: string;
     assigneeId?: string | null;
-    previousBody?: string;
-    previousBodyFormat?: "markdown";
     bodyFormat?: "markdown";
   };
   if (e.eventType === "replied")
@@ -675,6 +660,7 @@ function TimelineRow({
         compact={compact}
         continued={continued}
         onDelete={() => onDeleteReply(e.id)}
+        onEdit={(body) => onEditReply(e.id, body)}
       />
     );
   return (
@@ -685,25 +671,67 @@ function TimelineRow({
           ? p.assigneeId
             ? "担当者を指定"
             : "担当者を解除"
-          : e.eventType === "edited"
-            ? "本文を訂正（原文）"
-            : e.eventType === "carried_forward"
-              ? "次版へ持ち越し"
-              : e.eventType}
+          : e.eventType === "carried_forward"
+            ? "次版へ持ち越し"
+            : e.eventType}
       <span className="thread__time">{` ・ ${e.actor?.name ?? ""}・${formatJstShort(e.createdAt)}`}</span>
-      {e.eventType === "edited" ? (
-        <CommentBody
-          className="thread__previous"
-          body={p.previousBody ?? ""}
-          format={p.previousBodyFormat}
-        />
-      ) : null}
+    </div>
+  );
+}
+
+/** 訂正したコメント・返信の印（訂正前の本文は見せない。利用者指示 2026-10-26「編集済表示だけでいいんじゃないかなぁ」） */
+function EditedMark() {
+  return <span className="thread__edited">編集済み</span>;
+}
+
+/** 本文の訂正の欄（元のコメントと返信で同じ）。平文の本文は記号を打ち消して Markdown にして読み込む */
+function BodyEditForm({
+  id,
+  body,
+  format,
+  pending,
+  onSave,
+  onClose,
+}: {
+  id: string;
+  body: string;
+  format: "markdown" | undefined;
+  pending: boolean;
+  onSave: (body: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState(() => (format === "markdown" ? body : plainToMarkdown(body)));
+  const ready = text.trim() !== "";
+  const save = () => {
+    if (ready) void onSave(text);
+  };
+  return (
+    <div className="thread__form">
+      <RichCommentField
+        id={id}
+        ariaLabel="本文の訂正"
+        placeholder="本文の訂正"
+        autoFocus
+        value={text}
+        onValue={setText}
+        onEscape={onClose}
+        onSubmit={save}
+        onCancel={onClose}
+        cancelLabel="キャンセル"
+        send={{
+          label: "訂正を保存",
+          text: true,
+          ready,
+          disabled: pending || !ready,
+          onSend: save,
+        }}
+      />
     </div>
   );
 }
 
 /**
- * 返信 1 件。自分の返信だけ「⋮」から削除できる（削除した返信は並べない）。
+ * 返信 1 件。「⋮」の操作はサーバーの can に従う（訂正は返信した本人の校了前だけ、削除は本人とシステム管理者。削除した返信は並べない）。
  * 同じ人が 5 分以内に続けた返信（continued）は名前・アバター・時刻を省き、左の余白に時刻（マウスを乗せたときだけ）
  */
 function ReplyItem({
@@ -716,6 +744,7 @@ function ReplyItem({
   compact,
   continued,
   onDelete,
+  onEdit,
 }: {
   event: ThreadEvent;
   threadId: string;
@@ -726,16 +755,26 @@ function ReplyItem({
   compact: boolean;
   continued: boolean;
   onDelete: () => Promise<void>;
+  onEdit: (body: string) => Promise<void>;
 }) {
   const [confirm, setConfirm] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const toggleReaction = useMutation(api.comments.toggleReaction);
   const doDelete = useAction(async () => {
     await onDelete();
     setConfirm(false);
   });
+  const doEdit = useAction(async (text: string) => {
+    await onEdit(text);
+    setEditing(false);
+  });
   const menuId = `rm-${e.id}`;
-  const deletable = e.can?.delete === true;
+  const items: ActionSheetItem[] = [
+    ...(e.can?.edit ? [{ icon: "edit", label: "訂正", onSelect: () => setEditing(true) }] : []),
+    ...(e.can?.delete ? [{ icon: "delete", label: "削除", onSelect: () => setConfirm(true) }] : []),
+  ];
+  const hasMenu = items.length > 0;
   return (
     <div className={`thread__replyitem cth-post ${continued ? "cth-post--continued" : ""}`}>
       {continued ? (
@@ -752,12 +791,28 @@ function ReplyItem({
             <span className="thread__time">{formatJstShort(e.createdAt)}</span>
           </div>
         )}
-        <CommentBody
-          className="thread__body"
-          body={body}
-          format={bodyFormat}
-          mentionUsers={e.mentionUsers}
-        />
+        {editing ? (
+          <BodyEditForm
+            id={`${e.id}-edit`}
+            body={body}
+            format={bodyFormat}
+            pending={doEdit.pending}
+            onSave={async (text) => {
+              await doEdit.run(text);
+            }}
+            onClose={() => setEditing(false)}
+          />
+        ) : (
+          <>
+            <CommentBody
+              className="thread__body"
+              body={body}
+              format={bodyFormat}
+              mentionUsers={e.mentionUsers}
+            />
+            {e.edited ? <EditedMark /> : null}
+          </>
+        )}
         {e.files.length > 0 ? (
           <CommentAttachments files={e.files} confidentiality={confidentiality} />
         ) : null}
@@ -775,7 +830,7 @@ function ReplyItem({
           }
         />
       </div>
-      {deletable ? (
+      {hasMenu ? (
         <M3eIconButton
           aria-label="返信の操作"
           size="extra-small"
@@ -788,20 +843,22 @@ function ReplyItem({
           {compact ? null : <M3eMenuTrigger htmlFor={menuId} />}
         </M3eIconButton>
       ) : null}
-      {deletable && compact ? (
+      {hasMenu && compact ? (
         <ActionSheet
           open={sheetOpen}
           onClose={() => setSheetOpen(false)}
           title="返信の操作"
-          items={[{ icon: "delete", label: "削除", onSelect: () => setConfirm(true) }]}
+          items={items}
         />
       ) : null}
-      {deletable && !compact ? (
+      {hasMenu && !compact ? (
         <M3eMenu id={menuId} positionX="before">
-          <M3eMenuItem onClick={() => setConfirm(true)}>
-            <M3eIcon slot="icon" name="delete" />
-            削除
-          </M3eMenuItem>
+          {items.map((item) => (
+            <M3eMenuItem key={item.icon} onClick={item.onSelect}>
+              <M3eIcon slot="icon" name={item.icon} />
+              {item.label}
+            </M3eMenuItem>
+          ))}
         </M3eMenu>
       ) : null}
       <M3eDialog open={confirm} onClosed={() => setConfirm(false)} closeLabel="閉じる">
