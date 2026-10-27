@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { portalHost } from "@/lib/portalHost";
 import {
@@ -43,21 +36,29 @@ export function StoredComposePopover({
 }
 
 /**
- * 範囲・ピンのそばに出る投稿欄（Google ドキュメント / Figma の「コメントを追加」）。
- * 位置を選んだ瞬間に出るので、モード切替やパネルへの移動が要らない。
+ * 投稿欄を置く場所。
+ * - anchored: 選んだ場所のそばに浮かべる（中間幅のビューア・SNS 投稿のプレビュー）
+ * - docked: 画面下（キーボードが出ていればそのすぐ上）に全幅で固定する（compact でシートが開いていないとき）。
+ *   小さい画面では位置のそばの欄がキーボードや指に隠れるため
+ * - embedded: 枠の中に静的に置く。host があればそこ（スマホの開いているシートの下。利用者指示 2026-10-20「ボトムシート？が出てる状態の時は
+ *   そうじゃなくて埋め込みだといいのかも」）へ portal し、無ければその場（広い画面の引き出し「コメント」の下）
+ */
+export type ComposePlacement =
+  | { kind: "anchored"; x: number; y: number }
+  | { kind: "docked" }
+  | { kind: "embedded"; host?: HTMLElement };
+
+/**
+ * コメントの投稿欄（Google ドキュメント / Figma の「コメントを追加」）。位置を選んだ瞬間に出る。
  * Enter（Ctrl/⌘）で投稿、Escape で取消。「@」で制作物を見られる人をメンションできる。
  * 本文は書式つきの入力欄（Markdown。太字・リスト・引用・コード・リンク。RichCommentField）。
  *
- * docked（compact）: 選んだ位置のそばではなく、画面下（キーボードが出ていればそのすぐ上）に全幅で出す。
- * 小さい画面では位置のそばの欄がキーボードや指に隠れるため。何に対するコメントかは引用で示す。
- *
- * そばに出す欄が見えている範囲（ビューアのスクロール枠・画面）や浮遊ツールバーからはみ出しそうなら、内側へずらす
+ * anchored の欄が見えている範囲（ビューアのスクロール枠・画面）や浮遊ツールバーからはみ出しそうなら、内側へずらす
  * （利用者指示 2026-10-16「はみ出そうならスライドする形で調整」）。紙面を拡大して横にスクロールしているときも、
  * スクロールに合わせて追いかける。縦は欄の高さまでしかずらさない（選んだ場所が遠く離れたら一緒に流れていく）
  */
 export function ComposePopover({
-  x,
-  y,
+  placement,
   value,
   onChange,
   onMentions,
@@ -66,16 +67,12 @@ export function ComposePopover({
   pending,
   revisionId,
   label = "コメント",
-  style,
   extra,
-  docked,
-  host,
   quote,
   place,
   autoFocus = true,
 }: {
-  x: number;
-  y: number;
+  placement: ComposePlacement;
   value: string;
   onChange: (v: string) => void;
   onMentions: (ids: string[]) => void;
@@ -86,15 +83,11 @@ export function ComposePopover({
   /** コメントを付ける版。あれば添付できる */
   revisionId?: string;
   label?: string;
-  style?: CSSProperties;
   /** 投稿以外の操作（例: 選んだ文字を表記ルールに提案） */
   extra?: ReactNode;
-  docked?: boolean;
-  /** docked のとき、ここ（スマホの開いている引き出しのシートの下）に埋め込む。無ければ画面下に浮かべる */
-  host?: HTMLElement | null;
-  /** docked のとき、何に対するコメントかを示す引用（選んだ文字など） */
+  /** 何に対するコメントかを示す引用（選んだ文字など）。anchored では出さない（すぐそばに選んだ文字がある） */
   quote?: string;
-  /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。docked でなくても出す。アイコンは種類によらず地図のピン */
+  /** 何に対するコメントか（動画の時刻「0:03–0:06」など）。どの置き方でも出す。アイコンは種類によらず地図のピン */
   place?: string;
   /** 開いたとき文字欄にカーソルを移すか。移さないと、選んだ文字（紙面の選択）をそのままコピーできる */
   autoFocus?: boolean;
@@ -109,9 +102,9 @@ export function ComposePopover({
     if (canSend && !pending) onSubmit(canAttach ? uploads.fileIds : []);
   };
   const richRef = useRef<RichCommentHandle>(null);
-  // シートが開いているあいだは、浮かべずにシートの中に埋め込む（利用者指示 2026-10-20「ボトムシート？が出てる状態の時はそうじゃなくて埋め込みだといいのかも」）
-  const embedded = docked === true && host != null;
-  const floating = docked === true && !embedded;
+  const embedded = placement.kind === "embedded";
+  const floating = placement.kind === "docked";
+  const at = placement.kind === "anchored" ? placement : null;
   const panelRef = useRef<HTMLDivElement>(null);
   // 画面下の欄は見えている範囲の下端に置く（キーボードの上・iOS のずらしに追従）。閉じたらページの位置を戻す
   const vb = useVisualBottom(panelRef, floating);
@@ -138,7 +131,7 @@ export function ComposePopover({
     }, 1500);
     return () => window.clearTimeout(t);
   }, [raise]);
-  const shift = useFitInside(panelRef, !docked, x, y);
+  const shift = useFitInside(panelRef, at !== null, at?.x ?? 0, at?.y ?? 0);
   useEffect(() => {
     // 開いたときのフォーカスの元（ボタンや紙面）を覚え、閉じたらそこへ戻す（body に落とさない。§35 A-04）
     const opener = document.activeElement as HTMLElement | null;
@@ -152,13 +145,17 @@ export function ComposePopover({
   const panel = (
     <div
       ref={panelRef}
-      className={`compose-pop ${embedded ? "compose-pop--embedded" : docked ? "compose-pop--docked" : ""}`}
+      className={`compose-pop ${embedded ? "compose-pop--embedded" : floating ? "compose-pop--docked" : ""}`}
       role="dialog"
       aria-label={what}
       style={
-        embedded
-          ? undefined
-          : docked
+        at
+          ? {
+              left: at.x,
+              top: at.y,
+              ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
+            }
+          : floating
             ? // 見えている範囲の下端から 8px 上。キーボードが出ていなければ下のセーフエリアも空ける
               vb.top === null
               ? { bottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }
@@ -169,12 +166,7 @@ export function ComposePopover({
                       ? vb.top - expectedKeyboardHeight() - 8
                       : `calc(${vb.top - 8}px - env(safe-area-inset-bottom, 0px))`,
                 }
-            : {
-                left: x,
-                top: y,
-                ...(shift.x || shift.y ? { translate: `${shift.x}px ${shift.y}px` } : {}),
-                ...style,
-              }
+            : undefined
       }
       onPointerDown={(e) => e.stopPropagation()}
       // 本文にフォーカスが入った瞬間（キーボードが出る前）に欄を上げる。押した指の操作には手を出さない
@@ -194,7 +186,7 @@ export function ComposePopover({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {docked && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}
+      {!at && quote ? <div className="compose-pop__quote">「{quote}」</div> : null}
       {place ? (
         <div className="compose-pop__place">
           <M3eIcon name="location_on" />
@@ -232,9 +224,10 @@ export function ComposePopover({
       </AttachDropZone>
     </div>
   );
+  if (placement.kind === "embedded")
+    return placement.host ? createPortal(panel, placement.host) : panel;
   // docked は画面に固定する。スクロールや変形する親の中だと位置がずれるので body に出す（要素の全画面の間はその要素の中）
-  if (embedded) return createPortal(panel, host);
-  return docked ? createPortal(panel, portalHost()) : panel;
+  return floating ? createPortal(panel, portalHost()) : panel;
 }
 
 /** スクロールする一番近い親（無ければ null = 画面） */

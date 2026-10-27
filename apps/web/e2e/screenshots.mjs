@@ -834,7 +834,7 @@ async function main() {
   }
 
   // 76 コメントの書式（Markdown）: 太字と URL と箇条書きを書いて投稿 → カードに strong・a・li が出る（HTML は作らず、リンクは安全な属性つき）。
-  // 返信は `コード`、訂正は元の本文を読み込んで追記し、原文は履歴（書式つき）に残る。生の HTML は文字のまま出る
+  // 返信は `コード`、訂正は元の本文を読み込んで追記し、本文の後ろに「編集済み」の印が付く（原文は流れに出さない）。生の HTML は文字のまま出る
   {
     const n0 = await page.locator(".comments .thread").count();
     await page.locator(".comments__free").click();
@@ -906,8 +906,7 @@ async function main() {
     await page.keyboard.press("Control+End");
     await page.keyboard.type(" 追記");
     await panel.locator("m3e-button", { hasText: "訂正を保存" }).click();
-    await page.waitForSelector(".thread-panel .thread__previous strong");
-    // 履歴（原文）と本文は別々に届くので、本文が替わるまで待つ
+    await page.waitForSelector(".thread-panel__root .thread__edited");
     await page
       .waitForFunction(
         () =>

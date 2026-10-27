@@ -5,6 +5,7 @@ import type {
   CommentEvent,
   CommentFile,
   ReactionEntry,
+  ReplyBody,
   CommentThread,
   DocumentDraft,
   FeedbackFile,
@@ -119,6 +120,8 @@ export interface ThreadRepository {
   listEvents(threadId: string): Promise<CommentEvent[]>;
   /** 返信（イベント）のリアクションを置き換える（空にすると持たない状態に戻す） */
   setEventReactions(eventId: string, reactions: ReactionEntry[]): Promise<void>;
+  /** 返信（replied イベント）の本文と書式を置き換える（訂正。書式が無ければ平文。メンション・添付などほかの項目は変えない） */
+  setReplyBody(eventId: string, body: ReplyBody): Promise<void>;
   /** その人がスレッドを最後に読んだ時刻（未読の判定。読んだことが無ければ null） */
   readAt(userId: UserId, threadId: string): Promise<Instant | null>;
   /** 読んだ印を付ける（すでにそれ以降まで読んでいれば何もしない） */

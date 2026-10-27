@@ -594,6 +594,7 @@ export default defineSchema({
       v.literal("assigned"),
       v.literal("deleted"),
       v.literal("reply_deleted"),
+      v.literal("reply_edited"),
     ),
     actorId: v.string(),
     reason: v.optional(v.string()),

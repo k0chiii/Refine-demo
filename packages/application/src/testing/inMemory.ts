@@ -282,6 +282,13 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         if (reactions.length > 0) e.reactions = clone(reactions);
         else delete e.reactions;
       },
+      setReplyBody: async (eventId, { body, bodyFormat }) => {
+        const e = state.events.find((x) => x.id === eventId);
+        if (!e) return;
+        const { bodyFormat: _previous, ...rest } = e.payload ?? {};
+        void _previous;
+        e.payload = { ...rest, body, ...(bodyFormat ? { bodyFormat } : {}) };
+      },
       readAt: async (userId, threadId) => state.commentReads.get(`${userId}|${threadId}`) ?? null,
       markRead: async (userId, threadId, at) => {
         const key = `${userId}|${threadId}`;
