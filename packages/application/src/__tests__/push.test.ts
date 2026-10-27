@@ -262,4 +262,24 @@ describe("端末への通知（Web Push）", () => {
     expect(await recordPushResult(ctx, s.id, 410)).toBe("deleted");
     expect(await recordPushResult(ctx, s.id, 201)).toBe("missing");
   });
+
+  it("失敗回数が変わらない成功は購読を書かない（同じ端末への配信が並んでも書き込みがぶつからない）", async () => {
+    const ctx = createInMemoryContext();
+    const s = await subscribePush(ctx, principals.reviewer, sub());
+    const writes: number[] = [];
+    const update = ctx.pushSubscriptions.update.bind(ctx.pushSubscriptions);
+    ctx.pushSubscriptions.update = async (next) => {
+      writes.push(next.failureCount);
+      await update(next);
+    };
+    const before = ctx.state.pushSubscriptions.get(s.id);
+    expect(await recordPushResult(ctx, s.id, 201)).toBe("kept");
+    expect(writes).toEqual([]);
+    expect(ctx.state.pushSubscriptions.get(s.id)).toEqual(before);
+
+    expect(await recordPushResult(ctx, s.id, 503)).toBe("kept");
+    expect(await recordPushResult(ctx, s.id, 201)).toBe("kept");
+    expect(writes).toEqual([1, 0]);
+    expect(ctx.state.pushSubscriptions.get(s.id)?.failureCount).toBe(0);
+  });
 });
