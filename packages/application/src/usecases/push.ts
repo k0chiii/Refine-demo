@@ -127,7 +127,11 @@ export async function planPushDelivery(
   };
 }
 
-/** 送った結果を記録する（成功で失敗回数を 0 に。宛先が無くなった・続けて失敗したら購読を消す） */
+/**
+ * 送った結果を記録する（成功で失敗回数を 0 に。宛先が無くなった・続けて失敗したら購読を消す）。
+ * 同じ端末への配信は workpool で並んで走るので、失敗回数が変わらない成功では書かない。
+ * 毎回書くと同じ購読への書き込みがぶつかり、Convex がやり直していた（Convex Insights 2026-10-26）
+ */
 export async function recordPushResult(
   ctx: AppContext,
   subscriptionId: string,
@@ -140,8 +144,8 @@ export async function recordPushResult(
     await ctx.pushSubscriptions.delete(sub.id);
     return "deleted";
   }
-  const next: PushSubscriptionRecord = { ...sub, failureCount: r.failureCount };
-  if (status >= 200 && status < 300) next.lastSuccessAt = ctx.clock.now();
-  await ctx.pushSubscriptions.update(next);
+  if (r.failureCount !== sub.failureCount) {
+    await ctx.pushSubscriptions.update({ ...sub, failureCount: r.failureCount });
+  }
   return "kept";
 }

@@ -938,6 +938,7 @@ export default defineSchema({
     auth: v.string(),
     device: v.optional(v.string()),
     createdAt: v.number(),
+    // 旧。読む側は無い（もう書かない。既存の行のために残す）
     lastSuccessAt: v.optional(v.number()),
     failureCount: v.number(),
   })
