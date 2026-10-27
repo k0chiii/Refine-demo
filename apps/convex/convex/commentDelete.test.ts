@@ -140,7 +140,7 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     await cast.creator.as.mutation(api.comments.reply, { threadId, body: "対応します" });
     const events = () => cast.reviewer.as.query(api.comments.events, { threadId });
     const [reply] = (await events()).events.filter((e) => e.eventType === "replied");
-    expect(reply!.can).toEqual({ delete: false }); // 見ているのは校正者
+    expect(reply!.can).toEqual({ delete: false, edit: false });
 
     for (const who of [cast.reviewer, cast.manager]) {
       await expect(
@@ -192,7 +192,7 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     const [reply] = (
       await cast.admin.as.query(api.comments.events, { threadId: first })
     ).events.filter((e) => e.eventType === "replied");
-    expect(reply!.can).toEqual({ delete: true });
+    expect(reply!.can).toEqual({ delete: true, edit: false });
 
     await cast.admin.as.mutation(api.comments.removeReply, {
       threadId: first,
@@ -241,9 +241,18 @@ describe("Convex 統合: コメントの削除（投稿者・システム管理�
     // 削除できるのは管理者と本人だけ。削除は常に返信ごと
     const flags = async (who: Cast["admin"]) =>
       (await who.as.query(api.revisions.get, { revisionId: rid })).threads.map((x) => x.can);
-    expect(await flags(cast.admin)).toEqual([{ delete: true }, { delete: true }]);
-    expect(await flags(cast.reviewer)).toEqual([{ delete: true }, { delete: true }]);
-    expect(await flags(cast.creator)).toEqual([{ delete: false }, { delete: false }]);
+    expect(await flags(cast.admin)).toEqual([
+      { delete: true, edit: false },
+      { delete: true, edit: false },
+    ]);
+    expect(await flags(cast.reviewer)).toEqual([
+      { delete: true, edit: true },
+      { delete: true, edit: true },
+    ]);
+    expect(await flags(cast.creator)).toEqual([
+      { delete: false, edit: false },
+      { delete: false, edit: false },
+    ]);
 
     await cast.admin.as.mutation(api.comments.remove, { threadId });
     const after = await cast.creator.as.query(api.revisions.get, { revisionId: rid });

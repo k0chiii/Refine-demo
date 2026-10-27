@@ -417,6 +417,17 @@ export function createAppContext(
           reactions: reactions.length > 0 ? reactions : undefined,
         });
       },
+      async setReplyBody(eventId, { body, bodyFormat }) {
+        const id = eventId as Id<"commentEvents">;
+        const doc = await db.get("commentEvents", id);
+        if (!doc) return;
+        // payload は丸ごと置き換わるので、ほかの項目（メンション・添付）を写す
+        const { bodyFormat: _previous, ...rest } = (doc.payload ?? {}) as Record<string, unknown>;
+        void _previous;
+        await db.patch("commentEvents", id, {
+          payload: { ...rest, body, ...(bodyFormat ? { bodyFormat } : {}) },
+        });
+      },
       async readAt(userId, threadId) {
         const doc = await db
           .query("commentReads")

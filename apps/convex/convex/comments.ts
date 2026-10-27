@@ -4,6 +4,7 @@ import {
   decideThread,
   deleteReply,
   deleteThread,
+  editReply as editReplyUseCase,
   editThread,
   listCarryCandidates,
   listCommentFileViews,
@@ -130,7 +131,7 @@ export const decide = mutation({
   },
 });
 
-/** スレッドの履歴（返信・採否・訂正）。 */
+/** スレッドの流れ（返信・採否・担当・持越）。削除・訂正の記録は並べず、訂正した返信には edited が付く。 */
 export const events = query({
   args: { threadId: v.id("commentThreads") },
   handler: async (ctx, { threadId }) => {
@@ -245,6 +246,23 @@ export const edit = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       await editThread(createAppContext(ctx), principal, args);
+      return null;
+    });
+  },
+});
+
+/** 返信の訂正（返信した本人・校了前のみ）。訂正前の本文は reply_edited に残り、流れには「編集済み」の印だけが出る。 */
+export const editReply = mutation({
+  args: {
+    threadId: v.id("commentThreads"),
+    replyEventId: v.string(),
+    body: v.string(),
+    bodyFormat: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await editReplyUseCase(createAppContext(ctx), principal, args);
       return null;
     });
   },

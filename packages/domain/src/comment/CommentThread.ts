@@ -4,6 +4,7 @@ import type { Instant } from "../shared/time.ts";
 import type { Anchor } from "./Anchor.ts";
 import type { BotOrigin } from "../notation/autoProofread.ts";
 import type { ReactionEntry } from "../shared/reactions.ts";
+import type { WorkLifecycle } from "../work/Work.ts";
 import { type CommentBodyFormat, validateCommentBody } from "./body.ts";
 
 /** スレッド種別（§9.1 設計案） */
@@ -136,7 +137,26 @@ export type CommentEventType =
   /** スレッドの削除（投稿者のみ。論理削除） */
   | "deleted"
   /** 返信の削除（payload.replyEventId が削除した返信。返信の本文は元のイベントに残す） */
-  | "reply_deleted";
+  | "reply_deleted"
+  /** 返信の訂正（payload.replyEventId が訂正した返信。今の本文は返信のイベントに置き、訂正前の本文を payload.previousBody に残す） */
+  | "reply_edited";
+
+function isEditableResolution(resolution: Resolution): boolean {
+  return resolution === "open" || resolution === "acknowledged";
+}
+
+/** 閲覧者が本文を訂正できるか（editThreadBody と、校了後は不可とする呼び出し側の規則を合わせたもの） */
+export function canEditThreadBody(
+  thread: Pick<CommentThread, "authorId" | "resolution">,
+  viewerId: UserId,
+  lifecycle: WorkLifecycle,
+): boolean {
+  return (
+    thread.authorId === viewerId &&
+    isEditableResolution(thread.resolution) &&
+    lifecycle !== "finalized"
+  );
+}
 
 /**
  * 投稿者本人のみ、未判断（open/acknowledged）の間だけ訂正できる。訂正前の本文は呼び出し側がイベントに残す。
@@ -150,7 +170,7 @@ export function editThreadBody(
 ): CommentThread {
   if (thread.authorId !== actorId)
     throw new DomainError("comment_edit_not_author", { threadId: thread.id });
-  if (thread.resolution !== "open" && thread.resolution !== "acknowledged") {
+  if (!isEditableResolution(thread.resolution)) {
     throw new DomainError("comment_invalid_resolution_transition", {
       from: thread.resolution,
       to: "edited",
