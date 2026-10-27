@@ -87,10 +87,13 @@ describe("Convex 統合: コメント本文の書式（markdown。書式なし�
       "markdown",
       undefined,
     ]);
-    const edited = (
-      await cast.creator.as.query(api.comments.events, { threadId: legacyId })
-    ).events.find((e) => e.eventType === "edited");
-    expect(edited?.payload).toEqual({
+    const stored = await t.run((ctx) =>
+      ctx.db
+        .query("commentEvents")
+        .withIndex("by_thread", (q) => q.eq("threadId", legacyId))
+        .collect(),
+    );
+    expect(stored.find((e) => e.eventType === "edited")?.payload).toEqual({
       previousBody: "旧来の本文 **そのまま**",
       bodyFormat: "markdown",
     });

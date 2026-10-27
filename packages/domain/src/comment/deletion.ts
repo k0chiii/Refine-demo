@@ -2,7 +2,13 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { WorkLifecycle } from "../work/Work.ts";
-import type { CommentEvent, CommentThread } from "./CommentThread.ts";
+import {
+  canEditThreadBody,
+  type CommentEvent,
+  type CommentEventType,
+  type CommentThread,
+} from "./CommentThread.ts";
+import { canEditReply } from "./replyEdit.ts";
 
 /**
  * コメント・返信の削除（利用者決定 2026-10-18「コメントの削除機能欲しい。（投稿者のみ）」）。
@@ -62,17 +68,23 @@ export function assertCanDeleteComment(
   throw new DomainError("work_already_finalized");
 }
 
-/** 返信イベント 1 件の現在の状態（削除されたかは reply_deleted で導く） */
+/** 返信イベント 1 件の現在の状態（削除・訂正したかは reply_deleted / reply_edited で導く） */
 export interface ReplyEntry {
   id: string;
   actorId: UserId;
   deleted: boolean;
+  edited: boolean;
+  /** 添付の ID（付けた順） */
+  fileIds: string[];
 }
 
-function deletedReplyIds(events: readonly CommentEvent[]): Set<string> {
+function referencedReplyIds(
+  events: readonly CommentEvent[],
+  eventType: "reply_deleted" | "reply_edited",
+): Set<string> {
   const ids = new Set<string>();
   for (const e of events) {
-    if (e.eventType !== "reply_deleted") continue;
+    if (e.eventType !== eventType) continue;
     const id = (e.payload as { replyEventId?: unknown } | undefined)?.replyEventId;
     if (typeof id === "string") ids.add(id);
   }
@@ -80,11 +92,21 @@ function deletedReplyIds(events: readonly CommentEvent[]): Set<string> {
 }
 
 export function replyEntries(events: readonly CommentEvent[]): ReplyEntry[] {
-  const gone = deletedReplyIds(events);
+  const gone = referencedReplyIds(events, "reply_deleted");
+  const edited = referencedReplyIds(events, "reply_edited");
   const out: ReplyEntry[] = [];
   for (const e of events) {
     if (e.eventType !== "replied" || e.id === undefined) continue;
-    out.push({ id: e.id, actorId: e.actorId, deleted: gone.has(e.id) });
+    const fileIds = e.payload?.fileIds;
+    out.push({
+      id: e.id,
+      actorId: e.actorId,
+      deleted: gone.has(e.id),
+      edited: edited.has(e.id),
+      fileIds: Array.isArray(fileIds)
+        ? fileIds.filter((x): x is string => typeof x === "string")
+        : [],
+    });
   }
   return out;
 }
@@ -159,12 +181,30 @@ export function assertCanDeleteReply(
 
 export interface ThreadEventView extends CommentEvent {
   id: string;
-  /** 返信の削除ができるか（返信にだけ付く） */
-  can?: { delete: boolean };
+  /** 返信を削除・訂正できるか（返信にだけ付く） */
+  can?: { delete: boolean; edit: boolean };
+  /** 訂正したことのある返信か（返信にだけ付く。画面は「編集済み」の印だけを出す） */
+  edited?: boolean;
 }
 
 /**
- * 履歴の見せ方。削除された返信と、削除の記録（deleted / reply_deleted）は並べない（原文はイベントに残り、ここで見せないだけ）。
+ * 流れに並べるか。履歴にだけ残す記録（削除・訂正）は並べない。型を足したらここで決める
+ * （利用者指示 2026-10-26「編集済表示だけでいいんじゃないかなぁ」。訂正前の本文はイベントに残り、ここで見せないだけ）
+ */
+const inTimeline: Record<CommentEventType, boolean> = {
+  created: true,
+  replied: true,
+  decided: true,
+  assigned: true,
+  carried_forward: true,
+  edited: false,
+  reply_edited: false,
+  deleted: false,
+  reply_deleted: false,
+};
+
+/**
+ * 履歴の見せ方。削除された返信と、削除・訂正の記録は並べない（原文はイベントに残り、ここで見せないだけ）。
  * 削除したスレッド自体は一覧に出ないので、その履歴は呼び出し側が返さない。
  */
 export function projectThreadEvents(
@@ -173,17 +213,22 @@ export function projectThreadEvents(
   lifecycle: WorkLifecycle,
   viewer: DeleteActor = {},
 ): ThreadEventView[] {
-  const gone = deletedReplyIds(events);
+  const gone = referencedReplyIds(events, "reply_deleted");
+  const edited = referencedReplyIds(events, "reply_edited");
   const out: ThreadEventView[] = [];
   for (const e of events) {
-    if (e.eventType === "reply_deleted" || e.eventType === "deleted") continue;
+    if (!inTimeline[e.eventType]) continue;
     const id = e.id ?? "";
     if (e.eventType === "replied") {
       if (gone.has(id)) continue;
       out.push({
         ...e,
         id,
-        can: { delete: canDeleteComment(e.actorId, viewerId, lifecycle, viewer) },
+        edited: edited.has(id),
+        can: {
+          delete: canDeleteComment(e.actorId, viewerId, lifecycle, viewer),
+          edit: canEditReply(e.actorId, viewerId, lifecycle),
+        },
       });
       continue;
     }
@@ -194,11 +239,11 @@ export function projectThreadEvents(
 
 export type ThreadView<T extends CommentThread = CommentThread> = T & {
   /** 閲覧者ができる操作。画面は権限を推測せず、これに従う。削除すると返信もまとめて消える */
-  can: { delete: boolean };
+  can: { delete: boolean; edit: boolean };
 };
 
 /**
- * 画面に渡すスレッド（削除されていないもの）。削除できるのは投稿者本人とシステム管理者。
+ * 画面に渡すスレッド（削除されていないもの）。削除できるのは投稿者本人とシステム管理者、訂正できるのは投稿者本人だけ。
  * 削除済みは一覧に出さないので、呼び出し側が渡す前に除く（listByRevision の既定）。
  */
 export function presentThread<T extends CommentThread>(
@@ -209,6 +254,9 @@ export function presentThread<T extends CommentThread>(
 ): ThreadView<T> {
   return {
     ...thread,
-    can: { delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer) },
+    can: {
+      delete: canDeleteComment(thread.authorId, viewerId, lifecycle, viewer),
+      edit: canEditThreadBody(thread, viewerId, lifecycle),
+    },
   };
 }

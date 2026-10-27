@@ -30,6 +30,7 @@ export * from "./comment/Anchor.ts";
 export * from "./comment/body.ts";
 export * from "./comment/CommentThread.ts";
 export * from "./comment/deletion.ts";
+export * from "./comment/replyEdit.ts";
 export * from "./comment/reactions.ts";
 export * from "./comment/mentions.ts";
 export * from "./comment/attachments.ts";

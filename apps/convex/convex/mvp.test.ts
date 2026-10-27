@@ -450,7 +450,14 @@ describe("Convex 統合: 認可と状態遷移", () => {
     ).rejects.toThrow(code("comment_edit_not_author"));
     await cast.reviewer.as.mutation(api.comments.edit, { threadId, body: "誤字（3 ページ）" });
     const ev = await cast.creator.as.query(api.comments.events, { threadId });
-    expect(ev.events.map((e) => e.eventType)).toEqual(["created", "assigned", "edited"]);
+    expect(ev.events.map((e) => e.eventType)).toEqual(["created", "assigned"]);
+    const stored = await t.run((ctx) =>
+      ctx.db
+        .query("commentEvents")
+        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .collect(),
+    );
+    expect(stored.map((e) => e.eventType)).toEqual(["created", "assigned", "edited"]);
     const ws2 = await cast.creator.as.query(api.revisions.get, { revisionId });
     expect(ws2.threads[0]).toMatchObject({ body: "誤字（3 ページ）", editCount: 1 });
     expect(ws2.threads[0]!.assignee?.id).toBe(cast.manager.id);

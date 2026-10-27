@@ -181,8 +181,8 @@ describe("返信の削除", () => {
 
   it("replyEntries は削除済みを導く", () => {
     expect(replyEntries([...events, replyDeleted("e1", "creator")])).toEqual([
-      { id: "e1", actorId: "creator", deleted: true },
-      { id: "e2", actorId: "reviewer", deleted: false },
+      { id: "e1", actorId: "creator", deleted: true, edited: false, fileIds: [] },
+      { id: "e2", actorId: "reviewer", deleted: false, edited: false, fileIds: [] },
     ]);
   });
 });
@@ -213,16 +213,21 @@ describe("画面向けの見せ方", () => {
     const view = projectThreadEvents(events, "reviewer", "active");
     expect(view.map((e) => e.eventType)).toEqual(["created", "replied"]);
     expect(view.map((e) => e.id)).toEqual(["e0", "e2"]);
-    expect(view[1]).toMatchObject({ id: "e2", can: { delete: true } });
-    expect(projectThreadEvents(events, "creator", "active")[1]!.can).toEqual({ delete: false });
+    expect(view[1]).toMatchObject({ id: "e2", can: { delete: true, edit: true } });
+    expect(projectThreadEvents(events, "creator", "active")[1]!.can).toEqual({
+      delete: false,
+      edit: false,
+    });
     expect(projectThreadEvents(events, "reviewer", "finalized")[1]!.can).toEqual({
       delete: false,
+      edit: false,
     });
     // システム管理者は他人の返信も、校了後も削除できる
     const admin = { isSystemAdmin: true };
     for (const lifecycle of ["active", "finalized"] as const)
       expect(projectThreadEvents(events, "admin", lifecycle, admin)[1]!.can).toEqual({
         delete: true,
+        edit: false,
       });
   });
 });
