@@ -58,7 +58,7 @@ import { mayPersist } from "@/lib/fileCachePolicy";
 import { defaultArtifactId } from "./defaultArtifact";
 import { documentView } from "@/features/writing/documentView";
 import { CommentBody } from "@/features/review/CommentBody";
-import { StoredComposePopover } from "@/features/review/ComposePopover";
+import { StoredComposePopover, type ComposePlacement } from "@/features/review/ComposePopover";
 import { preloadRichComment } from "@/features/review/RichCommentField";
 import { createComposeStore } from "@/features/review/composeStore";
 import {
@@ -226,6 +226,23 @@ function popoverPos(box: { x: number; y: number; w: number; h: number }, vp: Vie
   const left = box.x - COMPOSE_W - 10;
   if (left >= 0) return { x: left, y: box.y };
   return { x: Math.max(0, Math.min(box.x, vp.width - COMPOSE_W)), y: box.y + box.h + 10 };
+}
+/** 投稿欄の場所の行（何に対するコメントか）。選んだ文字は引用で示すので出さない */
+function draftPlace(draft: Draft): string | undefined {
+  if (draft.free) return "位置なし";
+  if (draft.time)
+    return draft.time.end !== undefined
+      ? `${formatVideoSpan(draft.time)} の範囲`
+      : `${formatVideoSpan(draft.time)} の時点`;
+  if (draft.web)
+    return formatWebPlace(
+      { ...draft.web.place, type: "web_element", artifactId: "" },
+      draft.web.deviceLabel,
+    );
+  if (draft.figma) return formatFigmaPlace({ ...draft.figma, type: "figma_node", artifactId: "" });
+  const what = draft.rect ? "範囲" : draft.point ? "位置" : null;
+  if (!what) return undefined;
+  return draft.page !== undefined ? `${draft.page} ページの${what}` : `画像の${what}`;
 }
 const versionOf = (r: { kind: string; sequence: number }) => (r.kind === "rough" ? 0 : r.sequence);
 
@@ -823,6 +840,15 @@ export function Editor({
     ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
     : false;
   const canComment = can?.comment ?? false;
+  /** 新しいコメントを書いている（位置を選び終えた。SNS 投稿のプレビューの位置は、プレビューの上の欄で書く） */
+  const composing = draft !== null && !draft.marking && !draft.anchor && canComment;
+  // 広い画面の投稿欄は引き出し「コメント」の下にある。位置を選ぶたびに引き出しをコメントにする（ほかのタブへは移れる）。
+  // 動画の全画面のあいだは引き出しが見えないので、全画面を抜ける
+  useEffect(() => {
+    if (!composing || mobile) return;
+    if (drawer !== "comments") setDrawer("comments");
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, [draft, mobile]);
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
   // 紙面のクリック・タップはいつもふつうの操作で、なぞる（範囲）・長押し（ピン）だけがコメントになる（features/annotation/AnchorOverlay）。
   // 書き込みのモードはない。「コメントを追加」は、次の 1 回だけクリックでも印を付ける（armed）
@@ -931,9 +957,51 @@ export function Editor({
     );
   };
 
-  /** 投稿欄（ビューアの上）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
+  const viewerPlacement = (at: { x: number; y: number }): ComposePlacement =>
+    !compact
+      ? { kind: "anchored", ...at }
+      : sheetOpen && sheetComposeHost
+        ? { kind: "embedded", host: sheetComposeHost }
+        : { kind: "docked" };
+  const composeProps = (d: Draft) => {
+    const place = draftPlace(d);
+    return {
+      autoFocus: !d.range || d.focus === true,
+      ...(d.range && text
+        ? { quote: text.body.slice(d.range.start, d.range.end).slice(0, 80) }
+        : {}),
+      ...(place ? { place } : {}),
+      onSubmit: (fileIds: string[]) => void doPost.run(fileIds),
+      onCancel: resetCompose,
+      pending: doPost.pending,
+      ...(revisionId ? { revisionId } : {}),
+      ...(d.range && text && artifact && revisionId
+        ? {
+            extra: (
+              <M3eButton
+                variant="text"
+                onClick={() => {
+                  const r = d.range!;
+                  setProposeFrom({
+                    quote: text.body.slice(r.start, r.end).slice(0, 200),
+                    surrounding: text.body
+                      .slice(Math.max(0, r.start - 30), r.end + 30)
+                      .replace(/\n/g, " "),
+                    artifactId: artifact.id,
+                    revisionId,
+                  });
+                }}
+              >
+                表記ルールに提案
+              </M3eButton>
+            ),
+          }
+        : {}),
+    };
+  };
+  /** 紙面の上の投稿欄（mobile だけ。広い画面は composeInPanel）: 範囲・ピン・選択文字列のそば、位置なしは表示中のページの右上。`n` は PDF のページ */
   const compose = (vp: Viewport | null, box: Draft["box"] | null, n?: number) => {
-    if (!draft || draft.marking || draft.anchor || !canComment) return null;
+    if (!mobile || !composing) return null;
     if (n !== undefined && (draft.free ? n !== page : draft.page !== n)) return null;
     let pos = { x: 8, y: 8 };
     // 位置なし・動画の時刻だけ（画面の位置なし）・Figma のフレーム単位は、紙面（映像・画面）の右上
@@ -952,63 +1020,19 @@ export function Editor({
     return (
       <StoredComposePopover
         store={composeStore}
-        x={pos.x}
-        y={pos.y}
-        docked={compact}
-        host={sheetOpen ? sheetComposeHost : null}
-        // マウスで選んだ文字は、文字カーソルを移さず（コピーできるまま）。書き始めるときは欄を押す
-        autoFocus={!draft.range || draft.focus === true}
-        {...(draft.range && text
-          ? { quote: text.body.slice(draft.range.start, draft.range.end).slice(0, 80) }
-          : {})}
-        {...(draft.time
-          ? {
-              place:
-                draft.time.end !== undefined
-                  ? `${formatVideoSpan(draft.time)} の範囲`
-                  : `${formatVideoSpan(draft.time)} の時点`,
-            }
-          : draft.web
-            ? {
-                place: formatWebPlace(
-                  { ...draft.web.place, type: "web_element", artifactId: "" },
-                  draft.web.deviceLabel,
-                ),
-              }
-            : draft.figma
-              ? {
-                  place: formatFigmaPlace({ ...draft.figma, type: "figma_node", artifactId: "" }),
-                }
-              : {})}
-        onSubmit={(fileIds) => void doPost.run(fileIds)}
-        onCancel={resetCompose}
-        pending={doPost.pending}
-        {...(revisionId ? { revisionId } : {})}
-        {...(draft.range && text && artifact && revisionId
-          ? {
-              extra: (
-                <M3eButton
-                  variant="text"
-                  onClick={() => {
-                    const r = draft.range!;
-                    setProposeFrom({
-                      quote: text.body.slice(r.start, r.end).slice(0, 200),
-                      surrounding: text.body
-                        .slice(Math.max(0, r.start - 30), r.end + 30)
-                        .replace(/\n/g, " "),
-                      artifactId: artifact.id,
-                      revisionId,
-                    });
-                  }}
-                >
-                  表記ルールに提案
-                </M3eButton>
-              ),
-            }
-          : {})}
+        placement={viewerPlacement(pos)}
+        {...composeProps(draft)}
       />
     );
   };
+  const composeInPanel = () =>
+    composing ? (
+      <StoredComposePopover
+        store={composeStore}
+        placement={{ kind: "embedded" }}
+        {...composeProps(draft)}
+      />
+    ) : null;
   /** SNS 投稿のプレビューで選んだ位置の投稿欄（PostReview が置く座標を受ける。狭い画面は画面下） */
   const composePost = (at: { x: number; y: number }) => {
     if (!draft?.anchor || !canComment) return null;
@@ -1016,10 +1040,7 @@ export function Editor({
     return (
       <StoredComposePopover
         store={composeStore}
-        x={at.x}
-        y={at.y}
-        docked={compact}
-        host={sheetOpen ? sheetComposeHost : null}
+        placement={viewerPlacement(at)}
         // 狭い画面の投稿欄は引用を別の行で出す。広い画面は場所の行に引用も添える
         {...(place?.quote && compact ? { quote: place.quote.slice(0, 80) } : {})}
         place={
@@ -1672,6 +1693,7 @@ export function Editor({
         </div>
         {threadPanel}
       </div>
+      {!mobile ? <div className="comments__compose">{composeInPanel()}</div> : null}
     </div>
   );
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
