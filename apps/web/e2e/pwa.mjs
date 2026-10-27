@@ -12,6 +12,7 @@
  * - 外枠の外で実行時にキャッシュしたハッシュ付きファイル（画面のチャンク・フォント）も、新しい版のキャッシュへ写されて残る
  * - この版の JS・CSS は、開いたことのない画面のものも先にキャッシュする（デプロイで消えたチャンクの画面も、古い外枠のまま開ける）
  * - 無い /assets/* に配信側が返す index.html（200）を、JS の代わりに渡さず、キャッシュにも残さない
+ * - それでも画面のチャンクを読めなければ、待機中の新しい版へ「更新」を押さずに切り替わる
  */
 import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import http from "node:http";
@@ -77,6 +78,14 @@ let failed = 0;
 const check = (cond, msg) => {
   console.log(`${cond ? "ok  " : "FAIL"} ${msg}`);
   if (!cond) failed++;
+};
+/** 校正者としてサインインし、画面を読み直さずに /check へ移る（いま動いている外枠のまま、/check のチャンクを読ませる） */
+const openCheck = async () => {
+  await page.waitForFunction(() => !!globalThis.__mf100demo && !!globalThis.__mf100router);
+  await page.evaluate(() => globalThis.__mf100demo.signIn("mock-nogiku-reviewer"));
+  // 入口の振り分け（/ → /make・/check）が終わってから移る（途中で移ると振り分けに上書きされる）
+  await page.locator("[data-hub]").first().waitFor({ timeout: 10_000 });
+  await page.evaluate(() => globalThis.__mf100router.navigate({ to: "/check" }));
 };
 
 try {
@@ -201,15 +210,12 @@ try {
   const chunk = resolve(DIST, `.${unopened}`);
   renameSync(chunk, `${chunk}.gone`);
   try {
-    const shown = await (async () => {
-      await page.waitForFunction(() => !!globalThis.__mf100demo && !!globalThis.__mf100router);
-      await page.evaluate(() => globalThis.__mf100demo.signIn("mock-nogiku-reviewer"));
-      // 入口の振り分け（/ → /make・/check）が終わってから移る（途中で移ると振り分けに上書きされる）
-      await page.locator("[data-hub]").first().waitFor({ timeout: 10_000 });
-      await page.evaluate(() => globalThis.__mf100router.navigate({ to: "/check" }));
-      await page.locator('[data-hub="check"]').first().waitFor({ timeout: 10_000 });
-      return true;
-    })().catch(() => false);
+    const shown = await openCheck()
+      .then(() => page.locator('[data-hub="check"]').first().waitFor({ timeout: 10_000 }))
+      .then(
+        () => true,
+        () => false,
+      );
     check(shown, "配信側から消えたチャンクの画面（/check）を、古い外枠のまま開ける");
   } finally {
     renameSync(`${chunk}.gone`, chunk);
@@ -308,6 +314,40 @@ try {
       runtimeCached.length > 0 && lost.length === 0,
       `新しい版: 実行時にキャッシュした外枠の外の /assets/* ${runtimeCached.length} 本が写されて残る（消えた ${lost.length}）`,
     );
+
+    writeFileSync(
+      swPath,
+      original.replace(/const VERSION = "([0-9a-f]+)"/, 'const VERSION = "$1e2f"'),
+    );
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
+    await page.waitForFunction(
+      async () => !!(await navigator.serviceWorker.getRegistration())?.waiting,
+      null,
+      { timeout: 15_000 },
+    );
+    // 待機中の版が入ったあとで、いまの版のキャッシュと配信側の両方から /check のチャンクを消す
+    await page.evaluate(
+      ([name, p]) => caches.open(name).then((c) => c.delete(p)),
+      [after[0], unopened],
+    );
+    renameSync(chunk, `${chunk}.gone`);
+    try {
+      const loaded = page.waitForEvent("load", { timeout: 15_000 }).then(
+        () => true,
+        () => false,
+      );
+      await openCheck().catch(() => {});
+      const reloaded = await loaded;
+      const shells = await page.evaluate(async () =>
+        (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")),
+      );
+      check(
+        reloaded && shells.length === 1 && shells[0].endsWith("e2f"),
+        `読めないチャンクがあると、待機中の新しい版へ「更新」を押さずに切り替わる（${shells.join()}）`,
+      );
+    } finally {
+      renameSync(`${chunk}.gone`, chunk);
+    }
   } finally {
     writeFileSync(swPath, original);
   }
