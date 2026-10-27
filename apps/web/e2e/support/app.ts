@@ -253,8 +253,8 @@ export class App {
     await this.settle();
   }
 
-  /** 紙面をなぞって（範囲）その場の投稿欄からコメントする。座標は紙面の幅・高さに対する割合 */
-  async commentOnRect(x0: number, y0: number, x1: number, y1: number, body: string) {
+  /** 紙面をなぞって範囲を選ぶ（投稿欄が開く。書いて送るのは send）。座標は紙面の幅・高さに対する割合 */
+  async drawRect(x0: number, y0: number, x1: number, y1: number) {
     const page = this.page;
     const box = await page.locator(".viewer__overlay").first().boundingBox();
     if (!box) throw new Error("紙面が表示されていない");
@@ -262,6 +262,11 @@ export class App {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * x1, box.y + box.height * y1, { steps: 8 });
     await page.mouse.up();
+  }
+
+  /** 紙面をなぞって（範囲）コメントする。座標は紙面の幅・高さに対する割合 */
+  async commentOnRect(x0: number, y0: number, x1: number, y1: number, body: string) {
+    await this.drawRect(x0, y0, x1, y1);
     await this.send(body);
   }
 
@@ -271,12 +276,20 @@ export class App {
     await this.send(body);
   }
 
-  private async send(body: string) {
+  /** 開いている新しいコメントの投稿欄に書いて投稿し、欄が閉じるまで待つ（広い画面は引き出しの下、狭い画面は紙面・画面下） */
+  async send(body: string) {
     const page = this.page;
     await page.waitForSelector(".compose-pop .rt__content");
     await page.fill(".compose-pop .rt__content", body);
     await page.locator(".compose-pop .rt__send").click();
     await page.waitForSelector(".compose-pop", { state: "detached" });
+  }
+
+  /** 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上か画面下（viewer は紙面の上のもの） */
+  composer(where: "drawer" | "viewer") {
+    return this.page.locator(
+      where === "drawer" ? ".comments__compose .compose-pop" : ".viewer .compose-pop",
+    );
   }
 
   /** コメントの一覧のカード（校正のコメント。先頭に留まる「制作者からのコメント」は .creator-note で、ここには入らない） */
