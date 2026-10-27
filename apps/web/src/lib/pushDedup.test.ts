@@ -10,6 +10,7 @@ describe("Web Push redelivery", () => {
     const source = readFileSync(new URL("../../pwa/sw.template.js", import.meta.url), "utf8")
       .replace("__VERSION__", '"test"')
       .replace("__PRECACHE__", "[]")
+      .replace("__PRELOAD__", "[]")
       .replace("__CARRY__", "[]");
     runInNewContext(source, {
       URL,

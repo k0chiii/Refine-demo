@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { carriedAssets, shellPrecache } from "../../pwa/shellPrecache";
+import { outsideShell, shellPrecache } from "../../pwa/shellPrecache";
 
 describe("service worker shell precache", () => {
-  it("installs the entry shell and leaves route chunks to the runtime cache", () => {
+  it("puts only the entry, its static imports and their CSS in the shell", () => {
     const list = shellPrecache(
       {
         "assets/index-abc.js": {
@@ -39,7 +39,7 @@ describe("service worker shell precache", () => {
     ]);
   });
 
-  it("carries the hashed files outside the shell over from the previous version", () => {
+  it("preloads every JS and CSS outside the shell and only carries the other hashed files", () => {
     const bundle = {
       "assets/index-abc.js": {
         type: "chunk",
@@ -49,15 +49,15 @@ describe("service worker shell precache", () => {
       },
       "assets/index-abc.css": { type: "asset" },
       "assets/route-make-ghi.js": { type: "chunk", isEntry: false, imports: [] },
+      "assets/route-make-jkl.css": { type: "asset" },
       "assets/pdf.worker-xyz.mjs": { type: "asset" },
       "assets/noto-sans-jp-12-uvw.woff2": { type: "asset" },
       "sw.js": { type: "asset" },
     };
     const precache = shellPrecache(bundle, ["/manifest.webmanifest"]);
-    expect(carriedAssets(bundle, precache)).toEqual([
-      "/assets/noto-sans-jp-12-uvw.woff2",
-      "/assets/pdf.worker-xyz.mjs",
-      "/assets/route-make-ghi.js",
-    ]);
+    expect(outsideShell(bundle, precache)).toEqual({
+      preload: ["/assets/route-make-ghi.js", "/assets/route-make-jkl.css"],
+      carry: ["/assets/noto-sans-jp-12-uvw.woff2", "/assets/pdf.worker-xyz.mjs"],
+    });
   });
 });

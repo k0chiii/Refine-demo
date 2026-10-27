@@ -9,7 +9,9 @@
  */
 const VERSION = __VERSION__;
 const PRECACHE = __PRECACHE__;
-/** 外枠の外で、この版が使うハッシュ付きのファイル。前の版のキャッシュにあれば写す（無くても取りに行かない。使うときに取る） */
+/** 外枠の外の、この版の JS・CSS（画面のチャンク・PDF.js の本体）。install で写すか取る（precache） */
+const PRELOAD = __PRELOAD__;
+/** それ以外の、この版が使うハッシュ付きのファイル（フォントの分割ファイル・PDF.js のワーカーなど）。前の版のキャッシュにあれば写す（無くても取りに行かない。使うときに取る） */
 const CARRY = __CARRY__;
 const SHELL = `mf100-shell-${VERSION}`;
 /**
@@ -22,15 +24,18 @@ const VENDOR = "mf100-vendor-v1";
 const VENDOR_PREFIXES = ["/pdfjs/", "/ocr/"];
 /** 横取りしない同一オリジンのパス（API を同じオリジンに置いた場合に備える） */
 const BYPASS_PREFIXES = ["/api/", "/auth/", "/.well-known/"];
+/** 配信側（Cloudflare Pages）は無いファイルにも index.html を 200 で返す。静的ファイルの代わりに受け取らない */
+const isHtml = (res) => (res.headers.get("content-type") ?? "").startsWith("text/html");
 
 /**
  * 新しい版の外枠を用意する。/assets/* はファイル名にハッシュが入っていて、同じ名前なら中身も同じなので、
  * 前の版のキャッシュにあるものはそこから写し、通信しない（リリースで変わるのは数本のチャンクだけ。
  * 以前は 250 本あまり・合計 6MB 超を毎回すべて取り直していた）。それ以外（index.html・マニフェスト・アイコン）は必ず取り直す。
  * 前の版が無い（初回）、写せなかったときは、これまでどおり通信で取る。
- * 外枠の外のハッシュ付きファイル（CARRY: 画面のチャンク・PDF.js の本体とワーカー・使ったフォントの分割ファイル）も、
- * 前の版のキャッシュにあるものは写す。無ければ取りに行かない（使うときに取る）。以前は版が替わるたびに前の版ごと消していたので、
- * 更新のたびに PDF.js（圧縮後およそ 540KB）やフォントを取り直していた。
+ * PRELOAD（外枠の外の JS・CSS）も写すか取る。デプロイのあと、古い外枠が読むチャンクは配信側から消えている
+ * （取りに行くと index.html が返る）ので、開いたことのない画面のチャンクも版のキャッシュに先に入れておく。
+ * 一つ取れなくても install は止めない（使うときに取る）。
+ * CARRY（フォントの分割ファイルなど）は写すだけで、無ければ取りに行かない（使うときに取る）。
  */
 async function precache() {
   const cache = await caches.open(SHELL);
@@ -45,18 +50,24 @@ async function precache() {
   const copyFromOld = async (p) => {
     for (const old of olds) {
       const hit = await old.match(p, { ignoreVary: true }).catch(() => undefined);
-      if (hit && hit.ok && hit.status === 200) {
+      if (hit && hit.ok && hit.status === 200 && !isHtml(hit)) {
         await cache.put(p, hit);
         return true;
       }
     }
     return false;
   };
+  const preload = async (p) => {
+    if (await copyFromOld(p)) return;
+    const res = await fetch(p);
+    if (res.ok && !isHtml(res)) await cache.put(p, res);
+  };
   await Promise.all([
     ...PRECACHE.map(async (p) => {
       if (p.startsWith("/assets/") && (await copyFromOld(p))) return;
       await cache.add(new Request(p, { cache: "reload" }));
     }),
+    ...PRELOAD.map((p) => preload(p).catch(() => {})),
     ...CARRY.map((p) => copyFromOld(p).catch(() => false)),
   ]);
 }
@@ -139,18 +150,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const cacheName = VENDOR_PREFIXES.some((p) => url.pathname.startsWith(p))
-    ? VENDOR
-    : SHELL_PREFIXES.some((p) => url.pathname.startsWith(p)) || PRECACHE.includes(url.pathname)
-      ? SHELL
-      : null;
+  const vendor = VENDOR_PREFIXES.some((p) => url.pathname.startsWith(p));
+  const asset = vendor || SHELL_PREFIXES.some((p) => url.pathname.startsWith(p));
+  const cacheName = vendor ? VENDOR : asset || PRECACHE.includes(url.pathname) ? SHELL : null;
   if (!cacheName) return;
   event.respondWith(
     caches.open(cacheName).then((cache) =>
-      cache.match(req).then(
+      // Vary は見ない（配信側が Origin を付けると、install で入れたものが画面の要求に当たらない）: 名前が同じなら中身は同じ
+      cache.match(req, { ignoreVary: true }).then(
         (hit) =>
           hit ||
           fetch(req).then((res) => {
+            // デプロイで消えたチャンクに返る index.html を JS として渡さず、残さない（読み込みの失敗にする）
+            if (asset && isHtml(res)) return new Response(null, { status: 404 });
             // 正常な応答だけ保存する（範囲リクエストの 206・エラーは保存しない）
             if (res.ok && res.status === 200 && res.type === "basic")
               void cache.put(req, res.clone());
