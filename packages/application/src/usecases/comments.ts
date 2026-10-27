@@ -18,6 +18,7 @@ import {
   latestReplies,
   memberTeamIds,
   plainTextOf,
+  planReplyEdit,
   type Principal,
   recipientPrincipal,
   replyRecipients,
@@ -594,6 +595,41 @@ export async function editThread(
     createdAt: ctx.clock.now(),
   });
   return next;
+}
+
+/**
+ * 返信の訂正（返信した本人・校了前だけ。管理者でも他人の返信は訂正しない）。返信のイベントの本文を置き換え、
+ * 訂正前の本文を reply_edited に残す（§5.2-9）。訂正は動きに数えないので、未読・最後の動き・通知・メンションは変えない（editThread と同じ）。
+ */
+export async function editReply(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string; replyEventId: string; body: string; bodyFormat?: string },
+): Promise<void> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "comment.reply");
+  assertThreadNotDeleted(thread);
+  const plan = planReplyEdit(
+    thread,
+    input.replyEventId,
+    principal.userId,
+    input.body,
+    input.bodyFormat,
+    work.lifecycle,
+    await ctx.threads.listEvents(thread.id),
+  );
+  if (!plan.changed) return;
+  await ctx.threads.setReplyBody(plan.replyEventId, plan.next);
+  await ctx.threads.appendEvent({
+    threadId: thread.id,
+    eventType: "reply_edited",
+    actorId: principal.userId,
+    payload: { ...plan.previous },
+    createdAt: ctx.clock.now(),
+  });
 }
 
 /**
