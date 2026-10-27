@@ -175,8 +175,8 @@ export function isThreadUnread(
 }
 
 /**
- * 返信の通知の宛先: スレッドの投稿者と、これまでに（削除されていない返信で）返信した人。返信した本人は除く。
- * メンションされた人には「メンション」の通知が別に行くので、重ねない（`mentioned`）。
+ * 返信の通知の宛先: スレッドの投稿者と、これまでに（削除されていない返信で）返信した人と、スレッドを購読した人（`subscribers`）。
+ * 返信した本人は除く。メンションされた人には「メンション」の通知が別に行くので、重ねない（`mentioned`）。
  * 自動校正の指摘（origin）の投稿者はシステムなので、送らない。
  */
 export function replyRecipients(
@@ -184,12 +184,14 @@ export function replyRecipients(
   events: readonly CommentEvent[],
   replierId: UserId,
   mentioned: readonly UserId[] = [],
+  subscribers: readonly UserId[] = [],
 ): UserId[] {
   const people = [
     ...(thread.origin === undefined ? [thread.authorId] : []),
     ...replyEntries(events)
       .filter((r) => !r.deleted)
       .map((r) => r.actorId),
+    ...subscribers,
   ];
   const out: UserId[] = [];
   for (const id of people)
