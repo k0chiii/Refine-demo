@@ -221,7 +221,6 @@ export interface PushSubscriptionRecord {
   /** 設定画面で端末を見分けるための短い説明（ブラウザ名など）。任意 */
   device?: string;
   createdAt: Instant;
-  lastSuccessAt?: Instant;
   /** 続けて失敗した回数（成功で 0 に戻る） */
   failureCount: number;
 }
