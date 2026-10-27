@@ -379,6 +379,8 @@ export interface HomeRepository {
   listPins(userId: UserId): Promise<WorkPin[]>;
   addPin(pin: WorkPin): Promise<void>;
   removePin(userId: UserId, workId: WorkId): Promise<void>;
+  /** その制作物をピン留めしている人（ピン留めは制作物の購読を兼ねる。新しい版の通知の宛先） */
+  listPinners(workId: WorkId): Promise<UserId[]>;
 }
 
 /**

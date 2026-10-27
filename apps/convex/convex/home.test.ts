@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness } from "../test/harness";
-import { setupWork } from "../test/flows";
+import { setupWork, submitFiles } from "../test/flows";
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
@@ -32,6 +32,22 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     await expect(
       cast.stranger.as.mutation(api.home.setPinned, { workId, pinned: true }),
     ).rejects.toThrow(code("forbidden"));
+  });
+
+  it("ピン留めした人に新しい版の通知が届く（職責も割当も無い人）", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as const }];
+    await submitFiles(cast, workId, pdf);
+    await cast.stranger.as.mutation(api.home.setPinned, { workId, pinned: true });
+    const { revisionId } = await submitFiles(cast, workId, pdf);
+    const got = (await cast.stranger.as.query(api.notifications.list, {})).filter(
+      (n) => n.kind === "revision_submitted",
+    );
+    expect(got.map((n) => n.revisionId)).toEqual([revisionId]);
+    const other = await cast.reviewer.as.query(api.notifications.list, {});
+    expect(other.filter((n) => n.kind === "revision_submitted")).toHaveLength(0);
   });
 
   it("一括登録: 担当者を照合して、まとめて登録し、一括の監査を残す", async () => {

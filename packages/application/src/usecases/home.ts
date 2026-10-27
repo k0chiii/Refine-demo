@@ -23,10 +23,13 @@ export const submitTargetPolicy: SubmitTargetPolicy = defaultSubmitTargetPolicy;
 /** ダッシュボードの役割（制作物のページの件数・「役割ごとの件数」の単位） */
 export type DashboardRole = "creator" | "reviewer" | "checker" | "approver" | "manager";
 
-/** ピン留めの上限（古いものから外す） */
-export const homeListPolicy = { maxPins: 20 };
+/** ピン留めの上限（古いものから外す。20 → 100 は利用者決定 2026-10-27） */
+export const homeListPolicy = { maxPins: 100 };
 
-/** ホームにピン留め／外す。見られる制作物だけ */
+/**
+ * ピン留め／外す。見られる制作物だけ。ピン留めは制作物の購読を兼ねる（利用者決定 2026-10-27）:
+ * 新しい版の通知が届く（confirmSubmission）
+ */
 export async function setWorkPinned(
   ctx: AppContext,
   principal: Principal,

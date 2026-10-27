@@ -454,7 +454,8 @@ export async function confirmSubmission(
       at: now,
     });
     const who = await personName(ctx, principal.userId);
-    await notify(ctx, workStakeholders(work), principal.userId, {
+    const pinners = await ctx.home.listPinners(work.id);
+    await notify(ctx, [...workStakeholders(work), ...pinners], principal.userId, {
       kind: "revision_submitted",
       title: "新しい版が提出されました",
       body: `${about(work.title, revisionLabel(revision), who)}: ${

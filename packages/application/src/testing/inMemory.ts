@@ -495,6 +495,8 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       removePin: async (userId, workId) => {
         state.pins = state.pins.filter((p) => !(p.userId === userId && p.workId === workId));
       },
+      listPinners: async (workId) =>
+        state.pins.filter((p) => p.workId === workId).map((p) => p.userId),
     },
     alignments: {
       find: async (l, r) =>

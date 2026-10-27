@@ -803,14 +803,15 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
-  /** ピン留めした制作物（アカウントごと。制作物のページの「ピン留め」で絞る） */
+  /** ピン留めした制作物（アカウントごと。制作物の購読を兼ね、ピン留めした人に新しい版の通知が届く） */
   workPins: defineTable({
     userId: v.string(),
     workId: v.id("works"),
     pinnedAt: v.number(),
   })
     .index("by_userId_and_pinnedAt", ["userId", "pinnedAt"])
-    .index("by_userId_and_workId", ["userId", "workId"]),
+    .index("by_userId_and_workId", ["userId", "workId"])
+    .index("by_workId", ["workId"]),
 
   /** 旧ホームの「最近開いた制作物」。読み書きをやめた（dashboardLayouts と同じ理由で、テーブルは残している） */
   recentWorks: defineTable({

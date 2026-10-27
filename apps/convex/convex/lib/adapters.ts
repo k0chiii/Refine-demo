@@ -708,6 +708,13 @@ export function createAppContext(
           .collect();
         for (const d of docs) await db.delete("workPins", d._id);
       },
+      async listPinners(workId) {
+        const docs = await db
+          .query("workPins")
+          .withIndex("by_workId", (q) => q.eq("workId", workId as Id<"works">))
+          .take(1000);
+        return docs.map((d) => d.userId);
+      },
     },
     proofreadingRuns: {
       async findById(id) {
