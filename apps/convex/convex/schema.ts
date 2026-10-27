@@ -803,7 +803,7 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
-  /** ピン留めした制作物（アカウントごと。制作物の購読を兼ね、ピン留めした人に新しい版の通知が届く） */
+  /** ピン留めした制作物（アカウントごと。制作物の購読を兼ね、新しい版の通知が届き、校正の入口の「ピン留め」に出る） */
   workPins: defineTable({
     userId: v.string(),
     workId: v.id("works"),

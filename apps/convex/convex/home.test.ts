@@ -34,7 +34,7 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     ).rejects.toThrow(code("forbidden"));
   });
 
-  it("ピン留めした人に新しい版の通知が届く（職責も割当も無い人）", async () => {
+  it("ピン留めした人に新しい版の通知が届き、校正の入口のピン留めに出る（職責も割当も無い人）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const workId = await setupWork(t, cast);
@@ -48,6 +48,10 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     expect(got.map((n) => n.revisionId)).toEqual([revisionId]);
     const other = await cast.reviewer.as.query(api.notifications.list, {});
     expect(other.filter((n) => n.kind === "revision_submitted")).toHaveLength(0);
+
+    const check = await cast.stranger.as.query(api.dashboard.check, {});
+    expect(check.pinned.map((i) => [i.workId, i.revisionId])).toEqual([[workId, revisionId]]);
+    expect((await cast.reviewer.as.query(api.dashboard.check, {})).pinned).toEqual([]);
   });
 
   it("一括登録: 担当者を照合して、まとめて登録し、一括の監査を残す", async () => {

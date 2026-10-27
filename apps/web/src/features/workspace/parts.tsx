@@ -94,6 +94,7 @@ export function Group({
   count,
   label,
   side,
+  className,
   children,
 }: {
   title: string;
@@ -102,10 +103,11 @@ export function Group({
   label?: string;
   /** 補助のまとまりは見出しを控えめに */
   side?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className={`dash__section ${side ? "dash__section--side" : ""}`}>
+    <section className={`dash__section ${side ? "dash__section--side" : ""} ${className ?? ""}`}>
       <div className="dash__head">
         <M3eHeading
           variant="title"

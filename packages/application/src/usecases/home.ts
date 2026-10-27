@@ -28,7 +28,7 @@ export const homeListPolicy = { maxPins: 100 };
 
 /**
  * ピン留め／外す。見られる制作物だけ。ピン留めは制作物の購読を兼ねる（利用者決定 2026-10-27）:
- * 新しい版の通知が届く（confirmSubmission）
+ * 新しい版の通知が届き（confirmSubmission）、校正の入口の「ピン留め」に出る（buildCheckDashboard）
  */
 export async function setWorkPinned(
   ctx: AppContext,

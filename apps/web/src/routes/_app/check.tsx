@@ -77,7 +77,8 @@ const emptyText: Record<CheckTab, string> = {
  * 校正（自分が確かめるもの）の入口。割り当てられた校正・専門確認・校了を 未着手 / 確認中 / 完了 で見る（利用者決定 2026-10-19）。
  * 材料はダッシュボードの校正の節（dashboard.check）の「校正する」（mine.review。未着手 = pending・確認中 = viewed）・「専門確認をする」
  * （mine.checks）・「校了する」（mine.finalize）と、自分の分が終わったもの（done）。分け方と締切順は domain の groupCheckEntries。
- * 「割り当てる」（校正者がいない版。割当権限のある人）は小さなまとまりで下に。行を押すとエディタが開く（既定のコメントの引き出し）
+ * 「割り当てる」（校正者がいない版。割当権限のある人）は小さなまとまりで下に。行を押すとエディタが開く（既定のコメントの引き出し）。
+ * 「ピン留め」（ピン留めした制作物のうち、上の行に無いもの。利用者決定 2026-10-27）はその下に。エディタは受付中の版、無ければ最新の版を開く
  */
 function Check() {
   const { show: tab = "todo" } = Route.useSearch();
@@ -125,7 +126,8 @@ function Check() {
       </div>
     );
 
-  const assign = data.mine.assign;
+  const { assign } = data.mine;
+  const { pinned } = data;
   const list = groups[tab];
   return (
     <div className="hub" data-hub="check">
@@ -177,6 +179,24 @@ function Check() {
               chip="割り当てる"
               chipIcon="group_add"
               onOpen={() => open(i.workId, i.workTitle, { tab: "info" })}
+            />
+          ))}
+        </Group>
+      ) : null}
+      {pinned.length > 0 ? (
+        <Group title="ピン留め" count={pinned.length} side className="check__pinned">
+          {pinned.map((i) => (
+            <WorkspaceRow
+              key={`pinned-${i.workId}`}
+              icon="push_pin"
+              title={i.workTitle}
+              suffix={i.revisionLabel}
+              lines={[
+                deadlineLine(i.deadlineKind === "review" ? "校正の締切" : "納期", i.deadlineAt),
+              ]}
+              chip="見る"
+              chipIcon="visibility"
+              onOpen={() => open(i.workId, i.workTitle)}
             />
           ))}
         </Group>
