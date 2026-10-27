@@ -6,10 +6,15 @@ import { M3eSnackbar } from "@m3e/web/snackbar";
  * - Service Worker は本番ビルド（デモを含む）だけで登録する。開発サーバーでは登録しない（HMR と干渉するため）
  * - 新しい版が届いたら M3E snackbar で「更新」を出す。押したときだけ切り替えて再読み込みする（書きかけの画面を勝手に読み直さない）
  * - オフラインになったら snackbar で知らせる（データは端末に保存しないので、つながるまで最新の内容は出ない）
+ * - 画面のチャンクを読めなかったら、エラーを出さずに新しい版へ切り替える（recoverFromMissingChunk）
  */
 
 let registration: ServiceWorkerRegistration | null = null;
 let reloading = false;
+/** 次に入った新しい版へ、「更新」を待たずに切り替える（読めないチャンクから立て直すとき） */
+let switchOnInstall = false;
+/** 読めないチャンクのために読み直した時刻（sessionStorage）。読み直しても直らない外枠で繰り返さない */
+const RELOADED_AT = "mf100-missing-chunk-reload";
 
 function promptUpdate() {
   M3eSnackbar.open("新しいバージョンがあります", "更新", true, {
@@ -34,9 +39,48 @@ function watch(reg: ServiceWorkerRegistration) {
     const next = reg.installing;
     next?.addEventListener("statechange", () => {
       // 初回のインストール（controller が無い）では知らせない。2 回目以降の「新しい版」だけ
-      if (next.state === "installed" && navigator.serviceWorker.controller) promptUpdate();
+      if (next.state !== "installed" || !navigator.serviceWorker.controller) return;
+      if (switchOnInstall) applyUpdate();
+      else promptUpdate();
     });
   });
+}
+
+const reloadedRecently = () => {
+  try {
+    return Date.now() - Number(sessionStorage.getItem(RELOADED_AT)) < 60_000;
+  } catch {
+    return true;
+  }
+};
+
+function reloadOnce() {
+  if (reloading || registration?.installing) return;
+  try {
+    sessionStorage.setItem(RELOADED_AT, String(Date.now()));
+  } catch {
+    return;
+  }
+  reloading = true;
+  window.location.reload();
+}
+
+/**
+ * デプロイで配信側から消えたチャンクは、古い外枠からは読めない（Service Worker が 404 にする）。
+ * エラーを見せずに新しい版へ切り替える。待機中の版があればすぐ、無ければ確かめに行き、入ったら切り替える。
+ * 3 秒たっても入り始めなければ一度だけ読み直す（1 分に 1 回まで。それ以上はエラーをそのまま出す）
+ */
+function recoverFromMissingChunk(e: Event) {
+  if (registration?.waiting) {
+    e.preventDefault();
+    applyUpdate();
+    return;
+  }
+  if (reloadedRecently()) return;
+  e.preventDefault();
+  switchOnInstall = true;
+  void registration?.update().catch(() => {});
+  setTimeout(reloadOnce, 3000);
 }
 
 /**
@@ -55,6 +99,7 @@ export function setAppBadge(count: number) {
 
 export function registerServiceWorker() {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+  window.addEventListener("vite:preloadError", recoverFromMissingChunk);
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (reloading) window.location.reload();
   });

@@ -8,8 +8,8 @@ type ShellChunk = {
 const href = (file: string) => (file.startsWith("/") ? file : `/${file}`);
 
 /**
- * install で先に取る外枠。エントリと、それを実行する静的 import、その CSS。
- * 画面ごとの dynamic import は含めない（sw.template.js が /assets/ を実行時にキャッシュする）。
+ * install で必ず取る外枠。エントリと、それを実行する静的 import、その CSS。
+ * 画面ごとの dynamic import は含めない（outsideShell の preload として、取れなくても install を止めずに取る）。
  */
 export function shellPrecache(
   bundle: Record<string, ShellChunk>,
@@ -32,19 +32,23 @@ export function shellPrecache(
 }
 
 /**
- * 外枠には入れないが、この版が使うハッシュ付きのファイル（画面ごとのチャンク・PDF.js の本体とワーカー・フォントの分割ファイル）。
- * sw.template.js が新しい版の install で、前の版のキャッシュにあるものを通信せずに写す（取りに行かない。無ければ使うときに取る）。
- * 以前は版が替わるたびに前の版ごと消していたので、更新のたびに PDF.js（圧縮後およそ 540KB）や使ったフォントの分割ファイルを取り直していた。
+ * 外枠には入れないが、この版が使うハッシュ付きのファイル。sw.template.js が新しい版の install で、
+ * 前の版のキャッシュにあるものは通信せずに写す。
+ * - preload（JS・CSS。画面ごとのチャンク・PDF.js の本体）: 写せなければ取りに行く。デプロイのあと、古い外枠が読むチャンクは
+ *   配信側から消えている（Pages は index.html を返す）ので、開いたことのない画面の分も先に持っておく
+ * - carry（フォントの分割ファイル・PDF.js のワーカーなど）: 写すだけで取りに行かない（使うときに取る）
  * 一覧はこの版のものだけなので、前の版だけが使っていたファイルは写されず、版ごとのキャッシュと一緒に消える（溜まらない）
  */
-export function carriedAssets(
+export function outsideShell(
   bundle: Record<string, ShellChunk>,
   precache: readonly string[],
-): string[] {
+): { preload: string[]; carry: string[] } {
   const shell = new Set(precache);
-  return Object.keys(bundle)
+  const files = Object.keys(bundle)
     .filter((f) => f.startsWith("assets/"))
     .map(href)
     .filter((p) => !shell.has(p))
     .sort();
+  const code = (p: string) => /\.(js|css)$/.test(p);
+  return { preload: files.filter(code), carry: files.filter((p) => !code(p)) };
 }
