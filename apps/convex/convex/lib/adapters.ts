@@ -461,6 +461,32 @@ export function createAppContext(
         for (const d of docs) if (d) out.set(d.threadId as string, d.readAt);
         return out;
       },
+      async listSubscribers(threadId) {
+        const docs = await db
+          .query("threadSubscriptions")
+          .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"commentThreads">))
+          .take(1000);
+        return docs.map((d) => d.userId);
+      },
+      async isSubscribed(userId, threadId) {
+        const doc = await db
+          .query("threadSubscriptions")
+          .withIndex("by_user_thread", (q) =>
+            q.eq("userId", userId).eq("threadId", threadId as Id<"commentThreads">),
+          )
+          .first();
+        return doc !== null;
+      },
+      async setSubscribed(userId, threadId, on, at) {
+        const tid = threadId as Id<"commentThreads">;
+        const docs = await db
+          .query("threadSubscriptions")
+          .withIndex("by_user_thread", (q) => q.eq("userId", userId).eq("threadId", tid))
+          .collect();
+        if (!on) for (const d of docs) await db.delete("threadSubscriptions", d._id);
+        else if (docs.length === 0)
+          await db.insert("threadSubscriptions", { userId, threadId: tid, subscribedAt: at });
+      },
     },
     assignments: {
       async listByRevision(revisionId) {

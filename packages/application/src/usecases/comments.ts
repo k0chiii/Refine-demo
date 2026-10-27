@@ -276,9 +276,16 @@ export async function replyToThread(
     body: text,
     ...at,
   });
-  // スレッドの参加者（投稿者とこれまでに返信した人）には「返信」を知らせる。メンションした人には「メンション」だけ
+  // スレッドの参加者（投稿者とこれまでに返信した人）と購読した人には「返信」を知らせる。メンションした人には「メンション」だけ。
   const teams = work.confidentiality === "restricted" ? await ctx.teams.list() : [];
-  const participants = replyRecipients(thread, events, principal.userId, mentions).filter((id) =>
+  const subscribers = await ctx.threads.listSubscribers(thread.id);
+  const participants = replyRecipients(
+    thread,
+    events,
+    principal.userId,
+    mentions,
+    subscribers,
+  ).filter((id) =>
     canSeeNotificationSubject("work", {
       work,
       grants,
@@ -408,6 +415,24 @@ export async function markCommentRead(
   await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
   assertThreadNotDeleted(thread);
   await ctx.threads.markRead(principal.userId, thread.id, ctx.clock.now());
+}
+
+/**
+ * スレッドを購読する・外す。購読した人は、返信していなくても返信の通知（comment_posted）を受け取る（利用者指示 2026-10-27
+ * 「スレッドを購読。メンションされてなくてもそのスレッドの通知が来るようにしたい」）。見られる人だけ
+ */
+export async function setThreadSubscription(
+  ctx: AppContext,
+  principal: Principal,
+  input: { threadId: string; on: boolean },
+): Promise<void> {
+  const thread = await ctx.threads.findById(input.threadId);
+  if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
+  const revision = await ctx.revisions.findById(thread.revisionId);
+  if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
+  await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
+  assertThreadNotDeleted(thread);
+  await ctx.threads.setSubscribed(principal.userId, thread.id, input.on, ctx.clock.now());
 }
 
 /**

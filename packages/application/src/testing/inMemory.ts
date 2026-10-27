@@ -119,6 +119,7 @@ export interface InMemoryContext extends AppContext {
     /** `${userId}|${threadId}` → 最後に読んだ時刻 */
     feedbackReads: Map<string, number>;
     commentReads: Map<string, number>;
+    threadSubscriptions: { userId: string; threadId: string; subscribedAt: number }[];
     audit: AuditEntry[];
     idempotency: Map<string, unknown>;
     /** 表示名（テストで通知の文面を確かめるときに入れる）。ここに居る人を委員（名簿）とみなす */
@@ -167,6 +168,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     attempts: new Table<UploadAttempt>("att"),
     feedbackReads: new Map(),
     commentReads: new Map(),
+    threadSubscriptions: [],
     audit: [],
     idempotency: new Map(),
     names: new Map(),
@@ -301,6 +303,17 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
           if (at !== undefined) out.set(id, at);
         }
         return out;
+      },
+      listSubscribers: async (threadId) =>
+        state.threadSubscriptions.filter((s) => s.threadId === threadId).map((s) => s.userId),
+      isSubscribed: async (userId, threadId) =>
+        state.threadSubscriptions.some((s) => s.userId === userId && s.threadId === threadId),
+      setSubscribed: async (userId, threadId, on, at) => {
+        const mine = (s: { userId: string; threadId: string }) =>
+          s.userId === userId && s.threadId === threadId;
+        if (!on) state.threadSubscriptions = state.threadSubscriptions.filter((s) => !mine(s));
+        else if (!state.threadSubscriptions.some(mine))
+          state.threadSubscriptions.push({ userId, threadId, subscribedAt: at });
       },
     },
     assignments: {

@@ -541,6 +541,15 @@ export default defineSchema({
     readAt: v.number(),
   }).index("by_user_thread", ["userId", "threadId"]),
 
+  /** コメントのスレッドの購読（人 × スレッドで 1 行）。購読した人は、返信していなくても返信の通知を受け取る */
+  threadSubscriptions: defineTable({
+    userId: v.string(),
+    threadId: v.id("commentThreads"),
+    subscribedAt: v.number(),
+  })
+    .index("by_user_thread", ["userId", "threadId"])
+    .index("by_thread", ["threadId"]),
+
   /**
    * コメント・返信の添付（R2 の comments/ の下）。準備 → Hono で実体検証 → コメント（返信）に付ける。
    * 付けないまま 24 時間たったものは abandonedAt、付けたコメントが削除されたものは removedAt を付け、Hono の清掃で R2 から消す（purgedAt）。

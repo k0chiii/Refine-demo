@@ -128,6 +128,11 @@ export interface ThreadRepository {
   markRead(userId: UserId, threadId: string, at: Instant): Promise<void>;
   /** その人が最後に読んだ時刻を、まとめて引く（読んだことの無いスレッドは含めない） */
   readsOf(userId: UserId, threadIds: readonly string[]): Promise<Map<string, Instant>>;
+  /** スレッドを購読した人（返信の通知を受け取る。参加していなくてもよい） */
+  listSubscribers(threadId: string): Promise<UserId[]>;
+  isSubscribed(userId: UserId, threadId: string): Promise<boolean>;
+  /** 購読する・外す。何度呼んでも 1 人 1 行（購読していない人が外しても何もしない） */
+  setSubscribed(userId: UserId, threadId: string, on: boolean, at: Instant): Promise<void>;
 }
 
 export interface ReviewAssignmentRepository {

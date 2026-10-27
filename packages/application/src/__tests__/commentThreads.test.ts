@@ -10,6 +10,7 @@ import {
   postComment,
   presentThreadActivity,
   replyToThread,
+  setThreadSubscription,
 } from "../usecases/comments.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -283,5 +284,71 @@ describe("返信の通知: スレッドの参加者へ", () => {
       .find((n) => n.recipientId === reviewer.userId && n.threadId === t.id)!;
     expect(note).toMatchObject({ kind: "comment_posted", threadId: t.id });
     expect(notificationCategoryOf(note.kind)).toBe("reply");
+  });
+});
+
+describe("スレッドの購読: 参加していなくても返信の通知を受け取る", () => {
+  it("購読した人は、返信していなくても「返信」を受け取り、外すと受け取らない", async () => {
+    const { ctx, post, reply, replyNotes } = await setup();
+    const t = await post();
+    const toStranger = () => replyNotes(t.id).filter((n) => n.startsWith(stranger.userId));
+    await reply(t.id, creator);
+    expect(toStranger()).toEqual([]);
+    await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
+    await reply(t.id, creator);
+    expect(toStranger()).toEqual([`${stranger.userId}:comment_posted`]);
+    await setThreadSubscription(ctx, stranger, { threadId: t.id, on: false });
+    await reply(t.id, manager);
+    expect(toStranger()).toHaveLength(1);
+  });
+
+  it("2 回購読しても 1 回外せば受け取らない。購読していない人が外しても何も起きない", async () => {
+    const { ctx, post, reply, replyNotes } = await setup();
+    const t = await post();
+    const toStranger = () => replyNotes(t.id).filter((n) => n.startsWith(stranger.userId));
+    await setThreadSubscription(ctx, approver, { threadId: t.id, on: false });
+    await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
+    await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
+    expect(await ctx.threads.listSubscribers(t.id)).toEqual([stranger.userId]);
+    await reply(t.id, creator);
+    expect(toStranger()).toHaveLength(1);
+    await setThreadSubscription(ctx, stranger, { threadId: t.id, on: false });
+    expect(await ctx.threads.isSubscribed(stranger.userId, t.id)).toBe(false);
+    await reply(t.id, creator);
+    expect(toStranger()).toHaveLength(1);
+    expect(replyNotes(t.id).some((n) => n.startsWith(approver.userId))).toBe(false);
+  });
+
+  it("非公開の制作物で、購読した後に見られなくなった人には送らない（伏せた通知も作らない）", async () => {
+    const { ctx, work, post, reply } = await setup("restricted");
+    const t = await post();
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [stranger.userId],
+      permission: "view",
+    });
+    await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
+    await reply(t.id, creator);
+    const toStranger = () =>
+      ctx.state.notifications.all().filter((n) => n.recipientId === stranger.userId);
+    expect(toStranger()).toMatchObject([{ kind: "comment_posted", threadId: t.id }]);
+    await revokeWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userId: stranger.userId,
+    });
+    await reply(t.id, creator);
+    expect(toStranger()).toHaveLength(1);
+  });
+
+  it("見られない人は購読できず、削除されたスレッドは購読できない", async () => {
+    const { ctx, post } = await setup("restricted");
+    const t = await post();
+    await expect(
+      setThreadSubscription(ctx, stranger, { threadId: t.id, on: true }),
+    ).rejects.toThrow(code("forbidden"));
+    await deleteThread(ctx, reviewer, { threadId: t.id });
+    await expect(setThreadSubscription(ctx, creator, { threadId: t.id, on: true })).rejects.toThrow(
+      code("comment_thread_deleted"),
+    );
   });
 });
