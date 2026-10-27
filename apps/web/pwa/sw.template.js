@@ -22,6 +22,8 @@ const VENDOR = "mf100-vendor-v1";
 const VENDOR_PREFIXES = ["/pdfjs/", "/ocr/"];
 /** 横取りしない同一オリジンのパス（API を同じオリジンに置いた場合に備える） */
 const BYPASS_PREFIXES = ["/api/", "/auth/", "/.well-known/"];
+/** 配信側（Cloudflare Pages）は無いファイルにも index.html を 200 で返す。静的ファイルの代わりに受け取らない */
+const isHtml = (res) => (res.headers.get("content-type") ?? "").startsWith("text/html");
 
 /**
  * 新しい版の外枠を用意する。/assets/* はファイル名にハッシュが入っていて、同じ名前なら中身も同じなので、
@@ -45,7 +47,7 @@ async function precache() {
   const copyFromOld = async (p) => {
     for (const old of olds) {
       const hit = await old.match(p, { ignoreVary: true }).catch(() => undefined);
-      if (hit && hit.ok && hit.status === 200) {
+      if (hit && hit.ok && hit.status === 200 && !isHtml(hit)) {
         await cache.put(p, hit);
         return true;
       }
@@ -139,11 +141,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const cacheName = VENDOR_PREFIXES.some((p) => url.pathname.startsWith(p))
-    ? VENDOR
-    : SHELL_PREFIXES.some((p) => url.pathname.startsWith(p)) || PRECACHE.includes(url.pathname)
-      ? SHELL
-      : null;
+  const vendor = VENDOR_PREFIXES.some((p) => url.pathname.startsWith(p));
+  const asset = vendor || SHELL_PREFIXES.some((p) => url.pathname.startsWith(p));
+  const cacheName = vendor ? VENDOR : asset || PRECACHE.includes(url.pathname) ? SHELL : null;
   if (!cacheName) return;
   event.respondWith(
     caches.open(cacheName).then((cache) =>
@@ -151,6 +151,8 @@ self.addEventListener("fetch", (event) => {
         (hit) =>
           hit ||
           fetch(req).then((res) => {
+            // デプロイで消えたチャンクに返る index.html を JS として渡さず、残さない（読み込みの失敗にする）
+            if (asset && isHtml(res)) return new Response(null, { status: 404 });
             // 正常な応答だけ保存する（範囲リクエストの 206・エラーは保存しない）
             if (res.ok && res.status === 200 && res.type === "basic")
               void cache.put(req, res.clone());
