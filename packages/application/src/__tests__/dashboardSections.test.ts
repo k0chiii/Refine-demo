@@ -37,9 +37,13 @@ describe("ダッシュボードの節ごとの問い合わせ", () => {
       for (const who of everyone) {
         const full = await buildDashboard(ctx, who, await works());
         const { review, checks, finalize, assign } = full.mine;
+        const rows = new Set(
+          [...review, ...checks, ...finalize, ...assign, ...full.done].map((i) => i.workId),
+        );
         expect(await buildCheckDashboard(ctx, who, await works())).toEqual({
           mine: { review, checks, finalize, assign },
           done: full.done,
+          pinned: full.pinned.filter((i) => !rows.has(i.workId)),
         });
 
         const creatorOf = new Set(
@@ -80,15 +84,17 @@ describe("ダッシュボードの節ごとの問い合わせ", () => {
     expect((await buildWorksDashboard(ctx, principals.creator, await works())).pinned).toHaveLength(
       3,
     );
+    expect((await buildCheckDashboard(ctx, principals.creator, await works())).pinned).toHaveLength(
+      3,
+    );
   });
 
-  it("校正の節は通知・ピン留め・担当の一覧を読まない（それらの書込みで再実行されない）", async () => {
+  it("校正の節は通知・担当の一覧を読まない（それらの書込みで再実行されない）", async () => {
     const { ctx, works } = await seedPortfolio();
     const list = await works();
     const ports = spyPorts(ctx);
     for (const who of everyone) await buildCheckDashboard(ctx, who, list);
     expect(ports.read("notifications.")).toBe(0);
-    expect(ports.read("home.")).toBe(0);
     expect(ports.read("teams.")).toBe(0);
     expect(ports.read("threads.")).toBe(0);
   });

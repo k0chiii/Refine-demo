@@ -154,10 +154,15 @@ export interface DashboardOverview {
   bureaus: BureauSummary[];
 }
 
-/** 校正の入口（と `/` の振り分け）が読む節: 自分が確かめるものと、割り当てるもの */
-export interface CheckDashboard {
+interface CheckTasks {
   mine: Pick<Dashboard["mine"], "review" | "checks" | "finalize" | "assign">;
   done: DashboardItem[];
+}
+
+/** 校正の入口（と `/` の振り分け）が読む節 */
+export interface CheckDashboard extends CheckTasks {
+  /** ピン留めした制作物のうち、上の行（校正・専門確認・校了・割り当て・完了）に無いもの。並びはピン留めの新しい順 */
+  pinned: DashboardItem[];
 }
 
 /** 制作の入口が読む節 */
@@ -301,12 +306,12 @@ async function glanceWork(
   };
 }
 
-function emptyCheckTasks(): CheckDashboard {
+function emptyCheckTasks(): CheckTasks {
   return { mine: { review: [], checks: [], finalize: [], assign: [] }, done: [] };
 }
 
 /** 校正の仕事（校正する・専門確認・校了）と割り当てるを、受付中の版から足す */
-async function addCheckTasks(out: CheckDashboard, g: WorkGlance): Promise<void> {
+async function addCheckTasks(out: CheckTasks, g: WorkGlance): Promise<void> {
   const { work, open, authz } = g;
   if (!open) return;
   const { revision: accepting, assignments, checks, pendingChecks, reviewersDone, mine } = open;
@@ -694,8 +699,9 @@ export async function buildDashboard(
 }
 
 /**
- * 校正の入口と `/` の振り分けの節。進行中の制作物の受付中の版だけを読み、通知・ピン留め・担当の一覧は読まない
- * （コメントの通知やピン留めの書込みで、この購読は再実行されない）
+ * 校正の入口と `/` の振り分けの節。進行中の制作物の受付中の版と、ピン留めした制作物を読む。通知・担当の一覧は読まない
+ * （コメントの通知の書込みで、この購読は再実行されない）。ピン留めは制作物の購読を兼ねるので、自分の行が無い
+ * 制作物もここに出す（利用者決定 2026-10-27）
  */
 export async function buildCheckDashboard(
   ctx: AppContext,
@@ -710,7 +716,9 @@ export async function buildCheckDashboard(
     await addCheckTasks(out, await glanceWork(ctx, principal, work, grants));
   }
   for (const list of Object.values(out.mine)) list.sort(byDeadline);
-  return out;
+  const shown = new Set([...Object.values(out.mine).flat(), ...out.done].map((i) => i.workId));
+  const pinned = (await pinnedItems(ctx, principal)).filter((i) => !shown.has(i.workId));
+  return { ...out, pinned };
 }
 
 /**

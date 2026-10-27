@@ -314,6 +314,11 @@ export class App {
     await expect(panel.locator(".thread__replyitem")).toHaveCount(replies + 1);
   }
 
+  /** スレッドのパネルのバーにある、返信の通知を受け取るトグル（aria-pressed が購読しているか） */
+  subscribeToggle(panel: Locator) {
+    return panel.locator(".thread-panel__bar m3e-icon-button.thread-panel__subscribe");
+  }
+
   /** 元のコメントを訂正する（パネルの「その他の操作」→「訂正」で本文を入れ替えて保存） */
   async editComment(panel: Locator, body: string) {
     await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
@@ -333,6 +338,30 @@ export class App {
     await form.locator(".rt__content").fill(body);
     await form.locator("m3e-button", { hasText: "訂正を保存" }).click();
     await expect(form).toHaveCount(0);
+  }
+
+  /** エディタのアプリバーの「ピン留め」を押し、押された状態で保存し終わるまで待つ */
+  async pin() {
+    const button = this.page.locator('.shell__appbar m3e-icon-button[aria-label^="ピン留め"]');
+    const disabled = () =>
+      button.evaluate((el) => (el as HTMLElement & { disabled?: boolean }).disabled);
+    await expect.poll(disabled).toBe(false);
+    await button.click();
+    await expect(button).toHaveAttribute("selected");
+    await expect.poll(disabled).toBe(false);
+  }
+
+  /** 校正の入口（/check）の「ピン留め」の行 */
+  checkPinned() {
+    return this.page.locator(".hub[data-hub='check'] .check__pinned .hub-row");
+  }
+
+  /** アプリバーのベルから通知の一覧を開き、通知の行を返す（medium 以上のメニュー） */
+  async notifications() {
+    await this.page.locator('.bell m3e-icon-button[aria-label^="通知"]').click();
+    await this.page.waitForSelector("#notif-menu .notif-menu__header");
+    await this.settle();
+    return this.page.locator("#notif-menu .notif");
   }
 
   /** アプリバーの「比べる」から版や操作を選ぶ（広い画面は Menu、compact は Bottom sheet） */

@@ -15,6 +15,7 @@ import {
   searchMentionGroups as searchMentionGroupsUseCase,
   postComment,
   replyToThread,
+  setThreadSubscription,
   toggleCommentReaction,
 } from "@mf100/application";
 import {
@@ -84,6 +85,18 @@ export const markRead = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       await markCommentRead(createAppContext(ctx), principal, args);
+      return null;
+    });
+  },
+});
+
+/** スレッドを購読する・外す（購読した人は、返信していなくても返信の通知を受け取る）。見られる人だけ */
+export const setSubscription = mutation({
+  args: { threadId: v.id("commentThreads"), on: v.boolean() },
+  handler: async (ctx, args) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await setThreadSubscription(createAppContext(ctx), principal, args);
       return null;
     });
   },
@@ -175,6 +188,7 @@ export const events = query({
       return {
         /** 自分がこのスレッドを最後に読んだ時刻（「ここから未読」の線の位置。読んだことが無ければ null） */
         readAt: await app.threads.readAt(principal.userId, threadId),
+        subscribed: await app.threads.isSubscribed(principal.userId, threadId),
         canDecide:
           thread.deletedAt === undefined &&
           isAllowed("comment.decide", { work, grants, principal }) &&

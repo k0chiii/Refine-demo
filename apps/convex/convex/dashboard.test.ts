@@ -34,9 +34,13 @@ describe("Convex 統合: ダッシュボードの節ごとの問い合わせ", (
     for (const who of [cast.creator, cast.manager, cast.reviewer, cast.approver, cast.stranger]) {
       const full = await who.as.query(api.dashboard.get, {});
       const { review, checks, finalize, assign } = full.mine;
+      const rows = new Set(
+        [...review, ...checks, ...finalize, ...assign, ...full.done].map((i) => i.workId),
+      );
       expect(await who.as.query(api.dashboard.check, {})).toEqual({
         mine: { review, checks, finalize, assign },
         done: full.done,
+        pinned: full.pinned.filter((i) => !rows.has(i.workId)),
       });
       expect(await who.as.query(api.dashboard.make, {})).toEqual({
         submit: full.mine.submit,
@@ -60,6 +64,7 @@ describe("Convex 統合: ダッシュボードの節ごとの問い合わせ", (
     expect(creator.respond.map((i) => i.workId)).toEqual([workId]);
     expect(creator.mentions.length).toBeGreaterThan(0);
     expect((await cast.creator.as.query(api.dashboard.works, {})).pinned).toHaveLength(1);
+    expect((await cast.creator.as.query(api.dashboard.check, {})).pinned).toHaveLength(1);
   });
 });
 

@@ -10,6 +10,7 @@
 - `decision-reject` 理由を付けて不採用にするとスレッドが閉じる。
 - `reply-edit` 返信した本人が返信の「⋮」→「訂正」で本文を直せる（管理者でも他人の返信は直せない）。
 - `edited-mark` 訂正したコメント・返信は本文の後ろに「編集済み」の印（`.thread__edited`）。流れに原文の行は出ない。
+- `thread-subscribe` パネルのベル（`.thread-panel__subscribe`）で購読すると、メンションされていなくても返信の通知がベルに来る。
 - `compose-in-panel` 840px 以上では、なぞる・位置なしの投稿欄が紙面ではなく引き出し「コメント」の一番下（`.comments__compose`）に出る。
 
 ## How to get to it (user POV)

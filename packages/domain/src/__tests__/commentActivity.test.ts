@@ -145,4 +145,17 @@ describe("返信の通知の宛先", () => {
   it("自動校正の指摘の投稿者（システム）には送らない", () => {
     expect(replyRecipients(botThread, [reply("a", "creator", 1)], "manager")).toEqual(["creator"]);
   });
+
+  it("購読した人にも送る。返信した本人・メンションした人は除き、投稿者や返信者と重ねない", () => {
+    expect(replyRecipients(thread, events, "creator", [], ["watcher"])).toEqual([
+      "reviewer",
+      "manager",
+      "watcher",
+    ]);
+    expect(
+      replyRecipients(thread, events, "watcher", ["other"], ["watcher", "other", "reviewer"]),
+    ).toEqual(["reviewer", "creator", "manager"]);
+    expect(replyRecipients(thread, [], "reviewer", [], ["reviewer"])).toEqual([]);
+    expect(replyRecipients(botThread, [], "manager", [], ["creator"])).toEqual(["creator"]);
+  });
 });
