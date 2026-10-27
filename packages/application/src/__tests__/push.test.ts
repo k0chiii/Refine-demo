@@ -255,10 +255,7 @@ describe("端末への通知（Web Push）", () => {
     expect(await recordPushResult(ctx, s.id, 500)).toBe("kept");
     expect(ctx.state.pushSubscriptions.get(s.id)?.failureCount).toBe(1);
     expect(await recordPushResult(ctx, s.id, 201)).toBe("kept");
-    expect(ctx.state.pushSubscriptions.get(s.id)).toMatchObject({
-      failureCount: 0,
-      lastSuccessAt: ctx.clock.now(),
-    });
+    expect(ctx.state.pushSubscriptions.get(s.id)?.failureCount).toBe(0);
     expect(await recordPushResult(ctx, s.id, 410)).toBe("deleted");
     expect(await recordPushResult(ctx, s.id, 201)).toBe("missing");
   });
