@@ -8,6 +8,7 @@
 - `assign-group` グループ（`こうせいはん`）を選んで、一部を外して割り当てる。
 - `check-list` 校正者の「校正」に出る・切り替えが 3 つ・行ごとの次の操作の印・ナビのバッジ。
 - `check-mobile` 412px・360px で長い題名の行も右端で切れない。
+- `pin-subscribe` 割り当てられていない人がエディタのピン留めを押すと、次の版の提出でベルに通知が来て、「校正」の「ピン留め」の節（`.check__pinned`）に出る。
 - `picker-ime` ユーザーの選択欄で、日本語入力の「確定」（iPhone の Safari は keyCode 229）が候補の決定に取られない。ふつうの Enter は先頭の候補を決める。
 
 ## How to get to it (user POV)
