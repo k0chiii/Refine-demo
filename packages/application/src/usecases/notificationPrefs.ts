@@ -2,9 +2,12 @@ import {
   type AccountChannel,
   type ChannelAvailability,
   type ChannelStatus,
+  channelStatusOf,
+  deliverableEmail,
   normalizeNotificationPrefs,
   type NotificationPrefs,
   type Principal,
+  type SlackLink,
   validateNotificationPrefsPatch,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
@@ -42,8 +45,17 @@ export async function getNotificationSettings(
   principal: Principal,
   available: ChannelAvailability,
 ): Promise<NotificationSettings> {
-  void [ctx, principal, available];
-  throw new Error("not implemented");
+  const prefs = await getNotificationPrefs(ctx, principal);
+  const address = (await ctx.people.profiles([principal.userId]))[0]?.email || null;
+  const email = deliverableEmail(address);
+  const slack: SlackLink = email ? await ctx.slackMembers.find(email) : { state: "unresolved" };
+  const setting = (channel: AccountChannel): ChannelSetting => ({
+    available: available.has(channel),
+    on: prefs.channels.includes(channel),
+    address,
+    status: channelStatusOf(channel, email, slack),
+  });
+  return { ...prefs, destinations: { email: setting("email"), slack: setting("slack") } };
 }
 
 /**

@@ -1,4 +1,12 @@
-import { type DeliveryChannel, DomainError, SLACK_RECHECK_MS } from "@mf100/domain";
+import {
+  composeNotificationMessage,
+  type DeliveryChannel,
+  DomainError,
+  SLACK_RECHECK_MS,
+  toEmail,
+  toPushPayload,
+  toSlackText,
+} from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission, revokeWorkPermission } from "../usecases/acl.ts";
 import {
@@ -223,12 +231,14 @@ describe("外への通知の計画", () => {
     expect(hidden?.targets.map((t) => t.channel)).toEqual(["push", "email", "slack"]);
     for (const t of hidden!.targets)
       expect(renderedOf(t)).not.toMatch(new RegExp(`夏のポスター|本郷|相談です|thr-1|${work.id}`));
+    // 伏せた通知の決まった内容（非公開の制作物があることも出さない。行き先はトップ）
+    const fixed = composeNotificationMessage({ notification: n, work: null, hidden: true });
     const [push, email, slack] = hidden!.targets;
     if (push?.channel !== "push" || email?.channel !== "email" || slack?.channel !== "slack")
       throw new Error("push, email and slack targets expected");
-    expect(push.payload.url).toBe("/");
-    expect(email.content.text.split("\n")).toContain(`${ORIGIN}/`);
-    expect(slack.text).toContain(`<${ORIGIN}/|`);
+    expect(push.payload).toEqual(toPushPayload(fixed, 1));
+    expect(email.content).toEqual(toEmail(fixed, ORIGIN));
+    expect(slack.text).toBe(toSlackText(fixed, ORIGIN));
   });
 
   it("既読になった・止めた分類の通知は計画しない（アプリ内の通知は残る）", async () => {

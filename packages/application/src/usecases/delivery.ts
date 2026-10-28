@@ -1,13 +1,29 @@
-import type {
-  ChannelAvailability,
-  EmailContent,
-  NotificationContentPolicy,
-  PushDevice,
-  PushPayload,
-  SettledOutcome,
-  SlackLink,
+import {
+  type ChannelAvailability,
+  composeNotificationMessage,
+  deliverableEmail,
+  type Destination,
+  destinationsOf,
+  type EmailContent,
+  nextSlackLink,
+  normalizeNotificationPrefs,
+  type NotificationContentPolicy,
+  type NotificationMessage,
+  type PushDevice,
+  type PushPayload,
+  type SettledOutcome,
+  type SlackLink,
+  type SlackObservation,
+  toEmail,
+  toPushPayload,
+  toSlackText,
+  type UserId,
+  wantedChannels,
 } from "@mf100/domain";
-import type { AppContext } from "../ports.ts";
+import type { AppContext, Notification } from "../ports.ts";
+import { principalOf } from "../shared.ts";
+import { presentNotifications } from "./notifications.ts";
+import { recordPushResult } from "./push.ts";
 
 /*
  * 外への通知（端末・登録メールアドレス・Slack の DM）。通知 1 件ごとに、だれの・どの届け先へ・何を送るかを計画し、
@@ -49,8 +65,110 @@ export async function planDelivery(
   notificationId: string,
   env: DeliveryEnv,
 ): Promise<DeliveryPlan | null> {
-  void [ctx, notificationId, env];
-  throw new Error("not implemented");
+  const n = await ctx.notifications.findById(notificationId);
+  if (!n || n.readAt !== undefined) return null;
+  // 読むのは、使える経路が要るものだけ（Convex のトランザクションの読み取りを増やさない）
+  const available = usableChannels(env);
+  if (available.size === 0) return null;
+  const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(n.recipientId));
+  const devices = available.has("push")
+    ? (await ctx.pushSubscriptions.listByUser(n.recipientId)).map(
+        ({ id, endpoint, p256dh, auth }): PushDevice => ({ id, endpoint, p256dh, auth }),
+      )
+    : [];
+  const channels = wantedChannels({
+    kind: n.kind,
+    prefs,
+    available,
+    hasPushDevice: devices.length > 0,
+  });
+  if (channels.length === 0) return null;
+  const email =
+    channels.includes("email") || channels.includes("slack")
+      ? await deliverableEmailOf(ctx, n.recipientId)
+      : null;
+  const slack: SlackLink =
+    email && channels.includes("slack")
+      ? await ctx.slackMembers.find(email)
+      : { state: "unresolved" };
+  const settled = new Set(await ctx.deliveries.listSettled(n.id));
+  const destinations = destinationsOf({
+    channels,
+    devices,
+    email,
+    slack,
+    now: ctx.clock.now(),
+  }).filter((d) => !settled.has(d.key));
+  if (destinations.length === 0) return null;
+  const message = await messageOf(ctx, n, prefs.showPreview, env.policy);
+  const unread = destinations.some((d) => d.channel === "push")
+    ? await ctx.notifications.countUnread(n.recipientId)
+    : 0;
+  return {
+    notificationId: n.id,
+    targets: destinations.map((d) => targetOf(d, message, unread, env.origin)),
+  };
+}
+
+/** 使える経路。メール・Slack は画面へのリンクを載せるので、オリジン（FRONTEND_URL）が無ければ使わない */
+function usableChannels(env: DeliveryEnv): ChannelAvailability {
+  return env.origin === null
+    ? new Set([...env.available].filter((c) => c === "push"))
+    : env.available;
+}
+
+/** 送ってよい登録メールアドレス（無い・送れない形・試験用のドメインなら null） */
+async function deliverableEmailOf(ctx: AppContext, userId: UserId): Promise<string | null> {
+  return deliverableEmail((await ctx.people.profiles([userId]))[0]?.email);
+}
+
+/**
+ * 送る時点の閲覧権限で伏せ直し、外に出す内容を決める。作った後に ACL が外れたら、送り主・抜粋ごと伏せる。
+ * 「通知に内容を表示」が切ってあれば、送り主と抜粋を載せない
+ */
+async function messageOf(
+  ctx: AppContext,
+  n: Notification,
+  showPreview: boolean,
+  policy: NotificationContentPolicy | undefined,
+): Promise<NotificationMessage> {
+  // 受信者の担当の所属も添えて、非公開の制作物を所属で見られる人を伏せない
+  const [shown] = await presentNotifications(
+    ctx,
+    principalOf(n.recipientId, await ctx.teams.list()),
+    [n],
+  );
+  const hidden = n.workId !== undefined && shown?.workId === undefined;
+  const work = !hidden && n.workId ? await ctx.works.findById(n.workId) : null;
+  const notification = shown ?? n;
+  const restricted = work?.confidentiality === "restricted";
+  // 送り主の名前は、載せるときだけ引く（伏せるとき・内容を出さないときは読まない）
+  const actorName =
+    showPreview && (policy?.showPreview ?? true) && !hidden && !restricted && notification.actorId
+      ? await ctx.people.displayName(notification.actorId).catch(() => null)
+      : null;
+  return composeNotificationMessage({
+    notification,
+    work: work ? { title: work.title, restricted } : null,
+    hidden,
+    actorName,
+    showPreview,
+    ...(policy ? { policy } : {}),
+  });
+}
+
+function targetOf(
+  d: Destination,
+  m: NotificationMessage,
+  unread: number,
+  origin: string | null,
+): DeliveryTarget {
+  if (d.channel === "push") return { ...d, payload: toPushPayload(m, unread) };
+  // usableChannels がオリジンの無いときのメール・Slack を落としている
+  if (origin === null) throw new Error("delivery_origin_missing");
+  return d.channel === "email"
+    ? { ...d, content: toEmail(m, origin) }
+    : { ...d, text: toSlackText(m, origin) };
 }
 
 /**
@@ -61,28 +179,80 @@ export async function recordDelivery(
   ctx: AppContext,
   input: { notificationId: string; target: DeliveryTargetRef; outcome: SettledOutcome },
 ): Promise<void> {
-  void [ctx, input];
-  throw new Error("not implemented");
+  const { notificationId, target, outcome } = input;
+  const at = ctx.clock.now();
+  await ctx.deliveries.settle({
+    notificationId,
+    destination: target.key,
+    outcome: outcome.kind,
+    ...(outcome.kind === "rejected" ? { reason: outcome.reason } : {}),
+    at,
+  });
+  switch (target.channel) {
+    case "push":
+      await recordPushResult(ctx, target.subscriptionId, pushStatusOf(outcome));
+      return;
+    case "email":
+      return;
+    case "slack": {
+      const observation = slackPostObservation(target.memberId, outcome, at);
+      if (observation) await observeSlack(ctx, target.email, observation);
+      return;
+    }
+  }
+}
+
+/** recordPushResult は HTTP の状態で数える。状態の無い結果は、同じ扱いになる状態に読み替える */
+function pushStatusOf(outcome: SettledOutcome): number {
+  if (outcome.httpStatus !== undefined) return outcome.httpStatus;
+  if (outcome.kind === "sent") return 201;
+  return outcome.reason === "gone" ? 410 : 400;
+}
+
+/** DM を送った結果が示すこと。送っていない（メンバーが分からなかった）・ほかの理由で断られたなら無し */
+function slackPostObservation(
+  memberId: string | null,
+  outcome: SettledOutcome,
+  at: number,
+): SlackObservation | null {
+  if (memberId === null) return null;
+  if (outcome.kind === "sent") return { type: "post_ok", memberId, at };
+  return outcome.reason === "cannot_dm" ? { type: "post_cannot_dm", memberId, at } : null;
+}
+
+/** Slack の状態を観測で移す。slackMembers を書くのはここだけで、状態が変わらなければ書かない */
+async function observeSlack(
+  ctx: AppContext,
+  email: string,
+  observation: SlackObservation,
+): Promise<SlackLink> {
+  const prev = await ctx.slackMembers.find(email);
+  const next = nextSlackLink(prev, observation);
+  if (next !== prev && next.state !== "unresolved") await ctx.slackMembers.save(email, next);
+  return next;
 }
 
 /** 登録メールアドレスで Slack を引いた結果 */
 export type SlackLookupResult = { kind: "found"; memberId: string } | { kind: "not_found" };
 
-/**
- * 引いた結果を、引いたメールアドレスの行に保存する（slackMembers を書くのは、このファイルの 2 関数だけ）。
- * 状態が変わらなければ書かない
- */
+/** 引いた結果を、引いたメールアドレスの行に保存する（状態が変わらなければ書かない） */
 export async function recordSlackLookup(
   ctx: AppContext,
   email: string,
   result: SlackLookupResult,
 ): Promise<SlackLink> {
-  void [ctx, email, result];
-  throw new Error("not implemented");
+  const at = ctx.clock.now();
+  return observeSlack(
+    ctx,
+    email,
+    result.kind === "found"
+      ? { type: "lookup_found", memberId: result.memberId, at }
+      : { type: "lookup_not_found", at },
+  );
 }
 
 /** Slack で引くメールアドレス（Slack をオンにしていて、送れるアドレスがあるときだけ） */
 export async function slackLookupEmail(ctx: AppContext, userId: string): Promise<string | null> {
-  void [ctx, userId];
-  throw new Error("not implemented");
+  const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(userId));
+  return prefs.channels.includes("slack") ? deliverableEmailOf(ctx, userId) : null;
 }
