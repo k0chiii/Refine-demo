@@ -60,7 +60,7 @@
 
 ### 2.3 Convex: 関数の種類・cron
 
-- **action は少ない**: `ai.proofread`（利用者が確認して押したときだけ。`apps/convex/convex/ai.ts:106`）と `pushNode.deliver`（端末を登録した人への通知のときだけ）の 2 つ。mutation や query で足りるものを action にしている箇所はない。
+- **action は少ない**: `ai.proofread`（利用者が確認して押したときだけ。`apps/convex/convex/ai.ts:106`）、`deliveryNode.deliver`（外への届け先がある人への通知 1 件に 1 回。端末・メール・Slack をまとめて送る。`pushNode.deliver` を置き換えた）、`deliveryNode.resolveSlack`（Slack（DM）のスイッチを入れたときだけ）の 3 つ。mutation や query で足りるものを action にしている箇所はない。1 回の送信で書く mutation は 2 本から 1 本になり、送ったかを確かめる別の query は無くなった。メールは Resend の無料枠（3,000 通/月・100 通/日）が上限で、Slack の API の呼び出しに料金はかからない。
 - **cron**（`apps/convex/convex/crons.ts:9-15`）: 受付終了を 1 分ごと（月 4.3 万回）、リマインド・放置セッション・放置添付を毎時（月 約 2,200 回）。受付終了の 1 分は**表示のため**に要る（期限の判定自体は各 mutation の時刻比較で保証されるが、`revisions.get` は読み取りで時刻を読むため、受付終了の印は cron の書込みで購読を再実行させて反映している）。索引の範囲が空なら読み取りも書込みもほぼ無いので、止めない。呼び出し回数は月 4.6 万回で、この規模の 0.2% 未満。
 - **大きな文書**: ファイル本体は R2 にあり Convex には入れていない。文章の下書き（`documentDrafts`）は本文を 2 重に（JSON と平文）持つが、書く人が限られ、量は小さい。
 - **ページネーション**: 一覧は上限つきの `take`（`listMyWorks` は 2,000 件、通知は 20 件）で、`.collect()` で無制限に読むのは `by_revision` / `by_work` のような**親で絞った小さな集合**と、表記統一のカテゴリ・ルール（400 件程度。今回、必要なカテゴリだけに絞った）だけ。

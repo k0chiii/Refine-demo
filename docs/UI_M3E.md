@@ -1215,7 +1215,7 @@ m3.material.io の sitemap にある**ドキュメント 262 ページ全部**�
 
 - **スイッチ**: 「この端末にも通知を送る」（M3 の list item の形: 先頭アイコン・2 行・末尾の `m3e-switch`）。置き場所は当初は通知パネルの一番上だったが、2026-10-17 にアカウントの「通知の設定」ダイアログへ移した（§61）。押したときだけ通知の許可を求める。iPhone の Safari では「ホーム画面に追加したアプリで受け取れます」と案内し、拒否済みなら理由を出す。サーバーに鍵が無い環境（デモ）では出さない
 - **届く内容**: 題名（「新しいコメント」などの決まった文言）と『制作物名』。押すとアプリ内の通知と同じ画面を開き、その通知を既読にする。アイコンの数は届いた時点の未読数
-- **仕組み**: 通知を作ると（adapters の `notifications.insert`）、受信者が端末を登録していれば `pushNode.deliver` を予約。送る時点で既読・閲覧権限を確かめ直して内容を作り（`planPushDelivery`）、VAPID（ES256）と aes128gcm の暗号化（WebCrypto で実装。標準の実装 http_ece で復号できることをテストで確認）でプッシュサービスへ送る。404/410 や 5 回続けての失敗で登録を消す
+- **仕組み**: 通知を作ると（adapters の `notifications.insert`）、受信者が端末を登録していれば配信を予約（2026-10-28 からは `deliveryNode.deliver`。§103）。送る時点で既読・閲覧権限を確かめ直して内容を作り（`planDelivery`）、VAPID（ES256）と aes128gcm の暗号化（WebCrypto で実装。標準の実装 http_ece で復号できることをテストで確認）でプッシュサービスへ送る。404/410 や 5 回続けての失敗で登録を消す
 - **スマホのスレッドの下部ナビ**: §44 で隠したが「ナビゲーションバーを消して欲しいわけじゃない」ので戻した。上からアプリバー・投稿（ここだけスクロール）・返信欄・下部ナビ。キーボードが出ている間だけナビをキーボードの下に隠し、返信欄をキーボードのすぐ上に置く（ナビがキーボードと一緒に持ち上がらない）
 
 ## 46. 広い画面の FB（Slack・Gmail・M3E を調べた見直し。2026-10-16・利用者指示）
@@ -1667,8 +1667,8 @@ Frame.io（V4・Legacy）、Vimeo Review、Wipster、Filestage、Ziflow、Review
 
 - **通知パネル**: `NotificationsBell.Menu` / `Sheet` から `PushSetting` を外した。メニューの「チェックの付く項目」版（`PushSetting` の `inMenu`、`.notif-push-item*`）は不要になったので削除。パネルは見出し・「すべて既読にする」・通知の一覧だけ
 - **アカウントの操作**: `routes/_app.tsx` の `accountActions` に「通知の設定」（`notifications`）を、「アバターを変える」の次に足した。medium 以上は M3E menu、compact は `ui/ActionSheet` で、どちらも同じ配列から出す（ActionSheet 自体は変えていない）
-- **出す条件は PushSetting と同じ**: 端末への通知が使える環境（鍵のある本番、またはデモ）で、この端末が対応していること（`usePushAvailable`。`useDevicePush` の `usable` と `support !== "unsupported"`）。鍵の無い本番や非対応のブラウザでは項目ごと出さない。サインイン前は問い合わせない
-- **ダイアログ**（`features/notifications/PushSettingDialog`）: `ui/LazyDialog` の M3E ダイアログ。初めて開くまで読み込まない（`_app` の `lazy`。アバターの選択と同じ作り）。compact は全画面（`dialog--full`）、それ以上は幅 560 の普通のダイアログ（`dialog--narrow` を重ねた）。中身は説明の一文と `PushSetting`（先頭アイコン・「この端末にも通知を送る」・状態の説明・末尾の `m3e-switch`）。iPhone の Safari ではスイッチの代わりに「ホーム画面に追加」の案内、拒否済みなら理由、デモでは「この端末の中だけ」の説明が出る。操作は「閉じる」
+- **出す条件は PushSetting と同じ**: 端末への通知が使える環境（鍵のある本番、またはデモ）で、この端末が対応していること（`usePushAvailable`。`useDevicePush` の `usable` と `support !== "unsupported"`）。鍵の無い本番や非対応のブラウザでは項目ごと出さない。サインイン前は問い合わせない（2026-10-28 に改めた → §103「メニューに出す条件」）
+- **ダイアログ**（`features/notifications/PushSettingDialog`。§103 で `NotificationSettingsDialog` に名前を変えた）: `ui/LazyDialog` の M3E ダイアログ。初めて開くまで読み込まない（`_app` の `lazy`。アバターの選択と同じ作り）。compact は全画面（`dialog--full`）、それ以上は幅 560 の普通のダイアログ（`dialog--narrow` を重ねた）。中身は説明の一文と `PushSetting`（先頭アイコン・「この端末にも通知を送る」・状態の説明・末尾の `m3e-switch`）。iPhone の Safari ではスイッチの代わりに「ホーム画面に追加」の案内、拒否済みなら理由、デモでは「この端末の中だけ」の説明が出る。操作は「閉じる」
 - **挙動は変えない**: 購読・解除（`useDevicePush` の `enable` / `disable`）、許可の状態（available・needs_install・denied）、サインアウトの前に端末の購読を外す処理（`stopPushOnThisDevice`）、「通知をオンにしますか？」（`NotificationPrompt`）はそのまま。プロンプトの「あとからでもオン・オフできます」の案内文だけ、新しい場所（右上のアカウントの「通知の設定」）に直した
 
 ## 62. セレクトボックスで選ぶたび「再描画」に見えるのをやめる（2026-10-17・利用者指示）
@@ -2653,6 +2653,41 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 ### E2E
 
 `pin-subscribe.spec.ts`（割り当てられていない人がピン留め → 次の版が出ると `/check` の `.check__pinned` に 1 行、ベルに通知）、`thread-subscribe.spec.ts`（購読してから返信が来るとベルに通知。購読しなければ来ない）。
+
+## 103. 通知の設定に届け先（登録メールアドレス・Slack（DM））（2026-10-28・利用者指示「通知を外部サービスに送れるようにしたい」「アカウントメニューから通知設定ができるようにしたい」「登録メールアドレス」「Slack（DM）に流れるようにしたい。」）
+
+### 届け先の行
+
+- ダイアログは `features/notifications/NotificationSettingsDialog`（`PushSettingDialog` から名前を変えた。作りは §61 のまま）。上から、この端末への通知（`PushSetting`）、届け先の一覧（`NotificationChannelsSetting`。`.notif-channels`）、「通知に内容を表示」と分類ごとのスイッチ（`NotificationPrefsSetting`）。ダイアログは `notificationPrefs.get` を 1 本だけ読み、下の部品へ渡す。
+- 「登録メールアドレス」: 先頭アイコン（`mail`）・見出し・登録メールアドレス（出すだけ。ここでは変えない）・末尾の `m3e-switch`。アドレスが無いときだけ入れられない（予約済みドメインのアドレスは出し、入れられるが送らない。デモ・モックの利用者がそう）。
+- 「Slack（DM）」: 先頭アイコン（`forum`）・見出し・状態・末尾の `m3e-switch`。状態は 未確認（`unresolved`）・送れます（`ready`）・Slack に見つからない（`not_found`）・DM できない（`cannot_dm`）・メールアドレスなし（`no_address`）。メールアドレスなしのときはスイッチを入れられない。
+- 行は `.notif-channel` で、`data-channel`（`email`・`slack`）と `data-status`（上の 5 つ）を持つ。
+- スイッチは既定でオフ。オン・オフは `notificationPrefs.update` の `channels` に保存する。
+- 環境変数の揃っていない経路の行は出さない（README の Convex の環境変数）。デモでは両方出す（端末への通知と同じ）。デモとモックの利用者のアドレス（`*@example.invalid`）は送れるアドレスとみなさない。アドレスは出るが、Slack はメールアドレスなしになり、何も送らない。
+
+### Slack のメンバーは登録メールアドレスから探す
+
+- 利用者は何も入力しない。Slack（DM）のスイッチを入れると、サーバーが登録メールアドレスで MF100 のワークスペースのメンバーを引く（`deliveryNode.resolveSlack`）。結果はメールアドレスごとに `slackMembers` に書き、`notificationPrefs.get` の購読で行の状態が変わる。
+- Slack に見つからない・DM できないときは、24 時間たってから次に届けるときに確かめ直す。スイッチを入れ直すとすぐ確かめる。登録メールアドレスが変わると未確認に戻る。
+
+### 載せる内容は端末への通知と同じ
+
+- 端末・メール・Slack の文面は domain の `composeNotificationMessage` 1 つから作る。非公開の制作物の名前は載せない。見られない人には伏せた通知にする。止めた分類は送らない。「通知に内容を表示」をオフにすると内容を載せない。この 2 つの設定は外へのすべての経路に効く。
+- メールと Slack には校正システムで開くリンク（`FRONTEND_URL` と通知の行き先）を付け、内容を出してよいときはアプリ内の通知の本文も載せる。
+
+### メニューに出す条件（§61 を改めた）
+
+- 「通知の設定」は、サインインした人なら、この端末への通知・登録メールアドレス・Slack（DM）のどれかが使えるときに出す（デモでは常に）。§61 の「端末への通知が使えて、この端末が対応していること」だけではなくなった。メールか Slack が使える本番では、Web Push に対応しないブラウザでも出る。
+- 項目には `data-action="notifications"` を付ける（M3E menu と `ui/ActionSheet` の両方）。
+
+### 配信（Convex）
+
+- 通知 1 件に action 1 つ（`deliveryNode.deliver`）が、端末・メール・Slack をまとめて送る。`pushNode.deliver` を置き換えた。
+- 送った記録は通知 × 届け先で 1 行（`notificationDeliveries`）。旧 `pushDeliveries` の行は、利用者が削除を承認するまで残す。
+
+### E2E
+
+`notification-settings.spec.ts`（`[data-action="notifications"]` からダイアログを開く。両方の行がある。メールの行にアドレスが出る。メールのスイッチを切り替えて閉じ、開き直しても保たれる。`data-status="no_address"` の Slack のスイッチは押せない）。Slack に問い合わせる流れには頼らない。
 
 ## 104. コメントの引き出しを 1 列に・スレッドの上で前後へ（2026-10-28・利用者指示「コメントで2列取るのはやめよう」「上の部分で次のコメント、前のコメントみたいな形でコメントのスライドができてらいいのかな？」→ 試作を見て「Bかな！」）
 

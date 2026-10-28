@@ -52,6 +52,32 @@ describe("通知の受け取り方", () => {
     expect(validateNotificationPrefsPatch({})).toEqual({});
   });
 
+  it("既定ではメール・Slack をオンにしない", () => {
+    expect(normalizeNotificationPrefs(null).channels).toEqual([]);
+    expect(normalizeNotificationPrefs({ showPreview: false }).channels).toEqual([]);
+  });
+
+  it("保存された経路は重複と知らないものを除き、決まった順にそろえる", () => {
+    expect(
+      normalizeNotificationPrefs({ channels: ["slack", "push", "email", "slack", "sms"] }).channels,
+    ).toEqual(["email", "slack"]);
+  });
+
+  it("利用者が送った経路は決まった順にそろえ、知らないものがあれば受け付けない", () => {
+    expect(validateNotificationPrefsPatch({ channels: ["slack", "email", "slack"] })).toEqual({
+      channels: ["email", "slack"],
+    });
+    expect(validateNotificationPrefsPatch({ channels: [] })).toEqual({ channels: [] });
+    expect(validateNotificationPrefsPatch({ showPreview: true, channels: ["slack"] })).toEqual({
+      showPreview: true,
+      channels: ["slack"],
+    });
+    for (const channels of [["email", "sms"], ["push"]])
+      expect(() => validateNotificationPrefsPatch({ channels })).toThrow(
+        expect.objectContaining({ code: "notification_prefs_invalid" }),
+      );
+  });
+
   it("止めた分類の種類だけ止める", () => {
     const prefs = normalizeNotificationPrefs({ mutedCategories: ["reply"] });
     expect(isCategoryMuted(prefs, "comment_posted")).toBe(true);

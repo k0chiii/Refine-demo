@@ -111,7 +111,8 @@ export function useDevicePush() {
 }
 
 /**
- * アカウントのメニューに「通知の設定」を出すか（PushSetting を出す条件と同じ: 端末への通知が使える環境で、この端末が対応している）。
+ * この端末への通知が使えるか（PushSetting を出す条件と同じ: 端末への通知が使える環境で、この端末が対応している）。
+ * アカウントのメニューに「通知の設定」を出す条件の 1 つ（`useNotificationSettingsAvailable`。§103）。
  * サインイン前は問い合わせない（enabled: false）
  */
 export function usePushAvailable(enabled: boolean): boolean {

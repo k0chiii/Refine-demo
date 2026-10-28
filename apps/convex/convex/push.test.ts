@@ -37,11 +37,11 @@ async function device(n: number) {
   };
 }
 
-/** 端末への送信の予約（push:enqueue。取り消して置き換えた分は数えない）。args は { notificationIds } */
+/** 端末への送信の予約（delivery:enqueue。取り消して置き換えた分は数えない）。args は { notificationIds } */
 async function scheduledDeliveries(t: ReturnType<typeof createHarness>) {
   return t.run(async (ctx) =>
     (await ctx.db.system.query("_scheduled_functions").collect()).filter(
-      (f) => f.name.startsWith("push:enqueue") && f.state.kind !== "canceled",
+      (f) => f.name.startsWith("delivery:enqueue") && f.state.kind !== "canceled",
     ),
   );
 }
@@ -94,7 +94,7 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
       async (url: string) => new Response(null, { status: url === d1.endpoint ? 201 : 410 }),
     );
     vi.stubGlobal("fetch", fetch);
-    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
+    expect(await t.action(internal.deliveryNode.deliver, { notificationId })).toBe(1);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(await cast.reviewer.as.query(api.push.status, { endpoint: d2.endpoint })).toBe(false);
     expect(await cast.reviewer.as.query(api.push.status, { endpoint: d1.endpoint })).toBe(true);
@@ -103,7 +103,7 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
     await cast.reviewer.as.mutation(api.notifications.markRead, {
       notificationId: notificationId as never,
     });
-    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(0);
+    expect(await t.action(internal.deliveryNode.deliver, { notificationId })).toBe(0);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -126,7 +126,7 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
     const notificationId = firstNotificationId(scheduled!);
     const fetch = vi.fn(async () => new Response(null, { status: 201 }));
     vi.stubGlobal("fetch", fetch);
-    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(0);
+    expect(await t.action(internal.deliveryNode.deliver, { notificationId })).toBe(0);
     expect(fetch).not.toHaveBeenCalled();
     const list = await cast.reviewer.as.query(api.notifications.list, {});
     expect(list.some((n) => n.id === notificationId)).toBe(true);
@@ -134,7 +134,7 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
     expect(list.find((n) => n.id === notificationId)?.actorId).toBe(cast.manager.id);
     // 止めるのをやめれば送る
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { mutedCategories: [] });
-    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
+    expect(await t.action(internal.deliveryNode.deliver, { notificationId })).toBe(1);
   });
 
   it("1 回の操作で複数の人に通知ができても、送信の予約は 1 本にまとめる", async () => {
@@ -168,7 +168,7 @@ describe("Convex 統合: 端末への通知（Web Push）", () => {
       new Set([cast.reviewer.id, cast.approver.id]),
     );
     // 予約を 1 回走らせると、2 件とも workpool に積まれる
-    await t.mutation(internal.push.enqueue, { notificationIds: ids });
+    await t.mutation(internal.delivery.enqueue, { notificationIds: ids });
     const pending = await t.run(async (ctx) =>
       (await ctx.db.system.query("_scheduled_functions").collect()).filter(
         (f) => f.state.kind !== "canceled",
@@ -218,10 +218,10 @@ it("transient push failure retries only undelivered devices", async () => {
     return new Response(null, { status: 201 });
   });
   vi.stubGlobal("fetch", fetch);
-  await expect(t.action(internal.pushNode.deliver, { notificationId })).rejects.toThrow(
-    "push_transient_failure",
+  await expect(t.action(internal.deliveryNode.deliver, { notificationId })).rejects.toThrow(
+    "delivery_transient_failure",
   );
-  expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
+  expect(await t.action(internal.deliveryNode.deliver, { notificationId })).toBe(1);
   expect(fetch.mock.calls.filter(([url]) => url === d1.endpoint)).toHaveLength(1);
   expect(fetch.mock.calls.filter(([url]) => url === d2.endpoint)).toHaveLength(2);
 });

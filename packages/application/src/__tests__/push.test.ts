@@ -4,21 +4,40 @@ import {
   NOTIFICATION_KIND_CATEGORY,
   type NotificationCategory,
   notificationCategoryOf,
+  type NotificationContentPolicy,
 } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission, revokeWorkPermission } from "../usecases/acl.ts";
-import type { NotificationKind } from "../ports.ts";
+import type { AppContext, NotificationKind } from "../ports.ts";
+import { planDelivery } from "../usecases/delivery.ts";
 import { getNotificationPrefs, updateNotificationPrefs } from "../usecases/notificationPrefs.ts";
 import { notify } from "../usecases/notifications.ts";
 import {
   isPushSubscribed,
-  planPushDelivery,
   recordPushResult,
   subscribePush,
   unsubscribePush,
 } from "../usecases/push.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork } from "../testing/scenario.ts";
+
+/** 端末だけが使える環境で計画する（どの端末にも同じ内容を送る） */
+async function planPush(
+  ctx: AppContext,
+  notificationId: string,
+  policy?: NotificationContentPolicy,
+) {
+  const plan = await planDelivery(ctx, notificationId, {
+    available: new Set(["push"]),
+    origin: null,
+    ...(policy ? { policy } : {}),
+  });
+  const targets = plan?.targets.flatMap((t) => (t.channel === "push" ? [t] : [])) ?? [];
+  const [first] = targets;
+  if (!first) return null;
+  for (const t of targets) expect(t.payload).toEqual(first.payload);
+  return { payload: first.payload, targets };
+}
 
 const sub = (n = 1) => ({
   endpoint: `https://fcm.googleapis.com/fcm/send/device-${n}`,
@@ -64,7 +83,7 @@ describe("端末への通知（Web Push）", () => {
       workId: work.id,
     });
     const n = ctx.state.notifications.all()[0]!;
-    const plan = await planPushDelivery(ctx, n.id);
+    const plan = await planPush(ctx, n.id);
     expect(plan?.targets).toHaveLength(2);
     expect(plan?.payload).toMatchObject({
       url: `/works/${work.id}`,
@@ -85,7 +104,7 @@ describe("端末への通知（Web Push）", () => {
       workId: work.id,
       userId: principals.stranger.userId,
     });
-    const hidden = await planPushDelivery(ctx, n.id);
+    const hidden = await planPush(ctx, n.id);
     expect(JSON.stringify(hidden?.payload)).not.toContain("夏のポスター");
     expect(hidden?.payload.url).toBe("/");
   });
@@ -120,8 +139,8 @@ describe("端末への通知（Web Push）", () => {
       const a = await post();
       const b = await post();
       expect(a.actorId).toBe(principals.reviewer.userId);
-      const pa = (await planPushDelivery(ctx, a.id))!.payload;
-      const pb = (await planPushDelivery(ctx, b.id))!.payload;
+      const pa = (await planPush(ctx, a.id))!.payload;
+      const pb = (await planPush(ctx, b.id))!.payload;
       expect(pa.body).toContain("本郷 校正");
       expect(pa.body).toContain("相談です");
       expect(pa.tag).toBe("thr-1");
@@ -133,12 +152,12 @@ describe("端末への通知（Web Push）", () => {
       const { ctx, post } = await setup();
       const n = await post();
       await updateNotificationPrefs(ctx, principals.stranger, { showPreview: false });
-      const payload = (await planPushDelivery(ctx, n.id))!.payload;
+      const payload = (await planPush(ctx, n.id))!.payload;
       expect(JSON.stringify(payload)).not.toMatch(/本郷|相談です/);
       expect(ctx.state.notifications.get(n.id)?.preview).toBe("相談です");
       // ポリシー側で止めても同じ
       await updateNotificationPrefs(ctx, principals.stranger, { showPreview: true });
-      const byPolicy = (await planPushDelivery(ctx, n.id, {
+      const byPolicy = (await planPush(ctx, n.id, {
         showWorkTitle: true,
         showPreview: false,
       }))!;
@@ -150,12 +169,12 @@ describe("端末への通知（Web Push）", () => {
       const comment = await post("comment_posted");
       const assigned = await post("review_assigned");
       await updateNotificationPrefs(ctx, principals.stranger, { mutedCategories: ["reply"] });
-      expect(await planPushDelivery(ctx, comment.id)).toBeNull();
-      expect(await planPushDelivery(ctx, assigned.id)).not.toBeNull();
+      expect(await planPush(ctx, comment.id)).toBeNull();
+      expect(await planPush(ctx, assigned.id)).not.toBeNull();
       // アプリ内の通知は消えない
       expect(ctx.state.notifications.get(comment.id)).toBeDefined();
       await updateNotificationPrefs(ctx, principals.stranger, { mutedCategories: [] });
-      expect(await planPushDelivery(ctx, comment.id)).not.toBeNull();
+      expect(await planPush(ctx, comment.id)).not.toBeNull();
     });
 
     it("非公開の制作物と、見られなくなった制作物は、名前・送り主・抜粋を載せない", async () => {
@@ -166,14 +185,14 @@ describe("端末への通知（Web Push）", () => {
         confidentiality: "restricted",
       });
       // 閲覧 ACL があって見られる非公開の制作物
-      const restricted = (await planPushDelivery(ctx, n.id))!.payload;
+      const restricted = (await planPush(ctx, n.id))!.payload;
       expect(JSON.stringify(restricted)).not.toMatch(/夏のポスター|本郷|相談です/);
       // ACL が外れて見られなくなった
       await revokeWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
         userId: principals.stranger.userId,
       });
-      const hidden = (await planPushDelivery(ctx, n.id))!.payload;
+      const hidden = (await planPush(ctx, n.id))!.payload;
       expect(JSON.stringify(hidden)).not.toMatch(/夏のポスター|本郷|相談です|thr-1/);
       expect(hidden.url).toBe("/");
       expect(hidden.tag).toBe(n.id);
@@ -203,15 +222,21 @@ describe("端末への通知（Web Push）", () => {
       expect(await getNotificationPrefs(ctx, principals.reviewer)).toEqual({
         showPreview: true,
         mutedCategories: [],
+        channels: [],
       });
       await updateNotificationPrefs(ctx, principals.reviewer, {
         mutedCategories: ["rule", "mention"],
       });
       const after = await updateNotificationPrefs(ctx, principals.reviewer, { showPreview: false });
-      expect(after).toEqual({ showPreview: false, mutedCategories: ["mention", "rule"] });
+      expect(after).toEqual({
+        showPreview: false,
+        mutedCategories: ["mention", "rule"],
+        channels: [],
+      });
       expect(await getNotificationPrefs(ctx, principals.creator)).toEqual({
         showPreview: true,
         mutedCategories: [],
+        channels: [],
       });
     });
 
@@ -242,11 +267,11 @@ describe("端末への通知（Web Push）", () => {
       body: "b",
     });
     const n = ctx.state.notifications.all()[0]!;
-    expect(await planPushDelivery(ctx, n.id)).toBeNull();
+    expect(await planPush(ctx, n.id)).toBeNull();
     await subscribePush(ctx, principals.reviewer, sub());
-    expect(await planPushDelivery(ctx, n.id)).not.toBeNull();
+    expect(await planPush(ctx, n.id)).not.toBeNull();
     ctx.state.notifications.put({ ...n, readAt: ctx.clock.now() });
-    expect(await planPushDelivery(ctx, n.id)).toBeNull();
+    expect(await planPush(ctx, n.id)).toBeNull();
   });
 
   it("宛先が無くなったら購読を消し、成功で失敗回数を戻す", async () => {
