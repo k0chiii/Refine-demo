@@ -1,7 +1,8 @@
-import { getNotificationPrefs, updateNotificationPrefs } from "@mf100/application";
+import { getNotificationSettings, updateNotificationPrefs } from "@mf100/application";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
+import { availableChannels, deliveryConfigFromEnv } from "./lib/channels.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 
@@ -10,12 +11,16 @@ import { requireUser } from "./lib/principal.ts";
  * 自分の設定だけを読み書きする。アプリ内の通知（ベルの一覧）は設定にかかわらず作られる。
  */
 
-/** 自分の設定（無ければ既定: 内容を表示・止めている分類なし） */
+/** 自分の設定（無ければ既定: 内容を表示・止めている分類なし・メールと Slack はオフ）と、届け先ごとの状態 */
 export const get = query({
   args: {},
   handler: async (ctx) => {
     const { principal } = await requireUser(ctx);
-    return getNotificationPrefs(createReadContext(ctx.db), principal);
+    return getNotificationSettings(
+      createReadContext(ctx.db),
+      principal,
+      availableChannels(deliveryConfigFromEnv(process.env)),
+    );
   },
 });
 

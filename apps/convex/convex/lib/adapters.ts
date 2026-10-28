@@ -39,11 +39,12 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
-import { approversOf, parseDestinationKey } from "@mf100/domain";
+import { approversOf, deliverableEmail, parseDestinationKey } from "@mf100/domain";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
 import type { Scheduler } from "convex/server";
+import { deliveryConfigFromEnv } from "./channels.ts";
 import { vapidKeysFromEnv } from "./webpush.ts";
 import { personProfileOf, userDisplayName } from "./users.ts";
 
@@ -604,6 +605,18 @@ export function createAppContext(
           .first();
         if (doc) await db.replace(doc._id, prefs);
         else await db.insert("notificationPrefs", prefs);
+        // Slack をオンにしたら、最初の通知を待たずにメンバーを引く（設定画面に状態を出すため）
+        const slackTurnedOn =
+          prefs.channels.includes("slack") && !(doc?.channels ?? []).includes("slack");
+        if (
+          scheduler &&
+          slackTurnedOn &&
+          deliveryConfigFromEnv(process.env).slack &&
+          deliverableEmail((await db.get("users", prefs.userId as Id<"users">))?.email)
+        )
+          await scheduler.runAfter(0, internal.deliveryNode.resolveSlack, {
+            userId: prefs.userId,
+          });
       },
     },
     deliveries: {
