@@ -4,7 +4,7 @@ import type { NotificationContentPolicy } from "./message.ts";
 /*
  * 通知の配信（Web Push）。利用者決定 2026-10-15「Web Push 進めて」（外部への実データ送信の承認）。
  * 送り先は Apple・Google・Mozilla・Microsoft のプッシュサービス。本文は端末の鍵で暗号化される（RFC 8291）が、
- * サービスを経由するので、載せる内容はここで決めた最小限にする。
+ * サービスを経由するので、載せる内容は message.ts で決めた最小限にする。
  */
 
 /**
@@ -12,21 +12,6 @@ import type { NotificationContentPolicy } from "./message.ts";
  * 端末に載せる抜粋は notify が渡した短い抜粋だけ（確認観点・理由・締切などの本文は載せない）。
  */
 export type PushContentPolicy = NotificationContentPolicy;
-
-export const DEFAULT_PUSH_CONTENT_POLICY: PushContentPolicy = {
-  showWorkTitle: true,
-  showPreview: true,
-};
-
-/** 端末の通知の題名・本文の長さの上限（文字数。ロック画面と、暗号化した本文の大きさの上限に収める） */
-export const PUSH_TITLE_MAX = 80;
-export const PUSH_BODY_MAX = 120;
-
-/** 長ければ切って「…」を付ける（サロゲートペアを割らない） */
-export function clipPushText(text: string, max: number): string {
-  const chars = Array.from(text.replace(/\s+/g, " ").trim());
-  return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : chars.join("");
-}
 
 /**
  * 受け付けるプッシュサービス（購読の送り先。利用者が送ってくる URL なので、ここに無い宛先には送らない）。
@@ -109,94 +94,6 @@ export interface PushPayload {
 /** 通知をまとめる印: 同じスレッド、なければ同じ制作物、なければその通知だけ */
 export function pushTagOf(n: { id: string; workId?: string; threadId?: string }): string {
   return n.threadId ?? n.workId ?? n.id;
-}
-
-/**
- * 端末に送る内容を作る。
- * - 題名は制作物名（『…』。LINE の相手・Slack のチャンネルにあたる）。制作物の無い通知・非公開の制作物は通知の題名
- * - 本文は「送り主: 抜粋」。どちらか無ければある方だけ（両方無ければ通知の題名）
- * - 利用者かポリシーが内容の表示を止めているときは、題名を「新しい通知」にし、本文は制作物名だけにする
- * - 非公開の制作物の名前・送り主・抜粋は載せない。今は見られない制作物の通知（hidden）は決まった文言にする
- */
-export function buildPushPayload(input: {
-  notification: {
-    id: string;
-    kind: string;
-    title: string;
-    workId?: string;
-    revisionId?: string;
-    threadId?: string;
-    createdAt?: number;
-    /** 載せてよい短い抜粋（notify が作る。伏せた通知には無い） */
-    preview?: string;
-  };
-  /** 通知の制作物（今その人が見られるときだけ渡す。見られない・制作物の無い通知は null） */
-  work: { title: string; restricted: boolean } | null;
-  /** 制作物の通知なのに、今その人が見られない */
-  hidden: boolean;
-  /** 送り主の表示名（分からなければ null） */
-  actorName?: string | null;
-  /** 利用者の「通知に内容を表示」（既定は true） */
-  showPreview?: boolean;
-  unread: number;
-  policy?: PushContentPolicy;
-}): PushPayload {
-  const policy = input.policy ?? DEFAULT_PUSH_CONTENT_POLICY;
-  const n = input.notification;
-  const base = {
-    id: n.id,
-    badge: Math.max(0, Math.floor(input.unread)),
-    createdAt: n.createdAt ?? 0,
-  };
-  if (input.hidden)
-    return {
-      ...base,
-      tag: n.id,
-      title: "新しい通知",
-      body: "校正システムを開いて確かめてください",
-      url: "/",
-    };
-  const tag = pushTagOf(n);
-  const url = notificationPath(n);
-  const workName =
-    input.work === null
-      ? null
-      : input.work.restricted
-        ? "非公開の制作物"
-        : policy.showWorkTitle
-          ? `『${input.work.title}』`
-          : null;
-  // 内容を出さない: 決まった題名と、制作物名だけの本文
-  if (!policy.showPreview || input.showPreview === false)
-    return {
-      ...base,
-      tag,
-      url,
-      title: "新しい通知",
-      body: clipPushText(workName ?? "校正システム", PUSH_BODY_MAX),
-    };
-  // 非公開の制作物は、名前・送り主・抜粋を載せない
-  if (input.work?.restricted) return { ...base, tag, url, title: n.title, body: "非公開の制作物" };
-  const who = input.actorName?.trim() || null;
-  const text = n.preview?.trim() || null;
-  // 題名が通知の題名のときは、本文で同じ文言を繰り返さない
-  const event = workName === null ? null : n.title;
-  const body = text
-    ? who
-      ? `${who}: ${text}`
-      : text
-    : who
-      ? event
-        ? `${who}: ${event}`
-        : who
-      : (event ?? "校正システム");
-  return {
-    ...base,
-    tag,
-    url,
-    title: clipPushText(workName ?? n.title, PUSH_TITLE_MAX),
-    body: clipPushText(body, PUSH_BODY_MAX),
-  };
 }
 
 /** 送った結果で購読をどうするか（宛先が無くなった・続けて失敗したら消す） */
