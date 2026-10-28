@@ -305,6 +305,29 @@ export class App {
     return this.page.locator(".thread-panel");
   }
 
+  /** スレッドのパネルのバーの「コメントの一覧へ戻る」で一覧へ戻り、パネルが消えるまで待つ */
+  async closePanel(panel: Locator) {
+    await panel.locator(".thread-panel__bar .thread-panel__back").click();
+    await this.page.waitForSelector(".thread-panel", { state: "detached" });
+    await this.settle();
+  }
+
+  /** 引き出し「コメント」の枠（一覧と、開いたスレッドのパネルが入る） */
+  commentsDrawer() {
+    return this.page.locator(".comments");
+  }
+
+  /** 引き出し「コメント」の一覧（スレッドのパネルを開いている間は隠れる） */
+  commentsList() {
+    return this.page.locator(".comments__main");
+  }
+
+  /** スレッドのパネルのバーの前後のボタン（一覧の並びで前・次のスレッドへ。端では disabled） */
+  threadNav(panel: Locator) {
+    const buttons = panel.locator(".thread-panel__bar .thread-panel__nav m3e-icon-button");
+    return { prev: buttons.first(), next: buttons.last() };
+  }
+
   /** スレッドのパネルの返信欄から返信し、流れに載るまで待つ */
   async replyInPanel(panel: Locator, body: string) {
     const replies = await panel.locator(".thread__replyitem").count();
