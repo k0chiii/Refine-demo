@@ -192,6 +192,9 @@ export async function sendWebPush(
  * ほか → rejected(invalid_content)。購読の失敗回数は httpStatus から recordPushResult が数える
  */
 export function webPushOutcome(status: number): SendOutcome {
-  void status;
-  throw new Error("not implemented");
+  if (status >= 200 && status < 300) return { kind: "sent", httpStatus: status };
+  if (status === 404 || status === 410)
+    return { kind: "rejected", reason: "gone", httpStatus: status };
+  if (status === 0 || status === 429 || status >= 500) return { kind: "retry" };
+  return { kind: "rejected", reason: "invalid_content", httpStatus: status };
 }
