@@ -50,7 +50,6 @@ describe("Web Push の購読の検証", () => {
 });
 
 describe("Web Push の内容", () => {
-  /** 端末に送る内容（外に出す内容を一度決めて、端末の形に描く） */
   const pushOf = ({
     unread,
     ...input

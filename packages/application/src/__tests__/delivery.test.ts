@@ -45,7 +45,6 @@ const device = {
   auth: "A".repeat(22),
 };
 
-/** 届け先ごとに、外へ出る文面 */
 function renderedOf(t: DeliveryTarget): string {
   switch (t.channel) {
     case "push":
@@ -204,7 +203,6 @@ describe("外への通知の計画", () => {
       state: "cannot_dm",
       memberId: "U1",
     });
-    // 送れたら戻る
     await recordDelivery(ctx, {
       notificationId: (await post()).id,
       target: slackRef("U1"),
