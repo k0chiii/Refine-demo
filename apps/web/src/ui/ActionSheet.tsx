@@ -5,6 +5,8 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 
 export interface ActionSheetItem {
+  /** 項目の `data-action`（E2E が文言に頼らずに探す手がかり） */
+  action?: string;
   icon: string;
   label: ReactNode;
   onSelect: () => void;
@@ -114,6 +116,7 @@ export function ActionSheet({
               <M3eListAction
                 key={i}
                 className="list__item"
+                data-action={it.action}
                 disabled={it.disabled === true}
                 onClick={() => {
                   onClose();
