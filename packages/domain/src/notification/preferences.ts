@@ -68,6 +68,8 @@ export interface NotificationPrefs {
   mutedCategories: NotificationCategory[];
   /** オンにしたアカウントの経路。既定は空（オプトイン） */
   channels: AccountChannel[];
+  /** Slack（DM）の送り先のワークスペース（登録の id）。無ければ選んでいない */
+  slackWorkspaceId?: string;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -76,38 +78,51 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   channels: [],
 };
 
-/** 保存された設定（無ければ既定）を、決まった形・順にそろえる。知らない分類・経路は捨てる */
+/**
+ * 保存された設定（無ければ既定）を、決まった形・順にそろえる。知らない分類・経路は捨てる。
+ * ワークスペースは空・null なら選んでいないことにする（パッチの null で外れる）
+ */
 export function normalizeNotificationPrefs(
   input?: {
     showPreview?: boolean;
     mutedCategories?: readonly string[];
     channels?: readonly string[];
+    slackWorkspaceId?: string | null;
   } | null,
 ): NotificationPrefs {
   const muted = new Set(input?.mutedCategories ?? []);
   const channels = new Set(input?.channels ?? []);
+  const slackWorkspaceId = input?.slackWorkspaceId?.trim();
   return {
     showPreview: input?.showPreview ?? DEFAULT_NOTIFICATION_PREFS.showPreview,
     mutedCategories: NOTIFICATION_CATEGORIES.filter((c) => muted.has(c)),
     channels: ACCOUNT_CHANNELS.filter((c) => channels.has(c)),
+    ...(slackWorkspaceId ? { slackWorkspaceId } : {}),
   };
 }
 
-/** 利用者が送ってきた設定を確かめる（知らない分類・経路は受け付けない） */
-export function validateNotificationPrefsPatch(patch: {
+/** 利用者が送ってきた設定の変更 */
+export interface NotificationPrefsPatch {
   showPreview?: boolean;
   mutedCategories?: readonly string[];
   channels?: readonly string[];
-}): {
+  /** null で選択を外す */
+  slackWorkspaceId?: string | null;
+}
+
+interface ValidPrefsPatch {
   showPreview?: boolean;
   mutedCategories?: NotificationCategory[];
   channels?: AccountChannel[];
-} {
-  const out: {
-    showPreview?: boolean;
-    mutedCategories?: NotificationCategory[];
-    channels?: AccountChannel[];
-  } = {};
+  slackWorkspaceId?: string | null;
+}
+
+/**
+ * 利用者が送ってきた設定を確かめる（知らない分類・経路、空のワークスペースは受け付けない）。
+ * ワークスペースが登録にあるかは確かめない（application が確かめる）
+ */
+export function validateNotificationPrefsPatch(patch: NotificationPrefsPatch): ValidPrefsPatch {
+  const out: ValidPrefsPatch = {};
   if (patch.showPreview !== undefined) out.showPreview = patch.showPreview === true;
   if (patch.mutedCategories !== undefined) {
     const known = new Set<string>(NOTIFICATION_CATEGORIES);
@@ -122,6 +137,12 @@ export function validateNotificationPrefsPatch(patch: {
     if (patch.channels.some((c) => !known.has(c)))
       throw new DomainError("notification_prefs_invalid", { field: "channels" });
     out.channels = normalizeNotificationPrefs({ channels: patch.channels }).channels;
+  }
+  if (patch.slackWorkspaceId !== undefined) {
+    const id = patch.slackWorkspaceId?.trim() ?? null;
+    if (id === "")
+      throw new DomainError("notification_prefs_invalid", { field: "slackWorkspaceId" });
+    out.slackWorkspaceId = id;
   }
   return out;
 }

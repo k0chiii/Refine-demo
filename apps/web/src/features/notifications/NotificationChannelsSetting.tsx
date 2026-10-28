@@ -18,6 +18,7 @@ const SLACK_HINT: Record<ChannelStatus, string> = {
   not_found: "このメールアドレスの人が Slack に見つかりません",
   cannot_dm: "Slack の DM を送れません",
   no_address: "送れるメールアドレスが無いため使えません",
+  no_workspace: "ワークスペースを選んでください",
 };
 
 const CHANNEL: Record<
