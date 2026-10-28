@@ -364,6 +364,32 @@ export class App {
     return this.page.locator("#notif-menu .notif");
   }
 
+  /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */
+  async openNotificationSettings() {
+    const page = this.page;
+    await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+    const item = page.locator('[data-action="notifications"]:visible');
+    await item.waitFor();
+    await this.settle();
+    await item.click();
+    const dialog = page.locator("m3e-dialog[open].push-dialog");
+    await dialog.waitFor();
+    await this.settle();
+    return dialog;
+  }
+
+  /** 「通知の設定」の届け先の行（登録メールアドレス・Slack（DM））。スイッチは行の中の m3e-switch */
+  notificationChannel(channel: "email" | "slack") {
+    return this.page.locator(`m3e-dialog[open] .notif-channel[data-channel="${channel}"]`);
+  }
+
+  /** 開いているダイアログを Esc で閉じ、閉じきるまで待つ */
+  async closeDialog() {
+    await this.page.keyboard.press("Escape");
+    await expect(this.dialog()).toHaveCount(0);
+    await this.settle();
+  }
+
   /** アプリバーの「比べる」から版や操作を選ぶ（広い画面は Menu、compact は Bottom sheet） */
   async compareWith(label: string) {
     const page = this.page;
