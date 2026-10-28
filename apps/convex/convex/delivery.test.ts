@@ -19,6 +19,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const RESEND_KEY = "re_test_key";
@@ -61,12 +62,14 @@ const SUCCESS: Record<Service, Reply> = {
 };
 
 /** Resend・Slack の代わり。replies はサービスごとに n 回目（0 から）の応答。無ければ成功 */
-function fakeServices(replies: Partial<Record<Service, (n: number) => Reply>> = {}) {
+function fakeServices(
+  replies: Partial<Record<Service, (n: number) => Reply | Promise<Reply>>> = {},
+) {
   const counts: Record<Service, number> = { email: 0, lookup: 0, post: 0 };
   const fetch = vi.fn(async (url: string, _init?: RequestInit) => {
     const service = serviceOf(url);
     if (!service) throw new Error(`unexpected fetch: ${url}`);
-    const reply = replies[service]?.(counts[service]++) ?? SUCCESS[service];
+    const reply = (await replies[service]?.(counts[service]++)) ?? SUCCESS[service];
     return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200 });
   });
   vi.stubGlobal("fetch", fetch);
@@ -323,6 +326,54 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(JSON.stringify(services.fetch.mock.calls)).not.toContain(TITLE);
   });
 
+  it("運用側の問題（Resend の鍵の誤り）は記録も再試行もせず、宛先をログに出さない", async () => {
+    emailEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    const address = await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email"] });
+    const { notificationId } = await assignReviewer(t, cast);
+    const services = fakeServices({
+      email: () => ({
+        status: 403,
+        body: { name: "invalid_api_key", message: "API key is invalid" },
+      }),
+    });
+    const logs: unknown[][] = [];
+    for (const level of ["log", "warn", "error"] as const)
+      vi.spyOn(console, level).mockImplementation((...args) => void logs.push(args));
+
+    expect(await deliver(t, notificationId)).toBe(0);
+    // 決着していないので、鍵を直せば次の実行で送る
+    expect(await deliver(t, notificationId)).toBe(0);
+    expect(services.calls("email")).toHaveLength(2);
+    expect(JSON.stringify(logs)).toContain("delivery_unavailable");
+    expect(JSON.stringify(logs)).not.toContain(address);
+  });
+
+  it("送っている途中で既読になれば、残りの届け先には送らない", async () => {
+    emailEnv();
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email", "slack"] });
+    const { notificationId } = await assignReviewer(t, cast);
+    const services = fakeServices({
+      email: async () => {
+        await cast.reviewer.as.mutation(api.notifications.markRead, {
+          notificationId: notificationId as Id<"notifications">,
+        });
+        return SUCCESS.email;
+      },
+    });
+
+    expect(await deliver(t, notificationId)).toBe(1);
+    expect(services.calls("email")).toHaveLength(1);
+    expect(services.calls("lookup")).toHaveLength(0);
+    expect(services.calls("post")).toHaveLength(0);
+  });
+
   it("送る前に既読にした通知は、どこにも送らない", async () => {
     emailEnv();
     slackEnv();
@@ -340,17 +391,35 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(services.fetch).not.toHaveBeenCalled();
   });
 
-  it("旧の push.enqueue（通知 1 件の形）と pushNode.deliver は、新しい配信に渡す", async () => {
+  it("旧の pushNode.deliver は新しい配信に渡す", async () => {
     emailEnv();
     const t = createHarness();
     const cast = await createCast(t);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email"] });
     const { notificationId } = await assignReviewer(t, cast);
-    await t.mutation(internal.push.enqueue, { notificationId });
     const services = fakeServices();
 
     expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
+    expect(services.calls("email")).toHaveLength(1);
+  });
+
+  it("旧の push.enqueue に通知 1 件の形で積まれた分も、workpool が送る", async () => {
+    emailEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    // 通知ができた後にオンにする（通知を作ったときの予約では送らせない）
+    const { notificationId } = await assignReviewer(t, cast);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email"] });
+    const services = fakeServices();
+
+    await t.mutation(internal.push.enqueue, { notificationId });
+    // workpool は空になっても自分を予約し続けるので、送るまでの数歩だけ進める
+    for (let step = 0; step < 10 && services.calls("email").length === 0; step++) {
+      vi.runOnlyPendingTimers();
+      await t.finishInProgressScheduledFunctions();
+    }
     expect(services.calls("email")).toHaveLength(1);
   });
 });
