@@ -171,20 +171,6 @@ export function toPushPayload(m: NotificationMessage, unread: number): PushPaylo
   };
 }
 
-type ComposeInput = Parameters<typeof composeNotificationMessage>[0];
-
-/** 旧（端末だけだったころの入口）。呼び出し元を toPushPayload(composeNotificationMessage(…)) に移したら消す */
-export function buildPushPayload(
-  input: Omit<ComposeInput, "notification"> & {
-    notification: Omit<ComposeInput["notification"], "body">;
-    unread: number;
-  },
-): PushPayload {
-  // 端末には本文を載せないので、本文の無い入力のままでよい
-  const notification = { body: "", ...input.notification };
-  return toPushPayload(composeNotificationMessage({ ...input, notification }), input.unread);
-}
-
 /** メールの内容（テキストだけ。HTML は送らない） */
 export interface EmailContent {
   subject: string;

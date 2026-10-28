@@ -1,17 +1,10 @@
 import { DomainError } from "../shared/DomainError.ts";
-import type { NotificationContentPolicy } from "./message.ts";
 
 /*
  * 通知の配信（Web Push）。利用者決定 2026-10-15「Web Push 進めて」（外部への実データ送信の承認）。
  * 送り先は Apple・Google・Mozilla・Microsoft のプッシュサービス。本文は端末の鍵で暗号化される（RFC 8291）が、
  * サービスを経由するので、載せる内容は message.ts で決めた最小限にする。
  */
-
-/**
- * 端末の通知に載せる内容のポリシー値（旧名。中身は NotificationContentPolicy）。
- * 端末に載せる抜粋は notify が渡した短い抜粋だけ（確認観点・理由・締切などの本文は載せない）。
- */
-export type PushContentPolicy = NotificationContentPolicy;
 
 /**
  * 受け付けるプッシュサービス（購読の送り先。利用者が送ってくる URL なので、ここに無い宛先には送らない）。

@@ -1,21 +1,14 @@
 import {
-  buildPushPayload,
-  isCategoryMuted,
-  normalizeNotificationPrefs,
   type Principal,
-  type PushContentPolicy,
-  type PushPayload,
   pushOutcome,
   type PushSubscriptionInput,
   validatePushSubscription,
 } from "@mf100/domain";
 import type { AppContext, PushSubscriptionRecord } from "../ports.ts";
-import { principalOf } from "../shared.ts";
-import { presentNotifications } from "./notifications.ts";
 
 /*
  * 端末への通知（Web Push）。利用者決定 2026-10-15。
- * 購読（どの端末に送るか）を保存し、通知ができたら、その人の端末ごとに送る内容（buildPushPayload）を作る。
+ * 購読（どの端末に送るか）を保存し、送った結果で購読を整理する。送る計画は usecases/delivery.ts（メール・Slack と共通）。
  * 送ること自体（暗号化・プッシュサービスへの送信）はアダプタ（Convex の action）の仕事。
  */
 
@@ -71,60 +64,6 @@ export async function isPushSubscribed(
 ): Promise<boolean> {
   const existing = await ctx.pushSubscriptions.findByEndpoint(endpoint);
   return existing !== null && existing.userId === principal.userId;
-}
-
-export interface PushDelivery {
-  payload: PushPayload;
-  targets: Array<Pick<PushSubscriptionRecord, "id" | "endpoint" | "p256dh" | "auth">>;
-}
-
-/**
- * 通知 1 件を端末に送る計画。受信者の購読が無ければ null。
- * 送る時点でも見られるかを確かめ直す（作った後に ACL が外れたら、送り主・抜粋ごと伏せた内容にする）。
- * 既読になっていれば送らない（ほかの端末で先に読んだ）。
- * 受信者がその分類の通知を止めていれば送らない（アプリ内の通知は残る）。
- * 「通知に内容を表示」が切ってあれば、送り主と抜粋を載せない。
- */
-export async function planPushDelivery(
-  ctx: AppContext,
-  notificationId: string,
-  policy?: PushContentPolicy,
-): Promise<PushDelivery | null> {
-  const n = await ctx.notifications.findById(notificationId);
-  if (!n || n.readAt !== undefined) return null;
-  const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(n.recipientId));
-  if (isCategoryMuted(prefs, n.kind)) return null;
-  const subs = await ctx.pushSubscriptions.listByUser(n.recipientId);
-  if (subs.length === 0) return null;
-  // 受信者の担当の所属も添えて、非公開の制作物を所属で見られる人を伏せない
-  const [shown] = await presentNotifications(
-    ctx,
-    principalOf(n.recipientId, await ctx.teams.list()),
-    [n],
-  );
-  const hidden = n.workId !== undefined && shown?.workId === undefined;
-  const work = !hidden && n.workId ? await ctx.works.findById(n.workId) : null;
-  const shownNotification = shown ?? n;
-  const restricted = work?.confidentiality === "restricted";
-  // 送り主の名前は、載せるときだけ引く（伏せるとき・内容を出さないときは読まない）
-  const showPreview = prefs.showPreview && (policy?.showPreview ?? true);
-  const actorName =
-    showPreview && !hidden && !restricted && shownNotification.actorId
-      ? await ctx.people.displayName(shownNotification.actorId).catch(() => null)
-      : null;
-  const payload = buildPushPayload({
-    notification: shownNotification,
-    work: work ? { title: work.title, restricted: work.confidentiality === "restricted" } : null,
-    hidden,
-    actorName,
-    showPreview: prefs.showPreview,
-    unread: await ctx.notifications.countUnread(n.recipientId),
-    ...(policy ? { policy } : {}),
-  });
-  return {
-    payload,
-    targets: subs.map(({ id, endpoint, p256dh, auth }) => ({ id, endpoint, p256dh, auth })),
-  };
 }
 
 /**

@@ -256,3 +256,28 @@ export async function slackLookupEmail(ctx: AppContext, userId: string): Promise
   const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(userId));
   return prefs.channels.includes("slack") ? deliverableEmailOf(ctx, userId) : null;
 }
+
+/** 旧（端末だけだったころの計画の形） */
+export interface PushDelivery {
+  payload: PushPayload;
+  targets: PushDevice[];
+}
+
+/**
+ * 旧。端末だけが使える環境の planDelivery（どの端末にも同じ内容）。
+ * Convex の push.plan（pushNode.deliver が読む）が delivery.plan に移ったら消す
+ */
+export async function planPushDelivery(
+  ctx: AppContext,
+  notificationId: string,
+  policy?: NotificationContentPolicy,
+): Promise<PushDelivery | null> {
+  const plan = await planDelivery(ctx, notificationId, {
+    available: new Set(["push"]),
+    origin: null,
+    ...(policy ? { policy } : {}),
+  });
+  const push = plan?.targets.flatMap((t) => (t.channel === "push" ? [t] : [])) ?? [];
+  const [first] = push;
+  return first ? { payload: first.payload, targets: push.map((t) => t.device) } : null;
+}
