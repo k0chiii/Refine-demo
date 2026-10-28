@@ -24,5 +24,6 @@ export * from "./usecases/feedbackMigration.ts";
 export * from "./usecases/workStats.ts";
 export * from "./usecases/notificationPrefs.ts";
 export * from "./usecases/push.ts";
+export * from "./usecases/delivery.ts";
 
 export { resumeItemUpload } from "./usecases/submissions.ts";

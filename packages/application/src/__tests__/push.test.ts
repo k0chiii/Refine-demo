@@ -203,15 +203,21 @@ describe("端末への通知（Web Push）", () => {
       expect(await getNotificationPrefs(ctx, principals.reviewer)).toEqual({
         showPreview: true,
         mutedCategories: [],
+        channels: [],
       });
       await updateNotificationPrefs(ctx, principals.reviewer, {
         mutedCategories: ["rule", "mention"],
       });
       const after = await updateNotificationPrefs(ctx, principals.reviewer, { showPreview: false });
-      expect(after).toEqual({ showPreview: false, mutedCategories: ["mention", "rule"] });
+      expect(after).toEqual({
+        showPreview: false,
+        mutedCategories: ["mention", "rule"],
+        channels: [],
+      });
       expect(await getNotificationPrefs(ctx, principals.creator)).toEqual({
         showPreview: true,
         mutedCategories: [],
+        channels: [],
       });
     });
 

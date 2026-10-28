@@ -39,7 +39,7 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
-import { approversOf } from "@mf100/domain";
+import { approversOf, parseDestinationKey } from "@mf100/domain";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
@@ -604,6 +604,49 @@ export function createAppContext(
           .first();
         if (doc) await db.replace(doc._id, prefs);
         else await db.insert("notificationPrefs", prefs);
+      },
+    },
+    deliveries: {
+      async listSettled(notificationId) {
+        const docs = await db
+          .query("notificationDeliveries")
+          .withIndex("by_notification_and_destination", (q) =>
+            q.eq("notificationId", notificationId),
+          )
+          .take(50);
+        return docs.flatMap((d) => {
+          const key = parseDestinationKey(d.destination);
+          return key ? [key] : [];
+        });
+      },
+      async settle(row) {
+        const previous = await db
+          .query("notificationDeliveries")
+          .withIndex("by_notification_and_destination", (q) =>
+            q.eq("notificationId", row.notificationId).eq("destination", row.destination),
+          )
+          .first();
+        if (!previous) await db.insert("notificationDeliveries", compact(row));
+      },
+    },
+    slackMembers: {
+      async find(email) {
+        const doc = await db
+          .query("slackMembers")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .first();
+        if (!doc) return { state: "unresolved" };
+        return doc.state === "not_found"
+          ? { state: doc.state, checkedAt: doc.checkedAt }
+          : { state: doc.state, memberId: doc.memberId, checkedAt: doc.checkedAt };
+      },
+      async save(email, link) {
+        const doc = await db
+          .query("slackMembers")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .first();
+        if (doc) await db.replace(doc._id, { email, ...link });
+        else await db.insert("slackMembers", { email, ...link });
       },
     },
     notifications: {

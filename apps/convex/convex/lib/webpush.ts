@@ -1,3 +1,5 @@
+import type { SendOutcome } from "@mf100/domain";
+
 /*
  * Web Push の送信（外部ライブラリを使わず WebCrypto で実装）。
  * - VAPID（RFC 8292）: ES256 の JWT でプッシュサービスに送り手を名乗る
@@ -183,4 +185,13 @@ export async function sendWebPush(
   } catch {
     return 0;
   }
+}
+
+/**
+ * プッシュサービスの HTTP の状態 → 結果。2xx → sent、404・410 → rejected(gone)、429・5xx・0（つながらない）→ retry、
+ * ほか → rejected(invalid_content)。購読の失敗回数は httpStatus から recordPushResult が数える
+ */
+export function webPushOutcome(status: number): SendOutcome {
+  void status;
+  throw new Error("not implemented");
 }

@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import type { NotificationContentPolicy } from "./message.ts";
 
 /*
  * 通知の配信（Web Push）。利用者決定 2026-10-15「Web Push 進めて」（外部への実データ送信の承認）。
@@ -7,17 +8,10 @@ import { DomainError } from "../shared/DomainError.ts";
  */
 
 /**
- * 端末の通知に載せる内容（ポリシー値。運用で変えられるよう外出しする）。
- * - showWorkTitle: 題名・本文に制作物名を載せるか。false なら決まった文言だけ
- * - showPreview: 送り主と抜粋（コメントの冒頭など）を載せるか。false なら決まった題名（「新しい通知」）と制作物名だけ。
- *   利用者ごとの「通知に内容を表示」（NotificationPrefs.showPreview）も true のときだけ載せる
- * 非公開（restricted）の制作物の名前・送り主・抜粋と、伏せた通知（今は見られない制作物）の内容は、これらの値にかかわらず載せない。
- * 載せる抜粋は notify が渡した短い抜粋だけ（確認観点・理由・締切などの本文は載せない）。
+ * 端末の通知に載せる内容のポリシー値（旧名。中身は NotificationContentPolicy）。
+ * 端末に載せる抜粋は notify が渡した短い抜粋だけ（確認観点・理由・締切などの本文は載せない）。
  */
-export interface PushContentPolicy {
-  showWorkTitle: boolean;
-  showPreview: boolean;
-}
+export type PushContentPolicy = NotificationContentPolicy;
 
 export const DEFAULT_PUSH_CONTENT_POLICY: PushContentPolicy = {
   showWorkTitle: true,

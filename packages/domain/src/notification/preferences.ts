@@ -1,9 +1,18 @@
 import { DomainError } from "../shared/DomainError.ts";
 
 /*
- * 通知の受け取り方（利用者ごとの設定）。利用者指示 2026-10-18「アプリのプッシュ通知、もう少し普通のアプリみたいにしたい」。
- * 端末への通知（Web Push）にだけ効く。アプリ内の通知（ベルの一覧）は設定にかかわらず作られる。
+ * 通知の受け取り方（利用者ごとの設定）。利用者指示 2026-10-18「アプリのプッシュ通知、もう少し普通のアプリみたいにしたい」、
+ * 2026-10-28「登録メールアドレス、Slack（DM）に流れるようにしたい」。
+ * 外への通知（端末・登録メールアドレス・Slack の DM）に効く。アプリ内の通知（ベルの一覧）は設定にかかわらず作られる。
  */
+
+/** 通知を外に届ける経路（アプリ内の通知は別。常に作られる正本・§10-1） */
+export const DELIVERY_CHANNELS = ["push", "email", "slack"] as const;
+export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
+
+/** アカウントで一度オンにする経路。宛先はアカウント（users.email）から決まり、利用者は何も入力しない。push は端末ごと */
+export const ACCOUNT_CHANNELS = ["email", "slack"] as const satisfies readonly DeliveryChannel[];
+export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
 /** 通知の分類（設定でオン・オフする単位） */
 export const NOTIFICATION_CATEGORIES = [
@@ -53,34 +62,52 @@ export function notificationCategoryOf(kind: string): NotificationCategory {
 }
 
 export interface NotificationPrefs {
-  /** 端末の通知に送り主と抜粋を載せる（iOS の「プレビューを表示」にあたる） */
+  /** 外への通知（端末・メール・Slack）に送り主と抜粋（と本文）を載せる（iOS の「プレビューを表示」にあたる） */
   showPreview: boolean;
-  /** 端末に送らない分類 */
+  /** 外へ送らない分類（端末・メール・Slack に共通。アプリ内の通知は残る） */
   mutedCategories: NotificationCategory[];
+  /** オンにしたアカウントの経路。既定は空（オプトイン） */
+  channels: AccountChannel[];
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   showPreview: true,
   mutedCategories: [],
+  channels: [],
 };
 
-/** 保存された設定（無ければ既定）を、決まった形・順にそろえる。知らない分類は捨てる */
+/** 保存された設定（無ければ既定）を、決まった形・順にそろえる。知らない分類・経路は捨てる */
 export function normalizeNotificationPrefs(
-  input?: { showPreview?: boolean; mutedCategories?: readonly string[] } | null,
+  input?: {
+    showPreview?: boolean;
+    mutedCategories?: readonly string[];
+    channels?: readonly string[];
+  } | null,
 ): NotificationPrefs {
   const muted = new Set(input?.mutedCategories ?? []);
+  const channels = new Set(input?.channels ?? []);
   return {
     showPreview: input?.showPreview ?? DEFAULT_NOTIFICATION_PREFS.showPreview,
     mutedCategories: NOTIFICATION_CATEGORIES.filter((c) => muted.has(c)),
+    channels: ACCOUNT_CHANNELS.filter((c) => channels.has(c)),
   };
 }
 
-/** 利用者が送ってきた設定を確かめる（知らない分類は受け付けない） */
+/** 利用者が送ってきた設定を確かめる（知らない分類・経路は受け付けない） */
 export function validateNotificationPrefsPatch(patch: {
   showPreview?: boolean;
   mutedCategories?: readonly string[];
-}): { showPreview?: boolean; mutedCategories?: NotificationCategory[] } {
-  const out: { showPreview?: boolean; mutedCategories?: NotificationCategory[] } = {};
+  channels?: readonly string[];
+}): {
+  showPreview?: boolean;
+  mutedCategories?: NotificationCategory[];
+  channels?: AccountChannel[];
+} {
+  const out: {
+    showPreview?: boolean;
+    mutedCategories?: NotificationCategory[];
+    channels?: AccountChannel[];
+  } = {};
   if (patch.showPreview !== undefined) out.showPreview = patch.showPreview === true;
   if (patch.mutedCategories !== undefined) {
     const known = new Set<string>(NOTIFICATION_CATEGORIES);
@@ -90,10 +117,16 @@ export function validateNotificationPrefsPatch(patch: {
       mutedCategories: patch.mutedCategories,
     }).mutedCategories;
   }
+  if (patch.channels !== undefined) {
+    const known = new Set<string>(ACCOUNT_CHANNELS);
+    if (patch.channels.some((c) => !known.has(c)))
+      throw new DomainError("notification_prefs_invalid", { field: "channels" });
+    out.channels = normalizeNotificationPrefs({ channels: patch.channels }).channels;
+  }
   return out;
 }
 
-/** この種類の通知を端末に送らない設定か */
+/** この種類の通知を外へ送らない設定か */
 export function isCategoryMuted(prefs: NotificationPrefs, kind: string): boolean {
   return prefs.mutedCategories.includes(notificationCategoryOf(kind));
 }

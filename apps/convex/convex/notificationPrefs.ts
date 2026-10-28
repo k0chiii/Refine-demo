@@ -6,7 +6,7 @@ import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 
 /**
- * 通知の受け取り方（利用者ごと。端末への通知にだけ効く。利用者指示 2026-10-18）。
+ * 通知の受け取り方（利用者ごと。外への通知に効く。利用者指示 2026-10-18・2026-10-28）。
  * 自分の設定だけを読み書きする。アプリ内の通知（ベルの一覧）は設定にかかわらず作られる。
  */
 
@@ -24,6 +24,7 @@ export const update = mutation({
   args: {
     showPreview: v.optional(v.boolean()),
     mutedCategories: v.optional(v.array(v.string())),
+    channels: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);

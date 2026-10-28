@@ -11,20 +11,23 @@ describe("Convex 統合: 通知の受け取り方", () => {
     expect(await cast.reviewer.as.query(api.notificationPrefs.get, {})).toEqual({
       showPreview: true,
       mutedCategories: [],
+      channels: [],
     });
     await cast.reviewer.as.mutation(api.notificationPrefs.update, {
       mutedCategories: ["deadline", "mention"],
     });
     expect(
       await cast.reviewer.as.mutation(api.notificationPrefs.update, { showPreview: false }),
-    ).toEqual({ showPreview: false, mutedCategories: ["mention", "deadline"] });
+    ).toEqual({ showPreview: false, mutedCategories: ["mention", "deadline"], channels: [] });
     expect(await cast.reviewer.as.query(api.notificationPrefs.get, {})).toEqual({
       showPreview: false,
       mutedCategories: ["mention", "deadline"],
+      channels: [],
     });
     expect(await cast.creator.as.query(api.notificationPrefs.get, {})).toEqual({
       showPreview: true,
       mutedCategories: [],
+      channels: [],
     });
   });
 
