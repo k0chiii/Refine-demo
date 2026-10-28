@@ -1,14 +1,16 @@
+import { RateLimiter } from "@convex-dev/rate-limiter";
 import {
   type DeliveryPlan,
   type DeliveryTargetRef,
   planDelivery,
   recordDelivery,
   recordSlackLookup as recordSlackLookupFor,
-  slackLookupEmail,
+  type SlackMemberKey,
+  slackLookupTarget,
 } from "@mf100/application";
 import type { SlackLink } from "@mf100/domain";
 import { type Infer, v } from "convex/values";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { deliveryConfigFromEnv, deliveryEnvOf } from "./lib/channels.ts";
@@ -58,6 +60,7 @@ const targetRef = v.union(
   v.object({
     channel: v.literal("slack"),
     key: v.literal("slack"),
+    teamId: v.string(),
     email: v.string(),
     memberId: v.union(v.string(), v.null()),
   }),
@@ -100,24 +103,39 @@ export const record = internalMutation({
   },
 });
 
-/** 登録メールアドレスで Slack を引いた結果を保存する */
+/** そのワークスペースで登録メールアドレスを引いた結果を保存する */
 export const recordSlackLookup = internalMutation({
   args: {
+    teamId: v.string(),
     email: v.string(),
     result: v.union(
       v.object({ kind: v.literal("found"), memberId: v.string() }),
       v.object({ kind: v.literal("not_found") }),
     ),
   },
-  handler: (ctx, { email, result }): Promise<SlackLink> =>
-    recordSlackLookupFor(createAppContext(ctx), email, result),
+  handler: (ctx, { teamId, email, result }): Promise<SlackLink> =>
+    recordSlackLookupFor(createAppContext(ctx), { teamId, email }, result),
 });
 
-/** Slack で引くメールアドレス（引かないときは null） */
-export const slackEmail = internalQuery({
+/** Slack で引く宛先（選んだワークスペースの team_id と登録メールアドレス。引かないときは null） */
+export const slackTarget = internalQuery({
   args: { userId: v.string() },
-  handler: (ctx, { userId }): Promise<string | null> =>
-    slackLookupEmail(createReadContext(ctx.db), userId),
+  handler: (ctx, { userId }): Promise<SlackMemberKey | null> =>
+    slackLookupTarget(createReadContext(ctx.db), userId),
+});
+
+/** めいちゃん経由の DM は 1 秒に 1 件（docs/SLACK_MEICHAN.md の「失敗と再送」）。キーは無く、全体で 1 つ */
+const limiter = new RateLimiter(components.rateLimiter, {
+  slackDm: { kind: "fixed window", rate: 1, period: 1000 },
+});
+
+/** DM 1 件の枠を取る。取れなければ送らず、deliveryNode が workpool のやり直しに回す */
+export const reserveSlackDm = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{ ok: boolean }> => {
+    const { ok } = await limiter.limit(ctx, "slackDm");
+    return { ok };
+  },
 });
 
 /** workpool の 1 件が終わった（success・failed・canceled）。旧の push.completed も同じ */

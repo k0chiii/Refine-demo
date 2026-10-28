@@ -73,6 +73,7 @@ import type * as reviews from "../reviews.js";
 import type * as revisions from "../revisions.js";
 import type * as seed from "../seed.js";
 import type * as semanticRules from "../semanticRules.js";
+import type * as slackWorkspaces from "../slackWorkspaces.js";
 import type * as social from "../social.js";
 import type * as submissions from "../submissions.js";
 import type * as teams from "../teams.js";
@@ -152,6 +153,7 @@ declare const fullApi: ApiFromModules<{
   revisions: typeof revisions;
   seed: typeof seed;
   semanticRules: typeof semanticRules;
+  slackWorkspaces: typeof slackWorkspaces;
   social: typeof social;
   submissions: typeof submissions;
   teams: typeof teams;
