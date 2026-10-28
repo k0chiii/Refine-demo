@@ -18,6 +18,7 @@ import type {
   RuleCategoryManager,
   RuleProposal,
   RuleRevision,
+  SlackLink,
   UploadAttempt,
   UploadItem,
   UploadSession,
@@ -33,6 +34,7 @@ import type {
   AppContext,
   AuditEntry,
   Notification,
+  NotificationDeliveryRecord,
   NotificationPrefsRecord,
   PushSubscriptionRecord,
   WorkPin,
@@ -99,6 +101,10 @@ export interface InMemoryContext extends AppContext {
     notifications: Table<Notification>;
     pushSubscriptions: Table<PushSubscriptionRecord>;
     notificationPrefs: Map<string, NotificationPrefsRecord>;
+    /** `${notificationId}|${destination}` → 決着 */
+    deliveries: Map<string, NotificationDeliveryRecord>;
+    /** 小文字のメールアドレス → Slack のメンバー（無ければ unresolved） */
+    slackMembers: Map<string, Exclude<SlackLink, { state: "unresolved" }>>;
     documents: Table<DocumentDraft>;
     socialProfiles: Table<SocialProfile>;
     teams: Table<Team>;
@@ -129,6 +135,8 @@ export interface InMemoryContext extends AppContext {
      * profiles（存在確認）はここと names を見る。listMembers（名簿の一覧）は names だけ。
      */
     members: Set<string>;
+    /** 登録メールアドレス（profiles が返す。無い人は null） */
+    emails: Map<string, string>;
   };
 }
 
@@ -149,6 +157,8 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     notifications: new Table<Notification>("ntf"),
     pushSubscriptions: new Table<PushSubscriptionRecord>("push"),
     notificationPrefs: new Map(),
+    deliveries: new Map(),
+    slackMembers: new Map(),
     documents: new Table<DocumentDraft>("doc"),
     socialProfiles: new Table<SocialProfile>("sp"),
     teams: new Table<Team>("team"),
@@ -173,6 +183,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     idempotency: new Map(),
     names: new Map(),
     members: new Set(Object.values(principals).map((p) => p.userId)),
+    emails: new Map(),
   };
   const clock = new FakeClock(now);
   return {
@@ -187,7 +198,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       profiles: async (ids) =>
         [...new Set(ids)].flatMap((id) =>
           state.names.has(id) || state.members.has(id)
-            ? [{ id, name: state.names.get(id) ?? "", email: null }]
+            ? [{ id, name: state.names.get(id) ?? "", email: state.emails.get(id) ?? null }]
             : [],
         ),
     },
@@ -403,6 +414,22 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       find: async (userId) => clone(state.notificationPrefs.get(userId) ?? null),
       save: async (prefs) => {
         state.notificationPrefs.set(prefs.userId, clone(prefs));
+      },
+    },
+    deliveries: {
+      listSettled: async (notificationId) =>
+        [...state.deliveries.values()]
+          .filter((d) => d.notificationId === notificationId)
+          .map((d) => d.destination),
+      settle: async (row) => {
+        const key = `${row.notificationId}|${row.destination}`;
+        if (!state.deliveries.has(key)) state.deliveries.set(key, clone(row));
+      },
+    },
+    slackMembers: {
+      find: async (email) => clone(state.slackMembers.get(email)) ?? { state: "unresolved" },
+      save: async (email, link) => {
+        state.slackMembers.set(email, clone(link));
       },
     },
     notifications: {

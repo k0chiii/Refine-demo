@@ -297,12 +297,40 @@ export class App {
     return this.page.locator(".comments .thread");
   }
 
+  /** 一覧のカードの下の行（押すとスレッドのパネルが開く。閉じるとフォーカスが戻る先） */
+  threadOpener(card: Locator) {
+    return card.locator(".thread__footer");
+  }
+
   /** 一覧のカードの下の行を押してスレッドのパネルを開く */
   async openPanel(card: Locator) {
-    await card.locator(".thread__footer").click();
+    await this.threadOpener(card).click();
     await this.page.waitForSelector(".thread-panel");
     await this.settle();
     return this.page.locator(".thread-panel");
+  }
+
+  /** スレッドのパネルのバーの「コメントの一覧へ戻る」で一覧へ戻り、パネルが消えるまで待つ */
+  async closePanel(panel: Locator) {
+    await panel.locator(".thread-panel__bar .thread-panel__back").click();
+    await this.page.waitForSelector(".thread-panel", { state: "detached" });
+    await this.settle();
+  }
+
+  /** 引き出し「コメント」の枠（一覧と、開いたスレッドのパネルが入る） */
+  commentsDrawer() {
+    return this.page.locator(".comments");
+  }
+
+  /** 引き出し「コメント」の一覧（スレッドのパネルを開いている間は隠れる） */
+  commentsList() {
+    return this.page.locator(".comments__main");
+  }
+
+  /** スレッドのパネルのバーの前後のボタン（一覧の並びで前・次のスレッドへ。端では disabled） */
+  threadNav(panel: Locator) {
+    const buttons = panel.locator(".thread-panel__bar .thread-panel__nav m3e-icon-button");
+    return { prev: buttons.first(), next: buttons.last() };
   }
 
   /** スレッドのパネルの返信欄から返信し、流れに載るまで待つ */
@@ -362,6 +390,44 @@ export class App {
     await this.page.waitForSelector("#notif-menu .notif-menu__header");
     await this.settle();
     return this.page.locator("#notif-menu .notif");
+  }
+
+  /**
+   * メニューを開くボタンを押し、開ききるまで待つ。M3E のメニューは祖先がスクロールすると閉じる。Playwright の click は
+   * 見える位置までのスクロールと押下を同じフレームで行うので、遅れて届く scroll で開いたメニューが閉じることがある
+   * （横に流れる表の「⋮」）。先にスクロールし、その scroll が届いてから押す
+   */
+  async openMenu(trigger: Locator) {
+    await trigger.scrollIntoViewIfNeeded();
+    await this.settle();
+    await trigger.click();
+    await this.settle();
+  }
+
+  /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */
+  async openNotificationSettings() {
+    const page = this.page;
+    await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+    const item = page.locator('[data-action="notifications"]:visible');
+    await item.waitFor();
+    await this.settle();
+    await item.click();
+    const dialog = page.locator("m3e-dialog[open].push-dialog");
+    await dialog.waitFor();
+    await this.settle();
+    return dialog;
+  }
+
+  /** 「通知の設定」の届け先の行（登録メールアドレス・Slack（DM））。スイッチは行の中の m3e-switch */
+  notificationChannel(channel: "email" | "slack") {
+    return this.page.locator(`m3e-dialog[open] .notif-channel[data-channel="${channel}"]`);
+  }
+
+  /** 開いているダイアログを Esc で閉じ、閉じきるまで待つ */
+  async closeDialog() {
+    await this.page.keyboard.press("Escape");
+    await expect(this.dialog()).toHaveCount(0);
+    await this.settle();
   }
 
   /** アプリバーの「比べる」から版や操作を選ぶ（広い画面は Menu、compact は Bottom sheet） */

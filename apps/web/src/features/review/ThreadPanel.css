@@ -1,14 +1,11 @@
 /*
  * コメントの一覧のカード（ThreadCard）と、スレッドのパネル（ThreadPanel）。色・形・動きは styles.css のトークンだけを使う。
- * 引き出し「コメント」は container（.comments）で、幅が足りれば一覧とスレッドを並べ、足りなければスレッドを一覧に重ねる。
- * 区切りに細い線は使わない（利用者指示 2026-10-20）: ペインは余白（8px）と面の濃さ・角（16）で分け、
- * パネルの中の元のコメント・返信欄は一段濃い面の角丸のブロック（--tp-block）にする。docs/UI_M3E.md §98。
+ * 引き出し「コメント」は幅にかかわらず 1 列: スレッドは一覧に重ねて出し、← で一覧へ戻る。開いても引き出しは広げず、
+ * 隣のスレッドへはパネルの上の段の前後で移る（利用者指示 2026-10-28。docs/UI_M3E.md §104）。
+ * 区切りに細い線は使わない（利用者指示 2026-10-20）: パネルの中の元のコメント・返信欄は一段濃い面の角丸のブロック（--tp-block）にする。§98。
  */
 
-/* ---------- 引き出し「コメント」: 一覧（.comments__main）とスレッド（.thread-panel） */
-.comments {
-  container: comments / inline-size;
-}
+/* ---------- 引き出し「コメント」: 一覧（.comments__main）と、その上に重ねるスレッド（.thread-panel） */
 .comments__split {
   position: relative;
   flex: 1;
@@ -23,7 +20,6 @@
   min-height: 0;
   min-width: 0;
 }
-/* 狭いとき（引き出しの幅が足りない・スマホのシート）: スレッドは一覧に重ねて出し、戻るボタンで一覧へ */
 .thread-panel {
   position: absolute;
   inset: 0;
@@ -32,12 +28,13 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  /* 面とその中のブロックの色（狭いとき・シート: 引き出し／シートの面の上なので 1 段濃いブロック。広いときは下で白い面に替える） */
+  /* 引き出し／シートの面の上なので、中のブロックは 1 段濃くする */
   --tp-surface: var(--mf-surface-container-low);
   --tp-block: var(--mf-surface-container);
   background: var(--tp-surface);
   /* 横からすっと入る（空間の動き。「動きを減らす」では動かさない） */
   animation: thread-panel-in var(--mf-motion-spatial-fast) both;
+  container: thread-panel / inline-size;
 }
 @keyframes thread-panel-in {
   from {
@@ -57,37 +54,10 @@
 .thread-panel:focus {
   outline: none; /* フォーカスはパネルを開いたことの合図（読み上げ）だけ。枠は出さない */
 }
-.thread-panel__close {
-  display: none;
-}
 /* 一覧は重なって見えなくなる。キーボード・読み上げの対象から外す（動きが終わってから） */
-@container comments (max-width: 719px) {
-  .comments--thread:not(.comments--sheet) .comments__main {
-    visibility: hidden;
-    transition: visibility 0s linear 350ms;
-  }
-}
-/* 広いとき: 一覧は見えたまま、隣の列にスレッドが入る */
-@container comments (min-width: 720px) {
-  .comments--thread:not(.comments--sheet) .comments__split {
-    grid-template-columns: minmax(300px, 9fr) minmax(0, 11fr);
-    /* 一覧（引き出しの面）とスレッドのパネルは線でなく余白で分ける。パネルは引き出しの中の角丸の面 */
-    gap: 8px;
-    padding: 4px 8px 8px 0;
-  }
-  .comments:not(.comments--sheet) .thread-panel {
-    position: static;
-    --tp-surface: var(--mf-surface-container-lowest);
-    --tp-block: var(--mf-surface-container-low);
-    border-radius: var(--mf-shape-lg);
-    overflow: hidden;
-  }
-  .comments:not(.comments--sheet) .thread-panel__back {
-    display: none;
-  }
-  .comments:not(.comments--sheet) .thread-panel__close {
-    display: inline-flex;
-  }
+.comments--thread:not(.comments--sheet) .comments__main {
+  visibility: hidden;
+  transition: visibility 0s linear 350ms;
 }
 /* スマホのシート: シートいっぱいにスレッドだけを見せる（高さは ThreadPanel が測ってそろえる） */
 .comments--sheet.comments--thread .comments__main {
@@ -114,6 +84,32 @@
 .thread-panel__title {
   font: var(--mf-type-title-small);
   margin-inline-start: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 前後と「n / N」は、位置と末尾の操作（通知・解決・⋮）の間の真ん中に（試作 B。§104） */
+.thread-panel__nav {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline: auto;
+}
+.thread-panel__count {
+  min-width: 4ch;
+  text-align: center;
+  font: var(--mf-type-label-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+}
+/* 狭いとき（360 の引き出し・412px より狭い画面のシート）は、位置を印だけにし番号の見出しを出さない。バーを折り返さず 1 行に収める（§104） */
+@container thread-panel (max-width: 379px) {
+  .thread-panel__place,
+  .thread-panel__title {
+    display: none;
+  }
 }
 .thread-panel__scroll {
   position: relative;

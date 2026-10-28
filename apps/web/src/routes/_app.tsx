@@ -8,7 +8,7 @@ import { SubmitPicker, useSubmitLauncher, useSubmitTargets } from "@/features/ho
 import { NotificationsBell } from "@/features/notifications/NotificationsBell";
 import { setAppBadge, useInstallPrompt } from "@/lib/pwa";
 import { NotificationPrompt } from "@/features/notifications/NotificationPrompt";
-import { usePushAvailable } from "@/features/notifications/useDevicePush";
+import { useNotificationSettingsAvailable } from "@/features/notifications/useNotificationSettings";
 import { disablePush } from "@/lib/push";
 import { useWindowClass } from "@/lib/useMedia";
 import { M3eAppBar } from "@m3e/react/app-bar";
@@ -38,10 +38,10 @@ const AvatarPickerDialog = lazy(() =>
   import("@/features/account/AvatarPickerDialog").then((m) => ({ default: m.AvatarPickerDialog })),
 );
 
-/** 通知の設定（この端末への通知。初めて開くまで読み込まない） */
-const PushSettingDialog = lazy(() =>
-  import("@/features/notifications/PushSettingDialog").then((m) => ({
-    default: m.PushSettingDialog,
+/** 通知の設定（この端末・登録メールアドレス・Slack（DM）。初めて開くまで読み込まない） */
+const NotificationSettingsDialog = lazy(() =>
+  import("@/features/notifications/NotificationSettingsDialog").then((m) => ({
+    default: m.NotificationSettingsDialog,
   })),
 );
 
@@ -92,10 +92,10 @@ function AppShell() {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [avatarMounted, setAvatarMounted] = useState(false);
   /** 「通知の設定」。アバターと同じく一度開いたら描いたままにする */
-  const [pushOpen, setPushOpen] = useState(false);
-  const [pushMounted, setPushMounted] = useState(false);
-  // 端末への通知が使える環境・端末のときだけ、アカウントに「通知の設定」を出す（サインイン後に問い合わせる）
-  const pushAvailable = usePushAvailable(isAuthenticated && me != null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsMounted, setSettingsMounted] = useState(false);
+  // この端末への通知・登録メールアドレス・Slack（DM）のどれかが使えるときだけ、アカウントに「通知の設定」を出す（§103。サインイン後に問い合わせる）
+  const settingsAvailable = useNotificationSettingsAvailable(isAuthenticated && me != null);
   const submitTargets = useSubmitTargets();
   const [pickerOpen, setPickerOpen] = useState(false);
   /** FAB「作る」のボトムシート（compact）。medium 以上はメニュー */
@@ -264,15 +264,16 @@ function AppShell() {
         setAvatarOpen(true);
       },
     },
-    // 端末への通知（Web Push）のオン・オフ。以前は通知パネルの一番上にあった（利用者指示 2026-10-17）
-    ...(pushAvailable
+    // 端末・登録メールアドレス・Slack（DM）への通知の設定。以前は通知パネルの一番上にあった（利用者指示 2026-10-17）
+    ...(settingsAvailable
       ? [
           {
+            dataAction: "notifications",
             icon: "notifications",
             label: "通知の設定",
             onSelect: () => {
-              setPushMounted(true);
-              setPushOpen(true);
+              setSettingsMounted(true);
+              setSettingsOpen(true);
             },
           },
         ]
@@ -390,7 +391,7 @@ function AppShell() {
               </div>
             </div>
             {accountActions.map((a) => (
-              <M3eMenuItem key={a.label} onClick={a.onSelect}>
+              <M3eMenuItem key={a.label} data-action={a.dataAction} onClick={a.onSelect}>
                 <M3eIcon slot="icon" name={a.icon} />
                 {a.label}
               </M3eMenuItem>
@@ -434,9 +435,12 @@ function AppShell() {
             <AvatarPickerDialog open={avatarOpen} onClose={() => setAvatarOpen(false)} me={me} />
           </Suspense>
         ) : null}
-        {pushMounted ? (
+        {settingsMounted ? (
           <Suspense fallback={null}>
-            <PushSettingDialog open={pushOpen} onClose={() => setPushOpen(false)} />
+            <NotificationSettingsDialog
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+            />
           </Suspense>
         ) : null}
       </div>

@@ -38,6 +38,17 @@ const decisionLabel = { rejected: "不採用の", deferred: "持ち越しの" } 
 
 type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["events"][number];
 
+/** 開いているスレッドの、一覧の中の位置と前後への移動。一覧に無い（絞り込みで隠れている）ときは null */
+export interface ThreadNav {
+  at: number;
+  of: number;
+  onPrev: (() => void) | null;
+  onNext: (() => void) | null;
+}
+
+/** 前後のボタンで替えたとき、次に開くパネルへ「どちらを押したか」を渡す（パネルはスレッドごとに作り直される） */
+let navMoved: "prev" | "next" | null = null;
+
 /**
  * スレッドのパネル（Slack のスレッド式。Drive のコメントのように、コメントを開いて話す）。
  * 上に元のコメント（本文・添付・リアクション・状態・操作）、下に返信の流れ（日付の区切り・「ここから未読」・同じ人の続けての返信は
@@ -45,7 +56,7 @@ type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["
  * 開いたら（開いている間に新しい返信が来たときも）既読にする。
  * 一覧のカードは開かずに選ぶだけで、採否・担当・訂正・削除・リアクション・返信はここから行う。
  *
- * - pane: 引き出し（補助ペイン）の中。広いときは一覧の隣の 2 列目、狭いときは一覧に重ねて戻るボタンで閉じる（CSS の container query）
+ * - pane: 引き出し（補助ペイン）の中。幅にかかわらず一覧に重ね、戻るボタンで一覧へ（引き出しは広げない。docs/UI_M3E.md §104）
  * - sheet: スマホのボトムシートの中。シートいっぱいの高さにして戻るボタンで一覧へ戻る
  */
 export function ThreadPanel({
@@ -60,6 +71,7 @@ export function ThreadPanel({
   pending,
   now,
   variant,
+  nav,
   onBack,
   onSelect,
   onResolve,
@@ -83,6 +95,8 @@ export function ThreadPanel({
   pending?: boolean;
   now: number;
   variant: "pane" | "sheet";
+  /** バーの前後と「n / N」。無ければ出さない */
+  nav?: ThreadNav;
   onBack: () => void;
   /** 紙面のピン（位置）を表示する */
   onSelect: () => void;
@@ -103,16 +117,41 @@ export function ThreadPanel({
   const rootRef = useRef<HTMLElement>(null);
   useSheetFill(rootRef, variant === "sheet");
   // 開いたらフォーカスをパネルへ移し、閉じたら開いたときのボタン（カードの下の行など）へ戻す（フォーカスを body に落とさない。§35 A-04）。
-  // 入力欄には移さない（スマホでキーボードが勝手に出ないように）
+  // 入力欄には移さない（スマホでキーボードが勝手に出ないように）。
+  // 前後で替わったパネルは押したボタンにフォーカスを戻し、閉じたら一覧のこのスレッドのカードへ戻す
+  // （前のパネルごと作り直されて、押したボタンも開いたときのボタンも隠れた一覧も、フォーカスを受けられない）
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    rootRef.current?.focus({ preventScroll: true });
+    const moved = navMoved;
+    navMoved = null;
+    const opener = moved ? null : (document.activeElement as HTMLElement | null);
+    const root = rootRef.current;
+    root?.focus({ preventScroll: true });
+    // M3E のボタンは描き終わるまでフォーカスを受けない（tabindex は Lit の更新で付く。端で disabled になったら受けない）
+    const pressed = moved
+      ? root?.querySelector<HTMLElement & { updateComplete?: Promise<unknown> }>(
+          `.thread-panel__${moved}`,
+        )
+      : null;
+    void pressed?.updateComplete?.then(() => {
+      if (document.activeElement === root) pressed.focus({ preventScroll: true });
+    });
     return () => {
+      if (navMoved) return;
       const now = document.activeElement;
-      if ((!now || now === document.body) && opener?.isConnected)
-        opener.focus({ preventScroll: true });
+      if (now && now !== document.body) return;
+      const back =
+        opener ??
+        document.querySelector<HTMLElement>(
+          `.comments [data-thread-id="${CSS.escape(t.id)}"] .thread__footer`,
+        );
+      if (back?.isConnected) back.focus({ preventScroll: true });
     };
   }, []);
+  const move = (to: "prev" | "next", go: (() => void) | null) => {
+    if (!go) return;
+    navMoved = to;
+    go();
+  };
 
   const openMode = (m: Mode, initial = "") => {
     setMode(m);
@@ -266,13 +305,6 @@ export function ThreadPanel({
         >
           <M3eIcon name="arrow_back" className="icon--mirror" />
         </M3eIconButton>
-        <M3eIconButton
-          aria-label="スレッドを閉じる"
-          className="thread-panel__close"
-          onClick={onBack}
-        >
-          <M3eIcon name="close" />
-        </M3eIconButton>
         {locationLabel ? (
           <M3eButton
             variant="text"
@@ -281,12 +313,38 @@ export function ThreadPanel({
             onClick={onSelect}
           >
             <M3eIcon slot="icon" name="location_on" />
-            {locationLabel.label}
+            <span className="thread-panel__place">{locationLabel.label}</span>
           </M3eButton>
         ) : (
           <span className="thread-panel__title">コメント{index ? ` ${index}` : ""}</span>
         )}
-        <span className="spacer" />
+        {nav ? (
+          <span className="thread-panel__nav">
+            <M3eIconButton
+              aria-label="前のコメント"
+              size="extra-small"
+              className="thread-panel__prev"
+              disabled={!nav.onPrev}
+              onClick={() => move("prev", nav.onPrev)}
+            >
+              <M3eIcon name="chevron_left" className="icon--mirror" />
+            </M3eIconButton>
+            <span className="thread-panel__count">
+              {nav.at} / {nav.of}
+            </span>
+            <M3eIconButton
+              aria-label="次のコメント"
+              size="extra-small"
+              className="thread-panel__next"
+              disabled={!nav.onNext}
+              onClick={() => move("next", nav.onNext)}
+            >
+              <M3eIcon name="chevron_right" className="icon--mirror" />
+            </M3eIconButton>
+          </span>
+        ) : (
+          <span className="spacer" />
+        )}
         <M3eIconButton
           toggle
           selected={data?.subscribed === true}
