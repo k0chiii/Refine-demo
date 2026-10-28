@@ -297,9 +297,14 @@ export class App {
     return this.page.locator(".comments .thread");
   }
 
+  /** 一覧のカードの下の行（押すとスレッドのパネルが開く。閉じるとフォーカスが戻る先） */
+  threadOpener(card: Locator) {
+    return card.locator(".thread__footer");
+  }
+
   /** 一覧のカードの下の行を押してスレッドのパネルを開く */
   async openPanel(card: Locator) {
-    await card.locator(".thread__footer").click();
+    await this.threadOpener(card).click();
     await this.page.waitForSelector(".thread-panel");
     await this.settle();
     return this.page.locator(".thread-panel");

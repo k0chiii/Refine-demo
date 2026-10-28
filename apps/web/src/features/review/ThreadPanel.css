@@ -34,6 +34,7 @@
   background: var(--tp-surface);
   /* 横からすっと入る（空間の動き。「動きを減らす」では動かさない） */
   animation: thread-panel-in var(--mf-motion-spatial-fast) both;
+  container: thread-panel / inline-size;
 }
 @keyframes thread-panel-in {
   from {
@@ -83,6 +84,32 @@
 .thread-panel__title {
   font: var(--mf-type-title-small);
   margin-inline-start: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 前後と「n / N」は、位置と末尾の操作（通知・解決・⋮）の間の真ん中に（試作 B。§104） */
+.thread-panel__nav {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline: auto;
+}
+.thread-panel__count {
+  min-width: 4ch;
+  text-align: center;
+  font: var(--mf-type-label-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-on-surface-variant);
+}
+/* 狭いとき（360 の引き出し・412px より狭い画面のシート）は、位置を印だけにし番号の見出しを出さない。バーを折り返さず 1 行に収める（§104） */
+@container thread-panel (max-width: 379px) {
+  .thread-panel__place,
+  .thread-panel__title {
+    display: none;
+  }
 }
 .thread-panel__scroll {
   position: relative;

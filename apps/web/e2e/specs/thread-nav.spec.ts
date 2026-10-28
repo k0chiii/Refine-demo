@@ -36,6 +36,7 @@ test.describe("スレッドのパネルの前後", { tag: "@core" }, () => {
 
     await app.closePanel(panel);
     await expect(app.commentsList()).toBeVisible();
+    await expect(app.threadOpener(cards.nth(1))).toBeFocused();
     expect((await drawer.boundingBox())?.width).toBe(before);
   });
 });

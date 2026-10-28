@@ -68,7 +68,7 @@ import {
 } from "@/features/review/mentions";
 import { CreatorNoteCard, hasCreatorNote } from "@/features/review/CreatorNoteCard";
 import { ThreadCard, isClosed, type Thread } from "@/features/review/ThreadCard";
-import { ThreadPanel } from "@/features/review/ThreadPanel";
+import { ThreadPanel, type ThreadNav } from "@/features/review/ThreadPanel";
 import { WorkPresence } from "@/features/presence/WorkPresence";
 import { PinButton } from "@/features/home/PinButton";
 import { PaneHandle } from "@/features/editor/PaneHandle";
@@ -1550,6 +1550,21 @@ export function Editor({
   const openedThread = openThreadId
     ? (allThreads.find((t) => t.id === openThreadId) ?? null)
     : null;
+  const openedAt = openedThread ? threads.findIndex((t) => t.id === openedThread.id) : -1;
+  // 一覧のカードもそのスレッドまで送る（戻ったとき、いま見ていたカードが一覧に見えているように）
+  const openAt = (i: number) => {
+    const t = threads[i];
+    return t ? () => openThread(t, { reveal: true }) : null;
+  };
+  const threadNav: ThreadNav | null =
+    openedAt < 0
+      ? null
+      : {
+          at: openedAt + 1,
+          of: threads.length,
+          onPrev: openAt(openedAt - 1),
+          onNext: openAt(openedAt + 1),
+        };
   const threadPanel =
     openedThread && revisionId ? (
       <ThreadPanel
@@ -1558,6 +1573,7 @@ export function Editor({
         index={openedThread.index}
         {...(webStates.has(openedThread.id) ? { placeState: webStates.get(openedThread.id)! } : {})}
         variant={mobile ? "sheet" : "pane"}
+        {...(threadNav ? { nav: threadNav } : {})}
         meId={me?.id ?? null}
         canDecide={can?.decide ?? false}
         canReply={can?.reply ?? false}
