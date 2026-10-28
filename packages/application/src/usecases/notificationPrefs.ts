@@ -4,10 +4,12 @@ import {
   type ChannelStatus,
   channelStatusOf,
   deliverableEmail,
+  DomainError,
   normalizeNotificationPrefs,
   type NotificationPrefs,
+  type NotificationPrefsPatch,
   type Principal,
-  type SlackLink,
+  type SlackMembership,
   validateNotificationPrefsPatch,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
@@ -27,9 +29,17 @@ export interface ChannelSetting {
   status: ChannelStatus;
 }
 
-export interface NotificationSettings extends NotificationPrefs {
+/** Slack（DM）の行。送り先のワークスペースを選ぶ */
+export interface SlackChannelSetting extends ChannelSetting {
+  /** 選んだワークスペース。選んでいない・登録が消えたなら null */
+  workspaceId: string | null;
+  /** 選べるワークスペース（名前の順） */
+  workspaces: Array<{ id: string; name: string }>;
+}
+
+export interface NotificationSettings extends Omit<NotificationPrefs, "slackWorkspaceId"> {
   /** 設定画面の届け先。ACCOUNT_CHANNELS から導く（Record なので経路を足すと画面の型が落ちる） */
-  destinations: Record<AccountChannel, ChannelSetting>;
+  destinations: Record<AccountChannel, ChannelSetting> & { slack: SlackChannelSetting };
 }
 
 export async function getNotificationPrefs(
@@ -45,41 +55,68 @@ export async function getNotificationSettings(
   principal: Principal,
   available: ChannelAvailability,
 ): Promise<NotificationSettings> {
-  const prefs = await getNotificationPrefs(ctx, principal);
+  const { slackWorkspaceId, ...prefs } = await getNotificationPrefs(ctx, principal);
   const address = (await ctx.people.profiles([principal.userId]))[0]?.email || null;
   const email = deliverableEmail(address);
-  const slack: SlackLink = email ? await ctx.slackMembers.find(email) : { state: "unresolved" };
+  const workspaces = await ctx.slackWorkspaces.list();
+  const workspace = workspaces.find((w) => w.id === slackWorkspaceId) ?? null;
+  const slack: SlackMembership | null = workspace && {
+    teamId: workspace.teamId,
+    link: email ? await ctx.slackMembers.find(workspace.teamId, email) : { state: "unresolved" },
+  };
   const setting = (channel: AccountChannel): ChannelSetting => ({
     available: available.has(channel),
     on: prefs.channels.includes(channel),
     address,
     status: channelStatusOf(channel, email, slack),
   });
-  return { ...prefs, destinations: { email: setting("email"), slack: setting("slack") } };
+  return {
+    ...prefs,
+    destinations: {
+      email: setting("email"),
+      slack: {
+        ...setting("slack"),
+        workspaceId: workspace?.id ?? null,
+        workspaces: workspaces.map(({ id, name }) => ({ id, name })),
+      },
+    },
+  };
 }
 
 /**
- * 渡した項目だけを変える（showPreview・mutedCategories・channels）。
- * 使えない経路もオンにできる（意思として保存し、送るかは env が決める）
+ * 渡した項目だけを変える（showPreview・mutedCategories・channels・slackWorkspaceId）。
+ * 使えない経路もオンにできる（意思として保存し、送るかは env が決める）。登録に無いワークスペースは選べない。
+ * Slack がオンで、選んだワークスペースが無く（選んでいない・登録が消えた）、登録が 1 つだけなら、それを選ぶ
  */
 export async function updateNotificationPrefs(
   ctx: AppContext,
   principal: Principal,
-  patch: {
-    showPreview?: boolean;
-    mutedCategories?: readonly string[];
-    channels?: readonly string[];
-  },
+  patch: NotificationPrefsPatch,
 ): Promise<NotificationPrefs> {
   const valid = validateNotificationPrefsPatch(patch);
-  const next = normalizeNotificationPrefs({
+  if (
+    typeof valid.slackWorkspaceId === "string" &&
+    !(await ctx.slackWorkspaces.findById(valid.slackWorkspaceId))
+  )
+    throw new DomainError("notification_prefs_invalid", { field: "slackWorkspaceId" });
+  const merged = normalizeNotificationPrefs({
     ...(await getNotificationPrefs(ctx, principal)),
     ...valid,
   });
+  const next = merged.channels.includes("slack") ? await selectOnlyWorkspace(ctx, merged) : merged;
   await ctx.notificationPrefs.save({
     userId: principal.userId,
     ...next,
     updatedAt: ctx.clock.now(),
   });
   return next;
+}
+
+async function selectOnlyWorkspace(
+  ctx: AppContext,
+  prefs: NotificationPrefs,
+): Promise<NotificationPrefs> {
+  const workspaces = await ctx.slackWorkspaces.list();
+  const only = workspaces.length === 1 ? workspaces[0] : undefined;
+  return only ? { ...prefs, slackWorkspaceId: only.id } : prefs;
 }

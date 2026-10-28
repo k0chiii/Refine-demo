@@ -9,10 +9,12 @@ import {
   normalizeNotificationPrefs,
   type NotificationContentPolicy,
   type NotificationMessage,
+  type NotificationPrefs,
   type PushDevice,
   type PushPayload,
   type SettledOutcome,
   type SlackLink,
+  type SlackMembership,
   type SlackObservation,
   toEmail,
   toPushPayload,
@@ -43,7 +45,14 @@ export interface DeliveryEnv {
 export type DeliveryTarget =
   | { channel: "push"; key: `push:${string}`; device: PushDevice; payload: PushPayload }
   | { channel: "email"; key: "email"; to: string; content: EmailContent }
-  | { channel: "slack"; key: "slack"; email: string; memberId: string | null; text: string };
+  | {
+      channel: "slack";
+      key: "slack";
+      teamId: string;
+      email: string;
+      memberId: string | null;
+      text: string;
+    };
 
 export interface DeliveryPlan {
   notificationId: string;
@@ -54,7 +63,13 @@ export interface DeliveryPlan {
 export type DeliveryTargetRef =
   | { channel: "push"; key: `push:${string}`; subscriptionId: string }
   | { channel: "email"; key: "email" }
-  | { channel: "slack"; key: "slack"; email: string; memberId: string | null };
+  | { channel: "slack"; key: "slack"; teamId: string; email: string; memberId: string | null };
+
+/** Slack で引く宛先（選んだワークスペースの team_id と、登録メールアドレス） */
+export interface SlackMemberKey {
+  teamId: string;
+  email: string;
+}
 
 /**
  * 通知 1 件を外へ届ける計画。無い・既読・止めた分類・届け先なしなら null。
@@ -87,10 +102,8 @@ export async function planDelivery(
     channels.includes("email") || channels.includes("slack")
       ? await deliverableEmailOf(ctx, n.recipientId)
       : null;
-  const slack: SlackLink =
-    email && channels.includes("slack")
-      ? await ctx.slackMembers.find(email)
-      : { state: "unresolved" };
+  const slack =
+    email && channels.includes("slack") ? await slackMembershipOf(ctx, prefs, email) : null;
   const settled = new Set(await ctx.deliveries.listSettled(n.id));
   const destinations = destinationsOf({
     channels,
@@ -115,6 +128,19 @@ function usableChannels(env: DeliveryEnv): ChannelAvailability {
   return env.origin === null
     ? new Set([...env.available].filter((c) => c === "push"))
     : env.available;
+}
+
+/** 選んだワークスペースでのその人の宛先。選んでいない・登録が消えたなら null（送らない） */
+async function slackMembershipOf(
+  ctx: AppContext,
+  prefs: NotificationPrefs,
+  email: string,
+): Promise<SlackMembership | null> {
+  const workspace = prefs.slackWorkspaceId
+    ? await ctx.slackWorkspaces.findById(prefs.slackWorkspaceId)
+    : null;
+  if (!workspace) return null;
+  return { teamId: workspace.teamId, link: await ctx.slackMembers.find(workspace.teamId, email) };
 }
 
 /** 送ってよい登録メールアドレス（無い・送れない形・試験用のドメインなら null） */
@@ -196,7 +222,7 @@ export async function recordDelivery(
       return;
     case "slack": {
       const observation = slackPostObservation(target.memberId, outcome, at);
-      if (observation) await observeSlack(ctx, target.email, observation);
+      if (observation) await observeSlack(ctx, target, observation);
       return;
     }
   }
@@ -223,36 +249,43 @@ function slackPostObservation(
 /** Slack の状態を観測で移す。slackMembers を書くのはここだけで、状態が変わらなければ書かない */
 async function observeSlack(
   ctx: AppContext,
-  email: string,
+  { teamId, email }: SlackMemberKey,
   observation: SlackObservation,
 ): Promise<SlackLink> {
-  const prev = await ctx.slackMembers.find(email);
+  const prev = await ctx.slackMembers.find(teamId, email);
   const next = nextSlackLink(prev, observation);
-  if (next !== prev && next.state !== "unresolved") await ctx.slackMembers.save(email, next);
+  if (next !== prev && next.state !== "unresolved")
+    await ctx.slackMembers.save(teamId, email, next);
   return next;
 }
 
 /** 登録メールアドレスで Slack を引いた結果 */
 export type SlackLookupResult = { kind: "found"; memberId: string } | { kind: "not_found" };
 
-/** 引いた結果を、引いたメールアドレスの行に保存する（状態が変わらなければ書かない） */
+/** 引いた結果を、引いたワークスペース × メールアドレスの行に保存する（状態が変わらなければ書かない） */
 export async function recordSlackLookup(
   ctx: AppContext,
-  email: string,
+  key: SlackMemberKey,
   result: SlackLookupResult,
 ): Promise<SlackLink> {
   const at = ctx.clock.now();
   return observeSlack(
     ctx,
-    email,
+    key,
     result.kind === "found"
       ? { type: "lookup_found", memberId: result.memberId, at }
       : { type: "lookup_not_found", at },
   );
 }
 
-/** Slack で引くメールアドレス（Slack をオンにしていて、送れるアドレスがあるときだけ） */
-export async function slackLookupEmail(ctx: AppContext, userId: string): Promise<string | null> {
+/** Slack で引く宛先（Slack をオンにしていて、登録にあるワークスペースを選び、送れるアドレスがあるときだけ） */
+export async function slackLookupTarget(
+  ctx: AppContext,
+  userId: string,
+): Promise<SlackMemberKey | null> {
   const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(userId));
-  return prefs.channels.includes("slack") ? deliverableEmailOf(ctx, userId) : null;
+  if (!prefs.channels.includes("slack") || !prefs.slackWorkspaceId) return null;
+  const workspace = await ctx.slackWorkspaces.findById(prefs.slackWorkspaceId);
+  const email = workspace ? await deliverableEmailOf(ctx, userId) : null;
+  return workspace && email ? { teamId: workspace.teamId, email } : null;
 }
