@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  buildPushPayload,
   clipPushText,
+  composeNotificationMessage,
   DomainError,
   notificationPath,
   PUSH_BODY_MAX,
   PUSH_TITLE_MAX,
   pushOutcome,
   pushTagOf,
+  toPushPayload,
   validatePushSubscription,
 } from "../index.ts";
 
@@ -49,10 +50,18 @@ describe("Web Push の購読の検証", () => {
 });
 
 describe("Web Push の内容", () => {
+  /** 端末に送る内容（外に出す内容を一度決めて、端末の形に描く） */
+  const pushOf = ({
+    unread,
+    ...input
+  }: Parameters<typeof composeNotificationMessage>[0] & { unread: number }) =>
+    toPushPayload(composeNotificationMessage(input), unread);
   const n = {
     id: "n1",
     kind: "comment_posted",
     title: "新しいコメント",
+    // 本文に制作物名・送り主・抜粋があっても、端末には載らない
+    body: "『夏のポスター』第2版・本郷 校正さん: 相談です",
     workId: "w1",
     revisionId: "r1",
     threadId: "t1",
@@ -62,7 +71,7 @@ describe("Web Push の内容", () => {
   const open = { title: "夏のポスター", restricted: false };
 
   it("題名は制作物名、本文は送り主と抜粋。押すと同じ画面を開く", () => {
-    const p = buildPushPayload({
+    const p = pushOf({
       notification: n,
       work: open,
       hidden: false,
@@ -82,7 +91,7 @@ describe("Web Push の内容", () => {
 
   it("同じスレッドの通知は同じ印でまとまり、スレッドが無ければ制作物、それも無ければ通知の ID", () => {
     const tag = (x: object) =>
-      buildPushPayload({
+      pushOf({
         notification: { ...n, ...x },
         work: open,
         hidden: false,
@@ -96,9 +105,9 @@ describe("Web Push の内容", () => {
   });
 
   it("制作物の無い通知は通知の題名を題名にし、送り主か抜粋だけでも本文を作る", () => {
-    const base = { id: "n3", kind: "rule_proposed", title: "提案が届きました" };
+    const base = { id: "n3", kind: "rule_proposed", title: "提案が届きました", body: "" };
     const only = (extra: object, actorName: string | null) =>
-      buildPushPayload({
+      pushOf({
         notification: { ...base, ...extra },
         work: null,
         hidden: false,
@@ -116,7 +125,7 @@ describe("Web Push の内容", () => {
   });
 
   it("長い題名・本文は切る", () => {
-    const p = buildPushPayload({
+    const p = pushOf({
       notification: { ...n, preview: "あ".repeat(500) },
       work: { title: "題".repeat(300), restricted: false },
       hidden: false,
@@ -130,10 +139,10 @@ describe("Web Push の内容", () => {
 
   it("内容の表示を止めると、送り主と抜粋は載せず、題名は決まった文言になる", () => {
     const input = { notification: n, work: open, hidden: false, actorName: "本郷 校正", unread: 1 };
-    const shown = buildPushPayload(input);
+    const shown = pushOf(input);
     for (const off of [
-      buildPushPayload({ ...input, showPreview: false }),
-      buildPushPayload({ ...input, policy: { showWorkTitle: true, showPreview: false } }),
+      pushOf({ ...input, showPreview: false }),
+      pushOf({ ...input, policy: { showWorkTitle: true, showPreview: false } }),
     ]) {
       const text = JSON.stringify([off.title, off.body]);
       expect(text).not.toContain("本郷");
@@ -145,7 +154,7 @@ describe("Web Push の内容", () => {
   });
 
   it("非公開の制作物の名前・送り主・抜粋と、見られない通知の内容は載せない", () => {
-    const restricted = buildPushPayload({
+    const restricted = pushOf({
       notification: n,
       work: { title: "極秘", restricted: true },
       hidden: false,
@@ -155,7 +164,7 @@ describe("Web Push の内容", () => {
     expect(restricted.body).toBe("非公開の制作物");
     expect(JSON.stringify(restricted)).not.toMatch(/極秘|本郷|相談です/);
     // 内容の表示を止めていても、非公開の制作物名は出ない
-    const restrictedOff = buildPushPayload({
+    const restrictedOff = pushOf({
       notification: n,
       work: { title: "極秘", restricted: true },
       hidden: false,
@@ -163,11 +172,12 @@ describe("Web Push の内容", () => {
       unread: 1,
     });
     expect(JSON.stringify(restrictedOff)).not.toContain("極秘");
-    const hidden = buildPushPayload({
+    const hidden = pushOf({
       notification: {
         id: "n1",
         kind: "comment_posted",
         title: "閲覧できない制作物の通知です",
+        body: "",
         createdAt: 1,
       },
       work: null,
@@ -181,7 +191,7 @@ describe("Web Push の内容", () => {
   });
 
   it("ポリシーで制作物名を載せないようにできる", () => {
-    const p = buildPushPayload({
+    const p = pushOf({
       notification: n,
       work: open,
       hidden: false,
