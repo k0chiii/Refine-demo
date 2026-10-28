@@ -45,7 +45,7 @@ type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["
  * 開いたら（開いている間に新しい返信が来たときも）既読にする。
  * 一覧のカードは開かずに選ぶだけで、採否・担当・訂正・削除・リアクション・返信はここから行う。
  *
- * - pane: 引き出し（補助ペイン）の中。広いときは一覧の隣の 2 列目、狭いときは一覧に重ねて戻るボタンで閉じる（CSS の container query）
+ * - pane: 引き出し（補助ペイン）の中。幅にかかわらず一覧に重ね、戻るボタンで一覧へ（引き出しは広げない。docs/UI_M3E.md §104）
  * - sheet: スマホのボトムシートの中。シートいっぱいの高さにして戻るボタンで一覧へ戻る
  */
 export function ThreadPanel({
@@ -265,13 +265,6 @@ export function ThreadPanel({
           onClick={onBack}
         >
           <M3eIcon name="arrow_back" className="icon--mirror" />
-        </M3eIconButton>
-        <M3eIconButton
-          aria-label="スレッドを閉じる"
-          className="thread-panel__close"
-          onClick={onBack}
-        >
-          <M3eIcon name="close" />
         </M3eIconButton>
         {locationLabel ? (
           <M3eButton

@@ -1006,7 +1006,7 @@ async function main() {
   }
 
   // 78 スレッドのパネル（利用者決定 2026-10-20「Slackみたいに別タブで開く感じ？横に開く感じ？」）: 一覧のカードの「返信」の行を押すと、
-  // 一覧の隣にスレッドが開く（引き出しが広がり、一覧は見えたまま）。元のコメントの下に返信の流れ、一番下に返信欄。
+  // スレッドが一覧を差し替えて開く（引き出しは広げない。§104）。元のコメントの下に返信の流れ、一番下に返信欄。
   // 同じ人が続けて書いた返信はまとめる。79 別の人には未読の点が付き、開くと消え、「ここから未読」の線が引かれる
   {
     const n0 = await page.locator(".comments .thread").count();
@@ -1031,22 +1031,25 @@ async function main() {
       (await page.locator(".thread-panel").count()) === 0,
       "カードを押しただけでパネルが開く",
     );
+    const drawerWidth = () =>
+      page.evaluate(() => document.querySelector(".comments").getBoundingClientRect().width);
+    const widthBefore = await drawerWidth();
     const panel = await openPanel(card);
-    // 広い画面では一覧と並ぶ（一覧のカードは見えたまま・パネルは一覧の右）
+    // 広い画面でも引き出しは広げず、スレッドが一覧を差し替える（§104）
     const sides = await page.evaluate(() => {
-      const list = document.querySelector(".comments__list").getBoundingClientRect();
+      const list = document.querySelector(".comments__main").getBoundingClientRect();
       const panel = document.querySelector(".thread-panel").getBoundingClientRect();
       const composer = document.querySelector(".thread-panel__composer").getBoundingClientRect();
       return {
-        listRight: list.right,
-        panelLeft: panel.left,
+        overList: Math.abs(panel.left - list.left) <= 1 && Math.abs(panel.width - list.width) <= 1,
         listVisible: getComputedStyle(document.querySelector(".comments__main")).visibility,
         composerInside: composer.bottom <= innerHeight && composer.top >= panel.top,
       };
     });
+    expectTrue((await drawerWidth()) === widthBefore, "スレッドを開くと引き出しが広がる");
     expectTrue(
-      sides.panelLeft >= sides.listRight - 1 && sides.listVisible === "visible",
-      "広い画面でスレッドが一覧の隣に開かない",
+      sides.overList && sides.listVisible === "hidden",
+      "広い画面でスレッドが一覧を差し替えない",
     );
     expectTrue(sides.composerInside, "返信欄が見えていない");
     for (const text of ["一件目の返信です。", "続けて書いた返信です。"]) {
@@ -1083,11 +1086,11 @@ async function main() {
       null,
       { timeout: 10_000 },
     );
-    // 一覧の中で、開いているスレッドのカード（下の行まで）が見える位置にして撮る
+    await shot("78-thread-panel");
+    // 一覧へ戻り、いま返信したスレッドのカード（下の行まで）が見える位置にして撮る
+    await closePanel();
     await card.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
     await shot("78c-thread-card-replies");
-    await shot("78-thread-panel");
-    await closePanel();
     // 79 別の人（制作者）: 一覧のカードに未読の点 → パネルを開くと点が消え、「ここから未読」の線が引かれる
     await signInAs("mock-nogiku-creator");
     await go(revisionUrl);
@@ -2087,14 +2090,9 @@ const openPanel = async (card) => {
   await settle();
   return page.locator(".thread-panel");
 };
-/** スレッドのパネルを閉じる（広い画面は ✕、狭い画面・シートは戻る） */
+/** スレッドのパネルを閉じて一覧へ戻る（バーの ←。広い画面もシートも同じ） */
 const closePanel = async () => {
-  await page
-    .locator(
-      '.thread-panel__bar m3e-icon-button[aria-label="スレッドを閉じる"]:visible, .thread-panel__bar m3e-icon-button[aria-label="コメントの一覧へ戻る"]:visible',
-    )
-    .first()
-    .click();
+  await page.locator(".thread-panel__bar .thread-panel__back").click();
   await page.waitForSelector(".thread-panel", { state: "detached" });
   await settle();
 };

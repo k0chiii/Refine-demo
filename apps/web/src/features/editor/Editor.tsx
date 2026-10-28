@@ -194,9 +194,6 @@ let marksHiddenFor: string | null = null;
 const COMPOSE_W = 300;
 /** 紙面の描き終わりの通知が届かなくても、ファイルが届いてからこの時間で読み込み中の表示を終える */
 const PAINT_TIMEOUT_MS = 8000;
-/** スレッドを開いたときの引き出しの幅（一覧 330 + スレッド 410）と、これ未満しか取れなければ広げない幅（一覧に重ねて出す） */
-const THREAD_PANE_W = 740;
-const THREAD_PANE_MIN = 720;
 
 function anchorTop(anchor: Anchor, vp: Viewport): number | null {
   if (anchor.type === "pdf_rect" || anchor.type === "image_rect")
@@ -358,7 +355,7 @@ export function Editor({
     return () => ro.disconnect();
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くと一覧の隣・シートいっぱいにスレッドが開く） */
+  /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くとスレッドが一覧・シートを差し替える） */
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
@@ -765,22 +762,6 @@ export function Editor({
     if (openThreadId && data && !allThreads.some((t) => t.id === openThreadId))
       setOpenThreadId(null);
   }, [openThreadId, data, allThreads]);
-  // 広い画面でスレッドを開いたら、引き出しを一覧とスレッドが並ぶ幅まで広げる（閉じたら元の幅へ）。入りきらない狭さでは広げず、
-  // スレッドは一覧に重ねて出る（CSS の container query）
-  const paneBeforeThread = useRef<{ w: number | null } | null>(null);
-  const wantWidePane = openThreadId !== null && drawer === "comments" && !mobile;
-  useEffect(() => {
-    if (wantWidePane) {
-      if (!paneBeforeThread.current) paneBeforeThread.current = { w: paneW };
-      const room = Math.max(240, bodyW - 24 - 360);
-      const want = Math.min(THREAD_PANE_W, room);
-      if (want >= THREAD_PANE_MIN && (paneW ?? defaultPane) < want) setPaneW(want);
-    } else if (paneBeforeThread.current) {
-      const before = paneBeforeThread.current.w;
-      paneBeforeThread.current = null;
-      setPaneW(drawer === null ? null : before);
-    }
-  }, [wantWidePane]);
 
   // コメントを選んだら（紙面のピン・範囲、URL の ?thread=、通知）、一覧が見える状態にしてからそのカードまでスクロールする。
   // 一覧の位置合わせは features/review/revealThread。ここでは「一覧を見せる」ところまで（狭い画面はシートを開き、広い画面は
