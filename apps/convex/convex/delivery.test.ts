@@ -11,6 +11,13 @@ const MEMBER = "U0REVIEWER";
 const TITLE = "極秘ポスター";
 const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as const }];
 
+/** 待つ時間を記録してすぐ返す（DM の枠の時刻までの待ちを、時計を進めずに確かめる） */
+const sleep = vi.hoisted(() => vi.fn(async (_ms: number) => {}));
+vi.mock("./lib/retryAfter.ts", async (original) => ({
+  ...(await original<typeof import("./lib/retryAfter.ts")>()),
+  sleepFor: sleep,
+}));
+
 beforeEach(() => {
   // 予約した送信・引き当てが裏で走らないよう時計を止め、ここで 1 回ずつ呼ぶ
   vi.useFakeTimers({ toFake: ["setTimeout"] });
@@ -22,6 +29,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  sleep.mockClear();
 });
 
 const RESEND_KEY = "re_test_key";
@@ -418,7 +426,7 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(services.calls("post")).toHaveLength(0);
   });
 
-  it("DM は 1 秒に 1 件。超えた分は投げて workpool にやり直させ、1 秒たてば送る", async () => {
+  it("DM は 1 秒に 1 件。続けて送る分は次の枠まで待って送り、落とさない", async () => {
     freezeClock();
     slackEnv();
     const t = createHarness();
@@ -432,12 +440,35 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     const services = fakeServices();
 
     expect(await deliver(t, first.notificationId)).toBe(1);
-    await expect(deliver(t, second.notificationId)).rejects.toThrow("delivery_transient_failure");
-    expect(services.calls("post")).toHaveLength(1);
-
-    nextSecond();
+    expect(sleep).not.toHaveBeenCalled();
     expect(await deliver(t, second.notificationId)).toBe(1);
     expect(services.calls("post")).toHaveLength(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    const waited = sleep.mock.calls[0]![0];
+    expect(waited).toBeGreaterThan(0);
+    expect(waited).toBeLessThanOrEqual(1_000);
+    const lastPost = services.fetch.mock.invocationCallOrder.at(-1)!;
+    expect(sleep.mock.invocationCallOrder[0]!).toBeLessThan(lastPost);
+  });
+
+  it("DM の枠が遠い先まで埋まっていれば、待たずに投げて workpool にやり直させる", async () => {
+    freezeClock();
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
+    const { notificationId } = await assignReviewer(t, cast);
+    for (let n = 0; n < 30; n++) {
+      const { retryAfter } = await t.mutation(internal.delivery.reserveSlackDm, {});
+      if (retryAfter > 10_000) break;
+    }
+    const services = fakeServices();
+
+    await expect(deliver(t, notificationId)).rejects.toThrow("delivery_transient_failure");
+    expect(services.calls("post")).toHaveLength(0);
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it("登録が消えたワークスペースには、選んでいた人にも送らない", async () => {
