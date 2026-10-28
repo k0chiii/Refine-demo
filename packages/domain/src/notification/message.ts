@@ -202,16 +202,17 @@ const EMAIL_FOOTER =
  * 差し込む値はすべて & < > を逃がす（コメントの文面から <!channel>・<@U…>・リンクを作らせない）
  */
 export function toSlackText(m: NotificationMessage, origin: string): string {
-  const lines = [
-    `*${slackEscape(clipPushText(m.title, PUSH_TITLE_MAX))}*`,
-    slackEscape(clipPushText(m.summary, PUSH_BODY_MAX)),
-  ];
-  if (m.detail !== null) lines.push(`>${slackEscape(clipPushText(m.detail, SLACK_DETAIL_MAX))}`);
+  const lines = [`*${slackField(m.title, PUSH_TITLE_MAX)}*`, slackField(m.summary, PUSH_BODY_MAX)];
+  if (m.detail !== null) lines.push(`>${slackField(m.detail, SLACK_DETAIL_MAX)}`);
   lines.push(`<${slackEscape(`${origin}${m.path}`)}|校正システムで開く>`);
   return lines.join("\n");
 }
 
-/** 逃がすのは切ったあと（先に逃がすと &amp; などが途中で切れうる） */
+/** 切ってから逃がす（先に逃がすと &amp; などが途中で切れうる） */
+function slackField(text: string, max: number): string {
+  return slackEscape(clipPushText(text, max));
+}
+
 function slackEscape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

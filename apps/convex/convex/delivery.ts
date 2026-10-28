@@ -53,7 +53,7 @@ export const plan = internalQuery({
 });
 
 const targetRef = v.union(
-  v.object({ channel: v.literal("push"), key: v.string(), subscriptionId: v.string() }),
+  v.object({ channel: v.literal("push"), subscriptionId: v.string() }),
   v.object({ channel: v.literal("email"), key: v.literal("email") }),
   v.object({
     channel: v.literal("slack"),
@@ -80,12 +80,12 @@ const settledOutcome = v.union(
   }),
 );
 
-/** 端末の届け先のキーは購読から決まる（食い違う引数は受け付けない） */
-function targetRefOf(t: Infer<typeof targetRef>): DeliveryTargetRef {
+/** 記録に渡す手がかり（deliveryNode が作る。端末のキーは引数で受け取らず購読から決める） */
+export type DeliveryTargetArg = Infer<typeof targetRef>;
+
+function targetRefOf(t: DeliveryTargetArg): DeliveryTargetRef {
   if (t.channel !== "push") return t;
-  const key = `push:${t.subscriptionId}` as const;
-  if (t.key !== key) throw new Error("delivery_target_invalid");
-  return { channel: "push", key, subscriptionId: t.subscriptionId };
+  return { channel: "push", key: `push:${t.subscriptionId}`, subscriptionId: t.subscriptionId };
 }
 
 /** 送った結果（決着したものだけ）を記録する */

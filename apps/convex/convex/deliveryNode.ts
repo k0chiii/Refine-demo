@@ -1,11 +1,12 @@
 "use node";
 
-import type { DeliveryPlan, DeliveryTarget, DeliveryTargetRef } from "@mf100/application";
+import type { DeliveryPlan, DeliveryTarget } from "@mf100/application";
 import type { DeliveryChannel, DestinationKey, SendOutcome } from "@mf100/domain";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
+import type { DeliveryTargetArg } from "./delivery.ts";
 import { type DeliveryConfig, deliveryConfigFromEnv } from "./lib/channels.ts";
 import { sendEmail } from "./lib/email.ts";
 import { lookupSlackMember, postSlackDm } from "./lib/slack.ts";
@@ -54,7 +55,7 @@ export async function deliverNotification(ctx: ActionCtx, notificationId: string
 /** 1 つの届け先に送った結果と、記録に渡す手がかり（Slack は送った相手のメンバー） */
 interface Attempt {
   outcome: SendOutcome;
-  ref: DeliveryTargetRef;
+  ref: DeliveryTargetArg;
 }
 
 /** 計画は env の揃った経路だけを含むので、ここに来るのは計画と送る間に env が変わったときだけ */
@@ -68,7 +69,7 @@ async function send(
 ): Promise<Attempt> {
   switch (t.channel) {
     case "push": {
-      const ref = { channel: "push", key: t.key, subscriptionId: t.device.id } as const;
+      const ref = { channel: "push", subscriptionId: t.device.id } as const;
       if (!c.push) return { outcome: NOT_CONFIGURED, ref };
       try {
         const status = await sendWebPush(t.device, t.payload, c.push, { now: Date.now() });
@@ -97,7 +98,7 @@ async function send(
 
 type SlackTarget = Extract<DeliveryTarget, { channel: "slack" }>;
 
-function slackRef(t: SlackTarget, memberId: string | null): DeliveryTargetRef {
+function slackRef(t: SlackTarget, memberId: string | null): DeliveryTargetArg {
   return { channel: "slack", key: "slack", email: t.email, memberId };
 }
 

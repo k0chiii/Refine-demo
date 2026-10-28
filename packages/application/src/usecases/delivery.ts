@@ -100,7 +100,7 @@ export async function planDelivery(
     now: ctx.clock.now(),
   }).filter((d) => !settled.has(d.key));
   if (destinations.length === 0) return null;
-  const message = await messageOf(ctx, n, prefs.showPreview, env.policy);
+  const message = await composeAtSendTime(ctx, n, prefs.showPreview, env.policy);
   const unread = destinations.some((d) => d.channel === "push")
     ? await ctx.notifications.countUnread(n.recipientId)
     : 0;
@@ -123,10 +123,10 @@ async function deliverableEmailOf(ctx: AppContext, userId: UserId): Promise<stri
 }
 
 /**
- * 送る時点の閲覧権限で伏せ直し、外に出す内容を決める。作った後に ACL が外れたら、送り主・抜粋ごと伏せる。
+ * 送る時点で閲覧権限を確かめ直してから、外に出す内容を決める（作った後に ACL が外れたら、送り主・抜粋ごと伏せる）。
  * 「通知に内容を表示」が切ってあれば、送り主と抜粋を載せない
  */
-async function messageOf(
+async function composeAtSendTime(
   ctx: AppContext,
   n: Notification,
   showPreview: boolean,
