@@ -13,8 +13,7 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await app.signInAs("mock-nogiku-manager");
     await app.go("/works");
     const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await row.locator(`m3e-icon-button[aria-label="${title} の操作"]`).click();
-    await app.settle();
+    await app.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
     await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
     const dialog = app.dialog();
     await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を編集");
@@ -37,8 +36,7 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await rows.first().waitFor();
     const before = await rows.count();
     const row = rows.filter({ hasText: title }).first();
-    await row.locator(`m3e-icon-button[aria-label="${title} の操作"]`).click();
-    await app.settle();
+    await app.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
     await row.locator("m3e-menu m3e-menu-item", { hasText: "複製" }).click();
     const dialog = app.dialog();
     await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を複製");
@@ -55,8 +53,7 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await app.signInAs("mock-nogiku-creator");
     await app.go("/works");
     const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await row.locator(`m3e-icon-button[aria-label="${title} の操作"]`).click();
-    await app.settle();
+    await app.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
     const menu = row.locator("m3e-menu");
     await expect(menu.locator("m3e-menu-item", { hasText: "複製" })).toBeVisible();
     await expect(menu.locator("m3e-menu-item", { hasText: "情報を編集" })).toHaveCount(0);

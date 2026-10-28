@@ -905,7 +905,7 @@ export default defineSchema({
     // 移行でスレッドごとの既読を引く
     .index("by_thread", ["threadId"]),
 
-  /** アプリ内通知（F-11）。外部送信（Slack）は後続で NotificationJob に分離する。 */
+  /** アプリ内通知（F-11）。外への通知（端末・登録メールアドレス・Slack の DM）は通知ごとに delivery.ts が送る */
   notifications: defineTable({
     recipientId: v.string(),
     kind: v.string(),
@@ -925,15 +925,45 @@ export default defineSchema({
     // 未読の数・「すべて既読」は未読（readAt なし）だけをこの索引で読む。createdAt で「押した時刻まで」に区切る
     .index("by_recipient_read_created", ["recipientId", "readAt", "createdAt"]),
 
-  /** 通知の受け取り方（利用者ごとに 1 行。端末への通知にだけ効く。利用者指示 2026-10-18）。行が無ければ既定 */
+  /** 通知の受け取り方（利用者ごとに 1 行。外への通知に効く。利用者指示 2026-10-18・2026-10-28）。行が無ければ既定 */
   notificationPrefs: defineTable({
     userId: v.string(),
     showPreview: v.boolean(),
     mutedCategories: v.array(v.string()),
+    /** オンにしたアカウントの経路（"email"・"slack"）。無い行は空（既定オフ） */
+    channels: v.optional(v.array(v.string())),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
-  /** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意（利用者決定 2026-10-15） */
+  /** 外への通知の決着（通知 × 届け先で 1 行。届け先は "push:<購読>"・"email"・"slack"）。冪等のキー */
+  notificationDeliveries: defineTable({
+    notificationId: v.string(),
+    destination: v.string(),
+    outcome: v.union(v.literal("sent"), v.literal("rejected")),
+    reason: v.optional(v.string()),
+    at: v.number(),
+  }).index("by_notification_and_destination", ["notificationId", "destination"]),
+
+  /** 登録メールアドレスで引いた Slack のメンバー（アドレスごとに 1 行。無ければ未確認）。linked・cannot_dm は memberId 必須 */
+  slackMembers: defineTable(
+    v.union(
+      v.object({
+        email: v.string(),
+        state: v.literal("linked"),
+        memberId: v.string(),
+        checkedAt: v.number(),
+      }),
+      v.object({ email: v.string(), state: v.literal("not_found"), checkedAt: v.number() }),
+      v.object({
+        email: v.string(),
+        state: v.literal("cannot_dm"),
+        memberId: v.string(),
+        checkedAt: v.number(),
+      }),
+    ),
+  ).index("by_email", ["email"]),
+
+  /** 旧（端末ごとの決着。notificationDeliveries に替えた）。行の削除は承認後 */
   pushDeliveries: defineTable({
     notificationId: v.string(),
     subscriptionId: v.string(),
@@ -941,6 +971,7 @@ export default defineSchema({
     deliveredAt: v.number(),
   }).index("by_notification_and_subscription", ["notificationId", "subscriptionId"]),
 
+  /** 端末への通知（Web Push）の購読。端末（ブラウザ）ごとに 1 件。endpoint で一意（利用者決定 2026-10-15） */
   pushSubscriptions: defineTable({
     userId: v.string(),
     endpoint: v.string(),

@@ -10,6 +10,7 @@ import {
   sendWebPush,
   vapidAuthorization,
   type VapidKeys,
+  webPushOutcome,
 } from "./lib/webpush.ts";
 
 function receiver() {
@@ -88,5 +89,22 @@ describe("Web Push の暗号化と VAPID", () => {
       throw new Error("offline");
     });
     expect(await sendWebPush(target, {}, keys, { now: Date.now(), fetch: failing })).toBe(0);
+  });
+});
+
+describe("プッシュサービスの HTTP の状態 → 結果", () => {
+  it.each([
+    [200, { kind: "sent", httpStatus: 200 }],
+    [201, { kind: "sent", httpStatus: 201 }],
+    [404, { kind: "rejected", reason: "gone", httpStatus: 404 }],
+    [410, { kind: "rejected", reason: "gone", httpStatus: 410 }],
+    [429, { kind: "retry" }],
+    [500, { kind: "retry" }],
+    [503, { kind: "retry" }],
+    [0, { kind: "retry" }],
+    [400, { kind: "rejected", reason: "invalid_content", httpStatus: 400 }],
+    [413, { kind: "rejected", reason: "invalid_content", httpStatus: 413 }],
+  ])("%i", (status, expected) => {
+    expect(webPushOutcome(status)).toEqual(expected);
   });
 });

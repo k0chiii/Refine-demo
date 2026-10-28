@@ -7,6 +7,7 @@ import type {
   ReactionEntry,
   ReplyBody,
   CommentThread,
+  DestinationKey,
   DocumentDraft,
   FeedbackFile,
   FeedbackPost,
@@ -17,6 +18,7 @@ import type {
   NotificationPrefs,
   ProofreadingRun,
   Principal,
+  RejectReason,
   RequiredCheck,
   ReviewAssignment,
   Revision,
@@ -25,6 +27,7 @@ import type {
   RuleProposal,
   RuleRevision,
   RevisionId,
+  SlackLink,
   UploadAttempt,
   UploadAttemptTarget,
   UploadItem,
@@ -152,7 +155,7 @@ export interface RequiredCheckRepository {
 
 /**
  * アプリ内通知（F-11）。業務データの正本は「自分の校正待ち」と版の状態であり、通知は補助（§10-1）。
- * Slack 等の外部送信は NotificationJob として別途キューイングする（後続）。
+ * 外への通知（端末・登録メールアドレス・Slack の DM）は、通知 1 件ごとに usecases/delivery.ts が計画する。
  */
 export type NotificationKind =
   | "revision_submitted"
@@ -205,7 +208,7 @@ export interface NotificationRepository {
   countUnread(userId: UserId): Promise<number>;
 }
 
-/** 通知の受け取り方（利用者ごと。端末への通知にだけ効く）。行が無ければ既定（domain DEFAULT_NOTIFICATION_PREFS） */
+/** 通知の受け取り方（利用者ごと。外への通知に効く）。行が無ければ既定（domain DEFAULT_NOTIFICATION_PREFS） */
 export interface NotificationPrefsRecord extends NotificationPrefs {
   userId: UserId;
   updatedAt: Instant;
@@ -237,6 +240,29 @@ export interface PushSubscriptionRepository {
   insert(sub: Omit<PushSubscriptionRecord, "id">): Promise<PushSubscriptionRecord>;
   update(sub: PushSubscriptionRecord): Promise<void>;
   delete(id: string): Promise<void>;
+}
+
+/** 外への通知の決着（通知 × 届け先で 1 行）。決着した届け先には二度と送らない */
+export interface NotificationDeliveryRecord {
+  notificationId: string;
+  destination: DestinationKey;
+  outcome: "sent" | "rejected";
+  reason?: RejectReason;
+  at: Instant;
+}
+
+export interface NotificationDeliveryRepository {
+  /** その通知で決着した（送れた・二度と送らない）届け先 */
+  listSettled(notificationId: string): Promise<DestinationKey[]>;
+  /** 決着を記録。同じ通知 × 届け先が既にあれば何もしない（冪等） */
+  settle(row: NotificationDeliveryRecord): Promise<void>;
+}
+
+/** 登録メールアドレスで引いた Slack のメンバー（メールアドレスごとに 1 件） */
+export interface SlackMemberRepository {
+  /** 小文字のメールアドレスで引く。行が無ければ { state: "unresolved" } */
+  find(email: string): Promise<SlackLink>;
+  save(email: string, link: Exclude<SlackLink, { state: "unresolved" }>): Promise<void>;
 }
 
 export interface AclRepository {
@@ -432,6 +458,8 @@ export interface AppContext {
   notifications: NotificationRepository;
   pushSubscriptions: PushSubscriptionRepository;
   notificationPrefs: NotificationPrefsRepository;
+  deliveries: NotificationDeliveryRepository;
+  slackMembers: SlackMemberRepository;
   documents: DocumentDraftRepository;
   socialProfiles: SocialProfileRepository;
   teams: TeamRepository;
