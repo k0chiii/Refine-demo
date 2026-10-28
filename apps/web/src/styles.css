@@ -2226,6 +2226,21 @@ m3e-dialog {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
 }
+/* 管理 › Slack の登録の欄（§105）: 名前・team_id・「登録」を 1 行に並べ、狭いと折り返す。ボタンは入力の枠の高さの中ほどに */
+.admin-slack__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 16px;
+  max-width: 760px;
+}
+.admin-slack__form > .field {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.admin-slack__form > m3e-button {
+  margin-block-start: 8px;
+}
 .import-miss {
   color: var(--mf-error);
   display: inline-flex;
