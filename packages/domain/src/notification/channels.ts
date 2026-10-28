@@ -1,6 +1,12 @@
 import type { Instant } from "../shared/time.ts";
-import type { AccountChannel, DeliveryChannel, NotificationPrefs } from "./preferences.ts";
-import type { SlackLink } from "./slack.ts";
+import {
+  type AccountChannel,
+  DELIVERY_CHANNELS,
+  type DeliveryChannel,
+  isCategoryMuted,
+  type NotificationPrefs,
+} from "./preferences.ts";
+import { type SlackLink, slackStep } from "./slack.ts";
 
 /*
  * 外への通知の届け先（端末・登録メールアドレス・Slack の DM）。だれに・どの経路で・どこへ送るかを決める（純粋）。
@@ -15,8 +21,9 @@ export type DestinationKey = "email" | "slack" | `push:${string}`;
 
 /** 保存した文字列をキーに戻す。知らない形は null */
 export function parseDestinationKey(s: string): DestinationKey | null {
-  void s;
-  throw new Error("not implemented");
+  if (s === "email" || s === "slack") return s;
+  const subscriptionId = s.startsWith("push:") ? s.slice("push:".length) : "";
+  return subscriptionId ? `push:${subscriptionId}` : null;
 }
 
 export interface PushDevice {
@@ -41,8 +48,10 @@ export function reachableChannels(input: {
   available: ChannelAvailability;
   hasPushDevice: boolean;
 }): DeliveryChannel[] {
-  void input;
-  throw new Error("not implemented");
+  const { prefs, available, hasPushDevice } = input;
+  return DELIVERY_CHANNELS.filter(
+    (c) => available.has(c) && (c === "push" ? hasPushDevice : prefs.channels.includes(c)),
+  );
 }
 
 /** この通知を届ける経路（止めた分類なら空。ほかは reachableChannels と同じ） */
@@ -52,9 +61,30 @@ export function wantedChannels(input: {
   available: ChannelAvailability;
   hasPushDevice: boolean;
 }): DeliveryChannel[] {
-  void input;
-  throw new Error("not implemented");
+  return isCategoryMuted(input.prefs, input.kind) ? [] : reachableChannels(input);
 }
+
+interface DestinationSources {
+  devices: readonly PushDevice[];
+  email: string | null;
+  slack: SlackLink;
+  now: Instant;
+}
+
+/** 経路ごとの届け先の決め方（経路を足すと、ここに書くまで型が落ちる） */
+const DESTINATIONS_OF: {
+  [C in DeliveryChannel]: (s: DestinationSources) => Extract<Destination, { channel: C }>[];
+} = {
+  push: ({ devices }) =>
+    devices.map((device) => ({ channel: "push", key: `push:${device.id}`, device })),
+  email: ({ email }) => (email ? [{ channel: "email", key: "email", to: email }] : []),
+  slack: ({ email, slack, now }) => {
+    const step = slackStep(slack, now);
+    if (!email || step.do === "skip") return [];
+    const memberId = step.do === "post" ? step.memberId : null;
+    return [{ channel: "slack", key: "slack", email, memberId }];
+  },
+};
 
 /** 届け先を決める（純粋）。宛先の無い経路と、Slack で今は送らない状態（slackStep が skip）は落とす */
 export function destinationsOf(input: {
@@ -65,9 +95,24 @@ export function destinationsOf(input: {
   slack: SlackLink;
   now: Instant;
 }): Destination[] {
-  void input;
-  throw new Error("not implemented");
+  return DELIVERY_CHANNELS.filter((c) => input.channels.includes(c)).flatMap((c): Destination[] =>
+    DESTINATIONS_OF[c](input),
+  );
 }
+
+/** 送らないドメイン（RFC 2606・6761 の予約名）。そのもの・その下のドメインに送らない */
+const RESERVED_DOMAINS = [
+  "invalid",
+  "test",
+  "example",
+  "localhost",
+  "example.com",
+  "example.net",
+  "example.org",
+];
+
+/** @ が 1 つ、空白なし、ドメインは空でないラベルを点でつないだもの */
+const EMAIL_SHAPE = /^[^\s@]+@(?:[^\s@.]+\.)+[^\s@.]+$/;
 
 /**
  * 送ってよいメールアドレス: 形が正しく（@ が 1 つ・空白なし・ドメインに点がある）、予約済みのドメイン
@@ -75,8 +120,11 @@ export function destinationsOf(input: {
  * 試験・デモの利用者（*@example.invalid）には送らない
  */
 export function deliverableEmail(raw: string | null | undefined): string | null {
-  void raw;
-  throw new Error("not implemented");
+  const email = raw?.trim().toLowerCase();
+  if (!email || !EMAIL_SHAPE.test(email)) return null;
+  const domain = email.slice(email.indexOf("@") + 1);
+  const reserved = RESERVED_DOMAINS.some((r) => domain === r || domain.endsWith(`.${r}`));
+  return reserved ? null : email;
 }
 
 /** 送り先が二度と受け付けない理由 */
@@ -103,12 +151,24 @@ export type SettledOutcome = Extract<SendOutcome, { kind: "sent" | "rejected" }>
 /** 設定画面の経路の状態 */
 export type ChannelStatus = "ready" | "no_address" | "unresolved" | "not_found" | "cannot_dm";
 
+const SLACK_STATUS: Record<SlackLink["state"], ChannelStatus> = {
+  unresolved: "unresolved",
+  linked: "ready",
+  not_found: "not_found",
+  cannot_dm: "cannot_dm",
+};
+
 /** email: アドレスがあれば ready。slack: アドレスが無ければ no_address、あれば Slack の状態（linked は ready） */
 export function channelStatusOf(
   channel: AccountChannel,
   email: string | null,
   slack: SlackLink,
 ): ChannelStatus {
-  void [channel, email, slack];
-  throw new Error("not implemented");
+  if (!email) return "no_address";
+  switch (channel) {
+    case "email":
+      return "ready";
+    case "slack":
+      return SLACK_STATUS[slack.state];
+  }
 }
