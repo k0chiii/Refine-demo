@@ -9,6 +9,7 @@ import { internalAction } from "./_generated/server";
 import type { DeliveryTargetArg } from "./delivery.ts";
 import { type DeliveryConfig, deliveryConfigFromEnv } from "./lib/channels.ts";
 import { sendEmail } from "./lib/email.ts";
+import { sleepFor } from "./lib/retryAfter.ts";
 import { lookupSlackMember, type MeichanConfig, postSlackDm } from "./lib/slack.ts";
 import { sendWebPush, webPushOutcome } from "./lib/webpush.ts";
 
@@ -102,9 +103,12 @@ function slackRef(t: SlackTarget, memberId: string | null): DeliveryTargetArg {
   return { channel: "slack", key: "slack", teamId: t.teamId, email: t.email, memberId };
 }
 
+/** DM の枠の時刻まで action の中で待つ上限（ms）。workpool の同時数（8）× 1 秒より長く、続けて送る分を待って届ける */
+const SLACK_DM_MAX_WAIT_MS = 10_000;
+
 /**
  * メンバーが分からなければ、選んだワークスペースで登録メールアドレスを引いて保存する。見つかったときだけ、
- * 速さ制限の枠を取って DM を送る（枠が無ければ retry。workpool がやり直す）
+ * 速さ制限の枠を予約し、その時刻まで待って DM を送る（上限より先なら retry。workpool がやり直す）
  */
 async function sendSlack(ctx: ActionCtx, t: SlackTarget, cfg: MeichanConfig): Promise<Attempt> {
   let memberId = t.memberId;
@@ -121,8 +125,10 @@ async function sendSlack(ctx: ActionCtx, t: SlackTarget, cfg: MeichanConfig): Pr
       return { outcome: { kind: "rejected", reason: "not_found" }, ref: slackRef(t, null) };
     memberId = found.memberId;
   }
-  const { ok } = await ctx.runMutation(internal.delivery.reserveSlackDm, {});
-  if (!ok) return { outcome: { kind: "retry" }, ref: slackRef(t, memberId) };
+  const { ok, retryAfter } = await ctx.runMutation(internal.delivery.reserveSlackDm, {});
+  if (!ok || retryAfter > SLACK_DM_MAX_WAIT_MS)
+    return { outcome: { kind: "retry" }, ref: slackRef(t, memberId) };
+  if (retryAfter > 0) await sleepFor(retryAfter);
   const outcome = await postSlackDm(cfg, { teamId: t.teamId, userId: memberId, text: t.text });
   return { outcome, ref: slackRef(t, memberId) };
 }

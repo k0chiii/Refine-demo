@@ -129,12 +129,12 @@ const limiter = new RateLimiter(components.rateLimiter, {
   slackDm: { kind: "fixed window", rate: 1, period: 1000 },
 });
 
-/** DM 1 件の枠を取る。取れなければ送らず、deliveryNode が workpool のやり直しに回す */
+/** DM 1 件の枠を先の時刻まで予約する。retryAfter はその時刻までの ms（すぐ送れるなら 0） */
 export const reserveSlackDm = internalMutation({
   args: {},
-  handler: async (ctx): Promise<{ ok: boolean }> => {
-    const { ok } = await limiter.limit(ctx, "slackDm");
-    return { ok };
+  handler: async (ctx): Promise<{ ok: boolean; retryAfter: number }> => {
+    const { ok, retryAfter } = await limiter.limit(ctx, "slackDm", { reserve: true });
+    return { ok, retryAfter: retryAfter ?? 0 };
   },
 });
 
