@@ -1283,7 +1283,8 @@ async function lateScenes() {
     "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み",
   );
   await decisionPanel.locator("m3e-button", { hasText: "不採用にする" }).click();
-  await page.waitForSelector(".comments .thread--closed");
+  // 一覧はパネルの下に隠れているので、パネルが閉じた（不採用の）状態になるのを待つ
+  await page.waitForSelector(".thread-panel.thread--closed");
   await shot("09-decision");
 
   // 17 第 2 版を提出（引き出し「版」）し、前版の未解決コメントを持ち越す（制作者）
