@@ -364,6 +364,18 @@ export class App {
     return this.page.locator("#notif-menu .notif");
   }
 
+  /**
+   * メニューを開くボタンを押し、開ききるまで待つ。M3E のメニューは祖先がスクロールすると閉じる。Playwright の click は
+   * 見える位置までのスクロールと押下を同じフレームで行うので、遅れて届く scroll で開いたメニューが閉じることがある
+   * （横に流れる表の「⋮」）。先にスクロールし、その scroll が届いてから押す
+   */
+  async openMenu(trigger: Locator) {
+    await trigger.scrollIntoViewIfNeeded();
+    await this.settle();
+    await trigger.click();
+    await this.settle();
+  }
+
   /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */
   async openNotificationSettings() {
     const page = this.page;
