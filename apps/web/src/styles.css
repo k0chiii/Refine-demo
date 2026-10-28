@@ -5034,6 +5034,10 @@ m3e-snackbar {
 .notif-channel__address {
   overflow-wrap: anywhere;
 }
+/* Slack（DM）の行の見出しの下のワークスペースの選択（§105） */
+.notif-channel__workspace {
+  margin-block: 8px 4px;
+}
 
 /* ---------- 取り込みのプレビュー（表記ルール・制作物の CSV）: 件数の要約は文字、行は M3 リスト（§49） */
 .import-summary {
