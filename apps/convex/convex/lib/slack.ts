@@ -1,5 +1,6 @@
 import type { SlackLookupResult } from "@mf100/application";
 import type { SendOutcome } from "@mf100/domain";
+import { retryAfterMs, sleepFor } from "./retryAfter.ts";
 
 /*
  * Slack の DM（MF100 のワークスペースにボットを 1 つ。SLACK_BOT_TOKEN。lib/channels.ts が読む）。
@@ -8,15 +9,6 @@ import type { SendOutcome } from "@mf100/domain";
  */
 
 const API = "https://slack.com/api";
-
-/** 速さ制限の Retry-After（秒）を待つ時間。action を長く止めないよう 5 秒まで。無い・読めないときは 0 */
-function retryAfterMs(header: string | null): number {
-  const seconds = Number(header);
-  if (!header || !Number.isFinite(seconds) || seconds <= 0) return 0;
-  return Math.min(seconds, 5) * 1000;
-}
-
-const sleepFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface SlackReply {
   ok?: boolean;

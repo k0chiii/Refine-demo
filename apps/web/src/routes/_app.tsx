@@ -268,7 +268,7 @@ function AppShell() {
     ...(settingsAvailable
       ? [
           {
-            action: "notifications",
+            dataAction: "notifications",
             icon: "notifications",
             label: "通知の設定",
             onSelect: () => {
@@ -391,7 +391,7 @@ function AppShell() {
               </div>
             </div>
             {accountActions.map((a) => (
-              <M3eMenuItem key={a.label} data-action={a.action} onClick={a.onSelect}>
+              <M3eMenuItem key={a.label} data-action={a.dataAction} onClick={a.onSelect}>
                 <M3eIcon slot="icon" name={a.icon} />
                 {a.label}
               </M3eMenuItem>

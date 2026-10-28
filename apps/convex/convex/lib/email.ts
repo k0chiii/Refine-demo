@@ -1,4 +1,5 @@
 import type { EmailContent, SendOutcome } from "@mf100/domain";
+import { retryAfterMs, sleepFor } from "./retryAfter.ts";
 
 /*
  * 登録メールアドレスへの通知（Resend の HTTP API。無料枠 3,000 通/月・100 通/日）。
@@ -7,15 +8,6 @@ import type { EmailContent, SendOutcome } from "@mf100/domain";
  */
 
 const ENDPOINT = "https://api.resend.com/emails";
-
-/** 速さ制限の Retry-After（秒）を待つ時間。action を長く止めないよう 5 秒まで。無い・読めないときは 0 */
-function retryAfterMs(header: string | null): number {
-  const seconds = Number(header);
-  if (!header || !Number.isFinite(seconds) || seconds <= 0) return 0;
-  return Math.min(seconds, 5) * 1000;
-}
-
-const sleepFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Resend の誤りの応答（{ name, message }）。本文が無い・JSON でないときは空 */
 interface ResendError {
@@ -30,8 +22,11 @@ function mentionsTo(message: string | undefined): boolean {
   return /`to`|\bto (field|address)\b/i.test(message ?? "");
 }
 
-/** 応答 → 結果。"wait" は速さ制限の 429（待ってから一度だけ送り直す） */
-function outcomeOf(status: number, err: ResendError): SendOutcome | "wait" {
+/** 速さ制限の 429（待ってから一度だけ送り直す） */
+type Wait = { kind: "wait" };
+
+/** 応答 → 結果 */
+function outcomeOf(status: number, err: ResendError): SendOutcome | Wait {
   if (status >= 200 && status < 300) return { kind: "sent", httpStatus: status };
   if (status === 409)
     return err.name === "invalid_idempotent_request"
@@ -50,7 +45,7 @@ function outcomeOf(status: number, err: ResendError): SendOutcome | "wait" {
   if (status === 429)
     return err.name && QUOTA_ERRORS.has(err.name)
       ? { kind: "unavailable", reason: err.name }
-      : "wait";
+      : { kind: "wait" };
   if (status >= 500) return { kind: "retry" };
   // 401・403（鍵の誤り・送信元ドメイン未確認）と、ほかの想定外の 4xx は運用側の問題
   return { kind: "unavailable", reason: err.name ?? `http_${status}` };
@@ -101,7 +96,7 @@ export async function sendEmail(
       return { kind: "retry" };
     }
     const outcome = outcomeOf(res.status, await errorBody(res));
-    if (outcome !== "wait") return outcome;
+    if (outcome.kind !== "wait") return outcome;
     if (waited) return { kind: "retry" };
     waited = true;
     const ms = retryAfterMs(res.headers.get("Retry-After"));

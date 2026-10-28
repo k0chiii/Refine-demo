@@ -45,6 +45,7 @@ import type * as lib_principal from "../lib/principal.js";
 import type * as lib_processingValidators from "../lib/processingValidators.js";
 import type * as lib_reactions from "../lib/reactions.js";
 import type * as lib_redirect from "../lib/redirect.js";
+import type * as lib_retryAfter from "../lib/retryAfter.js";
 import type * as lib_revisionThreadStats from "../lib/revisionThreadStats.js";
 import type * as lib_serviceAuth from "../lib/serviceAuth.js";
 import type * as lib_slack from "../lib/slack.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   "lib/processingValidators": typeof lib_processingValidators;
   "lib/reactions": typeof lib_reactions;
   "lib/redirect": typeof lib_redirect;
+  "lib/retryAfter": typeof lib_retryAfter;
   "lib/revisionThreadStats": typeof lib_revisionThreadStats;
   "lib/serviceAuth": typeof lib_serviceAuth;
   "lib/slack": typeof lib_slack;
