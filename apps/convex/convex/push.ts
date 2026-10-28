@@ -1,14 +1,8 @@
-import {
-  isPushSubscribed,
-  planPushDelivery,
-  recordPushResult,
-  subscribePush,
-  unsubscribePush,
-} from "@mf100/application";
-import { enqueueDeliveries } from "./delivery.ts";
+import { isPushSubscribed, subscribePush, unsubscribePush } from "@mf100/application";
+import { enqueueDeliveries, logDeliveryComplete } from "./delivery.ts";
 import { deliveryPool } from "./lib/deliveryPool.ts";
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
@@ -63,23 +57,9 @@ export const unsubscribe = mutation({
   },
 });
 
-/** 送る計画（内部用。pushNode.deliver から読む） */
-export const plan = internalQuery({
-  args: { notificationId: v.string() },
-  handler: async (ctx, { notificationId }) =>
-    planPushDelivery(createReadContext(ctx.db), notificationId),
-});
-
-/** 送った結果（内部用） */
-export const recordResult = internalMutation({
-  args: { subscriptionId: v.string(), status: v.number() },
-  handler: async (ctx, { subscriptionId, status }) =>
-    recordPushResult(createAppContext(ctx), subscriptionId, status),
-});
-
 /**
- * 通知を作ったトランザクションが予約する（1 トランザクションに 1 本。adapters の pushBatch）。
- * `notificationId`（単数）は、この形に替える前に予約されていた分のため
+ * 旧（delivery.enqueue に替えた）。替える前に予約された分のため、1 回のデプロイの間残す。
+ * `notificationId`（単数）は、さらに前の形で予約されていた分
  */
 export const enqueue = internalMutation({
   args: {
@@ -92,39 +72,10 @@ export const enqueue = internalMutation({
   },
 });
 
-export const delivered = internalQuery({
-  args: { notificationId: v.string(), subscriptionId: v.string() },
-  handler: async (ctx, args) =>
-    (await ctx.db
-      .query("pushDeliveries")
-      .withIndex("by_notification_and_subscription", (q) =>
-        q.eq("notificationId", args.notificationId).eq("subscriptionId", args.subscriptionId),
-      )
-      .unique()) !== null,
-});
-
-export const recordDelivery = internalMutation({
-  args: { notificationId: v.string(), subscriptionId: v.string(), status: v.number() },
-  handler: async (ctx, args) => {
-    const previous = await ctx.db
-      .query("pushDeliveries")
-      .withIndex("by_notification_and_subscription", (q) =>
-        q.eq("notificationId", args.notificationId).eq("subscriptionId", args.subscriptionId),
-      )
-      .unique();
-    if (!previous) await ctx.db.insert("pushDeliveries", { ...args, deliveredAt: Date.now() });
-  },
-});
-
+/** 旧（delivery.completed に替えた）。替える前に workpool に積んだ仕事の完了がこの名前を指す */
 export const completed = deliveryPool.defineOnComplete({
   context: v.object({ notificationId: v.string() }),
   handler: async (_ctx, { context, result }) => {
-    console.log(
-      JSON.stringify({
-        event: "push_complete",
-        notificationId: context.notificationId,
-        outcome: result.kind,
-      }),
-    );
+    logDeliveryComplete(context.notificationId, result.kind);
   },
 });

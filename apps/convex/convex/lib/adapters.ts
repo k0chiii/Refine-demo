@@ -39,13 +39,19 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
-import { approversOf, deliverableEmail, parseDestinationKey } from "@mf100/domain";
+import {
+  ACCOUNT_CHANNELS,
+  approversOf,
+  deliverableEmail,
+  normalizeNotificationPrefs,
+  parseDestinationKey,
+  reachableChannels,
+} from "@mf100/domain";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
 import type { Scheduler } from "convex/server";
-import { deliveryConfigFromEnv } from "./channels.ts";
-import { vapidKeysFromEnv } from "./webpush.ts";
+import { availableChannels, deliveryConfigFromEnv } from "./channels.ts";
 import { personProfileOf, userDisplayName } from "./users.ts";
 
 /**
@@ -98,14 +104,9 @@ export class ConvexClock {
   }
 }
 
-/** Web Push の鍵が環境変数に揃っているか（デモ・テストでは揃っていない） */
-export function pushConfigured(): boolean {
-  return typeof process !== "undefined" && vapidKeysFromEnv(process.env) !== null;
-}
-
 /**
  * mutation の ctx（または db だけ）から業務の文脈を作る。ctx を渡すと、通知を作ったときに
- * 受信者の端末への送信（Web Push）を予約する。db だけ（テスト・読取）なら予約しない。
+ * 外への通知（端末・登録メールアドレス・Slack の DM）を予約する。db だけ（テスト・読取）なら予約しない。
  */
 export async function syncWorkRoles(db: DatabaseWriter, work: Work) {
   const workId = work.id as Id<"works">;
@@ -139,14 +140,38 @@ export function createAppContext(
   const db: DatabaseWriter = "db" in dbOrCtx ? dbOrCtx.db : dbOrCtx;
   const scheduler = "db" in dbOrCtx ? dbOrCtx.scheduler : undefined;
   /**
-   * このトランザクションで端末へ送る通知の ID と、それを運ぶ予約（push.enqueue）。
+   * このトランザクションで外へ送る通知の ID と、それを運ぶ予約（delivery.enqueue）。
    * 1 件の操作が複数の人に通知を作っても、予約は 1 本にまとめる（前の予約を取り消して ID を足した予約に置き換える。
    * 同じトランザクション内なので取り消した予約は走らない）。以前は通知 1 件ごとに予約していたので、同時に走った予約が
    * workpool の起動（batch-worker の `workers`）で書き込み競合を起こし、やり直しになっていた（Convex Insights 2026-10-25）
    */
-  const pushBatch: { ids: string[]; scheduled: Id<"_scheduled_functions"> | null } = {
+  const deliveryBatch: { ids: string[]; scheduled: Id<"_scheduled_functions"> | null } = {
     ids: [],
     scheduled: null,
+  };
+  /**
+   * 受信者に外への届け先があるか（通知の種類によらない。止めた分類は送る時点の計画が落とす）。
+   * 読むのは使える経路が要るものだけ（設定は email・slack が使えるとき、端末は push が使えるとき）
+   */
+  const hasReachableChannel = async (userId: string): Promise<boolean> => {
+    const available = availableChannels(deliveryConfigFromEnv(process.env));
+    if (available.size === 0) return false;
+    const prefs = ACCOUNT_CHANNELS.some((c) => available.has(c))
+      ? await db
+          .query("notificationPrefs")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .first()
+      : null;
+    const hasPushDevice =
+      available.has("push") &&
+      (await db
+        .query("pushSubscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first()) !== null;
+    return (
+      reachableChannels({ prefs: normalizeNotificationPrefs(prefs), available, hasPushDevice })
+        .length > 0
+    );
   };
   const syncRoles = async (work: Work) => {
     await syncWorkRoles(db, work);
@@ -665,19 +690,13 @@ export function createAppContext(
     notifications: {
       async insert(n) {
         const id = await db.insert("notifications", compact(n));
-        // 端末への通知: 受信者が端末を登録していれば、送信を予約する（送る内容は送る時点で作り直す）
-        if (scheduler && pushConfigured()) {
-          const hasDevice = await db
-            .query("pushSubscriptions")
-            .withIndex("by_user", (q) => q.eq("userId", n.recipientId))
-            .first();
-          if (hasDevice) {
-            pushBatch.ids.push(id);
-            if (pushBatch.scheduled) await scheduler.cancel(pushBatch.scheduled);
-            pushBatch.scheduled = await scheduler.runAfter(0, internal.push.enqueue, {
-              notificationIds: [...pushBatch.ids],
-            });
-          }
+        // 届け先があれば送信を予約する（送る内容は送る時点で作り直す）
+        if (scheduler && (await hasReachableChannel(n.recipientId))) {
+          deliveryBatch.ids.push(id);
+          if (deliveryBatch.scheduled) await scheduler.cancel(deliveryBatch.scheduled);
+          deliveryBatch.scheduled = await scheduler.runAfter(0, internal.delivery.enqueue, {
+            notificationIds: [...deliveryBatch.ids],
+          });
         }
         return { ...n, id } as Notification;
       },

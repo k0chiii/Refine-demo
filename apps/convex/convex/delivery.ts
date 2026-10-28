@@ -120,15 +120,14 @@ export const slackEmail = internalQuery({
     slackLookupEmail(createReadContext(ctx.db), userId),
 });
 
+/** workpool の 1 件が終わった（success・failed・canceled）。旧の push.completed も同じ */
+export function logDeliveryComplete(notificationId: string, outcome: string): void {
+  console.log(JSON.stringify({ event: "delivery_complete", notificationId, outcome }));
+}
+
 export const completed = deliveryPool.defineOnComplete({
   context: v.object({ notificationId: v.string() }),
   handler: async (_ctx, { context, result }) => {
-    console.log(
-      JSON.stringify({
-        event: "delivery_complete",
-        notificationId: context.notificationId,
-        outcome: result.kind,
-      }),
-    );
+    logDeliveryComplete(context.notificationId, result.kind);
   },
 });
