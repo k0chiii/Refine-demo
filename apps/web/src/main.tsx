@@ -5,11 +5,17 @@ import { registerServiceWorker } from "./lib/pwa";
 import { installScrollLockGuard } from "./lib/scrollLockGuard";
 import { installSnackbarPlacement } from "./lib/toast";
 import { routeTree } from "./routeTree.gen";
+import { RouteError } from "./ui/RouteError";
 import "./theme";
 import "./fonts";
 import "./styles.css";
 
-const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });
+const router = createRouter({
+  routeTree,
+  defaultPreload: "intent",
+  scrollRestoration: true,
+  defaultErrorComponent: RouteError,
+});
 
 // デモモード（バックエンド無し）では E2E / スクリーンショットからクライアント側遷移を行えるように公開する
 if (import.meta.env.MODE === "demo")

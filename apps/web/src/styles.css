@@ -824,6 +824,14 @@ m3e-dialog [slot="actions"] {
 .empty > .title-medium {
   color: var(--mf-on-surface);
 }
+/* 画面のエラー（ui/RouteError.tsx）: 端末の幅で折り返す（横にはみ出さない） */
+.route-error pre {
+  max-width: 100%;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--mf-type-body-small);
+}
 /* 読み込み中（ui/Loading.tsx）: M3 Expressive Loading indicator を区画の中央に。
    ごく短い読み込みで点滅しないよう 150ms 待って現れる（キャッシュ済みのデモでは見えないことが多い） */
 .loading {
