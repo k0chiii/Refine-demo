@@ -75,20 +75,36 @@ export const failedToLoad = () => loadFailed;
  * 登録（registration）は load のあとで済むので、開いた直後に読めなかったときは既存の登録を探して使う
  * （待機中の版を見落とすと、読み直しても同じ古い外枠が出る）
  */
-export async function recoverFromLoadError({ force = false } = {}) {
-  if (reloading && !force) return;
+export function recoverFromLoadError({ force = false } = {}) {
+  if (reloading && !force) return Promise.resolve();
+  if (recovering && !force) return recovering;
+  recovering = recover(force).finally(() => (recovering = undefined));
+  return recovering;
+}
+
+/** 立て直しの最中（チャンクが続けて読めなくても、確かめに行くのは一度） */
+let recovering: Promise<void> | undefined;
+
+const within = (ms: number, p: Promise<unknown>) =>
+  Promise.race([p, new Promise((done) => setTimeout(done, ms))]);
+
+async function recover(force: boolean) {
   const reg =
     registration ?? (await navigator.serviceWorker?.getRegistration().catch(() => undefined));
   if (reg && !reg.waiting) {
     switchOnInstall = true;
-    await Promise.race([
+    await within(
+      3000,
       reg.update().catch(() => {}),
-      new Promise((done) => setTimeout(done, 3000)),
-    ]);
+    );
     const next = reg.installing;
+    // インストールが止まったままでも（Service Worker が外枠を取り切れない）読み直しへ進む
     if (next)
-      await new Promise((done) =>
-        next.addEventListener("statechange", () => next.state !== "installing" && done(null)),
+      await within(
+        10_000,
+        new Promise((done) =>
+          next.addEventListener("statechange", () => next.state !== "installing" && done(null)),
+        ),
       );
   }
   if (reg?.waiting) {
