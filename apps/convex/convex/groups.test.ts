@@ -1,5 +1,5 @@
 import { api } from "./_generated/api";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createCast, createHarness } from "../test/harness";
 import { setupWork, submitFiles } from "../test/flows";
 import { upsertNogikuUser } from "./auth.ts";
@@ -28,12 +28,44 @@ describe("名前はふりがな（ひらがな）で出す（利用者指示 202
 });
 
 describe("メンバーのグループ", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("作る・変える・消すのは groups:manage を持つ人とシステム管理者（Nogiku Access 接続後）", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    vi.stubEnv("NOGIKU_ACCESS_ENABLED", "true");
+    await t.run(async (ctx) => {
+      await ctx.db.patch(cast.manager.id, { orgPermissions: ["groups:manage"] });
+      await ctx.db.patch(cast.creator.id, { orgPermissions: ["works:create"] });
+      await ctx.db.patch(cast.admin.id, { orgPermissions: [] });
+    });
+    expect((await cast.manager.as.query(api.me.me, {}))?.canManageGroups).toBe(true);
+    expect((await cast.creator.as.query(api.me.me, {}))?.canManageGroups).toBe(false);
+    expect((await cast.admin.as.query(api.me.me, {}))?.canManageGroups).toBe(true);
+
+    const id = await cast.manager.as.mutation(api.groups.save, {
+      name: "こうせいはん",
+      memberIds: [cast.reviewer.id],
+    });
+    await cast.manager.as.mutation(api.groups.save, { id, name: "こうせい", memberIds: [] });
+    await expect(
+      cast.creator.as.mutation(api.groups.save, { name: "こうほう", memberIds: [] }),
+    ).rejects.toThrow(code("forbidden"));
+    await expect(cast.creator.as.mutation(api.groups.remove, { id })).rejects.toThrow(
+      code("forbidden"),
+    );
+    expect((await cast.creator.as.query(api.groups.list, {})).map((g) => g.name)).toEqual([
+      "こうせい",
+    ]);
+    await cast.admin.as.mutation(api.groups.remove, { id });
+    expect(await cast.creator.as.query(api.groups.list, {})).toEqual([]);
+  });
+
   it("管理者が作ったグループを、メンションの候補に出し、「@グループ名」の本文を強調する名前を返す", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    await expect(
-      cast.manager.as.mutation(api.groups.save, { name: "こうせいはん", memberIds: [] }),
-    ).rejects.toThrow(code("forbidden"));
     const groupId = await cast.admin.as.mutation(api.groups.save, {
       name: "こうせいはん",
       memberIds: [cast.reviewer.id, cast.approver.id],
