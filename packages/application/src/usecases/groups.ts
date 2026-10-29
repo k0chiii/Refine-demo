@@ -1,6 +1,8 @@
 import {
+  canManageGroups,
   DomainError,
   MEMBER_GROUP_MAX,
+  orgPermissions,
   sortMemberGroups,
   validateMemberGroup,
   type MemberGroup,
@@ -11,7 +13,8 @@ import type { AppContext } from "../ports.ts";
 
 /**
  * メンバーのグループ（利用者指示 2026-10-21）。校正者の割り当てとメンションで、所属する人をまとめて選ぶ。
- * 作る・変える・消すのはシステム管理者だけ（担当と同じ）。一覧はサインインしていれば誰でも（選ぶ画面で使う）。
+ * 作る・変える・消すのは組織権限 groups:manage を持つ人とシステム管理者（利用者指示 2026-10-29）。
+ * 一覧はサインインしていれば誰でも（選ぶ画面で使う）。
  */
 export async function listMemberGroups(
   ctx: AppContext,
@@ -20,8 +23,9 @@ export async function listMemberGroups(
   return sortMemberGroups(await ctx.groups.list());
 }
 
-function requireSystemAdmin(principal: Principal): void {
-  if (!principal.isSystemAdmin) throw new DomainError("forbidden", { reason: "system_admin_only" });
+function requireGroupsManage(principal: Principal): void {
+  if (!canManageGroups(principal))
+    throw new DomainError("forbidden", { orgPermission: orgPermissions.groupsManage });
 }
 
 /** 所属する人が委員の名簿にいるか。既にいた人は確かめ直さない（担当の所属と同じ） */
@@ -48,7 +52,7 @@ export async function saveMemberGroup(
   principal: Principal,
   input: MemberGroupInput & { id?: string },
 ): Promise<MemberGroup> {
-  requireSystemAdmin(principal);
+  requireGroupsManage(principal);
   const { id, ...rest } = input;
   const all = await ctx.groups.list();
   const now = ctx.clock.now();
@@ -100,7 +104,7 @@ export async function deleteMemberGroup(
   principal: Principal,
   id: string,
 ): Promise<void> {
-  requireSystemAdmin(principal);
+  requireGroupsManage(principal);
   const before = await ctx.groups.findById(id);
   if (!before) return;
   await ctx.groups.remove(id);
