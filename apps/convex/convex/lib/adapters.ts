@@ -33,6 +33,7 @@ import type {
   RuleCategoryManager,
   RuleProposal,
   RuleRevision,
+  SlackWorkspace,
   UploadAttempt,
   UploadItem,
   UploadSession,
@@ -630,12 +631,17 @@ export function createAppContext(
           .first();
         if (doc) await db.replace(doc._id, prefs);
         else await db.insert("notificationPrefs", prefs);
-        // Slack をオンにしたら、最初の通知を待たずにメンバーを引く（設定画面に状態を出すため）
-        const slackTurnedOn =
-          prefs.channels.includes("slack") && !(doc?.channels ?? []).includes("slack");
+        // Slack をオンにした・オンのままワークスペースを替えたら、最初の通知を待たずにメンバーを引く（設定画面に状態を出すため）
+        const wasOnSameWorkspace =
+          (doc?.channels ?? []).includes("slack") &&
+          doc?.slackWorkspaceId === prefs.slackWorkspaceId;
+        const resolveNow =
+          prefs.channels.includes("slack") &&
+          prefs.slackWorkspaceId !== undefined &&
+          !wasOnSameWorkspace;
         if (
           scheduler &&
-          slackTurnedOn &&
+          resolveNow &&
           deliveryConfigFromEnv(process.env).slack &&
           deliverableEmail((await db.get("users", prefs.userId as Id<"users">))?.email)
         )
@@ -667,24 +673,53 @@ export function createAppContext(
         if (!previous) await db.insert("notificationDeliveries", compact(row));
       },
     },
+    slackWorkspaces: {
+      async list() {
+        const docs = await db.query("slackWorkspaces").withIndex("by_name").take(100);
+        return docs.map((d) => fromDoc(d) as SlackWorkspace);
+      },
+      async findById(id) {
+        const workspaceId = db.normalizeId("slackWorkspaces", id);
+        const doc = workspaceId ? await db.get("slackWorkspaces", workspaceId) : null;
+        return doc ? (fromDoc(doc) as SlackWorkspace) : null;
+      },
+      async findByTeamId(teamId) {
+        const doc = await db
+          .query("slackWorkspaces")
+          .withIndex("by_teamId", (q) => q.eq("teamId", teamId))
+          .first();
+        return doc ? (fromDoc(doc) as SlackWorkspace) : null;
+      },
+      async insert(workspace) {
+        const id = await db.insert("slackWorkspaces", {
+          name: workspace.name,
+          teamId: workspace.teamId,
+        });
+        return { ...workspace, id };
+      },
+      async delete(id) {
+        const workspaceId = db.normalizeId("slackWorkspaces", id);
+        if (workspaceId) await db.delete("slackWorkspaces", workspaceId);
+      },
+    },
     slackMembers: {
-      async find(email) {
+      async find(teamId, email) {
         const doc = await db
           .query("slackMembers")
-          .withIndex("by_email", (q) => q.eq("email", email))
+          .withIndex("by_team_and_email", (q) => q.eq("teamId", teamId).eq("email", email))
           .first();
         if (!doc) return { state: "unresolved" };
         return doc.state === "not_found"
           ? { state: doc.state, checkedAt: doc.checkedAt }
           : { state: doc.state, memberId: doc.memberId, checkedAt: doc.checkedAt };
       },
-      async save(email, link) {
+      async save(teamId, email, link) {
         const doc = await db
           .query("slackMembers")
-          .withIndex("by_email", (q) => q.eq("email", email))
+          .withIndex("by_team_and_email", (q) => q.eq("teamId", teamId).eq("email", email))
           .first();
-        if (doc) await db.replace(doc._id, { email, ...link });
-        else await db.insert("slackMembers", { email, ...link });
+        if (doc) await db.replace(doc._id, { teamId, email, ...link });
+        else await db.insert("slackMembers", { teamId, email, ...link });
       },
     },
     notifications: {

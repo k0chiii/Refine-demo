@@ -42,14 +42,15 @@ describe("Convex 統合: 通知の受け取り方", () => {
     const t = createHarness();
     const cast = await createCast(t);
     const mock = "reviewer@example.invalid";
+    const noWorkspace = { workspaceId: null, workspaces: [] };
     expect((await cast.reviewer.as.query(api.notificationPrefs.get, {})).destinations).toEqual({
       email: { available: false, on: false, address: mock, status: "no_address" },
-      slack: { available: false, on: false, address: mock, status: "no_address" },
+      slack: { available: false, on: false, address: mock, status: "no_address", ...noWorkspace },
     });
 
     vi.stubEnv("RESEND_API_KEY", "re_test_key");
     vi.stubEnv("NOTIFY_EMAIL_FROM", "MF100 <notify@example-org.jp>");
-    vi.stubEnv("SLACK_BOT_TOKEN", "xoxb-test-token");
+    vi.stubEnv("SLACK_BASE_URL", "https://meichan.example.invalid/slackbot/may");
     const address = "reviewer@example-org.jp";
     await t.run((ctx) => ctx.db.patch(cast.reviewer.id, { email: address }));
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack", "email"] });
@@ -57,7 +58,7 @@ describe("Convex 統合: 通知の受け取り方", () => {
     expect(settings.channels).toEqual(["email", "slack"]);
     expect(settings.destinations).toEqual({
       email: { available: true, on: true, address, status: "ready" },
-      slack: { available: true, on: true, address, status: "unresolved" },
+      slack: { available: true, on: true, address, status: "no_workspace", ...noWorkspace },
     });
     // 他の人の届け先は変わらない
     expect((await cast.creator.as.query(api.notificationPrefs.get, {})).destinations.email).toEqual(
