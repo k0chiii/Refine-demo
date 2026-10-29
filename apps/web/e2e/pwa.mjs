@@ -524,21 +524,29 @@ try {
       await dropFromCache(p, a, checkChunk);
       gone.add(checkChunk);
       deploy("o0");
-      const shown = p
-        .locator("[data-route-error]")
-        .waitFor({ timeout: 10_000 })
-        .then(
-          () => true,
-          () => false,
-        );
+      // エラー画面は新しい版の install が終わるまでの短い間だけ出る（切り替えで開き直す）ので、
+      // 画面側の監視で出たことを sessionStorage（同じタブなら開き直しても残る）に印を付ける
+      await p.evaluate(() => {
+        const seen = () => {
+          if (!document.querySelector("[data-route-error]")) return;
+          sessionStorage.setItem("e2e-route-error", "1");
+          observer.disconnect();
+        };
+        const observer = new MutationObserver(seen);
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        seen();
+      });
       await openCheck(p).catch(() => {});
       const switched = await eventually(
         p,
         `!!document.querySelector("main.signin") && ${onlyShell("o0")}`,
         15_000,
       );
+      const shown = await p
+        .evaluate(() => sessionStorage.getItem("e2e-route-error") === "1")
+        .catch(() => false);
       check(
-        (await shown) && switched,
+        shown && switched,
         "古い画面で消えたチャンクを読めないと、アプリのエラー画面を出し、まだ届いていない新しい版を入れて切り替える",
       );
     } finally {
