@@ -555,7 +555,6 @@ try {
     const [checkChunk] = assetsOf(/^check-.+\.js$/);
     await dropFromCache(p, a, checkChunk);
     try {
-      // 開くたびに回線を切り、自動で読み直さなくなるまで繰り返す
       for (let i = 0; i < 4; i++) {
         cutUntil.set(checkChunk, Date.now() + 2000);
         const reloaded = p.waitForEvent("load", { timeout: 6000 }).then(
