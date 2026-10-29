@@ -1,4 +1,5 @@
 import {
+  canManageGroups,
   hasOrgPermission,
   orgPermissions,
   parseAvatarConfig,
@@ -27,6 +28,8 @@ export const me = query({
       canCreateWorks: hasOrgPermission(principal, orgPermissions.worksCreate),
       /** 校了者を決められるか（Nogiku の組織権限 approvers:assign）。登録の入口・一覧と編集の校了者の編集を出すかに使う */
       canAssignApprovers: hasOrgPermission(principal, orgPermissions.approversAssign),
+      /** メンションのグループを作る・変える・消せるか（組織権限 groups:manage か、システム管理者）。管理の入口とタブを出すかに使う */
+      canManageGroups: canManageGroups(principal),
       source: user.source ?? null,
       mock: process.env.NOGIKU_MOCK_ENABLED === "true",
       /** 本人が選んだアバター（無ければ null。メールから決まる絵） */

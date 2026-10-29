@@ -462,6 +462,47 @@ export class App {
     return this.page.locator(`m3e-dialog[open] .notif-channel[data-channel="${channel}"]`);
   }
 
+  /**
+   * 「通知の設定」の Slack（DM）の行で、ワークスペースの選択肢の index 番目を選び、その id（slackWorkspaces の id）を返す。
+   * id は select の中の m3e-option の value。開いたときに見えるのは M3E がダイアログの中に写した別の option で、value を持たない
+   */
+  async pickSlackWorkspace(index = 0): Promise<string> {
+    const picker = this.notificationChannel("slack").locator("m3e-select");
+    const id = await picker
+      .locator("m3e-option")
+      .nth(index)
+      .evaluate((el) => (el as HTMLElement & { value: string }).value);
+    await picker.click();
+    await this.settle();
+    await this.dialog().getByRole("option").nth(index).click();
+    await this.settle();
+    return id;
+  }
+
+  /** 管理 › Slack のワークスペースの行（data-team-id は登録した team_id） */
+  slackWorkspaceRow(teamId: string) {
+    return this.page.locator(`.admin-slack__row[data-team-id="${teamId}"]`);
+  }
+
+  /** 管理 › Slack の登録の欄に名前と team_id を入れて「登録」を押す */
+  async addSlackWorkspace(name: string, teamId: string) {
+    const form = this.page.locator(".admin-slack__form");
+    await form.locator('input[name="name"]').fill(name);
+    await form.locator('input[name="teamId"]').fill(teamId);
+    await form.locator('m3e-button[variant="filled"]').click();
+  }
+
+  /** 管理 › Slack の行の削除を押し、確かめのダイアログで削除して、閉じきるまで待つ */
+  async removeSlackWorkspace(teamId: string) {
+    await this.slackWorkspaceRow(teamId).locator("m3e-icon-button").click();
+    const confirm = this.dialog();
+    await confirm.waitFor();
+    await this.settle();
+    await confirm.locator('[slot="actions"] m3e-button[variant="filled"]').click();
+    await expect(this.dialog()).toHaveCount(0);
+    await this.settle();
+  }
+
   /** 開いているダイアログを Esc で閉じ、閉じきるまで待つ */
   async closeDialog() {
     await this.page.keyboard.press("Escape");

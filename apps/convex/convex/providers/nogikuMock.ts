@@ -9,7 +9,7 @@ import type { NogikuOAuthProfile } from "./nogiku.ts";
  * フロントは `signIn("nogiku", ...)` を切り替え無しに呼べる。
  *
  * 組織権限: モックのユーザーは `users.orgPermissions` を持たない。`NOGIKU_ACCESS_ENABLED` を true にしないデプロイメント（デモ・開発）では
- * principal が `orgPermissions = ["*"]`（works:create・approvers:assign など全部あり）になるので、どの委員でも登録と校了者の変更ができる。
+ * principal が `orgPermissions = ["*"]`（works:create・approvers:assign・groups:manage など全部あり）になるので、どの委員でも登録と校了者の変更とグループの管理ができる。
  *
  * UniQ との差分: 単一の固定ユーザーではなく `sub` / `name` / `email` を引数で受け取り、
  * 制作者・校正者・校了者・管理者など複数の委員を切り替えて動作確認できるようにした。

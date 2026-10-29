@@ -932,6 +932,8 @@ export default defineSchema({
     mutedCategories: v.array(v.string()),
     /** オンにしたアカウントの経路（"email"・"slack"）。無い行は空（既定オフ） */
     channels: v.optional(v.array(v.string())),
+    /** Slack（DM）の送り先のワークスペース（slackWorkspaces の _id）。無ければ選んでいない */
+    slackWorkspaceId: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
@@ -944,24 +946,46 @@ export default defineSchema({
     at: v.number(),
   }).index("by_notification_and_destination", ["notificationId", "destination"]),
 
-  /** 登録メールアドレスで引いた Slack のメンバー（アドレスごとに 1 行。無ければ未確認）。linked・cannot_dm は memberId 必須 */
+  /**
+   * Slack のワークスペース（管理画面「Slack」でシステム管理者が登録する。docs/UI_M3E.md §105）。teamId で一意。
+   * 登録・削除した人と時刻は auditEvents（add_slack_workspace・remove_slack_workspace）
+   */
+  slackWorkspaces: defineTable({
+    name: v.string(),
+    /** Slack のチーム ID（T で始まる大文字の英数字）。めいちゃんに team_id として渡す */
+    teamId: v.string(),
+  })
+    .index("by_teamId", ["teamId"])
+    .index("by_name", ["name"]),
+
+  /**
+   * 登録メールアドレスで引いた Slack のメンバー（ワークスペース（teamId）× アドレスで 1 行。無ければ未確認）。
+   * linked・cannot_dm は memberId 必須
+   */
   slackMembers: defineTable(
     v.union(
       v.object({
+        teamId: v.string(),
         email: v.string(),
         state: v.literal("linked"),
         memberId: v.string(),
         checkedAt: v.number(),
       }),
-      v.object({ email: v.string(), state: v.literal("not_found"), checkedAt: v.number() }),
       v.object({
+        teamId: v.string(),
+        email: v.string(),
+        state: v.literal("not_found"),
+        checkedAt: v.number(),
+      }),
+      v.object({
+        teamId: v.string(),
         email: v.string(),
         state: v.literal("cannot_dm"),
         memberId: v.string(),
         checkedAt: v.number(),
       }),
     ),
-  ).index("by_email", ["email"]),
+  ).index("by_team_and_email", ["teamId", "email"]),
 
   /** 旧（端末ごとの決着。notificationDeliveries に替えた）。行の削除は承認後 */
   pushDeliveries: defineTable({
