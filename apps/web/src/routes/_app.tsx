@@ -157,7 +157,10 @@ function AppShell() {
   // たまに使う行き先。下部ナビには置かず、アカウントのメニューへ（広い画面ではレールの下にも）
   const lowerItems = [
     { to: "/notation", icon: "spellcheck", label: "表記ルール" },
-    ...(me.isSystemAdmin ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }] : []),
+    // 管理はシステム管理者と、グループを管理できる人（Nogiku の groups:manage。こちらはグループのタブだけ）
+    ...(me.isSystemAdmin || me.canManageGroups
+      ? [{ to: "/admin", icon: "admin_panel_settings", label: "管理" }]
+      : []),
   ];
   // 文章・投稿のエディタ（/works/:id/write・/post）と書く制作物の選択（/write）を開いているあいだは、入口の「制作」を選択中にする
   const writing = /^\/works\/[^/]+\/(write|post)$/.test(path);

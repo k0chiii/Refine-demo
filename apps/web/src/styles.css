@@ -824,6 +824,14 @@ m3e-dialog [slot="actions"] {
 .empty > .title-medium {
   color: var(--mf-on-surface);
 }
+/* 画面のエラー（ui/RouteError.tsx）: 端末の幅で折り返す（横にはみ出さない） */
+.route-error pre {
+  max-width: 100%;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--mf-type-body-small);
+}
 /* 読み込み中（ui/Loading.tsx）: M3 Expressive Loading indicator を区画の中央に。
    ごく短い読み込みで点滅しないよう 150ms 待って現れる（キャッシュ済みのデモでは見えないことが多い） */
 .loading {
@@ -2226,6 +2234,21 @@ m3e-dialog {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
 }
+/* 管理 › Slack の登録の欄（§105）: 名前・team_id・「登録」を 1 行に並べ、狭いと折り返す。ボタンは入力の枠の高さの中ほどに */
+.admin-slack__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 16px;
+  max-width: 760px;
+}
+.admin-slack__form > .field {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.admin-slack__form > m3e-button {
+  margin-block-start: 8px;
+}
 .import-miss {
   color: var(--mf-error);
   display: inline-flex;
@@ -2737,12 +2760,28 @@ m3e-dialog {
 .ws__zoom {
   --m3e-text-button-label-text-color: var(--mf-on-surface);
   min-width: 3.5em;
+  flex: none; /* 入りきらないときは「1…」に縮めず、中を横にスクロールする */
 }
 .ws__toolbar-sep {
+  flex: none;
   width: 1px;
   height: 24px;
   background: var(--mf-outline-variant);
   margin: 0 4px;
+}
+/* compact: ボタン（48 の当たり判定）の間と両端を詰め、文章の版（倍率・目・文字の選択・引き出し 3 つ）を 360 の画面に収める（§106） */
+@media (max-width: 599px) {
+  .ws__toolbar {
+    --m3e-toolbar-spacing: 0px;
+    --m3e-toolbar-rounded-leading-space: 4px;
+    --m3e-toolbar-rounded-trailing-space: 4px;
+  }
+  .ws__zoom {
+    --m3e-button-leading-space: 6px;
+    --m3e-button-trailing-space: 6px;
+    --m3e-button-small-leading-space: 6px;
+    --m3e-button-small-trailing-space: 6px;
+  }
 }
 
 /* 引き出し（コメント／版／情報） */
@@ -4357,13 +4396,6 @@ m3e-icon.icon--on {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 指で選んだ文字にコメントする拡張 FAB（覗き見シート 64 ＋ツールバー 64 ＋余白の上） */
-.touch-comment {
-  position: fixed;
-  inset-inline-end: 16px;
-  bottom: calc(160px + env(safe-area-inset-bottom, 0px));
-  z-index: 35;
-}
 
 /* ---------- コメントの本文（Markdown の描画・書式つき入力欄の中身で共通。features/review/CommentBody・RichCommentEditor） */
 .comment-body {
@@ -5018,6 +5050,10 @@ m3e-snackbar {
 /* 「通知の設定」の届け先（登録メールアドレス・Slack（DM）。§103）。行は通知の種類と同じ M3 の list item。長いアドレスは行の中で折り返す */
 .notif-channel__address {
   overflow-wrap: anywhere;
+}
+/* Slack（DM）の行の見出しの下のワークスペースの選択（§105） */
+.notif-channel__workspace {
+  margin-block: 8px 4px;
 }
 
 /* ---------- 取り込みのプレビュー（表記ルール・制作物の CSV）: 件数の要約は文字、行は M3 リスト（§49） */

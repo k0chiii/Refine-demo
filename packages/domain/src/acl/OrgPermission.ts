@@ -16,6 +16,11 @@ export const orgPermissions = {
    * 「登録自体を権限者に限る」: 制作物の登録は works:create に加えて、これも要る（登録は必ず校了者を決めるため）。
    */
   approversAssign: "approvers:assign",
+  /**
+   * メンションと校正者の割り当てで使うグループを作る・変える・消す。利用者指示（2026-10-29）
+   * 「グループメンションを作成できるひとには、そもそも nogiku で権限を管理したい」
+   */
+  groupsManage: "groups:manage",
 } as const;
 
 export type OrgPermissionName = (typeof orgPermissions)[keyof typeof orgPermissions];
@@ -33,6 +38,10 @@ export const orgPermissionCatalog: ReadonlyArray<{ name: OrgPermissionName; desc
     {
       name: orgPermissions.approversAssign,
       description: "校了者を決められる（制作物の登録と、校了者・校了とみなす人数の変更）",
+    },
+    {
+      name: orgPermissions.groupsManage,
+      description: "メンションと校正者の割り当てで使うグループを作る・変える・消す",
     },
   ];
 
@@ -59,4 +68,12 @@ export function canRegisterWorks(principal: Principal): boolean {
 export function requireWorkRegistration(principal: Principal): void {
   requireOrgPermission(principal, orgPermissions.worksCreate);
   requireOrgPermission(principal, orgPermissions.approversAssign);
+}
+
+/**
+ * メンションと校正者の割り当てで使うグループを作る・変える・消せる。システム管理者は権限が無くてもできる（従来どおり）。
+ * Nogiku Access 未接続（`"*"`）のあいだは全員が持つ。
+ */
+export function canManageGroups(principal: Principal): boolean {
+  return principal.isSystemAdmin || hasOrgPermission(principal, orgPermissions.groupsManage);
 }

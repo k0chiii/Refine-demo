@@ -19,6 +19,7 @@ import type {
   RuleProposal,
   RuleRevision,
   SlackLink,
+  SlackWorkspace,
   UploadAttempt,
   UploadItem,
   UploadSession,
@@ -103,7 +104,8 @@ export interface InMemoryContext extends AppContext {
     notificationPrefs: Map<string, NotificationPrefsRecord>;
     /** `${notificationId}|${destination}` → 決着 */
     deliveries: Map<string, NotificationDeliveryRecord>;
-    /** 小文字のメールアドレス → Slack のメンバー（無ければ unresolved） */
+    slackWorkspaces: Table<SlackWorkspace>;
+    /** `${teamId}|${小文字のメールアドレス}` → Slack のメンバー（無ければ unresolved） */
     slackMembers: Map<string, Exclude<SlackLink, { state: "unresolved" }>>;
     documents: Table<DocumentDraft>;
     socialProfiles: Table<SocialProfile>;
@@ -158,6 +160,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     pushSubscriptions: new Table<PushSubscriptionRecord>("push"),
     notificationPrefs: new Map(),
     deliveries: new Map(),
+    slackWorkspaces: new Table<SlackWorkspace>("sws"),
     slackMembers: new Map(),
     documents: new Table<DocumentDraft>("doc"),
     socialProfiles: new Table<SocialProfile>("sp"),
@@ -426,10 +429,25 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         if (!state.deliveries.has(key)) state.deliveries.set(key, clone(row));
       },
     },
+    slackWorkspaces: {
+      list: async () =>
+        state.slackWorkspaces
+          .all()
+          .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+          .slice(0, 100),
+      findById: async (id) => state.slackWorkspaces.get(id),
+      findByTeamId: async (teamId) =>
+        state.slackWorkspaces.all().find((w) => w.teamId === teamId) ?? null,
+      insert: async (workspace) => state.slackWorkspaces.insert(workspace),
+      delete: async (id) => {
+        state.slackWorkspaces.rows.delete(id);
+      },
+    },
     slackMembers: {
-      find: async (email) => clone(state.slackMembers.get(email)) ?? { state: "unresolved" },
-      save: async (email, link) => {
-        state.slackMembers.set(email, clone(link));
+      find: async (teamId, email) =>
+        clone(state.slackMembers.get(`${teamId}|${email}`)) ?? { state: "unresolved" },
+      save: async (teamId, email, link) => {
+        state.slackMembers.set(`${teamId}|${email}`, clone(link));
       },
     },
     notifications: {

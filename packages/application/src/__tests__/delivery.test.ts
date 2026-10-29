@@ -15,7 +15,7 @@ import {
   planDelivery,
   recordDelivery,
   recordSlackLookup,
-  slackLookupEmail,
+  slackLookupTarget,
 } from "../usecases/delivery.ts";
 import {
   getNotificationPrefs,
@@ -24,6 +24,7 @@ import {
 } from "../usecases/notificationPrefs.ts";
 import { notify } from "../usecases/notifications.ts";
 import { subscribePush } from "../usecases/push.ts";
+import { addSlackWorkspace, removeSlackWorkspace } from "../usecases/slackWorkspaces.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork } from "../testing/scenario.ts";
 
@@ -31,7 +32,10 @@ const ORIGIN = "https://mf100.example-org.jp";
 const EMAIL = "stranger@example-org.jp";
 const ACTOR = "本郷 校正";
 const TITLE = "夏のポスター";
+const TEAM = "T0MAY";
 const me = principals.stranger;
+/** 五月祭のワークスペースでの、受け取る人 */
+const member = { teamId: TEAM, email: EMAIL };
 
 const envOf = (...channels: DeliveryChannel[]): DeliveryEnv => ({
   available: new Set(channels),
@@ -56,9 +60,16 @@ function renderedOf(t: DeliveryTarget): string {
   }
 }
 
-/** 見られる制作物へのコメントの通知を 1 件受け取る人（メール・Slack をオンにし、端末も登録している） */
+/**
+ * 見られる制作物へのコメントの通知を 1 件受け取る人（メール・Slack をオンにし、端末も登録している）。
+ * Slack のワークスペースは五月祭の 1 つだけ（オンにしたときに選ばれる）
+ */
 async function setup(opts: { email?: string | null; push?: boolean } = {}) {
   const ctx = createInMemoryContext();
+  const workspace = await addSlackWorkspace(ctx, principals.sysadmin, {
+    name: "五月祭",
+    teamId: TEAM,
+  });
   ctx.state.names.set(principals.reviewer.userId, ACTOR);
   const email = opts.email === undefined ? EMAIL : opts.email;
   if (email !== null) ctx.state.emails.set(me.userId, email);
@@ -81,11 +92,11 @@ async function setup(opts: { email?: string | null; push?: boolean } = {}) {
     });
     return ctx.state.notifications.all().at(-1)!;
   };
-  return { ctx, work, sub, post };
+  return { ctx, work, sub, post, workspace };
 }
 
 const slackRef = (memberId: string | null) =>
-  ({ channel: "slack", key: "slack", email: EMAIL, memberId }) as const;
+  ({ channel: "slack", key: "slack", teamId: TEAM, email: EMAIL, memberId }) as const;
 
 describe("外への通知の計画", () => {
   it("メールは登録メールアドレスに、アプリの画面へのリンクを付けて送る", async () => {
@@ -101,14 +112,20 @@ describe("外への通知の計画", () => {
     expect(target.content.subject).not.toMatch(/[\r\n]/);
   });
 
-  it("Slack は、まだ引いていなければメンバーなしで、引けていればそのメンバーに送る", async () => {
+  it("Slack は選んだワークスペースへ、まだ引いていなければメンバーなしで、引けていればそのメンバーに送る", async () => {
     const { ctx, work, post } = await setup();
     const n = await post();
     const before = await planDelivery(ctx, n.id, envOf("slack"));
     expect(before?.targets).toEqual([
-      expect.objectContaining({ channel: "slack", key: "slack", email: EMAIL, memberId: null }),
+      expect.objectContaining({
+        channel: "slack",
+        key: "slack",
+        teamId: TEAM,
+        email: EMAIL,
+        memberId: null,
+      }),
     ]);
-    await recordSlackLookup(ctx, EMAIL, { kind: "found", memberId: "U1" });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
     const after = await planDelivery(ctx, n.id, envOf("slack"));
     const [target] = after!.targets;
     if (target?.channel !== "slack") throw new Error("slack target expected");
@@ -119,14 +136,14 @@ describe("外への通知の計画", () => {
   it("Slack で見つからない・DM できない人には、確かめ直す間が過ぎるまで送らない", async () => {
     const { ctx, post } = await setup();
     const n = await post();
-    await recordSlackLookup(ctx, EMAIL, { kind: "not_found" });
+    await recordSlackLookup(ctx, member, { kind: "not_found" });
     expect(await planDelivery(ctx, n.id, envOf("slack"))).toBeNull();
     ctx.clock.advance(SLACK_RECHECK_MS);
     expect((await planDelivery(ctx, n.id, envOf("slack")))?.targets).toEqual([
       expect.objectContaining({ channel: "slack", memberId: null }),
     ]);
 
-    await recordSlackLookup(ctx, EMAIL, { kind: "found", memberId: "U1" });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
     const other = await post();
     await recordDelivery(ctx, {
       notificationId: other.id,
@@ -185,12 +202,12 @@ describe("外への通知の計画", () => {
     const { ctx, post } = await setup();
     const saves: string[] = [];
     const save = ctx.slackMembers.save.bind(ctx.slackMembers);
-    ctx.slackMembers.save = async (email, link) => {
+    ctx.slackMembers.save = async (teamId, email, link) => {
       saves.push(link.state);
-      await save(email, link);
+      await save(teamId, email, link);
     };
-    await recordSlackLookup(ctx, EMAIL, { kind: "found", memberId: "U1" });
-    await recordSlackLookup(ctx, EMAIL, { kind: "found", memberId: "U1" });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
     expect(saves).toEqual(["linked"]);
     for (let i = 0; i < 2; i++)
       await recordDelivery(ctx, {
@@ -199,7 +216,7 @@ describe("外への通知の計画", () => {
         outcome: { kind: "rejected", reason: "cannot_dm" },
       });
     expect(saves).toEqual(["linked", "cannot_dm"]);
-    expect(await ctx.slackMembers.find(EMAIL)).toMatchObject({
+    expect(await ctx.slackMembers.find(TEAM, EMAIL)).toMatchObject({
       state: "cannot_dm",
       memberId: "U1",
     });
@@ -214,7 +231,7 @@ describe("外への通知の計画", () => {
   it("非公開になった・閲覧権限が外れた制作物の通知は、どの経路にも制作物名・送り主・抜粋を出さない", async () => {
     const { ctx, work, post } = await setup();
     const n = await post();
-    await recordSlackLookup(ctx, EMAIL, { kind: "found", memberId: "U1" });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
     await ctx.works.update({
       ...(await ctx.works.findById(work.id))!,
       confidentiality: "restricted",
@@ -292,14 +309,101 @@ describe("外への通知の計画", () => {
   });
 });
 
-describe("Slack で引くメールアドレス", () => {
-  it("Slack をオンにしていて、送れるアドレスがあるときだけ", async () => {
-    const { ctx } = await setup();
-    expect(await slackLookupEmail(ctx, me.userId)).toBe(EMAIL);
+describe("Slack で引く宛先", () => {
+  it("Slack をオンにしていて、ワークスペースを選び、送れるアドレスがあるときだけ", async () => {
+    const { ctx, workspace } = await setup();
+    expect(await slackLookupTarget(ctx, me.userId)).toEqual(member);
     await updateNotificationPrefs(ctx, me, { channels: ["email"] });
-    expect(await slackLookupEmail(ctx, me.userId)).toBeNull();
+    expect(await slackLookupTarget(ctx, me.userId)).toBeNull();
     const reserved = await setup({ email: "mock-1@example.invalid" });
-    expect(await slackLookupEmail(reserved.ctx, me.userId)).toBeNull();
+    expect(await slackLookupTarget(reserved.ctx, me.userId)).toBeNull();
+    await updateNotificationPrefs(ctx, me, { channels: ["email", "slack"] });
+    await removeSlackWorkspace(ctx, principals.sysadmin, workspace.id);
+    expect(await slackLookupTarget(ctx, me.userId)).toBeNull();
+  });
+});
+
+describe("Slack のワークスペースを選ぶ", () => {
+  it("登録が 1 つだけなら、Slack をオンにしたときにそれを選ぶ。2 つ以上なら選ばず no_workspace", async () => {
+    const ctx = createInMemoryContext();
+    ctx.state.emails.set(me.userId, EMAIL);
+    const may = await addSlackWorkspace(ctx, principals.sysadmin, { name: "五月祭", teamId: TEAM });
+    await updateNotificationPrefs(ctx, me, { channels: ["email"] });
+    expect(await getNotificationPrefs(ctx, me)).not.toHaveProperty("slackWorkspaceId");
+    expect(await updateNotificationPrefs(ctx, me, { channels: ["email", "slack"] })).toMatchObject({
+      slackWorkspaceId: may.id,
+    });
+
+    const other = createInMemoryContext();
+    other.state.emails.set(me.userId, EMAIL);
+    await addSlackWorkspace(other, principals.sysadmin, { name: "五月祭", teamId: TEAM });
+    const komaba = await addSlackWorkspace(other, principals.sysadmin, {
+      name: "駒場祭",
+      teamId: "T0KOMABA",
+    });
+    await updateNotificationPrefs(other, me, { channels: ["slack"] });
+    const none = await getNotificationSettings(other, me, new Set<DeliveryChannel>(["slack"]));
+    expect(none.destinations.slack).toMatchObject({ workspaceId: null, status: "no_workspace" });
+    await updateNotificationPrefs(other, me, { slackWorkspaceId: komaba.id });
+    const chosen = await getNotificationSettings(other, me, new Set<DeliveryChannel>(["slack"]));
+    expect(chosen.destinations.slack).toMatchObject({
+      workspaceId: komaba.id,
+      status: "unresolved",
+    });
+  });
+
+  it("登録に無いワークスペースは選べない", async () => {
+    const { ctx, workspace } = await setup();
+    await expect(
+      updateNotificationPrefs(ctx, me, { slackWorkspaceId: `${workspace.id}-gone` }),
+    ).rejects.toEqual(expect.objectContaining({ code: "notification_prefs_invalid" }));
+    expect((await getNotificationPrefs(ctx, me)).slackWorkspaceId).toBe(workspace.id);
+  });
+
+  it("登録が消えたワークスペースには送らず、設定は no_workspace。残った 1 つはオンのまま次に変えたときに選ぶ", async () => {
+    const { ctx, workspace, post } = await setup({ push: false });
+    const n = await post();
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
+    await removeSlackWorkspace(ctx, principals.sysadmin, workspace.id);
+    expect(await planDelivery(ctx, n.id, envOf("slack"))).toBeNull();
+    const gone = await getNotificationSettings(ctx, me, new Set<DeliveryChannel>(["slack"]));
+    expect(gone.destinations.slack).toMatchObject({
+      workspaceId: null,
+      workspaces: [],
+      status: "no_workspace",
+    });
+
+    const again = await addSlackWorkspace(ctx, principals.sysadmin, {
+      name: "五月祭",
+      teamId: TEAM,
+    });
+    await updateNotificationPrefs(ctx, me, { showPreview: false });
+    expect((await getNotificationPrefs(ctx, me)).slackWorkspaceId).toBe(again.id);
+    // 同じ team_id で登録し直したので、引いた結果はそのまま使える
+    expect((await planDelivery(ctx, n.id, envOf("slack")))?.targets).toEqual([
+      expect.objectContaining({ channel: "slack", teamId: TEAM, memberId: "U1" }),
+    ]);
+  });
+
+  it("引いた結果はワークスペースごと。替えると、替えた先のワークスペースで引く", async () => {
+    const { ctx, workspace, post } = await setup({ push: false });
+    const komaba = await addSlackWorkspace(ctx, principals.sysadmin, {
+      name: "駒場祭",
+      teamId: "T0KOMABA",
+    });
+    const n = await post();
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
+    await updateNotificationPrefs(ctx, me, { slackWorkspaceId: komaba.id });
+    expect((await planDelivery(ctx, n.id, envOf("slack")))?.targets).toEqual([
+      expect.objectContaining({ channel: "slack", teamId: "T0KOMABA", memberId: null }),
+    ]);
+    await recordSlackLookup(ctx, { teamId: "T0KOMABA", email: EMAIL }, { kind: "not_found" });
+    const settings = async () =>
+      (await getNotificationSettings(ctx, me, new Set<DeliveryChannel>(["slack"]))).destinations
+        .slack.status;
+    expect(await settings()).toBe("not_found");
+    await updateNotificationPrefs(ctx, me, { slackWorkspaceId: workspace.id });
+    expect(await settings()).toBe("ready");
   });
 });
 
@@ -309,23 +413,30 @@ describe("通知の設定の届け先", () => {
     return { email: s.destinations.email.status, slack: s.destinations.slack.status };
   };
 
-  it("経路ごとに、使えるか・オンか・アドレス・状態を返す", async () => {
-    const { ctx } = await setup({ push: false });
+  it("経路ごとに、使えるか・オンか・アドレス・状態を返し、Slack は選べるワークスペースと選んだものも返す", async () => {
+    const { ctx, workspace } = await setup({ push: false });
     await updateNotificationPrefs(ctx, me, { channels: ["slack"] });
     const s = await getNotificationSettings(ctx, me, new Set<DeliveryChannel>(["push", "email"]));
     expect(s).toMatchObject({ showPreview: true, mutedCategories: [], channels: ["slack"] });
     expect(s.destinations).toEqual({
       email: { available: true, on: false, address: EMAIL, status: "ready" },
-      slack: { available: false, on: true, address: EMAIL, status: "unresolved" },
+      slack: {
+        available: false,
+        on: true,
+        address: EMAIL,
+        status: "unresolved",
+        workspaceId: workspace.id,
+        workspaces: [{ id: workspace.id, name: "五月祭" }],
+      },
     });
   });
 
   it("Slack の状態は引いた・送った結果に従う", async () => {
     const { ctx, post } = await setup({ push: false });
     expect(await statuses(ctx)).toEqual({ email: "ready", slack: "unresolved" });
-    await recordSlackLookup(ctx, EMAIL, { kind: "not_found" });
+    await recordSlackLookup(ctx, member, { kind: "not_found" });
     expect(await statuses(ctx)).toEqual({ email: "ready", slack: "not_found" });
-    await recordSlackLookup(ctx, EMAIL, { kind: "found", memberId: "U1" });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
     expect(await statuses(ctx)).toEqual({ email: "ready", slack: "ready" });
     await recordDelivery(ctx, {
       notificationId: (await post()).id,
@@ -350,6 +461,8 @@ describe("通知の設定の届け先", () => {
       on: true,
       address: null,
       status: "no_address",
+      workspaceId: none.workspace.id,
+      workspaces: [{ id: none.workspace.id, name: "五月祭" }],
     });
   });
 

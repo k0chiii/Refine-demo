@@ -35,8 +35,9 @@ export function shellPrecache(
  * 外枠には入れないが、この版が使うハッシュ付きのファイル。sw.template.js が新しい版の install で、
  * 前の版のキャッシュにあるものは通信せずに写す。
  * - preload（JS・CSS。画面ごとのチャンク・PDF.js の本体）: 写せなければ取りに行く。デプロイのあと、古い外枠が読むチャンクは
- *   配信側から消えている（Pages は index.html を返す）ので、開いたことのない画面の分も先に持っておく
- * - carry（フォントの分割ファイル・PDF.js のワーカーなど）: 写すだけで取りに行かない（使うときに取る）
+ *   配信側から消えている（Pages は index.html を返す）ので、開いたことのない画面の分も先に持っておく。
+ *   アイコンのフォントも同じ（アイコンを足すたびに名前が変わり、前の版からは写せない。無いとアイコンが文字で出る）
+ * - carry（日本語フォントの分割ファイル・PDF.js のワーカーなど）: 写すだけで取りに行かない（使うときに取る）
  * 一覧はこの版のものだけなので、前の版だけが使っていたファイルは写されず、版ごとのキャッシュと一緒に消える（溜まらない）
  */
 export function outsideShell(
@@ -49,6 +50,6 @@ export function outsideShell(
     .map(href)
     .filter((p) => !shell.has(p))
     .sort();
-  const code = (p: string) => /\.(js|css)$/.test(p);
-  return { preload: files.filter(code), carry: files.filter((p) => !code(p)) };
+  const needed = (p: string) => /\.(js|css)$|\/material-symbols-subset-[^/]+\.woff2$/.test(p);
+  return { preload: files.filter(needed), carry: files.filter((p) => !needed(p)) };
 }

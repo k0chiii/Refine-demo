@@ -1,17 +1,22 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { lookupSlackMember, postSlackDm } from "./lib/slack.ts";
 
-const token = "xoxb-1-2-abc";
+const BASE = "https://meichan.example.invalid/slackbot/may";
+const cfg = { baseUrl: BASE };
+const TEAM = "T0123ABCD";
 const email = "someone@mail.example.org";
+const text = "*件名*\n本文";
 
-/** Slack は失敗も HTTP 200 の {ok:false,error} で返す。速さ制限だけ HTTP 429 */
 function reply(body: unknown, status = 200, headers?: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), { status, headers: headers ?? {} });
+  return new Response(typeof body === "string" ? body : JSON.stringify(body), {
+    status,
+    headers: headers ?? {},
+  });
 }
 
-function slack(...responses: Array<Response | Error>) {
-  const fetch = vi.fn(async () => {
+function meichan(...responses: Array<Response | Error>) {
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => {
     const next = responses.shift();
     if (!next) throw new Error("no response left");
     if (next instanceof Error) throw next;
@@ -21,155 +26,126 @@ function slack(...responses: Array<Response | Error>) {
   return {
     fetch,
     sleep,
-    lookup: () => lookupSlackMember(token, email, { fetch, sleep }),
-    post: () => postSlackDm(token, "U123", "*件名*\n本文", { fetch, sleep }),
-    request: () => fetch.mock.calls[0] as unknown as [string, RequestInit],
+    lookup: () => lookupSlackMember(cfg, { teamId: TEAM, email }, { fetch, sleep }),
+    post: () => postSlackDm(cfg, { teamId: TEAM, userId: "U123", text }, { fetch, sleep }),
+    request: () => {
+      const [url, init] = fetch.mock.calls[0]!;
+      return {
+        url: url as string,
+        init: init ?? {},
+        json: JSON.parse(init?.body as string) as unknown,
+      };
+    },
   };
 }
 
-const TOKEN_ERRORS = [
-  "invalid_auth",
-  "not_authed",
-  "account_inactive",
-  "token_revoked",
-  "missing_scope",
-];
+/** JSON だけを送り、認証ヘッダは付けない（めいちゃんの仕様） */
+function expectJsonWithoutAuth(init: RequestInit) {
+  expect(init.method).toBe("POST");
+  const headers = new Headers(init.headers);
+  expect(headers.get("Content-Type")).toBe("application/json");
+  expect(headers.has("Authorization")).toBe(false);
+}
 
-describe("Slack のメンバーを登録メールアドレスで引く", () => {
-  it("users.lookupByEmail に Bearer で問い合わせ、見つかったメンバーの id を返す", async () => {
-    const s = slack(reply({ ok: true, user: { id: "U123", deleted: false, is_bot: false } }));
-    expect(await s.lookup()).toEqual({ kind: "found", memberId: "U123" });
-    const [url, init] = s.request();
-    const u = new URL(url);
-    expect(`${u.origin}${u.pathname}`).toBe("https://slack.com/api/users.lookupByEmail");
-    expect(u.searchParams.get("email")).toBe(email);
-    expect(init.method ?? "GET").toBe("GET");
-    expect(init.headers).toMatchObject({ Authorization: `Bearer ${token}` });
-  });
-
-  it.each([
-    ["見つからない", reply({ ok: false, error: "users_not_found" }), { kind: "not_found" }],
-    [
-      "削除済み",
-      reply({ ok: true, user: { id: "U9", deleted: true, is_bot: false } }),
-      { kind: "not_found" },
-    ],
-    [
-      "ボット",
-      reply({ ok: true, user: { id: "U9", deleted: false, is_bot: true } }),
-      { kind: "not_found" },
-    ],
-    ...TOKEN_ERRORS.map((error) => [
-      `トークンの誤り ${error}`,
-      reply({ ok: false, error }),
-      { kind: "unavailable", reason: error },
-    ]),
-    [
-      "ほかの ok:false",
-      reply({ ok: false, error: "fatal_error" }),
-      { kind: "unavailable", reason: "fatal_error" },
-    ],
-    ["HTTP 500", reply({ ok: false, error: "internal_error" }, 500), { kind: "retry" }],
-    ["HTTP 503 本文が JSON でない", new Response("busy", { status: 503 }), { kind: "retry" }],
-    ["HTTP 429 で本文なし", new Response(null, { status: 429 }), { kind: "retry" }],
-    ["つながらない", new Error("offline"), { kind: "retry" }],
-  ] as Array<[string, Response | Error, unknown]>)("%s", async (_name, response, expected) => {
-    const s = slack(response);
-    expect(await s.lookup()).toEqual(expected);
-  });
-
-  it("ratelimited は Retry-After だけ待って一度だけ引き直す", async () => {
-    const s = slack(
-      reply({ ok: false, error: "ratelimited" }, 429, { "Retry-After": "3" }),
-      reply({ ok: true, user: { id: "U123", deleted: false, is_bot: false } }),
-    );
-    expect(await s.lookup()).toEqual({ kind: "found", memberId: "U123" });
-    expect(s.sleep.mock.calls).toEqual([[3000]]);
-    expect(s.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it("二度目の ratelimited は待たずに retry", async () => {
-    const s = slack(
-      reply({ ok: false, error: "ratelimited" }, 429, { "Retry-After": "1" }),
-      reply({ ok: false, error: "ratelimited" }, 429, { "Retry-After": "1" }),
-    );
-    expect(await s.lookup()).toEqual({ kind: "retry" });
-    expect(s.sleep).toHaveBeenCalledTimes(1);
-    expect(s.fetch).toHaveBeenCalledTimes(2);
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-describe("Slack の DM", () => {
-  it("chat.postMessage に Bearer と JSON で送り、リンクの展開を切る", async () => {
-    const s = slack(reply({ ok: true, ts: "1.2" }));
-    expect(await s.post()).toEqual({ kind: "sent", httpStatus: 200 });
-    const [url, init] = s.request();
-    expect(url).toBe("https://slack.com/api/chat.postMessage");
-    expect(init.method).toBe("POST");
-    expect(init.headers).toMatchObject({ Authorization: `Bearer ${token}` });
-    expect((init.headers as Record<string, string>)["Content-Type"]).toMatch(/^application\/json/);
-    expect(JSON.parse(init.body as string)).toEqual({
-      channel: "U123",
-      text: "*件名*\n本文",
-      unfurl_links: false,
-      unfurl_media: false,
-    });
+describe("めいちゃんで Slack のメンバーを登録メールアドレスから引く（/userid）", () => {
+  it("{base}/userid に email と team_id を JSON で送り、userId を返す", async () => {
+    const s = meichan(reply({ userId: "U123" }));
+    expect(await s.lookup()).toEqual({ kind: "found", memberId: "U123" });
+    const { url, init, json } = s.request();
+    expect(url).toBe(`${BASE}/userid`);
+    expectJsonWithoutAuth(init);
+    expect(json).toEqual({ email, team_id: TEAM });
   });
 
   it.each([
-    ...[
-      "channel_not_found",
-      "not_in_channel",
-      "cannot_dm_bot",
-      "user_disabled",
-      "is_archived",
-      "messages_tab_disabled",
-    ].map((error) => [
-      `DM できない ${error}`,
-      reply({ ok: false, error }),
-      { kind: "rejected", reason: "cannot_dm", httpStatus: 200 },
-    ]),
-    ...TOKEN_ERRORS.map((error) => [
-      `トークンの誤り ${error}`,
-      reply({ ok: false, error }),
-      { kind: "unavailable", reason: error },
-    ]),
+    ["404 はそのワークスペースにいない", reply({}, 404), { kind: "not_found" }],
+    ["200 で userId が無い", reply({}), { kind: "unavailable", reason: "userid_missing" }],
     [
-      "ほかの ok:false",
-      reply({ ok: false, error: "msg_too_long" }),
-      { kind: "rejected", reason: "invalid_content", httpStatus: 200 },
+      "200 で userId が空",
+      reply({ userId: "" }),
+      { kind: "unavailable", reason: "userid_missing" },
     ],
-    ["HTTP 500", reply({ ok: false, error: "internal_error" }, 500), { kind: "retry" }],
-    [
-      "HTTP 502 本文が JSON でない",
-      new Response("bad gateway", { status: 502 }),
-      { kind: "retry" },
-    ],
-    ["HTTP 429 で本文なし", new Response(null, { status: 429 }), { kind: "retry" }],
+    ["200 で本文が JSON でない", reply("ok"), { kind: "unavailable", reason: "userid_missing" }],
+    ["400", reply({}, 400), { kind: "unavailable", reason: "http_400" }],
+    ["403", reply({}, 403), { kind: "unavailable", reason: "http_403" }],
+    ["500", reply({}, 500), { kind: "retry" }],
+    ["503 で本文が JSON でない", reply("busy", 503), { kind: "retry" }],
     ["つながらない", new Error("offline"), { kind: "retry" }],
   ] as Array<[string, Response | Error, unknown]>)("%s", async (_name, response, expected) => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const s = slack(response);
-    expect(await s.post()).toEqual(expected);
-    vi.restoreAllMocks();
+    expect(await meichan(response).lookup()).toEqual(expected);
   });
 
-  it("ratelimited は Retry-After だけ（5 秒まで）待って一度だけ送り直す", async () => {
-    const s = slack(
-      reply({ ok: false, error: "ratelimited" }, 429, { "Retry-After": "30" }),
-      reply({ ok: true, ts: "1.2" }),
-    );
-    expect(await s.post()).toEqual({ kind: "sent", httpStatus: 200 });
-    expect(s.sleep.mock.calls).toEqual([[5000]]);
-    expect(s.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it("ほかの ok:false はログに error を出し、本文は出さない", async () => {
+  it("見つからないときは team_id をログに出し、メールアドレスは出さない", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await slack(reply({ ok: false, error: "msg_too_long" })).post();
+    await meichan(reply({}, 404)).lookup();
     const lines = warn.mock.calls.map((c) => c.map(String).join(" "));
-    expect(lines.some((l) => l.includes("msg_too_long"))).toBe(true);
-    expect(lines.every((l) => !l.includes("本文"))).toBe(true);
-    vi.restoreAllMocks();
+    expect(lines.some((l) => l.includes(TEAM))).toBe(true);
+    expect(lines.every((l) => !l.includes(email))).toBe(true);
+  });
+
+  it("429 は Retry-After だけ待って一度だけ引き直し、二度目の 429 は retry", async () => {
+    const once = meichan(reply({}, 429, { "Retry-After": "3" }), reply({ userId: "U123" }));
+    expect(await once.lookup()).toEqual({ kind: "found", memberId: "U123" });
+    expect(once.sleep.mock.calls).toEqual([[3000]]);
+    expect(once.fetch).toHaveBeenCalledTimes(2);
+
+    const twice = meichan(reply({}, 429, { "Retry-After": "1" }), reply({}, 429));
+    expect(await twice.lookup()).toEqual({ kind: "retry" });
+    expect(twice.sleep).toHaveBeenCalledTimes(1);
+    expect(twice.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("めいちゃんで DM を送る（/dm）", () => {
+  it("{base}/dm に team_id・user_id・text を JSON で送り、200 だけを送れたとする", async () => {
+    const s = meichan(reply({ ok: true }));
+    expect(await s.post()).toEqual({ kind: "sent", httpStatus: 200 });
+    const { url, init, json } = s.request();
+    expect(url).toBe(`${BASE}/dm`);
+    expectJsonWithoutAuth(init);
+    expect(json).toEqual({ team_id: TEAM, user_id: "U123", text });
+  });
+
+  it.each([
+    [
+      "404 は DM できない",
+      reply({}, 404),
+      { kind: "rejected", reason: "cannot_dm", httpStatus: 404 },
+    ],
+    ["400", reply({ error: "invalid" }, 400), { kind: "unavailable", reason: "http_400" }],
+    ["403", reply({}, 403), { kind: "unavailable", reason: "http_403" }],
+    ["500", reply({}, 500), { kind: "retry" }],
+    ["502 で本文が JSON でない", reply("bad gateway", 502), { kind: "retry" }],
+    ["つながらない", new Error("offline"), { kind: "retry" }],
+  ] as Array<[string, Response | Error, unknown]>)("%s", async (_name, response, expected) => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(await meichan(response).post()).toEqual(expected);
+  });
+
+  it("429 は Retry-After だけ（5 秒まで）待って一度だけ送り直し、二度目の 429 は retry", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const once = meichan(reply({}, 429, { "Retry-After": "30" }), reply({ ok: true }));
+    expect(await once.post()).toEqual({ kind: "sent", httpStatus: 200 });
+    expect(once.sleep.mock.calls).toEqual([[5000]]);
+    expect(once.fetch).toHaveBeenCalledTimes(2);
+
+    const twice = meichan(reply({}, 429), reply({}, 429));
+    expect(await twice.post()).toEqual({ kind: "retry" });
+    expect(twice.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("200 以外は状態と応答の本文（先頭 300 文字）をログに出し、送った本文は出さない", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await meichan(reply(`bad ${"x".repeat(400)}`, 400)).post();
+    const logged = warn.mock.calls.map((c) => JSON.parse(String(c[0])) as Record<string, unknown>);
+    expect(logged).toEqual([
+      { event: "slack_dm_failed", teamId: TEAM, status: 400, body: `bad ${"x".repeat(296)}` },
+    ]);
+    expect(JSON.stringify(logged)).not.toContain("本文");
   });
 });

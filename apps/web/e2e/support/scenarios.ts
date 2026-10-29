@@ -19,6 +19,17 @@ export async function submitFirstRevision(
   return { workPath, revisionPath };
 }
 
+/** 制作者が制作物に文章（テキスト）だけの最初の版を出す。終わると制作者のまま、第1版（/v/1）の本文を開いている */
+export async function submitFirstTextRevision(app: App, title = PAMPHLET) {
+  await app.signInAs("mock-nogiku-creator");
+  const workPath = await app.openWork(title);
+  await app.uploadRevision("最初の版を提出", [fixture("greeting.txt")], "初稿。", () =>
+    app.tickSelfChecks(),
+  );
+  const revisionPath = await app.confirmRevision(1, () => app.textReady());
+  return { workPath, revisionPath };
+}
+
 /** 制作者が次の版を出す（制作物の版を開いている前提）。終わると新しい版を開いている */
 export async function submitNextRevision(app: App, n: number, summary = `第${n}版。`) {
   await app.drawer("版");

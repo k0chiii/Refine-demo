@@ -6,7 +6,7 @@ import {
   isCategoryMuted,
   type NotificationPrefs,
 } from "./preferences.ts";
-import { type SlackLink, slackStep } from "./slack.ts";
+import { type SlackLink, type SlackMembership, slackStep } from "./slack.ts";
 
 /*
  * 外への通知の届け先（端末・登録メールアドレス・Slack の DM）。だれに・どの経路で・どこへ送るかを決める（純粋）。
@@ -36,8 +36,8 @@ export interface PushDevice {
 export type Destination =
   | { channel: "push"; key: `push:${string}`; device: PushDevice }
   | { channel: "email"; key: "email"; to: string }
-  /** memberId が null なら、送る前に登録メールアドレスで引く */
-  | { channel: "slack"; key: "slack"; email: string; memberId: string | null };
+  /** teamId は選んだワークスペース。memberId が null なら、送る前にそのワークスペースで登録メールアドレスを引く */
+  | { channel: "slack"; key: "slack"; teamId: string; email: string; memberId: string | null };
 
 /**
  * 種類によらず届けうる経路。adapters の「予約するか」はこれが空でないかだけで決める。
@@ -67,7 +67,7 @@ export function wantedChannels(input: {
 interface DestinationSources {
   devices: readonly PushDevice[];
   email: string | null;
-  slack: SlackLink;
+  slack: SlackMembership | null;
   now: Instant;
 }
 
@@ -79,20 +79,23 @@ const DESTINATIONS_OF: {
     devices.map((device) => ({ channel: "push", key: `push:${device.id}`, device })),
   email: ({ email }) => (email ? [{ channel: "email", key: "email", to: email }] : []),
   slack: ({ email, slack, now }) => {
-    const step = slackStep(slack, now);
-    if (!email || step.do === "skip") return [];
+    if (!email || !slack) return [];
+    const step = slackStep(slack.link, now);
+    if (step.do === "skip") return [];
     const memberId = step.do === "post" ? step.memberId : null;
-    return [{ channel: "slack", key: "slack", email, memberId }];
+    return [{ channel: "slack", key: "slack", teamId: slack.teamId, email, memberId }];
   },
 };
 
-/** 届け先を決める（純粋）。宛先の無い経路と、Slack で今は送らない状態（slackStep が skip）は落とす */
+/**
+ * 届け先を決める（純粋）。宛先の無い経路、ワークスペースの無い Slack、Slack で今は送らない状態（slackStep が skip）は落とす
+ */
 export function destinationsOf(input: {
   channels: readonly DeliveryChannel[];
   devices: readonly PushDevice[];
   /** deliverableEmail を通したもの */
   email: string | null;
-  slack: SlackLink;
+  slack: SlackMembership | null;
   now: Instant;
 }): Destination[] {
   return DELIVERY_CHANNELS.filter((c) => input.channels.includes(c)).flatMap((c): Destination[] =>
@@ -148,8 +151,14 @@ export type SendOutcome =
 /** 記録して決着する結果 */
 export type SettledOutcome = Extract<SendOutcome, { kind: "sent" | "rejected" }>;
 
-/** 設定画面の経路の状態 */
-export type ChannelStatus = "ready" | "no_address" | "unresolved" | "not_found" | "cannot_dm";
+/** 設定画面の経路の状態（no_workspace: Slack のワークスペースを選んでいない・選んだ登録が消えた） */
+export type ChannelStatus =
+  | "ready"
+  | "no_address"
+  | "no_workspace"
+  | "unresolved"
+  | "not_found"
+  | "cannot_dm";
 
 const SLACK_STATUS: Record<SlackLink["state"], ChannelStatus> = {
   unresolved: "unresolved",
@@ -158,17 +167,20 @@ const SLACK_STATUS: Record<SlackLink["state"], ChannelStatus> = {
   cannot_dm: "cannot_dm",
 };
 
-/** email: アドレスがあれば ready。slack: アドレスが無ければ no_address、あれば Slack の状態（linked は ready） */
+/**
+ * email: アドレスがあれば ready。slack: アドレスが無ければ no_address、ワークスペースが無ければ no_workspace、
+ * あればそのワークスペースでの状態（linked は ready）
+ */
 export function channelStatusOf(
   channel: AccountChannel,
   email: string | null,
-  slack: SlackLink,
+  slack: SlackMembership | null,
 ): ChannelStatus {
   if (!email) return "no_address";
   switch (channel) {
     case "email":
       return "ready";
     case "slack":
-      return SLACK_STATUS[slack.state];
+      return slack ? SLACK_STATUS[slack.link.state] : "no_workspace";
   }
 }

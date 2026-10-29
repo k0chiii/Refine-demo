@@ -1,30 +1,43 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { portalHost } from "@/lib/portalHost";
+import { useEffect, useRef } from "react";
 import { useMedia } from "@/lib/useMedia";
-import { M3eFab } from "@m3e/react/fab";
-import { M3eIcon } from "@m3e/react/icon";
+import { useSelectionMode } from "./selectionMode";
 import type { TextRangeDraft } from "./TextViewer";
 
 /**
- * 指で操作する端末での文章の範囲選択（校正画面の文章・リッチ文章）。
+ * 指で操作する端末での文章の範囲選択（校正画面の文章・リッチ文章・SNS のプレビュー）。
  * スマホでは選択のつまみを動かしているあいだに投稿欄が出ると操作できないので、
- * 選択が落ち着いたら（selectionchange の 300ms 後）画面に「コメント」ボタン（M3E の拡張 FAB）を出し、押したときに投稿欄を開く。
- * マウス・キーボードは従来どおり、選び終えた瞬間に投稿欄が出る。
+ * 選択が落ち着いたら（selectionchange の 300ms 後）その範囲で `onCommit` を呼ぶ（選ぶ ＝ コメント。§106）。
+ * 文字の選択を「文字」（`SelectionMode` の text）にしているあいだは止まり、端末の選択（コピーなど）に任せる。
+ * マウス・キーボードは従来どおり、選び終えた瞬間に投稿欄が出る。指で操作する端末かを返す
  */
-export function useTouchSelection(enabled: boolean, read: () => TextRangeDraft | null) {
+export function useTouchSelection(
+  enabled: boolean,
+  read: () => TextRangeDraft | null,
+  onCommit: (d: TextRangeDraft) => void,
+) {
   const touch = useMedia("(pointer: coarse)");
-  const on = enabled && touch;
-  const [candidate, setCandidate] = useState<TextRangeDraft | null>(null);
+  const comment = useSelectionMode() === "comment";
+  const on = enabled && touch && comment;
+  const commit = useRef(onCommit);
+  commit.current = onCommit;
   useEffect(() => {
-    if (!on) {
-      setCandidate(null);
-      return;
-    }
+    if (!on) return;
+    let last: TextRangeDraft | null = null;
+    const settle = () => {
+      const d = read();
+      // 選択が消えたら忘れる（同じ範囲をもう一度選べば、また開く）
+      if (!d) last = null;
+      else if (d.start !== last?.start || d.end !== last.end) {
+        last = d;
+        commit.current(d);
+      }
+    };
+    // 選んだまま「コメント」に戻したときは、その選択で開く
+    settle();
     let timer = 0;
     const onChange = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setCandidate(read()), 300);
+      timer = window.setTimeout(settle, 300);
     };
     document.addEventListener("selectionchange", onChange);
     return () => {
@@ -32,24 +45,5 @@ export function useTouchSelection(enabled: boolean, read: () => TextRangeDraft |
       document.removeEventListener("selectionchange", onChange);
     };
   }, [on, read]);
-  return { touch: on, candidate, clear: () => setCandidate(null) };
-}
-
-/** 選んだ文字にコメントする拡張 FAB（画面右下。compact の覗き見シートとツールバーの上） */
-export function TouchCommentButton({ onCommit }: { onCommit: () => void }) {
-  return createPortal(
-    <M3eFab
-      variant="primary"
-      extended
-      className="touch-comment"
-      // 押し下げで選択が消えないよう、既定動作を止める
-      onPointerDown={(e: { preventDefault: () => void }) => e.preventDefault()}
-      onMouseDown={(e: { preventDefault: () => void }) => e.preventDefault()}
-      onClick={onCommit}
-    >
-      <M3eIcon slot="icon" name="add_comment" />
-      <span slot="label">選んだ文字にコメント</span>
-    </M3eFab>,
-    portalHost(),
-  );
+  return enabled && touch;
 }

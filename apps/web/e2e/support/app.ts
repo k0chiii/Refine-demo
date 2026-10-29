@@ -231,12 +231,42 @@ export class App {
       await this.dialog().locator(`m3e-checkbox#self-check-${id}`).click();
   }
 
-  /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ。版の URL を返す */
-  async confirmRevision(n: number) {
+  /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ（既定は PDF。文章は textReady）。版の URL を返す */
+  async confirmRevision(n: number, ready: () => Promise<unknown> = () => this.pdfReady()) {
     await this.dialog().locator("m3e-button", { hasText: "提出を確定する" }).click();
     await this.page.waitForURL(new RegExp(`/v/${n}$`), { timeout: 15_000 });
-    await this.pdfReady();
+    await ready();
     return new URL(this.page.url()).pathname;
+  }
+
+  /** 文章（テキスト）の版の本文が出るまで待つ */
+  textReady() {
+    return this.page.locator(".text-viewer__body").waitFor({ timeout: 30_000 });
+  }
+
+  /** 文章の本文の中の文字を選ぶ（指で長押しして選んだのと同じく、ページの選択を置き換える） */
+  async selectText(needle: string) {
+    await this.page.evaluate((n) => {
+      const body = document.querySelector(".text-viewer__body");
+      if (!body) throw new Error("文章の本文が無い");
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const i = node.textContent?.indexOf(n) ?? -1;
+        if (i < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + n.length);
+        getSelection()?.removeAllRanges();
+        getSelection()?.addRange(range);
+        return;
+      }
+      throw new Error(`本文に「${n}」が無い`);
+    }, needle);
+  }
+
+  /** 下のツールバーの、文字の選択を「コメント」と「文字（コピーなど）」で切り替えるトグル（aria-pressed が文字か） */
+  selectModeToggle() {
+    return this.page.locator(".ws__toolbar m3e-icon-button.ws__select-mode");
   }
 
   /** エディタの引き出し（コメント／版／情報）を開く */
@@ -285,10 +315,19 @@ export class App {
     await page.waitForSelector(".compose-pop", { state: "detached" });
   }
 
-  /** 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上か画面下（viewer は紙面の上のもの） */
-  composer(where: "drawer" | "viewer") {
+  /**
+   * 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上（viewer）か画面下（docked）。
+   * 場所を言わなければ、どこに出ているものでも
+   */
+  composer(where?: "drawer" | "viewer" | "docked") {
     return this.page.locator(
-      where === "drawer" ? ".comments__compose .compose-pop" : ".viewer .compose-pop",
+      where === "drawer"
+        ? ".comments__compose .compose-pop"
+        : where === "viewer"
+          ? ".viewer .compose-pop"
+          : where === "docked"
+            ? ".compose-pop--docked"
+            : ".compose-pop",
     );
   }
 
@@ -421,6 +460,47 @@ export class App {
   /** 「通知の設定」の届け先の行（登録メールアドレス・Slack（DM））。スイッチは行の中の m3e-switch */
   notificationChannel(channel: "email" | "slack") {
     return this.page.locator(`m3e-dialog[open] .notif-channel[data-channel="${channel}"]`);
+  }
+
+  /**
+   * 「通知の設定」の Slack（DM）の行で、ワークスペースの選択肢の index 番目を選び、その id（slackWorkspaces の id）を返す。
+   * id は select の中の m3e-option の value。開いたときに見えるのは M3E がダイアログの中に写した別の option で、value を持たない
+   */
+  async pickSlackWorkspace(index = 0): Promise<string> {
+    const picker = this.notificationChannel("slack").locator("m3e-select");
+    const id = await picker
+      .locator("m3e-option")
+      .nth(index)
+      .evaluate((el) => (el as HTMLElement & { value: string }).value);
+    await picker.click();
+    await this.settle();
+    await this.dialog().getByRole("option").nth(index).click();
+    await this.settle();
+    return id;
+  }
+
+  /** 管理 › Slack のワークスペースの行（data-team-id は登録した team_id） */
+  slackWorkspaceRow(teamId: string) {
+    return this.page.locator(`.admin-slack__row[data-team-id="${teamId}"]`);
+  }
+
+  /** 管理 › Slack の登録の欄に名前と team_id を入れて「登録」を押す */
+  async addSlackWorkspace(name: string, teamId: string) {
+    const form = this.page.locator(".admin-slack__form");
+    await form.locator('input[name="name"]').fill(name);
+    await form.locator('input[name="teamId"]').fill(teamId);
+    await form.locator('m3e-button[variant="filled"]').click();
+  }
+
+  /** 管理 › Slack の行の削除を押し、確かめのダイアログで削除して、閉じきるまで待つ */
+  async removeSlackWorkspace(teamId: string) {
+    await this.slackWorkspaceRow(teamId).locator("m3e-icon-button").click();
+    const confirm = this.dialog();
+    await confirm.waitFor();
+    await this.settle();
+    await confirm.locator('[slot="actions"] m3e-button[variant="filled"]').click();
+    await expect(this.dialog()).toHaveCount(0);
+    await this.settle();
   }
 
   /** 開いているダイアログを Esc で閉じ、閉じきるまで待つ */

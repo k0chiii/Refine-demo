@@ -1,5 +1,5 @@
 import { nextStacked } from "./stacked";
-import { TouchCommentButton, useTouchSelection } from "./touchSelection";
+import { useTouchSelection } from "./touchSelection";
 import type { Anchor } from "@mf100/domain";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { diffKindAt, type TextCompareProps } from "@/features/compare/textSync";
@@ -12,7 +12,7 @@ export interface TextRangeDraft {
   end: number;
   /** 選択範囲の表示位置（本文コンテナ基準 px）。投稿欄をそのそばに出すために使う */
   box?: { x: number; y: number; w: number; h: number };
-  /** 投稿欄に文字カーソルを移すか（キーボード・ボタンで選んだとき。マウスで選んだときは移さず、コピーできるまま） */
+  /** 投稿欄に文字カーソルを移すか（キーボード・指で選んだとき。マウスで選んだときは移さず、コピーできるまま） */
   focus?: boolean;
 }
 
@@ -207,31 +207,28 @@ export function TextViewer({
     sel?.addRange(range);
   }, [draft?.start, draft?.end, draft?.focus]);
 
-  const touchSel = useTouchSelection(canComment, computeSelection);
+  const touch = useTouchSelection(canComment, computeSelection, (d) => {
+    // 端末の選択（コピーのメニュー）を外す。選んだ範囲は下書きの強調で残り、focus なので選択を置き直さない
+    window.getSelection()?.removeAllRanges();
+    onDraft({ ...d, focus: true });
+  });
   /** マウス・キーボードの端末（文字カーソルを置いて Shift＋矢印で選べるようにする） */
   const finePointer = useMedia("(pointer: fine)") && canComment;
   /**
    * マウスで選び終えたら投稿欄を出すが、文字カーソルは移さない（選んだ文字をそのままコピーできる。Ctrl/⌘＋C）。
-   * キーボードで選んだ・ボタンで確定したときは、続けて書けるよう移す（focus）
+   * キーボードで選んだときは、続けて書けるよう移す（focus）
    */
   const readSelection = (focus: boolean) => {
-    // 指の操作では選び終えた合図が取れないので、ボタン（TouchCommentButton）で確定する
-    if (touchSel.touch) return;
+    // 指の操作では選び終えた合図が取れないので、選択が落ち着いたとき（useTouchSelection）に開く
+    if (touch) return;
     const d = computeSelection();
     // 同じ選択のまま（Ctrl/⌘＋C を離したときなど）は何もしない
     if (d && !(draft?.start === d.start && draft.end === d.end))
       onDraft(focus ? { ...d, focus } : d);
   };
-  const commitTouch = () => {
-    const d = touchSel.candidate;
-    touchSel.clear();
-    window.getSelection()?.removeAllRanges();
-    if (d) onDraft({ ...d, focus: true });
-  };
 
   return (
     <div className="viewer text-viewer">
-      {touchSel.candidate ? <TouchCommentButton onCommit={commitTouch} /> : null}
       <div
         className="viewer__stage"
         tabIndex={0}

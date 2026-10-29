@@ -39,7 +39,7 @@ describe("service worker shell precache", () => {
     ]);
   });
 
-  it("preloads every JS and CSS outside the shell and only carries the other hashed files", () => {
+  it("preloads every JS and CSS and the icon font outside the shell and only carries the other hashed files", () => {
     const bundle = {
       "assets/index-abc.js": {
         type: "chunk",
@@ -52,11 +52,16 @@ describe("service worker shell precache", () => {
       "assets/route-make-jkl.css": { type: "asset" },
       "assets/pdf.worker-xyz.mjs": { type: "asset" },
       "assets/noto-sans-jp-12-uvw.woff2": { type: "asset" },
+      "assets/material-symbols-subset-mno.woff2": { type: "asset" },
       "sw.js": { type: "asset" },
     };
     const precache = shellPrecache(bundle, ["/manifest.webmanifest"]);
     expect(outsideShell(bundle, precache)).toEqual({
-      preload: ["/assets/route-make-ghi.js", "/assets/route-make-jkl.css"],
+      preload: [
+        "/assets/material-symbols-subset-mno.woff2",
+        "/assets/route-make-ghi.js",
+        "/assets/route-make-jkl.css",
+      ],
       carry: ["/assets/noto-sans-jp-12-uvw.woff2", "/assets/pdf.worker-xyz.mjs"],
     });
   });
