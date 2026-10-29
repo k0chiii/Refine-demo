@@ -264,11 +264,6 @@ export class App {
     }, needle);
   }
 
-  /** 指で文字を選んだあとに出る「選んだ文字にコメント」の拡張 FAB */
-  touchComment() {
-    return this.page.locator(".touch-comment");
-  }
-
   /** 下のツールバーの、文字の選択を「コメント」と「文字（コピーなど）」で切り替えるトグル（aria-pressed が文字か） */
   selectModeToggle() {
     return this.page.locator(".ws__toolbar m3e-icon-button.ws__select-mode");
@@ -320,10 +315,19 @@ export class App {
     await page.waitForSelector(".compose-pop", { state: "detached" });
   }
 
-  /** 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上か画面下（viewer は紙面の上のもの） */
-  composer(where: "drawer" | "viewer") {
+  /**
+   * 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上（viewer）か画面下（docked）。
+   * 場所を言わなければ、どこに出ているものでも
+   */
+  composer(where?: "drawer" | "viewer" | "docked") {
     return this.page.locator(
-      where === "drawer" ? ".comments__compose .compose-pop" : ".viewer .compose-pop",
+      where === "drawer"
+        ? ".comments__compose .compose-pop"
+        : where === "viewer"
+          ? ".viewer .compose-pop"
+          : where === "docked"
+            ? ".compose-pop--docked"
+            : ".compose-pop",
     );
   }
 
