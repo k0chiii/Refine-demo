@@ -14,7 +14,7 @@
  * - 無い /assets/* に配信側が返す index.html（200）を、JS の代わりに渡さず、キャッシュにも残さない
  * - それでも画面のチャンクを読めなければ、待機中の新しい版へ「更新」を押さずに切り替わる
  * - アイコンのフォントも install で入る。名前の変わった版でも、配信側から消えたあとにアイコンが文字にならない
- * - 開き直した直後（load が遅い回線）に画面のチャンクを読めなくても、待機中の新しい版に切り替わる
+ * - 開き直した直後（load が遅い回線）に画面のチャンクを読めなくても、古い外枠のまま読み直しを重ねない
  * - 古い画面で消えたチャンクを読めないと、アプリのエラー画面を出し、まだ届いていない新しい版を入れて切り替える
  * - 自動で直せない（回線が切れたまま）ときは、アプリのエラー画面の「再読み込み」で開き直せる
  */
@@ -474,7 +474,9 @@ try {
     }
   }
 
-  // 開き直した直後に画面のチャンクを読めない（新しい版は待機中。回線が遅く、load がなかなか来ない）
+  // 開き直した直後に画面のチャンクを読めない（新しい版は待機中。回線が遅く、load がなかなか来ない）。
+  // 待機中の版がいつ入れ替わるかはブラウザ次第（Chromium は前の版が取得を抱えていると待たせ、そのまま止まることもある）なので、
+  // 確かめるのは画面側: 同じ古い外枠のまま読み直しを重ねず、アプリのエラー画面か新しい版の画面を出す
   {
     const p = await freshPage();
     const [a] = await shells(p);
@@ -488,14 +490,22 @@ try {
       await dropFromCache(p, a, iconFont);
       slow.set(iconFont, 8000);
       await p.reload({ waitUntil: "commit" });
-      const opened = await eventually(
+      let staleReloads = 0;
+      p.on("framenavigated", (f) => {
+        if (f !== p.mainFrame()) return;
+        void eventually(p, onlyShell("s0"), 500).then((switched) => {
+          if (!switched) staleReloads++;
+        });
+      });
+      await new Promise((r) => setTimeout(r, 6000));
+      const shown = await eventually(
         p,
-        `!!document.querySelector("main.signin") && ${onlyShell("s0")}`,
-        12_000,
+        `!!document.querySelector("[data-route-error] m3e-button") || (!!document.querySelector("main.signin") && ${onlyShell("s0")})`,
+        1000,
       );
       check(
-        opened,
-        "開き直した直後に画面のチャンクを読めなくても（load が遅い回線）、待機中の新しい版に切り替わって画面が出る",
+        shown && staleReloads === 0,
+        `開き直した直後に画面のチャンクを読めなくても（load が遅い回線）、古い外枠のまま読み直しを重ねず、アプリのエラー画面か新しい版の画面を出す（古い外枠での読み直し ${staleReloads} 回）`,
       );
     } finally {
       gone.clear();
