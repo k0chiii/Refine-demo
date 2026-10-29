@@ -1,6 +1,6 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { useWindowClass } from "@/lib/useMedia";
@@ -32,6 +32,18 @@ import { TeamsAdmin } from "@/features/team/TeamsAdmin";
 
 type Tab = "works" | "teams" | "groups" | "users" | "sns" | "slack" | "audit";
 
+const tabItems: { id: Tab; label: string }[] = [
+  { id: "works", label: "制作物" },
+  { id: "teams", label: "担当" },
+  { id: "groups", label: "グループ" },
+  { id: "users", label: "ユーザー" },
+  { id: "sns", label: "SNS アカウント" },
+  { id: "slack", label: "Slack" },
+  { id: "audit", label: "監査ログ" },
+];
+const groupsOnly = tabItems.filter((t) => t.id === "groups");
+const searchFor = (t: Tab) => (t === "works" ? {} : { view: t });
+
 export const Route = createFileRoute("/_app/admin")({
   component: Admin,
   validateSearch: (s: Record<string, unknown>): { view?: Tab } =>
@@ -54,10 +66,11 @@ export const Route = createFileRoute("/_app/admin")({
  */
 function Admin() {
   const me = useQuery(api.me.me, {});
-  const { view: tab = "works" } = Route.useSearch();
+  const tabs = me?.isSystemAdmin ? tabItems : me?.canManageGroups ? groupsOnly : [];
+  const { view } = Route.useSearch();
+  const tab = view ?? tabs[0]?.id ?? "works";
   const navigate = useNavigate();
-  const setTab = (t: Tab) =>
-    void navigate({ to: "/admin", search: t === "works" ? {} : { view: t }, replace: true });
+  const setTab = (t: Tab) => void navigate({ to: "/admin", search: searchFor(t), replace: true });
   const [text, setText] = useState("");
   const users = useQuery(
     api.acl.searchUsers,
@@ -97,13 +110,18 @@ function Admin() {
   // 登録は works:create に加えて、校了者を決める権限（approvers:assign）も要る
   const canRegister = me.canCreateWorks && me.canAssignApprovers;
   const title = <AppBarSlot slot="title">管理</AppBarSlot>;
-  if (!me.isSystemAdmin)
+  const first = tabs[0];
+  if (!first)
     return (
       <>
         {title}
-        <div className="alert">管理画面はシステム管理者だけが使えます</div>
+        <div className="alert">
+          管理画面を使う権限がありません（システム管理者か、グループを管理する権限が要ります）
+        </div>
       </>
     );
+  if (!tabs.some((t) => t.id === tab))
+    return <Navigate to="/admin" search={searchFor(first.id)} replace />;
   return (
     <>
       {title}
@@ -113,15 +131,7 @@ function Admin() {
         value={tab}
         onChange={setTab}
         scroll={compact}
-        items={[
-          { id: "works", label: "制作物" },
-          { id: "teams", label: "担当" },
-          { id: "groups", label: "グループ" },
-          { id: "users", label: "ユーザー" },
-          { id: "sns", label: "SNS アカウント" },
-          { id: "slack", label: "Slack" },
-          { id: "audit", label: "監査ログ" },
-        ]}
+        items={tabs}
       />
       {tab === "works" ? (
         <section className="stack">

@@ -9,11 +9,8 @@ import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 const code = (c: string) => expect.objectContaining({ code: c });
 
 describe("メンバーのグループ（管理）", () => {
-  it("作る・変える・消すのはシステム管理者だけ。一覧は誰でも並び順で引ける", async () => {
+  it("作ったグループを並び順で誰でも引ける。変更と削除は監査に残る", async () => {
     const ctx = createInMemoryContext();
-    await expect(
-      saveMemberGroup(ctx, principals.manager, { name: "こうせいはん", memberIds: [] }),
-    ).rejects.toThrow(code("forbidden"));
     const a = await saveMemberGroup(ctx, principals.sysadmin, {
       name: "こうせいはん",
       memberIds: [principals.reviewer.userId],
@@ -32,11 +29,31 @@ describe("メンバーのグループ（管理）", () => {
       ["こうほう", 2, 0],
     ]);
     expect(ctx.state.audit.filter((e) => e.entityType === "memberGroup")).toHaveLength(3);
-    await expect(deleteMemberGroup(ctx, principals.creator, b.id)).rejects.toThrow(
-      code("forbidden"),
-    );
     await deleteMemberGroup(ctx, principals.sysadmin, b.id);
     expect((await listMemberGroups(ctx, principals.creator)).map((g) => g.id)).toEqual([a.id]);
+  });
+  it("作る・変える・消すのは groups:manage を持つ人とシステム管理者。どちらでもない人は forbidden", async () => {
+    const ctx = createInMemoryContext();
+    const holder = { ...principals.manager, orgPermissions: ["groups:manage"] };
+    const neither = { ...principals.creator, orgPermissions: ["works:create", "approvers:assign"] };
+    const admin = { ...principals.sysadmin, orgPermissions: [] as string[] };
+
+    const g = await saveMemberGroup(ctx, holder, { name: "こうせいはん", memberIds: [] });
+    await saveMemberGroup(ctx, holder, { id: g.id, name: "こうせい", memberIds: [] });
+    await expect(
+      saveMemberGroup(ctx, neither, { name: "こうほう", memberIds: [] }),
+    ).rejects.toThrow(code("forbidden"));
+    await expect(
+      saveMemberGroup(ctx, neither, { id: g.id, name: "x", memberIds: [] }),
+    ).rejects.toThrow(code("forbidden"));
+    await expect(deleteMemberGroup(ctx, neither, g.id)).rejects.toThrow(code("forbidden"));
+    // 一覧は権限が無くても引ける
+    expect((await listMemberGroups(ctx, neither)).map((x) => x.name)).toEqual(["こうせい"]);
+
+    await deleteMemberGroup(ctx, holder, g.id);
+    const h = await saveMemberGroup(ctx, admin, { name: "こうほう", memberIds: [] });
+    await deleteMemberGroup(ctx, admin, h.id);
+    expect(await listMemberGroups(ctx, neither)).toEqual([]);
   });
   it("委員の名簿にいない人は入れられない。知らないグループの変更は group_not_found", async () => {
     const ctx = createInMemoryContext();
