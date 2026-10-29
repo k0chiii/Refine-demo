@@ -4,23 +4,28 @@ import { portalHost } from "@/lib/portalHost";
 import { useMedia } from "@/lib/useMedia";
 import { M3eFab } from "@m3e/react/fab";
 import { M3eIcon } from "@m3e/react/icon";
+import { useSelectionMode } from "./selectionMode";
 import type { TextRangeDraft } from "./TextViewer";
 
 /**
  * 指で操作する端末での文章の範囲選択（校正画面の文章・リッチ文章）。
  * スマホでは選択のつまみを動かしているあいだに投稿欄が出ると操作できないので、
  * 選択が落ち着いたら（selectionchange の 300ms 後）画面に「コメント」ボタン（M3E の拡張 FAB）を出し、押したときに投稿欄を開く。
+ * 文字の選択を「文字」（`SelectionMode` の text。§106）にしているあいだは止まり、端末の選択（コピーなど）に任せる。
  * マウス・キーボードは従来どおり、選び終えた瞬間に投稿欄が出る。
  */
 export function useTouchSelection(enabled: boolean, read: () => TextRangeDraft | null) {
   const touch = useMedia("(pointer: coarse)");
-  const on = enabled && touch;
+  const comment = useSelectionMode() === "comment";
+  const on = enabled && touch && comment;
   const [candidate, setCandidate] = useState<TextRangeDraft | null>(null);
   useEffect(() => {
     if (!on) {
       setCandidate(null);
       return;
     }
+    // 選んだまま「コメント」に戻したときは、その選択で FAB を出し直す
+    setCandidate(read());
     let timer = 0;
     const onChange = () => {
       window.clearTimeout(timer);
@@ -32,7 +37,7 @@ export function useTouchSelection(enabled: boolean, read: () => TextRangeDraft |
       document.removeEventListener("selectionchange", onChange);
     };
   }, [on, read]);
-  return { touch: on, candidate, clear: () => setCandidate(null) };
+  return { touch: enabled && touch, candidate, clear: () => setCandidate(null) };
 }
 
 /** 選んだ文字にコメントする拡張 FAB（画面右下。compact の覗き見シートとツールバーの上） */
