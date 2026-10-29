@@ -51,6 +51,7 @@ import {
   WebLiveViewer,
 } from "@/features/annotation/lazyViewers";
 import { TextViewer } from "@/features/annotation/TextViewer";
+import { setSelectionMode, useSelectionMode } from "@/features/annotation/selectionMode";
 import type { WebDraft } from "@/features/annotation/WebLiveViewer";
 import type { FigmaDraft } from "@/features/annotation/FigmaEmbedViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
@@ -167,7 +168,7 @@ type Draft = {
   point?: { x: number; y: number };
   range?: { start: number; end: number };
   box?: { x: number; y: number; w: number; h: number };
-  /** 投稿欄に文字カーソルを移す（キーボード・ボタンで選んだ文字。マウスで選んだときは移さず、コピーできるまま） */
+  /** 投稿欄に文字カーソルを移す（キーボード・指で選んだ文字。マウスで選んだときは移さず、コピーできるまま） */
   focus?: boolean;
   /** 動画の時点（end があれば範囲）。rect・point と一緒なら、その時点の画面の位置 */
   time?: { start: number; end?: number };
@@ -365,6 +366,8 @@ export function Editor({
   useEffect(() => () => setMarkArmed(false), []);
   /** コメントの印（ピン・範囲・文字の強調・動画の印）を一時的に隠している（コメントそのものは消さない・一覧も隠さない） */
   const [marksHidden, setMarksHidden] = useState(() => marksHiddenFor === workId);
+  /** 指で文字を選んだとき、コメントにするか端末の選択（コピーなど）に任せるか（§106） */
+  const textSelect = useSelectionMode() === "text";
   useEffect(() => {
     marksHiddenFor = marksHidden ? workId : null;
     return () => {
@@ -1319,7 +1322,15 @@ export function Editor({
           scale={scale}
           artifactId={artifact.id}
           {...viewerProps}
-          draft={draft?.range ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) } : null}
+          draft={
+            draft?.range
+              ? {
+                  ...draft.range,
+                  ...(draft.box ? { box: draft.box } : {}),
+                  ...(draft.focus ? { focus: true } : {}),
+                }
+              : null
+          }
           onDraft={(r) => {
             setDraft(
               r
@@ -1342,7 +1353,15 @@ export function Editor({
           scale={scale}
           artifactId={artifact.id}
           {...viewerProps}
-          draft={draft?.range ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) } : null}
+          draft={
+            draft?.range
+              ? {
+                  ...draft.range,
+                  ...(draft.box ? { box: draft.box } : {}),
+                  ...(draft.focus ? { focus: true } : {}),
+                }
+              : null
+          }
           onDraft={(r) => {
             setDraft(
               r
@@ -2012,6 +2031,20 @@ export function Editor({
                       onClick={() => setMarksHidden((v) => !v)}
                     >
                       <M3eIcon name={marksHidden ? "visibility_off" : "visibility"} />
+                    </M3eIconButton>
+                  ) : null}
+                  {/* 指で文字を選んだときの扱い（コメント／コピーなど）。文字を選んでコメントできる紙面（文章）だけ */}
+                  {touch && canComment && artifact.type === "document" ? (
+                    <M3eIconButton
+                      className="ws__select-mode"
+                      aria-label={textSelect ? "文字の選択: コピーなど" : "文字の選択: コメント"}
+                      title={textSelect ? "文字の選択: コピーなど" : "文字の選択: コメント"}
+                      variant={textSelect ? "tonal" : "standard"}
+                      toggle
+                      selected={textSelect}
+                      onClick={() => setSelectionMode(textSelect ? "comment" : "text")}
+                    >
+                      <M3eIcon name={textSelect ? "text_select_start" : "chat_bubble"} />
                     </M3eIconButton>
                   ) : null}
                   {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}

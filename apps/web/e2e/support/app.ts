@@ -231,12 +231,42 @@ export class App {
       await this.dialog().locator(`m3e-checkbox#self-check-${id}`).click();
   }
 
-  /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ。版の URL を返す */
-  async confirmRevision(n: number) {
+  /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ（既定は PDF。文章は textReady）。版の URL を返す */
+  async confirmRevision(n: number, ready: () => Promise<unknown> = () => this.pdfReady()) {
     await this.dialog().locator("m3e-button", { hasText: "提出を確定する" }).click();
     await this.page.waitForURL(new RegExp(`/v/${n}$`), { timeout: 15_000 });
-    await this.pdfReady();
+    await ready();
     return new URL(this.page.url()).pathname;
+  }
+
+  /** 文章（テキスト）の版の本文が出るまで待つ */
+  textReady() {
+    return this.page.locator(".text-viewer__body").waitFor({ timeout: 30_000 });
+  }
+
+  /** 文章の本文の中の文字を選ぶ（指で長押しして選んだのと同じく、ページの選択を置き換える） */
+  async selectText(needle: string) {
+    await this.page.evaluate((n) => {
+      const body = document.querySelector(".text-viewer__body");
+      if (!body) throw new Error("文章の本文が無い");
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const i = node.textContent?.indexOf(n) ?? -1;
+        if (i < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + n.length);
+        getSelection()?.removeAllRanges();
+        getSelection()?.addRange(range);
+        return;
+      }
+      throw new Error(`本文に「${n}」が無い`);
+    }, needle);
+  }
+
+  /** 下のツールバーの、文字の選択を「コメント」と「文字（コピーなど）」で切り替えるトグル（aria-pressed が文字か） */
+  selectModeToggle() {
+    return this.page.locator(".ws__toolbar m3e-icon-button.ws__select-mode");
   }
 
   /** エディタの引き出し（コメント／版／情報）を開く */
@@ -285,10 +315,19 @@ export class App {
     await page.waitForSelector(".compose-pop", { state: "detached" });
   }
 
-  /** 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上か画面下（viewer は紙面の上のもの） */
-  composer(where: "drawer" | "viewer") {
+  /**
+   * 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上（viewer）か画面下（docked）。
+   * 場所を言わなければ、どこに出ているものでも
+   */
+  composer(where?: "drawer" | "viewer" | "docked") {
     return this.page.locator(
-      where === "drawer" ? ".comments__compose .compose-pop" : ".viewer .compose-pop",
+      where === "drawer"
+        ? ".comments__compose .compose-pop"
+        : where === "viewer"
+          ? ".viewer .compose-pop"
+          : where === "docked"
+            ? ".compose-pop--docked"
+            : ".compose-pop",
     );
   }
 

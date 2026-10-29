@@ -1893,7 +1893,7 @@ async function compactScenes() {
   const quote = await page.locator(".rich-viewer__page .text-anchor").first().innerText();
   if (!quote.includes("百花繚乱")) throw new Error(`範囲へのコメントの位置がずれている: ${quote}`);
   await shot("44-write-review-comment");
-  // 44a スマホ（指の操作）: 文字を選ぶと「選んだ文字にコメント」ボタン → 投稿欄は画面下に全幅（引用つき）
+  // 44a スマホ（指の操作）: 文字を選ぶと、選択が落ち着いたところで投稿欄が画面下に全幅（引用つき）で開く
   await page.evaluate(() => {
     const orig = window.matchMedia.bind(window);
     window.__origMatchMedia = orig;
@@ -1930,13 +1930,7 @@ async function compactScenes() {
       }
     }
   }, "入場は無料");
-  await page.waitForSelector(".touch-comment", { timeout: 5000 });
-  expectTrue(
-    (await page.locator(".compose-pop").count()) === 0,
-    "指の操作で選んだ瞬間に投稿欄が出た",
-  );
-  await page.locator(".touch-comment").click();
-  await page.waitForSelector(".compose-pop--docked .compose-pop__quote");
+  await page.waitForSelector(".compose-pop--docked .compose-pop__quote", { timeout: 5000 });
   expectTrue(
     (await page.locator(".compose-pop__quote").innerText()).includes("入場は無料"),
     "投稿欄に選んだ文字の引用が出ない",

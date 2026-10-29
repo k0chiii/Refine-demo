@@ -1147,9 +1147,7 @@
     animation: none;
   }
 }
-/* 全画面のプレビューの上でも、コメントの投稿欄・「選んだ文字にコメント」を手前に */
-body:has(.sp-full) .compose-pop--docked,
-body:has(.sp-full) .touch-comment {
+body:has(.sp-full) .compose-pop--docked {
   z-index: 1100;
 }
 
