@@ -168,7 +168,7 @@ type Draft = {
   point?: { x: number; y: number };
   range?: { start: number; end: number };
   box?: { x: number; y: number; w: number; h: number };
-  /** 投稿欄に文字カーソルを移す（キーボード・ボタンで選んだ文字。マウスで選んだときは移さず、コピーできるまま） */
+  /** 投稿欄に文字カーソルを移す（キーボード・指で選んだ文字。マウスで選んだときは移さず、コピーできるまま） */
   focus?: boolean;
   /** 動画の時点（end があれば範囲）。rect・point と一緒なら、その時点の画面の位置 */
   time?: { start: number; end?: number };
@@ -1322,7 +1322,15 @@ export function Editor({
           scale={scale}
           artifactId={artifact.id}
           {...viewerProps}
-          draft={draft?.range ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) } : null}
+          draft={
+            draft?.range
+              ? {
+                  ...draft.range,
+                  ...(draft.box ? { box: draft.box } : {}),
+                  ...(draft.focus ? { focus: true } : {}),
+                }
+              : null
+          }
           onDraft={(r) => {
             setDraft(
               r
@@ -1345,7 +1353,15 @@ export function Editor({
           scale={scale}
           artifactId={artifact.id}
           {...viewerProps}
-          draft={draft?.range ? { ...draft.range, ...(draft.box ? { box: draft.box } : {}) } : null}
+          draft={
+            draft?.range
+              ? {
+                  ...draft.range,
+                  ...(draft.box ? { box: draft.box } : {}),
+                  ...(draft.focus ? { focus: true } : {}),
+                }
+              : null
+          }
           onDraft={(r) => {
             setDraft(
               r

@@ -22,7 +22,7 @@ import { Icon, StatusIcons } from "./icons";
 import "./preview.css";
 import { scrollBehavior } from "@/lib/motion";
 import { nextStacked } from "@/features/annotation/stacked";
-import { TouchCommentButton, useTouchSelection } from "@/features/annotation/touchSelection";
+import { useTouchSelection } from "@/features/annotation/touchSelection";
 import { useMedia } from "@/lib/useMedia";
 import { ImageMarkLayer, PostMarksContext } from "./postMarks";
 import { buildTextSegments, selectionToRange, tokenize, type TextPick } from "./postText";
@@ -311,7 +311,7 @@ export function igTruncate(text: string, lead: number, lines = 2, perLine = 26):
  * Instagram は 2 行で切って「続きを読む」。
  * 校正画面（PostMarksContext あり）では、本文を区切りごとに本文での位置（data-s / data-e）を持たせ、
  * - コメントの範囲を強調する（押すとそのコメントを開く。開いたときは「続きを読む」を開いてそこへスクロールする）
- * - 文字を選ぶとその範囲にコメントできる（マウス・キーボードは選び終えた瞬間、タッチは「選んだ文字にコメント」）
+ * - 文字を選ぶとその範囲にコメントできる（マウス・キーボードは選び終えた瞬間、タッチは選択が落ち着いたとき）
  */
 export function PostText({
   text: full,
@@ -379,7 +379,10 @@ export function PostText({
       { left: b.x, top: b.y, right: b.x + b.w, bottom: b.y + b.h },
     );
   };
-  const touchSel = useTouchSelection(canComment, readSelection);
+  useTouchSelection(canComment, readSelection, (d) => {
+    window.getSelection()?.removeAllRanges();
+    emit(d);
+  });
   /** マウス・キーボードの端末（文字カーソルを置いて Shift＋矢印で選べるようにする）。タッチは長押しで選ぶ */
   const finePointer = useMedia("(pointer: fine)") && canComment;
   useEffect(() => {
@@ -400,16 +403,6 @@ export function PostText({
   };
   return (
     <>
-      {touchSel.candidate ? (
-        <TouchCommentButton
-          onCommit={() => {
-            const d = touchSel.candidate;
-            touchSel.clear();
-            window.getSelection()?.removeAllRanges();
-            if (d) emit(d);
-          }}
-        />
-      ) : null}
       <span
         ref={rootRef}
         className="sp-text"

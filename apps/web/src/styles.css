@@ -4373,13 +4373,6 @@ m3e-icon.icon--on {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 指で選んだ文字にコメントする拡張 FAB（覗き見シート 64 ＋ツールバー 64 ＋余白の上） */
-.touch-comment {
-  position: fixed;
-  inset-inline-end: 16px;
-  bottom: calc(160px + env(safe-area-inset-bottom, 0px));
-  z-index: 35;
-}
 
 /* ---------- コメントの本文（Markdown の描画・書式つき入力欄の中身で共通。features/review/CommentBody・RichCommentEditor） */
 .comment-body {
