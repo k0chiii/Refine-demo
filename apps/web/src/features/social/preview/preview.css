@@ -1147,7 +1147,6 @@
     animation: none;
   }
 }
-/* 全画面のプレビューの上でも、コメントの投稿欄を手前に */
 body:has(.sp-full) .compose-pop--docked {
   z-index: 1100;
 }

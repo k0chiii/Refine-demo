@@ -15,7 +15,6 @@ test.describe("スマホの文字選択の切り替え", { tag: "@core" }, () =>
     await app.selectText("五月祭常任委員会");
     const composer = app.composer("docked");
     await expect(composer).toBeVisible();
-    // 端末の選択（コピーのメニュー）は外れ、選んだ範囲は下書きの強調で残る
     await expect.poll(() => page.evaluate(() => String(getSelection()))).toBe("");
     // 画面下の欄は下のツールバーに重なるので、何も書かずに閉じてから切り替える（空の欄は Esc で取消）
     await composer.locator(".rt__content").click();
