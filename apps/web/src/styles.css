@@ -2737,12 +2737,28 @@ m3e-dialog {
 .ws__zoom {
   --m3e-text-button-label-text-color: var(--mf-on-surface);
   min-width: 3.5em;
+  flex: none; /* 入りきらないときは「1…」に縮めず、中を横にスクロールする */
 }
 .ws__toolbar-sep {
+  flex: none;
   width: 1px;
   height: 24px;
   background: var(--mf-outline-variant);
   margin: 0 4px;
+}
+/* compact: ボタン（48 の当たり判定）の間と両端を詰め、文章の版（倍率・目・文字の選択・引き出し 3 つ）を 360 の画面に収める（§106） */
+@media (max-width: 599px) {
+  .ws__toolbar {
+    --m3e-toolbar-spacing: 0px;
+    --m3e-toolbar-rounded-leading-space: 4px;
+    --m3e-toolbar-rounded-trailing-space: 4px;
+  }
+  .ws__zoom {
+    --m3e-button-leading-space: 6px;
+    --m3e-button-trailing-space: 6px;
+    --m3e-button-small-leading-space: 6px;
+    --m3e-button-small-trailing-space: 6px;
+  }
 }
 
 /* 引き出し（コメント／版／情報） */

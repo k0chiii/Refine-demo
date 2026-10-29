@@ -2735,6 +2735,8 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 - `features/annotation/selectionMode.ts`: `SelectionMode = "comment" | "text"` と小さな保管場所（`useSelectionMode()` は `useSyncExternalStore`、`setSelectionMode(m)`）。`sessionStorage` が使えないときはメモリだけで動く。
 - `useTouchSelection(enabled, read)`（`touchSelection.tsx`）がこれを読み、`text` のあいだは止まる（候補なし・FAB なし）。動き始めたとき（コメントに戻したとき）は、いまの選択を一度読み直す。文章・リッチ文章・SNS のプレビューの 3 か所は呼び出しを変えない。
 - アイコンのフォントに `chat_bubble`・`text_select_start` を足した（`pnpm --filter @mf100/web icons`）。
+- compact（599px 以下）のツールバーを詰めた: ボタンの間 0（48 の当たり判定どうしが接する。見た目の間は 8 残る）・両端 4・倍率の数値の左右 6。文章の版はボタンが 1 つ増え、360〜430 の画面でそのままだと入りきらず、倍率が「1…」に縮んでいた。詰めて 360 でも横にスクロールせずに収まる（360・375・390・402・412・430 で確かめた）。倍率の数値と区切りは縮めない（入りきらないときは、これまでどおり中を横にスクロール）。
+- 再生成で、もう使っていない `comments_disabled`・`overview`・`upcoming` がフォントから抜け、`ProcessingTools` が使う `stream` が入った。
 
 ### E2E
 
