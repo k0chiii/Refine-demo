@@ -13,6 +13,10 @@
  * - この版の JS・CSS は、開いたことのない画面のものも先にキャッシュする（デプロイで消えたチャンクの画面も、古い外枠のまま開ける）
  * - 無い /assets/* に配信側が返す index.html（200）を、JS の代わりに渡さず、キャッシュにも残さない
  * - それでも画面のチャンクを読めなければ、待機中の新しい版へ「更新」を押さずに切り替わる
+ * - アイコンのフォントも install で入る。名前の変わった版でも、配信側から消えたあとにアイコンが文字にならない
+ * - 開き直した直後（load が遅い回線）に画面のチャンクを読めなくても、待機中の新しい版に切り替わる
+ * - 古い画面で消えたチャンクを読めないと、アプリのエラー画面を出し、まだ届いていない新しい版を入れて切り替える
+ * - 自動で直せない（回線が切れたまま）ときは、アプリのエラー画面の「再読み込み」で開き直せる
  */
 import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import http from "node:http";
@@ -28,10 +32,19 @@ const DIST =
 
 const ORIGIN = new URL(process.env.BASE_URL ?? "http://127.0.0.1:4173");
 /**
+ * 画面からの要求には配信側から消えたことにする /assets/*（新しい版の install の取得には渡す。
+ * 新しい版が自分の名前で持っている同じ中身の代わり）
+ */
+const gone = new Set();
+/** この時刻まで、そのパスへの通信を切る（回線の途切れ） */
+const cutUntil = new Map();
+/** そのパスの応答を遅らせる ms（遅い回線） */
+const slow = new Map();
+/**
  * 本番の Cloudflare Pages と同じく /index.html を / へ 308 でリダイレクトする中継を挟んで確かめる
  * （リダイレクトを経た外枠を SW が画面の移動に返すと、ブラウザが読み込みを止める。2026-10-18 の不具合）
  */
-const proxy = http.createServer((req, res) => {
+const proxy = http.createServer(async (req, res) => {
   if (req.url === "/index.html" || req.url?.startsWith("/index.html?")) {
     res.writeHead(308, { Location: "/" });
     res.end();
@@ -39,7 +52,16 @@ const proxy = http.createServer((req, res) => {
   }
   // Pages は無いファイルにも index.html を 200 で返す（/assets/* でも。デプロイで消えたチャンクはこうなる）
   const path = new URL(req.url ?? "/", "http://x").pathname;
-  if (path.startsWith("/assets/") && !existsSync(resolve(DIST, `.${path}`))) {
+  if ((cutUntil.get(path) ?? 0) > Date.now()) {
+    req.socket.destroy();
+    return;
+  }
+  if (slow.has(path)) await new Promise((r) => setTimeout(r, slow.get(path)));
+  const fromInstall = (req.headers.referer ?? "").endsWith("/sw.js");
+  if (
+    path.startsWith("/assets/") &&
+    (!existsSync(resolve(DIST, `.${path}`)) || (gone.has(path) && !fromInstall))
+  ) {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(readFileSync(resolve(DIST, "index.html")));
     return;
@@ -80,13 +102,82 @@ const check = (cond, msg) => {
   if (!cond) failed++;
 };
 /** 校正者としてサインインし、画面を読み直さずに /check へ移る（いま動いている外枠のまま、/check のチャンクを読ませる） */
-const openCheck = async () => {
-  await page.waitForFunction(() => !!globalThis.__mf100demo && !!globalThis.__mf100router);
-  await page.evaluate(() => globalThis.__mf100demo.signIn("mock-nogiku-reviewer"));
+const openCheck = async (p = page) => {
+  await p.waitForFunction(() => !!globalThis.__mf100demo && !!globalThis.__mf100router);
+  await p.evaluate(() => globalThis.__mf100demo.signIn("mock-nogiku-reviewer"));
   // 入口の振り分け（/ → /make・/check）が終わってから移る（途中で移ると振り分けに上書きされる）
-  await page.locator("[data-hub]").first().waitFor({ timeout: 10_000 });
-  await page.evaluate(() => globalThis.__mf100router.navigate({ to: "/check" }));
+  await p.locator("[data-hub]").first().waitFor({ timeout: 10_000 });
+  await p.evaluate(() => globalThis.__mf100router.navigate({ to: "/check" }));
 };
+const swPath = resolve(DIST, "sw.js");
+const original = readFileSync(swPath, "utf8");
+/** 配信中の sw.js の版だけ変える（新しい版のデプロイ。終わったら original に戻す） */
+const deploy = (suffix) =>
+  writeFileSync(
+    swPath,
+    original.replace(/const VERSION = "([0-9a-f]+)"/, `const VERSION = "$1${suffix}"`),
+  );
+const assetsOf = (pattern) =>
+  readdirSync(resolve(DIST, "assets"))
+    .filter((f) => pattern.test(f))
+    .map((f) => `/assets/${f}`);
+const [iconFont] = assetsOf(/^material-symbols-subset-.+\.woff2$/);
+const shells = (p) =>
+  p.evaluate(async () => (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")));
+const inCache = (p, name, path) =>
+  p.evaluate(
+    ([n, q]) =>
+      caches
+        .open(n)
+        .then((c) => c.match(q, { ignoreVary: true }))
+        .then((r) => !!r),
+    [name, path],
+  );
+const dropFromCache = (p, name, path) =>
+  p.evaluate(
+    ([n, q]) => caches.open(n).then((c) => c.delete(q, { ignoreVary: true })),
+    [name, path],
+  );
+/** 新しい版が install を終えて待機する（install 中の版が無い）まで待つ */
+const waitForWaiting = (p) =>
+  p.waitForFunction(
+    async () => {
+      const r = await navigator.serviceWorker.getRegistration();
+      return !!r?.waiting && !r.installing;
+    },
+    null,
+    { timeout: 15_000 },
+  );
+/** 別のタブ（sessionStorage も別）で開き、Service Worker の制御下にする */
+const freshPage = async () => {
+  const ctx = await browser.newContext({ locale: "ja-JP", viewport: { width: 412, height: 915 } });
+  const p = await ctx.newPage();
+  p.on("pageerror", (e) => console.error("[pageerror]", e.message));
+  await p.goto(`${BASE}/signin`);
+  await p.waitForSelector("#root *");
+  await p.evaluate(() => navigator.serviceWorker.ready);
+  await p.reload();
+  await p.waitForFunction(() => !!navigator.serviceWorker.controller);
+  await p.waitForSelector("#root *");
+  return p;
+};
+/** 読み直しをまたいで、条件が成り立つまで待つ */
+const eventually = async (p, fn, ms) => {
+  for (const end = Date.now() + ms; Date.now() < end;) {
+    if (await p.evaluate(fn).catch(() => false)) return true;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+};
+const onlyShell = (suffix) =>
+  `(async () => (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")).every((k) => k.endsWith(${JSON.stringify(suffix)})))()`;
+const iconFontLoaded = (p) =>
+  p.evaluate(() =>
+    document.fonts.load('400 24px "Material Symbols Outlined"').then(
+      () => document.fonts.check('400 24px "Material Symbols Outlined"'),
+      () => false,
+    ),
+  );
 
 try {
   await page.goto(`${BASE}/signin`);
@@ -131,6 +222,10 @@ try {
   check(
     sw.script?.endsWith("/sw.js") && sw.scope === `${BASE}/`,
     `Service Worker が有効（${sw.script}）`,
+  );
+  check(
+    await inCache(page, (await shells(page))[0], iconFont),
+    `install でアイコンのフォント（${iconFont}）もキャッシュに入る（制御下で開く前から）`,
   );
   await page.reload();
   await page.waitForSelector("#root *");
@@ -238,8 +333,6 @@ try {
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
 
   // 新しい版: 配信中の sw.js の版だけ変えて更新を確かめる（終わったら必ず戻す）
-  const swPath = resolve(DIST, "sw.js");
-  const original = readFileSync(swPath, "utf8");
   try {
     const before = await page.evaluate(async () =>
       (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")),
@@ -350,6 +443,145 @@ try {
     }
   } finally {
     writeFileSync(swPath, original);
+  }
+  // アイコンのフォント: 名前の変わった新しい版（前の版のキャッシュに無い）でも install で入れる。
+  // 次のデプロイで配信側から消えても、その版の画面のアイコンは文字にならない
+  {
+    const p = await freshPage();
+    const [a] = await shells(p);
+    await dropFromCache(p, a, iconFont);
+    try {
+      deploy("f0");
+      await p.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
+      await waitForWaiting(p);
+      gone.add(iconFont);
+      const update = p.locator("m3e-snackbar").getByRole("button", { name: "更新" });
+      await update.waitFor({ timeout: 15_000 });
+      const reloaded = p.waitForEvent("load", { timeout: 15_000 });
+      await update.click();
+      await reloaded;
+      const switched = await eventually(p, onlyShell("f0"), 10_000);
+      check(
+        switched && (await iconFontLoaded(p)),
+        "名前の変わったアイコンのフォントも新しい版の install で入り、配信側から消えてもアイコンが文字にならない",
+      );
+    } finally {
+      gone.delete(iconFont);
+      writeFileSync(swPath, original);
+      await p.context().close();
+    }
+  }
+
+  // 開き直した直後に画面のチャンクを読めない（新しい版は待機中。回線が遅く、load がなかなか来ない）
+  {
+    const p = await freshPage();
+    const [a] = await shells(p);
+    const [signin] = assetsOf(/^signin-.+\.js$/);
+    try {
+      deploy("s0");
+      await p.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
+      await waitForWaiting(p);
+      await dropFromCache(p, a, signin);
+      gone.add(signin);
+      await dropFromCache(p, a, iconFont);
+      slow.set(iconFont, 8000);
+      await p.reload({ waitUntil: "commit" });
+      const opened = await eventually(
+        p,
+        `!!document.querySelector("main.signin") && ${onlyShell("s0")}`,
+        12_000,
+      );
+      check(
+        opened,
+        "開き直した直後に画面のチャンクを読めなくても（load が遅い回線）、待機中の新しい版に切り替わって画面が出る",
+      );
+    } finally {
+      gone.clear();
+      slow.clear();
+      writeFileSync(swPath, original);
+      await p.context().close();
+    }
+  }
+
+  // 古い画面で、消えたチャンクを読めない（新しい版はまだ届いていない）
+  {
+    const p = await freshPage();
+    const [a] = await shells(p);
+    const [checkChunk] = assetsOf(/^check-.+\.js$/);
+    try {
+      await dropFromCache(p, a, checkChunk);
+      gone.add(checkChunk);
+      deploy("o0");
+      const shown = p
+        .locator("[data-route-error]")
+        .waitFor({ timeout: 10_000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      await openCheck(p).catch(() => {});
+      const switched = await eventually(
+        p,
+        `!!document.querySelector("main.signin") && ${onlyShell("o0")}`,
+        15_000,
+      );
+      check(
+        (await shown) && switched,
+        "古い画面で消えたチャンクを読めないと、アプリのエラー画面を出し、まだ届いていない新しい版を入れて切り替える",
+      );
+    } finally {
+      gone.clear();
+      writeFileSync(swPath, original);
+      await p.context().close();
+    }
+  }
+
+  // 回線が切れていてチャンクを読めない（キャッシュにも無い）。自動の読み直しが止まったあと
+  {
+    const p = await freshPage();
+    const [a] = await shells(p);
+    const [checkChunk] = assetsOf(/^check-.+\.js$/);
+    await dropFromCache(p, a, checkChunk);
+    try {
+      // 開くたびに回線を切り、自動で読み直さなくなるまで繰り返す
+      for (let i = 0; i < 4; i++) {
+        cutUntil.set(checkChunk, Date.now() + 2000);
+        const reloaded = p.waitForEvent("load", { timeout: 6000 }).then(
+          () => true,
+          () => false,
+        );
+        await openCheck(p).catch(() => {});
+        if (!(await reloaded)) break;
+      }
+      cutUntil.clear();
+      const retry = p.locator("[data-route-error] m3e-button");
+      const offered = await retry.waitFor({ timeout: 3000 }).then(
+        () => true,
+        () => false,
+      );
+      let reopened = false;
+      if (offered) {
+        const reloaded = p.waitForEvent("load", { timeout: 10_000 });
+        await retry.click();
+        await reloaded;
+        await openCheck(p);
+        reopened = await p
+          .locator('[data-hub="check"]')
+          .first()
+          .waitFor({ timeout: 10_000 })
+          .then(
+            () => true,
+            () => false,
+          );
+      }
+      check(
+        offered && reopened,
+        "回線が切れたまま自動で直せないときは、アプリのエラー画面の「再読み込み」で開き直せる",
+      );
+    } finally {
+      cutUntil.clear();
+      await p.context().close();
+    }
   }
 } catch (e) {
   console.error(e);
