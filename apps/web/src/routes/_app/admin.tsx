@@ -63,7 +63,6 @@ export const Route = createFileRoute("/_app/admin")({
  */
 function Admin() {
   const me = useQuery(api.me.me, {});
-  // システム管理者でなくても、グループを管理できる人（Nogiku の groups:manage）にはグループのタブだけ出す
   const tabs = me?.isSystemAdmin ? tabItems : me?.canManageGroups ? groupsOnly : [];
   const { view } = Route.useSearch();
   const tab = view ?? tabs[0]?.id ?? "works";
@@ -113,7 +112,9 @@ function Admin() {
     return (
       <>
         {title}
-        <div className="alert">管理画面はシステム管理者だけが使えます</div>
+        <div className="alert">
+          管理画面を使う権限がありません（システム管理者か、グループを管理する権限が要ります）
+        </div>
       </>
     );
   if (!tabs.some((t) => t.id === tab))
