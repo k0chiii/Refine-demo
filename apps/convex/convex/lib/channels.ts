@@ -12,24 +12,35 @@ export interface DeliveryConfig {
   push: VapidKeys | null;
   /** RESEND_API_KEY・NOTIFY_EMAIL_FROM（確認済みの送信元ドメイン）・FRONTEND_URL */
   email: { apiKey: string; from: string } | null;
-  /** SLACK_BOT_TOKEN（xoxb-）・FRONTEND_URL */
-  slack: { botToken: string } | null;
+  /** SLACK_BASE_URL（めいちゃんの入口。例 https://internal.gogatsusai.jp/slackbot/may。末尾の / を除く）・FRONTEND_URL */
+  slack: { baseUrl: string } | null;
   /** FRONTEND_URL（末尾の / を除く）。メール・Slack のリンクの前につける */
   origin: string | null;
 }
 
 export function deliveryConfigFromEnv(env: Record<string, string | undefined>): DeliveryConfig {
-  const frontend = env.FRONTEND_URL?.trim().replace(/\/+$/, "");
-  const origin = frontend && /^https?:\/\/[^/]/.test(frontend) ? frontend : null;
+  const origin = httpUrlOf(env.FRONTEND_URL);
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.NOTIFY_EMAIL_FROM?.trim();
-  const botToken = env.SLACK_BOT_TOKEN?.trim();
+  const baseUrl = httpUrlOf(env.SLACK_BASE_URL);
   return {
     push: vapidKeysFromEnv(env),
     email: origin && apiKey && from?.includes("@") ? { apiKey, from } : null,
-    slack: origin && botToken?.startsWith("xoxb-") ? { botToken } : null,
+    slack: origin && baseUrl ? { baseUrl } : null,
     origin,
   };
+}
+
+/** 前後の空白と末尾の / を除いた http(s) の URL。そうでなければ null */
+function httpUrlOf(raw: string | undefined): string | null {
+  const url = raw?.trim().replace(/\/+$/, "");
+  if (!url || !/^https?:\/\/[^/]/.test(url)) return null;
+  try {
+    new URL(url);
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 /** 秘密の揃った経路 */

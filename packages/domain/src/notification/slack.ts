@@ -1,9 +1,40 @@
+import { DomainError } from "../shared/DomainError.ts";
 import type { Instant } from "../shared/time.ts";
 
 /*
- * Slack の DM の宛先。登録メールアドレスで MF100 のワークスペースのメンバーを引く（利用者は何も入力しない）。
- * 引いた結果と、DM を送った結果で状態が移る。保存は slackMembers（メールアドレスごとに 1 行）。
+ * Slack の DM の宛先。ワークスペースは管理者が登録し、各自が選ぶ（docs/UI_M3E.md §105）。
+ * 選んだワークスペースで登録メールアドレスのメンバーを引く（めいちゃんの /userid）。利用者はメールアドレスを入力しない。
+ * 引いた結果と、DM を送った結果で状態が移る。保存は slackMembers（ワークスペース × メールアドレスで 1 行）。
  */
+
+/** Slack のワークスペース（管理者が登録する。めいちゃんに渡す team_id の出どころ） */
+export interface SlackWorkspace {
+  id: string;
+  name: string;
+  /** Slack のチーム ID（T で始まる。ブラウザ版 Slack の URL の app.slack.com/client/Txxxx/… の Txxxx） */
+  teamId: string;
+}
+
+/** ワークスペースの名前の長さの上限（文字数） */
+export const SLACK_WORKSPACE_NAME_MAX = 80;
+
+const TEAM_ID = /^T[A-Z0-9]{2,}$/;
+
+/**
+ * 登録の入力を確かめて整える。名前は前後の空白を除いて 1〜80 文字。team_id は全角・小文字・前後の空白をならして
+ * T で始まる英数字にそろえる。外れたら slack_workspace_invalid（details.field に name か teamId）
+ */
+export function validateSlackWorkspace(input: { name: string; teamId: string }): {
+  name: string;
+  teamId: string;
+} {
+  const name = input.name.trim();
+  if (name === "" || Array.from(name).length > SLACK_WORKSPACE_NAME_MAX)
+    throw new DomainError("slack_workspace_invalid", { field: "name" });
+  const teamId = input.teamId.normalize("NFKC").trim().toUpperCase();
+  if (!TEAM_ID.test(teamId)) throw new DomainError("slack_workspace_invalid", { field: "teamId" });
+  return { name, teamId };
+}
 
 /**
  * 登録メールアドレスで引いた Slack のメンバー。
@@ -14,6 +45,12 @@ export type SlackLink =
   | { state: "linked"; memberId: string; checkedAt: Instant }
   | { state: "not_found"; checkedAt: Instant }
   | { state: "cannot_dm"; memberId: string; checkedAt: Instant };
+
+/** 選んだワークスペースでのその人の宛先（ワークスペースを選んでいない・登録が消えたときは null で表す） */
+export interface SlackMembership {
+  teamId: string;
+  link: SlackLink;
+}
 
 /** 外で観測したこと。post_* は memberId を持つので、メンバーを知らない状態には当てられない */
 export type SlackObservation =

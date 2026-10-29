@@ -28,6 +28,7 @@ import type {
   RuleRevision,
   RevisionId,
   SlackLink,
+  SlackWorkspace,
   UploadAttempt,
   UploadAttemptTarget,
   UploadItem,
@@ -258,11 +259,25 @@ export interface NotificationDeliveryRepository {
   settle(row: NotificationDeliveryRecord): Promise<void>;
 }
 
-/** 登録メールアドレスで引いた Slack のメンバー（メールアドレスごとに 1 件） */
+/** Slack のワークスペース（管理者が登録する。team_id で一意） */
+export interface SlackWorkspaceRepository {
+  /** 名前の順。多くても 100 件 */
+  list(): Promise<SlackWorkspace[]>;
+  findById(id: string): Promise<SlackWorkspace | null>;
+  findByTeamId(teamId: string): Promise<SlackWorkspace | null>;
+  insert(workspace: Omit<SlackWorkspace, "id">): Promise<SlackWorkspace>;
+  delete(id: string): Promise<void>;
+}
+
+/** 登録メールアドレスで引いた Slack のメンバー（ワークスペース × メールアドレスで 1 件） */
 export interface SlackMemberRepository {
-  /** 小文字のメールアドレスで引く。行が無ければ { state: "unresolved" } */
-  find(email: string): Promise<SlackLink>;
-  save(email: string, link: Exclude<SlackLink, { state: "unresolved" }>): Promise<void>;
+  /** ワークスペース（team_id）と小文字のメールアドレスで引く。行が無ければ { state: "unresolved" } */
+  find(teamId: string, email: string): Promise<SlackLink>;
+  save(
+    teamId: string,
+    email: string,
+    link: Exclude<SlackLink, { state: "unresolved" }>,
+  ): Promise<void>;
 }
 
 export interface AclRepository {
@@ -459,6 +474,7 @@ export interface AppContext {
   pushSubscriptions: PushSubscriptionRepository;
   notificationPrefs: NotificationPrefsRepository;
   deliveries: NotificationDeliveryRepository;
+  slackWorkspaces: SlackWorkspaceRepository;
   slackMembers: SlackMemberRepository;
   documents: DocumentDraftRepository;
   socialProfiles: SocialProfileRepository;

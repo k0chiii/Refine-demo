@@ -108,6 +108,9 @@ const messages: Record<string, string> = {
   push_subscription_invalid:
     "この端末への通知を設定できませんでした。ブラウザを更新してやり直してください。",
   notification_prefs_invalid: "通知の設定を保存できませんでした。もう一度お試しください。",
+  slack_workspace_invalid:
+    "ワークスペースの内容を確かめてください。名前は 80 文字まで、team_id は T で始まる英数字です。",
+  slack_workspace_duplicate: "同じ team_id のワークスペースはもう登録されています",
   comment_file_invalid: "添付を確かめてください。1 つのコメントに付けられるのは 10 件までです。",
   comment_file_not_found: "この添付は見つかりません。",
   comment_file_not_ready:
@@ -139,6 +142,7 @@ function withDetails(code: string, details: unknown): string | null {
     problems?: unknown;
     groups?: unknown;
     groupId?: unknown;
+    field?: unknown;
   };
   if (code === "work_invalid") return workInvalidMessage(details);
   if (code === "forbidden") {
@@ -173,6 +177,12 @@ function withDetails(code: string, details: unknown): string | null {
     return "メンションしたグループが見つかりません。画面を更新してから選び直してください";
   if (code === "group_invalid" && d.reason === "limit")
     return `グループはこれ以上作れません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
+  if (code === "slack_workspace_invalid") {
+    if (d.field === "name") return "ワークスペースの名前を 80 文字までで入れてください";
+    if (d.field === "teamId") return "team_id は T で始まる英数字です（例: T0123ABCD）";
+    if (d.reason === "limit")
+      return `ワークスペースはこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
+  }
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {

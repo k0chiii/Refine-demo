@@ -11,6 +11,7 @@ import {
   reachableChannels,
   SLACK_RECHECK_MS,
   type SlackLink,
+  type SlackMembership,
   wantedChannels,
 } from "../index.ts";
 
@@ -22,6 +23,9 @@ const unresolved: SlackLink = { state: "unresolved" };
 const linked: SlackLink = { state: "linked", memberId: "UA", checkedAt: T0 };
 const notFound: SlackLink = { state: "not_found", checkedAt: T0 };
 const cannotDm: SlackLink = { state: "cannot_dm", memberId: "UA", checkedAt: T0 };
+
+const TEAM = "T0123ABCD";
+const inTeam = (link: SlackLink): SlackMembership => ({ teamId: TEAM, link });
 
 const phone: PushDevice = {
   id: "s1",
@@ -50,7 +54,7 @@ describe("届け先のキー", () => {
       channels: ["push", "email", "slack"],
       devices: [phone, laptop],
       email: EMAIL,
-      slack: linked,
+      slack: inTeam(linked),
       now: T0,
     });
     expect(destinations).toHaveLength(4);
@@ -105,7 +109,7 @@ describe("届けうる経路と、この通知を届ける経路", () => {
 });
 
 describe("届け先", () => {
-  const base = { devices: [] as PushDevice[], email: null, slack: unresolved, now: T0 };
+  const base = { devices: [] as PushDevice[], email: null, slack: inTeam(unresolved), now: T0 };
 
   it("端末は購読ごとに 1 つ。端末が無ければ無い", () => {
     expect(destinationsOf({ ...base, channels: ["push"], devices: [phone, laptop] })).toEqual([
@@ -122,11 +126,11 @@ describe("届け先", () => {
     expect(destinationsOf({ ...base, channels: ["email"] })).toEqual([]);
   });
 
-  it("Slack は、アドレスがあり、いま送るか引くときだけ", () => {
+  it("Slack は、アドレスがあり、いま送るか引くときだけ。送り先は選んだワークスペース", () => {
     const slack = (link: SlackLink, now = T0, email: string | null = EMAIL) =>
-      destinationsOf({ ...base, channels: ["slack"], email, slack: link, now });
-    const lookup = [{ channel: "slack", key: "slack", email: EMAIL, memberId: null }];
-    const post = [{ channel: "slack", key: "slack", email: EMAIL, memberId: "UA" }];
+      destinationsOf({ ...base, channels: ["slack"], email, slack: inTeam(link), now });
+    const lookup = [{ channel: "slack", key: "slack", teamId: TEAM, email: EMAIL, memberId: null }];
+    const post = [{ channel: "slack", key: "slack", teamId: TEAM, email: EMAIL, memberId: "UA" }];
 
     expect(slack(unresolved)).toEqual(lookup);
     expect(slack(linked)).toEqual(post);
@@ -138,16 +142,28 @@ describe("届け先", () => {
     expect(slack(unresolved, T0, null)).toEqual([]);
   });
 
+  it("Slack はワークスペースを選んでいない（登録が消えた）なら送らない", () => {
+    expect(
+      destinationsOf({ ...base, channels: ["slack", "email"], email: EMAIL, slack: null }),
+    ).toEqual([{ channel: "email", key: "email", to: EMAIL }]);
+  });
+
   it("経路に入っていなければ、宛先があっても届けない", () => {
     expect(
-      destinationsOf({ channels: [], devices: [phone], email: EMAIL, slack: linked, now: T0 }),
+      destinationsOf({
+        channels: [],
+        devices: [phone],
+        email: EMAIL,
+        slack: inTeam(linked),
+        now: T0,
+      }),
     ).toEqual([]);
     expect(
       destinationsOf({
         channels: ["email"],
         devices: [phone],
         email: EMAIL,
-        slack: linked,
+        slack: inTeam(linked),
         now: T0,
       }),
     ).toEqual([{ channel: "email", key: "email", to: EMAIL }]);
@@ -189,17 +205,20 @@ describe("送ってよいメールアドレス", () => {
 });
 
 describe("設定画面の経路の状態", () => {
-  it("メールは送れるアドレスがあれば使える", () => {
-    expect(channelStatusOf("email", EMAIL, unresolved)).toBe("ready");
-    expect(channelStatusOf("email", EMAIL, notFound)).toBe("ready");
-    expect(channelStatusOf("email", null, linked)).toBe("no_address");
+  it("メールは送れるアドレスがあれば使える（Slack のワークスペースによらない）", () => {
+    expect(channelStatusOf("email", EMAIL, inTeam(unresolved))).toBe("ready");
+    expect(channelStatusOf("email", EMAIL, inTeam(notFound))).toBe("ready");
+    expect(channelStatusOf("email", EMAIL, null)).toBe("ready");
+    expect(channelStatusOf("email", null, inTeam(linked))).toBe("no_address");
   });
 
-  it("Slack はアドレスが無ければ使えず、あれば Slack での状態", () => {
-    expect(channelStatusOf("slack", null, linked)).toBe("no_address");
-    expect(channelStatusOf("slack", EMAIL, unresolved)).toBe("unresolved");
-    expect(channelStatusOf("slack", EMAIL, linked)).toBe("ready");
-    expect(channelStatusOf("slack", EMAIL, notFound)).toBe("not_found");
-    expect(channelStatusOf("slack", EMAIL, cannotDm)).toBe("cannot_dm");
+  it("Slack はアドレスが無ければ使えず、ワークスペースが無ければ選べず、あればそこでの状態", () => {
+    expect(channelStatusOf("slack", null, inTeam(linked))).toBe("no_address");
+    expect(channelStatusOf("slack", null, null)).toBe("no_address");
+    expect(channelStatusOf("slack", EMAIL, null)).toBe("no_workspace");
+    expect(channelStatusOf("slack", EMAIL, inTeam(unresolved))).toBe("unresolved");
+    expect(channelStatusOf("slack", EMAIL, inTeam(linked))).toBe("ready");
+    expect(channelStatusOf("slack", EMAIL, inTeam(notFound))).toBe("not_found");
+    expect(channelStatusOf("slack", EMAIL, inTeam(cannotDm))).toBe("cannot_dm");
   });
 });

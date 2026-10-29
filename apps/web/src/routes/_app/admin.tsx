@@ -25,11 +25,12 @@ import { Loading } from "@/ui/Loading";
 import { UserAvatar } from "@/ui/UserAvatar";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { PaneTabs } from "@/ui/PaneTabs";
+import { SlackWorkspacesAdmin } from "@/features/notifications/SlackWorkspacesAdmin";
 import { ProfilesAdmin } from "@/features/social/ProfilesAdmin";
 import { GroupsAdmin } from "@/features/team/GroupsAdmin";
 import { TeamsAdmin } from "@/features/team/TeamsAdmin";
 
-type Tab = "works" | "teams" | "groups" | "users" | "sns" | "audit";
+type Tab = "works" | "teams" | "groups" | "users" | "sns" | "slack" | "audit";
 
 const tabItems: { id: Tab; label: string }[] = [
   { id: "works", label: "制作物" },
@@ -37,6 +38,7 @@ const tabItems: { id: Tab; label: string }[] = [
   { id: "groups", label: "グループ" },
   { id: "users", label: "ユーザー" },
   { id: "sns", label: "SNS アカウント" },
+  { id: "slack", label: "Slack" },
   { id: "audit", label: "監査ログ" },
 ];
 const groupsOnly = tabItems.filter((t) => t.id === "groups");
@@ -49,6 +51,7 @@ export const Route = createFileRoute("/_app/admin")({
     s.view === "groups" ||
     s.view === "users" ||
     s.view === "sns" ||
+    s.view === "slack" ||
     s.view === "audit"
       ? { view: s.view }
       : {},
@@ -283,6 +286,8 @@ function Admin() {
         <GroupsAdmin />
       ) : tab === "sns" ? (
         <ProfilesAdmin />
+      ) : tab === "slack" ? (
+        <SlackWorkspacesAdmin />
       ) : (
         <section className="stack">
           <p className="admin__lead">直近 100 件の操作</p>

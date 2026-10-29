@@ -1,6 +1,6 @@
 "use node";
 
-import type { DeliveryPlan, DeliveryTarget } from "@mf100/application";
+import type { DeliveryPlan, DeliveryTarget, SlackMemberKey } from "@mf100/application";
 import type { DeliveryChannel, DestinationKey, SendOutcome } from "@mf100/domain";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -9,7 +9,8 @@ import { internalAction } from "./_generated/server";
 import type { DeliveryTargetArg } from "./delivery.ts";
 import { type DeliveryConfig, deliveryConfigFromEnv } from "./lib/channels.ts";
 import { sendEmail } from "./lib/email.ts";
-import { lookupSlackMember, postSlackDm } from "./lib/slack.ts";
+import { sleepFor } from "./lib/retryAfter.ts";
+import { lookupSlackMember, type MeichanConfig, postSlackDm } from "./lib/slack.ts";
 import { sendWebPush, webPushOutcome } from "./lib/webpush.ts";
 
 /*
@@ -91,7 +92,7 @@ async function send(
     }
     case "slack":
       return c.slack
-        ? sendSlack(ctx, t, c.slack.botToken)
+        ? sendSlack(ctx, t, c.slack)
         : { outcome: NOT_CONFIGURED, ref: slackRef(t, t.memberId) };
   }
 }
@@ -99,22 +100,36 @@ async function send(
 type SlackTarget = Extract<DeliveryTarget, { channel: "slack" }>;
 
 function slackRef(t: SlackTarget, memberId: string | null): DeliveryTargetArg {
-  return { channel: "slack", key: "slack", email: t.email, memberId };
+  return { channel: "slack", key: "slack", teamId: t.teamId, email: t.email, memberId };
 }
 
-/** メンバーが分からなければ登録メールアドレスで引いて保存し、見つかったときだけ DM を送る */
-async function sendSlack(ctx: ActionCtx, t: SlackTarget, token: string): Promise<Attempt> {
+/** DM の枠の時刻まで action の中で待つ上限（ms）。workpool の同時数（8）× 1 秒より長く、続けて送る分を待って届ける */
+const SLACK_DM_MAX_WAIT_MS = 10_000;
+
+/**
+ * メンバーが分からなければ、選んだワークスペースで登録メールアドレスを引いて保存する。見つかったときだけ、
+ * 速さ制限の枠を予約し、その時刻まで待って DM を送る（上限より先なら retry。workpool がやり直す）
+ */
+async function sendSlack(ctx: ActionCtx, t: SlackTarget, cfg: MeichanConfig): Promise<Attempt> {
   let memberId = t.memberId;
   if (memberId === null) {
-    const found = await lookupSlackMember(token, t.email);
+    const found = await lookupSlackMember(cfg, { teamId: t.teamId, email: t.email });
     if (found.kind === "retry" || found.kind === "unavailable")
       return { outcome: found, ref: slackRef(t, null) };
-    await ctx.runMutation(internal.delivery.recordSlackLookup, { email: t.email, result: found });
+    await ctx.runMutation(internal.delivery.recordSlackLookup, {
+      teamId: t.teamId,
+      email: t.email,
+      result: found,
+    });
     if (found.kind === "not_found")
       return { outcome: { kind: "rejected", reason: "not_found" }, ref: slackRef(t, null) };
     memberId = found.memberId;
   }
-  const outcome = await postSlackDm(token, memberId, t.text);
+  const { ok, retryAfter } = await ctx.runMutation(internal.delivery.reserveSlackDm, {});
+  if (!ok || retryAfter > SLACK_DM_MAX_WAIT_MS)
+    return { outcome: { kind: "retry" }, ref: slackRef(t, memberId) };
+  if (retryAfter > 0) await sleepFor(retryAfter);
+  const outcome = await postSlackDm(cfg, { teamId: t.teamId, userId: memberId, text: t.text });
   return { outcome, ref: slackRef(t, memberId) };
 }
 
@@ -124,7 +139,7 @@ export const deliver = internalAction({
 });
 
 /**
- * Slack をオンにしたとき、登録メールアドレスで引き直す（今の状態によらない）。
+ * Slack をオンにした・ワークスペースを替えたとき、選んだワークスペースで登録メールアドレスを引き直す（今の状態によらない）。
  * やり直さない（引けなければ未確認のまま。次に送るときに引く）
  */
 export const resolveSlack = internalAction({
@@ -132,11 +147,13 @@ export const resolveSlack = internalAction({
   handler: async (ctx, { userId }): Promise<null> => {
     const slack = deliveryConfigFromEnv(process.env).slack;
     if (!slack) return null;
-    const email: string | null = await ctx.runQuery(internal.delivery.slackEmail, { userId });
-    if (!email) return null;
-    const result = await lookupSlackMember(slack.botToken, email);
+    const target: SlackMemberKey | null = await ctx.runQuery(internal.delivery.slackTarget, {
+      userId,
+    });
+    if (!target) return null;
+    const result = await lookupSlackMember(slack, target);
     if (result.kind === "found" || result.kind === "not_found")
-      await ctx.runMutation(internal.delivery.recordSlackLookup, { email, result });
+      await ctx.runMutation(internal.delivery.recordSlackLookup, { ...target, result });
     else if (result.kind === "unavailable") logUnavailable("slack", result.reason);
     else console.warn(JSON.stringify({ event: "slack_resolve_deferred" }));
     return null;

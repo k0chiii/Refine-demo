@@ -2715,6 +2715,31 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 - A（一覧の中でその場に展開）と C（展開＋上に前後）。試作の画像は作業メモ（scratch）にだけ残す。
 - 未読だけを渡る「次の未読へ」。
 
+## 105. Slack はめいちゃん経由・ワークスペースは管理者が登録し各自が選ぶ（2026-10-28・利用者指示「ADMINの管理画面でWS名とTEAM_IDの登録画面を作る→みんなは設定画面でWSを選ぶだけにしたい」）
+
+§103 の Slack（DM）は Slack API を Bot Token で直接呼ぶ作りだったが、同日、利用者から「めいちゃん通知」の仕様（`docs/SLACK_MEICHAN.md`）が渡された。Slack API は呼ばず、HTTP でめいちゃんに渡す。送り先のワークスペースはリクエストの `team_id` で決まる。校正システムにはワークスペースのレコードが無いので、管理画面で登録し、各自が選ぶ。
+
+### 管理画面「Slack」（`/admin?view=slack`。システム管理者だけ）
+
+- ワークスペースの一覧（名前・`team_id`・削除）と、登録の欄（名前・`team_id`・「登録」）。`team_id` は `T` で始まる英数字（大文字にそろえる）。同じ `team_id` は登録できない。登録・削除は監査ログに残す。
+- 空のときは、`team_id` の見つけ方（ブラウザ版 Slack の URL `https://app.slack.com/client/Txxxx/…` の `Txxxx`）を 1 行で示す。
+
+### 「通知の設定」の Slack（DM）の行
+
+- 見出しの下にワークスペースの選択を置く（登録が 1 つ以上あるとき）。1 つしか無ければ、スイッチを入れたときにそれが選ばれる。選んだワークスペースは行の `data-workspace-id` に出す。
+- 登録が無いときはスイッチを入れられず、「管理者がワークスペースを登録すると使えます」。選んでいない・登録が消えたときの状態は `no_workspace`（「ワークスペースを選んでください」）。
+- ワークスペースを替えると、そのワークスペースでメンバーを引き直す（`resolveSlack`）。引き当ての状態（linked・not_found・cannot_dm）はワークスペースごと。
+
+### 配信（Convex）
+
+- 環境変数は `SLACK_BASE_URL`（例 `https://internal.gogatsusai.jp/slackbot/may`。末尾スラッシュ無し）。`SLACK_BOT_TOKEN` は廃止。未設定なら Slack の経路は使えない（行も出ない。デモは出る）。
+- 引き当ては `POST {SLACK_BASE_URL}/userid`（`{ email, team_id }`。404 は見つからない）、DM は `POST {SLACK_BASE_URL}/dm`（`{ team_id, user_id, text }`。200 だけ成功）。認証ヘッダは付けない。本文は §103 と同じ（`toSlackText`）。
+- DM は `@convex-dev/rate-limiter` で 1 秒に 1 件。超えた分は workpool のやり直しに回す（捨てない）。
+- 登録に無いワークスペース（消えた）には送らない。
+
+### E2E
+
+`slack-workspace.spec.ts`（管理者がワークスペースを登録・削除・再登録し、制作者の「通知の設定」の Slack の行に `data-workspace-id` が入る。文言は確かめない）。
 ## 107. メンションのグループを作れる人を Nogiku の権限で決める（2026-10-29・利用者指示「権限管理に、グループメンションの作成を追加したい」「グループメンションを作成できるひとには、そもそも nogiku で権限を管理したい」）
 
 - 組織権限 `groups:manage`（`me.canManageGroups`。システム管理者は権限が無くても真）。アカウントのメニュー（広い画面ではレールの下も）の「管理」は、システム管理者か `canManageGroups` の人に出す。
