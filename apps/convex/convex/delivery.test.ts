@@ -5,9 +5,18 @@ import { setupWork, submitFiles } from "../test/flows";
 import { createCast, createHarness, type Harness } from "../test/harness";
 
 const ORIGIN = "https://proof.example-org.jp";
+const MEICHAN = "https://meichan.example.invalid/slackbot/may";
+const TEAM = "T0MAY";
 const MEMBER = "U0REVIEWER";
 const TITLE = "極秘ポスター";
 const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as const }];
+
+/** 待つ時間を記録してすぐ返す（DM の枠の時刻までの待ちを、時計を進めずに確かめる） */
+const sleep = vi.hoisted(() => vi.fn(async (_ms: number) => {}));
+vi.mock("./lib/retryAfter.ts", async (original) => ({
+  ...(await original<typeof import("./lib/retryAfter.ts")>()),
+  sleepFor: sleep,
+}));
 
 beforeEach(() => {
   // 予約した送信・引き当てが裏で走らないよう時計を止め、ここで 1 回ずつ呼ぶ
@@ -20,6 +29,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  sleep.mockClear();
 });
 
 const RESEND_KEY = "re_test_key";
@@ -30,7 +40,23 @@ function emailEnv() {
 }
 
 function slackEnv() {
-  vi.stubEnv("SLACK_BOT_TOKEN", "xoxb-test-token");
+  vi.stubEnv("SLACK_BASE_URL", MEICHAN);
+}
+
+type Cast = Awaited<ReturnType<typeof createCast>>;
+
+/** DM の速さ制限（1 秒に 1 件）の窓を決まったものにするため、時計も止める。nextSecond で次の窓へ進める */
+function freezeClock() {
+  vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+}
+
+function nextSecond() {
+  vi.setSystemTime(Date.now() + 1_001);
+}
+
+/** 管理者が Slack のワークスペースを登録する（1 つだけなら、Slack をオンにした人はそれを選ぶ） */
+function addWorkspace(cast: Cast, teamId = TEAM) {
+  return cast.admin.as.mutation(api.slackWorkspaces.add, { name: `WS ${teamId}`, teamId });
 }
 
 /** 試験の利用者は *@example.invalid（送らないアドレス）なので、送れるアドレスに替える */
@@ -46,22 +72,23 @@ interface Reply {
   body?: unknown;
 }
 
+const SERVICE_URLS: Record<string, Service> = {
+  "https://api.resend.com/emails": "email",
+  [`${MEICHAN}/userid`]: "lookup",
+  [`${MEICHAN}/dm`]: "post",
+};
+
 function serviceOf(url: string): Service | null {
-  if (url === "https://api.resend.com/emails") return "email";
-  const { origin, pathname } = new URL(url);
-  if (origin !== "https://slack.com") return null;
-  if (pathname === "/api/users.lookupByEmail") return "lookup";
-  if (pathname === "/api/chat.postMessage") return "post";
-  return null;
+  return SERVICE_URLS[url] ?? null;
 }
 
 const SUCCESS: Record<Service, Reply> = {
   email: { body: { id: "email-1" } },
-  lookup: { body: { ok: true, user: { id: MEMBER, deleted: false, is_bot: false } } },
+  lookup: { body: { userId: MEMBER } },
   post: { body: { ok: true } },
 };
 
-/** Resend・Slack の代わり。replies はサービスごとに n 回目（0 から）の応答。無ければ成功 */
+/** Resend・めいちゃんの代わり。replies はサービスごとに n 回目（0 から）の応答。無ければ成功 */
 function fakeServices(
   replies: Partial<Record<Service, (n: number) => Reply | Promise<Reply>>> = {},
 ) {
@@ -95,7 +122,7 @@ async function scheduled(t: Harness, name: string) {
 }
 
 describe("Convex 統合: Slack のメンバーを登録メールアドレスで引く", () => {
-  it("トークンがあり送れるアドレスの人が Slack をオンにしたときだけ、引きに行く予約をする", async () => {
+  it("めいちゃんがあり、ワークスペースを選んだ送れるアドレスの人が Slack をオンにした・ワークスペースを替えたときだけ、引きに行く予約をする", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     await setDeliverableEmail(t, cast.reviewer.id);
@@ -106,6 +133,7 @@ describe("Convex 統合: Slack のメンバーを登録メールアドレスで�
     const setSlack = (on: boolean) =>
       cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: on ? ["slack"] : [] });
 
+    await addWorkspace(cast);
     await setSlack(true);
     expect(await resolving()).toEqual([]);
     await setSlack(false);
@@ -116,15 +144,35 @@ describe("Convex 統合: Slack のメンバーを登録メールアドレスで�
     // オンのままほかの項目を変えても引き直さない
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { showPreview: false });
     expect(await resolving()).toEqual([cast.reviewer.id]);
+    // ワークスペースを替えると、替えた先で引き直す
+    const komaba = await addWorkspace(cast, "T0KOMABA");
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { slackWorkspaceId: komaba.id });
+    expect(await resolving()).toEqual([cast.reviewer.id, cast.reviewer.id]);
     // 送らないアドレス（試験用のドメイン）の人は引かない
-    await cast.stranger.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
-    expect(await resolving()).toEqual([cast.reviewer.id]);
+    await cast.stranger.as.mutation(api.notificationPrefs.update, {
+      channels: ["slack"],
+      slackWorkspaceId: komaba.id,
+    });
+    expect(await resolving()).toEqual([cast.reviewer.id, cast.reviewer.id]);
   });
 
-  it("登録メールアドレスで引き、見つかれば設定の Slack が ready になる。一時的な失敗では投げない", async () => {
+  it("ワークスペースが無ければ、Slack をオンにしても引きに行かない", async () => {
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
+    expect(await scheduled(t, "deliveryNode:resolveSlack")).toEqual([]);
+    const services = fakeServices();
+    await t.action(internal.deliveryNode.resolveSlack, { userId: cast.reviewer.id });
+    expect(services.fetch).not.toHaveBeenCalled();
+  });
+
+  it("選んだワークスペースで登録メールアドレスを引き、見つかれば設定の Slack が ready になる。一時的な失敗では投げない", async () => {
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
     const email = await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
     const slackStatus = async () =>
@@ -141,12 +189,10 @@ describe("Convex 統合: Slack のメンバーを登録メールアドレスで�
     expect(await slackStatus()).toBe("ready");
     const lookups = services.calls("lookup");
     expect(lookups).toHaveLength(2);
-    expect(new URL(lookups[1]!.url).searchParams.get("email")).toBe(email);
+    expect(JSON.parse(lookups[1]!.body)).toEqual({ email, team_id: TEAM });
     expect(services.calls("post")).toHaveLength(0);
   });
 });
-
-type Cast = Awaited<ReturnType<typeof createCast>>;
 
 /** 制作物を登録して校正者に割り当てる。校正者への割り当ての通知を返す */
 async function assignReviewer(
@@ -248,10 +294,12 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
   });
 
   it("メールを送った後で Slack が一時的に失敗したら投げ、次の実行では Slack だけ送る", async () => {
+    freezeClock();
     emailEnv();
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await addWorkspace(cast);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email", "slack"] });
     const { notificationId } = await assignReviewer(t, cast);
@@ -261,25 +309,28 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(services.calls("email")).toHaveLength(1);
     expect(services.calls("post")).toHaveLength(1);
 
+    // 失敗した DM も 1 秒の枠を使った
+    nextSecond();
     expect(await deliver(t, notificationId)).toBe(1);
     expect(services.calls("email")).toHaveLength(1);
     expect(services.calls("post")).toHaveLength(2);
     // 一度引いたメンバーには、引き直さずに送る
     expect(services.calls("lookup")).toHaveLength(1);
-    const post = JSON.parse(services.calls("post")[1]!.body) as { channel: string };
-    expect(post.channel).toBe(MEMBER);
+    expect(JSON.parse(services.calls("post")[1]!.body)).toMatchObject({
+      team_id: TEAM,
+      user_id: MEMBER,
+    });
   });
 
   it("Slack に見つからない人には DM を送らず、設定の Slack が not_found になる", async () => {
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await addWorkspace(cast);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
     const { notificationId } = await assignReviewer(t, cast);
-    const services = fakeServices({
-      lookup: () => ({ body: { ok: false, error: "users_not_found" } }),
-    });
+    const services = fakeServices({ lookup: () => ({ status: 404 }) });
 
     expect(await deliver(t, notificationId)).toBe(0);
     expect(services.calls("lookup")).toHaveLength(1);
@@ -288,16 +339,15 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(settings.destinations.slack.status).toBe("not_found");
   });
 
-  it("DM を開けない相手（channel_not_found）は、設定の Slack が cannot_dm になる", async () => {
+  it("DM を開けない相手（/dm が 404）は、設定の Slack が cannot_dm になる", async () => {
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await addWorkspace(cast);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
     const { notificationId } = await assignReviewer(t, cast);
-    const services = fakeServices({
-      post: () => ({ body: { ok: false, error: "channel_not_found" } }),
-    });
+    const services = fakeServices({ post: () => ({ status: 404 }) });
 
     expect(await deliver(t, notificationId)).toBe(0);
     expect(services.calls("post")).toHaveLength(1);
@@ -310,6 +360,7 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await addWorkspace(cast);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email", "slack"] });
     const { workId, notificationId } = await assignReviewer(t, cast, {
@@ -356,6 +407,7 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await addWorkspace(cast);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email", "slack"] });
     const { notificationId } = await assignReviewer(t, cast);
@@ -374,11 +426,77 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(services.calls("post")).toHaveLength(0);
   });
 
+  it("DM は 1 秒に 1 件。続けて送る分は次の枠まで待って送り、落とさない", async () => {
+    freezeClock();
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
+    const first = await assignReviewer(t, cast);
+    const second = await assignReviewer(t, cast);
+    expect(second.notificationId).not.toBe(first.notificationId);
+    const services = fakeServices();
+
+    expect(await deliver(t, first.notificationId)).toBe(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(await deliver(t, second.notificationId)).toBe(1);
+    expect(services.calls("post")).toHaveLength(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    const waited = sleep.mock.calls[0]![0];
+    expect(waited).toBeGreaterThan(0);
+    expect(waited).toBeLessThanOrEqual(1_000);
+    const lastPost = services.fetch.mock.invocationCallOrder.at(-1)!;
+    expect(sleep.mock.invocationCallOrder[0]!).toBeLessThan(lastPost);
+  });
+
+  it("DM の枠が遠い先まで埋まっていれば、待たずに投げて workpool にやり直させる", async () => {
+    freezeClock();
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
+    const { notificationId } = await assignReviewer(t, cast);
+    for (let n = 0; n < 30; n++) {
+      const { retryAfter } = await t.mutation(internal.delivery.reserveSlackDm, {});
+      if (retryAfter > 10_000) break;
+    }
+    const services = fakeServices();
+
+    await expect(deliver(t, notificationId)).rejects.toThrow("delivery_transient_failure");
+    expect(services.calls("post")).toHaveLength(0);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("登録が消えたワークスペースには、選んでいた人にも送らない", async () => {
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workspace = await addWorkspace(cast);
+    await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
+    const { notificationId } = await assignReviewer(t, cast);
+    await cast.admin.as.mutation(api.slackWorkspaces.remove, { id: workspace.id });
+    const services = fakeServices();
+
+    expect(await deliver(t, notificationId)).toBe(0);
+    expect(services.fetch).not.toHaveBeenCalled();
+    const settings = await cast.reviewer.as.query(api.notificationPrefs.get, {});
+    expect(settings.destinations.slack).toMatchObject({
+      workspaceId: null,
+      status: "no_workspace",
+    });
+  });
+
   it("送る前に既読にした通知は、どこにも送らない", async () => {
     emailEnv();
     slackEnv();
     const t = createHarness();
     const cast = await createCast(t);
+    await addWorkspace(cast);
     await setDeliverableEmail(t, cast.reviewer.id);
     await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email", "slack"] });
     const { notificationId } = await assignReviewer(t, cast);

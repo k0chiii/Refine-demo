@@ -78,6 +78,37 @@ describe("通知の受け取り方", () => {
       );
   });
 
+  it("Slack のワークスペースは既定で選んでおらず、保存された ID は前後の空白を除いて残す", () => {
+    expect(normalizeNotificationPrefs(null)).not.toHaveProperty("slackWorkspaceId");
+    expect(normalizeNotificationPrefs({ slackWorkspaceId: " ws1 " }).slackWorkspaceId).toBe("ws1");
+    for (const slackWorkspaceId of ["", "  ", null])
+      expect(normalizeNotificationPrefs({ slackWorkspaceId })).not.toHaveProperty(
+        "slackWorkspaceId",
+      );
+  });
+
+  it("利用者が送ったワークスペースは ID なら残し、null は選択を外す。空は受け付けない", () => {
+    expect(validateNotificationPrefsPatch({ slackWorkspaceId: " ws1 " })).toEqual({
+      slackWorkspaceId: "ws1",
+    });
+    expect(validateNotificationPrefsPatch({ slackWorkspaceId: null })).toEqual({
+      slackWorkspaceId: null,
+    });
+    expect(() => validateNotificationPrefsPatch({ slackWorkspaceId: " " })).toThrow(
+      expect.objectContaining({
+        code: "notification_prefs_invalid",
+        details: { field: "slackWorkspaceId" },
+      }),
+    );
+    const selected = normalizeNotificationPrefs({ channels: ["slack"], slackWorkspaceId: "ws1" });
+    expect(
+      normalizeNotificationPrefs({
+        ...selected,
+        ...validateNotificationPrefsPatch({ slackWorkspaceId: null }),
+      }),
+    ).toEqual({ ...DEFAULT_NOTIFICATION_PREFS, channels: ["slack"] });
+  });
+
   it("止めた分類の種類だけ止める", () => {
     const prefs = normalizeNotificationPrefs({ mutedCategories: ["reply"] });
     expect(isCategoryMuted(prefs, "comment_posted")).toBe(true);

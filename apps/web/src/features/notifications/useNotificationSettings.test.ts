@@ -7,7 +7,14 @@ const settings = (email: boolean, slack: boolean): NotificationSettingsView => (
   channels: [],
   destinations: {
     email: { available: email, on: false, address: "a@mf100.jp", status: "ready" },
-    slack: { available: slack, on: false, address: "a@mf100.jp", status: "unresolved" },
+    slack: {
+      available: slack,
+      on: false,
+      address: "a@mf100.jp",
+      status: "unresolved",
+      workspaceId: null,
+      workspaces: [],
+    },
   },
 });
 

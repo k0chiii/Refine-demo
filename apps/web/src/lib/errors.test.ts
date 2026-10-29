@@ -27,6 +27,16 @@ describe("describeError（UI_M3E §35 W-02）", () => {
     expect(messageForCode("upload_file_too_large")).not.toContain("コード");
   });
 
+  it("Slack のワークスペースの登録の失敗は、決まった案内を出し、名前と team_id のどちらが悪いかで分ける", () => {
+    const message = (code: string, details: Record<string, string>) =>
+      describeError(new ConvexError({ code, details })).message;
+    const name = message("slack_workspace_invalid", { field: "name" });
+    const teamId = message("slack_workspace_invalid", { field: "teamId" });
+    const duplicate = message("slack_workspace_duplicate", { teamId: "T0123ABCD" });
+    for (const m of [name, teamId, duplicate]) expect(m).not.toContain("slack_workspace");
+    expect(name).not.toBe(teamId);
+  });
+
   it("状態の変更の失敗には今の状態を入れる", () => {
     expect(
       describeError(
