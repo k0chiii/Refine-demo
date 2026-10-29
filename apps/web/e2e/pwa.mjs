@@ -138,16 +138,29 @@ const dropFromCache = (p, name, path) =>
     ([n, q]) => caches.open(n).then((c) => c.delete(q, { ignoreVary: true })),
     [name, path],
   );
+/**
+ * 読み直しをまたいで、条件が成り立つまで待つ。条件は Promise を返してよい
+ * （page.waitForFunction は返った Promise をそのまま真とみなし、待たずに終わる）
+ */
+const eventually = async (p, fn, ms, arg) => {
+  for (const end = Date.now() + ms; Date.now() < end;) {
+    if (await p.evaluate(fn, arg).catch(() => false)) return true;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+};
 /** 新しい版が install を終えて待機する（install 中の版が無い）まで待つ */
-const waitForWaiting = (p) =>
-  p.waitForFunction(
+const waitForWaiting = async (p) => {
+  const settled = await eventually(
+    p,
     async () => {
       const r = await navigator.serviceWorker.getRegistration();
       return !!r?.waiting && !r.installing;
     },
-    null,
-    { timeout: 15_000 },
+    15_000,
   );
+  if (!settled) throw new Error("新しい版が待機にならない");
+};
 /** 別のタブ（sessionStorage も別）で開き、Service Worker の制御下にする */
 const freshPage = async () => {
   const ctx = await browser.newContext({ locale: "ja-JP", viewport: { width: 412, height: 915 } });
@@ -160,14 +173,6 @@ const freshPage = async () => {
   await p.waitForFunction(() => !!navigator.serviceWorker.controller);
   await p.waitForSelector("#root *");
   return p;
-};
-/** 読み直しをまたいで、条件が成り立つまで待つ */
-const eventually = async (p, fn, ms) => {
-  for (const end = Date.now() + ms; Date.now() < end;) {
-    if (await p.evaluate(fn).catch(() => false)) return true;
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  return false;
 };
 const onlyShell = (suffix) =>
   `(async () => (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")).every((k) => k.endsWith(${JSON.stringify(suffix)})))()`;
@@ -371,13 +376,14 @@ try {
     await reloaded;
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     // 古い外枠のキャッシュは新しい SW の activate が消す。1 つになるまで待つ
-    await page.waitForFunction(
+    await eventually(
+      page,
       async (b) => {
         const k = (await caches.keys()).filter((n) => n.startsWith("mf100-shell-"));
         return k.length === 1 && !b.includes(k[0]);
       },
+      10_000,
       before,
-      { timeout: 10_000 },
     );
     const after = await page.evaluate(async () =>
       (await caches.keys()).filter((k) => k.startsWith("mf100-shell-")),
@@ -413,11 +419,7 @@ try {
       original.replace(/const VERSION = "([0-9a-f]+)"/, 'const VERSION = "$1e2f"'),
     );
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
-    await page.waitForFunction(
-      async () => !!(await navigator.serviceWorker.getRegistration())?.waiting,
-      null,
-      { timeout: 15_000 },
-    );
+    await waitForWaiting(page);
     // 待機中の版が入ったあとで、いまの版のキャッシュと配信側の両方から /check のチャンクを消す
     await page.evaluate(
       ([name, p]) => caches.open(name).then((c) => c.delete(p)),
