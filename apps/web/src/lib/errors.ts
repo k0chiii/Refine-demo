@@ -145,6 +145,7 @@ function withDetails(code: string, details: unknown): string | null {
     const permission = (details as { orgPermission?: unknown } | null)?.orgPermission;
     if (permission === "approvers:assign") return "校了者を決める権限がありません";
     if (permission === "works:create") return "制作物を登録する権限がありません";
+    if (permission === "groups:manage") return "グループを管理する権限がありません";
   }
   if (code === "work_import_invalid" && d.reason === "row_invalid") {
     const index = (details as { index?: unknown } | null)?.index;
