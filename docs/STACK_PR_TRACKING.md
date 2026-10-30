@@ -111,3 +111,5 @@
 
 - 集成: `origin/cursor/stack-linear-v2-8b5a`
 - 本文生成: `node scripts/stack-pr/write-pr-bodies.mjs`
+- **未作成 PR の一括作成**: Cloud Agent が `node scripts/stack-pr/agent-bulk-create-prs.mjs` の出力を見て `ManagePullRequest` で create（`gh pr create` は integration 権限不足）
+- 2026-10-30: #108–#128 まで 016–036 を作成済み。037–076 は `agent-bulk-create-prs.mjs` で pending 確認後に同手順で続行
