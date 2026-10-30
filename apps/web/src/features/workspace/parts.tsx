@@ -124,7 +124,11 @@ export function Group({
           </M3eBadge>
         ) : null}
       </div>
-      <M3eActionList className="list" aria-label={label ?? title}>
+      <M3eActionList
+        className={side ? "list" : "list list--segmented"}
+        {...(side ? {} : { variant: "segmented" })}
+        aria-label={label ?? title}
+      >
         {children}
       </M3eActionList>
     </section>
