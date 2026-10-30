@@ -1,9 +1,9 @@
 import {
   assertCanPostComment,
+  canRunProofread,
   DomainError,
   revisionLabel,
   isAccepting,
-  isAllowed,
   planBotThreads,
   remainingBotThreadQuota,
   proofreadableType,
@@ -62,13 +62,12 @@ export async function createProofreadingRun(
   });
 }
 
-/** 文字を送れる人: 版を提出できる人か、校正に加われる人（コメントを書けるだけの人に自動の指摘を作らせない） */
+/** 文字を送り・再試行できる人（canRunProofread） */
 async function loadForRun(ctx: AppContext, principal: Principal, runId: string) {
   const run = await ctx.proofreadingRuns.findById(runId);
   if (!run) throw new DomainError("forbidden", { reason: "run_not_found" });
   const { work, grants } = await loadAuthorizedWork(ctx, principal, run.workId, "work.view");
-  const authz = { work, grants, principal };
-  if (!isAllowed("revision.submit", authz) && !isAllowed("review.participate", authz))
+  if (!canRunProofread({ work, grants, principal }))
     throw new DomainError("forbidden", { reason: "proofread_not_allowed" });
   const revision = await ctx.revisions.findById(run.revisionId);
   if (!revision) throw new DomainError("forbidden", { reason: "revision_not_found" });
@@ -89,7 +88,6 @@ export async function getProofreadingRun(
   const revision = await ctx.revisions.findById(revisionId);
   if (!revision) throw new DomainError("forbidden", { revisionId });
   const { work, grants } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
-  const authz = { work, grants, principal };
   const run = await ctx.proofreadingRuns.findByRevision(revisionId);
   return {
     run,
@@ -97,7 +95,7 @@ export async function getProofreadingRun(
       !!run &&
       work.lifecycle !== "finalized" &&
       isAccepting(revision) &&
-      (isAllowed("revision.submit", authz) || isAllowed("review.participate", authz)),
+      canRunProofread({ work, grants, principal }),
   };
 }
 

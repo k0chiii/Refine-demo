@@ -1,4 +1,4 @@
-import type { RuleDraft } from "@mf100/domain";
+import type { Principal, RuleDraft } from "@mf100/domain";
 import { PROOFREADER_ID } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
@@ -16,7 +16,7 @@ import { createInMemoryContext } from "../testing/inMemory.ts";
 import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
 const code = (c: string) => expect.objectContaining({ code: c });
-const { sysadmin, reviewer, stranger, creator, approver } = principals;
+const { sysadmin, reviewer, stranger, creator, approver, manager } = principals;
 
 const rule: RuleDraft = {
   ruleId: "A1-0001",
@@ -153,6 +153,42 @@ describe("提出時の自動校正", () => {
     v = await getProofreadingRun(ctx, creator, rev.id);
     expect(v.run!.status).toBe("pending");
     expect(v.run!.attempts).toBe(2);
+  });
+
+  it("主管とシステム管理者も、校正者と同じく実行を進めて再試行できる。関係者に入っているだけの人はできない", async () => {
+    const ctx = createInMemoryContext();
+    await saveRule(ctx, sysadmin, { rule });
+    const work = await seedWork(ctx, {
+      notationCategories: ["A1"],
+      stakeholderIds: [stranger.userId],
+    });
+    await grantWorkPermission(ctx, sysadmin, {
+      workId: work.id,
+      userIds: [reviewer.userId],
+      permission: "review",
+    });
+    const rev = await submitRevision(ctx, work.id);
+    const run = (await getProofreadingRun(ctx, creator, rev.id)).run!;
+    const artifactId = run.artifacts[0]!.artifactId;
+    const failAndRetry = async (who: Principal) => {
+      await failProofreadArtifact(ctx, creator, { runId: run.id, artifactId, error: "x" });
+      await retryProofreadingRun(ctx, who, { runId: run.id });
+      return (await getProofreadingRun(ctx, creator, rev.id)).run!.status;
+    };
+
+    for (const who of [reviewer, manager, sysadmin]) {
+      expect((await getProofreadingRun(ctx, who, rev.id)).canRun, who.userId).toBe(true);
+      expect(await failAndRetry(who), who.userId).toBe("pending");
+    }
+    expect(
+      (await claimProofreadArtifact(ctx, sysadmin, { runId: run.id, artifactId })).claimed,
+    ).toBe(true);
+
+    expect((await getProofreadingRun(ctx, stranger, rev.id)).canRun).toBe(false);
+    await failProofreadArtifact(ctx, creator, { runId: run.id, artifactId, error: "x" });
+    await expect(retryProofreadingRun(ctx, stranger, { runId: run.id })).rejects.toEqual(
+      code("forbidden"),
+    );
   });
 
   it("カテゴリ未選択の制作物は実行を作らない。受付が終わった版には作らない", async () => {
