@@ -107,7 +107,7 @@ export function WorksTable({
       >
         <thead>
           <tr>
-            {header("title", "題名")}
+            {header("title", "制作物名")}
             {header("stage", "状態", "works-table__col--stage")}
             <ColumnHeader className="works-table__col--version">版</ColumnHeader>
             {header("accepting", "校正の締切")}
