@@ -125,6 +125,40 @@ export function applyEdit(name) {
         "apps/web/src/features/review/ThreadPanel.css",
         "apps/web/src/styles.css",
       ]);
+      {
+        const editorPath = path.join(root, "apps/web/src/features/editor/Editor.tsx");
+        let editor = fs.readFileSync(editorPath, "utf8");
+        editor = editor.replace('import { ShortcutSheet } from "./ShortcutSheet";\n', "");
+        editor = editor.replace("  const [keysOpen, setKeysOpen] = useState(false);\n", "");
+        editor = editor.replace(
+          /  \/\/ \? でショートカット一覧、C でコメントを付ける[\s\S]*?\}, \[commentKey\]\);\n/,
+          `  // C でコメントを付ける（動画はビューアが C を受け持つ）。入力中は何もしない
+  const commentKey = canComment && artifact?.type !== "video";
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if ((e.key === "c" || e.key === "C") && commentKey) {
+        e.preventDefault();
+        setMarkArmed(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [commentKey]);
+`,
+        );
+        editor = editor.replace(
+          /                  \{!mobile \? \(\n                    <M3eIconButton\n                      className="ws__keys"[\s\S]*?\) : null\}\n                  \{!mobile \? \(\n/,
+          "                  {!mobile ? (\n",
+        );
+        editor = editor.replace(
+          "        <ShortcutSheet open={keysOpen} onClose={() => setKeysOpen(false)} />\n",
+          "",
+        );
+        fs.writeFileSync(editorPath, editor);
+      }
       return;
     case "review-e2e-smoke-ce0b91f":
       checkoutFromLinear(["apps/web/e2e/specs/decision.spec.ts"]);
