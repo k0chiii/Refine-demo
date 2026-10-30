@@ -81,7 +81,7 @@ import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { ShortcutSheet } from "./ShortcutSheet";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
-import { remaining } from "@/lib/format";
+import { formatDeadline, remaining } from "@/lib/format";
 import { workHint } from "@/lib/workHint";
 import {
   blockedReasonLabel,
@@ -1825,9 +1825,9 @@ export function Editor({
             <>
               {revision.label} ·{" "}
               {open
-                ? `校正中 · ${remaining(revision.deadlineAt, now)}`
+                ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
-                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  ? `締切済み（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
               {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
