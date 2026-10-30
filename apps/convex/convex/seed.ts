@@ -333,15 +333,16 @@ export const demo = internalMutation({
       created.push(workId);
     }
     // ロール別ホーム用: 校正割当付きの受付中版（dashboard.make / dashboard.check 用。1 セットだけ）
+    // e2e の PAMPHLET（PR-001）には触れない
     if (!(await ctx.db.query("reviewAssignments").first())) {
-      const pamphlet = await ctx.db
+      const sampleWork = await ctx.db
         .query("works")
         .withIndex("by_year", (q) => q.eq("year", 100))
-        .filter((q) => q.eq(q.field("legacyId"), "PR-001"))
+        .filter((q) => q.eq(q.field("legacyId"), "WEB-003"))
         .unique();
-      if (pamphlet) {
+      if (sampleWork) {
         const revisionId = await ctx.db.insert("revisions", {
-          workId: pamphlet._id,
+          workId: sampleWork._id,
           kind: "standard",
           sequence: 1,
           reviewType: "general",
