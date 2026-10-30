@@ -62,7 +62,8 @@ export async function remindUpcomingDeadlinesBatch(
   let sent = 0;
   for (const revision of page) {
     // 索引の範囲で絞っているが、判定はドメインの規則でも確かめる
-    if (revision.reviewState !== "open" || isDeadlineReached(now, revision.deadlineAt)) continue;
+    if (revision.reviewState !== "open" || revision.deadlineAt === undefined) continue;
+    if (isDeadlineReached(now, revision.deadlineAt)) continue;
     if (revision.deadlineAt - now > windowMs) continue;
     // 利用者合意（2026-10-30）: 締切当日だけ、まだ校正を完了していない人へ
     if (!isRevisionDeadlineDay(now, revision.deadlineAt)) continue;

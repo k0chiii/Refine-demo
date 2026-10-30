@@ -75,6 +75,8 @@ export async function submitRevision(
     kind?: "rough" | "standard";
     /** 版の提出種別。名簿から作る割当の種別とは別。 */
     reviewType?: string;
+    /** 緊急校正（校正の締切付き）。deadlineInHours / deadlineAt を渡したときも urgent 扱い */
+    reviewUrgent?: boolean;
     deadlineInHours?: number;
     /** 締切の時刻を直接指定する（deadlineInHours より優先） */
     deadlineAt?: number;
@@ -85,11 +87,20 @@ export async function submitRevision(
 ): Promise<Revision> {
   const principal = opts.principal ?? principals.creator;
   const files = opts.files ?? 1;
+  const hasDeadline =
+    opts.deadlineAt !== undefined ||
+    opts.deadlineInHours !== undefined ||
+    opts.reviewUrgent === true;
   const prepared = await prepareSubmission(ctx, principal, {
     workId,
     kind: opts.kind ?? "standard",
     reviewType: opts.reviewType ?? "general",
-    deadlineAt: opts.deadlineAt ?? ctx.clock.now() + (opts.deadlineInHours ?? 24) * HOUR,
+    ...(hasDeadline
+      ? {
+          reviewUrgent: true,
+          deadlineAt: opts.deadlineAt ?? ctx.clock.now() + (opts.deadlineInHours ?? 24) * HOUR,
+        }
+      : {}),
     changeSummary: "初稿",
     focusNotes: "表紙の配色",
     items: Array.from({ length: files }, (_, i) => ({

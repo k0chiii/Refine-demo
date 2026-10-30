@@ -6,7 +6,7 @@ import {
   figmaDeepLink,
   formatFigmaPlace,
   formatWebPlace,
-  isBeforeDeadline,
+  isBeforeReviewDeadline,
   isFigmaUrl,
   isReviewableArtifact,
   isWebLiveArtifact,
@@ -821,7 +821,7 @@ export function Editor({
         }))
         .filter((t) => t.anchor);
   const open = revision
-    ? revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt)
+    ? revision.reviewState === "open" && isBeforeReviewDeadline(now, revision.deadlineAt)
     : false;
   const canComment = can?.comment ?? false;
   /** 新しいコメントを書いている（位置を選び終えた。SNS 投稿のプレビューの位置は、プレビューの上の欄で書く） */
@@ -1807,7 +1807,11 @@ export function Editor({
             <>
               {revision.label} ·{" "}
               {open
-                ? `受付中 · ${remaining(revision.deadlineAt, now)}`
+                ? revision.deadlineAt !== undefined
+                  ? `${revision.reviewUrgent ? "🚨 " : ""}受付中 · ${remaining(revision.deadlineAt, now)}`
+                  : revision.reviewUrgent
+                    ? "🚨 受付中"
+                    : "受付中"
                 : revision.reviewClosedReason
                   ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}

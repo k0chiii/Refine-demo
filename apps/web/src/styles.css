@@ -5885,6 +5885,17 @@ m3e-snackbar {
   color: var(--mf-on-surface-variant);
 }
 /* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
+.submit-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+.submit-dialog__header .switch {
+  flex-shrink: 0;
+}
+
 .submit-checklist {
   display: grid;
   gap: 8px;

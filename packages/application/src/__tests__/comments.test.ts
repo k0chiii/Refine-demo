@@ -49,11 +49,11 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
         kind: "correction",
         severity: "minor",
       });
-    ctx.clock.current = revision.deadlineAt - 1000;
+    ctx.clock.current = revision.deadlineAt! - 1000;
     await expect(post()).resolves.toBeTruthy();
-    ctx.clock.current = revision.deadlineAt;
+    ctx.clock.current = revision.deadlineAt!;
     await expect(post()).rejects.toThrow(code("revision_deadline_passed"));
-    ctx.clock.current = revision.deadlineAt + 1000;
+    ctx.clock.current = revision.deadlineAt! + 1000;
     await expect(post()).rejects.toThrow(code("revision_deadline_passed"));
   });
 
@@ -65,7 +65,7 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
       kind: "correction",
       severity: "major",
     });
-    ctx.clock.current = revision.deadlineAt;
+    ctx.clock.current = revision.deadlineAt!;
     const closed = await closeExpiredReviews(ctx);
     expect(closed.map((r) => r.id)).toEqual([revision.id]);
     expect((await ctx.revisions.findById(revision.id))?.reviewClosedReason).toBe("deadline");
@@ -96,9 +96,9 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
 
   it("校正完了は読了印: 二度押しても完了時刻は最初のまま。その後に閲覧しても戻らない", async () => {
     const { ctx, revision } = await setup();
-    ctx.clock.current = revision.deadlineAt - 5 * HOUR;
+    ctx.clock.current = revision.deadlineAt! - 5 * HOUR;
     const first = await completeMyReview(ctx, principals.reviewer, revision.id);
-    ctx.clock.current = revision.deadlineAt - HOUR;
+    ctx.clock.current = revision.deadlineAt! - HOUR;
     const again = await completeMyReview(ctx, principals.reviewer, revision.id);
     expect(again.respondedAt).toBe(first.respondedAt);
     await markRevisionViewed(ctx, principals.reviewer, revision.id);
@@ -270,7 +270,7 @@ describe("採否判断（A-07, D5）", () => {
       kind: "correction",
       severity: "minor",
     });
-    ctx.clock.current = revision.deadlineAt + 1;
+    ctx.clock.current = revision.deadlineAt! + 1;
     await closeExpiredReviews(ctx);
     await expect(
       decideThread(ctx, principals.creator, { threadId: thread.id, action: "accepted" }),

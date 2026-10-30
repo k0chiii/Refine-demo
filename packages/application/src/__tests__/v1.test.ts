@@ -415,7 +415,7 @@ describe("アプリ内通知（F-11）", () => {
       reviewerIds: [principals.reviewer.userId, principals.stranger.userId],
     });
     expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 締切当日まで送らない
-    ctx.clock.current = startOfJstDay(rev.deadlineAt - 1);
+    ctx.clock.current = startOfJstDay(rev.deadlineAt! - 1);
     expect(await remindUpcomingDeadlines(ctx)).toBe(2);
     expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 二度送らない
     expect((await listMyNotifications(ctx, principals.reviewer)).map((n) => n.kind)).toEqual([

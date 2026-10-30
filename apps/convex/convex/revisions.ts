@@ -10,7 +10,7 @@ import {
   DomainError,
   isAccepting,
   isAllowed,
-  isBeforeDeadline,
+  isBeforeReviewDeadline,
   isDeadlineReached,
   isUnresponded,
   presentThread,
@@ -84,7 +84,7 @@ export const get = query({
         isAllowed("comment.post", authz) &&
         work.lifecycle !== "finalized" &&
         accepting?.id === revision.id &&
-        isBeforeDeadline(now, revision.deadlineAt);
+        isBeforeReviewDeadline(now, revision.deadlineAt);
       return {
         revision: {
           ...revision,
@@ -151,7 +151,7 @@ export const get = query({
             ? "finalized"
             : revision.reviewState !== "open"
               ? (revision.reviewClosedReason ?? "closed")
-              : isDeadlineReached(now, revision.deadlineAt)
+              : revision.deadlineAt !== undefined && isDeadlineReached(now, revision.deadlineAt)
                 ? "deadline"
                 : accepting?.id !== revision.id
                   ? "not_latest"

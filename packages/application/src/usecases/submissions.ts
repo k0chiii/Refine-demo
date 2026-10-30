@@ -52,7 +52,9 @@ export interface PrepareSubmissionInput {
   workId: string;
   kind: RevisionKind;
   reviewType: string;
-  deadlineAt: number;
+  /** 緊急校正のときだけ必須。通常提出では付けない */
+  deadlineAt?: number;
+  reviewUrgent?: boolean;
   changeSummary: string;
   focusNotes: string;
   items: Array<{
@@ -93,8 +95,17 @@ export async function prepareSubmission(
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "revision.submit");
   assertWorkActive(work);
   const now = ctx.clock.now();
-  if (input.deadlineAt <= now)
-    throw new DomainError("revision_deadline_in_past", { now, deadlineAt: input.deadlineAt });
+  const urgent = input.reviewUrgent === true || input.deadlineAt !== undefined;
+  if (input.reviewUrgent === true && input.deadlineAt === undefined)
+    throw new DomainError("revision_deadline_required", { reviewUrgent: true });
+  if (input.reviewUrgent === false && input.deadlineAt !== undefined)
+    throw new DomainError("revision_deadline_not_allowed", { reviewUrgent: false });
+  if (urgent) {
+    if (input.deadlineAt === undefined)
+      throw new DomainError("revision_deadline_required", { reviewUrgent: true });
+    if (input.deadlineAt <= now)
+      throw new DomainError("revision_deadline_in_past", { now, deadlineAt: input.deadlineAt });
+  }
   // 0版の重複・通常版の後の0版は準備段階で早期に弾く（確定時にも再検証する）
   const baseRevisions = await ctx.revisions.listByWork(work.id);
   planRevision(baseRevisions, input.kind);
@@ -122,7 +133,8 @@ export async function prepareSubmission(
         submittedBy: principal.userId,
         kind: input.kind,
         reviewType: input.reviewType,
-        deadlineAt: input.deadlineAt,
+        ...(input.deadlineAt !== undefined ? { deadlineAt: input.deadlineAt } : {}),
+        ...(urgent ? { reviewUrgent: true } : {}),
         changeSummary: input.changeSummary,
         focusNotes: input.focusNotes,
         state: "open",
@@ -397,7 +409,8 @@ export async function confirmSubmission(
         reviewType: session.reviewType,
         submittedBy: principal.userId,
         now,
-        deadlineAt: session.deadlineAt,
+        ...(session.deadlineAt !== undefined ? { deadlineAt: session.deadlineAt } : {}),
+        ...(session.reviewUrgent === true ? { reviewUrgent: true } : {}),
         changeSummary: session.changeSummary,
         focusNotes: session.focusNotes,
         ...(session.declarations ? { declarations: session.declarations } : {}),

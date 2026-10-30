@@ -3,7 +3,8 @@ import type { Id } from "@mf100/convex/dataModel";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { formatDeadlineUntil, formatJstShort } from "@/lib/format";
+import { formatJstShort } from "@/lib/format";
+import { formatOpenReviewDeadline } from "@/lib/urgentReview";
 import { closedReasonLabel, reviewStateLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { StatusText } from "@/ui/Chip";
@@ -92,7 +93,7 @@ export function VersionsTab({
                 </div>
                 <div className="small muted">
                   {r.reviewState === "open"
-                    ? `受付中・締切 ${formatDeadlineUntil(r.deadlineAt)}`
+                    ? formatOpenReviewDeadline(r.reviewUrgent, r.deadlineAt, Date.now())
                     : r.reviewState === "void"
                       ? reviewStateLabel.void
                       : (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "受付終了")}

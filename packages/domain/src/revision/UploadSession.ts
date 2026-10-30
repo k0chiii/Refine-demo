@@ -20,7 +20,9 @@ export interface UploadSession {
   submittedBy: UserId;
   kind: RevisionKind;
   reviewType: string;
-  deadlineAt: Instant;
+  deadlineAt?: Instant;
+  /** 提出ダイアログの「緊急」トグル（確定時に版へ写す） */
+  reviewUrgent?: boolean;
   changeSummary: string;
   focusNotes: string;
   state: UploadSessionState;

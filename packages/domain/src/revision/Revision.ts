@@ -22,7 +22,10 @@ export interface Revision {
   reviewType: string;
   submittedBy: UserId;
   submittedAt: Instant;
-  deadlineAt: Instant;
+  /** 緊急校正など、提出時に付けた校正の締切。無い通常提出は期限で受付を閉じない */
+  deadlineAt?: Instant;
+  /** 提出ダイアログの「緊急」トグルで付けた版（一覧・校画面・通知の印） */
+  reviewUrgent?: boolean;
   reviewState: ReviewState;
   reviewClosedReason?: ReviewClosedReason;
   reviewClosedAt?: Instant;
@@ -93,7 +96,8 @@ export interface NewRevisionInput {
   reviewType: string;
   submittedBy: UserId;
   now: Instant;
-  deadlineAt: Instant;
+  deadlineAt?: Instant;
+  reviewUrgent?: boolean;
   changeSummary: string;
   focusNotes: string;
   snapshotHash?: string;
@@ -102,11 +106,15 @@ export interface NewRevisionInput {
 }
 
 export function createRevision(input: NewRevisionInput, plan: RevisionPlan): NewRevision {
-  if (!isBeforeDeadline(input.now, input.deadlineAt)) {
-    throw new DomainError("revision_deadline_in_past", {
-      now: input.now,
-      deadlineAt: input.deadlineAt,
-    });
+  const urgent = input.reviewUrgent === true || input.deadlineAt !== undefined;
+  if (urgent) {
+    if (input.deadlineAt === undefined)
+      throw new DomainError("revision_deadline_required", { reviewUrgent: true });
+    if (!isBeforeDeadline(input.now, input.deadlineAt))
+      throw new DomainError("revision_deadline_in_past", {
+        now: input.now,
+        deadlineAt: input.deadlineAt,
+      });
   }
   const revision: NewRevision = {
     workId: input.workId,
@@ -115,7 +123,6 @@ export function createRevision(input: NewRevisionInput, plan: RevisionPlan): New
     reviewType: input.reviewType,
     submittedBy: input.submittedBy,
     submittedAt: input.now,
-    deadlineAt: input.deadlineAt,
     reviewState: "open",
     changeSummary: input.changeSummary,
     focusNotes: input.focusNotes,
@@ -127,7 +134,15 @@ export function createRevision(input: NewRevisionInput, plan: RevisionPlan): New
   if (input.declarations !== undefined) revision.declarations = { ...input.declarations };
   if (input.selfChecks !== undefined && input.selfChecks.length > 0)
     revision.selfChecks = [...input.selfChecks];
+  if (input.deadlineAt !== undefined) revision.deadlineAt = input.deadlineAt;
+  if (urgent) revision.reviewUrgent = true;
   return revision;
+}
+
+/** 版の校正締切前か。締切が無い通常提出は常に true（受付中の間） */
+export function isBeforeReviewDeadline(now: Instant, deadlineAt: Instant | undefined): boolean {
+  if (deadlineAt === undefined) return true;
+  return isBeforeDeadline(now, deadlineAt);
 }
 
 /** 新版確定と同一トランザクションで旧版を superseded で閉じる（D1 / A-17）。既に閉じている版は変更しない。 */
@@ -145,6 +160,7 @@ export function supersede(previous: Revision, by: Pick<Revision, "id">, now: Ins
 /** 期限到来で受付のみ終了する（A-05）。未読・指摘・校了状態には触れない。 */
 export function closeByDeadline(revision: Revision, now: Instant): Revision {
   if (revision.reviewState !== "open") return revision;
+  if (revision.deadlineAt === undefined) return revision;
   if (isBeforeDeadline(now, revision.deadlineAt)) return revision;
   return {
     ...revision,
@@ -171,7 +187,7 @@ export function assertCanPostComment(
       reason: revision.reviewClosedReason,
     });
   }
-  if (!isBeforeDeadline(now, revision.deadlineAt)) {
+  if (revision.deadlineAt !== undefined && !isBeforeDeadline(now, revision.deadlineAt)) {
     throw new DomainError("revision_deadline_passed", {
       revisionId: revision.id,
       now,

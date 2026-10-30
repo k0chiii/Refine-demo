@@ -63,28 +63,29 @@ describe("supersede / closeByDeadline（独立した受付終了 / A-05, A-17）
   });
   it("期限前なら closeByDeadline は何もしない", () => {
     const r = makeRevision();
-    expect(closeByDeadline(r, r.deadlineAt - 1)).toBe(r);
+    expect(closeByDeadline(r, r.deadlineAt! - 1)).toBe(r);
   });
 });
 
 describe("assertCanPostComment（期限境界 / A-04）", () => {
   const r = makeRevision();
+  const deadline = r.deadlineAt!;
   it("期限の1秒前は投稿できる", () => {
-    expect(() => assertCanPostComment(r, r.deadlineAt - 1000, r.id)).not.toThrow();
+    expect(() => assertCanPostComment(r, deadline - 1000, r.id)).not.toThrow();
   });
   it("期限ちょうどは拒否する", () => {
-    expect(() => assertCanPostComment(r, r.deadlineAt, r.id)).toThrowError(
+    expect(() => assertCanPostComment(r, deadline, r.id)).toThrowError(
       expect.objectContaining({ code: "revision_deadline_passed" }),
     );
   });
   it("期限の1秒後は拒否する", () => {
-    expect(() => assertCanPostComment(r, r.deadlineAt + 1000, r.id)).toThrowError(
+    expect(() => assertCanPostComment(r, deadline + 1000, r.id)).toThrowError(
       expect.objectContaining({ code: "revision_deadline_passed" }),
     );
   });
   it("期限ジョブが遅れて open のままでも時刻比較で拒否する", () => {
     expect(() =>
-      assertCanPostComment({ ...r, reviewState: "open" }, r.deadlineAt + 1, r.id),
+      assertCanPostComment({ ...r, reviewState: "open" }, deadline + 1, r.id),
     ).toThrow();
   });
   it("superseded 済みの版には投稿できない", () => {
@@ -110,6 +111,7 @@ describe("createRevision", () => {
           reviewType: "general",
           submittedBy: "c",
           now: T0,
+          reviewUrgent: true,
           deadlineAt: T0,
           changeSummary: "",
           focusNotes: "",
@@ -117,6 +119,22 @@ describe("createRevision", () => {
         { sequence: 1, toSupersede: null },
       ),
     ).toThrowError(expect.objectContaining({ code: "revision_deadline_in_past" }));
+  });
+  it("通常提出は校正期限なしで作れる", () => {
+    const r = createRevision(
+      {
+        workId: "w",
+        kind: "standard",
+        reviewType: "general",
+        submittedBy: "c",
+        now: T0,
+        changeSummary: "",
+        focusNotes: "",
+      },
+      { sequence: 1, toSupersede: null },
+    );
+    expect(r.deadlineAt).toBeUndefined();
+    expect(r.reviewUrgent).toBeUndefined();
   });
 });
 

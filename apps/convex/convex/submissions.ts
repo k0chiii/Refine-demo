@@ -42,7 +42,8 @@ export const prepare = mutation({
     workId: v.id("works"),
     kind: vRevisionKind,
     reviewType: v.string(),
-    deadlineAt: v.number(),
+    deadlineAt: v.optional(v.number()),
+    reviewUrgent: v.optional(v.boolean()),
     changeSummary: v.string(),
     focusNotes: v.string(),
     items: v.array(

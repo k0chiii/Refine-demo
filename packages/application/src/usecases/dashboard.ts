@@ -62,6 +62,8 @@ export interface DashboardItem {
   mediaType?: MediaType;
   /** 「次の締切」: 校正の締切か制作物の納期か */
   deadlineKind?: "review" | "delivery";
+  /** 緊急校正（提出時のトグル） */
+  reviewUrgent?: boolean;
   /** 「自分宛てのコメント」: 通知とコメント */
   notificationId?: string;
   threadId?: string;
@@ -221,6 +223,7 @@ function itemOf(
     revisionLabel: r?.label ?? null,
     deadlineAt,
     count,
+    ...(r?.reviewUrgent ? { reviewUrgent: true } : {}),
   };
 }
 
@@ -317,7 +320,7 @@ async function addCheckTasks(out: CheckTasks, g: WorkGlance): Promise<void> {
   const { revision: accepting, assignments, checks, pendingChecks, reviewersDone, mine } = open;
   const me = authz.principal.userId;
   const { unresolved } = g.tally;
-  const item = (count = 0) => itemOf(work, accepting, accepting.deadlineAt, count);
+  const item = (count = 0) => itemOf(work, accepting, accepting.deadlineAt ?? null, count);
   const progress = () => ({ done: reviewersDone, total: assignments.length });
   if (isReviewPending(mine))
     out.mine.review.push({
@@ -356,7 +359,7 @@ async function addCheckTasks(out: CheckTasks, g: WorkGlance): Promise<void> {
 function respondItem(g: WorkGlance): DashboardItem | null {
   const { open, tally } = g;
   if (!open || tally.unresolved === 0 || !isAllowed("comment.decide", g.authz)) return null;
-  return itemOf(g.work, open.revision, open.revision.deadlineAt, tally.unresolved);
+  return itemOf(g.work, open.revision, open.revision.deadlineAt ?? null, tally.unresolved);
 }
 
 /** 全体の状況・滞っている制作物・締切の候補を、制作物ごとに足していく入れ物 */
@@ -467,15 +470,15 @@ async function addOverview(parts: OverviewParts, g: WorkGlance): Promise<void> {
     if (tally.lastCreatedAt !== null)
       lastActivity = Math.max(lastActivity ?? 0, tally.lastCreatedAt);
     if (assignments.length === 0)
-      backlog.unassigned.push(itemOf(work, accepting, accepting.deadlineAt));
+      backlog.unassigned.push(itemOf(work, accepting, accepting.deadlineAt ?? null));
     // 校正の締切: 自分が校正する版、または職責のある制作物の受付中の版
     if (isReviewPending(open.mine) || roleHolder)
       deadlines.push({
-        ...itemOf(work, accepting, accepting.deadlineAt, tally.unresolved),
+        ...itemOf(work, accepting, accepting.deadlineAt ?? null, tally.unresolved),
         deadlineKind: "review",
       });
   } else if (latest?.lapsed) {
-    backlog.overdue.push(itemOf(work, latest, latest.deadlineAt, tally.unresolved));
+    backlog.overdue.push(itemOf(work, latest, latest.deadlineAt ?? null, tally.unresolved));
     countThreads();
     Object.assign(detail, {
       revisionId: latest.id,

@@ -1,7 +1,7 @@
 import { completeMyReview, setWorkReviewers } from "@mf100/application";
 import {
   isApproverOf,
-  isBeforeDeadline,
+  isBeforeReviewDeadline,
   isDeadlineReached,
   overridesAllPermissions,
   revisionLabel,
@@ -103,14 +103,21 @@ export const myQueue = query({
         reviewType: a.reviewType,
         focusNotes: revision.focusNotes,
         deadlineAt: revision.deadlineAt,
+        reviewUrgent: revision.reviewUrgent === true,
         reviewState: revision.reviewState,
-        isOpen: revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt),
-        overdue: revision.reviewState !== "open" || isDeadlineReached(now, revision.deadlineAt),
+        isOpen: revision.reviewState === "open" && isBeforeReviewDeadline(now, revision.deadlineAt),
+        overdue:
+          revision.reviewState !== "open" ||
+          (revision.deadlineAt !== undefined && isDeadlineReached(now, revision.deadlineAt)),
         assignmentState: a.state,
         myCommentCount: myThreads.filter((t) => t.authorId === principal.userId).length,
         totalCommentCount: myThreads.length,
       });
     }
-    return items.sort((a, b) => Number(b.isOpen) - Number(a.isOpen) || a.deadlineAt - b.deadlineAt);
+    return items.sort(
+      (a, b) =>
+        Number(b.isOpen) - Number(a.isOpen) ||
+        (a.deadlineAt ?? Infinity) - (b.deadlineAt ?? Infinity),
+    );
   },
 });

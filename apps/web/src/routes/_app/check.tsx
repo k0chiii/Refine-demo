@@ -11,6 +11,7 @@ import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo } from "react";
 import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
+import { urgentReviewPrefix } from "@/lib/urgentReview";
 import { rememberWorkspace } from "@/lib/workspace";
 import { rememberWorkHint } from "@/lib/workHint";
 import { AppBarSlot } from "@/ui/AppBarSlot";
@@ -66,6 +67,10 @@ const detailOf = (e: { kind: CheckKind; item: Item }): string => {
     .join("・");
 };
 
+const reviewDeadlineLine = (item: Item): string => {
+  if (item.deadlineAt == null) return item.reviewUrgent ? "🚨 緊急校正" : "校正の締切 —";
+  return `${urgentReviewPrefix(item.reviewUrgent)}${deadlineLine("校正の締切", item.deadlineAt)}`;
+};
 const tabLabel: Record<CheckTab, string> = { todo: "未着手", doing: "確認中", done: "完了" };
 const emptyText: Record<CheckTab, string> = {
   todo: "未着手の校正はありません",
@@ -159,7 +164,7 @@ function Check() {
               icon={kindIcon[e.kind]}
               title={e.title}
               suffix={e.item.revisionLabel}
-              lines={[detailOf(e), deadlineLine("校正の締切", e.deadlineAt)]}
+              lines={[detailOf(e), reviewDeadlineLine(e.item)]}
               chip={chipOf(e.kind, e.state)}
               chipIcon={e.state === "done" ? "visibility" : kindIcon[e.kind]}
               onOpen={() => open(e.item.workId, e.title, e.kind === "check" ? { tab: "info" } : {})}
@@ -175,7 +180,7 @@ function Check() {
               icon="group_add"
               title={i.workTitle}
               suffix={i.revisionLabel}
-              lines={["校正者がいません", deadlineLine("校正の締切", i.deadlineAt)]}
+              lines={["校正者がいません", reviewDeadlineLine(i)]}
               chip="割り当てる"
               chipIcon="group_add"
               onOpen={() => open(i.workId, i.workTitle, { tab: "info" })}

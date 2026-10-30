@@ -84,7 +84,7 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("期限到来で受付が終わり次の版が無いと「期限超過」、長く動きがないと「動きなし」", async () => {
     const { ctx, works, revision } = await setup();
-    ctx.clock.current = revision.deadlineAt + HOUR;
+    ctx.clock.current = revision.deadlineAt! + HOUR;
     await closeExpiredReviews(ctx, 10);
     let d = await buildDashboard(ctx, principals.creator, await works());
     expect(d.backlog.overdue.map((i) => i.revisionId)).toEqual([revision.id]);
@@ -155,7 +155,7 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("全体の状況: 期限到来で受付が終わると「受付終了」で期限超過、自分の数字にも出る", async () => {
     const { ctx, works, revision } = await setup();
-    ctx.clock.current = revision.deadlineAt + HOUR;
+    ctx.clock.current = revision.deadlineAt! + HOUR;
     await closeExpiredReviews(ctx, 10);
     const d = await buildDashboard(ctx, principals.creator, await works());
     expect(d.overview.stages.lapsed).toBe(1);

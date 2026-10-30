@@ -114,8 +114,15 @@ export async function syncRevisionToRoster(
     actorId,
     {
       kind: "review_assigned",
-      title: "校正を割り当てられました",
-      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}。締切は ${formatDeadlineUntil(revision.deadlineAt, now)}。${
+      title:
+        revision.reviewUrgent === true
+          ? "🚨 緊急校正を割り当てられました"
+          : "校正を割り当てられました",
+      body: `${about(work.title, revisionLabel(revision), who ? `${who}から` : null)}。${
+        revision.deadlineAt !== undefined
+          ? `締切は ${formatDeadlineUntil(revision.deadlineAt, now)}。`
+          : ""
+      }${
         revision.focusNotes?.trim()
           ? `見てほしい観点: ${excerpt(revision.focusNotes, 80)}`
           : "校正画面で内容を確かめ、終わったら「校正を完了」を押してください。"
