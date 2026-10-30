@@ -8,6 +8,10 @@ const manifest = JSON.parse(fs.readFileSync(path.join(stackDir, "manifest.json")
 const rows = JSON.parse(fs.readFileSync(path.join(stackDir, "published-branches.json"), "utf8"));
 const byId = new Map(manifest.map((m) => [m.id, m]));
 const fixtures = path.join(stackDir, "fixtures");
+/** PR 本文用: GitHub raw（ブランチに PNG を commit したうえで参照） */
+const RAW_SCREENSHOT_BASE =
+  process.env.STACK_PR_RAW_BASE ??
+  "https://raw.githubusercontent.com/k0chiii/Refine-demo/cursor/stack-docs-stack-pr-tracking-8b5a/docs/stack-pr-screenshots";
 
 function shotSection(id, item) {
   const artDir = path.join("/workspace/artifacts/stack-pr", id);
@@ -17,36 +21,35 @@ function shotSection(id, item) {
   const afterM = path.join(artDir, "after-mobile.png");
   const fix058d = path.join(fixtures, "x3-focused-comment.png");
   const fix058m = path.join(fixtures, "x3b-mobile-focused-comment.png");
+  const raw058d = `${RAW_SCREENSHOT_BASE}/058/x3-focused-comment.png`;
+  const raw058m = `${RAW_SCREENSHOT_BASE}/058/x3b-mobile-focused-comment.png`;
 
-  if (id === "058" && fs.existsSync(fix058d)) {
-    lines.push("### After（デスクトップ・選択中コメント）");
-    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`);
-    lines.push("");
-  }
-  if (id === "060" && fs.existsSync(fix058d)) {
-    lines.push("### After（デスクトップ）");
-    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/058/after-desktop.png" />`);
+  if ((id === "058" || id === "060") && fs.existsSync(fix058d)) {
+    lines.push("### After（デスクトップ・選択中コメント / x3）");
+    lines.push(`<img alt="after desktop x3" src="${raw058d}" />`);
     lines.push("");
     if (fs.existsSync(fix058m)) {
-      lines.push("### After（412px）");
-      lines.push(`<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/058/after-mobile.png" />`);
+      lines.push("### After（412px / x3b）");
+      lines.push(`<img alt="after mobile x3b" src="${raw058m}" />`);
       lines.push("");
     }
   }
 
   if (fs.existsSync(beforeD)) {
     lines.push("### Before");
-    lines.push(`<img alt="before desktop" src="/opt/cursor/artifacts/stack-pr/${id}/before-desktop.png" />`);
+    lines.push(
+      `<img alt="before desktop" src="${RAW_SCREENSHOT_BASE}/${id}/before-desktop.png" />`,
+    );
     lines.push("");
   }
   if (fs.existsSync(afterD) && id !== "058" && id !== "060") {
     lines.push("### After");
-    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`);
+    lines.push(`<img alt="after desktop" src="${RAW_SCREENSHOT_BASE}/${id}/after-desktop.png" />`);
     lines.push("");
   }
   if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060") {
     lines.push("### After（モバイル）");
-    lines.push(`<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/${id}/after-mobile.png" />`);
+    lines.push(`<img alt="after mobile" src="${RAW_SCREENSHOT_BASE}/${id}/after-mobile.png" />`);
     lines.push("");
   }
   if (lines.length <= 2) {
