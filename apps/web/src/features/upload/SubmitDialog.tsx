@@ -14,6 +14,7 @@ import {
   isGraphicSubmissionFile,
   isIllustratorFile,
   isReviewableArtifact,
+  isSlideSubGenre,
   pickReviewArtifact,
   revisionDeclarationItems,
   suggestedChecksFor,
@@ -87,7 +88,7 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
         accept: ".pdf,application/pdf,image/*,.ai,.indd",
         noun: "PDF・画像・Illustrator（.ai）・InDesign（.indd）",
         matches: (f) => isGraphicSubmissionFile({ fileName: f.name, mimeType: f.type }),
-        link: true,
+        link: false,
       };
     case "video":
       return {
@@ -101,9 +102,22 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
     case "sns":
       return { kind: "files", link: false };
     default:
-      return { kind: "files", link: true };
+      return { kind: "files", link: false };
   }
 }
+
+/** URL らしければ受け付ける（Google スライドに限定しない） */
+const isUrlLike = (raw: string) => {
+  const t = raw.trim();
+  if (t.length < 4) return false;
+  if (/^https?:\/\//i.test(t)) return true;
+  try {
+    new URL(t.includes("://") ? t : `https://${t}`);
+    return true;
+  } catch {
+    return /\.\S/.test(t);
+  }
+};
 
 /** http(s) の URL か（ライブ表示の iframe に渡せるもの） */
 const isHttpUrl = (raw: string) => {
@@ -238,6 +252,7 @@ export function SubmitDialog({
   }, [state.confirmed?.revisionId]);
 
   const work = data?.work ?? null;
+  const slideSubmit = isSlideSubGenre(work?.subGenre);
   const revisions = data?.revisions ?? [];
   const hasRough = revisions.some((r) => r.kind === "rough");
   const hasStandard = revisions.some((r) => r.kind === "standard");
@@ -295,13 +310,10 @@ export function SubmitDialog({
       return setError("サイトの URL を https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
-    if (
-      input.kind === "files" &&
-      graphic &&
-      form.externalUrl.trim() &&
-      !isHttpUrl(form.externalUrl)
-    )
-      return setError("スライドのリンクは https:// から入れてください");
+    if (slideSubmit && !form.externalUrl.trim())
+      return setError("スライドのリンクを入力してください");
+    if (slideSubmit && form.externalUrl.trim() && !isUrlLike(form.externalUrl))
+      return setError("リンクの形が正しくありません");
     // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
     // （サーバーも確定のときに同じ規則で断る）
     if (input.kind === "files" && graphic) {
@@ -361,7 +373,7 @@ export function SubmitDialog({
         externalUrl: f.url,
       })),
       ...(form.externalUrl.trim() &&
-      (input.kind === "web" || (input.kind === "files" && input.link))
+      (input.kind === "web" || slideSubmit || (input.kind === "files" && input.link))
         ? [
             {
               fileName: form.externalUrl.trim(),
@@ -439,7 +451,9 @@ export function SubmitDialog({
       ? !form.externalUrl.trim()
       : input.kind === "figma"
         ? figmaFrames.length === 0
-        : files.length === 0 && !(input.link && form.externalUrl.trim()));
+        : slideSubmit
+          ? files.length === 0 || !form.externalUrl.trim()
+          : files.length === 0);
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
@@ -511,6 +525,11 @@ export function SubmitDialog({
                   addFiles(e.dataTransfer.files, true);
                 }}
               >
+                {slideSubmit ? (
+                  <p className="label-large" style={{ margin: "0 0 8px" }}>
+                    PDF（必須、校正対象）
+                  </p>
+                ) : null}
                 <M3eIcon name="upload_file" />
                 <span>
                   {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
@@ -552,16 +571,18 @@ export function SubmitDialog({
                     .ai・.indd はプレビューできません。PDF か画像も付けてください
                   </p>
                 ) : null}
-                {input.kind === "files" && input.link && graphic ? (
+                {slideSubmit ? (
                   <Field
-                    label="Google スライドなどのリンク"
-                    hint="PDF とセットで提出するときは、スライドの共有リンクを貼ってください。校正者は PDF 上でコメントし、スライドは外部リンクから開けます"
+                    label="スライドのリンク"
+                    required
+                    hint="Google スライドなど、共有 URL を貼ってください。校正は PDF 上で行います"
                   >
                     <TextInput
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       value={form.externalUrl}
                       onChange={set("externalUrl")}
-                      placeholder="https://docs.google.com/presentation/d/…"
+                      placeholder="https://"
                     />
                   </Field>
                 ) : null}
