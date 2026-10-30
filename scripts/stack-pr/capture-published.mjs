@@ -9,7 +9,30 @@ const id = process.argv[2];
 const locked = process.argv.includes("--locked");
 const self = fileURLToPath(import.meta.url);
 const repo = "/tmp/wt-001";
+const workspace = "/workspace";
 const lock = "/tmp/stack-pr-capture.lock";
+
+function linkWorkspaceNodeModules() {
+  const dirs = [
+    "node_modules",
+    "apps/web/node_modules",
+    "apps/convex/node_modules",
+    "apps/api/node_modules",
+    "packages/domain/node_modules",
+    "packages/application/node_modules",
+  ];
+  for (const d of dirs) {
+    const src = path.join(workspace, d);
+    if (!fs.existsSync(src)) continue;
+    const dest = path.join(repo, d);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    try {
+      fs.symlinkSync(src, dest, "dir");
+    } catch {
+      /* exists */
+    }
+  }
+}
 
 if (!id) {
   console.error("usage: node capture-published.mjs <id>");
@@ -47,6 +70,8 @@ async function main() {
   }
 
   process.env.STACK_PR_REPO = repo;
+  process.env.PATH = `${path.join(workspace, "node_modules/.bin")}:${process.env.PATH ?? ""}`;
+  linkWorkspaceNodeModules();
   const outDir = path.join("/workspace/docs/stack-pr-screenshots", id);
   const tmpBefore = path.join("/workspace/artifacts/stack-pr", id, "cap-before");
   const tmpAfter = path.join("/workspace/artifacts/stack-pr", id, "cap-after");
