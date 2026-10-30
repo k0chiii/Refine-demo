@@ -16,7 +16,8 @@
 - 詳細画面（detail.png）の版コメント・情報校正・校了前チェックリスト
 - design-questions #4 配色、#7 解決済み折りたたみ、#8 ナビ
 - 監査 Q2 の UI への 7 段階反映（domain は 069 で ID のみ）
-- 各 PR の before/after 画像を `node scripts/stack-pr/run-one.mjs --from <id>` で生成（build:demo）
+- 参考 patch `ref-ce0b91f` / `ref-44dba54` を `stack-linear` 先端に反映済み。**058–060・066 のリモート branch は `build-linear --from 058` で再 publish が必要**
+- 44dba54 の残り分割候補: InfoTab/WorkForm/AiBackground（1 PR）、domain+docs 用語（1 PR）— 現状は 066 と同コミットに同梱
 
 ## 衝突
 
@@ -83,7 +84,7 @@
 | 055 | A-ui-copy   | copy: index.tsx.patch の文言短縮・用語統一                       | なし       | `cursor/stack-055-copy-apps-web-src-routes-app-works-index-tsx-patch-8b5a`    |
 | 056 | A-ui-copy   | copy: signin.tsx.patch の文言短縮・用語統一                      | なし       | `cursor/stack-056-copy-apps-web-src-routes-signin-tsx-patch-8b5a`             |
 | 057 | A-ui-copy   | copy: DateField.tsx.patch の文言短縮・用語統一                   | なし       | `cursor/stack-057-copy-apps-web-src-ui-DateField-tsx-patch-8b5a`              |
-| 058 | A-ui-copy   | review: 選んだコメントのパネルにだけ反映ボタン行を出す           | あり       | `cursor/stack-058-review-decide-buttons-panel-8b5a`                           |
+| 058 | A-ui-copy   | review: 選んだ／フォーカスしたコメントにだけ採否ボタン行           | あり       | `cursor/stack-058-review-decide-buttons-panel-8b5a`                           |
 | 059 | A-ui-copy   | review: 一覧カードは小さな状態表示のみ（✓ クイック操作をやめる） | なし       | `cursor/stack-059-review-card-status-not-actions-8b5a`                        |
 | 060 | A-ui-copy   | test(e2e): 反映ボタン行に合わせ decision spec を更新             | なし       | `cursor/stack-060-review-e2e-decision-8b5a`                                   |
 | 061 | A-ui-copy   | editor: ? でショートカット一覧                                   | あり       | `cursor/stack-061-editor-shortcut-sheet-8b5a`                                 |
