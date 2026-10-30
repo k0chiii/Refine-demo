@@ -208,7 +208,7 @@ export function ThreadCard({
           className="thread__footer"
           aria-label={
             t.replyCount > 0
-              ? `返信 ${t.replyCount} 件。スレッドを開く${t.unread ? "（未読）" : ""}`
+              ? `${t.replyCount}件の返信。スレッドを開く${t.unread ? "（未読）" : ""}`
               : `スレッドを開く${t.unread ? "（未読）" : ""}`
           }
           onClick={(e) => {
@@ -218,6 +218,8 @@ export function ThreadCard({
         >
           {hidden > 0 ? (
             <span className="thread__replies">ほか {hidden} 件の返信</span>
+          ) : t.replyCount > 0 ? (
+            <span className="thread__replies">{t.replyCount}件の返信</span>
           ) : canReply ? (
             <span className="thread__replies">返信</span>
           ) : null}

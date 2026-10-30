@@ -454,16 +454,7 @@ export async function confirmSubmission(
       at: now,
     });
     const who = await personName(ctx, principal.userId);
-    const pinners = await ctx.home.listPinners(work.id);
-    await notify(ctx, [...workStakeholders(work), ...pinners], principal.userId, {
-      kind: "revision_submitted",
-      title: "新しい版が提出されました",
-      body: `${about(work.title, revisionLabel(revision), who)}: ${
-        revision.changeSummary?.trim() ? excerpt(revision.changeSummary) : "変更点の記載なし"
-      }`,
-      workId: work.id,
-      revisionId: revision.id,
-    });
+    // 利用者合意（2026-10-30）: 版提出の通知は出さない（ピン留め購読者向け revision_submitted も含む）
     for (const c of session.requiredChecks ?? []) {
       if (c.assigneeId) {
         await notify(ctx, [c.assigneeId], principal.userId, {

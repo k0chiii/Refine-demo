@@ -13,7 +13,7 @@ export const reviewStateLabel: Record<string, string> = {
   void: "無効",
 };
 export const closedReasonLabel: Record<string, string> = {
-  deadline: "期限到来",
+  deadline: "期限後",
   superseded: "新版提出",
   void: "無効化",
 };

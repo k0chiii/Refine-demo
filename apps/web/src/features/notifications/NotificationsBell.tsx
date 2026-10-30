@@ -46,9 +46,13 @@ function useNotifications() {
   const navigate = useNavigate();
   const list = useQuery(api.notifications.list, { limit: 20 });
   const markRead = useMutation(api.notifications.markRead);
+  const markUnread = useMutation(api.notifications.markUnread);
   const markAllRead = useMutation(api.notifications.markAllRead);
   const doMarkAll = useAction(async () => {
     await markAllRead({});
+  });
+  const doMarkUnread = useAction(async (notificationId: Id<"notifications">) => {
+    await markUnread({ notificationId });
   });
   const openOne = useAction(async (n: NonNullable<typeof list>[number]) => {
     if (n.readAt === undefined) await markRead({ notificationId: n.id as Id<"notifications"> });
@@ -64,7 +68,7 @@ function useNotifications() {
       void navigate({ to: "/notation", search: { view: "proposals" } });
   });
   const unread = (list ?? []).filter((n) => n.readAt === undefined).length;
-  return { list, unread, doMarkAll, openOne };
+  return { list, unread, doMarkAll, doMarkUnread, openOne };
 }
 
 /**
@@ -117,7 +121,7 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
  * 押した通知は既読にして、対象（その版のエディタ）へ飛ぶ。
  */
 function Menu({ id }: { id: string }) {
-  const { list, unread, doMarkAll, openOne } = useNotifications();
+  const { list, unread, doMarkAll, doMarkUnread, openOne } = useNotifications();
   return (
     <M3eMenu id={id} positionX="before" className="notif-menu">
       <div className="notif-menu__header">
@@ -160,7 +164,7 @@ function Menu({ id }: { id: string }) {
  * 下部バーの「通知」から開き、外側を押す・下へ払う・通知を押すと閉じる。
  */
 function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { list, unread, doMarkAll, openOne } = useNotifications();
+  const { list, unread, doMarkAll, doMarkUnread, openOne } = useNotifications();
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current as
@@ -221,6 +225,19 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
               </span>
+              {n.readAt !== undefined ? (
+                <M3eIconButton
+                  slot="trailing"
+                  aria-label="未読に戻す"
+                  title="未読に戻す"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void doMarkUnread.run(n.id as Id<"notifications">);
+                  }}
+                >
+                  <M3eIcon name="mark_chat_unread" />
+                </M3eIconButton>
+              ) : null}
             </M3eListAction>
           ))}
         </M3eActionList>
