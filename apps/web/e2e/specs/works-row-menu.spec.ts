@@ -12,10 +12,7 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
   test("主管が ⋮ → 情報を編集で目的・用途を書き足せる", async ({ app, page }) => {
     await app.signInAs("mock-nogiku-manager");
     await app.go("/works");
-    const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await app.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
-    await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
-    const dialog = app.dialog();
+    const dialog = await app.editWorkFromList(title);
     await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を編集");
     // 目的・用途は 2 つ目の欄（1 つ目は制作物名）
     const purpose = dialog.locator("textarea").first();

@@ -443,6 +443,14 @@ export class App {
     await this.settle();
   }
 
+  /** 制作物一覧（/works）の行の「⋮」→「情報を編集」で編集のダイアログを開き、そのダイアログを返す（主管の行だけに出る） */
+  async editWorkFromList(title: string) {
+    const row = this.page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await this.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
+    await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
+    return this.dialog();
+  }
+
   /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */
   async openNotificationSettings() {
     const page = this.page;
