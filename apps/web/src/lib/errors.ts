@@ -108,6 +108,7 @@ const messages: Record<string, string> = {
   push_subscription_invalid:
     "この端末への通知を設定できませんでした。ブラウザを更新してやり直してください。",
   notification_prefs_invalid: "通知の設定を保存できませんでした。もう一度お試しください。",
+  test_notification_too_soon: "テスト通知は 1 分に 1 回まで送れます",
   slack_workspace_invalid:
     "ワークスペースの内容を確かめてください。名前は 80 文字まで、team_id は T で始まる英数字です。",
   slack_workspace_duplicate: "同じ team_id のワークスペースはもう登録されています",

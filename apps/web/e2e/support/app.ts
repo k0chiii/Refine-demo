@@ -489,6 +489,11 @@ export class App {
     return dialog;
   }
 
+  /** 「通知の設定」の「テスト通知を送る」（§112） */
+  sendTestNotificationButton() {
+    return this.page.locator('m3e-dialog[open] [data-action="send-test"]');
+  }
+
   /** 「通知の設定」の届け先の行（登録メールアドレス・Slack（DM））。スイッチは行の中の m3e-switch */
   notificationChannel(channel: "email" | "slack") {
     return this.page.locator(`m3e-dialog[open] .notif-channel[data-channel="${channel}"]`);

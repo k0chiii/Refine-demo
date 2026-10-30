@@ -1,6 +1,6 @@
 import { expect, test } from "../support/app";
 
-// docs/UI_M3E.md §103（通知の設定の届け先）・§110（Slack のメールアドレス）。デモには env が無いので何も送らず、
+// docs/UI_M3E.md §103（通知の設定の届け先）・§110（Slack のメールアドレス）・§112（テスト通知）。デモには env が無いので何も送らず、
 // Slack に問い合わせる流れにも頼らない
 test.describe("通知の設定", { tag: "@core" }, () => {
   test("アカウントのメニューから開き、メールで受け取る設定が開き直しても保たれる", async ({
@@ -65,5 +65,19 @@ test.describe("通知の設定", { tag: "@core" }, () => {
     await app.openNotificationSettings();
     await expect(app.slackEmailInput()).toHaveValue("");
     await expect(address).toHaveText(nogiku);
+  });
+
+  test("テスト通知を送るとボタンが押せなくなり、ベルにテスト通知が届く", async ({ app }) => {
+    await app.signInAs("mock-nogiku-creator");
+    await app.openNotificationSettings();
+    const send = app.sendTestNotificationButton();
+    await expect(send).toHaveJSProperty("disabled", false);
+    await send.click();
+    // 1 分は押せない（2 回目は送らない）
+    await expect(send).toHaveJSProperty("disabled", true);
+    await app.closeDialog();
+
+    const rows = await app.notifications();
+    await expect(rows.and(app.page.locator('[data-kind="test"]'))).toHaveCount(1);
   });
 });

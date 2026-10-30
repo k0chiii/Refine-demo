@@ -37,7 +37,7 @@ export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
  * - assignment: 自分への割当・専門確認の依頼
  * - deadline: 締切が近い
  * - rule: 表記ルールの提案とその結果
- * - other: 版の提出・無効、校了・再開、専門確認の完了、自動校正の終了
+ * - other: 版の提出・無効、校了・再開、専門確認の完了、自動校正の終了、テスト通知（§112）
  */
 export const NOTIFICATION_KIND_CATEGORY = {
   mentioned: "mention",
@@ -57,6 +57,7 @@ export const NOTIFICATION_KIND_CATEGORY = {
   work_reopened: "other",
   check_completed: "other",
   auto_proofread_done: "other",
+  test: "other",
 } as const satisfies Record<string, NotificationCategory>;
 
 /** 通知の種類 → 分類。知らない種類は「その他」 */
@@ -168,7 +169,24 @@ export function validateNotificationPrefsPatch(patch: NotificationPrefsPatch): V
   return out;
 }
 
-/** この種類の通知を外へ送らない設定か */
+/**
+ * 経路が使えるかを確かめるテスト通知（§112）。外へ届けることが目的なので、止めた分類でも既読でも送る
+ * （本人はまずベルで受け取り、Slack の引き当てが終わる前に開くことが多い）
+ */
+function isTestNotification(kind: string): boolean {
+  return kind === "test";
+}
+
+/** この種類の通知を外へ送らない設定か（テスト通知は止めない） */
 export function isCategoryMuted(prefs: NotificationPrefs, kind: string): boolean {
+  if (isTestNotification(kind)) return false;
   return prefs.mutedCategories.includes(notificationCategoryOf(kind));
 }
+
+/** 既読になった後も外へ送るか。ふつうはアプリで読んだら送らない。テスト通知だけ送る */
+export function deliversEvenIfRead(kind: string): boolean {
+  return isTestNotification(kind);
+}
+
+/** テスト通知（§112）を 1 人が続けて送れる間隔。サーバーはこれで断り、画面はこの間ボタンを押せなくする */
+export const TEST_NOTIFICATION_INTERVAL_MS = 60_000;

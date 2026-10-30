@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   DEFAULT_NOTIFICATION_PREFS,
+  deliversEvenIfRead,
   DomainError,
   isCategoryMuted,
   NOTIFICATION_CATEGORIES,
@@ -150,5 +151,18 @@ describe("通知の受け取り方", () => {
     expect(isCategoryMuted(prefs, "unknown_kind")).toBe(false);
     const other = normalizeNotificationPrefs({ mutedCategories: ["other"] });
     expect(isCategoryMuted(other, "unknown_kind")).toBe(true);
+  });
+
+  it("テスト通知は「その他」だが、どの分類を止めていても止めない（§112）", () => {
+    expect(notificationCategoryOf("test")).toBe("other");
+    const all = normalizeNotificationPrefs({ mutedCategories: [...NOTIFICATION_CATEGORIES] });
+    expect(isCategoryMuted(all, "test")).toBe(false);
+    expect(isCategoryMuted(all, "revision_submitted")).toBe(true);
+  });
+
+  it("既読の後も外へ送るのはテスト通知だけ（§112）", () => {
+    expect(deliversEvenIfRead("test")).toBe(true);
+    for (const kind of Object.keys(NOTIFICATION_KIND_CATEGORY).filter((k) => k !== "test"))
+      expect(deliversEvenIfRead(kind)).toBe(false);
   });
 });
