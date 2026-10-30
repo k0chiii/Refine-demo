@@ -2,6 +2,7 @@ import {
   type ChannelAvailability,
   composeNotificationMessage,
   deliverableEmail,
+  deliversEvenIfRead,
   type Destination,
   destinationsOf,
   type EmailContent,
@@ -73,7 +74,7 @@ export interface SlackMemberKey {
 }
 
 /**
- * 通知 1 件を外へ届ける計画。無い・既読・止めた分類・届け先なしなら null。
+ * 通知 1 件を外へ届ける計画。無い・既読（テスト通知を除く。deliversEvenIfRead）・止めた分類・届け先なしなら null。
  * 決着した届け先は含めない。送る時点の閲覧権限で伏せ直す（presentNotifications）。内容を決めるのは composeNotificationMessage の一度だけ
  */
 export async function planDelivery(
@@ -82,7 +83,7 @@ export async function planDelivery(
   env: DeliveryEnv,
 ): Promise<DeliveryPlan | null> {
   const n = await ctx.notifications.findById(notificationId);
-  if (!n || n.readAt !== undefined) return null;
+  if (!n || (n.readAt !== undefined && !deliversEvenIfRead(n.kind))) return null;
   // 読むのは、使える経路が要るものだけ（Convex のトランザクションの読み取りを増やさない）
   const available = usableChannels(env);
   if (available.size === 0) return null;

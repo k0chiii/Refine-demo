@@ -34,6 +34,7 @@ const icon: Record<string, string> = {
   mentioned: "alternate_email",
   feedback_posted: "forum",
   feedback_mentioned: "alternate_email",
+  test: "send",
 };
 
 function useUnread() {
@@ -135,6 +136,7 @@ function Menu({ id }: { id: string }) {
           <M3eMenuItem
             key={n.id}
             className={`notif ${n.readAt === undefined ? "notif--unread" : ""}`}
+            data-kind={n.kind}
             onClick={() => void openOne.run(n)}
           >
             <M3eIcon slot="icon" name={icon[n.kind] ?? "notifications"} />
@@ -204,6 +206,7 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             <M3eListAction
               key={n.id}
               className={`list__item notif ${n.readAt === undefined ? "notif--unread" : ""}`}
+              data-kind={n.kind}
               onClick={() => {
                 onClose();
                 void openOne.run(n);

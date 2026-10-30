@@ -6,6 +6,7 @@ import {
   type Principal,
   recipientPrincipal,
   type Team,
+  TEST_NOTIFICATION_INTERVAL_MS,
   type Work,
   type WorkPermissionGrant,
 } from "@mf100/domain";
@@ -192,6 +193,39 @@ export async function notify(
     }
   }
   return count;
+}
+
+/** テスト通知の文面（§112） */
+export const TEST_NOTIFICATION = {
+  title: "テスト通知",
+  body: "通知の設定から送ったテストです。この通知が届いていれば、この経路は使えます。",
+} as const;
+
+/** 1 分以内に送ったテスト通知を探す範囲（新しい順）。この間に通知が多く届いて外れても、テストがもう 1 件届くだけ */
+const RECENT_FOR_TEST_LIMIT = 20;
+
+/**
+ * 本人宛にテスト通知を 1 件作る（§112）。本物の通知と同じ insert を通すので、外への配信も同じく予約される。
+ * notify は使わない: 送り主（本人）には送らず、失敗も握りつぶすため。
+ * 前のテストから TEST_NOTIFICATION_INTERVAL_MS たっていなければ test_notification_too_soon
+ */
+export async function sendTestNotification(
+  ctx: AppContext,
+  principal: Principal,
+): Promise<Notification> {
+  const now = ctx.clock.now();
+  const recent = await ctx.notifications.listForUser(principal.userId, RECENT_FOR_TEST_LIMIT);
+  const last = recent.find((n) => n.kind === "test");
+  if (last && now - last.createdAt < TEST_NOTIFICATION_INTERVAL_MS)
+    throw new DomainError("test_notification_too_soon", {
+      retryAfterMs: TEST_NOTIFICATION_INTERVAL_MS - (now - last.createdAt),
+    });
+  return ctx.notifications.insert({
+    recipientId: principal.userId,
+    kind: "test",
+    ...TEST_NOTIFICATION,
+    createdAt: now,
+  });
 }
 
 /**

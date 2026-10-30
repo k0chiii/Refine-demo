@@ -612,6 +612,47 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(services.fetch).not.toHaveBeenCalled();
   });
 
+  it("テスト通知は本人に 1 件作り、分類の「その他」を止めていても、オンにしたメールと Slack に届ける（§112）", async () => {
+    emailEnv();
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    const address = await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, {
+      channels: ["email", "slack"],
+      mutedCategories: ["other"],
+    });
+    const services = fakeServices();
+
+    await cast.reviewer.as.mutation(api.notifications.sendTest, {});
+    const tests = (await cast.reviewer.as.query(api.notifications.list, {})).filter(
+      (n) => n.kind === "test",
+    );
+    expect(tests).toHaveLength(1);
+    expect(
+      (await cast.manager.as.query(api.notifications.list, {})).filter((n) => n.kind === "test"),
+    ).toHaveLength(0);
+    const queued = (await scheduled(t, "delivery:enqueue")).flatMap(
+      (f) => (f.args[0] as { notificationIds: string[] }).notificationIds,
+    );
+    expect(queued).toContain(tests[0]!.id);
+
+    expect(await deliver(t, tests[0]!.id)).toBe(2);
+    const [mail] = services.calls("email");
+    expect((JSON.parse(mail!.body) as { to: string[] }).to).toEqual([address]);
+    expect(JSON.parse(services.calls("post")[0]!.body)).toMatchObject({
+      team_id: TEAM,
+      user_id: MEMBER,
+    });
+
+    await expect(cast.reviewer.as.mutation(api.notifications.sendTest, {})).rejects.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ code: "test_notification_too_soon" }),
+      }),
+    );
+  });
+
   it("旧の pushNode.deliver は新しい配信に渡す", async () => {
     emailEnv();
     const t = createHarness();

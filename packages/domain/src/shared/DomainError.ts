@@ -107,6 +107,7 @@ export const domainErrorCodes = [
   // 通知の配信（Web Push）
   "push_subscription_invalid",
   "notification_prefs_invalid",
+  "test_notification_too_soon",
   // Slack のワークスペース（管理画面「Slack」）
   "slack_workspace_invalid",
   "slack_workspace_duplicate",

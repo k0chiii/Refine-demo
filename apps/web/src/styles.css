@@ -5061,6 +5061,10 @@ m3e-snackbar {
 .notif-channel__slack-email {
   margin-block: 4px;
 }
+/* 届け先の下の「テスト通知を送る」（§112） */
+.notif-test {
+  padding-block: 8px;
+}
 
 /* ---------- 取り込みのプレビュー（表記ルール・制作物の CSV）: 件数の要約は文字、行は M3 リスト（§49） */
 .import-summary {
