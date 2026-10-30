@@ -13,6 +13,7 @@ import {
   normalizeWorkEssentials,
   normalizeWorkMetadata,
   orgPermissions,
+  overridesAllPermissions,
   type Principal,
   hasOrgPermission,
   requireOrgPermission,
@@ -216,16 +217,20 @@ export async function updateWork(
   input: UpdateWorkInput,
 ): Promise<Work> {
   // 校了者だけを変える更新は、校了者を決める権限（approvers:assign）があれば、閲覧できる制作物で通る（その人が校了者の決め手）。
+  // 制作者だけを変える更新は、現在の制作者・主管（work.edit と同じ職責）・システム管理者が通る（利用者要望 2026-10-30）。
   // ほかの項目の変更は従来どおり work.edit
   const approversOnly = isApproversOnlyPatch(input.patch);
+  const creatorsOnly = isCreatorsOnlyPatch(input.patch);
   const viaApproversAssign =
     approversOnly && hasOrgPermission(principal, orgPermissions.approversAssign);
   const { work } = await loadAuthorizedWork(
     ctx,
     principal,
     input.workId,
-    viaApproversAssign ? "work.view" : "work.edit",
+    viaApproversAssign || creatorsOnly ? "work.view" : "work.edit",
   );
+  if (creatorsOnly && !canChangeCreators(work, principal))
+    throw new DomainError("forbidden", { action: "work.transferCreators", workId: work.id });
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
@@ -277,6 +282,20 @@ function isApproversOnlyPatch(patch: UpdateWorkInput["patch"]): boolean {
   const approverKeys = ["approverId", "approverIds", "approvalQuorum"];
   const defined = Object.entries(patch).filter(([, v]) => v !== undefined);
   return defined.length > 0 && defined.every(([k]) => approverKeys.includes(k));
+}
+
+/** 制作者（creatorIds）だけを含む更新か */
+function isCreatorsOnlyPatch(patch: UpdateWorkInput["patch"]): boolean {
+  const defined = Object.entries(patch).filter(([, v]) => v !== undefined);
+  return defined.length === 1 && defined[0]![0] === "creatorIds";
+}
+
+/** 制作者の変更ができる人: 現在の制作者・主管・システム管理者。校了後は不可 */
+export function canChangeCreators(work: Work, principal: Principal): boolean {
+  if (work.lifecycle === "finalized") return false;
+  if (overridesAllPermissions(principal)) return true;
+  if (work.managerIds.includes(principal.userId)) return true;
+  return work.creatorIds.includes(principal.userId);
 }
 
 export async function changeWorkLifecycle(
