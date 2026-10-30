@@ -88,7 +88,7 @@ export function WorkspaceRow({
   );
 }
 
-/** 見出し付きのまとまり（あなたの番・校正中・割り当てる など）。件数を添える */
+/** 見出し付きのまとまり（要対応・校正中・割り当てる など）。件数を添える */
 export function Group({
   title,
   count,
