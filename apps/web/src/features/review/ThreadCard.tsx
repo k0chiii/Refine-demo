@@ -12,7 +12,7 @@ import { M3eAvatar } from "@m3e/react/avatar";
 import { M3eButton } from "@m3e/react/button";
 import { M3eCard } from "@m3e/react/card";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eIconButton } from "@m3e/react/icon-button";
+import { useRef, useState } from "react";
 import { CommentAttachments } from "./CommentAttachments";
 import { CommentBody } from "./CommentBody";
 import { ThreadMeta } from "./ThreadMeta";
@@ -27,7 +27,9 @@ export { closedResolutions, isClosed, type Thread } from "./thread";
  * 最新の 3 件。アバター・名前・時刻・本文 3 行まで・添付）、返信がそれより多いときは「ほか n 件の返信」、最後に未読の点。
  * 押すとコメントを選んで紙面のピンへ移るだけで、カードは開かない。
  * 開く（返信・採否・担当・訂正・削除・リアクションなど全部）のは返信の欄か下の行から、スレッドのパネル（ThreadPanel）で。
- * 手早く済ませる「✓ 解決」と、紙面の位置へ移るボタンだけカードに残す。
+ * 反映する／反映しない／次の版で対応のボタンは、選んだ（押した・キーボードでフォーカスした）カードにだけ出す
+ * （Google ドキュメント・Filestage と同じく、操作は選んだ 1 件に。ほかのカードは状態の行だけ）。
+ * 反映しない・次の版で対応は理由が要るので、スレッドのパネルをその入力欄を開いた状態で開く。
  */
 export function ThreadCard({
   thread: t,
@@ -37,6 +39,7 @@ export function ThreadCard({
   onSelect,
   onOpen,
   onResolve,
+  onDecideStart,
   pending,
   className,
   index,
@@ -61,6 +64,8 @@ export function ThreadCard({
   /** スレッドのパネルを開く */
   onOpen: () => void;
   onResolve: () => Promise<void>;
+  /** 反映しない・次の版で対応（理由の欄を開いたパネルを開く） */
+  onDecideStart: (mode: "rejected" | "deferred") => void;
   pending?: boolean;
   className?: string;
 }) {
@@ -69,6 +74,10 @@ export function ThreadCard({
   // 直近の返信（古い順）。見せきれない分は「ほか n 件の返信」
   const replies = t.latestReplies.slice(-THREAD_LATEST_REPLIES_SHOWN);
   const hidden = Math.max(0, t.replyCount - replies.length);
+  // キーボードでカードの中にフォーカスがある間も、選んだのと同じに採否のボタンを出す
+  const [focused, setFocused] = useState(false);
+  const pressing = useRef(false);
+  const showDecide = canDecide && !closed && (active || focused);
   return (
     <M3eCard
       variant="filled"
@@ -77,7 +86,20 @@ export function ThreadCard({
       data-thread-id={t.id}
       onClick={onSelect}
     >
-      <div slot="content" className="thread__content">
+      <div
+        slot="content"
+        className="thread__content"
+        onPointerDown={() => (pressing.current = true)}
+        onPointerUp={() => (pressing.current = false)}
+        onPointerCancel={() => (pressing.current = false)}
+        onFocus={() => {
+          if (!pressing.current) setFocused(true);
+        }}
+        onBlur={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (!next || !e.currentTarget.contains(next)) setFocused(false);
+        }}
+      >
         <div className="thread__head">
           {t.origin ? (
             <M3eAvatar className="thread__bot" aria-hidden="true">
@@ -142,6 +164,27 @@ export function ThreadCard({
           <CommentAttachments files={t.files} confidentiality={confidentiality} variant="thumbs" />
         ) : null}
         <ThreadMeta thread={t} placeState={placeState} />
+        {showDecide ? (
+          <div className="thread__decide" role="group" aria-label="反映するかどうか" onClick={stop}>
+            <M3eButton
+              variant="filled"
+              size="small"
+              disabled={pending === true}
+              onClick={() => void onResolve()}
+            >
+              <M3eIcon slot="icon" name="check" />
+              反映する
+            </M3eButton>
+            <M3eButton variant="tonal" size="small" onClick={() => onDecideStart("rejected")}>
+              <M3eIcon slot="icon" name="block" />
+              反映しない
+            </M3eButton>
+            <M3eButton variant="text" size="small" onClick={() => onDecideStart("deferred")}>
+              <M3eIcon slot="icon" name="move_down" />
+              次の版で対応
+            </M3eButton>
+          </div>
+        ) : null}
         {replies.length > 0 ? (
           <div
             className="thread__replylist"

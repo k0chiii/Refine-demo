@@ -82,7 +82,10 @@ export function ThreadPanel({
   onDelete,
   onDeleteReply,
   onEditReply,
+  initialMode,
 }: {
+  /** 一覧のカードの「反映しない」「次の版で対応」から開いたとき、理由の欄を開いておく */
+  initialMode?: "rejected" | "deferred" | undefined;
   thread: Thread;
   /** 紙面のピンと同じ番号 */
   index?: number;
@@ -109,7 +112,7 @@ export function ThreadPanel({
   onDeleteReply: (replyEventId: string) => Promise<void>;
   onEditReply: (replyEventId: string, body: string) => Promise<void>;
 }) {
-  const [mode, setMode] = useState<Mode>(null);
+  const [mode, setMode] = useState<Mode>(initialMode ?? null);
   const [text, setText] = useState("");
   const [ids, setIds] = useState<string[]>([]);
   const closed = isClosed(t);
@@ -126,6 +129,13 @@ export function ThreadPanel({
     const opener = moved ? null : (document.activeElement as HTMLElement | null);
     const root = rootRef.current;
     root?.focus({ preventScroll: true });
+    let raf = 0;
+    if (initialMode)
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(() =>
+          root?.querySelector<HTMLTextAreaElement>(".thread__form textarea")?.focus(),
+        );
+      });
     // M3E のボタンは描き終わるまでフォーカスを受けない（tabindex は Lit の更新で付く。端で disabled になったら受けない）
     const pressed = moved
       ? root?.querySelector<HTMLElement & { updateComplete?: Promise<unknown> }>(
@@ -136,6 +146,7 @@ export function ThreadPanel({
       if (document.activeElement === root) pressed.focus({ preventScroll: true });
     });
     return () => {
+      cancelAnimationFrame(raf);
       if (navMoved) return;
       const now = document.activeElement;
       if (now && now !== document.body) return;
@@ -423,7 +434,7 @@ export function ThreadPanel({
                 <M3eIcon slot="icon" name="block" />
                 反映しない
               </M3eButton>
-              <M3eButton variant="outlined" size="small" onClick={() => openMode("deferred")}>
+              <M3eButton variant="text" size="small" onClick={() => openMode("deferred")}>
                 <M3eIcon slot="icon" name="move_down" />
                 次の版で対応
               </M3eButton>

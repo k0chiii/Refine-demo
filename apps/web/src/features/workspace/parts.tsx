@@ -88,7 +88,7 @@ export function WorkspaceRow({
   );
 }
 
-/** 見出し付きのまとまり（あなたの番・校正中・割り当てる など）。件数を添える */
+/** 見出し付きのまとまり（要対応・校正中・割り当てる など）。件数を添える */
 export function Group({
   title,
   count,
@@ -116,7 +116,7 @@ export function Group({
           {...(side ? {} : { emphasized: true })}
           className={side ? "dash__title dash__title--side" : "dash__title"}
         >
-          {title ? title : <span className="dash__title--sr">今すぐ</span>}
+          {title}
         </M3eHeading>
         {count !== undefined ? (
           <M3eBadge size="medium" className="dash__badge" aria-label={`${count} 件`}>

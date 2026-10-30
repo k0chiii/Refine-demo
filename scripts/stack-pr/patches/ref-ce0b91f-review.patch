@@ -1,0 +1,398 @@
+From ce0b91f197e736ba2f2aececfcc07e5789394654 Mon Sep 17 00:00:00 2001
+From: "Grok Bot (local)" <grok-bot@localhost>
+Date: Sat, 31 Oct 2026 01:28:01 +0900
+Subject: [PATCH 1/2] =?UTF-8?q?review:=20=E6=8E=A1=E5=90=A6=E3=81=AE?=
+ =?UTF-8?q?=E3=83=9C=E3=82=BF=E3=83=B3=E3=81=AF=E9=81=B8=E3=82=93=E3=81=A0?=
+ =?UTF-8?q?=EF=BC=8F=E3=83=95=E3=82=A9=E3=83=BC=E3=82=AB=E3=82=B9=E3=81=97?=
+ =?UTF-8?q?=E3=81=9F=E3=82=B3=E3=83=A1=E3=83=B3=E3=83=88=E3=81=AB=E3=81=A0?=
+ =?UTF-8?q?=E3=81=91=E5=87=BA=E3=81=99?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+一覧のカードごとの✓をやめ、選択中（クリック・タップ）かキーボードでフォーカスしたカードにだけ
+反映する／反映しない／次の版で対応 を出す。ほかのカードは状態の表示だけ。
+反映しない・次の版で対応 は理由の欄を開いてフォーカスしたパネルを開く。
+---
+ apps/web/e2e/screenshots.mjs                 | 22 ++++---
+ apps/web/e2e/specs/decision.spec.ts          | 25 ++++++++
+ apps/web/src/features/editor/Editor.tsx      | 10 ++-
+ apps/web/src/features/review/ThreadCard.tsx  | 64 ++++++++++++++------
+ apps/web/src/features/review/ThreadPanel.css | 17 +++++-
+ apps/web/src/features/review/ThreadPanel.tsx | 17 +++++-
+ apps/web/src/styles.css                      |  6 +-
+ 7 files changed, 125 insertions(+), 36 deletions(-)
+
+diff --git a/apps/web/e2e/screenshots.mjs b/apps/web/e2e/screenshots.mjs
+index ae247df..3812675 100644
+--- a/apps/web/e2e/screenshots.mjs
++++ b/apps/web/e2e/screenshots.mjs
+@@ -1213,7 +1213,7 @@ async function main() {
+ 
+ /** 27–64: 制作・採否・第2版と持ち越し・比較・校了・通知・管理（core の続き。core で付けたコメント・版を使う） */
+ async function lateScenes() {
+-  // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
++  // 27 制作（制作者）: 進行中の「要対応」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
+   await signInAs("mock-nogiku-creator");
+   await go(`${BASE}/make`);
+   await page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
+@@ -1547,12 +1547,13 @@ async function lateScenes() {
+   await go(revision2Url);
+   await pdfReady();
+   await drawer("コメント");
++  // 採否のボタンは選んだカードにだけ出る: 未対応のカードを選んでから「反映する」
+   for (let i = 0; i < 5; i++) {
+-    const sel = '.comments .thread m3e-icon-button[aria-label="反映する"]';
++    const sel = ".comments .thread:not(.thread--closed)";
+     const left = await page.locator(sel).count();
+     if (left === 0) break;
+-    await page.locator(".comments .thread .thread__body").first().click();
+-    await page.locator(sel).first().click();
++    await page.locator(`${sel} .thread__body`).first().click();
++    await page.locator(".comments .thread--active .thread__decide m3e-button").first().click();
+     await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
+   }
+   await page.waitForSelector(".comments .thread--closed");
+@@ -2749,17 +2750,18 @@ async function v2Scenes() {
+   };
+   await openComments();
+   for (let i = 0; i < 10; i++) {
+-    const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]';
++    const sel = "m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)";
+     const left = await page.locator(sel).count();
+     if (left === 0) break;
+-    await page.locator("m3e-bottom-sheet.ws__sheet .thread .thread__body").first().click();
+-    await page.locator(sel).first().click();
++    await page.locator(`${sel} .thread__body`).first().click();
++    await page
++      .locator("m3e-bottom-sheet.ws__sheet .thread--active .thread__decide m3e-button")
++      .first()
++      .click();
+     await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
+   }
+   expectTrue(
+-    (await page
+-      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]')
+-      .count()) === 0,
++    (await page.locator("m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)").count()) === 0,
+     "プレビューに付けたコメントを反映済みにできない",
+   );
+   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
+diff --git a/apps/web/e2e/specs/decision.spec.ts b/apps/web/e2e/specs/decision.spec.ts
+index 31edc1f..30e2a7a 100644
+--- a/apps/web/e2e/specs/decision.spec.ts
++++ b/apps/web/e2e/specs/decision.spec.ts
+@@ -18,4 +18,29 @@ test.describe("コメントの反映するかどうか", { tag: "@smoke" }, () =
+ 
+     await expect(card.first()).toHaveClass(/thread--closed/);
+   });
++
++  test("採否のボタンは選んだカードにだけ出て、反映しないは理由の欄を開いたパネルになる", async ({
++    app,
++    page,
++  }) => {
++    const { revisionPath } = await submitFirstRevision(app);
++    await app.signInAs("mock-nogiku-reviewer");
++    await app.go(revisionPath);
++    await app.pdfReady();
++    await app.drawer("コメント");
++    await app.freeComment("団体名の表記が規約と違います。");
++    await app.freeComment("日付の曜日が違います。");
++
++    await app.signInAs("mock-nogiku-creator");
++    await app.go(revisionPath);
++    await app.drawer("コメント");
++    // 選ぶまではどのカードにも出ない
++    await expect(page.locator(".comments .thread__decide")).toHaveCount(0);
++    const card = app.threads().filter({ hasText: "団体名の表記" });
++    await card.locator(".thread__body").click();
++    await expect(page.locator(".comments .thread__decide")).toHaveCount(1);
++    await expect(card.locator(".thread__decide")).toHaveCount(1);
++    await card.locator(".thread__decide m3e-button", { hasText: "反映しない" }).click();
++    await expect(page.locator(".thread-panel textarea")).toBeFocused();
++  });
+ });
+diff --git a/apps/web/src/features/editor/Editor.tsx b/apps/web/src/features/editor/Editor.tsx
+index 80b6b52..a03bd4b 100644
+--- a/apps/web/src/features/editor/Editor.tsx
++++ b/apps/web/src/features/editor/Editor.tsx
+@@ -359,6 +359,11 @@ export function Editor({
+   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+   /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くとスレッドが一覧・シートを差し替える） */
+   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
++  /** 一覧のカードの「反映しない」「次の版で対応」から開いたスレッドと、開いておく理由の欄 */
++  const [openThreadMode, setOpenThreadMode] = useState<{
++    id: string;
++    mode: "rejected" | "deferred";
++  } | null>(null);
+   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
+   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
+   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
+@@ -931,7 +936,8 @@ export function Editor({
+    * スレッドのパネルを開く（コメントを選んで紙面のピンへ移り、パネルを開く）。広い画面は引き出しの「コメント」に、狭い画面は
+    * シートをいっぱいに開いて。開いたら既読にする（パネルが行う）
+    */
+-  const openThread = (t: Thread, opts?: { reveal?: boolean }) => {
++  const openThread = (t: Thread, opts?: { reveal?: boolean; mode?: "rejected" | "deferred" }) => {
++    setOpenThreadMode(opts?.mode ? { id: t.id, mode: opts.mode } : null);
+     // 一覧のカードから開くときは一覧を動かさない（今そのカードを見て押している）。紙面のピンから開くときはカードまで送る
+     // （狭い画面の一覧はシートの中に隠れるので送らない）
+     jumpTo(t, { reveal: opts?.reveal === true && !mobile });
+@@ -956,6 +962,7 @@ export function Editor({
+         {...(className ? { className } : {})}
+         onSelect={() => jumpTo(t, { reveal: false })}
+         onOpen={() => openThread(t)}
++        onDecideStart={(mode) => openThread(t, { mode })}
+         onResolve={onResolve}
+       />
+     );
+@@ -1606,6 +1613,7 @@ export function Editor({
+     openedThread && revisionId ? (
+       <ThreadPanel
+         key={openedThread.id}
++        {...(openThreadMode?.id === openedThread.id ? { initialMode: openThreadMode.mode } : {})}
+         thread={openedThread}
+         index={openedThread.index}
+         {...(webStates.has(openedThread.id) ? { placeState: webStates.get(openedThread.id)! } : {})}
+diff --git a/apps/web/src/features/review/ThreadCard.tsx b/apps/web/src/features/review/ThreadCard.tsx
+index 86ac30a..8d6d711 100644
+--- a/apps/web/src/features/review/ThreadCard.tsx
++++ b/apps/web/src/features/review/ThreadCard.tsx
+@@ -12,7 +12,7 @@ import { M3eAvatar } from "@m3e/react/avatar";
+ import { M3eButton } from "@m3e/react/button";
+ import { M3eCard } from "@m3e/react/card";
+ import { M3eIcon } from "@m3e/react/icon";
+-import { M3eIconButton } from "@m3e/react/icon-button";
++import { useRef, useState } from "react";
+ import { CommentAttachments } from "./CommentAttachments";
+ import { CommentBody } from "./CommentBody";
+ import { ThreadMeta } from "./ThreadMeta";
+@@ -27,7 +27,9 @@ export { closedResolutions, isClosed, type Thread } from "./thread";
+  * 最新の 3 件。アバター・名前・時刻・本文 3 行まで・添付）、返信がそれより多いときは「ほか n 件の返信」、最後に未読の点。
+  * 押すとコメントを選んで紙面のピンへ移るだけで、カードは開かない。
+  * 開く（返信・採否・担当・訂正・削除・リアクションなど全部）のは返信の欄か下の行から、スレッドのパネル（ThreadPanel）で。
+- * 手早く済ませる「✓ 解決」と、紙面の位置へ移るボタンだけカードに残す。
++ * 反映する／反映しない／次の版で対応のボタンは、選んだ（押した・キーボードでフォーカスした）カードにだけ出す
++ * （Google ドキュメント・Filestage と同じく、操作は選んだ 1 件に。ほかのカードは状態の行だけ）。
++ * 反映しない・次の版で対応は理由が要るので、スレッドのパネルをその入力欄を開いた状態で開く。
+  */
+ export function ThreadCard({
+   thread: t,
+@@ -37,6 +39,7 @@ export function ThreadCard({
+   onSelect,
+   onOpen,
+   onResolve,
++  onDecideStart,
+   pending,
+   className,
+   index,
+@@ -61,6 +64,8 @@ export function ThreadCard({
+   /** スレッドのパネルを開く */
+   onOpen: () => void;
+   onResolve: () => Promise<void>;
++  /** 反映しない・次の版で対応（理由の欄を開いたパネルを開く） */
++  onDecideStart: (mode: "rejected" | "deferred") => void;
+   pending?: boolean;
+   className?: string;
+ }) {
+@@ -69,6 +74,11 @@ export function ThreadCard({
+   // 直近の返信（古い順）。見せきれない分は「ほか n 件の返信」
+   const replies = t.latestReplies.slice(-THREAD_LATEST_REPLIES_SHOWN);
+   const hidden = Math.max(0, t.replyCount - replies.length);
++  // キーボードでカードの中にフォーカスがある間も、選んだのと同じに採否のボタンを出す
++  // （押したときは「選んだ」で出る。押した瞬間のフォーカスで出すと、行が増えて押した先がずれる）
++  const [focused, setFocused] = useState(false);
++  const pressing = useRef(false);
++  const showDecide = canDecide && !closed && (active || focused);
+   return (
+     <M3eCard
+       variant="filled"
+@@ -77,7 +87,20 @@ export function ThreadCard({
+       data-thread-id={t.id}
+       onClick={onSelect}
+     >
+-      <div slot="content" className="thread__content">
++      <div
++        slot="content"
++        className="thread__content"
++        onPointerDown={() => (pressing.current = true)}
++        onPointerUp={() => (pressing.current = false)}
++        onPointerCancel={() => (pressing.current = false)}
++        onFocus={() => {
++          if (!pressing.current) setFocused(true);
++        }}
++        onBlur={(e) => {
++          const next = e.relatedTarget as Node | null;
++          if (!next || !e.currentTarget.contains(next)) setFocused(false);
++        }}
++      >
+         <div className="thread__head">
+           {t.origin ? (
+             <M3eAvatar className="thread__bot" aria-hidden="true">
+@@ -121,20 +144,6 @@ export function ThreadCard({
+                     : index}
+             </M3eButton>
+           ) : null}
+-          {canDecide && !closed ? (
+-            <M3eIconButton
+-              aria-label="反映する"
+-              size="extra-small"
+-              className="thread__resolve"
+-              disabled={pending === true}
+-              onClick={(e: Event) => {
+-                stop(e);
+-                void onResolve();
+-              }}
+-            >
+-              <M3eIcon name="check" />
+-            </M3eIconButton>
+-          ) : null}
+         </div>
+         {t.anchor?.type === "text_range" ? (
+           <blockquote className="thread__quote thread__quote--clamp">
+@@ -156,6 +165,27 @@ export function ThreadCard({
+           <CommentAttachments files={t.files} confidentiality={confidentiality} variant="thumbs" />
+         ) : null}
+         <ThreadMeta thread={t} placeState={placeState} />
++        {showDecide ? (
++          <div className="thread__decide" role="group" aria-label="反映するかどうか" onClick={stop}>
++            <M3eButton
++              variant="filled"
++              size="small"
++              disabled={pending === true}
++              onClick={() => void onResolve()}
++            >
++              <M3eIcon slot="icon" name="check" />
++              反映する
++            </M3eButton>
++            <M3eButton variant="tonal" size="small" onClick={() => onDecideStart("rejected")}>
++              <M3eIcon slot="icon" name="block" />
++              反映しない
++            </M3eButton>
++            <M3eButton variant="text" size="small" onClick={() => onDecideStart("deferred")}>
++              <M3eIcon slot="icon" name="move_down" />
++              次の版で対応
++            </M3eButton>
++          </div>
++        ) : null}
+         {replies.length > 0 ? (
+           <div
+             className="thread__replylist"
+diff --git a/apps/web/src/features/review/ThreadPanel.css b/apps/web/src/features/review/ThreadPanel.css
+index 2eba9d4..68446d7 100644
+--- a/apps/web/src/features/review/ThreadPanel.css
++++ b/apps/web/src/features/review/ThreadPanel.css
+@@ -365,10 +365,25 @@
+   flex: none;
+ }
+ 
+-/* 反映するかどうかは ⋯ に隠さず、本文のすぐ下に並べる */
++/* 反映するかどうかは ⋯ に隠さず、本文のすぐ下に並べる。一覧では選んだカードにだけ出る */
+ .thread__decide {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 8px;
+   margin-top: 12px;
+ }
++.thread--compact .thread__decide {
++  margin-top: 4px;
++  animation: thread-decide-in var(--mf-motion-spatial-fast);
++}
++@keyframes thread-decide-in {
++  from {
++    opacity: 0;
++    transform: translateY(-4px);
++  }
++}
++@media (prefers-reduced-motion: reduce) {
++  .thread--compact .thread__decide {
++    animation: none;
++  }
++}
+diff --git a/apps/web/src/features/review/ThreadPanel.tsx b/apps/web/src/features/review/ThreadPanel.tsx
+index a9d19f4..9be3a4e 100644
+--- a/apps/web/src/features/review/ThreadPanel.tsx
++++ b/apps/web/src/features/review/ThreadPanel.tsx
+@@ -82,7 +82,10 @@ export function ThreadPanel({
+   onDelete,
+   onDeleteReply,
+   onEditReply,
++  initialMode,
+ }: {
++  /** 一覧のカードの「反映しない」「次の版で対応」から開いたとき、理由の欄を開いておく */
++  initialMode?: "rejected" | "deferred" | undefined;
+   thread: Thread;
+   /** 紙面のピンと同じ番号 */
+   index?: number;
+@@ -109,7 +112,7 @@ export function ThreadPanel({
+   onDeleteReply: (replyEventId: string) => Promise<void>;
+   onEditReply: (replyEventId: string, body: string) => Promise<void>;
+ }) {
+-  const [mode, setMode] = useState<Mode>(null);
++  const [mode, setMode] = useState<Mode>(initialMode ?? null);
+   const [text, setText] = useState("");
+   const [ids, setIds] = useState<string[]>([]);
+   const closed = isClosed(t);
+@@ -126,6 +129,15 @@ export function ThreadPanel({
+     const opener = moved ? null : (document.activeElement as HTMLElement | null);
+     const root = rootRef.current;
+     root?.focus({ preventScroll: true });
++    // カードの「反映しない」「次の版で対応」から開いたときは、理由の欄へ（押した人はすぐ書く）。
++    // 開いた直後は一覧の入れ替え・シートの高さ合わせでフォーカスが動くので、描き終わってから移す
++    let raf = 0;
++    if (initialMode)
++      raf = requestAnimationFrame(() => {
++        raf = requestAnimationFrame(() =>
++          root?.querySelector<HTMLTextAreaElement>(".thread__form textarea")?.focus(),
++        );
++      });
+     // M3E のボタンは描き終わるまでフォーカスを受けない（tabindex は Lit の更新で付く。端で disabled になったら受けない）
+     const pressed = moved
+       ? root?.querySelector<HTMLElement & { updateComplete?: Promise<unknown> }>(
+@@ -136,6 +148,7 @@ export function ThreadPanel({
+       if (document.activeElement === root) pressed.focus({ preventScroll: true });
+     });
+     return () => {
++      cancelAnimationFrame(raf);
+       if (navMoved) return;
+       const now = document.activeElement;
+       if (now && now !== document.body) return;
+@@ -423,7 +436,7 @@ export function ThreadPanel({
+                 <M3eIcon slot="icon" name="block" />
+                 反映しない
+               </M3eButton>
+-              <M3eButton variant="outlined" size="small" onClick={() => openMode("deferred")}>
++              <M3eButton variant="text" size="small" onClick={() => openMode("deferred")}>
+                 <M3eIcon slot="icon" name="move_down" />
+                 次の版で対応
+               </M3eButton>
+diff --git a/apps/web/src/styles.css b/apps/web/src/styles.css
+index 7942224..f3352c8 100644
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -1325,7 +1325,7 @@ m3e-dialog {
+   align-items: center;
+   gap: 8px;
+ }
+-/* 件数のバッジ（あなたの番 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
++/* 件数のバッジ（要対応 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
+ .dash__badge {
+   --m3e-badge-container-color: var(--mf-secondary-container);
+   --m3e-badge-color: var(--mf-on-secondary-container);
+@@ -2992,13 +2992,9 @@ m3e-dialog {
+   font: var(--mf-type-body-small);
+   color: var(--mf-on-surface-variant);
+ }
+-.thread__resolve,
+ .thread__more {
+   margin: -4px 0;
+ }
+-.thread__resolve {
+-  color: var(--mf-primary);
+-}
+ .thread__body {
+   font: var(--mf-type-body-medium);
+ }
+-- 
+2.47.3
+

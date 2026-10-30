@@ -160,32 +160,13 @@ export function applyEdit(name) {
       let s = fs.readFileSync(make, "utf8");
       s = s.replace(
         '<Group title="あなたの番" count={turn.length}>',
-        '<Group title="" label="今すぐ" count={turn.length} className="dash__section--now">',
+        '<Group title="要対応" count={turn.length}>',
       );
       s = s.replace(
         " * - 進行中: 「あなたの番」（未対応のコメントに返事をする・次の版を出す）",
-        " * - 進行中: 今すぐ（未対応のコメント・次の版。見出しは件数バッジで示す）",
+        " * - 進行中: 「要対応」（未対応のコメントに返事をする・次の版を出す）",
       );
       fs.writeFileSync(make, s);
-      const parts = path.join(root, "apps/web/src/features/workspace/parts.tsx");
-      let p = fs.readFileSync(parts, "utf8");
-      if (!p.includes("dash__title--sr")) {
-        p = p.replace(
-          `        >
-          {title}
-        </M3eHeading>`,
-          `        >
-          {title ? title : <span className="dash__title--sr">今すぐ</span>}
-        </M3eHeading>`,
-        );
-        fs.writeFileSync(parts, p);
-      }
-      const css = path.join(root, "apps/web/src/styles.css");
-      let c = fs.readFileSync(css, "utf8");
-      if (!c.includes("dash__title--sr")) {
-        c += `\n.dash__title--sr {\n  position: absolute;\n  width: 1px;\n  height: 1px;\n  overflow: hidden;\n  clip: rect(0, 0, 0, 0);\n}\n.dash__section--now .dash__head {\n  gap: 8px;\n}\n`;
-        fs.writeFileSync(css, c);
-      }
       return;
     }
     case "m3e-shape-table": {

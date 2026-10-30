@@ -186,7 +186,7 @@ const seriesA = [
   {
     series: "A-ui-copy",
     slug: "review-decide-buttons-panel",
-    title: "review: 選んだコメントのパネルにだけ反映ボタン行を出す",
+    title: "review: 選んだ／フォーカスしたコメントにだけ採否ボタン行",
     edit: "review-panel-decide",
     verify: "standard",
     shots: { desktop: "09-decision", mobile: "09-decision" },
@@ -199,7 +199,7 @@ const seriesA = [
           {
             id: "A",
             rec: true,
-            text: "パネル本文下（選んだコメントだけ）",
+            text: "一覧で選んだ／フォーカスしたカード（パネルも同じ行）",
             note: "大地さん fb (a)",
           },
           { id: "B", text: "見出しアイコン", note: "次の版が入らない" },
@@ -220,7 +220,7 @@ const seriesA = [
   {
     series: "A-ui-copy",
     slug: "review-e2e-decision",
-    title: "test(e2e): 反映ボタン行に合わせ decision spec を更新",
+    title: "test(e2e): 採否は選択中のみ・反映しないで理由にフォーカス @smoke",
     patches: [
       "patches/p03-apps__web__e2e__specs__decision.spec.ts.patch",
       "p03-apps__web__e2e__screenshots.mjs.patch",
@@ -305,7 +305,7 @@ const seriesA = [
   {
     series: "A-ui-copy",
     slug: "ui-make-turn-section-layout",
-    title: "ui(make): 「あなたの番」見出しをやめ件数バッジで区切る",
+    title: "copy(make): 「あなたの番」→「要対応」",
     edit: "make-turn-layout",
     verify: "standard",
     shots: { desktop: "27-make-creator", mobile: "20-mobile-make" },
