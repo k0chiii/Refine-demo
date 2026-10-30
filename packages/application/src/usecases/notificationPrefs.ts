@@ -9,6 +9,7 @@ import {
   type NotificationPrefs,
   type NotificationPrefsPatch,
   type Principal,
+  slackAddressOf,
   type SlackMembership,
   validateNotificationPrefsPatch,
 } from "@mf100/domain";
@@ -24,20 +25,25 @@ export interface ChannelSetting {
   /** env が揃っている（web はデモで true に読み替える） */
   available: boolean;
   on: boolean;
-  /** users.email（ここでは変えない）。無ければ null */
+  /** email: users.email（ここでは変えない）。slack: 引くアドレス（slackAddressOf）。無ければ null */
   address: string | null;
   status: ChannelStatus;
 }
 
 /** Slack（DM）の行。送り先のワークスペースを選ぶ */
 export interface SlackChannelSetting extends ChannelSetting {
+  /** 各自が書いた Slack のメールアドレス（§110）。書いていなければ null（Nogiku のアドレスで引く） */
+  customEmail: string | null;
   /** 選んだワークスペース。選んでいない・登録が消えたなら null */
   workspaceId: string | null;
   /** 選べるワークスペース（名前の順） */
   workspaces: Array<{ id: string; name: string }>;
 }
 
-export interface NotificationSettings extends Omit<NotificationPrefs, "slackWorkspaceId"> {
+export interface NotificationSettings extends Omit<
+  NotificationPrefs,
+  "slackWorkspaceId" | "slackEmail"
+> {
   /** 設定画面の届け先。ACCOUNT_CHANNELS から導く（Record なので経路を足すと画面の型が落ちる） */
   destinations: Record<AccountChannel, ChannelSetting> & { slack: SlackChannelSetting };
 }
@@ -55,27 +61,39 @@ export async function getNotificationSettings(
   principal: Principal,
   available: ChannelAvailability,
 ): Promise<NotificationSettings> {
-  const { slackWorkspaceId, ...prefs } = await getNotificationPrefs(ctx, principal);
+  const stored = await getNotificationPrefs(ctx, principal);
+  const { slackWorkspaceId, slackEmail, ...prefs } = stored;
   const address = (await ctx.people.profiles([principal.userId]))[0]?.email || null;
   const email = deliverableEmail(address);
+  const slackAddress = slackAddressOf(stored, email);
   const workspaces = await ctx.slackWorkspaces.list();
   const workspace = workspaces.find((w) => w.id === slackWorkspaceId) ?? null;
-  const slack: SlackMembership | null = workspace && {
-    teamId: workspace.teamId,
-    link: email ? await ctx.slackMembers.find(workspace.teamId, email) : { state: "unresolved" },
-  };
-  const setting = (channel: AccountChannel): ChannelSetting => ({
+  const slack: SlackMembership | null =
+    workspace && slackAddress
+      ? {
+          teamId: workspace.teamId,
+          email: slackAddress,
+          link: await ctx.slackMembers.find(workspace.teamId, slackAddress),
+        }
+      : null;
+  /** shown は画面に出すアドレス、to は送ってよいアドレス（状態を決める） */
+  const setting = (
+    channel: AccountChannel,
+    shown: string | null,
+    to: string | null,
+  ): ChannelSetting => ({
     available: available.has(channel),
     on: prefs.channels.includes(channel),
-    address,
-    status: channelStatusOf(channel, email, slack),
+    address: shown,
+    status: channelStatusOf(channel, to, slack),
   });
   return {
     ...prefs,
     destinations: {
-      email: setting("email"),
+      email: setting("email", address, email),
       slack: {
-        ...setting("slack"),
+        ...setting("slack", slackAddress, slackAddress),
+        customEmail: slackEmail ?? null,
         workspaceId: workspace?.id ?? null,
         workspaces: workspaces.map(({ id, name }) => ({ id, name })),
       },
@@ -84,7 +102,7 @@ export async function getNotificationSettings(
 }
 
 /**
- * 渡した項目だけを変える（showPreview・mutedCategories・channels・slackWorkspaceId）。
+ * 渡した項目だけを変える（showPreview・mutedCategories・channels・slackWorkspaceId・slackEmail）。
  * 使えない経路もオンにできる（意思として保存し、送るかは env が決める）。登録に無いワークスペースは選べない。
  * Slack がオンで、選んだワークスペースが無く（選んでいない・登録が消えた）、登録が 1 つだけなら、それを選ぶ
  */

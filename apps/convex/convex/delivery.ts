@@ -103,7 +103,7 @@ export const record = internalMutation({
   },
 });
 
-/** そのワークスペースで登録メールアドレスを引いた結果を保存する */
+/** そのワークスペースで引くアドレス（書いた Slack のメールアドレス、無ければ Nogiku のアドレス）を引いた結果を保存する */
 export const recordSlackLookup = internalMutation({
   args: {
     teamId: v.string(),
@@ -117,7 +117,7 @@ export const recordSlackLookup = internalMutation({
     recordSlackLookupFor(createAppContext(ctx), { teamId, email }, result),
 });
 
-/** Slack で引く宛先（選んだワークスペースの team_id と登録メールアドレス。引かないときは null） */
+/** Slack で引く宛先（選んだワークスペースの team_id と引くアドレス。引かないときは null） */
 export const slackTarget = internalQuery({
   args: { userId: v.string() },
   handler: (ctx, { userId }): Promise<SlackMemberKey | null> =>

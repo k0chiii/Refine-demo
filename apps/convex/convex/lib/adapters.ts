@@ -47,6 +47,7 @@ import {
   normalizeNotificationPrefs,
   parseDestinationKey,
   reachableChannels,
+  slackAddressOf,
 } from "@mf100/domain";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
@@ -631,19 +632,24 @@ export function createAppContext(
           .first();
         if (doc) await db.replace(doc._id, prefs);
         else await db.insert("notificationPrefs", prefs);
-        // Slack をオンにした・オンのままワークスペースを替えたら、最初の通知を待たずにメンバーを引く（設定画面に状態を出すため）
-        const wasOnSameWorkspace =
+        // Slack をオンにした・オンのままワークスペースか Slack のメールアドレスを替えたら、最初の通知を待たずに
+        // メンバーを引く（設定画面に状態を出すため）
+        const wasOnSameTarget =
           (doc?.channels ?? []).includes("slack") &&
-          doc?.slackWorkspaceId === prefs.slackWorkspaceId;
+          doc?.slackWorkspaceId === prefs.slackWorkspaceId &&
+          doc?.slackEmail === prefs.slackEmail;
         const resolveNow =
           prefs.channels.includes("slack") &&
           prefs.slackWorkspaceId !== undefined &&
-          !wasOnSameWorkspace;
+          !wasOnSameTarget;
         if (
           scheduler &&
           resolveNow &&
           deliveryConfigFromEnv(process.env).slack &&
-          deliverableEmail((await db.get("users", prefs.userId as Id<"users">))?.email)
+          slackAddressOf(
+            prefs,
+            deliverableEmail((await db.get("users", prefs.userId as Id<"users">))?.email),
+          )
         )
           await scheduler.runAfter(0, internal.deliveryNode.resolveSlack, {
             userId: prefs.userId,

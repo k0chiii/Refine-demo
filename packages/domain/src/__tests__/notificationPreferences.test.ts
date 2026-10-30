@@ -7,6 +7,7 @@ import {
   NOTIFICATION_KIND_CATEGORY,
   normalizeNotificationPrefs,
   notificationCategoryOf,
+  slackAddressOf,
   validateNotificationPrefsPatch,
 } from "../index.ts";
 
@@ -107,6 +108,39 @@ describe("通知の受け取り方", () => {
         ...validateNotificationPrefsPatch({ slackWorkspaceId: null }),
       }),
     ).toEqual({ ...DEFAULT_NOTIFICATION_PREFS, channels: ["slack"] });
+  });
+
+  it("Slack のメールアドレスは既定で書いておらず、保存されたものは残す", () => {
+    expect(normalizeNotificationPrefs(null)).not.toHaveProperty("slackEmail");
+    expect(normalizeNotificationPrefs({ slackEmail: "a@b.jp" }).slackEmail).toBe("a@b.jp");
+    for (const slackEmail of ["", "  ", null])
+      expect(normalizeNotificationPrefs({ slackEmail })).not.toHaveProperty("slackEmail");
+  });
+
+  it("利用者が送った Slack のメールアドレスはそろえて残し、null・空は消す。形が違えば受け付けない", () => {
+    expect(validateNotificationPrefsPatch({ slackEmail: " Kenta@Example-Org.JP " })).toEqual({
+      slackEmail: "kenta@example-org.jp",
+    });
+    for (const slackEmail of [null, "", "  "])
+      expect(validateNotificationPrefsPatch({ slackEmail })).toEqual({ slackEmail: null });
+    expect(() => validateNotificationPrefsPatch({ slackEmail: "kenta" })).toThrow(
+      expect.objectContaining({
+        code: "notification_prefs_invalid",
+        details: { field: "slackEmail" },
+      }),
+    );
+  });
+
+  it("Slack で引くアドレスは、書いた Slack のメールアドレス、無ければ Nogiku のアドレス", () => {
+    const nogiku = "7787946800@g.ecc.u-tokyo.ac.jp";
+    expect(slackAddressOf({ slackEmail: "kenta@example-org.jp" }, nogiku)).toBe(
+      "kenta@example-org.jp",
+    );
+    expect(slackAddressOf({ slackEmail: "kenta@example-org.jp" }, null)).toBe(
+      "kenta@example-org.jp",
+    );
+    expect(slackAddressOf({}, nogiku)).toBe(nogiku);
+    expect(slackAddressOf({}, null)).toBeNull();
   });
 
   it("止めた分類の種類だけ止める", () => {

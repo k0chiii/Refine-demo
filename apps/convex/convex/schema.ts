@@ -934,6 +934,8 @@ export default defineSchema({
     channels: v.optional(v.array(v.string())),
     /** Slack（DM）の送り先のワークスペース（slackWorkspaces の _id）。無ければ選んでいない */
     slackWorkspaceId: v.optional(v.string()),
+    /** Slack で引くアドレス（各自が書いたもの。小文字）。無ければ Nogiku のメールアドレス（users.email）で引く */
+    slackEmail: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
