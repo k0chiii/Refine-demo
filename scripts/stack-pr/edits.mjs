@@ -4,6 +4,15 @@ import { execSync } from "node:child_process";
 
 const root = "/workspace";
 const stackDir = path.join(root, "scripts/stack-pr");
+const REF_LINEAR = "origin/cursor/stack-linear-8b5a";
+
+function checkoutFromLinear(paths) {
+  execSync(`git fetch origin cursor/stack-linear-8b5a 2>/dev/null || true`, { cwd: root });
+  execSync(`git checkout ${REF_LINEAR} -- ${paths.map((p) => JSON.stringify(p)).join(" ")}`, {
+    cwd: root,
+    stdio: "inherit",
+  });
+}
 
 export function applyPatches(names) {
   for (const n of names ?? []) {
@@ -103,6 +112,37 @@ export function applyEdit(name) {
         "patches/p03-apps__web__src__features__review__ThreadCard.tsx.patch",
       ]);
       return;
+    case "review-focused-decide":
+      applyPatches([
+        "patches/p02-apps__web__src__features__review__ThreadPanel.tsx.patch",
+        "patches/p03-apps__web__src__features__review__ThreadPanel.tsx.patch",
+        "patches/p03-apps__web__src__features__review__ThreadPanel.css.patch",
+      ]);
+      checkoutFromLinear([
+        "apps/web/src/features/review/ThreadCard.tsx",
+        "apps/web/src/features/editor/Editor.tsx",
+        "apps/web/src/features/review/ThreadPanel.tsx",
+        "apps/web/src/features/review/ThreadPanel.css",
+        "apps/web/src/styles.css",
+      ]);
+      return;
+    case "review-e2e-smoke-ce0b91f":
+      checkoutFromLinear(["apps/web/e2e/specs/decision.spec.ts"]);
+      try {
+        patchFile("apps/web/e2e/screenshots.mjs", [
+          [
+            `const sel = '.comments .thread m3e-icon-button[aria-label="反映する"]';`,
+            `const sel = ".comments .thread:not(.thread--closed)";`,
+          ],
+          [
+            `await page.locator(sel).first().click();`,
+            `await page.locator(".comments .thread--active .thread__decide m3e-button").first().click();`,
+          ],
+        ]);
+      } catch {
+        checkoutFromLinear(["apps/web/e2e/screenshots.mjs"]);
+      }
+      return;
     case "review-e2e-decision":
       patchFile("apps/web/e2e/specs/decision.spec.ts", [
         ['test.describe("コメントの採否"', 'test.describe("コメントの反映するかどうか"'],
@@ -169,6 +209,25 @@ export function applyEdit(name) {
       fs.writeFileSync(make, s);
       return;
     }
+    case "copy-anata-phrasing":
+      checkoutFromLinear([
+        "apps/web/src/features/editor/InfoTab.tsx",
+        "apps/web/src/features/notation/AiBackground.tsx",
+        "apps/web/src/features/work/WorkForm.tsx",
+      ]);
+      return;
+    case "copy-youtaiou-terminology":
+      checkoutFromLinear([
+        "packages/domain/src/dashboard/workspace.ts",
+        "packages/domain/src/__tests__/workspace.test.ts",
+        "docs/DECISIONS.md",
+        "docs/SCREENSHOTS.md",
+        "docs/UI_M3E.md",
+        "apps/web/e2e/motion/composition.html",
+        "apps/web/src/features/workspace/parts.tsx",
+        "apps/web/src/styles.css",
+      ]);
+      return;
     case "m3e-shape-table": {
       appendCssOnce(
         "m3e-shape-table",

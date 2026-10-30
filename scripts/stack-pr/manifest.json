@@ -1022,7 +1022,7 @@
     "series": "A-ui-copy",
     "slug": "review-decide-buttons-panel",
     "title": "review: 選んだ／フォーカスしたコメントにだけ採否ボタン行",
-    "edit": "review-panel-decide",
+    "edit": "review-focused-decide",
     "verify": "standard",
     "shots": {
       "desktop": "09-decision",
@@ -1073,10 +1073,7 @@
     "series": "A-ui-copy",
     "slug": "review-e2e-decision",
     "title": "test(e2e): 採否は選択中のみ・反映しないで理由にフォーカス @smoke",
-    "patches": [
-      "patches/p03-apps__web__e2e__specs__decision.spec.ts.patch",
-      "p03-apps__web__e2e__screenshots.mjs.patch"
-    ],
+    "edit": "review-e2e-smoke-ce0b91f",
     "verify": "e2e-smoke",
     "shots": {
       "desktop": "09-decision"
@@ -1285,6 +1282,36 @@
   },
   {
     "id": "069",
+    "series": "A-ui-copy",
+    "slug": "copy-anata-phrasing",
+    "title": "copy: 画面の「あなた」表現を直す（InfoTab/WorkForm/AiBackground）",
+    "edit": "copy-anata-phrasing",
+    "verify": "standard",
+    "shots": {
+      "desktop": "08-workspace-comment"
+    },
+    "m3e": [
+      "typography"
+    ],
+    "decide": null
+  },
+  {
+    "id": "070",
+    "series": "A-ui-copy",
+    "slug": "copy-youtaiou-terminology",
+    "title": "copy: domain/docs の「要対応」用語統一",
+    "edit": "copy-youtaiou-terminology",
+    "verify": "standard",
+    "shots": {
+      "desktop": "27-make-creator"
+    },
+    "m3e": [
+      "typography"
+    ],
+    "decide": null
+  },
+  {
+    "id": "071",
     "series": "B-dashboard",
     "slug": "domain-work-stages-v7",
     "title": "feat(domain): 7 段階 stage ID を追加（旧 stage と並行）",
@@ -1312,7 +1339,7 @@
     ]
   },
   {
-    "id": "070",
+    "id": "072",
     "series": "B-dashboard",
     "slug": "schema-revision-planned-at",
     "title": "feat(schema): 版ごとの予定日フィールド",
@@ -1327,7 +1354,7 @@
     "decide": null
   },
   {
-    "id": "071",
+    "id": "073",
     "series": "B-dashboard",
     "slug": "domain-danger-kpi",
     "title": "feat(domain): 危ない KPI 定義（24h/3日）",
@@ -1342,7 +1369,7 @@
     "decide": null
   },
   {
-    "id": "072",
+    "id": "074",
     "series": "B-dashboard",
     "slug": "demo-dashboard-role-homes",
     "title": "feat(demo): ロール別ホーム用シード",
@@ -1357,7 +1384,7 @@
     "decide": null
   },
   {
-    "id": "073",
+    "id": "075",
     "series": "B-dashboard",
     "slug": "ui-home-view-switcher",
     "title": "ui(home): ロール名なしのビュー切替",
@@ -1385,7 +1412,7 @@
     ]
   },
   {
-    "id": "074",
+    "id": "076",
     "series": "C-detail",
     "slug": "detail-route-shell",
     "title": "ui(detail): 詳細画面ルートと 2 行見出し",

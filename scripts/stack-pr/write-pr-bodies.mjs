@@ -7,12 +7,82 @@ const stackDir = path.join("/workspace/scripts/stack-pr");
 const manifest = JSON.parse(fs.readFileSync(path.join(stackDir, "manifest.json"), "utf8"));
 const rows = JSON.parse(fs.readFileSync(path.join(stackDir, "published-branches.json"), "utf8"));
 const byId = new Map(manifest.map((m) => [m.id, m]));
+const fixtures = path.join(stackDir, "fixtures");
+
+function shotSection(id, item) {
+  const artDir = path.join("/workspace/artifacts/stack-pr", id);
+  const lines = ["## スクリーンショット（before / after）", ""];
+  const beforeD = path.join(artDir, "before-desktop.png");
+  const afterD = path.join(artDir, "after-desktop.png");
+  const afterM = path.join(artDir, "after-mobile.png");
+  const fix058d = path.join(fixtures, "x3-focused-comment.png");
+  const fix058m = path.join(fixtures, "x3b-mobile-focused-comment.png");
+
+  if (id === "058" && fs.existsSync(fix058d)) {
+    lines.push("### After（デスクトップ・選択中コメント）");
+    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`);
+    lines.push("");
+  }
+  if (id === "060" && fs.existsSync(fix058d)) {
+    lines.push("### After（デスクトップ）");
+    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/058/after-desktop.png" />`);
+    lines.push("");
+    if (fs.existsSync(fix058m)) {
+      lines.push("### After（412px）");
+      lines.push(`<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/058/after-mobile.png" />`);
+      lines.push("");
+    }
+  }
+
+  if (fs.existsSync(beforeD)) {
+    lines.push("### Before");
+    lines.push(`<img alt="before desktop" src="/opt/cursor/artifacts/stack-pr/${id}/before-desktop.png" />`);
+    lines.push("");
+  }
+  if (fs.existsSync(afterD) && id !== "058" && id !== "060") {
+    lines.push("### After");
+    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`);
+    lines.push("");
+  }
+  if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060") {
+    lines.push("### After（モバイル）");
+    lines.push(`<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/${id}/after-mobile.png" />`);
+    lines.push("");
+  }
+  if (lines.length <= 2) {
+    lines.push(
+      "`node scripts/stack-pr/capture-published.mjs " +
+        id +
+        "` で `artifacts/stack-pr/" +
+        id +
+        "/` に PNG を生成。",
+    );
+  }
+  return lines.join("\n");
+}
 
 for (const row of rows) {
   const item = byId.get(row.id);
   if (!item) continue;
   const artDir = path.join("/workspace/artifacts/stack-pr", item.id);
   fs.mkdirSync(artDir, { recursive: true });
+
+  if (item.id === "058" || item.id === "060") {
+    for (const [src, dest] of [
+      [path.join(fixtures, "x3-focused-comment.png"), path.join(artDir, "after-desktop.png")],
+      [path.join(fixtures, "x3b-mobile-focused-comment.png"), path.join(artDir, "after-mobile.png")],
+    ]) {
+      if (item.id === "060") continue;
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+    }
+    if (item.id === "060" && fs.existsSync(path.join(fixtures, "x3-focused-comment.png"))) {
+      fs.copyFileSync(
+        path.join(fixtures, "x3-focused-comment.png"),
+        path.join(artDir, "after-desktop.png"),
+      );
+    }
+  }
+
   const body = [
     item.title,
     "",
@@ -20,25 +90,21 @@ for (const row of rows) {
     "",
     `- 系列: **${item.series}**`,
     `- スタック親: \`${row.base}\``,
-    `- ブランチ: \`${row.branch}\``,
+    `- ブランチ: \`${row.branch}\`${row.variant === "v2" ? "（v2・旧 `-8b5a` ブランチは未使用）" : ""}`,
     item.series.startsWith("B") || item.series.startsWith("C")
-      ? "- 目標 UI: `dashboard-research/mockups-m3e-v3/`（リポジトリ外の参考モック）"
-      : "- 元: uploads 0001–0009 を 1PR=1変更に分解",
+      ? "- 目標 UI: `dashboard-research/mockups-m3e-v3/`"
+      : "- 元: uploads 0001–0009 分解 + ce0b91f/44dba54 参考",
     "",
-    "## スクリーンショット（before / after）",
-    "",
-    "デモ版（`pnpm --filter @mf100/web build:demo`）で `node scripts/stack-pr/run-one.mjs --from " +
-      item.id +
-      "` を実行すると `artifacts/stack-pr/" +
-      item.id +
-      "/` に PNG が出ます。本 PR マージ前に大地さんレビュー用に同コマンドで撮り直してください。",
+    shotSection(item.id, item),
     "",
     m3eSection({
       refs: (item.m3e ?? ["typography"]).map((k) => M3E_PAGES[k] ?? k),
       aligned: [
         "Expressive のコンポーネント（@m3e/react）の variant / shape をそのまま利用",
         "色は `--mf-*` トークン（color roles）からのみ",
-      ],
+        item.id === "058" ? "採否行は M3 button groups + filled/tonal/text（https://m3.material.io/components/button-groups/overview）" : null,
+        item.id === "058" ? "一覧の出現は motion spatial-fast + reduced-motion で無効化" : null,
+      ].filter(Boolean),
       intentional: ["モック v3 より情報密度を下げたデモデータ（別 PR で足す）"],
     }),
     "",
@@ -46,16 +112,16 @@ for (const row of rows) {
     "",
     "## 衝突メモ",
     "",
-    "- PR #86 `cursor/transfer-work-creators-c30a` が `WorksTable.tsx` を変更。衝突時は #86 を先に取り込む。",
+    "- PR #86 `cursor/transfer-work-creators-c30a` — WorksTable。取り込み順に注意。",
     "",
     "## テスト",
     "",
     "- `pnpm check` / `pnpm typecheck` / `pnpm test`",
-    item.verify === "standard"
-      ? "- smoke E2E: `CHROMIUM_PATH=/usr/bin/google-chrome pnpm --filter @mf100/web e2e:smoke`（クラウド VM では playwright パスに注意）"
-      : "- 上記 + 該当 spec",
+    item.verify === "standard" || !item.verify
+      ? "- smoke E2E: `CHROMIUM_PATH=/usr/bin/google-chrome pnpm --filter @mf100/web e2e:smoke`"
+      : "- 上記 + `pnpm --filter @mf100/web e2e:smoke`",
     "",
-    "トラッキング一覧: `docs/STACK_PR_TRACKING.md`",
+    "トラッキング: `docs/STACK_PR_TRACKING.md`（全一覧は最下位 PR 本文）",
   ].join("\n");
   fs.writeFileSync(path.join(artDir, "pr-body.md"), body);
 }

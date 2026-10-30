@@ -187,7 +187,7 @@ const seriesA = [
     series: "A-ui-copy",
     slug: "review-decide-buttons-panel",
     title: "review: 選んだ／フォーカスしたコメントにだけ採否ボタン行",
-    edit: "review-panel-decide",
+    edit: "review-focused-decide",
     verify: "standard",
     shots: { desktop: "09-decision", mobile: "09-decision" },
     m3e: ["buttons", "buttonGroups"],
@@ -221,10 +221,7 @@ const seriesA = [
     series: "A-ui-copy",
     slug: "review-e2e-decision",
     title: "test(e2e): 採否は選択中のみ・反映しないで理由にフォーカス @smoke",
-    patches: [
-      "patches/p03-apps__web__e2e__specs__decision.spec.ts.patch",
-      "p03-apps__web__e2e__screenshots.mjs.patch",
-    ],
+    edit: "review-e2e-smoke-ce0b91f",
     verify: "e2e-smoke",
     shots: { desktop: "09-decision" },
     m3e: ["buttons"],
@@ -344,9 +341,29 @@ const seriesA = [
       },
     ],
   },
+  {
+    series: "A-ui-copy",
+    slug: "copy-anata-phrasing",
+    title: "copy: 画面の「あなた」表現を直す（InfoTab/WorkForm/AiBackground）",
+    edit: "copy-anata-phrasing",
+    verify: "standard",
+    shots: { desktop: "08-workspace-comment" },
+    m3e: ["typography"],
+    decide: null,
+  },
+  {
+    series: "A-ui-copy",
+    slug: "copy-youtaiou-terminology",
+    title: "copy: domain/docs の「要対応」用語統一",
+    edit: "copy-youtaiou-terminology",
+    verify: "standard",
+    shots: { desktop: "27-make-creator" },
+    m3e: ["typography"],
+    decide: null,
+  },
 ];
 
-// Series B — dashboard (schema → query → UI parts). 未実装 PR もキューに載せ run が skip 可能に
+// Series B — dashboard
 const seriesB = [
   {
     series: "B-dashboard",

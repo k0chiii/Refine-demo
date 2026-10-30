@@ -86,13 +86,13 @@
 | 057 | A-ui-copy   | copy: DateField.tsx.patch の文言短縮・用語統一                   | なし       | `cursor/stack-057-copy-apps-web-src-ui-DateField-tsx-patch-8b5a`              |
 | 058 | A-ui-copy   | review: 選んだ／フォーカスしたコメントにだけ採否ボタン行           | あり       | `cursor/stack-058-review-decide-buttons-panel-8b5a`                           |
 | 059 | A-ui-copy   | review: 一覧カードは小さな状態表示のみ（✓ クイック操作をやめる） | なし       | `cursor/stack-059-review-card-status-not-actions-8b5a`                        |
-| 060 | A-ui-copy   | test(e2e): 反映ボタン行に合わせ decision spec を更新             | なし       | `cursor/stack-060-review-e2e-decision-8b5a`                                   |
+| 060 | A-ui-copy   | test(e2e): 採否は選択中のみ・反映しないで理由にフォーカス @smoke   | なし       | `cursor/stack-060-review-e2e-decision-8b5a`                                   |
 | 061 | A-ui-copy   | editor: ? でショートカット一覧                                   | あり       | `cursor/stack-061-editor-shortcut-sheet-8b5a`                                 |
 | 062 | A-ui-copy   | copy: 「校正の締切」→「校正期日」                                | なし       | `cursor/stack-062-copy-deadline-term-8b5a`                                    |
 | 063 | A-ui-copy   | style(M3E): 表・KPI・コメントカードの shape と強調               | なし       | `cursor/stack-063-style-m3e-table-card-shape-8b5a`                            |
 | 064 | A-ui-copy   | test(e2e): スクリーンショット手順をツールバー配置に合わせる      | なし       | `cursor/stack-064-test-e2e-screenshots-toolbar-8b5a`                          |
 | 065 | A-ui-copy   | copy(make): 未提出行の「まだ版がありません」を削除               | なし       | `cursor/stack-065-copy-make-unsubmitted-line-8b5a`                            |
-| 066 | A-ui-copy   | ui(make): 「あなたの番」見出しをやめ件数バッジで区切る           | なし       | `cursor/stack-066-ui-make-turn-section-layout-8b5a`                           |
+| 066 | A-ui-copy   | copy(make): 「あなたの番」→「要対応」                           | なし       | `cursor/stack-066-ui-make-turn-section-layout-8b5a`                           |
 | 067 | A-ui-copy   | style(M3E): 制作・校正一覧を segmented list に                   | あり       | `cursor/stack-067-style-m3e-segmented-list-8b5a`                              |
 | 068 | A-ui-copy   | style(M3E): 表見出しのトーンと segmented list CSS                | あり       | `cursor/stack-068-style-m3e-table-header-segmented-css-8b5a`                  |
 | 069 | B-dashboard | feat(domain): 7 段階 stage ID を追加（旧 stage と並行）          | あり       | `cursor/stack-069-domain-work-stages-v7-8b5a`                                 |
