@@ -175,7 +175,9 @@ export type NotificationKind =
   | "rule_proposal_decided"
   | "mentioned"
   | "feedback_posted"
-  | "feedback_mentioned";
+  | "feedback_mentioned"
+  /** 通知の設定から本人が自分に送るテスト（§112）。制作物・送り主は無い */
+  | "test";
 
 export interface Notification {
   id: string;
