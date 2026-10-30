@@ -274,7 +274,7 @@ export class App {
 
   /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ（既定は PDF。文章は textReady）。版の URL を返す */
   async confirmRevision(n: number, ready: () => Promise<unknown> = () => this.pdfReady()) {
-    await this.dialog().locator("m3e-button", { hasText: "提出を確定する" }).click();
+    await this.dialog().locator("m3e-button", { hasText: "提出する" }).click();
     await this.page.waitForURL(new RegExp(`/v/${n}$`), { timeout: 15_000 });
     await ready();
     return new URL(this.page.url()).pathname;
