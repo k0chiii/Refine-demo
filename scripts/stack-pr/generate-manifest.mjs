@@ -19,7 +19,10 @@ function copyFilePrs() {
     .sort();
   return files.map((f) => {
     const rel = f.replace(/^p02-/, "").replace(/__/g, "/");
-    const slug = rel.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 48);
+    const slug = rel
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48);
     return {
       series: "A-ui-copy",
       slug: `copy-${slug}`,
@@ -36,7 +39,8 @@ function copyFilePrs() {
 function shotFor(rel) {
   if (rel.includes("make.tsx") || rel.includes("workspace")) return { desktop: "27-make-creator" };
   if (rel.includes("check.tsx")) return { desktop: "28-check-reviewer" };
-  if (rel.includes("works/index") || rel.includes("WorksTable")) return { desktop: "02-works-list" };
+  if (rel.includes("works/index") || rel.includes("WorksTable"))
+    return { desktop: "02-works-list" };
   if (rel.includes("Editor") || rel.includes("review/") || rel.includes("annotation/"))
     return { desktop: "08-workspace-comment" };
   if (rel.includes("signin")) return { desktop: "01-signin" };
@@ -52,7 +56,15 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "09-decision" },
     m3e: ["typography"],
-    decide: [{ id: "Q3", q: "監査 Q3: 受付中→校正中（本 PR は resolution のみ）", options: [{ id: "A", rec: true, text: "別 PR で reviewState を揃える", note: "混在を避ける" }] }],
+    decide: [
+      {
+        id: "Q3",
+        q: "監査 Q3: 受付中→校正中（本 PR は resolution のみ）",
+        options: [
+          { id: "A", rec: true, text: "別 PR で reviewState を揃える", note: "混在を避ける" },
+        ],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -62,7 +74,15 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "27-make-creator" },
     m3e: ["typography"],
-    decide: [{ id: "Q3", q: "監査 Q3: stageInfo の「受付終了」は別 PR", options: [{ id: "A", rec: true, text: "本 PR は labels のみ", note: "約20か所は follow-up" }] }],
+    decide: [
+      {
+        id: "Q3",
+        q: "監査 Q3: stageInfo の「受付終了」は別 PR",
+        options: [
+          { id: "A", rec: true, text: "本 PR は labels のみ", note: "約20か所は follow-up" },
+        ],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -72,7 +92,13 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "08-workspace-comment" },
     m3e: ["typography"],
-    decide: [{ id: "Q9", q: "監査 Q9", options: [{ id: "A", rec: true, text: "参考", note: "仮実装承認待ち" }] }],
+    decide: [
+      {
+        id: "Q9",
+        q: "監査 Q9",
+        options: [{ id: "A", rec: true, text: "参考", note: "仮実装承認待ち" }],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -82,7 +108,13 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "31-finalize" },
     m3e: ["buttons"],
-    decide: [{ id: "Q6", q: "監査 Q6: 校了を宣言→校了する", options: [{ id: "A", rec: true, text: "はい（本 PR）", note: "UI ボタンは別 PR" }] }],
+    decide: [
+      {
+        id: "Q6",
+        q: "監査 Q6: 校了を宣言→校了する",
+        options: [{ id: "A", rec: true, text: "はい（本 PR）", note: "UI ボタンは別 PR" }],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -102,7 +134,13 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "15-notifications" },
     m3e: ["typography"],
-    decide: [{ id: "Q8", q: "監査 Q8: 担当者→対応する人", options: [{ id: "A", rec: true, text: "はい", note: "通知種別のみ" }] }],
+    decide: [
+      {
+        id: "Q8",
+        q: "監査 Q8: 担当者→対応する人",
+        options: [{ id: "A", rec: true, text: "はい", note: "通知種別のみ" }],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -148,12 +186,26 @@ const seriesA = [
   {
     series: "A-ui-copy",
     slug: "review-decide-buttons-panel",
-    title: "review: 選んだコメントのパネルにだけ反映ボタン行を出す",
-    edit: "review-panel-decide",
+    title: "review: 選んだ／フォーカスしたコメントにだけ採否ボタン行",
+    edit: "review-focused-decide",
     verify: "standard",
     shots: { desktop: "09-decision", mobile: "09-decision" },
     m3e: ["buttons", "buttonGroups"],
-    decide: [{ id: "1", q: "design-questions #1 反映ボタンの置き場所", options: [{ id: "A", rec: true, text: "パネル本文下（選んだコメントだけ）", note: "大地さん fb (a)" }, { id: "B", text: "見出しアイコン", note: "次の版が入らない" }] }],
+    decide: [
+      {
+        id: "1",
+        q: "design-questions #1 反映ボタンの置き場所",
+        options: [
+          {
+            id: "A",
+            rec: true,
+            text: "一覧で選んだ／フォーカスしたカード（パネルも同じ行）",
+            note: "大地さん fb (a)",
+          },
+          { id: "B", text: "見出しアイコン", note: "次の版が入らない" },
+        ],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -168,8 +220,8 @@ const seriesA = [
   {
     series: "A-ui-copy",
     slug: "review-e2e-decision",
-    title: "test(e2e): 反映ボタン行に合わせ decision spec を更新",
-    patches: ["patches/p03-apps__web__e2e__specs__decision.spec.ts.patch", "p03-apps__web__e2e__screenshots.mjs.patch"],
+    title: "test(e2e): 採否は選択中のみ・反映しないで理由にフォーカス @smoke",
+    edit: "review-e2e-smoke-ce0b91f",
     verify: "e2e-smoke",
     shots: { desktop: "09-decision" },
     m3e: ["buttons"],
@@ -179,17 +231,21 @@ const seriesA = [
     series: "A-ui-copy",
     slug: "editor-shortcut-sheet",
     title: "editor: ? でショートカット一覧",
-    patches: [
-      "patches/p04-apps__web__src__features__editor__ShortcutSheet.tsx.patch",
-      "patches/p04-apps__web__src__features__editor__ShortcutSheet.css.patch",
-      "patches/p04-apps__web__src__features__editor__Editor.tsx.patch",
-    ],
+    edit: "editor-shortcut-sheet",
     verify: "standard",
     shots: { desktop: "08-workspace-comment" },
     m3e: ["dialogs", "typography", "buttons"],
     decide: [
-      { id: "2", q: "design-questions #2 コメントボタン", options: [{ id: "A", rec: true, text: "ツールバー", note: "Figma C" }] },
-      { id: "3", q: "design-questions #3", options: [{ id: "A", rec: true, text: "エディタ内だけ", note: "58626f5" }] },
+      {
+        id: "2",
+        q: "design-questions #2 コメントボタン",
+        options: [{ id: "A", rec: true, text: "ツールバー", note: "Figma C" }],
+      },
+      {
+        id: "3",
+        q: "design-questions #3",
+        options: [{ id: "A", rec: true, text: "エディタ内だけ", note: "58626f5" }],
+      },
     ],
   },
   {
@@ -241,7 +297,7 @@ const seriesA = [
   {
     series: "A-ui-copy",
     slug: "ui-make-turn-section-layout",
-    title: "ui(make): 「あなたの番」見出しをやめ件数バッジで区切る",
+    title: "copy(make): 「あなたの番」→「要対応」",
     edit: "make-turn-layout",
     verify: "standard",
     shots: { desktop: "27-make-creator", mobile: "20-mobile-make" },
@@ -256,7 +312,13 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "27-make-creator" },
     m3e: ["lists", "shape"],
-    decide: [{ id: "5", q: "design-questions #5", options: [{ id: "A", rec: true, text: "segmented list にする", note: "efdba20" }] }],
+    decide: [
+      {
+        id: "5",
+        q: "design-questions #5",
+        options: [{ id: "A", rec: true, text: "segmented list にする", note: "efdba20" }],
+      },
+    ],
   },
   {
     series: "A-ui-copy",
@@ -266,22 +328,122 @@ const seriesA = [
     verify: "standard",
     shots: { desktop: "02-works-list" },
     m3e: ["lists", "color"],
-    decide: [{ id: "6", q: "design-questions #6 表見出し", options: [{ id: "A", rec: true, text: "surface-container-low", note: "青い帯にしない" }] }],
+    decide: [
+      {
+        id: "6",
+        q: "design-questions #6 表見出し",
+        options: [{ id: "A", rec: true, text: "surface-container-low", note: "青い帯にしない" }],
+      },
+    ],
+  },
+  {
+    series: "A-ui-copy",
+    slug: "copy-anata-phrasing",
+    title: "copy: 画面の「あなた」表現を直す（InfoTab/WorkForm/AiBackground）",
+    edit: "copy-anata-phrasing",
+    verify: "standard",
+    shots: { desktop: "08-workspace-comment" },
+    m3e: ["typography"],
+    decide: null,
+  },
+  {
+    series: "A-ui-copy",
+    slug: "copy-youtaiou-terminology",
+    title: "copy: domain/docs の「要対応」用語統一",
+    edit: "copy-youtaiou-terminology",
+    verify: "standard",
+    shots: { desktop: "27-make-creator" },
+    m3e: ["typography"],
+    decide: null,
   },
 ];
 
-// Series B — dashboard (schema → query → UI parts). 未実装 PR もキューに載せ run が skip 可能に
+// Series B — dashboard
 const seriesB = [
-  { series: "B-dashboard", slug: "domain-work-stages-v7", title: "feat(domain): 7 段階 stage ID を追加（旧 stage と並行）", edit: "domain-stages-v7", verify: "full", shots: { desktop: "02-works-list" }, m3e: ["color"], decide: [{ id: "Q2", q: "監査 Q2 状態4つ", options: [{ id: "A", rec: true, text: "7 段階を新 ID で追加", note: "データ影響" }] }] },
-  { series: "B-dashboard", slug: "schema-revision-planned-at", title: "feat(schema): 版ごとの予定日フィールド", edit: "schema-revision-planned", verify: "full", shots: { desktop: "02-works-list" }, m3e: ["typography"], decide: null },
-  { series: "B-dashboard", slug: "domain-danger-kpi", title: "feat(domain): 危ない KPI 定義（24h/3日）", edit: "domain-danger", verify: "full", shots: { desktop: "02-works-list" }, m3e: ["color"], decide: null },
-  { series: "B-dashboard", slug: "demo-dashboard-role-homes", title: "feat(demo): ロール別ホーム用シード", edit: "demo-role-homes", verify: "standard", shots: { desktop: "27-make-creator" }, m3e: ["cards"], decide: null },
-  { series: "B-dashboard", slug: "ui-home-view-switcher", title: "ui(home): ロール名なしのビュー切替", edit: "ui-view-switcher", verify: "standard", shots: { desktop: "27-make-creator" }, m3e: ["buttonGroups"], decide: [{ id: "38A", q: "ロール別ホーム", options: [{ id: "A", rec: true, text: "画面上にロール名を出さない", note: "decisions 38A" }] }] },
+  {
+    series: "B-dashboard",
+    slug: "domain-work-stages-v7",
+    title: "feat(domain): 7 段階 stage ID を追加（旧 stage と並行）",
+    edit: "domain-stages-v7",
+    verify: "full",
+    shots: { desktop: "02-works-list" },
+    m3e: ["color"],
+    decide: [
+      {
+        id: "Q2",
+        q: "監査 Q2 状態4つ",
+        options: [{ id: "A", rec: true, text: "7 段階を新 ID で追加", note: "データ影響" }],
+      },
+    ],
+  },
+  {
+    series: "B-dashboard",
+    slug: "schema-revision-planned-at",
+    title: "feat(schema): 版ごとの予定日フィールド",
+    edit: "schema-revision-planned",
+    verify: "full",
+    shots: { desktop: "02-works-list" },
+    m3e: ["typography"],
+    decide: null,
+  },
+  {
+    series: "B-dashboard",
+    slug: "domain-danger-kpi",
+    title: "feat(domain): 危ない KPI 定義（24h/3日）",
+    edit: "domain-danger",
+    verify: "full",
+    shots: { desktop: "02-works-list" },
+    m3e: ["color"],
+    decide: null,
+  },
+  {
+    series: "B-dashboard",
+    slug: "demo-dashboard-role-homes",
+    title: "feat(demo): ロール別ホーム用シード",
+    edit: "demo-role-homes",
+    verify: "standard",
+    shots: { desktop: "27-make-creator" },
+    m3e: ["cards"],
+    decide: null,
+  },
+  {
+    series: "B-dashboard",
+    slug: "ui-home-view-switcher",
+    title: "ui(home): ロール名なしのビュー切替",
+    edit: "ui-view-switcher",
+    verify: "standard",
+    shots: { desktop: "27-make-creator" },
+    m3e: ["buttonGroups"],
+    decide: [
+      {
+        id: "38A",
+        q: "ロール別ホーム",
+        options: [
+          { id: "A", rec: true, text: "画面上にロール名を出さない", note: "decisions 38A" },
+        ],
+      },
+    ],
+  },
   // ... more dashboard widgets - placeholders implemented incrementally
 ];
 
 const seriesC = [
-  { series: "C-detail", slug: "detail-route-shell", title: "ui(detail): 詳細画面ルートと 2 行見出し", edit: "detail-shell", verify: "standard", shots: { desktop: "08-workspace-comment" }, m3e: ["typography", "shape"], decide: [{ id: "59A", q: "詳細画面作り直し", options: [{ id: "A", rec: true, text: "初版から", note: "decisions 59A" }] }] },
+  {
+    series: "C-detail",
+    slug: "detail-route-shell",
+    title: "ui(detail): 詳細画面ルートと 2 行見出し",
+    edit: "detail-shell",
+    verify: "standard",
+    shots: { desktop: "08-workspace-comment" },
+    m3e: ["typography", "shape"],
+    decide: [
+      {
+        id: "59A",
+        q: "詳細画面作り直し",
+        options: [{ id: "A", rec: true, text: "初版から", note: "decisions 59A" }],
+      },
+    ],
+  },
 ];
 
 const queue = [...seriesA, ...seriesB, ...seriesC].map((item, i) => ({
