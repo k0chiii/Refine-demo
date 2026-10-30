@@ -134,6 +134,13 @@ export function applyEdit(name) {
     case "editor-comment-toolbar":
       applyPatches(["p04-apps__web__src__features__editor__Editor.tsx.patch"]);
       return;
+    case "editor-shortcut-sheet":
+      checkoutFromLinear([
+        "apps/web/src/features/editor/ShortcutSheet.tsx",
+        "apps/web/src/features/editor/ShortcutSheet.css",
+        "apps/web/src/features/editor/Editor.tsx",
+      ]);
+      return;
     case "make-turn-layout": {
       const make = path.join(root, "apps/web/src/routes/_app/make.tsx");
       let s = fs.readFileSync(make, "utf8");
