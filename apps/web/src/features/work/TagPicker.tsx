@@ -280,9 +280,7 @@ export function TagPicker({
             </div>
           ) : null}
         </div>
-        <span slot="hint" id={`${id}-hint`}>
-          Notion のタグと同じ選択肢から選べます。ほかの語は書いて作れます
-        </span>
+        <span slot="hint" id={`${id}-hint`}></span>
       </M3eFormField>
       <span className="sr-only" role="status" aria-live="polite">
         {announce}
