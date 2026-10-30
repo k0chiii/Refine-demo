@@ -14,7 +14,10 @@ export function applyPatches(names) {
     ];
     const file = candidates.find((p) => fs.existsSync(p));
     if (!file) throw new Error(`patch missing: ${n}`);
-    execSync(`git apply --whitespace=nowarn ${JSON.stringify(file)}`, { cwd: root, stdio: "inherit" });
+    execSync(`git apply --whitespace=nowarn ${JSON.stringify(file)}`, {
+      cwd: root,
+      stdio: "inherit",
+    });
   }
 }
 
@@ -72,7 +75,10 @@ export function applyEdit(name) {
         ],
         ['  closed: "この版の受付は終了しています",', '  closed: "この版の校正は終わりました",'],
         ['  void: "この版は無効化されています",', '  void: "この版は無効です",'],
-        ['  not_latest: "最新の受付対象版ではありません",', '  not_latest: "最新の版ではありません",'],
+        [
+          '  not_latest: "最新の受付対象版ではありません",',
+          '  not_latest: "最新の版ではありません",',
+        ],
       ]);
       return;
     case "labels-notifications":
@@ -84,9 +90,7 @@ export function applyEdit(name) {
       ]);
       return;
     case "labels-permission":
-      patchFile("apps/web/src/lib/labels.ts", [
-        ['  edit: "編集（制作委任）",', '  edit: "編集",'],
-      ]);
+      patchFile("apps/web/src/lib/labels.ts", [['  edit: "編集（制作委任）",', '  edit: "編集",']]);
       return;
     case "errors-approver":
       applyPatches(["patches/p01-apps__web__src__lib__errors.ts.patch"]);
@@ -102,7 +106,10 @@ export function applyEdit(name) {
     case "review-e2e-decision":
       patchFile("apps/web/e2e/specs/decision.spec.ts", [
         ['test.describe("コメントの採否"', 'test.describe("コメントの反映するかどうか"'],
-        ['test("制作者が理由を付けて不採用にすると', 'test("制作者が理由を付けて反映しないにすると'],
+        [
+          'test("制作者が理由を付けて不採用にすると',
+          'test("制作者が理由を付けて反映しないにすると',
+        ],
         [
           `    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
     await app.settle();
@@ -118,10 +125,7 @@ export function applyEdit(name) {
     case "review-card-status": {
       const card = path.join(root, "apps/web/src/features/review/ThreadCard.tsx");
       let s = fs.readFileSync(card, "utf8");
-      s = s.replace(
-        /          \{canDecide && !closed \? \([\s\S]*?\) : null\}\n/,
-        "",
-      );
+      s = s.replace(/          \{canDecide && !closed \? \([\s\S]*?\) : null\}\n/, "");
       fs.writeFileSync(card, s);
       const meta = path.join(root, "apps/web/src/features/review/ThreadMeta.tsx");
       let m = fs.readFileSync(meta, "utf8");
@@ -154,7 +158,10 @@ export function applyEdit(name) {
     case "make-turn-layout": {
       const make = path.join(root, "apps/web/src/routes/_app/make.tsx");
       let s = fs.readFileSync(make, "utf8");
-      s = s.replace('<Group title="あなたの番" count={turn.length}>', '<Group title="" label="今すぐ" count={turn.length} className="dash__section--now">');
+      s = s.replace(
+        '<Group title="あなたの番" count={turn.length}>',
+        '<Group title="" label="今すぐ" count={turn.length} className="dash__section--now">',
+      );
       s = s.replace(
         " * - 進行中: 「あなたの番」（未対応のコメントに返事をする・次の版を出す）",
         " * - 進行中: 今すぐ（未対応のコメント・次の版。見出しは件数バッジで示す）",
@@ -239,24 +246,27 @@ export function applyEdit(name) {
     }
     case "e2e-screenshots-toolbar":
       patchFile("apps/web/e2e/screenshots.mjs", [
-        ["await page.mouse.click(...at(0.92, 0.95));", "// 下端は浮いたツールバーと重なるので、紙面の中ほどで試す\n    await page.mouse.click(...at(0.92, 0.6));"],
+        [
+          "await page.mouse.click(...at(0.92, 0.95));",
+          "// 下端は浮いたツールバーと重なるので、紙面の中ほどで試す\n    await page.mouse.click(...at(0.92, 0.6));",
+        ],
         ["const [jx, jy] = at(0.9, 0.9);", "const [jx, jy] = at(0.9, 0.55);"],
         ["await mouseHold(...at(0.92, 0.95));", "await mouseHold(...at(0.92, 0.6));"],
         [
-          'const sel = \'.comments .thread m3e-icon-button[aria-label^="解決"]\';',
-          'const sel = \'.comments .thread m3e-icon-button[aria-label="反映する"]\';',
+          "const sel = '.comments .thread m3e-icon-button[aria-label^=\"解決\"]';",
+          "const sel = '.comments .thread m3e-icon-button[aria-label=\"反映する\"]';",
         ],
         [
           "/ページ対応: 旧 [1-9]\\d* → 新 [1-9]/.test(",
           "/ページの対応（前の版 [1-9]\\d*・この版 [1-9]/.test(",
         ],
         [
-          'const sel = \'m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]\';',
-          'const sel = \'m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]\';',
+          "const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^=\"解決\"]';",
+          "const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label=\"反映する\"]';",
         ],
         [
-          '.locator(\'m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]\')',
-          '.locator(\'m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]\')',
+          ".locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^=\"解決\"]')",
+          ".locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label=\"反映する\"]')",
         ],
       ]);
       return;
@@ -312,7 +322,10 @@ export function applyEdit(name) {
       return;
     case "domain-stages-v7":
       copySnippet("productionStages.ts", "packages/domain/src/dashboard/productionStages.ts");
-      copySnippet("productionStages.test.ts", "packages/domain/src/__tests__/productionStages.test.ts");
+      copySnippet(
+        "productionStages.test.ts",
+        "packages/domain/src/__tests__/productionStages.test.ts",
+      );
       ensureIndexExport('export * from "./dashboard/productionStages.ts";');
       return;
     case "schema-revision-planned":

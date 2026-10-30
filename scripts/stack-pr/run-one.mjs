@@ -33,7 +33,10 @@ function m3eBody(keys) {
   const refs = keys.map((k) => M3E_PAGES[k] ?? k);
   return m3eSection({
     refs,
-    aligned: ["色は `--mf-*` / `--md-sys-color-*` の色役割から取る", "コンポーネントは @m3e/react をそのまま使う"],
+    aligned: [
+      "色は `--mf-*` / `--md-sys-color-*` の色役割から取る",
+      "コンポーネントは @m3e/react をそのまま使う",
+    ],
     intentional: ["デモ用データの密度は mockups より低い（別 PR で足す）"],
   });
 }
@@ -59,76 +62,85 @@ if (!item) {
   process.exit(1);
 }
 
-const parent = readParent();
-const branch = `cursor/stack-${item.id}-${item.slug}-8b5a`;
-const artDir = path.join(root, "artifacts/stack-pr", item.id);
-fs.mkdirSync(artDir, { recursive: true });
+await (async () => {
+  const parent = readParent();
+  const branch = `cursor/stack-${item.id}-${item.slug}-8b5a`;
+  const artDir = path.join(root, "artifacts/stack-pr", item.id);
+  fs.mkdirSync(artDir, { recursive: true });
 
-console.log("PR", item.id, item.title, "parent", parent);
+  console.log("PR", item.id, item.title, "parent", parent);
 
-sh(`git fetch origin develop`);
-sh(`git checkout ${parent}`);
-sh(`git checkout -B ${branch}`);
+  sh(`git fetch origin develop`);
+  sh(`git checkout ${parent}`);
+  sh(`git checkout -B ${branch}`);
 
-captureShots(item.shots, path.join(artDir, "before"));
+  await captureShots(item.shots, path.join(artDir, "before"));
 
-try {
-  applyItem(item);
-} catch (e) {
-  console.error("apply failed", e.message);
-  process.exit(2);
-}
+  try {
+    applyItem(item);
+  } catch (e) {
+    console.error("apply failed", e.message);
+    process.exit(2);
+  }
 
-captureShots(item.shots, path.join(artDir, "after"));
-verify(item.verify);
+  await captureShots(item.shots, path.join(artDir, "after"));
+  verify(item.verify);
 
-sh("git add -A");
-sh(`git commit -m "${item.title.replace(/"/g, '\\"')}"`);
-sh(`git push -u origin ${branch}`);
+  sh("git add -A");
+  sh(`git commit -m "${item.title.replace(/"/g, '\\"')}"`);
+  sh(`git push -u origin ${branch}`);
 
-writeParent(branch);
-const next = manifest[manifest.findIndex((m) => m.id === item.id) + 1];
-if (next) fs.writeFileSync(nextFile, next.id);
-else fs.writeFileSync(nextFile, "done");
+  writeParent(branch);
+  const next = manifest[manifest.findIndex((m) => m.id === item.id) + 1];
+  if (next) fs.writeFileSync(nextFile, next.id);
+  else fs.writeFileSync(nextFile, "done");
 
-const body = [
-  item.title,
-  "",
-  "## 概要",
-  "",
-  `- 系列: **${item.series}**`,
-  `- 親ブランチ: \`${parent}\``,
-  item.series.startsWith("B") || item.series.startsWith("C")
-    ? "- モックアップ: `dashboard-research/mockups-m3e-v3/`（参考画像）"
-    : "- 元コミット: uploads 0001–0009 を分解",
-  "",
-  "### スクリーンショット",
-  "",
-  "| | デスクトップ |",
-  "|---|---|",
-  `| before | ![before](/workspace/artifacts/stack-pr/${item.id}/before-desktop.png) |`,
-  `| after | ![after](/workspace/artifacts/stack-pr/${item.id}/after-desktop.png) |`,
-  item.shots.mobile
-    ? `\n| before (mobile) | ![before-m](/workspace/artifacts/stack-pr/${item.id}/before-mobile.png) |\n| after (mobile) | ![after-m](/workspace/artifacts/stack-pr/${item.id}/after-mobile.png) |`
-    : "",
-  "",
-  m3eBody(item.m3e ?? ["typography"]),
-  "",
-  decideSection(item.decide),
-  "",
-  "## 衝突メモ",
-  "",
-  "- 既存 PR #86（`cursor/transfer-work-creators-c30a`）は `WorksTable.tsx` を触る可能性あり。衝突したら #86 側を先に取り込む。",
-  "",
-  "## テスト",
-  "",
-  "- [x] pnpm check / typecheck / test" + (item.verify !== "standard" ? " / e2e smoke" : ""),
-].join("\n");
+  const body = [
+    item.title,
+    "",
+    "## 概要",
+    "",
+    `- 系列: **${item.series}**`,
+    `- 親ブランチ: \`${parent}\``,
+    item.series.startsWith("B") || item.series.startsWith("C")
+      ? "- モックアップ: `dashboard-research/mockups-m3e-v3/`（参考画像）"
+      : "- 元コミット: uploads 0001–0009 を分解",
+    "",
+    "### スクリーンショット",
+    "",
+    "| | デスクトップ |",
+    "|---|---|",
+    `| before | ![before](/workspace/artifacts/stack-pr/${item.id}/before-desktop.png) |`,
+    `| after | ![after](/workspace/artifacts/stack-pr/${item.id}/after-desktop.png) |`,
+    item.shots.mobile
+      ? `\n| before (mobile) | ![before-m](/workspace/artifacts/stack-pr/${item.id}/before-mobile.png) |\n| after (mobile) | ![after-m](/workspace/artifacts/stack-pr/${item.id}/after-mobile.png) |`
+      : "",
+    "",
+    m3eBody(item.m3e ?? ["typography"]),
+    "",
+    decideSection(item.decide),
+    "",
+    "## 衝突メモ",
+    "",
+    "- 既存 PR #86（`cursor/transfer-work-creators-c30a`）は `WorksTable.tsx` を触る可能性あり。衝突したら #86 側を先に取り込む。",
+    "",
+    "## テスト",
+    "",
+    "- [x] pnpm check / typecheck / test" + (item.verify !== "standard" ? " / e2e smoke" : ""),
+  ].join("\n");
 
-fs.writeFileSync(path.join(artDir, "pr-body.md"), body);
-fs.writeFileSync(
-  path.join(artDir, "pr-meta.json"),
-  JSON.stringify({ branch, base_branch: parent, title: item.title, bodyPath: path.join(artDir, "pr-body.md") }, null, 2),
-);
+  fs.writeFileSync(path.join(artDir, "pr-body.md"), body);
+  fs.writeFileSync(
+    path.join(artDir, "pr-meta.json"),
+    JSON.stringify(
+      { branch, base_branch: parent, title: item.title, bodyPath: path.join(artDir, "pr-body.md") },
+      null,
+      2,
+    ),
+  );
 
-console.log("OK", branch, "next", next?.id ?? "done");
+  console.log("OK", branch, "next", next?.id ?? "done");
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

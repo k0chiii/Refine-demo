@@ -22,15 +22,13 @@ function readStored(): HomeView {
 }
 
 /** 画面上にロール名を出さないビュー切替（decisions 38A）。選択は sessionStorage に保存 */
-export function ViewSwitcher(
-  {
-    value,
-    onChange,
-  }: {
-    value?: HomeView;
-    onChange?: (next: HomeView) => void;
-  } = {},
-) {
+export function ViewSwitcher({
+  value,
+  onChange,
+}: {
+  value?: HomeView;
+  onChange?: (next: HomeView) => void;
+} = {}) {
   const [internal, setInternal] = useState<HomeView>(() => readStored());
   const current = value ?? internal;
   useEffect(() => {
