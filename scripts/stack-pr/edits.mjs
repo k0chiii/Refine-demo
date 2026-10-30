@@ -310,6 +310,138 @@ export function applyEdit(name) {
 `,
       );
       return;
+    }
+    case "domain-stages-v7":
+      copySnippet("productionStages.ts", "packages/domain/src/dashboard/productionStages.ts");
+      copySnippet("productionStages.test.ts", "packages/domain/src/__tests__/productionStages.test.ts");
+      ensureIndexExport('export * from "./dashboard/productionStages.ts";');
+      return;
+    case "schema-revision-planned":
+      patchFile("apps/convex/convex/schema.ts", [
+        [
+          `    submittedAt: v.number(),
+    deadlineAt: v.number(),
+    reviewState,`,
+          `    submittedAt: v.number(),
+    deadlineAt: v.number(),
+    plannedSubmitAt: v.optional(v.number()),
+    reviewState,`,
+        ],
+      ]);
+      execSync("pnpm codegen", { cwd: root, stdio: "inherit" });
+      return;
+    case "domain-danger":
+      copySnippet("danger.ts", "packages/domain/src/dashboard/danger.ts");
+      copySnippet("danger.test.ts", "packages/domain/src/__tests__/danger.test.ts");
+      ensureIndexExport('export * from "./dashboard/danger.ts";');
+      return;
+    case "demo-role-homes":
+      patchFile("apps/convex/convex/seed.ts", [
+        [
+          `      created.push(workId);
+    }
+    // 表記統一のサンプル（notation2 の初期データ＋α）。ルールが 1 件も無いときだけ入れる`,
+          `      created.push(workId);
+    }
+    // ロール別ホーム用: 校正割当付きの受付中版（dashboard.make / dashboard.check 用。1 セットだけ）
+    if (!(await ctx.db.query("reviewAssignments").first())) {
+      const pamphlet = await ctx.db
+        .query("works")
+        .withIndex("by_year", (q) => q.eq("year", 100))
+        .filter((q) => q.eq(q.field("legacyId"), "PR-001"))
+        .unique();
+      if (pamphlet) {
+        const revisionId = await ctx.db.insert("revisions", {
+          workId: pamphlet._id,
+          kind: "standard",
+          sequence: 1,
+          reviewType: "general",
+          submittedBy: ids["mock-nogiku-creator"]!,
+          submittedAt: now,
+          deadlineAt: now + 12 * 3_600_000,
+          plannedSubmitAt: now + 2 * day,
+          reviewState: "open",
+          changeSummary: "ホーム用サンプル",
+          focusNotes: "",
+        });
+        await ctx.db.insert("reviewAssignments", {
+          revisionId,
+          reviewerId: ids["mock-nogiku-reviewer"]!,
+          reviewType: "general",
+          state: "pending",
+        });
+      }
+    }
+    // 表記統一のサンプル（notation2 の初期データ＋α）。ルールが 1 件も無いときだけ入れる`,
+        ],
+      ]);
+      return;
+    case "ui-view-switcher":
+      copySnippet("ViewSwitcher.tsx", "apps/web/src/features/home/ViewSwitcher.tsx");
+      patchFile("apps/web/src/routes/_app/make.tsx", [
+        [
+          `import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";`,
+          `import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
+import { ViewSwitcher } from "@/features/home/ViewSwitcher";`,
+        ],
+        [
+          `      <AppBarSlot slot="title">制作</AppBarSlot>
+      {tabs}`,
+          `      <AppBarSlot slot="title">制作</AppBarSlot>
+      <AppBarSlot slot="actions">
+        <ViewSwitcher />
+      </AppBarSlot>
+      {tabs}`,
+        ],
+      ]);
+      appendCssOnce(
+        "ui-home-view-switcher",
+        `
+.home-view-switcher__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+`,
+      );
+      return;
+    case "detail-shell":
+      copySnippet("detail.tsx", "apps/web/src/routes/_app/works/$workId/detail.tsx");
+      appendCssOnce(
+        "detail-shell",
+        `
+.detail-shell__head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.detail-shell__row--title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.detail-shell__title {
+  margin: 0;
+  min-width: 0;
+}
+.detail-shell__version {
+  color: var(--mf-on-surface-variant);
+  flex-shrink: 0;
+}
+.detail-shell__row--steps {
+  min-height: 48px;
+}
+.detail-shell__stepper {
+  width: 100%;
+}
+`,
+      );
+      return;
     default:
       throw new Error(`unknown edit: ${name}`);
   }
@@ -321,6 +453,22 @@ function appendCssOnce(marker, chunk) {
   if (c.includes(marker)) return;
   c += `\n/* stack-pr:${marker} */\n${chunk}\n`;
   fs.writeFileSync(cssPath, c);
+}
+
+function copySnippet(name, destRel) {
+  const src = path.join(stackDir, "snippets", name);
+  if (!fs.existsSync(src)) throw new Error(`snippet missing: ${name}`);
+  const dest = path.join(root, destRel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, fs.readFileSync(src, "utf8"));
+}
+
+function ensureIndexExport(line) {
+  const rel = "packages/domain/src/index.ts";
+  const file = path.join(root, rel);
+  const s = fs.readFileSync(file, "utf8");
+  if (s.includes(line)) return;
+  fs.writeFileSync(file, `${s.trimEnd()}\n${line}\n`);
 }
 
 export function applyItem(item) {
