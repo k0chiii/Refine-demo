@@ -156,19 +156,43 @@ describe("提出時の自動校正", () => {
   });
 
   it("再試行は 4 回まで（最初の検査と合わせて 5 回）。上限を越えると権限ではなく上限のエラーになる", async () => {
-    const { ctx, run } = await setup();
+    const { ctx, rev, run, view } = await setup();
+    expect(view).toMatchObject({ retriesLeft: 4, canRetry: true });
     const artifactId = run.artifacts[0]!.artifactId;
     const failAndRetry = async () => {
       await failProofreadArtifact(ctx, creator, { runId: run.id, artifactId, error: "x" });
       await retryProofreadingRun(ctx, reviewer, { runId: run.id });
     };
     for (let i = 0; i < 4; i++) await failAndRetry();
+    expect(await getProofreadingRun(ctx, reviewer, rev.id)).toMatchObject({
+      canRun: true,
+      retriesLeft: 0,
+      canRetry: false,
+    });
     await expect(failAndRetry()).rejects.toEqual(
       expect.objectContaining({
         code: "proofread_retry_exhausted",
         details: expect.objectContaining({ attempts: 5, max: 4 }),
       }),
     );
+  });
+
+  it("システム管理者は上限を越えて再試行できる（失敗の本当の理由を確かめるため）", async () => {
+    const { ctx, rev, run } = await setup();
+    const artifactId = run.artifacts[0]!.artifactId;
+    const failAndRetry = async (who: Principal) => {
+      await failProofreadArtifact(ctx, creator, { runId: run.id, artifactId, error: "x" });
+      await retryProofreadingRun(ctx, who, { runId: run.id });
+    };
+    for (let i = 0; i < 4; i++) await failAndRetry(reviewer);
+    expect(await getProofreadingRun(ctx, sysadmin, rev.id)).toMatchObject({
+      retriesLeft: 0,
+      canRetry: true,
+    });
+    await failAndRetry(sysadmin);
+    const after = await getProofreadingRun(ctx, sysadmin, rev.id);
+    expect(after.run).toMatchObject({ status: "pending", attempts: 6 });
+    expect(after).toMatchObject({ retriesLeft: 0, canRetry: true });
   });
 
   it("主管とシステム管理者も、校正者と同じく実行を進めて再試行できる。関係者に入っているだけの人はできない", async () => {
@@ -212,7 +236,11 @@ describe("提出時の自動校正", () => {
     await saveRule(ctx, sysadmin, { rule });
     const w1 = await seedWork(ctx);
     const r1 = await submitRevision(ctx, w1.id);
-    expect((await getProofreadingRun(ctx, creator, r1.id)).run).toBeNull();
+    expect(await getProofreadingRun(ctx, creator, r1.id)).toMatchObject({
+      run: null,
+      retriesLeft: 0,
+      canRetry: false,
+    });
 
     const w2 = await seedWork(ctx, { notationCategories: ["A1"] });
     const r2 = await submitRevision(ctx, w2.id, { deadlineInHours: 1 });
