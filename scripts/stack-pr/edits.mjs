@@ -235,6 +235,10 @@ export function applyEdit(name) {
         "apps/web/src/styles.css",
       ]);
       return;
+    case "m3e-shape-table-kpi":
+      applyEdit("m3e-shape-table");
+      applyEdit("m3e-kpi-active");
+      return;
     case "m3e-shape-table": {
       appendCssOnce(
         "m3e-shape-table",

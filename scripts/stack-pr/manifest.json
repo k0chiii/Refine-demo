@@ -1151,9 +1151,7 @@
     "series": "A-ui-copy",
     "slug": "style-m3e-table-card-shape",
     "title": "style(M3E): 表・KPI・コメントカードの shape と強調",
-    "patches": [
-      "patches/p06-apps__web__src__styles.css.patch"
-    ],
+    "edit": "m3e-shape-table-kpi",
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"

@@ -6039,3 +6039,40 @@ m3e-snackbar {
 .detail-shell__stepper {
   width: 100%;
 }
+
+/* stack-pr:m3e-shape-table */
+
+/* M3E shape: 表の角を large に */
+.mf-table:not(.mf-table--flush) {
+  border-radius: var(--mf-shape-lg);
+}
+
+
+/* stack-pr:m3e-kpi-active */
+
+.kpi {
+  --m3e-card-shape: var(--mf-shape-xl);
+}
+.kpi__num {
+  font-weight: 500;
+  color: var(--mf-primary);
+}
+.comments .thread,
+.thread-panel .creator-note,
+.comments .creator-note {
+  --m3e-card-shape: var(--mf-shape-lg);
+}
+.thread--active::before {
+  width: 4px;
+}
+.comments .thread--active {
+  --m3e-filled-card-container-color: color-mix(
+    in srgb,
+    var(--mf-primary) 10%,
+    var(--mf-surface-container-lowest)
+  );
+}
+.thread__decide m3e-button {
+  --m3e-button-shape: var(--mf-shape-full);
+}
+
