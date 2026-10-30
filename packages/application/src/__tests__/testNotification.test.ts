@@ -2,7 +2,12 @@ import { TEST_NOTIFICATION_INTERVAL_MS } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { planDelivery } from "../usecases/delivery.ts";
 import { updateNotificationPrefs } from "../usecases/notificationPrefs.ts";
-import { listMyNotifications, notify, sendTestNotification } from "../usecases/notifications.ts";
+import {
+  listMyNotifications,
+  markNotificationRead,
+  notify,
+  sendTestNotification,
+} from "../usecases/notifications.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals } from "../testing/scenario.ts";
 
@@ -59,5 +64,28 @@ describe("テスト通知", () => {
     const [target] = plan!.targets;
     if (target?.channel !== "email") throw new Error("email target expected");
     expect(target.content.text.split("\n")).toContain(`${ORIGIN}/`);
+  });
+
+  it("ベルで開いて既読にしても、テスト通知は外へ届ける計画に残る。本物の通知は既読なら計画しない", async () => {
+    const ctx = createInMemoryContext();
+    ctx.state.emails.set(me.userId, "stranger@example-org.jp");
+    await updateNotificationPrefs(ctx, me, { channels: ["email"] });
+    const env = { available: new Set(["email"] as const), origin: ORIGIN };
+    await sendTestNotification(ctx, me);
+    await notify(ctx, [me.userId], principals.reviewer.userId, {
+      kind: "comment_posted",
+      title: "新しいコメント",
+      body: "相談です",
+    });
+    const mine = await listMyNotifications(ctx, me);
+    const test = mine.find((n) => n.kind === "test")!;
+    const real = mine.find((n) => n.kind === "comment_posted")!;
+    expect((await planDelivery(ctx, real.id, env))?.targets).toHaveLength(1);
+
+    for (const n of [test, real]) await markNotificationRead(ctx, me, n.id);
+    expect((await planDelivery(ctx, test.id, env))?.targets.map((t) => t.channel)).toEqual([
+      "email",
+    ]);
+    expect(await planDelivery(ctx, real.id, env)).toBeNull();
   });
 });
