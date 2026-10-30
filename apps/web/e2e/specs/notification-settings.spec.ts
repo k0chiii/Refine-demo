@@ -1,6 +1,7 @@
 import { expect, test } from "../support/app";
 
-// docs/UI_M3E.md §103（通知の設定の届け先）。デモには env が無いので何も送らず、Slack に問い合わせる流れにも頼らない
+// docs/UI_M3E.md §103（通知の設定の届け先）・§110（Slack のメールアドレス）。デモには env が無いので何も送らず、
+// Slack に問い合わせる流れにも頼らない
 test.describe("通知の設定", { tag: "@core" }, () => {
   test("アカウントのメニューから開き、メールで受け取る設定が開き直しても保たれる", async ({
     app,
@@ -30,5 +31,39 @@ test.describe("通知の設定", { tag: "@core" }, () => {
       "checked",
       true,
     );
+  });
+
+  test("Slack のメールアドレスを書くと開き直しても残り、Slack の行のアドレスがそれになる。消すと Nogiku のアドレスに戻る", async ({
+    app,
+  }) => {
+    await app.signInAs("mock-nogiku-admin");
+    await app.go("/admin?view=slack");
+    await app.addSlackWorkspace("五月祭", "T0123ABCD");
+    await expect(app.slackWorkspaceRow("T0123ABCD")).toHaveCount(1);
+    const nogiku = "creator@mf100.example-org.jp";
+    const custom = "creator@slack-profile.example-org.jp";
+    await app.setNogikuEmail("mock-nogiku-creator", nogiku);
+
+    await app.signInAs("mock-nogiku-creator");
+    await app.openNotificationSettings();
+    const slack = app.notificationChannel("slack");
+    const address = slack.locator(".notif-channel__address");
+    await slack.locator("m3e-switch").click();
+    await expect(slack.locator("m3e-switch")).toHaveJSProperty("checked", true);
+    await expect(address).toHaveText(nogiku);
+
+    await app.setSlackEmail(custom);
+    await expect(address).toHaveText(custom);
+    await app.closeDialog();
+    await app.openNotificationSettings();
+    await expect(app.slackEmailInput()).toHaveValue(custom);
+    await expect(address).toHaveText(custom);
+
+    await app.setSlackEmail("");
+    await expect(address).toHaveText(nogiku);
+    await app.closeDialog();
+    await app.openNotificationSettings();
+    await expect(app.slackEmailInput()).toHaveValue("");
+    await expect(address).toHaveText(nogiku);
   });
 });

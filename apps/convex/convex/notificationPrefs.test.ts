@@ -42,10 +42,11 @@ describe("Convex 統合: 通知の受け取り方", () => {
     const t = createHarness();
     const cast = await createCast(t);
     const mock = "reviewer@example.invalid";
-    const noWorkspace = { workspaceId: null, workspaces: [] };
+    const noWorkspace = { customEmail: null, workspaceId: null, workspaces: [] };
     expect((await cast.reviewer.as.query(api.notificationPrefs.get, {})).destinations).toEqual({
       email: { available: false, on: false, address: mock, status: "no_address" },
-      slack: { available: false, on: false, address: mock, status: "no_address", ...noWorkspace },
+      // Slack の行は引くアドレスを出す。送れないアドレスでは引かないので無い
+      slack: { available: false, on: false, address: null, status: "no_address", ...noWorkspace },
     });
 
     vi.stubEnv("RESEND_API_KEY", "re_test_key");

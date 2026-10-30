@@ -310,6 +310,24 @@ describe("外への通知の計画", () => {
 });
 
 describe("Slack で引く宛先", () => {
+  it("Slack のメールアドレスを書いていればそれで、消せば Nogiku のアドレスで引く", async () => {
+    const { ctx } = await setup();
+    await updateNotificationPrefs(ctx, me, { slackEmail: " Stranger@Slack-Profile.JP " });
+    expect(await slackLookupTarget(ctx, me.userId)).toEqual({
+      teamId: TEAM,
+      email: "stranger@slack-profile.jp",
+    });
+    await updateNotificationPrefs(ctx, me, { slackEmail: null });
+    expect(await slackLookupTarget(ctx, me.userId)).toEqual(member);
+    // Nogiku のアドレスが送れない形でも、書いた Slack のメールアドレスで引ける
+    const reserved = await setup({ email: "mock-1@example.invalid" });
+    await updateNotificationPrefs(reserved.ctx, me, { slackEmail: "mock-1@slack-profile.jp" });
+    expect(await slackLookupTarget(reserved.ctx, me.userId)).toEqual({
+      teamId: TEAM,
+      email: "mock-1@slack-profile.jp",
+    });
+  });
+
   it("Slack をオンにしていて、ワークスペースを選び、送れるアドレスがあるときだけ", async () => {
     const { ctx, workspace } = await setup();
     expect(await slackLookupTarget(ctx, me.userId)).toEqual(member);
@@ -407,6 +425,71 @@ describe("Slack のワークスペースを選ぶ", () => {
   });
 });
 
+describe("Slack のメールアドレス", () => {
+  const SLACK_EMAIL = "stranger@slack-profile.jp";
+
+  it("形の違うものは field slackEmail で断り、それまでの設定を変えない", async () => {
+    const { ctx } = await setup({ push: false });
+    await updateNotificationPrefs(ctx, me, { slackEmail: SLACK_EMAIL });
+    await expect(updateNotificationPrefs(ctx, me, { slackEmail: "stranger" })).rejects.toEqual(
+      new DomainError("notification_prefs_invalid", { field: "slackEmail" }),
+    );
+    expect((await getNotificationPrefs(ctx, me)).slackEmail).toBe(SLACK_EMAIL);
+  });
+
+  it("設定の Slack の行は、書いたものと引くアドレスを返し、メールの行は Nogiku のアドレスのまま。null で消す", async () => {
+    const { ctx } = await setup({ push: false });
+    const destinations = async () =>
+      (await getNotificationSettings(ctx, me, new Set<DeliveryChannel>(["email", "slack"])))
+        .destinations;
+    expect((await destinations()).slack).toMatchObject({ address: EMAIL, customEmail: null });
+    await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
+    expect((await destinations()).slack.status).toBe("ready");
+
+    await updateNotificationPrefs(ctx, me, { slackEmail: SLACK_EMAIL });
+    const custom = await destinations();
+    expect(custom.slack).toMatchObject({
+      address: SLACK_EMAIL,
+      customEmail: SLACK_EMAIL,
+      // 引いた結果はアドレスごとなので、替えれば引き直すまで未確認
+      status: "unresolved",
+    });
+    expect(custom.email.address).toBe(EMAIL);
+
+    await updateNotificationPrefs(ctx, me, { slackEmail: null });
+    expect((await destinations()).slack).toMatchObject({
+      address: EMAIL,
+      customEmail: null,
+      status: "ready",
+    });
+    expect(await getNotificationPrefs(ctx, me)).not.toHaveProperty("slackEmail");
+  });
+
+  it("Slack の DM は書いたアドレスで引いて送り、メールは Nogiku のアドレスに送る", async () => {
+    const { ctx, post } = await setup({ push: false });
+    await updateNotificationPrefs(ctx, me, { slackEmail: SLACK_EMAIL });
+    const n = await post();
+    const plan = await planDelivery(ctx, n.id, envOf("email", "slack"));
+    expect(plan?.targets).toEqual([
+      expect.objectContaining({ channel: "email", to: EMAIL }),
+      expect.objectContaining({
+        channel: "slack",
+        teamId: TEAM,
+        email: SLACK_EMAIL,
+        memberId: null,
+      }),
+    ]);
+  });
+
+  it("Nogiku のアドレスが送れない形でも、書けば Slack は引ける状態になる", async () => {
+    const { ctx } = await setup({ email: "mock-1@example.invalid", push: false });
+    await updateNotificationPrefs(ctx, me, { slackEmail: SLACK_EMAIL });
+    const s = await getNotificationSettings(ctx, me, new Set<DeliveryChannel>(["email", "slack"]));
+    expect(s.destinations.email.status).toBe("no_address");
+    expect(s.destinations.slack).toMatchObject({ address: SLACK_EMAIL, status: "unresolved" });
+  });
+});
+
 describe("通知の設定の届け先", () => {
   const statuses = async (ctx: ReturnType<typeof createInMemoryContext>) => {
     const s = await getNotificationSettings(ctx, me, new Set<DeliveryChannel>(["email"]));
@@ -425,6 +508,7 @@ describe("通知の設定の届け先", () => {
         on: true,
         address: EMAIL,
         status: "unresolved",
+        customEmail: null,
         workspaceId: workspace.id,
         workspaces: [{ id: workspace.id, name: "五月祭" }],
       },
@@ -461,6 +545,7 @@ describe("通知の設定の届け先", () => {
       on: true,
       address: null,
       status: "no_address",
+      customEmail: null,
       workspaceId: none.workspace.id,
       workspaces: [{ id: none.workspace.id, name: "五月祭" }],
     });

@@ -2667,7 +2667,7 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 
 ### Slack のメンバーは Nogiku のメールアドレスから探す
 
-- 利用者は何も入力しない。Slack（DM）のスイッチを入れると、サーバーが Nogiku のメールアドレス（ログインのたびに Nogiku のプロフィールから `users.email` に入れる）で MF100 のワークスペースのメンバーを引く（`deliveryNode.resolveSlack`）。結果はメールアドレスごとに `slackMembers` に書き、`notificationPrefs.get` の購読で行の状態が変わる。
+- 利用者は原則入力しない。Nogiku のアドレスと違うときだけ Slack のメールアドレスを書く（§110）。Slack（DM）のスイッチを入れると、サーバーが Nogiku のメールアドレス（ログインのたびに Nogiku のプロフィールから `users.email` に入れる。Slack のメールアドレスを書いたときはそれ）で MF100 のワークスペースのメンバーを引く（`deliveryNode.resolveSlack`）。結果はメールアドレスごとに `slackMembers` に書き、`notificationPrefs.get` の購読で行の状態が変わる。
 - Slack に見つからない・DM できないときは、24 時間たってから次に届けるときに確かめ直す。スイッチを入れ直すとすぐ確かめる。Nogiku のメールアドレスが変わると未確認に戻る。
 
 ### 載せる内容は端末への通知と同じ
@@ -2733,7 +2733,7 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 ### 配信（Convex）
 
 - 環境変数は `SLACK_BASE_URL`（例 `https://internal.gogatsusai.jp/slackbot/may`。末尾スラッシュ無し）。`SLACK_BOT_TOKEN` は廃止。未設定なら Slack の経路は使えない（行も出ない。デモは出る）。
-- 引き当ては `POST {SLACK_BASE_URL}/userid`（`{ email, team_id }`。`email` は Nogiku のメールアドレス。404 と、本文が `Failed to get user id` の 500 は見つからない。§109）、DM は `POST {SLACK_BASE_URL}/dm`（`{ team_id, user_id, text }`。200 だけ成功）。認証ヘッダは付けない。本文は §103 と同じ（`toSlackText`）。
+- 引き当ては `POST {SLACK_BASE_URL}/userid`（`{ email, team_id }`。`email` は Nogiku のメールアドレス（§110 の Slack のメールアドレスを書いたときはそれ）。404 と、本文が `Failed to get user id` の 500 は見つからない。§109）、DM は `POST {SLACK_BASE_URL}/dm`（`{ team_id, user_id, text }`。200 だけ成功）。認証ヘッダは付けない。本文は §103 と同じ（`toSlackText`）。
 - DM は `@convex-dev/rate-limiter` で 1 秒に 1 件。超えた分は workpool のやり直しに回す（捨てない）。
 - 登録に無いワークスペース（消えた）には送らない。
 
@@ -2793,3 +2793,17 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 - Slack（DM）の行は、引き当てに使うアドレスを出す。オフのときの説明は「Nogiku のメールアドレス（{アドレス}）で Slack のメンバーを探して DM で送ります」。オンのときは、未確認なら「{アドレス} を Slack で確かめています」、見つからないなら「{アドレス} の人が Slack に見つかりません（Slack のプロフィールのメールと同じにしてください）」、送れるなら「DM で届きます（{アドレス}）」。
 - `/userid` の 500 で本文が `Failed to get user id` で始まるものは見つからない（`not_found`）と読む。ほかの 5xx・つながらないときはやり直す。
 - ログ: 引き当てが 200 以外で終わったら `slack_lookup_failed`（`teamId`・メールアドレス・状態・応答の本文の先頭 300 文字。つながらないときは状態 0）を 1 行出す。メールアドレスを出すのは利用者の承認（2026-10-30「出していいので」）による例外で、ほかのログ（`delivery_unavailable` など）には宛先を出さない。DM の失敗（`slack_dm_failed`）にはメンバーの ID を、`delivery_report` には届け先ごとの結果（経路・結果・理由・HTTP の状態。宛先と本文は出さない）を足した。
+
+## 110. Slack のメールアドレスを各自が書ける（2026-10-30・利用者指示「直し方を後者に変えて」。Nogiku のアドレス 7787946800@g.ecc.u-tokyo.ac.jp 型と Slack のプロフィールのメールが違う委員がいる）
+
+本番のログに `slack_lookup_failed`（メールアドレスは大学の Google アカウント `…@g.ecc.u-tokyo.ac.jp`。めいちゃんは 500 `Failed to get user id`）が出た。その人の Slack のプロフィールのメールは別のアドレスだった。直し方は 2 つ示し（Slack のプロフィールのメールを変える・設定に Slack のメールアドレスを書けるようにする）、利用者は後者を選んだ。
+
+- 場所: 「通知の設定」の Slack（DM）の行の、ワークスペースの選択の下（ワークスペースの選択が出るとき。スイッチを入れる前にも書ける）。欄は「Slack のメールアドレス」（`data-field="slackEmail"`。`type="text"` に `inputMode="email"`。`type="email"` にするとブラウザの検証が全角で打ったアドレスを誤りとし、M3E の欄が赤いまま残るため。形はサーバーが確かめる）。説明は「Nogiku のアドレス（{アドレス}）と Slack のプロフィールのメールが違うときだけ」。
+- 保存: 欄から離れたとき・Enter で、値が変わっていれば `notificationPrefs.update` の `slackEmail` に送る。空にすると `null` を送り、書いたものを消す。保存するのは前後の空白を除き、全角を NFKC でそろえ、小文字にしたもの（`notificationPrefs.slackEmail`）。
+- 引き当てに使うアドレス: 書いてあればそれ、無ければ Nogiku のメールアドレス（`users.email` を `deliverableEmail` に通したもの）。設定画面の Slack の行の説明（§109）はこのアドレスを出す（`destinations.slack.address`。書いたものそのものは `destinations.slack.customEmail`）。メールの行は Nogiku のメールアドレスのまま。書いたアドレスには予約済みドメインの決まり（§103）を当てない。
+- 書く・替える・消すと、Slack がオンでワークスペースを選んでいれば、ワークスペースを替えたときと同じくすぐ引き直す（`deliveryNode.resolveSlack`）。`slackMembers` はワークスペース × メールアドレスで 1 行なので、アドレスが変われば状態は未確認に戻る。
+- 形が正しくない（`deliverableEmail` と同じ形の決まり: @ が 1 つ、空白なし、ドメインに点がある）ときは `notification_prefs_invalid`（`field: "slackEmail"`）で断り、「Slack のメールアドレスの形が正しくありません」を出す。打った文字は欄に残す。
+
+### E2E
+
+`notification-settings.spec.ts`（Slack をオンにして欄に書き、離れて開き直すと欄に残り、行の説明のアドレスがそれになる。消して開き直すと Nogiku のアドレスに戻る。文言は確かめない）。

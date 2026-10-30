@@ -1,9 +1,11 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { Instant } from "../shared/time.ts";
+import { EMAIL_SHAPE } from "./email.ts";
 
 /*
  * Slack の DM の宛先。ワークスペースは管理者が登録し、各自が選ぶ（docs/UI_M3E.md §105）。
- * 選んだワークスペースで登録メールアドレスのメンバーを引く（めいちゃんの /userid）。利用者はメールアドレスを入力しない。
+ * 選んだワークスペースで Nogiku のメールアドレスのメンバーを引く（めいちゃんの /userid）。利用者は原則入力しないが、
+ * Slack のプロフィールのメールが違う人は Slack のメールアドレスを書ける（§110。書いてあればそれで引く）。
  * 引いた結果と、DM を送った結果で状態が移る。保存は slackMembers（ワークスペース × メールアドレスで 1 行）。
  */
 
@@ -37,7 +39,25 @@ export function validateSlackWorkspace(input: { name: string; teamId: string }):
 }
 
 /**
- * 登録メールアドレスで引いた Slack のメンバー。
+ * 各自が書いた Slack のメールアドレス（§110）を保存する形にする: 全角を NFKC でそろえ、前後の空白を除き、小文字にする。
+ * 形（deliverableEmail と同じ: @ が 1 つ・空白なし・ドメインに点がある）が正しくなければ null。
+ * 予約済みドメインの決まりは当てない（Slack のプロフィールのアドレスは各自のもの）
+ */
+export function normalizeSlackEmail(raw: string): string | null {
+  const email = raw.normalize("NFKC").trim().toLowerCase();
+  return EMAIL_SHAPE.test(email) ? email : null;
+}
+
+/** 利用者が送った Slack のメールアドレス。null・空なら消す（null）。形が正しくなければ notification_prefs_invalid（field: slackEmail） */
+export function validateSlackEmail(raw: string | null): string | null {
+  if (raw === null || raw.trim() === "") return null;
+  const email = normalizeSlackEmail(raw);
+  if (!email) throw new DomainError("notification_prefs_invalid", { field: "slackEmail" });
+  return email;
+}
+
+/**
+ * 引くアドレスで引いた Slack のメンバー。
  * 行が無い = unresolved（導く。メールアドレスが変われば自然に unresolved になる）
  */
 export type SlackLink =
@@ -46,9 +66,11 @@ export type SlackLink =
   | { state: "not_found"; checkedAt: Instant }
   | { state: "cannot_dm"; memberId: string; checkedAt: Instant };
 
-/** 選んだワークスペースでのその人の宛先（ワークスペースを選んでいない・登録が消えたときは null で表す） */
+/** 選んだワークスペースでのその人の宛先（ワークスペースを選んでいない・登録が消えた・引くアドレスが無いときは null で表す） */
 export interface SlackMembership {
   teamId: string;
+  /** 引くアドレス（slackAddressOf）。link はこのワークスペース × このアドレスの行 */
+  email: string;
   link: SlackLink;
 }
 

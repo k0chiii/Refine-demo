@@ -26,7 +26,7 @@ export const get = query({
 
 /**
  * 渡した項目だけを変える。変えたあとの設定を返す。slackWorkspaceId は登録にあるワークスペースの id で、null で外す
- * （Slack がオンで登録が 1 つだけなら、選んでいなくてもそれを選ぶ）
+ * （Slack がオンで登録が 1 つだけなら、選んでいなくてもそれを選ぶ）。slackEmail は Slack で引くアドレスで、null で消す
  */
 export const update = mutation({
   args: {
@@ -34,6 +34,7 @@ export const update = mutation({
     mutedCategories: v.optional(v.array(v.string())),
     channels: v.optional(v.array(v.string())),
     slackWorkspaceId: v.optional(v.union(v.string(), v.null())),
+    slackEmail: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const { principal } = await requireUser(ctx);

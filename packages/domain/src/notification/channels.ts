@@ -6,6 +6,7 @@ import {
   isCategoryMuted,
   type NotificationPrefs,
 } from "./preferences.ts";
+import { EMAIL_SHAPE } from "./email.ts";
 import { type SlackLink, type SlackMembership, slackStep } from "./slack.ts";
 
 /*
@@ -36,7 +37,7 @@ export interface PushDevice {
 export type Destination =
   | { channel: "push"; key: `push:${string}`; device: PushDevice }
   | { channel: "email"; key: "email"; to: string }
-  /** teamId は選んだワークスペース。memberId が null なら、送る前にそのワークスペースで登録メールアドレスを引く */
+  /** teamId は選んだワークスペース。memberId が null なら、送る前にそのワークスペースで email を引く */
   | { channel: "slack"; key: "slack"; teamId: string; email: string; memberId: string | null };
 
 /**
@@ -78,23 +79,25 @@ const DESTINATIONS_OF: {
   push: ({ devices }) =>
     devices.map((device) => ({ channel: "push", key: `push:${device.id}`, device })),
   email: ({ email }) => (email ? [{ channel: "email", key: "email", to: email }] : []),
-  slack: ({ email, slack, now }) => {
-    if (!email || !slack) return [];
+  slack: ({ slack, now }) => {
+    if (!slack) return [];
     const step = slackStep(slack.link, now);
     if (step.do === "skip") return [];
     const memberId = step.do === "post" ? step.memberId : null;
-    return [{ channel: "slack", key: "slack", teamId: slack.teamId, email, memberId }];
+    return [{ channel: "slack", key: "slack", teamId: slack.teamId, email: slack.email, memberId }];
   },
 };
 
 /**
- * 届け先を決める（純粋）。宛先の無い経路、ワークスペースの無い Slack、Slack で今は送らない状態（slackStep が skip）は落とす
+ * 届け先を決める（純粋）。宛先の無い経路、ワークスペースか引くアドレスの無い Slack（slack が null）、
+ * Slack で今は送らない状態（slackStep が skip）は落とす
  */
 export function destinationsOf(input: {
   channels: readonly DeliveryChannel[];
   devices: readonly PushDevice[];
-  /** deliverableEmail を通したもの */
+  /** メールの宛先（Nogiku のアドレスを deliverableEmail に通したもの） */
   email: string | null;
+  /** Slack の宛先（引くアドレスは slackAddressOf のもの） */
   slack: SlackMembership | null;
   now: Instant;
 }): Destination[] {
@@ -113,9 +116,6 @@ const RESERVED_DOMAINS = [
   "example.net",
   "example.org",
 ];
-
-/** @ が 1 つ、空白なし、ドメインは空でないラベルを点でつないだもの */
-const EMAIL_SHAPE = /^[^\s@]+@(?:[^\s@.]+\.)+[^\s@.]+$/;
 
 /**
  * 送ってよいメールアドレス: 形が正しく（@ が 1 つ・空白なし・ドメインに点がある）、予約済みのドメイン
@@ -168,8 +168,8 @@ const SLACK_STATUS: Record<SlackLink["state"], ChannelStatus> = {
 };
 
 /**
- * email: アドレスがあれば ready。slack: アドレスが無ければ no_address、ワークスペースが無ければ no_workspace、
- * あればそのワークスペースでの状態（linked は ready）
+ * email: アドレスがあれば ready。slack: アドレス（slackAddressOf）が無ければ no_address、ワークスペースが無ければ
+ * no_workspace、あればそのワークスペースでの状態（linked は ready）
  */
 export function channelStatusOf(
   channel: AccountChannel,

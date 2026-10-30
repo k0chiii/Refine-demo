@@ -31,7 +31,16 @@ type Demo = {
   ensureSeeded(): Promise<void>;
   signIn(sub: string): Promise<void>;
   signOut(): Promise<void>;
-  users(): Promise<{ sub: string; name: string }[]>;
+  users(): Promise<{ id: string; sub: string; name: string }[]>;
+  /** デモの Convex の呼び出しを直列にする口（TS では private。ほかの呼び出しとぶつけずに t.run するため） */
+  enqueue<T>(fn: () => Promise<T>): Promise<T>;
+  t: {
+    run<T>(
+      fn: (ctx: {
+        db: { patch(id: string, fields: Record<string, unknown>): Promise<void> };
+      }) => Promise<T>,
+    ): Promise<T>;
+  };
 };
 type Router = { navigate(opts: { to: string; search?: Record<string, string> }): Promise<void> };
 declare global {
@@ -144,6 +153,21 @@ export class App {
     const u = all.find((x) => x.sub === sub);
     if (!u) throw new Error(`デモのユーザーがいない: ${sub}`);
     return u;
+  }
+
+  /**
+   * デモの利用者の Nogiku のメールアドレスを替える。シードの利用者は送らないアドレス（*@example.invalid）なので、
+   * 送れるアドレスが要る spec が使う。画面に出るのは次の signInAs から
+   */
+  async setNogikuEmail(sub: DemoUser, email: string) {
+    const { id } = await this.user(sub);
+    await this.page.evaluate(
+      ([id, email]) => {
+        const demo = globalThis.__mf100demo!;
+        return demo.enqueue(() => demo.t.run((ctx) => ctx.db.patch(id, { email })));
+      },
+      [id, email] as const,
+    );
   }
 
   btn(text: string) {
@@ -485,6 +509,19 @@ export class App {
     await this.dialog().getByRole("option").nth(index).click();
     await this.settle();
     return id;
+  }
+
+  /** 「通知の設定」の Slack（DM）の行の「Slack のメールアドレス」の欄（§110。ワークスペースの登録があるときに出る） */
+  slackEmailInput() {
+    return this.notificationChannel("slack").locator('[data-field="slackEmail"] input');
+  }
+
+  /** 「Slack のメールアドレス」に書いて欄から離れる（離れたときに保存する。空なら消す） */
+  async setSlackEmail(value: string) {
+    const input = this.slackEmailInput();
+    await input.fill(value);
+    await input.blur();
+    await this.settle();
   }
 
   /** 管理 › Slack のワークスペースの行（data-team-id は登録した team_id） */
