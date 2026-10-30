@@ -1,0 +1,26 @@
+---
+diff --git a/apps/web/src/features/annotation/WebLiveViewer.tsx b/apps/web/src/features/annotation/WebLiveViewer.tsx
+index c76679a..2f0b519 100644
+--- a/apps/web/src/features/annotation/WebLiveViewer.tsx
++++ b/apps/web/src/features/annotation/WebLiveViewer.tsx
+@@ -430,7 +430,7 @@ export function WebLiveViewer({
+         {/* CM-03: ライブ表示は今の内容。版の内容は添付 */}
+         <p className="wlive__banner" role="note">
+           <M3eIcon name="info" />
+-          ライブ表示は今のサイトの内容です。この版の内容はこの版の添付（スクリーンショット・画像）で確かめてください。サイト側のコメントは同期されません
++          公開中のサイトです。提出時の見た目は添付の画像で見てください
+         </p>
+         <div className="wlive__bar" role="toolbar" aria-label="ライブ表示の操作">
+           <M3eButton
+@@ -523,10 +523,7 @@ export function WebLiveViewer({
+               <div>
+                 <p className="title-small">このサイトはここに表示できません</p>
+                 <p className="small muted">
+-                  サイトが埋め込みを拒否している（X-Frame-Options・CSP の
+-                  frame-ancestors）か、校正システムのブリッジ（bridge.js）が置かれていません。
+-                  委員会のサイトなら Web
+-                  担当にブリッジの設置を頼んでください。それまでは、この版に添付したスクリーンショットの上でコメントしてください
++                  新しいタブで開くか、添付のスクリーンショットにコメントしてください
+                 </p>
+                 <div className="row">{openNew}</div>
+               </div>

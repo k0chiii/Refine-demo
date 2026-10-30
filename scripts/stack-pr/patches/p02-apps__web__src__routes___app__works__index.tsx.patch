@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/routes/_app/works/index.tsx b/apps/web/src/routes/_app/works/index.tsx
+index 533b561..cbcd13d 100644
+--- a/apps/web/src/routes/_app/works/index.tsx
++++ b/apps/web/src/routes/_app/works/index.tsx
+@@ -34,7 +34,7 @@ const SORT_KEYS = ["accepting", "deadline", "title", "stage", "owner", "producti
+ const sortLabel: Record<WorkSortKey, string> = {
+   accepting: "校正の締切順",
+   deadline: "納期順",
+-  title: "題名順",
++  title: "制作物名順",
+   stage: "状態順",
+   owner: "主管担当順",
+   production: "制作担当順",

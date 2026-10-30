@@ -32,9 +32,9 @@ export const severityLabel: Record<string, string> = {
 export const resolutionLabel: Record<string, string> = {
   open: "未対応",
   acknowledged: "確認済み",
-  accepted: "採用",
-  rejected: "不採用",
-  deferred: "次版へ持ち越し",
+  accepted: "反映する",
+  rejected: "反映しない",
+  deferred: "次の版で対応",
   resolved: "反映済み",
 };
 export const assignmentLabel: Record<string, string> = {

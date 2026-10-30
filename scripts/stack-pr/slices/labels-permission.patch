@@ -1,0 +1,10 @@
+--- a/apps/web/src/lib/labels.ts
++++ b/apps/web/src/lib/labels.ts
+@@ -46,7 +46,7 @@ export const assignmentLabel: Record<string, string> = {
+ export const permissionLabel: Record<string, string> = {
+   view: "閲覧",
+   review: "校正",
+-  edit: "編集（制作委任）",
++  edit: "編集",
+   manage: "管理",
+ };
