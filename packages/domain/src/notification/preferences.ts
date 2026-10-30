@@ -169,10 +169,23 @@ export function validateNotificationPrefsPatch(patch: NotificationPrefsPatch): V
   return out;
 }
 
-/** この種類の通知を外へ送らない設定か。テスト通知は経路が使えるかを確かめるためのものなので止めない（§112） */
+/**
+ * 経路が使えるかを確かめるテスト通知（§112）。外へ届けることが目的なので、止めた分類でも既読でも送る
+ * （本人はまずベルで受け取り、Slack の引き当てが終わる前に開くことが多い）
+ */
+function isTestNotification(kind: string): boolean {
+  return kind === "test";
+}
+
+/** この種類の通知を外へ送らない設定か（テスト通知は止めない） */
 export function isCategoryMuted(prefs: NotificationPrefs, kind: string): boolean {
-  if (kind === "test") return false;
+  if (isTestNotification(kind)) return false;
   return prefs.mutedCategories.includes(notificationCategoryOf(kind));
+}
+
+/** 既読になった後も外へ送るか。ふつうはアプリで読んだら送らない。テスト通知だけ送る */
+export function deliversEvenIfRead(kind: string): boolean {
+  return isTestNotification(kind);
 }
 
 /** テスト通知（§112）を 1 人が続けて送れる間隔。サーバーはこれで断り、画面はこの間ボタンを押せなくする */
