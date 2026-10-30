@@ -14,16 +14,17 @@ import { lookupSlackMember, type MeichanConfig, postSlackDm } from "./lib/slack.
 import { sendWebPush, webPushOutcome } from "./lib/webpush.ts";
 
 /*
- * 外への通知を送る（端末・登録メールアドレス・Slack の DM）。Node ランタイムで動かす（Web Push の WebCrypto の ECDH・HKDF を確実に使うため）。
+ * 外への通知を送る（端末・Nogiku のメールアドレス・Slack の DM）。Node ランタイムで動かす（Web Push の WebCrypto の ECDH・HKDF を確実に使うため）。
  * 送るたびに計画を読み直す（既読・閲覧権限・設定・宛先の変化を反映。delivery.plan）。内容は計画が描き終えている。
  */
 
-/** 経路ごとの結果の数（ログに出す。deliver が返すのは送れた数） */
+/** 経路ごとの結果の数と、送った順の届け先ごとの結果（ログに出す。宛先・本文は含めない。deliver が返すのは送れた数） */
 export interface DeliveryReport {
   sent: number;
   rejected: number;
   retry: number;
   unavailable: number;
+  targets: Array<{ channel: DeliveryChannel } & SendOutcome>;
 }
 
 /**
@@ -33,7 +34,7 @@ export interface DeliveryReport {
 export async function deliverNotification(ctx: ActionCtx, notificationId: string): Promise<number> {
   const config = deliveryConfigFromEnv(process.env);
   const attempted = new Set<DestinationKey>();
-  const report: DeliveryReport = { sent: 0, rejected: 0, retry: 0, unavailable: 0 };
+  const report: DeliveryReport = { sent: 0, rejected: 0, retry: 0, unavailable: 0, targets: [] };
   for (;;) {
     const plan: DeliveryPlan | null = await ctx.runQuery(internal.delivery.plan, {
       notificationId,
@@ -43,6 +44,7 @@ export async function deliverNotification(ctx: ActionCtx, notificationId: string
     attempted.add(target.key);
     const { outcome, ref } = await send(ctx, target, config, notificationId);
     report[outcome.kind]++;
+    report.targets.push({ channel: target.channel, ...outcome });
     if (outcome.kind === "sent" || outcome.kind === "rejected")
       await ctx.runMutation(internal.delivery.record, { notificationId, target: ref, outcome });
     else if (outcome.kind === "unavailable") logUnavailable(target.channel, outcome.reason);
@@ -107,7 +109,7 @@ function slackRef(t: SlackTarget, memberId: string | null): DeliveryTargetArg {
 const SLACK_DM_MAX_WAIT_MS = 10_000;
 
 /**
- * メンバーが分からなければ、選んだワークスペースで登録メールアドレスを引いて保存する。見つかったときだけ、
+ * メンバーが分からなければ、選んだワークスペースで Nogiku のメールアドレスを引いて保存する。見つかったときだけ、
  * 速さ制限の枠を予約し、その時刻まで待って DM を送る（上限より先なら retry。workpool がやり直す）
  */
 async function sendSlack(ctx: ActionCtx, t: SlackTarget, cfg: MeichanConfig): Promise<Attempt> {
@@ -139,7 +141,7 @@ export const deliver = internalAction({
 });
 
 /**
- * Slack をオンにした・ワークスペースを替えたとき、選んだワークスペースで登録メールアドレスを引き直す（今の状態によらない）。
+ * Slack をオンにした・ワークスペースを替えたとき、選んだワークスペースで Nogiku のメールアドレスを引き直す（今の状態によらない）。
  * やり直さない（引けなければ未確認のまま。次に送るときに引く）
  */
 export const resolveSlack = internalAction({
@@ -155,7 +157,14 @@ export const resolveSlack = internalAction({
     if (result.kind === "found" || result.kind === "not_found")
       await ctx.runMutation(internal.delivery.recordSlackLookup, { ...target, result });
     else if (result.kind === "unavailable") logUnavailable("slack", result.reason);
-    else console.warn(JSON.stringify({ event: "slack_resolve_deferred" }));
+    else
+      console.warn(
+        JSON.stringify({
+          event: "slack_resolve_deferred",
+          teamId: target.teamId,
+          email: target.email,
+        }),
+      );
     return null;
   },
 });
