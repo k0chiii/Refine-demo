@@ -296,30 +296,7 @@ export function applyEdit(name) {
       return;
     }
     case "e2e-screenshots-toolbar":
-      patchFile("apps/web/e2e/screenshots.mjs", [
-        [
-          "await page.mouse.click(...at(0.92, 0.95));",
-          "// 下端は浮いたツールバーと重なるので、紙面の中ほどで試す\n    await page.mouse.click(...at(0.92, 0.6));",
-        ],
-        ["const [jx, jy] = at(0.9, 0.9);", "const [jx, jy] = at(0.9, 0.55);"],
-        ["await mouseHold(...at(0.92, 0.95));", "await mouseHold(...at(0.92, 0.6));"],
-        [
-          "const sel = '.comments .thread m3e-icon-button[aria-label^=\"解決\"]';",
-          "const sel = '.comments .thread m3e-icon-button[aria-label=\"反映する\"]';",
-        ],
-        [
-          "/ページ対応: 旧 [1-9]\\d* → 新 [1-9]/.test(",
-          "/ページの対応（前の版 [1-9]\\d*・この版 [1-9]/.test(",
-        ],
-        [
-          "const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^=\"解決\"]';",
-          "const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label=\"反映する\"]';",
-        ],
-        [
-          ".locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^=\"解決\"]')",
-          ".locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label=\"反映する\"]')",
-        ],
-      ]);
+      checkoutFromLinear(["apps/web/e2e/screenshots.mjs"]);
       return;
     case "m3e-segmented-css":
       patchFile("apps/web/src/styles.css", [
