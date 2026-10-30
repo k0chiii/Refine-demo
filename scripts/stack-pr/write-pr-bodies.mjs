@@ -8,34 +8,50 @@ const manifest = JSON.parse(fs.readFileSync(path.join(stackDir, "manifest.json")
 const rows = JSON.parse(fs.readFileSync(path.join(stackDir, "published-branches.json"), "utf8"));
 const byId = new Map(manifest.map((m) => [m.id, m]));
 const fixtures = path.join(stackDir, "fixtures");
+/** PR 本文用: GitHub raw（ブランチに PNG を commit したうえで参照） */
+const RAW_SCREENSHOT_BASE =
+  process.env.STACK_PR_RAW_BASE ??
+  "https://raw.githubusercontent.com/k0chiii/Refine-demo/cursor/stack-docs-stack-pr-tracking-8b5a/docs/stack-pr-screenshots";
+
+const docsShotRoot = path.join("/workspace/docs/stack-pr-screenshots");
+
+function screenChangeNone(item) {
+  if (!item.shots?.desktop) return true;
+  const patches = item.patches ?? [];
+  if (patches.length > 0 && patches.every((p) => /\.test\.|failureText|errors\.test/.test(p))) {
+    return true;
+  }
+  if (item.title.startsWith("test(") || item.slug?.includes("e2e-")) return true;
+  if (item.series === "B-dashboard" && ["071", "072", "073"].includes(item.id)) return true;
+  if (["059", "060", "062", "063", "064", "065", "069", "070", "074"].includes(item.id)) {
+    return true;
+  }
+  return false;
+}
 
 function shotSection(id, item) {
-  const artDir = path.join("/workspace/artifacts/stack-pr", id);
+  const docsDir = path.join(docsShotRoot, id);
   const lines = ["## スクリーンショット（before / after）", ""];
-  const beforeD = path.join(artDir, "before-desktop.png");
-  const afterD = path.join(artDir, "after-desktop.png");
-  const afterM = path.join(artDir, "after-mobile.png");
-  const fix058d = path.join(fixtures, "x3-focused-comment.png");
-  const fix058m = path.join(fixtures, "x3b-mobile-focused-comment.png");
 
-  if (id === "058" && fs.existsSync(fix058d)) {
-    lines.push("### After（デスクトップ・選択中コメント）");
-    lines.push(
-      `<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`,
-    );
+  if (screenChangeNone(item)) {
+    lines.push("**画面変化なし**（テスト・domain・文言のみなど。スクリーンショット省略）");
     lines.push("");
+    return lines.join("\n");
   }
-  if (id === "060" && fs.existsSync(fix058d)) {
-    lines.push("### After（デスクトップ）");
-    lines.push(
-      `<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/058/after-desktop.png" />`,
-    );
+
+  const beforeD = path.join(docsDir, "before-desktop.png");
+  const afterD = path.join(docsDir, "after-desktop.png");
+  const afterM = path.join(docsDir, "after-mobile.png");
+  const raw058d = `${RAW_SCREENSHOT_BASE}/058/x3-focused-comment.png`;
+  const raw058m = `${RAW_SCREENSHOT_BASE}/058/x3b-mobile-focused-comment.png`;
+
+  if ((id === "058" || id === "060") && fs.existsSync(path.join(docsDir, "after-desktop.png"))) {
+    lines.push("### After（デスクトップ・選択中コメント / x3）");
+    lines.push(`<img alt="after desktop x3" src="${raw058d}" />`);
     lines.push("");
-    if (fs.existsSync(fix058m)) {
-      lines.push("### After（412px）");
-      lines.push(
-        `<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/058/after-mobile.png" />`,
-      );
+    if (fs.existsSync(path.join(docsShotRoot, "058/x3b-mobile-focused-comment.png"))) {
+      lines.push("### After（412px / x3b）");
+      lines.push(`<img alt="after mobile x3b" src="${raw058m}" />`);
       lines.push("");
     }
   }
@@ -43,32 +59,29 @@ function shotSection(id, item) {
   if (fs.existsSync(beforeD)) {
     lines.push("### Before");
     lines.push(
-      `<img alt="before desktop" src="/opt/cursor/artifacts/stack-pr/${id}/before-desktop.png" />`,
+      `<img alt="before desktop" src="${RAW_SCREENSHOT_BASE}/${id}/before-desktop.png" />`,
     );
     lines.push("");
   }
   if (fs.existsSync(afterD) && id !== "058" && id !== "060") {
     lines.push("### After");
-    lines.push(
-      `<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`,
-    );
+    lines.push(`<img alt="after desktop" src="${RAW_SCREENSHOT_BASE}/${id}/after-desktop.png" />`);
     lines.push("");
   }
-  if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060") {
+  if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060" && id !== "058") {
     lines.push("### After（モバイル）");
-    lines.push(
-      `<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/${id}/after-mobile.png" />`,
-    );
+    lines.push(`<img alt="after mobile" src="${RAW_SCREENSHOT_BASE}/${id}/after-mobile.png" />`);
     lines.push("");
   }
   if (lines.length <= 2) {
     lines.push(
-      "`node scripts/stack-pr/capture-published.mjs " +
+      "キャプチャ: `node scripts/stack-pr/capture-published.mjs " +
         id +
-        "` で `artifacts/stack-pr/" +
+        "` → `docs/stack-pr-screenshots/" +
         id +
-        "/` に PNG を生成。",
+        "/`（docs ブランチに commit 後、raw URL が有効）",
     );
+    lines.push("");
   }
   return lines.join("\n");
 }
@@ -78,25 +91,6 @@ for (const row of rows) {
   if (!item) continue;
   const artDir = path.join("/workspace/artifacts/stack-pr", item.id);
   fs.mkdirSync(artDir, { recursive: true });
-
-  if (item.id === "058" || item.id === "060") {
-    for (const [src, dest] of [
-      [path.join(fixtures, "x3-focused-comment.png"), path.join(artDir, "after-desktop.png")],
-      [
-        path.join(fixtures, "x3b-mobile-focused-comment.png"),
-        path.join(artDir, "after-mobile.png"),
-      ],
-    ]) {
-      if (item.id === "060") continue;
-      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
-    }
-    if (item.id === "060" && fs.existsSync(path.join(fixtures, "x3-focused-comment.png"))) {
-      fs.copyFileSync(
-        path.join(fixtures, "x3-focused-comment.png"),
-        path.join(artDir, "after-desktop.png"),
-      );
-    }
-  }
 
   const body = [
     item.title,

@@ -21,7 +21,6 @@ function sh(cmd) {
 }
 
 async function main() {
-  const stackDir = path.join(repo, "scripts/stack-pr");
   const manifestPath = path.join("/workspace/scripts/stack-pr/manifest.json");
   const rowsPath = path.join("/workspace/scripts/stack-pr/published-branches.json");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
