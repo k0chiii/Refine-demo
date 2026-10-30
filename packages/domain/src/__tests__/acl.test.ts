@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { hasOrgPermission, orgPermissionCatalog } from "../acl/OrgPermission.ts";
 import { effectivePermission, type WorkPermissionGrant } from "../acl/Permission.ts";
 import {
   allMembersCanView,
@@ -6,6 +7,7 @@ import {
   isAllowed,
   isInvolvedInWork,
   workTeamIdsOf,
+  type WorkAction,
 } from "../acl/authorize.ts";
 import { defaultWorkViewPolicy, type WorkViewPolicy } from "../acl/WorkViewPolicy.ts";
 import { makeWork } from "./fixtures.ts";
@@ -76,18 +78,14 @@ describe("閲覧範囲（D3 の細則。利用者決定 2026-10-17「閲覧は�
   it("ポリシーを involved_only に戻すと、通常の制作物も職責・ACL・関係者・所属の無い人には見えない", () => {
     const ctx = { work: normal, grants: [], viewPolicy: involvedOnly };
     expect(canViewWork({ ...ctx, principal: principal("stranger") })).toBe(false);
-    expect(canViewWork({ ...ctx, principal: principal("sysadmin", true) })).toBe(false);
     expect(canViewWork({ ...ctx, principal: principal("creator") })).toBe(true);
     expect(canViewWork({ ...ctx, grants: [grant({})], principal: principal("viewer") })).toBe(true);
   });
 
-  it("非公開・取扱注意は、職責か閲覧以上の ACL がある人だけ。無関係な人・システム管理者は見られない（§7.2）", () => {
+  it("非公開・取扱注意は、職責か閲覧以上の ACL がある人だけ。無関係な人は見られない（§7.2）", () => {
     expect(canViewWork({ work: restricted, grants: [], principal: principal("stranger") })).toBe(
       false,
     );
-    expect(
-      canViewWork({ work: restricted, grants: [], principal: principal("sysadmin", true) }),
-    ).toBe(false);
     expect(canViewWork({ work: restricted, grants: [], principal: principal("approver") })).toBe(
       true,
     );
@@ -191,18 +189,74 @@ describe("isAllowed（§7.2 操作権限）", () => {
       true,
     );
   });
-  it("ACL 変更はシステム管理者のみ。校了は校了権限者のみ", () => {
+  it("ACL 変更はシステム管理者のみ。校了は校了権限者（とシステム管理者）", () => {
     expect(isAllowed("acl.manage", { work, grants: [], principal: principal("manager") })).toBe(
       false,
     );
     expect(
       isAllowed("acl.manage", { work, grants: [], principal: principal("sysadmin", true) }),
     ).toBe(true);
-    expect(
-      isAllowed("work.finalize", { work, grants: [], principal: principal("sysadmin", true) }),
-    ).toBe(false);
+    expect(isAllowed("work.finalize", { work, grants: [], principal: principal("manager") })).toBe(
+      false,
+    );
     expect(isAllowed("work.finalize", { work, grants: [], principal: principal("approver") })).toBe(
       true,
     );
+  });
+});
+
+describe("システム管理者はすべての操作権限を持つ（利用者決定 2026-10-30）", () => {
+  const actions = Object.keys({
+    "work.view": true,
+    "work.edit": true,
+    "revision.submit": true,
+    "comment.post": true,
+    "comment.reply": true,
+    "review.participate": true,
+    "comment.decide": true,
+    "review.assign": true,
+    "work.finalize": true,
+    "work.reopen": true,
+    "approval.confirm": true,
+    "acl.manage": true,
+    "audit.view": true,
+  } satisfies Record<WorkAction, true>) as WorkAction[];
+  // 職責・ACL・関係者・所属のどれも無い非公開の制作物
+  const restricted = makeWork({ confidentiality: "restricted" });
+  const admin = { ...principal("sysadmin", true), orgPermissions: [] };
+  const stranger = { ...principal("stranger"), orgPermissions: [] };
+
+  it("職責・ACL・所属が無い非公開の制作物でも、すべての操作が許される", () => {
+    for (const action of actions)
+      expect(isAllowed(action, { work: restricted, grants: [], principal: admin }), action).toBe(
+        true,
+      );
+  });
+
+  it("非公開の制作物を見られる。閲覧範囲を関係者だけに戻しても見られる", () => {
+    expect(canViewWork({ work: restricted, grants: [], principal: admin })).toBe(true);
+    expect(
+      canViewWork({
+        work: makeWork(),
+        grants: [],
+        principal: admin,
+        viewPolicy: involvedOnly,
+      }),
+    ).toBe(true);
+  });
+
+  it("組織権限は Nogiku Access から何も渡されていなくても、すべて持つ", () => {
+    for (const { name } of orgPermissionCatalog)
+      expect(hasOrgPermission(admin, name), name).toBe(true);
+  });
+
+  it("管理者でない人は変わらない（同じ非公開の制作物で、閲覧も操作も組織権限も持たない）", () => {
+    expect(canViewWork({ work: restricted, grants: [], principal: stranger })).toBe(false);
+    for (const action of actions)
+      expect(isAllowed(action, { work: restricted, grants: [], principal: stranger }), action).toBe(
+        false,
+      );
+    for (const { name } of orgPermissionCatalog)
+      expect(hasOrgPermission(stranger, name), name).toBe(false);
   });
 });

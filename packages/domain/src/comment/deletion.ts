@@ -1,3 +1,4 @@
+import { overridesAllPermissions } from "../acl/Permission.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
@@ -43,7 +44,7 @@ export function commentDeleteAuthority(
   actor: DeleteActor = {},
 ): CommentDeleteAuthority | null {
   if (authorId === actorId && lifecycle !== "finalized") return "author";
-  return actor.isSystemAdmin === true ? "admin" : null;
+  return overridesAllPermissions({ isSystemAdmin: actor.isSystemAdmin === true }) ? "admin" : null;
 }
 
 /** 削除できるか。投稿者本人で校了前、またはシステム管理者 */

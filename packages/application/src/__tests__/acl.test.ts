@@ -198,12 +198,4 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       principals.stranger.userId,
     ]);
   });
-
-  it("システム管理者であっても ACL/職責の無い非公開の作品は閲覧できない（§7.2）", async () => {
-    const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
-    await expect(
-      loadAuthorizedWork(ctx, principals.sysadmin, work.id, "work.view"),
-    ).rejects.toThrow(code("forbidden"));
-  });
 });

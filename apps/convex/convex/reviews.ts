@@ -1,5 +1,11 @@
 import { completeMyReview, setWorkReviewers } from "@mf100/application";
-import { isApproverOf, isBeforeDeadline, isDeadlineReached, revisionLabel } from "@mf100/domain";
+import {
+  isApproverOf,
+  isBeforeDeadline,
+  isDeadlineReached,
+  overridesAllPermissions,
+  revisionLabel,
+} from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
@@ -70,6 +76,7 @@ export const myQueue = query({
         .withIndex("by_work", (q) => q.eq("workId", work._id))
         .collect();
       const hasAccess =
+        overridesAllPermissions(principal) ||
         work.creatorIds.includes(principal.userId) ||
         work.managerIds.includes(principal.userId) ||
         isApproverOf(work, principal.userId) ||

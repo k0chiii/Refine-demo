@@ -46,13 +46,13 @@ describe("Convex: works.listMyWorks（索引で集める）", () => {
     return { t, cast, ids, team };
   }
 
-  it("通常は委員の誰でも、非公開は職責・関係者・担当の所属がある人だけ。並びは作成順", async () => {
+  it("通常は委員の誰でも、非公開は職責・関係者・担当の所属がある人とシステム管理者だけ。並びは作成順", async () => {
     const { cast, ids } = await seed();
     const mine = async (who: (typeof cast)[keyof typeof cast]) =>
       (await who.as.query(api.works.listMine, {})).map((w) => w.id);
     // listMine は締切 → 題名の順。ここでは題名が作成順なのでそのまま比べられる
     expect(await mine(cast.manager)).toEqual(ids); // 主管は全部
-    expect(await mine(cast.admin)).toEqual([ids[0], ids[2]]); // 管理者でも非公開は見られない
+    expect(await mine(cast.admin)).toEqual(ids); // システム管理者は全部（利用者決定 2026-10-30）
     expect(await mine(cast.stranger)).toEqual([ids[0], ids[2], ids[3]]); // 担当の所属
     expect(await mine(cast.reviewer)).toEqual([ids[0], ids[2], ids[4]]); // 関係者
   });

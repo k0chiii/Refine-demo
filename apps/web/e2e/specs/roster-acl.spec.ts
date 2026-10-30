@@ -40,4 +40,24 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await acl.locator("m3e-button", { hasText: "追加" }).click();
     await expect(acl.locator('m3e-list[aria-label="個人の許可"] m3e-list-item')).toHaveCount(2);
   });
+
+  // システム管理者はすべての操作権限を持つ（利用者決定 2026-10-30・UI_M3E §113）。シードの管理者は職責・ACL・所属を持たない
+  test("管理者は職責・ACL の無い非公開の制作物も一覧に出て、情報を編集できる", async ({
+    app,
+    page,
+  }) => {
+    const title = "公式 Instagram 開催告知";
+    const purpose = "管理者が書き足した用途。";
+    await app.restrictWork(title);
+
+    await app.signInAs("mock-nogiku-admin");
+    await app.go("/works");
+    const dialog = await app.editWorkFromList(title);
+    await dialog.locator("textarea").first().fill(purpose);
+    await dialog.locator("m3e-button", { hasText: "保存" }).click();
+    await expect(dialog).toHaveCount(0);
+    await app.openWork(title);
+    await app.drawer("情報");
+    await expect(page.locator(".drawer__body")).toContainText(purpose);
+  });
 });
