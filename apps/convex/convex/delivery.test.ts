@@ -157,6 +157,68 @@ describe("Convex 統合: Slack のメンバーを登録メールアドレスで�
     expect(await resolving()).toEqual([cast.reviewer.id, cast.reviewer.id]);
   });
 
+  it("Slack のメールアドレスを書く・替える・消すと引き直し、書いてあればそれで引く。設定には書いたものと引くアドレスが出る", async () => {
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    const nogiku = await setDeliverableEmail(t, cast.reviewer.id);
+    const update = (args: { slackEmail?: string | null; channels?: string[] }) =>
+      cast.reviewer.as.mutation(api.notificationPrefs.update, args);
+    const resolving = async () => (await scheduled(t, "deliveryNode:resolveSlack")).length;
+    const slackRow = async () =>
+      (await cast.reviewer.as.query(api.notificationPrefs.get, {})).destinations;
+
+    // オフのうちに書いても引かない（オンにしたときに引く）
+    await update({ slackEmail: " Reviewer@Slack-Profile.JP " });
+    expect(await resolving()).toBe(0);
+    await update({ channels: ["slack"] });
+    expect(await resolving()).toBe(1);
+    expect(await slackRow()).toMatchObject({
+      email: { address: nogiku },
+      slack: { address: "reviewer@slack-profile.jp", customEmail: "reviewer@slack-profile.jp" },
+    });
+    const services = fakeServices();
+    await t.action(internal.deliveryNode.resolveSlack, { userId: cast.reviewer.id });
+    expect(JSON.parse(services.calls("lookup")[0]!.body)).toEqual({
+      email: "reviewer@slack-profile.jp",
+      team_id: TEAM,
+    });
+    expect((await slackRow()).slack.status).toBe("ready");
+
+    // 同じものを送っても引き直さない。替える・消すと引き直す
+    await update({ slackEmail: "reviewer@slack-profile.jp" });
+    expect(await resolving()).toBe(1);
+    await update({ slackEmail: "reviewer2@slack-profile.jp" });
+    expect(await resolving()).toBe(2);
+    expect((await slackRow()).slack.status).toBe("unresolved");
+    await update({ slackEmail: null });
+    expect(await resolving()).toBe(3);
+    expect((await slackRow()).slack).toMatchObject({ address: nogiku, customEmail: null });
+
+    await expect(update({ slackEmail: "reviewer" })).rejects.toThrow(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          code: "notification_prefs_invalid",
+          details: { field: "slackEmail" },
+        }),
+      }),
+    );
+  });
+
+  it("Nogiku のアドレスが送れない形（試験用のドメイン）の人も、Slack のメールアドレスを書けば引きに行く", async () => {
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    await cast.stranger.as.mutation(api.notificationPrefs.update, { channels: ["slack"] });
+    expect(await scheduled(t, "deliveryNode:resolveSlack")).toEqual([]);
+    await cast.stranger.as.mutation(api.notificationPrefs.update, {
+      slackEmail: "stranger@slack-profile.jp",
+    });
+    expect(await scheduled(t, "deliveryNode:resolveSlack")).toHaveLength(1);
+  });
+
   it("ワークスペースが無ければ、Slack をオンにしても引きに行かない", async () => {
     slackEnv();
     const t = createHarness();
