@@ -20,33 +20,45 @@ function shotSection(id, item) {
 
   if (id === "058" && fs.existsSync(fix058d)) {
     lines.push("### After（デスクトップ・選択中コメント）");
-    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`);
+    lines.push(
+      `<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`,
+    );
     lines.push("");
   }
   if (id === "060" && fs.existsSync(fix058d)) {
     lines.push("### After（デスクトップ）");
-    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/058/after-desktop.png" />`);
+    lines.push(
+      `<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/058/after-desktop.png" />`,
+    );
     lines.push("");
     if (fs.existsSync(fix058m)) {
       lines.push("### After（412px）");
-      lines.push(`<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/058/after-mobile.png" />`);
+      lines.push(
+        `<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/058/after-mobile.png" />`,
+      );
       lines.push("");
     }
   }
 
   if (fs.existsSync(beforeD)) {
     lines.push("### Before");
-    lines.push(`<img alt="before desktop" src="/opt/cursor/artifacts/stack-pr/${id}/before-desktop.png" />`);
+    lines.push(
+      `<img alt="before desktop" src="/opt/cursor/artifacts/stack-pr/${id}/before-desktop.png" />`,
+    );
     lines.push("");
   }
   if (fs.existsSync(afterD) && id !== "058" && id !== "060") {
     lines.push("### After");
-    lines.push(`<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`);
+    lines.push(
+      `<img alt="after desktop" src="/opt/cursor/artifacts/stack-pr/${id}/after-desktop.png" />`,
+    );
     lines.push("");
   }
   if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060") {
     lines.push("### After（モバイル）");
-    lines.push(`<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/${id}/after-mobile.png" />`);
+    lines.push(
+      `<img alt="after mobile" src="/opt/cursor/artifacts/stack-pr/${id}/after-mobile.png" />`,
+    );
     lines.push("");
   }
   if (lines.length <= 2) {
@@ -70,7 +82,10 @@ for (const row of rows) {
   if (item.id === "058" || item.id === "060") {
     for (const [src, dest] of [
       [path.join(fixtures, "x3-focused-comment.png"), path.join(artDir, "after-desktop.png")],
-      [path.join(fixtures, "x3b-mobile-focused-comment.png"), path.join(artDir, "after-mobile.png")],
+      [
+        path.join(fixtures, "x3b-mobile-focused-comment.png"),
+        path.join(artDir, "after-mobile.png"),
+      ],
     ]) {
       if (item.id === "060") continue;
       if (fs.existsSync(src)) fs.copyFileSync(src, dest);
@@ -102,7 +117,9 @@ for (const row of rows) {
       aligned: [
         "Expressive のコンポーネント（@m3e/react）の variant / shape をそのまま利用",
         "色は `--mf-*` トークン（color roles）からのみ",
-        item.id === "058" ? "採否行は M3 button groups + filled/tonal/text（https://m3.material.io/components/button-groups/overview）" : null,
+        item.id === "058"
+          ? "採否行は M3 button groups + filled/tonal/text（https://m3.material.io/components/button-groups/overview）"
+          : null,
         item.id === "058" ? "一覧の出現は motion spatial-fast + reduced-motion で無効化" : null,
       ].filter(Boolean),
       intentional: ["モック v3 より情報密度を下げたデモデータ（別 PR で足す）"],
