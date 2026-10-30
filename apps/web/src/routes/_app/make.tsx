@@ -156,8 +156,9 @@ function Make() {
                         deadlineLine("校正期日", x.r.reviewDeadlineAt),
                       ]
                     : [
+                        // 未提出は右の「版を提出」で分かるので、行に書かない
                         x.r.stage === "unsubmitted"
-                          ? "まだ版がありません"
+                          ? null
                           : `${x.r.revisionLabel ?? "この版"}は受付終了`,
                         deadlineLine("納期", x.r.deliveryAt),
                       ]
