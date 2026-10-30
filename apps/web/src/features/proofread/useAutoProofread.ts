@@ -10,7 +10,7 @@ import {
   pdfSegments,
   type ArtifactRef,
 } from "./extract";
-import { describeError } from "@/lib/errors";
+import { failureText } from "./failureText";
 
 export interface AutoProofreadProgress {
   artifactId: string;
@@ -100,10 +100,11 @@ export function useAutoProofread(revisionId: string | null, artifacts: readonly 
           }
         }
       } catch (e) {
+        console.error("[auto-proofread]", artifact.id, e);
         await fail({
           runId: run.id,
           artifactId: artifact.id,
-          error: describeError(e).message,
+          error: failureText(e),
         }).catch(() => undefined);
       }
     };

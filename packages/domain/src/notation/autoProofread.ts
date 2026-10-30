@@ -1,3 +1,4 @@
+import { isAllowed, type AuthorizationContext } from "../acl/authorize.ts";
 import type { Anchor, NormalizedRect } from "../comment/Anchor.ts";
 import { TEXT_QUOTE_MAX } from "../comment/Anchor.ts";
 import type { Severity } from "../comment/CommentThread.ts";
@@ -19,6 +20,19 @@ export const PROOFREADER_NAME = "自動校正";
 
 export function isBotAuthor(id: string): boolean {
   return id.startsWith("bot:");
+}
+
+/**
+ * 自動校正を自分の端末で進め、失敗を再試行できる人: 版を提出できる人、校正に加われる人（校正者・制作者・校了者・主管）、
+ * システム管理者（利用者承認 2026-10-30）。コメントを書けるだけの人（関係者・委員）に自動の指摘を作らせない。
+ * 制作物を見られることは別に確かめる（システム管理者も見られない制作物では進められない）。
+ */
+export function canRunProofread(ctx: AuthorizationContext): boolean {
+  return (
+    isAllowed("revision.submit", ctx) ||
+    isAllowed("review.participate", ctx) ||
+    ctx.principal.isSystemAdmin
+  );
 }
 
 /** どこから文字を得たか（指摘の信頼度の説明に使う） */
