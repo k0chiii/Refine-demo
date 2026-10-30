@@ -1325,7 +1325,7 @@ m3e-dialog {
   align-items: center;
   gap: 8px;
 }
-/* 件数のバッジ（要対応 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
+/* 件数のバッジ（あなたの番 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
 .dash__badge {
   --m3e-badge-container-color: var(--mf-secondary-container);
   --m3e-badge-color: var(--mf-on-secondary-container);
@@ -6000,6 +6000,7 @@ m3e-snackbar {
   );
 }
 
+
 /* stack-pr:ui-home-view-switcher */
 
 .home-view-switcher__sr {
@@ -6010,32 +6011,3 @@ m3e-snackbar {
   clip: rect(0, 0, 0, 0);
 }
 
-/* stack-pr:detail-shell */
-
-.detail-shell__head {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-}
-.detail-shell__row--title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 16px;
-}
-.detail-shell__title {
-  margin: 0;
-  min-width: 0;
-}
-.detail-shell__version {
-  color: var(--mf-on-surface-variant);
-  flex-shrink: 0;
-}
-.detail-shell__row--steps {
-  min-height: 48px;
-}
-.detail-shell__stepper {
-  width: 100%;
-}
