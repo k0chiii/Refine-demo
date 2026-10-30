@@ -37,6 +37,13 @@ describe("describeError（UI_M3E §35 W-02）", () => {
     expect(name).not.toBe(teamId);
   });
 
+  it("通知の設定の失敗のうち Slack のメールアドレスの形の誤りは、ほかの欄と分ける", () => {
+    const message = (details: Record<string, string>) =>
+      describeError(new ConvexError({ code: "notification_prefs_invalid", details })).message;
+    expect(message({ field: "slackEmail" })).not.toBe(message({ field: "channels" }));
+    expect(message({ field: "slackEmail" })).not.toContain("notification_prefs");
+  });
+
   it("状態の変更の失敗には今の状態を入れる", () => {
     expect(
       describeError(

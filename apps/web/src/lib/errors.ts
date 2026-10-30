@@ -183,6 +183,8 @@ function withDetails(code: string, details: unknown): string | null {
     if (d.reason === "limit")
       return `ワークスペースはこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   }
+  if (code === "notification_prefs_invalid" && d.field === "slackEmail")
+    return "Slack のメールアドレスの形が正しくありません";
   if (code === "team_invalid" && d.reason === "limit")
     return `局・担当はこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   if (code === "comment_invalid_resolution_transition" && typeof d.from === "string") {

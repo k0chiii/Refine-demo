@@ -5057,6 +5057,10 @@ m3e-snackbar {
 .notif-channel__workspace {
   margin-block: 8px 4px;
 }
+/* その下の Slack のメールアドレス（§110） */
+.notif-channel__slack-email {
+  margin-block: 4px;
+}
 
 /* ---------- 取り込みのプレビュー（表記ルール・制作物の CSV）: 件数の要約は文字、行は M3 リスト（§49） */
 .import-summary {
