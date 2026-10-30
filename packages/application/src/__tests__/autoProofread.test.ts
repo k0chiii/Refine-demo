@@ -155,6 +155,22 @@ describe("提出時の自動校正", () => {
     expect(v.run!.attempts).toBe(2);
   });
 
+  it("再試行は 4 回まで（最初の検査と合わせて 5 回）。上限を越えると権限ではなく上限のエラーになる", async () => {
+    const { ctx, run } = await setup();
+    const artifactId = run.artifacts[0]!.artifactId;
+    const failAndRetry = async () => {
+      await failProofreadArtifact(ctx, creator, { runId: run.id, artifactId, error: "x" });
+      await retryProofreadingRun(ctx, reviewer, { runId: run.id });
+    };
+    for (let i = 0; i < 4; i++) await failAndRetry();
+    await expect(failAndRetry()).rejects.toEqual(
+      expect.objectContaining({
+        code: "proofread_retry_exhausted",
+        details: expect.objectContaining({ attempts: 5, max: 4 }),
+      }),
+    );
+  });
+
   it("主管とシステム管理者も、校正者と同じく実行を進めて再試行できる。関係者に入っているだけの人はできない", async () => {
     const ctx = createInMemoryContext();
     await saveRule(ctx, sysadmin, { rule });
