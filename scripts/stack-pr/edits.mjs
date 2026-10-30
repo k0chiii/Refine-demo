@@ -261,7 +261,54 @@ export function applyEdit(name) {
       ]);
       return;
     case "m3e-segmented-css":
-      applyPatches(["patches/p09-apps__web__src__styles.css.patch"]);
+      patchFile("apps/web/src/styles.css", [
+        [
+          `.mf-table__th {
+  background: var(--mf-surface-container-high);
+  font-weight: 600;
+}`,
+          `/* 見出し行は面の色を変えず、文字の色と太さで分ける（青い帯にしない。太さは 2026-10-15 の決定どおり 500 のまま） */
+.mf-table__th {
+  background: var(--mf-surface-container-low);
+  color: var(--mf-on-surface-variant);
+}`,
+        ],
+        [".kpi__num {\n  font-weight: 600;", ".kpi__num {\n  font-weight: 500;"],
+      ]);
+      appendCssOnce(
+        "m3e-segmented-list",
+        `
+@container (min-width: 1240px) and (max-width: 1439px) {
+  .works-table tr {
+    --mf-table-pad: 12px;
+  }
+}
+.list--segmented {
+  --m3e-segmented-list-segment-gap: 2px;
+  --m3e-segmented-list-container-shape: var(--md-sys-shape-corner-large-increased, 20px);
+  --m3e-segmented-list-item-container-shape: var(--mf-shape-xs);
+  --m3e-segmented-list-item-hover-container-shape: var(--mf-shape-lg);
+  --m3e-segmented-list-item-focus-container-shape: var(--mf-shape-lg);
+  --m3e-segmented-list-item-container-color: var(--mf-surface-container-lowest);
+  --m3e-list-item-container-color: var(--mf-surface-container-lowest);
+  margin: 0;
+}
+.list--segmented .list__item {
+  --m3e-list-item-container-shape: var(--mf-shape-xs);
+}
+.hub .list.list--segmented {
+  width: 100%;
+  max-width: 100%;
+}
+.list--segmented .list__item--urgent {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    var(--mf-error-container) 35%,
+    var(--mf-surface-container-lowest)
+  );
+}
+`,
+      );
       return;
     default:
       throw new Error(`unknown edit: ${name}`);
