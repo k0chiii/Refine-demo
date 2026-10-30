@@ -60,10 +60,14 @@ export async function getNotificationSettings(
   const email = deliverableEmail(address);
   const workspaces = await ctx.slackWorkspaces.list();
   const workspace = workspaces.find((w) => w.id === slackWorkspaceId) ?? null;
-  const slack: SlackMembership | null = workspace && {
-    teamId: workspace.teamId,
-    link: email ? await ctx.slackMembers.find(workspace.teamId, email) : { state: "unresolved" },
-  };
+  const slack: SlackMembership | null =
+    workspace && email
+      ? {
+          teamId: workspace.teamId,
+          email,
+          link: await ctx.slackMembers.find(workspace.teamId, email),
+        }
+      : null;
   const setting = (channel: AccountChannel): ChannelSetting => ({
     available: available.has(channel),
     on: prefs.channels.includes(channel),

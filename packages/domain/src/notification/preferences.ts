@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import { validateSlackEmail } from "./slack.ts";
 
 /*
  * 通知の受け取り方（利用者ごとの設定）。利用者指示 2026-10-18「アプリのプッシュ通知、もう少し普通のアプリみたいにしたい」、
@@ -10,7 +11,10 @@ import { DomainError } from "../shared/DomainError.ts";
 export const DELIVERY_CHANNELS = ["push", "email", "slack"] as const;
 export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
 
-/** アカウントで一度オンにする経路。宛先はアカウント（users.email）から決まり、利用者は何も入力しない。push は端末ごと */
+/**
+ * アカウントで一度オンにする経路。宛先はアカウント（users.email）から決まり、利用者は原則入力しない
+ * （Slack だけ、プロフィールのメールが違えば Slack のメールアドレスを書ける。§110）。push は端末ごと
+ */
 export const ACCOUNT_CHANNELS = ["email", "slack"] as const satisfies readonly DeliveryChannel[];
 export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
@@ -70,6 +74,8 @@ export interface NotificationPrefs {
   channels: AccountChannel[];
   /** Slack（DM）の送り先のワークスペース（登録の id）。無ければ選んでいない */
   slackWorkspaceId?: string;
+  /** Slack で引くアドレス（normalizeSlackEmail の形）。無ければ Nogiku のメールアドレスで引く（§110） */
+  slackEmail?: string;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -80,7 +86,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
 
 /**
  * 保存された設定（無ければ既定）を、決まった形・順にそろえる。知らない分類・経路は捨てる。
- * ワークスペースは空・null なら選んでいないことにする（パッチの null で外れる）
+ * ワークスペース・Slack のメールアドレスは空・null なら無いことにする（パッチの null で外れる）
  */
 export function normalizeNotificationPrefs(
   input?: {
@@ -88,17 +94,28 @@ export function normalizeNotificationPrefs(
     mutedCategories?: readonly string[];
     channels?: readonly string[];
     slackWorkspaceId?: string | null;
+    slackEmail?: string | null;
   } | null,
 ): NotificationPrefs {
   const muted = new Set(input?.mutedCategories ?? []);
   const channels = new Set(input?.channels ?? []);
   const slackWorkspaceId = input?.slackWorkspaceId?.trim();
+  const slackEmail = input?.slackEmail?.trim();
   return {
     showPreview: input?.showPreview ?? DEFAULT_NOTIFICATION_PREFS.showPreview,
     mutedCategories: NOTIFICATION_CATEGORIES.filter((c) => muted.has(c)),
     channels: ACCOUNT_CHANNELS.filter((c) => channels.has(c)),
     ...(slackWorkspaceId ? { slackWorkspaceId } : {}),
+    ...(slackEmail ? { slackEmail } : {}),
   };
+}
+
+/** Slack で引くアドレス（§110）: 各自が書いた Slack のメールアドレス、無ければ Nogiku のアドレス（deliverableEmail を通したもの） */
+export function slackAddressOf(
+  prefs: Pick<NotificationPrefs, "slackEmail">,
+  nogikuEmail: string | null,
+): string | null {
+  return prefs.slackEmail ?? nogikuEmail;
 }
 
 /** 利用者が送ってきた設定の変更 */
@@ -108,6 +125,8 @@ export interface NotificationPrefsPatch {
   channels?: readonly string[];
   /** null で選択を外す */
   slackWorkspaceId?: string | null;
+  /** null・空で消す（Nogiku のアドレスで引くのに戻る） */
+  slackEmail?: string | null;
 }
 
 interface ValidPrefsPatch {
@@ -115,10 +134,11 @@ interface ValidPrefsPatch {
   mutedCategories?: NotificationCategory[];
   channels?: AccountChannel[];
   slackWorkspaceId?: string | null;
+  slackEmail?: string | null;
 }
 
 /**
- * 利用者が送ってきた設定を確かめる（知らない分類・経路、空のワークスペースは受け付けない）。
+ * 利用者が送ってきた設定を確かめる（知らない分類・経路、空のワークスペース、形の違う Slack のメールアドレスは受け付けない）。
  * ワークスペースが登録にあるかは確かめない（application が確かめる）
  */
 export function validateNotificationPrefsPatch(patch: NotificationPrefsPatch): ValidPrefsPatch {
@@ -144,6 +164,7 @@ export function validateNotificationPrefsPatch(patch: NotificationPrefsPatch): V
       throw new DomainError("notification_prefs_invalid", { field: "slackWorkspaceId" });
     out.slackWorkspaceId = id;
   }
+  if (patch.slackEmail !== undefined) out.slackEmail = validateSlackEmail(patch.slackEmail);
   return out;
 }
 

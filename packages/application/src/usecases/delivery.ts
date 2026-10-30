@@ -140,7 +140,11 @@ async function slackMembershipOf(
     ? await ctx.slackWorkspaces.findById(prefs.slackWorkspaceId)
     : null;
   if (!workspace) return null;
-  return { teamId: workspace.teamId, link: await ctx.slackMembers.find(workspace.teamId, email) };
+  return {
+    teamId: workspace.teamId,
+    email,
+    link: await ctx.slackMembers.find(workspace.teamId, email),
+  };
 }
 
 /** 送ってよい登録メールアドレス（無い・送れない形・試験用のドメインなら null） */

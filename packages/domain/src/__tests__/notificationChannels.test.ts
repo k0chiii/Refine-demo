@@ -25,7 +25,7 @@ const notFound: SlackLink = { state: "not_found", checkedAt: T0 };
 const cannotDm: SlackLink = { state: "cannot_dm", memberId: "UA", checkedAt: T0 };
 
 const TEAM = "T0123ABCD";
-const inTeam = (link: SlackLink): SlackMembership => ({ teamId: TEAM, link });
+const inTeam = (link: SlackLink, email = EMAIL): SlackMembership => ({ teamId: TEAM, email, link });
 
 const phone: PushDevice = {
   id: "s1",
@@ -126,9 +126,9 @@ describe("届け先", () => {
     expect(destinationsOf({ ...base, channels: ["email"] })).toEqual([]);
   });
 
-  it("Slack は、アドレスがあり、いま送るか引くときだけ。送り先は選んだワークスペース", () => {
-    const slack = (link: SlackLink, now = T0, email: string | null = EMAIL) =>
-      destinationsOf({ ...base, channels: ["slack"], email, slack: inTeam(link), now });
+  it("Slack は、いま送るか引くときだけ。送り先は選んだワークスペース", () => {
+    const slack = (link: SlackLink, now = T0) =>
+      destinationsOf({ ...base, channels: ["slack"], slack: inTeam(link), now });
     const lookup = [{ channel: "slack", key: "slack", teamId: TEAM, email: EMAIL, memberId: null }];
     const post = [{ channel: "slack", key: "slack", teamId: TEAM, email: EMAIL, memberId: "UA" }];
 
@@ -138,8 +138,21 @@ describe("届け先", () => {
     expect(slack(notFound, DUE + 1)).toEqual(lookup);
     expect(slack(cannotDm, DUE - 1)).toEqual([]);
     expect(slack(cannotDm, DUE + 1)).toEqual(post);
-    expect(slack(linked, T0, null)).toEqual([]);
-    expect(slack(unresolved, T0, null)).toEqual([]);
+  });
+
+  it("Slack はメンバーを引いたアドレス（書いた Slack のメールアドレス）に送り、メールは Nogiku のアドレスのまま", () => {
+    const slackEmail = "kenta@slack-profile.example-org.jp";
+    expect(
+      destinationsOf({
+        ...base,
+        channels: ["email", "slack"],
+        email: EMAIL,
+        slack: inTeam(linked, slackEmail),
+      }),
+    ).toEqual([
+      { channel: "email", key: "email", to: EMAIL },
+      { channel: "slack", key: "slack", teamId: TEAM, email: slackEmail, memberId: "UA" },
+    ]);
   });
 
   it("Slack はワークスペースを選んでいない（登録が消えた）なら送らない", () => {
