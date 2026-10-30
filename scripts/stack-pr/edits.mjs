@@ -4,6 +4,15 @@ import { execSync } from "node:child_process";
 
 const root = "/workspace";
 const stackDir = path.join(root, "scripts/stack-pr");
+const REF_LINEAR = "origin/cursor/stack-linear-8b5a";
+
+function checkoutFromLinear(paths) {
+  execSync(`git fetch origin cursor/stack-linear-8b5a 2>/dev/null || true`, { cwd: root });
+  execSync(`git checkout ${REF_LINEAR} -- ${paths.map((p) => JSON.stringify(p)).join(" ")}`, {
+    cwd: root,
+    stdio: "inherit",
+  });
+}
 
 export function applyPatches(names) {
   for (const n of names ?? []) {
@@ -14,7 +23,10 @@ export function applyPatches(names) {
     ];
     const file = candidates.find((p) => fs.existsSync(p));
     if (!file) throw new Error(`patch missing: ${n}`);
-    execSync(`git apply --whitespace=nowarn ${JSON.stringify(file)}`, { cwd: root, stdio: "inherit" });
+    execSync(`git apply --whitespace=nowarn ${JSON.stringify(file)}`, {
+      cwd: root,
+      stdio: "inherit",
+    });
   }
 }
 
@@ -72,7 +84,10 @@ export function applyEdit(name) {
         ],
         ['  closed: "この版の受付は終了しています",', '  closed: "この版の校正は終わりました",'],
         ['  void: "この版は無効化されています",', '  void: "この版は無効です",'],
-        ['  not_latest: "最新の受付対象版ではありません",', '  not_latest: "最新の版ではありません",'],
+        [
+          '  not_latest: "最新の受付対象版ではありません",',
+          '  not_latest: "最新の版ではありません",',
+        ],
       ]);
       return;
     case "labels-notifications":
@@ -84,27 +99,73 @@ export function applyEdit(name) {
       ]);
       return;
     case "labels-permission":
-      patchFile("apps/web/src/lib/labels.ts", [
-        ['  edit: "編集（制作委任）",', '  edit: "編集",'],
-      ]);
+      patchFile("apps/web/src/lib/labels.ts", [['  edit: "編集（制作委任）",', '  edit: "編集",']]);
       return;
     case "errors-approver":
       applyPatches(["patches/p01-apps__web__src__lib__errors.ts.patch"]);
       return;
     case "review-panel-decide":
       applyPatches([
+        "patches/p02-apps__web__src__features__review__ThreadPanel.tsx.patch",
         "patches/p03-apps__web__src__features__review__ThreadPanel.tsx.patch",
         "patches/p03-apps__web__src__features__review__ThreadPanel.css.patch",
         "patches/p03-apps__web__src__features__review__ThreadCard.tsx.patch",
       ]);
       return;
+    case "review-focused-decide":
+      applyPatches([
+        "patches/p02-apps__web__src__features__review__ThreadPanel.tsx.patch",
+        "patches/p03-apps__web__src__features__review__ThreadPanel.tsx.patch",
+        "patches/p03-apps__web__src__features__review__ThreadPanel.css.patch",
+      ]);
+      checkoutFromLinear([
+        "apps/web/src/features/review/ThreadCard.tsx",
+        "apps/web/src/features/editor/Editor.tsx",
+        "apps/web/src/features/review/ThreadPanel.tsx",
+        "apps/web/src/features/review/ThreadPanel.css",
+        "apps/web/src/styles.css",
+      ]);
+      return;
+    case "review-e2e-smoke-ce0b91f":
+      checkoutFromLinear(["apps/web/e2e/specs/decision.spec.ts"]);
+      try {
+        patchFile("apps/web/e2e/screenshots.mjs", [
+          [
+            `const sel = '.comments .thread m3e-icon-button[aria-label="反映する"]';`,
+            `const sel = ".comments .thread:not(.thread--closed)";`,
+          ],
+          [
+            `await page.locator(sel).first().click();`,
+            `await page.locator(".comments .thread--active .thread__decide m3e-button").first().click();`,
+          ],
+        ]);
+      } catch {
+        checkoutFromLinear(["apps/web/e2e/screenshots.mjs"]);
+      }
+      return;
+    case "review-e2e-decision":
+      patchFile("apps/web/e2e/specs/decision.spec.ts", [
+        ['test.describe("コメントの採否"', 'test.describe("コメントの反映するかどうか"'],
+        [
+          'test("制作者が理由を付けて不採用にすると',
+          'test("制作者が理由を付けて反映しないにすると',
+        ],
+        [
+          `    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+    await app.settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
+    await page.fill(".thread-panel textarea", "正式名称は規約で確認済み");
+    await panel.locator("m3e-button", { hasText: "不採用にする" }).click();`,
+          `    await panel.locator(".thread__decide m3e-button", { hasText: "反映しない" }).click();
+    await page.fill(".thread-panel textarea", "正式名称は規約で確認済み");
+    await panel.locator(".thread__form m3e-button", { hasText: "反映しない" }).click();`,
+        ],
+      ]);
+      return;
     case "review-card-status": {
       const card = path.join(root, "apps/web/src/features/review/ThreadCard.tsx");
       let s = fs.readFileSync(card, "utf8");
-      s = s.replace(
-        /          \{canDecide && !closed \? \([\s\S]*?\) : null\}\n/,
-        "",
-      );
+      s = s.replace(/          \{canDecide && !closed \? \([\s\S]*?\) : null\}\n/, "");
       fs.writeFileSync(card, s);
       const meta = path.join(root, "apps/web/src/features/review/ThreadMeta.tsx");
       let m = fs.readFileSync(meta, "utf8");
@@ -134,36 +195,50 @@ export function applyEdit(name) {
     case "editor-comment-toolbar":
       applyPatches(["p04-apps__web__src__features__editor__Editor.tsx.patch"]);
       return;
+    case "editor-shortcut-sheet":
+      checkoutFromLinear([
+        "apps/web/src/features/editor/ShortcutSheet.tsx",
+        "apps/web/src/features/editor/ShortcutSheet.css",
+        "apps/web/src/features/editor/Editor.tsx",
+      ]);
+      return;
     case "make-turn-layout": {
       const make = path.join(root, "apps/web/src/routes/_app/make.tsx");
       let s = fs.readFileSync(make, "utf8");
-      s = s.replace('<Group title="あなたの番" count={turn.length}>', '<Group title="" label="今すぐ" count={turn.length} className="dash__section--now">');
+      s = s.replace(
+        '<Group title="あなたの番" count={turn.length}>',
+        '<Group title="要対応" count={turn.length}>',
+      );
       s = s.replace(
         " * - 進行中: 「あなたの番」（未対応のコメントに返事をする・次の版を出す）",
-        " * - 進行中: 今すぐ（未対応のコメント・次の版。見出しは件数バッジで示す）",
+        " * - 進行中: 「要対応」（未対応のコメントに返事をする・次の版を出す）",
       );
       fs.writeFileSync(make, s);
-      const parts = path.join(root, "apps/web/src/features/workspace/parts.tsx");
-      let p = fs.readFileSync(parts, "utf8");
-      if (!p.includes("dash__title--sr")) {
-        p = p.replace(
-          `        >
-          {title}
-        </M3eHeading>`,
-          `        >
-          {title ? title : <span className="dash__title--sr">今すぐ</span>}
-        </M3eHeading>`,
-        );
-        fs.writeFileSync(parts, p);
-      }
-      const css = path.join(root, "apps/web/src/styles.css");
-      let c = fs.readFileSync(css, "utf8");
-      if (!c.includes("dash__title--sr")) {
-        c += `\n.dash__title--sr {\n  position: absolute;\n  width: 1px;\n  height: 1px;\n  overflow: hidden;\n  clip: rect(0, 0, 0, 0);\n}\n.dash__section--now .dash__head {\n  gap: 8px;\n}\n`;
-        fs.writeFileSync(css, c);
-      }
       return;
     }
+    case "copy-anata-phrasing":
+      checkoutFromLinear([
+        "apps/web/src/features/editor/InfoTab.tsx",
+        "apps/web/src/features/notation/AiBackground.tsx",
+        "apps/web/src/features/work/WorkForm.tsx",
+      ]);
+      return;
+    case "copy-youtaiou-terminology":
+      checkoutFromLinear([
+        "packages/domain/src/dashboard/workspace.ts",
+        "packages/domain/src/__tests__/workspace.test.ts",
+        "docs/DECISIONS.md",
+        "docs/SCREENSHOTS.md",
+        "docs/UI_M3E.md",
+        "apps/web/e2e/motion/composition.html",
+        "apps/web/src/features/workspace/parts.tsx",
+        "apps/web/src/styles.css",
+      ]);
+      return;
+    case "m3e-shape-table-kpi":
+      applyEdit("m3e-shape-table");
+      applyEdit("m3e-kpi-active");
+      return;
     case "m3e-shape-table": {
       appendCssOnce(
         "m3e-shape-table",
@@ -220,10 +295,193 @@ export function applyEdit(name) {
       );
       return;
     }
-    case "m3e-segmented-css": {
-      applyPatches(["patches/p09-apps__web__src__styles.css.patch"]);
+    case "e2e-screenshots-toolbar":
+      checkoutFromLinear(["apps/web/e2e/screenshots.mjs"]);
       return;
+    case "m3e-segmented-css":
+      patchFile("apps/web/src/styles.css", [
+        [
+          `.mf-table__th {
+  background: var(--mf-surface-container-high);
+  font-weight: 600;
+}`,
+          `/* 見出し行は面の色を変えず、文字の色と太さで分ける（青い帯にしない。太さは 2026-10-15 の決定どおり 500 のまま） */
+.mf-table__th {
+  background: var(--mf-surface-container-low);
+  color: var(--mf-on-surface-variant);
+}`,
+        ],
+        [".kpi__num {\n  font-weight: 600;", ".kpi__num {\n  font-weight: 500;"],
+      ]);
+      appendCssOnce(
+        "m3e-segmented-list",
+        `
+@container (min-width: 1240px) and (max-width: 1439px) {
+  .works-table tr {
+    --mf-table-pad: 12px;
+  }
+}
+.list--segmented {
+  --m3e-segmented-list-segment-gap: 2px;
+  --m3e-segmented-list-container-shape: var(--md-sys-shape-corner-large-increased, 20px);
+  --m3e-segmented-list-item-container-shape: var(--mf-shape-xs);
+  --m3e-segmented-list-item-hover-container-shape: var(--mf-shape-lg);
+  --m3e-segmented-list-item-focus-container-shape: var(--mf-shape-lg);
+  --m3e-segmented-list-item-container-color: var(--mf-surface-container-lowest);
+  --m3e-list-item-container-color: var(--mf-surface-container-lowest);
+  margin: 0;
+}
+.list--segmented .list__item {
+  --m3e-list-item-container-shape: var(--mf-shape-xs);
+}
+.hub .list.list--segmented {
+  width: 100%;
+  max-width: 100%;
+}
+.list--segmented .list__item--urgent {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    var(--mf-error-container) 35%,
+    var(--mf-surface-container-lowest)
+  );
+}
+`,
+      );
+      return;
+    case "domain-stages-v7":
+      copySnippet("productionStages.ts", "packages/domain/src/dashboard/productionStages.ts");
+      copySnippet(
+        "productionStages.test.ts",
+        "packages/domain/src/__tests__/productionStages.test.ts",
+      );
+      ensureIndexExport('export * from "./dashboard/productionStages.ts";');
+      return;
+    case "schema-revision-planned":
+      patchFile("apps/convex/convex/schema.ts", [
+        [
+          `    submittedAt: v.number(),
+    deadlineAt: v.number(),
+    reviewState,`,
+          `    submittedAt: v.number(),
+    deadlineAt: v.number(),
+    plannedSubmitAt: v.optional(v.number()),
+    reviewState,`,
+        ],
+      ]);
+      execSync("pnpm codegen", { cwd: root, stdio: "inherit" });
+      return;
+    case "domain-danger":
+      copySnippet("danger.ts", "packages/domain/src/dashboard/danger.ts");
+      copySnippet("danger.test.ts", "packages/domain/src/__tests__/danger.test.ts");
+      ensureIndexExport('export * from "./dashboard/danger.ts";');
+      return;
+    case "demo-role-homes":
+      patchFile("apps/convex/convex/seed.ts", [
+        [
+          `      created.push(workId);
     }
+    // 表記統一のサンプル（notation2 の初期データ＋α）。ルールが 1 件も無いときだけ入れる`,
+          `      created.push(workId);
+    }
+    // ロール別ホーム用: 校正割当付きの受付中版（dashboard.make / dashboard.check 用。1 セットだけ）
+    if (!(await ctx.db.query("reviewAssignments").first())) {
+      const pamphlet = await ctx.db
+        .query("works")
+        .withIndex("by_year", (q) => q.eq("year", 100))
+        .filter((q) => q.eq(q.field("legacyId"), "PR-001"))
+        .unique();
+      if (pamphlet) {
+        const revisionId = await ctx.db.insert("revisions", {
+          workId: pamphlet._id,
+          kind: "standard",
+          sequence: 1,
+          reviewType: "general",
+          submittedBy: ids["mock-nogiku-creator"]!,
+          submittedAt: now,
+          deadlineAt: now + 12 * 3_600_000,
+          plannedSubmitAt: now + 2 * day,
+          reviewState: "open",
+          changeSummary: "ホーム用サンプル",
+          focusNotes: "",
+        });
+        await ctx.db.insert("reviewAssignments", {
+          revisionId,
+          reviewerId: ids["mock-nogiku-reviewer"]!,
+          reviewType: "general",
+          state: "pending",
+        });
+      }
+    }
+    // 表記統一のサンプル（notation2 の初期データ＋α）。ルールが 1 件も無いときだけ入れる`,
+        ],
+      ]);
+      return;
+    case "ui-view-switcher":
+      copySnippet("ViewSwitcher.tsx", "apps/web/src/features/home/ViewSwitcher.tsx");
+      patchFile("apps/web/src/routes/_app/make.tsx", [
+        [
+          `import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";`,
+          `import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
+import { ViewSwitcher } from "@/features/home/ViewSwitcher";`,
+        ],
+        [
+          `      <AppBarSlot slot="title">制作</AppBarSlot>
+      {tabs}`,
+          `      <AppBarSlot slot="title">制作</AppBarSlot>
+      <AppBarSlot slot="actions">
+        <ViewSwitcher />
+      </AppBarSlot>
+      {tabs}`,
+        ],
+      ]);
+      appendCssOnce(
+        "ui-home-view-switcher",
+        `
+.home-view-switcher__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+`,
+      );
+      return;
+    case "detail-shell":
+      copySnippet("detail.tsx", "apps/web/src/routes/_app/works/$workId/detail.tsx");
+      appendCssOnce(
+        "detail-shell",
+        `
+.detail-shell__head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.detail-shell__row--title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.detail-shell__title {
+  margin: 0;
+  min-width: 0;
+}
+.detail-shell__version {
+  color: var(--mf-on-surface-variant);
+  flex-shrink: 0;
+}
+.detail-shell__row--steps {
+  min-height: 48px;
+}
+.detail-shell__stepper {
+  width: 100%;
+}
+`,
+      );
+      return;
     default:
       throw new Error(`unknown edit: ${name}`);
   }
@@ -235,6 +493,22 @@ function appendCssOnce(marker, chunk) {
   if (c.includes(marker)) return;
   c += `\n/* stack-pr:${marker} */\n${chunk}\n`;
   fs.writeFileSync(cssPath, c);
+}
+
+function copySnippet(name, destRel) {
+  const src = path.join(stackDir, "snippets", name);
+  if (!fs.existsSync(src)) throw new Error(`snippet missing: ${name}`);
+  const dest = path.join(root, destRel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, fs.readFileSync(src, "utf8"));
+}
+
+function ensureIndexExport(line) {
+  const rel = "packages/domain/src/index.ts";
+  const file = path.join(root, rel);
+  const s = fs.readFileSync(file, "utf8");
+  if (s.includes(line)) return;
+  fs.writeFileSync(file, `${s.trimEnd()}\n${line}\n`);
 }
 
 export function applyItem(item) {
