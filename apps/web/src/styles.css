@@ -1325,7 +1325,7 @@ m3e-dialog {
   align-items: center;
   gap: 8px;
 }
-/* 件数のバッジ（要対応 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
+/* 件数のバッジ（あなたの番 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
 .dash__badge {
   --m3e-badge-container-color: var(--mf-secondary-container);
   --m3e-badge-color: var(--mf-on-secondary-container);
@@ -5998,81 +5998,5 @@ m3e-snackbar {
     var(--mf-error-container) 35%,
     var(--mf-surface-container-lowest)
   );
-}
-
-/* stack-pr:ui-home-view-switcher */
-
-.home-view-switcher__sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-}
-
-/* stack-pr:detail-shell */
-
-.detail-shell__head {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-}
-.detail-shell__row--title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 16px;
-}
-.detail-shell__title {
-  margin: 0;
-  min-width: 0;
-}
-.detail-shell__version {
-  color: var(--mf-on-surface-variant);
-  flex-shrink: 0;
-}
-.detail-shell__row--steps {
-  min-height: 48px;
-}
-.detail-shell__stepper {
-  width: 100%;
-}
-
-/* stack-pr:m3e-shape-table */
-
-/* M3E shape: 表の角を large に */
-.mf-table:not(.mf-table--flush) {
-  border-radius: var(--mf-shape-lg);
-}
-
-
-/* stack-pr:m3e-kpi-active */
-
-.kpi {
-  --m3e-card-shape: var(--mf-shape-xl);
-}
-.kpi__num {
-  font-weight: 500;
-  color: var(--mf-primary);
-}
-.comments .thread,
-.thread-panel .creator-note,
-.comments .creator-note {
-  --m3e-card-shape: var(--mf-shape-lg);
-}
-.thread--active::before {
-  width: 4px;
-}
-.comments .thread--active {
-  --m3e-filled-card-container-color: color-mix(
-    in srgb,
-    var(--mf-primary) 10%,
-    var(--mf-surface-container-lowest)
-  );
-}
-.thread__decide m3e-button {
-  --m3e-button-shape: var(--mf-shape-full);
 }
 
