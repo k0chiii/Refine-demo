@@ -99,6 +99,22 @@ export function applyEdit(name) {
         "patches/p03-apps__web__src__features__review__ThreadCard.tsx.patch",
       ]);
       return;
+    case "review-e2e-decision":
+      patchFile("apps/web/e2e/specs/decision.spec.ts", [
+        ['test.describe("コメントの採否"', 'test.describe("コメントの反映するかどうか"'],
+        ['test("制作者が理由を付けて不採用にすると', 'test("制作者が理由を付けて反映しないにすると'],
+        [
+          `    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+    await app.settle();
+    await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
+    await page.fill(".thread-panel textarea", "正式名称は規約で確認済み");
+    await panel.locator("m3e-button", { hasText: "不採用にする" }).click();`,
+          `    await panel.locator(".thread__decide m3e-button", { hasText: "反映しない" }).click();
+    await page.fill(".thread-panel textarea", "正式名称は規約で確認済み");
+    await panel.locator(".thread__form m3e-button", { hasText: "反映しない" }).click();`,
+        ],
+      ]);
+      return;
     case "review-card-status": {
       const card = path.join(root, "apps/web/src/features/review/ThreadCard.tsx");
       let s = fs.readFileSync(card, "utf8");
