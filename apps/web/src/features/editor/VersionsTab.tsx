@@ -92,7 +92,7 @@ export function VersionsTab({
                 </div>
                 <div className="small muted">
                   {r.reviewState === "open"
-                    ? `受付中・締切 ${formatDeadlineUntil(r.deadlineAt)}`
+                    ? `校正中・締切 ${formatDeadlineUntil(r.deadlineAt)}`
                     : r.reviewState === "void"
                       ? reviewStateLabel.void
                       : (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "受付終了")}
@@ -116,11 +116,10 @@ export function VersionsTab({
       ) : null}
 
       <M3eDialog open={voidDraft !== null} onClosed={() => setVoidDraft(null)} closeLabel="閉じる">
-        <span slot="header">誤提出した版を無効化</span>
+        <span slot="header">この版を無効にする</span>
         <div className="dialog-body">
           <p className="small muted" style={{ margin: 0 }}>
-            {current?.label}
-            の受付を終了して「無効」にします。添付とコメントは履歴に残り、版番号は欠番になります。
+            {current?.label} を無効にします。版番号は欠番になります
           </p>
           <Field label="理由" required>
             <TextArea
