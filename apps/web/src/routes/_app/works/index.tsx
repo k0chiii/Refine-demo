@@ -32,7 +32,7 @@ import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3
 type TeamAxis = "owner" | "production";
 const SORT_KEYS = ["accepting", "deadline", "title", "stage", "owner", "production"] as const;
 const sortLabel: Record<WorkSortKey, string> = {
-  accepting: "校正の締切順",
+  accepting: "校正期日順",
   deadline: "納期順",
   title: "制作物名順",
   stage: "状態順",

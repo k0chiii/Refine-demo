@@ -153,7 +153,7 @@ function Make() {
                   x.action === "respond"
                     ? [
                         `未対応のコメント ${x.toRespond}`,
-                        deadlineLine("校正の締切", x.r.reviewDeadlineAt),
+                        deadlineLine("校正期日", x.r.reviewDeadlineAt),
                       ]
                     : [
                         x.r.stage === "unsubmitted"
@@ -184,7 +184,7 @@ function Make() {
                 suffix={x.r.revisionLabel}
                 lines={[
                   progressLine(x.r),
-                  deadlineLine("校正の締切", x.r.reviewDeadlineAt) ||
+                  deadlineLine("校正期日", x.r.reviewDeadlineAt) ||
                     deadlineLine("納期", x.r.deliveryAt),
                 ]}
                 chip={actionLabel[x.action]}
