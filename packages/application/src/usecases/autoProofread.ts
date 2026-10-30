@@ -12,6 +12,7 @@ import {
   proofreadRetriesLeft,
   runStatusOf,
   validateAnchor,
+  withinProofreadRetryLimit,
   type Artifact,
   type CommentThread,
   type Principal,
@@ -79,6 +80,10 @@ export interface RunView {
   run: ProofreadingRun | null;
   /** この人の端末で検査を進められるか */
   canRun: boolean;
+  /** 最初の検査のあと、あと何回再試行できるか（実行が無ければ 0） */
+  retriesLeft: number;
+  /** この人が失敗した添付を再試行できるか（システム管理者は上限を越えられる） */
+  canRetry: boolean;
 }
 
 export async function getProofreadingRun(
@@ -90,13 +95,16 @@ export async function getProofreadingRun(
   if (!revision) throw new DomainError("forbidden", { revisionId });
   const { work, grants } = await loadAuthorizedWork(ctx, principal, revision.workId, "work.view");
   const run = await ctx.proofreadingRuns.findByRevision(revisionId);
+  const canRun =
+    !!run &&
+    work.lifecycle !== "finalized" &&
+    isAccepting(revision) &&
+    canRunProofread({ work, grants, principal });
   return {
     run,
-    canRun:
-      !!run &&
-      work.lifecycle !== "finalized" &&
-      isAccepting(revision) &&
-      canRunProofread({ work, grants, principal }),
+    canRun,
+    retriesLeft: run ? proofreadRetriesLeft(run.attempts) : 0,
+    canRetry: canRun && withinProofreadRetryLimit(run.attempts, principal),
   };
 }
 
@@ -317,7 +325,7 @@ export async function retryProofreadingRun(
   input: { runId: string },
 ): Promise<void> {
   const { run } = await loadForRun(ctx, principal, input.runId);
-  if (proofreadRetriesLeft(run.attempts) === 0)
+  if (!withinProofreadRetryLimit(run.attempts, principal))
     throw new DomainError("proofread_retry_exhausted", {
       attempts: run.attempts,
       max: PROOFREAD_MAX_RETRIES,

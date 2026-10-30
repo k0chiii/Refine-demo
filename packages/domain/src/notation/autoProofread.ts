@@ -1,4 +1,5 @@
 import { isAllowed, type AuthorizationContext } from "../acl/authorize.ts";
+import type { Principal } from "../acl/Permission.ts";
 import type { Anchor, NormalizedRect } from "../comment/Anchor.ts";
 import { TEXT_QUOTE_MAX } from "../comment/Anchor.ts";
 import type { Severity } from "../comment/CommentThread.ts";
@@ -28,6 +29,11 @@ export const PROOFREAD_MAX_RETRIES = 4;
 /** 実行の試行回数（最初の検査を含む）から、残りの再試行の回数 */
 export function proofreadRetriesLeft(attempts: number): number {
   return Math.max(0, PROOFREAD_MAX_RETRIES + 1 - attempts);
+}
+
+/** システム管理者は上限を越えて再試行できる（失敗の本当の理由を確かめるため。利用者承認 2026-10-30） */
+export function withinProofreadRetryLimit(attempts: number, principal: Principal): boolean {
+  return proofreadRetriesLeft(attempts) > 0 || principal.isSystemAdmin;
 }
 
 /**
