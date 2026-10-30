@@ -6000,7 +6000,6 @@ m3e-snackbar {
   );
 }
 
-
 /* stack-pr:ui-home-view-switcher */
 
 .home-view-switcher__sr {
@@ -6010,4 +6009,3 @@ m3e-snackbar {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
 }
-

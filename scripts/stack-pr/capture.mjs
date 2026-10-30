@@ -1,9 +1,15 @@
-import { chromium } from "playwright";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 
-const root = "/workspace/apps/web";
+const repoRoot =
+  process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const require = createRequire(path.join(repoRoot, "apps/web/package.json"));
+const { chromium } = require("playwright-core");
+
+const root = path.join(repoRoot, "apps/web");
 const routes = {
   "01-signin": "/signin",
   "02-works-list": "/works",
