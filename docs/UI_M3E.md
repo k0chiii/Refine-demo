@@ -2798,7 +2798,7 @@ FB の 4 つの表は、この変更では schema に残す（移行と削除の
 
 本番のログに `slack_lookup_failed`（メールアドレスは大学の Google アカウント `…@g.ecc.u-tokyo.ac.jp`。めいちゃんは 500 `Failed to get user id`）が出た。その人の Slack のプロフィールのメールは別のアドレスだった。直し方は 2 つ示し（Slack のプロフィールのメールを変える・設定に Slack のメールアドレスを書けるようにする）、利用者は後者を選んだ。
 
-- 場所: 「通知の設定」の Slack（DM）の行の、ワークスペースの選択の下（ワークスペースの選択が出るとき。スイッチを入れる前にも書ける）。欄は「Slack のメールアドレス」（`type="email"`、`data-field="slackEmail"`）。説明は「Nogiku のアドレス（{アドレス}）と Slack のプロフィールのメールが違うときだけ」。
+- 場所: 「通知の設定」の Slack（DM）の行の、ワークスペースの選択の下（ワークスペースの選択が出るとき。スイッチを入れる前にも書ける）。欄は「Slack のメールアドレス」（`data-field="slackEmail"`。`type="text"` に `inputMode="email"`。`type="email"` にするとブラウザの検証が全角で打ったアドレスを誤りとし、M3E の欄が赤いまま残るため。形はサーバーが確かめる）。説明は「Nogiku のアドレス（{アドレス}）と Slack のプロフィールのメールが違うときだけ」。
 - 保存: 欄から離れたとき・Enter で、値が変わっていれば `notificationPrefs.update` の `slackEmail` に送る。空にすると `null` を送り、書いたものを消す。保存するのは前後の空白を除き、全角を NFKC でそろえ、小文字にしたもの（`notificationPrefs.slackEmail`）。
 - 引き当てに使うアドレス: 書いてあればそれ、無ければ Nogiku のメールアドレス（`users.email` を `deliverableEmail` に通したもの）。設定画面の Slack の行の説明（§109）はこのアドレスを出す（`destinations.slack.address`。書いたものそのものは `destinations.slack.customEmail`）。メールの行は Nogiku のメールアドレスのまま。書いたアドレスには予約済みドメインの決まり（§103）を当てない。
 - 書く・替える・消すと、Slack がオンでワークスペースを選んでいれば、ワークスペースを替えたときと同じくすぐ引き直す（`deliveryNode.resolveSlack`）。`slackMembers` はワークスペース × メールアドレスで 1 行なので、アドレスが変われば状態は未確認に戻る。

@@ -108,8 +108,12 @@ function SlackEmailField({
       >
         <TextInput
           key={saved ?? ""}
-          type="email"
+          // type="email" にしない: ブラウザの検証は全角で打ったアドレスを誤りとし（ここでは NFKC でそろえて受け付ける）、
+          // M3E の欄が赤いまま残る。形はサーバーが確かめる。キーボードは inputMode でメール用にする
+          type="text"
+          inputMode="email"
           autoComplete="email"
+          autoCapitalize="off"
           spellCheck={false}
           defaultValue={saved ?? ""}
           onBlur={(e) => commit(e.currentTarget.value)}
