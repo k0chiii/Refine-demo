@@ -1,0 +1,29 @@
+---
+diff --git a/apps/web/src/lib/errors.test.ts b/apps/web/src/lib/errors.test.ts
+index bd41c27..a8e93d8 100644
+--- a/apps/web/src/lib/errors.test.ts
++++ b/apps/web/src/lib/errors.test.ts
+@@ -87,20 +87,20 @@ describe("describeError（UI_M3E §35 W-02）", () => {
+     const err = (code: string, details: unknown) =>
+       describeError(new ConvexError({ code, details: details as never })).message;
+     expect(err("work_invalid", { field: "title", reason: "required" })).toBe(
+-      "名称を入力してください",
++      "制作物名を入力してください",
+     );
+     expect(err("work_invalid", { field: "creatorIds", reason: "required" })).toBe(
+       "制作者を 1 人以上選んでください",
+     );
+     expect(err("work_invalid", { field: "approverIds", reason: "unknown_user" })).toBe(
+-      "校了権限者に名簿にいない人が含まれています。一度サインインした人から選び直してください",
++      "校了者に名簿にいない人が含まれています。一度サインインした人から選び直してください",
+     );
+     // 制作者を校了者にした誤りは、汎用の文言ではなく欄に即した文言になる
+     expect(err("work_invalid", { field: "approverIds", reason: "creator_is_approver" })).not.toBe(
+       err("work_invalid", { field: "approverIds", reason: "no_such_reason" }),
+     );
+     expect(err("work_invalid", { field: "title", reason: "too_long", max: 200 })).toBe(
+-      "名称は 200 文字までです",
++      "制作物名は 200 文字までです",
+     );
+     expect(
+       err("work_import_invalid", {

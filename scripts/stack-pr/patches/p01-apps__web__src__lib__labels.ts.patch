@@ -1,0 +1,102 @@
+---
+diff --git a/apps/web/src/lib/labels.ts b/apps/web/src/lib/labels.ts
+index 8484f11..9120e41 100644
+--- a/apps/web/src/lib/labels.ts
++++ b/apps/web/src/lib/labels.ts
+@@ -8,14 +8,14 @@ export const lifecycleLabel: Record<string, string> = {
+ };
+ export const reviewStateLabel: Record<string, string> = {
+   scheduled: "準備中",
+-  open: "受付中",
+-  closed: "受付終了",
++  open: "校正中",
++  closed: "締切済み",
+   void: "無効",
+ };
+ export const closedReasonLabel: Record<string, string> = {
+-  deadline: "期限到来",
+-  superseded: "新版提出",
+-  void: "無効化",
++  deadline: "校正期日を過ぎた",
++  superseded: "新しい版が出た",
++  void: "無効にした",
+ };
+ export const kindLabel: Record<string, string> = {
+   correction: "修正提案",
+@@ -27,14 +27,14 @@ export const severityLabel: Record<string, string> = {
+   critical: "重大",
+   major: "重要",
+   minor: "軽微",
+-  info: "情報",
++  info: "参考",
+ };
+ export const resolutionLabel: Record<string, string> = {
+   open: "未対応",
+   acknowledged: "確認済み",
+-  accepted: "採用",
+-  rejected: "不採用",
+-  deferred: "次版へ持ち越し",
++  accepted: "反映する",
++  rejected: "反映しない",
++  deferred: "次の版で対応",
+   resolved: "反映済み",
+ };
+ export const assignmentLabel: Record<string, string> = {
+@@ -46,7 +46,7 @@ export const assignmentLabel: Record<string, string> = {
+ export const permissionLabel: Record<string, string> = {
+   view: "閲覧",
+   review: "校正",
+-  edit: "編集（制作委任）",
++  edit: "編集",
+   manage: "管理",
+ };
+ export const mediaLabel: Record<string, string> = {
+@@ -60,18 +60,18 @@ export const mediaLabel: Record<string, string> = {
+   other: "その他",
+ };
+ export const approvalActionLabel: Record<string, string> = {
+-  declared: "校了を宣言",
++  declared: "校了する",
+   finalized: "校了",
+-  exception_finalized: "例外校了",
++  exception_finalized: "未対応のまま校了",
+   reopened: "再開",
+ };
+ export const blockedReasonLabel: Record<string, string> = {
+-  finalized: "この制作物は校了済みのため、新しいコメントはできません",
+-  superseded: "新版が提出されたため、この版の受付は終了しました",
+-  deadline: "校正期限を過ぎたため、この版の受付は終了しました",
+-  closed: "この版の受付は終了しています",
+-  void: "この版は無効化されています",
+-  not_latest: "最新の受付対象版ではありません",
++  finalized: "校了済みのため、コメントできません",
++  superseded: "新しい版が出たため、この版の校正は終わりました",
++  deadline: "校正期日を過ぎたため、この版の校正は終わりました",
++  closed: "この版の校正は終わりました",
++  void: "この版は無効です",
++  not_latest: "最新の版ではありません",
+   forbidden: "この制作物にコメントする権限がありません",
+ };
+ export const checkStateLabel: Record<string, string> = {
+@@ -83,14 +83,14 @@ export const notificationKindLabel: Record<string, string> = {
+   revision_submitted: "版の提出",
+   review_assigned: "校正の割り当て",
+   comment_posted: "コメント",
+-  comment_decided: "採否",
+-  comment_assigned: "対応担当",
++  comment_decided: "反映するかどうか",
++  comment_assigned: "対応する人",
+   check_requested: "専門確認の依頼",
+   check_completed: "専門確認の完了",
+-  deadline_approaching: "期限接近",
++  deadline_approaching: "校正期日が近い",
+   work_finalized: "校了",
+   work_reopened: "再開",
+-  revision_voided: "版の無効化",
++  revision_voided: "版を無効にした",
+   auto_proofread_done: "自動校正",
+   rule_proposed: "表記ルールの提案",
+   rule_proposal_decided: "提案の結果",
+-- 
+2.47.3
+

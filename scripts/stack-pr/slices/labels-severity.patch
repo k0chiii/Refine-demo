@@ -1,0 +1,9 @@
+--- a/apps/web/src/lib/labels.ts
++++ b/apps/web/src/lib/labels.ts
+@@ -27,7 +27,7 @@ export const severityLabel: Record<string, string> = {
+   critical: "重大",
+   major: "重要",
+   minor: "軽微",
+-  info: "情報",
++  info: "参考",
+ };
