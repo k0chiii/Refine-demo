@@ -7,7 +7,7 @@ import { expect, test } from "../support/app";
  * - 入れて書いた部数は保存すると残る。切って保存すると、開き直しても切れたまま
  * - 切って隠した欄の値は消えない（もう一度入れると、書いた部数がそのまま出る）
  */
-test.describe("制作物の入稿の欄", () => {
+test.describe("制作物の入稿の欄", { tag: "@smoke" }, () => {
   const title = "公式 Instagram 開催告知";
 
   test("入稿のスイッチを入れたときだけ欄が出て、保存した値は切っても残る", async ({ app }) => {

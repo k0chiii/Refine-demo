@@ -20,10 +20,10 @@ import type { ReactNode } from "react";
 import { mediaLabel } from "@/lib/labels";
 import { DateField } from "@/ui/DateField";
 import {
-  Checkbox,
   ControlledSelect,
   Field,
   Select,
+  Switch,
   TextArea,
   TextInput,
   useFieldId,
@@ -420,40 +420,45 @@ export function WorkFormFields({
             onChange={(v) => setForm((f) => ({ ...f, publishAt: v }))}
           />
         </div>
-        <Checkbox
-          checked={form.requiresPrinterSubmission}
-          onChange={(on) => setForm((f) => ({ ...f, requiresPrinterSubmission: on }))}
-          label="入稿あり（印刷所などへ入稿する制作物）"
-        />
-        <div className="form">
-          <Field label="印刷する部数/枚数/個数">
-            <TextInput
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={form.printQuantity}
-              onChange={set("printQuantity")}
-            />
-          </Field>
-          <Field label="サイズ・尺" hint="A4、1080×1350、30 秒 など">
-            <TextInput
-              maxLength={WORK_SIZE_MAX}
-              value={form.sizeOrLength}
-              onChange={set("sizeOrLength")}
-            />
-          </Field>
-          <Field label="制作日数">
-            <TextInput
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={form.productionDays}
-              onChange={set("productionDays")}
-            />
-          </Field>
+        <div data-field="requiresPrinterSubmission">
+          <Switch
+            checked={form.requiresPrinterSubmission}
+            onChange={(on) => setForm((f) => ({ ...f, requiresPrinterSubmission: on }))}
+            label="入稿あり（印刷所などへ入稿する制作物）"
+          />
         </div>
+        {/* 切って隠しても値は消さずに送る（入稿なしの制作物にもサイズ・尺「30 秒」などがある。UI_M3E §108） */}
+        {form.requiresPrinterSubmission ? (
+          <div className="form" data-fields="submission">
+            <Field label="印刷する部数/枚数/個数">
+              <TextInput
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={form.printQuantity}
+                onChange={set("printQuantity")}
+              />
+            </Field>
+            <Field label="サイズ・尺" hint="A4、1080×1350、30 秒 など">
+              <TextInput
+                maxLength={WORK_SIZE_MAX}
+                value={form.sizeOrLength}
+                onChange={set("sizeOrLength")}
+              />
+            </Field>
+            <Field label="制作日数">
+              <TextInput
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={form.productionDays}
+                onChange={set("productionDays")}
+              />
+            </Field>
+          </div>
+        ) : null}
       </FormSection>
 
       <CategoryPicker
