@@ -22,6 +22,14 @@ export function isBotAuthor(id: string): boolean {
   return id.startsWith("bot:");
 }
 
+/** 最初の検査のあと、失敗した添付を再試行できる回数 */
+export const PROOFREAD_MAX_RETRIES = 4;
+
+/** 実行の試行回数（最初の検査を含む）から、残りの再試行の回数 */
+export function proofreadRetriesLeft(attempts: number): number {
+  return Math.max(0, PROOFREAD_MAX_RETRIES + 1 - attempts);
+}
+
 /**
  * 自動校正を自分の端末で進め、失敗を再試行できる人: 版を提出できる人、校正に加われる人（校正者・制作者・校了者・主管）、
  * システム管理者（利用者承認 2026-10-30）。コメントを書けるだけの人（関係者・委員）に自動の指摘を作らせない。

@@ -116,6 +116,7 @@ const messages: Record<string, string> = {
   comment_file_not_found: "この添付は見つかりません。",
   comment_file_not_ready:
     "まだ添付できないファイルがあります。アップロードが終わってから投稿してください。",
+  proofread_retry_exhausted: "自動校正の再試行の回数が上限に達しました",
   avatar_invalid: "アバターの設定を保存できませんでした。選び直してからもう一度お試しください。",
 };
 
@@ -184,6 +185,8 @@ function withDetails(code: string, details: unknown): string | null {
     if (d.reason === "limit")
       return `ワークスペースはこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
   }
+  if (code === "proofread_retry_exhausted" && typeof d.max === "number")
+    return `自動校正の再試行は ${d.max} 回までです`;
   if (code === "notification_prefs_invalid" && d.field === "slackEmail")
     return "Slack のメールアドレスの形が正しくありません";
   if (code === "team_invalid" && d.reason === "limit")

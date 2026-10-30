@@ -8,6 +8,8 @@ import {
   remainingBotThreadQuota,
   proofreadableType,
   PROOFREADER_ID,
+  PROOFREAD_MAX_RETRIES,
+  proofreadRetriesLeft,
   runStatusOf,
   validateAnchor,
   type Artifact,
@@ -33,7 +35,6 @@ import { about, notify } from "./notifications.ts";
  */
 
 const LEASE_MS = 3 * 60_000;
-const MAX_ATTEMPTS = 5;
 
 /** 提出確定の中から呼ぶ（権限確認済み） */
 export async function createProofreadingRun(
@@ -316,8 +317,11 @@ export async function retryProofreadingRun(
   input: { runId: string },
 ): Promise<void> {
   const { run } = await loadForRun(ctx, principal, input.runId);
-  if (run.attempts >= MAX_ATTEMPTS)
-    throw new DomainError("forbidden", { reason: "too_many_attempts" });
+  if (proofreadRetriesLeft(run.attempts) === 0)
+    throw new DomainError("proofread_retry_exhausted", {
+      attempts: run.attempts,
+      max: PROOFREAD_MAX_RETRIES,
+    });
   const artifacts = run.artifacts.map((x) => {
     if (x.status !== "failed") return x;
     const { error: _e, ...rest } = x;
