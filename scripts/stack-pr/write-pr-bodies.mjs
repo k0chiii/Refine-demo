@@ -13,12 +13,33 @@ const RAW_SCREENSHOT_BASE =
   process.env.STACK_PR_RAW_BASE ??
   "https://raw.githubusercontent.com/k0chiii/Refine-demo/cursor/stack-docs-stack-pr-tracking-8b5a/docs/stack-pr-screenshots";
 
+const docsShotRoot = path.join("/workspace/docs/stack-pr-screenshots");
+
+function screenChangeNone(item) {
+  if (!item.shots?.desktop) return true;
+  const patches = item.patches ?? [];
+  if (patches.length > 0 && patches.every((p) => /\.test\.|failureText|errors\.test/.test(p))) {
+    return true;
+  }
+  if (/^test\(/.test(item.title) || item.slug?.includes("e2e-")) return true;
+  if (item.series === "B-dashboard" && ["071", "072", "073"].includes(item.id)) return true;
+  return false;
+}
+
 function shotSection(id, item) {
   const artDir = path.join("/workspace/artifacts/stack-pr", id);
+  const docsDir = path.join(docsShotRoot, id);
   const lines = ["## スクリーンショット（before / after）", ""];
-  const beforeD = path.join(artDir, "before-desktop.png");
-  const afterD = path.join(artDir, "after-desktop.png");
-  const afterM = path.join(artDir, "after-mobile.png");
+
+  if (screenChangeNone(item)) {
+    lines.push("**画面変化なし**（テスト・domain・文言のみなど。スクリーンショット省略）");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  const beforeD = path.join(docsDir, "before-desktop.png");
+  const afterD = path.join(docsDir, "after-desktop.png");
+  const afterM = path.join(docsDir, "after-mobile.png");
   const fix058d = path.join(fixtures, "x3-focused-comment.png");
   const fix058m = path.join(fixtures, "x3b-mobile-focused-comment.png");
   const raw058d = `${RAW_SCREENSHOT_BASE}/058/x3-focused-comment.png`;
@@ -47,18 +68,18 @@ function shotSection(id, item) {
     lines.push(`<img alt="after desktop" src="${RAW_SCREENSHOT_BASE}/${id}/after-desktop.png" />`);
     lines.push("");
   }
-  if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060") {
+  if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060" && id !== "058") {
     lines.push("### After（モバイル）");
     lines.push(`<img alt="after mobile" src="${RAW_SCREENSHOT_BASE}/${id}/after-mobile.png" />`);
     lines.push("");
   }
   if (lines.length <= 2) {
     lines.push(
-      "`node scripts/stack-pr/capture-published.mjs " +
+      "キャプチャ: `node scripts/stack-pr/capture-published.mjs " +
         id +
-        "` で `artifacts/stack-pr/" +
+        "` → `docs/stack-pr-screenshots/" +
         id +
-        "/` に PNG を生成。",
+        "/`",
     );
   }
   return lines.join("\n");
