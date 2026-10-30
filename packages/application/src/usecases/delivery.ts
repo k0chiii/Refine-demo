@@ -16,6 +16,7 @@ import {
   type SlackLink,
   type SlackMembership,
   type SlackObservation,
+  slackAddressOf,
   toEmail,
   toPushPayload,
   toSlackText,
@@ -65,7 +66,7 @@ export type DeliveryTargetRef =
   | { channel: "email"; key: "email" }
   | { channel: "slack"; key: "slack"; teamId: string; email: string; memberId: string | null };
 
-/** Slack で引く宛先（選んだワークスペースの team_id と、登録メールアドレス） */
+/** Slack で引く宛先（選んだワークスペースの team_id と、引くアドレス（slackAddressOf）） */
 export interface SlackMemberKey {
   teamId: string;
   email: string;
@@ -102,8 +103,8 @@ export async function planDelivery(
     channels.includes("email") || channels.includes("slack")
       ? await deliverableEmailOf(ctx, n.recipientId)
       : null;
-  const slack =
-    email && channels.includes("slack") ? await slackMembershipOf(ctx, prefs, email) : null;
+  const slackEmail = channels.includes("slack") ? slackAddressOf(prefs, email) : null;
+  const slack = slackEmail ? await slackMembershipOf(ctx, prefs, slackEmail) : null;
   const settled = new Set(await ctx.deliveries.listSettled(n.id));
   const destinations = destinationsOf({
     channels,
@@ -282,7 +283,10 @@ export async function recordSlackLookup(
   );
 }
 
-/** Slack で引く宛先（Slack をオンにしていて、登録にあるワークスペースを選び、送れるアドレスがあるときだけ） */
+/**
+ * Slack で引く宛先（Slack をオンにしていて、登録にあるワークスペースを選び、引くアドレスがあるときだけ）。
+ * アドレスは書いた Slack のメールアドレス、無ければ送ってよい Nogiku のアドレス（§110）
+ */
 export async function slackLookupTarget(
   ctx: AppContext,
   userId: string,
@@ -290,6 +294,6 @@ export async function slackLookupTarget(
   const prefs = normalizeNotificationPrefs(await ctx.notificationPrefs.find(userId));
   if (!prefs.channels.includes("slack") || !prefs.slackWorkspaceId) return null;
   const workspace = await ctx.slackWorkspaces.findById(prefs.slackWorkspaceId);
-  const email = workspace ? await deliverableEmailOf(ctx, userId) : null;
+  const email = workspace ? slackAddressOf(prefs, await deliverableEmailOf(ctx, userId)) : null;
   return workspace && email ? { teamId: workspace.teamId, email } : null;
 }
