@@ -23,7 +23,7 @@ const CATEGORY: Record<NotificationCategory, { label: string; icon: string }> = 
 const checkedOf = (e: Event) => (e.target as unknown as { checked: boolean }).checked;
 
 /**
- * 通知の受け取り方（利用者ごと。端末・登録メールアドレス・Slack（DM）の外へのすべての経路に効く。§103）。
+ * 通知の受け取り方（利用者ごと。端末・Nogiku のメールアドレス・Slack（DM）の外へのすべての経路に効く。§103）。
  * 「通知に内容を表示」（iOS の「プレビューを表示」にあたる）と、分類ごとのオン・オフ。
  * アプリ内の通知（ベルの一覧）は、オフにした分類でも届く。
  */

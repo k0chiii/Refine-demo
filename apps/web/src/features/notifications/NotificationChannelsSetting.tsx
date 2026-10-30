@@ -12,15 +12,24 @@ import type { NotificationSettingsView } from "./useNotificationSettings";
 
 type Destinations = NotificationSettingsView["destinations"];
 
-/** Slack の行の 2 行目（オンにしているとき。メールアドレスなしはオフでも出す: スイッチを入れられない理由） */
-const SLACK_HINT: Record<ChannelStatus, string> = {
-  ready: "DM で届きます",
-  unresolved: "Slack のメンバーを確かめています",
-  not_found: "このメールアドレスの人が Slack に見つかりません",
-  cannot_dm: "Slack の DM を送れません",
-  no_address: "送れるメールアドレスが無いため使えません",
-  no_workspace: "ワークスペースを選んでください",
+/**
+ * Slack の行の 2 行目（オンにしているとき。メールアドレスなしはオフでも出す: スイッチを入れられない理由）。
+ * 引き当てに使う Nogiku のメールアドレスを名指す（利用者が Slack のプロフィールと見比べられるように。§109）
+ */
+const SLACK_HINT: Record<ChannelStatus, (address: ReactNode) => ReactNode> = {
+  ready: (a) => <>DM で届きます（{a}）</>,
+  unresolved: (a) => <>{a} を Slack で確かめています</>,
+  not_found: (a) => (
+    <>{a} の人が Slack に見つかりません（Slack のプロフィールのメールと同じにしてください）</>
+  ),
+  cannot_dm: () => "Slack の DM を送れません",
+  no_address: () => "送れるメールアドレスが無いため使えません",
+  no_workspace: () => "ワークスペースを選んでください",
 };
+
+const addressText = (address: string | null) => (
+  <span className="notif-channel__address">{address}</span>
+);
 
 const CHANNEL: Record<
   AccountChannel,
@@ -33,14 +42,10 @@ const CHANNEL: Record<
   }
 > = {
   email: {
-    label: "登録メールアドレス",
+    label: "Nogiku のメールアドレス",
     icon: "mail",
     supporting: ({ email: s }) =>
-      s.address ? (
-        <span className="notif-channel__address">{s.address}</span>
-      ) : (
-        "登録メールアドレスがありません"
-      ),
+      s.address ? addressText(s.address) : "Nogiku のメールアドレスがありません",
     // 予約済みのドメイン（デモ・モックの利用者）でも、アドレスがあれば意思として保存できる。送るかはサーバーが決める（§103）
     canTurnOn: ({ email: s }) => s.address !== null,
   },
@@ -48,11 +53,16 @@ const CHANNEL: Record<
     label: "Slack（DM）",
     icon: "forum",
     supporting: ({ slack: s }) =>
-      s.workspaces.length === 0
-        ? "管理者がワークスペースを登録すると使えます"
-        : s.status === "no_address" || s.on
-          ? SLACK_HINT[s.status]
-          : "登録メールアドレスで Slack のメンバーを探して DM で送ります",
+      s.workspaces.length === 0 ? (
+        "管理者がワークスペースを登録すると使えます"
+      ) : s.status === "no_address" || s.on ? (
+        SLACK_HINT[s.status](addressText(s.address))
+      ) : (
+        <>
+          Nogiku のメールアドレス（{addressText(s.address)}）で Slack のメンバーを探して DM
+          で送ります
+        </>
+      ),
     // メンバーは送れるメールアドレスで、選んだワークスペースの中から引くので、どちらかが無ければ入れられない
     canTurnOn: ({ slack: s }) => s.status !== "no_address" && s.workspaces.length > 0,
   },
@@ -61,7 +71,7 @@ const CHANNEL: Record<
 const checkedOf = (e: Event) => (e.target as unknown as { checked: boolean }).checked;
 
 /**
- * 外への届け先（登録メールアドレス・Slack（DM）。§103）。アカウントで一度オンにすれば、宛先はアカウントから決まる。
+ * 外への届け先（Nogiku のメールアドレス・Slack（DM）。§103）。アカウントで一度オンにすれば、宛先はアカウントから決まる。
  * env の揃った経路だけ行を出す（デモは両方）。アドレスはここでは変えない。
  * Slack は管理者が登録したワークスペースから、送り先を見出しの下で選ぶ（§105。選んだものは行の data-workspace-id）
  */

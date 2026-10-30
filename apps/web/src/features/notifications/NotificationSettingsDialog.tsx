@@ -7,7 +7,7 @@ import { useNotificationSettings } from "./useNotificationSettings";
 
 /**
  * アカウントの「通知の設定」（利用者指示 2026-10-17「通知の設定もプロフィールの方にやりたい」・2026-10-28。§61・§103）。
- * 上から、この端末への通知（Web Push）のスイッチ、外への届け先（登録メールアドレス・Slack（DM））、
+ * 上から、この端末への通知（Web Push）のスイッチ、外への届け先（Nogiku のメールアドレス・Slack（DM））、
  * 通知の受け取り方（内容の表示・種類ごとのオン・オフ。利用者指示 2026-10-18）。compact は全画面、それ以上は普通のダイアログ
  * （M3 Dialogs › Full-screen dialog。`dialog--full` に `dialog--narrow` を重ね、広い画面では幅 560 に抑える）。
  * 設定は 1 本の問い合わせで読み、下の部品へ渡す。出すかどうかは呼び出し側（`useNotificationSettingsAvailable`）が決める。
