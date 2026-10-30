@@ -5,11 +5,12 @@ import { createCast, createHarness } from "../test/harness";
 
 /**
  * 制作物一覧の行メニュー（WorkRowMenu）が読む `canEdit`（works.listMine）。
- * 主管（work.edit の職責）だけ true。制作者・校了者・管理者（職責なし）は false。中止した制作物は編集できる（updateWork と同じ）が、
+ * 主管（work.edit の職責）とシステム管理者（職責が無くても。利用者決定 2026-10-30）だけ true。制作者・校了者は false。
+ * 中止した制作物は編集できる（updateWork と同じ）が、
  * 校了済みは false（校了後の更新は updateWork が拒む）。
  */
 describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () => {
-  it("主管だけが編集できる。管理者でも職責が無ければ編集できない", async () => {
+  it("主管とシステム管理者が編集できる（管理者は職責の無い非公開の制作物でも）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const workId = (await cast.manager.as.mutation(api.works.create, {
@@ -20,13 +21,14 @@ describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () 
       year: 100,
       creatorIds: [cast.creator.id],
       approverId: cast.approver.id,
+      confidentiality: "restricted",
     })) as Id<"works">;
     const canEdit = async (who: (typeof cast)[keyof typeof cast]) =>
       (await who.as.query(api.works.listMine, {})).find((w) => w.id === workId)?.canEdit;
     expect(await canEdit(cast.manager)).toBe(true);
     expect(await canEdit(cast.creator)).toBe(false);
     expect(await canEdit(cast.approver)).toBe(false);
-    expect(await canEdit(cast.admin)).toBe(false);
+    expect(await canEdit(cast.admin)).toBe(true);
   });
 
   it("中止した制作物は編集できる（再開のため）", async () => {

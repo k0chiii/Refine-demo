@@ -14,6 +14,7 @@ import {
   hasOrgPermission,
   normalizePersonKey,
   orgPermissions,
+  overridesAllPermissions,
   type DirectoryUser,
   approvalProgressOf,
   approvalSetupOf,
@@ -587,10 +588,13 @@ async function summarizeWorkList(
     canEditApprovers: work.lifecycle !== "finalized" && canAssignApprovers,
     /**
      * 一覧の行メニューから制作物の情報を編集できるか（利用者 QA 2026-10-24「制作物の情報変更ってどこからやればいい？」）。
-     * 主管（work.edit の職責）に限る。ACL の manage を持つ人の判定には制作物ごとの ACL の読み取りが要るので一覧では行わず、
-     * その人は制作物の画面（情報）から編集する。校了後は編集できない（updateWork と同じ）
+     * 主管（work.edit の職責）とシステム管理者（overridesAllPermissions）に限る。ACL の manage を持つ人の判定には
+     * 制作物ごとの ACL の読み取りが要るので一覧では行わず、その人は制作物の画面（情報）から編集する。
+     * 校了後は編集できない（updateWork と同じ）
      */
-    canEdit: work.lifecycle !== "finalized" && work.managerIds.includes(principal.userId),
+    canEdit:
+      work.lifecycle !== "finalized" &&
+      (overridesAllPermissions(principal) || work.managerIds.includes(principal.userId)),
     reviewers: (work.reviewerIds ?? []).map((id) => ({
       id,
       name: users.get(id)?.name ?? "（不明なユーザー）",

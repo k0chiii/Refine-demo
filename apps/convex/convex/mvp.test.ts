@@ -78,8 +78,10 @@ describe("Convex 統合: 認可と状態遷移", () => {
       code("forbidden"),
     );
     expect(await cast.stranger.as.query(api.works.listMine, {})).toEqual([]);
-    // 管理者も職責/ACL が無ければ見えない
-    await expect(cast.admin.as.query(api.works.get, { workId })).rejects.toThrow(code("forbidden"));
+    // システム管理者は職責/ACL が無くても見え、すべての操作ができる（利用者決定 2026-10-30）
+    const asAdmin = await cast.admin.as.query(api.works.get, { workId });
+    expect(Object.values(asAdmin.can).every(Boolean)).toBe(true);
+    expect((await cast.admin.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([workId]);
 
     const detail = await cast.reviewer.as.query(api.works.get, { workId });
     expect(detail.work.title).toBe("MF100 パンフレット");
