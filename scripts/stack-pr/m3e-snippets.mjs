@@ -1,13 +1,10 @@
 /** PR 本文用: Material 3 Expressive 自己レビューの定型（URL は m3.material.io 公式） */
 export const M3E_PAGES = {
-  buttons:
-    "https://m3.material.io/components/buttons/overview",
-  buttonGroups:
-    "https://m3.material.io/components/button-groups/overview",
+  buttons: "https://m3.material.io/components/buttons/overview",
+  buttonGroups: "https://m3.material.io/components/button-groups/overview",
   lists: "https://m3.material.io/components/lists/overview",
   cards: "https://m3.material.io/components/cards/overview",
-  progress:
-    "https://m3.material.io/components/progress-indicators/overview",
+  progress: "https://m3.material.io/components/progress-indicators/overview",
   shape: "https://m3.material.io/styles/shape/overview",
   typography: "https://m3.material.io/styles/typography/overview",
   color: "https://m3.material.io/styles/color/the-color-system/color-roles",
