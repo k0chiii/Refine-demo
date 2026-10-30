@@ -3,6 +3,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   markUnreadNotificationsRead,
+  sendTestNotification,
 } from "@mf100/application";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -73,5 +74,20 @@ export const continueMarkAllRead = internalMutation({
         asOf,
       });
     return r.marked;
+  },
+});
+
+/**
+ * 通知の設定の「テスト通知を送る」（§112）。自分宛に 1 件作る。外への配信は insert が本物の通知と同じく予約する。
+ * 1 分に 1 回まで（test_notification_too_soon）
+ */
+export const sendTest = mutation({
+  args: {},
+  handler: async (ctx): Promise<null> => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await sendTestNotification(createAppContext(ctx), principal);
+      return null;
+    });
   },
 });
