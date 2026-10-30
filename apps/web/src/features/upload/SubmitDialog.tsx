@@ -87,7 +87,7 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
         accept: ".pdf,application/pdf,image/*,.ai,.indd",
         noun: "PDF・画像・Illustrator（.ai）・InDesign（.indd）",
         matches: (f) => isGraphicSubmissionFile({ fileName: f.name, mimeType: f.type }),
-        link: false,
+        link: true,
       };
     case "video":
       return {
@@ -295,6 +295,13 @@ export function SubmitDialog({
       return setError("サイトの URL を https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
+    if (
+      input.kind === "files" &&
+      graphic &&
+      form.externalUrl.trim() &&
+      !isHttpUrl(form.externalUrl)
+    )
+      return setError("スライドのリンクは https:// から入れてください");
     // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
     // （サーバーも確定のときに同じ規則で断る）
     if (input.kind === "files" && graphic) {
@@ -544,6 +551,19 @@ export function SubmitDialog({
                   <p className="small muted" style={{ margin: 0 }}>
                     .ai・.indd はプレビューできません。PDF か画像も付けてください
                   </p>
+                ) : null}
+                {input.kind === "files" && input.link && graphic ? (
+                  <Field
+                    label="Google スライドなどのリンク"
+                    hint="PDF とセットで提出するときは、スライドの共有リンクを貼ってください。校正者は PDF 上でコメントし、スライドは外部リンクから開けます"
+                  >
+                    <TextInput
+                      type="url"
+                      value={form.externalUrl}
+                      onChange={set("externalUrl")}
+                      placeholder="https://docs.google.com/presentation/d/…"
+                    />
+                  </Field>
                 ) : null}
               </div>
             )}
