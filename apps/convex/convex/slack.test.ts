@@ -51,7 +51,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("めいちゃんで Slack のメンバーを登録メールアドレスから引く（/userid）", () => {
+describe("めいちゃんで Slack のメンバーを Nogiku のメールアドレスから引く（/userid）", () => {
   it("{base}/userid に email と team_id を JSON で送り、userId を返す", async () => {
     const s = meichan(reply({ userId: "U123" }));
     expect(await s.lookup()).toEqual({ kind: "found", memberId: "U123" });
@@ -63,6 +63,11 @@ describe("めいちゃんで Slack のメンバーを登録メールアドレス
 
   it.each([
     ["404 はそのワークスペースにいない", reply({}, 404), { kind: "not_found" }],
+    [
+      "500 で本文が Failed to get user id（めいちゃんの見つからない）",
+      reply("Failed to get user id", 500),
+      { kind: "not_found" },
+    ],
     ["200 で userId が無い", reply({}), { kind: "unavailable", reason: "userid_missing" }],
     [
       "200 で userId が空",
@@ -80,15 +85,28 @@ describe("めいちゃんで Slack のメンバーを登録メールアドレス
     expect(await meichan(response).lookup()).toEqual(expected);
   });
 
-  it("見つからないときは team_id をログに出し、メールアドレスは出さない", async () => {
+  it("200 以外は team_id・メールアドレス・状態・応答の本文（先頭 300 文字）を 1 行ログに出す", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await meichan(reply({}, 404)).lookup();
-    const lines = warn.mock.calls.map((c) => c.map(String).join(" "));
-    expect(lines.some((l) => l.includes(TEAM))).toBe(true);
-    expect(lines.every((l) => !l.includes(email))).toBe(true);
+    const logged = async (response: Response | Error) => {
+      warn.mockClear();
+      await meichan(response).lookup();
+      return warn.mock.calls.map((c) => JSON.parse(String(c[0])) as unknown);
+    };
+    const failed = { event: "slack_lookup_failed", teamId: TEAM, email };
+    expect(await logged(reply("Failed to get user id", 500))).toEqual([
+      { ...failed, status: 500, body: "Failed to get user id" },
+    ]);
+    expect(await logged(reply("", 404))).toEqual([{ ...failed, status: 404, body: "" }]);
+    expect(await logged(reply(`busy ${"x".repeat(400)}`, 503))).toEqual([
+      { ...failed, status: 503, body: `busy ${"x".repeat(295)}` },
+    ]);
+    expect(await logged(reply("no", 403))).toEqual([{ ...failed, status: 403, body: "no" }]);
+    expect(await logged(new Error("offline"))).toEqual([{ ...failed, status: 0 }]);
+    expect(await logged(reply({ userId: "U123" }))).toEqual([]);
   });
 
   it("429 は Retry-After だけ待って一度だけ引き直し、二度目の 429 は retry", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const once = meichan(reply({}, 429, { "Retry-After": "3" }), reply({ userId: "U123" }));
     expect(await once.lookup()).toEqual({ kind: "found", memberId: "U123" });
     expect(once.sleep.mock.calls).toEqual([[3000]]);
@@ -144,7 +162,13 @@ describe("めいちゃんで DM を送る（/dm）", () => {
     await meichan(reply(`bad ${"x".repeat(400)}`, 400)).post();
     const logged = warn.mock.calls.map((c) => JSON.parse(String(c[0])) as Record<string, unknown>);
     expect(logged).toEqual([
-      { event: "slack_dm_failed", teamId: TEAM, status: 400, body: `bad ${"x".repeat(296)}` },
+      {
+        event: "slack_dm_failed",
+        teamId: TEAM,
+        userId: "U123",
+        status: 400,
+        body: `bad ${"x".repeat(296)}`,
+      },
     ]);
     expect(JSON.stringify(logged)).not.toContain("本文");
   });
