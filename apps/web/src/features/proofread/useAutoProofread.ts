@@ -118,6 +118,7 @@ export function useAutoProofread(revisionId: string | null, artifacts: readonly 
   return {
     run,
     canRun: view?.canRun ?? false,
+    canRetry: view?.canRetry ?? false,
     progress,
     retry: run ? () => retry({ runId: run.id }) : null,
   };

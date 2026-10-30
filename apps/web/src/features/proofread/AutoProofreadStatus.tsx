@@ -1,4 +1,5 @@
 import { useAction } from "@/lib/useAction";
+import { PROOFREAD_MAX_RETRIES } from "@mf100/domain";
 import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
@@ -6,7 +7,7 @@ import type { useAutoProofread } from "./useAutoProofread";
 
 /**
  * 自動校正の状態（コメント欄の先頭）。M3E の進捗表示とボタンだけで組む。
- * 終わったら件数だけを短く出し、失敗は理由と再試行を出す。
+ * 終わったら件数だけを短く出し、失敗は理由と再試行を出す（再試行の上限に達したらその旨だけ）。
  */
 export function AutoProofreadStatus({ auto }: { auto: ReturnType<typeof useAutoProofread> }) {
   const retry = useAction(async () => {
@@ -35,9 +36,13 @@ export function AutoProofreadStatus({ auto }: { auto: ReturnType<typeof useAutoP
         </span>
         <span className="spacer" />
         {run.status === "failed" && auto.canRun ? (
-          <M3eButton variant="text" disabled={retry.pending} onClick={() => void retry.run()}>
-            再試行
-          </M3eButton>
+          auto.canRetry ? (
+            <M3eButton variant="text" disabled={retry.pending} onClick={() => void retry.run()}>
+              再試行
+            </M3eButton>
+          ) : (
+            <span className="small">再試行の上限（{PROOFREAD_MAX_RETRIES} 回）に達しました</span>
+          )
         ) : null}
       </div>
       {working ? (

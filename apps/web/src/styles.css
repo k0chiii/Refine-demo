@@ -4317,6 +4317,7 @@ m3e-icon.icon--on {
   gap: 8px;
 }
 .auto-status__icon {
+  flex-shrink: 0;
   color: var(--mf-primary);
 }
 

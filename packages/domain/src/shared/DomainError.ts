@@ -100,6 +100,8 @@ export const domainErrorCodes = [
   "notation_not_manager",
   "notation_category_invalid",
   "notation_proposal_closed",
+  // 自動校正
+  "proofread_retry_exhausted",
   // コメント・返信の添付
   "comment_file_invalid",
   "comment_file_not_found",

@@ -37,6 +37,15 @@ describe("describeError（UI_M3E §35 W-02）", () => {
     expect(name).not.toBe(teamId);
   });
 
+  it("自動校正の再試行の上限は、権限の不足と分けて上限の回数を出す", () => {
+    const forbidden = describeError(new ConvexError({ code: "forbidden" })).message;
+    const exhausted = describeError(
+      new ConvexError({ code: "proofread_retry_exhausted", details: { attempts: 5, max: 4 } }),
+    ).message;
+    expect(exhausted).not.toBe(forbidden);
+    expect(exhausted).toContain("4");
+  });
+
   it("通知の設定の失敗のうち Slack のメールアドレスの形の誤りは、ほかの欄と分ける", () => {
     const message = (details: Record<string, string>) =>
       describeError(new ConvexError({ code: "notification_prefs_invalid", details })).message;
