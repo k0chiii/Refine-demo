@@ -15,7 +15,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await page.getByRole("option", { name: "グラフィック", exact: true }).click();
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
     await app.pickUser(
-      dialog.locator("m3e-form-field", { hasText: "校了者（校了者）" }),
+      dialog.locator("m3e-form-field", { hasText: "校了者（校了権限者）" }),
       approver.name,
     );
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "校正者" }), "こうせいはん");
