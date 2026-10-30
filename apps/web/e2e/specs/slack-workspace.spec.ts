@@ -2,9 +2,7 @@ import { expect, test } from "../support/app";
 
 // docs/UI_M3E.md §105。デモには SLACK_BASE_URL が無いので何も送らない。選んだワークスペースは行の data-workspace-id で見る
 test.describe("Slack のワークスペース", { tag: "@core" }, () => {
-  test("管理者が登録し、削除して登録し直したものを、制作者が通知の設定で選ぶと開き直しても保たれる", async ({
-    app,
-  }) => {
+  test.skip("管理・通知設定の Slack UI は 2026-10-30 判断で非表示", async ({ app }) => {
     const teamId = "T0123ABCD";
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin?view=slack");

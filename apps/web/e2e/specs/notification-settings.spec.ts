@@ -10,17 +10,10 @@ test.describe("通知の設定", { tag: "@core" }, () => {
     await expect(await app.openNotificationSettings()).toBeVisible();
 
     const email = app.notificationChannel("email");
-    const slack = app.notificationChannel("slack");
     await expect(email).toHaveCount(1);
-    await expect(slack).toHaveCount(1);
     await expect(email.locator(".notif-channel__address")).not.toBeEmpty();
-    // 送れるメールアドレスが無い（no_address）ときだけ、Slack のスイッチは入れられない
-    const slackStatus = await slack.getAttribute("data-status");
-    expect(slackStatus).toBeTruthy();
-    await expect(slack.locator("m3e-switch")).toHaveJSProperty(
-      "disabled",
-      slackStatus === "no_address",
-    );
+    // Slack 通知 UI は 2026-10-30 判断で非表示（コードは残す）
+    await expect(app.notificationChannel("slack")).toHaveCount(0);
 
     await expect(email.locator("m3e-switch")).toHaveJSProperty("checked", false);
     await email.locator("m3e-switch").click();
@@ -33,9 +26,7 @@ test.describe("通知の設定", { tag: "@core" }, () => {
     );
   });
 
-  test("Slack のメールアドレスを書くと開き直しても残り、Slack の行のアドレスがそれになる。消すと Nogiku のアドレスに戻る", async ({
-    app,
-  }) => {
+  test.skip("Slack のメールアドレス（UI 非表示のためスキップ）", async ({ app }) => {
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin?view=slack");
     await app.addSlackWorkspace("五月祭", "T0123ABCD");
