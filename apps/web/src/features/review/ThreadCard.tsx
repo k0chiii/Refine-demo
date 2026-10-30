@@ -121,20 +121,6 @@ export function ThreadCard({
                     : index}
             </M3eButton>
           ) : null}
-          {canDecide && !closed ? (
-            <M3eIconButton
-              aria-label="反映する"
-              size="extra-small"
-              className="thread__resolve"
-              disabled={pending === true}
-              onClick={(e: Event) => {
-                stop(e);
-                void onResolve();
-              }}
-            >
-              <M3eIcon name="check" />
-            </M3eIconButton>
-          ) : null}
         </div>
         {t.anchor?.type === "text_range" ? (
           <blockquote className="thread__quote thread__quote--clamp">
