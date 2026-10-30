@@ -9,9 +9,7 @@
     "shots": {
       "desktop": "09-decision"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": [
       {
         "id": "Q3",
@@ -37,9 +35,7 @@
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": [
       {
         "id": "Q3",
@@ -65,9 +61,7 @@
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": [
       {
         "id": "Q9",
@@ -93,9 +87,7 @@
     "shots": {
       "desktop": "31-finalize"
     },
-    "m3e": [
-      "buttons"
-    ],
+    "m3e": ["buttons"],
     "decide": [
       {
         "id": "Q6",
@@ -121,9 +113,7 @@
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -136,9 +126,7 @@
     "shots": {
       "desktop": "15-notifications"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": [
       {
         "id": "Q8",
@@ -164,9 +152,7 @@
     "shots": {
       "desktop": "34-acl"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -179,9 +165,7 @@
     "shots": {
       "desktop": "12-submit-dialog"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -189,16 +173,12 @@
     "series": "A-ui-copy",
     "slug": "copy-errors-tests",
     "title": "copy(errors): errors.test を新文言に合わせる",
-    "patches": [
-      "patches/p01-apps__web__src__lib__errors.test.ts.patch"
-    ],
+    "patches": ["patches/p01-apps__web__src__lib__errors.test.ts.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "33-work-form"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -206,16 +186,12 @@
     "series": "A-ui-copy",
     "slug": "copy-errors-failure-text-test",
     "title": "copy(errors): failureText テストを新文言に合わせる",
-    "patches": [
-      "patches/p01-apps__web__src__features__proofread__failureText.test.ts.patch"
-    ],
+    "patches": ["patches/p01-apps__web__src__features__proofread__failureText.test.ts.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -223,16 +199,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-annotation-FigmaEmbedViewe",
     "title": "copy: FigmaEmbedViewer.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__annotation__FigmaEmbedViewer.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__annotation__FigmaEmbedViewer.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -240,16 +212,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-annotation-VideoViewer-tsx",
     "title": "copy: VideoViewer.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__annotation__VideoViewer.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__annotation__VideoViewer.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -257,16 +225,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-annotation-WebLiveViewer-t",
     "title": "copy: WebLiveViewer.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__annotation__WebLiveViewer.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__annotation__WebLiveViewer.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -274,16 +238,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-compare-CompareButton-tsx-",
     "title": "copy: CompareButton.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__compare__CompareButton.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__compare__CompareButton.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -291,16 +251,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-compare-CrossWorkPicker-ts",
     "title": "copy: CrossWorkPicker.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__compare__CrossWorkPicker.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__compare__CrossWorkPicker.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -308,16 +264,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-compare-PageMappingDialog-",
     "title": "copy: PageMappingDialog.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__compare__PageMappingDialog.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__compare__PageMappingDialog.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -325,16 +277,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-editor-EditorPending-tsx-p",
     "title": "copy: EditorPending.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__editor__EditorPending.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__editor__EditorPending.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -342,16 +290,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-editor-InfoTab-tsx-patch",
     "title": "copy: InfoTab.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__editor__InfoTab.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__editor__InfoTab.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -359,16 +303,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-editor-PaneHandle-tsx-patc",
     "title": "copy: PaneHandle.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__editor__PaneHandle.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__editor__PaneHandle.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -376,16 +316,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-editor-RevisionFiles-tsx-p",
     "title": "copy: RevisionFiles.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__editor__RevisionFiles.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__editor__RevisionFiles.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -393,16 +329,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-editor-VersionsTab-tsx-pat",
     "title": "copy: VersionsTab.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__editor__VersionsTab.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__editor__VersionsTab.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -410,16 +342,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-home-DashboardOverview-tsx",
     "title": "copy: DashboardOverview.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__home__DashboardOverview.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__home__DashboardOverview.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -427,16 +355,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-home-SubmitPicker-tsx-patc",
     "title": "copy: SubmitPicker.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__home__SubmitPicker.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__home__SubmitPicker.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -444,16 +368,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-notation-AiAssist-tsx-patc",
     "title": "copy: AiAssist.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__notation__AiAssist.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__notation__AiAssist.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -461,16 +381,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-notation-AiBackground-tsx-",
     "title": "copy: AiBackground.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__notation__AiBackground.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__notation__AiBackground.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -478,16 +394,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-notation-ImportDialog-tsx-",
     "title": "copy: ImportDialog.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__notation__ImportDialog.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__notation__ImportDialog.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -495,16 +407,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-notation-SemanticRuleSearc",
     "title": "copy: SemanticRuleSearch.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__notation__SemanticRuleSearch.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__notation__SemanticRuleSearch.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -519,9 +427,7 @@
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -529,16 +435,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-notifications-PushSetting-",
     "title": "copy: PushSetting.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__notifications__PushSetting.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__notifications__PushSetting.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -546,16 +448,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-processing-ProcessingTools",
     "title": "copy: ProcessingTools.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__processing__ProcessingTools.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__processing__ProcessingTools.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -563,16 +461,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-review-CreatorNoteCard-tsx",
     "title": "copy: CreatorNoteCard.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__review__CreatorNoteCard.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__review__CreatorNoteCard.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -580,16 +474,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-social-PostEditor-tsx-patc",
     "title": "copy: PostEditor.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__social__PostEditor.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__social__PostEditor.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -597,16 +487,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-social-PostReview-tsx-patc",
     "title": "copy: PostReview.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__social__PostReview.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__social__PostReview.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -614,16 +500,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-social-ProfilesAdmin-tsx-p",
     "title": "copy: ProfilesAdmin.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__social__ProfilesAdmin.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__social__ProfilesAdmin.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -631,16 +513,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-social-preview-PostPreview",
     "title": "copy: PostPreview.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__social__preview__PostPreview.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__social__preview__PostPreview.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -648,16 +526,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-team-GroupsAdmin-tsx-patch",
     "title": "copy: GroupsAdmin.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__team__GroupsAdmin.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__team__GroupsAdmin.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -665,16 +539,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-team-TeamsAdmin-tsx-patch",
     "title": "copy: TeamsAdmin.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__team__TeamsAdmin.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__team__TeamsAdmin.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -682,16 +552,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-upload-SubmitDialog-tsx-pa",
     "title": "copy: SubmitDialog.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__upload__SubmitDialog.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__upload__SubmitDialog.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -699,16 +565,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-upload-fileKind-test-ts-pa",
     "title": "copy: fileKind.test.ts.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__upload__fileKind.test.ts.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__upload__fileKind.test.ts.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -716,16 +578,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-AclPanel-tsx-patch",
     "title": "copy: AclPanel.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__AclPanel.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__AclPanel.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -733,16 +591,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-ApproverFields-tsx-pa",
     "title": "copy: ApproverFields.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__ApproverFields.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__ApproverFields.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -750,16 +604,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-ExportStatsDialog-tsx",
     "title": "copy: ExportStatsDialog.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__ExportStatsDialog.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__ExportStatsDialog.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -767,16 +617,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-ImportWorksDialog-tsx",
     "title": "copy: ImportWorksDialog.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__ImportWorksDialog.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__ImportWorksDialog.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -784,16 +630,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-ReviewersDialog-tsx-p",
     "title": "copy: ReviewersDialog.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__ReviewersDialog.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__ReviewersDialog.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -801,16 +643,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-TagPicker-tsx-patch",
     "title": "copy: TagPicker.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__TagPicker.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__TagPicker.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -818,16 +656,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-WorkForm-tsx-patch",
     "title": "copy: WorkForm.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__WorkForm.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__WorkForm.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -835,16 +669,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-work-WorksTable-tsx-patch",
     "title": "copy: WorksTable.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__work__WorksTable.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__work__WorksTable.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -852,16 +682,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-writing-EditorMismatch-tsx",
     "title": "copy: EditorMismatch.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__writing__EditorMismatch.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__writing__EditorMismatch.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -869,16 +695,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-writing-WriteEditor-tsx-pa",
     "title": "copy: WriteEditor.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__writing__WriteEditor.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__writing__WriteEditor.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -886,16 +708,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-writing-WritePanels-tsx-pa",
     "title": "copy: WritePanels.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__writing__WritePanels.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__writing__WritePanels.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -903,16 +721,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-features-writing-plainText-test-ts-",
     "title": "copy: plainText.test.ts.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__features__writing__plainText.test.ts.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__features__writing__plainText.test.ts.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -920,16 +734,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-lib-push-ts-patch",
     "title": "copy: push.ts.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__lib__push.ts.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__lib__push.ts.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -937,16 +747,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-routes-app-admin-tsx-patch",
     "title": "copy: admin.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__routes___app__admin.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__routes___app__admin.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -954,16 +760,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-routes-app-check-tsx-patch",
     "title": "copy: check.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__routes___app__check.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__routes___app__check.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "28-check-reviewer"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -971,16 +773,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-routes-app-works-index-tsx-patch",
     "title": "copy: index.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__routes___app__works__index.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__routes___app__works__index.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -988,16 +786,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-routes-signin-tsx-patch",
     "title": "copy: signin.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__routes__signin.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__routes__signin.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "01-signin"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -1005,16 +799,12 @@
     "series": "A-ui-copy",
     "slug": "copy-apps-web-src-ui-DateField-tsx-patch",
     "title": "copy: DateField.tsx.patch の文言短縮・用語統一",
-    "patches": [
-      "patches/p02-apps__web__src__ui__DateField.tsx.patch"
-    ],
+    "patches": ["patches/p02-apps__web__src__ui__DateField.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -1028,10 +818,7 @@
       "desktop": "09-decision",
       "mobile": "09-decision"
     },
-    "m3e": [
-      "buttons",
-      "buttonGroups"
-    ],
+    "m3e": ["buttons", "buttonGroups"],
     "decide": [
       {
         "id": "1",
@@ -1062,10 +849,7 @@
     "shots": {
       "desktop": "78-thread-panel"
     },
-    "m3e": [
-      "lists",
-      "chips"
-    ],
+    "m3e": ["lists", "chips"],
     "decide": null
   },
   {
@@ -1078,9 +862,7 @@
     "shots": {
       "desktop": "09-decision"
     },
-    "m3e": [
-      "buttons"
-    ],
+    "m3e": ["buttons"],
     "decide": null
   },
   {
@@ -1093,11 +875,7 @@
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "dialogs",
-      "typography",
-      "buttons"
-    ],
+    "m3e": ["dialogs", "typography", "buttons"],
     "decide": [
       {
         "id": "2",
@@ -1141,9 +919,7 @@
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -1151,17 +927,12 @@
     "series": "A-ui-copy",
     "slug": "style-m3e-table-card-shape",
     "title": "style(M3E): 表・KPI・コメントカードの shape と強調",
-    "patches": [
-      "patches/p06-apps__web__src__styles.css.patch"
-    ],
+    "edit": "m3e-shape-table-kpi",
     "verify": "standard",
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "shape",
-      "cards"
-    ],
+    "m3e": ["shape", "cards"],
     "decide": null
   },
   {
@@ -1169,16 +940,12 @@
     "series": "A-ui-copy",
     "slug": "test-e2e-screenshots-toolbar",
     "title": "test(e2e): スクリーンショット手順をツールバー配置に合わせる",
-    "patches": [
-      "patches/p07-apps__web__e2e__screenshots.mjs.patch"
-    ],
+    "patches": ["patches/p07-apps__web__e2e__screenshots.mjs.patch"],
     "verify": "e2e-smoke",
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "buttons"
-    ],
+    "m3e": ["buttons"],
     "decide": null
   },
   {
@@ -1186,16 +953,12 @@
     "series": "A-ui-copy",
     "slug": "copy-make-unsubmitted-line",
     "title": "copy(make): 未提出行の「まだ版がありません」を削除",
-    "patches": [
-      "patches/p08-apps__web__src__routes___app__make.tsx.patch"
-    ],
+    "patches": ["patches/p08-apps__web__src__routes___app__make.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "lists"
-    ],
+    "m3e": ["lists"],
     "decide": null
   },
   {
@@ -1209,10 +972,7 @@
       "desktop": "27-make-creator",
       "mobile": "20-mobile-make"
     },
-    "m3e": [
-      "lists",
-      "typography"
-    ],
+    "m3e": ["lists", "typography"],
     "decide": null
   },
   {
@@ -1220,17 +980,12 @@
     "series": "A-ui-copy",
     "slug": "style-m3e-segmented-list",
     "title": "style(M3E): 制作・校正一覧を segmented list に",
-    "patches": [
-      "patches/p09-apps__web__src__features__workspace__parts.tsx.patch"
-    ],
+    "patches": ["patches/p09-apps__web__src__features__workspace__parts.tsx.patch"],
     "verify": "standard",
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "lists",
-      "shape"
-    ],
+    "m3e": ["lists", "shape"],
     "decide": [
       {
         "id": "5",
@@ -1256,10 +1011,7 @@
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "lists",
-      "color"
-    ],
+    "m3e": ["lists", "color"],
     "decide": [
       {
         "id": "6",
@@ -1285,9 +1037,7 @@
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -1300,9 +1050,7 @@
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -1315,9 +1063,7 @@
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "color"
-    ],
+    "m3e": ["color"],
     "decide": [
       {
         "id": "Q2",
@@ -1343,9 +1089,7 @@
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "typography"
-    ],
+    "m3e": ["typography"],
     "decide": null
   },
   {
@@ -1358,9 +1102,7 @@
     "shots": {
       "desktop": "02-works-list"
     },
-    "m3e": [
-      "color"
-    ],
+    "m3e": ["color"],
     "decide": null
   },
   {
@@ -1373,9 +1115,7 @@
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "cards"
-    ],
+    "m3e": ["cards"],
     "decide": null
   },
   {
@@ -1388,9 +1128,7 @@
     "shots": {
       "desktop": "27-make-creator"
     },
-    "m3e": [
-      "buttonGroups"
-    ],
+    "m3e": ["buttonGroups"],
     "decide": [
       {
         "id": "38A",
@@ -1416,10 +1154,7 @@
     "shots": {
       "desktop": "08-workspace-comment"
     },
-    "m3e": [
-      "typography",
-      "shape"
-    ],
+    "m3e": ["typography", "shape"],
     "decide": [
       {
         "id": "59A",
