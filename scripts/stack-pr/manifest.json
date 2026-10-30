@@ -1174,9 +1174,7 @@
     "series": "A-ui-copy",
     "slug": "test-e2e-screenshots-toolbar",
     "title": "test(e2e): スクリーンショット手順をツールバー配置に合わせる",
-    "patches": [
-      "patches/p07-apps__web__e2e__screenshots.mjs.patch"
-    ],
+    "edit": "e2e-screenshots-toolbar",
     "verify": "e2e-smoke",
     "shots": {
       "desktop": "08-workspace-comment"
