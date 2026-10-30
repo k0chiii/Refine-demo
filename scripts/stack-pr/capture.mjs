@@ -3,8 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 
-const repoRoot =
-  process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const repoRoot = process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(path.join(repoRoot, "apps/web/package.json"));
 const { chromium } = require("playwright-core");
 
@@ -47,13 +46,9 @@ function ensureDemo() {
 
 async function signIn(page) {
   await page.goto("http://127.0.0.1:4173/signin");
-  await page
-    .getByRole("button", { name: /大地|demo|nogiku/i })
-    .first()
-    .click({ timeout: 15000 })
-    .catch(async () => {
-      await page.getByRole("button").first().click();
-    });
+  await page.getByRole("button", { name: /大地|demo|nogiku/i }).first().click({ timeout: 15000 }).catch(async () => {
+    await page.getByRole("button").first().click();
+  });
   await page.waitForURL(/\/(make|check|works)/, { timeout: 30000 });
 }
 
