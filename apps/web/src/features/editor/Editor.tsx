@@ -78,6 +78,7 @@ import { PaneTabs } from "@/ui/PaneTabs";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
+import { ShortcutSheet } from "./ShortcutSheet";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { formatDeadline, remaining } from "@/lib/format";
@@ -851,14 +852,18 @@ export function Editor({
   useEffect(() => {
     if (!canComment) setMarkArmed(false);
   }, [canComment]);
-  // C でコメントを付ける（動画はビューアが C を受け持つ）。入力中は何もしない
+  // ? でショートカット一覧、C でコメントを付ける（動画はビューアが C を受け持つ）。入力中は何もしない
+  const [keysOpen, setKeysOpen] = useState(false);
   const commentKey = canComment && artifact?.type !== "video";
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if ((e.key === "c" || e.key === "C") && commentKey) {
+      if (e.key === "?") {
+        e.preventDefault();
+        setKeysOpen(true);
+      } else if ((e.key === "c" || e.key === "C") && commentKey) {
         e.preventDefault();
         setMarkArmed(true);
       }
@@ -2085,6 +2090,16 @@ export function Editor({
                   {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
                   {!mobile ? (
                     <M3eIconButton
+                      className="ws__keys"
+                      aria-label="キーボードショートカット（?）"
+                      title="キーボードショートカット（?）"
+                      onClick={() => setKeysOpen(true)}
+                    >
+                      <M3eIcon name="keyboard" />
+                    </M3eIconButton>
+                  ) : null}
+                  {!mobile ? (
+                    <M3eIconButton
                       className="ws__more"
                       aria-label="コメントの表示"
                       title="コメントの表示"
@@ -2375,6 +2390,7 @@ export function Editor({
             />
           </Suspense>
         ) : null}
+        <ShortcutSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
       </div>
     </MentionProvider>
   );
