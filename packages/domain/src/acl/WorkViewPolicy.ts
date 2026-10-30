@@ -6,7 +6,7 @@
  * - `involved_only`: 通常の制作物も、職責・閲覧 ACL・関係者・担当の所属がある人だけ（2026-10-17 より前の扱い）
  *
  * 機密区分が非公開・取扱注意（restricted）の制作物は、この値に関わらず、職責・閲覧 ACL・関係者・
- * 主管担当／制作担当／関係担当に所属する人だけが見られる（{@link canViewWork}）。
+ * 主管担当／制作担当／関係担当に所属する人と、システム管理者だけが見られる（{@link canViewWork}）。
  * 閲覧だけの規則で、編集・コメント・採否・割当・校了・ACL の管理の規則は変えない。
  */
 export type NormalWorkViewScope = "all_members" | "involved_only";

@@ -38,15 +38,10 @@ export function withinProofreadRetryLimit(attempts: number, principal: Principal
 
 /**
  * 自動校正を自分の端末で進め、失敗を再試行できる人: 版を提出できる人、校正に加われる人（校正者・制作者・校了者・主管）、
- * システム管理者（利用者承認 2026-10-30）。コメントを書けるだけの人（関係者・委員）に自動の指摘を作らせない。
- * 制作物を見られることは別に確かめる（システム管理者も見られない制作物では進められない）。
+ * システム管理者（利用者承認 2026-10-30。isAllowed が通す）。コメントを書けるだけの人（関係者・委員）に自動の指摘を作らせない。
  */
 export function canRunProofread(ctx: AuthorizationContext): boolean {
-  return (
-    isAllowed("revision.submit", ctx) ||
-    isAllowed("review.participate", ctx) ||
-    ctx.principal.isSystemAdmin
-  );
+  return isAllowed("revision.submit", ctx) || isAllowed("review.participate", ctx);
 }
 
 /** どこから文字を得たか（指摘の信頼度の説明に使う） */

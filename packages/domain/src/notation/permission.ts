@@ -1,4 +1,4 @@
-import type { Principal } from "../acl/Permission.ts";
+import { overridesAllPermissions, type Principal } from "../acl/Permission.ts";
 
 /**
  * 表記統一の権限。
@@ -27,7 +27,10 @@ export function notationRole(
   categoryCode: string,
   managedCategories: readonly string[],
 ): NotationRole {
-  if (principal.isSystemAdmin || hasExplicit(principal, notationOrgPermissions.manageAll))
+  if (
+    overridesAllPermissions(principal) ||
+    hasExplicit(principal, notationOrgPermissions.manageAll)
+  )
     return "admin";
   if (
     managedCategories.includes(categoryCode) ||
@@ -46,5 +49,7 @@ export function canEditCategory(
 }
 
 export function canAssignManagers(principal: Principal): boolean {
-  return principal.isSystemAdmin || hasExplicit(principal, notationOrgPermissions.manageAll);
+  return (
+    overridesAllPermissions(principal) || hasExplicit(principal, notationOrgPermissions.manageAll)
+  );
 }

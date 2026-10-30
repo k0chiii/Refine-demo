@@ -35,7 +35,7 @@ export function isGrantActive(grant: WorkPermissionGrant): boolean {
 /** 認可対象の主体。groupIds は将来 Nogiku Access から供給される（MVP では常に空）。 */
 export interface Principal {
   userId: UserId;
-  /** 校正システム管理者（ACL 設定・運用）。業務上の校了権限を意味しない（§2.1, §5.2-12）。 */
+  /** 校正システム管理者（ACL 設定・運用）。すべての操作の権限を持つ（{@link overridesAllPermissions}）。 */
   isSystemAdmin: boolean;
   groupIds: readonly GroupId[];
   /** Nogiku Access 由来の組織権限名（例 "works:create"）。"*" は制限なし（連携前の MVP）。 */
@@ -47,6 +47,16 @@ export interface Principal {
    * 呼び出し側（application の withTeamMembership・Convex の listMyWorks）が添える。通知の受信者など ID しか分からない主体も同様。
    */
   teamIds?: readonly string[];
+}
+
+/**
+ * 権限の判定（その操作をしてよい人か）を、職責・ACL・所属・組織権限によらず通す主体か。
+ * 利用者決定 2026-10-30「Admin は製作者とかそういうのによらず全ての権限を override できるようにして欲しい」で、
+ * システム管理者がこれにあたる（要件 §2.1・§5.2-12 の旧規則「業務上の校了権限を当然には取得しない」を改めた）。
+ * 権限の判定の先頭でだけ見る。業務の状態の規則（校了後の編集禁止・受付期限・校了とみなす人数・独立確認の独立性）は越えない。
+ */
+export function overridesAllPermissions(principal: Pick<Principal, "isSystemAdmin">): boolean {
+  return principal.isSystemAdmin;
 }
 
 /** 主体に有効な最大権限レベルを求める。該当なしは null。 */
