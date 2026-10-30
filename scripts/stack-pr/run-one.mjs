@@ -33,7 +33,10 @@ function m3eBody(keys) {
   const refs = keys.map((k) => M3E_PAGES[k] ?? k);
   return m3eSection({
     refs,
-    aligned: ["色は `--mf-*` / `--md-sys-color-*` の色役割から取る", "コンポーネントは @m3e/react をそのまま使う"],
+    aligned: [
+      "色は `--mf-*` / `--md-sys-color-*` の色役割から取る",
+      "コンポーネントは @m3e/react をそのまま使う",
+    ],
     intentional: ["デモ用データの密度は mockups より低い（別 PR で足す）"],
   });
 }
@@ -70,7 +73,7 @@ sh(`git fetch origin develop`);
 sh(`git checkout ${parent}`);
 sh(`git checkout -B ${branch}`);
 
-captureShots(item.shots, path.join(artDir, "before"));
+void captureShots(item.shots, path.join(artDir, "before"));
 
 try {
   applyItem(item);
@@ -79,7 +82,7 @@ try {
   process.exit(2);
 }
 
-captureShots(item.shots, path.join(artDir, "after"));
+void captureShots(item.shots, path.join(artDir, "after"));
 verify(item.verify);
 
 sh("git add -A");
@@ -128,7 +131,11 @@ const body = [
 fs.writeFileSync(path.join(artDir, "pr-body.md"), body);
 fs.writeFileSync(
   path.join(artDir, "pr-meta.json"),
-  JSON.stringify({ branch, base_branch: parent, title: item.title, bodyPath: path.join(artDir, "pr-body.md") }, null, 2),
+  JSON.stringify(
+    { branch, base_branch: parent, title: item.title, bodyPath: path.join(artDir, "pr-body.md") },
+    null,
+    2,
+  ),
 );
 
 console.log("OK", branch, "next", next?.id ?? "done");
