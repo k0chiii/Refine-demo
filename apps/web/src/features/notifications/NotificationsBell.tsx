@@ -152,6 +152,19 @@ function Menu({ id }: { id: string }) {
               <span className="notif__sub">{n.body}</span>
               <span className="notif__time">{formatJstShort(n.createdAt)}</span>
             </span>
+            {n.readAt !== undefined ? (
+              <M3eIconButton
+                slot="trailing"
+                aria-label="未読に戻す"
+                title="未読に戻す"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void doMarkUnread.run(n.id as Id<"notifications">);
+                }}
+              >
+                <M3eIcon name="mark_chat_unread" />
+              </M3eIconButton>
+            ) : null}
           </M3eMenuItem>
         ))
       )}
