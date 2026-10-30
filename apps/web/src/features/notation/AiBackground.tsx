@@ -36,7 +36,7 @@ export function AiBackground({ workId, getText }: { workId: string; getText: () 
     <details>
       <summary>保存した原稿をバックグラウンドで校正する</summary>
       <p className="small muted">
-        保存した原稿を AI に送ります。候補は1時間、あなたにだけ表示されます
+        保存した原稿を AI に送ります。候補は1時間、自分にだけ表示されます
       </p>
       <label>
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />

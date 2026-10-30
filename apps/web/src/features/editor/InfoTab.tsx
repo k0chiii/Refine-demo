@@ -574,7 +574,7 @@ export function InfoTab({
           {multiApprovers ? (
             <StatusText tone={reachesNow ? "success" : "neutral"}>
               校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
-              {approval.declaredCount} 人{reachesNow ? "・あなたの宣言で校了" : ""}
+              {approval.declaredCount} 人{reachesNow ? "・この宣言で校了" : ""}
             </StatusText>
           ) : null}
           {candidate && candidate.pendingChecks.length > 0 ? (
