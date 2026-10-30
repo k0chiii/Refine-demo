@@ -19,10 +19,7 @@ const base = {
 describe("危ない KPI（decisions 39A）", () => {
   it("校了済みは数えない", () => {
     expect(
-      isWorkDanger(
-        { ...base, lifecycle: "finalized", reviewDeadlineAt: NOW - HOUR },
-        NOW,
-      ),
+      isWorkDanger({ ...base, lifecycle: "finalized", reviewDeadlineAt: NOW - HOUR }, NOW),
     ).toBe(false);
   });
 
@@ -36,17 +33,10 @@ describe("危ない KPI（decisions 39A）", () => {
   });
 
   it("予定提出が 3 日以内なら危ない（校了前）", () => {
+    expect(isWorkDanger({ ...base, approvalTargetAt: NOW + 2 * DAY }, NOW)).toBe(true);
+    expect(isWorkDanger({ ...base, approvalTargetAt: NOW + 4 * DAY }, NOW)).toBe(false);
     expect(
-      isWorkDanger({ ...base, approvalTargetAt: NOW + 2 * DAY }, NOW),
-    ).toBe(true);
-    expect(
-      isWorkDanger({ ...base, approvalTargetAt: NOW + 4 * DAY }, NOW),
-    ).toBe(false);
-    expect(
-      isWorkDanger(
-        { ...base, lifecycle: "finalized", approvalTargetAt: NOW + DAY },
-        NOW,
-      ),
+      isWorkDanger({ ...base, lifecycle: "finalized", approvalTargetAt: NOW + DAY }, NOW),
     ).toBe(false);
   });
 
