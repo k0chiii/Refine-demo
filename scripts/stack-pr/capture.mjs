@@ -42,9 +42,13 @@ function ensureDemo() {
 
 async function signIn(page) {
   await page.goto("http://127.0.0.1:4173/signin");
-  await page.getByRole("button", { name: /大地|demo|nogiku/i }).first().click({ timeout: 15000 }).catch(async () => {
-    await page.getByRole("button").first().click();
-  });
+  await page
+    .getByRole("button", { name: /大地|demo|nogiku/i })
+    .first()
+    .click({ timeout: 15000 })
+    .catch(async () => {
+      await page.getByRole("button").first().click();
+    });
   await page.waitForURL(/\/(make|check|works)/, { timeout: 30000 });
 }
 
