@@ -7,7 +7,6 @@ const stackDir = path.join("/workspace/scripts/stack-pr");
 const manifest = JSON.parse(fs.readFileSync(path.join(stackDir, "manifest.json"), "utf8"));
 const rows = JSON.parse(fs.readFileSync(path.join(stackDir, "published-branches.json"), "utf8"));
 const byId = new Map(manifest.map((m) => [m.id, m]));
-const fixtures = path.join(stackDir, "fixtures");
 /** PR 本文用: GitHub raw（ブランチに PNG を commit したうえで参照） */
 const RAW_SCREENSHOT_BASE =
   process.env.STACK_PR_RAW_BASE ??
@@ -71,16 +70,6 @@ function shotSection(id, item) {
   if (fs.existsSync(afterM) && item.shots?.mobile && id !== "060" && id !== "058") {
     lines.push("### After（モバイル）");
     lines.push(`<img alt="after mobile" src="${RAW_SCREENSHOT_BASE}/${id}/after-mobile.png" />`);
-    lines.push("");
-  }
-  if (lines.length <= 2) {
-    lines.push(
-      "キャプチャ: `node scripts/stack-pr/capture-published.mjs " +
-        id +
-        "` → `docs/stack-pr-screenshots/" +
-        id +
-        "/`（docs ブランチに commit 後、raw URL が有効）",
-    );
     lines.push("");
   }
   return lines.join("\n");

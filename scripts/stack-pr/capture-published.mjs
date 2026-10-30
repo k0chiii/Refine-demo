@@ -1,30 +1,40 @@
 #!/usr/bin/env node
-/**
- * before/after を同一 clone 上で checkout してキャプチャ（/tmp/wt-001 推奨）。
- */
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { captureShots } from "./capture.mjs";
 
 const id = process.argv[2];
+const locked = process.argv.includes("--locked");
+const self = fileURLToPath(import.meta.url);
+const repo = "/tmp/wt-001";
+const lock = "/tmp/stack-pr-capture.lock";
+
 if (!id) {
-  console.error("usage: node capture-published.mjs <id> [--repo /path]");
+  console.error("usage: node capture-published.mjs <id>");
   process.exit(1);
 }
-const repo = process.argv.includes("--repo")
-  ? process.argv[process.argv.indexOf("--repo") + 1]
-  : "/tmp/wt-001";
+
+if (!locked) {
+  execSync(`flock -w 7200 ${lock} ${process.execPath} ${JSON.stringify(self)} ${id} --locked`, {
+    stdio: "inherit",
+    shell: true,
+  });
+  process.exit(0);
+}
 
 function sh(cmd) {
   execSync(cmd, { cwd: repo, stdio: "inherit", shell: true });
 }
 
 async function main() {
-  const manifestPath = path.join("/workspace/scripts/stack-pr/manifest.json");
-  const rowsPath = path.join("/workspace/scripts/stack-pr/published-branches.json");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const rows = JSON.parse(fs.readFileSync(rowsPath, "utf8"));
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join("/workspace/scripts/stack-pr/manifest.json"), "utf8"),
+  );
+  const rows = JSON.parse(
+    fs.readFileSync(path.join("/workspace/scripts/stack-pr/published-branches.json"), "utf8"),
+  );
   const item = manifest.find((m) => m.id === id);
   const row = rows.find((r) => r.id === id);
   if (!item || !row) {
@@ -76,6 +86,7 @@ async function main() {
     }
   }
 
+  sh("git checkout --force origin/develop");
   console.log("wrote", outDir);
 }
 
