@@ -1210,7 +1210,7 @@
     "id": "066",
     "series": "A-ui-copy",
     "slug": "ui-make-turn-section-layout",
-    "title": "ui(make): 「あなたの番」見出しをやめ件数バッジで区切る",
+    "title": "copy(make): 「あなたの番」→「要対応」",
     "edit": "make-turn-layout",
     "verify": "standard",
     "shots": {
