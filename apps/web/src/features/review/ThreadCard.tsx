@@ -123,7 +123,7 @@ export function ThreadCard({
           ) : null}
           {canDecide && !closed ? (
             <M3eIconButton
-              aria-label="解決済みにする"
+              aria-label="反映する"
               size="extra-small"
               className="thread__resolve"
               disabled={pending === true}

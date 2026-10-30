@@ -16,10 +16,15 @@ function sh(cmd) {
 const from = process.argv.includes("--from")
   ? process.argv[process.argv.indexOf("--from") + 1]
   : manifest[0].id;
+const resume = from !== manifest[0].id;
 
 sh("git fetch origin develop");
-sh("git checkout develop");
-sh("git checkout -B cursor/stack-linear-8b5a");
+if (!resume) {
+  sh("git checkout develop");
+  sh("git checkout -B cursor/stack-linear-8b5a");
+} else {
+  sh("git checkout cursor/stack-linear-8b5a");
+}
 
 const start = manifest.findIndex((m) => m.id === from);
 for (const item of manifest.slice(start)) {
