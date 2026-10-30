@@ -17,6 +17,7 @@ const repo = process.argv.includes("--repo")
   : "/workspace";
 
 async function main() {
+  process.env.STACK_PR_REPO = repo;
   const stackDir = path.join(repo, "scripts/stack-pr");
   const manifest = JSON.parse(fs.readFileSync(path.join(stackDir, "manifest.json"), "utf8"));
   const rows = JSON.parse(fs.readFileSync(path.join(stackDir, "published-branches.json"), "utf8"));
