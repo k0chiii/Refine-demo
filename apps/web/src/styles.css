@@ -5955,3 +5955,14 @@ m3e-snackbar {
 .ws__comment {
   margin-inline: 4px;
 }
+
+.dash__title--sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.dash__section--now .dash__head {
+  gap: 8px;
+}

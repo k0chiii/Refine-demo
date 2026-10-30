@@ -44,7 +44,7 @@ const inProgress = new Set(["unsubmitted", "reviewing", "lapsed"]);
 
 /**
  * 制作（自分が作るもの）の入口。制作者になっている制作物を 進行中 / 下書き / 校了済み で見る（利用者決定 2026-10-19）。
- * - 進行中: 「あなたの番」（未対応のコメントに返事をする・次の版を出す）と「校正中」（校正と校了を待っている）。
+ * - 進行中: 今すぐ（未対応のコメント・次の版。見出しは件数バッジで示す）と「校正中」（校正と校了を待っている）。
  *   材料はダッシュボードの制作の節（dashboard.make。「返事をする」「提出する」と制作者の行）。分け方は domain の classifyMakeRow
  * - 下書き: 文章・SNS 投稿の下書き（documents.writable）。校了済み: 自分が制作者の校了した制作物（works.listMine）。どちらも開いたときだけ読む
  * - 行は 1 つの「次の操作」の印を持ち、押すとエディタが開く（返事をする・見るは、未解決のコメントが並ぶコメントの引き出しで）。
@@ -142,7 +142,7 @@ function Make() {
     return (
       <>
         {turn.length > 0 ? (
-          <Group title="あなたの番" count={turn.length}>
+          <Group title="" label="今すぐ" count={turn.length} className="dash__section--now">
             {turn.map((x) => (
               <WorkspaceRow
                 key={x.r.workId}

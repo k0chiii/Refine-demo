@@ -116,7 +116,7 @@ export function Group({
           {...(side ? {} : { emphasized: true })}
           className={side ? "dash__title dash__title--side" : "dash__title"}
         >
-          {title}
+          {title ? title : <span className="dash__title--sr">今すぐ</span>}
         </M3eHeading>
         {count !== undefined ? (
           <M3eBadge size="medium" className="dash__badge" aria-label={`${count} 件`}>
