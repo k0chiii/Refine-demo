@@ -34,7 +34,7 @@ const SORT_KEYS = ["accepting", "deadline", "title", "stage", "owner", "producti
 const sortLabel: Record<WorkSortKey, string> = {
   accepting: "校正の締切順",
   deadline: "納期順",
-  title: "題名順",
+  title: "制作物名順",
   stage: "状態順",
   owner: "主管担当順",
   production: "制作担当順",
