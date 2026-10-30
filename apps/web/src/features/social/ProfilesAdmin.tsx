@@ -42,8 +42,7 @@ export function ProfilesAdmin() {
   return (
     <section className="stack">
       <p className="muted small">
-        投稿のプレビューに出すアカウントの見た目です（実際の SNS
-        には接続しません）。制作物ごとに、その制作物の「情報」で使うアカウントを選びます。
+        プレビューに出すアカウントです。SNS には接続しません
         {SOCIAL_PROFILE_MAX} 件まで。
       </p>
       <div className="row">
