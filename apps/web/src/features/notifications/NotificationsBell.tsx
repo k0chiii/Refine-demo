@@ -8,6 +8,7 @@ import { formatJstShort } from "@/lib/format";
 import { showDeviceNotification } from "@/lib/push";
 import { useDevicePush } from "./useDevicePush";
 import { useSystemNotificationSync } from "./useSystemNotificationSync";
+import { useNotificationRowMenu } from "./notificationRowMenu";
 import { useAction } from "@/lib/useAction";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
@@ -54,6 +55,9 @@ function useNotifications() {
   const doMarkUnread = useAction(async (notificationId: Id<"notifications">) => {
     await markUnread({ notificationId });
   });
+  const doMarkReadOnly = useAction(async (notificationId: Id<"notifications">) => {
+    await markRead({ notificationId });
+  });
   const openOne = useAction(async (n: NonNullable<typeof list>[number]) => {
     if (n.readAt === undefined) await markRead({ notificationId: n.id as Id<"notifications"> });
     // 旧 FB の通知は、サーバーが移し先のコメント（版とスレッド）に付け替えて返す。移していないものは行き先を持たない
@@ -68,7 +72,7 @@ function useNotifications() {
       void navigate({ to: "/notation", search: { view: "proposals" } });
   });
   const unread = (list ?? []).filter((n) => n.readAt === undefined).length;
-  return { list, unread, doMarkAll, doMarkUnread, openOne };
+  return { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne };
 }
 
 /**
@@ -121,7 +125,11 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
  * 押した通知は既読にして、対象（その版のエディタ）へ飛ぶ。
  */
 function Menu({ id }: { id: string }) {
-  const { list, unread, doMarkAll, doMarkUnread, openOne } = useNotifications();
+  const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } = useNotifications();
+  const rowMenu = useNotificationRowMenu({
+    markRead: (notificationId) => void doMarkReadOnly.run(notificationId),
+    markUnread: (notificationId) => void doMarkUnread.run(notificationId),
+  });
   return (
     <M3eMenu id={id} positionX="before" className="notif-menu">
       <div className="notif-menu__header">
@@ -142,6 +150,7 @@ function Menu({ id }: { id: string }) {
             className={`notif ${n.readAt === undefined ? "notif--unread" : ""}`}
             data-kind={n.kind}
             onClick={() => void openOne.run(n)}
+            {...rowMenu.rowHandlers(n)}
           >
             <M3eIcon slot="icon" name={icon[n.kind] ?? "notifications"} />
             <span className="notif__body">
@@ -152,22 +161,10 @@ function Menu({ id }: { id: string }) {
               <span className="notif__sub">{n.body}</span>
               <span className="notif__time">{formatJstShort(n.createdAt)}</span>
             </span>
-            {n.readAt !== undefined ? (
-              <M3eIconButton
-                slot="trailing"
-                aria-label="未読に戻す"
-                title="未読に戻す"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void doMarkUnread.run(n.id as Id<"notifications">);
-                }}
-              >
-                <M3eIcon name="mark_chat_unread" />
-              </M3eIconButton>
-            ) : null}
           </M3eMenuItem>
         ))
       )}
+      {rowMenu.menu}
     </M3eMenu>
   );
 }
@@ -177,7 +174,11 @@ function Menu({ id }: { id: string }) {
  * 下部バーの「通知」から開き、外側を押す・下へ払う・通知を押すと閉じる。
  */
 function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { list, unread, doMarkAll, doMarkUnread, openOne } = useNotifications();
+  const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } = useNotifications();
+  const rowMenu = useNotificationRowMenu({
+    markRead: (notificationId) => void doMarkReadOnly.run(notificationId),
+    markUnread: (notificationId) => void doMarkUnread.run(notificationId),
+  });
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current as
@@ -228,6 +229,7 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
                 onClose();
                 void openOne.run(n);
               }}
+              {...rowMenu.rowHandlers(n)}
             >
               <M3eIcon slot="leading" name={icon[n.kind] ?? "notifications"} />
               <span className="list__headline notif__title">
@@ -238,23 +240,11 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
               </span>
-              {n.readAt !== undefined ? (
-                <M3eIconButton
-                  slot="trailing"
-                  aria-label="未読に戻す"
-                  title="未読に戻す"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void doMarkUnread.run(n.id as Id<"notifications">);
-                  }}
-                >
-                  <M3eIcon name="mark_chat_unread" />
-                </M3eIconButton>
-              ) : null}
             </M3eListAction>
           ))}
         </M3eActionList>
       )}
+      {rowMenu.menu}
     </M3eBottomSheet>
   );
 }
