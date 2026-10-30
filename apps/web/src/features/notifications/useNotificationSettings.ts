@@ -5,7 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useMemo } from "react";
 import { usePushAvailable } from "./useDevicePush";
 
-/** 自分の通知の設定と、届け先（登録メールアドレス・Slack（DM））ごとの状態 */
+/** 自分の通知の設定と、届け先（Nogiku のメールアドレス・Slack（DM））ごとの状態 */
 export type NotificationSettingsView = FunctionReturnType<typeof api.notificationPrefs.get>;
 
 /** サーバーの無いデモ。env が無いので届け先は使えないことになるが、端末への通知と同じく行を出して設定を試せるようにする */
