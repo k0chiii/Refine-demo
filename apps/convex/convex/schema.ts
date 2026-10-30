@@ -381,6 +381,7 @@ export default defineSchema({
     submittedBy: v.string(),
     submittedAt: v.number(),
     deadlineAt: v.number(),
+    plannedSubmitAt: v.optional(v.number()),
     reviewState,
     reviewClosedReason: v.optional(closedReason),
     reviewClosedAt: v.optional(v.number()),
