@@ -16,9 +16,12 @@ export const Route = createFileRoute("/_app/works/$workId/detail")({
 function WorkDetailShell() {
   const { workId } = Route.useParams();
   const hint = workHint(workId);
-  const work = useQuery(api.works.get, { workId });
-  const title = work?.title ?? hint?.title ?? "制作物";
-  const version = work?.latestRevisionLabel ?? "—";
+  const data = useQuery(api.works.get, { workId });
+  const title = data?.work.title ?? hint?.title ?? "制作物";
+  const latest = data?.revisions
+    ?.filter((r) => r.reviewState !== "void")
+    .sort((a, b) => b.submittedAt - a.submittedAt)[0];
+  const version = latest?.label ?? "—";
 
   return (
     <div className="detail-shell">
@@ -29,13 +32,13 @@ function WorkDetailShell() {
           <span className="title-medium detail-shell__version">{version}</span>
         </div>
         <div className="detail-shell__row detail-shell__row--steps">
-          {work === undefined ? (
+          {data === undefined ? (
             <Loading label="制作物を読み込んでいます" />
           ) : (
             <M3eStepper className="detail-shell__stepper" aria-label="進行">
-              <M3eStep label="未提出" />
-              <M3eStep label="校正中" />
-              <M3eStep label="校了" />
+              <M3eStep>未提出</M3eStep>
+              <M3eStep>校正中</M3eStep>
+              <M3eStep>校了</M3eStep>
             </M3eStepper>
           )}
         </div>
