@@ -310,7 +310,6 @@ export function applyEdit(name) {
 `,
       );
       return;
-    }
     case "domain-stages-v7":
       copySnippet("productionStages.ts", "packages/domain/src/dashboard/productionStages.ts");
       copySnippet("productionStages.test.ts", "packages/domain/src/__tests__/productionStages.test.ts");
