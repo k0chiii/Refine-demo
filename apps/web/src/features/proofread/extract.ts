@@ -1,6 +1,7 @@
 import type { ProofreadSegment } from "@mf100/domain";
 import { extractPageFeature } from "@/features/compare/pdfFeatures";
 import { documentView } from "@/features/writing/documentView";
+import { fitWithin } from "./fitWithin";
 
 /** PDF.js 本体（約 400KB）は PDF を扱うときだけ読み込む（校正画面を開いただけでは引き込まない）。ワーカーの設定も同じ場所 */
 const loadPdfjs = () => import("@/features/annotation/pdfjs");
@@ -89,7 +90,7 @@ async function ocrWorker(onProgress?: (ratio: number) => void): Promise<OcrWorke
 /** 画像を OCR し、行ごとの文字と位置（画像に対する正規化座標）を返す */
 async function ocr(
   worker: OcrWorker,
-  image: Blob | HTMLCanvasElement,
+  image: HTMLCanvasElement,
   W: number,
   H: number,
 ): Promise<OcrResult> {
@@ -124,21 +125,39 @@ async function ocr(
   return { text, boxes, confidence: confN ? confSum / confN / 100 : 0 };
 }
 
-/** 画像の OCR。信頼度の低い文字は誤りと断定しない（エンジン側で要確認にする） */
+/** OCR に渡す画像の長辺の上限（大きな写真で端末のメモリを使い切らない） */
+const OCR_IMAGE_MAX_SIDE = 3000;
+
+/**
+ * 画像の OCR。信頼度の低い文字は誤りと断定しない（エンジン側で要確認にする）。
+ * 元のファイルをそのまま渡すと、OCR エンジンが読めない形式（Safari の HEIC・AVIF など）で失敗するため、
+ * ブラウザで復号して canvas に描いてから渡す。
+ */
 export async function imageSegments(
   blob: Blob,
   onProgress?: (ratio: number) => void,
 ): Promise<ProofreadSegment[]> {
   const worker = await ocrWorker(onProgress);
+  const canvas = document.createElement("canvas");
   try {
     const bitmap = await createImageBitmap(blob);
-    const W = bitmap.width;
-    const H = bitmap.height;
+    const { width, height } = fitWithin(bitmap.width, bitmap.height, OCR_IMAGE_MAX_SIDE);
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    // 透明な部分を白にする（透明のままだと黒として読まれ、黒い文字が消える）
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    const r = await ocr(worker, blob, W, H);
+    // 座標は描いた大きさで割るので、縮めても元の画像に対する正規化座標のまま
+    const r = await ocr(worker, canvas, width, height);
     if (!r.text.trim()) return [];
     return [{ kind: "image", text: r.text, boxes: r.boxes, confidence: r.confidence }];
   } finally {
+    // Safari は canvas のメモリをすぐには返さないため、使い終えたら大きさを 0 にする
+    canvas.width = 0;
+    canvas.height = 0;
     await worker.terminate();
   }
 }
