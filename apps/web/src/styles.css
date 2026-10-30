@@ -6047,7 +6047,6 @@ m3e-snackbar {
   border-radius: var(--mf-shape-lg);
 }
 
-
 /* stack-pr:m3e-kpi-active */
 
 .kpi {
@@ -6075,4 +6074,3 @@ m3e-snackbar {
 .thread__decide m3e-button {
   --m3e-button-shape: var(--mf-shape-full);
 }
-
