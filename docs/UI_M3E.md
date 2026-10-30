@@ -2822,7 +2822,7 @@ Slack の DM が届かず、経路が使えるかを本物の通知が来るま�
 
 - 場所: 「通知の設定」の届け先（`NotificationChannelsSetting`）の下、「通知に内容を表示」と分類のスイッチの上。outlined の `M3eButton`「テスト通知を送る」（アイコン `send`・`data-action="send-test"`）。押すと `notifications.sendTest` が自分宛の通知を 1 件作り、本物の通知と同じ経路（`notifications.insert` → `delivery.enqueue`）で、オンにした端末・Nogiku のメールアドレス・Slack（DM）へ送る。アプリ内の通知（ベル）にはすぐ出る。
 - 通知の形: 種類 `test`（分類は「その他」）、題名「テスト通知」、本文「通知の設定から送ったテストです。この通知が届いていれば、この経路は使えます。」。制作物・版・スレッド・送り主は無く、行き先は `/`。
-- 止めた分類にかかわらず送る（domain の `isCategoryMuted` は `test` では false）。経路のオン・オフ、「通知に内容を表示」、Slack の引き当ての状態は本物の通知と同じに効くので、テストの結果がそのまま実際を映す。
+- 止めた分類にかかわらず送る（domain の `isCategoryMuted` は `test` では false）。ベルで開いて既読にしても外へは送る（`deliversEvenIfRead`。ふつうの通知は既読なら送らない。本人はまずベルで受け取り、Slack の引き当てが終わる前に開くことが多いため）。経路のオン・オフ、「通知に内容を表示」、Slack の引き当ての状態は本物の通知と同じに効くので、テストの結果がそのまま実際を映す。
 - 1 分に 1 回まで: 自分の最新の `test` の通知の `createdAt` から 60 秒たっていなければ `test_notification_too_soon`（「テスト通知は 1 分に 1 回まで送れます」）。画面は送っている間と、送ってから 60 秒はボタンを押せない（決まりはサーバー）。
 - 送れたら「テスト通知を送りました。オンにした経路に届きます（Slack・メールは少し遅れることがあります）」。失敗は `describeError` の文言。ベルの通知の行は `data-kind` に種類を持つ。
 - E2E: `notification-settings.spec.ts`（ダイアログで `[data-action="send-test"]` を押すとボタンが押せなくなり、ベルに `data-kind="test"` の行が出る。文言は確かめない）。
