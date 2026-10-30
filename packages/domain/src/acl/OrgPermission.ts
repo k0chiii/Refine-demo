@@ -1,5 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
-import type { Principal } from "./Permission.ts";
+import { overridesAllPermissions, type Principal } from "./Permission.ts";
 
 /**
  * 組織権限（Nogiku Access 連携の拡張点）。
@@ -45,8 +45,13 @@ export const orgPermissionCatalog: ReadonlyArray<{ name: OrgPermissionName; desc
     },
   ];
 
+/** 組織権限を持つか。システム管理者は Nogiku Access の結果によらずすべて持つ（{@link overridesAllPermissions}） */
 export function hasOrgPermission(principal: Principal, name: OrgPermissionName): boolean {
-  return principal.orgPermissions.includes("*") || principal.orgPermissions.includes(name);
+  return (
+    overridesAllPermissions(principal) ||
+    principal.orgPermissions.includes("*") ||
+    principal.orgPermissions.includes(name)
+  );
 }
 
 export function requireOrgPermission(principal: Principal, name: OrgPermissionName): void {
@@ -71,9 +76,9 @@ export function requireWorkRegistration(principal: Principal): void {
 }
 
 /**
- * メンションと校正者の割り当てで使うグループを作る・変える・消せる。システム管理者は権限が無くてもできる（従来どおり）。
+ * メンションと校正者の割り当てで使うグループを作る・変える・消せる（システム管理者は {@link hasOrgPermission} で通る）。
  * Nogiku Access 未接続（`"*"`）のあいだは全員が持つ。
  */
 export function canManageGroups(principal: Principal): boolean {
-  return principal.isSystemAdmin || hasOrgPermission(principal, orgPermissions.groupsManage);
+  return hasOrgPermission(principal, orgPermissions.groupsManage);
 }

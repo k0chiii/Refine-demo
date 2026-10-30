@@ -2827,3 +2827,13 @@ Slack の DM が届かず、経路が使えるかを本物の通知が来るま�
 - 1 分に 1 回まで: 自分の最新の `test` の通知の `createdAt` から 60 秒たっていなければ `test_notification_too_soon`（「テスト通知は 1 分に 1 回まで送れます」）。画面は送っている間と、送ってから 60 秒はボタンを押せない（決まりはサーバー）。
 - 送れたら「テスト通知を送りました。オンにした経路に届きます（Slack・メールは少し遅れることがあります）」。失敗は `describeError` の文言。ベルの通知の行は `data-kind` に種類を持つ。
 - E2E: `notification-settings.spec.ts`（ダイアログで `[data-action="send-test"]` を押すとボタンが押せなくなり、ベルに `data-kind="test"` の行が出る。文言は確かめない）。
+
+## 113. システム管理者はすべての操作権限を持つ（2026-10-30・利用者決定「Admin は製作者とかそういうのによらず全ての権限を override できるようにして欲しい」）
+
+これまでシステム管理者は ACL の設定と運用の権限で、職責・ACL・所属が無い非公開の制作物は見られず、校了もできなかった（要件 §2.1・§5.2-12 の旧規則）。これを改め、権限の判定はシステム管理者なら常に通す。
+
+- 規則は 1 か所: domain `acl/Permission.ts` の `overridesAllPermissions(principal)`。`isAllowed`（すべての `WorkAction`）、`canViewWork`（非公開も）、`hasOrgPermission`（`works:create`・`reviews:assign`・`approvers:assign`・`groups:manage`）、表記統一の管理（`notationRole`・`canAssignManagers`）の先頭でこれを見る。自動校正（`canRunProofread`）とページ対応の編集（`canEditAlignment`）は `isAllowed` から従う。
+- 業務の状態の規則は変えない: 校了後は編集しない、受付終了の版に提出しない、校了とみなす人数、独立確認の独立性（`evaluateIndependentConfirmation`）、採否の流れ、テスト通知の間隔。権限を通ったあとは、その職責の人と同じ規則に従う。
+- 誰がしたかを記録する操作は管理者本人として記録する。校了の宣言は校了者ごとに数えるので、校了者でない管理者は宣言できない（`approval_not_approver`。画面は `approval.canDeclare` で「校了する」を出さない）。再開はできる。
+- 画面: ボタンとメニューはサーバーの判定（`can.*`・一覧の `canEdit`・`canEditReviewers`・`canEditApprovers`）に従うので、管理者には職責の無い制作物でも「情報を編集」「校正者を選ぶ」などが出る。一覧（`/works`）・検索・ダッシュボードに非公開の制作物も出る。通知の本文は `canViewWork` に従うので、非公開の制作物の通知も伏せずに読める。「制作」の自分の制作物（制作者の分）・版を提出する制作物の候補は、権限ではなく自分の担当の一覧なので広げない。
+- E2E: `roster-acl.spec.ts`「管理者は職責・ACL の無い非公開の制作物も一覧に出て、情報を編集できる」（シードの制作物を非公開にし、管理者で一覧の「⋮」→「情報を編集」から保存し、制作物の情報に残る。文言は確かめない）。

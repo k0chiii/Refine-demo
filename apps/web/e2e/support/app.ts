@@ -37,7 +37,10 @@ type Demo = {
   t: {
     run<T>(
       fn: (ctx: {
-        db: { patch(id: string, fields: Record<string, unknown>): Promise<void> };
+        db: {
+          patch(id: string, fields: Record<string, unknown>): Promise<void>;
+          query(table: "works"): { collect(): Promise<{ _id: string; title: string }[]> };
+        };
       }) => Promise<T>,
     ): Promise<T>;
   };
@@ -168,6 +171,20 @@ export class App {
       },
       [id, email] as const,
     );
+  }
+
+  /** シードの制作物を非公開・取扱注意にする（画面に機密区分を変える入口は無いので、デモの Convex を直接書く） */
+  async restrictWork(title: string) {
+    await this.page.evaluate((t) => {
+      const demo = globalThis.__mf100demo!;
+      return demo.enqueue(() =>
+        demo.t.run(async (ctx) => {
+          const work = (await ctx.db.query("works").collect()).find((w) => w.title === t);
+          if (!work) throw new Error(`デモの制作物がない: ${t}`);
+          await ctx.db.patch(work._id, { confidentiality: "restricted" });
+        }),
+      );
+    }, title);
   }
 
   btn(text: string) {
