@@ -1,0 +1,594 @@
+[
+  {
+    "id": "001",
+    "branch": "cursor/stack-001-copy-labels-resolution-8b5a",
+    "base": "develop",
+    "title": "copy(labels): 採否を「反映する／反映しない／次の版で対応」に統一",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "002",
+    "branch": "cursor/stack-002-copy-labels-review-state-8b5a",
+    "base": "cursor/stack-001-copy-labels-resolution-8b5a",
+    "title": "copy(labels): 版の状態を「校正中／締切済み」に統一",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "003",
+    "branch": "cursor/stack-003-copy-labels-severity-info-8b5a",
+    "base": "cursor/stack-002-copy-labels-review-state-8b5a",
+    "title": "copy(labels): 重要度 info を「参考」に",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "004",
+    "branch": "cursor/stack-004-copy-labels-approval-action-8b5a",
+    "base": "cursor/stack-003-copy-labels-severity-info-8b5a",
+    "title": "copy(labels): 校了操作を「校了する／未対応のまま校了」に",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "005",
+    "branch": "cursor/stack-005-copy-labels-blocked-reason-8b5a",
+    "base": "cursor/stack-004-copy-labels-approval-action-8b5a",
+    "title": "copy(labels): コメント不可理由を短く",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "006",
+    "branch": "cursor/stack-006-copy-labels-notifications-8b5a",
+    "base": "cursor/stack-005-copy-labels-blocked-reason-8b5a",
+    "title": "copy(labels): 通知種別ラベルを短く・用語統一",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "007",
+    "branch": "cursor/stack-007-copy-labels-permission-edit-8b5a",
+    "base": "cursor/stack-006-copy-labels-notifications-8b5a",
+    "title": "copy(labels): 権限「編集（制作委任）」→「編集」",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "008",
+    "branch": "cursor/stack-008-copy-errors-messages-8b5a",
+    "base": "cursor/stack-007-copy-labels-permission-edit-8b5a",
+    "title": "copy(errors): 利用者向けエラーメッセージの短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "009",
+    "branch": "cursor/stack-009-copy-errors-tests-8b5a",
+    "base": "cursor/stack-008-copy-errors-messages-8b5a",
+    "title": "copy(errors): errors.test を新文言に合わせる",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "010",
+    "branch": "cursor/stack-010-copy-errors-failure-text-test-8b5a",
+    "base": "cursor/stack-009-copy-errors-tests-8b5a",
+    "title": "copy(errors): failureText テストを新文言に合わせる",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "011",
+    "branch": "cursor/stack-011-copy-apps-web-src-features-annotation-FigmaEmbedViewe-8b5a",
+    "base": "cursor/stack-010-copy-errors-failure-text-test-8b5a",
+    "title": "copy: FigmaEmbedViewer.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "012",
+    "branch": "cursor/stack-012-copy-apps-web-src-features-annotation-VideoViewer-tsx-8b5a",
+    "base": "cursor/stack-011-copy-apps-web-src-features-annotation-FigmaEmbedViewe-8b5a",
+    "title": "copy: VideoViewer.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "013",
+    "branch": "cursor/stack-013-copy-apps-web-src-features-annotation-WebLiveViewer-t-8b5a",
+    "base": "cursor/stack-012-copy-apps-web-src-features-annotation-VideoViewer-tsx-8b5a",
+    "title": "copy: WebLiveViewer.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "014",
+    "branch": "cursor/stack-014-copy-apps-web-src-features-compare-CompareButton-tsx--8b5a",
+    "base": "cursor/stack-013-copy-apps-web-src-features-annotation-WebLiveViewer-t-8b5a",
+    "title": "copy: CompareButton.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "015",
+    "branch": "cursor/stack-015-copy-apps-web-src-features-compare-CrossWorkPicker-ts-8b5a",
+    "base": "cursor/stack-014-copy-apps-web-src-features-compare-CompareButton-tsx--8b5a",
+    "title": "copy: CrossWorkPicker.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "016",
+    "branch": "cursor/stack-016-copy-apps-web-src-features-compare-PageMappingDialog--8b5a",
+    "base": "cursor/stack-015-copy-apps-web-src-features-compare-CrossWorkPicker-ts-8b5a",
+    "title": "copy: PageMappingDialog.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "017",
+    "branch": "cursor/stack-017-copy-apps-web-src-features-editor-EditorPending-tsx-p-8b5a",
+    "base": "cursor/stack-016-copy-apps-web-src-features-compare-PageMappingDialog--8b5a",
+    "title": "copy: EditorPending.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "018",
+    "branch": "cursor/stack-018-copy-apps-web-src-features-editor-InfoTab-tsx-patch-8b5a",
+    "base": "cursor/stack-017-copy-apps-web-src-features-editor-EditorPending-tsx-p-8b5a",
+    "title": "copy: InfoTab.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "019",
+    "branch": "cursor/stack-019-copy-apps-web-src-features-editor-PaneHandle-tsx-patc-8b5a",
+    "base": "cursor/stack-018-copy-apps-web-src-features-editor-InfoTab-tsx-patch-8b5a",
+    "title": "copy: PaneHandle.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "020",
+    "branch": "cursor/stack-020-copy-apps-web-src-features-editor-RevisionFiles-tsx-p-8b5a",
+    "base": "cursor/stack-019-copy-apps-web-src-features-editor-PaneHandle-tsx-patc-8b5a",
+    "title": "copy: RevisionFiles.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "021",
+    "branch": "cursor/stack-021-copy-apps-web-src-features-editor-VersionsTab-tsx-pat-8b5a",
+    "base": "cursor/stack-020-copy-apps-web-src-features-editor-RevisionFiles-tsx-p-8b5a",
+    "title": "copy: VersionsTab.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "022",
+    "branch": "cursor/stack-022-copy-apps-web-src-features-home-DashboardOverview-tsx-8b5a",
+    "base": "cursor/stack-021-copy-apps-web-src-features-editor-VersionsTab-tsx-pat-8b5a",
+    "title": "copy: DashboardOverview.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "023",
+    "branch": "cursor/stack-023-copy-apps-web-src-features-home-SubmitPicker-tsx-patc-8b5a",
+    "base": "cursor/stack-022-copy-apps-web-src-features-home-DashboardOverview-tsx-8b5a",
+    "title": "copy: SubmitPicker.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "024",
+    "branch": "cursor/stack-024-copy-apps-web-src-features-notation-AiAssist-tsx-patc-8b5a",
+    "base": "cursor/stack-023-copy-apps-web-src-features-home-SubmitPicker-tsx-patc-8b5a",
+    "title": "copy: AiAssist.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "025",
+    "branch": "cursor/stack-025-copy-apps-web-src-features-notation-AiBackground-tsx--8b5a",
+    "base": "cursor/stack-024-copy-apps-web-src-features-notation-AiAssist-tsx-patc-8b5a",
+    "title": "copy: AiBackground.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "026",
+    "branch": "cursor/stack-026-copy-apps-web-src-features-notation-ImportDialog-tsx--8b5a",
+    "base": "cursor/stack-025-copy-apps-web-src-features-notation-AiBackground-tsx--8b5a",
+    "title": "copy: ImportDialog.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "027",
+    "branch": "cursor/stack-027-copy-apps-web-src-features-notation-SemanticRuleSearc-8b5a",
+    "base": "cursor/stack-026-copy-apps-web-src-features-notation-ImportDialog-tsx--8b5a",
+    "title": "copy: SemanticRuleSearch.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "028",
+    "branch": "cursor/stack-028-copy-apps-web-src-features-notifications-Notification-8b5a",
+    "base": "cursor/stack-027-copy-apps-web-src-features-notation-SemanticRuleSearc-8b5a",
+    "title": "copy: NotificationPrompt.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "029",
+    "branch": "cursor/stack-029-copy-apps-web-src-features-notifications-PushSetting--8b5a",
+    "base": "cursor/stack-028-copy-apps-web-src-features-notifications-Notification-8b5a",
+    "title": "copy: PushSetting.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "030",
+    "branch": "cursor/stack-030-copy-apps-web-src-features-processing-ProcessingTools-8b5a",
+    "base": "cursor/stack-029-copy-apps-web-src-features-notifications-PushSetting--8b5a",
+    "title": "copy: ProcessingTools.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "031",
+    "branch": "cursor/stack-031-copy-apps-web-src-features-review-CreatorNoteCard-tsx-8b5a",
+    "base": "cursor/stack-030-copy-apps-web-src-features-processing-ProcessingTools-8b5a",
+    "title": "copy: CreatorNoteCard.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "032",
+    "branch": "cursor/stack-032-copy-apps-web-src-features-social-PostEditor-tsx-patc-8b5a",
+    "base": "cursor/stack-031-copy-apps-web-src-features-review-CreatorNoteCard-tsx-8b5a",
+    "title": "copy: PostEditor.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "033",
+    "branch": "cursor/stack-033-copy-apps-web-src-features-social-PostReview-tsx-patc-8b5a",
+    "base": "cursor/stack-032-copy-apps-web-src-features-social-PostEditor-tsx-patc-8b5a",
+    "title": "copy: PostReview.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "034",
+    "branch": "cursor/stack-034-copy-apps-web-src-features-social-ProfilesAdmin-tsx-p-8b5a",
+    "base": "cursor/stack-033-copy-apps-web-src-features-social-PostReview-tsx-patc-8b5a",
+    "title": "copy: ProfilesAdmin.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "035",
+    "branch": "cursor/stack-035-copy-apps-web-src-features-social-preview-PostPreview-8b5a",
+    "base": "cursor/stack-034-copy-apps-web-src-features-social-ProfilesAdmin-tsx-p-8b5a",
+    "title": "copy: PostPreview.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "036",
+    "branch": "cursor/stack-036-copy-apps-web-src-features-team-GroupsAdmin-tsx-patch-8b5a",
+    "base": "cursor/stack-035-copy-apps-web-src-features-social-preview-PostPreview-8b5a",
+    "title": "copy: GroupsAdmin.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "037",
+    "branch": "cursor/stack-037-copy-apps-web-src-features-team-TeamsAdmin-tsx-patch-8b5a",
+    "base": "cursor/stack-036-copy-apps-web-src-features-team-GroupsAdmin-tsx-patch-8b5a",
+    "title": "copy: TeamsAdmin.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "038",
+    "branch": "cursor/stack-038-copy-apps-web-src-features-upload-SubmitDialog-tsx-pa-8b5a",
+    "base": "cursor/stack-037-copy-apps-web-src-features-team-TeamsAdmin-tsx-patch-8b5a",
+    "title": "copy: SubmitDialog.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "039",
+    "branch": "cursor/stack-039-copy-apps-web-src-features-upload-fileKind-test-ts-pa-8b5a",
+    "base": "cursor/stack-038-copy-apps-web-src-features-upload-SubmitDialog-tsx-pa-8b5a",
+    "title": "copy: fileKind.test.ts.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "040",
+    "branch": "cursor/stack-040-copy-apps-web-src-features-work-AclPanel-tsx-patch-8b5a",
+    "base": "cursor/stack-039-copy-apps-web-src-features-upload-fileKind-test-ts-pa-8b5a",
+    "title": "copy: AclPanel.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "041",
+    "branch": "cursor/stack-041-copy-apps-web-src-features-work-ApproverFields-tsx-pa-8b5a",
+    "base": "cursor/stack-040-copy-apps-web-src-features-work-AclPanel-tsx-patch-8b5a",
+    "title": "copy: ApproverFields.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "042",
+    "branch": "cursor/stack-042-copy-apps-web-src-features-work-ExportStatsDialog-tsx-8b5a",
+    "base": "cursor/stack-041-copy-apps-web-src-features-work-ApproverFields-tsx-pa-8b5a",
+    "title": "copy: ExportStatsDialog.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "043",
+    "branch": "cursor/stack-043-copy-apps-web-src-features-work-ImportWorksDialog-tsx-8b5a",
+    "base": "cursor/stack-042-copy-apps-web-src-features-work-ExportStatsDialog-tsx-8b5a",
+    "title": "copy: ImportWorksDialog.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "044",
+    "branch": "cursor/stack-044-copy-apps-web-src-features-work-ReviewersDialog-tsx-p-8b5a",
+    "base": "cursor/stack-043-copy-apps-web-src-features-work-ImportWorksDialog-tsx-8b5a",
+    "title": "copy: ReviewersDialog.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "045",
+    "branch": "cursor/stack-045-copy-apps-web-src-features-work-TagPicker-tsx-patch-8b5a",
+    "base": "cursor/stack-044-copy-apps-web-src-features-work-ReviewersDialog-tsx-p-8b5a",
+    "title": "copy: TagPicker.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "046",
+    "branch": "cursor/stack-046-copy-apps-web-src-features-work-WorkForm-tsx-patch-8b5a",
+    "base": "cursor/stack-045-copy-apps-web-src-features-work-TagPicker-tsx-patch-8b5a",
+    "title": "copy: WorkForm.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "047",
+    "branch": "cursor/stack-047-copy-apps-web-src-features-work-WorksTable-tsx-patch-8b5a",
+    "base": "cursor/stack-046-copy-apps-web-src-features-work-WorkForm-tsx-patch-8b5a",
+    "title": "copy: WorksTable.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "048",
+    "branch": "cursor/stack-048-copy-apps-web-src-features-writing-EditorMismatch-tsx-8b5a",
+    "base": "cursor/stack-047-copy-apps-web-src-features-work-WorksTable-tsx-patch-8b5a",
+    "title": "copy: EditorMismatch.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "049",
+    "branch": "cursor/stack-049-copy-apps-web-src-features-writing-WriteEditor-tsx-pa-8b5a",
+    "base": "cursor/stack-048-copy-apps-web-src-features-writing-EditorMismatch-tsx-8b5a",
+    "title": "copy: WriteEditor.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "050",
+    "branch": "cursor/stack-050-copy-apps-web-src-features-writing-WritePanels-tsx-pa-8b5a",
+    "base": "cursor/stack-049-copy-apps-web-src-features-writing-WriteEditor-tsx-pa-8b5a",
+    "title": "copy: WritePanels.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "051",
+    "branch": "cursor/stack-051-copy-apps-web-src-features-writing-plainText-test-ts--8b5a",
+    "base": "cursor/stack-050-copy-apps-web-src-features-writing-WritePanels-tsx-pa-8b5a",
+    "title": "copy: plainText.test.ts.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "052",
+    "branch": "cursor/stack-052-copy-apps-web-src-lib-push-ts-patch-8b5a",
+    "base": "cursor/stack-051-copy-apps-web-src-features-writing-plainText-test-ts--8b5a",
+    "title": "copy: push.ts.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "053",
+    "branch": "cursor/stack-053-copy-apps-web-src-routes-app-admin-tsx-patch-8b5a",
+    "base": "cursor/stack-052-copy-apps-web-src-lib-push-ts-patch-8b5a",
+    "title": "copy: admin.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "054",
+    "branch": "cursor/stack-054-copy-apps-web-src-routes-app-check-tsx-patch-8b5a",
+    "base": "cursor/stack-053-copy-apps-web-src-routes-app-admin-tsx-patch-8b5a",
+    "title": "copy: check.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "055",
+    "branch": "cursor/stack-055-copy-apps-web-src-routes-app-works-index-tsx-patch-8b5a",
+    "base": "cursor/stack-054-copy-apps-web-src-routes-app-check-tsx-patch-8b5a",
+    "title": "copy: index.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "056",
+    "branch": "cursor/stack-056-copy-apps-web-src-routes-signin-tsx-patch-8b5a",
+    "base": "cursor/stack-055-copy-apps-web-src-routes-app-works-index-tsx-patch-8b5a",
+    "title": "copy: signin.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "057",
+    "branch": "cursor/stack-057-copy-apps-web-src-ui-DateField-tsx-patch-8b5a",
+    "base": "cursor/stack-056-copy-apps-web-src-routes-signin-tsx-patch-8b5a",
+    "title": "copy: DateField.tsx.patch の文言短縮・用語統一",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "058",
+    "branch": "cursor/stack-058-review-decide-buttons-panel-8b5a",
+    "base": "cursor/stack-057-copy-apps-web-src-ui-DateField-tsx-patch-8b5a",
+    "title": "review: 選んだコメントのパネルにだけ反映ボタン行を出す",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "059",
+    "branch": "cursor/stack-059-review-card-status-not-actions-8b5a",
+    "base": "cursor/stack-058-review-decide-buttons-panel-8b5a",
+    "title": "review: 一覧カードは小さな状態表示のみ（✓ クイック操作をやめる）",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "060",
+    "branch": "cursor/stack-060-review-e2e-decision-8b5a",
+    "base": "cursor/stack-059-review-card-status-not-actions-8b5a",
+    "title": "test(e2e): 反映ボタン行に合わせ decision spec を更新",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "061",
+    "branch": "cursor/stack-061-editor-shortcut-sheet-8b5a",
+    "base": "cursor/stack-060-review-e2e-decision-8b5a",
+    "title": "editor: ? でショートカット一覧",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "062",
+    "branch": "cursor/stack-062-copy-deadline-term-8b5a",
+    "base": "cursor/stack-061-editor-shortcut-sheet-8b5a",
+    "title": "copy: 「校正の締切」→「校正期日」",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "063",
+    "branch": "cursor/stack-063-style-m3e-table-card-shape-8b5a",
+    "base": "cursor/stack-062-copy-deadline-term-8b5a",
+    "title": "style(M3E): 表・KPI・コメントカードの shape と強調",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "064",
+    "branch": "cursor/stack-064-test-e2e-screenshots-toolbar-8b5a",
+    "base": "cursor/stack-063-style-m3e-table-card-shape-8b5a",
+    "title": "test(e2e): スクリーンショット手順をツールバー配置に合わせる",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "065",
+    "branch": "cursor/stack-065-copy-make-unsubmitted-line-8b5a",
+    "base": "cursor/stack-064-test-e2e-screenshots-toolbar-8b5a",
+    "title": "copy(make): 未提出行の「まだ版がありません」を削除",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "066",
+    "branch": "cursor/stack-066-ui-make-turn-section-layout-8b5a",
+    "base": "cursor/stack-065-copy-make-unsubmitted-line-8b5a",
+    "title": "ui(make): 「あなたの番」見出しをやめ件数バッジで区切る",
+    "series": "A-ui-copy",
+    "decide": "なし"
+  },
+  {
+    "id": "067",
+    "branch": "cursor/stack-067-style-m3e-segmented-list-8b5a",
+    "base": "cursor/stack-066-ui-make-turn-section-layout-8b5a",
+    "title": "style(M3E): 制作・校正一覧を segmented list に",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "068",
+    "branch": "cursor/stack-068-style-m3e-table-header-segmented-css-8b5a",
+    "base": "cursor/stack-067-style-m3e-segmented-list-8b5a",
+    "title": "style(M3E): 表見出しのトーンと segmented list CSS",
+    "series": "A-ui-copy",
+    "decide": "あり"
+  },
+  {
+    "id": "069",
+    "branch": "cursor/stack-069-domain-work-stages-v7-8b5a",
+    "base": "cursor/stack-068-style-m3e-table-header-segmented-css-8b5a",
+    "title": "feat(domain): 7 段階 stage ID を追加（旧 stage と並行）",
+    "series": "B-dashboard",
+    "decide": "あり"
+  },
+  {
+    "id": "070",
+    "branch": "cursor/stack-070-schema-revision-planned-at-8b5a",
+    "base": "cursor/stack-069-domain-work-stages-v7-8b5a",
+    "title": "feat(schema): 版ごとの予定日フィールド",
+    "series": "B-dashboard",
+    "decide": "なし"
+  },
+  {
+    "id": "071",
+    "branch": "cursor/stack-071-domain-danger-kpi-8b5a",
+    "base": "cursor/stack-070-schema-revision-planned-at-8b5a",
+    "title": "feat(domain): 危ない KPI 定義（24h/3日）",
+    "series": "B-dashboard",
+    "decide": "なし"
+  },
+  {
+    "id": "072",
+    "branch": "cursor/stack-072-demo-dashboard-role-homes-8b5a",
+    "base": "cursor/stack-071-domain-danger-kpi-8b5a",
+    "title": "feat(demo): ロール別ホーム用シード",
+    "series": "B-dashboard",
+    "decide": "なし"
+  },
+  {
+    "id": "073",
+    "branch": "cursor/stack-073-ui-home-view-switcher-8b5a",
+    "base": "cursor/stack-072-demo-dashboard-role-homes-8b5a",
+    "title": "ui(home): ロール名なしのビュー切替",
+    "series": "B-dashboard",
+    "decide": "あり"
+  },
+  {
+    "id": "074",
+    "branch": "cursor/stack-074-detail-route-shell-8b5a",
+    "base": "cursor/stack-073-ui-home-view-switcher-8b5a",
+    "title": "ui(detail): 詳細画面ルートと 2 行見出し",
+    "series": "C-detail",
+    "decide": "あり"
+  }
+]
