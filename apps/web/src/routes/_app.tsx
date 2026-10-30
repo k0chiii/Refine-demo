@@ -38,7 +38,7 @@ const AvatarPickerDialog = lazy(() =>
   import("@/features/account/AvatarPickerDialog").then((m) => ({ default: m.AvatarPickerDialog })),
 );
 
-/** 通知の設定（この端末・登録メールアドレス・Slack（DM）。初めて開くまで読み込まない） */
+/** 通知の設定（この端末・Nogiku のメールアドレス・Slack（DM）。初めて開くまで読み込まない） */
 const NotificationSettingsDialog = lazy(() =>
   import("@/features/notifications/NotificationSettingsDialog").then((m) => ({
     default: m.NotificationSettingsDialog,
@@ -94,7 +94,7 @@ function AppShell() {
   /** 「通知の設定」。アバターと同じく一度開いたら描いたままにする */
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMounted, setSettingsMounted] = useState(false);
-  // この端末への通知・登録メールアドレス・Slack（DM）のどれかが使えるときだけ、アカウントに「通知の設定」を出す（§103。サインイン後に問い合わせる）
+  // この端末への通知・Nogiku のメールアドレス・Slack（DM）のどれかが使えるときだけ、アカウントに「通知の設定」を出す（§103。サインイン後に問い合わせる）
   const settingsAvailable = useNotificationSettingsAvailable(isAuthenticated && me != null);
   const submitTargets = useSubmitTargets();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -267,7 +267,7 @@ function AppShell() {
         setAvatarOpen(true);
       },
     },
-    // 端末・登録メールアドレス・Slack（DM）への通知の設定。以前は通知パネルの一番上にあった（利用者指示 2026-10-17）
+    // 端末・Nogiku のメールアドレス・Slack（DM）への通知の設定。以前は通知パネルの一番上にあった（利用者指示 2026-10-17）
     ...(settingsAvailable
       ? [
           {

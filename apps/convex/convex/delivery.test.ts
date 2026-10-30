@@ -97,7 +97,8 @@ function fakeServices(
     const service = serviceOf(url);
     if (!service) throw new Error(`unexpected fetch: ${url}`);
     const reply = (await replies[service]?.(counts[service]++)) ?? SUCCESS[service];
-    return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200 });
+    const body = typeof reply.body === "string" ? reply.body : JSON.stringify(reply.body ?? {});
+    return new Response(body, { status: reply.status ?? 200 });
   });
   vi.stubGlobal("fetch", fetch);
   return {
@@ -337,6 +338,46 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(services.calls("post")).toHaveLength(0);
     const settings = await cast.reviewer.as.query(api.notificationPrefs.get, {});
     expect(settings.destinations.slack.status).toBe("not_found");
+  });
+
+  it("めいちゃんが 500「Failed to get user id」を返す人は見つからないとし、やり直さず、届け先ごとの結果を宛先なしでログに出す", async () => {
+    emailEnv();
+    slackEnv();
+    const t = createHarness();
+    const cast = await createCast(t);
+    await addWorkspace(cast);
+    const address = await setDeliverableEmail(t, cast.reviewer.id);
+    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email", "slack"] });
+    const { notificationId } = await assignReviewer(t, cast);
+    const services = fakeServices({
+      lookup: () => ({ status: 500, body: "Failed to get user id" }),
+    });
+    const reports: unknown[] = [];
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      const parsed = JSON.parse(String(line)) as { event?: string };
+      if (parsed.event === "delivery_report") reports.push(parsed);
+    });
+
+    expect(await deliver(t, notificationId)).toBe(1);
+    expect(services.calls("post")).toHaveLength(0);
+    const settings = await cast.reviewer.as.query(api.notificationPrefs.get, {});
+    expect(settings.destinations.slack.status).toBe("not_found");
+    expect(reports).toEqual([
+      {
+        event: "delivery_report",
+        notificationId,
+        sent: 1,
+        rejected: 1,
+        retry: 0,
+        unavailable: 0,
+        targets: [
+          { channel: "email", kind: "sent", httpStatus: 200 },
+          { channel: "slack", kind: "rejected", reason: "not_found" },
+        ],
+      },
+    ]);
+    expect(JSON.stringify(reports)).not.toContain(address);
   });
 
   it("DM を開けない相手（/dm が 404）は、設定の Slack が cannot_dm になる", async () => {

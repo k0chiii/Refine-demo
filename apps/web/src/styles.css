@@ -5049,7 +5049,7 @@ m3e-snackbar {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
-/* 「通知の設定」の届け先（登録メールアドレス・Slack（DM）。§103）。行は通知の種類と同じ M3 の list item。長いアドレスは行の中で折り返す */
+/* 「通知の設定」の届け先（Nogiku のメールアドレス・Slack（DM）。§103）。行は通知の種類と同じ M3 の list item。長いアドレスは行の中で折り返す */
 .notif-channel__address {
   overflow-wrap: anywhere;
 }
