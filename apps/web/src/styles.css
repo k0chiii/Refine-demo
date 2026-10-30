@@ -677,12 +677,14 @@ m3e-dialog [slot="actions"] {
 .select {
   width: 100%;
 }
-.checkbox {
+.checkbox,
+.switch {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.checkbox label {
+.checkbox label,
+.switch label {
   cursor: pointer;
 }
 .form {

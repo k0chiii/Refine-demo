@@ -19,10 +19,11 @@ import { M3eCheckbox } from "@m3e/react/checkbox";
 import { M3eFormField } from "@m3e/react/form-field";
 import { M3eOption } from "@m3e/react/option";
 import { M3eSelect } from "@m3e/react/select";
+import { M3eSwitch } from "@m3e/react/switch";
 
 /**
  * フォーム部品。入力そのものは native の input / textarea を使う（日本語 IME・キーボード操作・ブラウザ標準の検証を優先: §4 デザイン）。
- * 選択は m3e-select + m3e-option、真偽は m3e-checkbox。
+ * 選択は m3e-select + m3e-option、真偽は m3e-checkbox（入れると欄が開くような切り替えは m3e-switch）。
  *
  * 見た目は M3E の outlined form-field（枠付き・浮くラベル）。Google フォーム風の下線だけの入力（docs §30）は、
  * 利用者指示 2026-10-20「入力欄を M3E の枠付きに」で取りやめた（DECISIONS）。
@@ -264,6 +265,42 @@ export function Checkbox({
         onChange={(e) => onChange((e.target as unknown as { checked: boolean }).checked)}
       />
       <label htmlFor={cid} id={`${cid}-label`}>
+        {label}
+      </label>
+    </span>
+  );
+}
+
+/**
+ * 真偽のスイッチ（m3e-switch）とラベル。{@link Checkbox} と同じ形で使う。
+ * 入れると下に欄が開くような「切り替え」に使う（制作物の「入稿あり」。UI_M3E §108）
+ */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  id,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: ReactNode;
+  id?: string;
+  disabled?: boolean;
+}) {
+  const auto = useId();
+  const sid = id ?? auto;
+  return (
+    <span className="switch">
+      <M3eSwitch
+        id={sid}
+        aria-labelledby={`${sid}-label`}
+        checked={checked}
+        icons="selected"
+        {...(disabled ? { disabled: true } : {})}
+        onChange={(e) => onChange((e.target as unknown as { checked: boolean }).checked)}
+      />
+      <label htmlFor={sid} id={`${sid}-label`}>
         {label}
       </label>
     </span>
