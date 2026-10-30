@@ -93,6 +93,7 @@ export function applyEdit(name) {
       return;
     case "review-panel-decide":
       applyPatches([
+        "patches/p02-apps__web__src__features__review__ThreadPanel.tsx.patch",
         "patches/p03-apps__web__src__features__review__ThreadPanel.tsx.patch",
         "patches/p03-apps__web__src__features__review__ThreadPanel.css.patch",
         "patches/p03-apps__web__src__features__review__ThreadCard.tsx.patch",

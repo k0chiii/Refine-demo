@@ -180,6 +180,7 @@ const seriesA = [
     slug: "editor-shortcut-sheet",
     title: "editor: ? でショートカット一覧",
     patches: [
+      "patches/p02-apps__web__src__features__editor__Editor.tsx.patch",
       "patches/p04-apps__web__src__features__editor__ShortcutSheet.tsx.patch",
       "patches/p04-apps__web__src__features__editor__ShortcutSheet.css.patch",
       "patches/p04-apps__web__src__features__editor__Editor.tsx.patch",
