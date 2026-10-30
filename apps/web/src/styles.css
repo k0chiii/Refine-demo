@@ -2350,6 +2350,17 @@ m3e-dialog {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
+/* 通知行: ホバーで ⋮（Slack 式。右クリック / Shift+F10 も同じメニュー） */
+.notif-row__more {
+  opacity: 0;
+  margin: -4px -8px;
+  transition: opacity 0.15s ease;
+}
+.notif:hover .notif-row__more,
+.notif:focus-within .notif-row__more,
+.notif-row__more:focus-visible {
+  opacity: 1;
+}
 
 /* ---------- エディタの引き出し「情報」 */
 .info {
