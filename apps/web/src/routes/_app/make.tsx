@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo } from "react";
 import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
+import { ViewSwitcher } from "@/features/home/ViewSwitcher";
 import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
 import { formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
@@ -284,6 +285,9 @@ function Make() {
   return (
     <div className="hub" data-hub="make">
       <AppBarSlot slot="title">制作</AppBarSlot>
+      <AppBarSlot slot="actions">
+        <ViewSwitcher />
+      </AppBarSlot>
       {tabs}
       {tab === "active" ? activeBody() : tab === "draft" ? draftBody() : doneBody()}
       {launcher.element}
