@@ -1210,7 +1210,7 @@ async function main() {
 
 /** 27–64: 制作・採否・第2版と持ち越し・比較・校了・通知・管理（core の続き。core で付けたコメント・版を使う） */
 async function lateScenes() {
-  // 27 制作（制作者）: 進行中の「要対応」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
+  // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/make`);
   await page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
@@ -1548,13 +1548,12 @@ async function lateScenes() {
   await go(revision2Url);
   await pdfReady();
   await drawer("コメント");
-  // 採否のボタンは選んだカードにだけ出る: 未対応のカードを選んでから「反映する」
   for (let i = 0; i < 5; i++) {
-    const sel = ".comments .thread:not(.thread--closed)";
+    const sel = '.comments .thread m3e-icon-button[aria-label="反映する"]';
     const left = await page.locator(sel).count();
     if (left === 0) break;
-    await page.locator(`${sel} .thread__body`).first().click();
-    await page.locator(".comments .thread--active .thread__decide m3e-button").first().click();
+    await page.locator(".comments .thread .thread__body").first().click();
+    await page.locator(sel).first().click();
     await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
   }
   await page.waitForSelector(".comments .thread--closed");
@@ -2751,18 +2750,17 @@ async function v2Scenes() {
   };
   await openComments();
   for (let i = 0; i < 10; i++) {
-    const sel = "m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)";
+    const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]';
     const left = await page.locator(sel).count();
     if (left === 0) break;
-    await page.locator(`${sel} .thread__body`).first().click();
-    await page
-      .locator("m3e-bottom-sheet.ws__sheet .thread--active .thread__decide m3e-button")
-      .first()
-      .click();
+    await page.locator("m3e-bottom-sheet.ws__sheet .thread .thread__body").first().click();
+    await page.locator(sel).first().click();
     await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
   }
   expectTrue(
-    (await page.locator("m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)").count()) === 0,
+    (await page
+      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]')
+      .count()) === 0,
     "プレビューに付けたコメントを反映済みにできない",
   );
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
