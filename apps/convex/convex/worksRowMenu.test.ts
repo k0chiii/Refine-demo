@@ -47,4 +47,36 @@ describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () 
     const rows = await cast.manager.as.query(api.works.listMine, {});
     expect(rows.find((w) => w.id === workId)?.canEdit).toBe(true);
   });
+
+  it("統括と校了する人が制作者だけを変更できる（制作者本人は不可）", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = (await cast.manager.as.mutation(api.works.create, {
+      title: "表紙",
+      purpose: "",
+      category: "印刷物",
+      mediaType: "pdf",
+      year: 100,
+      creatorIds: [cast.creator.id],
+      approverId: cast.approver.id,
+    })) as Id<"works">;
+    const flags = async (who: (typeof cast)[keyof typeof cast]) =>
+      (await who.as.query(api.works.listMine, {})).find((w) => w.id === workId);
+    expect(await flags(cast.manager)).toMatchObject({
+      canEdit: true,
+      canTransferCreators: true,
+    });
+    expect(await flags(cast.approver)).toMatchObject({
+      canEdit: false,
+      canTransferCreators: true,
+    });
+    expect(await flags(cast.creator)).toMatchObject({
+      canEdit: false,
+      canTransferCreators: false,
+    });
+    await cast.approver.as.mutation(api.works.update, {
+      workId,
+      patch: { creatorIds: [cast.reviewer.id] },
+    });
+  });
 });
