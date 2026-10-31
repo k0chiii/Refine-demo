@@ -6120,3 +6120,8 @@ m3e-snackbar {
   margin: 4px 0 0;
   color: var(--mf-on-secondary-container);
 }
+
+/* stack-pr:ui-role-home-manager */
+.home-dashboard--manager .ov {
+  margin-inline: 16px;
+}
