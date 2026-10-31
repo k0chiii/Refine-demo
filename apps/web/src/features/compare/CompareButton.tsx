@@ -165,7 +165,6 @@ export function CompareButton({
               <M3eListAction className="list__item" onClick={() => pick(onPickOther)}>
                 <M3eIcon slot="leading" name="search" />
                 <span className="list__headline">制作物を探して比べる</span>
-                <span slot="supporting-text">制作物を検索して、その版を選びます</span>
               </M3eListAction>
             </M3eActionList>
           </M3eBottomSheet>,
