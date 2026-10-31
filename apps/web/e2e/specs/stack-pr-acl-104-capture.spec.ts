@@ -48,8 +48,7 @@ test.describe("stack PR acl 104 screenshots", () => {
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin");
     await app.settle();
-    const adminWorks =
-      'm3e-action-list[aria-label="制作物ごとの閲覧権限"] m3e-list-action';
+    const adminWorks = 'm3e-action-list[aria-label="制作物ごとの閲覧権限"] m3e-list-action';
     await page.waitForSelector(adminWorks);
     await page.locator(adminWorks).first().click();
     await page.waitForSelector("m3e-dialog[open] .acl");
