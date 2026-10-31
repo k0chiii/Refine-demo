@@ -1,0 +1,27 @@
+---
+diff --git a/apps/web/src/features/team/GroupsAdmin.tsx b/apps/web/src/features/team/GroupsAdmin.tsx
+index 2e2536a..e766b6a 100644
+--- a/apps/web/src/features/team/GroupsAdmin.tsx
++++ b/apps/web/src/features/team/GroupsAdmin.tsx
+@@ -111,9 +111,7 @@ export function GroupsAdmin() {
+           グループを作る
+         </M3eButton>
+       </div>
+-      <p className="muted small">
+-        校正者の割り当てでグループを選ぶと、所属する人をまとめて加えます。コメントで「@グループ名」と書くと、所属する人のうち制作物を見られる人に知らせます。
+-      </p>
++      <p className="muted small">校正者の割り当てと「@グループ名」のメンションに使います</p>
+       {groups === undefined ? (
+         <Loading label="グループを読み込んでいます" />
+       ) : list.length === 0 ? (
+@@ -188,9 +186,7 @@ export function GroupsAdmin() {
+       <M3eDialog open={removing !== null} onClosed={() => setRemoving(null)} closeLabel="閉じる">
+         <span slot="header">「{removing?.name}」を削除しますか？</span>
+         <div className="dialog-body">
+-          <p>
+-            グループを削除します。割り当て済みの校正者と、これまでのメンションの通知はそのまま残ります。
+-          </p>
++          <p>割り当て済みの校正者は残ります</p>
+         </div>
+         <div slot="actions" className="row">
+           <span className="spacer" />

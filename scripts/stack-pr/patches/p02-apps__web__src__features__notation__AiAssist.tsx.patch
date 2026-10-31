@@ -1,0 +1,37 @@
+---
+diff --git a/apps/web/src/features/notation/AiAssist.tsx b/apps/web/src/features/notation/AiAssist.tsx
+index 68c743c..b7f3e33 100644
+--- a/apps/web/src/features/notation/AiAssist.tsx
++++ b/apps/web/src/features/notation/AiAssist.tsx
+@@ -69,13 +69,10 @@ export function AiAssist({
+         result.note ? (
+           <p className="small error-text">{result.note}</p>
+         ) : result.candidates.length === 0 ? (
+-          <p className="small muted">AI（{result.provider}）の候補はありません</p>
++          <p className="small muted">候補はありません</p>
+         ) : (
+           <>
+-            <p className="small muted">
+-              AI（{result.provider}）の候補 {result.candidates.length}{" "}
+-              件。誤りと決まったものではありません。
+-            </p>
++            <p className="small muted">AI の候補 {result.candidates.length} 件</p>
+             <FindingList
+               label="AI の候補"
+               findings={result.candidates}
+@@ -115,13 +112,9 @@ export function AiAssist({
+         <span slot="header">外部の AI に送ります</span>
+         <div className="dialog-body">
+           <p>
+-            この文章（{chars} 文字）と表記ルールを {status.provider}{" "}
+-            に送り、校正の候補を受け取ります。
+-            候補は保存されず、ルールやコメントが自動で変わることはありません。
+-          </p>
+-          <p className="small muted">
+-            送信の記録（誰が・いつ・文字数）は監査ログに残ります。送り先の利用規約に従って扱われます。
++            この文章（{chars} 文字）を {status.provider} に送ります。候補は保存しません
+           </p>
++          <p className="small muted">送信は記録されます</p>
+         </div>
+         <div slot="actions" className="row">
+           <M3eButton variant="text" onClick={() => setConfirm(false)}>

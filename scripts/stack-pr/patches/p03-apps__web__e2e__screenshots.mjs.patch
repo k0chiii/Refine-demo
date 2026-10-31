@@ -1,0 +1,24 @@
+---
+diff --git a/apps/web/e2e/screenshots.mjs b/apps/web/e2e/screenshots.mjs
+index 59e096e..1127d6e 100644
+--- a/apps/web/e2e/screenshots.mjs
++++ b/apps/web/e2e/screenshots.mjs
+@@ -1276,16 +1276,12 @@ async function lateScenes() {
+   await page.waitForSelector(".comments .thread");
+   const first = page.locator(".comments .thread").first();
+   const decisionPanel = await openPanel(first);
+-  await decisionPanel
+-    .locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]')
+-    .click();
+-  await settle();
+-  await page.locator("m3e-menu-item:visible", { hasText: "反映しない" }).click();
++  await decisionPanel.locator(".thread__decide m3e-button", { hasText: "反映しない" }).click();
+   await page.fill(
+     ".thread-panel textarea",
+     "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み",
+   );
+-  await decisionPanel.locator("m3e-button", { hasText: "反映しないにする" }).click();
++  await decisionPanel.locator(".thread__form m3e-button", { hasText: "反映しない" }).click();
+   // 一覧はパネルの下に隠れているので、パネルが閉じた（不採用の）状態になるのを待つ
+   await page.waitForSelector(".thread-panel.thread--closed");
+   await shot("09-decision");

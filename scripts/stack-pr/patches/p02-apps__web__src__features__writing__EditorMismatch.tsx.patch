@@ -1,0 +1,28 @@
+---
+diff --git a/apps/web/src/features/writing/EditorMismatch.tsx b/apps/web/src/features/writing/EditorMismatch.tsx
+index bef9b23..84c0ecc 100644
+--- a/apps/web/src/features/writing/EditorMismatch.tsx
++++ b/apps/web/src/features/writing/EditorMismatch.tsx
+@@ -21,9 +21,8 @@ const editorLabel: Record<DraftFormat, string> = {
+ const editorIcon: Record<DraftFormat, string> = { document: "edit_document", post: "post_add" };
+ /** 開いたエディタが合わないときの説明（expected = この制作物に合う形式） */
+ const mismatchText: Record<DraftFormat, string> = {
+-  document:
+-    "この制作物は SNS 投稿ではないため、投稿エディタでは編集できません。文章エディタで書いてください。",
+-  post: "この制作物は SNS 投稿のため、文章エディタでは編集できません。投稿エディタで作ってください。",
++  document: "この制作物は文章エディタで書きます",
++  post: "この制作物は投稿エディタで書きます",
+ };
+ 
+ /**
+@@ -113,8 +112,8 @@ export function DraftFormatMismatch({
+       <AppBarSlot slot="title">{workTitle}</AppBarSlot>
+       <M3eIcon name="warning" />
+       <p>
+-        この制作物には{draftFormatLabels[stored]}の下書きが保存されています。
+-        {draftFormatLabels[expected]}として書き始めると、その下書きは置き換えられます。
++        {draftFormatLabels[stored]}の下書きがあります。{draftFormatLabels[expected]}
++        で書き始めると置き換わります
+       </p>
+       <div className="row">
+         {canEdit ? (
