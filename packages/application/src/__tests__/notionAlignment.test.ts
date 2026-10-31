@@ -118,6 +118,30 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
     ).rejects.toThrow(expect.objectContaining({ code: "team_not_found" }));
   });
 
+  it("編集で納期・制作物 ID を消せる（null・空文字で消す。省略なら触らない）", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, {
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      legacyId: "P-001",
+    });
+    const kept = await updateWork(ctx, principals.manager, {
+      workId: work.id,
+      patch: { title: "名称だけ変える" },
+    });
+    expect(kept).toMatchObject({ legacyId: "P-001", deadlineAt: work.deadlineAt });
+    const cleared = await updateWork(ctx, principals.manager, {
+      workId: work.id,
+      patch: { deadlineAt: null, legacyId: "  " },
+    });
+    expect(cleared).not.toHaveProperty("deadlineAt");
+    expect(cleared).not.toHaveProperty("legacyId");
+    const again = await updateWork(ctx, principals.manager, {
+      workId: work.id,
+      patch: { legacyId: null },
+    });
+    expect(again).not.toHaveProperty("legacyId");
+  });
+
   it("一括登録: 揃えた項目をそのまま登録する（有効性・校了済みは取り込まない。状態は登録してから操作で入れる）", async () => {
     const ctx = createInMemoryContext();
     const [a, b] = await importWorks(ctx, principals.sysadmin, {
