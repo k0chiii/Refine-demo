@@ -79,6 +79,12 @@ function DashboardKpis({ data }: { data: Data }) {
   );
 }
 
+const kpiLabelEn: Record<string, string> = {
+  締切が近い: "Due soon",
+  期限超過: "Overdue",
+  未対応のコメント: "Open threads",
+};
+
 function Kpi({
   label,
   value,
@@ -93,7 +99,12 @@ function Kpi({
   return (
     <M3eCard variant="filled" className={`kpi ${tone === "error" ? "kpi--error" : ""}`}>
       <div slot="content" className="kpi__body">
-        <span className="kpi__label">{label}</span>
+        <span className="kpi__label">
+          {label}
+          <span className="kpi__label-en" aria-hidden="true">
+            {kpiLabelEn[label] ?? ""}
+          </span>
+        </span>
         <span className="kpi__value">
           <span className="kpi__num">{value}</span>
           <span className="kpi__unit">件</span>
