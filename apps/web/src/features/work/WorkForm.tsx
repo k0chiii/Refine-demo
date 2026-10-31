@@ -354,11 +354,7 @@ export function WorkFormFields({
 
       <FormSection title="担当と人">
         <div className="form">
-          <TeamSelect
-            label="担当（主管担当）"
-            value={form.ownerTeam}
-            onChange={setIds("ownerTeam")}
-          />
+          <TeamSelect label="担当" value={form.ownerTeam} onChange={setIds("ownerTeam")} />
           <TeamSelect
             label="制作担当"
             hint="1 つ（あとから変えられます）"
@@ -389,7 +385,7 @@ export function WorkFormFields({
           }
         />
         <UserPicker
-          label="主管・制作統括"
+          label="統括"
           {...(mode === "create" ? { hint: "自分は自動で入ります" } : {})}
           value={form.managerIds}
           onChange={setIds("managerIds")}

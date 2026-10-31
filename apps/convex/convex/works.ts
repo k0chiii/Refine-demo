@@ -67,7 +67,8 @@ const workPatch = {
   purpose: v.optional(v.string()),
   category: v.optional(v.string()),
   mediaType: v.optional(vMediaType),
-  deadlineAt: v.optional(v.number()),
+  /** 納期（null で消す） */
+  deadlineAt: v.optional(v.union(v.number(), v.null())),
   creatorIds: v.optional(v.array(v.string())),
   /** 校了者。approverIds があればそちら（複数可）。approverId だけなら「その 1 人に置き換える」 */
   approverId: v.optional(v.string()),
@@ -76,7 +77,8 @@ const workPatch = {
   approvalQuorum: v.optional(v.number()),
   managerIds: v.optional(v.array(v.string())),
   confidentiality: v.optional(vConfidentiality),
-  legacyId: v.optional(v.string()),
+  /** 制作物 ID（null か空文字で消す） */
+  legacyId: v.optional(v.union(v.string(), v.null())),
   ownerTeamId: v.optional(v.string()),
   productionTeamIds: v.optional(v.array(v.string())),
   relatedTeamIds: v.optional(v.array(v.string())),

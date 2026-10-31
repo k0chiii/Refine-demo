@@ -57,8 +57,8 @@ export function EditWorkDialog({
         productionTeamIds: form.productionTeamIds,
         relatedTeamIds: form.relatedTeamIds,
         ...(form.mediaType === "sns" ? { socialProfileId: form.socialProfileId || null } : {}),
-        ...(form.legacyId ? { legacyId: form.legacyId } : {}),
-        ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
+        legacyId: form.legacyId.trim() || null,
+        deadlineAt: form.deadlineAt ?? null,
         ...workFormToFields(form),
       },
     });
