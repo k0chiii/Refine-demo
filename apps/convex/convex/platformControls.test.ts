@@ -28,7 +28,7 @@ describe("Platform controls", () => {
     const first = await cast.stranger.as.query(api.works.listMinePage, {
       paginationOpts: { numItems: 1, cursor: null },
     });
-    expect(first.page).toHaveLength(0);
+    expect(first.page).toHaveLength(1);
     expect(first.isDone).toBe(false);
     const next = await cast.stranger.as.query(api.works.listMinePage, {
       text: "月祭の",

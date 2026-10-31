@@ -14,7 +14,7 @@ import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.
 
 /** 通知本文にも制作物の ACL を適用する（§5.2-10。レビュー指摘 P1） */
 describe("通知の本文と制作物の閲覧権限", () => {
-  it("非公開の制作物に閲覧 ACL の無い人を割り当てても、作品名・確認観点を含む通知を送らない", async () => {
+  it("閲覧 ACL がなくても、割当通知は作品名・確認観点を含む（105A）", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, { title: "極秘ポスター" });
     const revision = await submitRevision(ctx, work.id);
@@ -24,19 +24,15 @@ describe("通知の本文と制作物の閲覧権限", () => {
     });
     const [note] = await listMyNotifications(ctx, principals.stranger);
     expect(note?.kind).toBe("review_assigned");
-    expect(note?.title).toBe(REDACTED_NOTIFICATION.title);
-    expect(note?.body).toBe(REDACTED_NOTIFICATION.body);
-    // 保存された本文にも保護情報を残さない（読取側の判定に頼り切らない）
+    expect(note?.body).toContain("極秘ポスター");
+    expect(note?.workId).toBe(work.id);
     const stored = ctx.state.notifications
       .all()
       .find((n) => n.recipientId === principals.stranger.userId)!;
-    expect(stored.body).not.toContain("極秘ポスター");
-    expect(stored.body).not.toContain("表紙の配色");
-    expect(note).not.toHaveProperty("workId");
-    expect(note).not.toHaveProperty("revisionId");
+    expect(stored.body).toContain("極秘ポスター");
   });
 
-  it("ACL を取り消した後は、既存の通知も作品名を伏せて返す（再付与で戻る）", async () => {
+  it("ACL を取り消しても、通知は作品名を伏せない（105A）", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, { title: "極秘ポスター" });
     const revision = await submitRevision(ctx, work.id);
@@ -59,18 +55,8 @@ describe("通知の本文と制作物の閲覧権限", () => {
     });
     const [after] = await listMyNotifications(ctx, principals.reviewer);
     expect(after).toMatchObject({ id: before!.id, kind: "review_assigned" });
-    expect(after?.title).toBe(REDACTED_NOTIFICATION.title);
-    expect(after?.body).toBe(REDACTED_NOTIFICATION.body);
-    expect(after).not.toHaveProperty("workId");
-    expect(after).not.toHaveProperty("revisionId");
-
-    await grantWorkPermission(ctx, principals.sysadmin, {
-      workId: work.id,
-      userIds: [principals.reviewer.userId],
-      permission: "review",
-    });
-    const [again] = await listMyNotifications(ctx, principals.reviewer);
-    expect(again?.body).toContain("極秘ポスター");
+    expect(after?.body).toContain("極秘ポスター");
+    expect(after?.workId).toBe(work.id);
   });
 
   it("通常の制作物は委員なら誰でも見られるので、割当の通知も伏せない（利用者決定 2026-10-17）", async () => {
@@ -115,7 +101,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
     expect(note?.body).toContain("極秘ポスター");
   });
 
-  it("旧フィードバックの通知も制作物の閲覧権限で守る（コメントへ統合したため）。restricted の制作物は伏せる", async () => {
+  it("旧フィードバックの通知も制作物名を返す（105A）", async () => {
     const ctx = createInMemoryContext();
     const open = await seedWork(ctx, { title: "公開チラシ" });
     const secret = await seedWork(ctx, { title: "極秘ポスター" });
@@ -130,8 +116,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
     const list = await listMyNotifications(ctx, principals.stranger);
     const bodies = list.map((n) => n.body);
     expect(bodies).toContain("「公開チラシ」のスレッド");
-    expect(bodies).toContain(REDACTED_NOTIFICATION.body);
-    expect(bodies.join()).not.toContain("極秘ポスター");
+    expect(bodies).toContain("「極秘ポスター」のスレッド");
   });
 });
 

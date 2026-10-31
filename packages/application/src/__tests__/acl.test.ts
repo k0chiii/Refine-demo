@@ -55,11 +55,17 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       productionTeamIds: [design.id],
     });
     const member = { ...principals.reviewer, teamIds: [design.id] };
-    await expect(loadAuthorizedWork(ctx, principals.stranger, work.id, "work.view")).resolves.toBeTruthy();
+    await expect(
+      loadAuthorizedWork(ctx, principals.stranger, work.id, "work.view"),
+    ).resolves.toBeTruthy();
     await expect(loadAuthorizedWork(ctx, member, work.id, "work.view")).resolves.toBeTruthy();
-    await expect(loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view")).resolves.toBeTruthy();
+    await expect(
+      loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view"),
+    ).resolves.toBeTruthy();
     await saveTeam(ctx, principals.sysadmin, { ...design, memberIds: [] });
-    await expect(loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view")).resolves.toBeTruthy();
+    await expect(
+      loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view"),
+    ).resolves.toBeTruthy();
     await expect(loadAuthorizedWork(ctx, member, work.id, "comment.post")).resolves.toBeTruthy();
     await expect(loadAuthorizedWork(ctx, member, work.id, "review.participate")).rejects.toThrow(
       code("forbidden"),
@@ -90,7 +96,9 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       userIds: [viewer.userId],
       permission: "review",
     });
-    await expect(loadAuthorizedWork(ctx, viewer, work.id, "review.participate")).resolves.toBeTruthy();
+    await expect(
+      loadAuthorizedWork(ctx, viewer, work.id, "review.participate"),
+    ).resolves.toBeTruthy();
 
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -137,7 +145,9 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
         severity: "info",
       }),
     ).resolves.toBeTruthy();
-    await expect(loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view")).resolves.toBeTruthy();
+    await expect(
+      loadAuthorizedWork(ctx, principals.reviewer, work.id, "work.view"),
+    ).resolves.toBeTruthy();
     await expect(
       loadAuthorizedWork(ctx, principals.reviewer, work.id, "review.participate"),
     ).rejects.toThrow(code("forbidden"));

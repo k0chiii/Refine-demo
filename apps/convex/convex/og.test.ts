@@ -4,10 +4,10 @@ import { createCast, createHarness } from "../test/harness";
 
 /**
  * リンクのプレビュー（OGP）の公開の応答 `GET /og/work?id=`（http.ts → works.ogSummary）。
- * 認証なしで引けるのは、機密区分が通常の制作物の題名だけ。非公開・取扱注意と無い ID は 404（存在も返さない）
+ * 105A: 認証なしで制作物の題名を返す。無い ID は 404
  */
 describe("Convex: GET /og/work（リンクのプレビューの題名）", () => {
-  it("通常の制作物は題名だけ返し、非公開・無い ID は 404", async () => {
+  it("制作物は題名だけ返し、無い ID は 404", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const base = {
@@ -32,7 +32,9 @@ describe("Convex: GET /og/work（リンクのプレビューの題名）", () =>
     expect(ok.headers.get("cache-control")).toContain("max-age=300");
     expect(await ok.json()).toEqual({ title: "公式 Instagram 開催告知" });
 
-    expect((await t.fetch(`/og/work?id=${restricted}`)).status).toBe(404);
+    const restrictedRes = await t.fetch(`/og/work?id=${restricted}`);
+    expect(restrictedRes.status).toBe(200);
+    expect(await restrictedRes.json()).toEqual({ title: "非公開の企画" });
     expect((await t.fetch(`/og/work?id=not-an-id`)).status).toBe(404);
     expect((await t.fetch(`/og/work`)).status).toBe(404);
   });

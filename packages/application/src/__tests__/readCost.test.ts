@@ -69,7 +69,7 @@ describe("提出先の候補（常時購読）は、候補にならない制作�
 });
 
 describe("ダッシュボード: 進行中でない通常の制作物は ACL を読まずに表の行に数える", () => {
-  it("保留の通常制作物は ACL を読まない。非公開は従来どおり ACL で見られるかを確かめる", async () => {
+  it("保留の制作物は ACL を読まずに表に出る（105A）", async () => {
     const ctx = createInMemoryContext();
     const held = await seedWork(ctx, { title: "保留" });
     await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
@@ -80,9 +80,8 @@ describe("ダッシュボード: 進行中でない通常の制作物は ACL を
     );
     const calls = counted(ctx);
     const d = await buildDashboard(ctx, principals.reviewer, works);
-    // 校正者: 通常の保留は見られる（行に出る）。非公開の保留は見られない（出ない）
-    expect(d.overview.works.map((r) => r.title)).toEqual(["保留"]);
-    expect(calls.acl).toBe(1); // 非公開の判定のぶんだけ
+    expect(d.overview.works.map((r) => r.title).sort()).toEqual(["保留", "非公開"].sort());
+    expect(calls.acl).toBe(0);
     const own = await buildDashboard(ctx, principals.manager, works);
     expect(own.overview.works.map((r) => r.title).sort()).toEqual(["保留", "非公開"]);
   });

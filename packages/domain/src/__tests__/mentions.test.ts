@@ -38,7 +38,7 @@ describe("メンション", () => {
       ["approver", "creator", "manager", "member", "stake"].sort(),
     );
     expect(validateMentions(["member"], w, [], teams)).toEqual(["member"]);
-    expect(() => validateMentions(["other"], w, [], teams)).toThrow(code("mention_not_allowed"));
+    expect(validateMentions(["other"], w, [], teams)).toEqual(["other"]);
   });
   it("重複は 1 人にまとめる。委員なら誰でもメンションできる（105A）", () => {
     expect(validateMentions(["creator", "creator", "approver"], work, [])).toEqual([
@@ -46,9 +46,7 @@ describe("メンション", () => {
       "approver",
     ]);
     expect(validateMentions(["stranger"], work, [])).toEqual(["stranger"]);
-    expect(() => validateMentions(["gone"], work, [grant("gone", { revokedAt: T0 })])).toThrow(
-      code("mention_not_allowed"),
-    );
+    expect(validateMentions(["gone"], work, [grant("gone", { revokedAt: T0 })])).toEqual(["gone"]);
   });
   it("通常の制作物は委員の誰でも見られる（既定のポリシー）ので、ここでは上限と重複だけを見る", () => {
     const normal = makeWork();

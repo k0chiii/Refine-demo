@@ -56,9 +56,9 @@ describe("Convex 統合: 文章の下書き", () => {
         baseVersion: 1,
       }),
     ).rejects.toThrow(code("forbidden"));
-    await expect(cast.stranger.as.query(api.documents.get, { workId })).rejects.toThrow(
-      code("forbidden"),
-    );
+    const seenStranger = await cast.stranger.as.query(api.documents.get, { workId });
+    expect(seenStranger.canEdit).toBe(false);
+    expect(seenStranger.draft).toMatchObject({ title: "五月祭のごあいさつ" });
     await expect(
       cast.creator.as.mutation(api.documents.save, {
         workId,

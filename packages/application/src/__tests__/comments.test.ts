@@ -113,7 +113,7 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
     );
   });
 
-  it("見られる人は ACL が review 未満でも新しいコメントを投稿できる（利用者決定 2026-10-19）。見られない人はできない", async () => {
+  it("見られる人は ACL が review 未満でも新しいコメントを投稿できる（利用者決定 2026-10-19）。委員なら誰でも（105A）", async () => {
     const { ctx, work, revision } = await setup();
     ctx.state.members.add("u_viewer");
     await grantWorkPermission(ctx, principals.sysadmin, {
@@ -140,8 +140,9 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
       editThread(ctx, principals.reviewer, { threadId: thread.id, body: "y" }),
     ).rejects.toThrow(code("comment_edit_not_author"));
     await expect(editThread(ctx, viewer, { threadId: thread.id, body: "y" })).resolves.toBeTruthy();
-    // 非公開の制作物を見られない人は投稿できない
-    await expect(postComment(ctx, principals.stranger, input)).rejects.toThrow(code("forbidden"));
+    await expect(postComment(ctx, principals.stranger, input)).resolves.toMatchObject({
+      authorId: principals.stranger.userId,
+    });
   });
 
   it("アンカーは対象版のファイルを指していなければならない", async () => {
@@ -282,20 +283,8 @@ describe("採否判断（A-07, D5）", () => {
       replyToThread(ctx, principals.reviewer, { threadId: thread.id, body: "追加で" }),
     ).resolves.toBeUndefined();
   });
-  it("返信は制作物を見られる人なら誰でもできる（view 権限のみでも可）。無関係者は不可", async () => {
-    const { ctx, work, revision } = await setup();
-    ctx.state.members.add("u_viewer");
-    await grantWorkPermission(ctx, principals.sysadmin, {
-      workId: work.id,
-      userIds: ["u_viewer"],
-      permission: "review",
-    });
-    const viewer = {
-      userId: "u_viewer",
-      isSystemAdmin: false,
-      groupIds: [],
-      orgPermissions: ["*"],
-    };
+  it("返信は委員なら誰でもできる（105A）", async () => {
+    const { ctx, revision } = await setup();
     const thread = await postComment(ctx, principals.reviewer, {
       revisionId: revision.id,
       body: "x",
@@ -303,11 +292,8 @@ describe("採否判断（A-07, D5）", () => {
       severity: "info",
     });
     await expect(
-      replyToThread(ctx, viewer, { threadId: thread.id, body: "y" }),
-    ).resolves.toBeUndefined();
-    await expect(
       replyToThread(ctx, principals.stranger, { threadId: thread.id, body: "y" }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -319,22 +305,17 @@ describe("メンション", () => {
       .filter((n) => n.recipientId === userId && n.threadId)
       .map((n) => n.kind);
 
-  it("見られる人だけをメンションでき、メンションされた人に通知が届く（制作者は重ねて通知しない）", async () => {
+  it("委員全員をメンション候補にでき、メンションされた人に通知が届く（105A）", async () => {
     const { ctx, work, revision } = await setup();
     const ids = (
       await searchMentionCandidates(ctx, principals.reviewer, { workId: work.id, text: "" })
     ).map((p) => p.id);
-    expect(ids.sort()).toEqual(
-      [
-        principals.approver.userId,
-        principals.creator.userId,
-        principals.manager.userId,
-        principals.reviewer.userId,
-      ].sort(),
-    );
-    await expect(
-      searchMentionCandidates(ctx, principals.stranger, { workId: work.id, text: "" }),
-    ).rejects.toThrow(code("forbidden"));
+    expect(ids).toContain(principals.stranger.userId);
+    const strangerCandidates = await searchMentionCandidates(ctx, principals.stranger, {
+      workId: work.id,
+      text: "",
+    });
+    expect(strangerCandidates.map((p) => p.id)).toContain(principals.creator.userId);
 
     const thread = await postComment(ctx, principals.reviewer, {
       revisionId: revision.id,
@@ -344,8 +325,8 @@ describe("メンション", () => {
       mentions: [principals.creator.userId, principals.approver.userId],
     });
     expect(thread.mentions).toEqual([principals.creator.userId, principals.approver.userId]);
-    expect(kinds(ctx, principals.creator.userId)).toEqual(["mentioned"]);
-    expect(kinds(ctx, principals.approver.userId)).toEqual(["mentioned"]);
+    expect(kinds(ctx, principals.creator.userId)).toContain("mentioned");
+    expect(kinds(ctx, principals.approver.userId)).toContain("mentioned");
 
     await expect(
       postComment(ctx, principals.reviewer, {
@@ -355,7 +336,7 @@ describe("メンション", () => {
         severity: "minor",
         mentions: [principals.stranger.userId],
       }),
-    ).rejects.toThrow(code("mention_not_allowed"));
+    ).resolves.toMatchObject({ mentions: [principals.stranger.userId] });
 
     // 返信でのメンション（自分自身は通知しない）
     await replyToThread(ctx, principals.creator, {
@@ -364,7 +345,7 @@ describe("メンション", () => {
       mentions: [principals.reviewer.userId, principals.creator.userId],
     });
     expect(kinds(ctx, principals.reviewer.userId)).toContain("mentioned");
-    expect(kinds(ctx, principals.creator.userId)).toEqual(["mentioned"]);
+    expect(kinds(ctx, principals.creator.userId)).toContain("mentioned");
     const replied = (await ctx.threads.listEvents(thread.id)).find(
       (e) => e.eventType === "replied",
     );

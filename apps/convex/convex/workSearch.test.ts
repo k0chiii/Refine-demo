@@ -51,9 +51,9 @@ describe("検索と要約の派生データ", () => {
       throw new Error("cursor did not finish");
     };
     expect((await pages("祭の")).sort()).toEqual([current, legacy, secret].sort());
-    expect((await pages("場者")).sort()).toEqual([current, legacy].sort());
+    expect((await pages("場者")).sort()).toEqual([current, legacy, secret].sort());
     await c.manager.as.mutation(api.works.update, { workId: current, patch: { title: "新受付" } });
-    expect(await pages("祭の")).toEqual([legacy]);
+    expect((await pages("祭の")).sort()).toEqual([legacy, secret].sort());
     expect(
       await t.run((ctx) =>
         ctx.db

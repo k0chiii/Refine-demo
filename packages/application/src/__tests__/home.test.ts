@@ -106,17 +106,15 @@ describe("自分だけのダッシュボード（W-26 段階 1）", () => {
     expect((await buildDashboard(ctx, principals.creator, await all())).mentions).toHaveLength(0);
   });
 
-  it("ピン留め。見られない制作物はピン留めできない", async () => {
+  it("ピン留め。委員ならどの制作物もピン留めできる（105A）", async () => {
     const { ctx, soon, late, all } = await setup();
     await setWorkPinned(ctx, principals.reviewer, { workId: soon.id, pinned: true });
-    await expect(
-      setWorkPinned(ctx, principals.reviewer, { workId: late.id, pinned: true }),
-    ).rejects.toThrow("forbidden");
+    await setWorkPinned(ctx, principals.reviewer, { workId: late.id, pinned: true });
     let d = await buildDashboard(ctx, principals.reviewer, await all());
-    expect(d.pinned.map((i) => i.workTitle)).toEqual(["A 近い納期"]);
+    expect(d.pinned.map((i) => i.workTitle).sort()).toEqual(["A 近い納期", "B 遅い納期"].sort());
     await setWorkPinned(ctx, principals.reviewer, { workId: soon.id, pinned: false });
     d = await buildDashboard(ctx, principals.reviewer, await all());
-    expect(d.pinned).toHaveLength(0);
+    expect(d.pinned.map((i) => i.workTitle)).toEqual(["B 遅い納期"]);
   });
 });
 
@@ -173,7 +171,7 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     expect(await submitted(ctx, principals.stranger)).toHaveLength(1);
   });
 
-  it("非公開の制作物は、ピン留めした後に見られなくなった人には伏せた通知を送る", async () => {
+  it("ACL を取り消してもピン留め購読者に版提出通知を送る（105A）", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, { title: "極秘ポスター" });
     await grantWorkPermission(ctx, principals.sysadmin, {
@@ -197,9 +195,8 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({
       kind: "revision_submitted",
-      title: REDACTED_NOTIFICATION.title,
-      body: REDACTED_NOTIFICATION.body,
     });
+    expect(stored[0]!.body).toContain("極秘ポスター");
   });
 
   it("ピン留めは 100 件まで。超えたら古いものから外す", async () => {

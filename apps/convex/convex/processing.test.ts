@@ -57,11 +57,19 @@ it("派生処理は明示同意・作品権限・機密区分を確認し、権�
     state: "failed",
     output: null,
   });
-  const restricted = await setupWork(t, c);
+  const otherWork = await setupWork(t, c);
+  await c.approver.as.mutation(api.approvals.finalize, {
+    workId: otherWork,
+    revisionId: (
+      await submitFiles(c, otherWork, [
+        { fileName: "x.pdf", mimeType: "application/pdf", type: "pdf" },
+      ])
+    ).revisionId,
+  });
   await expect(
     c.creator.as.mutation(api.processing.create, {
       kind: "web-snapshot",
-      options: { workId: restricted, url: "https://example.com/" },
+      options: { workId: otherWork, url: "https://example.com/" },
       consentToProcessing: true,
     }),
   ).rejects.toThrow("processing_not_allowed");

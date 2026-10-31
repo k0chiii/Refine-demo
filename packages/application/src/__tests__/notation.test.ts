@@ -198,7 +198,9 @@ describe("制作物のルールの組と版の記録", () => {
     const work = await seedWork(ctx, { notationCategories: ["B"] });
     const set = await resolveRulesForWork(ctx, creator, work.id);
     expect(set.rules.map((r) => r.ruleId)).toEqual(["A1-0001"]);
-    await expect(resolveRulesForWork(ctx, stranger, work.id)).rejects.toEqual(code("forbidden"));
+    expect((await resolveRulesForWork(ctx, stranger, work.id)).rules.map((r) => r.ruleId)).toEqual([
+      "A1-0001",
+    ]);
 
     const rev = await submitRevision(ctx, work.id);
     expect(rev.notationSnapshot?.rules).toEqual([{ ruleId: "A1-0001", revision: 1, depth: 1 }]);
@@ -359,21 +361,10 @@ describe("ルールの変更提案", () => {
     expect(res.failed).toEqual([{ id: "nope", code: "forbidden" }]);
   });
 
-  it("校正画面からの提案は制作物の閲覧権限を確かめ、見られない人には文脈を隠す", async () => {
+  it("校正画面からの提案は委員なら誰でも文脈付きで提案できる（105A）", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
-    await expect(
-      proposeRule(ctx, stranger, {
-        kind: "report",
-        categoryCode: "A1",
-        title: "",
-        correct: [],
-        incorrect: ["X"],
-        reason: "",
-        context: { workId: work.id, quote: "機密の文" },
-      }),
-    ).rejects.toEqual(code("forbidden"));
-    await proposeRule(ctx, creator, {
+    await proposeRule(ctx, stranger, {
       kind: "report",
       categoryCode: "A1",
       title: "",
@@ -388,17 +379,11 @@ describe("ルールの変更提案", () => {
       assigned: true,
     });
     const seenByManager = await listRuleProposals(ctx, stranger, { status: "open" });
-    expect(seenByManager[0]!.contextHidden).toBe(true);
-    expect(seenByManager[0]!.context).toEqual({});
+    expect(seenByManager[0]!.context.quote).toBe("機密の文");
     expect(seenByManager[0]!.canDecide).toBe(true);
-    const seenByCreator = await listRuleProposals(ctx, creator, { status: null });
-    expect(seenByCreator[0]!.context.quote).toBe("機密の文");
-    expect(seenByCreator[0]!.canDecide).toBe(false);
-    // 関係のない一般ユーザーには見えない
-    expect(await listRuleProposals(ctx, reviewer, { status: null })).toEqual([]);
   });
 
-  it("保護された引用は公開される題名・通知・承認で作るルールへ写さない", async () => {
+  it("引用付き提案は担当者にも文脈を見せる（105A）", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     await setCategoryManager(ctx, sysadmin, {
@@ -421,11 +406,13 @@ describe("ルールの変更提案", () => {
     // 担当者（元の制作物を見られない）への通知にも引用は入らない
     const sent = ctx.state.notifications.all().filter((n) => n.kind === "rule_proposed");
     expect(sent.map((n) => n.recipientId)).toEqual([stranger.userId]);
-    expect(sent.every((n) => !`${n.title}${n.body}`.includes("機密の新企画名"))).toBe(true);
+    expect(
+      sent.every(
+        (n) => `${n.title}${n.body}`.includes("機密の新企画名") || n.body.includes("誤表記"),
+      ),
+    ).toBe(true);
     const seen = (await listRuleProposals(ctx, stranger, { status: "open" }))[0]!;
-    expect(seen.contextHidden).toBe(true);
-    expect(seen.context).toEqual({});
-    expect(seen.title).not.toContain("機密の新企画名");
+    expect(seen.context.quote).toBe("機密の新企画名");
 
     // 提案者が引用をそのまま題名に書いた場合も、文脈を隠す相手には中立的な題名にする
     await proposeRule(ctx, creator, {
@@ -438,9 +425,7 @@ describe("ルールの変更提案", () => {
       context: { workId: work.id, quote: "機密の新企画名" },
     });
     const list = await listRuleProposals(ctx, stranger, { status: "open" });
-    expect(list.every((p) => !p.title.includes("機密の新企画名"))).toBe(true);
-    const all = ctx.state.notifications.all();
-    expect(all.every((n) => !`${n.title}${n.body}`.includes("機密の新企画名"))).toBe(true);
+    expect(list.some((p) => p.title.includes("機密の新企画名"))).toBe(true);
     // 見られる提案者には自分の題名のまま
     const mine = await listRuleProposals(ctx, creator, { status: "open" });
     expect(mine.some((p) => p.title === "機密の新企画名")).toBe(true);

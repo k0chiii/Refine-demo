@@ -26,12 +26,11 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     expect(await cast.reviewer.as.query(api.home.pinned, { workId })).toBe(true);
     const d = await cast.reviewer.as.query(api.dashboard.get, {});
     expect(d.pinned.map((i) => i.workId)).toEqual([workId]);
-    // ほかの人には影響しない。見られない制作物はピン留めできない
+    // ほかの人には影響しない。委員ならピン留めできる（105A）
     const other = await cast.creator.as.query(api.dashboard.get, {});
     expect(other.pinned).toHaveLength(0);
-    await expect(
-      cast.stranger.as.mutation(api.home.setPinned, { workId, pinned: true }),
-    ).rejects.toThrow(code("forbidden"));
+    await cast.stranger.as.mutation(api.home.setPinned, { workId, pinned: true });
+    expect(await cast.stranger.as.query(api.home.pinned, { workId })).toBe(true);
   });
 
   it("ピン留めした制作物は校正の入口のピン留めに出て、版提出の通知もピン留めした人に届く", async () => {
