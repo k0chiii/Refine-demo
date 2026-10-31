@@ -27,7 +27,7 @@ export const severityLabel: Record<string, string> = {
   critical: "重大",
   major: "重要",
   minor: "軽微",
-  info: "情報",
+  info: "参考",
 };
 export const resolutionLabel: Record<string, string> = {
   open: "未対応",
