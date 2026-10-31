@@ -148,8 +148,6 @@ export function optionKey(value: string): string {
 // ---------------------------------------------------------------- タグ（Notion: multi_select）
 /** Notion にある選択肢（候補として出す。これ以外のタグも付けられる） */
 export const workTagOptions = [
-  "a",
-  "b",
   "マスター",
   "流し込み",
   "公式パンフ",

@@ -213,7 +213,7 @@ function workInvalidMessage(details: unknown): string | null {
     title: "制作物名",
     category: "区分",
     creatorIds: "制作者",
-    approverIds: "校了者",
+    approverIds: "校了する人",
     approvalQuorum: "校了とみなす人数",
     managerIds: "主管",
     mediaType: "媒体",
