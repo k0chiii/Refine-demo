@@ -50,7 +50,7 @@ test.describe("制作物一覧", { tag: "@smoke" }, () => {
     await page.locator(WORKS_ENTRY).first().waitFor();
     await page.locator(".works__sort").click();
     await app.settle();
-    await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "担当順" }).click();
+    await page.locator("#works-sort-menu m3e-menu-item-radio").nth(4).click();
     await expect(page).toHaveURL(/sort=owner/);
   });
 });
