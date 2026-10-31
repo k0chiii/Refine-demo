@@ -224,6 +224,19 @@ export function assertItemsReadyForConfirm(items: readonly UploadItem[]): void {
   }
 }
 
+/** 版提出の external 添付に載せる URL（https のみ。利用者決定 95A） */
+export function assertSubmissionExternalUrl(url: string): void {
+  const trimmed = url.trim();
+  try {
+    if (new URL(trimmed).protocol !== "https:") {
+      throw new DomainError("anchor_invalid", { reason: "external_url_https_required" });
+    }
+  } catch (error) {
+    if (error instanceof DomainError) throw error;
+    throw new DomainError("anchor_invalid", { reason: "external_url_invalid" });
+  }
+}
+
 export function toArtifact(item: UploadItem, revisionId: string): Omit<Artifact, "id"> {
   const a: Omit<Artifact, "id"> = {
     revisionId,
