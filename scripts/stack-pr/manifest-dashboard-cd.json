@@ -1,0 +1,112 @@
+[
+  {
+    "id": "077",
+    "series": "C-dashboard-mock",
+    "slug": "ui-delay-color-tokens",
+    "title": "ui(home): 遅延の色分け（1日=オレンジ・2日以上=赤）",
+    "parent": "076",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-member", "mobile": "dashboard-member" },
+    "m3e": ["color"],
+    "decide": [{ "id": "delay-color", "q": "モックの遅延色", "options": [{ "id": "A", "rec": true, "text": "1日オレンジ・2日以上赤", "note": "decisions + mock" }] }]
+  },
+  {
+    "id": "078",
+    "series": "C-dashboard-mock",
+    "slug": "ui-kpi-row-mock",
+    "title": "ui(home): KPI 行をモック配置に合わせる",
+    "parent": "077",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-manager", "mobile": "dashboard-manager" }
+  },
+  {
+    "id": "079",
+    "series": "C-dashboard-mock",
+    "slug": "ui-graphs-stage-bureau",
+    "title": "ui(home): 状態・局別グラフ（モック通り）",
+    "parent": "078",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-manager" }
+  },
+  {
+    "id": "080",
+    "series": "C-dashboard-mock",
+    "slug": "ui-sns-band-visibility",
+    "title": "ui(home): SNS 帯は SNS 主管と校了者のみ",
+    "parent": "079",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-approver" }
+  },
+  {
+    "id": "081",
+    "series": "C-dashboard-mock",
+    "slug": "ui-english-parallel-labels",
+    "title": "ui(home): 英語版ラベル並行（英語校了は日本語校了後）",
+    "parent": "080",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-member" }
+  },
+  {
+    "id": "082",
+    "series": "C-dashboard-mock",
+    "slug": "ui-submission-prep-days",
+    "title": "ui(home): 入稿準備日数（Issue #92 パラメータ）",
+    "parent": "081",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-member" }
+  },
+  {
+    "id": "083",
+    "series": "D-dashboard-mock",
+    "slug": "ui-role-home-manager",
+    "title": "ui(home): 主管ビュー（モック manager）",
+    "parent": "082",
+    "verify": "full",
+    "shots": { "desktop": "dashboard-manager", "mobile": "dashboard-manager-mobile" }
+  },
+  {
+    "id": "084",
+    "series": "D-dashboard-mock",
+    "slug": "ui-role-home-approver",
+    "title": "ui(home): 校了ビュー（モック approver）",
+    "parent": "083",
+    "verify": "full",
+    "shots": { "desktop": "dashboard-approver", "mobile": "dashboard-approver-mobile" }
+  },
+  {
+    "id": "085",
+    "series": "D-dashboard-mock",
+    "slug": "ui-role-home-member",
+    "title": "ui(home): メンバービュー（モック member）",
+    "parent": "084",
+    "verify": "full",
+    "shots": { "desktop": "dashboard-member", "mobile": "dashboard-member-mobile" }
+  },
+  {
+    "id": "086",
+    "series": "D-dashboard-mock",
+    "slug": "ui-detail-shell-mock",
+    "title": "ui(detail): 詳細画面（モック detail）",
+    "parent": "085",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-detail", "mobile": "dashboard-detail-mobile" }
+  },
+  {
+    "id": "087",
+    "series": "D-dashboard-mock",
+    "slug": "ui-tablet-layout",
+    "title": "ui(home): タブレット幅レイアウト",
+    "parent": "086",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-member-tablet" }
+  },
+  {
+    "id": "088",
+    "series": "D-dashboard-mock",
+    "slug": "ui-dark-theme-home",
+    "title": "ui(home): ダークテーマ",
+    "parent": "087",
+    "verify": "standard",
+    "shots": { "desktop": "dashboard-manager-dark", "mobile": "dashboard-manager-dark-mobile" }
+  }
+]

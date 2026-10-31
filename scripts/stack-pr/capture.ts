@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { App, PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
+import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 
 /** 誤ってサインイン画面だけ撮ったときの PNG（大地さん指摘） */
 export const SIGNIN_SCREEN_MD5 = "ac741f735c6593b5cbdc397deb4a8004";
@@ -50,114 +50,151 @@ function ensureDemo() {
   throw new Error("demo preview failed to start");
 }
 
-type SceneFn = (app: App, page: import("playwright").Page) => Promise<void>;
+type DemoUser =
+  | "mock-nogiku-creator"
+  | "mock-nogiku-reviewer"
+  | "mock-nogiku-manager"
+  | "mock-nogiku-approver";
+
+async function ready(page: import("playwright").Page) {
+  await page.waitForFunction(() => Boolean(globalThis.__mf100demo && globalThis.__mf100router), null, {
+    timeout: 30_000,
+  });
+}
+
+async function demoGo(page: import("playwright").Page, routePath: string) {
+  await page.evaluate((p) => {
+    const [to, q] = p.split("?");
+    const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
+    return globalThis.__mf100router!.navigate(search ? { to: to!, search } : { to: to! });
+  }, routePath.replace(/^https?:\/\/[^/]+/, ""));
+  await page.waitForTimeout(800);
+}
+
+async function signInAs(page: import("playwright").Page, sub: DemoUser) {
+  await page.goto(`${BASE}/signin`);
+  await ready(page);
+  await page.evaluate(() => globalThis.__mf100demo!.signOut());
+  await demoGo(page, "/signin");
+  await page.evaluate(async (s) => {
+    await globalThis.__mf100demo!.ensureSeeded();
+    await globalThis.__mf100demo!.signIn(s);
+  }, sub);
+  await page.waitForURL((u) => ["/", "/make", "/check", "/works"].includes(u.pathname), {
+    timeout: 30_000,
+  });
+  await page.waitForTimeout(800);
+}
+
+type SceneFn = (page: import("playwright").Page) => Promise<void>;
 
 const SCENES: Record<string, SceneFn> = {
-  "01-signin": async (_app, page) => {
+  "01-signin": async (page) => {
     await page.goto(`${BASE}/signin`);
-    await new App(page).ready();
+    await ready(page);
     await page.locator("m3e-expansion-panel [slot=header]").first().click();
   },
-  "02-works-list": async (app) => {
-    await app.signInAs("mock-nogiku-creator");
-    await app.go("/works");
-    await app.page.waitForSelector(WORKS_ENTRY);
+  "02-works-list": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/works");
+    await page.waitForSelector(WORKS_ENTRY);
   },
-  "27-make-creator": async (app) => {
-    await app.signInAs("mock-nogiku-creator");
-    await app.go("/make");
-    await app.page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
+  "27-make-creator": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
   },
-  "28-check-reviewer": async (app) => {
-    await app.signInAs("mock-nogiku-reviewer");
-    await app.go("/check");
-    await app.page.waitForSelector(".hub[data-hub='check']");
+  "28-check-reviewer": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/check");
+    await page.waitForSelector(".hub[data-hub='check']");
   },
-  "08-workspace-comment": async (app) => {
-    await app.signInAs("mock-nogiku-reviewer");
-    await app.go("/works");
-    await app.page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
-    await app.page.waitForURL(/\/w\//);
-    await app.page.waitForSelector(".comments .thread");
+  "08-workspace-comment": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
+    await page.waitForURL(/\/w\//);
+    await page.waitForSelector(".comments .thread");
   },
-  "09-decision": async (app) => {
-    await app.signInAs("mock-nogiku-creator");
-    await app.go("/works");
-    await app.page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
-    await app.page.waitForURL(/\/v\//);
-    await app.page.waitForSelector(".comments .thread");
+  "09-decision": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
+    await page.waitForURL(/\/v\//);
+    await page.waitForSelector(".comments .thread");
   },
-  "15-notifications": async (app) => {
-    await app.signInAs("mock-nogiku-creator");
-    await app.go("/make");
+  "15-notifications": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
   },
-  "31-finalize": async (app) => {
-    await app.signInAs("mock-nogiku-approver");
-    await app.go("/check");
+  "31-finalize": async (page) => {
+    await signInAs(page, "mock-nogiku-approver");
+    await demoGo(page, "/check");
   },
-  "33-work-form": async (app) => {
-    await app.signInAs("mock-nogiku-manager");
-    await app.go("/works");
+  "33-work-form": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
   },
-  "34-acl": async (app) => {
-    await app.signInAs("mock-nogiku-manager");
-    await app.go("/works");
+  "34-acl": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
   },
-  "12-submit-dialog": async (app) => {
-    await app.signInAs("mock-nogiku-creator");
-    await app.go("/make");
+  "12-submit-dialog": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
   },
-  "dashboard-manager": async (app) => {
-    await app.signInAs("mock-nogiku-manager");
-    await app.go("/make");
-    await app.page.waitForSelector(".hub[data-hub='make'], .home-dashboard, .kpis");
+  "dashboard-manager": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works .ov, .works .kpis, .works", { timeout: 60_000 });
   },
-  "dashboard-approver": async (app) => {
-    await app.signInAs("mock-nogiku-approver");
-    await app.go("/make");
-    await app.page.waitForSelector(".hub[data-hub='make'], .home-dashboard, .kpis");
+  "dashboard-approver": async (page) => {
+    await signInAs(page, "mock-nogiku-approver");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works, .hub[data-hub='make']", { timeout: 60_000 });
   },
-  "dashboard-member": async (app) => {
-    await app.signInAs("mock-nogiku-creator");
-    await app.go("/make");
-    await app.page.waitForSelector(".hub[data-hub='make']");
+  "dashboard-member": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make']");
   },
-  "dashboard-manager-mobile": async (app) => {
-    await SCENES["dashboard-manager"]!(app, app.page);
+  "dashboard-manager-mobile": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
   },
-  "dashboard-member-mobile": async (app) => {
-    await SCENES["dashboard-member"]!(app, app.page);
+  "dashboard-member-mobile": async (page) => {
+    await SCENES["dashboard-member"]!(page);
   },
-  "dashboard-approver-mobile": async (app) => {
-    await SCENES["dashboard-approver"]!(app, app.page);
+  "dashboard-approver-mobile": async (page) => {
+    await SCENES["dashboard-approver"]!(page);
   },
-  "dashboard-detail": async (app) => {
-    await app.signInAs("mock-nogiku-manager");
-    await app.openWork(PAMPHLET);
+  "dashboard-detail": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
+    await page.waitForURL(/\/w\//);
   },
-  "dashboard-detail-mobile": async (app) => {
-    await SCENES["dashboard-detail"]!(app, app.page);
+  "dashboard-detail-mobile": async (page) => {
+    await SCENES["dashboard-detail"]!(page);
   },
-  "dashboard-manager-dark": async (app, page) => {
+  "dashboard-manager-dark": async (page) => {
     await page.emulateMedia({ colorScheme: "dark" });
-    await SCENES["dashboard-manager"]!(app, page);
+    await SCENES["dashboard-manager"]!(page);
   },
-  "dashboard-manager-dark-mobile": async (app, page) => {
+  "dashboard-manager-dark-mobile": async (page) => {
     await page.emulateMedia({ colorScheme: "dark" });
-    await SCENES["dashboard-manager"]!(app, page);
+    await SCENES["dashboard-manager"]!(page);
   },
-  "dashboard-member-tablet": async (app) => {
-    await SCENES["dashboard-member"]!(app, app.page);
+  "dashboard-member-tablet": async (page) => {
+    await SCENES["dashboard-member"]!(page);
   },
 };
 
 async function runScene(page: import("playwright").Page, key: string) {
-  const app = new App(page);
   await page.goto(`${BASE}/signin`);
-  await app.ready();
-  await app.page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
+  await ready(page);
+  await page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
-  await fn(app, page);
+  await fn(page);
 }
 
 export async function captureShots(

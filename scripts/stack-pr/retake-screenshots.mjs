@@ -42,6 +42,10 @@ const report = [];
 
 for (const item of items) {
   if (!item.shots?.desktop) continue;
+  let shots = item.shots;
+  if (["071", "072", "073", "074", "075", "076"].includes(item.id)) {
+    shots = { desktop: "dashboard-manager", mobile: "dashboard-manager-mobile" };
+  }
   const dir = path.join(outRoot, item.id);
   fs.mkdirSync(dir, { recursive: true });
   const before = path.join(dir, "before-desktop.png");
@@ -49,8 +53,8 @@ for (const item of items) {
   console.log(`\n=== ${item.id} ${item.title} ===`);
   try {
     const capOpts = { mobileWidth: 412 };
-    await captureShots(item.shots, path.join(dir, "before"), capOpts);
-    await captureShots(item.shots, path.join(dir, "after"), capOpts);
+    await captureShots(shots, path.join(dir, "before"), capOpts);
+    await captureShots(shots, path.join(dir, "after"), capOpts);
     for (const f of [before, after, path.join(dir, "before-mobile.png"), path.join(dir, "after-mobile.png")]) {
       if (!fs.existsSync(f)) continue;
       if (md5File(f) === SIGNIN_SCREEN_MD5) throw new Error(`signin md5 on ${f}`);
@@ -72,4 +76,5 @@ for (const item of items) {
 }
 console.log("\nretaken_png_count", retaken);
 console.log("signin_hash_total", allHashes.get(SIGNIN_SCREEN_MD5) ?? 0);
+fs.mkdirSync(`${root}/artifacts/stack-pr`, { recursive: true });
 fs.writeFileSync(`${root}/artifacts/stack-pr/retake-report.json`, JSON.stringify({ retaken, report }, null, 2));

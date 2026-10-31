@@ -1,0 +1,59 @@
+[
+  {
+    "id": "e089",
+    "decision": "89",
+    "series": "E-work-meta",
+    "slug": "copy-unify-terminology",
+    "title": "copy(work): 統括・校了する人（役割名を画面から外す）",
+    "parent": "develop",
+    "verify": "standard",
+    "shots": { "desktop": "33-work-form", "mobile": "33-work-form" },
+    "m3e": ["typography"],
+    "decide": [{ "id": "89", "q": "画面での呼び方", "options": [{ "id": "A", "rec": true, "text": "主管・制作統括→「統括」、校了者→「校了する人」", "note": "decisions 89" }] }]
+  },
+  {
+    "id": "e088",
+    "decision": "88",
+    "series": "E-work-meta",
+    "slug": "drop-legacy-id-ui",
+    "title": "feat(work): 制作物 ID を UI から廃止",
+    "parent": "e089",
+    "verify": "standard",
+    "shots": { "desktop": "33-work-form" },
+    "decide": [{ "id": "88", "q": "目的・用途の入力場所", "options": [{ "id": "C", "rec": true, "text": "登録では聞かず、情報タブで後から（78 と同じ）", "note": "decisions 88 + 78" }] }]
+  },
+  {
+    "id": "e078",
+    "decision": "78",
+    "series": "E-work-meta",
+    "slug": "reg-minimal-fields",
+    "title": "feat(work): 登録は制作物名・小ジャンル・制作者・仕上がり日のみ",
+    "parent": "e088",
+    "verify": "full",
+    "shots": { "desktop": "33-work-form", "mobile": "33-work-form" },
+    "m3e": ["dialogs", "lists"],
+    "decide": [{ "id": "78", "q": "登録で必ず聞く項目", "options": [{ "id": "A", "rec": true, "text": "上記4つのみ。機密区分含む他は情報タブ", "note": "decisions 78" }] }]
+  },
+  {
+    "id": "e081",
+    "decision": "81",
+    "series": "E-work-meta",
+    "slug": "dates-approval-target-finish",
+    "title": "feat(work): ◆校了目標日と■仕上がり日（納期語廃止）",
+    "parent": "e078",
+    "verify": "full",
+    "shots": { "desktop": "33-work-form" },
+    "decide": [{ "id": "81", "q": "日付フィールド", "options": [{ "id": "A", "rec": true, "text": "◆=■−入稿準備日数で自動、上書き可", "note": "Issue #92" }] }]
+  },
+  {
+    "id": "e082",
+    "decision": "82",
+    "series": "E-work-meta",
+    "slug": "revision-planned-dates-list",
+    "title": "feat(schema): 第n版の予定日リスト（072 単一 plannedSubmitAt を置換）",
+    "parent": "e081",
+    "verify": "full",
+    "shots": { "desktop": "02-works-list" },
+    "decide": [{ "id": "82", "q": "版の予定日", "options": [{ "id": "A", "rec": true, "text": "制作物にリスト、提出版と紐付け。移行で旧 plannedSubmitAt を取り込む", "note": "072 置換" }] }]
+  }
+]
