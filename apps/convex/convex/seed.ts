@@ -344,6 +344,36 @@ export const demo = internalMutation({
       });
       created.push(workId);
     }
+    // ロール別ホーム用: 校正割当付きの受付中版（dashboard.make / dashboard.check 用。1 セットだけ）
+    // e2e の PAMPHLET（PR-001）には触れない
+    if (!(await ctx.db.query("reviewAssignments").first())) {
+      const sampleWork = await ctx.db
+        .query("works")
+        .withIndex("by_year", (q) => q.eq("year", 100))
+        .filter((q) => q.eq(q.field("legacyId"), "WEB-003"))
+        .unique();
+      if (sampleWork) {
+        const revisionId = await ctx.db.insert("revisions", {
+          workId: sampleWork._id,
+          kind: "standard",
+          sequence: 1,
+          reviewType: "general",
+          submittedBy: ids["mock-nogiku-creator"]!,
+          submittedAt: now,
+          deadlineAt: now + 12 * 3_600_000,
+          plannedSubmitAt: now + 2 * day,
+          reviewState: "open",
+          changeSummary: "ホーム用サンプル",
+          focusNotes: "",
+        });
+        await ctx.db.insert("reviewAssignments", {
+          revisionId,
+          reviewerId: ids["mock-nogiku-reviewer"]!,
+          reviewType: "general",
+          state: "pending",
+        });
+      }
+    }
     // 表記統一のサンプル（notation2 の初期データ＋α）。ルールが 1 件も無いときだけ入れる
     if (!(await ctx.db.query("notationRules").first())) {
       const admin = ids["mock-nogiku-admin"]!;

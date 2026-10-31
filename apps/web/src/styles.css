@@ -1325,7 +1325,7 @@ m3e-dialog {
   align-items: center;
   gap: 8px;
 }
-/* 件数のバッジ（要対応 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
+/* 件数のバッジ（あなたの番 7）は secondary（上付きの小さな数字にしない。監査 L-02。PaneTabs と同じ） */
 .dash__badge {
   --m3e-badge-container-color: var(--mf-secondary-container);
   --m3e-badge-color: var(--mf-on-secondary-container);
