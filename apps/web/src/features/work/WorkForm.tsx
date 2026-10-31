@@ -461,7 +461,7 @@ export function WorkFormFields({
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
           <DateField
-            label="◆校了目標日"
+            label="校了目標日"
             value={form.deadlineAt}
             onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v, approvalTargetManual: true }))}
           />
