@@ -4,19 +4,20 @@
 
 ## develop マージ進捗（001–070）
 
-`origin/develop` @ `2c7b506540df57fd1a5a164fba9906ddc8b11907`（2026-10-31 UTC）
+`origin/develop` @ `c4ea316540970dccd4a80c1abae4e61cd2d41032`（2026-10-31 UTC）
 
 | id | PR | develop | メモ |
 |---|---:|---|---|
 | 001 | #93 | ✅ | |
 | 002 | #94 | ✅ | |
-| 003 | #97 | ✅ | git merge + push |
-| 004 | #96 | ⚠️ | GitHub 上は **stack-003 向けに MERGED** のみ。develop 未取り込み。`ManagePullRequest` で base→develop 再オープン、または `cursor/merge-004-to-develop-32db` から PR 化 |
-| 005 | #95 | ⚠️ | **stack-004 向けに MERGED**（develop 未取り込み） |
-| 006–070 | — | ⏸ | **停止**: `merge-stack-001-070-git.mjs --only 006` → `NEED_RETARGET 102`。`gh pr edit` / `ManagePullRequest` 必須 |
-| 071–076 | #165 等 | — | 001–070 完了後に #165 base→develop（未実施） |
+| 003 | #97 | ✅ | |
+| 004–005 | #96, #95 | — | stack 向け誤マージ。内容は **#102 経由で develop に含まれる** |
+| 006 | #102 | ✅ | `gh pr merge` |
+| 007 | #99 | ✅ | `gh pr merge` |
+| 008–070 | — | ⏸ | **停止** stack **008 / #100**: base≠develop → `ManagePullRequest update_pr` + PDF コメント + marker + CI + `gh pr merge` |
+| 071–076 | #165 等 | — | 001–070 完了後 #165 base→develop（未実施） |
 
-手順正本: `scripts/stack-pr/merge-stack-001-070-git.mjs`（PDF コメント → marker → CI → git merge）。integration では retarget/comment 不可。
+手順: `scripts/stack-pr/merge-all-auto.mjs` / `merge-stack-001-070-git.mjs`。retarget・コメントは **ManagePullRequest**（`gh` integration 不可）。
 
 ## 使っていないブランチ（v1・058–074 再積み前）
 
