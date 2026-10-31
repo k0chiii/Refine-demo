@@ -13,9 +13,9 @@ build_demo() {
 run_capture() {
   local pr=$1 phase=$2 ref=$3
   echo "=== PR #$pr $phase @ $ref ==="
+  rm -rf "$ROOT/docs/stack-pr-screenshots/c30a-pr${pr}"
   rm -f "$WEB/e2e/specs/stack-pr-c30a-capture.spec.ts"
   git checkout -q "$ref"
-  git clean -fd -- docs/stack-pr-screenshots 2>/dev/null || true
   mkdir -p "$WEB/e2e/specs"
   cp "$CAP_SPEC_BACKUP" "$WEB/e2e/specs/stack-pr-c30a-capture.spec.ts"
   pkill -f "vp preview --mode demo --outDir dist-demo --port 4173" 2>/dev/null || true
