@@ -4,7 +4,8 @@ import { fixture, PAMPHLET, test } from "../support/app";
 import { assignReviewer, submitFirstRevision } from "../support/scenarios";
 
 const outDir =
-  process.env.STACK_PR_E090_DIR ?? path.resolve(import.meta.dirname, "../../../../docs/stack-pr-screenshots/e090");
+  process.env.STACK_PR_E090_DIR ??
+  path.resolve(import.meta.dirname, "../../../../docs/stack-pr-screenshots/e090");
 const VIDEO_TITLE = "MF100 告知動画";
 
 async function workspaceForScreenshot(
@@ -28,10 +29,15 @@ async function videoReviewWorkspace(
   page: import("@playwright/test").Page,
 ) {
   await app.signInAs("mock-nogiku-creator");
-  const workPath = await app.openWork(VIDEO_TITLE);
-  await app.uploadRevision("最初の版を提出", [fixture("promo.webm")], "初稿の告知動画", async () => {
-    await app.tickSelfChecks();
-  });
+  await app.openWork(VIDEO_TITLE);
+  await app.uploadRevision(
+    "最初の版を提出",
+    [fixture("promo.webm")],
+    "初稿の告知動画",
+    async () => {
+      await app.tickSelfChecks();
+    },
+  );
   const revisionPath = await app.confirmRevision(1, () =>
     page.waitForFunction(
       () => {
@@ -118,6 +124,9 @@ test.describe("stack-pr e090 screenshots", () => {
     await page.locator(".compose-pop .rt__content").waitFor({ state: "visible" });
     await page.getByText("位置なし", { exact: false }).first().waitFor({ state: "visible" });
     fs.mkdirSync(outDir, { recursive: true });
-    await page.screenshot({ path: path.join(outDir, "after-video-free-c-desktop.png"), fullPage: true });
+    await page.screenshot({
+      path: path.join(outDir, "after-video-free-c-desktop.png"),
+      fullPage: true,
+    });
   });
 });

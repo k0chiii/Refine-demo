@@ -5884,25 +5884,39 @@ m3e-snackbar {
   display: block;
   color: var(--mf-on-surface-variant);
 }
-/* 版提出: ヘッダーの緊急 chip・一覧の緊急表示 */
+/* 版提出: ヘッダーの緊急スイッチ・一覧の緊急表示 */
 .submit-dialog__header {
   flex: 1;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  /* m3e-dialog 見出し slot の typography を子全体に継承させない（#89 の switch ラベルが大きく見えたのと同型の事故を防ぐ） */
+  /* m3e-dialog 見出し slot の typography を子全体に継承させない */
   font: inherit;
 }
 .submit-dialog__header > span:first-child,
 .submit-dialog__header > .submit-dialog__title {
   font: var(--mf-type-title-medium);
 }
-/* M3 Filter chips（Material Chips › Filter）：label-large。ダイアログ見出しより一段小さく、他画面の filter chip と同じ */
-.submit-dialog__header m3e-filter-chip,
-.submit-dialog__header m3e-filter-chip-set {
-  font: var(--mf-type-label-large);
+.submit-dialog__urgent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
-.review-urgent-chip { margin-inline-end: 6px; vertical-align: middle; }
+.submit-dialog__urgent-label {
+  font: var(--mf-type-body-large);
+  color: var(--mf-on-surface);
+  line-height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+.submit-dialog__urgent m3e-switch {
+  flex-shrink: 0;
+}
+.review-urgent-chip {
+  margin-inline-end: 6px;
+  vertical-align: middle;
+}
 /* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
 .submit-checklist {
   display: grid;

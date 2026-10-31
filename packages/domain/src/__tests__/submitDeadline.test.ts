@@ -22,9 +22,9 @@ describe("版提出の校正期日（98A）", () => {
   });
 
   it("校正期日が無い提出は拒否する", () => {
-    expect(() =>
-      assertSubmitRevisionDeadline({ now: T0, deadlineAt: undefined }),
-    ).toThrowError(expect.objectContaining({ code: "revision_deadline_required" }));
+    expect(() => assertSubmitRevisionDeadline({ now: T0, deadlineAt: undefined })).toThrowError(
+      expect.objectContaining({ code: "revision_deadline_required" }),
+    );
   });
 
   it("緊急は上限より遅い校正期日を拒否する", () => {

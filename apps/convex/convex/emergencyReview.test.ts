@@ -2,13 +2,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { defaultSubmitDeadlineAt } from "@mf100/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import {
-  createCast,
-  createHarness,
-  HOUR,
-  uploadVerified,
-  type Harness,
-} from "../test/harness";
+import { createCast, createHarness, HOUR, uploadVerified, type Harness } from "../test/harness";
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 

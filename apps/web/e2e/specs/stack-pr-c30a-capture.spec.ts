@@ -26,7 +26,10 @@ async function assertNoLegacyVisibleCopy(page: Page) {
         if (!(el instanceof HTMLElement) || !visible(el)) continue;
         if (open && (open === el || open.contains(el))) continue;
         for (const node of el.childNodes) {
-          if (node.nodeType === Node.TEXT_NODE && /^デモ:/.test((node.textContent ?? "").trim()))
+          if (
+            node.nodeType === Node.TEXT_NODE &&
+            (node.textContent ?? "").trim().startsWith("デモ:")
+          )
             return true;
         }
       }

@@ -108,8 +108,7 @@ export interface NewRevisionInput {
 }
 
 export function createRevision(input: NewRevisionInput, plan: RevisionPlan): NewRevision {
-  const openAccepting =
-    input.openAcceptingDeadlineAt ?? plan.toSupersede?.deadlineAt ?? undefined;
+  const openAccepting = input.openAcceptingDeadlineAt ?? plan.toSupersede?.deadlineAt ?? undefined;
   assertSubmitRevisionDeadline({
     now: input.now,
     deadlineAt: input.deadlineAt,

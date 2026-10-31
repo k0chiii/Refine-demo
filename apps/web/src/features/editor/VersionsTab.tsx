@@ -97,9 +97,11 @@ export function VersionsTab({
                       {r.reviewUrgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
                       {`校正中・校正期日 ${formatDeadlineUntil(r.deadlineAt)}`}
                     </>
-                  ) : r.reviewState === "void"
-                    ? reviewStateLabel.void
-                    : (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "締切済み")}
+                  ) : r.reviewState === "void" ? (
+                    reviewStateLabel.void
+                  ) : (
+                    (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "締切済み")
+                  )}
                   {" · "}
                   {r.submitter?.name}・{formatJstShort(r.submittedAt)}
                   {r.unresolvedCount > 0 ? `・未対応 ${r.unresolvedCount}` : ""}

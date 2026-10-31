@@ -11,7 +11,6 @@ import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useMemo } from "react";
 import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
-import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { rememberWorkspace } from "@/lib/workspace";
 import { rememberWorkHint } from "@/lib/workHint";
 import { AppBarSlot } from "@/ui/AppBarSlot";

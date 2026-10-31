@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * e098 緊急校正: デモ版の before（e082）/ after（e098）スクリーンショット。
  * 用法: node docs/stack-pr-screenshots/e098/capture.mjs --phase before|after
@@ -34,48 +35,68 @@ async function navTo(page, to) {
     await item.click();
   } else {
     await page.evaluate((path) => {
-      globalThis.__mf100router?.navigate({ to: path });
+      void globalThis.__mf100router?.navigate({ to: path });
     }, to);
   }
-  await page.waitForURL((u) => u.pathname === to || u.pathname.startsWith(`${to}/`), { timeout: 30_000 });
+  await page.waitForURL((u) => u.pathname === to || u.pathname.startsWith(`${to}/`), {
+    timeout: 30_000,
+  });
   await page.waitForLoadState("networkidle");
 }
 
 async function openSubmitDialog(page) {
   await navTo(page, "/make");
-  await page.locator('m3e-nav-rail m3e-fab[aria-label="作る"], m3e-fab[aria-label="作る"]').first().click();
+  await page
+    .locator('m3e-nav-rail m3e-fab[aria-label="作る"], m3e-fab[aria-label="作る"]')
+    .first()
+    .click();
   await page.locator("#make-menu m3e-menu-item", { hasText: "版を提出" }).click();
-  await page.locator("m3e-dialog.submit-picker[open] m3e-list-action", { hasText: "MF100 公式パンフレット" }).click({
-    timeout: 30_000,
-  });
+  await page
+    .locator("m3e-dialog.submit-picker[open] m3e-list-action", {
+      hasText: "MF100 公式パンフレット",
+    })
+    .click({
+      timeout: 30_000,
+    });
   await page.waitForSelector("m3e-dialog[open].dialog--full", { timeout: 30_000 });
-  await page.locator(".submit-dialog__header m3e-filter-chip").first().waitFor({ state: "attached", timeout: 30_000 }).catch(() => {});
+  await page
+    .locator(".submit-dialog__urgent m3e-switch")
+    .first()
+    .waitFor({ state: "attached", timeout: 30_000 })
+    .catch(() => {});
+}
+
+async function assertUrgentHeaderTypography(page) {
+  const fonts = await page.evaluate(() => {
+    const title = document.querySelector(".submit-dialog__title");
+    const label = document.querySelector(".submit-dialog__urgent-label");
+    if (!title || !label) return null;
+    const ts = getComputedStyle(title);
+    const ls = getComputedStyle(label);
+    return {
+      titleSize: parseFloat(ts.fontSize),
+      labelSize: parseFloat(ls.fontSize),
+      titleFamily: ts.fontFamily,
+      labelFamily: ls.fontFamily,
+    };
+  });
+  if (!fonts) throw new Error("typography: submit-dialog title or urgent label missing");
+  if (fonts.labelSize > fonts.titleSize + 0.5)
+    throw new Error(`typography: 緊急ラベル ${fonts.labelSize}px > 見出し ${fonts.titleSize}px`);
+  if (fonts.titleFamily !== fonts.labelFamily) throw new Error("typography: font-family mismatch");
 }
 
 async function assertUrgentChipTypography(page) {
-  const fonts = await page.evaluate(() => {
-    const title = document.querySelector(".submit-dialog__title, .submit-dialog__header > span");
-    const chip = document.querySelector(".submit-dialog__header m3e-filter-chip");
-    if (!title || !chip) return null;
-    const ts = getComputedStyle(title);
-    const cs = getComputedStyle(chip);
-    return {
-      titleSize: parseFloat(ts.fontSize),
-      chipSize: parseFloat(cs.fontSize),
-      titleFamily: ts.fontFamily,
-      chipFamily: cs.fontFamily,
-    };
-  });
-  if (!fonts) throw new Error("typography: submit-dialog header or chip missing");
-  if (fonts.chipSize > fonts.titleSize + 0.5)
-    throw new Error(`typography: 緊急 chip ${fonts.chipSize}px > 見出し ${fonts.titleSize}px`);
-  if (fonts.titleFamily !== fonts.chipFamily) throw new Error("typography: font-family mismatch");
+  await assertUrgentHeaderTypography(page);
 }
 
 function ensureDemo() {
   try {
     execSync("fuser -k 4173/tcp 2>/dev/null || true", { stdio: "ignore", shell: true });
-    execSync("pkill -9 -f 'vp preview.*4173' 2>/dev/null || true", { stdio: "ignore", shell: true });
+    execSync("pkill -9 -f 'vp preview.*4173' 2>/dev/null || true", {
+      stdio: "ignore",
+      shell: true,
+    });
     execSync("sleep 1");
   } catch {
     /* no preview */
@@ -108,9 +129,13 @@ function ensureDemo() {
 
 async function signIn(page) {
   await page.goto(`${BASE}/signin`);
-  await page.waitForFunction(() => globalThis.__mf100demo?.signIn && globalThis.__mf100router, undefined, {
-    timeout: 30_000,
-  });
+  await page.waitForFunction(
+    () => globalThis.__mf100demo?.signIn && globalThis.__mf100router,
+    undefined,
+    {
+      timeout: 30_000,
+    },
+  );
   await page.evaluate(async () => {
     const demo = globalThis.__mf100demo;
     if (!demo) throw new Error("__mf100demo missing");
@@ -155,9 +180,13 @@ async function seedUrgentRevision(page) {
       const itemId = prepared.items[0]?.id;
       if (!itemId) throw new Error("prepare item missing");
       const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-      const sha256 = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const sha256 = [...new Uint8Array(digest)]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
       await demo.uploadItem(itemId, file, sha256);
-      const confirmed = await demo.mutation(api.submissions.confirm, { sessionId: prepared.sessionId });
+      const confirmed = await demo.mutation(api.submissions.confirm, {
+        sessionId: prepared.sessionId,
+      });
       if (!confirmed?.revisionId) throw new Error("confirm failed");
       return target.workId;
     },
@@ -178,7 +207,9 @@ async function shot(page, name, assertFn) {
 function assertUniqueMd5(dir) {
   const hashes = new Map();
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".png"))) {
-    const h = createHash("md5").update(fs.readFileSync(path.join(dir, f))).digest("hex");
+    const h = createHash("md5")
+      .update(fs.readFileSync(path.join(dir, f)))
+      .digest("hex");
     if (hashes.has(h)) throw new Error(`duplicate md5 ${h}: ${hashes.get(h)} and ${f}`);
     hashes.set(h, f);
   }
@@ -200,29 +231,40 @@ await signIn(page);
 if (phase === "before") {
   await openSubmitDialog(page);
   const html = await page.content();
-  if (/m3e-filter-chip[\s\S]*緊急|緊急[\s\S]*m3e-filter-chip/.test(html))
-    throw new Error("before: 緊急トグルが既に出ている");
+  if (/submit-dialog__urgent[\s\S]*m3e-switch|m3e-switch[\s\S]*submit-dialog__urgent/.test(html))
+    throw new Error("before: 緊急スイッチが既に出ている");
   await shot(page, "01-submit-dialog-normal", async (p) => {
-    await p.getByText("校正期限", { exact: false }).first().waitFor({ state: "visible", timeout: 30_000 });
+    await p
+      .getByText("校正期日", { exact: false })
+      .first()
+      .waitFor({ state: "visible", timeout: 30_000 });
   });
 } else {
   await openSubmitDialog(page);
   await shot(page, "01-submit-dialog-urgent-off", async (p) => {
     await p.getByText("版を提出", { exact: true }).first().waitFor({ state: "visible" });
-    await p.locator("m3e-dialog[open].dialog--full m3e-date-input").waitFor({ state: "visible", timeout: 30_000 });
-  });
-  const urgentChip = page.locator(".submit-dialog__header m3e-filter-chip").filter({ hasText: "緊急" });
-  if ((await urgentChip.count()) === 0) throw new Error("after: 緊急 chip が無い");
-  await urgentChip.click();
-  await shot(page, "02-submit-dialog-urgent-on", async (p) => {
     await p
-      .locator(".submit-dialog__header m3e-filter-chip")
-      .filter({ hasText: "緊急" })
-      .waitFor({ state: "visible" });
-    await assertUrgentChipTypography(p);
+      .locator("m3e-dialog[open].dialog--full m3e-date-input")
+      .waitFor({ state: "visible", timeout: 30_000 });
+    if ((await p.getByText("時刻を指定", { exact: true }).count()) > 0)
+      throw new Error("after 01: 時刻を指定 toggle should be hidden when urgent off");
+  });
+  const urgentSwitch = page.locator(".submit-dialog__urgent m3e-switch").first();
+  if ((await urgentSwitch.count()) === 0) throw new Error("after: 緊急 switch が無い");
+  await urgentSwitch.click();
+  await shot(page, "02-submit-dialog-urgent-on", async (p) => {
+    await p.locator(".submit-dialog__urgent-label").filter({ hasText: "緊急" }).waitFor({
+      state: "visible",
+    });
+    await p
+      .locator(".date-field m3e-date-input[type='time']")
+      .waitFor({ state: "visible", timeout: 30_000 });
+    await assertUrgentHeaderTypography(p);
   });
   await page.keyboard.press("Escape");
-  await page.waitForSelector("m3e-dialog[open]", { state: "detached", timeout: 10_000 }).catch(() => {});
+  await page
+    .waitForSelector("m3e-dialog[open]", { state: "detached", timeout: 10_000 })
+    .catch(() => {});
   for (let i = 0; i < 5 && (await page.locator("m3e-dialog[open]").count()) > 0; i++) {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
@@ -230,7 +272,7 @@ if (phase === "before") {
 
   const workId = await seedUrgentRevision(page);
   await page.evaluate(() => {
-    globalThis.__mf100router?.navigate({ to: "/works" });
+    void globalThis.__mf100router?.navigate({ to: "/works" });
   });
   await page.waitForURL("**/works**", { timeout: 30_000 });
   await page.waitForFunction(
@@ -248,7 +290,10 @@ if (phase === "before") {
 
   await page.evaluate(
     ({ workId }) => {
-      globalThis.__mf100router?.navigate({ to: "/works/$workId/v/$n", params: { workId, n: "1" } });
+      void globalThis.__mf100router?.navigate({
+        to: "/works/$workId/v/$n",
+        params: { workId, n: "1" },
+      });
     },
     { workId },
   );
@@ -262,7 +307,18 @@ if (phase === "before") {
     { timeout: 120_000 },
   );
   await shot(page, "04-editor-subtitle-urgent", async (p) => {
-    await p.locator('m3e-app-bar [slot="subtitle"]').getByText("緊急").first().waitFor({ state: "visible" });
+    await p
+      .locator('m3e-app-bar [slot="subtitle"]')
+      .getByText("緊急")
+      .first()
+      .waitFor({ state: "visible" });
+    const toolbar = p.locator(".editor-toolbar m3e-icon-button", { hasText: "全体コメント" });
+    if ((await toolbar.count()) === 0) {
+      const byLabel = p.locator('.editor-toolbar m3e-icon-button[aria-label*="全体"]');
+      if ((await byLabel.count()) === 0) {
+        throw new Error("after 04: 全体コメント toolbar button missing (#186)");
+      }
+    }
   });
 }
 

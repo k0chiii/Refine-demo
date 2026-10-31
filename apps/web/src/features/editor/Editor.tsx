@@ -358,6 +358,11 @@ export function Editor({
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くとスレッドが一覧・シートを差し替える） */
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  /** 一覧のカードの「反映しない」「次の版で対応」から開いたスレッドと、開いておく理由の欄 */
+  const [openThreadMode, setOpenThreadMode] = useState<{
+    id: string;
+    mode: "rejected" | "deferred";
+  } | null>(null);
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
@@ -912,7 +917,8 @@ export function Editor({
    * スレッドのパネルを開く（コメントを選んで紙面のピンへ移り、パネルを開く）。広い画面は引き出しの「コメント」に、狭い画面は
    * シートをいっぱいに開いて。開いたら既読にする（パネルが行う）
    */
-  const openThread = (t: Thread, opts?: { reveal?: boolean }) => {
+  const openThread = (t: Thread, opts?: { reveal?: boolean; mode?: "rejected" | "deferred" }) => {
+    setOpenThreadMode(opts?.mode ? { id: t.id, mode: opts.mode } : null);
     // 一覧のカードから開くときは一覧を動かさない（今そのカードを見て押している）。紙面のピンから開くときはカードまで送る
     // （狭い画面の一覧はシートの中に隠れるので送らない）
     jumpTo(t, { reveal: opts?.reveal === true && !mobile });
@@ -937,6 +943,7 @@ export function Editor({
         {...(className ? { className } : {})}
         onSelect={() => jumpTo(t, { reveal: false })}
         onOpen={() => openThread(t)}
+        onDecideStart={(mode) => openThread(t, { mode })}
         onResolve={onResolve}
       />
     );
@@ -1589,6 +1596,7 @@ export function Editor({
     openedThread && revisionId ? (
       <ThreadPanel
         key={openedThread.id}
+        {...(openThreadMode?.id === openedThread.id ? { initialMode: openThreadMode.mode } : {})}
         thread={openedThread}
         index={openedThread.index}
         {...(webStates.has(openedThread.id) ? { placeState: webStates.get(openedThread.id)! } : {})}

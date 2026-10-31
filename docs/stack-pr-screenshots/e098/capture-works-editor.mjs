@@ -1,3 +1,4 @@
+// @ts-nocheck
 /** e098 after の 03/04 だけ（01/02 済みのセッション前提で単体実行可） */
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
@@ -70,7 +71,7 @@ await page.evaluate(async () => {
   await __mf100demo.signIn("mock-nogiku-creator");
 });
 await seedUrgent(page);
-await page.evaluate(() => globalThis.__mf100router.navigate({ to: "/works" }));
+await page.evaluate(() => void globalThis.__mf100router.navigate({ to: "/works" }));
 await page.waitForURL("**/works**", { timeout: 30_000 });
 await page.waitForFunction(
   () => document.querySelector(".works-table")?.textContent?.includes("緊急"),
@@ -88,7 +89,10 @@ const workId = await page.evaluate(async () => {
 });
 await page.evaluate(
   ({ workId }) => {
-    globalThis.__mf100router.navigate({ to: "/works/$workId/v/$n", params: { workId, n: "1" } });
+    void globalThis.__mf100router.navigate({
+      to: "/works/$workId/v/$n",
+      params: { workId, n: "1" },
+    });
   },
   { workId },
 );

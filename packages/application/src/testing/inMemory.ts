@@ -220,10 +220,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         state.revisions
           .all()
           .filter(
-            (r) =>
-              r.reviewState === "open" &&
-              r.deadlineAt !== undefined &&
-              r.deadlineAt <= t,
+            (r) => r.reviewState === "open" && r.deadlineAt !== undefined && r.deadlineAt <= t,
           )
           .slice(0, limit),
       listOpenDueWithin: async ({ after, upTo }, { cursor, limit }) => {

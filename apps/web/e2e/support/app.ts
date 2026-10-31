@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page, type Route } from "@playwright/test";
+
+export type { Page, Route };
 
 /**
  * デモ版の画面を操る部品。e2e/screenshots.mjs の同名の関数を、spec から使えるように切り出したもの。
@@ -47,7 +49,13 @@ type Demo = {
     ): Promise<T>;
   };
 };
-type Router = { navigate(opts: { to: string; search?: Record<string, string> }): Promise<void> };
+type Router = {
+  navigate(opts: {
+    to: string;
+    search?: Record<string, string>;
+    params?: Record<string, string>;
+  }): Promise<void>;
+};
 declare global {
   var __mf100demo: Demo | undefined;
   var __mf100router: Router | undefined;

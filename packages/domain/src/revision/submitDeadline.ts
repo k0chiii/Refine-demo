@@ -28,8 +28,7 @@ export interface SubmitRevisionDeadlineInput {
 export function assertSubmitRevisionDeadline(
   input: SubmitRevisionDeadlineInput,
 ): asserts input is SubmitRevisionDeadlineInput & { deadlineAt: Instant } {
-  if (input.deadlineAt === undefined)
-    throw new DomainError("revision_deadline_required", {});
+  if (input.deadlineAt === undefined) throw new DomainError("revision_deadline_required", {});
   if (!isBeforeDeadline(input.now, input.deadlineAt))
     throw new DomainError("revision_deadline_in_past", {
       now: input.now,
