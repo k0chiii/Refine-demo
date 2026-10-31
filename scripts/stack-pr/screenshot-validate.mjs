@@ -26,13 +26,8 @@ function check(path) {
 }
 
 walk(root);
-
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
 console.log(`OK: ${digests.size} PNG(s), all >= ${minBytes} bytes, unique md5`);
-
-if (process.env.STACK_PR_SKIP_DOM !== "1") {
-  console.log("DOM/copy gates are enforced in e2e/specs/stack-pr-c30a-capture.spec.ts before each screenshot.");
-}

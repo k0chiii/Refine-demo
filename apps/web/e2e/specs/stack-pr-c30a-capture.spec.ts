@@ -6,8 +6,7 @@ const SLIDE_DECK = "企画説明会スライド";
 
 const PR = process.env.STACK_PR_C30A ?? "87";
 const PHASE = process.env.STACK_PR_C30A_PHASE ?? "after";
-const OUT =
-  process.env.OUT_DIR ?? resolve(`docs/stack-pr-screenshots/c30a-pr${PR}/${PHASE}`);
+const OUT = process.env.OUT_DIR ?? resolve(`docs/stack-pr-screenshots/c30a-pr${PR}/${PHASE}`);
 
 mkdirSync(OUT, { recursive: true });
 
@@ -64,6 +63,10 @@ async function shot(page: Page, app: { settle: () => Promise<void> }, file: stri
   await page.screenshot({ path: resolve(OUT, file) });
 }
 
+/**
+ * スタック PR #86–#88（c30a）の before/after 用。
+ * STACK_PR_C30A=86|87|88, STACK_PR_C30A_PHASE=before|after, OUT_DIR=…
+ */
 test.describe("stack PR c30a screenshots", () => {
   test.use({ reducedMotion: "reduce" });
 
@@ -97,9 +100,15 @@ test.describe("stack PR c30a screenshots", () => {
       await app.openWork(title);
       await app.btn("最初の版を提出").click();
       const dialog = app.dialog();
+      await expect(dialog).toBeVisible();
+      await app.settle();
       if (PHASE === "after") {
         await expect(dialog).toContainText("PDF（必須、校正対象）");
         await expect(dialog).toContainText("スライドのリンク");
+        await expect(
+          dialog.locator(".file-drop .field", { hasText: "スライドのリンク" }),
+        ).toHaveCount(0);
+        await expect(dialog.locator(".field", { hasText: "スライドのリンク" })).toBeVisible();
       } else {
         await expect(dialog).not.toContainText("スライドのリンク");
       }

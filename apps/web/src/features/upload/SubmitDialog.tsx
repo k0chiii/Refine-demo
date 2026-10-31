@@ -504,71 +504,69 @@ export function SubmitDialog({
                 ) : null}
               </>
             ) : (
-              <div
-                className={`file-drop ${dragging ? "file-drop--over" : ""}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragging(false);
-                  addFiles(e.dataTransfer.files, true);
-                }}
-              >
+              <>
+                <div
+                  className={`file-drop ${dragging ? "file-drop--over" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    addFiles(e.dataTransfer.files, true);
+                  }}
+                >
+                  {slideSubmit ? (
+                    <p className="label-large" style={{ margin: "0 0 8px" }}>
+                      PDF（必須、校正対象）
+                    </p>
+                  ) : null}
+                  <M3eIcon name="upload_file" />
+                  <span>
+                    {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
+                  </span>
+                  <label className="file-drop__pick">
+                    選択
+                    <input
+                      type="file"
+                      multiple
+                      {...(input.accept ? { accept: input.accept } : {})}
+                      aria-label="ファイルを選択"
+                      onChange={(e) => addFiles(e.target.files)}
+                    />
+                  </label>
+                  {files.length > 0 ? (
+                    <ul className="file-drop__files">
+                      {files.map((f) => (
+                        <li key={f.name}>
+                          {f.name}
+                          <span className="muted">
+                            　{formatBytes(f.size)}・
+                            {f === shownFile
+                              ? "プレビューに表示（コメントはこのファイルに）"
+                              : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
+                          </span>
+                          <M3eIconButton
+                            className="file-drop__remove"
+                            aria-label={`${f.name} を外す`}
+                            onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
+                          >
+                            <M3eIcon name="close" />
+                          </M3eIconButton>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {files.length > 0 && graphic && !shownFile ? (
+                    <p className="small muted" style={{ margin: 0 }}>
+                      .ai・.indd はプレビューできません。PDF か画像も付けてください
+                    </p>
+                  ) : null}
+                </div>
                 {slideSubmit ? (
-                  <p className="label-large" style={{ margin: "0 0 8px" }}>
-                    PDF（必須、校正対象）
-                  </p>
-                ) : null}
-                <M3eIcon name="upload_file" />
-                <span>
-                  {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
-                </span>
-                <label className="file-drop__pick">
-                  選択
-                  <input
-                    type="file"
-                    multiple
-                    {...(input.accept ? { accept: input.accept } : {})}
-                    aria-label="ファイルを選択"
-                    onChange={(e) => addFiles(e.target.files)}
-                  />
-                </label>
-                {files.length > 0 ? (
-                  <ul className="file-drop__files">
-                    {files.map((f) => (
-                      <li key={f.name}>
-                        {f.name}
-                        <span className="muted">
-                          　{formatBytes(f.size)}・
-                          {f === shownFile
-                            ? "プレビューに表示（コメントはこのファイルに）"
-                            : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
-                        </span>
-                        <M3eIconButton
-                          className="file-drop__remove"
-                          aria-label={`${f.name} を外す`}
-                          onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
-                        >
-                          <M3eIcon name="close" />
-                        </M3eIconButton>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {files.length > 0 && graphic && !shownFile ? (
-                  <p className="small muted" style={{ margin: 0 }}>
-                    .ai・.indd はプレビューできません。PDF か画像も付けてください
-                  </p>
-                ) : null}
-                {slideSubmit ? (
-                  <Field
-                    label="スライドのリンク"
-                    required
-                    hint="共有 URL（https）。校正は PDF 上"
-                  >
+                  <Field label="スライドのリンク" required hint="共有 URL（https）。校正は PDF 上">
                     <TextInput
                       type="text"
                       inputMode="url"
@@ -578,7 +576,7 @@ export function SubmitDialog({
                     />
                   </Field>
                 ) : null}
-              </div>
+              </>
             )}
             <div className="form">
               <Field label="版の種別" required>
