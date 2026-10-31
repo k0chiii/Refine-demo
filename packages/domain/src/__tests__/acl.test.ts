@@ -169,7 +169,7 @@ describe("isAllowed（§7.2 操作権限）", () => {
       grants,
       principal: principal(who),
     });
-    expect(isAllowed("review.participate", ctxOf("viewer"))).toBe(false);
+    expect(isAllowed("review.participate", ctxOf("viewer", []))).toBe(false);
     expect(
       isAllowed("review.participate", ctxOf("viewer", [grant({ permission: "review" })])),
     ).toBe(true);

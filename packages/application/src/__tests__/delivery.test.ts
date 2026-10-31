@@ -77,7 +77,7 @@ async function setup(opts: { email?: string | null; push?: boolean } = {}) {
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
     userIds: [me.userId],
-    permission: "view",
+    permission: "review",
   });
   await updateNotificationPrefs(ctx, me, { channels: ["email", "slack"] });
   const sub = opts.push === false ? null : await subscribePush(ctx, me, device);

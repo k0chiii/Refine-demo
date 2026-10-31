@@ -180,7 +180,7 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.stranger.userId],
-      permission: "view",
+      permission: "review",
     });
     await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: true });
     await submitRevision(ctx, work.id);
