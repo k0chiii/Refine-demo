@@ -5,14 +5,20 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
+import {
+  assertSceneMarkers,
+  validateScreenshotFile,
+  SIGNIN_SCREEN_MD5,
+} from "./screenshot-validate.ts";
 
-/** 誤ってサインイン画面だけ撮ったときの PNG（大地さん指摘） */
-export const SIGNIN_SCREEN_MD5 = "ac741f735c6593b5cbdc397deb4a8004";
+export { SIGNIN_SCREEN_MD5 };
 
-const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../apps/web");
+const repoRoot = process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const webRoot = path.join(repoRoot, "apps/web");
 const require = createRequire(path.join(webRoot, "package.json"));
 const { chromium } = require("playwright-core");
-const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";
+const BASE = process.env.BASE_URL ?? `http://127.0.0.1:${process.env.CAPTURE_PORT ?? "4173"}`;
+const PREVIEW_PORT = process.env.CAPTURE_PORT ?? "4173";
 
 let previewStarted = false;
 
@@ -21,27 +27,38 @@ function md5File(file: string) {
 }
 
 export function assertNotSigninScreenshot(filePath: string, pagePath: string) {
-  if (!fs.existsSync(filePath)) throw new Error(`missing screenshot ${filePath}`);
-  const md5 = md5File(filePath);
-  if (md5 === SIGNIN_SCREEN_MD5) {
-    throw new Error(`signin duplicate md5 on ${filePath} (path was ${pagePath})`);
-  }
-  if (pagePath.includes("/signin")) {
-    throw new Error(`still on signin URL: ${pagePath}`);
-  }
+  validateScreenshotFile(filePath, {
+    sceneKey: "_legacy",
+    pagePath,
+    corpusRoot: process.env.SCREENSHOT_CORPUS,
+    selfPath: filePath,
+  });
 }
 
 function ensureDemo() {
-  execFileSync("pnpm", ["build:demo"], { cwd: webRoot, stdio: "inherit" });
+  try {
+    execFileSync("fuser", [`-k`, `${PREVIEW_PORT}/tcp`], { stdio: "ignore" });
+  } catch {
+    /* port free */
+  }
+  previewStarted = false;
+  execFileSync("sleep", ["1"]);
+  execFileSync("rm", ["-rf", "dist-demo"], { cwd: webRoot });
+  execFileSync("pnpm", ["build:demo"], {
+    cwd: webRoot,
+    stdio: "inherit",
+    env: { ...process.env, VP_CACHE: "0" },
+  });
   if (previewStarted) return;
   execFileSync(
-    `mkdir -p e2e/out && setsid sh -c 'echo $$ > e2e/out/preview.pgid; exec pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 --strictPort' > e2e/out/preview.log 2>&1 &`,
+    `mkdir -p e2e/out && setsid sh -c 'echo $$ > e2e/out/preview.pgid; exec pnpm exec vp preview --mode demo --outDir dist-demo --port ${PREVIEW_PORT} --host 127.0.0.1 --strictPort' > e2e/out/preview.log 2>&1 &`,
     { cwd: webRoot, shell: true },
   );
   for (let i = 0; i < 120; i++) {
     try {
       execFileSync("curl", ["-sf", "-o", "/dev/null", `${BASE}/`], { stdio: "ignore" });
       previewStarted = true;
+      execFileSync("sleep", ["2"]);
       return;
     } catch {
       execFileSync("sleep", ["1"]);
@@ -75,16 +92,38 @@ async function signInAs(page: import("playwright").Page, sub: DemoUser) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
   await page.evaluate(() => globalThis.__mf100demo!.signOut());
-  await demoGo(page, "/signin");
-  await page.evaluate(async (s) => {
-    await globalThis.__mf100demo!.ensureSeeded();
-    await globalThis.__mf100demo!.signIn(s);
-  }, sub);
-  await page.waitForURL((u) => ["/", "/make", "/check", "/works"].includes(u.pathname), {
-    timeout: 30_000,
-  });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(300);
+  try {
+    await page.evaluate(async (s) => {
+      await globalThis.__mf100demo!.ensureSeeded();
+      await globalThis.__mf100demo!.signIn(s);
+    }, sub);
+    await page.waitForURL((u) => !u.pathname.includes("/signin"), { timeout: 30_000 });
+  } catch {
+    await page.goto(`${BASE}/signin`);
+    await ready(page);
+    const panel = page.locator("m3e-expansion-panel", { hasText: "モック" });
+    await panel.locator("[slot=header]").click();
+    await page.locator('select, m3e-select').first().selectOption(sub).catch(async () => {
+      await page.locator("select").first().selectOption(sub);
+    });
+    await page.getByRole("button", { name: "モックでサインイン" }).click();
+    await page.waitForURL((u) => !u.pathname.includes("/signin"), { timeout: 60_000 });
+  }
+  await page.waitForTimeout(1000);
 }
+
+async function openDashboardOverview(page: import("playwright").Page) {
+  const panel = page.locator(".ov m3e-expansion-panel, m3e-expansion-panel.ov");
+  const header = page.locator("#ov-title, .ov__header");
+  if (await header.first().isVisible().catch(() => false)) return;
+  await panel.first().locator("[slot=header]").click({ timeout: 10_000 }).catch(() => {});
+  await page.locator("#ov-title").waitFor({ state: "visible", timeout: 60_000 });
+  await page.locator(".kpis .kpi").first().waitFor({ state: "visible", timeout: 60_000 });
+}
+
+type CaptureSceneOpts = { expandOverview?: boolean };
+let sceneRunOpts: CaptureSceneOpts = {};
 
 type SceneFn = (page: import("playwright").Page) => Promise<void>;
 
@@ -133,7 +172,20 @@ const SCENES: Record<string, SceneFn> = {
   },
   "33-work-form": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
-    await demoGo(page, "/works");
+    await demoGo(page, "/works?new=true");
+    await page.waitForSelector("m3e-dialog[open]", { timeout: 60_000 });
+    const detailLegacy = page.locator("m3e-expansion-panel", { hasText: "制作物 ID" });
+    if (await detailLegacy.count()) {
+      await detailLegacy.first().locator("[slot=header]").click();
+      await page.waitForTimeout(400);
+    }
+    const body = page.locator("m3e-dialog[open] .dialog-body");
+    if (await body.count()) {
+      await body.first().evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+    await page.waitForTimeout(400);
   },
   "34-acl": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -146,7 +198,8 @@ const SCENES: Record<string, SceneFn> = {
   "dashboard-manager": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
-    await page.waitForSelector(".works .ov, .works .kpis, .works", { timeout: 60_000 });
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    if (sceneRunOpts.expandOverview !== false) await openDashboardOverview(page);
   },
   "dashboard-approver": async (page) => {
     await signInAs(page, "mock-nogiku-approver");
@@ -197,40 +250,74 @@ async function runScene(page: import("playwright").Page, key: string) {
   await fn(page);
 }
 
+async function captureOne(
+  page: import("playwright").Page,
+  sceneKey: string,
+  outPath: string,
+  corpusRoot: string | undefined,
+) {
+  await runScene(page, sceneKey);
+  await assertSceneMarkers(page, sceneKey);
+  const pagePath = new URL(page.url()).pathname;
+  await page.screenshot({ path: outPath, fullPage: true });
+  validateScreenshotFile(outPath, { sceneKey, pagePath, corpusRoot, selfPath: outPath });
+}
+
 export async function captureShots(
   shots: { desktop: string; mobile?: string },
   prefix: string,
-  opts: { mobileWidth?: number } = {},
+  opts: { mobileWidth?: number; expandOverview?: boolean; corpusRoot?: string } = {},
 ) {
   ensureDemo();
+  sceneRunOpts = { expandOverview: opts.expandOverview };
+  const corpusRoot = opts.corpusRoot ?? process.env.SCREENSHOT_CORPUS;
   const mobileW = opts.mobileWidth ?? 412;
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.CHROMIUM_PATH || undefined,
   });
-  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 }, baseURL: BASE });
+  const desktop = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    baseURL: BASE,
+    serviceWorkers: "block",
+  });
+  await desktop.route("**/*", (route) => {
+    route.continue({
+      headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
+    });
+  });
   const page = await desktop.newPage();
-  await runScene(page, shots.desktop);
-  await page.screenshot({ path: `${prefix}-desktop.png`, fullPage: true });
-  assertNotSigninScreenshot(`${prefix}-desktop.png`, new URL(page.url()).pathname);
+  await captureOne(page, shots.desktop, `${prefix}-desktop.png`, corpusRoot);
 
   if (shots.mobile) {
     const mobile = await browser.newContext({
       viewport: { width: mobileW, height: 915 },
       baseURL: BASE,
+      serviceWorkers: "block",
+    });
+    await mobile.route("**/*", (route) => {
+      route.continue({
+        headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
+      });
     });
     const mp = await mobile.newPage();
-    await runScene(mp, shots.mobile ?? shots.desktop);
-    await mp.screenshot({ path: `${prefix}-mobile.png`, fullPage: true });
-    assertNotSigninScreenshot(`${prefix}-mobile.png`, new URL(mp.url()).pathname);
+    await captureOne(mp, shots.mobile ?? shots.desktop, `${prefix}-mobile.png`, corpusRoot);
     await mobile.close();
   }
   await browser.close();
+  try {
+    execFileSync("pkill", ["-f", "vp preview"], { stdio: "ignore" });
+  } catch {
+    /* none */
+  }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.includes("capture.ts")) {
   const prefix = process.argv[2] || "/tmp/shot";
-  captureShots({ desktop: "dashboard-member", mobile: "dashboard-member" }, prefix).catch((e) => {
+  const scene = process.env.CAPTURE_SCENE || "dashboard-manager";
+  captureShots({ desktop: scene, mobile: `${scene}-mobile`.replace("-mobile-mobile", "-mobile") }, prefix, {
+    corpusRoot: process.env.SCREENSHOT_CORPUS,
+  }).catch((e) => {
     console.error(e);
     process.exit(1);
   });
