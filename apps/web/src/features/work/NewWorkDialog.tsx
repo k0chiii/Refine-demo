@@ -1,8 +1,8 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation } from "convex/react";
-import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { useAction } from "@/lib/useAction";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { UserPicker } from "@/ui/UserPicker";
@@ -41,8 +41,19 @@ export function NewWorkDialog({
 }) {
   const navigate = useNavigate();
   const create = useMutation(api.works.create);
+  const me = useQuery(api.me.me, {});
+  const registrationUsers = useQuery(api.users.search, { text: "", limit: 50 });
+  const fullForm = initial !== undefined;
   const [form, setForm] = useState<WorkFormState>(() => initial?.form ?? emptyWorkForm());
   const [reviewerIds, setReviewerIds] = useState<string[]>(() => [...(initial?.reviewerIds ?? [])]);
+  useEffect(() => {
+    if (!fullForm && form.approverIds.length === 0 && registrationUsers?.length) {
+      const pick = registrationUsers.find(
+        (u) => !form.creatorIds.includes(u.id) && u.id !== me?.id,
+      );
+      if (pick) setForm((f) => ({ ...f, approverIds: [pick.id], approvalQuorum: "1" }));
+    }
+  }, [fullForm, form.approverIds.length, form.creatorIds, me?.id, registrationUsers]);
   const { run, pending } = useAction(async () => {
     const meta = withoutNulls(workFormToFields(form));
     const id = await create({
@@ -51,10 +62,10 @@ export function NewWorkDialog({
       category: form.category,
       mediaType: form.mediaType as "pdf",
       year: 100,
-      ...(form.legacyId ? { legacyId: form.legacyId } : {}),
       creatorIds: form.creatorIds,
       ...approversFromForm(form),
       managerIds: form.managerIds,
+      ...(form.finishAt ? { finishAt: form.finishAt } : {}),
       ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
       notationCategories: form.notationCategories,
@@ -73,13 +84,15 @@ export function NewWorkDialog({
       <span slot="header">{header}</span>
       <div className="dialog-body work-form">
         <WorkFormFields form={form} setForm={setForm} mode="create" />
-        <UserPicker
-          label="校正者"
-          groups
-          hint="グループを選ぶと、所属する人をまとめて加えます"
-          value={reviewerIds}
-          onChange={setReviewerIds}
-        />
+        {fullForm ? (
+          <UserPicker
+            label="校正者"
+            groups
+            hint="グループを選ぶと、所属する人をまとめて加えます"
+            value={reviewerIds}
+            onChange={setReviewerIds}
+          />
+        ) : null}
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>
@@ -87,7 +100,7 @@ export function NewWorkDialog({
         </M3eButton>
         <M3eButton
           variant="filled"
-          disabled={pending || !workFormReady(form)}
+          disabled={pending || !workFormReady(form, "create")}
           onClick={() => void run()}
         >
           {submitLabel}

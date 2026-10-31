@@ -49,6 +49,7 @@ export interface CreateWorkInput extends WorkMetadataInput {
   /** 校了とみなす人数（1..校了者の数。省略は 1） */
   approvalQuorum?: number;
   deadlineAt?: number;
+  finishAt?: number;
   confidentiality?: Confidentiality;
   /** 表記統一のルールカテゴリ（人が選ぶ。空なら検査しない） */
   notationCategories?: string[];
@@ -127,6 +128,7 @@ export async function createWork(
   if (input.legacyId !== undefined) data.legacyId = input.legacyId;
   if (ownerTeamId !== undefined) data.ownerTeamId = ownerTeamId;
   if (input.deadlineAt !== undefined) data.deadlineAt = input.deadlineAt;
+  if (input.finishAt !== undefined) data.finishAt = input.finishAt;
   if (input.notationCategories !== undefined)
     data.notationCategories = cleanCategories(input.notationCategories);
   assignWorkMetadata(data, meta);
@@ -202,7 +204,13 @@ export async function importWorks(
 export interface UpdateWorkInput {
   workId: string;
   expectedVersion?: number;
-  patch: WorkPatch & {
+  patch: Omit<WorkPatch, "deadlineAt" | "legacyId" | "finishAt"> & {
+    /** 納期（null で消す） */
+    deadlineAt?: number | null;
+    /** ■仕上がり日（null で消す） */
+    finishAt?: number | null;
+    /** 制作物 ID（null か空文字で消す） */
+    legacyId?: string | null;
     /** 主管担当（空文字で外す） */
     ownerTeamId?: string;
     /** SNS のアカウント（本体の設定）の割り当て。null で外す */
@@ -229,8 +237,13 @@ export async function updateWork(
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  const { socialProfileId, ownerTeamId, ...rest } = input.patch;
-  const patch: WorkPatch = stripUndefined(rest);
+  const { socialProfileId, ownerTeamId, deadlineAt, finishAt, legacyId, ...rest } = input.patch;
+  const patch: WorkPatch = stripUndefined({
+    ...rest,
+    ...(typeof deadlineAt === "number" ? { deadlineAt } : {}),
+    ...(typeof finishAt === "number" ? { finishAt } : {}),
+    ...(typeof legacyId === "string" && legacyId.trim() ? { legacyId } : {}),
+  });
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
   // 制作担当・関係担当は全体の置き換え（重複・空を除く）。制作担当の数の上限は applyWorkPatch（WorkTeamPolicy）で確かめる
@@ -253,6 +266,9 @@ export async function updateWork(
   // 主管担当: 空文字は「主管担当なし」（外す）
   if (owner === "") delete next.ownerTeamId;
   else if (owner !== undefined) next.ownerTeamId = owner;
+  if (deadlineAt === null) delete next.deadlineAt;
+  if (finishAt === null) delete next.finishAt;
+  if (legacyId === null || (typeof legacyId === "string" && !legacyId.trim())) delete next.legacyId;
   if (socialProfileId === null) delete next.socialProfileId;
   else if (socialProfileId !== undefined) {
     if (!(await ctx.socialProfiles.findById(socialProfileId)))
