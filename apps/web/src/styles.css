@@ -6145,3 +6145,12 @@ m3e-snackbar {
     grid-template-columns: 2fr 1fr 1fr;
   }
 }
+
+/* stack-pr:ui-graphs-stage-bureau */
+.stagebar--mock {
+  min-height: 12px;
+  border-radius: var(--mf-shape-sm);
+}
+.ov__block--bureau-mock .mf-table {
+  --mf-table-header-bg: var(--mf-surface-container-high);
+}

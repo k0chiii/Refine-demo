@@ -269,7 +269,7 @@ function StageBreakdown({ data }: { data: Data }) {
         <span className="spacer" />
         <span className="dash__count">全 {total} 件</span>
       </div>
-      <div className="stagebar" role="img" aria-label={`状態の内訳: ${summary}`}>
+      <div className="stagebar stagebar--mock" role="img" aria-label={`状態の内訳: ${summary}`}>
         {present.map((s) => (
           <span
             key={s}
@@ -357,7 +357,7 @@ function BureauTable({ data }: { data: Data }) {
   const rows = data.overview.bureaus;
   if (rows.every((b) => b.bureau === "")) return null;
   return (
-    <section className="ov__block" aria-labelledby="ov-bureaus">
+    <section className="ov__block ov__block--bureau-mock" aria-labelledby="ov-bureaus">
       <M3eHeading
         variant="title"
         size="small"
