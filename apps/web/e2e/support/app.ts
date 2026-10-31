@@ -205,6 +205,26 @@ export class App {
     return this.page.locator("m3e-dialog[open]");
   }
 
+  /** outlined form-field 内の M3E 日付（YYYY-MM-DD） */
+  async fillOutlinedDate(scope: Locator, fieldLabel: string, isoDate: string) {
+    const [y, m, d] = isoDate.split("-");
+    const group = scope.getByRole("group", { name: new RegExp(fieldLabel) });
+    await group.getByRole("spinbutton", { name: "年" }).fill(y!);
+    await group.getByRole("spinbutton", { name: "月" }).fill(m!);
+    await group.getByRole("spinbutton", { name: "日" }).fill(d!);
+    await group.getByRole("spinbutton", { name: "日" }).press("Tab");
+    await this.settle();
+  }
+
+  /** M3E select（form-field 内）で選択肢を選ぶ（オプションはダイアログに写る） */
+  async pickSelectOption(scope: Locator, fieldLabel: string, option: string) {
+    const field = scope.locator("m3e-form-field", { hasText: fieldLabel });
+    await field.locator("m3e-select").click();
+    await this.settle();
+    await this.dialog().getByRole("option", { name: option, exact: true }).click();
+    await this.settle();
+  }
+
   /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人（または 1 グループ）選ぶ */
   async pickUser(scope: Locator, name: string) {
     const input = scope.locator(".picker__input").first();
