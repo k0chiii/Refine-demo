@@ -105,10 +105,10 @@ function LiveProcessingTools({
           setOpen(true);
         }}
       >
-        派生プレビュー
+        プレビュー画像
       </M3eButton>
       <M3eDialog open={open} onClosed={() => setOpen(false)} closeLabel="閉じる">
-        <span slot="header">派生プレビューを作成</span>
+        <span slot="header">プレビュー画像を作成</span>
         <div className="dialog-body stack">
           <label>
             処理
@@ -138,14 +138,14 @@ function LiveProcessingTools({
               />
             </label>
           ) : null}
-          <p>Cloudflare で処理し、原本とは別のファイルを保存します。提出済みの版は変更しません。</p>
+          <p>元のファイルは変わりません</p>
           <label>
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            処理と派生物の保存に同意する
+            作成と保存に同意する
           </label>
           {pending ? (
             <p role="status">
