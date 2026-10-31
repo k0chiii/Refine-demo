@@ -6030,7 +6030,7 @@ m3e-snackbar {
 /* stack-pr:detail-shell */
 
 .detail-shell {
-  min-height: 720px;
+  min-height: 1200px;
 }
 
 .detail-shell__head {
