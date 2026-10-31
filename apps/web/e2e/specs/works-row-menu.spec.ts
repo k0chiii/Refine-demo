@@ -9,11 +9,21 @@ import { expect, test, WORKS_ENTRY } from "../support/app";
 test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
   const title = "公式 Instagram 開催告知";
 
-  test("主管が制作物の情報から目的・用途を書き足せる", async ({ app, page }) => {
+  test("主管が ⋮ → 情報を編集で目的・用途を書き足せる", async ({ app, page }) => {
     await app.signInAs("mock-nogiku-manager");
     await app.go("/works");
-    await app.setWorkPurpose(title, "開催 1 週間前に投稿する告知。");
-    await expect(page.locator(".drawer__body")).toContainText("開催 1 週間前に投稿する告知。");
+    const dialog = await app.editWorkFromList(title);
+    await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を編集");
+    await dialog.locator("m3e-expansion-panel").click();
+    const category = dialog.locator("m3e-form-field", { hasText: "区分" }).locator("input");
+    await category.fill("開催告知（一覧から更新）");
+    await dialog.locator("m3e-button", { hasText: "保存" }).click();
+    await expect(dialog).toHaveCount(0);
+    // 一覧に戻ったまま（エディタへは移らない）。書いた区分は制作物の情報に残る
+    await expect(page).toHaveURL(/\/works(\?|$)/);
+    await app.openWork(title);
+    await app.drawer("情報");
+    await expect(page.locator(".drawer__body")).toContainText("開催告知（一覧から更新）");
   });
 
   test("⋮ → 複製で同じ情報の制作物がもう 1 件できる", async ({ app, page }) => {

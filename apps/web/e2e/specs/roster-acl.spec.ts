@@ -10,9 +10,13 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await page.locator('.shell__appbar m3e-icon-button[aria-label="制作物を登録"]').click();
     const dialog = app.dialog();
     await dialog.locator("input").first().fill(title);
-    await app.pickSelectOption(dialog, "小ジャンル", "デジタル画像（SNS投稿用画像）");
+    await dialog.locator("m3e-select").first().click();
+    await page.getByRole("option", { name: "印刷物（紙・ビラ）", exact: true }).click();
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
-    await app.fillOutlinedDate(dialog, "■仕上がり日", "2026-12-01");
+    await dialog
+      .locator("m3e-form-field", { hasText: "仕上がり日" })
+      .locator("input")
+      .fill("2026-12-01");
     await dialog.locator("m3e-button", { hasText: "登録" }).click();
     await page.waitForURL(/\/works\/[^/]+$/);
 
@@ -48,12 +52,17 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     page,
   }) => {
     const title = "公式 Instagram 開催告知";
-    const purpose = "管理者が書き足した用途。";
+    const purpose = "管理者が書き足した区分。";
     await app.restrictWork(title);
 
     await app.signInAs("mock-nogiku-admin");
     await app.go("/works");
-    await app.setWorkPurpose(title, purpose);
+    const dialog = await app.editWorkFromList(title);
+    await dialog.locator("m3e-expansion-panel").click();
+    await dialog.locator("m3e-form-field", { hasText: "区分" }).locator("input").fill(purpose);
+    await dialog.locator("m3e-button", { hasText: "保存" }).click();
+    await expect(dialog).toHaveCount(0);
+    await app.openWork(title);
     await app.drawer("情報");
     await expect(page.locator(".drawer__body")).toContainText(purpose);
   });
