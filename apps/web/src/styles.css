@@ -6149,3 +6149,13 @@ m3e-snackbar {
 .detail-shell__head {
   border-bottom: 1px solid var(--mf-outline-variant);
 }
+
+/* stack-pr:ui-tablet-layout */
+@media (min-width: 600px) and (max-width: 839px) {
+  .dash--columns {
+    grid-template-columns: 1fr;
+  }
+  .home-dashboard--manager .kpis--three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
