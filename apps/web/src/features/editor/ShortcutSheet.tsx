@@ -7,7 +7,7 @@ const groups: ReadonlyArray<{ title: string; rows: readonly Row[] }> = [
   {
     title: "コメント",
     rows: [
-      [["C"], "コメントを付ける（次のクリック・ドラッグ）"],
+      [["C"], "全体へのコメントを開く"],
       [["Esc"], "選んだ位置・書きかけをやめる"],
       [["Ctrl", "Enter"], "送る・確定する"],
     ],

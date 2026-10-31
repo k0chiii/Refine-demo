@@ -77,7 +77,6 @@ import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
-import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { formatDeadline, remaining } from "@/lib/format";
@@ -366,9 +365,6 @@ export function Editor({
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
-  /** 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける。置くか Esc で戻る） */
-  const armed = useMarkArmed();
-  useEffect(() => () => setMarkArmed(false), []);
   /** コメントの印（ピン・範囲・文字の強調・動画の印）を一時的に隠している（コメントそのものは消さない・一覧も隠さない） */
   const [marksHidden, setMarksHidden] = useState(() => marksHiddenFor === workId);
   /** 指で文字を選んだとき、コメントにするか端末の選択（コピーなど）に任せるか（§106） */
@@ -839,19 +835,15 @@ export function Editor({
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
   }, [draft, mobile]);
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・全体へのコメントできる。左の版は見るだけ
-  // 紙面のクリック・タップはいつもふつうの操作で、なぞる（範囲）・長押し（ピン）だけがコメントになる（features/annotation/AnchorOverlay）。
-  // 書き込みのモードはない。「コメントを追加」は、次の 1 回だけクリックでも印を付ける（armed）
-  // コメントを書き始めたら（位置つきの下書きができたら）印を付ける状態は戻し、隠していた印も出す
+  // 紙面の位置はなぞる（範囲）・長押し（ピン）だけ（features/annotation/AnchorOverlay）。全体へのコメントはツールバー・C
   useEffect(() => {
-    if (draft && !draft.free) {
-      setMarkArmed(false);
-      setMarksHidden(false);
-    }
+    if (draft && !draft.free) setMarksHidden(false);
   }, [draft]);
-  useEffect(() => {
-    if (!canComment) setMarkArmed(false);
-  }, [canComment]);
-  // C でコメントを付ける（動画はビューアが C を受け持つ）。入力中は何もしない
+  const openFreeComment = () => {
+    setDraft({ free: true });
+    setActiveThreadId(null);
+  };
+  // C で「全体へのコメント」（動画はビューアが C を受け持つ）。入力中は何もしない
   const commentKey = canComment && artifact?.type !== "video";
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -860,20 +852,13 @@ export function Editor({
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
       if ((e.key === "c" || e.key === "C") && commentKey) {
         e.preventDefault();
-        setMarkArmed(true);
+        setDraft({ free: true });
+        setActiveThreadId(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [commentKey]);
-  useEffect(() => {
-    if (!armed) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMarkArmed(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [armed]);
   // 隠していても、コメントを選んだ（一覧のカード・URL・通知）ら印を出す（その印へ移れるように）
   useEffect(() => {
     if (activeThreadId) setMarksHidden(false);
@@ -1634,20 +1619,6 @@ export function Editor({
         <div className="comments__main">
           <AutoProofreadStatus auto={auto} />
           <div className="comments__header">
-            {/* 「全体へのコメント」はここから（紙面の位置に付けるのは、なぞる・長押し・ツールバーの「コメントを追加」） */}
-            {canComment ? (
-              <M3eButton
-                variant="tonal"
-                className="comments__free"
-                onClick={() => {
-                  setDraft({ free: true });
-                  setActiveThreadId(null);
-                }}
-              >
-                <M3eIcon slot="icon" name="add_comment" />
-                全体へのコメント
-              </M3eButton>
-            ) : null}
             <M3eFilterChipSet aria-label="コメントの絞り込み">
               {botCount > 0 ? (
                 <>
@@ -2040,18 +2011,18 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {/* コメントはいつでもここから（⋯ やジェスチャーに隠さない）。次のクリック・ドラッグ 1 回で位置を付ける */}
+                  {/* 全体へのコメント（位置なし）。紙面の位置はなぞる・長押しだけ */}
                   {canComment && !isFigmaEmbed && artifact.type !== "video" ? (
                     <M3eButton
                       className="ws__comment"
-                      variant={armed ? "filled" : "tonal"}
+                      variant="tonal"
                       size="small"
-                      aria-pressed={armed}
-                      title="コメント（C）"
-                      onClick={() => setMarkArmed(!armed)}
+                      aria-label="全体へのコメント"
+                      title="全体へのコメント（C）"
+                      onClick={() => openFreeComment()}
                     >
                       <M3eIcon slot="icon" name="add_comment" />
-                      {mobile ? null : "コメント"}
+                      {mobile ? null : "全体へのコメント"}
                     </M3eButton>
                   ) : null}
                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}

@@ -343,7 +343,7 @@ export class App {
 
   /** 位置なしのコメント（コメントの一覧の下の入口） */
   async freeComment(body: string) {
-    await this.page.locator(".comments__free").click();
+    await this.page.getByRole("button", { name: "全体へのコメント" }).click();
     await this.send(body);
   }
 

@@ -9,7 +9,6 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { haptic } from "@/lib/haptics";
 import { portalHost } from "@/lib/portalHost";
-import { useMarkArmed } from "./markArm";
 import {
   chargeDelayMs,
   holdMs,
@@ -65,11 +64,10 @@ type Press = {
 /**
  * PDF / 画像 / 動画の映像の上に重ねる SVG レイヤー。保存値は常に正規化座標で、表示倍率・回転は Viewport で吸収する（A-03）。
  * 印を付ける操作は **紙面の枠（この層の親）** で受ける。層そのものは押す・なぞるを下の紙面（PDF のリンクなど）へ通し、
- * 印そのもの（ピン・番号・範囲の面）だけが押せる。クリック・タップはふつうの操作で、コメントになるのは次の 3 つだけ
+ * 印そのもの（ピン・番号・範囲の面）だけが押せる。クリック・タップはふつうの操作で、位置付きコメントは次の 2 つだけ
  * （利用者指示 2026-10-20「タップはタップで長押しでコメント。PC もクリックはクリック、範囲選択のときだけコメント」）。
  * - 範囲をなぞる（ドラッグ）: 範囲。マウス・ペンは少し動かしたらすぐ、タッチは長押ししてから動かす（長押しの前はスクロール）
  * - 長押し: 離すとその場にピン（マウスは動かさず押し続ける、タッチは指を置いたまま）。範囲の面の上でもよい
- * - 「コメントを追加」を押した直後の 1 回（useMarkArmed）: クリックもピン。置くと元に戻る
  * 長押しの手応え（利用者指示 2026-10-16）: 押している間は指の周りの輪が満ちていき、満ちて選択が始まると輪が弾けて、
  * 端末が軽く震える（震えられる端末だけ）。離してコメントの位置を置いたときも軽く震える
  */
@@ -85,7 +83,6 @@ export function AnchorOverlay({
   filterPage,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const armed = useMarkArmed();
   const [dragRect, setDragRect] = useState<Drag | null>(null);
   /**
    * 長押しの輪（満ちていく途中）と、満ちた瞬間に弾ける輪。key で描き直してアニメーションを始めからにする。
@@ -93,16 +90,8 @@ export function AnchorOverlay({
    */
   const [charge, setCharge] = useState<ChargeMark | null>(null);
   const [pop, setPop] = useState<PopMark | null>(null);
-  const live = useRef({ viewport, armed, onDraft, onGestureStart });
-  live.current = { viewport, armed, onDraft, onGestureStart };
-
-  // 一度だけ置くための「コメントを追加」の間は、紙面の枠にカーソルの十字を出す
-  useEffect(() => {
-    const host = svgRef.current?.parentElement;
-    if (!host || !canComment) return;
-    host.classList.toggle("is-armed", armed);
-    return () => host.classList.remove("is-armed");
-  }, [armed, canComment]);
+  const live = useRef({ viewport, onDraft, onGestureStart });
+  live.current = { viewport, onDraft, onGestureStart };
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -233,11 +222,6 @@ export function AnchorOverlay({
         drewAt = Date.now();
         if (cur.held) haptic(); // 位置を置いた手応え（指を離す操作の中なので iPhone でも震えやすい）
         finish(d);
-      } else if (live.current.armed && moveOutcome(cur.kind, false, dist) === "wait") {
-        // 「コメントを追加」の直後は、動かさない押下（クリック・タップ）もピン
-        drewAt = Date.now();
-        live.current.onGestureStart?.();
-        finish({ x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y });
       }
     }
     function onCancel() {
