@@ -86,45 +86,6 @@ async function ready(page: Page) {
   );
 }
 
-/** stack-pr 63B: before/after を同じビルドで撮るとき、実行時にテーマだけ切り替える */
-async function applyCaptureTheme(page: Page) {
-  const mode = process.env.CAPTURE_THEME;
-  if (mode !== "before" && mode !== "after") return;
-  const spec =
-    mode === "before"
-      ? { color: "#1b5fb4", variant: "vibrant" }
-      : { color: "#3F51B5", variant: "tonal-spot" };
-  await page.evaluate((s) => {
-    const t = document.querySelector("m3e-theme");
-    if (!t) return;
-    t.setAttribute("color", s.color);
-    t.setAttribute("variant", s.variant);
-  }, spec);
-  await page.waitForTimeout(400);
-}
-
-async function assertCaptureThemePrimary(page: Page) {
-  const mode = process.env.CAPTURE_THEME;
-  if (mode !== "before" && mode !== "after") return;
-  await page.evaluate((expected) => {
-    const t = document.querySelector("m3e-theme");
-    if (!t) throw new Error("CAPTURE_THEME: missing m3e-theme");
-    const color = t.getAttribute("color")?.toLowerCase();
-    const variant = t.getAttribute("variant");
-    if (color !== expected.color || variant !== expected.variant) {
-      throw new Error(
-        `CAPTURE_THEME ${expected.mode}: expected ${expected.color}/${expected.variant}, got ${color}/${variant}`,
-      );
-    }
-    const primary = getComputedStyle(document.documentElement)
-      .getPropertyValue("--md-sys-color-primary")
-      .trim();
-    if (!primary) throw new Error("CAPTURE_THEME: --md-sys-color-primary empty");
-  }, mode === "before"
-    ? { mode, color: "#1b5fb4", variant: "vibrant" }
-    : { mode, color: "#3f51b5", variant: "tonal-spot" });
-}
-
 async function demoGo(page: Page, routePath: string) {
   await page.evaluate((p: string) => {
     const path = p.replace(/^https?:\/\/[^/]+/, "");
@@ -326,7 +287,7 @@ const SCENES: Record<string, SceneFn> = {
   "28-check-reviewer": async (page) => {
     await signInAs(page, "mock-nogiku-reviewer");
     await demoGo(page, "/check");
-    await page.waitForSelector(".hub[data-hub='check'] .hub__tabs", { timeout: 60_000 });
+    await page.waitForSelector(".hub[data-hub='check']");
   },
   "08-workspace-comment": async (page) => {
     await workspaceCommentsReady(page);
@@ -354,6 +315,19 @@ const SCENES: Record<string, SceneFn> = {
     await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
     await page.waitForURL(/\/v\//);
     await page.waitForSelector(".comments .thread");
+  },
+  /** コメント引き出しのヘッダ（解決済み chip。PDF 不要） */
+  "editor-comments-header": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await page.waitForSelector(".ws", { timeout: 60_000 });
+    await openEditorDrawer(page, "コメント");
+    await page.locator(".comments__header").waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "editor-comments-q66": async (page) => {
+    await SCENES["editor-comments-header"]!(page);
   },
   "15-notifications": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
@@ -388,37 +362,29 @@ const SCENES: Record<string, SceneFn> = {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
   },
-  /** 統括: 制作物の状況（KPI・内訳）。一覧表はキャプチャ用に隠す */
-  "role-home-manager": async (page) => {
+  "dashboard-manager": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
-    await openDashboardOverview(page);
-    await page.addStyleTag({
-      content: ".works__controls, .works > .empty, .works .mf-table { display: none !important; }",
-    });
-    await page.locator("#ov-title").scrollIntoViewIfNeeded();
-  },
-  /** 校了する人: 校正ホーム（/check） */
-  "role-home-approver": async (page) => {
-    await signInAs(page, "mock-nogiku-approver");
-    await demoGo(page, "/check");
-    await page.waitForSelector(".hub[data-hub='check'] .hub__tabs", { timeout: 60_000 });
-  },
-  /** 制作者: 制作ホーム（/make） */
-  "role-home-member": async (page) => {
-    await signInAs(page, "mock-nogiku-creator");
-    await demoGo(page, "/make");
-    await page.waitForSelector(".hub[data-hub='make'] m3e-list-action", { timeout: 60_000 });
-  },
-  "dashboard-manager": async (page) => {
-    await SCENES["role-home-manager"]!(page);
+    if (sceneRunOpts.expandOverview !== false) await openDashboardOverview(page);
+    if (sceneRunOpts.openViewSwitcher) {
+      await page
+        .locator(".home-view-switcher m3e-segmented-button, .home-view-switcher")
+        .first()
+        .click({ timeout: 5000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    }
   },
   "dashboard-approver": async (page) => {
-    await SCENES["role-home-approver"]!(page);
+    await signInAs(page, "mock-nogiku-approver");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works, .hub[data-hub='make']", { timeout: 60_000 });
   },
   "dashboard-member": async (page) => {
-    await SCENES["role-home-member"]!(page);
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make']");
   },
   "dashboard-manager-mobile": async (page) => {
     await SCENES["dashboard-manager"]!(page);
@@ -463,11 +429,9 @@ const SCENES: Record<string, SceneFn> = {
 async function runScene(page: Page, key: string) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await applyCaptureTheme(page);
   await page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
-  await applyCaptureTheme(page);
 }
 
 async function captureOne(
@@ -478,7 +442,6 @@ async function captureOne(
 ) {
   await runScene(page, sceneKey);
   await assertSceneMarkers(page, sceneKey);
-  await assertCaptureThemePrimary(page);
   const pagePath = new URL(page.url()).pathname;
   await page.screenshot({ path: outPath, fullPage: true });
   await writeSceneDomSidecar(page, sceneKey, outPath);
@@ -512,7 +475,6 @@ export async function captureShots(
   });
   const desktop = await browser.newContext({
     viewport: { width: desktopW, height: desktopH },
-    deviceScaleFactor: 2,
     baseURL: BASE,
     serviceWorkers: "block",
   });
