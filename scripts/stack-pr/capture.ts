@@ -316,6 +316,19 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForURL(/\/v\//);
     await page.waitForSelector(".comments .thread");
   },
+  /** コメント引き出しのヘッダ（解決済み chip。PDF 不要） */
+  "editor-comments-header": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await page.waitForSelector(".ws", { timeout: 60_000 });
+    await openEditorDrawer(page, "コメント");
+    await page.locator(".comments__header").waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "editor-comments-q66": async (page) => {
+    await SCENES["editor-comments-header"]!(page);
+  },
   "15-notifications": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");

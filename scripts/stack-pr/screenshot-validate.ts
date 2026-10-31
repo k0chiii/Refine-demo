@@ -31,6 +31,8 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "e090-after-mobile": ["キャンセル"],
   "e090-after-video-c": ["位置なし", "キャンセル"],
   "09-decision": ["コメント"],
+  "editor-comments-header": [],
+  "editor-comments-q66": ["解決済みを表示"],
 };
 
 export function md5File(file: string): string {
