@@ -219,12 +219,20 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       listOpenExpired: async (t, limit) =>
         state.revisions
           .all()
-          .filter((r) => r.reviewState === "open" && r.deadlineAt <= t)
+          .filter(
+            (r) => r.reviewState === "open" && r.deadlineAt !== undefined && r.deadlineAt <= t,
+          )
           .slice(0, limit),
       listOpenDueWithin: async ({ after, upTo }, { cursor, limit }) => {
         const all = state.revisions
           .all()
-          .filter((r) => r.reviewState === "open" && r.deadlineAt > after && r.deadlineAt <= upTo)
+          .filter(
+            (r) =>
+              r.reviewState === "open" &&
+              r.deadlineAt !== undefined &&
+              r.deadlineAt > after &&
+              r.deadlineAt <= upTo,
+          )
           .sort((a, b) => a.deadlineAt - b.deadlineAt);
         const start = cursor === null ? 0 : Number(cursor);
         const end = start + limit;
