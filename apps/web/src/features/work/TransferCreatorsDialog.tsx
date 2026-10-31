@@ -14,8 +14,7 @@ import type { FunctionReturnType } from "convex/server";
 type Work = FunctionReturnType<typeof api.works.get>["work"];
 
 /**
- * 制作者だけを変える（利用者要望 2026-10-30）。主管・現在の制作者・システム管理者が使える。
- * 制作物の全項目を編集する権限が無い制作者向け。
+ * 制作者だけを変える（利用者要望 2026-10-30 / 決定 94）。統括・校了する人・システム管理者が使える。
  */
 export function TransferCreatorsDialog({
   work,
@@ -29,8 +28,9 @@ export function TransferCreatorsDialog({
   const update = useMutation(api.works.update);
   const [creatorIds, setCreatorIds] = useState<string[]>(() => [...work.creatorIds]);
   useEffect(() => {
-    if (open) setCreatorIds([...work.creatorIds]);
-  }, [open, work.version, work.creatorIds]);
+    if (!open) return;
+    setCreatorIds([...work.creatorIds]);
+  }, [open, work.id, work.version]);
 
   const approverIds = approvalSetupOf(work).approverIds;
   const form: Pick<WorkFormState, "creatorIds" | "approverIds" | "approvalQuorum"> = {
@@ -53,9 +53,7 @@ export function TransferCreatorsDialog({
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる">
       <span slot="header">制作者を変更</span>
       <div className="dialog-body">
-        <p className="body-medium">
-          版の提出や指摘の採否は制作者だけが行えます。別の人に引き継ぐときは、新しい制作者を選んで保存してください。
-        </p>
+        <p className="body-medium">新しい制作者を選んで保存してください。</p>
         <UserPicker
           label="制作者"
           required
