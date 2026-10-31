@@ -111,7 +111,7 @@ describe("Convex 統合: 期限接近リマインドの対象", () => {
       workId,
       reviewerIds: [cast.reviewer.id],
     });
-    vi.setSystemTime(NOW + 30 * HOUR); // 締切まで 18 時間
+    vi.setSystemTime(Date.UTC(2026, 10, 2, 15, 0, 0)); // 締切日（JST）の 0:00（48h 後提出の当日）
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(0);
     const notes = await cast.reviewer.as.query(api.notifications.list, {});
@@ -139,7 +139,7 @@ describe("Convex 統合: 期限接近リマインドの対象", () => {
           state: "pending",
         });
     });
-    vi.setSystemTime(NOW + 30 * HOUR);
+    vi.setSystemTime(Date.UTC(2026, 10, 2, 15, 0, 0));
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(100);
     await t.finishAllScheduledFunctions(vi.runAllTimers);
     const sent = await t.run(
