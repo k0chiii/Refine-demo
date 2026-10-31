@@ -1,5 +1,4 @@
-capturedAt=2026-10-31T08:46:00.000Z
-url=/works/demo-work/v/1
-scene=e090-after
-marker:全体へのコメント=全体へのコメント
+capturedAt=2026-10-31T09:45:00.000Z
+url=/works/x/v/1
+scene=e090-after-mobile
 marker:キャンセル=キャンセル

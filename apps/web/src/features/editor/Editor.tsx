@@ -843,8 +843,8 @@ export function Editor({
     setDraft({ free: true });
     setActiveThreadId(null);
   };
-  // C で「全体へのコメント」（動画はビューアが C を受け持つ）。入力中は何もしない
-  const commentKey = canComment && artifact?.type !== "video";
+  // C で「全体へのコメント」（動画も同じ。時点へのコメントは VideoViewer の T）。入力中は何もしない
+  const commentKey = canComment;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1679,7 +1679,7 @@ export function Editor({
               <p className="muted small comments__empty">
                 {canComment
                   ? artifact?.type === "video"
-                    ? "C でこの時点にコメント"
+                    ? "C で全体へのコメント（T でこの時点）"
                     : artifact && isWebLiveArtifact(artifact)
                       ? "「コメント」に切り替えて要素を押す"
                       : artifact?.role === "external" && isLiveExternal
@@ -2012,7 +2012,7 @@ export function Editor({
                     </>
                   ) : null}
                   {/* 全体へのコメント（位置なし）。紙面の位置はなぞる・長押しだけ */}
-                  {canComment && !isFigmaEmbed && artifact.type !== "video" ? (
+                  {canComment && !isFigmaEmbed ? (
                     <M3eButton
                       className="ws__comment"
                       variant="tonal"
@@ -2022,7 +2022,7 @@ export function Editor({
                       onClick={() => openFreeComment()}
                     >
                       <M3eIcon slot="icon" name="add_comment" />
-                      {mobile ? null : "全体へのコメント"}
+                      {mobile ? null : "全体コメント"}
                     </M3eButton>
                   ) : null}
                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}

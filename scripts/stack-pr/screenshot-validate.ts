@@ -26,7 +26,9 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "08-workspace-comment": ["コメント"],
   "076-before-editor": ["MF100 公式パンフレット"],
   "e090-before": ["全体へのコメント"],
-  "e090-after": ["全体へのコメント", "キャンセル"],
+  "e090-after": ["全体コメント", "キャンセル"],
+  "e090-after-mobile": ["キャンセル"],
+  "e090-after-video-c": ["位置なし", "キャンセル"],
   "09-decision": ["コメント"],
 };
 

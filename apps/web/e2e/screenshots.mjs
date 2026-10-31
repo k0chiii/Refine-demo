@@ -2820,10 +2820,10 @@ async function v2Scenes() {
     await page.waitForFunction(() => !document.querySelector(".vplayer video").seeking);
     await settle();
   };
-  // 時点: 3 秒で止めて C
+  // 時点: 3 秒で止めて T（C は全体へのコメント）
   await seekTo(0.25);
   await page.locator(".vplayer").focus();
-  await page.keyboard.press("c");
+  await page.keyboard.press("t");
   await page.waitForSelector(".compose-pop__place");
   expectTrue(
     (await page.locator(".compose-pop__place").innerText()).includes("0:03"),
