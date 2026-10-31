@@ -8,6 +8,7 @@ import {
   assertItemsReadyForConfirm,
   assertSessionOpen,
   assertSubmissionBaseCurrent,
+  assertSubmissionExternalUrl,
   discardAttempt,
   assertWorkActive,
   createRevision,
@@ -169,7 +170,8 @@ export async function prepareSubmission(
         if (it.role === "external") {
           if (!it.externalUrl)
             throw new DomainError("anchor_invalid", { reason: "external_url_required" });
-          base.externalUrl = it.externalUrl;
+          assertSubmissionExternalUrl(it.externalUrl);
+          base.externalUrl = it.externalUrl.trim();
         } else {
           // キーの名前空間は推測困難かつ作品/セッションで分ける。公開バケットには置かない。
           // 実体は試行ごとにこの下の別キーへ置き、検証の済んだ 1 つだけを採用する（objectKey）。
@@ -454,8 +456,9 @@ export async function confirmSubmission(
       at: now,
     });
     const who = await personName(ctx, principal.userId);
+    const reviewers = (await ctx.assignments.listByRevision(revision.id)).map((a) => a.reviewerId);
     const pinners = await ctx.home.listPinners(work.id);
-    await notify(ctx, [...workStakeholders(work), ...pinners], principal.userId, {
+    await notify(ctx, [...reviewers, ...pinners], principal.userId, {
       kind: "revision_submitted",
       title: "新しい版が提出されました",
       body: `${about(work.title, revisionLabel(revision), who)}: ${

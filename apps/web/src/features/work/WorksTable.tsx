@@ -19,6 +19,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { ApproversCell } from "./ApproversCell";
 import { DuplicateWorkDialog } from "./DuplicateWorkDialog";
 import { EditWorkById } from "./EditWorkDialog";
+import { TransferCreatorsById } from "./TransferCreatorsDialog";
 import { ReviewersCell } from "./ReviewersCell";
 import { WorkRowMenu } from "./WorkRowMenu";
 
@@ -75,7 +76,10 @@ export function WorksTable({
 }) {
   const [page, setPage] = useState({ index: 0, size: DEFAULT_PAGE_SIZE });
   /** 行メニューから開いているダイアログ（編集・複製）。表の外に 1 つだけ置く */
-  const [dialog, setDialog] = useState<{ kind: "edit" | "duplicate"; workId: string } | null>(null);
+  const [dialog, setDialog] = useState<{
+    kind: "edit" | "duplicate" | "transferCreators";
+    workId: string;
+  } | null>(null);
   useEffect(() => setPage((p) => (p.index === 0 ? p : { ...p, index: 0 })), [resetKey]);
   const { index, rows } = pageSlice(works, page.index, page.size);
   const now = Date.now();
@@ -135,6 +139,7 @@ export function WorksTable({
               canDuplicate={canDuplicate}
               onOpen={onOpen}
               onEdit={() => setDialog({ kind: "edit", workId: w.id })}
+              onTransferCreators={() => setDialog({ kind: "transferCreators", workId: w.id })}
               onDuplicate={() => setDialog({ kind: "duplicate", workId: w.id })}
             />
           ))}
@@ -147,6 +152,13 @@ export function WorksTable({
         <DuplicateWorkDialog
           key={dialog.workId}
           sourceWorkId={dialog.workId}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {dialog?.kind === "transferCreators" ? (
+        <TransferCreatorsById
+          key={dialog.workId}
+          workId={dialog.workId}
           onClose={() => setDialog(null)}
         />
       ) : null}
@@ -163,6 +175,7 @@ function Row({
   canDuplicate,
   onOpen,
   onEdit,
+  onTransferCreators,
   onDuplicate,
 }: {
   w: WorkRow;
@@ -173,6 +186,7 @@ function Row({
   canDuplicate: boolean;
   onOpen: (workId: string) => void;
   onEdit: () => void;
+  onTransferCreators: () => void;
   onDuplicate: () => void;
 }) {
   const done = w.lifecycle === "finalized" || w.lifecycle === "cancelled";
@@ -285,6 +299,7 @@ function Row({
           canDuplicate={canDuplicate}
           compact={compact}
           onEdit={onEdit}
+          onTransferCreators={onTransferCreators}
           onDuplicate={onDuplicate}
         />
       </td>
