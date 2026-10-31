@@ -58,6 +58,7 @@ import type * as lib_workSearch from "../lib/workSearch.js";
 import type * as lib_workSummary from "../lib/workSummary.js";
 import type * as me from "../me.js";
 import type * as migrations from "../migrations.js";
+import type * as migrations_decision104 from "../migrations/decision104.js";
 import type * as notation from "../notation.js";
 import type * as notationSeed from "../notationSeed.js";
 import type * as notificationPrefs from "../notificationPrefs.js";
@@ -138,6 +139,7 @@ declare const fullApi: ApiFromModules<{
   "lib/workSummary": typeof lib_workSummary;
   me: typeof me;
   migrations: typeof migrations;
+  "migrations/decision104": typeof migrations_decision104;
   notation: typeof notation;
   notationSeed: typeof notationSeed;
   notificationPrefs: typeof notificationPrefs;
