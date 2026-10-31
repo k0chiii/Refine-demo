@@ -159,7 +159,7 @@ function Make() {
                         // 未提出は右の「版を提出」で分かるので、行に書かない
                         x.r.stage === "unsubmitted"
                           ? null
-                          : `${x.r.revisionLabel ?? "この版"}は受付終了`,
+                          : `${x.r.revisionLabel ?? "この版"}は次版作成中`,
                         deadlineLine("納期", x.r.deliveryAt),
                       ]
                 }

@@ -9,7 +9,7 @@ export const lifecycleLabel: Record<string, string> = {
 export const reviewStateLabel: Record<string, string> = {
   scheduled: "準備中",
   open: "校正中",
-  closed: "締切済み",
+  closed: "次版作成中",
   void: "無効",
 };
 export const closedReasonLabel: Record<string, string> = {
@@ -84,7 +84,7 @@ export const notificationKindLabel: Record<string, string> = {
   review_assigned: "校正の割り当て",
   comment_posted: "コメント",
   comment_decided: "反映するかどうか",
-  comment_assigned: "対応する人",
+  comment_assigned: "担当者",
   check_requested: "専門確認の依頼",
   check_completed: "専門確認の完了",
   deadline_approaching: "校正期日が近い",
