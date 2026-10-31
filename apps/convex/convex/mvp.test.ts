@@ -112,7 +112,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
       cast.manager.as.mutation(api.acl.grant, {
         workId,
         userIds: [cast.stranger.id],
-        permission: "view",
+        permission: "review",
       }),
     ).rejects.toThrow(code("acl_requires_system_admin"));
     await expect(
@@ -181,7 +181,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     await cast.admin.as.mutation(api.acl.revoke, {
       workId,

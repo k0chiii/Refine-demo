@@ -28,12 +28,7 @@ import {
  * - 認可は関数内で行う。テーブル構造だけで非公開作品の存在を隠すことはできないので、クエリ側で必ず絞る。
  */
 
-const permissionLevel = v.union(
-  v.literal("view"),
-  v.literal("review"),
-  v.literal("edit"),
-  v.literal("manage"),
-);
+const permissionLevel = v.union(v.literal("review"), v.literal("edit"), v.literal("manage"));
 const principalType = v.union(v.literal("user"), v.literal("group"));
 const lifecycle = v.union(
   v.literal("draft"),
