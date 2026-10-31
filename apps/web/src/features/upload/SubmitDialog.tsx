@@ -101,29 +101,17 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
     case "document":
     case "sns":
       return { kind: "files", link: false };
+    case "other":
+      return { kind: "files", link: true };
     default:
       return { kind: "files", link: false };
   }
 }
 
-/** URL らしければ受け付ける（Google スライドに限定しない） */
-const isUrlLike = (raw: string) => {
-  const t = raw.trim();
-  if (t.length < 4) return false;
-  if (/^https?:\/\//i.test(t)) return true;
+/** https の URL か（Web・外部リンク・スライド URL。利用者決定 95A） */
+const isHttpsUrl = (raw: string) => {
   try {
-    new URL(t.includes("://") ? t : `https://${t}`);
-    return true;
-  } catch {
-    return /\.\S/.test(t);
-  }
-};
-
-/** http(s) の URL か（ライブ表示の iframe に渡せるもの） */
-const isHttpUrl = (raw: string) => {
-  try {
-    const u = new URL(raw.trim());
-    return u.protocol === "https:" || u.protocol === "http:";
+    return new URL(raw.trim()).protocol === "https:";
   } catch {
     return false;
   }
@@ -306,14 +294,16 @@ export function SubmitDialog({
       return setError("校正期限が過ぎています。今より後の日時にしてください");
     if (!token)
       return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
-    if (input.kind === "web" && !isHttpUrl(form.externalUrl))
-      return setError("サイトの URL を https:// から入れてください");
+    const needsExternalUrl =
+      input.kind === "web" ||
+      slideSubmit ||
+      (input.kind === "files" && input.link && !!form.externalUrl.trim());
+    if (needsExternalUrl && !isHttpsUrl(form.externalUrl))
+      return setError("リンクは https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
     if (slideSubmit && !form.externalUrl.trim())
       return setError("スライドのリンクを入力してください");
-    if (slideSubmit && form.externalUrl.trim() && !isUrlLike(form.externalUrl))
-      return setError("リンクの形が正しくありません");
     // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
     // （サーバーも確定のときに同じ規則で断る）
     if (input.kind === "files" && graphic) {
@@ -453,7 +443,9 @@ export function SubmitDialog({
         ? figmaFrames.length === 0
         : slideSubmit
           ? files.length === 0 || !form.externalUrl.trim()
-          : files.length === 0);
+          : input.kind === "files" && input.link
+            ? files.length === 0 && !form.externalUrl.trim()
+            : files.length === 0);
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
@@ -575,7 +567,7 @@ export function SubmitDialog({
                   <Field
                     label="スライドのリンク"
                     required
-                    hint="Google スライドなど、共有 URL を貼ってください。校正は PDF 上で行います"
+                    hint="共有 URL（https）。校正は PDF 上"
                   >
                     <TextInput
                       type="text"
