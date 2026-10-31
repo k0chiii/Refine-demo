@@ -17,7 +17,6 @@ import {
   type PointerEvent,
 } from "react";
 import { PressLayer, type ChargeMark, type PopMark } from "@/features/annotation/AnchorOverlay";
-import { useMarkArmed } from "@/features/annotation/markArm";
 import {
   holdMs,
   kindOf,
@@ -116,7 +115,7 @@ interface Placed {
 /**
  * 画像の上に重ねる層（切り抜きの範囲 = 層の全体）。`crop` は元画像のうち、いま見えている範囲（cropRect）。
  * - マウス・ペン: ドラッグで範囲、動かさず押し続けるとピン。クリックはふつうのクリックで、印（範囲の面・ピン）を押すと
- *   そのコメントを開く（「コメントを追加」の直後の 1 回だけ、何もない所のクリックもピン）
+ *   そのコメントを開く
  * - タッチ: なぞるとふつうにスクロール。長押しすると選択が始まり、動かすと範囲、離すとピン（AnchorOverlay と同じ）。
  *   短いタップは印を開くだけ
  * - キーボード: 層にフォーカス → 矢印で動かし（Shift で細かく）、Enter で始点・もう一度 Enter で終点（同じ場所ならピン）
@@ -141,7 +140,6 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
     timer: number;
   } | null>(null);
   const handledAt = useRef(0);
-  const armed = useMarkArmed();
   const canComment = ctx?.canComment ?? false;
 
   const mine: Placed[] = (ctx?.images ?? [])
@@ -371,9 +369,6 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
     if (cur.hit.length) {
       handledAt.current = performance.now();
       open(cur.hit);
-    } else if (canComment && armed) {
-      handledAt.current = performance.now();
-      commit(cur.p, cur.p, true);
     }
   };
   const onPointerCancel = () => {
@@ -422,7 +417,7 @@ export function ImageMarkLayer({ imageIndex, crop }: { imageIndex: number; crop:
   return (
     <div
       ref={ref}
-      className={`sp-marks ${canComment && armed ? "is-drawable" : ""}`}
+      className="sp-marks"
       data-mark-layer=""
       {...(canComment
         ? {
