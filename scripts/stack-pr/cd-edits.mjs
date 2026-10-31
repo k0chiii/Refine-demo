@@ -366,7 +366,7 @@ import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
         "ui-detail-shell-mock",
         `.detail-shell {
   background: var(--mf-surface-container-lowest);
-  min-height: 1600px;
+  min-height: 2000px;
 }
 .detail-shell__head {
   border-bottom: 1px solid var(--mf-outline-variant);
