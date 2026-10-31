@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { formatDeadline, remaining } from "@/lib/format";
+import { ReviewDeadlineCell } from "@/features/review/UrgentReviewChip";
 import { lifecycleLabel } from "@/lib/labels";
 import { stageInfo } from "@/lib/stageInfo";
 import { rememberWorkHint } from "@/lib/workHint";
@@ -252,10 +253,13 @@ function Row({
       </td>
       <td className="mf-table__td">
         {w.acceptingDeadlineAt ? (
-          <>
-            <span className="works-table__date">{formatDeadline(w.acceptingDeadlineAt, now)}</span>
-            <span className="mf-table__sub">{remaining(w.acceptingDeadlineAt, now)}</span>
-          </>
+          <span className="works-table__date">
+            <ReviewDeadlineCell
+              urgent={w.acceptingReviewUrgent}
+              deadlineAt={w.acceptingDeadlineAt}
+              now={now}
+            />
+          </span>
         ) : (
           <span className="muted">—</span>
         )}

@@ -43,6 +43,7 @@ export const prepare = mutation({
     kind: vRevisionKind,
     reviewType: v.string(),
     deadlineAt: v.number(),
+    reviewUrgent: v.optional(v.boolean()),
     changeSummary: v.string(),
     focusNotes: v.string(),
     items: v.array(
