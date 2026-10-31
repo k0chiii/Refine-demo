@@ -8,7 +8,7 @@ index faa1154..deb3538 100644
      <>
        <UserPicker
 -        label="校了者（校了権限者）"
-+        label="校了者（校了者）"
++        label="校了者"
          {...(required && !readOnly ? { required } : {})}
          {...(readOnly ? { readOnly } : {})}
          value={ids}

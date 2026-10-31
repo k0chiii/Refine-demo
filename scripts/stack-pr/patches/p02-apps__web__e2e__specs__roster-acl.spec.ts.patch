@@ -8,7 +8,7 @@ index ce717f9..6157b0a 100644
      await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
      await app.pickUser(
 -      dialog.locator("m3e-form-field", { hasText: "校了者（校了権限者）" }),
-+      dialog.locator("m3e-form-field", { hasText: "校了者（校了者）" }),
++      dialog.locator("m3e-form-field", { hasText: "校了者" }),
        approver.name,
      );
      await app.pickUser(dialog.locator("m3e-form-field", { hasText: "校正者" }), "こうせいはん");
