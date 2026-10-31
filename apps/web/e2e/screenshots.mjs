@@ -1210,7 +1210,7 @@ async function main() {
 
 /** 27–64: 制作・採否・第2版と持ち越し・比較・校了・通知・管理（core の続き。core で付けたコメント・版を使う） */
 async function lateScenes() {
-  // 27 制作（制作者）: 進行中の「あなたの番」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
+  // 27 制作（制作者）: 進行中の「要対応」（版を提出・対応する）と「校正中」。行ごとに次の操作の印が 1 つ
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/make`);
   await page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
@@ -1478,10 +1478,11 @@ async function lateScenes() {
   {
     const box = await page1().boundingBox();
     const at = (x, y) => [box.x + box.width * x, box.y + box.height * y];
-    await page.mouse.click(...at(0.92, 0.95));
+    // 下端は浮いたツールバーと重なるので、紙面の中ほどで試す
+    await page.mouse.click(...at(0.92, 0.6));
     await page.waitForTimeout(500);
     expectTrue((await composeCount()) === 0, "紙面をクリックしただけで投稿欄が出た");
-    const [jx, jy] = at(0.9, 0.9);
+    const [jx, jy] = at(0.9, 0.55);
     await page.mouse.move(jx, jy);
     await page.mouse.down();
     await page.mouse.move(jx + 2, jy + 2, { steps: 2 }); // しきい値（4px）より小さいぶれはクリック
@@ -1498,7 +1499,7 @@ async function lateScenes() {
       "なぞった範囲が下書きとして描かれない",
     );
     await cancelCompose();
-    await mouseHold(...at(0.92, 0.95));
+    await mouseHold(...at(0.92, 0.6));
     await page.waitForSelector(".compose-pop");
     expectTrue(
       (await page1().locator(".viewer__overlay circle.anchor-draft").count()) === 1,
@@ -1547,12 +1548,13 @@ async function lateScenes() {
   await go(revision2Url);
   await pdfReady();
   await drawer("コメント");
+  // 採否のボタンは選んだカードにだけ出る: 未対応のカードを選んでから「反映する」
   for (let i = 0; i < 5; i++) {
-    const sel = '.comments .thread m3e-icon-button[aria-label^="解決"]';
+    const sel = ".comments .thread:not(.thread--closed)";
     const left = await page.locator(sel).count();
     if (left === 0) break;
-    await page.locator(".comments .thread .thread__body").first().click();
-    await page.locator(sel).first().click();
+    await page.locator(`${sel} .thread__body`).first().click();
+    await page.locator(".comments .thread--active .thread__decide m3e-button").first().click();
     await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
   }
   await page.waitForSelector(".comments .thread--closed");
@@ -2306,7 +2308,7 @@ async function v2Scenes() {
   // 相手を替えた後にページの対応を解析し直す（前の組の結果を引きずらない）
   await page.waitForFunction(
     () =>
-      /ページ対応: 旧 [1-9]\d* → 新 [1-9]/.test(
+      /ページの対応（前の版 [1-9]\d*・この版 [1-9]/.test(
         document.querySelector(".compare-status")?.textContent ?? "",
       ),
     null,
@@ -2749,17 +2751,18 @@ async function v2Scenes() {
   };
   await openComments();
   for (let i = 0; i < 10; i++) {
-    const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]';
+    const sel = "m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)";
     const left = await page.locator(sel).count();
     if (left === 0) break;
-    await page.locator("m3e-bottom-sheet.ws__sheet .thread .thread__body").first().click();
-    await page.locator(sel).first().click();
+    await page.locator(`${sel} .thread__body`).first().click();
+    await page
+      .locator("m3e-bottom-sheet.ws__sheet .thread--active .thread__decide m3e-button")
+      .first()
+      .click();
     await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
   }
   expectTrue(
-    (await page
-      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label^="解決"]')
-      .count()) === 0,
+    (await page.locator("m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)").count()) === 0,
     "プレビューに付けたコメントを反映済みにできない",
   );
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
