@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:07:20.664Z
+url=http://127.0.0.1:4303/works
+scene=role-home-manager
+marker:制作物の状況=制作物の状況

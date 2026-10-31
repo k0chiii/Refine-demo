@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:06:41.442Z
+url=http://127.0.0.1:4305/check
+scene=role-home-approver
+marker:未着手=未着手 1

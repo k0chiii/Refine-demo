@@ -14,13 +14,14 @@ if (phase !== "before" && phase !== "after") {
 const outDir = path.join(here, phase);
 fs.mkdirSync(outDir, { recursive: true });
 
+/** 主色・面・filled ボタンが見える画面 + ロール別ホーム（/works KPI・/make・/check） */
 const scenes = [
+  "33-work-form",
   "02-works-list",
   "27-make-creator",
-  "dashboard-manager",
-  "dashboard-member",
-  "dashboard-approver",
-  "33-work-form",
+  "role-home-manager",
+  "role-home-member",
+  "role-home-approver",
   "12-submit-dialog",
 ];
 
@@ -44,6 +45,7 @@ for (const scene of scenes) {
       CHROMIUM_PATH: process.env.CHROMIUM_PATH ?? "/usr/bin/google-chrome",
       SCREENSHOT_CORPUS: outDir,
       SKIP_DEMO_BUILD: skipBuild,
+      CAPTURE_THEME: phase === "before" ? "before" : "after",
     },
   });
   fs.unlinkSync(req);

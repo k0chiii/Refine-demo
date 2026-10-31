@@ -1,4 +1,4 @@
-capturedAt=2026-10-31T17:02:44.519Z
-url=http://127.0.0.1:4305/works?new=true
+capturedAt=2026-10-31T17:06:57.312Z
+url=http://127.0.0.1:4300/works?new=true
 scene=33-work-form
 marker:制作物を登録=制作物を登録

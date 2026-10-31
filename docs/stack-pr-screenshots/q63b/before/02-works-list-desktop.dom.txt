@@ -1,4 +1,4 @@
-capturedAt=2026-10-31T16:59:55.752Z
-url=http://127.0.0.1:4300/works
+capturedAt=2026-10-31T17:06:10.559Z
+url=http://127.0.0.1:4301/works
 scene=02-works-list
 marker:MF100 公式パンフレット=MF100 公式パンフレット
