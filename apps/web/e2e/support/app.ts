@@ -213,13 +213,28 @@ export class App {
     await group.getByRole("spinbutton", { name: "月" }).fill(m!);
     await group.getByRole("spinbutton", { name: "日" }).fill(d!);
     await group.getByRole("spinbutton", { name: "日" }).press("Tab");
+    // spinbutton だけでは React の onChange が走らないことがあるので date-input にも反映する
+    const dateInput = group.locator("xpath=ancestor::m3e-form-field[1]//m3e-date-input").first();
+    if ((await dateInput.count()) > 0) {
+      await dateInput.evaluate((el, iso) => {
+        const [yy, mm, dd] = iso.split("-").map((x) => Number(x));
+        const target = el as unknown as { value: Date | null };
+        target.value = new Date(yy!, mm! - 1, dd!);
+        el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+      }, isoDate);
+    }
     await this.settle();
   }
 
-  /** M3E select（form-field 内）で選択肢を選ぶ（オプションはダイアログに写る） */
+  /** M3E select（form-field 内）で選択肢を選ぶ（候補は overlay で page 直下に出る） */
   async pickSelectOption(scope: Locator, fieldLabel: string, option: string) {
     const combo = scope.getByRole("combobox", { name: fieldLabel });
-    await combo.click();
+    if ((await combo.count()) > 0) {
+      await combo.click();
+    } else {
+      const field = scope.locator("m3e-form-field", { hasText: fieldLabel });
+      await field.locator("m3e-select").click();
+    }
     await this.settle();
     await this.page.getByRole("option", { name: option, exact: true }).click();
     await this.settle();
