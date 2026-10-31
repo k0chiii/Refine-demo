@@ -438,6 +438,10 @@ async function main() {
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
   await shot("02-works-list");
+  // 担当順の並べ替えは局・担当の絞り込み UI が出る利用者向け（§52）
+  await signInAs("mock-nogiku-manager");
+  await go(`${BASE}/works`);
+  await page.waitForSelector(WORKS_ENTRY);
   // 絞り込み・並べ替えの振る舞いは specs/works-list.spec.ts で確かめる。ここは撮るだけ
   await page.locator(".works__team--production").click();
   await settle();
