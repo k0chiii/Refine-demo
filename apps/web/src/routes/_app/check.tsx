@@ -60,7 +60,7 @@ const detailOf = (e: { kind: CheckKind; item: Item }): string => {
   return [
     "校正",
     p ? `校正者 ${p.done}/${p.total} 完了` : null,
-    item.count > 0 ? `未解決のコメント ${item.count}` : null,
+    item.count > 0 ? `未対応のコメント ${item.count}` : null,
   ]
     .filter(Boolean)
     .join("・");
