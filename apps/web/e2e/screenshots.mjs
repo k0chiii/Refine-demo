@@ -387,13 +387,13 @@ async function prepareRevisions() {
         await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
     },
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   revisionUrl = page.url();
   await pdfReady();
   await drawer("版");
   await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   revision2Url = page.url();
   await pdfReady();
@@ -416,12 +416,12 @@ async function prepareWeb() {
     for (const id of ["theme_font", "balance", "committee_output"])
       await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
   });
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   await pdfReady();
   await drawer("版");
   await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   await pdfReady();
 }
@@ -433,7 +433,7 @@ async function main() {
   await page.locator(`m3e-expansion-panel [slot="header"]`).first().click();
   await shot("01-signin");
 
-  // 02 制作物一覧（制作者）: 1 つの表。02b は制作担当で絞り込み、主管担当順に並べ替えたところ。見出しを押すと並べ替え（aria-sort・URL）
+  // 02 制作物一覧（制作者）: 1 つの表。02b は制作担当で絞り込み、担当順に並べ替えたところ。見出しを押すと並べ替え（aria-sort・URL）
   await signInAs("mock-nogiku-creator");
   await go(`${BASE}/works`);
   await page.waitForSelector(WORKS_ENTRY);
@@ -448,7 +448,7 @@ async function main() {
   await settle();
   await page.locator(".works__sort").click();
   await settle();
-  await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "主管担当順" }).click();
+  await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "担当順" }).click();
   await page.waitForURL(/sort=owner/);
   await settle();
   await shot("02b-works-filtered");
@@ -550,7 +550,7 @@ async function main() {
     },
   );
   await shot("04-submit-verified");
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   revisionUrl = page.url();
   await pdfReady();
@@ -610,7 +610,7 @@ async function main() {
   await signInAs("mock-nogiku-creator");
   const longPath = await openWork(LONG_TITLE);
   await submitRevision("最初の版を提出", [resolve(FIXTURES, "sample.pdf")], "初稿");
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   await pdfReady();
   await signInAs("mock-nogiku-manager");
@@ -1294,7 +1294,7 @@ async function lateScenes() {
     [resolve(FIXTURES, "sample.pdf")],
     "団体名表記は規約どおり維持。凡例の文字サイズを調整。",
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   revision2Url = page.url();
   await pdfReady();
@@ -1835,7 +1835,7 @@ async function compactScenes() {
     null,
     { timeout: 30_000 },
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1(\?|$)/, { timeout: 15_000 });
   // 校正者を割り当てる（主管）
   await signInAs("mock-nogiku-manager");
@@ -2239,7 +2239,7 @@ async function v2Scenes() {
   // 54–55 提出時の自動校正と PDF の版比較（委員会企画 D の制作物。D は A を継承）
   const poster = await openWork("EVE 企画ポスター");
   await submitRevision("最初の版を提出", [resolve(FIXTURES, "compare-v1.pdf")], "初稿");
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   await pdfReady();
   await drawer("版");
@@ -2250,7 +2250,7 @@ async function v2Scenes() {
     ),
     "協賛ページを追加",
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
   await pdfReady();
   await drawer("コメント");
@@ -2498,7 +2498,7 @@ async function v2Scenes() {
       timeout: 30_000,
     },
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   await page.waitForSelector(".sp-figure", { timeout: 20_000 });
   await page.waitForTimeout(1500);
@@ -2795,7 +2795,7 @@ async function v2Scenes() {
   await page.waitForURL(/\/works\/[^/]+$/);
   const videoWork = page.url();
   await submitRevision("最初の版を提出", [resolve(FIXTURES, "promo.webm")], "初稿の告知動画");
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   await signInAs("mock-nogiku-reviewer");
   await go(videoWork);
@@ -3157,7 +3157,7 @@ async function webFigmaScenes() {
     null,
     { timeout: 30_000 },
   );
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/3$/, { timeout: 15_000 });
   await pdfReady(); // PDF 互換の .ai が紙面に出る
   await drawer("情報");
