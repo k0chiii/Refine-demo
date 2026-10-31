@@ -6135,3 +6135,13 @@ m3e-snackbar {
 .thread__decide m3e-button {
   --m3e-button-shape: var(--mf-shape-full);
 }
+
+/* stack-pr:ui-kpi-row-mock */
+.kpis--mock-row {
+  margin-block-end: 4px;
+}
+@media (min-width: 840px) {
+  .kpis--mock-row {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+}
