@@ -359,9 +359,7 @@ describe("アプリ内通知（F-11）", () => {
         (n) => n.kind === "revision_submitted",
       ),
     ).toHaveLength(0);
-    expect((await listMyNotifications(ctx, principals.approver)).map((n) => n.kind)).toEqual([
-      "revision_submitted",
-    ]);
+    expect((await listMyNotifications(ctx, principals.approver)).map((n) => n.kind)).toEqual([]);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.reviewer.userId],

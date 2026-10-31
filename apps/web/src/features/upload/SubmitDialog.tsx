@@ -14,6 +14,7 @@ import {
   isGraphicSubmissionFile,
   isIllustratorFile,
   isReviewableArtifact,
+  isSlideSubGenre,
   pickReviewArtifact,
   revisionDeclarationItems,
   suggestedChecksFor,
@@ -103,16 +104,17 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
     case "document":
     case "sns":
       return { kind: "files", link: false };
-    default:
+    case "other":
       return { kind: "files", link: true };
+    default:
+      return { kind: "files", link: false };
   }
 }
 
-/** http(s) の URL か（ライブ表示の iframe に渡せるもの） */
-const isHttpUrl = (raw: string) => {
+/** https の URL か（Web・外部リンク・スライド URL。利用者決定 95A） */
+const isHttpsUrl = (raw: string) => {
   try {
-    const u = new URL(raw.trim());
-    return u.protocol === "https:" || u.protocol === "http:";
+    return new URL(raw.trim()).protocol === "https:";
   } catch {
     return false;
   }
@@ -242,6 +244,7 @@ export function SubmitDialog({
   }, [state.confirmed?.revisionId]);
 
   const work = data?.work ?? null;
+  const slideSubmit = isSlideSubGenre(work?.subGenre);
   const revisions = data?.revisions ?? [];
   const hasRough = revisions.some((r) => r.kind === "rough");
   const hasStandard = revisions.some((r) => r.kind === "standard");
@@ -306,10 +309,16 @@ export function SubmitDialog({
       );
     if (!token)
       return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
-    if (input.kind === "web" && !isHttpUrl(form.externalUrl))
-      return setError("サイトの URL を https:// から入れてください");
+    const needsExternalUrl =
+      input.kind === "web" ||
+      slideSubmit ||
+      (input.kind === "files" && input.link && !!form.externalUrl.trim());
+    if (needsExternalUrl && !isHttpsUrl(form.externalUrl))
+      return setError("リンクは https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
+    if (slideSubmit && !form.externalUrl.trim())
+      return setError("スライドのリンクを入力してください");
     // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
     // （サーバーも確定のときに同じ規則で断る）
     if (input.kind === "files" && graphic) {
@@ -369,7 +378,7 @@ export function SubmitDialog({
         externalUrl: f.url,
       })),
       ...(form.externalUrl.trim() &&
-      (input.kind === "web" || (input.kind === "files" && input.link))
+      (input.kind === "web" || slideSubmit || (input.kind === "files" && input.link))
         ? [
             {
               fileName: form.externalUrl.trim(),
@@ -448,7 +457,11 @@ export function SubmitDialog({
       ? !form.externalUrl.trim()
       : input.kind === "figma"
         ? figmaFrames.length === 0
-        : files.length === 0 && !(input.link && form.externalUrl.trim()));
+        : slideSubmit
+          ? files.length === 0 || !form.externalUrl.trim()
+          : input.kind === "files" && input.link
+            ? files.length === 0 && !form.externalUrl.trim()
+            : files.length === 0);
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
@@ -523,61 +536,79 @@ export function SubmitDialog({
                 ) : null}
               </>
             ) : (
-              <div
-                className={`file-drop ${dragging ? "file-drop--over" : ""}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragging(false);
-                  addFiles(e.dataTransfer.files, true);
-                }}
-              >
-                <M3eIcon name="upload_file" />
-                <span>
-                  {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
-                </span>
-                <label className="file-drop__pick">
-                  選択
-                  <input
-                    type="file"
-                    multiple
-                    {...(input.accept ? { accept: input.accept } : {})}
-                    aria-label="ファイルを選択"
-                    onChange={(e) => addFiles(e.target.files)}
-                  />
-                </label>
-                {files.length > 0 ? (
-                  <ul className="file-drop__files">
-                    {files.map((f) => (
-                      <li key={f.name}>
-                        {f.name}
-                        <span className="muted">
-                          　{formatBytes(f.size)}・
-                          {f === shownFile
-                            ? "プレビューに表示（コメントはこのファイルに）"
-                            : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
-                        </span>
-                        <M3eIconButton
-                          className="file-drop__remove"
-                          aria-label={`${f.name} を外す`}
-                          onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
-                        >
-                          <M3eIcon name="close" />
-                        </M3eIconButton>
-                      </li>
-                    ))}
-                  </ul>
+              <>
+                <div
+                  className={`file-drop ${dragging ? "file-drop--over" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    addFiles(e.dataTransfer.files, true);
+                  }}
+                >
+                  {slideSubmit ? (
+                    <p className="label-large" style={{ margin: "0 0 8px" }}>
+                      PDF（必須、校正対象）
+                    </p>
+                  ) : null}
+                  <M3eIcon name="upload_file" />
+                  <span>
+                    {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
+                  </span>
+                  <label className="file-drop__pick">
+                    選択
+                    <input
+                      type="file"
+                      multiple
+                      {...(input.accept ? { accept: input.accept } : {})}
+                      aria-label="ファイルを選択"
+                      onChange={(e) => addFiles(e.target.files)}
+                    />
+                  </label>
+                  {files.length > 0 ? (
+                    <ul className="file-drop__files">
+                      {files.map((f) => (
+                        <li key={f.name}>
+                          {f.name}
+                          <span className="muted">
+                            　{formatBytes(f.size)}・
+                            {f === shownFile
+                              ? "プレビューに表示（コメントはこのファイルに）"
+                              : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
+                          </span>
+                          <M3eIconButton
+                            className="file-drop__remove"
+                            aria-label={`${f.name} を外す`}
+                            onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
+                          >
+                            <M3eIcon name="close" />
+                          </M3eIconButton>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {files.length > 0 && graphic && !shownFile ? (
+                    <p className="small muted" style={{ margin: 0 }}>
+                      .ai・.indd はプレビューできません。PDF か画像も付けてください
+                    </p>
+                  ) : null}
+                </div>
+                {slideSubmit ? (
+                  <Field label="スライドのリンク" required hint="共有 URL（https）。校正は PDF 上">
+                    <TextInput
+                      type="text"
+                      inputMode="url"
+                      value={form.externalUrl}
+                      onChange={set("externalUrl")}
+                      placeholder="https://"
+                    />
+                  </Field>
                 ) : null}
-                {files.length > 0 && graphic && !shownFile ? (
-                  <p className="small muted" style={{ margin: 0 }}>
-                    .ai・.indd はプレビューできません。PDF か画像も付けてください
-                  </p>
-                ) : null}
-              </div>
+              </>
             )}
             <div className="form">
               <Field label="版の種別" required>

@@ -63,6 +63,7 @@ describe("通知の文面（UI_M3E §35 W-14）", () => {
     expect(posted?.body.endsWith("…")).toBe(true);
     ctx.clock.current = startOfJstDay(revision.deadlineAt); // 長い本文は抜粋にして「…」で切る
 
+    ctx.clock.current = startOfJstDay(revision.deadlineAt);
     expect(await remindUpcomingDeadlines(ctx)).toBe(1);
     const reminder = (await listMyNotifications(ctx, principals.reviewer)).find(
       (n) => n.kind === "deadline_approaching",

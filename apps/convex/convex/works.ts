@@ -1,6 +1,7 @@
 import { substringQuery, workSearchText } from "./lib/workSearch";
 import {
   changeWorkLifecycle,
+  canChangeCreators,
   createWork,
   importWorks,
   loadAuthorizedWork,
@@ -355,6 +356,7 @@ export const get = query({
         activeGrantCount: grants.filter(isGrantActive).length,
         can: {
           edit: isAllowed("work.edit", authz),
+          transferCreators: canChangeCreators(work, principal),
           submit: isAllowed("revision.submit", authz),
           decide: isAllowed("comment.decide", authz),
           comment: isAllowed("comment.post", authz),
@@ -606,6 +608,7 @@ async function summarizeWorkList(
     canEdit:
       work.lifecycle !== "finalized" &&
       (overridesAllPermissions(principal) || work.managerIds.includes(principal.userId)),
+    canTransferCreators: canChangeCreators(work, principal),
     reviewers: (work.reviewerIds ?? []).map((id) => ({
       id,
       name: users.get(id)?.name ?? "（不明なユーザー）",
