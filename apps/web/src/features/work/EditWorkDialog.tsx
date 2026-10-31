@@ -44,7 +44,6 @@ export function EditWorkDialog({
       expectedVersion: work.version,
       patch: {
         title: form.title,
-        purpose: form.purpose,
         category: form.category,
         mediaType: form.mediaType as "pdf",
         confidentiality: form.confidentiality as "normal",
@@ -56,9 +55,8 @@ export function EditWorkDialog({
         ownerTeamId: form.ownerTeam[0] ?? "",
         productionTeamIds: form.productionTeamIds,
         relatedTeamIds: form.relatedTeamIds,
-        ...(form.mediaType === "sns" ? { socialProfileId: form.socialProfileId || null } : {}),
-        legacyId: form.legacyId.trim() || null,
         deadlineAt: form.deadlineAt ?? null,
+        ...(form.mediaType === "sns" ? { socialProfileId: form.socialProfileId || null } : {}),
         ...workFormToFields(form),
       },
     });

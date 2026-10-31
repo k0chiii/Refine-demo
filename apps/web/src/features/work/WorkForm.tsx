@@ -238,7 +238,7 @@ function SubGenreSelect({
 
 /**
  * 登録・編集で共通の入力。節は Notion の制作物 DB の並びに沿って 基本／担当と人／日程と入稿、
- * 表記統一のカテゴリ、詳細設定（制作物 ID・区分・機密区分・SNS アカウント）。
+ * 表記統一のカテゴリ、詳細設定（区分・機密区分・SNS アカウント）。
  */
 export function WorkFormFields({
   form,
@@ -318,9 +318,6 @@ export function WorkFormFields({
             value={form.title}
             onChange={set("title")}
           />
-        </Field>
-        <Field label="目的・用途">
-          <TextArea value={form.purpose} onChange={set("purpose")} />
         </Field>
         <div className="form">
           <Field label="大ジャンル">
@@ -460,14 +457,11 @@ export function WorkFormFields({
 
       <M3eExpansionPanel className="expansion">
         <span slot="header">
-          詳細設定（制作物 ID・区分・機密区分
+          詳細設定（区分・機密区分
           {form.mediaType === "sns" && mode === "edit" ? "・SNS アカウント" : ""}）
         </span>
         <div className="form">
-          <Field label="制作物 ID" hint="Notion の制作物 ID や過年度の ID">
-            <TextInput value={form.legacyId} onChange={set("legacyId")} />
-          </Field>
-          <Field label="区分" required hint="小ジャンルから自動で入ります">
+          <Field label="区分" required>
             <TextInput
               required
               maxLength={WORK_CATEGORY_MAX}
