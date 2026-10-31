@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, PAMPHLET, test, type Page } from "../support/app";
+import type { Page } from "@playwright/test";
+import { expect, PAMPHLET, test } from "../support/app";
 
 const SLIDE_DECK = "企画説明会スライド";
 
