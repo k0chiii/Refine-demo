@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/features/notation/SemanticRuleSearch.tsx b/apps/web/src/features/notation/SemanticRuleSearch.tsx
+index b053c98..90b6a34 100644
+--- a/apps/web/src/features/notation/SemanticRuleSearch.tsx
++++ b/apps/web/src/features/notation/SemanticRuleSearch.tsx
+@@ -23,7 +23,7 @@ export function SemanticRuleSearch({ workId }: { workId: string }) {
+       </label>
+       <label>
+         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+-        検索文を Cloudflare Workers AI に送ることに同意する
++        検索文を AI に送ることに同意する
+       </label>
+       <M3eButton
+         variant="outlined"

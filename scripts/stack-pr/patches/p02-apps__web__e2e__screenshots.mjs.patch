@@ -1,0 +1,246 @@
+---
+diff --git a/apps/web/e2e/screenshots.mjs b/apps/web/e2e/screenshots.mjs
+index ebf9896..59e096e 100644
+--- a/apps/web/e2e/screenshots.mjs
++++ b/apps/web/e2e/screenshots.mjs
+@@ -387,13 +387,13 @@ async function prepareRevisions() {
+         await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+     },
+   );
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   revisionUrl = page.url();
+   await pdfReady();
+   await drawer("版");
+   await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+   revision2Url = page.url();
+   await pdfReady();
+@@ -416,12 +416,12 @@ async function prepareWeb() {
+     for (const id of ["theme_font", "balance", "committee_output"])
+       await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+   });
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   await pdfReady();
+   await drawer("版");
+   await submitRevision("新しい版を提出", [resolve(FIXTURES, "sample.pdf")], "第2版。");
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+   await pdfReady();
+ }
+@@ -550,7 +550,7 @@ async function main() {
+     },
+   );
+   await shot("04-submit-verified");
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   revisionUrl = page.url();
+   await pdfReady();
+@@ -610,7 +610,7 @@ async function main() {
+   await signInAs("mock-nogiku-creator");
+   const longPath = await openWork(LONG_TITLE);
+   await submitRevision("最初の版を提出", [resolve(FIXTURES, "sample.pdf")], "初稿");
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   await pdfReady();
+   await signInAs("mock-nogiku-manager");
+@@ -729,13 +729,16 @@ async function main() {
+   // 縦の浮遊ツールバーは右の引き出しが開いているあいだは隠れ、畳むと出る（利用者決定 2026-10-20）。出たツールバーから開き直せる
+   {
+     const bar = page.locator(".ws__side-toolbar");
+-    expectTrue(!(await bar.isVisible()), "引き出しが開いているのに縦の浮遊ツールバーが出ている");
++    expectTrue(
++      !(await bar.isVisible()),
++      "サイドパネルが開いているのに縦の浮遊ツールバーが出ている",
++    );
+     await page.locator(".ws__handle").focus();
+     await page.keyboard.press("Enter"); // 畳む
+     await settle();
+-    expectTrue(await bar.isVisible(), "引き出しを畳んでも縦の浮遊ツールバーが出ない");
++    expectTrue(await bar.isVisible(), "サイドパネルを畳んでも縦の浮遊ツールバーが出ない");
+     await drawer("コメント"); // 縦のツールバーから開き直す
+-    expectTrue(!(await bar.isVisible()), "引き出しを開き直しても縦の浮遊ツールバーが隠れない");
++    expectTrue(!(await bar.isVisible()), "サイドパネルを開き直しても縦の浮遊ツールバーが隠れない");
+   }
+   // 23 ピンの高さに並べる（Google ドキュメント式） / 24 ピンだけ（Figma 式）
+   await pickLayout("ピンの高さに並べる");
+@@ -1046,7 +1049,7 @@ async function main() {
+         composerInside: composer.bottom <= innerHeight && composer.top >= panel.top,
+       };
+     });
+-    expectTrue((await drawerWidth()) === widthBefore, "スレッドを開くと引き出しが広がる");
++    expectTrue((await drawerWidth()) === widthBefore, "スレッドを開くとサイドパネルが広がる");
+     expectTrue(
+       sides.overList && sides.listVisible === "hidden",
+       "広い画面でスレッドが一覧を差し替えない",
+@@ -1277,12 +1280,12 @@ async function lateScenes() {
+     .locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]')
+     .click();
+   await settle();
+-  await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
++  await page.locator("m3e-menu-item:visible", { hasText: "反映しない" }).click();
+   await page.fill(
+     ".thread-panel textarea",
+     "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み",
+   );
+-  await decisionPanel.locator("m3e-button", { hasText: "不採用にする" }).click();
++  await decisionPanel.locator("m3e-button", { hasText: "反映しないにする" }).click();
+   // 一覧はパネルの下に隠れているので、パネルが閉じた（不採用の）状態になるのを待つ
+   await page.waitForSelector(".thread-panel.thread--closed");
+   await shot("09-decision");
+@@ -1294,16 +1297,16 @@ async function lateScenes() {
+     [resolve(FIXTURES, "sample.pdf")],
+     "団体名表記は規約どおり維持。凡例の文字サイズを調整。",
+   );
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+   revision2Url = page.url();
+   await pdfReady();
+   await drawer("コメント");
+-  await page.waitForSelector('[aria-label="前版の未解決コメント"]');
++  await page.waitForSelector('[aria-label="前版の未対応コメント"]');
+   await shot("17-carry-forward");
+   const threadsBeforeCarry = await page.locator(".comments .thread").count();
+   await page
+-    .locator('[aria-label="前版の未解決コメント"] m3e-button', { hasText: "この版へ持ち越す" })
++    .locator('[aria-label="前版の未対応コメント"] m3e-button', { hasText: "この版へ持ち越す" })
+     .first()
+     .click();
+   await page.waitForFunction(
+@@ -1480,7 +1483,7 @@ async function lateScenes() {
+     const at = (x, y) => [box.x + box.width * x, box.y + box.height * y];
+     await page.mouse.click(...at(0.92, 0.95));
+     await page.waitForTimeout(500);
+-    expectTrue((await composeCount()) === 0, "紙面をクリックしただけで投稿欄が出た");
++    expectTrue((await composeCount()) === 0, "プレビューをクリックしただけで投稿欄が出た");
+     const [jx, jy] = at(0.9, 0.9);
+     await page.mouse.move(jx, jy);
+     await page.mouse.down();
+@@ -1511,7 +1514,7 @@ async function lateScenes() {
+     await drawer("コメント");
+     const marks = () => page.locator(".viewer__overlay [data-anchor]").count();
+     const shown = await marks();
+-    expectTrue(shown > 0, "印を隠す前に、紙面に印が無い");
++    expectTrue(shown > 0, "印を隠す前に、プレビューに印が無い");
+     const cards = await page.locator(".comments .thread").count();
+     const toggle = page.locator(".ws__toolbar .ws__marks-toggle");
+     await toggle.click();
+@@ -1639,7 +1642,7 @@ async function lateScenes() {
+   );
+   expectTrue(
+     (await page.locator(".drawer m3e-tab, .ws__drawer m3e-tab", { hasText: "FB" }).count()) === 0,
+-    "エディタの引き出しに FB のタブが残っている",
++    "エディタのサイドパネルに FB のタブが残っている",
+   );
+ 
+   if (PART === "all") await compactScenes();
+@@ -1747,7 +1750,7 @@ async function compactScenes() {
+       const s = document.querySelector("m3e-bottom-sheet.ws__sheet");
+       return s.hasAttribute("handle") && s.getAttribute("detents") === "half full";
+     }),
+-    "引き出しのシートにハンドル・止まる高さが無い",
++    "サイドパネルのシートにハンドル・止まる高さが無い",
+   );
+   await shot("34-mobile-sheet-half");
+   // 開いている間はシートがツールバーに重なる（中のタブで切り替え、下に払うと閉じる）
+@@ -1834,7 +1837,7 @@ async function compactScenes() {
+     null,
+     { timeout: 30_000 },
+   );
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1(\?|$)/, { timeout: 15_000 });
+   // 校正者を割り当てる（主管）
+   await signInAs("mock-nogiku-manager");
+@@ -2175,13 +2178,13 @@ const expectNoOverflow = async (route, width, height) => {
+   console.log(`  overflow ${route} ${width}px:`, JSON.stringify(m));
+   const where = `${route} の ${width}px`;
+   expectTrue(m.scrollWidth <= m.clientWidth, `${where}で、ページが横にはみ出している`);
+-  expectTrue(m.longRows >= 1, `${where}に、長い題名の行がない`);
++  expectTrue(m.longRows >= 1, `${where}に、長い制作物名の行がない`);
+   expectTrue(
+     m.longRowRight <= m.innerWidth && m.longChipRight <= m.innerWidth,
+-    `${where}で、長い題名の行か印が画面の右に出ている`,
++    `${where}で、長い制作物名の行か印が画面の右に出ている`,
+   );
+   expectTrue(m.chips === m.rows, `${where}で、行の印が 1 つずつ付いていない`);
+-  expectTrue(m.actionLines === m.rows, `${where}で、印が題名の下に置かれていない`);
++  expectTrue(m.actionLines === m.rows, `${where}で、印が制作物名の下に置かれていない`);
+ };
+ 
+ /** v2: 表記統一・自動校正・版比較・SNS 投稿 */
+@@ -2238,7 +2241,7 @@ async function v2Scenes() {
+   // 54–55 提出時の自動校正と PDF の版比較（委員会企画 D の制作物。D は A を継承）
+   const poster = await openWork("EVE 企画ポスター");
+   await submitRevision("最初の版を提出", [resolve(FIXTURES, "compare-v1.pdf")], "初稿");
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   await pdfReady();
+   await drawer("版");
+@@ -2249,7 +2252,7 @@ async function v2Scenes() {
+     ),
+     "協賛ページを追加",
+   );
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/2$/, { timeout: 15_000 });
+   await pdfReady();
+   await drawer("コメント");
+@@ -2314,7 +2317,7 @@ async function v2Scenes() {
+   );
+   expectTrue(
+     (await page.locator(".compare-status").innerText()).includes("MF100 公式パンフレット"),
+-    "比較の状況に相手の制作物の題名が出ない",
++    "比較の状況に相手の制作物の制作物名が出ない",
+   );
+   expectTrue(
+     (await compareButton().getAttribute("selected")) !== null,
+@@ -2497,7 +2500,7 @@ async function v2Scenes() {
+       timeout: 30_000,
+     },
+   );
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   await page.waitForSelector(".sp-figure", { timeout: 20_000 });
+   await page.waitForTimeout(1500);
+@@ -2794,7 +2797,7 @@ async function v2Scenes() {
+   await page.waitForURL(/\/works\/[^/]+$/);
+   const videoWork = page.url();
+   await submitRevision("最初の版を提出", [resolve(FIXTURES, "promo.webm")], "初稿の告知動画");
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
+   await signInAs("mock-nogiku-reviewer");
+   await go(videoWork);
+@@ -3144,7 +3147,7 @@ async function webFigmaScenes() {
+   await page.waitForFunction(
+     () =>
+       [...document.querySelectorAll("m3e-dialog[open] .file-drop__files li")].some(
+-        (li) => li.textContent.includes("poster.ai") && li.textContent.includes("紙面に表示"),
++        (li) => li.textContent.includes("poster.ai") && li.textContent.includes("プレビューに表示"),
+       ),
+     null,
+     { timeout: 10_000 },
+@@ -3156,9 +3159,9 @@ async function webFigmaScenes() {
+     null,
+     { timeout: 30_000 },
+   );
+-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
++  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
+   await page.waitForURL(/\/v\/3$/, { timeout: 15_000 });
+-  await pdfReady(); // PDF 互換の .ai が紙面に出る
++  await pdfReady(); // PDF 互換の .ai がプレビューに出る
+   await drawer("情報");
+   const filesList = page.locator('[aria-label="この版のファイル"] m3e-list-item');
+   expectTrue((await filesList.count()) === 2, "この版のファイルが 2 件並ばない");

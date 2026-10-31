@@ -33,7 +33,7 @@ const invalid = (field: string, reason: string) =>
   });
 
 describe("Notion の制作物 DB に揃えた項目（docs/NOTION_ALIGNMENT.md）", () => {
-  it("小ジャンルは Notion の 22 の選択肢。色の組が大ジャンル、媒体の既定が決まる", () => {
+  it("小ジャンルは Notion の 23 の選択肢。色の組が大ジャンル、媒体の既定が決まる", () => {
     expect(workSubGenres).toHaveLength(23);
     expect(parseWorkSubGenre("デジタル画像（SNS投稿用画像）")).toBe("digital_sns");
     expect(parseWorkSubGenre("デジタル画像(SNS投稿用画像)")).toBe("digital_sns"); // 括弧のゆれ

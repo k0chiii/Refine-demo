@@ -290,12 +290,12 @@ function isCreatorsOnlyPatch(patch: UpdateWorkInput["patch"]): boolean {
   return defined.length === 1 && defined[0]![0] === "creatorIds";
 }
 
-/** 制作者の変更ができる人: 現在の制作者・主管・システム管理者。校了後は不可 */
+/** 制作者の変更ができる人: 統括（主管）・校了する人。制作者本人は不可。校了後は不可 */
 export function canChangeCreators(work: Work, principal: Principal): boolean {
   if (work.lifecycle === "finalized") return false;
   if (overridesAllPermissions(principal)) return true;
   if (work.managerIds.includes(principal.userId)) return true;
-  return work.creatorIds.includes(principal.userId);
+  return approversOf(work).includes(principal.userId);
 }
 
 export async function changeWorkLifecycle(

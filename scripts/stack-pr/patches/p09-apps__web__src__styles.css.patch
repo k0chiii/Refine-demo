@@ -1,0 +1,73 @@
+---
+diff --git a/apps/web/src/styles.css b/apps/web/src/styles.css
+index 2cd48c9..7942224 100644
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -4973,6 +4973,12 @@ m3e-snackbar {
+ .works-table__in {
+   display: none;
+ }
++/* 1440 の画面（表の幅 1240〜1439）では、余白を 12 に詰めて全列を収める（右端の校了者が切れていた） */
++@container (min-width: 1240px) and (max-width: 1439px) {
++  .works-table tr {
++    --mf-table-pad: 12px;
++  }
++}
+ @container (max-width: 1239px) {
+   .works-table__col--creators,
+   .works-table__col--reviewers {
+@@ -5920,15 +5926,16 @@ m3e-snackbar {
+ .mf-table:not(.mf-table--flush) {
+   border-radius: var(--mf-shape-lg);
+ }
++/* 見出し行は面の色を変えず、文字の色と太さで分ける（青い帯にしない。太さは 2026-10-15 の決定どおり 500 のまま） */
+ .mf-table__th {
+-  background: var(--mf-surface-container-high);
+-  font-weight: 600;
++  background: var(--mf-surface-container-low);
++  color: var(--mf-on-surface-variant);
+ }
+ .kpi {
+   --m3e-card-shape: var(--mf-shape-xl);
+ }
+ .kpi__num {
+-  font-weight: 600;
++  font-weight: 500;
+   color: var(--mf-primary);
+ }
+ .comments .thread,
+@@ -5955,3 +5962,31 @@ m3e-snackbar {
+ .ws__comment {
+   margin-inline: 4px;
+ }
++
++/* 入口（制作・校正）の主な一覧は M3 Expressive の segmented list（行ごとの面を 2px の隙間で並べ、まとまりの両端だけ角を大きく）。
++ * 行の面が区切りの役をするので、行の間の線や説明の文は要らない。補助のまとまり（side）は平らなまま */
++.list--segmented {
++  --m3e-segmented-list-segment-gap: 2px;
++  --m3e-segmented-list-container-shape: var(--md-sys-shape-corner-large-increased, 20px);
++  --m3e-segmented-list-item-container-shape: var(--mf-shape-xs);
++  --m3e-segmented-list-item-hover-container-shape: var(--mf-shape-lg);
++  --m3e-segmented-list-item-focus-container-shape: var(--mf-shape-lg);
++  --m3e-segmented-list-item-container-color: var(--mf-surface-container-lowest);
++  /* 上の :where（行の地は透明）が M3E の segmented の既定より強いので、ここで行の面の色を戻す */
++  --m3e-list-item-container-color: var(--mf-surface-container-lowest);
++  margin: 0;
++}
++.list--segmented .list__item {
++  --m3e-list-item-container-shape: var(--mf-shape-xs);
++}
++.hub .list.list--segmented {
++  width: 100%;
++  max-width: 100%;
++}
++.list--segmented .list__item--urgent {
++  --m3e-list-item-container-color: color-mix(
++    in srgb,
++    var(--mf-error-container) 35%,
++    var(--mf-surface-container-lowest)
++  );
++}
+-- 
+2.47.3
+

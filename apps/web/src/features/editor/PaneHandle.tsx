@@ -26,7 +26,7 @@ export function PaneHandle({
   onResize,
   onToggle,
   side = "end",
-  label = "引き出し",
+  label = "サイドパネル",
 }: {
   side?: "start" | "end";
   label?: string;
@@ -68,7 +68,7 @@ export function PaneHandle({
       onPointerMove={(e) => {
         const d = drag.current;
         if (!d) return;
-        const dx = (d.x - e.clientX) * (rtl() ? -1 : 1); // 内側（紙面側）へ動かすと広がる
+        const dx = (d.x - e.clientX) * (rtl() ? -1 : 1); // 内側（プレビュー側）へ動かすと広がる
         if (Math.abs(dx) > 8) d.moved = true;
         if (d.moved) onResize(clamp(snap(d.w + dx)));
       }}

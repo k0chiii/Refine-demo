@@ -101,29 +101,17 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
     case "document":
     case "sns":
       return { kind: "files", link: false };
+    case "other":
+      return { kind: "files", link: true };
     default:
       return { kind: "files", link: false };
   }
 }
 
-/** URL らしければ受け付ける（Google スライドに限定しない） */
-const isUrlLike = (raw: string) => {
-  const t = raw.trim();
-  if (t.length < 4) return false;
-  if (/^https?:\/\//i.test(t)) return true;
+/** https の URL か（Web・外部リンク・スライド URL。利用者決定 95A） */
+const isHttpsUrl = (raw: string) => {
   try {
-    new URL(t.includes("://") ? t : `https://${t}`);
-    return true;
-  } catch {
-    return /\.\S/.test(t);
-  }
-};
-
-/** http(s) の URL か（ライブ表示の iframe に渡せるもの） */
-const isHttpUrl = (raw: string) => {
-  try {
-    const u = new URL(raw.trim());
-    return u.protocol === "https:" || u.protocol === "http:";
+    return new URL(raw.trim()).protocol === "https:";
   } catch {
     return false;
   }
@@ -237,10 +225,9 @@ export function SubmitDialog({
   const failed = failedItems(state).length;
   useEffect(() => {
     if (failed > 0)
-      toast(
-        `${failed} 件が失敗しました。失敗したファイルだけ再アップロードしてから確定してください（旧版の受付は維持されています）`,
-        { kind: "error" },
-      );
+      toast(`${failed} 件を送れませんでした。再アップロードしてから提出してください`, {
+        kind: "error",
+      });
   }, [failed]);
   useEffect(() => {
     if (open && initialFiles && initialFiles.length > 0) setFiles(initialFiles);
@@ -307,14 +294,16 @@ export function SubmitDialog({
       return setError("校正期限が過ぎています。今より後の日時にしてください");
     if (!token)
       return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
-    if (input.kind === "web" && !isHttpUrl(form.externalUrl))
-      return setError("サイトの URL を https:// から入れてください");
+    const needsExternalUrl =
+      input.kind === "web" ||
+      slideSubmit ||
+      (input.kind === "files" && input.link && !!form.externalUrl.trim());
+    if (needsExternalUrl && !isHttpsUrl(form.externalUrl))
+      return setError("リンクは https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
     if (slideSubmit && !form.externalUrl.trim())
       return setError("スライドのリンクを入力してください");
-    if (slideSubmit && form.externalUrl.trim() && !isUrlLike(form.externalUrl))
-      return setError("リンクの形が正しくありません");
     // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
     // （サーバーも確定のときに同じ規則で断る）
     if (input.kind === "files" && graphic) {
@@ -454,7 +443,9 @@ export function SubmitDialog({
         ? figmaFrames.length === 0
         : slideSubmit
           ? files.length === 0 || !form.externalUrl.trim()
-          : files.length === 0);
+          : input.kind === "files" && input.link
+            ? files.length === 0 && !form.externalUrl.trim()
+            : files.length === 0);
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
@@ -462,7 +453,7 @@ export function SubmitDialog({
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>
-            {`${accepting.label} が ${formatDeadlineUntil(accepting.deadlineAt)}受付中。確定した時点で受付が終了します。`}
+            {`提出すると ${accepting.label} の校正は締め切られます`}
           </p>
         ) : null}
         {!work ? (
@@ -471,11 +462,7 @@ export function SubmitDialog({
         ) : !flow ? (
           <>
             {input.kind === "web" ? (
-              <Field
-                label="サイトの URL"
-                required
-                hint="校正者は表示したサイトの上で、要素を選んでコメントします"
-              >
+              <Field label="サイトの URL" required>
                 <TextInput
                   type="url"
                   value={form.externalUrl}
@@ -493,8 +480,8 @@ export function SubmitDialog({
                   required
                   hint={
                     figmaEnabled === false
-                      ? "Figma 連携が未設定のため、URL は外部リンクとして付きます（埋め込み表示とフレーム単位のコメント）"
-                      : "フレームを選んで「リンクをコピー」（…?node-id=1-2）。提出時に画像として取り込みます"
+                      ? "Figma 連携が未設定なので、リンクとして付けます"
+                      : "フレームのリンクを貼ってください。画像として取り込みます"
                   }
                 >
                   <TextArea
@@ -557,7 +544,7 @@ export function SubmitDialog({
                         <span className="muted">
                           　{formatBytes(f.size)}・
                           {f === shownFile
-                            ? "紙面に表示（コメントはこのファイルに）"
+                            ? "プレビューに表示（コメントはこのファイルに）"
                             : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
                         </span>
                         <M3eIconButton
@@ -573,15 +560,14 @@ export function SubmitDialog({
                 ) : null}
                 {files.length > 0 && graphic && !shownFile ? (
                   <p className="small muted" style={{ margin: 0 }}>
-                    Illustrator・InDesign のファイルは紙面に出せません（PDF 互換の .ai
-                    を除く）。校正に使う書き出した PDF か画像も一緒に出してください。
+                    .ai・.indd はプレビューできません。PDF か画像も付けてください
                   </p>
                 ) : null}
                 {slideSubmit ? (
                   <Field
                     label="スライドのリンク"
                     required
-                    hint="Google スライドなど、共有 URL を貼ってください。校正は PDF 上で行います"
+                    hint="共有 URL（https）。校正は PDF 上"
                   >
                     <TextInput
                       type="text"
@@ -601,7 +587,7 @@ export function SubmitDialog({
                     通常版（第{revisions.filter((r) => r.kind === "standard").length + 1}版）
                   </option>
                   <option value="rough" disabled={hasStandard}>
-                    0版（ラフ）{hasStandard ? "・通常版提出後は不可" : hasRough ? "・再提出" : ""}
+                    0版（ラフ）{hasStandard ? "・最初の版だけ" : hasRough ? "・再提出" : ""}
                   </option>
                 </Select>
               </Field>
@@ -805,7 +791,7 @@ export function SubmitDialog({
             disabled={!canConfirm(state)}
             onClick={() => void flow.confirm().catch(() => undefined)}
           >
-            提出を確定する
+            提出する
           </M3eButton>
         )}
       </div>

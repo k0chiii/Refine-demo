@@ -48,7 +48,7 @@ describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () 
     expect(rows.find((w) => w.id === workId)?.canEdit).toBe(true);
   });
 
-  it("制作者と主管が制作者だけを変更できる", async () => {
+  it("統括と校了する人が制作者だけを変更できる（制作者本人は不可）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const workId = (await cast.manager.as.mutation(api.works.create, {
@@ -66,15 +66,15 @@ describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () 
       canEdit: true,
       canTransferCreators: true,
     });
-    expect(await flags(cast.creator)).toMatchObject({
+    expect(await flags(cast.approver)).toMatchObject({
       canEdit: false,
       canTransferCreators: true,
     });
-    expect(await flags(cast.approver)).toMatchObject({
+    expect(await flags(cast.creator)).toMatchObject({
       canEdit: false,
       canTransferCreators: false,
     });
-    await cast.creator.as.mutation(api.works.update, {
+    await cast.approver.as.mutation(api.works.update, {
       workId,
       patch: { creatorIds: [cast.reviewer.id] },
     });

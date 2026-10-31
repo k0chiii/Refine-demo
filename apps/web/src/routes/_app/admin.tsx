@@ -116,9 +116,7 @@ function Admin() {
     return (
       <>
         {title}
-        <div className="alert">
-          管理画面を使う権限がありません（システム管理者か、グループを管理する権限が要ります）
-        </div>
+        <div className="alert">この画面を開く権限がありません</div>
       </>
     );
   if (!tabs.some((t) => t.id === tab))
@@ -175,9 +173,7 @@ function Admin() {
               </M3eMenu>
             )}
           </div>
-          <p className="admin__lead">
-            制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます。通常の制作物は委員なら誰でも見られるので、閲覧の権限が要るのは非公開・取扱注意の制作物だけです（関係者と担当の所属する人には自動で付きます）
-          </p>
+
           {works === undefined ? (
             <Loading label="制作物を読み込んでいます" />
           ) : works.length === 0 ? (

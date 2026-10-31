@@ -1,0 +1,53 @@
+---
+diff --git a/apps/web/src/styles.css b/apps/web/src/styles.css
+index 0352fbc..2cd48c9 100644
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -5914,3 +5914,44 @@ m3e-snackbar {
+   margin-inline-end: 4px;
+   color: var(--mf-on-surface-variant);
+ }
++
++/* ---------- M3 Expressive の仕上げ（形を一段大きく、強調は太さと色で。色は必ず色役割から） ---------- */
++/* 表とカードは角を一段大きく（M3E shape: medium → large / large → extra-large） */
++.mf-table:not(.mf-table--flush) {
++  border-radius: var(--mf-shape-lg);
++}
++.mf-table__th {
++  background: var(--mf-surface-container-high);
++  font-weight: 600;
++}
++.kpi {
++  --m3e-card-shape: var(--mf-shape-xl);
++}
++.kpi__num {
++  font-weight: 600;
++  color: var(--mf-primary);
++}
++.comments .thread,
++.thread-panel .creator-note,
++.comments .creator-note {
++  --m3e-card-shape: var(--mf-shape-lg);
++}
++/* 選んだカードは帯を太く、面は primary 系で一目で分かるように */
++.thread--active::before {
++  width: 4px;
++}
++.comments .thread--active {
++  --m3e-filled-card-container-color: color-mix(
++    in srgb,
++    var(--mf-primary) 10%,
++    var(--mf-surface-container-lowest)
++  );
++}
++/* 反映するかどうかのボタン列: 主操作（反映する）は filled、ほかは同じ高さで並べる */
++.thread__decide m3e-button {
++  --m3e-button-shape: var(--mf-shape-full);
++}
++/* ツールバーのコメントボタンは常に見える主操作。ほかのアイコンより一段目立たせる */
++.ws__comment {
++  margin-inline: 4px;
++}
+-- 
+2.47.3
+

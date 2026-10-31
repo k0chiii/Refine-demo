@@ -339,11 +339,7 @@ export function WorkFormFields({
           <Field label="小ジャンル" hint="選ぶと区分と媒体の既定が入ります">
             <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
           </Field>
-          <Field
-            label="媒体"
-            required
-            hint="このアプリでの提出・紙面の扱い（PDF・画像・文章・SNS 投稿・動画・Web・Figma）"
-          >
+          <Field label="媒体" required>
             <Select value={form.mediaType} onChange={set("mediaType")}>
               {Object.entries(mediaLabel).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -394,13 +390,13 @@ export function WorkFormFields({
         />
         <UserPicker
           label="主管・制作統括"
-          {...(mode === "create" ? { hint: "登録するあなたは自動で入ります" } : {})}
+          {...(mode === "create" ? { hint: "自分は自動で入ります" } : {})}
           value={form.managerIds}
           onChange={setIds("managerIds")}
         />
         <UserPicker
           label="関係者"
-          hint="職責ではありません（提出・採否・校了はできません）。非公開・取扱注意の制作物でも見られます"
+          hint="見るだけの人です（非公開でも見られます）"
           value={form.stakeholderIds}
           onChange={setIds("stakeholderIds")}
         />
@@ -475,11 +471,7 @@ export function WorkFormFields({
           <Field label="制作物 ID" hint="Notion の制作物 ID や過年度の ID">
             <TextInput value={form.legacyId} onChange={set("legacyId")} />
           </Field>
-          <Field
-            label="区分"
-            required
-            hint="小ジャンルから自動で入ります。必要なら書き換えられます"
-          >
+          <Field label="区分" required hint="小ジャンルから自動で入ります">
             <TextInput
               required
               maxLength={WORK_CATEGORY_MAX}
@@ -487,17 +479,14 @@ export function WorkFormFields({
               onChange={set("category")}
             />
           </Field>
-          <Field
-            label="機密区分"
-            hint="通常は委員なら誰でも見られます。非公開・取扱注意は職責・関係者・担当の所属する人と、管理者が閲覧権限を付けた人だけ"
-          >
+          <Field label="機密区分" hint="非公開・取扱注意は関係者だけが見られます">
             <Select value={form.confidentiality} onChange={set("confidentiality")}>
               <option value="normal">通常</option>
               <option value="restricted">非公開・取扱注意</option>
             </Select>
           </Field>
           {mode === "edit" && form.mediaType === "sns" ? (
-            <Field label="SNS アカウント" hint="管理 › SNS アカウントで登録したもの">
+            <Field label="SNS アカウント">
               <Select value={form.socialProfileId} onChange={set("socialProfileId")}>
                 <option value="">未設定</option>
                 {(profiles ?? []).map((p) => (

@@ -24,6 +24,8 @@ export const WORKS_ENTRY = ".works .works-table tbody tr";
 /** シードの制作物 */
 export const PAMPHLET = "MF100 公式パンフレット";
 export const LONG_TITLE = "100nc_デザインガイドライン";
+/** 小ジャンル「スライド」の提出（PDF + 共有 URL） */
+export const SLIDE_DECK = "企画説明会スライド";
 /** 提出前の確認（§58）。提出は止めないが、ふだんの提出に合わせて印を付けておく */
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
@@ -274,7 +276,7 @@ export class App {
 
   /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ（既定は PDF。文章は textReady）。版の URL を返す */
   async confirmRevision(n: number, ready: () => Promise<unknown> = () => this.pdfReady()) {
-    await this.dialog().locator("m3e-button", { hasText: "提出を確定する" }).click();
+    await this.dialog().locator("m3e-button", { hasText: "提出する" }).click();
     await this.page.waitForURL(new RegExp(`/v/${n}$`), { timeout: 15_000 });
     await ready();
     return new URL(this.page.url()).pathname;
