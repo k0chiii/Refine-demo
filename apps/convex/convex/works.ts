@@ -68,6 +68,8 @@ const workPatch = {
   mediaType: v.optional(vMediaType),
   /** 納期（null で消す） */
   deadlineAt: v.optional(v.union(v.number(), v.null())),
+  /** ■仕上がり日（null で消す） */
+  finishAt: v.optional(v.union(v.number(), v.null())),
   creatorIds: v.optional(v.array(v.string())),
   /** 校了者。approverIds があればそちら（複数可）。approverId だけなら「その 1 人に置き換える」 */
   approverId: v.optional(v.string()),
@@ -104,6 +106,7 @@ export const create = mutation({
     approverIds: v.optional(v.array(v.string())),
     approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
+    finishAt: v.optional(v.number()),
     confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
     reviewerIds: v.optional(v.array(v.id("users"))),
@@ -138,6 +141,7 @@ export const importBatch = mutation({
         approverIds: v.array(v.id("users")),
         approvalQuorum: v.optional(v.number()),
         deadlineAt: v.optional(v.number()),
+        finishAt: v.optional(v.number()),
         legacyId: v.optional(v.string()),
         confidentiality: vConfidentiality,
         notationCategories: v.array(v.string()),
@@ -464,6 +468,7 @@ function summarize(
     lifecycle: work.lifecycle,
     confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
+    finishAt: work.finishAt ?? null,
     latestRevisionLabel: latest?.label ?? null,
     acceptingRevisionId: accepting?.id ?? null,
     acceptingDeadlineAt: accepting?.deadlineAt ?? null,

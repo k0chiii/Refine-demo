@@ -237,6 +237,8 @@ export default defineSchema({
     /** 校正者の名簿。無い行は未設定（次の版の確定で直前の版から作る）。空配列は校正者なし。 */
     reviewerIds: v.optional(v.array(v.id("users"))),
     deadlineAt: v.optional(v.number()),
+    /** ■仕上がり日（decisions 81） */
+    finishAt: v.optional(v.number()),
     lifecycle,
     confidentiality,
     finalRevisionId: v.optional(v.string()),

@@ -1,5 +1,6 @@
 import { api } from "@mf100/convex/api";
 import {
+  approvalTargetFromFinish,
   defaultMediaTypeFor,
   genreOfSubGenre,
   socialPlatformLabels,
@@ -55,7 +56,12 @@ export interface WorkFormState {
   mediaType: string;
   legacyId: string;
   confidentiality: string;
+  /** ◆校了目標日（deadlineAt） */
   deadlineAt: number | null;
+  /** ■仕上がり日 */
+  finishAt: number | null;
+  /** ◆を手で直したあとは自動計算しない（画面だけ） */
+  approvalTargetManual: boolean;
   publishAt: number | null;
   requiresPrinterSubmission: boolean;
   printQuantity: string;
@@ -86,6 +92,8 @@ export function emptyWorkForm(): WorkFormState {
     legacyId: "",
     confidentiality: "normal",
     deadlineAt: null,
+    finishAt: null,
+    approvalTargetManual: false,
     publishAt: null,
     requiresPrinterSubmission: false,
     printQuantity: "",
@@ -118,6 +126,8 @@ export function workFormFromWork(work: Work): WorkFormState {
     legacyId: work.legacyId ?? "",
     confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
+    finishAt: work.finishAt ?? null,
+    approvalTargetManual: false,
     publishAt: work.publishAt ?? null,
     requiresPrinterSubmission: work.requiresPrinterSubmission ?? false,
     printQuantity: work.printQuantity === undefined ? "" : String(work.printQuantity),
@@ -141,6 +151,16 @@ const num = (s: string): number | null => {
   const v = s.normalize("NFKC").replace(/[,，\s]/g, "");
   return v === "" ? null : Number(v);
 };
+
+const prepDaysFromForm = (form: WorkFormState): number => num(form.productionDays) ?? 0;
+
+function withFinishAt(form: WorkFormState, finishAt: number | null): WorkFormState {
+  const next = { ...form, finishAt };
+  if (!form.approvalTargetManual && finishAt != null) {
+    next.deadlineAt = approvalTargetFromFinish(finishAt, prepDaysFromForm(form));
+  }
+  return next;
+}
 
 /**
  * Notion に揃えた項目を送る形に直す（null は「無し」。変更では null で消し、登録では null を落として送る）。
@@ -184,7 +204,7 @@ export function workFormReady(form: WorkFormState, mode: "create" | "edit" = "ed
       form.title.trim() !== "" &&
       form.subGenre !== "" &&
       form.creatorIds.length > 0 &&
-      form.deadlineAt !== null
+      form.finishAt !== null
     );
   }
   return (
@@ -340,10 +360,10 @@ export function WorkFormFields({
             }
           />
           <DateField
-            label="仕上がり日"
+            label="■仕上がり日"
             kind="date"
-            value={form.deadlineAt}
-            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
+            value={form.finishAt}
+            onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
         </FormSection>
       </>
@@ -438,9 +458,15 @@ export function WorkFormFields({
       <FormSection title="日程と入稿">
         <div className="form">
           <DateField
-            label="納期"
+            label="■仕上がり日"
+            kind="date"
+            value={form.finishAt}
+            onChange={(v) => setForm((f) => withFinishAt(f, v))}
+          />
+          <DateField
+            label="◆校了目標日"
             value={form.deadlineAt}
-            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
+            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v, approvalTargetManual: true }))}
           />
           <DateField
             label="入稿日・投稿日・印刷日"

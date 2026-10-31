@@ -65,6 +65,7 @@ export function NewWorkDialog({
       creatorIds: form.creatorIds,
       ...approversFromForm(form),
       managerIds: form.managerIds,
+      ...(form.finishAt ? { finishAt: form.finishAt } : {}),
       ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
       confidentiality: form.confidentiality as "normal",
       notationCategories: form.notationCategories,

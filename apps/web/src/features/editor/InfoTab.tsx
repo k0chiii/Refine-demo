@@ -199,7 +199,8 @@ export function InfoTab({
     {
       title: "日程と入稿",
       rows: [
-        ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
+        ["■仕上がり日", w.finishAt === undefined ? "—" : formatDeadline(w.finishAt)] as Row,
+        ["◆校了目標日", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
         ...optional(
           "入稿日・投稿日・印刷日",
           w.publishAt === undefined

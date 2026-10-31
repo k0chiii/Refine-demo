@@ -57,6 +57,7 @@ export function EditWorkDialog({
         productionTeamIds: form.productionTeamIds,
         relatedTeamIds: form.relatedTeamIds,
         deadlineAt: form.deadlineAt ?? null,
+        finishAt: form.finishAt ?? null,
         ...(form.mediaType === "sns" ? { socialProfileId: form.socialProfileId || null } : {}),
         ...workFormToFields(form),
       },
