@@ -82,7 +82,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId: current,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     await expect(cast.stranger.as.query(api.comparisons.getOverride, args)).rejects.toThrow(
       code("forbidden"),
@@ -91,22 +91,16 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId: otherWork,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     expect(await cast.stranger.as.query(api.comparisons.getOverride, args)).toBeNull();
-    await expect(
-      cast.stranger.as.mutation(api.comparisons.saveOverride, {
-        ...args,
-        pairs: [{ left: 1, right: 1 }],
-      }),
-    ).rejects.toThrow(code("forbidden"));
-    // 表示中の制作物の校正者（相手は閲覧できる）は直せる。保存先の制作物は表示中（右）
-    await cast.reviewer.as.mutation(api.comparisons.saveOverride, {
+    // review ACL で表示中の制作物に校正参加できる人は直せる
+    await cast.stranger.as.mutation(api.comparisons.saveOverride, {
       ...args,
-      pairs: [{ left: 2, right: 1 }],
+      pairs: [{ left: 1, right: 1 }],
     });
     expect((await cast.stranger.as.query(api.comparisons.getOverride, args))!.pairs).toEqual([
-      { left: 2, right: 1 },
+      { left: 1, right: 1 },
     ]);
     const rows = await t.run((ctx) => ctx.db.query("alignmentOverrides").collect());
     expect(rows.map((r) => r.workId)).toEqual([current]);

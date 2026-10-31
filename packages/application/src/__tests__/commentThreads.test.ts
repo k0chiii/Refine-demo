@@ -325,7 +325,7 @@ describe("スレッドの購読: 参加していなくても返信の通知を�
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [stranger.userId],
-      permission: "view",
+      permission: "review",
     });
     await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
     await reply(t.id, creator);

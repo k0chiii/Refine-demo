@@ -67,7 +67,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.reviewer.userId],
-      permission: "view",
+      permission: "review",
     });
     const [again] = await listMyNotifications(ctx, principals.reviewer);
     expect(again?.body).toContain("極秘ポスター");

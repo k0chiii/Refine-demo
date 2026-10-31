@@ -105,7 +105,13 @@ export function allMembersCanView(
 export function canViewWork(ctx: AuthorizationContext): boolean {
   if (overridesAllPermissions(ctx.principal)) return true;
   const roles = rolesOf(ctx.work, ctx.principal);
-  if (roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "view")) return true;
+  if (
+    roles.isCreator ||
+    roles.isApprover ||
+    roles.isManager ||
+    effectivePermission(ctx.grants, ctx.principal) !== null
+  )
+    return true;
   if (isInvolvedInWork(ctx.work, ctx.principal)) return true;
   return allMembersCanView(ctx.work, ctx.viewPolicy);
 }

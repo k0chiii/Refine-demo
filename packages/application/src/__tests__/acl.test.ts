@@ -100,14 +100,14 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       grantWorkPermission(ctx, principals.manager, {
         workId: work.id,
         userIds: [viewer.userId],
-        permission: "view",
+        permission: "review",
       }),
     ).rejects.toThrow(code("acl_requires_system_admin"));
 
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [viewer.userId],
-      permission: "view",
+      permission: "review",
     });
     await expect(loadAuthorizedWork(ctx, viewer, work.id, "work.view")).resolves.toBeTruthy();
 
@@ -115,12 +115,15 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [viewer.userId],
-      permission: "review",
+      permission: "edit",
     });
     const history = await listWorkPermissions(ctx, principals.sysadmin, work.id);
     expect(history.length).toBe(2);
     expect(history.filter(isGrantActive)).toHaveLength(1);
-    expect(history[0]).toMatchObject({ permission: "view", revokedBy: principals.sysadmin.userId });
+    expect(history[0]).toMatchObject({
+      permission: "review",
+      revokedBy: principals.sysadmin.userId,
+    });
 
     const revoked = await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -176,7 +179,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       grantWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
         userIds: [principals.reviewer.userId, "missing-user"],
-        permission: "view",
+        permission: "review",
       }),
     ).rejects.toThrow(code("acl_invalid"));
     expect(ctx.state.grants).toEqual([]);
@@ -184,7 +187,7 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
       grantWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
         userIds: [],
-        permission: "view",
+        permission: "review",
       }),
     ).rejects.toThrow(code("acl_invalid"));
     const granted = await grantWorkPermission(ctx, principals.sysadmin, {
