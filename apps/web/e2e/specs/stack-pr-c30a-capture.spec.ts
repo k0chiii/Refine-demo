@@ -1,6 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, PAMPHLET, SLIDE_DECK, test } from "../support/app";
+import { expect, PAMPHLET, test } from "../support/app";
+
+const SLIDE_DECK = "企画説明会スライド";
 
 const PR = process.env.STACK_PR_C30A ?? "87";
 const PHASE = process.env.STACK_PR_C30A_PHASE ?? "after";
