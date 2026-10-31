@@ -10,7 +10,7 @@ const SHA = "a".repeat(64);
 
 type Cast = Awaited<ReturnType<typeof createCast>>;
 
-async function setup(over: { confidentiality?: "normal" | "restricted" } = {}) {
+async function setup(over: Record<string, never> = {}) {
   const t = createHarness();
   const cast = await createCast(t);
   const workId = await setupWork(t, cast, over);
@@ -168,7 +168,7 @@ describe("Convex 統合: コメント・返信の添付", () => {
   });
 
   it("restricted の制作物は、見られない人は読めない。付けられない添付があるとコメントは投稿されない", async () => {
-    const { cast, revisionId } = await setup({ confidentiality: "restricted" });
+    const { cast, revisionId } = await setup();
     const { fileId } = await uploadFile(cast.reviewer, revisionId);
     const mine2 = (
       await cast.reviewer.as.mutation(api.commentFiles.prepare, {

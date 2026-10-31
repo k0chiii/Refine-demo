@@ -195,7 +195,7 @@ describe("制作物のルールの組と版の記録", () => {
         incorrect: ["y"],
       }),
     });
-    const work = await seedWork(ctx, { notationCategories: ["B"], confidentiality: "restricted" });
+    const work = await seedWork(ctx, { notationCategories: ["B"] });
     const set = await resolveRulesForWork(ctx, creator, work.id);
     expect(set.rules.map((r) => r.ruleId)).toEqual(["A1-0001"]);
     await expect(resolveRulesForWork(ctx, stranger, work.id)).rejects.toEqual(code("forbidden"));
@@ -361,7 +361,7 @@ describe("ルールの変更提案", () => {
 
   it("校正画面からの提案は制作物の閲覧権限を確かめ、見られない人には文脈を隠す", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     await expect(
       proposeRule(ctx, stranger, {
         kind: "report",
@@ -400,7 +400,7 @@ describe("ルールの変更提案", () => {
 
   it("保護された引用は公開される題名・通知・承認で作るルールへ写さない", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     await setCategoryManager(ctx, sysadmin, {
       userId: stranger.userId,
       categoryCode: "A1",

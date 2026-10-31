@@ -96,7 +96,7 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("閲覧権限の無い人には何も出ない（非公開の制作物）", async () => {
     const { ctx, works } = await setup();
-    for (const w of await works()) await ctx.works.update({ ...w, confidentiality: "restricted" });
+    for (const w of await works()) await ctx.works.update({ ...w });
     const d = await buildDashboard(ctx, principals.stranger, await works());
     expect(
       [...Object.values(d.mine), ...Object.values(d.backlog)].every((l) => l.length === 0),
@@ -179,7 +179,7 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
 
   it("閲覧権限の無い人の全体の状況は空", async () => {
     const { ctx, works } = await setup();
-    for (const w of await works()) await ctx.works.update({ ...w, confidentiality: "restricted" });
+    for (const w of await works()) await ctx.works.update({ ...w });
     const d = await buildDashboard(ctx, principals.stranger, await works());
     expect(d.overview.total).toBe(0);
     expect(d.overview.works).toEqual([]);

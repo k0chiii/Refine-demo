@@ -19,7 +19,7 @@ describe("検索と要約の派生データ", () => {
   it("新旧索引のページを継続し、複数項目部分一致・ACL・更新・移行を保つ", async () => {
     const t = createHarness();
     const c = await createCast(t);
-    const create = async (title: string, confidentiality: "normal" | "restricted" = "normal") =>
+    const create = async (title: string) =>
       (await c.manager.as.mutation(api.works.create, {
         title,
         purpose: "構内の案内",
@@ -29,11 +29,10 @@ describe("検索と要約の派生データ", () => {
         year: 100,
         creatorIds: [c.creator.id],
         approverId: c.approver.id,
-        confidentiality,
       })) as Id<"works">;
     const current = await create("五月祭の受付");
     const legacy = await create("五月祭の旧受付");
-    await create("五月祭の非公開", "restricted");
+    const secret = await create("五月祭の非公開");
     await t.run(async (ctx) => {
       await ctx.db.patch(legacy, { searchTokens: undefined });
     });
@@ -51,7 +50,7 @@ describe("検索と要約の派生データ", () => {
       }
       throw new Error("cursor did not finish");
     };
-    expect((await pages("祭の")).sort()).toEqual([current, legacy].sort());
+    expect((await pages("祭の")).sort()).toEqual([current, legacy, secret].sort());
     expect((await pages("場者")).sort()).toEqual([current, legacy].sort());
     await c.manager.as.mutation(api.works.update, { workId: current, patch: { title: "新受付" } });
     expect(await pages("祭の")).toEqual([legacy]);

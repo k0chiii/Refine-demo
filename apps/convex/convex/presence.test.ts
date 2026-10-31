@@ -9,7 +9,7 @@ describe("authorized work presence", () => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, { confidentiality: "restricted" });
+    const workId = await setupWork(t, cast);
     const first = await cast.creator.as.mutation(api.presence.heartbeat, {
       workId,
       sessionId: crypto.randomUUID(),

@@ -70,7 +70,7 @@ describe("グループのメンション", () => {
   async function setup() {
     const ctx = createInMemoryContext();
     // 非公開の制作物: 校正者は ACL で見られる。stranger はグループにいても見られない
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,

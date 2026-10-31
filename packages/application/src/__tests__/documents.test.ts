@@ -49,7 +49,7 @@ describe("文章の下書き", () => {
 
   it("権限の無い人には存在も返さない（forbidden）", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     await expect(getDocumentDraft(ctx, principals.stranger, work.id)).rejects.toThrow(
       code("forbidden"),
     );

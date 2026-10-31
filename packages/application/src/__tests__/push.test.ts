@@ -72,7 +72,7 @@ describe("端末への通知（Web Push）", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.stranger.userId],
-      permission: "view",
+      permission: "review",
     });
     await subscribePush(ctx, principals.stranger, sub(1));
     await subscribePush(ctx, principals.stranger, sub(2));
@@ -98,7 +98,6 @@ describe("端末への通知（Web Push）", () => {
     // 送る前に閲覧権限が外れたら（非公開になり、ACL も外れた）、伏せた内容にする
     await ctx.works.update({
       ...(await ctx.works.findById(work.id))!,
-      confidentiality: "restricted",
     });
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -117,7 +116,7 @@ describe("端末への通知（Web Push）", () => {
       await grantWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
         userIds: [principals.stranger.userId],
-        permission: "view",
+        permission: "review",
       });
       await subscribePush(ctx, principals.stranger, sub());
       const post = async (kind: "comment_posted" | "review_assigned" = "comment_posted") => {
@@ -182,7 +181,6 @@ describe("端末への通知（Web Push）", () => {
       const n = await post();
       await ctx.works.update({
         ...(await ctx.works.findById(work.id))!,
-        confidentiality: "restricted",
       });
       // 閲覧 ACL があって見られる非公開の制作物
       const restricted = (await planPush(ctx, n.id))!.payload;
@@ -202,7 +200,7 @@ describe("端末への通知（Web Push）", () => {
       const ctx = createInMemoryContext();
       ctx.state.names.set(principals.reviewer.userId, "本郷 校正");
       const work = await seedWork(ctx, { title: "極秘" });
-      await ctx.works.update({ ...work, confidentiality: "restricted" });
+      await ctx.works.update({ ...work });
       await notify(ctx, [principals.stranger.userId], principals.reviewer.userId, {
         kind: "comment_posted",
         title: "t",

@@ -20,7 +20,8 @@ const { reviewer, creator, manager, approver, stranger } = principals;
 
 async function setup(confidentiality: "normal" | "restricted" = "normal") {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx, { confidentiality });
+  void confidentiality;
+  const work = await seedWork(ctx);
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
@@ -325,7 +326,7 @@ describe("スレッドの購読: 参加していなくても返信の通知を�
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [stranger.userId],
-      permission: "view",
+      permission: "review",
     });
     await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
     await reply(t.id, creator);

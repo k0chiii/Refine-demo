@@ -37,7 +37,6 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
     creatorIds: [principals.creator.userId],
     managerIds: [],
     approverIds: [principals.approver.userId],
-    confidentiality: "normal" as const,
     notationCategories: [],
     productionTeamIds: [],
   };
@@ -150,7 +149,7 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
 
     it("閲覧できない制作物は、権限があっても存在を漏らさない", async () => {
       const ctx = createInMemoryContext();
-      const work = await seedWork(ctx, { confidentiality: "restricted" });
+      const work = await seedWork(ctx);
       await expect(
         updateWork(ctx, decider, { workId: work.id, patch: patchApprovers }),
       ).rejects.toThrow(code("forbidden"));
@@ -159,7 +158,7 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
 
   it("reviews:assign を持つ人、または制作者は割当できる。それ以外は不可", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     const rev = await submitRevision(ctx, work.id);
     const assigner = { ...nobody, userId: "u_assigner", orgPermissions: ["reviews:assign"] };
     // 組織権限があっても作品の閲覧権限（職責/ACL）が無ければ存在を漏らさない

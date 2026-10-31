@@ -22,7 +22,6 @@ describe("共同編集", () => {
       year: 100,
       creatorIds: [c.creator.id],
       approverId: c.approver.id,
-      confidentiality: "restricted",
     })) as Id<"works">;
     await c.creator.as.mutation(api.documents.save, {
       workId,

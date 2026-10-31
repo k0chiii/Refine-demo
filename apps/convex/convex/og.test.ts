@@ -25,7 +25,6 @@ describe("Convex: GET /og/work（リンクのプレビューの題名）", () =>
     const restricted = await cast.manager.as.mutation(api.works.create, {
       ...base,
       title: "非公開の企画",
-      confidentiality: "restricted",
     });
 
     const ok = await t.fetch(`/og/work?id=${normal}`);

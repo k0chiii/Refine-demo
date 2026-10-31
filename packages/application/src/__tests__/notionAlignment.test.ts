@@ -90,7 +90,6 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
       creatorIds: [principals.creator.userId],
       managerIds: [],
       approverIds: [principals.approver.userId],
-      confidentiality: "normal" as const,
       notationCategories: [],
       productionTeamIds: [design.id, web.id],
     };
@@ -157,7 +156,6 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
           creatorIds: [principals.creator.userId],
           managerIds: [],
           approverIds: [principals.approver.userId],
-          confidentiality: "normal",
           notationCategories: [],
           productionTeamIds: [],
         },
@@ -170,7 +168,6 @@ describe("Notion の制作物 DB に揃えた項目の登録・変更（docs/NOT
           creatorIds: [principals.creator.userId],
           managerIds: [],
           approverIds: [principals.approver.userId],
-          confidentiality: "normal",
           notationCategories: [],
           productionTeamIds: [],
           tags: ["1次公開"],

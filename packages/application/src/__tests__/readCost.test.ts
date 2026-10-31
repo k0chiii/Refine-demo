@@ -73,7 +73,7 @@ describe("ダッシュボード: 進行中でない通常の制作物は ACL を
     const ctx = createInMemoryContext();
     const held = await seedWork(ctx, { title: "保留" });
     await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
-    const secret = await seedWork(ctx, { title: "非公開", confidentiality: "restricted" });
+    const secret = await seedWork(ctx, { title: "非公開" });
     await changeWorkLifecycle(ctx, principals.manager, { workId: secret.id, to: "on_hold" });
     const works = await Promise.all(
       [held, secret].map(async (w) => (await ctx.works.findById(w.id))!),

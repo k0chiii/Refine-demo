@@ -25,7 +25,6 @@ async function setup() {
   const late = await seedWork(ctx, {
     title: "B 遅い納期",
     deadlineAt: now + 20 * DAY,
-    confidentiality: "restricted",
   });
   const soon = await seedWork(ctx, { title: "A 近い納期", deadlineAt: now + 3 * DAY });
   const text = await seedWork(ctx, { title: "C 文章", mediaType: "document" });
@@ -176,11 +175,11 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
 
   it("非公開の制作物は、ピン留めした後に見られなくなった人には伏せた通知を送る", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    const work = await seedWork(ctx, { title: "極秘ポスター" });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.stranger.userId],
-      permission: "view",
+      permission: "review",
     });
     await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: true });
     await submitRevision(ctx, work.id);
@@ -231,7 +230,6 @@ describe("制作物の一括登録", () => {
     creatorIds: [principals.creator.userId],
     managerIds: [],
     approverIds: [principals.approver.userId],
-    confidentiality: "normal" as const,
     notationCategories: ["A1"],
     productionTeamIds: [],
   });

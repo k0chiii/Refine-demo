@@ -53,7 +53,6 @@ export const vMediaType = v.union(
   v.literal("figma"),
   v.literal("other"),
 );
-export const vConfidentiality = v.union(v.literal("normal"), v.literal("restricted"));
 
 // ---------------------------------------------------------------- Notion の制作物 DB・版 DB・担当 DB に揃えた項目（docs/NOTION_ALIGNMENT.md）
 /** 大ジャンル（domain の workGenres） */

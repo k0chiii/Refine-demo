@@ -25,9 +25,9 @@ import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.
 const code = (c: string) => expect.objectContaining({ code: c });
 const { creator, reviewer, stranger, sysadmin, manager } = principals;
 
-async function setup(over: { confidentiality?: "normal" | "restricted" } = {}) {
+async function setup(_over: Record<string, never> = {}) {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx, over);
+  const work = await seedWork(ctx);
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, sysadmin, {
     workId: work.id,
@@ -103,7 +103,7 @@ describe("コメントの添付: 準備（投稿と同じ条件）", () => {
     expect((await ctx.commentFiles.findFile(b!.fileId))!.type).toBe("pdf");
   });
   it("見えない人（restricted の制作物の関係者でない人）は準備できない", async () => {
-    const { ctx, revision } = await setup({ confidentiality: "restricted" });
+    const { ctx, revision } = await setup();
     await expect(
       prepareCommentFiles(ctx, stranger, {
         revisionId: revision.id,
@@ -396,7 +396,7 @@ describe("コメントの添付: 読み取りの認可", () => {
     ).rejects.toThrow(code("comment_file_not_ready"));
   });
   it("restricted の制作物は、見られない人には読めず、サムネイルも端末に残させない", async () => {
-    const { ctx, revision } = await setup({ confidentiality: "restricted" });
+    const { ctx, revision } = await setup();
     const f = await uploadFile(ctx, reviewer, revision.id, { thumb: true });
     await postComment(ctx, reviewer, {
       revisionId: revision.id,

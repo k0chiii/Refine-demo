@@ -37,7 +37,6 @@ export function aiConfig(): AiConfig {
       (provider === "workers-ai" ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : "claude-opus-5-5"),
     policy: {
       enabled: hasKey && process.env.AI_PROOFREAD_ENABLED !== "false",
-      allowRestricted: process.env.AI_ALLOW_RESTRICTED === "true",
       maxChars: Number(process.env.AI_MAX_CHARS ?? 20_000) || 20_000,
     },
   };

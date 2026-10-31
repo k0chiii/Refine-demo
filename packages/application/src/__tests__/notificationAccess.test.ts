@@ -16,7 +16,7 @@ import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.
 describe("通知の本文と制作物の閲覧権限", () => {
   it("非公開の制作物に閲覧 ACL の無い人を割り当てても、作品名・確認観点を含む通知を送らない", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    const work = await seedWork(ctx, { title: "極秘ポスター" });
     const revision = await submitRevision(ctx, work.id);
     await setWorkReviewers(ctx, principals.manager, {
       workId: revision.workId,
@@ -38,7 +38,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
 
   it("ACL を取り消した後は、既存の通知も作品名を伏せて返す（再付与で戻る）", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    const work = await seedWork(ctx, { title: "極秘ポスター" });
     const revision = await submitRevision(ctx, work.id);
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -67,7 +67,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.reviewer.userId],
-      permission: "view",
+      permission: "review",
     });
     const [again] = await listMyNotifications(ctx, principals.reviewer);
     expect(again?.body).toContain("極秘ポスター");
@@ -97,7 +97,6 @@ describe("通知の本文と制作物の閲覧権限", () => {
     });
     const work = await seedWork(ctx, {
       title: "極秘ポスター",
-      confidentiality: "restricted",
       productionTeamIds: [design.id],
     });
     const revision = await submitRevision(ctx, work.id);
@@ -119,7 +118,7 @@ describe("通知の本文と制作物の閲覧権限", () => {
   it("旧フィードバックの通知も制作物の閲覧権限で守る（コメントへ統合したため）。restricted の制作物は伏せる", async () => {
     const ctx = createInMemoryContext();
     const open = await seedWork(ctx, { title: "公開チラシ" });
-    const secret = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    const secret = await seedWork(ctx, { title: "極秘ポスター" });
     for (const w of [open, secret])
       await notify(ctx, [principals.stranger.userId], principals.creator.userId, {
         kind: "feedback_posted",

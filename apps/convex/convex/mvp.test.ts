@@ -12,11 +12,7 @@ import {
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
-async function setupWork(
-  t: Harness,
-  cast: Awaited<ReturnType<typeof createCast>>,
-  confidentiality: "normal" | "restricted" = "normal",
-) {
+async function setupWork(t: Harness, cast: Awaited<ReturnType<typeof createCast>>) {
   const workId = (await cast.manager.as.mutation(api.works.create, {
     title: "MF100 パンフレット",
     purpose: "来場者案内",
@@ -25,7 +21,6 @@ async function setupWork(
     year: 100,
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
-    confidentiality,
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
@@ -72,7 +67,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
   it("A-01 / A-20: 非公開の作品は、権限のない Nogiku ユーザーが作品 ID を直接指定しても一覧・詳細・添付を得られない。個人 ACL だけで閲覧できる", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, "restricted");
+    const workId = await setupWork(t, cast);
 
     await expect(cast.stranger.as.query(api.works.get, { workId })).rejects.toThrow(
       code("forbidden"),
@@ -102,7 +97,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
   it("A-19 / A-11: 管理者のみ ACL を変更でき、剥奪後は閲覧・投稿・添付認可ができない（非公開の作品）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, "restricted");
+    const workId = await setupWork(t, cast);
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
     const rev = await cast.reviewer.as.query(api.revisions.get, { revisionId });
@@ -112,7 +107,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
       cast.manager.as.mutation(api.acl.grant, {
         workId,
         userIds: [cast.stranger.id],
-        permission: "view",
+        permission: "review",
       }),
     ).rejects.toThrow(code("acl_requires_system_admin"));
     await expect(
@@ -181,7 +176,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     await cast.admin.as.mutation(api.acl.revoke, {
       workId,
@@ -614,7 +609,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
   it("メンション: 候補は見られる人だけ、見られない人は拒否、メンションされた人に通知が届き名前が返る（非公開の作品）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, "restricted");
+    const workId = await setupWork(t, cast);
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
 

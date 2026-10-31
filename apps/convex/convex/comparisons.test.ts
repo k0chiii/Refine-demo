@@ -12,7 +12,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     const t = createHarness();
     const cast = await createCast(t);
     // 非公開の制作物（通常の制作物は委員なら誰でも見られるので、権限の境目はこちらで確かめる）
-    const workId = await setupWork(t, cast, { confidentiality: "restricted" });
+    const workId = await setupWork(t, cast);
     const r1 = await submitFiles(cast, workId, [
       { fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" },
     ]);
@@ -55,11 +55,9 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     const cast = await createCast(t);
     const current = await setupWork(t, cast, {
       title: "今年のポスター",
-      confidentiality: "restricted",
     });
     const otherWork = await setupWork(t, cast, {
       title: "去年のポスター",
-      confidentiality: "restricted",
     });
     const cur = await submitFiles(cast, current, [
       { fileName: "poster.pdf", mimeType: "application/pdf", type: "pdf" },
@@ -82,7 +80,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId: current,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     await expect(cast.stranger.as.query(api.comparisons.getOverride, args)).rejects.toThrow(
       code("forbidden"),
@@ -91,7 +89,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId: otherWork,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     expect(await cast.stranger.as.query(api.comparisons.getOverride, args)).toBeNull();
     await expect(

@@ -374,7 +374,7 @@ describe("FB のスレッドをコメントへ移す", () => {
 describe("旧 FB の URL からの行き先", () => {
   it("移したスレッドは移し先のコメントへ。移していない・削除した・見られない制作物は null", async () => {
     const { ctx, work, rev2 } = await setup();
-    const secret = await seedWork(ctx, { title: "極秘", confidentiality: "restricted" });
+    const secret = await seedWork(ctx, { title: "極秘" });
     await submitRevision(ctx, secret.id);
     const t = addThread(ctx, work.id);
     addPost(ctx, t);
@@ -401,7 +401,7 @@ describe("旧 FB の URL からの行き先", () => {
 describe("FB の通知の行き先", () => {
   it("移したスレッドの通知は移し先のコメントへ、移していない通知は行き先を持たない。見られない制作物は伏せる", async () => {
     const { ctx, work, rev2 } = await setup();
-    const secret = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    const secret = await seedWork(ctx, { title: "極秘ポスター" });
     const t = addThread(ctx, work.id);
     addPost(ctx, t);
     const other = addThread(ctx, work.id);

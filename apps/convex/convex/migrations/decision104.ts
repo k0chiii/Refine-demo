@@ -6,7 +6,7 @@ export const upgradeViewPermissionGrants = internalMutation({
   handler: async (ctx) => {
     let n = 0;
     for (const g of await ctx.db.query("workPermissions").collect()) {
-      if (g.permission !== "view") continue;
+      if ((g.permission as string) !== "view") continue;
       await ctx.db.patch(g._id, { permission: "review" });
       n++;
     }

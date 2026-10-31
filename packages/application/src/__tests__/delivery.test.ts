@@ -77,7 +77,7 @@ async function setup(opts: { email?: string | null; push?: boolean } = {}) {
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
     userIds: [me.userId],
-    permission: "view",
+    permission: "review",
   });
   await updateNotificationPrefs(ctx, me, { channels: ["email", "slack"] });
   const sub = opts.push === false ? null : await subscribePush(ctx, me, device);
@@ -234,7 +234,6 @@ describe("外への通知の計画", () => {
     await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
     await ctx.works.update({
       ...(await ctx.works.findById(work.id))!,
-      confidentiality: "restricted",
     });
     const restricted = await planDelivery(ctx, n.id, ALL);
     expect(restricted?.targets).toHaveLength(3);

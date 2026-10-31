@@ -32,7 +32,6 @@ describe("Convex 統合: 通知の認可（§5.2-10）", () => {
     const cast = await createCast(t);
     const workId = await setupWork(t, cast, {
       title: "極秘ポスター",
-      confidentiality: "restricted",
     });
     await submitFiles(cast, workId, pdf);
     await cast.manager.as.mutation(api.reviews.setReviewers, {

@@ -57,7 +57,7 @@ it("派生処理は明示同意・作品権限・機密区分を確認し、権�
     state: "failed",
     output: null,
   });
-  const restricted = await setupWork(t, c, { confidentiality: "restricted" });
+  const restricted = await setupWork(t, c);
   await expect(
     c.creator.as.mutation(api.processing.create, {
       kind: "web-snapshot",

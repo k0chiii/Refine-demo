@@ -6,7 +6,7 @@ it("Aggregate は書込みと同時に変わり、非公開の件数と移行状
   const t = createHarness();
   const c = await createCast(t);
   await setupWork(t, c);
-  const restricted = await setupWork(t, c, { confidentiality: "restricted" });
+  const restricted = await setupWork(t, c);
   const total = async (as: typeof c.creator.as) => {
     const result = await as.query(api.workMetrics.counts, { year: 100 });
     return { ready: result.ready, total: result.counts.reduce((sum, row) => sum + row.count, 0) };
@@ -18,7 +18,7 @@ it("Aggregate は書込みと同時に変わり、非公開の件数と移行状
   expect(await total(c.admin.as)).toEqual({ ready: false, total: 0 });
   await c.manager.as.mutation(api.works.update, {
     workId: restricted,
-    patch: { confidentiality: "normal" },
+    patch: {},
   });
   expect(await total(c.stranger.as)).toEqual({ ready: true, total: 2 });
 });

@@ -21,7 +21,7 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
   it("ピン留めはアカウントごとに保存される", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, { confidentiality: "restricted" });
+    const workId = await setupWork(t, cast);
     await cast.reviewer.as.mutation(api.home.setPinned, { workId, pinned: true });
     expect(await cast.reviewer.as.query(api.home.pinned, { workId })).toBe(true);
     const d = await cast.reviewer.as.query(api.dashboard.get, {});
@@ -73,7 +73,6 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
         creatorIds: [byName.creator!],
         managerIds: [],
         approverIds: [byName.approver!],
-        confidentiality: "normal" as const,
         notationCategories: [],
       })),
       source: "works.csv",

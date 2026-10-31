@@ -18,7 +18,7 @@ const stranger: Principal = { ...principals.stranger, orgPermissions: [] };
 
 async function restrictedWork() {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx, { confidentiality: "restricted" });
+  const work = await seedWork(ctx);
   return { ctx, work };
 }
 

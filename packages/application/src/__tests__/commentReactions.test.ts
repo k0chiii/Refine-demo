@@ -111,13 +111,13 @@ describe("コメント・返信へのリアクション", () => {
   });
 
   it("コメントを見られて返信できる人なら誰でも付けられる。見られない人は付けられない", async () => {
-    const { ctx, work, post } = await setup({ confidentiality: "restricted" });
+    const { ctx, work, post } = await setup();
     const thread = await post();
     ctx.state.members.add("u_viewer");
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: ["u_viewer"],
-      permission: "view",
+      permission: "review",
     });
     const viewer = {
       userId: "u_viewer",
