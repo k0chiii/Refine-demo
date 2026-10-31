@@ -6030,8 +6030,12 @@ m3e-snackbar {
 /* stack-pr:detail-shell */
 
 .detail-shell {
-  min-height: 1200px;
-  background: var(--mf-surface-container-low);
+  min-height: 1600px;
+  background: linear-gradient(
+    180deg,
+    var(--mf-surface-container-low) 0%,
+    var(--mf-surface-container) 100%
+  );
 }
 
 .detail-shell__head {
