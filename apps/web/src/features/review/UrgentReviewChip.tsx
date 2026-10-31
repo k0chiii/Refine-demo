@@ -37,8 +37,8 @@ export function formatOpenReviewDeadline(
   deadlineAt: number | undefined,
   now: number,
 ): string {
-  if (deadlineAt === undefined) return "受付中";
-  return `受付中・校正期日 ${formatDeadlineUntil(deadlineAt, now)}`;
+  if (deadlineAt === undefined) return "校正中";
+  return `校正中・校正期日 ${formatDeadlineUntil(deadlineAt, now)}`;
 }
 
 export function formatOpenReviewDeadlinePrefix(urgent: boolean | undefined): boolean {

@@ -100,8 +100,10 @@ export async function prepareSubmission(
   assertSubmitRevisionDeadline({
     now,
     deadlineAt: input.deadlineAt,
-    reviewUrgent: input.reviewUrgent,
-    openAcceptingDeadlineAt: plan.toSupersede?.deadlineAt,
+    ...(input.reviewUrgent === true ? { reviewUrgent: true } : {}),
+    ...(plan.toSupersede?.deadlineAt !== undefined
+      ? { openAcceptingDeadlineAt: plan.toSupersede.deadlineAt }
+      : {}),
   });
   // 0版の重複・通常版の後の0版は準備段階で早期に弾く（確定時にも再検証する）
   if (input.items.length === 0) throw new DomainError("revision_no_artifacts");

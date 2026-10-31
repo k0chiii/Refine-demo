@@ -80,7 +80,7 @@ import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
-import { remaining } from "@/lib/format";
+import { formatDeadline, remaining } from "@/lib/format";
 import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { workHint } from "@/lib/workHint";
 import {
@@ -1809,9 +1809,9 @@ export function Editor({
               {revision.label} ·{" "}
               {revision.reviewUrgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
               {open
-                ? `受付中 · ${remaining(revision.deadlineAt, now)}`
+                ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
-                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  ? `締切済み（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
               {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
