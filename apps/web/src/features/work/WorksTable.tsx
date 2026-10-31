@@ -111,12 +111,12 @@ export function WorksTable({
             {header("stage", "状態", "works-table__col--stage")}
             <ColumnHeader className="works-table__col--version">版</ColumnHeader>
             {header("accepting", "校正期日")}
-            {header("deadline", "納期", "works-table__col--delivery")}
-            {hasTeams ? header("owner", "主管担当", "works-table__col--owner") : null}
+            {header("deadline", "◆校了目標日", "works-table__col--delivery")}
+            {hasTeams ? header("owner", "担当", "works-table__col--owner") : null}
             {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
             <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
             <ColumnHeader className="works-table__col--reviewers">校正者</ColumnHeader>
-            <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
+            <ColumnHeader className="works-table__col--approvers">校了する人</ColumnHeader>
             {/* 見出しの文字は読み上げだけ（aria-label は span に付けられない: aria-prohibited-attr） */}
             <ColumnHeader className="works-table__col--actions">
               <span className="sr-only">操作</span>
@@ -230,6 +230,11 @@ function Row({
       <td className="mf-table__td works-table__col--stage">{stage}</td>
       <td className="mf-table__td works-table__col--version">
         {w.latestRevisionLabel ?? <span className="muted">—</span>}
+        {w.nextRevisionPlannedAt ? (
+          <span className="mf-table__sub">
+            予定提出 {formatDeadline(w.nextRevisionPlannedAt, now)}
+          </span>
+        ) : null}
       </td>
       <td className="mf-table__td">
         {w.acceptingDeadlineAt ? (

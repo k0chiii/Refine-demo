@@ -237,6 +237,10 @@ export default defineSchema({
     /** 校正者の名簿。無い行は未設定（次の版の確定で直前の版から作る）。空配列は校正者なし。 */
     reviewerIds: v.optional(v.array(v.id("users"))),
     deadlineAt: v.optional(v.number()),
+    /** ■仕上がり日（decisions 81） */
+    finishAt: v.optional(v.number()),
+    /** 第 n 版の予定提出日（decisions 82） */
+    revisionPlannedAt: v.optional(v.array(v.object({ sequence: v.number(), at: v.number() }))),
     lifecycle,
     confidentiality,
     finalRevisionId: v.optional(v.string()),
@@ -381,6 +385,7 @@ export default defineSchema({
     submittedBy: v.string(),
     submittedAt: v.number(),
     deadlineAt: v.number(),
+    /** 廃止: 制作物 revisionPlannedAt へ移行（072 / e082。読取・移行のみ） */
     plannedSubmitAt: v.optional(v.number()),
     reviewState,
     reviewClosedReason: v.optional(closedReason),
