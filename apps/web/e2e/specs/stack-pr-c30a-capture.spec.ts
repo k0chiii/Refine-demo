@@ -11,7 +11,6 @@ const OUT =
 
 mkdirSync(OUT, { recursive: true });
 
-/** 撮影前: 旧コピーが画面に見えていないこと（develop 取り込み後の DOM） */
 async function assertNoLegacyVisibleCopy(page: Page) {
   await expect(page.getByText("あなたの番", { exact: false })).toHaveCount(0);
   const demoOutsideDialog = await page.evaluate(() => {
@@ -38,7 +37,6 @@ async function assertNoLegacyVisibleCopy(page: Page) {
   expect(demoOutsideDialog).toBe(false);
 }
 
-/** ダイアログのアニメーション完了（opacity 1）まで待つ */
 async function waitForDialogFullyOpen(page: Page) {
   await page.locator("m3e-dialog[open]").waitFor({ state: "visible" });
   await page.evaluate(async () => {
@@ -66,10 +64,6 @@ async function shot(page: Page, app: { settle: () => Promise<void> }, file: stri
   await page.screenshot({ path: resolve(OUT, file) });
 }
 
-/**
- * スタック PR #86–#88（c30a）の before/after 用。
- * STACK_PR_C30A=86|87|88, STACK_PR_C30A_PHASE=before|after, OUT_DIR=…
- */
 test.describe("stack PR c30a screenshots", () => {
   test.use({ reducedMotion: "reduce" });
 
