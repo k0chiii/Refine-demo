@@ -366,8 +366,7 @@ export function VideoViewer({
       <div className="viewer__stage" ref={stageRef}>
         {unplayable ? (
           <div className="empty vplayer__unplayable" role="alert">
-            この動画はブラウザで再生できない形式です（ProRes の .mov など）。MP4（H.264）か WebM
-            で出し直すか、ダウンロードして確認してください
+            この動画は再生できません。MP4 で出し直すか、ダウンロードしてください
             <a href={url} download>
               ダウンロード
             </a>
@@ -380,7 +379,7 @@ export function VideoViewer({
           style={viewport && !full ? { width: controlsW } : undefined}
           tabIndex={0}
           role="group"
-          aria-label={`${label}の再生と校正（Space で再生・停止、← → で 1 コマ、I・O で範囲、C でコメント）`}
+          aria-label={`${label}（ショートカットは ? で一覧）`}
           onKeyDown={onKeyDown}
         >
           <div
