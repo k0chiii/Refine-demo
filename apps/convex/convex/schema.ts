@@ -29,7 +29,6 @@ import {
  */
 
 const permissionLevel = v.union(
-  v.literal("view"),
   v.literal("review"),
   v.literal("edit"),
   v.literal("manage"),
