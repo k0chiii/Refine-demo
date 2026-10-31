@@ -2350,6 +2350,17 @@ m3e-dialog {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
 }
+/* 通知行: ホバーで ⋮（Slack 式。右クリック / Shift+F10 も同じメニュー） */
+.notif-row__more {
+  opacity: 0;
+  margin: -4px -8px;
+  transition: opacity 0.15s ease;
+}
+.notif:hover .notif-row__more,
+.notif:focus-within .notif-row__more,
+.notif-row__more:focus-visible {
+  opacity: 1;
+}
 
 /* ---------- エディタの引き出し「情報」 */
 .info {
@@ -5872,6 +5883,39 @@ m3e-snackbar {
 .import-list__notes {
   display: block;
   color: var(--mf-on-surface-variant);
+}
+/* 版提出: ヘッダーの緊急スイッチ・一覧の緊急表示 */
+.submit-dialog__header {
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* m3e-dialog 見出し slot の typography を子全体に継承させない */
+  font: inherit;
+}
+.submit-dialog__header > span:first-child,
+.submit-dialog__header > .submit-dialog__title {
+  font: var(--mf-type-title-medium);
+}
+.submit-dialog__urgent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.submit-dialog__urgent-label {
+  font: var(--mf-type-body-large);
+  color: var(--mf-on-surface);
+  line-height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+.submit-dialog__urgent m3e-switch {
+  flex-shrink: 0;
+}
+.review-urgent-chip {
+  margin-inline-end: 6px;
+  vertical-align: middle;
 }
 /* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
 .submit-checklist {
