@@ -386,6 +386,8 @@ export default defineSchema({
     submittedBy: v.string(),
     submittedAt: v.number(),
     deadlineAt: v.number(),
+    /** 廃止: 制作物 revisionPlannedAt へ移行（072 / e082。読取・移行のみ） */
+    plannedSubmitAt: v.optional(v.number()),
     reviewUrgent: v.optional(v.boolean()),
     reviewState,
     reviewClosedReason: v.optional(closedReason),
