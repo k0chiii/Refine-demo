@@ -11,6 +11,7 @@ import {
   setWorkPinned,
 } from "../usecases/home.ts";
 import { listMyNotifications, REDACTED_NOTIFICATION } from "../usecases/notifications.ts";
+import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { changeWorkLifecycle, importWorks } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
@@ -126,17 +127,32 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     who: (typeof principals)[keyof typeof principals],
   ) => (await listMyNotifications(ctx, who)).filter((n) => n.kind === "revision_submitted");
 
-  it("版提出の通知は出さない（2026-10-30 合意。ピン留めしていても revision_submitted は作らない）", async () => {
+  it("版提出で、その版の校正者とピン留めした人に revision_submitted が届く。名簿だけの関係者には届かない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.reviewer.userId],
+      permission: "review",
+    });
+    await setWorkReviewers(ctx, principals.manager, {
+      workId: work.id,
+      reviewerIds: [principals.reviewer.userId],
+    });
     await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: true });
-    await submitRevision(ctx, work.id);
-    await submitRevision(ctx, work.id);
-    expect(await submitted(ctx, principals.stranger)).toHaveLength(0);
+    const rev = await submitRevision(ctx, work.id);
+    expect(await submitted(ctx, principals.reviewer)).toHaveLength(1);
+    expect((await submitted(ctx, principals.reviewer))[0]).toMatchObject({
+      workId: work.id,
+      revisionId: rev.id,
+    });
+    expect(await submitted(ctx, principals.stranger)).toHaveLength(1);
     expect(await submitted(ctx, principals.manager)).toHaveLength(0);
+    expect(await submitted(ctx, principals.approver)).toHaveLength(0);
+    expect(await submitted(ctx, principals.creator)).toHaveLength(0);
   });
 
-  it.skip("旧: ピン留めした人は版提出の通知を受け取る", async () => {
+  it("ピン留めした人は、職責も割当も無くても新しい版の通知を受け取る。外せば届かない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     await submitRevision(ctx, work.id);
@@ -150,7 +166,7 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     expect(got).toHaveLength(1);
     expect(got[0]).toMatchObject({ workId: work.id, revisionId: second.id });
     expect(got[0]!.title).not.toBe(REDACTED_NOTIFICATION.title);
-    expect(await submitted(ctx, principals.approver)).toHaveLength(2);
+    expect(await submitted(ctx, principals.approver)).toHaveLength(1);
     expect(await submitted(ctx, principals.creator)).toHaveLength(0);
 
     await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: false });
@@ -158,7 +174,7 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     expect(await submitted(ctx, principals.stranger)).toHaveLength(1);
   });
 
-  it.skip("非公開の制作物は、ピン留めした後に見られなくなった人には伏せた通知を送る", async () => {
+  it("非公開の制作物は、ピン留めした後に見られなくなった人には伏せた通知を送る", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
     await grantWorkPermission(ctx, principals.sysadmin, {

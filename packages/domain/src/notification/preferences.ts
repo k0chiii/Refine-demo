@@ -19,7 +19,7 @@ export const ACCOUNT_CHANNELS = ["email", "slack"] as const satisfies readonly D
 export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
 /**
- * 大地さん判断（2026-10-30）: Slack 通知の実装は残すが、設定・管理など UI には出さない。送信も当面無効。
+ * 大地さん判断（2026-10-30）: Slack 通知の実装・外への配信経路は残す。設定・管理など UI だけ出さない。
  */
 export const SLACK_NOTIFICATION_UI_ENABLED = false;
 

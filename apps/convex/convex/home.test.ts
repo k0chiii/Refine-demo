@@ -34,7 +34,7 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     ).rejects.toThrow(code("forbidden"));
   });
 
-  it("ピン留めした制作物は校正の入口のピン留めに出る（版提出通知は 2026-10-30 合意で停止）", async () => {
+  it("ピン留めした制作物は校正の入口のピン留めに出て、版提出の通知もピン留めした人に届く", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const workId = await setupWork(t, cast);
@@ -45,7 +45,8 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     const got = (await cast.stranger.as.query(api.notifications.list, {})).filter(
       (n) => n.kind === "revision_submitted",
     );
-    expect(got).toHaveLength(0);
+    expect(got).toHaveLength(1);
+    expect(got[0]).toMatchObject({ workId, revisionId });
     const other = await cast.reviewer.as.query(api.notifications.list, {});
     expect(other.filter((n) => n.kind === "revision_submitted")).toHaveLength(0);
 
