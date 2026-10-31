@@ -6164,3 +6164,14 @@ m3e-snackbar {
   margin: 4px 0 0;
   color: var(--mf-on-secondary-container);
 }
+
+/* stack-pr:ui-role-home-manager */
+.home-dashboard--manager .ov {
+  margin-inline: 16px;
+}
+.role-home-tag {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mf-on-surface-variant);
+}
