@@ -319,9 +319,6 @@ export function WorkFormFields({
             onChange={set("title")}
           />
         </Field>
-        <Field label="目的・用途">
-          <TextArea value={form.purpose} onChange={set("purpose")} />
-        </Field>
         <div className="form">
           <Field label="大ジャンル">
             <Select
