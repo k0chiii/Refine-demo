@@ -51,7 +51,6 @@ export function NewWorkDialog({
       category: form.category,
       mediaType: form.mediaType as "pdf",
       year: 100,
-      ...(form.legacyId ? { legacyId: form.legacyId } : {}),
       creatorIds: form.creatorIds,
       ...approversFromForm(form),
       managerIds: form.managerIds,
