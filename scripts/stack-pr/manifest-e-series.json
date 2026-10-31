@@ -20,7 +20,7 @@
     "parent": "e089",
     "verify": "standard",
     "shots": { "desktop": "33-work-form" },
-    "decide": [{ "id": "88", "q": "目的・用途の入力場所", "options": [{ "id": "C", "rec": true, "text": "登録では聞かず、情報タブで後から（78 と同じ）", "note": "decisions 88 + 78" }] }]
+    "decide": null
   },
   {
     "id": "e078",
