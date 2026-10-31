@@ -61,7 +61,7 @@ describe("日付だけの締切＝その日の終わり（利用者決定 2026-1
   it("期限前の通知は当日 0:00 から届き、本文に「11/14（土）」を書く", async () => {
     const { ctx } = await setup();
     ctx.clock.current = jst(2026, 11, 13, 23, 59);
-    expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 締切の 24 時間と 1 分前
+    expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 締切前日は送らない
     ctx.clock.current = jst(2026, 11, 14);
     expect(await remindUpcomingDeadlines(ctx)).toBe(1);
     const [note] = await listMyNotifications(ctx, principals.reviewer);

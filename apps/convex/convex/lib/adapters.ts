@@ -249,7 +249,9 @@ export function createAppContext(
       async listOpenExpired(now, limit) {
         const docs = await db
           .query("revisions")
-          .withIndex("by_state_deadline", (q) => q.eq("reviewState", "open").lte("deadlineAt", now))
+          .withIndex("by_state_deadline", (q) =>
+            q.eq("reviewState", "open").gt("deadlineAt", 0).lte("deadlineAt", now),
+          )
           .take(limit);
         return docs.map((d) => fromDoc(d) as Revision);
       },
