@@ -4,6 +4,7 @@ import {
   type AccountChannel,
   type ChannelStatus,
   normalizeSlackEmail,
+  SLACK_NOTIFICATION_UI_ENABLED,
 } from "@mf100/domain";
 import { useMutation } from "convex/react";
 import type { ReactNode } from "react";
@@ -134,7 +135,9 @@ function SlackEmailField({
  */
 export function NotificationChannelsSetting({ settings }: { settings: NotificationSettingsView }) {
   const update = useMutation(api.notificationPrefs.update);
-  const shown = ACCOUNT_CHANNELS.filter((c) => settings.destinations[c].available);
+  const shown = ACCOUNT_CHANNELS.filter(
+    (c) => settings.destinations[c].available && (c !== "slack" || SLACK_NOTIFICATION_UI_ENABLED),
+  );
   if (shown.length === 0) return null;
 
   const save = (patch: Parameters<typeof update>[0]) =>
