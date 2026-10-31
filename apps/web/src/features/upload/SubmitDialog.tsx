@@ -566,11 +566,7 @@ export function SubmitDialog({
                   ) : null}
                 </div>
                 {slideSubmit ? (
-                  <Field
-                    label="スライドのリンク"
-                    required
-                    hint="共有 URL（https）。校正は PDF 上"
-                  >
+                  <Field label="スライドのリンク" required hint="共有 URL（https）。校正は PDF 上">
                     <TextInput
                       type="text"
                       inputMode="url"

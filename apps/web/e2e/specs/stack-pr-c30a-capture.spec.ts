@@ -6,8 +6,7 @@ const SLIDE_DECK = "企画説明会スライド";
 
 const PR = process.env.STACK_PR_C30A ?? "87";
 const PHASE = process.env.STACK_PR_C30A_PHASE ?? "after";
-const OUT =
-  process.env.OUT_DIR ?? resolve(`docs/stack-pr-screenshots/c30a-pr${PR}/${PHASE}`);
+const OUT = process.env.OUT_DIR ?? resolve(`docs/stack-pr-screenshots/c30a-pr${PR}/${PHASE}`);
 
 mkdirSync(OUT, { recursive: true });
 
