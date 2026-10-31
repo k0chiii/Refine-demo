@@ -2,6 +2,22 @@
 
 正本: `scripts/stack-pr/manifest.json`（76 件）
 
+## develop マージ進捗（001–070）
+
+`origin/develop` @ `2c7b506540df57fd1a5a164fba9906ddc8b11907`（2026-10-31 UTC）
+
+| id | PR | develop | メモ |
+|---|---:|---|---|
+| 001 | #93 | ✅ | |
+| 002 | #94 | ✅ | |
+| 003 | #97 | ✅ | git merge + push |
+| 004 | #96 | ⚠️ | GitHub 上は **stack-003 向けに MERGED** のみ。develop 未取り込み。`ManagePullRequest` で base→develop 再オープン、または `cursor/merge-004-to-develop-32db` から PR 化 |
+| 005 | #95 | ⚠️ | **stack-004 向けに MERGED**（develop 未取り込み） |
+| 006–070 | — | ⏸ | **停止**: `merge-stack-001-070-git.mjs --only 006` → `NEED_RETARGET 102`。`gh pr edit` / `ManagePullRequest` 必須 |
+| 071–076 | #165 等 | — | 001–070 完了後に #165 base→develop（未実施） |
+
+手順正本: `scripts/stack-pr/merge-stack-001-070-git.mjs`（PDF コメント → marker → CI → git merge）。integration では retarget/comment 不可。
+
 ## 使っていないブランチ（v1・058–074 再積み前）
 
 058 以降の再ビルドは `-v2-8b5a` ブランチで PR 化。以下は **上書き・削除せず未使用**:
