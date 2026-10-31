@@ -81,7 +81,7 @@ export function EditWorkDialog({
         </M3eButton>
         <M3eButton
           variant="filled"
-          disabled={pending || !workFormReady(form)}
+          disabled={pending || !workFormReady(form, "edit")}
           onClick={() => void run()}
         >
           保存

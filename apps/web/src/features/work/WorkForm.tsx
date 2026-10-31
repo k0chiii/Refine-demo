@@ -177,8 +177,16 @@ export function approversFromForm(form: Pick<WorkFormState, "approverIds" | "app
   };
 }
 
-/** 登録・保存できるか（必須: 名称・区分（小ジャンルから入る）・制作者・校了権限者） */
-export function workFormReady(form: WorkFormState): boolean {
+/** 登録・保存できるか（編集: 名称・区分・制作者・校了する人。登録: 名称・小ジャンル・制作者・仕上がり日） */
+export function workFormReady(form: WorkFormState, mode: "create" | "edit" = "edit"): boolean {
+  if (mode === "create") {
+    return (
+      form.title.trim() !== "" &&
+      form.subGenre !== "" &&
+      form.creatorIds.length > 0 &&
+      form.deadlineAt !== null
+    );
+  }
   return (
     form.title.trim() !== "" &&
     form.category.trim() !== "" &&
@@ -308,6 +316,40 @@ export function WorkFormFields({
         next.category = f.genre ? workGenreLabels[f.genre] : "";
       return next;
     });
+  if (mode === "create") {
+    return (
+      <>
+        <FormSection title="基本">
+          <Field label="制作物名" required>
+            <TextInput
+              required
+              maxLength={WORK_TITLE_MAX}
+              value={form.title}
+              onChange={set("title")}
+            />
+          </Field>
+          <Field label="小ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
+            <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
+          </Field>
+          <UserPicker
+            label="制作者"
+            required
+            value={form.creatorIds}
+            onChange={(ids) =>
+              setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))
+            }
+          />
+          <DateField
+            label="仕上がり日"
+            kind="date"
+            value={form.deadlineAt}
+            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
+          />
+        </FormSection>
+      </>
+    );
+  }
+
   return (
     <>
       <FormSection title="基本">
@@ -384,12 +426,7 @@ export function WorkFormFields({
             setForm((f) => ({ ...f, approverIds: next.ids, approvalQuorum: next.quorum }))
           }
         />
-        <UserPicker
-          label="統括"
-          {...(mode === "create" ? { hint: "自分は自動で入ります" } : {})}
-          value={form.managerIds}
-          onChange={setIds("managerIds")}
-        />
+        <UserPicker label="統括" value={form.managerIds} onChange={setIds("managerIds")} />
         <UserPicker
           label="関係者"
           hint="見るだけの人です（非公開でも見られます）"
