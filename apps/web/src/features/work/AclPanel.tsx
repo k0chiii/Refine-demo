@@ -60,9 +60,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
   return (
     <div className="acl">
       {readOnly ? null : (
-        <p className="muted small">
-          通常の制作物は委員なら誰でも見られます。ここで付けるのは、非公開・取扱注意の制作物を見られる人（関係者と担当の所属する人には自動で付きます）と、校正・編集・管理の権限です
-        </p>
+        <p className="muted small">非公開・取扱注意の制作物を見られる人を追加します</p>
       )}
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません</p>
