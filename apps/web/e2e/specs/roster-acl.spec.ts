@@ -11,7 +11,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     const dialog = app.dialog();
     await dialog.locator("input").first().fill(title);
     await dialog.locator("m3e-select").first().click();
-    await page.getByRole("option", { name: "グラフィック", exact: true }).click();
+    await page.getByRole("option", { name: "印刷物（紙・ビラ）", exact: true }).click();
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
     await dialog
       .locator("m3e-form-field", { hasText: "仕上がり日" })
@@ -52,13 +52,14 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     page,
   }) => {
     const title = "公式 Instagram 開催告知";
-    const purpose = "管理者が書き足した用途。";
+    const purpose = "管理者が書き足した区分。";
     await app.restrictWork(title);
 
     await app.signInAs("mock-nogiku-admin");
     await app.go("/works");
     const dialog = await app.editWorkFromList(title);
-    await dialog.locator("textarea").first().fill(purpose);
+    await dialog.locator("m3e-expansion-panel").click();
+    await dialog.locator("m3e-form-field", { hasText: "区分" }).locator("input").fill(purpose);
     await dialog.locator("m3e-button", { hasText: "保存" }).click();
     await expect(dialog).toHaveCount(0);
     await app.openWork(title);
