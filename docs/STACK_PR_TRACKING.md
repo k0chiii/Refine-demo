@@ -21,7 +21,7 @@
 
 | id | PR | ブランチ | 状態 |
 |---|---|---|---|
-| e089 | （作成中） | `cursor/stack-e089-copy-unify-terminology-8b5a` | 統括・校了する人、納期/ID 削除、タグ a/b 除外 |
+| e089 | **#175** | `cursor/stack-e089-copy-unify-terminology-8b5a` | ✅ CI 想定（e2e:smoke 緑） |
 | e088 | — | `stack-e088-drop-legacy-id-ui` | 予定 |
 | e078 | — | `stack-e078-reg-minimal-fields` | 登録4項目のみ |
 | e081 | — | | ◆校了目標日・■仕上がり日（CD081 相当はここ） |
