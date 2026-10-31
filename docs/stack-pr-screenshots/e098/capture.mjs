@@ -20,6 +20,28 @@ const phase = process.argv.includes("--phase")
   ? process.argv[process.argv.indexOf("--phase") + 1]
   : "after";
 if (phase !== "before" && phase !== "after") throw new Error("use --phase before|after");
+const onlyIdx = process.argv.indexOf("--only");
+const onlyShots =
+  onlyIdx >= 0
+    ? new Set(
+        process.argv[onlyIdx + 1]
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
+    : null;
+function wantShot(basename) {
+  if (!onlyShots) return true;
+  for (const o of onlyShots) {
+    if (basename === o || basename.startsWith(`${o}-`) || basename.includes(o)) return true;
+  }
+  return false;
+}
+
+async function assertNoSubmitDialogFieldSummary(page) {
+  const n = await page.locator("m3e-dialog[open].dialog--full .field__summary").count();
+  if (n > 0) throw new Error(`submit dialog must not show field__summary (found ${n})`);
+}
 
 const outDir = path.join(__dir, phase);
 fs.mkdirSync(outDir, { recursive: true });
@@ -241,27 +263,33 @@ if (phase === "before") {
   });
 } else {
   await openSubmitDialog(page);
-  await shot(page, "01-submit-dialog-urgent-off", async (p) => {
-    await p.getByText("版を提出", { exact: true }).first().waitFor({ state: "visible" });
-    await p
-      .locator("m3e-dialog[open].dialog--full m3e-date-input")
-      .waitFor({ state: "visible", timeout: 30_000 });
-    if ((await p.getByText("時刻を指定", { exact: true }).count()) > 0)
-      throw new Error("after 01: 時刻を指定 toggle should be hidden when urgent off");
-  });
+  if (wantShot("01-submit-dialog-urgent-off")) {
+    await shot(page, "01-submit-dialog-urgent-off", async (p) => {
+      await p.getByText("版を提出", { exact: true }).first().waitFor({ state: "visible" });
+      await p
+        .locator("m3e-dialog[open].dialog--full m3e-date-input")
+        .waitFor({ state: "visible", timeout: 30_000 });
+      if ((await p.getByText("時刻を指定", { exact: true }).count()) > 0)
+        throw new Error("after 01: 時刻を指定 toggle should be hidden when urgent off");
+      await assertNoSubmitDialogFieldSummary(p);
+    });
+  }
   const urgentSwitch = page.locator(".submit-dialog__urgent m3e-switch").first();
   if ((await urgentSwitch.count()) === 0) throw new Error("after: 緊急 switch が無い");
-  await urgentSwitch.click();
-  await shot(page, "02-submit-dialog-urgent-on", async (p) => {
-    await p.locator(".submit-dialog__urgent-label").filter({ hasText: "緊急" }).waitFor({
-      state: "visible",
+  if (wantShot("02-submit-dialog-urgent-on")) {
+    await urgentSwitch.click();
+    await shot(page, "02-submit-dialog-urgent-on", async (p) => {
+      await p.locator(".submit-dialog__urgent-label").filter({ hasText: "緊急" }).waitFor({
+        state: "visible",
+      });
+      await p
+        .locator(".date-field")
+        .getByLabel("時刻", { exact: true })
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await assertUrgentHeaderTypography(p);
+      await assertNoSubmitDialogFieldSummary(p);
     });
-    await p
-      .locator(".date-field")
-      .getByLabel("時刻", { exact: true })
-      .waitFor({ state: "visible", timeout: 30_000 });
-    await assertUrgentHeaderTypography(p);
-  });
+  }
   await page.keyboard.press("Escape");
   await page
     .waitForSelector("m3e-dialog[open]", { state: "detached", timeout: 10_000 })
@@ -269,6 +297,13 @@ if (phase === "before") {
   for (let i = 0; i < 5 && (await page.locator("m3e-dialog[open]").count()) > 0; i++) {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
+  }
+
+  if (onlyShots && !wantShot("03-works-list-urgent") && !wantShot("04-editor-subtitle-urgent")) {
+    await browser.close();
+    assertUniqueMd5(outDir);
+    console.log(`OK ${phase} -> ${outDir}`);
+    process.exit(0);
   }
 
   const workId = await seedUrgentRevision(page);

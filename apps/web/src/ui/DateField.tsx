@@ -54,6 +54,7 @@ export function DateField({
   max,
   kind = "deadline",
   timePolicy = "optional",
+  hideSummary = false,
 }: {
   label: string;
   value: number | null;
@@ -74,6 +75,8 @@ export function DateField({
    * required: 日付と時刻を常に入力（スイッチなし）。
    */
   timePolicy?: "optional" | "hidden" | "required";
+  /** true なら確定締切の補足行（field__summary）を出さない（版提出など） */
+  hideSummary?: boolean;
 }) {
   const id = useId();
   const inputId = `${id}-input`;
@@ -135,7 +138,7 @@ export function DateField({
             id={inputId}
             type="date"
             aria-labelledby={`${id}-label`}
-            aria-describedby={summaryId}
+            {...(hideSummary ? {} : { "aria-describedby": summaryId })}
             value={dateValue}
             {...(required ? { required: true } : {})}
             {...(minValue !== null ? { minDate: minValue } : {})}
@@ -175,7 +178,7 @@ export function DateField({
               type="time"
               timeFormat="24"
               aria-labelledby={`${id}-label ${timeLabelId}`}
-              aria-describedby={summaryId}
+              {...(hideSummary ? {} : { "aria-describedby": summaryId })}
               value={timeValue}
               hourLabel="時"
               minuteLabel="分"
@@ -189,21 +192,23 @@ export function DateField({
             </M3eIconButton>
           </M3eFormField>
         ) : null}
-        <p className="field__summary" id={summaryId} aria-live="polite">
-          {kind === "date"
-            ? value === null
-              ? "時刻（任意）"
-              : time === null
-                ? formatJstDate(value - 1)
-                : formatJstShort(value)
-            : value === null
-              ? timePolicy === "required"
-                ? "日付と時刻を入力してください"
-                : timePolicy === "hidden"
-                  ? "日付を選ぶと、その日の終わりまで"
-                  : "日付だけでも、時刻を付けてもよい"
-              : formatDeadlineUntil(value)}
-        </p>
+        {hideSummary ? null : (
+          <p className="field__summary" id={summaryId} aria-live="polite">
+            {kind === "date"
+              ? value === null
+                ? "時刻（任意）"
+                : time === null
+                  ? formatJstDate(value - 1)
+                  : formatJstShort(value)
+              : value === null
+                ? timePolicy === "required"
+                  ? "日付と時刻を入力してください"
+                  : timePolicy === "hidden"
+                    ? "日付を選ぶと、その日の終わりまで"
+                    : "日付だけでも、時刻を付けてもよい"
+                : formatDeadlineUntil(value)}
+          </p>
+        )}
       </div>
       <M3eDatepicker
         id={pickerId}

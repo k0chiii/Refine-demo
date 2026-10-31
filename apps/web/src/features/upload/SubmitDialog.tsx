@@ -651,6 +651,7 @@ export function SubmitDialog({
               <DateField
                 label="校正期日"
                 required
+                hideSummary
                 value={deadlineAt}
                 onChange={setDeadlineAt}
                 min={Date.now()}

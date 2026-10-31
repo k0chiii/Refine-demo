@@ -218,10 +218,10 @@ export class App {
 
   /** M3E select（form-field 内）で選択肢を選ぶ（オプションはダイアログに写る） */
   async pickSelectOption(scope: Locator, fieldLabel: string, option: string) {
-    const field = scope.locator("m3e-form-field", { hasText: fieldLabel });
-    await field.locator("m3e-select").click();
+    const combo = scope.getByRole("combobox", { name: fieldLabel });
+    await combo.click();
     await this.settle();
-    await this.dialog().getByRole("option", { name: option, exact: true }).click();
+    await this.page.getByRole("option", { name: option, exact: true }).click();
     await this.settle();
   }
 

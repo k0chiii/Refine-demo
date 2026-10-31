@@ -29,8 +29,6 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を複製");
     // 題名は「（コピー）」付きで入っている。元の情報（制作者・校了者）も入っているので、そのまま登録できる
     await expect(dialog.locator("input").first()).toHaveValue(`${title}（コピー）`);
-    await app.fillOutlinedDate(dialog, "■仕上がり日", "2026-12-01");
-    await expect(dialog.locator("m3e-button", { hasText: "複製して登録" })).toBeEnabled();
     await dialog.locator("m3e-button", { hasText: "複製して登録" }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(/\/works(\?|$)/);
