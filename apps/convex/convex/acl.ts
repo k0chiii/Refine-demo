@@ -119,6 +119,7 @@ export const adminWorks = query({
         title: w.title,
         legacyId: w.legacyId ?? null,
         category: w.category,
+        mediaType: w.mediaType,
         lifecycle: w.lifecycle,
         activeGrantCount: grants.filter((g) => g.revokedAt === undefined).length,
       });

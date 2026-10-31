@@ -5,7 +5,7 @@ import { lifecycleLabel, resolutionLabel } from "./labels";
 const messages: Record<string, string> = {
   unauthenticated: "サインインしてください",
   forbidden: "権限がないか、対象が見つかりません",
-  acl_requires_system_admin: "閲覧権限を変更できるのはシステム管理者だけです",
+  acl_requires_system_admin: "権限を変更できるのはシステム管理者だけです",
   acl_invalid: "追加する人を確かめてください。空の選択や、いない人は追加できません。",
   work_not_editable: "校了・中止した制作物の校正者は変更できません。",
   acl_group_principal_not_enabled: "グループには権限を付けられません。個人を選んでください。",

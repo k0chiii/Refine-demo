@@ -27,7 +27,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin");
     await page
-      .locator('m3e-action-list[aria-label="制作物ごとの閲覧権限"] m3e-list-action', {
+      .locator('m3e-action-list[aria-label="制作物ごとの権限"] m3e-list-action', {
         hasText: title,
       })
       .click();

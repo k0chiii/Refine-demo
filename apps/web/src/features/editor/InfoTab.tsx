@@ -554,8 +554,8 @@ export function InfoTab({
       ) : null}
 
       {can.viewAudit ? (
-        <section className="info-tab__section" aria-label="閲覧権限">
-          <h2 className="info-tab__h">閲覧権限</h2>
+        <section className="info-tab__section" aria-label="権限">
+          <h2 className="info-tab__h">権限</h2>
           <AclPanel workId={w.id} readOnly={!can.manageAcl} />
         </section>
       ) : null}

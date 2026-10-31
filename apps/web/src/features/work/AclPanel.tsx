@@ -55,15 +55,10 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
       permission: p,
     });
   });
-  if (grants === undefined) return <Loading size="small" label="閲覧権限を読み込んでいます" />;
+  if (grants === undefined) return <Loading size="small" label="権限を読み込んでいます" />;
   const active = grants.filter((g) => g.revokedAt === undefined);
   return (
     <div className="acl">
-      {readOnly ? null : (
-        <p className="muted small">
-          校正・編集・管理の個人許可を付けます（制作物は委員なら誰でも見られます）
-        </p>
-      )}
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません</p>
       ) : (
@@ -158,7 +153,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
           onClosed={() => setHistory(false)}
         >
           <span slot="header">変更履歴</span>
-          <M3eList className="list" aria-label="閲覧権限の変更履歴">
+          <M3eList className="list" aria-label="権限の変更履歴">
             {[...grants]
               .sort((a, b) => b.grantedAt - a.grantedAt)
               .map((g) => (
