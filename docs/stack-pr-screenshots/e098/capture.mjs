@@ -257,7 +257,8 @@ if (phase === "before") {
       state: "visible",
     });
     await p
-      .locator(".date-field m3e-date-input[type='time']")
+      .locator(".date-field")
+      .getByLabel("時刻", { exact: true })
       .waitFor({ state: "visible", timeout: 30_000 });
     await assertUrgentHeaderTypography(p);
   });
@@ -282,8 +283,8 @@ if (phase === "before") {
   );
   await shot(page, "03-works-list-urgent", async (p) => {
     await p
-      .locator(".works-table")
-      .getByText("緊急", { exact: true })
+      .locator(".works-table .review-urgent-chip, .works-table m3e-filter-chip")
+      .filter({ hasText: "緊急" })
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
   });
@@ -312,13 +313,10 @@ if (phase === "before") {
       .getByText("緊急")
       .first()
       .waitFor({ state: "visible" });
-    const toolbar = p.locator(".editor-toolbar m3e-icon-button", { hasText: "全体コメント" });
-    if ((await toolbar.count()) === 0) {
-      const byLabel = p.locator('.editor-toolbar m3e-icon-button[aria-label*="全体"]');
-      if ((await byLabel.count()) === 0) {
-        throw new Error("after 04: 全体コメント toolbar button missing (#186)");
-      }
-    }
+    await p
+      .locator('[aria-label="全体へのコメント"], .ws__comment')
+      .first()
+      .waitFor({ state: "visible", timeout: 30_000 });
   });
 }
 
