@@ -390,7 +390,7 @@ export function WorkFormFields({
         />
         <UserPicker
           label="主管・制作統括"
-          {...(mode === "create" ? { hint: "登録するあなたは自動で入ります" } : {})}
+          {...(mode === "create" ? { hint: "自分は自動で入ります" } : {})}
           value={form.managerIds}
           onChange={setIds("managerIds")}
         />
