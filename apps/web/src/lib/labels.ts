@@ -8,14 +8,14 @@ export const lifecycleLabel: Record<string, string> = {
 };
 export const reviewStateLabel: Record<string, string> = {
   scheduled: "準備中",
-  open: "受付中",
-  closed: "受付終了",
+  open: "校正中",
+  closed: "締切済み",
   void: "無効",
 };
 export const closedReasonLabel: Record<string, string> = {
-  deadline: "期限到来",
-  superseded: "新版提出",
-  void: "無効化",
+  deadline: "校正期日を過ぎた",
+  superseded: "新しい版が出た",
+  void: "無効にした",
 };
 export const kindLabel: Record<string, string> = {
   correction: "修正提案",
