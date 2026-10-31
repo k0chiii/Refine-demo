@@ -2,6 +2,8 @@
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 WEB="$ROOT/apps/web"
+CAP_SPEC_BACKUP="/tmp/stack-pr-c30a-capture.spec.ts"
+cp "$WEB/e2e/specs/stack-pr-c30a-capture.spec.ts" "$CAP_SPEC_BACKUP"
 cd "$ROOT"
 
 build_demo() {
@@ -12,6 +14,10 @@ run_capture() {
   local pr=$1 phase=$2 ref=$3
   echo "=== PR #$pr $phase @ $ref ==="
   git checkout -q "$ref"
+  mkdir -p "$WEB/e2e/specs"
+  cp "$CAP_SPEC_BACKUP" "$WEB/e2e/specs/stack-pr-c30a-capture.spec.ts"
+  pkill -f "vp preview --mode demo --outDir dist-demo --port 4173" 2>/dev/null || true
+  sleep 1
   build_demo
   mkdir -p "$WEB/e2e/out"
   if ! pgrep -f "vp preview --mode demo" >/dev/null 2>&1; then
@@ -24,8 +30,9 @@ run_capture() {
   local out="$ROOT/docs/stack-pr-screenshots/c30a-pr${pr}/${phase}"
   mkdir -p "$out"
   cd "$WEB"
+  BASE_URL=http://127.0.0.1:4173 E2E_PREBUILT=1 \
   STACK_PR_C30A="$pr" STACK_PR_C30A_PHASE="$phase" OUT_DIR="$out" \
-    pnpm exec playwright test e2e/specs/stack-pr-c30a-capture.spec.ts --project=chromium
+    pnpm exec playwright test stack-pr-c30a-capture.spec.ts --project=chromium
 }
 
 START_BRANCH="$(git branch --show-current)"
