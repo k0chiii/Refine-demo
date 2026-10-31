@@ -36,7 +36,7 @@ import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { Loading } from "@/ui/Loading";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
-import { M3eFilterChip } from "@m3e/react/chips";
+import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -452,13 +452,23 @@ export function SubmitDialog({
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
-      <div slot="header" className="row submit-dialog__header">
-        <span>版を提出</span>
-        <M3eFilterChip selected={urgent} onClick={() => { const next = !urgent; setUrgent(next); if (next && deadlineAt && maxUrgentDeadline !== undefined && deadlineAt > maxUrgentDeadline) setDeadlineAt(maxUrgentDeadline); }}>
-          <M3eIcon slot="icon" name="priority_high" />
-          緊急
-        </M3eFilterChip>
-      </div>
+      <span slot="header" className="row submit-dialog__header">
+        <span className="submit-dialog__title">版を提出</span>
+        <M3eFilterChipSet aria-label="緊急校正" className="submit-dialog__urgent">
+          <M3eFilterChip
+            selected={urgent}
+            onClick={() => {
+              const next = !urgent;
+              setUrgent(next);
+              if (next && deadlineAt && maxUrgentDeadline !== undefined && deadlineAt > maxUrgentDeadline)
+                setDeadlineAt(maxUrgentDeadline);
+            }}
+          >
+            <M3eIcon slot="icon" name="priority_high" />
+            緊急
+          </M3eFilterChip>
+        </M3eFilterChipSet>
+      </span>
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>

@@ -5874,7 +5874,23 @@ m3e-snackbar {
   color: var(--mf-on-surface-variant);
 }
 /* 版提出: ヘッダーの緊急 chip・一覧の緊急表示 */
-.submit-dialog__header { flex: 1; align-items: center; justify-content: space-between; gap: 12px; }
+.submit-dialog__header {
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* m3e-dialog 見出し slot の typography を子全体に継承させない（#89 の switch ラベルが大きく見えたのと同型の事故を防ぐ） */
+  font: inherit;
+}
+.submit-dialog__header > span:first-child,
+.submit-dialog__header > .submit-dialog__title {
+  font: var(--mf-type-title-medium);
+}
+/* M3 Filter chips（Material Chips › Filter）：label-large。ダイアログ見出しより一段小さく、他画面の filter chip と同じ */
+.submit-dialog__header m3e-filter-chip,
+.submit-dialog__header m3e-filter-chip-set {
+  font: var(--mf-type-label-large);
+}
 .review-urgent-chip { margin-inline-end: 6px; vertical-align: middle; }
 /* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
 .submit-checklist {

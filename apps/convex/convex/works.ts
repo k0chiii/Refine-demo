@@ -1,7 +1,6 @@
 import { substringQuery, workSearchText } from "./lib/workSearch";
 import {
   changeWorkLifecycle,
-  canChangeCreators,
   createWork,
   importWorks,
   loadAuthorizedWork,
@@ -29,6 +28,7 @@ import {
   revisionHeadsOf,
   revisionLabel,
   revisionThreadStatsFromRevision,
+  nextRevisionPlannedAt,
   revisionThreadStatsOf,
   workTeamIdsOf,
   type Principal,
@@ -67,7 +67,10 @@ const workPatch = {
   purpose: v.optional(v.string()),
   category: v.optional(v.string()),
   mediaType: v.optional(vMediaType),
-  deadlineAt: v.optional(v.number()),
+  /** 納期（null で消す） */
+  deadlineAt: v.optional(v.union(v.number(), v.null())),
+  /** ■仕上がり日（null で消す） */
+  finishAt: v.optional(v.union(v.number(), v.null())),
   creatorIds: v.optional(v.array(v.string())),
   /** 校了者。approverIds があればそちら（複数可）。approverId だけなら「その 1 人に置き換える」 */
   approverId: v.optional(v.string()),
@@ -76,7 +79,8 @@ const workPatch = {
   approvalQuorum: v.optional(v.number()),
   managerIds: v.optional(v.array(v.string())),
   confidentiality: v.optional(vConfidentiality),
-  legacyId: v.optional(v.string()),
+  /** 制作物 ID（null か空文字で消す） */
+  legacyId: v.optional(v.union(v.string(), v.null())),
   ownerTeamId: v.optional(v.string()),
   productionTeamIds: v.optional(v.array(v.string())),
   relatedTeamIds: v.optional(v.array(v.string())),
@@ -103,6 +107,7 @@ export const create = mutation({
     approverIds: v.optional(v.array(v.string())),
     approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
+    finishAt: v.optional(v.number()),
     confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
     reviewerIds: v.optional(v.array(v.id("users"))),
@@ -137,6 +142,7 @@ export const importBatch = mutation({
         approverIds: v.array(v.id("users")),
         approvalQuorum: v.optional(v.number()),
         deadlineAt: v.optional(v.number()),
+        finishAt: v.optional(v.number()),
         legacyId: v.optional(v.string()),
         confidentiality: vConfidentiality,
         notationCategories: v.array(v.string()),
@@ -349,7 +355,6 @@ export const get = query({
         activeGrantCount: grants.filter(isGrantActive).length,
         can: {
           edit: isAllowed("work.edit", authz),
-          transferCreators: canChangeCreators(work, principal),
           submit: isAllowed("revision.submit", authz),
           decide: isAllowed("comment.decide", authz),
           comment: isAllowed("comment.post", authz),
@@ -464,6 +469,9 @@ function summarize(
     lifecycle: work.lifecycle,
     confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
+    finishAt: work.finishAt ?? null,
+    revisionPlannedAt: work.revisionPlannedAt ?? null,
+    nextRevisionPlannedAt: nextRevisionPlannedAt(work.revisionPlannedAt, Date.now()),
     latestRevisionLabel: latest?.label ?? null,
     acceptingRevisionId: accepting?.id ?? null,
     acceptingDeadlineAt: accepting?.deadlineAt ?? null,
@@ -598,7 +606,6 @@ async function summarizeWorkList(
     canEdit:
       work.lifecycle !== "finalized" &&
       (overridesAllPermissions(principal) || work.managerIds.includes(principal.userId)),
-    canTransferCreators: canChangeCreators(work, principal),
     reviewers: (work.reviewerIds ?? []).map((id) => ({
       id,
       name: users.get(id)?.name ?? "（不明なユーザー）",

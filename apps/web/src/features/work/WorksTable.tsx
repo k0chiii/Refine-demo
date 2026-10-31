@@ -9,7 +9,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
-import { formatDeadline } from "@/lib/format";
+import { formatDeadline, remaining } from "@/lib/format";
 import { ReviewDeadlineCell } from "@/features/review/UrgentReviewChip";
 import { lifecycleLabel } from "@/lib/labels";
 import { stageInfo } from "@/lib/stageInfo";
@@ -20,7 +20,6 @@ import { M3eIcon } from "@m3e/react/icon";
 import { ApproversCell } from "./ApproversCell";
 import { DuplicateWorkDialog } from "./DuplicateWorkDialog";
 import { EditWorkById } from "./EditWorkDialog";
-import { TransferCreatorsById } from "./TransferCreatorsDialog";
 import { ReviewersCell } from "./ReviewersCell";
 import { WorkRowMenu } from "./WorkRowMenu";
 
@@ -77,10 +76,7 @@ export function WorksTable({
 }) {
   const [page, setPage] = useState({ index: 0, size: DEFAULT_PAGE_SIZE });
   /** 行メニューから開いているダイアログ（編集・複製）。表の外に 1 つだけ置く */
-  const [dialog, setDialog] = useState<{
-    kind: "edit" | "duplicate" | "transferCreators";
-    workId: string;
-  } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "edit" | "duplicate"; workId: string } | null>(null);
   useEffect(() => setPage((p) => (p.index === 0 ? p : { ...p, index: 0 })), [resetKey]);
   const { index, rows } = pageSlice(works, page.index, page.size);
   const now = Date.now();
@@ -112,12 +108,12 @@ export function WorksTable({
       >
         <thead>
           <tr>
-            {header("title", "題名")}
+            {header("title", "制作物名")}
             {header("stage", "状態", "works-table__col--stage")}
             <ColumnHeader className="works-table__col--version">版</ColumnHeader>
-            {header("accepting", "校正の締切")}
-            {header("deadline", "納期", "works-table__col--delivery")}
-            {hasTeams ? header("owner", "主管担当", "works-table__col--owner") : null}
+            {header("accepting", "校正期日")}
+            {header("deadline", "◆校了目標日", "works-table__col--delivery")}
+            {hasTeams ? header("owner", "担当", "works-table__col--owner") : null}
             {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
             <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
             <ColumnHeader className="works-table__col--reviewers">校正者</ColumnHeader>
@@ -140,7 +136,6 @@ export function WorksTable({
               canDuplicate={canDuplicate}
               onOpen={onOpen}
               onEdit={() => setDialog({ kind: "edit", workId: w.id })}
-              onTransferCreators={() => setDialog({ kind: "transferCreators", workId: w.id })}
               onDuplicate={() => setDialog({ kind: "duplicate", workId: w.id })}
             />
           ))}
@@ -153,13 +148,6 @@ export function WorksTable({
         <DuplicateWorkDialog
           key={dialog.workId}
           sourceWorkId={dialog.workId}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
-      {dialog?.kind === "transferCreators" ? (
-        <TransferCreatorsById
-          key={dialog.workId}
-          workId={dialog.workId}
           onClose={() => setDialog(null)}
         />
       ) : null}
@@ -176,7 +164,6 @@ function Row({
   canDuplicate,
   onOpen,
   onEdit,
-  onTransferCreators,
   onDuplicate,
 }: {
   w: WorkRow;
@@ -187,7 +174,6 @@ function Row({
   canDuplicate: boolean;
   onOpen: (workId: string) => void;
   onEdit: () => void;
-  onTransferCreators: () => void;
   onDuplicate: () => void;
 }) {
   const done = w.lifecycle === "finalized" || w.lifecycle === "cancelled";
@@ -245,6 +231,11 @@ function Row({
       <td className="mf-table__td works-table__col--stage">{stage}</td>
       <td className="mf-table__td works-table__col--version">
         {w.latestRevisionLabel ?? <span className="muted">—</span>}
+        {w.nextRevisionPlannedAt ? (
+          <span className="mf-table__sub">
+            予定提出 {formatDeadline(w.nextRevisionPlannedAt, now)}
+          </span>
+        ) : null}
       </td>
       <td className="mf-table__td">
         {w.acceptingDeadlineAt ? (
@@ -298,7 +289,6 @@ function Row({
           canDuplicate={canDuplicate}
           compact={compact}
           onEdit={onEdit}
-          onTransferCreators={onTransferCreators}
           onDuplicate={onDuplicate}
         />
       </td>
