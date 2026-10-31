@@ -218,6 +218,7 @@ export type WorkPatch = {
       | "category"
       | "mediaType"
       | "deadlineAt"
+      | "finishAt"
       | "creatorIds"
       | "approverId"
       | "approverIds"
