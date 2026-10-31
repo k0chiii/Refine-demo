@@ -1805,7 +1805,7 @@ export function Editor({
               {open
                 ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
-                  ? `締切済み（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  ? `次版作成中（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
               {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
