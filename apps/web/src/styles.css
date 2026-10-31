@@ -6175,3 +6175,13 @@ m3e-snackbar {
   font-weight: 600;
   color: var(--mf-on-surface-variant);
 }
+
+/* stack-pr:ui-role-home-approver */
+.home-dashboard--approver {
+  margin: 8px 16px;
+  padding: 12px 16px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-tertiary-container);
+  color: var(--mf-on-tertiary-container);
+  min-height: 48px;
+}
