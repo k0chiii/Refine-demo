@@ -6073,6 +6073,15 @@ m3e-snackbar {
 
 /* stack-pr:detail-shell */
 
+.detail-shell {
+  min-height: 3500px;
+  background: linear-gradient(
+    180deg,
+    var(--mf-surface-container-low) 0%,
+    var(--mf-surface-container) 100%
+  );
+}
+
 .detail-shell__head {
   display: flex;
   flex-direction: column;
@@ -6184,4 +6193,10 @@ m3e-snackbar {
   background: var(--mf-tertiary-container);
   color: var(--mf-on-tertiary-container);
   min-height: 48px;
+}
+
+/* stack-pr:ui-role-home-member */
+.home-dashboard--member {
+  margin: 8px 16px;
+  min-height: 32px;
 }
