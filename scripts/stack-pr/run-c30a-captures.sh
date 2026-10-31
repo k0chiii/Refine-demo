@@ -13,20 +13,19 @@ build_demo() {
 run_capture() {
   local pr=$1 phase=$2 ref=$3
   echo "=== PR #$pr $phase @ $ref ==="
+  rm -f "$WEB/e2e/specs/stack-pr-c30a-capture.spec.ts"
   git checkout -q "$ref"
   mkdir -p "$WEB/e2e/specs"
   cp "$CAP_SPEC_BACKUP" "$WEB/e2e/specs/stack-pr-c30a-capture.spec.ts"
   pkill -f "vp preview --mode demo --outDir dist-demo --port 4173" 2>/dev/null || true
-  sleep 1
+  sleep 2
   build_demo
-  mkdir -p "$WEB/e2e/out"
-  if ! pgrep -f "vp preview --mode demo" >/dev/null 2>&1; then
-    (cd "$WEB" && setsid sh -c 'pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 --strictPort' >e2e/out/preview.log 2>&1 &)
-    for i in $(seq 1 90); do
-      curl -sf -o /dev/null http://127.0.0.1:4173/ && break
-      sleep 1
-    done
-  fi
+  (cd "$WEB" && setsid sh -c 'pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 --strictPort' >e2e/out/preview.log 2>&1 &)
+  for i in $(seq 1 90); do
+    curl -sf -o /dev/null http://127.0.0.1:4173/ && break
+    sleep 1
+  done
+  curl -sf -o /dev/null http://127.0.0.1:4173/ || { echo "preview failed"; exit 1; }
   local out="$ROOT/docs/stack-pr-screenshots/c30a-pr${pr}/${phase}"
   mkdir -p "$out"
   cd "$WEB"
