@@ -203,6 +203,17 @@ export const demo = internalMutation({
         relatedTeamIds: teamIds["総務局"] ? [teamIds["総務局"]] : [],
       },
       {
+        title: "企画説明会スライド",
+        purpose: "委員向け企画説明（スライド小ジャンルの提出確認用）",
+        category: "スライド",
+        mediaType: "pdf" as const,
+        legacyId: "SLD-050",
+        notationCategories: ["A1"],
+        genre: "graphic" as const,
+        subGenre: "slide" as const,
+        ...teamsOf("広報局/デザイン担当", ["広報局/デザイン担当"]),
+      },
+      {
         title: "公式サイト トップページ",
         purpose: "Web 来場者導線",
         category: "web原稿",
