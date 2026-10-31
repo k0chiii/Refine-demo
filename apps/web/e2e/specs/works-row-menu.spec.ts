@@ -9,20 +9,10 @@ import { expect, test, WORKS_ENTRY } from "../support/app";
 test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
   const title = "公式 Instagram 開催告知";
 
-  test("主管が ⋮ → 情報を編集で目的・用途を書き足せる", async ({ app, page }) => {
+  test("主管が制作物の情報から目的・用途を書き足せる", async ({ app, page }) => {
     await app.signInAs("mock-nogiku-manager");
     await app.go("/works");
-    const dialog = await app.editWorkFromList(title);
-    await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を編集");
-    // 目的・用途は 2 つ目の欄（1 つ目は制作物名）
-    const purpose = dialog.locator("textarea").first();
-    await purpose.fill("開催 1 週間前に投稿する告知。");
-    await dialog.locator("m3e-button", { hasText: "保存" }).click();
-    await expect(dialog).toHaveCount(0);
-    // 一覧に戻ったまま（エディタへは移らない）。書いた用途は制作物の情報に残る
-    await expect(page).toHaveURL(/\/works(\?|$)/);
-    await app.openWork(title);
-    await app.drawer("情報");
+    await app.setWorkPurpose(title, "開催 1 週間前に投稿する告知。");
     await expect(page.locator(".drawer__body")).toContainText("開催 1 週間前に投稿する告知。");
   });
 

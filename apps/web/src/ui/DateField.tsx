@@ -51,7 +51,10 @@ export function DateField({
   onChange,
   required,
   min,
+  max,
   kind = "deadline",
+  timePolicy = "optional",
+  hideSummary = false,
 }: {
   label: string;
   value: number | null;
@@ -59,11 +62,21 @@ export function DateField({
   required?: boolean;
   /** この日より前の日付は選べない（epoch ms。その JST 暦日に丸める） */
   min?: number;
+  /** この日より後の日付は選べない（epoch ms。その JST 暦日に丸める） */
+  max?: number;
   /**
    * deadline（既定）: 締切・納期。日付だけなら「その日の 23:59 まで」と出す。
    * date: 入稿日などの日付。値の持ち方は同じ（日付だけなら翌日 0:00 JST）だが、「まで」とは書かない
    */
   kind?: "deadline" | "date";
+  /**
+   * optional: スイッチで時刻を任意指定（既定）。
+   * hidden: 日付のみ（その日の終わり）。スイッチ・時刻欄なし。
+   * required: 日付と時刻を常に入力（スイッチなし）。
+   */
+  timePolicy?: "optional" | "hidden" | "required";
+  /** true なら確定締切の補足行（field__summary）を出さない（版提出など） */
+  hideSummary?: boolean;
 }) {
   const id = useId();
   const inputId = `${id}-input`;
@@ -79,23 +92,37 @@ export function DateField({
   const time = parts ? parts.time : pendingTime;
   // 時刻の入力を出すかどうか。時刻があるあいだは必ずオン（外から値が入ったときも）。オンにして時刻がまだ空の間もオンのまま
   const [timeOn, setTimeOn] = useState(time !== null);
-  const showTime = timeOn || time !== null;
+  const showTime =
+    timePolicy === "required" ? true : timePolicy === "hidden" ? false : timeOn || time !== null;
+  const showTimeSwitch = timePolicy === "optional";
 
   const minDate = min === undefined ? null : toJstDate(min);
+  const maxDate = max === undefined ? null : toJstDate(max);
   // M3E の date-input には Date オブジェクトを渡す。毎回 new Date すると、@lit/react が描き直しのたびに「値が変わった」と
   // 見て、フォームのどこを操作しても全部の日付欄が更新される（入力途中の年月日も巻き込む）。日付が同じなら同じ Date を渡す
   const dateValue = useMemo(() => toLocalDate(parts?.date ?? null), [parts?.date]);
   const timeValue = useMemo(() => toLocalTime(time), [time]);
   const minValue = useMemo(() => (minDate === null ? null : toLocalDate(minDate)), [minDate]);
+  const maxValue = useMemo(() => (maxDate === null ? null : toLocalDate(maxDate)), [maxDate]);
   const emitDate = (e: Event) => {
     const date = fromLocalDate((e.target as unknown as { value: Date | null }).value);
-    onChange(date === null ? null : deadlineFromJst(date, time));
+    const nextTime =
+      timePolicy === "hidden"
+        ? null
+        : timePolicy === "required"
+          ? (time ?? DEFAULT_TIME)
+          : showTime
+            ? time
+            : null;
+    onChange(date === null ? null : deadlineFromJst(date, nextTime));
   };
   const emitTime = (next: string | null) => {
+    if (timePolicy === "hidden") return;
     if (parts) onChange(deadlineFromJst(parts.date, next));
     else setPendingTime(next);
   };
   const switchTime = (on: boolean) => {
+    if (timePolicy !== "optional") return;
     setTimeOn(on);
     emitTime(on ? DEFAULT_TIME : null);
   };
@@ -111,10 +138,11 @@ export function DateField({
             id={inputId}
             type="date"
             aria-labelledby={`${id}-label`}
-            aria-describedby={summaryId}
+            {...(hideSummary ? {} : { "aria-describedby": summaryId })}
             value={dateValue}
             {...(required ? { required: true } : {})}
             {...(minValue !== null ? { minDate: minValue } : {})}
+            {...(maxValue !== null ? { maxDate: maxValue } : {})}
             yearLabel="年"
             monthLabel="月"
             dayLabel="日"
@@ -125,19 +153,21 @@ export function DateField({
             <M3eDatepickerToggle htmlFor={pickerId} />
           </M3eIconButton>
         </M3eFormField>
-        {/* 時刻はスイッチで指定したときだけ入力を出す（日付の下に置く。横に並べると幅で折り返しが変わり、入力のたびに形が跳ねる）。オフならその日の終わりまで */}
-        <span className="checkbox">
-          <M3eSwitch
-            id={switchId}
-            aria-labelledby={`${switchId}-label`}
-            {...(showTime ? { "aria-controls": timeId } : {})}
-            checked={showTime}
-            onChange={(e) => switchTime((e.target as unknown as { checked: boolean }).checked)}
-          />
-          <label htmlFor={switchId} id={`${switchId}-label`}>
-            時刻を指定
-          </label>
-        </span>
+        {/* 時刻はスイッチで指定したときだけ入力を出す（日付の下に置く。横に並べると幅で折り返しが変じ、入力のたびに形が跳ねる）。オフならその日の終わりまで */}
+        {showTimeSwitch ? (
+          <span className="checkbox">
+            <M3eSwitch
+              id={switchId}
+              aria-labelledby={`${switchId}-label`}
+              {...(showTime ? { "aria-controls": timeId } : {})}
+              checked={showTime}
+              onChange={(e) => switchTime((e.target as unknown as { checked: boolean }).checked)}
+            />
+            <label htmlFor={switchId} id={`${switchId}-label`}>
+              時刻を指定
+            </label>
+          </span>
+        ) : null}
         {showTime ? (
           <M3eFormField variant="outlined" className="field" hideSubscript="always">
             <label slot="label" id={timeLabelId} htmlFor={timeId}>
@@ -148,7 +178,7 @@ export function DateField({
               type="time"
               timeFormat="24"
               aria-labelledby={`${id}-label ${timeLabelId}`}
-              aria-describedby={summaryId}
+              {...(hideSummary ? {} : { "aria-describedby": summaryId })}
               value={timeValue}
               hourLabel="時"
               minuteLabel="分"
@@ -162,17 +192,23 @@ export function DateField({
             </M3eIconButton>
           </M3eFormField>
         ) : null}
-        <p className="field__summary" id={summaryId} aria-live="polite">
-          {kind === "date"
-            ? value === null
-              ? "時刻（任意）"
-              : time === null
-                ? formatJstDate(value - 1)
-                : formatJstShort(value)
-            : value === null
-              ? "日付だけでも、時刻を付けてもよい"
-              : formatDeadlineUntil(value)}
-        </p>
+        {hideSummary ? null : (
+          <p className="field__summary" id={summaryId} aria-live="polite">
+            {kind === "date"
+              ? value === null
+                ? "時刻（任意）"
+                : time === null
+                  ? formatJstDate(value - 1)
+                  : formatJstShort(value)
+              : value === null
+                ? timePolicy === "required"
+                  ? "日付と時刻を入力してください"
+                  : timePolicy === "hidden"
+                    ? "日付を選ぶと、その日の終わりまで"
+                    : "日付だけでも、時刻を付けてもよい"
+                : formatDeadlineUntil(value)}
+          </p>
+        )}
       </div>
       <M3eDatepicker
         id={pickerId}

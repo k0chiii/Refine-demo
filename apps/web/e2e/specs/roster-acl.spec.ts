@@ -10,13 +10,9 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await page.locator('.shell__appbar m3e-icon-button[aria-label="制作物を登録"]').click();
     const dialog = app.dialog();
     await dialog.locator("input").first().fill(title);
-    await dialog.locator("m3e-select").first().click();
-    await page.getByRole("option", { name: "グラフィック", exact: true }).click();
+    await app.pickSelectOption(dialog, "小ジャンル", "デジタル画像（SNS投稿用画像）");
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
-    await dialog
-      .locator("m3e-form-field", { hasText: "仕上がり日" })
-      .locator("input")
-      .fill("2026-12-01");
+    await app.fillOutlinedDate(dialog, "■仕上がり日", "2026-12-01");
     await dialog.locator("m3e-button", { hasText: "登録" }).click();
     await page.waitForURL(/\/works\/[^/]+$/);
 
@@ -57,11 +53,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
 
     await app.signInAs("mock-nogiku-admin");
     await app.go("/works");
-    const dialog = await app.editWorkFromList(title);
-    await dialog.locator("textarea").first().fill(purpose);
-    await dialog.locator("m3e-button", { hasText: "保存" }).click();
-    await expect(dialog).toHaveCount(0);
-    await app.openWork(title);
+    await app.setWorkPurpose(title, purpose);
     await app.drawer("情報");
     await expect(page.locator(".drawer__body")).toContainText(purpose);
   });

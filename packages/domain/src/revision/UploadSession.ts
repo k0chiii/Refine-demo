@@ -21,6 +21,8 @@ export interface UploadSession {
   kind: RevisionKind;
   reviewType: string;
   deadlineAt: Instant;
+  /** 提出ダイアログの「緊急」（確定時に版へ写す） */
+  reviewUrgent?: boolean;
   changeSummary: string;
   focusNotes: string;
   state: UploadSessionState;

@@ -477,6 +477,7 @@ function summarize(
     latestRevisionLabel: latest?.label ?? null,
     acceptingRevisionId: accepting?.id ?? null,
     acceptingDeadlineAt: accepting?.deadlineAt ?? null,
+    acceptingReviewUrgent: accepting?.reviewUrgent === true,
     /** 主管担当・制作担当（teams の ID。担当別の表示に使う） */
     ownerTeamId: work.ownerTeamId ?? null,
     productionTeamIds: [...work.productionTeamIds],

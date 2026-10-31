@@ -67,6 +67,7 @@ const vRevisionGlance = v.object({
   kind: revisionKind,
   submittedAt: v.number(),
   deadlineAt: v.number(),
+  reviewUrgent: v.optional(v.boolean()),
   lapsed: v.boolean(),
 });
 const artifactRole = v.union(v.literal("source"), v.literal("preview"), v.literal("external"));
@@ -387,6 +388,7 @@ export default defineSchema({
     deadlineAt: v.number(),
     /** 廃止: 制作物 revisionPlannedAt へ移行（072 / e082。読取・移行のみ） */
     plannedSubmitAt: v.optional(v.number()),
+    reviewUrgent: v.optional(v.boolean()),
     reviewState,
     reviewClosedReason: v.optional(closedReason),
     reviewClosedAt: v.optional(v.number()),
@@ -431,6 +433,7 @@ export default defineSchema({
     kind: revisionKind,
     reviewType: v.string(),
     deadlineAt: v.number(),
+    reviewUrgent: v.optional(v.boolean()),
     changeSummary: v.string(),
     focusNotes: v.string(),
     state: v.union(v.literal("open"), v.literal("confirmed"), v.literal("abandoned")),
