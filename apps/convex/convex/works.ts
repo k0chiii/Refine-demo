@@ -8,9 +8,7 @@ import {
   updateWork,
 } from "@mf100/application";
 import {
-  canViewWork,
   currentDeclarations,
-  defaultWorkViewPolicy,
   canRegisterWorks,
   hasOrgPermission,
   normalizePersonKey,
@@ -30,11 +28,9 @@ import {
   revisionLabel,
   revisionThreadStatsFromRevision,
   revisionThreadStatsOf,
-  workTeamIdsOf,
   type Principal,
   type RevisionGlance,
   type Work,
-  type WorkViewPolicy,
 } from "@mf100/domain";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
@@ -48,11 +44,10 @@ import {
 } from "./_generated/server";
 import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
-import { requireUser, teamIdsOf } from "./lib/principal.ts";
+import { requireUser } from "./lib/principal.ts";
 import { resolveUsers, userDisplayName } from "./lib/users.ts";
 import { workSummaryFromDoc } from "./lib/workSummary.ts";
 import {
-  vConfidentiality,
   vLifecycleTarget,
   vMediaType,
   vWorkGenre,
@@ -76,7 +71,6 @@ const workPatch = {
   /** 校了とみなす人数（1..校了者の数。校了者だけを変えて省略すると、いまの人数を校了者の数に収める） */
   approvalQuorum: v.optional(v.number()),
   managerIds: v.optional(v.array(v.string())),
-  confidentiality: v.optional(vConfidentiality),
   /** 制作物 ID（null か空文字で消す） */
   legacyId: v.optional(v.union(v.string(), v.null())),
   ownerTeamId: v.optional(v.string()),
@@ -105,7 +99,6 @@ export const create = mutation({
     approverIds: v.optional(v.array(v.string())),
     approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
-    confidentiality: v.optional(vConfidentiality),
     notationCategories: v.optional(v.array(v.string())),
     reviewerIds: v.optional(v.array(v.id("users"))),
     activate: v.optional(v.boolean()),
@@ -140,7 +133,6 @@ export const importBatch = mutation({
         approvalQuorum: v.optional(v.number()),
         deadlineAt: v.optional(v.number()),
         legacyId: v.optional(v.string()),
-        confidentiality: vConfidentiality,
         notationCategories: v.array(v.string()),
         /** 主管担当・制作担当・関係担当（teams の ID） */
         ownerTeamId: v.optional(v.string()),
@@ -240,7 +232,7 @@ export const ogSummary = internalQuery({
     const id = ctx.db.normalizeId("works", workId);
     if (!id) return null;
     const doc = await ctx.db.get(id);
-    if (!doc || doc.confidentiality !== "normal") return null;
+    if (!doc) return null;
     return { title: doc.title };
   },
 });
@@ -400,50 +392,12 @@ export const listMine = query({
 const WORKS_SCAN_LIMIT = 2000;
 
 /**
- * 自分が見られる制作物。通常の制作物は委員なら誰でも（WorkViewPolicy。利用者決定 2026-10-17「閲覧は基本全員できて良い」）、
- * 非公開・取扱注意は職責・有効な ACL・関係者・担当の所属がある人。一覧・ダッシュボード・版提出の候補で共用。
- *
- * 読み方（docs/UI_M3E.md §60）: ポリシーが all_members のとき、通常の制作物は `by_confidentiality` の索引で集めるだけで
- * ACL を読まない（判定は機密区分だけで決まる）。非公開は同じ索引で集め、1 件ずつ ACL を読んでドメインの canViewWork で判定する
- * （職責・ACL・関係者で通らなければ、そのときだけ担当の所属を 1 回読んで判定し直す）。
- * 並びは works を全走査していたときと同じ（_creationTime の昇順）。ポリシーが involved_only なら従来どおり全件を判定する。
+ * 自分が見られる制作物（105A: サインインした委員はすべて）。一覧・ダッシュボード・版提出の候補で共用。
  */
-export async function listMyWorks(
-  db: DatabaseReader,
-  principal: Principal,
-  policy: WorkViewPolicy = defaultWorkViewPolicy,
-): Promise<Work[]> {
+export async function listMyWorks(db: DatabaseReader, _principal: Principal): Promise<Work[]> {
   const app = createReadContext(db);
-  // 担当の所属を添えた主体。非公開の制作物で要るときだけ、1 回読む
-  let member: Principal | null = null;
-  const canView = async (work: Work): Promise<boolean> => {
-    const grants = await app.acl.listByWork(work.id);
-    if (canViewWork({ work, grants, principal, viewPolicy: policy })) return true;
-    if (principal.teamIds !== undefined || workTeamIdsOf(work).length === 0) return false;
-    member ??= { ...principal, teamIds: await teamIdsOf(db, principal.userId as Id<"users">) };
-    return canViewWork({ work, grants, principal: member, viewPolicy: policy });
-  };
   const out: Work[] = [];
-  if (policy.normalWorks !== "all_members") {
-    for (const work of await app.works.list(WORKS_SCAN_LIMIT))
-      if (await canView(work)) out.push(work);
-    return out;
-  }
-  const byConfidentiality = (c: Doc<"works">["confidentiality"]) =>
-    db
-      .query("works")
-      .withIndex("by_confidentiality", (q) => q.eq("confidentiality", c))
-      .take(WORKS_SCAN_LIMIT);
-  const [normal, restricted] = await Promise.all([
-    byConfidentiality("normal"),
-    byConfidentiality("restricted"),
-  ]);
-  // 索引の中は _creationTime 順。2 本を作成時刻で合流し、全走査と同じ並びにする
-  const docs = [...normal, ...restricted].sort((a, b) => a._creationTime - b._creationTime);
-  for (const doc of docs) {
-    const work = workFromDoc(doc);
-    if (doc.confidentiality === "normal" || (await canView(work))) out.push(work);
-  }
+  for (const work of await app.works.list(WORKS_SCAN_LIMIT)) out.push(work);
   return out;
 }
 
@@ -464,7 +418,6 @@ function summarize(
     tags: [...(work.tags ?? [])],
     year: work.year,
     lifecycle: work.lifecycle,
-    confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
     latestRevisionLabel: latest?.label ?? null,
     acceptingRevisionId: accepting?.id ?? null,
@@ -689,29 +642,7 @@ export const listMinePage = query({
         };
       }
     } else result = await source.paginate(args.paginationOpts);
-    const visible: Work[] = [];
-    let member: Principal | null = null;
-    const app = createReadContext(ctx.db);
-    for (const doc of result.page) {
-      const work = workFromDoc(doc);
-      if (
-        work.confidentiality === "normal" &&
-        defaultWorkViewPolicy.normalWorks === "all_members"
-      ) {
-        visible.push(work);
-        continue;
-      }
-      const grants = await app.acl.listByWork(work.id);
-      if (canViewWork({ work, grants, principal })) {
-        visible.push(work);
-        continue;
-      }
-      member ??= {
-        ...principal,
-        teamIds: await teamIdsOf(ctx.db, principal.userId as Id<"users">),
-      };
-      if (canViewWork({ work, grants, principal: member })) visible.push(work);
-    }
+    const visible = result.page.map((doc) => workFromDoc(doc));
     return { ...result, page: await summarizeWorkList(ctx, principal, visible, args) };
   },
 });

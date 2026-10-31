@@ -70,7 +70,7 @@ describe("グループのメンション", () => {
   async function setup() {
     const ctx = createInMemoryContext();
     // 非公開の制作物: 校正者は ACL で見られる。stranger はグループにいても見られない
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
@@ -93,7 +93,7 @@ describe("グループのメンション", () => {
       .filter((n) => n.recipientId === userId && n.threadId)
       .map((n) => n.kind);
 
-  it("「@グループ名」で、所属する人のうち見られる人に知らせる（見られない人・書いた本人は外す）", async () => {
+  it("「@グループ名」で所属する委員全員に知らせる（書いた本人は外す）（105A）", async () => {
     const { ctx, revision, group } = await setup();
     const thread = await postComment(ctx, principals.reviewer, {
       revisionId: revision.id,
@@ -102,10 +102,12 @@ describe("グループのメンション", () => {
       severity: "info",
       mentions: [groupMentionToken(group.id)],
     });
-    expect(thread.mentions).toEqual([principals.approver.userId]);
+    expect((thread.mentions ?? []).sort()).toEqual(
+      [principals.approver.userId, principals.stranger.userId].sort(),
+    );
     expect(thread.mentionGroupIds).toEqual([group.id]);
     expect(kinds(ctx, principals.approver.userId)).toEqual(["mentioned"]);
-    expect(kinds(ctx, principals.stranger.userId)).toEqual([]);
+    expect(kinds(ctx, principals.stranger.userId)).toEqual(["mentioned"]);
     expect(kinds(ctx, principals.reviewer.userId)).toEqual([]);
 
     // 返信でも同じ。人とグループを一緒にメンションしても、知らせるのは 1 回
@@ -118,7 +120,11 @@ describe("グループのメンション", () => {
       (e) => e.eventType === "replied",
     );
     expect(replied?.payload).toMatchObject({
-      mentions: [principals.approver.userId, principals.reviewer.userId],
+      mentions: [
+        principals.approver.userId,
+        principals.reviewer.userId,
+        principals.stranger.userId,
+      ],
       mentionGroupIds: [group.id],
     });
     expect(kinds(ctx, principals.approver.userId)).toEqual(["mentioned", "mentioned"]);
@@ -137,12 +143,12 @@ describe("グループのメンション", () => {
     ).rejects.toThrow(code("mention_not_allowed"));
     expect(
       await searchMentionGroups(ctx, principals.creator, { workId: work.id, text: "コウセイ" }),
-    ).toEqual([{ id: group.id, name: "こうせいはん", memberCount: 2 }]);
+    ).toEqual([{ id: group.id, name: "こうせいはん", memberCount: 3 }]);
     expect(
       await searchMentionGroups(ctx, principals.creator, { workId: work.id, text: "ほか" }),
     ).toEqual([]);
-    await expect(
-      searchMentionGroups(ctx, principals.stranger, { workId: work.id, text: "" }),
-    ).rejects.toThrow(code("forbidden"));
+    expect(
+      await searchMentionGroups(ctx, principals.stranger, { workId: work.id, text: "" }),
+    ).toEqual([{ id: group.id, name: "こうせいはん", memberCount: 2 }]);
   });
 });

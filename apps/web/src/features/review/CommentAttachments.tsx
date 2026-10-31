@@ -35,13 +35,7 @@ const STRIP_SHOWN = 4;
 
 export interface CommentAttachmentsProps {
   files: readonly CommentFileView[];
-  /**
-   * full: 本文の下に大きく（画像は格子、ほかはチップ）。thumbs: 一覧のカード用に小さなサムネイルを 1 列（最初の数枚だけ。
-   * 押すと拡大・保存。カード全体の選択には伝えない）
-   */
   variant?: "full" | "thumbs";
-  /** 制作物の機密区分。機密（restricted）や不明のときは端末に残さない（メモリだけ） */
-  confidentiality?: "normal" | "restricted" | undefined;
   className?: string;
 }
 
@@ -223,13 +217,12 @@ const iconFor = (type: CommentFileView["type"]) =>
 
 export function CommentAttachments({
   files,
-  confidentiality,
   className,
   variant = "full",
 }: CommentAttachmentsProps) {
   const token = useAuthToken();
   const [open, setOpen] = useState<CommentFileView | null>(null);
-  const persist = mayPersist(confidentiality);
+  const persist = mayPersist();
   const download = useAction(async (f: CommentFileView) => {
     if (token) await downloadCommentFile(token, f.id, f.name);
   });

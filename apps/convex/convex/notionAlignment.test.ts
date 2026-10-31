@@ -77,11 +77,6 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
     expect((await cast.stranger.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([
       workId,
     ]);
-    // 非公開にすると、関係者（reviewer）と制作担当に所属する人（stranger）は自動で見られる。システム管理者も見られる（2026-10-30）
-    await cast.manager.as.mutation(api.works.update, {
-      workId,
-      patch: { confidentiality: "restricted" },
-    });
     await expect(cast.reviewer.as.query(api.works.get, { workId })).resolves.toBeTruthy();
     await expect(cast.stranger.as.query(api.works.get, { workId })).resolves.toBeTruthy();
     await expect(cast.admin.as.query(api.works.get, { workId })).resolves.toBeTruthy();
@@ -94,7 +89,7 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
     ]);
     expect((await cast.admin.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([workId]);
     await expect(cast.stranger.as.query(api.dashboard.get, {})).resolves.toBeTruthy();
-    // 所属を外すと見られなくなる
+    // 105A: 所属を外しても委員は見られる
     await cast.admin.as.mutation(api.teams.save, {
       id: design,
       name: "デザイン担当",
@@ -102,12 +97,10 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       parentId: bureau,
       memberIds: [],
     });
-    await expect(cast.stranger.as.query(api.works.get, { workId })).rejects.toThrow(
-      code("forbidden"),
-    );
+    await expect(cast.stranger.as.query(api.works.get, { workId })).resolves.toBeTruthy();
     await cast.manager.as.mutation(api.works.update, {
       workId,
-      patch: { confidentiality: "normal" },
+      patch: {},
     });
 
     // 変更: null で消す。一覧は大ジャンルで絞れる

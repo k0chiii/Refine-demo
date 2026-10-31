@@ -44,7 +44,6 @@ export const assignmentLabel: Record<string, string> = {
   excused: "免除",
 };
 export const permissionLabel: Record<string, string> = {
-  view: "閲覧",
   review: "校正",
   edit: "編集",
   manage: "管理",

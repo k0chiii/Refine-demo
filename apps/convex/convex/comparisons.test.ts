@@ -12,7 +12,7 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     const t = createHarness();
     const cast = await createCast(t);
     // 非公開の制作物（通常の制作物は委員なら誰でも見られるので、権限の境目はこちらで確かめる）
-    const workId = await setupWork(t, cast, { confidentiality: "restricted" });
+    const workId = await setupWork(t, cast);
     const r1 = await submitFiles(cast, workId, [
       { fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" },
     ]);
@@ -34,9 +34,12 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
       { left: 2, right: 3 },
       { left: null, right: 2 },
     ]);
-    await expect(cast.stranger.as.query(api.comparisons.getOverride, args)).rejects.toThrow(
-      code("forbidden"),
-    );
+    expect(await cast.stranger.as.query(api.comparisons.getOverride, args)).toMatchObject({
+      pairs: [
+        { left: 2, right: 3 },
+        { left: null, right: 2 },
+      ],
+    });
     await expect(
       cast.reviewer.as.mutation(api.comparisons.saveOverride, {
         ...args,
@@ -55,11 +58,9 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
     const cast = await createCast(t);
     const current = await setupWork(t, cast, {
       title: "今年のポスター",
-      confidentiality: "restricted",
     });
     const otherWork = await setupWork(t, cast, {
       title: "去年のポスター",
-      confidentiality: "restricted",
     });
     const cur = await submitFiles(cast, current, [
       { fileName: "poster.pdf", mimeType: "application/pdf", type: "pdf" },
@@ -72,35 +73,23 @@ describe("Convex 統合: 版比較の手動ページ対応", () => {
 
     // 相手の版そのものは閲覧権限で読める（revisions.get）。見られない人には存在も返さない
     expect(
-      (await cast.reviewer.as.query(api.revisions.get, { revisionId: oth.revisionId })).work,
+      (await cast.stranger.as.query(api.revisions.get, { revisionId: oth.revisionId })).work,
     ).toMatchObject({ id: otherWork, title: "去年のポスター" });
-    await expect(
-      cast.stranger.as.query(api.revisions.get, { revisionId: oth.revisionId }),
-    ).rejects.toThrow(code("forbidden"));
 
-    // 表示中の制作物だけ見られる人: 相手が見られないので対応も読めない
-    await cast.admin.as.mutation(api.acl.grant, {
-      workId: current,
-      userIds: [cast.stranger.id],
-      permission: "review",
-    });
-    await expect(cast.stranger.as.query(api.comparisons.getOverride, args)).rejects.toThrow(
-      code("forbidden"),
-    );
-    // 両方を見られるようになれば読める。閲覧だけの人は直せない
-    await cast.admin.as.mutation(api.acl.grant, {
-      workId: otherWork,
-      userIds: [cast.stranger.id],
-      permission: "review",
-    });
     expect(await cast.stranger.as.query(api.comparisons.getOverride, args)).toBeNull();
-    // review ACL で表示中の制作物に校正参加できる人は直せる
-    await cast.stranger.as.mutation(api.comparisons.saveOverride, {
+    await expect(
+      cast.stranger.as.mutation(api.comparisons.saveOverride, {
+        ...args,
+        pairs: [{ left: 1, right: 1 }],
+      }),
+    ).rejects.toThrow(code("forbidden"));
+    // 表示中の制作物の校正者（相手は閲覧できる）は直せる。保存先の制作物は表示中（右）
+    await cast.reviewer.as.mutation(api.comparisons.saveOverride, {
       ...args,
-      pairs: [{ left: 1, right: 1 }],
+      pairs: [{ left: 2, right: 1 }],
     });
     expect((await cast.stranger.as.query(api.comparisons.getOverride, args))!.pairs).toEqual([
-      { left: 1, right: 1 },
+      { left: 2, right: 1 },
     ]);
     const rows = await t.run((ctx) => ctx.db.query("alignmentOverrides").collect());
     expect(rows.map((r) => r.workId)).toEqual([current]);

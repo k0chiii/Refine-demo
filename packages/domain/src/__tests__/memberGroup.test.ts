@@ -100,26 +100,15 @@ describe("グループのメンション", () => {
       { userIds: ["u1"], groupIds: ["g1"] },
     );
   });
-  it("非公開の制作物では、所属する人のうち見られる人だけに知らせる（見られない人は黙って外し、書いた本人も外す）", () => {
-    const work = makeWork({ confidentiality: "restricted" });
-    const grants = [
-      {
-        workId: work.id,
-        principalType: "user" as const,
-        principalId: "reviewer",
-        permission: "review" as const,
-        grantedBy: "manager",
-        grantedAt: T0,
-      },
-    ];
-    // outsider は見られないので外す。approver は書いた本人
-    expect(resolveGroupMentions(["g1"], groups, work, grants, [], "approver")).toEqual([
+  it("グループのメンションは所属者全員（書いた本人は外す）", () => {
+    const work = makeWork();
+    expect(resolveGroupMentions(["g1"], groups, work, [], [], "approver")).toEqual([
       "reviewer",
+      "outsider",
     ]);
-    expect(resolveGroupMentions(["g1"], groups, work, [])).toEqual(["approver"]);
   });
-  it("通常の制作物では所属する人全員。知らないグループ・グループの数の上限は拒否", () => {
-    const work = makeWork({ confidentiality: "normal" });
+  it("所属する人全員。知らないグループ・グループの数の上限は拒否", () => {
+    const work = makeWork();
     expect(resolveGroupMentions(["g1", "g2"], groups, work, [])).toEqual([
       "reviewer",
       "approver",

@@ -18,21 +18,19 @@ const stranger: Principal = { ...principals.stranger, orgPermissions: [] };
 
 async function restrictedWork() {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx, { confidentiality: "restricted" });
+  const work = await seedWork(ctx);
   return { ctx, work };
 }
 
 describe("システム管理者はすべての操作権限を持つ（利用者決定 2026-10-30）", () => {
-  it("職責・ACL・所属の無い非公開の制作物を開け、一覧（制作物の状況）にも出る", async () => {
+  it("職責・ACL・所属の無い制作物も、委員なら開け一覧にも出る（105A）。管理者も同様", async () => {
     const { ctx, work } = await restrictedWork();
     await expect(loadAuthorizedWork(ctx, admin, work.id, "work.view")).resolves.toBeTruthy();
-    await expect(loadAuthorizedWork(ctx, stranger, work.id, "work.view")).rejects.toThrow(
-      code("forbidden"),
-    );
+    await expect(loadAuthorizedWork(ctx, stranger, work.id, "work.view")).resolves.toBeTruthy();
     const listed = async (who: Principal) =>
       (await buildWorksDashboard(ctx, who, [work])).overview.works.map((r) => r.workId);
     expect(await listed(admin)).toEqual([work.id]);
-    expect(await listed(stranger)).toEqual([]);
+    expect(await listed(stranger)).toEqual([work.id]);
   });
 
   it("主管でなくても制作物の情報を変えられ、校了者も（approvers:assign が無くても）変えられる。監査に本人が残る", async () => {

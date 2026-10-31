@@ -40,7 +40,7 @@ function Prefetch({ workId }: { workId: string }) {
     const id = defaultArtifactId(open.artifacts, work.work.mediaType);
     const artifact = open.artifacts.find((a) => a.id === id);
     if (!id || !artifact || artifact.role === "external") return;
-    artifactFiles.prefetch(token, id, { persist: mayPersist(work.work.confidentiality) });
+    artifactFiles.prefetch(token, id, { persist: mayPersist() });
   }, [open?.revisionId, token !== null]);
   return null;
 }

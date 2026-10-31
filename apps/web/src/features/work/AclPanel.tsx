@@ -55,13 +55,10 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
       permission: p,
     });
   });
-  if (grants === undefined) return <Loading size="small" label="閲覧権限を読み込んでいます" />;
+  if (grants === undefined) return <Loading size="small" label="権限を読み込んでいます" />;
   const active = grants.filter((g) => g.revokedAt === undefined);
   return (
     <div className="acl">
-      {readOnly ? null : (
-        <p className="muted small">非公開・取扱注意の制作物を見られる人を追加します</p>
-      )}
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません</p>
       ) : (
@@ -127,11 +124,11 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
           <Field label="権限">
             <Select
               value={permission}
-              onChange={(e) => setPermission(e.target.value as typeof permission)}
+              onChange={(e) => setPermission(e.target.value as "review" | "edit" | "manage")}
             >
-              {(["review", "edit", "manage"] as const).map((k) => (
+              {Object.entries(permissionLabel).map(([k, v]) => (
                 <option key={k} value={k}>
-                  {permissionLabel[k] ?? k}
+                  {v}
                 </option>
               ))}
             </Select>
@@ -156,7 +153,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
           onClosed={() => setHistory(false)}
         >
           <span slot="header">変更履歴</span>
-          <M3eList className="list" aria-label="閲覧権限の変更履歴">
+          <M3eList className="list" aria-label="権限の変更履歴">
             {[...grants]
               .sort((a, b) => b.grantedAt - a.grantedAt)
               .map((g) => (

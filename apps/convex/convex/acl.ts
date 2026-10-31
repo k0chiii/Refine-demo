@@ -98,7 +98,6 @@ export const workSummary = query({
       legacyId: work.legacyId ?? null,
       category: work.category,
       lifecycle: work.lifecycle,
-      confidentiality: work.confidentiality,
     };
   },
 });
@@ -120,8 +119,8 @@ export const adminWorks = query({
         title: w.title,
         legacyId: w.legacyId ?? null,
         category: w.category,
+        mediaType: w.mediaType,
         lifecycle: w.lifecycle,
-        confidentiality: w.confidentiality,
         activeGrantCount: grants.filter((g) => g.revokedAt === undefined).length,
       });
     }

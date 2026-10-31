@@ -67,7 +67,6 @@ export function ThreadPanel({
   canDecide,
   canReply,
   revisionId,
-  confidentiality,
   pending,
   now,
   variant,
@@ -94,7 +93,6 @@ export function ThreadPanel({
   canDecide: boolean;
   canReply: boolean;
   revisionId: string;
-  confidentiality?: "normal" | "restricted" | undefined;
   pending?: boolean;
   now: number;
   variant: "pane" | "sheet";
@@ -409,9 +407,7 @@ export function ThreadPanel({
             mentionUsers={t.mentionUsers}
           />
           {(t.editCount ?? 0) > 0 ? <EditedMark /> : null}
-          {t.files.length > 0 ? (
-            <CommentAttachments files={t.files} confidentiality={confidentiality} />
-          ) : null}
+          {t.files.length > 0 ? <CommentAttachments files={t.files} /> : null}
           <ThreadMeta thread={t} placeState={placeState} />
           <ReactionRow
             id={`tr-${t.id}`}
@@ -534,7 +530,6 @@ export function ThreadPanel({
                       threadId={t.id}
                       continued={item.continued}
                       canReact={canReply}
-                      confidentiality={confidentiality}
                       compact={compact}
                       onDeleteReply={onDeleteReply}
                       onEditReply={onEditReply}
@@ -717,7 +712,6 @@ function TimelineRow({
   threadId,
   continued,
   canReact,
-  confidentiality,
   compact,
   onDeleteReply,
   onEditReply,
@@ -726,7 +720,6 @@ function TimelineRow({
   threadId: string;
   continued: boolean;
   canReact: boolean;
-  confidentiality: "normal" | "restricted" | undefined;
   compact: boolean;
   onDeleteReply: (replyEventId: string) => Promise<void>;
   onEditReply: (replyEventId: string, body: string) => Promise<void>;
@@ -743,7 +736,6 @@ function TimelineRow({
         event={e}
         threadId={threadId}
         canReact={canReact}
-        confidentiality={confidentiality}
         body={p.body ?? ""}
         bodyFormat={p.bodyFormat}
         compact={compact}
@@ -827,7 +819,6 @@ function ReplyItem({
   event: e,
   threadId,
   canReact,
-  confidentiality,
   body,
   bodyFormat,
   compact,
@@ -838,7 +829,6 @@ function ReplyItem({
   event: ThreadEvent;
   threadId: string;
   canReact: boolean;
-  confidentiality: "normal" | "restricted" | undefined;
   body: string;
   bodyFormat: "markdown" | undefined;
   compact: boolean;
@@ -902,9 +892,7 @@ function ReplyItem({
             {e.edited ? <EditedMark /> : null}
           </>
         )}
-        {e.files.length > 0 ? (
-          <CommentAttachments files={e.files} confidentiality={confidentiality} />
-        ) : null}
+        {e.files.length > 0 ? <CommentAttachments files={e.files} /> : null}
         <ReactionRow
           id={`rr-${e.id}`}
           reactions={e.reactions}

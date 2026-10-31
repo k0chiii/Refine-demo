@@ -37,7 +37,6 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
     creatorIds: [principals.creator.userId],
     managerIds: [],
     approverIds: [principals.approver.userId],
-    confidentiality: "normal" as const,
     notationCategories: [],
     productionTeamIds: [],
   };
@@ -148,27 +147,25 @@ describe("組織権限（Nogiku Access 連携の拡張点）", () => {
       ).resolves.toMatchObject({ approvalQuorum: 2 });
     });
 
-    it("閲覧できない制作物は、権限があっても存在を漏らさない", async () => {
+    it("組織権限があれば閲覧 ACL がなくても校了者を変えられる（105A）", async () => {
       const ctx = createInMemoryContext();
-      const work = await seedWork(ctx, { confidentiality: "restricted" });
-      await expect(
-        updateWork(ctx, decider, { workId: work.id, patch: patchApprovers }),
-      ).rejects.toThrow(code("forbidden"));
+      const work = await seedWork(ctx);
+      await updateWork(ctx, decider, { workId: work.id, patch: patchApprovers });
+      expect((await ctx.works.findById(work.id))!.approverIds).toEqual(patchApprovers.approverIds);
     });
   });
 
   it("reviews:assign を持つ人、または制作者は割当できる。それ以外は不可", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
+    const work = await seedWork(ctx);
     const rev = await submitRevision(ctx, work.id);
     const assigner = { ...nobody, userId: "u_assigner", orgPermissions: ["reviews:assign"] };
-    // 組織権限があっても作品の閲覧権限（職責/ACL）が無ければ存在を漏らさない
     await expect(
       setWorkReviewers(ctx, assigner, {
         workId: rev.workId,
-        reviewerIds: ["r"],
+        reviewerIds: [principals.stranger.userId],
       }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toMatchObject({ work: { reviewerIds: [principals.stranger.userId] } });
     const creatorNoOrg = { ...principals.creator, orgPermissions: [] as string[] };
     await expect(
       setWorkReviewers(ctx, creatorNoOrg, {

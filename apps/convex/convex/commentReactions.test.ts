@@ -7,7 +7,7 @@ const code = (c: string) => expect.objectContaining({ data: expect.objectContain
 
 type Cast = Awaited<ReturnType<typeof createCast>>;
 
-async function setup(t: Harness, cast: Cast, confidentiality: "normal" | "restricted" = "normal") {
+async function setup(t: Harness, cast: Cast) {
   const workId = (await cast.manager.as.mutation(api.works.create, {
     title: "MF100 パンフレット",
     purpose: "来場者案内",
@@ -16,7 +16,6 @@ async function setup(t: Harness, cast: Cast, confidentiality: "normal" | "restri
     year: 100,
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
-    confidentiality,
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
@@ -126,13 +125,13 @@ describe("Convex 統合: コメント・返信へのリアクション", () => {
     ).rejects.toThrow(code("comment_reply_not_found"));
   });
 
-  it("見られない人・決まった絵文字以外・削除されたコメントは拒否する", async () => {
+  it("決まった絵文字以外・削除されたコメントは拒否する（105A）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const { threadId } = await setup(t, cast, "restricted");
+    const { threadId } = await setup(t, cast);
     await expect(
       cast.stranger.as.mutation(api.comments.toggleReaction, { threadId, emoji: "👍" }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toBeTruthy();
     await expect(
       cast.reviewer.as.mutation(api.comments.toggleReaction, { threadId, emoji: "😀" }),
     ).rejects.toThrow(code("comment_reaction_invalid"));

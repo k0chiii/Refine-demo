@@ -87,14 +87,14 @@ const directory = [
   { id: "u4", name: "同名 太郎", email: "b@example.invalid" },
 ];
 const csv = (lines: string[]) => lines.join("\n");
-const header = "題名,年度,用途,区分,媒体,制作者,主管,校了権限者,納期,旧ID,機密区分,表記カテゴリ";
+const header = "題名,年度,用途,区分,媒体,制作者,主管,校了権限者,納期,旧ID,表記カテゴリ";
 
 describe("制作物の一括登録（CSV）", () => {
   it("見出しで列を探し、行を登録の内容にする。担当者はメールか名前で照合する", () => {
     const parsed = parseWorkCsv(
       csv([
         header,
-        "パンフレット,,来場者向け,印刷物,PDF,MEI@example.invalid、五月　めい,,駒場 校了,2026/11/14,PR-1,非公開,A1;A2",
+        "パンフレット,,来場者向け,印刷物,PDF,MEI@example.invalid、五月　めい,,駒場 校了,2026/11/14,PR-1,A1;A2",
         "",
         "告知,99,,SNS,SNS 投稿,mei@example.invalid,,approver@example.invalid,2026-11-20 18:00,,,",
       ]),
@@ -113,10 +113,9 @@ describe("制作物の一括登録（CSV）", () => {
       approverIds: ["u2"],
       deadlineAt: endOfJstDate("2026-11-14"),
       legacyId: "PR-1",
-      confidentiality: "restricted",
       notationCategories: ["A1", "A2"],
     });
-    expect(b).toMatchObject({ year: 99, mediaType: "sns", confidentiality: "normal" });
+    expect(b).toMatchObject({ year: 99, mediaType: "sns" });
     expect(b!.deadlineAt).toBe(Date.UTC(2026, 10, 20, 9, 0));
   });
 
@@ -124,7 +123,7 @@ describe("制作物の一括登録（CSV）", () => {
     const parsed = parseWorkCsv(
       csv([
         header,
-        ",,,,ポスター,誰か,,同名 太郎,明日,,秘密,",
+        ",,,,ポスター,誰か,,同名 太郎,明日,,",
         "B,,,印刷物,PDF,u1@x,,mei@example.invalid;approver@example.invalid,2020-01-01,,,",
       ]),
       { defaultYear: 100, now: T0 },
@@ -136,7 +135,6 @@ describe("制作物の一括登録（CSV）", () => {
     expect(a).toContain("小ジャンル（または区分）がありません");
     expect(a).toContain("媒体「ポスター」が分かりません");
     expect(a).toContain("納期「明日」を日付として読めません");
-    expect(a).toContain("機密区分「秘密」が分かりません");
     expect(a).toContain("制作者「誰か」が見つかりません");
     expect(a).toContain("2 人います");
     // 校了者は複数書ける（利用者決定 2026-10-18）。2 人とも名簿に当たる

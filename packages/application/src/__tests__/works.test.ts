@@ -109,7 +109,6 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
     const row = {
       ...importInput,
       managerIds: [],
-      confidentiality: "normal" as const,
       notationCategories: [],
       productionTeamIds: [],
     };
@@ -164,7 +163,6 @@ describe("制作者は校了者になれない（利用者決定 2026-10-18）",
     const row = {
       ...importInput,
       managerIds: [],
-      confidentiality: "normal" as const,
       notationCategories: [],
       productionTeamIds: [],
     };

@@ -47,12 +47,19 @@ describe("文章の下書き", () => {
     ).rejects.toThrow(code("forbidden"));
   });
 
-  it("権限の無い人には存在も返さない（forbidden）", async () => {
+  it("委員なら下書きを読めるが書けない（105A）", async () => {
     const ctx = createInMemoryContext();
-    const work = await seedWork(ctx, { confidentiality: "restricted" });
-    await expect(getDocumentDraft(ctx, principals.stranger, work.id)).rejects.toThrow(
-      code("forbidden"),
-    );
+    const work = await seedWork(ctx);
+    await saveDocumentDraft(ctx, principals.creator, {
+      workId: work.id,
+      title: "あいさつ",
+      content: doc("こんにちは"),
+      text: "こんにちは",
+      baseVersion: 0,
+    });
+    const view = await getDocumentDraft(ctx, principals.stranger, work.id);
+    expect(view.canEdit).toBe(false);
+    expect(view.draft).toMatchObject({ title: "あいさつ" });
   });
 
   it("古い版番号からの保存は version_conflict（他の人の保存を上書きしない）", async () => {

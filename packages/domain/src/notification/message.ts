@@ -13,7 +13,7 @@ import { notificationPath, type PushPayload, pushTagOf } from "./push.ts";
  *   利用者ごとの「通知に内容を表示」（NotificationPrefs.showPreview）も true のときだけ載せる
  * - showDetail: メール・Slack にアプリ内の通知の本文を載せるか（端末の通知には場所が無いので載せない）。
  *   無ければ載せない（端末だけだったころの値で本文が出ないように）
- * 非公開（restricted）の制作物の名前・送り主・抜粋・本文と、伏せた通知（今は見られない制作物）の内容は、これらの値にかかわらず載せない。
+ * 伏せた通知（今は見られない制作物）の内容は、これらの値にかかわらず載せない。
  */
 export interface NotificationContentPolicy {
   showWorkTitle: boolean;
@@ -30,11 +30,10 @@ export const DEFAULT_NOTIFICATION_CONTENT_POLICY: NotificationContentPolicy = {
 /**
  * どこまで出したか。
  * - hidden: 今は見られない制作物の通知（決まった文言・行き先は "/"）
- * - restricted: 非公開の制作物（通知の題名と「非公開の制作物」だけ）
- * - withheld: 利用者かポリシーが内容の表示を止めている（「新しい通知」と制作物名だけ。非公開の制作物でもこちら）
+ * - withheld: 利用者かポリシーが内容の表示を止めている（「新しい通知」と制作物名だけ）
  * - full: 送り主・抜粋（と、許されていれば本文）まで
  */
-export type Disclosure = "hidden" | "restricted" | "withheld" | "full";
+export type Disclosure = "hidden" | "withheld" | "full";
 
 /** 経路によらない「外に出す内容」 */
 export interface NotificationMessage {
@@ -70,10 +69,10 @@ export function clipPushText(text: string, max: number): string {
 
 /**
  * 通知 1 件の外に出す内容を決める（切り詰めは経路ごとの形で行う）。
- * - 題名は制作物名（『…』。LINE の相手・Slack のチャンネルにあたる）。制作物の無い通知・非公開の制作物は通知の題名
+ * - 題名は制作物名（『…』。LINE の相手・Slack のチャンネルにあたる）。制作物の無い通知は通知の題名
  * - 要約は「送り主: 抜粋」。どちらか無ければある方だけ（両方無ければ通知の題名）
  * - 利用者かポリシーが内容の表示を止めているときは、題名を「新しい通知」にし、要約は制作物名だけにする
- * - 非公開の制作物の名前・送り主・抜粋・本文は載せない。今は見られない制作物の通知（hidden）は決まった文言にする
+ * - 今は見られない制作物の通知（hidden）は決まった文言にする
  */
 export function composeNotificationMessage(input: {
   notification: {
@@ -89,7 +88,7 @@ export function composeNotificationMessage(input: {
     preview?: string;
   };
   /** 通知の制作物（今その人が見られるときだけ渡す。見られない・制作物の無い通知は null） */
-  work: { title: string; restricted: boolean } | null;
+  work: { title: string } | null;
   /** 制作物の通知なのに、今その人が見られない */
   hidden: boolean;
   /** 送り主の表示名（分からなければ null） */
@@ -113,27 +112,13 @@ export function composeNotificationMessage(input: {
     };
   const at = { ...base, path: notificationPath(n), tag: pushTagOf(n) };
   const workName =
-    input.work === null
-      ? null
-      : input.work.restricted
-        ? "非公開の制作物"
-        : policy.showWorkTitle
-          ? `『${input.work.title}』`
-          : null;
+    input.work === null ? null : policy.showWorkTitle ? `『${input.work.title}』` : null;
   if (!policy.showPreview || input.showPreview === false)
     return {
       ...at,
       disclosure: "withheld",
       title: "新しい通知",
       summary: workName ?? "校正システム",
-      detail: null,
-    };
-  if (input.work?.restricted)
-    return {
-      ...at,
-      disclosure: "restricted",
-      title: n.title,
-      summary: "非公開の制作物",
       detail: null,
     };
   const who = input.actorName?.trim() || null;

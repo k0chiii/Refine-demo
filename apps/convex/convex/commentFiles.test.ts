@@ -10,7 +10,7 @@ const SHA = "a".repeat(64);
 
 type Cast = Awaited<ReturnType<typeof createCast>>;
 
-async function setup(over: { confidentiality?: "normal" | "restricted" } = {}) {
+async function setup(over: Record<string, never> = {}) {
   const t = createHarness();
   const cast = await createCast(t);
   const workId = await setupWork(t, cast, over);
@@ -167,8 +167,8 @@ describe("Convex 統合: コメント・返信の添付", () => {
     expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([]);
   });
 
-  it("restricted の制作物は、見られない人は読めない。付けられない添付があるとコメントは投稿されない", async () => {
-    const { cast, revisionId } = await setup({ confidentiality: "restricted" });
+  it("委員なら添付を読める。付けられない添付があるとコメントは投稿されない（105A）", async () => {
+    const { cast, revisionId } = await setup();
     const { fileId } = await uploadFile(cast.reviewer, revisionId);
     const mine2 = (
       await cast.reviewer.as.mutation(api.commentFiles.prepare, {
@@ -177,24 +177,21 @@ describe("Convex 統合: コメント・返信の添付", () => {
         files: [{ fileName: "x.webp", mimeType: "image/webp", size: 1 }],
       })
     )[0]!.fileId;
-    // 検証前の添付を付けようとすると断られる
     await expect(post(cast.reviewer, revisionId, [fileId, mine2])).rejects.toThrow(
       code("comment_file_not_ready"),
     );
     const threadId = await post(cast.reviewer, revisionId, [fileId]);
-    await expect(
-      cast.stranger.as.query(api.commentFiles.authorizeFile, { fileId, variant: "original" }),
-    ).rejects.toThrow(code("forbidden"));
-    // 見えない人は準備もできない
+    expect(
+      await cast.stranger.as.query(api.commentFiles.authorizeFile, { fileId, variant: "original" }),
+    ).toMatchObject({ fileName: expect.any(String) });
     await expect(
       cast.stranger.as.mutation(api.commentFiles.prepare, {
         revisionId,
         purpose: "reply",
         files: [{ fileName: "x.webp", mimeType: "image/webp", size: 1 }],
       }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toHaveLength(1);
     expect(threadId).toBeTruthy();
-    // 機密の制作物のサムネイルは端末に残させない
     const { fileId: withThumb } = await uploadFile(cast.reviewer, revisionId, { thumb: true });
     await post(cast.reviewer, revisionId, [withThumb]);
     expect(
@@ -202,7 +199,7 @@ describe("Convex 統合: コメント・返信の添付", () => {
         fileId: withThumb,
         variant: "thumb",
       }),
-    ).toMatchObject({ cacheable: false });
+    ).toMatchObject({ cacheable: true });
   });
 
   it("24 時間たっても付かなかった添付は放置扱いになり、清掃の一覧に載る。付いた添付は残る", async () => {

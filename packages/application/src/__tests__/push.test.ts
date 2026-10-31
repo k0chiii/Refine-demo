@@ -95,18 +95,14 @@ describe("端末への通知（Web Push）", () => {
     expect(plan?.payload.title).toContain("夏のポスター");
     expect(JSON.stringify(plan?.payload)).not.toContain("誤字");
 
-    // 送る前に閲覧権限が外れたら（非公開になり、ACL も外れた）、伏せた内容にする
-    await ctx.works.update({
-      ...(await ctx.works.findById(work.id))!,
-      confidentiality: "restricted",
-    });
+    // ACL を取り消しても制作物名は載せる（105A）
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userId: principals.stranger.userId,
     });
-    const hidden = await planPush(ctx, n.id);
-    expect(JSON.stringify(hidden?.payload)).not.toContain("夏のポスター");
-    expect(hidden?.payload.url).toBe("/");
+    const afterRevoke = await planPush(ctx, n.id);
+    expect(afterRevoke?.payload.title).toContain("夏のポスター");
+    expect(afterRevoke?.payload.url).toBe(`/works/${work.id}`);
   });
 
   describe("送り主・抜粋・設定", () => {
@@ -177,32 +173,23 @@ describe("端末への通知（Web Push）", () => {
       expect(await planPush(ctx, comment.id)).not.toBeNull();
     });
 
-    it("非公開の制作物と、見られなくなった制作物は、名前・送り主・抜粋を載せない", async () => {
+    it("ACL を取り消しても端末通知に制作物名・送り主・抜粋を載せる（105A）", async () => {
       const { ctx, work, post } = await setup();
       const n = await post();
-      await ctx.works.update({
-        ...(await ctx.works.findById(work.id))!,
-        confidentiality: "restricted",
-      });
-      // 閲覧 ACL があって見られる非公開の制作物
-      const restricted = (await planPush(ctx, n.id))!.payload;
-      expect(JSON.stringify(restricted)).not.toMatch(/夏のポスター|本郷|相談です/);
-      // ACL が外れて見られなくなった
       await revokeWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
         userId: principals.stranger.userId,
       });
-      const hidden = (await planPush(ctx, n.id))!.payload;
-      expect(JSON.stringify(hidden)).not.toMatch(/夏のポスター|本郷|相談です|thr-1/);
-      expect(hidden.url).toBe("/");
-      expect(hidden.tag).toBe(n.id);
+      const payload = (await planPush(ctx, n.id))!.payload;
+      expect(JSON.stringify(payload)).toMatch(/夏のポスター|本郷|相談です/);
+      expect(payload.url).toBe(`/works/${work.id}`);
     });
 
-    it("見られない人の通知には、送り主も抜粋も保存しない", async () => {
+    it("通知作成時に送り主と抜粋を保存する（105A）", async () => {
       const ctx = createInMemoryContext();
       ctx.state.names.set(principals.reviewer.userId, "本郷 校正");
       const work = await seedWork(ctx, { title: "極秘" });
-      await ctx.works.update({ ...work, confidentiality: "restricted" });
+      await ctx.works.update({ ...work });
       await notify(ctx, [principals.stranger.userId], principals.reviewer.userId, {
         kind: "comment_posted",
         title: "t",
@@ -211,8 +198,8 @@ describe("端末への通知（Web Push）", () => {
         workId: work.id,
       });
       const n = ctx.state.notifications.all()[0]!;
-      expect(n.actorId).toBeUndefined();
-      expect(n.preview).toBeUndefined();
+      expect(n.actorId).toBe(principals.reviewer.userId);
+      expect(n.preview).toBe("相談です");
     });
   });
 

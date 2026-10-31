@@ -136,7 +136,6 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
           creatorIds: [cast.creator.id],
           managerIds: [],
           approverIds: [cast.approver.id],
-          confidentiality: "normal" as const,
           notationCategories: [],
           ownerTeamId: bureau,
           productionTeamIds: [bureau],

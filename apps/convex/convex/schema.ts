@@ -37,7 +37,6 @@ const lifecycle = v.union(
   v.literal("finalized"),
   v.literal("cancelled"),
 );
-const confidentiality = v.union(v.literal("normal"), v.literal("restricted"));
 const mediaType = v.union(
   v.literal("pdf"),
   v.literal("image"),
@@ -233,7 +232,6 @@ export default defineSchema({
     reviewerIds: v.optional(v.array(v.id("users"))),
     deadlineAt: v.optional(v.number()),
     lifecycle,
-    confidentiality,
     finalRevisionId: v.optional(v.string()),
     /** 表記統一のルールカテゴリ（人が選ぶ） */
     notationCategories: v.optional(v.array(v.string())),
@@ -250,7 +248,6 @@ export default defineSchema({
     version: v.number(),
   })
     .index("by_aggregate_version", ["aggregateVersion"])
-    .index("by_aggregate_version_confidentiality", ["aggregateVersion", "confidentiality"])
     .index("by_search_tokens", ["searchTokens"])
     .searchIndex("search_substring", {
       searchField: "searchTokens",
@@ -262,8 +259,6 @@ export default defineSchema({
     .index("by_social_profile", ["socialProfileId"])
     .index("by_owner_team", ["ownerTeamId"])
     .index("by_lifecycle", ["lifecycle"])
-    /** 機密区分で引く（通常の制作物は委員なら誰でも見られるので、一覧は ACL を読まずに索引で集める。works.listMyWorks） */
-    .index("by_confidentiality", ["confidentiality"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
   /** 職責（制作者・校了者・主管）を「ユーザー → 作品」で引くための派生テーブル。works 書込み時に同期する。 */
@@ -325,7 +320,6 @@ export default defineSchema({
     workId: v.id("works"),
     year: v.number(),
     lifecycle: v.string(),
-    confidentiality: v.string(),
   }).index("by_work", ["workId"]),
 
   /** 制作物ごとの要約（lib/workSummary.ts）。summaryVersion の無い古い行は id だけを持ち、読む側が版から数え直す */

@@ -16,7 +16,7 @@ import {
   type WorkGenre,
   type WorkSubGenre,
 } from "./metadata.ts";
-import { confidentialities, mediaTypes, type Confidentiality, type MediaType } from "./Work.ts";
+import { mediaTypes, type MediaType } from "./Work.ts";
 import {
   defaultWorkTeamPolicy,
   WORK_CATEGORY_MAX,
@@ -141,12 +141,6 @@ export const workCsvColumns = [
   },
   { key: "tags", header: "タグ", aliases: ["タグ", "tags"], required: false },
   {
-    key: "confidentiality",
-    header: "機密区分",
-    aliases: ["機密区分", "機密", "confidentiality"],
-    required: false,
-  },
-  {
     key: "notation",
     header: "表記カテゴリ",
     aliases: ["表記カテゴリ", "表記ルールのカテゴリ", "notationCategories"],
@@ -178,14 +172,6 @@ const mediaAliases: Record<string, MediaType> = {
   figma: "figma",
   その他: "other",
   other: "other",
-};
-const confidentialityAliases: Record<string, Confidentiality> = {
-  通常: "normal",
-  normal: "normal",
-  非公開: "restricted",
-  取扱注意: "restricted",
-  "非公開・取扱注意": "restricted",
-  restricted: "restricted",
 };
 
 /** 全角英数・全角空白をそろえ、連続する空白を 1 つに（名前・見出しの照合用） */
@@ -221,7 +207,6 @@ export interface WorkCsvRow {
   productionDays: number | null;
   tags: string[];
   legacyId: string;
-  confidentiality: Confidentiality;
   notationCategories: string[];
   /** 主管担当（組織）の書き方のまま。無ければ null（照合は {@link resolveWorkImport}） */
   ownerTeam: string | null;
@@ -398,17 +383,6 @@ export function parseWorkCsv(
       problems.push("タグが多すぎるか、長すぎます（20 個・各 30 文字まで）");
     }
 
-    const confText = get("confidentiality");
-    const confidentiality =
-      confText === ""
-        ? "normal"
-        : (confidentialityAliases[normalizePersonKey(confText)] ??
-          ((confidentialities as readonly string[]).includes(confText)
-            ? (confText as Confidentiality)
-            : null));
-    if (confidentiality === null)
-      problems.push(`機密区分「${confText}」が分かりません（通常・非公開）`);
-
     const ownerTeams = splitList(get("ownerTeam"));
     if (ownerTeams.length > 1) problems.push("担当（主管担当）は 1 つだけ書いてください");
     const productionTeams = splitList(get("productionTeams"));
@@ -441,7 +415,6 @@ export function parseWorkCsv(
       productionDays: productionDays ?? null,
       tags,
       legacyId: get("legacyId"),
-      confidentiality: confidentiality ?? "normal",
       notationCategories: splitList(get("notation")),
       ownerTeam: ownerTeams[0] ?? null,
       productionTeams,
@@ -515,7 +488,6 @@ export interface WorkImportInput {
   productionDays?: number;
   tags?: string[];
   legacyId?: string;
-  confidentiality: Confidentiality;
   notationCategories: string[];
   /** 主管担当（組織の ID） */
   ownerTeamId?: string;
@@ -660,7 +632,6 @@ export function resolveWorkImport(
           ...(row.productionDays !== null ? { productionDays: row.productionDays } : {}),
           tags: row.tags,
           ...(row.legacyId ? { legacyId: row.legacyId } : {}),
-          confidentiality: row.confidentiality,
           notationCategories: row.notationCategories,
           ...(ownerTeam ? { ownerTeamId: teamIdOf(ownerTeam) } : {}),
           productionTeamIds: Array.from(new Set(productionTeams.map(teamIdOf))),
@@ -716,7 +687,6 @@ export function workCsvTemplate(now: Instant = Date.now()): string {
     sizeOrLength: "A5・32 ページ",
     productionDays: "20",
     tags: "公式パンフ;マスター",
-    confidentiality: "通常",
     notation: "A1;A2",
     year: "100",
   };

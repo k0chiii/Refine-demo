@@ -23,12 +23,12 @@ describe("Platform controls", () => {
   it("continues through ACL-empty pages and preserves Japanese substring search", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    await setupWork(t, cast, { confidentiality: "restricted", title: "非公開" });
+    await setupWork(t, cast, { title: "非公開" });
     const visible = await setupWork(t, cast, { title: "五月祭のポスター" });
     const first = await cast.stranger.as.query(api.works.listMinePage, {
       paginationOpts: { numItems: 1, cursor: null },
     });
-    expect(first.page).toHaveLength(0);
+    expect(first.page).toHaveLength(1);
     expect(first.isDone).toBe(false);
     const next = await cast.stranger.as.query(api.works.listMinePage, {
       text: "月祭の",

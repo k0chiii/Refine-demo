@@ -323,7 +323,6 @@ export const demo = internalMutation({
         // 納期は日付だけ（その日の終わり＝翌日 0:00 JST）。30 日後の 23:59 まで
         deadlineAt: endOfJstDay(now + 30 * day),
         lifecycle: "active",
-        confidentiality: "normal",
         version: 1,
       });
       for (const [userId, role] of [

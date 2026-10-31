@@ -219,15 +219,6 @@ function Row({
               onClick={() => rememberWorkHint(w.id, { title: w.title, mediaType: w.mediaType })}
             >
               {w.title}
-              {w.confidentiality === "restricted" ? (
-                <M3eIcon
-                  name="lock"
-                  className="works-table__lock"
-                  role="img"
-                  aria-label="非公開"
-                  title="非公開"
-                />
-              ) : null}
             </Link>
             {/* 状態・版の列が隠れる幅では、題名の下に出す */}
             <span className="mf-table__sub works-table__inline">
