@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:37:41.276Z
+url=http://127.0.0.1:4301/admin
+scene=q63b-admin-csv
+marker:CSV で一括登録=CSV で一括登録

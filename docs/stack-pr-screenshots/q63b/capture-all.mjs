@@ -14,14 +14,17 @@ if (phase !== "before" && phase !== "after") {
 const outDir = path.join(here, phase);
 fs.mkdirSync(outDir, { recursive: true });
 
-/** 主色・面・filled ボタンが見える画面 + ロール別ホーム（/works KPI・/make・/check） */
+/** 主色がはっきり見える実画面のみ（UI を隠したり加工しない） */
 const scenes = [
   "33-work-form",
+  "q63b-admin-csv",
+  "q63b-admin-register",
+  "q63b-works-chip",
+  "q63b-works-dashboard",
+  "q63b-editor-toolbar",
+  "q63b-admin-tab",
   "02-works-list",
   "27-make-creator",
-  "role-home-manager",
-  "role-home-member",
-  "role-home-approver",
   "12-submit-dialog",
 ];
 
