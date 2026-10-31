@@ -730,7 +730,7 @@ function InstagramStory({
         <Icon name="igShare" size={24} />
       </div>
       {safeArea ? (
-        <div className="sp-story__safe" aria-label="安全領域（上 14%・下 20% は UI と重なる目安）">
+        <div className="sp-story__safe" aria-label="UI と重なる範囲">
           <span>上 14%: アカウント名・進行バー</span>
           <span>下 20%: 返信欄</span>
         </div>
