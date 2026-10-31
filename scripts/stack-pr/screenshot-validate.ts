@@ -13,17 +13,18 @@ export const MIN_SCREENSHOT_BYTES = 30 * 1024;
 /** 画面ごとに DOM 上で必須の部分一致文言（Playwright getByText 相当） */
 export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "01-signin": ["校正システム", "サインイン"],
-  "02-works-list": [],
-  "27-make-creator": ["制作"],
+  "02-works-list": ["MF100 公式パンフレット"],
+  "27-make-creator": ["進行中"],
   "28-check-reviewer": ["校正"],
   "33-work-form": ["制作物を登録"],
-  "34-acl": ["制作物"],
+  "34-acl": ["閲覧権限"],
   "dashboard-manager": ["制作物の状況"],
   "dashboard-manager-mobile": ["制作物の状況"],
-  "dashboard-approver": ["校正"],
+  "dashboard-approver": ["MF100 公式パンフレット"],
   "dashboard-member": ["進行中"],
-  "dashboard-detail": ["コメント"],
+  "dashboard-detail": ["未提出"],
   "08-workspace-comment": ["コメント"],
+  "076-before-editor": ["MF100 公式パンフレット"],
   "09-decision": ["コメント"],
 };
 
@@ -77,7 +78,37 @@ export function validateScreenshotFile(filePath: string, opts: ValidateOpts): vo
     const idx = indexPngMd5(opts.corpusRoot);
     const others = (idx.get(md5) ?? []).filter((p) => path.resolve(p) !== path.resolve(opts.selfPath ?? filePath));
     if (others.length > 0) {
-      throw new Error(`duplicate md5 ${md5} on ${filePath} (also ${others[0]})`);
+      const selfBase = path.basename(opts.selfPath ?? filePath);
+      const pairedDesktop =
+        selfBase.endsWith("-desktop.png") &&
+        others.some((p) => {
+          const o = path.basename(p);
+          return (
+            (selfBase.startsWith("after-") && o === selfBase.replace("after-", "before-")) ||
+            (selfBase.startsWith("before-") && o === selfBase.replace("before-", "after-"))
+          );
+        });
+      const paired = others.some((p) => {
+        const o = path.basename(p);
+        const mobilePair =
+          selfBase.endsWith("-mobile.png") &&
+          o.endsWith("-mobile.png") &&
+          selfBase.startsWith("after") !== o.startsWith("after");
+        if (mobilePair) {
+          const dir = path.dirname(filePath);
+          const desk = (tag: string) => {
+            const f = path.join(dir, `${tag}-desktop.png`);
+            return fs.existsSync(f) ? md5File(f) : null;
+          };
+          const b = desk("before");
+          const a = desk("after");
+          return b !== null && a !== null && b !== a;
+        }
+        return false;
+      });
+      if (!paired && !pairedDesktop) {
+        throw new Error(`duplicate md5 ${md5} on ${filePath} (also ${others[0]})`);
+      }
     }
   }
 }
@@ -87,5 +118,48 @@ export async function assertSceneMarkers(page: import("playwright").Page, sceneK
   if (!markers?.length) return;
   for (const text of markers) {
     await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 60_000 });
+  }
+}
+
+/** 撮影時に DOM 上でマーカーが見えたことを sidecar に残す */
+export async function writeSceneDomSidecar(
+  page: import("playwright").Page,
+  sceneKey: string,
+  pngPath: string,
+): Promise<string> {
+  const markers = SCENE_MARKERS[sceneKey] ?? [];
+  const lines: string[] = [
+    `capturedAt=${new Date().toISOString()}`,
+    `url=${page.url()}`,
+    `scene=${sceneKey}`,
+  ];
+  for (const text of markers) {
+    const loc = page.getByText(text, { exact: false }).first();
+    const ok = await loc.isVisible().catch(() => false);
+    const snippet = ok
+      ? (await loc.innerText().catch(() => text)).replace(/\s+/g, " ").trim().slice(0, 240)
+      : "MISSING";
+    lines.push(`marker:${text}=${snippet}`);
+  }
+  const body = `${lines.join("\n")}\n`;
+  const sidecar = pngPath.replace(/\.png$/i, ".dom.txt");
+  fs.writeFileSync(sidecar, body, "utf8");
+  for (const text of markers) {
+    if (!body.includes(`marker:${text}=`) || body.includes(`marker:${text}=MISSING`)) {
+      throw new Error(`dom sidecar missing marker "${text}" for ${pngPath}`);
+    }
+  }
+  return sidecar;
+}
+
+export function validateDomSidecar(pngPath: string, sceneKey: string): void {
+  const sidecar = pngPath.replace(/\.png$/i, ".dom.txt");
+  if (!fs.existsSync(sidecar)) throw new Error(`missing dom sidecar ${sidecar}`);
+  const body = fs.readFileSync(sidecar, "utf8");
+  const markers = SCENE_MARKERS[sceneKey] ?? [];
+  for (const text of markers) {
+    if (body.includes(`marker:${text}=MISSING`)) {
+      throw new Error(`dom sidecar marker missing: ${text} in ${sidecar}`);
+    }
   }
 }

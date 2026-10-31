@@ -31,14 +31,14 @@
 
 | PR | id | base（現状） |
 |---:|---|---|
-| #165 | 071 | `develop` ✅ |
-| #163 | 072 | stack-071（**e082 後に差し替え**） |
+| #165 | 071 | `cursor/stack-e082-revision-planned-dates-list-8b5a`（付け替え済） |
+| #163 | 072 | `cursor/stack-e082-revision-planned-dates-list-8b5a`（071→e082 に差し替え） |
 | #162 | 073 | stack-072 |
 | #168 | 074 | stack-073 |
 | #167 | 075 | stack-074 |
 | #169 | 076 | stack-075 |
 
-071 の再撮: `after-desktop.png` ≥30KB・検査通過（076 は `08-workspace-comment` 要再撮）。
+071–076 の再撮: ローカル Convex デモ・ログイン後に撮影済み（076 は before=旧エディタ / after=detail-shell）。`node scripts/stack-pr/report-screenshots.mjs` で ✅。
 
 ## C/D ダッシュボード（未マージ）
 

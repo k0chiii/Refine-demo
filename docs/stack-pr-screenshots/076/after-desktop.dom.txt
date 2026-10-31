@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T08:10:46.148Z
+url=http://127.0.0.1:4304/works/000000000000000000000010016works/detail
+scene=dashboard-detail
+marker:未提出=未提出

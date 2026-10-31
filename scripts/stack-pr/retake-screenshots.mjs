@@ -8,7 +8,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { captureShots, SIGNIN_SCREEN_MD5 } from "./capture.mjs";
-import { validateScreenshotFile, indexPngMd5 } from "./screenshot-validate.mjs";
+import { validateScreenshotFile, indexPngMd5, validateDomSidecar } from "./screenshot-validate.mjs";
 
 const root = "/workspace";
 const manifest = JSON.parse(fs.readFileSync(`${root}/scripts/stack-pr/manifest.json`, "utf8"));
@@ -41,27 +41,48 @@ const BRANCH_BY_ID = {
   "076": "cursor/stack-076-detail-route-shell-v2-8b5a",
 };
 
-function shotsForItem(item) {
-  if (item.id === "076") {
-    return { desktop: "08-workspace-comment", mobile: "08-workspace-comment" };
-  }
-  if (["071", "072", "073", "074", "075"].includes(item.id)) {
-    return { desktop: "dashboard-manager", mobile: "dashboard-manager-mobile" };
-  }
-  return item.shots;
-}
+const PARENT_BRANCH_BY_ID = {
+  "071": "develop",
+  "072": "071",
+  "073": "072",
+  "074": "073",
+  "075": "074",
+  "076": "075",
+};
 
-function checkoutStackBranch(id) {
-  const repo = process.env.STACK_PR_REPO;
-  const branch = BRANCH_BY_ID[id];
-  if (!repo || !branch) return;
-  execFileSync("git", ["fetch", "origin", branch], { cwd: repo, stdio: "inherit" });
-  execFileSync("git", ["checkout", "-B", branch, `origin/${branch}`], { cwd: repo, stdio: "inherit" });
+const stackRepo = process.env.STACK_PR_REPO ?? `${root}/wt-cap-076`;
+
+function checkoutStackBranch(id, parentKey) {
+  const repo = stackRepo;
+  let branch;
+  if (parentKey === "develop") {
+    execFileSync("git", ["fetch", "origin", "develop"], { cwd: repo, stdio: "inherit" });
+    execFileSync("git", ["checkout", "-B", "develop", "origin/develop"], { cwd: repo, stdio: "inherit" });
+  } else {
+    const key = parentKey ?? id;
+    branch = BRANCH_BY_ID[key];
+    if (!branch) return;
+    execFileSync("git", ["fetch", "origin", branch], { cwd: repo, stdio: "inherit" });
+    execFileSync("git", ["checkout", "-B", branch, `origin/${branch}`], { cwd: repo, stdio: "inherit" });
+  }
   try {
     execFileSync("pkill", ["-f", "vp preview"], { stdio: "ignore" });
   } catch {
     /* none */
   }
+}
+
+function shotsForItem(item) {
+  if (item.id === "076") return { desktop: "dashboard-detail" };
+  if (item.id === "075") {
+    return { desktop: "27-make-creator", mobile: "27-make-creator" };
+  }
+  if (item.id === "074") {
+    return { desktop: "dashboard-manager", mobile: "dashboard-manager-mobile" };
+  }
+  const s = item.shots;
+  if (!s?.desktop) return s;
+  return s.mobile ? { desktop: s.desktop, mobile: s.mobile } : { desktop: s.desktop };
 }
 
 let items = manifest;
@@ -77,24 +98,45 @@ const report = [];
 for (const item of items) {
   if (!item.shots?.desktop) continue;
   const shots = shotsForItem(item);
-  if (BRANCH_BY_ID[item.id]) checkoutStackBranch(item.id);
   const dir = path.join(outRoot, item.id);
   fs.mkdirSync(dir, { recursive: true });
-  const before = path.join(dir, "before-desktop.png");
-  const after = path.join(dir, "after-desktop.png");
+  for (const f of fs.readdirSync(dir)) {
+    if (f.endsWith(".png") || f.endsWith(".dom.txt")) fs.unlinkSync(path.join(dir, f));
+  }
   console.log(`\n=== ${item.id} ${item.title} ===`);
   try {
-    const capOpts = { mobileWidth: 412, corpusRoot: outRoot, expandOverview: false };
-    await captureShots(shots, path.join(dir, "before"), capOpts);
-    await captureShots(shots, path.join(dir, "after"), { ...capOpts, expandOverview: true });
+    const capOpts = {
+      mobileWidth: 412,
+      corpusRoot: dir,
+      expandOverview: false,
+      ...(item.id === "076" ? { desktopHeight: 2400 } : {}),
+      ...(item.id === "072" ? { desktopWidth: 1280 } : {}),
+    };
+    if (PARENT_BRANCH_BY_ID[item.id]) checkoutStackBranch(item.id, PARENT_BRANCH_BY_ID[item.id]);
+    const beforeShots =
+      item.id === "076" ? { desktop: "076-before-editor" } : shots;
+    const afterShots =
+      item.id === "076" ? { desktop: "dashboard-detail" } : shots;
+    await captureShots(beforeShots, path.join(dir, "before"), capOpts);
+    checkoutStackBranch(item.id, item.id);
+    const afterOpts = { ...capOpts, expandOverview: true };
+    if (item.id === "075") afterOpts.openViewSwitcher = true;
+    if (item.id === "072") afterOpts.desktopWidth = 1281;
+    await captureShots(afterShots, path.join(dir, "after"), afterOpts);
     for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".png"))) {
       const full = path.join(dir, f);
+      const tag = f.startsWith("after-") ? "after" : "before";
+      const shotDef = tag === "after" ? afterShots : beforeShots;
+      const sceneKey = f.includes("mobile")
+        ? (shotDef.mobile ?? `${shotDef.desktop}-mobile`)
+        : shotDef.desktop;
       validateScreenshotFile(full, {
-        sceneKey: shots.desktop,
-        pagePath: "/works",
-        corpusRoot: outRoot,
+        sceneKey,
+        pagePath: item.id === "076" ? "/works" : "/works",
+        corpusRoot: dir,
         selfPath: full,
       });
+      validateDomSidecar(full, sceneKey);
     }
     retaken += fs.readdirSync(dir).filter((n) => n.endsWith(".png")).length;
     report.push({ id: item.id, dir, ok: true });

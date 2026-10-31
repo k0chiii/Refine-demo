@@ -1,0 +1,3 @@
+capturedAt=2026-10-31T07:29:05.228Z
+url=http://127.0.0.1:4392/works
+scene=dashboard-manager-dark

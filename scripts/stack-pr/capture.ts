@@ -8,6 +8,8 @@ import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 import {
   assertSceneMarkers,
   validateScreenshotFile,
+  validateDomSidecar,
+  writeSceneDomSidecar,
   SIGNIN_SCREEN_MD5,
 } from "./screenshot-validate.ts";
 
@@ -43,12 +45,16 @@ function ensureDemo() {
   }
   previewStarted = false;
   execFileSync("sleep", ["1"]);
-  execFileSync("rm", ["-rf", "dist-demo"], { cwd: webRoot });
-  execFileSync("pnpm", ["build:demo"], {
-    cwd: webRoot,
-    stdio: "inherit",
-    env: { ...process.env, VP_CACHE: "0" },
-  });
+  const distIndex = path.join(webRoot, "dist-demo/index.html");
+  const skipBuild = process.env.SKIP_DEMO_BUILD === "1" && fs.existsSync(distIndex);
+  if (!skipBuild) {
+    execFileSync("rm", ["-rf", "dist-demo"], { cwd: webRoot });
+    execFileSync("pnpm", ["build:demo"], {
+      cwd: webRoot,
+      stdio: "inherit",
+      env: { ...process.env, VP_CACHE: "0" },
+    });
+  }
   if (previewStarted) return;
   execFileSync(
     `mkdir -p e2e/out && setsid sh -c 'echo $$ > e2e/out/preview.pgid; exec pnpm exec vp preview --mode demo --outDir dist-demo --port ${PREVIEW_PORT} --host 127.0.0.1 --strictPort' > e2e/out/preview.log 2>&1 &`,
@@ -122,7 +128,7 @@ async function openDashboardOverview(page: import("playwright").Page) {
   await page.locator(".kpis .kpi").first().waitFor({ state: "visible", timeout: 60_000 });
 }
 
-type CaptureSceneOpts = { expandOverview?: boolean };
+type CaptureSceneOpts = { expandOverview?: boolean; openViewSwitcher?: boolean };
 let sceneRunOpts: CaptureSceneOpts = {};
 
 type SceneFn = (page: import("playwright").Page) => Promise<void>;
@@ -136,12 +142,16 @@ const SCENES: Record<string, SceneFn> = {
   "02-works-list": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/works");
-    await page.waitForSelector(WORKS_ENTRY);
+    await page.waitForSelector(WORKS_ENTRY, { timeout: 60_000 });
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().waitFor({ state: "visible", timeout: 60_000 });
   },
   "27-make-creator": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
-    await page.waitForSelector(".hub[data-hub='make'] m3e-list-action");
+    await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    if (sceneRunOpts.openViewSwitcher) {
+      await page.locator(".home-view-switcher").first().waitFor({ state: "visible", timeout: 30_000 });
+    }
   },
   "28-check-reviewer": async (page) => {
     await signInAs(page, "mock-nogiku-reviewer");
@@ -149,11 +159,26 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForSelector(".hub[data-hub='check']");
   },
   "08-workspace-comment": async (page) => {
-    await signInAs(page, "mock-nogiku-reviewer");
+    await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
-    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
-    await page.waitForURL(/\/w\//);
-    await page.waitForSelector(".comments .thread");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: "コメント" }).first();
+    if (await tab.isVisible().catch(() => false)) await tab.click();
+    else await page.getByRole("button", { name: "コメント" }).click({ timeout: 10_000 });
+    await page.waitForSelector(".comments", { state: "visible", timeout: 60_000 });
+    await page
+      .locator(".comments__list, .comments__header, .thread-panel, .comments__empty, .thread")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "076-before-editor": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await page.waitForSelector(".ws", { timeout: 60_000 });
   },
   "09-decision": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
@@ -200,6 +225,10 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
     if (sceneRunOpts.expandOverview !== false) await openDashboardOverview(page);
+    if (sceneRunOpts.openViewSwitcher) {
+      await page.locator(".home-view-switcher m3e-segmented-button, .home-view-switcher").first().click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(400);
+    }
   },
   "dashboard-approver": async (page) => {
     await signInAs(page, "mock-nogiku-approver");
@@ -223,8 +252,14 @@ const SCENES: Record<string, SceneFn> = {
   "dashboard-detail": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
-    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click();
-    await page.waitForURL(/\/w\//);
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId not found in ${page.url()}`);
+    await page.evaluate((id) => {
+      return globalThis.__mf100router!.navigate({ to: "/works/$workId/detail", params: { workId: id } });
+    }, workId);
+    await page.waitForSelector(".detail-shell__head, .detail-shell, .ws", { timeout: 60_000 });
   },
   "dashboard-detail-mobile": async (page) => {
     await SCENES["dashboard-detail"]!(page);
@@ -260,24 +295,29 @@ async function captureOne(
   await assertSceneMarkers(page, sceneKey);
   const pagePath = new URL(page.url()).pathname;
   await page.screenshot({ path: outPath, fullPage: true });
+  await writeSceneDomSidecar(page, sceneKey, outPath);
   validateScreenshotFile(outPath, { sceneKey, pagePath, corpusRoot, selfPath: outPath });
+  validateDomSidecar(outPath, sceneKey);
 }
 
 export async function captureShots(
   shots: { desktop: string; mobile?: string },
   prefix: string,
-  opts: { mobileWidth?: number; expandOverview?: boolean; corpusRoot?: string } = {},
+  opts: { mobileWidth?: number; mobileHeight?: number; desktopWidth?: number; desktopHeight?: number; expandOverview?: boolean; corpusRoot?: string } = {},
 ) {
   ensureDemo();
-  sceneRunOpts = { expandOverview: opts.expandOverview };
+  sceneRunOpts = { expandOverview: opts.expandOverview, openViewSwitcher: opts.openViewSwitcher };
   const corpusRoot = opts.corpusRoot ?? process.env.SCREENSHOT_CORPUS;
   const mobileW = opts.mobileWidth ?? 412;
+  const mobileH = opts.mobileHeight ?? 915;
+  const desktopW = opts.desktopWidth ?? 1280;
+  const desktopH = opts.desktopHeight ?? 800;
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.CHROMIUM_PATH || undefined,
   });
   const desktop = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: desktopW, height: desktopH },
     baseURL: BASE,
     serviceWorkers: "block",
   });
@@ -291,7 +331,7 @@ export async function captureShots(
 
   if (shots.mobile) {
     const mobile = await browser.newContext({
-      viewport: { width: mobileW, height: 915 },
+      viewport: { width: mobileW, height: mobileH },
       baseURL: BASE,
       serviceWorkers: "block",
     });

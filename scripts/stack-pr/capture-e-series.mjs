@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { captureShots, SIGNIN_SCREEN_MD5 } from "./capture.mjs";
-import { validateScreenshotFile } from "./screenshot-validate.mjs";
+import { validateScreenshotFile, validateDomSidecar } from "./screenshot-validate.mjs";
 
 const root = "/workspace";
 const repo = process.env.STACK_PR_REPO ?? "/workspace/wt-e-series";
@@ -58,21 +58,28 @@ for (const item of items) {
   if (!item.shots?.desktop) continue;
   const dir = path.join(outRoot, item.id);
   fs.mkdirSync(dir, { recursive: true });
+  for (const f of fs.readdirSync(dir)) {
+    if (f.endsWith(".png") || f.endsWith(".dom.txt")) fs.unlinkSync(path.join(dir, f));
+  }
   const shots = item.shots;
 
   console.log(`\n=== ${item.id} before (${baseRef(item)}) ===`);
   checkout(baseRef(item));
-  await captureShots(shots, path.join(dir, "before"), {
+  await captureShots({ desktop: shots.desktop }, path.join(dir, "before"), {
     mobileWidth: 412,
     expandOverview: false,
+    corpusRoot: dir,
   });
-  for (const suffix of ["desktop", "mobile"]) {
+  for (const suffix of ["desktop"]) {
     const f = path.join(dir, `before-${suffix}.png`);
     if (!fs.existsSync(f)) continue;
     validateScreenshotFile(f, {
       sceneKey: shots.desktop,
       pagePath: "/works",
+      corpusRoot: dir,
+      selfPath: f,
     });
+    validateDomSidecar(f, shots.desktop);
   }
 
   console.log(`=== ${item.id} after (${branchRef(item.id)}) ===`);
@@ -80,6 +87,7 @@ for (const item of items) {
   await captureShots(shots, path.join(dir, "after"), {
     mobileWidth: 412,
     expandOverview: false,
+    corpusRoot: dir,
   });
   for (const suffix of ["desktop", "mobile"]) {
     const f = path.join(dir, `after-${suffix}.png`);
@@ -95,6 +103,7 @@ for (const item of items) {
       pagePath: "/works",
       ...(skipDup ? {} : { corpusRoot: dir, selfPath: f }),
     });
+    validateDomSidecar(f, shots.desktop);
   }
 }
 

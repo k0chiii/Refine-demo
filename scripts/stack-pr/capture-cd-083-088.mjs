@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { captureShots } from "./capture.mjs";
-import { validateScreenshotFile } from "./screenshot-validate.mjs";
+import { validateScreenshotFile, validateDomSidecar } from "./screenshot-validate.mjs";
 
 const root = "/workspace";
 const repo = process.env.STACK_PR_REPO ?? "/workspace/wt-cd-stack";
@@ -74,26 +74,42 @@ for (const id of IDS) {
 
   console.log(`\n=== capture ${id} parent ${parent} ===`);
   checkout(parent);
+  const beforeOpts =
+    id === "087"
+      ? { ...capOpts, desktopWidth: 1280, mobileWidth: 412, expandOverview: false }
+      : {
+          ...capOpts,
+          expandOverview: id === "088" ? false : capOpts.expandOverview,
+        };
   await captureShots(shots.before, path.join(dir, "before"), {
-    ...capOpts,
-    expandOverview: id === "088" ? true : capOpts.expandOverview,
+    ...beforeOpts,
+    corpusRoot: dir,
   });
 
   console.log(`=== capture ${id} after ${branch} ===`);
   checkout(branch);
-  await captureShots(shots.after, path.join(dir, "after"), { ...capOpts, expandOverview: true });
+  const afterOpts = id === "087" ? { ...capOpts, desktopWidth: 768, expandOverview: true } : { ...capOpts, expandOverview: true };
+  await captureShots(shots.after, path.join(dir, "after"), { ...afterOpts, corpusRoot: dir });
 
   for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".png"))) {
     const full = path.join(dir, name);
-    const sceneKey = name.includes("mobile")
-      ? (shots.after.mobile ?? `${shots.after.desktop}-mobile`)
-      : shots.after.desktop;
+    const key =
+      name.startsWith("before") && id === "088"
+        ? name.includes("mobile")
+          ? "dashboard-manager-mobile"
+          : "dashboard-manager"
+        : name.includes("mobile")
+          ? (shots.after.mobile ?? `${shots.after.desktop}-mobile`)
+          : name.startsWith("before")
+            ? shots.before.desktop
+            : shots.after.desktop;
     validateScreenshotFile(full, {
-      sceneKey,
-      pagePath: item.shots.desktop.includes("detail") ? "/w/" : "/works",
+      sceneKey: key,
+      pagePath: item.shots.desktop.includes("detail") ? "/works" : "/works",
       corpusRoot: dir,
       selfPath: full,
     });
+    validateDomSidecar(full, key);
     const size = fs.statSync(full).size;
     console.log(name, size, md5File(full));
   }

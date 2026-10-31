@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T08:07:54.356Z
+url=http://127.0.0.1:4303/works
+scene=02-works-list
+marker:MF100 公式パンフレット=MF100 公式パンフレット
