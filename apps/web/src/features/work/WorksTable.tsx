@@ -244,6 +244,11 @@ function Row({
       <td className="mf-table__td works-table__col--stage">{stage}</td>
       <td className="mf-table__td works-table__col--version">
         {w.latestRevisionLabel ?? <span className="muted">—</span>}
+        {w.nextRevisionPlannedAt ? (
+          <span className="mf-table__sub">
+            予定提出 {formatDeadline(w.nextRevisionPlannedAt, now)}
+          </span>
+        ) : null}
       </td>
       <td className="mf-table__td">
         {w.acceptingDeadlineAt ? (

@@ -54,6 +54,8 @@ export interface Work {
   deadlineAt?: Instant;
   /** ■仕上がり日（decisions 81） */
   finishAt?: Instant;
+  /** 第 n 版の予定提出日（decisions 82） */
+  revisionPlannedAt?: readonly { sequence: number; at: Instant }[];
   lifecycle: WorkLifecycle;
   confidentiality: Confidentiality;
   finalRevisionId?: RevisionId;
