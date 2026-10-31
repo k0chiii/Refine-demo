@@ -49,7 +49,7 @@ describe("本文 ⇔ 平文の対応（校正の範囲指摘・文字数・検�
     const to = offsetToPos(index, start + 3, doc.content.size);
     expect(doc.textBetween(from, to)).toBe("と本文");
   });
-  it("提出用 HTML は題名をエスケープする", () => {
+  it("提出用 HTML は制作物名をエスケープする", () => {
     expect(documentHtml("<a&b>", "<p>x</p>")).toContain("<title>&lt;a&amp;b&gt;</title>");
   });
 });
