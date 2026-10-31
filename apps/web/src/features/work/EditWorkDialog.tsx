@@ -44,7 +44,6 @@ export function EditWorkDialog({
       expectedVersion: work.version,
       patch: {
         title: form.title,
-        purpose: form.purpose,
         category: form.category,
         mediaType: form.mediaType as "pdf",
         confidentiality: form.confidentiality as "normal",
