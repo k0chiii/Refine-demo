@@ -6125,3 +6125,13 @@ m3e-snackbar {
 .home-dashboard--manager .ov {
   margin-inline: 16px;
 }
+
+/* stack-pr:ui-role-home-approver */
+.home-dashboard--approver {
+  margin: 8px 16px;
+  padding: 12px 16px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-tertiary-container);
+  color: var(--mf-on-tertiary-container);
+  min-height: 48px;
+}
