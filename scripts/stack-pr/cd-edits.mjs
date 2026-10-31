@@ -364,10 +364,7 @@ import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
     case "086":
       appendCss(
         "ui-detail-shell-mock",
-        `.detail-shell {
-  background: var(--mf-surface-container-lowest);
-}
-.detail-shell__head {
+        `.detail-shell__head {
   border-bottom: 1px solid var(--mf-outline-variant);
 }`,
       );
