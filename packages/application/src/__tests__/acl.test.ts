@@ -120,7 +120,10 @@ describe("作品単位の個人 ACL（A-01, A-11, A-19, A-20）", () => {
     const history = await listWorkPermissions(ctx, principals.sysadmin, work.id);
     expect(history.length).toBe(2);
     expect(history.filter(isGrantActive)).toHaveLength(1);
-    expect(history[0]).toMatchObject({ permission: "review", revokedBy: principals.sysadmin.userId });
+    expect(history[0]).toMatchObject({
+      permission: "review",
+      revokedBy: principals.sysadmin.userId,
+    });
 
     const revoked = await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
