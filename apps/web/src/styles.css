@@ -1250,6 +1250,23 @@ m3e-dialog {
 .list__item--urgent {
   --m3e-list-item-label-text-color: var(--mf-error);
 }
+/* 滞っている制作物: 期限超過から 1 日=オレンジ・2 日以上=赤（モック / decisions） */
+.list__item--delay-1d {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    var(--mf-tertiary-container) 45%,
+    var(--mf-surface-container-lowest)
+  );
+  --m3e-list-item-label-text-color: var(--mf-on-tertiary-container);
+}
+.list__item--delay-2d {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    var(--mf-error-container) 40%,
+    var(--mf-surface-container-lowest)
+  );
+  --m3e-list-item-label-text-color: var(--mf-error);
+}
 .list__item--selected {
   --m3e-list-item-container-color: var(--mf-secondary-container);
   border-radius: var(--mf-shape-md);
