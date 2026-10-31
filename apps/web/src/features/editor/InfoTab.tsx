@@ -14,7 +14,7 @@ import {
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
 import { ReviewersDialog } from "@/features/work/ReviewersDialog";
 import { EditWorkDialog } from "@/features/work/EditWorkDialog";
@@ -59,6 +59,7 @@ export function InfoTab({
   const finalize = useMutation(api.approvals.finalize);
   const reopen = useMutation(api.approvals.reopen);
   const changeLifecycle = useMutation(api.works.changeLifecycle);
+  const updateWork = useMutation(api.works.update);
   const completeCheck = useMutation(api.checks.complete);
   const waiveCheck = useMutation(api.checks.waive);
   const addCheck = useMutation(api.checks.add);
@@ -80,6 +81,10 @@ export function InfoTab({
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
   const { work: w, people, approvals, approval, can } = work;
+  const [purposeDraft, setPurposeDraft] = useState(w.purpose ?? "");
+  useEffect(() => {
+    setPurposeDraft(w.purpose ?? "");
+  }, [w.purpose, w.version]);
   const me = approval.approvers.find((a) => a.isMe) ?? null;
   const multiApprovers = approval.approvers.length > 1;
   // この宣言で「校了とみなす人数」に届くか（届かなければ宣言の記録だけで、校了にはまだ進まない）
@@ -176,32 +181,30 @@ export function InfoTab({
       title: "基本",
       rows: [
         ["制作物名", w.title] as Row,
-        ["目的・用途", w.purpose || "未入力"] as Row,
         ...optional("大ジャンル", w.genre ? workGenreLabels[w.genre] : null),
         ...optional("小ジャンル", workSubGenreLabel(w.subGenre)),
         ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
         ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
-        // 提出時の「見てほしい点」はここではなく、コメントの一覧の先頭（制作者からのコメント。CreatorNoteCard）に出す
-        ["制作物 ID", w.legacyId || "なし"] as Row,
         ...(w.confidentiality === "restricted" ? ([["機密", "非公開・取扱注意"]] as Row[]) : []),
       ],
     },
     {
       title: "担当と人",
       rows: [
-        ...optional("担当（主管担当）", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
+        ...optional("担当", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
         ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
         ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
         ["制作者", names(people.creators) || "—"] as Row,
-        ["校了者", <ApproverList key="approvers" approval={approval} />] as Row,
-        ["主管", names(people.managers) || "—"] as Row,
+        ["校了する人", <ApproverList key="approvers" approval={approval} />] as Row,
+        ["統括", names(people.managers) || "—"] as Row,
         ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
       ],
     },
     {
       title: "日程と入稿",
       rows: [
-        ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
+        ["■仕上がり日", w.finishAt === undefined ? "—" : formatDeadline(w.finishAt)] as Row,
+        ["◆校了目標日", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
         ...optional(
           "入稿日・投稿日・印刷日",
           w.publishAt === undefined
@@ -255,6 +258,32 @@ export function InfoTab({
       {propGroups.map((g) => (
         <section key={g.title} className="info-tab__section" aria-label={g.title}>
           <h2 className="info-tab__h">{g.title}</h2>
+          {g.title === "基本" ? (
+            can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
+              <Field label="目的・用途" hint="登録後にここで記入・更新します">
+                <TextArea value={purposeDraft} onChange={(e) => setPurposeDraft(e.target.value)} />
+                <div className="row" style={{ marginTop: "0.5rem" }}>
+                  <M3eButton
+                    variant="tonal"
+                    disabled={purposeDraft === (w.purpose ?? "")}
+                    onClick={() =>
+                      void updateWork({
+                        workId: w.id as Id<"works">,
+                        expectedVersion: w.version,
+                        patch: { purpose: purposeDraft.trim() },
+                      })
+                    }
+                  >
+                    保存
+                  </M3eButton>
+                </div>
+              </Field>
+            ) : (
+              <p className="small" style={{ margin: "0 0 0.75rem" }}>
+                目的・用途: {w.purpose?.trim() ? w.purpose : "未入力"}
+              </p>
+            )
+          ) : null}
           <M3eList className="list prop-list">
             {g.rows.map(([label, value]) => (
               <M3eListItem key={label} className="list__item">
@@ -573,7 +602,7 @@ export function InfoTab({
           </p>
           {multiApprovers ? (
             <StatusText tone={reachesNow ? "success" : "neutral"}>
-              校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
+              校了する人 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
               {approval.declaredCount} 人{reachesNow ? "・この宣言で校了" : ""}
             </StatusText>
           ) : null}
