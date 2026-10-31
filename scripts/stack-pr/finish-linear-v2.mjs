@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-/** v2 linear の 062 以降: applyItem 失敗時は stack-linear-8b5a から同名コミットを cherry-pick --no-commit */
+/** v2 linear の 062 以降: applyItem 失敗時は stack-linear-8b5a の同名コミットからファイル checkout（cherry-pick しない） */
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { applyItem } from "./edits.mjs";
 
 const root = "/workspace";
@@ -55,7 +55,7 @@ for (const item of manifest.slice(start)) {
     applyItem(item);
     applied = true;
   } catch (e) {
-    console.warn("applyItem failed, cherry-pick:", e.message?.slice?.(0, 80));
+    console.warn("applyItem failed, checkout from linear:", e.message?.slice?.(0, 120));
   }
   if (!applied) {
     const sha = findSha(item.title);
@@ -63,7 +63,15 @@ for (const item of manifest.slice(start)) {
       console.error("no commit for", item.title);
       process.exit(1);
     }
-    sh(`git cherry-pick ${sha} --no-commit`);
+    const files = shOut(`git diff-tree --no-commit-id --name-only -r ${sha}`);
+    if (!files) {
+      console.error("no files in commit", sha, item.title);
+      process.exit(1);
+    }
+    for (const f of files.split("\n").filter(Boolean)) {
+      if (f.startsWith("scripts/stack-pr/")) continue;
+      execFileSync("git", ["checkout", sha, "--", f], { cwd: root, stdio: "inherit" });
+    }
   }
   sh("git add -A");
   sh(`git commit -m "${item.title.replace(/"/g, '\\"')}"`);
