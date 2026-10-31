@@ -16,7 +16,7 @@ const grant = (over: Partial<WorkPermissionGrant>): WorkPermissionGrant => ({
   workId: "work1",
   principalType: "user",
   principalId: "viewer",
-  permission: "view",
+  permission: "review",
   grantedBy: "sysadmin",
   grantedAt: 0,
   ...over,

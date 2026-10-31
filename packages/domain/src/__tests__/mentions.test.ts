@@ -10,7 +10,7 @@ const grant = (
   workId: "work1",
   principalType: "user",
   principalId,
-  permission: "view",
+  permission: "review",
   grantedBy: "manager",
   grantedAt: T0,
   ...over,
