@@ -1642,7 +1642,7 @@ export function Editor({
               ) : null}
               {resolvedCount > 0 ? (
                 <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
-                  解決済み {resolvedCount}
+                  {showResolved ? `解決済み ${resolvedCount}` : "解決済みを表示"}
                 </M3eFilterChip>
               ) : null}
             </M3eFilterChipSet>

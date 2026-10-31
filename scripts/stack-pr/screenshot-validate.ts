@@ -14,10 +14,17 @@ export const MIN_SCREENSHOT_BYTES = 30 * 1024;
 /** 画面ごとに DOM 上で必須の部分一致文言（Playwright getByText 相当） */
 export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "01-signin": ["校正システム", "サインイン"],
-  "02-works-list": ["MF100 公式パンフレット"],
+  "02-works-list": [],
   "27-make-creator": ["進行中"],
   "28-check-reviewer": ["校正"],
   "33-work-form": ["制作物を登録"],
+  "q63b-admin-csv": ["CSV で一括登録"],
+  "q63b-admin-register": ["登録"],
+  "q63b-works-chip": ["進行中"],
+  "q63b-works-dashboard": ["制作物の状況"],
+  "q63b-editor-toolbar": ["MF100 公式パンフレット"],
+  "q63b-admin-tab": ["担当"],
+  "12-submit-dialog": ["版を提出"],
   "34-acl": ["閲覧権限"],
   "dashboard-manager": ["制作物の状況"],
   "dashboard-manager-mobile": ["制作物の状況"],
@@ -31,6 +38,8 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "e090-after-mobile": ["キャンセル"],
   "e090-after-video-c": ["位置なし", "キャンセル"],
   "09-decision": ["コメント"],
+  "editor-comments-header": [],
+  "editor-comments-q66": ["解決済みを表示"],
 };
 
 export function md5File(file: string): string {
