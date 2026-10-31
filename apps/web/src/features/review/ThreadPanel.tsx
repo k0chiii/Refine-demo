@@ -33,8 +33,8 @@ import "./ThreadPanel.css";
 type Mode = null | "rejected" | "deferred" | "assign" | "edit";
 
 /** 採否の確定ボタン（動詞）と理由欄の見出し */
-const decisionAction = { rejected: "不採用にする", deferred: "次版へ持ち越す" } as const;
-const decisionLabel = { rejected: "不採用の", deferred: "持ち越しの" } as const;
+const decisionAction = { rejected: "反映しない", deferred: "次の版で対応" } as const;
+const decisionLabel = { rejected: "反映しない", deferred: "次の版で対応する" } as const;
 
 type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["events"][number];
 
@@ -82,7 +82,10 @@ export function ThreadPanel({
   onDelete,
   onDeleteReply,
   onEditReply,
+  initialMode,
 }: {
+  /** 一覧のカードの「反映しない」「次の版で対応」から開いたとき、理由の欄を開いておく */
+  initialMode?: "rejected" | "deferred" | undefined;
   thread: Thread;
   /** 紙面のピンと同じ番号 */
   index?: number;
@@ -109,7 +112,7 @@ export function ThreadPanel({
   onDeleteReply: (replyEventId: string) => Promise<void>;
   onEditReply: (replyEventId: string, body: string) => Promise<void>;
 }) {
-  const [mode, setMode] = useState<Mode>(null);
+  const [mode, setMode] = useState<Mode>(initialMode ?? null);
   const [text, setText] = useState("");
   const [ids, setIds] = useState<string[]>([]);
   const closed = isClosed(t);
@@ -126,6 +129,13 @@ export function ThreadPanel({
     const opener = moved ? null : (document.activeElement as HTMLElement | null);
     const root = rootRef.current;
     root?.focus({ preventScroll: true });
+    let raf = 0;
+    if (initialMode)
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(() =>
+          root?.querySelector<HTMLTextAreaElement>(".thread__form textarea")?.focus(),
+        );
+      });
     // M3E のボタンは描き終わるまでフォーカスを受けない（tabindex は Lit の更新で付く。端で disabled になったら受けない）
     const pressed = moved
       ? root?.querySelector<HTMLElement & { updateComplete?: Promise<unknown> }>(
@@ -136,6 +146,7 @@ export function ThreadPanel({
       if (document.activeElement === root) pressed.focus({ preventScroll: true });
     });
     return () => {
+      cancelAnimationFrame(raf);
       if (navMoved) return;
       const now = document.activeElement;
       if (now && now !== document.body) return;
@@ -166,6 +177,7 @@ export function ThreadPanel({
   };
   const menuId = `tm-${t.id}`;
   const hasMenu = canDecide || t.can.edit || t.can.delete;
+  const showDecide = canDecide && !closed && mode !== "rejected" && mode !== "deferred";
   const [confirmDelete, setConfirmDelete] = useState(false);
   const doDelete = useAction(async () => {
     await onDelete();
@@ -174,12 +186,6 @@ export function ThreadPanel({
   const toggleReaction = useMutation(api.comments.toggleReaction);
   const [sheetOpen, setSheetOpen] = useState(false);
   const actions: ActionSheetItem[] = [
-    ...(canDecide && !closed
-      ? [
-          { icon: "block", label: "不採用にする", onSelect: () => openMode("rejected") },
-          { icon: "move_down", label: "次版へ持ち越す", onSelect: () => openMode("deferred") },
-        ]
-      : []),
     ...(canDecide
       ? [{ icon: "person_pin", label: "担当者を指定", onSelect: () => openMode("assign") }]
       : []),
@@ -358,17 +364,6 @@ export function ThreadPanel({
           <M3eIcon name="notifications" />
           <M3eIcon slot="selected" name="notifications_active" className="icon--filled" />
         </M3eIconButton>
-        {canDecide && !closed ? (
-          <M3eIconButton
-            aria-label="解決済みにする"
-            size="extra-small"
-            className="thread__resolve"
-            disabled={pending === true}
-            onClick={() => void onResolve()}
-          >
-            <M3eIcon name="check" />
-          </M3eIconButton>
-        ) : null}
         {hasMenu ? (
           <M3eIconButton
             aria-label="その他の操作"
@@ -424,6 +419,27 @@ export function ThreadPanel({
             canReact={canReply}
             onToggle={(emoji) => toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })}
           />
+          {showDecide ? (
+            <div className="thread__decide" role="group" aria-label="反映するかどうか">
+              <M3eButton
+                variant="filled"
+                size="small"
+                disabled={pending === true}
+                onClick={() => void onResolve()}
+              >
+                <M3eIcon slot="icon" name="check" />
+                反映する
+              </M3eButton>
+              <M3eButton variant="tonal" size="small" onClick={() => openMode("rejected")}>
+                <M3eIcon slot="icon" name="block" />
+                反映しない
+              </M3eButton>
+              <M3eButton variant="text" size="small" onClick={() => openMode("deferred")}>
+                <M3eIcon slot="icon" name="move_down" />
+                次の版で対応
+              </M3eButton>
+            </div>
+          ) : null}
           {mode === "edit" ? (
             <BodyEditForm
               id={`${t.id}-edit`}
@@ -575,18 +591,6 @@ export function ThreadPanel({
       ) : null}
       {hasMenu && !compact ? (
         <M3eMenu id={menuId} positionX="before">
-          {canDecide && !closed ? (
-            <M3eMenuItem onClick={() => openMode("rejected")}>
-              <M3eIcon slot="icon" name="block" />
-              不採用にする
-            </M3eMenuItem>
-          ) : null}
-          {canDecide && !closed ? (
-            <M3eMenuItem onClick={() => openMode("deferred")}>
-              <M3eIcon slot="icon" name="move_down" />
-              次版へ持ち越す
-            </M3eMenuItem>
-          ) : null}
           {canDecide ? (
             <M3eMenuItem onClick={() => openMode("assign")}>
               <M3eIcon slot="icon" name="person_pin" />
