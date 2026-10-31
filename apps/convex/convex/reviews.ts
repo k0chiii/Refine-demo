@@ -103,6 +103,7 @@ export const myQueue = query({
         reviewType: a.reviewType,
         focusNotes: revision.focusNotes,
         deadlineAt: revision.deadlineAt,
+        reviewUrgent: revision.reviewUrgent === true,
         reviewState: revision.reviewState,
         isOpen: revision.reviewState === "open" && isBeforeDeadline(now, revision.deadlineAt),
         overdue: revision.reviewState !== "open" || isDeadlineReached(now, revision.deadlineAt),

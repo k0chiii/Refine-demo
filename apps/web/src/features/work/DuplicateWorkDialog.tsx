@@ -30,7 +30,13 @@ export function DuplicateWorkDialog({
   const navigate = useNavigate();
   if (!data) return null;
   const { work } = data;
-  const form: WorkFormState = { ...workFormFromWork(work), title: duplicateTitle(work.title) };
+  const base = workFormFromWork(work);
+  const form: WorkFormState = {
+    ...base,
+    title: duplicateTitle(work.title),
+    /** 登録（create）必須。元に仕上がり日が無ければ入稿日などから引く */
+    finishAt: base.finishAt ?? base.publishAt ?? null,
+  };
   return (
     <NewWorkDialog
       open

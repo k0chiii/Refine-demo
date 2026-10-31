@@ -666,4 +666,34 @@ describe("グラフィック制作物の提出: PDF・画像・Illustrator・InD
       }),
     ).resolves.toBeDefined();
   });
+
+  it("external 添付の URL は https のみ（95A）", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const base = {
+      workId: work.id,
+      kind: "standard" as const,
+      reviewType: "general" as const,
+      deadlineAt: ctx.clock.now() + 24 * HOUR,
+      changeSummary: "",
+      focusNotes: "",
+    };
+    await expect(
+      prepareSubmission(ctx, principals.creator, {
+        ...base,
+        items: [
+          {
+            fileName: "http://example.com/",
+            mimeType: "text/uri-list",
+            type: "external_link",
+            role: "external",
+            externalUrl: "http://example.com/",
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: "anchor_invalid",
+      details: { reason: "external_url_https_required" },
+    });
+  });
 });

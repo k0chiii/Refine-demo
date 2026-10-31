@@ -53,6 +53,8 @@ export interface DashboardItem {
   revisionLabel: string | null;
   /** 校正期限（版）または納期（制作物）。並び替えと表示に使う */
   deadlineAt: number | null;
+  /** 提出時の「緊急」トグル */
+  reviewUrgent?: boolean;
   /** 未対応のコメント数など、行の右に出す数 */
   count: number;
   /** 行の補足（専門確認の名前・通知の本文など） */
@@ -220,6 +222,7 @@ function itemOf(
     revisionId: r?.id ?? null,
     revisionLabel: r?.label ?? null,
     deadlineAt,
+    ...(r?.reviewUrgent === true ? { reviewUrgent: true } : {}),
     count,
   };
 }
