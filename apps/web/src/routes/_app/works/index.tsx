@@ -326,7 +326,7 @@ function TeamFilterChip({
   onChange: (teamId: string | undefined) => void;
 }) {
   const picked = value ? teams.find((t) => t.id === value) : undefined;
-  const short = axis === "owner" ? "主管" : "制作";
+  const short = axis === "owner" ? "担当" : "制作";
   return (
     <MenuChip
       id={`works-${axis}-menu`}
