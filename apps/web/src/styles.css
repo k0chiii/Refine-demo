@@ -6154,3 +6154,13 @@ m3e-snackbar {
 .ov__block--bureau-mock .mf-table {
   --mf-table-header-bg: var(--mf-surface-container-high);
 }
+
+/* stack-pr:ui-sns-band-visibility */
+.sns-home-band {
+  margin: 0 16px 12px;
+  --m3e-filled-card-container-color: var(--mf-secondary-container);
+}
+.sns-home-band__meta {
+  margin: 4px 0 0;
+  color: var(--mf-on-secondary-container);
+}
