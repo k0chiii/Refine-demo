@@ -250,8 +250,11 @@ export function createAppContext(
         const docs = await db
           .query("revisions")
           .withIndex("by_state_deadline", (q) => q.eq("reviewState", "open").lte("deadlineAt", now))
-          .take(limit);
-        return docs.map((d) => fromDoc(d) as Revision);
+          .take(limit * 2);
+        return docs
+          .filter((d) => d.deadlineAt !== undefined)
+          .slice(0, limit)
+          .map((d) => fromDoc(d) as Revision);
       },
       async listOpenDueWithin({ after, upTo }, { cursor, limit }) {
         const result = await db

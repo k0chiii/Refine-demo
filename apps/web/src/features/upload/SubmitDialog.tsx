@@ -17,6 +17,8 @@ import {
   pickReviewArtifact,
   revisionDeclarationItems,
   suggestedChecksFor,
+  defaultSubmitDeadlineAt,
+  maxUrgentSubmitDeadlineAt,
   type CheckType,
   type MediaType,
   type RevisionDeclarations,
@@ -27,13 +29,14 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { figmaStatus, importFigmaFrames, uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
-import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
+import { formatBytes, formatDeadlineUntil } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
 import { Loading } from "@/ui/Loading";
 import { M3eDialog } from "@/ui/LazyDialog";
 import { M3eButton } from "@m3e/react/button";
+import { M3eFilterChip } from "@m3e/react/chips";
 import { M3eExpansionPanel } from "@m3e/react/expansion-panel";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -139,7 +142,8 @@ export function SubmitDialog({
   const confirm = useMutation(api.submissions.confirm);
 
   // 既定は 3 日後の終わり（日付だけの締切＝その日の 23:59 まで）。当日の終わりも選べる
-  const defaultDeadline = useMemo(() => endOfJstDay(Date.now() + 3 * 86_400_000), []);
+  const defaultDeadline = useMemo(() => defaultSubmitDeadlineAt(Date.now()), []);
+  const [urgent, setUrgent] = useState(false);
   const [deadlineAt, setDeadlineAt] = useState<number | null>(defaultDeadline);
   const [form, setForm] = useState({
     kind: "standard",
@@ -242,6 +246,13 @@ export function SubmitDialog({
   const hasRough = revisions.some((r) => r.kind === "rough");
   const hasStandard = revisions.some((r) => r.kind === "standard");
   const accepting = revisions.find((r) => r.id === data?.acceptingRevisionId) ?? null;
+  const maxUrgentDeadline = useMemo(
+    () =>
+      urgent
+        ? maxUrgentSubmitDeadlineAt(Date.now(), accepting?.deadlineAt ?? undefined)
+        : undefined,
+    [urgent, accepting?.deadlineAt],
+  );
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   // 文章エディタ・投稿の編集が下書きから作ったファイルを持って開いたときは、媒体に関わらずファイルの提出
@@ -286,9 +297,13 @@ export function SubmitDialog({
   const start = async () => {
     setError(null);
     if (!work) return;
-    if (!deadlineAt) return setError("校正期限を入力してください");
+    if (!deadlineAt) return setError("校正期日を入力してください");
     if (deadlineAt <= Date.now())
-      return setError("校正期限が過ぎています。今より後の日時にしてください");
+      return setError("校正期日が過ぎています。今より後の日時にしてください");
+    if (urgent && maxUrgentDeadline !== undefined && deadlineAt > maxUrgentDeadline)
+      return setError(
+        "緊急の校正期日は、通常の既定（3 日後）またはいま受付中の版の校正期日より前にしてください",
+      );
     if (!token)
       return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
     if (input.kind === "web" && !isHttpUrl(form.externalUrl))
@@ -385,6 +400,7 @@ export function SubmitDialog({
             kind: form.kind as "standard",
             reviewType: "general",
             deadlineAt,
+            ...(urgent ? { reviewUrgent: true } : {}),
             // 初回の「補足」は版の説明（changeSummary）の後ろに添える（データの持ち方は変えない）
             changeSummary:
               isFirst && form.notes.trim()
@@ -436,7 +452,13 @@ export function SubmitDialog({
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
-      <span slot="header">版を提出</span>
+      <div slot="header" className="row submit-dialog__header">
+        <span>版を提出</span>
+        <M3eFilterChip selected={urgent} onClick={() => { const next = !urgent; setUrgent(next); if (next && deadlineAt && maxUrgentDeadline !== undefined && deadlineAt > maxUrgentDeadline) setDeadlineAt(maxUrgentDeadline); }}>
+          <M3eIcon slot="icon" name="priority_high" />
+          緊急
+        </M3eFilterChip>
+      </div>
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>
@@ -559,11 +581,12 @@ export function SubmitDialog({
                 </Select>
               </Field>
               <DateField
-                label="校正期限"
+                label="校正期日"
                 required
                 value={deadlineAt}
                 onChange={setDeadlineAt}
                 min={Date.now()}
+                {...(urgent && maxUrgentDeadline !== undefined ? { max: maxUrgentDeadline } : {})}
               />
             </div>
             <Field label={isFirst ? "この案の意図" : "変更した点とその理由"}>

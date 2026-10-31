@@ -5873,6 +5873,9 @@ m3e-snackbar {
   display: block;
   color: var(--mf-on-surface-variant);
 }
+/* 版提出: ヘッダーの緊急 chip・一覧の緊急表示 */
+.submit-dialog__header { flex: 1; align-items: center; justify-content: space-between; gap: 12px; }
+.review-urgent-chip { margin-inline-end: 6px; vertical-align: middle; }
 /* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
 .submit-checklist {
   display: grid;

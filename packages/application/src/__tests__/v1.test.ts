@@ -1,3 +1,4 @@
+import { startOfJstDay } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { finalizeWork } from "../usecases/approvals.ts";
 import { addRequiredCheck, completeRequiredCheck, waiveRequiredCheck } from "../usecases/checks.ts";
@@ -415,8 +416,8 @@ describe("アプリ内通知（F-11）", () => {
       workId: rev.workId,
       reviewerIds: [principals.reviewer.userId, principals.stranger.userId],
     });
-    expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 48h 前はまだ
-    ctx.clock.advance(30 * HOUR);
+    expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 締切当日まで送らない
+    ctx.clock.current = startOfJstDay(rev.deadlineAt);
     expect(await remindUpcomingDeadlines(ctx)).toBe(2);
     expect(await remindUpcomingDeadlines(ctx)).toBe(0); // 二度送らない
     expect((await listMyNotifications(ctx, principals.reviewer)).map((n) => n.kind)).toEqual([
