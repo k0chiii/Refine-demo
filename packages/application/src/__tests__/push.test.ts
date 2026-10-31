@@ -72,7 +72,7 @@ describe("端末への通知（Web Push）", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: [principals.stranger.userId],
-      permission: "view",
+      permission: "review",
     });
     await subscribePush(ctx, principals.stranger, sub(1));
     await subscribePush(ctx, principals.stranger, sub(2));
@@ -117,7 +117,7 @@ describe("端末への通知（Web Push）", () => {
       await grantWorkPermission(ctx, principals.sysadmin, {
         workId: work.id,
         userIds: [principals.stranger.userId],
-        permission: "view",
+        permission: "review",
       });
       await subscribePush(ctx, principals.stranger, sub());
       const post = async (kind: "comment_posted" | "review_assigned" = "comment_posted") => {

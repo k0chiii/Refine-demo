@@ -117,7 +117,7 @@ describe("コメント・返信へのリアクション", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: ["u_viewer"],
-      permission: "view",
+      permission: "review",
     });
     const viewer = {
       userId: "u_viewer",

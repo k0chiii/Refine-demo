@@ -119,7 +119,7 @@ describe("指摘の投稿（A-04, A-05, A-06）", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: ["u_viewer"],
-      permission: "view",
+      permission: "review",
     });
     const viewer = {
       userId: "u_viewer",
@@ -288,7 +288,7 @@ describe("採否判断（A-07, D5）", () => {
     await grantWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userIds: ["u_viewer"],
-      permission: "view",
+      permission: "review",
     });
     const viewer = {
       userId: "u_viewer",
