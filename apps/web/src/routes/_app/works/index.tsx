@@ -33,13 +33,13 @@ type TeamAxis = "owner" | "production";
 const SORT_KEYS = ["accepting", "deadline", "title", "stage", "owner", "production"] as const;
 const sortLabel: Record<WorkSortKey, string> = {
   accepting: "校正期日順",
-  deadline: "納期順",
+  deadline: "◆校了目標日順",
   title: "制作物名順",
   stage: "状態順",
-  owner: "主管担当順",
+  owner: "担当順",
   production: "制作担当順",
 };
-const axisLabel: Record<TeamAxis, string> = { owner: "主管担当", production: "制作担当" };
+const axisLabel: Record<TeamAxis, string> = { owner: "担当", production: "制作担当" };
 
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (
@@ -326,7 +326,7 @@ function TeamFilterChip({
   onChange: (teamId: string | undefined) => void;
 }) {
   const picked = value ? teams.find((t) => t.id === value) : undefined;
-  const short = axis === "owner" ? "主管" : "制作";
+  const short = axis === "owner" ? "担当" : "制作";
   return (
     <MenuChip
       id={`works-${axis}-menu`}
