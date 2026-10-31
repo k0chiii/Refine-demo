@@ -24,6 +24,8 @@ export const WORKS_ENTRY = ".works .works-table tbody tr";
 /** シードの制作物 */
 export const PAMPHLET = "MF100 公式パンフレット";
 export const LONG_TITLE = "100nc_デザインガイドライン";
+/** 小ジャンル「スライド」の提出（PDF + 共有 URL） */
+export const SLIDE_DECK = "企画説明会スライド";
 /** 提出前の確認（§58）。提出は止めないが、ふだんの提出に合わせて印を付けておく */
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
