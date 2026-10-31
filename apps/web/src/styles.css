@@ -6031,6 +6031,7 @@ m3e-snackbar {
 
 .detail-shell {
   min-height: 1200px;
+  background: var(--mf-surface-container-low);
 }
 
 .detail-shell__head {
