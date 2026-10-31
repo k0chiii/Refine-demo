@@ -1,4 +1,4 @@
-capturedAt=2026-10-31T17:06:49.165Z
-url=http://127.0.0.1:4306/make
+capturedAt=2026-10-31T17:43:11.619Z
+url=http://127.0.0.1:4513/works/000000000000000000000010016works?tab=comments
 scene=12-submit-dialog
-marker:進行中=進行中
+marker:版を提出=第1版を提出・11/01 02:43

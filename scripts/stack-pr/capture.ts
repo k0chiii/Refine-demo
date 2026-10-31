@@ -86,6 +86,45 @@ async function ready(page: Page) {
   );
 }
 
+/** stack-pr 63B: before/after を同じビルドで撮るとき、実行時にテーマだけ切り替える */
+async function applyCaptureTheme(page: Page) {
+  const mode = process.env.CAPTURE_THEME;
+  if (mode !== "before" && mode !== "after") return;
+  const spec =
+    mode === "before"
+      ? { color: "#1b5fb4", variant: "vibrant" }
+      : { color: "#3F51B5", variant: "tonal-spot" };
+  await page.evaluate((s) => {
+    const t = document.querySelector("m3e-theme");
+    if (!t) return;
+    t.setAttribute("color", s.color);
+    t.setAttribute("variant", s.variant);
+  }, spec);
+  await page.waitForTimeout(400);
+}
+
+async function assertCaptureThemePrimary(page: Page) {
+  const mode = process.env.CAPTURE_THEME;
+  if (mode !== "before" && mode !== "after") return;
+  await page.evaluate((expected) => {
+    const t = document.querySelector("m3e-theme");
+    if (!t) throw new Error("CAPTURE_THEME: missing m3e-theme");
+    const color = t.getAttribute("color")?.toLowerCase();
+    const variant = t.getAttribute("variant");
+    if (color !== expected.color || variant !== expected.variant) {
+      throw new Error(
+        `CAPTURE_THEME ${expected.mode}: expected ${expected.color}/${expected.variant}, got ${color}/${variant}`,
+      );
+    }
+    const primary = getComputedStyle(document.documentElement)
+      .getPropertyValue("--md-sys-color-primary")
+      .trim();
+    if (!primary) throw new Error("CAPTURE_THEME: --md-sys-color-primary empty");
+  }, mode === "before"
+    ? { mode, color: "#1b5fb4", variant: "vibrant" }
+    : { mode, color: "#3f51b5", variant: "tonal-spot" });
+}
+
 async function demoGo(page: Page, routePath: string) {
   await page.evaluate((p: string) => {
     const path = p.replace(/^https?:\/\/[^/]+/, "");
@@ -267,11 +306,8 @@ const SCENES: Record<string, SceneFn> = {
   "02-works-list": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/works");
-    await page.waitForSelector(WORKS_ENTRY, { timeout: 60_000 });
-    await page
-      .locator(WORKS_ENTRY, { hasText: PAMPHLET })
-      .first()
-      .waitFor({ state: "visible", timeout: 60_000 });
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    await page.locator(WORKS_ENTRY).first().waitFor({ state: "attached", timeout: 60_000 });
   },
   "27-make-creator": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
@@ -322,6 +358,16 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (workId) {
+      await page.evaluate((id: string) => {
+        return globalThis.__mf100router!.navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId: id, n: "1" },
+        });
+      }, workId);
+      await page.waitForTimeout(800);
+    }
     await page.waitForSelector(".ws", { timeout: 60_000 });
     await openEditorDrawer(page, "コメント");
     await page.locator(".comments__header").waitFor({ state: "visible", timeout: 60_000 });
@@ -338,21 +384,81 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/check");
   },
   "33-work-form": async (page) => {
-    await signInAs(page, "mock-nogiku-manager");
+    await signInAs(page, "mock-nogiku-admin");
     await demoGo(page, "/works?new=true");
     await page.waitForSelector("m3e-dialog[open]", { timeout: 60_000 });
-    const detailLegacy = page.locator("m3e-expansion-panel", { hasText: "制作物 ID" });
-    if (await detailLegacy.count()) {
-      await detailLegacy.first().locator("[slot=header]").click();
-      await page.waitForTimeout(400);
-    }
-    const body = page.locator("m3e-dialog[open] .dialog-body");
-    if (await body.count()) {
-      await body.first().evaluate((el: HTMLElement) => {
-        el.scrollTop = el.scrollHeight;
-      });
-    }
-    await page.waitForTimeout(400);
+    await page.getByRole("textbox", { name: "制作物名" }).fill("テーマ確認用の制作物");
+    await page.locator("m3e-dialog[open] m3e-select").first().click({ timeout: 30_000 });
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    const creatorBox = page.getByRole("combobox", { name: /制作者/ });
+    await creatorBox.click({ timeout: 30_000 });
+    await creatorBox.fill("めい");
+    await page.waitForTimeout(800);
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "登録" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-admin-csv": async (page) => {
+    await signInAs(page, "mock-nogiku-admin");
+    await demoGo(page, "/admin");
+    await page
+      .locator("m3e-button", { hasText: "CSV で一括登録" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-admin-register": async (page) => {
+    await signInAs(page, "mock-nogiku-admin");
+    await demoGo(page, "/admin");
+    await page.locator("m3e-button", { hasText: "1 件ずつ登録" }).click({ timeout: 60_000 });
+    await page.waitForSelector("m3e-dialog[open]", { timeout: 60_000 });
+    await page.getByRole("textbox", { name: "制作物名" }).fill("登録ボタン確認");
+    await page.locator("m3e-dialog[open] m3e-select").first().click({ timeout: 30_000 });
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    const creatorBox = page.getByRole("combobox", { name: /制作者/ });
+    await creatorBox.click({ timeout: 30_000 });
+    await creatorBox.fill("めい");
+    await page.waitForTimeout(800);
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "登録" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-works-chip": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works__filters m3e-filter-chip", { timeout: 60_000 });
+    await page.locator(".works__filters m3e-filter-chip", { hasText: "進行中" }).click({
+      timeout: 30_000,
+    });
+    await page
+      .locator(".works__filters m3e-filter-chip[selected]")
+      .first()
+      .waitFor({ state: "visible", timeout: 30_000 });
+  },
+  "q63b-works-dashboard": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    await openDashboardOverview(page);
+    await page.locator("#ov-title, .kpis .kpi").first().waitFor({ state: "visible", timeout: 60_000 });
+    await page.locator(".works__controls").waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-editor-toolbar": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await page.waitForSelector(".ws", { timeout: 60_000 });
+    await page.locator(".ws__side-toolbar:not(.ws__side-toolbar--hidden), .drawer .pane-tabs").first().waitFor({
+      state: "visible",
+      timeout: 60_000,
+    });
+  },
+  "q63b-admin-tab": async (page) => {
+    await signInAs(page, "mock-nogiku-admin");
+    await demoGo(page, "/admin?view=teams");
+    await page.locator(".page-tabs m3e-tab[selected]").waitFor({ state: "visible", timeout: 60_000 });
   },
   "34-acl": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -361,6 +467,17 @@ const SCENES: Record<string, SceneFn> = {
   "12-submit-dialog": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
+    const row = page.locator("m3e-list-action", { hasText: "未提出" }).first();
+    if (await row.isVisible().catch(() => false)) {
+      await row.click({ timeout: 60_000 });
+    } else {
+      await page.locator("m3e-list-action").first().click({ timeout: 60_000 }).catch(() => {});
+    }
+    const submit = page.locator("m3e-button", { hasText: "版を提出" }).first();
+    if (await submit.isVisible().catch(() => false)) {
+      await submit.click({ timeout: 60_000 });
+      await page.waitForSelector('m3e-dialog[open] .submit-dialog__title', { timeout: 60_000 });
+    }
   },
   "dashboard-manager": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -427,9 +544,10 @@ const SCENES: Record<string, SceneFn> = {
 };
 
 async function runScene(page: Page, key: string) {
+  const skipPamphletComments = process.env.SKIP_PAMPHLET_COMMENTS === "1";
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
+  await page.evaluate((skip) => globalThis.__mf100demo!.ensureSeeded({ skipPamphletComments: skip }), skipPamphletComments);
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
 }
@@ -441,7 +559,9 @@ async function captureOne(
   corpusRoot: string | undefined,
 ) {
   await runScene(page, sceneKey);
+  await applyCaptureTheme(page);
   await assertSceneMarkers(page, sceneKey);
+  await assertCaptureThemePrimary(page);
   const pagePath = new URL(page.url()).pathname;
   await page.screenshot({ path: outPath, fullPage: true });
   await writeSceneDomSidecar(page, sceneKey, outPath);
@@ -468,13 +588,14 @@ export async function captureShots(
   const mobileW = opts.mobileWidth ?? 412;
   const mobileH = opts.mobileHeight ?? 915;
   const desktopW = opts.desktopWidth ?? 1280;
-  const desktopH = opts.desktopHeight ?? 800;
+  const desktopH = opts.desktopHeight ?? 900;
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.CHROMIUM_PATH || undefined,
   });
   const desktop = await browser.newContext({
     viewport: { width: desktopW, height: desktopH },
+    deviceScaleFactor: 2,
     baseURL: BASE,
     serviceWorkers: "block",
   });
