@@ -110,34 +110,12 @@ describe("コメント・返信へのリアクション", () => {
     ).toBeUndefined();
   });
 
-  it("コメントを見られて返信できる人なら誰でも付けられる。見られない人は付けられない", async () => {
-    const { ctx, work, post } = await setup();
+  it("委員なら誰でもリアクションできる（105A）", async () => {
+    const { ctx, post } = await setup();
     const thread = await post();
-    ctx.state.members.add("u_viewer");
-    await grantWorkPermission(ctx, principals.sysadmin, {
-      workId: work.id,
-      userIds: ["u_viewer"],
-      permission: "review",
-    });
-    const viewer = {
-      userId: "u_viewer",
-      isSystemAdmin: false,
-      groupIds: [],
-      orgPermissions: ["*"],
-    };
-    for (const p of [
-      principals.creator,
-      principals.manager,
-      principals.approver,
-      principals.reviewer,
-      viewer,
-    ])
-      await expect(
-        toggleCommentReaction(ctx, p, { threadId: thread.id, emoji: "👀" }),
-      ).resolves.toBeTruthy();
     await expect(
       toggleCommentReaction(ctx, principals.stranger, { threadId: thread.id, emoji: "👀" }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toBeTruthy();
   });
 
   it("決まった絵文字以外・存在しないコメント・存在しない返信は拒否する", async () => {

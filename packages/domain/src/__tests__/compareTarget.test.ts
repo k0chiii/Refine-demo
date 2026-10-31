@@ -84,7 +84,7 @@ describe("別の制作物との比較（利用者指示 2026-10-17）", () => {
     ).toBe(true);
     expect(
       canEditAlignment({ work, grants: [grant("v", "review")], principal: principal("v") }),
-    ).toBe(false);
+    ).toBe(true);
     expect(canEditAlignment({ work, grants: [], principal: principal("nobody") })).toBe(false);
   });
 });

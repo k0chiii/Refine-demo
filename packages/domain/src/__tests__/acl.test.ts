@@ -105,7 +105,7 @@ describe("isAllowed（§7.2 操作権限）", () => {
     );
   });
   it("校正への参加（review.participate）は review 以上の ACL か職責のみ", () => {
-    const ctxOf = (who: string, grants: typeof [] | [ReturnType<typeof grant>] = []) => ({
+    const ctxOf = (who: string, grants: WorkPermissionGrant[] = []) => ({
       work,
       grants,
       principal: principal(who),

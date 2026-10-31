@@ -94,13 +94,11 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     expect(d.backlog.stale).toHaveLength(1);
   });
 
-  it("閲覧権限の無い人には何も出ない（非公開の制作物）", async () => {
+  it("関係のない委員でも全体の状況と溜まっているものは見られる（105A）", async () => {
     const { ctx, works } = await setup();
-    for (const w of await works()) await ctx.works.update({ ...w });
     const d = await buildDashboard(ctx, principals.stranger, await works());
-    expect(
-      [...Object.values(d.mine), ...Object.values(d.backlog)].every((l) => l.length === 0),
-    ).toBe(true);
+    expect(d.overview.total).toBe(1);
+    expect(d.backlog.unassigned.length + d.backlog.dueSoon.length).toBeGreaterThan(0);
   });
 
   it("全体の状況: 段階・指摘・校正者の数と、注意が要る順の表", async () => {
@@ -177,12 +175,11 @@ describe("ダッシュボード（あなたの担当・溜まっているもの�
     expect(d.summary.dueSoon).toBe(d.upcoming.length);
   });
 
-  it("閲覧権限の無い人の全体の状況は空", async () => {
+  it("関係のない委員の全体の状況にも制作物が出る（105A）", async () => {
     const { ctx, works } = await setup();
-    for (const w of await works()) await ctx.works.update({ ...w });
     const d = await buildDashboard(ctx, principals.stranger, await works());
-    expect(d.overview.total).toBe(0);
-    expect(d.overview.works).toEqual([]);
+    expect(d.overview.total).toBe(1);
+    expect(d.overview.works.map((r) => r.workId)).toEqual([(await works())[0]!.id]);
   });
 
   it("校正の仕事: 割当は未着手→確認中→完了の順に進み、完了した分は done に移る（やることの数に入らない）", async () => {

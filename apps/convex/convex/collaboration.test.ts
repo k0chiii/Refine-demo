@@ -37,9 +37,9 @@ describe("共同編集", () => {
       content: doc("元の原稿"),
     });
     expect((await c.creator.as.query(api.documents.get, { workId })).collaborative).toBe(true);
-    await expect(
-      c.stranger.as.query(api.collaboration.getSnapshot, { id: workId }),
-    ).rejects.toThrow();
+    expect(await c.stranger.as.query(api.collaboration.getSnapshot, { id: workId })).toMatchObject({
+      version: 1,
+    });
     await expect(
       c.approver.as.mutation(api.collaboration.submitSteps, {
         id: workId,

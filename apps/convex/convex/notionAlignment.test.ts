@@ -89,7 +89,7 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
     ]);
     expect((await cast.admin.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([workId]);
     await expect(cast.stranger.as.query(api.dashboard.get, {})).resolves.toBeTruthy();
-    // 所属を外すと見られなくなる
+    // 105A: 所属を外しても委員は見られる
     await cast.admin.as.mutation(api.teams.save, {
       id: design,
       name: "デザイン担当",
@@ -97,9 +97,7 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       parentId: bureau,
       memberIds: [],
     });
-    await expect(cast.stranger.as.query(api.works.get, { workId })).rejects.toThrow(
-      code("forbidden"),
-    );
+    await expect(cast.stranger.as.query(api.works.get, { workId })).resolves.toBeTruthy();
     await cast.manager.as.mutation(api.works.update, {
       workId,
       patch: {},

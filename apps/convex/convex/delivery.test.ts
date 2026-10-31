@@ -454,7 +454,7 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(settings.destinations.slack.status).toBe("cannot_dm");
   });
 
-  it("閲覧権限を外された人へのメール・Slack には、非公開の制作物の名前を載せない", async () => {
+  it("ACL を取り消してもメール・Slack に制作物名を載せる（105A）", async () => {
     emailEnv();
     slackEnv();
     const t = createHarness();
@@ -471,7 +471,7 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
     expect(await deliver(t, notificationId)).toBe(2);
     expect(services.calls("email")).toHaveLength(1);
     expect(services.calls("post")).toHaveLength(1);
-    expect(JSON.stringify(services.fetch.mock.calls)).not.toContain(TITLE);
+    expect(JSON.stringify(services.fetch.mock.calls)).toContain(TITLE);
   });
 
   it("運用側の問題（Resend の鍵の誤り）は記録も再試行もせず、宛先をログに出さない", async () => {
