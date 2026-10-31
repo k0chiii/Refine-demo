@@ -58,7 +58,7 @@ function DashboardKpis({ data }: { data: Data }) {
   const { summary, overview, nextDeadline } = data;
   const comments = overview.threads.open + overview.threads.done;
   return (
-    <section className="kpis kpis--three" aria-label="サマリー">
+    <section className="kpis kpis--three kpis--mock-row" aria-label="サマリー">
       <Kpi label="締切が近い" value={summary.dueSoon}>
         {nextDeadline?.deadlineAt ? (
           <span className="kpi__sub">次は {formatDeadline(nextDeadline.deadlineAt)}</span>
