@@ -4,20 +4,38 @@
 
 ## develop マージ進捗（001–070）
 
-`origin/develop` @ `c4ea316540970dccd4a80c1abae4e61cd2d41032`（2026-10-31 UTC）
+`origin/develop` @ `554c6281ef2d1670ec22be73a6a9ec5e992df797`（2026-10-31 UTC・merge-batch 実行中）
 
 | id | PR | develop | メモ |
 |---|---:|---|---|
-| 001 | #93 | ✅ | |
-| 002 | #94 | ✅ | |
-| 003 | #97 | ✅ | |
-| 004–005 | #96, #95 | — | stack 向け誤マージ。内容は **#102 経由で develop に含まれる** |
-| 006 | #102 | ✅ | `gh pr merge` |
-| 007 | #99 | ✅ | `gh pr merge` |
-| 008–070 | — | ⏸ | **停止** stack **008 / #100**: base≠develop → `ManagePullRequest update_pr` + PDF コメント + marker + CI + `gh pr merge` |
-| 071–076 | #165 等 | — | 001–070 完了後 #165 base→develop（未実施） |
+| 001–014 | #93–#107 | ✅ | `merge-one.sh` + PDF marker（#96/#95 は develop に MERGED 表示） |
+| 015–070 | #104–#166 | 🔄 | tmux `merge-batch-008-070.sh` 順次（**#129 は対象外**） |
+| 071–076 | #165,#163,#162,#168,#167,#169 | — | develop マージ後 #165 base→develop（**ManagePullRequest**）。現 base は stack 071–075 上 |
 
-手順: `scripts/stack-pr/merge-all-auto.mjs` / `merge-stack-001-070-git.mjs`。retarget・コメントは **ManagePullRequest**（`gh` integration 不可）。
+手順: `scripts/stack-pr/merge-one.sh` / `merge-batch-008-070.sh`。retarget・PDF コメントは **ManagePullRequest**（`gh` integration 403）。
+
+### 071–076 CI（2026-10-31・マージしない）
+
+| PR | id | base | CI |
+|---:|---|---|---|
+| #165 | 071 | `cursor/stack-070-copy-youtaiou-terminology-v2-8b5a` | verify 系 + e2e-smoke 緑 |
+| #163 | 072 | `cursor/stack-071-domain-work-stages-v7-v2-8b5a` | 緑 |
+| #162 | 073 | `cursor/stack-072-schema-revision-planned-at-v2-8b5a` | 緑 |
+| #168 | 074 | `cursor/stack-073-domain-danger-kpi-v2-8b5a` | 緑 |
+| #167 | 075 | `cursor/stack-074-demo-dashboard-role-homes-v2-8b5a` | 緑 |
+| #169 | 076 | `cursor/stack-075-ui-home-view-switcher-v2-8b5a` | 緑 |
+
+### C/D ダッシュボード mock（076 上・未マージ）
+
+| id | ブランチ | 備考 |
+|---|---|---|
+| 077 | `cursor/stack-077-ui-delay-color-tokens-8b5a` | push 済。PR 作成は ManagePullRequest（gh create 403）→ [compare](https://github.com/k0chiii/Refine-demo/compare/cursor/stack-076-detail-route-shell-v2-8b5a...cursor/stack-077-ui-delay-color-tokens-8b5a) |
+| 078–088 | — | `manifest-dashboard-cd.json` 残り（未 push） |
+
+### スクリーンショット
+
+- `scripts/stack-pr/capture.ts` … `App.signInAs` / `App.go` + `build:demo` + signin md5 `ac741f735c6593b5cbdc397deb4a8004` 拒否
+- `node scripts/stack-pr/retake-screenshots.mjs --ids=071,072,073,074,075,076`（412px mobile）
 
 ## 使っていないブランチ（v1・058–074 再積み前）
 
