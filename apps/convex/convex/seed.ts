@@ -1,5 +1,7 @@
 import { endOfJstDay } from "@mf100/domain";
-import { internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { v } from "convex/values";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { SAMPLE_RULE_DRAFTS } from "./lib/notationSamples.ts";
 
 /**
@@ -46,8 +48,8 @@ export const MOCK_USERS = [
 ] as const;
 
 export const demo = internalMutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { skipPamphletComments: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
       throw new Error("seed:demo is only available when NOGIKU_MOCK_ENABLED=true");
     const ids: Record<string, string> = {};
@@ -376,9 +378,75 @@ export const demo = internalMutation({
         assignedAt: now,
       });
     }
+    if (!args.skipPamphletComments) {
+      await seedPamphletCommentFixture(ctx, ids, now, day);
+    }
     return { users: ids, createdWorks: created };
   },
 });
+
+/** 66A スクリーンショット用: 公式パンフに版1と解決済みコメントを1件以上 */
+async function seedPamphletCommentFixture(
+  ctx: MutationCtx,
+  ids: Record<string, string>,
+  now: number,
+  day: number,
+) {
+  const work = await ctx.db
+    .query("works")
+    .withIndex("by_year", (q) => q.eq("year", 100))
+    .filter((q) => q.eq(q.field("legacyId"), "PR-001"))
+    .unique();
+  if (!work) return;
+  let revision = await ctx.db
+    .query("revisions")
+    .withIndex("by_work", (q) => q.eq("workId", work._id))
+    .first();
+  if (!revision) {
+    const revisionId = await ctx.db.insert("revisions", {
+      workId: work._id,
+      kind: "standard",
+      sequence: 1,
+      reviewType: "general",
+      submittedBy: ids["mock-nogiku-creator"]!,
+      submittedAt: now,
+      deadlineAt: endOfJstDay(now + 14 * day),
+      reviewState: "open",
+      changeSummary: "デモ初稿",
+      focusNotes: "",
+      threadCount: 2,
+      unresolvedCount: 1,
+    });
+    revision = (await ctx.db.get(revisionId))!;
+  }
+  const revisionId = revision._id;
+  const existing = await ctx.db
+    .query("commentThreads")
+    .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+    .take(1);
+  if (existing.length > 0) return;
+
+  const reviewerId = ids["mock-nogiku-reviewer"]!;
+  await ctx.db.insert("commentThreads", {
+    revisionId,
+    authorId: reviewerId,
+    body: "表記を確認してください",
+    kind: "correction",
+    severity: "info",
+    resolution: "open",
+    createdAt: now,
+  });
+  await ctx.db.insert("commentThreads", {
+    revisionId,
+    authorId: reviewerId,
+    body: "反映済みの指摘（デモ）",
+    kind: "correction",
+    severity: "minor",
+    resolution: "resolved",
+    createdAt: now + 1,
+  });
+  await ctx.db.patch(revisionId, { threadCount: 2, unresolvedCount: 1 });
+}
 
 /** サンプルのアカウントのアイコン（アプリのアイコン 192px の PNG） */
 const SAMPLE_AVATAR =

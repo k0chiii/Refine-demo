@@ -147,9 +147,11 @@ class DemoBackend {
       : this.t;
   }
 
-  ensureSeeded(): Promise<void> {
+  ensureSeeded(opts?: { skipPamphletComments?: boolean }): Promise<void> {
+    const skip =
+      opts?.skipPamphletComments === true || g.process?.env?.SKIP_PAMPHLET_COMMENTS === "1";
     this.seeded ??= this.enqueue(async () => {
-      await this.t.mutation(internal.seed.demo, {});
+      await this.t.mutation(internal.seed.demo, { skipPamphletComments: skip });
     });
     return this.seeded;
   }
