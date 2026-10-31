@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:02:36.429Z
+url=http://127.0.0.1:4304/works
+scene=dashboard-approver
+marker:MF100 公式パンフレット=MF100 公式パンフレット

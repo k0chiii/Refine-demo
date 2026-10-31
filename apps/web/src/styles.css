@@ -10,7 +10,7 @@
     "Noto Sans JP Variable", "Noto Sans JP", "Roboto", system-ui, -apple-system, "Segoe UI",
     sans-serif;
 
-  /* 色役割（M3 color roles）。フォールバックはいまの配色（seed #1b5fb4・vibrant。m3e-theme が無いときだけ使う） */
+  /* 色役割（M3 color roles）。フォールバックは seed #3F51B5・tonal-spot（m3e-theme が無いときだけ使う） */
   --mf-surface: var(--md-sys-color-surface, #f6f5ff);
   --mf-surface-dim: var(--md-sys-color-surface-dim, #c8d3ff);
   --mf-surface-container-lowest: var(--md-sys-color-surface-container-lowest, #ffffff);

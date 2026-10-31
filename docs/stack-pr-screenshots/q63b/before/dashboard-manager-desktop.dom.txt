@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:00:09.379Z
+url=http://127.0.0.1:4302/works
+scene=dashboard-manager
+marker:制作物の状況=制作物の状況

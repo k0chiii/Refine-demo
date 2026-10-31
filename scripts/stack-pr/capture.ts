@@ -287,7 +287,7 @@ const SCENES: Record<string, SceneFn> = {
   "28-check-reviewer": async (page) => {
     await signInAs(page, "mock-nogiku-reviewer");
     await demoGo(page, "/check");
-    await page.waitForSelector(".hub[data-hub='check']");
+    await page.waitForSelector(".hub[data-hub='check'] .hub__tabs", { timeout: 60_000 });
   },
   "08-workspace-comment": async (page) => {
     await workspaceCommentsReady(page);
@@ -462,6 +462,7 @@ export async function captureShots(
   });
   const desktop = await browser.newContext({
     viewport: { width: desktopW, height: desktopH },
+    deviceScaleFactor: 2,
     baseURL: BASE,
     serviceWorkers: "block",
   });

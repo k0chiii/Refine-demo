@@ -16,7 +16,7 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "01-signin": ["校正システム", "サインイン"],
   "02-works-list": ["MF100 公式パンフレット"],
   "27-make-creator": ["進行中"],
-  "28-check-reviewer": ["校正"],
+  "28-check-reviewer": ["未着手"],
   "33-work-form": ["制作物を登録"],
   "34-acl": ["閲覧権限"],
   "dashboard-manager": ["制作物の状況"],
@@ -31,6 +31,8 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "e090-after-mobile": ["キャンセル"],
   "e090-after-video-c": ["位置なし", "キャンセル"],
   "09-decision": ["コメント"],
+  "31-finalize": ["未着手"],
+  "12-submit-dialog": ["進行中"],
 };
 
 export function md5File(file: string): string {
