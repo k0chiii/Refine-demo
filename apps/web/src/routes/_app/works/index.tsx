@@ -36,10 +36,10 @@ const sortLabel: Record<WorkSortKey, string> = {
   deadline: "納期順",
   title: "制作物名順",
   stage: "状態順",
-  owner: "主管担当順",
+  owner: "担当順",
   production: "制作担当順",
 };
-const axisLabel: Record<TeamAxis, string> = { owner: "主管担当", production: "制作担当" };
+const axisLabel: Record<TeamAxis, string> = { owner: "担当", production: "制作担当" };
 
 export const Route = createFileRoute("/_app/works/")({
   validateSearch: (

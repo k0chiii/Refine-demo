@@ -44,10 +44,10 @@ test.describe("制作物一覧", { tag: "@smoke" }, () => {
     await expect(sorted).toHaveAttribute("aria-sort", "descending");
   });
 
-  test("並べ替えのメニューで主管担当順にできる", async ({ app, page }) => {
+  test("並べ替えのメニューで担当順にできる", async ({ app, page }) => {
     await page.locator(".works__sort").click();
     await app.settle();
-    await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "主管担当順" }).click();
+    await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "担当順" }).click();
     await expect(page).toHaveURL(/sort=owner/);
   });
 });

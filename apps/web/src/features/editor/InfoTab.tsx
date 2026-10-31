@@ -189,12 +189,12 @@ export function InfoTab({
     {
       title: "担当と人",
       rows: [
-        ...optional("担当（主管担当）", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
+        ...optional("担当", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
         ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
         ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
         ["制作者", names(people.creators) || "—"] as Row,
-        ["校了者", <ApproverList key="approvers" approval={approval} />] as Row,
-        ["主管", names(people.managers) || "—"] as Row,
+        ["校了する人", <ApproverList key="approvers" approval={approval} />] as Row,
+        ["統括", names(people.managers) || "—"] as Row,
         ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
       ],
     },
@@ -573,7 +573,7 @@ export function InfoTab({
           </p>
           {multiApprovers ? (
             <StatusText tone={reachesNow ? "success" : "neutral"}>
-              校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
+              校了する人 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
               {approval.declaredCount} 人{reachesNow ? "・この宣言で校了" : ""}
             </StatusText>
           ) : null}
