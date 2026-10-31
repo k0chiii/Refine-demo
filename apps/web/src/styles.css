@@ -6029,6 +6029,10 @@ m3e-snackbar {
 
 /* stack-pr:detail-shell */
 
+.detail-shell {
+  min-height: 720px;
+}
+
 .detail-shell__head {
   display: flex;
   flex-direction: column;
