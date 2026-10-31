@@ -526,7 +526,7 @@ function WriteSurface({
     ) : null;
   const panelTabs = (current: Panel | null, onPick: (p: Panel) => void) => (
     <PaneTabs
-      label="補助ペイン"
+      label="サイドパネル"
       value={current ?? "outline"}
       onChange={onPick}
       items={panels.map((p) => ({
@@ -564,7 +564,7 @@ function WriteSurface({
           className={`write__status write__status--${status.kind}`}
           {...(status.kind === "error" || status.kind === "conflict" ? { role: "alert" } : {})}
         >
-          {canEdit ? statusText : "閲覧のみ（書けるのは版を提出できる人です）"}
+          {canEdit ? statusText : "閲覧のみ"}
         </span>
       </AppBarSlot>
       <AppBarSlot slot="actions">
@@ -630,7 +630,7 @@ function WriteSurface({
               className="ws__side-toolbar write__side"
               shape="rounded"
               elevated
-              aria-label="補助ペイン"
+              aria-label="サイドパネル"
             >
               {panels.map((p) => (
                 <span key={p.id} className="write__side-item">
@@ -689,7 +689,7 @@ function WriteSurface({
           </div>
         ) : null}
         {desktopPanel ? (
-          <aside className="drawer" aria-label="補助ペイン">
+          <aside className="drawer" aria-label="サイドパネル">
             {panelTabs(panel, (p) => setPanel(p))}
             <div className="drawer__body">{panelBody(panel)}</div>
           </aside>
@@ -701,7 +701,7 @@ function WriteSurface({
           modal
           hideable
           handle
-          handleLabel="補助ペイン"
+          handleLabel="サイドパネル"
           className="write__sheet"
           onClosed={() => setPanel(null)}
         >
@@ -753,11 +753,10 @@ function WriteSurface({
         <div className="dialog-body">
           <p style={{ margin: 0 }}>
             {doc.draft?.updatedBy?.name ?? "別の人"} さんが{" "}
-            {doc.draft ? formatJstShort(doc.draft.updatedAt) : ""} に保存した内容があります。
-            この原稿では通常の保存を使用しています。
+            {doc.draft ? formatJstShort(doc.draft.updatedAt) : ""} に保存しました
           </p>
           <p className="small muted" style={{ margin: 0 }}>
-            最新を読み込むまで、この画面の変更は保存されません。読み込むと、まだ保存していない変更は消えます。残したい文章は先にコピーしてください。
+            読み込むと、保存していない変更は消えます
           </p>
         </div>
         <div slot="actions" className="row">

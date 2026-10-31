@@ -1,0 +1,17 @@
+---
+diff --git a/apps/web/src/features/review/ThreadPanel.css b/apps/web/src/features/review/ThreadPanel.css
+index 6c9e403..2eba9d4 100644
+--- a/apps/web/src/features/review/ThreadPanel.css
++++ b/apps/web/src/features/review/ThreadPanel.css
+@@ -364,3 +364,11 @@
+ .thread__chevron {
+   flex: none;
+ }
++
++/* 反映するかどうかは ⋯ に隠さず、本文のすぐ下に並べる */
++.thread__decide {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++  margin-top: 12px;
++}

@@ -28,7 +28,7 @@ describe("最初に開く入口", () => {
   });
 });
 
-describe("制作: あなたの番と校正中", () => {
+describe("制作: 要対応と校正中", () => {
   it("未対応のコメントがあれば、受付中でも提出できても「対応する」が先", () => {
     expect(classifyMakeRow({ accepting: true, toRespond: 2, canSubmit: true })).toEqual({
       group: "turn",

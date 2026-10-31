@@ -90,8 +90,7 @@ function deviceLabel(): string {
  */
 export async function enablePush(publicKey: string): Promise<PushSubscriptionJson | null> {
   const reg = await registration();
-  if (!reg)
-    throw new Error("Service Worker がまだ準備できていません。少し待ってからやり直してください");
+  if (!reg) throw new Error("準備中です。少し待ってからやり直してください");
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return null;
   const sub =

@@ -237,10 +237,9 @@ export function SubmitDialog({
   const failed = failedItems(state).length;
   useEffect(() => {
     if (failed > 0)
-      toast(
-        `${failed} 件が失敗しました。失敗したファイルだけ再アップロードしてから確定してください（旧版の受付は維持されています）`,
-        { kind: "error" },
-      );
+      toast(`${failed} 件を送れませんでした。再アップロードしてから提出してください`, {
+        kind: "error",
+      });
   }, [failed]);
   useEffect(() => {
     if (open && initialFiles && initialFiles.length > 0) setFiles(initialFiles);
@@ -462,7 +461,7 @@ export function SubmitDialog({
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>
-            {`${accepting.label} が ${formatDeadlineUntil(accepting.deadlineAt)}受付中。確定した時点で受付が終了します。`}
+            {`提出すると ${accepting.label} の校正は締め切られます`}
           </p>
         ) : null}
         {!work ? (
@@ -471,11 +470,7 @@ export function SubmitDialog({
         ) : !flow ? (
           <>
             {input.kind === "web" ? (
-              <Field
-                label="サイトの URL"
-                required
-                hint="校正者は表示したサイトの上で、要素を選んでコメントします"
-              >
+              <Field label="サイトの URL" required>
                 <TextInput
                   type="url"
                   value={form.externalUrl}
@@ -493,8 +488,8 @@ export function SubmitDialog({
                   required
                   hint={
                     figmaEnabled === false
-                      ? "Figma 連携が未設定のため、URL は外部リンクとして付きます（埋め込み表示とフレーム単位のコメント）"
-                      : "フレームを選んで「リンクをコピー」（…?node-id=1-2）。提出時に画像として取り込みます"
+                      ? "Figma 連携が未設定なので、リンクとして付けます"
+                      : "フレームのリンクを貼ってください。画像として取り込みます"
                   }
                 >
                   <TextArea
@@ -557,7 +552,7 @@ export function SubmitDialog({
                         <span className="muted">
                           　{formatBytes(f.size)}・
                           {f === shownFile
-                            ? "紙面に表示（コメントはこのファイルに）"
+                            ? "プレビューに表示（コメントはこのファイルに）"
                             : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
                         </span>
                         <M3eIconButton
@@ -573,8 +568,7 @@ export function SubmitDialog({
                 ) : null}
                 {files.length > 0 && graphic && !shownFile ? (
                   <p className="small muted" style={{ margin: 0 }}>
-                    Illustrator・InDesign のファイルは紙面に出せません（PDF 互換の .ai
-                    を除く）。校正に使う書き出した PDF か画像も一緒に出してください。
+                    .ai・.indd はプレビューできません。PDF か画像も付けてください
                   </p>
                 ) : null}
                 {slideSubmit ? (
@@ -601,7 +595,7 @@ export function SubmitDialog({
                     通常版（第{revisions.filter((r) => r.kind === "standard").length + 1}版）
                   </option>
                   <option value="rough" disabled={hasStandard}>
-                    0版（ラフ）{hasStandard ? "・通常版提出後は不可" : hasRough ? "・再提出" : ""}
+                    0版（ラフ）{hasStandard ? "・最初の版だけ" : hasRough ? "・再提出" : ""}
                   </option>
                 </Select>
               </Field>
@@ -805,7 +799,7 @@ export function SubmitDialog({
             disabled={!canConfirm(state)}
             onClick={() => void flow.confirm().catch(() => undefined)}
           >
-            提出を確定する
+            提出する
           </M3eButton>
         )}
       </div>

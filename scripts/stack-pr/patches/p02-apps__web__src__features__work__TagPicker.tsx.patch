@@ -1,0 +1,16 @@
+---
+diff --git a/apps/web/src/features/work/TagPicker.tsx b/apps/web/src/features/work/TagPicker.tsx
+index 95dbfb7..79c6815 100644
+--- a/apps/web/src/features/work/TagPicker.tsx
++++ b/apps/web/src/features/work/TagPicker.tsx
+@@ -280,9 +280,7 @@ export function TagPicker({
+             </div>
+           ) : null}
+         </div>
+-        <span slot="hint" id={`${id}-hint`}>
+-          Notion のタグと同じ選択肢から選べます。ほかの語は書いて作れます
+-        </span>
++        <span slot="hint" id={`${id}-hint`}></span>
+       </M3eFormField>
+       <span className="sr-only" role="status" aria-live="polite">
+         {announce}

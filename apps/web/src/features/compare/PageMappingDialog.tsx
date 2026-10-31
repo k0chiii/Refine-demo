@@ -71,8 +71,7 @@ export function PageMappingDialog({
       <span slot="header">ページの対応</span>
       <div className="dialog-body mapping">
         <p className="small muted" style={{ margin: 0 }}>
-          {rightLabel} の各ページに、{leftLabel}{" "}
-          のどのページが対応するかを選びます。自動の推定（文字と縮小画像の類似度）を直すと、同じ版の組で次回も使われます。
+          対応するページを選んでください。直した対応は次回も使います
         </p>
         <ul className="mapping__list">
           {Array.from({ length: pdf.rightCount }, (_, i) => i + 1).map((r) => {

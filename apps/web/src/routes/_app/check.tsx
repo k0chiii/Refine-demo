@@ -60,7 +60,7 @@ const detailOf = (e: { kind: CheckKind; item: Item }): string => {
   return [
     "校正",
     p ? `校正者 ${p.done}/${p.total} 完了` : null,
-    item.count > 0 ? `未解決のコメント ${item.count}` : null,
+    item.count > 0 ? `未対応のコメント ${item.count}` : null,
   ]
     .filter(Boolean)
     .join("・");
@@ -159,7 +159,7 @@ function Check() {
               icon={kindIcon[e.kind]}
               title={e.title}
               suffix={e.item.revisionLabel}
-              lines={[detailOf(e), deadlineLine("校正の締切", e.deadlineAt)]}
+              lines={[detailOf(e), deadlineLine("校正期日", e.deadlineAt)]}
               chip={chipOf(e.kind, e.state)}
               chipIcon={e.state === "done" ? "visibility" : kindIcon[e.kind]}
               onOpen={() => open(e.item.workId, e.title, e.kind === "check" ? { tab: "info" } : {})}
@@ -175,7 +175,7 @@ function Check() {
               icon="group_add"
               title={i.workTitle}
               suffix={i.revisionLabel}
-              lines={["校正者がいません", deadlineLine("校正の締切", i.deadlineAt)]}
+              lines={["校正者がいません", deadlineLine("校正期日", i.deadlineAt)]}
               chip="割り当てる"
               chipIcon="group_add"
               onOpen={() => open(i.workId, i.workTitle, { tab: "info" })}
@@ -192,7 +192,7 @@ function Check() {
               title={i.workTitle}
               suffix={i.revisionLabel}
               lines={[
-                deadlineLine(i.deadlineKind === "review" ? "校正の締切" : "納期", i.deadlineAt),
+                deadlineLine(i.deadlineKind === "review" ? "校正期日" : "納期", i.deadlineAt),
               ]}
               chip="見る"
               chipIcon="visibility"

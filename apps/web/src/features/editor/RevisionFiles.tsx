@@ -51,7 +51,7 @@ export function RevisionFiles({
               {artifactFormatLabel(a)}
               {a.size ? `・${formatBytes(a.size)}` : ""}
               {a.id === shownId
-                ? "・紙面に表示中（コメントはこのファイルに）"
+                ? "・プレビューに表示中"
                 : a.role !== "external" && !isReviewableArtifact(a)
                   ? "・ダウンロードして開く"
                   : ""}

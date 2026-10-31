@@ -1,0 +1,85 @@
+---
+diff --git a/apps/web/src/features/editor/Editor.tsx b/apps/web/src/features/editor/Editor.tsx
+index 808a2fc..946ba69 100644
+--- a/apps/web/src/features/editor/Editor.tsx
++++ b/apps/web/src/features/editor/Editor.tsx
+@@ -78,6 +78,7 @@ import { PaneTabs } from "@/ui/PaneTabs";
+ import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
+ import { useAutoProofread } from "@/features/proofread/useAutoProofread";
+ import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
++import { ShortcutSheet } from "./ShortcutSheet";
+ import { CompareButton } from "@/features/compare/CompareButton";
+ import { useCompareSession } from "@/features/compare/useCompareSession";
+ import { remaining } from "@/lib/format";
+@@ -846,6 +847,25 @@ export function Editor({
+   useEffect(() => {
+     if (!canComment) setMarkArmed(false);
+   }, [canComment]);
++  // ? でショートカット一覧、C でコメントを付ける（動画はビューアが C を受け持つ）。入力中は何もしない
++  const [keysOpen, setKeysOpen] = useState(false);
++  const commentKey = canComment && artifact?.type !== "video";
++  useEffect(() => {
++    const onKey = (e: KeyboardEvent) => {
++      if (e.isComposing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
++      const el = e.target as HTMLElement | null;
++      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
++      if (e.key === "?") {
++        e.preventDefault();
++        setKeysOpen(true);
++      } else if ((e.key === "c" || e.key === "C") && commentKey) {
++        e.preventDefault();
++        setMarkArmed(true);
++      }
++    };
++    window.addEventListener("keydown", onKey);
++    return () => window.removeEventListener("keydown", onKey);
++  }, [commentKey]);
+   useEffect(() => {
+     if (!armed) return;
+     const onKey = (e: KeyboardEvent) => {
+@@ -2017,6 +2037,20 @@ export function Editor({
+                       )}
+                     </>
+                   ) : null}
++                  {/* コメントはいつでもここから（⋯ やジェスチャーに隠さない）。次のクリック・ドラッグ 1 回で位置を付ける */}
++                  {canComment && !isFigmaEmbed && artifact.type !== "video" ? (
++                    <M3eButton
++                      className="ws__comment"
++                      variant={armed ? "filled" : "tonal"}
++                      size="small"
++                      aria-pressed={armed}
++                      title="コメント（C）"
++                      onClick={() => setMarkArmed(!armed)}
++                    >
++                      <M3eIcon slot="icon" name="add_comment" />
++                      {mobile ? null : "コメント"}
++                    </M3eButton>
++                  ) : null}
+                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
+                   {!isFigmaEmbed ? (
+                     <M3eIconButton
+@@ -2046,6 +2080,16 @@ export function Editor({
+                     </M3eIconButton>
+                   ) : null}
+                   {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
++                  {!mobile ? (
++                    <M3eIconButton
++                      className="ws__keys"
++                      aria-label="キーボードショートカット（?）"
++                      title="キーボードショートカット（?）"
++                      onClick={() => setKeysOpen(true)}
++                    >
++                      <M3eIcon name="keyboard" />
++                    </M3eIconButton>
++                  ) : null}
+                   {!mobile ? (
+                     <M3eIconButton
+                       className="ws__more"
+@@ -2338,6 +2382,7 @@ export function Editor({
+             />
+           </Suspense>
+         ) : null}
++        <ShortcutSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
+       </div>
+     </MentionProvider>
+   );
