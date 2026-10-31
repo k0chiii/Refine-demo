@@ -24,6 +24,8 @@ export const domainErrorCodes = [
   "revision_deadline_passed",
   "revision_not_latest",
   "revision_deadline_in_past",
+  "revision_deadline_required",
+  "revision_deadline_after_max",
   "revision_artifacts_not_verified",
   "revision_no_artifacts",
   "revision_no_reviewable_file",
