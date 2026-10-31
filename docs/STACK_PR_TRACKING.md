@@ -22,10 +22,10 @@
 | id | PR | ブランチ | tip（参考） |
 |---|---|---|---|
 | e089 | **#175** | `cursor/stack-e089-copy-unify-terminology-8b5a` | `13a298f` |
-| e088 | （起票予定） | `cursor/stack-e088-drop-legacy-id-ui-8b5a` | `40d636e`（88 目的・用途は情報タブのみ・**決めることなし**） |
-| e078 | （起票予定） | `cursor/stack-e078-reg-minimal-fields-8b5a` | `55739fa` |
-| e081 | （起票予定） | `cursor/stack-e081-dates-approval-target-finish-8b5a` | `29439d3` |
-| e082 | （起票予定） | `cursor/stack-e082-revision-planned-dates-list-8b5a` | `1d34b79` |
+| e088 | **#177** | `cursor/stack-e088-drop-legacy-id-ui-8b5a` | `40d636e` |
+| e078 | **#181** | `cursor/stack-e078-reg-minimal-fields-8b5a` | `55739fa` |
+| e081 | **#180** | `cursor/stack-e081-dates-approval-target-finish-8b5a` | `29439d3` |
+| e082 | **#179** | `cursor/stack-e082-revision-planned-dates-list-8b5a` | `1d34b79` |
 
 ## B ダッシュボード 071–076（未マージ・base 付け替え待ち）
 
@@ -48,12 +48,15 @@
 | #171 | 078 | stack-077 |
 | #172 | 079 | stack-078 |
 | #173 | 080 | stack-079 |
-| — | 083 | stack-080 |
-| — | 084 | stack-083 |
-| — | 085 | stack-084 |
-| — | 086 | stack-085 |
-| — | 087 | stack-086 |
-| — | 088 | stack-087 |
+| **#176** | 083 | stack-080 |
+| **#178** | 084 | stack-083 |
+| **#185** | 085 | stack-084 |
+| **#183** | 086 | stack-085 |
+| **#184** | 087 | stack-086 |
+| **#182** | 088 | stack-087 |
+
+スクリーンショット raw（docs `7a024bc`）例:  
+https://raw.githubusercontent.com/k0chiii/Refine-demo/7a024bcde924846efb32f0f72806d3b15b749577/docs/stack-pr-screenshots/083/after-desktop.png
 
 ## スクリーンショット
 
