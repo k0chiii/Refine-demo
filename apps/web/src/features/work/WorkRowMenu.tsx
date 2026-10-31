@@ -9,6 +9,8 @@ export interface WorkRowMenuWork {
   title: string;
   /** 情報を編集できるか（listMine の canEdit: 主管） */
   canEdit: boolean;
+  /** 制作者だけを変えられるか（listMine の canTransferCreators） */
+  canTransferCreators?: boolean;
 }
 
 /**
@@ -21,17 +23,22 @@ export function WorkRowMenu({
   canDuplicate,
   compact,
   onEdit,
+  onTransferCreators,
   onDuplicate,
 }: {
   w: WorkRowMenuWork;
   canDuplicate: boolean;
   compact: boolean;
   onEdit: () => void;
+  onTransferCreators: () => void;
   onDuplicate: () => void;
 }) {
   const [sheet, setSheet] = useState(false);
   const items: ActionSheetItem[] = [
     ...(w.canEdit ? [{ icon: "edit", label: "情報を編集", onSelect: onEdit }] : []),
+    ...(w.canTransferCreators
+      ? [{ icon: "group", label: "制作者を変更", onSelect: onTransferCreators }]
+      : []),
     ...(canDuplicate
       ? [
           {

@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T09:40:00.000Z
+url=/works/x/v/1
+scene=e090-before
+marker:全体へのコメント=全体へのコメント
