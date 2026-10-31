@@ -7,10 +7,6 @@ import type { WorkGenre, WorkSubGenre } from "./metadata.ts";
 export const workLifecycles = ["draft", "active", "on_hold", "finalized", "cancelled"] as const;
 export type WorkLifecycle = (typeof workLifecycles)[number];
 
-/** 機密区分。細則は D3 承認待ちのため値を増減しやすい列挙にしておく。 */
-export const confidentialities = ["normal", "restricted"] as const;
-export type Confidentiality = (typeof confidentialities)[number];
-
 /** 媒体種別。導入対象外（external）は外部リンクで管理する（C5 / A-12）。 */
 export const mediaTypes = [
   "pdf",
@@ -52,7 +48,6 @@ export interface Work {
   approvalQuorum?: number;
   deadlineAt?: Instant;
   lifecycle: WorkLifecycle;
-  confidentiality: Confidentiality;
   finalRevisionId?: RevisionId;
   /**
    * 表記統一で使うルールカテゴリ（A1, B など）。制作物ごとに人が選ぶ。媒体・部署から自動では決めない。

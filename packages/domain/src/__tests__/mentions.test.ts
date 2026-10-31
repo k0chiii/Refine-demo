@@ -18,9 +18,8 @@ const grant = (
 const code = (c: string) => expect.objectContaining({ code: c });
 
 describe("メンション", () => {
-  // 非公開・取扱注意: 見られる人が限られるので、候補と検査がそのまま効く
-  const work = makeWork({ confidentiality: "restricted" });
-  it("メンションできるのは制作物を見られる人（職責と有効な ACL）だけ", () => {
+  const work = makeWork();
+  it("メンションできるのは制作物に関わる人（職責と有効な ACL）", () => {
     const grants = [grant("reviewer", { permission: "review" }), grant("gone", { revokedAt: T0 })];
     expect(mentionableUserIds(work, grants).sort()).toEqual(
       ["approver", "creator", "manager", "reviewer"].sort(),
@@ -28,7 +27,6 @@ describe("メンション", () => {
   });
   it("関係者と、制作物の担当に所属する人も候補（利用者決定 2026-10-17）。ほかの担当の所属は入らない", () => {
     const w = makeWork({
-      confidentiality: "restricted",
       stakeholderIds: ["stake"],
       productionTeamIds: ["design"],
     });
@@ -42,12 +40,12 @@ describe("メンション", () => {
     expect(validateMentions(["member"], w, [], teams)).toEqual(["member"]);
     expect(() => validateMentions(["other"], w, [], teams)).toThrow(code("mention_not_allowed"));
   });
-  it("重複は 1 人にまとめ、見られない人を含むと mention_not_allowed", () => {
+  it("重複は 1 人にまとめる。委員なら誰でもメンションできる（105A）", () => {
     expect(validateMentions(["creator", "creator", "approver"], work, [])).toEqual([
       "creator",
       "approver",
     ]);
-    expect(() => validateMentions(["stranger"], work, [])).toThrow(code("mention_not_allowed"));
+    expect(validateMentions(["stranger"], work, [])).toEqual(["stranger"]);
     expect(() => validateMentions(["gone"], work, [grant("gone", { revokedAt: T0 })])).toThrow(
       code("mention_not_allowed"),
     );
