@@ -1,15 +1,12 @@
 import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import { expect, PAMPHLET, test, WORKS_ENTRY } from "../support/app";
-
-const here = dirname(fileURLToPath(import.meta.url));
 
 const PHASE = process.env.STACK_PR_ACL_PHASE ?? "after";
 const OUT =
   process.env.OUT_DIR ??
-  resolve(here, `../../../../docs/stack-pr-screenshots/acl-104-106/pr191/${PHASE}`);
+  resolve(`docs/stack-pr-screenshots/acl-104-106/pr191/${PHASE}`);
 
 mkdirSync(OUT, { recursive: true });
 

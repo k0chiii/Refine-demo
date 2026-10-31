@@ -1,15 +1,12 @@
 import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../support/app";
-
-const here = dirname(fileURLToPath(import.meta.url));
 
 const PHASE = process.env.STACK_PR_ACL_PHASE ?? "after";
 const OUT =
   process.env.OUT_DIR ??
-  resolve(here, `../../../../docs/stack-pr-screenshots/acl-104-106/pr191/${PHASE}`);
+  resolve(`docs/stack-pr-screenshots/acl-104-106/pr191/${PHASE}`);
 
 mkdirSync(OUT, { recursive: true });
 
@@ -48,14 +45,17 @@ test.describe("stack PR acl 104 screenshots", () => {
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin");
     await app.settle();
-    const adminWorks = 'm3e-action-list[aria-label="制作物ごとの権限"] m3e-list-action';
+    const adminWorks =
+      PHASE === "after"
+        ? 'm3e-action-list[aria-label="制作物ごとの権限"] m3e-list-action'
+        : 'm3e-action-list[aria-label="制作物ごとの閲覧権限"] m3e-list-action';
     await page.waitForSelector(adminWorks);
     await page.locator(adminWorks).first().click();
     await page.waitForSelector("m3e-dialog[open] .acl");
     if (PHASE === "after") {
       const acl = page.locator("m3e-dialog[open] .acl");
-      await expect(acl).toContainText("校正・編集・管理");
-      await expect(acl).not.toContainText("非公開");
+      await expect(page.locator("m3e-dialog[open] [slot='header']")).toContainText("権限:");
+      await expect(acl).not.toContainText("制作物は委員なら誰でも");
       await expect(acl.locator("m3e-radio", { hasText: /^閲覧$/ })).toHaveCount(0);
     } else {
       await expect(page.locator("m3e-dialog[open] .acl")).toContainText("閲覧");
