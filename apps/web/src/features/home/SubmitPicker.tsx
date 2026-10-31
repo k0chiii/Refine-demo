@@ -56,7 +56,7 @@ export function describeTarget(t: {
   deadlineAt: number | null;
 }): string {
   const state = t.acceptingLabel
-    ? `${t.acceptingLabel}が受付中`
+    ? `${t.acceptingLabel}が校正中`
     : t.latestLabel
       ? `最新 ${t.latestLabel}`
       : "まだ版がありません";
@@ -115,10 +115,7 @@ export function useSubmitLauncher(): {
 const EMPTY = (
   <div className="empty submit-picker__empty">
     <M3eIcon name="upload_file" />
-    <span className="title-medium">版を提出できる制作物はありません</span>
-    <span className="small">
-      あなたが制作者になっている進行中の制作物がないためです。制作物の担当は管理者が登録します。
-    </span>
+    <span className="title-medium">提出できる制作物はまだありません</span>
   </div>
 );
 
