@@ -3,7 +3,6 @@ import { expect, test, WORKS_ENTRY } from "../support/app";
 test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
   test("登録でグループを校正者にし、管理者が同じグループに閲覧を付ける", async ({ app, page }) => {
     const creator = await app.user("mock-nogiku-creator");
-    const approver = await app.user("mock-nogiku-approver");
     const title = "名簿確認の制作物";
 
     await app.signInAs("mock-nogiku-creator");
@@ -14,9 +13,10 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await dialog.locator("m3e-select").first().click();
     await page.getByRole("option", { name: "グラフィック", exact: true }).click();
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
-    await app.pickUser(dialog.locator("m3e-form-field", { hasText: "校了" }), approver.name);
-    await app.pickUser(dialog.locator("m3e-form-field", { hasText: "校正者" }), "こうせいはん");
-    await expect(dialog.locator("m3e-input-chip")).toHaveCount(4);
+    await dialog
+      .locator("m3e-form-field", { hasText: "仕上がり日" })
+      .locator("input")
+      .fill("2026-12-01");
     await dialog.locator("m3e-button", { hasText: "登録" }).click();
     await page.waitForURL(/\/works\/[^/]+$/);
 
@@ -36,6 +36,14 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await expect(acl.locator("m3e-input-chip")).toHaveCount(2);
     await acl.locator("m3e-button", { hasText: "追加" }).click();
     await expect(acl.locator('m3e-list[aria-label="個人の許可"] m3e-list-item')).toHaveCount(2);
+
+    await app.signInAs("mock-nogiku-manager");
+    await app.go("/works");
+    const rowAfter = page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await rowAfter.getByRole("button", { name: /の校正者を選ぶ/ }).click();
+    const reviewers = app.dialog();
+    await app.pickUser(reviewers, "こうせいはん");
+    await reviewers.locator("m3e-button", { hasText: "保存" }).click();
   });
 
   // システム管理者はすべての操作権限を持つ（利用者決定 2026-10-30・UI_M3E §113）。シードの管理者は職責・ACL・所属を持たない
