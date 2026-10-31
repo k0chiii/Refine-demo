@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import type { Page } from "../../apps/web/e2e/support/app.ts";
 
 /** サインイン画面だけの PNG（禁止） */
 export const SIGNIN_SCREEN_MD5 = "ac741f735c6593b5cbdc397deb4a8004";
@@ -80,7 +81,9 @@ export function validateScreenshotFile(filePath: string, opts: ValidateOpts): vo
   }
   if (opts.corpusRoot) {
     const idx = indexPngMd5(opts.corpusRoot);
-    const others = (idx.get(md5) ?? []).filter((p) => path.resolve(p) !== path.resolve(opts.selfPath ?? filePath));
+    const others = (idx.get(md5) ?? []).filter(
+      (p) => path.resolve(p) !== path.resolve(opts.selfPath ?? filePath),
+    );
     if (others.length > 0) {
       const selfBase = path.basename(opts.selfPath ?? filePath);
       const pairedDesktop =
@@ -117,17 +120,20 @@ export function validateScreenshotFile(filePath: string, opts: ValidateOpts): vo
   }
 }
 
-export async function assertSceneMarkers(page: import("playwright").Page, sceneKey: string): Promise<void> {
+export async function assertSceneMarkers(page: Page, sceneKey: string): Promise<void> {
   const markers = SCENE_MARKERS[sceneKey];
   if (!markers?.length) return;
   for (const text of markers) {
-    await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .getByText(text, { exact: false })
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
   }
 }
 
 /** 撮影時に DOM 上でマーカーが見えたことを sidecar に残す */
 export async function writeSceneDomSidecar(
-  page: import("playwright").Page,
+  page: Page,
   sceneKey: string,
   pngPath: string,
 ): Promise<string> {

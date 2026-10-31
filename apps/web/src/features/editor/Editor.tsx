@@ -80,6 +80,7 @@ import { useAutoProofread } from "@/features/proofread/useAutoProofread";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { formatDeadline, remaining } from "@/lib/format";
+import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { workHint } from "@/lib/workHint";
 import {
   blockedReasonLabel,
@@ -1272,7 +1273,9 @@ export function Editor({
           <a href={url || "#"} target="_blank" rel="noreferrer noopener">
             <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} /> {url}
           </a>
-          <p className="muted small">結論はここに書いてください</p>
+          <p className="muted small">
+            外部ツール上のコメントは同期されません。結論はここに記録してください。
+          </p>
           {record}
         </div>
       );
@@ -1649,8 +1652,8 @@ export function Editor({
             onScroll={(e) => setListScrolled(e.currentTarget.scrollTop > 0)}
           >
             {carryCandidates && carryCandidates.length > 0 ? (
-              <div className="carry-box" aria-label="前版の未対応コメント">
-                <div className="label-large">前版の未対応コメント {carryCandidates.length}</div>
+              <div className="carry-box" aria-label="前版の未解決コメント">
+                <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
                 {carryCandidates.map((c) => (
                   <div key={c.id} className="carry">
                     <div className="small muted">
@@ -1681,13 +1684,13 @@ export function Editor({
                   ? artifact?.type === "video"
                     ? "C で全体へのコメント（T でこの時点）"
                     : artifact && isWebLiveArtifact(artifact)
-                      ? "「コメント」に切り替えて要素を押す"
+                      ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
                       : artifact?.role === "external" && isLiveExternal
-                        ? "「このフレームにコメント」から"
+                        ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
                         : touch
-                          ? "長押しでコメント（なぞると範囲）"
-                          : "まだありません（C でコメント）"
-                  : "まだありません"}
+                          ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                          : "ファイルの上でドラッグすると、その場にコメントできます"
+                  : "コメントはありません"}
               </p>
             ) : (
               threads.map((t) => card(t))
@@ -1706,7 +1709,7 @@ export function Editor({
   );
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
     <PaneTabs
-      label="サイドパネル"
+      label="引き出し"
       stretch
       value={current ?? "comments"}
       onChange={onPick}
@@ -1798,6 +1801,7 @@ export function Editor({
           {revision && work && !initial ? (
             <>
               {revision.label} ·{" "}
+              {revision.reviewUrgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
               {open
                 ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
@@ -1935,7 +1939,7 @@ export function Editor({
                   {isPdf ? (
                     <>
                       {/* ページ送りは connected のボタングループ（前・次）。数値はその左（M3 Button groups。監査 E-03）。
-                          狭い画面はページの位置をスクロールで見るので数値を省き、サイドパネルのボタンに場所を譲る */}
+                          狭い画面はページの位置をスクロールで見るので数値を省き、引き出しのボタンに場所を譲る */}
                       {mobile ? null : (
                         <span className="ws__toolbar-text">
                           {pageCount ? `${page} / ${pageCount}` : "…"}
@@ -2137,7 +2141,7 @@ export function Editor({
                 className="ws__toolbar"
                 shape="rounded"
                 elevated
-                aria-label="サイドパネルの操作"
+                aria-label="引き出しの操作"
               >
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
@@ -2224,14 +2228,14 @@ export function Editor({
             ) : null}
             {!mobile ? (
               /* ペインの操作は縦の浮遊ツールバー（レールの反対側。Scaffold の trailing rail 領域）。
-                 右のサイドパネルが開いているあいだは隠す（サイドパネルのタブで切り替えられる）。畳んだときだけ出して、開き直す入口にする
+                 右の引き出しが開いているあいだは隠す（引き出しのタブで切り替えられる）。畳んだときだけ出して、開き直す入口にする
                  （利用者決定 2026-10-20「右の欄が表示されてない時はフローティングバー出したい。表示されてる時は消して良い」） */
               <M3eToolbar
                 vertical
                 className={`ws__side-toolbar ${desktopDrawer ? "ws__side-toolbar--hidden" : ""}`}
                 shape="rounded"
                 elevated
-                aria-label="サイドパネルの操作"
+                aria-label="引き出しの操作"
               >
                 <M3eIconButton
                   aria-label={`コメント（${openCount}）`}
@@ -2273,7 +2277,7 @@ export function Editor({
             </div>
           ) : null}
           {desktopDrawer ? (
-            <aside className="drawer" aria-label="サイドパネル">
+            <aside className="drawer" aria-label="引き出し">
               {drawerTabs(drawer, (d) => openDrawer(d))}
               <div className="drawer__body">{drawerBody(drawer)}</div>
             </aside>
@@ -2284,7 +2288,7 @@ export function Editor({
             ref={attachSheet as never}
             handle
             hideable
-            handleLabel="サイドパネル"
+            handleLabel="引き出し"
             className="ws__sheet"
           >
             <div className="drawer drawer--sheet">
@@ -2375,7 +2379,7 @@ function CompareStatus({
       ).length;
       parts.push(
         [
-          `ページの対応（前の版 ${cmp.pdf.leftCount}・この版 ${cmp.pdf.rightCount}）`,
+          `ページ対応: 旧 ${cmp.pdf.leftCount} → 新 ${cmp.pdf.rightCount}`,
           inserted ? `追加 ${inserted}` : "",
           deleted ? `削除 ${deleted}` : "",
           moved ? `移動 ${moved}` : "",

@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page, type Route } from "@playwright/test";
+
+export type { Page, Route };
 
 /**
  * デモ版の画面を操る部品。e2e/screenshots.mjs の同名の関数を、spec から使えるように切り出したもの。
@@ -24,6 +26,8 @@ export const WORKS_ENTRY = ".works .works-table tbody tr";
 /** シードの制作物 */
 export const PAMPHLET = "MF100 公式パンフレット";
 export const LONG_TITLE = "100nc_デザインガイドライン";
+/** 小ジャンル「スライド」の提出（PDF + 共有 URL） */
+export const SLIDE_DECK = "企画説明会スライド";
 /** 提出前の確認（§58）。提出は止めないが、ふだんの提出に合わせて印を付けておく */
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
@@ -45,7 +49,13 @@ type Demo = {
     ): Promise<T>;
   };
 };
-type Router = { navigate(opts: { to: string; search?: Record<string, string> }): Promise<void> };
+type Router = {
+  navigate(opts: {
+    to: string;
+    search?: Record<string, string>;
+    params?: Record<string, string>;
+  }): Promise<void>;
+};
 declare global {
   var __mf100demo: Demo | undefined;
   var __mf100router: Router | undefined;
@@ -193,6 +203,41 @@ export class App {
 
   dialog() {
     return this.page.locator("m3e-dialog[open]");
+  }
+
+  /** outlined form-field 内の M3E 日付（YYYY-MM-DD） */
+  async fillOutlinedDate(scope: Locator, fieldLabel: string, isoDate: string) {
+    const [y, m, d] = isoDate.split("-");
+    const group = scope.getByRole("group", { name: new RegExp(fieldLabel) });
+    await group.getByRole("spinbutton", { name: "年" }).fill(y!);
+    await group.getByRole("spinbutton", { name: "月" }).fill(m!);
+    await group.getByRole("spinbutton", { name: "日" }).fill(d!);
+    await group.getByRole("spinbutton", { name: "日" }).press("Tab");
+    // spinbutton だけでは React の onChange が走らないことがあるので date-input にも反映する
+    const dateInput = group.locator("xpath=ancestor::m3e-form-field[1]//m3e-date-input").first();
+    if ((await dateInput.count()) > 0) {
+      await dateInput.evaluate((el, iso) => {
+        const [yy, mm, dd] = iso.split("-").map((x) => Number(x));
+        const target = el as unknown as { value: Date | null };
+        target.value = new Date(yy!, mm! - 1, dd!);
+        el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+      }, isoDate);
+    }
+    await this.settle();
+  }
+
+  /** M3E select（form-field 内）で選択肢を選ぶ（候補は overlay で page 直下に出る） */
+  async pickSelectOption(scope: Locator, fieldLabel: string, option: string) {
+    const combo = scope.getByRole("combobox", { name: fieldLabel });
+    if ((await combo.count()) > 0) {
+      await combo.click();
+    } else {
+      const field = scope.locator("m3e-form-field", { hasText: fieldLabel });
+      await field.locator("m3e-select").click();
+    }
+    await this.settle();
+    await this.page.getByRole("option", { name: option, exact: true }).click();
+    await this.settle();
   }
 
   /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人（または 1 グループ）選ぶ */
@@ -490,6 +535,16 @@ export class App {
     await this.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
     await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
     return this.dialog();
+  }
+
+  /** 校正画面の「情報」で目的・用途を保存（WorkForm の編集ダイアログには目的欄が無い） */
+  async setWorkPurpose(title: string, purpose: string) {
+    await this.openWork(title);
+    await this.drawer("情報");
+    const body = this.page.locator(".drawer__body");
+    await body.locator("textarea").fill(purpose);
+    await body.locator("m3e-button", { hasText: "保存" }).click();
+    await this.settle();
   }
 
   /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */

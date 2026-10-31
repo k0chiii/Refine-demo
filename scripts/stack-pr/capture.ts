@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Page, Route } from "../../apps/web/e2e/support/app.ts";
 import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 import {
   assertSceneMarkers,
@@ -15,7 +15,8 @@ import {
 
 export { SIGNIN_SCREEN_MD5 };
 
-const repoRoot = process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const repoRoot =
+  process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const webRoot = path.join(repoRoot, "apps/web");
 const require = createRequire(path.join(webRoot, "package.json"));
 const { chromium } = require("playwright-core");
@@ -23,10 +24,6 @@ const BASE = process.env.BASE_URL ?? `http://127.0.0.1:${process.env.CAPTURE_POR
 const PREVIEW_PORT = process.env.CAPTURE_PORT ?? "4173";
 
 let previewStarted = false;
-
-function md5File(file: string) {
-  return createHash("md5").update(fs.readFileSync(file)).digest("hex");
-}
 
 export function assertNotSigninScreenshot(filePath: string, pagePath: string) {
   validateScreenshotFile(filePath, {
@@ -79,14 +76,18 @@ type DemoUser =
   | "mock-nogiku-manager"
   | "mock-nogiku-approver";
 
-async function ready(page: import("playwright").Page) {
-  await page.waitForFunction(() => Boolean(globalThis.__mf100demo && globalThis.__mf100router), null, {
-    timeout: 30_000,
-  });
+async function ready(page: Page) {
+  await page.waitForFunction(
+    () => Boolean(globalThis.__mf100demo && globalThis.__mf100router),
+    null,
+    {
+      timeout: 30_000,
+    },
+  );
 }
 
-async function demoGo(page: import("playwright").Page, routePath: string) {
-  await page.evaluate((p) => {
+async function demoGo(page: Page, routePath: string) {
+  await page.evaluate((p: string) => {
     const path = p.replace(/^https?:\/\/[^/]+/, "");
     const rev = path.match(/^\/works\/([^/]+)\/v\/(\d+)$/);
     if (rev) {
@@ -97,7 +98,10 @@ async function demoGo(page: import("playwright").Page, routePath: string) {
     }
     const work = path.match(/^\/works\/([^/?#]+)$/);
     if (work) {
-      return globalThis.__mf100router!.navigate({ to: "/works/$workId", params: { workId: work[1]! } });
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId",
+        params: { workId: work[1]! },
+      });
     }
     const [to, q] = path.split("?");
     const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
@@ -106,48 +110,64 @@ async function demoGo(page: import("playwright").Page, routePath: string) {
   await page.waitForTimeout(800);
 }
 
-async function signInAs(page: import("playwright").Page, sub: DemoUser) {
+async function signInAs(page: Page, sub: DemoUser) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
   await page.evaluate(() => globalThis.__mf100demo!.signOut());
   await page.waitForTimeout(300);
   try {
-    await page.evaluate(async (s) => {
+    await page.evaluate(async (s: DemoUser) => {
       await globalThis.__mf100demo!.signIn(s);
     }, sub);
-    await page.waitForURL((u) => !u.pathname.includes("/signin"), { timeout: 30_000 });
+    await page.waitForURL((u: URL) => !u.pathname.includes("/signin"), { timeout: 30_000 });
   } catch {
     await page.goto(`${BASE}/signin`);
     await ready(page);
     const panel = page.locator("m3e-expansion-panel", { hasText: "モック" });
     await panel.locator("[slot=header]").click();
-    await page.locator('select, m3e-select').first().selectOption(sub).catch(async () => {
-      await page.locator("select").first().selectOption(sub);
-    });
+    await page
+      .locator("select, m3e-select")
+      .first()
+      .selectOption(sub)
+      .catch(async () => {
+        await page.locator("select").first().selectOption(sub);
+      });
     await page.getByRole("button", { name: "モックでサインイン" }).click();
-    await page.waitForURL((u) => !u.pathname.includes("/signin"), { timeout: 60_000 });
+    await page.waitForURL((u: URL) => !u.pathname.includes("/signin"), { timeout: 60_000 });
   }
   await page.waitForTimeout(1000);
 }
 
-async function openDashboardOverview(page: import("playwright").Page) {
+async function openDashboardOverview(page: Page) {
   const panel = page.locator(".ov m3e-expansion-panel, m3e-expansion-panel.ov");
   const header = page.locator("#ov-title, .ov__header");
-  if (await header.first().isVisible().catch(() => false)) return;
-  await panel.first().locator("[slot=header]").click({ timeout: 10_000 }).catch(() => {});
+  if (
+    await header
+      .first()
+      .isVisible()
+      .catch(() => false)
+  )
+    return;
+  await panel
+    .first()
+    .locator("[slot=header]")
+    .click({ timeout: 10_000 })
+    .catch(() => {});
   await page.locator("#ov-title").waitFor({ state: "visible", timeout: 60_000 });
   await page.locator(".kpis .kpi").first().waitFor({ state: "visible", timeout: 60_000 });
 }
 
-async function pdfReady(page: import("playwright").Page) {
+async function pdfReady(page: Page) {
   await page.waitForFunction(
-    () => (document.querySelector(".viewer__page canvas")?.width ?? 0) > 0,
+    () =>
+      ((document.querySelector(".viewer__page canvas") as HTMLCanvasElement | null)?.width ?? 0) >
+      0,
     null,
     { timeout: 60_000 },
   );
 }
 
-async function openEditorDrawer(page: import("playwright").Page, label: string) {
+async function openEditorDrawer(page: Page, label: string) {
   await page.waitForSelector(".ws", { timeout: 60_000 });
   const bar = page.locator(".ws__side-toolbar");
   if (await bar.isVisible().catch(() => false)) {
@@ -163,22 +183,28 @@ async function openEditorDrawer(page: import("playwright").Page, label: string) 
 
 const samplePdf = path.join(webRoot, "e2e/fixtures/sample.pdf");
 
-async function seedReviewPamphlet(page: import("playwright").Page) {
+async function seedReviewPamphlet(page: Page) {
   await signInAs(page, "mock-nogiku-creator");
   await demoGo(page, "/works");
   await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
   await page.waitForURL(/\/works\/[^/]+$/, { timeout: 60_000 });
-  const workPath = new URL(page.url()).pathname;
-  await page.locator("m3e-button", { hasText: "最初の版を提出" }).first().click({ timeout: 60_000 });
+  await page
+    .locator("m3e-button", { hasText: "最初の版を提出" })
+    .first()
+    .click({ timeout: 60_000 });
   await page.waitForSelector('m3e-dialog[open] input[type="file"]', { timeout: 60_000 });
   await page.setInputFiles('m3e-dialog[open] input[type="file"]', samplePdf);
   await page.fill("m3e-dialog[open] textarea >> nth=0", "初稿。");
   for (const id of ["theme_font", "balance", "committee_output"]) {
     await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
   }
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click({ timeout: 60_000 });
+  await page
+    .locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" })
+    .click({ timeout: 60_000 });
   await page.locator(".upload-item__state--verified").first().waitFor({ timeout: 60_000 });
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click({ timeout: 60_000 });
+  await page
+    .locator("m3e-dialog[open] m3e-button", { hasText: "提出する" })
+    .click({ timeout: 60_000 });
   await page.waitForURL(/\/v\/1$/, { timeout: 60_000 });
   await pdfReady(page);
   const revisionPath = new URL(page.url()).pathname;
@@ -194,17 +220,23 @@ async function seedReviewPamphlet(page: import("playwright").Page) {
   await demoGo(page, revisionPath);
   await pdfReady(page);
   await openEditorDrawer(page, "情報");
-  await page.locator("m3e-button", { hasText: "校正者を割り当てる" }).first().click({ timeout: 60_000 });
+  await page
+    .locator("m3e-button", { hasText: "校正者を割り当てる" })
+    .first()
+    .click({ timeout: 60_000 });
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]', { timeout: 60_000 });
   const input = page.locator("m3e-dialog[open] .picker__input").first();
   await input.click();
   await input.fill(reviewerName);
-  await page.getByRole("option", { name: new RegExp(reviewerName) }).first().click({ timeout: 60_000 });
+  await page
+    .getByRole("option", { name: new RegExp(reviewerName) })
+    .first()
+    .click({ timeout: 60_000 });
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click({ timeout: 60_000 });
   await page.waitForSelector("m3e-dialog[open]", { state: "detached", timeout: 60_000 });
 }
 
-async function workspaceCommentsReady(page: import("playwright").Page) {
+async function workspaceCommentsReady(page: Page) {
   await seedReviewPamphlet(page);
   await signInAs(page, "mock-nogiku-reviewer");
   await demoGo(page, "/check");
@@ -224,7 +256,7 @@ async function workspaceCommentsReady(page: import("playwright").Page) {
 type CaptureSceneOpts = { expandOverview?: boolean; openViewSwitcher?: boolean };
 let sceneRunOpts: CaptureSceneOpts = {};
 
-type SceneFn = (page: import("playwright").Page) => Promise<void>;
+type SceneFn = (page: Page) => Promise<void>;
 
 const SCENES: Record<string, SceneFn> = {
   "01-signin": async (page) => {
@@ -236,14 +268,20 @@ const SCENES: Record<string, SceneFn> = {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/works");
     await page.waitForSelector(WORKS_ENTRY, { timeout: 60_000 });
-    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .locator(WORKS_ENTRY, { hasText: PAMPHLET })
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
   },
   "27-make-creator": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
     await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
     if (sceneRunOpts.openViewSwitcher) {
-      await page.locator(".home-view-switcher").first().waitFor({ state: "visible", timeout: 30_000 });
+      await page
+        .locator(".home-view-switcher")
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
     }
   },
   "28-check-reviewer": async (page) => {
@@ -297,7 +335,7 @@ const SCENES: Record<string, SceneFn> = {
     }
     const body = page.locator("m3e-dialog[open] .dialog-body");
     if (await body.count()) {
-      await body.first().evaluate((el) => {
+      await body.first().evaluate((el: HTMLElement) => {
         el.scrollTop = el.scrollHeight;
       });
     }
@@ -317,7 +355,11 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForSelector(".works", { timeout: 60_000 });
     if (sceneRunOpts.expandOverview !== false) await openDashboardOverview(page);
     if (sceneRunOpts.openViewSwitcher) {
-      await page.locator(".home-view-switcher m3e-segmented-button, .home-view-switcher").first().click({ timeout: 5000 }).catch(() => {});
+      await page
+        .locator(".home-view-switcher m3e-segmented-button, .home-view-switcher")
+        .first()
+        .click({ timeout: 5000 })
+        .catch(() => {});
       await page.waitForTimeout(400);
     }
   },
@@ -347,8 +389,11 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
     const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
     if (!workId) throw new Error(`workId not found in ${page.url()}`);
-    await page.evaluate((id) => {
-      return globalThis.__mf100router!.navigate({ to: "/works/$workId/detail", params: { workId: id } });
+    await page.evaluate((id: string) => {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/detail",
+        params: { workId: id },
+      });
     }, workId);
     await page.waitForSelector(".detail-shell__head, .detail-shell, .ws", { timeout: 60_000 });
   },
@@ -368,7 +413,7 @@ const SCENES: Record<string, SceneFn> = {
   },
 };
 
-async function runScene(page: import("playwright").Page, key: string) {
+async function runScene(page: Page, key: string) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
   await page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
@@ -377,7 +422,7 @@ async function runScene(page: import("playwright").Page, key: string) {
 }
 
 async function captureOne(
-  page: import("playwright").Page,
+  page: Page,
   sceneKey: string,
   outPath: string,
   corpusRoot: string | undefined,
@@ -394,7 +439,15 @@ async function captureOne(
 export async function captureShots(
   shots: { desktop: string; mobile?: string },
   prefix: string,
-  opts: { mobileWidth?: number; mobileHeight?: number; desktopWidth?: number; desktopHeight?: number; expandOverview?: boolean; corpusRoot?: string } = {},
+  opts: {
+    mobileWidth?: number;
+    mobileHeight?: number;
+    desktopWidth?: number;
+    desktopHeight?: number;
+    expandOverview?: boolean;
+    openViewSwitcher?: boolean;
+    corpusRoot?: string;
+  } = {},
 ) {
   ensureDemo();
   sceneRunOpts = { expandOverview: opts.expandOverview, openViewSwitcher: opts.openViewSwitcher };
@@ -412,7 +465,7 @@ export async function captureShots(
     baseURL: BASE,
     serviceWorkers: "block",
   });
-  await desktop.route("**/*", (route) => {
+  await desktop.route("**/*", (route: Route) => {
     route.continue({
       headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
     });
@@ -426,7 +479,7 @@ export async function captureShots(
       baseURL: BASE,
       serviceWorkers: "block",
     });
-    await mobile.route("**/*", (route) => {
+    await mobile.route("**/*", (route: Route) => {
       route.continue({
         headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
       });
@@ -446,9 +499,13 @@ export async function captureShots(
 if (process.argv[1]?.includes("capture.ts")) {
   const prefix = process.argv[2] || "/tmp/shot";
   const scene = process.env.CAPTURE_SCENE || "dashboard-manager";
-  captureShots({ desktop: scene, mobile: `${scene}-mobile`.replace("-mobile-mobile", "-mobile") }, prefix, {
-    corpusRoot: process.env.SCREENSHOT_CORPUS,
-  }).catch((e) => {
+  captureShots(
+    { desktop: scene, mobile: `${scene}-mobile`.replace("-mobile-mobile", "-mobile") },
+    prefix,
+    {
+      corpusRoot: process.env.SCREENSHOT_CORPUS,
+    },
+  ).catch((e) => {
     console.error(e);
     process.exit(1);
   });
