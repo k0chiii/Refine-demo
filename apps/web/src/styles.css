@@ -6030,7 +6030,7 @@ m3e-snackbar {
 /* stack-pr:detail-shell */
 
 .detail-shell {
-  min-height: 1600px;
+  min-height: 2000px;
   background: linear-gradient(
     180deg,
     var(--mf-surface-container-low) 0%,
