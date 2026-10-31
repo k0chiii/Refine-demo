@@ -6125,3 +6125,9 @@ m3e-snackbar {
 .home-dashboard--manager .ov {
   margin-inline: 16px;
 }
+.role-home-tag {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mf-on-surface-variant);
+}
