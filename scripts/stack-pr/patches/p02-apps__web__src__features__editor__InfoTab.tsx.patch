@@ -1,0 +1,97 @@
+---
+diff --git a/apps/web/src/features/editor/InfoTab.tsx b/apps/web/src/features/editor/InfoTab.tsx
+index f90fc96..9a593ae 100644
+--- a/apps/web/src/features/editor/InfoTab.tsx
++++ b/apps/web/src/features/editor/InfoTab.tsx
+@@ -517,9 +517,7 @@ export function InfoTab({
+             ) : null}
+           </h2>
+           <p className="small muted" style={{ margin: 0 }}>
+-            制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）が
+-            {confirmationTarget ? `${confirmationTarget.label}を` : "最新の版を"}
+-            確認した記録が要ります。
++            制作者が校了するには、ほかの人の確認が必要です
+           </p>
+           {confirmation.valid ? (
+             <div className="small">
+@@ -529,9 +527,7 @@ export function InfoTab({
+             </div>
+           ) : null}
+           {confirmation.confirmedByMe && !confirmation.valid ? (
+-            <div className="small muted">
+-              あなたの確認は記録されていますが、いまは有効ではありません（職責・閲覧権限が変わったため）。
+-            </div>
++            <div className="small muted">役割が変わったため、この確認は無効です</div>
+           ) : null}
+         </section>
+       ) : null}
+@@ -583,24 +579,18 @@ export function InfoTab({
+           ) : null}
+           {candidate && candidate.pendingChecks.length > 0 ? (
+             <div className="alert--warn alert">
+-              <span>
+-                未完了の専門確認: {candidate.pendingChecks.join("、")}
+-                。完了または免除されるまで、理由なしの校了はできません。
+-              </span>
++              <span>専門確認が残っています: {candidate.pendingChecks.join("、")}</span>
+             </div>
+           ) : null}
+           {blocking > 0 ? (
+             <div className="alert--warn alert">
+-              <span>未対応のコメントが {blocking} 件あります。理由なしでは校了できません。</span>
++              <span>未対応のコメント {blocking} 件</span>
+             </div>
+           ) : null}
+           {candidate && candidate.openBotCount > 0 ? (
+             <>
+               <div className="alert--warn alert">
+-                <span>
+-                  自動校正のコメントが {candidate.openBotCount}{" "}
+-                  件、まだ確認されていません。校了はできますが、件数とメモが校了の記録に残ります。
+-                </span>
++                <span>未確認の自動校正 {candidate.openBotCount} 件（校了の記録に残ります）</span>
+               </div>
+               <Field label="自動校正についてのメモ（任意）">
+                 <TextInput value={autoNote} onChange={(e) => setAutoNote(e.target.value)} />
+@@ -609,7 +599,7 @@ export function InfoTab({
+           ) : null}
+           <Field
+             label="例外校了の理由"
+-            hint="未解決のコメントや専門確認を残して校了するときだけ書きます"
++            hint="未対応のコメントや専門確認を残して校了するときだけ書きます"
+           >
+             <TextArea
+               value={exceptionReason}
+@@ -625,9 +615,7 @@ export function InfoTab({
+               </p>
+             ) : (
+               <div className="alert--warn alert">
+-                <span>
+-                  制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）がこの版の独立確認をするまで校了できません。確認する人は、引き出し「情報」の「独立確認をする」から記録します。
+-                </span>
++                <span>ほかの人（主管・校正者）の確認が済むまで校了できません</span>
+               </div>
+             )
+           ) : null}
+@@ -651,8 +639,8 @@ export function InfoTab({
+         <span slot="header">独立確認をする</span>
+         <div className="dialog-body">
+           <p style={{ margin: 0 }}>
+-            対象版: <strong>{confirmationTarget?.label ?? "（通常版がありません）"}</strong>
+-            。制作者・校了権限者とは別の立場で、この版の内容を確認したことを記録します。記録はあなたの名前で残り、校了の証跡になります。
++            <strong>{confirmationTarget?.label ?? "（通常版がありません）"}</strong>{" "}
++            の内容を確認したことを記録します
+           </p>
+           <Field label="確認のメモ（任意）" hint="確認した範囲など。500 文字まで">
+             <TextArea
+@@ -704,9 +692,7 @@ export function InfoTab({
+       <M3eDialog open={cancelOpen} onClosed={() => setCancelOpen(false)} closeLabel="閉じる">
+         <span slot="header">この制作物を中止しますか？</span>
+         <div className="dialog-body">
+-          <p style={{ margin: 0 }}>
+-            中止すると、版の提出・校正・校了ができなくなります。中止は取り消せません。
+-          </p>
++          <p style={{ margin: 0 }}>中止すると元に戻せません</p>
+         </div>
+         <div slot="actions" className="row">
+           <M3eButton variant="text" onClick={() => setCancelOpen(false)}>
