@@ -1,13 +1,17 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { chromium } from "playwright";
-import { App, PAMPHLET, WORKS_ENTRY, type DemoUser } from "../../apps/web/e2e/support/app.ts";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { App, PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 
 /** 誤ってサインイン画面だけ撮ったときの PNG（大地さん指摘） */
 export const SIGNIN_SCREEN_MD5 = "ac741f735c6593b5cbdc397deb4a8004";
 
-const webRoot = "/workspace/apps/web";
+const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../apps/web");
+const require = createRequire(path.join(webRoot, "package.json"));
+const { chromium } = require("playwright-core");
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";
 
 let previewStarted = false;
