@@ -4,9 +4,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../support/app";
 
 const PHASE = process.env.STACK_PR_ACL_PHASE ?? "after";
-const OUT =
-  process.env.OUT_DIR ??
-  resolve(`docs/stack-pr-screenshots/acl-104-106/pr191/${PHASE}`);
+const OUT = process.env.OUT_DIR ?? resolve(`docs/stack-pr-screenshots/acl-104-106/pr191/${PHASE}`);
 
 mkdirSync(OUT, { recursive: true });
 
