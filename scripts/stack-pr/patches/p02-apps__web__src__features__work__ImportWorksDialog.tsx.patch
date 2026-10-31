@@ -1,0 +1,32 @@
+---
+diff --git a/apps/web/src/features/work/ImportWorksDialog.tsx b/apps/web/src/features/work/ImportWorksDialog.tsx
+index af2f2e1..67e9f46 100644
+--- a/apps/web/src/features/work/ImportWorksDialog.tsx
++++ b/apps/web/src/features/work/ImportWorksDialog.tsx
+@@ -188,16 +188,7 @@ export function ImportWorksDialog({
+       <span slot="header">CSV で制作物を一括登録</span>
+       <div className="dialog-body stack">
+         <p className="small muted">
+-          1 行に 1 つの制作物を書いた CSV を選びます（雛形を書き出せます）。列の名前は委員会の制作物
+-          DB の項目名と同じです:{" "}
+-          {workCsvTemplateColumns
+-            .map((c) => `${c.header}${c.required ? "（必須）" : ""}`)
+-            .join("・")}
+-          。
+-          区分と媒体は小ジャンルから自動で入ります。人はメールアドレスかユーザー名（一度サインインした人）で書き、複数なら「;」か「,」で区切ります。担当（主管担当）・制作担当は
+-          1 つ、関係担当は複数を、組織の局・担当を「PR ›
+-          デザイン担当」のように（局はコードでも）書けます。校了者は 1
+-          人です。登録する前に、内容と人の対応をこの表で確かめられます。
++          雛形と同じ列の CSV を選んでください（書き方は雛形の見出し行に）
+         </p>
+         <div className="row">
+           <input
+@@ -257,7 +248,7 @@ export function ImportWorksDialog({
+                     <M3eIcon slot="leading" name={r.input ? "check_circle" : "error"} />
+                     <span slot="overline">{r.row.line} 行目</span>
+                     <span className="list__headline">
+-                      {r.row.title || <span className="muted">（題名なし）</span>}
++                      {r.row.title || <span className="muted">（制作物名なし）</span>}
+                     </span>
+                     <span slot="supporting-text" className="import-list__detail">
+                       {r.row.subGenre

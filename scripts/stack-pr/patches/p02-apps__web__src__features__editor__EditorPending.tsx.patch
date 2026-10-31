@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/features/editor/EditorPending.tsx b/apps/web/src/features/editor/EditorPending.tsx
+index 55e0c91..2857708 100644
+--- a/apps/web/src/features/editor/EditorPending.tsx
++++ b/apps/web/src/features/editor/EditorPending.tsx
+@@ -53,7 +53,7 @@ export function EditorPending({ workId }: { workId: string }) {
+               className="ws__toolbar"
+               shape="rounded"
+               elevated
+-              aria-label="引き出しの操作"
++              aria-label="サイドパネルの操作"
+               inert
+             >
+               <div className="ws__toolbar-items">

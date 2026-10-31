@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/features/social/PostReview.tsx b/apps/web/src/features/social/PostReview.tsx
+index 7e14f82..9762505 100644
+--- a/apps/web/src/features/social/PostReview.tsx
++++ b/apps/web/src/features/social/PostReview.tsx
+@@ -222,7 +222,7 @@ export function PostReview({
+     const id = annotate.activeThreadId;
+     const story = post.platform === "instagram" && post.format === "story";
+     if (story && marks.texts.some((t) => t.id === id))
+-      return "このコメントは本文に付いています。ストーリーズの表示には本文が出ません（本文の添付で確認できます）";
++      return "本文へのコメントです（ストーリーズには本文が出ません）";
+     const im = marks.images.find((t) => t.id === id);
+     if (im && post.platform === "x" && im.imageIndex >= 4)
+       return `このコメントは ${im.imageIndex + 1} 枚目の画像に付いています。X のプレビューは 4 枚までです`;

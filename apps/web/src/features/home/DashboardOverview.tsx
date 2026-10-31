@@ -65,7 +65,7 @@ function DashboardKpis({ data }: { data: Data }) {
         ) : null}
       </Kpi>
       <Kpi label="期限超過" value={summary.overdue} tone={summary.overdue > 0 ? "error" : "none"} />
-      <Kpi label="未解決のコメント" value={overview.threads.open}>
+      <Kpi label="未対応のコメント" value={overview.threads.open}>
         {comments > 0 ? (
           <Meter
             value={overview.threads.done}
@@ -364,7 +364,7 @@ function BureauTable({ data }: { data: Data }) {
             <ColumnHeader>局</ColumnHeader>
             <ColumnHeader numeric>制作物</ColumnHeader>
             <ColumnHeader numeric>校正中</ColumnHeader>
-            <ColumnHeader numeric>未解決</ColumnHeader>
+            <ColumnHeader numeric>未対応</ColumnHeader>
             <ColumnHeader numeric>校了</ColumnHeader>
           </tr>
         </thead>

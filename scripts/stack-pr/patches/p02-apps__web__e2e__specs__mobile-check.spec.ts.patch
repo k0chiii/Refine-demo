@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/e2e/specs/mobile-check.spec.ts b/apps/web/e2e/specs/mobile-check.spec.ts
+index b249894..5cb3dd3 100644
+--- a/apps/web/e2e/specs/mobile-check.spec.ts
++++ b/apps/web/e2e/specs/mobile-check.spec.ts
+@@ -7,7 +7,7 @@ test.describe("スマホの校正", { tag: "@core" }, () => {
+     [412, 915],
+     [360, 780],
+   ] as const) {
+-    test(`${width}px でも長い題名の行が右端で切れず、ページが横にはみ出さない`, async ({
++    test(`${width}px でも長い制作物名の行が右端で切れず、ページが横にはみ出さない`, async ({
+       app,
+       page,
+     }) => {
