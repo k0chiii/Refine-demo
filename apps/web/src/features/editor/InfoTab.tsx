@@ -183,7 +183,6 @@ export function InfoTab({
         ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
         // 提出時の「見てほしい点」はここではなく、コメントの一覧の先頭（制作者からのコメント。CreatorNoteCard）に出す
         ["制作物 ID", w.legacyId || "なし"] as Row,
-        ...(w.confidentiality === "restricted" ? ([["機密", "非公開・取扱注意"]] as Row[]) : []),
       ],
     },
     {

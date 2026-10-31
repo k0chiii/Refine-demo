@@ -189,18 +189,7 @@ function Admin() {
                     onClick={() => setAclFor(w)}
                   >
                     <M3eIcon slot="leading" name="lock_person" />
-                    <span className="list__headline">
-                      {w.title}
-                      {w.confidentiality === "restricted" ? (
-                        <M3eIcon
-                          name="lock"
-                          className="ml list__lock"
-                          role="img"
-                          aria-label="非公開"
-                          title="非公開"
-                        />
-                      ) : null}
-                    </span>
+                    <span className="list__headline">{w.title}</span>
                     <span slot="supporting-text">{lifecycleLabel[w.lifecycle] ?? w.lifecycle}</span>
                     <span slot="trailing" className="meta num">
                       個人の許可 {w.activeGrantCount}

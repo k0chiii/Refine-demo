@@ -56,7 +56,6 @@ export function NewWorkDialog({
       ...approversFromForm(form),
       managerIds: form.managerIds,
       ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
-      confidentiality: form.confidentiality as "normal",
       notationCategories: form.notationCategories,
       ...(form.ownerTeam[0] ? { ownerTeamId: form.ownerTeam[0] } : {}),
       productionTeamIds: form.productionTeamIds,

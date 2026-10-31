@@ -217,7 +217,6 @@ function workInvalidMessage(details: unknown): string | null {
     approvalQuorum: "校了とみなす人数",
     managerIds: "主管",
     mediaType: "媒体",
-    confidentiality: "機密区分",
     productionTeamIds: "制作担当",
   };
   const name = typeof d.field === "string" ? label[d.field] : undefined;
