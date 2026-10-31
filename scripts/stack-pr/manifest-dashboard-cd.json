@@ -60,7 +60,7 @@
     "series": "D-dashboard-mock",
     "slug": "ui-role-home-manager",
     "title": "ui(home): 主管ビュー（モック manager）",
-    "parent": "082",
+    "parent": "080",
     "verify": "full",
     "shots": { "desktop": "dashboard-manager", "mobile": "dashboard-manager-mobile" }
   },

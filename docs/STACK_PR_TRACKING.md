@@ -1,6 +1,6 @@
 # STACK PR トラッキング
 
-正本: `scripts/stack-pr/manifest.json`（76 件） / E 系列: `scripts/stack-pr/manifest-e-series.json`
+正本: `scripts/stack-pr/manifest.json`（76 件） / E 系列: `scripts/stack-pr/manifest-e-series.json` / C/D: `scripts/stack-pr/manifest-dashboard-cd.json`
 
 ## develop マージ（001–070）— 完了
 
@@ -15,17 +15,17 @@
 
 1. **E 系列**（`develop` ベース）… 制作物登録・メタ（decisions 78–89）。**072 の単一 `plannedSubmitAt` は e082 で置換**。
 2. **B ダッシュボード 071–076** … E の上に付け替えて再スタック（#165 は既に `develop` base）。
-3. **C/D ダッシュボード 077+** … **CD 081（英語 KPI）・082（入稿準備日数 UI）は E81/E82 と重なるため中止**。077–080, 083–088 を E 完了後に積む。
+3. **C/D ダッシュボード 077+** … **CD 081/082 は E81/E82 に統合して中止**。077–080 → **083–088**（083 の親は **stack-080**）。
 
 ## E 系列（develop・未マージ）
 
-| id | PR | ブランチ | 状態 |
+| id | PR | ブランチ | tip（参考） |
 |---|---|---|---|
-| e089 | **#175** | `cursor/stack-e089-copy-unify-terminology-8b5a` | ✅ CI 想定（e2e:smoke 緑） |
-| e088 | — | `stack-e088-drop-legacy-id-ui` | 予定 |
-| e078 | — | `stack-e078-reg-minimal-fields` | 登録4項目のみ |
-| e081 | — | | ◆校了目標日・■仕上がり日（CD081 相当はここ） |
-| e082 | — | | 版予定日リスト + 移行（**072 置換**） |
+| e089 | **#175** | `cursor/stack-e089-copy-unify-terminology-8b5a` | `13a298f` |
+| e088 | （起票予定） | `cursor/stack-e088-drop-legacy-id-ui-8b5a` | `40d636e`（88 目的・用途は情報タブのみ・**決めることなし**） |
+| e078 | （起票予定） | `cursor/stack-e078-reg-minimal-fields-8b5a` | `55739fa` |
+| e081 | （起票予定） | `cursor/stack-e081-dates-approval-target-finish-8b5a` | `29439d3` |
+| e082 | （起票予定） | `cursor/stack-e082-revision-planned-dates-list-8b5a` | `1d34b79` |
 
 ## B ダッシュボード 071–076（未マージ・base 付け替え待ち）
 
@@ -38,6 +38,8 @@
 | #167 | 075 | stack-074 |
 | #169 | 076 | stack-075 |
 
+071 の再撮: `after-desktop.png` ≥30KB・検査通過（076 は `08-workspace-comment` 要再撮）。
+
 ## C/D ダッシュボード（未マージ）
 
 | PR | id | base |
@@ -46,11 +48,16 @@
 | #171 | 078 | stack-077 |
 | #172 | 079 | stack-078 |
 | #173 | 080 | stack-079 |
-| 081–088 | | **E 系列と整合後に再開**（081/082 は E に統合） |
+| — | 083 | stack-080 |
+| — | 084 | stack-083 |
+| — | 085 | stack-084 |
+| — | 086 | stack-085 |
+| — | 087 | stack-086 |
+| — | 088 | stack-087 |
 
 ## スクリーンショット
 
-- `scripts/stack-pr/capture.ts` … デモログイン、md5 `ac741f73` / `/signin` 拒否
-- 071–076: `docs/stack-pr-screenshots/`（manager は `/works` の `.ov` 優先で再撮影中）
-- Raw 例（docs ブランチ `66381d4`）:  
-  `https://raw.githubusercontent.com/k0chiii/Refine-demo/66381d4/docs/stack-pr-screenshots/074/after-desktop.png`
+- 検査: ≥30KB / サインイン md5 禁止 / シーン文言 / 同一 id フォルダ内 md5 一意
+- 撮影: `scripts/stack-pr/capture.ts`、CD 083–088 は `capture-cd-083-088.mjs`
+- Raw は **docs ブランチの commit SHA** を差し替え:  
+  `https://raw.githubusercontent.com/k0chiii/Refine-demo/<sha>/docs/stack-pr-screenshots/<id>/after-desktop.png`
