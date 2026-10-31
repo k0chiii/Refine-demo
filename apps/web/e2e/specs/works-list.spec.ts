@@ -45,6 +45,9 @@ test.describe("制作物一覧", { tag: "@smoke" }, () => {
   });
 
   test("並べ替えのメニューで担当順にできる", async ({ app, page }) => {
+    await app.signInAs("mock-nogiku-manager");
+    await app.go("/works");
+    await page.locator(WORKS_ENTRY).first().waitFor();
     await page.locator(".works__sort").click();
     await app.settle();
     await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "担当順" }).click();
