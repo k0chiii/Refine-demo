@@ -93,7 +93,7 @@ describe("describeError（UI_M3E §35 W-02）", () => {
       "制作者を 1 人以上選んでください",
     );
     expect(err("work_invalid", { field: "approverIds", reason: "unknown_user" })).toBe(
-      "校了者に名簿にいない人が含まれています。一度サインインした人から選び直してください",
+      "校了する人に名簿にいない人が含まれています。一度サインインした人から選び直してください",
     );
     // 制作者を校了者にした誤りは、汎用の文言ではなく欄に即した文言になる
     expect(err("work_invalid", { field: "approverIds", reason: "creator_is_approver" })).not.toBe(
