@@ -502,6 +502,16 @@ export class App {
     return this.dialog();
   }
 
+  /** 校正画面の「情報」で目的・用途を保存（WorkForm の編集ダイアログには目的欄が無い） */
+  async setWorkPurpose(title: string, purpose: string) {
+    await this.openWork(title);
+    await this.drawer("情報");
+    const body = this.page.locator(".drawer__body");
+    await body.locator("textarea").fill(purpose);
+    await body.locator("m3e-button", { hasText: "保存" }).click();
+    await this.settle();
+  }
+
   /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */
   async openNotificationSettings() {
     const page = this.page;

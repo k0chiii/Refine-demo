@@ -57,11 +57,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
 
     await app.signInAs("mock-nogiku-admin");
     await app.go("/works");
-    const dialog = await app.editWorkFromList(title);
-    await dialog.locator("textarea").first().fill(purpose);
-    await dialog.locator("m3e-button", { hasText: "保存" }).click();
-    await expect(dialog).toHaveCount(0);
-    await app.openWork(title);
+    await app.setWorkPurpose(title, purpose);
     await app.drawer("情報");
     await expect(page.locator(".drawer__body")).toContainText(purpose);
   });
