@@ -43,15 +43,24 @@ export function RoleHomeDashboard({ variant }: { variant: Variant }) {
   if (variant === "manager" && me?.canCreateWorks && dash) {
     return (
       <div className="home-dashboard home-dashboard--manager">
+        <p className="role-home-tag">主管ビュー</p>
         <DashboardOverview data={dash} twoColumns={twoColumns} />
       </div>
     );
   }
   if (variant === "approver" && me?.canAssignApprovers) {
-    return <div className="home-dashboard home-dashboard--approver" aria-label="校了ビュー" />;
+    return (
+      <div className="home-dashboard home-dashboard--approver" aria-label="校了ビュー">
+        <p className="role-home-tag">校了ビュー</p>
+      </div>
+    );
   }
   if (variant === "member") {
-    return <div className="home-dashboard home-dashboard--member" aria-label="メンバービュー" />;
+    return (
+      <div className="home-dashboard home-dashboard--member" aria-label="メンバービュー">
+        <p className="role-home-tag">メンバービュー</p>
+      </div>
+    );
   }
   return null;
 }
@@ -293,11 +302,43 @@ import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
       <SnsHomeBand />`,
         ],
       ]);
-      appendCss("ui-role-home-manager", `.home-dashboard--manager .ov { margin-inline: 16px; }`);
+      appendCss(
+        "ui-role-home-manager",
+        `.home-dashboard--manager .ov { margin-inline: 16px; }
+.role-home-tag {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mf-on-surface-variant);
+}`,
+      );
+      patch("apps/web/src/routes/_app/works/index.tsx", [
+        [
+          `import { DashboardOverview } from "@/features/home/DashboardOverview";`,
+          `import { DashboardOverview } from "@/features/home/DashboardOverview";
+import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
+        ],
+        [
+          `{dash ? <DashboardOverview data={dash} twoColumns={twoColumns} /> : null}`,
+          `{dash ? (
+        <div className="home-dashboard home-dashboard--manager">
+          <p className="role-home-tag">主管ビュー</p>
+          <DashboardOverview data={dash} twoColumns={twoColumns} />
+        </div>
+      ) : null}`,
+        ],
+      ]);
       return;
     case "084":
       patch("apps/web/src/routes/_app/make.tsx", [
         [`<RoleHomeDashboard variant="manager" />`, `<RoleHomeDashboard variant="approver" />`],
+      ]);
+      patch("apps/web/src/routes/_app/works/index.tsx", [
+        [
+          `<div className="works">`,
+          `<RoleHomeDashboard variant="approver" />
+      <div className="works">`,
+        ],
       ]);
       appendCss(
         "ui-role-home-approver",
