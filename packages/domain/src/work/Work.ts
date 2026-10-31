@@ -2,6 +2,7 @@ import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import type { WorkGenre, WorkSubGenre } from "./metadata.ts";
+import type { RegisteredPlanInfo } from "./planInfo.ts";
 
 /** Work.lifecycle（§5.1）。校正受付・校了とは独立した状態。 */
 export const workLifecycles = ["draft", "active", "on_hold", "finalized", "cancelled"] as const;
@@ -91,6 +92,8 @@ export interface Work {
   productionDays?: number;
   /** タグ（Notion の選択肢を候補にするが、ほかの語も可） */
   tags?: readonly string[];
+  /** 登録済み企画情報（情報校正 AI。decisions 69–72） */
+  registeredPlanInfo?: RegisteredPlanInfo;
   /** 楽観的排他用のバージョン */
   version: number;
 }

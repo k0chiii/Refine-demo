@@ -15,6 +15,7 @@ export * from "./work/workInput.ts";
 export * from "./work/approvalTargetFromFinish.ts";
 export * from "./work/revisionPlannedAt.ts";
 export * from "./work/metadata.ts";
+export * from "./work/planInfo.ts";
 export * from "./work/submitTarget.ts";
 export * from "./work/bulkImport.ts";
 export * from "./work/workStats.ts";

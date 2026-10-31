@@ -91,6 +91,12 @@ export const vWorkSubGenre = v.union(
   v.literal("web_design"),
   v.literal("committee_screen"),
 );
+export const vRegisteredPlanInfo = v.object({
+  name: v.optional(v.string()),
+  number: v.optional(v.string()),
+  venue: v.optional(v.string()),
+  schedule: v.optional(v.string()),
+});
 /** 制作物の Notion に揃えた任意の項目（表の形。登録・保存の形） */
 export const vWorkMetadataFields = {
   genre: v.optional(vWorkGenre),

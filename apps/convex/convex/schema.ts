@@ -19,6 +19,7 @@ import {
   vRevisionDeclarations,
   vStoredAvatarConfig,
   vWorkMetadataFields,
+  vRegisteredPlanInfo,
 } from "./lib/validators.ts";
 
 /**
@@ -251,6 +252,7 @@ export default defineSchema({
     socialProfileId: v.optional(v.string()),
     /** Notion の制作物 DB に揃えた項目（大ジャンル・小ジャンル・関係者・入稿・タグ。docs/NOTION_ALIGNMENT.md） */
     ...vWorkMetadataFields,
+    registeredPlanInfo: v.optional(vRegisteredPlanInfo),
     /**
      * 廃止（利用者指示 2026-10-17「SlackのチャンネルとGoogleドライブはいらない」）。読み書きしない。
      * すでに保存された制作物の検証を通すためだけに残す（データ移行はしない）
