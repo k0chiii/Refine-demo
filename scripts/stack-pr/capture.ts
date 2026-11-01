@@ -605,10 +605,7 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForTimeout(600);
   },
   "detail-preview-73": async (page) => {
-    await openWebWork(page);
-    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
-    if (!workId) throw new Error("workId missing");
-    await demoGo(page, `/works/${workId}/detail`);
+    await SCENES["dashboard-detail"]!(page);
     await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
     await page.waitForSelector(".detail-shell__comments", { timeout: 60_000 });
   },
