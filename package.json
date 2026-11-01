@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "5.0.4",
+    "sharp": "0.33.5",
     "typescript": "5.9.3",
     "vite-plus": "1.2.0"
   },

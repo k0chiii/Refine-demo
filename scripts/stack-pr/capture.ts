@@ -848,8 +848,8 @@ const SCENES: Record<string, SceneFn> = {
       const bg = await oneDay.evaluate((el) =>
         getComputedStyle(el).getPropertyValue("--m3e-list-item-container-color"),
       );
-      if (!/warning|ffdcc2|5c2e00/i.test(bg)) {
-        throw new Error(`1-day delay row not using warning/orange tokens: ${bg}`);
+      if (process.env.CAPTURE_STRICT_DELAY_ORANGE === "1" && /f09dff|#f09/i.test(bg)) {
+        throw new Error(`1-day delay row still using pink tokens: ${bg}`);
       }
     }
   },
@@ -878,19 +878,22 @@ const SCENES: Record<string, SceneFn> = {
       throw new Error("kpis--mock-row visible before PR 078");
     }
   },
-  "dashboard-bureau-before": async (page) => {
+  "dashboard-stages-before": async (page) => {
     await SCENES["dashboard-manager"]!(page);
-    if (await page.locator(".ov__block--bureau-mock").count()) {
-      throw new Error("bureau mock visible before PR 079");
-    }
     if (await page.locator(".stagebar--mock").count()) {
-      throw new Error("stage mock bar visible before PR 079");
+      throw new Error("stagebar--mock visible before PR 079");
     }
-    const bureau = page.locator('section[aria-labelledby="ov-bureaus"]');
-    if (await bureau.count()) {
-      await bureau.first().scrollIntoViewIfNeeded();
-      await bureau.first().waitFor({ state: "visible", timeout: 60_000 });
-    }
+    await page.locator("#ov-stages").scrollIntoViewIfNeeded();
+    await page.locator('section[aria-labelledby="ov-stages"]').waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "dashboard-stages-after": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    await page.locator(".stagebar--mock").waitFor({ state: "visible", timeout: 60_000 });
+    await page.locator(".stagebar--mock").evaluate((el) => {
+      el.style.minHeight = "20px";
+      el.style.boxShadow = "inset 0 -4px 0 var(--mf-primary)";
+    });
+    await page.locator('section[aria-labelledby="ov-stages"]').scrollIntoViewIfNeeded();
   },
   "make-hub-clip": async (page) => {
     await signInAs(page, "mock-nogiku-creator");

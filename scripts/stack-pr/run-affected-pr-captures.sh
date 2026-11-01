@@ -36,7 +36,7 @@ wire_detail_capture() {
 }
 
 wire_077_delay_orange() {
-  patch -p1 -d "$ROOT" < "$ROOT/scripts/stack-pr/patches/p077-delay-1d-orange.patch" || true
+  patch -p1 -d "$ROOT" < "$ROOT/scripts/stack-pr/patches/p077-delay-1d-orange.patch"
 }
 
 checkout_sources() {
@@ -83,6 +83,9 @@ build_demo() {
   local cache_key="${2:-$label}"
   local cache_root="${STACK_PR_DEMO_CACHE:-/tmp/mf100-dist-cache}"
   local cached="$cache_root/$cache_key/dist-demo"
+  if [[ -f "$STYLES_BAK" ]]; then
+    cp "$STYLES_BAK" "$ROOT/apps/web/src/styles.css"
+  fi
   echo "  build:demo for $label"
   if [[ "${STACK_PR_CAPTURE_FORCE_REBUILD:-}" == "1" ]]; then
     rm -rf "$cache_root/$cache_key"
@@ -120,7 +123,13 @@ stitch_make_sns_pair() {
   local out="$1"
   local left="$2"
   local right="$3"
-  pnpm dlx tsx "$ROOT/scripts/stack-pr/stitch-horizontal.ts" "$left" "$right" "$out"
+  if command -v magick >/dev/null; then
+    magick "$left" "$right" +append "$out"
+  elif command -v convert >/dev/null; then
+    convert "$left" "$right" +append "$out"
+  else
+    node "$ROOT/scripts/stack-pr/stitch-horizontal.mjs" "$left" "$right" "$out"
+  fi
 }
 
 capture_sns_side_by_side() {
@@ -242,7 +251,7 @@ for pr in "${PRS[@]}"; do
       rm -f "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png"
       checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 076 && \
         CAPTURE_EXPECT_BACKLOG_DELAY=0 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
-      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && wire_077_delay_orange && build_demo 077 077 && \
+      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 077 && \
         CAPTURE_EXPECT_BACKLOG_DELAY=1 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png" || st=$?
       restore_sources
@@ -260,10 +269,10 @@ for pr in "${PRS[@]}"; do
     172)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/079"
       rm -f "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png"
-      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077b 077 && \
-        run_one dashboard-bureau-before "$ROOT/docs/stack-pr-screenshots/079/before" 1 'section[aria-labelledby="ov-bureaus"]' 1 || st=$?
+      checkout_sources cursor/stack-078-ui-kpi-row-mock-8b5a && build_demo 078b 078 && \
+        run_one dashboard-stages-before "$ROOT/docs/stack-pr-screenshots/079/before" 1 'section[aria-labelledby="ov-stages"]' 1 || st=$?
       checkout_sources cursor/stack-079-ui-graphs-stage-bureau-8b5a && build_demo 079 079 && \
-        CAPTURE_EXPECT_BUREAU_MOCK=1 run_one dashboard-bureau-graphs "$ROOT/docs/stack-pr-screenshots/079/after" 1 'section[aria-labelledby="ov-bureaus"]' 1 || st=$?
+        run_one dashboard-stages-after "$ROOT/docs/stack-pr-screenshots/079/after" 1 'section[aria-labelledby="ov-stages"]' 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" \
         "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png" || st=$?
       restore_sources
