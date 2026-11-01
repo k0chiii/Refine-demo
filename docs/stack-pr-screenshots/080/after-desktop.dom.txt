@@ -1,4 +1,4 @@
-capturedAt=2026-11-01T07:10:26.083Z
-url=http://127.0.0.1:4588/make
-scene=27-make-creator
+capturedAt=2026-11-01T07:54:46.531Z
+url=http://127.0.0.1:4534/make
+scene=make-sns-band
 marker:進行中=8 件が進行中
