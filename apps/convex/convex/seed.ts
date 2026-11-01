@@ -1,5 +1,4 @@
 import { endOfJstDay } from "@mf100/domain";
-import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { SAMPLE_RULE_DRAFTS } from "./lib/notationSamples.ts";
@@ -48,7 +47,10 @@ export const MOCK_USERS = [
 ] as const;
 
 export const demo = internalMutation({
-  args: { skipPamphletComments: v.optional(v.boolean()) },
+  args: {
+    skipPamphletComments: v.optional(v.boolean()),
+    skipPlanInfoWarnings: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
       throw new Error("seed:demo is only available when NOGIKU_MOCK_ENABLED=true");
