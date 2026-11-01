@@ -44,7 +44,6 @@ export function ThreadCard({
   className,
   index,
   placeState,
-  confidentiality,
   now,
 }: {
   /** 紙面のピンと同じ番号（ピンの名前「コメント N」と対応させる） */
@@ -56,7 +55,6 @@ export function ThreadCard({
   canDecide: boolean;
   canReply: boolean;
   /** 制作物の機密区分（添付の写しを端末に残してよいかの判断） */
-  confidentiality?: "normal" | "restricted" | undefined;
   /** 最後の返信の「n 分前」を数える現在時刻 */
   now: number;
   /** カードを押した（選んで位置へ移る。パネルは開かない） */
@@ -160,9 +158,7 @@ export function ThreadCard({
           format={t.bodyFormat}
           mentionUsers={t.mentionUsers}
         />
-        {t.files.length > 0 ? (
-          <CommentAttachments files={t.files} confidentiality={confidentiality} variant="thumbs" />
-        ) : null}
+        {t.files.length > 0 ? <CommentAttachments files={t.files} variant="thumbs" /> : null}
         <ThreadMeta thread={t} placeState={placeState} />
         {showDecide ? (
           <div className="thread__decide" role="group" aria-label="反映するかどうか" onClick={stop}>
@@ -216,11 +212,7 @@ export function ThreadCard({
                   {r.fileCount > 0 ? (
                     <div className="thread__reply-files">
                       {r.firstFile ? (
-                        <CommentAttachments
-                          files={[r.firstFile]}
-                          confidentiality={confidentiality}
-                          variant="thumbs"
-                        />
+                        <CommentAttachments files={[r.firstFile]} variant="thumbs" />
                       ) : null}
                       {r.fileCount > 1 ? (
                         <span className="thread__reply-filecount">+{r.fileCount - 1}</span>
