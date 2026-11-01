@@ -147,6 +147,9 @@ class DemoBackend {
       : this.t;
   }
 
+  /** 既に足した撮影用の fixture */
+  private fixtures = new Set<string>();
+
   /**
    * 撮影の道具（scripts/stack-pr/capture.ts）が渡す seed の選択肢。撮影用の fixture は頼まれたときだけ足す
    * （e2e・デモの既定は変えない）。seed.demo に無い選択肢は受け流す
@@ -159,13 +162,22 @@ class DemoBackend {
     seedConfidentiality?: boolean;
     seedRevisionPlanned?: boolean;
   }): Promise<void> {
+    // 既定の seed は 1 回だけ。撮影用の fixture は、サインイン画面などが先に既定の seed を走らせていても
+    // 後から頼まれたぶんを足す（seed.demo は既にある分を作り直さない）
     this.seeded ??= this.enqueue(async () => {
-      await this.t.mutation(internal.seed.demo, {
-        ...(opts?.seedBacklogCapture ? { seedBacklogCapture: true } : {}),
-        ...(opts?.seedPlanInfoMismatch ? { seedPlanInfoMismatch: true } : {}),
-        ...(opts?.seedRevisionPlanned ? { seedRevisionPlanned: true } : {}),
-      });
+      await this.t.mutation(internal.seed.demo, {});
     });
+    const wanted = (
+      ["seedBacklogCapture", "seedPlanInfoMismatch", "seedRevisionPlanned"] as const
+    ).filter((k) => opts?.[k] === true && !this.fixtures.has(k));
+    if (wanted.length === 0) return this.seeded;
+    for (const k of wanted) this.fixtures.add(k);
+    const args = Object.fromEntries(wanted.map((k) => [k, true]));
+    this.seeded = this.seeded.then(() =>
+      this.enqueue(async () => {
+        await this.t.mutation(internal.seed.demo, args);
+      }),
+    );
     return this.seeded;
   }
 
