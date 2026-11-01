@@ -141,19 +141,20 @@ capture_pair() {
   local before_skip="${7:-1}" after_skip="${8:-1}"
   local clip="${9:-}"
   local seed="${10:-0}"
+  local after_clip="${11:-$clip}"
   local out="$ROOT/docs/stack-pr-screenshots/$out_id"
   mkdir -p "$out"
   rm -f "$out/before-desktop.png" "$out/after-desktop.png" "$out"/*.dom.txt
 
   echo "=== PR #$pr BEFORE $before_ref $before_scene ==="
   checkout_sources "$before_ref"
-  build_demo "$before_ref"
+  build_demo "$before_ref" "$before_ref"
   run_one "$before_scene" "$out/before" "$before_skip" "$clip" "$seed" || return 1
 
   echo "=== PR #$pr AFTER $after_ref $after_scene ==="
   checkout_sources "$after_ref"
-  build_demo "$after_ref"
-  run_one "$after_scene" "$out/after" "$after_skip" "$clip" "$seed" || return 1
+  build_demo "$after_ref" "$after_ref"
+  run_one "$after_scene" "$out/after" "$after_skip" "$after_clip" "$seed" || return 1
 
   validate_pair "$out/before-desktop.png" "$out/after-desktop.png" || return 1
   restore_sources
@@ -195,7 +196,7 @@ for pr in "${PRS[@]}"; do
       ;;
     172)
       capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
-        dashboard-manager dashboard-manager 079 1 1 "" 1 || st=$?
+        dashboard-manager dashboard-manager 079 1 1 "" 1 'section[aria-labelledby="ov-stages"]' || st=$?
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"
@@ -264,7 +265,7 @@ for pr in "${PRS[@]}"; do
       rm -f "$ROOT/docs/stack-pr-screenshots/q72/before"/* "$ROOT/docs/stack-pr-screenshots/q72/after"/*
       checkout_sources cursor/stack-q71-plan-info-warn-8b5a && build_demo q71 && \
         run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 || st=$?
-      checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && build_demo q72 && \
+      checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && build_demo q72 q72 && \
         run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 || st=$?
       restore_sources
       ;;

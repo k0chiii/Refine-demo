@@ -413,8 +413,9 @@ const SCENES: Record<string, SceneFn> = {
   },
   "editor-shortcut-open": async (page) => {
     await SCENES["076-before-editor"]!(page);
-    await page.locator(".ws").click({ position: { x: 100, y: 120 } });
-    await page.keyboard.press("?");
+    await page.locator('[title*="キーボードショートカット"], [aria-label*="キーボードショートカット"]')
+      .first()
+      .click({ force: true, timeout: 60_000 });
     await page
       .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
       .waitFor({ state: "visible", timeout: 30_000 });
@@ -815,10 +816,8 @@ const SCENES: Record<string, SceneFn> = {
       .first()
       .waitFor({ state: "attached", timeout: 120_000 })
       .catch(() => {});
-    await page.locator(".detail-shell__comments .thread").first().waitFor({
-      state: "attached",
-      timeout: 60_000,
-    });
+    await page.locator(".detail-shell__comments").waitFor({ state: "attached", timeout: 60_000 });
+    await page.waitForTimeout(1200);
   },
 };
 
