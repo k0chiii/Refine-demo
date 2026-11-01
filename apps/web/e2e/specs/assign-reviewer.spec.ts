@@ -55,7 +55,7 @@ test.describe("ユーザーの選択と日本語入力", { tag: "@core" }, () =>
     await app.go("/works");
     await page
       .locator(WORKS_ENTRY, { hasText: PAMPHLET })
-      .locator(`m3e-button[aria-label^="${PAMPHLET} の校正者を選ぶ"]`)
+      .locator(`m3e-button[aria-label^="${PAMPHLET} の担当者を選ぶ"]`)
       .click();
     const dialog = app.dialog();
     const chips = dialog.locator("m3e-input-chip");
