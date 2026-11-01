@@ -378,14 +378,20 @@ const SCENES: Record<string, SceneFn> = {
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works-table", { timeout: 60_000 });
-    await page.getByText("【撮影】締切超過").first().waitFor({ state: "visible", timeout: 90_000 });
+    const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
+    await capRow.scrollIntoViewIfNeeded();
+    await capRow.waitFor({ state: "visible", timeout: 90_000 });
+    await page.getByText("受付終了").first().scrollIntoViewIfNeeded();
     await page.getByText("受付終了").first().waitFor({ state: "visible", timeout: 90_000 });
   },
   "q68-works-after": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works-table", { timeout: 60_000 });
-    await page.getByText("【撮影】締切超過").first().waitFor({ state: "visible", timeout: 90_000 });
+    const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
+    await capRow.scrollIntoViewIfNeeded();
+    await capRow.waitFor({ state: "visible", timeout: 90_000 });
+    await page.getByText("次版作成中").first().scrollIntoViewIfNeeded();
     await page.getByText("次版作成中").first().waitFor({ state: "visible", timeout: 90_000 });
   },
   "works-deadline-header-before": async (page) => {
@@ -413,7 +419,12 @@ const SCENES: Record<string, SceneFn> = {
   },
   "editor-shortcut-open": async (page) => {
     await SCENES["076-before-editor"]!(page);
-    await page.getByRole("button", { name: /キーボードショートカット/ }).click({ timeout: 60_000 });
+    const btn = page.getByRole("button", { name: /キーボードショートカット/ });
+    if (await btn.isVisible().catch(() => false)) {
+      await btn.click({ timeout: 60_000 });
+    } else {
+      await page.keyboard.press("?");
+    }
     await page
       .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
       .waitFor({ state: "visible", timeout: 30_000 });
@@ -455,10 +466,11 @@ const SCENES: Record<string, SceneFn> = {
     await workspaceCommentsReady(page);
   },
   "076-before-editor": async (page) => {
-    await signInAs(page, "mock-nogiku-manager");
-    await demoGo(page, "/works");
-    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
-    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    const app = new App(page);
+    await app.signInAs("mock-nogiku-manager");
+    const { revisionPath } = await submitFirstRevision(app);
+    await app.go(revisionPath);
+    await app.pdfReady();
     await page.waitForSelector(".ws", { timeout: 60_000 });
   },
   "e090-before": async (page) => {

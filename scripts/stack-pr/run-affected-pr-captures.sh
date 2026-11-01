@@ -43,7 +43,17 @@ trap restore_sources EXIT
 
 build_demo() {
   echo "  build:demo for $1"
-  (cd "$ROOT/apps/web" && NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}" pnpm build:demo)
+  local attempt
+  for attempt in 1 2 3; do
+    if (cd "$ROOT/apps/web" && NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}" VP_CACHE=0 pnpm build:demo); then
+      return 0
+    fi
+    echo "  build failed (attempt $attempt), retrying after cleanup" >&2
+    rm -rf "$ROOT/apps/web/dist-demo" "$ROOT/apps/web/node_modules/.vite" 2>/dev/null || true
+    sync
+    sleep 5
+  done
+  return 1
 }
 
 run_one() {
@@ -256,11 +266,17 @@ done
 restore_sources
 trap - EXIT
 rm -f "$CAPTURE_BAK" "$SEED_BAK" "$BACKEND_BAK"
+fail=0
+if [[ -s /tmp/pr-capture-failures.log ]]; then fail=1; fi
 AUDIT_DIRS=(075 077 078 079 080 q68 061 062 q70 q71 q72 q75 q74 q73)
 for d in "${AUDIT_DIRS[@]}"; do
   dir="$ROOT/docs/stack-pr-screenshots/$d"
   if [[ -d "$dir" ]]; then
-    node scripts/stack-pr/screenshot-validate.mjs "$dir" || exit 1
+    node scripts/stack-pr/screenshot-validate.mjs "$dir" || fail=1
   fi
 done
+if [[ $fail -ne 0 ]]; then
+  echo "capture batch had failures" >&2
+  exit 1
+fi
 echo done
