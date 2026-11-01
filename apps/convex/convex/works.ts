@@ -43,6 +43,7 @@ import {
   type DatabaseReader,
   type QueryCtx,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
@@ -205,11 +206,17 @@ export const update = mutation({
     patch: v.object(workPatch),
   },
   handler: async (ctx, args) => {
-    const { principal } = await requireUser(ctx);
+    const { principal, user } = await requireUser(ctx);
     return runUseCase(async () => {
       const input: Parameters<typeof updateWork>[2] = { workId: args.workId, patch: args.patch };
       if (args.expectedVersion !== undefined) input.expectedVersion = args.expectedVersion;
       const work = await updateWork(createAppContext(ctx), principal, input);
+      if (args.patch.registeredPlanInfo !== undefined) {
+        await ctx.scheduler.runAfter(0, internal.planInfo.sync, {
+          workId: args.workId,
+          userId: user._id,
+        });
+      }
       return work.version;
     });
   },
