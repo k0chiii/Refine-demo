@@ -180,6 +180,7 @@ function demoSeedOptsFromEnv() {
 }
 
 async function signInAs(page: Page, sub: DemoUser) {
+  const effective = (process.env.CAPTURE_SIGNIN_SUB as DemoUser | undefined) ?? sub;
   await page.goto(`${BASE}/signin`);
   await ready(page);
   const seedOpts = demoSeedOptsFromEnv();
@@ -187,7 +188,7 @@ async function signInAs(page: Page, sub: DemoUser) {
     await globalThis.__mf100demo!.signOut();
     await globalThis.__mf100demo!.ensureSeeded(o);
     await globalThis.__mf100demo!.signIn(s);
-  }, { s: sub, o: seedOpts });
+  }, { s: effective, o: seedOpts });
   await page.waitForURL(
     (u: URL) =>
       !u.pathname.includes("/signin") &&
@@ -449,6 +450,7 @@ const SCENES: Record<string, SceneFn> = {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
     await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    await page.locator(".hub[data-hub='make']").first().scrollIntoViewIfNeeded();
     if (sceneRunOpts.openViewSwitcher) {
       await page
         .locator(".home-view-switcher")
@@ -769,8 +771,37 @@ const SCENES: Record<string, SceneFn> = {
       .waitFor({ state: "hidden", timeout: 10_000 })
       .catch(() => undefined);
   },
+  "q72-plan-info-before-warn": async (page) => {
+    await SCENES["q72-detail-before-warn"]!(page);
+  },
+  "q72-detail-before-warn": async (page) => {
+    await openWebWork(page);
+    await navigateWebWorkEditorRoute(page);
+    await page.waitForSelector(".write", { timeout: 60_000 });
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId missing from ${page.url()}`);
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, `/works/${workId}/detail`);
+    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
   "q72-plan-info-recheck": async (page) => {
-    await SCENES["q70-info-tab-plan"]!(page);
+    await SCENES["q72-detail-after-recheck"]!(page);
+  },
+  "q72-detail-after-recheck": async (page) => {
+    await openWebWork(page);
+    await navigateWebWorkEditorRoute(page);
+    await page.waitForSelector(".write", { timeout: 60_000 });
+    await openEditorDrawer(page, "情報");
     await page.getByRole("textbox", { name: "開催日時" }).fill("5/25(日) 10:00–17:00");
     await page
       .locator('.info-tab__section[aria-label="企画情報"]')
@@ -780,17 +811,15 @@ const SCENES: Record<string, SceneFn> = {
     await page.evaluate(async () => {
       await globalThis.__mf100demo!.resolveOpenPlanInfoBotThreads();
     });
-    await page.reload({ waitUntil: "networkidle" });
-    await openWebWorkEditor(page);
-    await openEditorDrawer(page, "コメント");
-    await page.waitForTimeout(800);
-    const notFound = await page.getByText(/見つかりません/).count();
-    if (notFound > 0) {
-      throw new Error(`plan-info recheck still shows ${notFound} 見つかりません warning(s)`);
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId missing from ${page.url()}`);
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, `/works/${workId}/detail`);
+    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    const warn = await page.getByText(/開催日時.*一致しません/).count();
+    if (warn > 0) {
+      throw new Error(`plan-info warnings still visible on detail (${warn})`);
     }
-  },
-  "q72-plan-info-before-warn": async (page) => {
-    await SCENES["q71-plan-info-warn"]!(page);
   },
   "dashboard-backlog-delay": async (page) => {
     await page.evaluate(() => localStorage.setItem("mf100.works-overview-open", "1"));
@@ -813,6 +842,14 @@ const SCENES: Record<string, SceneFn> = {
       const delayItems = await backlogSection.locator(".list__item[class*='delay']").count();
       if (delayItems < 1) {
         throw new Error("expected backlog delay color class on after capture");
+      }
+      const oneDay = backlogSection.locator(".list__item--delay-1d").first();
+      await oneDay.waitFor({ state: "visible", timeout: 60_000 });
+      const bg = await oneDay.evaluate((el) =>
+        getComputedStyle(el).getPropertyValue("--m3e-list-item-container-color"),
+      );
+      if (!/warning|ffdcc2|5c2e00/i.test(bg)) {
+        throw new Error(`1-day delay row not using warning/orange tokens: ${bg}`);
       }
     }
   },
@@ -841,6 +878,31 @@ const SCENES: Record<string, SceneFn> = {
       throw new Error("kpis--mock-row visible before PR 078");
     }
   },
+  "dashboard-bureau-before": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    if (await page.locator(".ov__block--bureau-mock").count()) {
+      throw new Error("bureau mock visible before PR 079");
+    }
+    if (await page.locator(".stagebar--mock").count()) {
+      throw new Error("stage mock bar visible before PR 079");
+    }
+    const bureau = page.locator('section[aria-labelledby="ov-bureaus"]');
+    if (await bureau.count()) {
+      await bureau.first().scrollIntoViewIfNeeded();
+      await bureau.first().waitFor({ state: "visible", timeout: 60_000 });
+    }
+  },
+  "make-hub-clip": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    await page.locator(".hub[data-hub='make']").first().scrollIntoViewIfNeeded();
+    if (process.env.CAPTURE_EXPECT_SNS_BAND === "1") {
+      await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 90_000 });
+    } else if (process.env.CAPTURE_EXPECT_SNS_BAND === "0" && (await page.locator(".sns-home-band").count())) {
+      throw new Error("sns-home-band visible when band expected hidden");
+    }
+  },
   "dashboard-bureau-graphs": async (page) => {
     await SCENES["dashboard-manager"]!(page);
     await page.locator("#ov-bureaus").waitFor({ state: "visible", timeout: 60_000 });
@@ -862,11 +924,7 @@ const SCENES: Record<string, SceneFn> = {
     await app.signInAs("mock-nogiku-manager");
     await app.go(`${workPath}/detail`);
     await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
-    await page
-      .locator(".detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame canvas")
-      .first()
-      .waitFor({ state: "attached", timeout: 120_000 })
-      .catch(() => {});
+    await pdfReady(page);
     await page.locator(".detail-shell__comments").waitFor({ state: "attached", timeout: 60_000 });
     if (process.env.CAPTURE_EXPECT_NO_ACTIVITY === "1") {
       if (await page.locator(".activity-log, [aria-label*='活動']").count()) {
@@ -890,6 +948,7 @@ async function runScene(page: Page, key: string) {
     skipPlanInfoWarnings,
     seedBacklogCapture,
     seedConfidentiality,
+    seedRevisionPlanned: process.env.SEED_REVISION_PLANNED === "1",
   });
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
@@ -918,6 +977,34 @@ async function captureOne(
   }
   await writeSceneDomSidecar(page, sceneKey, outPath);
   const sidecar = outPath.replace(/\.png$/i, ".dom.txt");
+  const sub = await page
+    .evaluate(async () => {
+      const u = await globalThis.__mf100demo!.users();
+      const id = globalThis.__mf100demo!.userId;
+      return u.find((x) => x.id === id)?.sub ?? "";
+    })
+    .catch(() => "");
+  fs.appendFileSync(sidecar, `captureUser=${sub}\n`);
+  if (clipSelector) fs.appendFileSync(sidecar, `captureClip=${clipSelector}\n`);
+  if (/detail-preview|q72-detail|dashboard-detail/.test(sceneKey)) {
+    const version = await page.locator(".detail-shell__version").innerText().catch(() => "");
+    const previewParts = await page
+      .locator(
+        ".detail-shell__preview-frame canvas, .detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame .rich-viewer__page, .detail-shell__preview-frame .write__page",
+      )
+      .count();
+    fs.appendFileSync(sidecar, `detail:version=${version.trim()}\n`);
+    fs.appendFileSync(sidecar, `detail:preview=${previewParts > 0 ? "yes" : "no"}\n`);
+    if (previewParts < 1 && sceneKey === "detail-preview-73") {
+      throw new Error(`detail preview missing content for ${outPath}`);
+    }
+    if (process.env.CAPTURE_EXPECT_EMPTY_VERSION === "1" && !/^—/.test(version.trim())) {
+      throw new Error(`expected empty version label, got ${version}`);
+    }
+    if (process.env.CAPTURE_EXPECT_VERSION_NUMBER === "1" && !/版\s*\d/.test(version)) {
+      throw new Error(`expected numbered version label, got ${version}`);
+    }
+  }
   if (/plan-info|q72|q71-comments/.test(sceneKey)) {
     const notFound = await page.getByText(/見つかりません/).count().catch(() => 0);
     const warn = await page.getByText(/開催日時.*一致しません/).count().catch(() => 0);

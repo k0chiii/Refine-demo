@@ -255,6 +255,13 @@ export function assertDomSidecarClean(sidecarPath: string, body?: string): void 
   if (nfMatch && Number(nfMatch[1]) > 0) {
     throw new Error(`not-found warnings still visible (${nfMatch[1]}) in ${sidecarPath}`);
   }
+  const previewMatch = text.match(/detail:preview=no/);
+  if (previewMatch && /detail-preview-73|detail-with-preview/i.test(sidecarPath)) {
+    throw new Error(`detail preview empty in ${sidecarPath}`);
+  }
+  if (/detail:version=—/.test(text) && /detail-with-preview|q73\/after/i.test(sidecarPath)) {
+    throw new Error(`unexpected empty version in ${sidecarPath}`);
+  }
 }
 
 export function assertPngPairValidated(beforePath: string, afterPath: string, corpusRoot?: string): void {

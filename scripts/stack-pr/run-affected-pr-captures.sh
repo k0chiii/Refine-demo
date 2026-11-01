@@ -10,14 +10,25 @@ export SKIP_PAMPHLET_COMMENTS=1
 CAPTURE_BAK="$(mktemp)"
 SEED_BAK="$(mktemp)"
 BACKEND_BAK="$(mktemp)"
+DETAIL_BAK="$(mktemp)"
+DETAIL_PREVIEW_BAK="$(mktemp)"
 cp "$ROOT/scripts/stack-pr/capture.ts" "$CAPTURE_BAK"
 cp "$ROOT/apps/convex/convex/seed.ts" "$SEED_BAK"
 cp "$ROOT/apps/web/src/demo/backend.ts" "$BACKEND_BAK"
+cp "$ROOT/apps/web/src/routes/_app/works/\$workId/detail.tsx" "$DETAIL_BAK"
+cp "$ROOT/apps/web/src/features/work/WorkDetailPreview.tsx" "$DETAIL_PREVIEW_BAK" 2>/dev/null || true
 
 restore_capture() {
   cp "$CAPTURE_BAK" "$ROOT/scripts/stack-pr/capture.ts"
   cp "$SEED_BAK" "$ROOT/apps/convex/convex/seed.ts"
   cp "$BACKEND_BAK" "$ROOT/apps/web/src/demo/backend.ts"
+  if [[ -f "$DETAIL_BAK" ]]; then
+    cp "$DETAIL_BAK" "$ROOT/apps/web/src/routes/_app/works/\$workId/detail.tsx"
+  fi
+  if [[ -s "$DETAIL_PREVIEW_BAK" ]]; then
+    mkdir -p "$ROOT/apps/web/src/features/work"
+    cp "$DETAIL_PREVIEW_BAK" "$ROOT/apps/web/src/features/work/WorkDetailPreview.tsx"
+  fi
 }
 
 checkout_sources() {
@@ -97,6 +108,28 @@ wire_061_shortcut_editor() {
   patch -p1 -d "$ROOT" < "$ROOT/scripts/stack-pr/patches/p04-061-shortcut-wiring.patch"
 }
 
+stitch_make_sns_pair() {
+  local out="$1"
+  local left="$2"
+  local right="$3"
+  pnpm dlx tsx "$ROOT/scripts/stack-pr/stitch-horizontal.ts" "$left" "$right" "$out"
+}
+
+capture_sns_side_by_side() {
+  local prefix="$1"
+  local expect_band="$2"
+  local tmp
+  tmp="$(mktemp -d)"
+  CAPTURE_SIGNIN_SUB=mock-nogiku-reviewer \
+    run_one make-hub-clip "$tmp/non-sns" 1 ".hub[data-hub='make']" 0 0 "" 1 || return 1
+  CAPTURE_SIGNIN_SUB=mock-nogiku-creator \
+    CAPTURE_EXPECT_SNS_BAND="$expect_band" \
+    run_one make-hub-clip "$tmp/sns" 1 ".hub[data-hub='make']" 0 0 "" 1 || return 1
+  stitch_make_sns_pair "${prefix}-desktop.png" "$tmp/non-sns-desktop.png" "$tmp/sns-desktop.png"
+  cp "$tmp/non-sns-desktop.dom.txt" "${prefix}-desktop.dom.txt" 2>/dev/null || true
+  rm -rf "$tmp"
+}
+
 run_one() {
   local scene="$1"
   local prefix="$2"
@@ -127,6 +160,10 @@ NODE
     SEED_BACKLOG_CAPTURE="$seed_backlog" \
     SEED_CONFIDENTIALITY="$seed_confidentiality" \
     SEED_REVISION_PLANNED="${SEED_REVISION_PLANNED:-0}" \
+    CAPTURE_SIGNIN_SUB="${CAPTURE_SIGNIN_SUB:-}" \
+    CAPTURE_EXPECT_SNS_BAND="${CAPTURE_EXPECT_SNS_BAND:-}" \
+    CAPTURE_EXPECT_EMPTY_VERSION="${CAPTURE_EXPECT_EMPTY_VERSION:-}" \
+    CAPTURE_EXPECT_VERSION_NUMBER="${CAPTURE_EXPECT_VERSION_NUMBER:-}" \
     SCREENSHOT_CORPUS="$ROOT/docs/stack-pr-screenshots" \
     pnpm dlx tsx scripts/stack-pr/capture-cli.ts "$req"
   local st=$?
@@ -185,10 +222,11 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/075"
       rm -f "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png"
       checkout_sources cursor/stack-073-domain-danger-kpi-v2-8b5a && build_demo 073 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 ".shell__appbar" 0 0 || st=$?
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 ".hub[data-hub='make']" 0 0 "" 1 || st=$?
       checkout_sources cursor/stack-075-ui-home-view-switcher-v2-8b5a && build_demo 075 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".home-view-switcher" 0 1 || st=$?
-      validate_pair "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png" || st=$?
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".hub[data-hub='make']" 0 1 "" 1 || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png" || st=$?
       restore_sources
       ;;
     170)
@@ -215,20 +253,22 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/079"
       rm -f "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png"
       checkout_sources cursor/stack-078-ui-kpi-row-mock-8b5a && build_demo 078 078 && \
-        run_one dashboard-manager "$ROOT/docs/stack-pr-screenshots/079/before" 1 ".ov" 1 || st=$?
+        run_one dashboard-bureau-before "$ROOT/docs/stack-pr-screenshots/079/before" 1 'section[aria-labelledby="ov-bureaus"]' 1 || st=$?
       checkout_sources cursor/stack-079-ui-graphs-stage-bureau-8b5a && build_demo 079 079 && \
         CAPTURE_EXPECT_BUREAU_MOCK=1 run_one dashboard-bureau-graphs "$ROOT/docs/stack-pr-screenshots/079/after" 1 'section[aria-labelledby="ov-bureaus"]' 1 || st=$?
-      validate_pair "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png" || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png" || st=$?
       restore_sources
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"
       rm -f "$ROOT/docs/stack-pr-screenshots/080/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/080/after-desktop.png"
       checkout_sources cursor/stack-079-ui-graphs-stage-bureau-8b5a && build_demo 079 && \
-        CAPTURE_EXPECT_SNS_BAND=0 run_one make-sns-band "$ROOT/docs/stack-pr-screenshots/080/before" 1 ".hub[data-hub='make']" 0 || st=$?
+        capture_sns_side_by_side "$ROOT/docs/stack-pr-screenshots/080/before" 0 || st=$?
       checkout_sources cursor/stack-080-ui-sns-band-visibility-8b5a && build_demo 080 && \
-        CAPTURE_EXPECT_SNS_BAND=1 run_one make-sns-band "$ROOT/docs/stack-pr-screenshots/080/after" 1 ".sns-home-band" 0 || st=$?
-      validate_pair "$ROOT/docs/stack-pr-screenshots/080/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/080/after-desktop.png" || st=$?
+        capture_sns_side_by_side "$ROOT/docs/stack-pr-screenshots/080/after" 1 || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/080/before-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/080/after-desktop.png" || st=$?
       restore_sources
       ;;
     194)
@@ -287,38 +327,44 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q72/before" "$ROOT/docs/stack-pr-screenshots/q72/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q72/before"/* "$ROOT/docs/stack-pr-screenshots/q72/after"/*
       checkout_sources cursor/stack-q71-plan-info-warn-8b5a && build_demo q71 && \
-        run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 || st=$?
+        run_one q72-detail-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 ".detail-shell__main" 0 0 "" 1 || st=$?
       checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && build_demo q72 q72 && \
-        run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 || st=$?
+        run_one q72-detail-after-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 ".detail-shell__main" 0 0 "" 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck-desktop.png" \
         "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck-desktop.png" || st=$?
       restore_sources
       ;;
     203)
-      mkdir -p "$ROOT/docs/stack-pr-screenshots/q75/after"
-      rm -f "$ROOT/docs/stack-pr-screenshots/q75/after"/*
+      mkdir -p "$ROOT/docs/stack-pr-screenshots/q75/before" "$ROOT/docs/stack-pr-screenshots/q75/after"
+      rm -f "$ROOT/docs/stack-pr-screenshots/q75/before"/* "$ROOT/docs/stack-pr-screenshots/q75/after"/*
+      checkout_sources cursor/stack-q73a-detail-preview-8b5a && build_demo q73before q73 && \
+        CAPTURE_EXPECT_VERSION_NUMBER=1 run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q75/before/detail-with-preview" 1 ".detail-shell__main" || st=$?
       checkout_sources cursor/stack-q75c-detail-no-activity-8b5a && build_demo q75 q75 && \
-        CAPTURE_EXPECT_NO_ACTIVITY=1 run_one dashboard-detail "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity" 1 ".detail-shell" || st=$?
-      node scripts/stack-pr/screenshot-validate.mjs "$ROOT/docs/stack-pr-screenshots/q75" || st=$?
+        CAPTURE_EXPECT_NO_ACTIVITY=1 CAPTURE_EXPECT_VERSION_NUMBER=1 \
+        run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity" 1 ".detail-shell__main" || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/q75/before/detail-with-preview-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity-desktop.png" || st=$?
       restore_sources
       ;;
     204)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q73/before" "$ROOT/docs/stack-pr-screenshots/q73/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q73/before"/* "$ROOT/docs/stack-pr-screenshots/q73/after"/*
       checkout_sources cursor/stack-086-ui-detail-shell-mock-8b5a && build_demo 086 && \
-        run_one dashboard-detail "$ROOT/docs/stack-pr-screenshots/q73/before/detail-shell" 1 || st=$?
+        run_one dashboard-detail "$ROOT/docs/stack-pr-screenshots/q73/before/detail-shell" 1 ".detail-shell__head" || st=$?
       checkout_sources cursor/stack-q73a-detail-preview-8b5a && build_demo q73 && \
-        run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q73/after/detail-preview" 1 || st=$?
+        CAPTURE_EXPECT_VERSION_NUMBER=1 run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q73/after/detail-preview" 1 ".detail-shell__main" || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/q73/before/detail-shell-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/q73/after/detail-preview-desktop.png" || st=$?
       restore_sources
       ;;
     205)
-      mkdir -p "$ROOT/docs/stack-pr-screenshots/q73/after" "$ROOT/docs/stack-pr-screenshots/q74/after"
-      rm -f "$ROOT/docs/stack-pr-screenshots/q74/after"/*
+      mkdir -p "$ROOT/docs/stack-pr-screenshots/q74/before" "$ROOT/docs/stack-pr-screenshots/q74/after"
+      rm -f "$ROOT/docs/stack-pr-screenshots/q74/before"/* "$ROOT/docs/stack-pr-screenshots/q74/after"/*
       checkout_sources cursor/stack-q73a-detail-preview-8b5a && build_demo q73ref && \
-        run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q73/after/detail-preview" 1 || st=$?
+        CAPTURE_EXPECT_VERSION_NUMBER=1 run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q74/before/detail-preview" 1 ".detail-shell__main" || st=$?
       checkout_sources cursor/stack-q74c-detail-no-submission-8b5a && build_demo q74 && \
-        run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q74/after/detail-preview" 1 || st=$?
-      validate_pair "$ROOT/docs/stack-pr-screenshots/q73/after/detail-preview-desktop.png" \
+        CAPTURE_EXPECT_EMPTY_VERSION=1 run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q74/after/detail-preview" 1 ".detail-shell__main" || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/q74/before/detail-preview-desktop.png" \
         "$ROOT/docs/stack-pr-screenshots/q74/after/detail-preview-desktop.png" || st=$?
       restore_sources
       ;;
@@ -329,7 +375,7 @@ done
 
 restore_sources
 trap - EXIT
-rm -f "$CAPTURE_BAK" "$SEED_BAK" "$BACKEND_BAK"
+rm -f "$CAPTURE_BAK" "$SEED_BAK" "$BACKEND_BAK" "$DETAIL_BAK" "$DETAIL_PREVIEW_BAK"
 fail=0
 if [[ -s /tmp/pr-capture-failures.log ]]; then fail=1; fi
 AUDIT_DIRS=()
@@ -348,7 +394,7 @@ for pr in "${PRS[@]}"; do
     202) AUDIT_DIRS+=(q72) ;;
     203) AUDIT_DIRS+=(q75) ;;
     204) AUDIT_DIRS+=(q73) ;;
-    205) AUDIT_DIRS+=(q74 q73) ;;
+    205) AUDIT_DIRS+=(q74) ;;
   esac
 done
 for d in "${AUDIT_DIRS[@]}"; do
