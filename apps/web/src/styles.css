@@ -6087,6 +6087,24 @@ m3e-snackbar {
   background: var(--mf-surface-container-lowest);
   border: 1px solid var(--mf-outline-variant);
 }
+.detail-shell__preview-frame--pdf {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.detail-shell__preview-frame--pdf .viewer {
+  flex: 1;
+  min-height: 420px;
+}
+.detail-shell__main {
+  grid-template-columns: minmax(0, 2.4fr) minmax(280px, 1fr);
+}
+.detail-shell__comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .detail-shell__comments {
   padding: 16px;
   border-radius: var(--mf-shape-lg);

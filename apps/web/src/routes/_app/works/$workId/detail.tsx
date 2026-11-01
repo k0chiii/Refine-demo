@@ -1,6 +1,11 @@
 import { api } from "@mf100/convex/api";
+import { isReviewableArtifact } from "@mf100/domain";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { Suspense, useMemo, useState } from "react";
+import { PdfViewer } from "@/features/annotation/lazyViewers";
+import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
+import { ThreadCard } from "@/features/review/ThreadCard";
 import { workHint } from "@/lib/workHint";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
@@ -12,7 +17,7 @@ export const Route = createFileRoute("/_app/works/$workId/detail")({
 });
 
 /**
- * 制作物詳細の骨組み（2 行見出し + ステッパー placeholder）。データは demo / Convex の works.get。
+ * 制作物詳細（決定 73A）: 大きなプレビュー + コメント列。データは works.get / revisions.get。
  */
 function WorkDetailShell() {
   const { workId } = Route.useParams();
@@ -26,6 +31,7 @@ function WorkDetailShell() {
         ? "ラフ"
         : `版 ${acceptingRev.sequence}`
       : "—";
+  const revisionId = workData?.acceptingRevisionId ?? null;
 
   return (
     <div className="detail-shell">
@@ -49,18 +55,11 @@ function WorkDetailShell() {
       </header>
       <main className="detail-shell__main">
         <section className="detail-shell__preview" aria-label="プレビュー">
-          {workData === undefined ? (
+          {workData === undefined || !revisionId ? (
             <Loading label="プレビューを読み込んでいます" />
           ) : (
             <>
-              <div className="detail-shell__preview-frame" data-testid="detail-preview">
-                <p className="body-medium" style={{ margin: 0 }}>
-                  {title}
-                </p>
-                <p className="small muted" style={{ margin: "0.5rem 0 0" }}>
-                  版 {version}
-                </p>
-              </div>
+              <DetailPreviewFrame revisionId={revisionId} />
               <Link to="/works/$workId" params={{ workId }} className="detail-shell__open-ws">
                 <M3eButton variant="tonal">校正画面を開く</M3eButton>
               </Link>
@@ -69,11 +68,108 @@ function WorkDetailShell() {
         </section>
         <aside className="detail-shell__comments" aria-label="コメント">
           <h2 className="title-small detail-shell__comments-h">コメント</h2>
-          <p className="small muted" style={{ margin: 0 }}>
-            詳細では一覧のみ。返信は校正画面で行います。
-          </p>
+          {workData === undefined || !revisionId ? (
+            <Loading label="コメントを読み込んでいます" />
+          ) : (
+            <DetailCommentsList revisionId={revisionId} />
+          )}
         </aside>
       </main>
+    </div>
+  );
+}
+
+function DetailPreviewFrame({ revisionId }: { revisionId: string }) {
+  const data = useQuery(api.revisions.get, { revisionId });
+  const artifact = useMemo(() => {
+    const list = data?.artifacts ?? [];
+    return (
+      list.find((a) => a.type === "pdf" && a.role !== "external") ??
+      list.find((a) => isReviewableArtifact(a)) ??
+      null
+    );
+  }, [data?.artifacts]);
+  const persist = data?.work.confidentiality !== "restricted";
+  const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null, {
+    persist,
+  });
+  const [page, setPage] = useState(1);
+
+  if (data === undefined) {
+    return <Loading label="プレビューを読み込んでいます" />;
+  }
+
+  const pdfReady = artifact?.type === "pdf" ? Boolean(blob.download ?? blob.blob) : Boolean(blob.blob);
+
+  return (
+    <div
+      className={`detail-shell__preview-frame${artifact?.type === "pdf" && pdfReady ? " detail-shell__preview-frame--pdf" : ""}`}
+      data-testid="detail-preview"
+    >
+      {artifact?.type === "pdf" && pdfReady ? (
+        <Suspense fallback={<Loading label="PDF を読み込んでいます" />}>
+          <PdfViewer
+            download={blob.download}
+            blob={blob.blob}
+            artifactId={artifact.id}
+            threads={[]}
+            activeThreadId={null}
+            onSelectThread={() => undefined}
+            canComment={false}
+            draft={null}
+            onDraft={() => undefined}
+            page={page}
+            onPageChange={setPage}
+            scale={1}
+            rotation={0}
+          />
+        </Suspense>
+      ) : artifact && !pdfReady && !blob.error ? (
+        <Loading label="ファイルを取得しています" />
+      ) : (
+        <p className="body-medium muted" style={{ margin: 0 }}>
+          添付がありません
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DetailCommentsList({ revisionId }: { revisionId: string }) {
+  const data = useQuery(api.revisions.get, { revisionId });
+  const now = Date.now();
+
+  if (data === undefined) {
+    return <Loading label="コメントを読み込んでいます" />;
+  }
+
+  if (data.threads.length === 0) {
+    return (
+      <p className="small muted" style={{ margin: 0 }}>
+        コメントはありません
+      </p>
+    );
+  }
+
+  return (
+    <div className="comments detail-shell__comments-list">
+      {data.threads.map((t, index) => (
+        <ThreadCard
+          key={t.id}
+          thread={t}
+          index={index + 1}
+          active={false}
+          canDecide={false}
+          canReply={false}
+          confidentiality={data.work.confidentiality}
+          now={now}
+          className="detail-shell__thread thread"
+          onSelect={() => undefined}
+          onOpen={() => undefined}
+          onResolve={async () => undefined}
+          onDecideStart={() => undefined}
+        />
+      ))}
     </div>
   );
 }
