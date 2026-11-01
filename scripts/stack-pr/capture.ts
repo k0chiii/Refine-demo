@@ -883,7 +883,7 @@ async function runScene(page: Page, key: string) {
   const skipPlanInfoWarnings = process.env.SKIP_PLAN_INFO_WARNINGS === "1";
   const seedBacklogCapture =
     process.env.SEED_BACKLOG_CAPTURE === "1" || key === "dashboard-backlog-delay";
-  const seedConfidentiality = process.env.SEED_CONFIDENTIALITY === "1";
+  const seedConfidentiality = process.env.SEED_CONFIDENTIALITY !== "0";
   await page.goto(`${BASE}/signin`);
   await ready(page);
   await ensureDemoSeeded(page, {
