@@ -11,6 +11,7 @@ import {
   type ReviewAssignment,
   type Revision,
   revisionLabel,
+  startOfJstDay,
   toJstDate,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
@@ -56,7 +57,7 @@ export async function remindUpcomingDeadlinesBatch(
   const now = opts.asOf ?? ctx.clock.now();
   const windowMs = opts.windowMs ?? 24 * 3_600_000;
   const { page, continueCursor } = await ctx.revisions.listOpenDueWithin(
-    { after: now, upTo: now + windowMs },
+    { after: startOfJstDay(now), upTo: now + windowMs },
     { cursor: opts.cursor ?? null, limit: opts.limit ?? 100 },
   );
   let sent = 0;

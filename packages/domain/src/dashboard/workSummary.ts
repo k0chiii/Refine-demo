@@ -24,6 +24,7 @@ export interface RevisionGlance {
   kind: RevisionKind;
   submittedAt: Instant;
   deadlineAt: Instant;
+  reviewUrgent?: boolean;
   /** 期限到来で受付が終わった版 */
   lapsed: boolean;
 }
@@ -56,6 +57,7 @@ export function glanceOf(revision: Revision): RevisionGlance {
     kind: revision.kind,
     submittedAt: revision.submittedAt,
     deadlineAt: revision.deadlineAt,
+    ...(revision.reviewUrgent === true ? { reviewUrgent: true } : {}),
     lapsed: revision.reviewState === "closed" && revision.reviewClosedReason === "deadline",
   };
 }

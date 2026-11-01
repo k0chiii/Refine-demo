@@ -198,6 +198,7 @@ export const demo = internalMutation({
         printQuantity: 30000,
         sizeOrLength: "A5・48 ページ",
         productionDays: 45,
+        revisionPlannedAt: [{ sequence: 2, at: endOfJstDay(now + 14 * day) }],
         tags: ["公式パンフ", "マスター", "1次公開"],
         ...teamsOf("広報局/デザイン担当", ["広報局/デザイン担当"]),
         relatedTeamIds: teamIds["総務局"] ? [teamIds["総務局"]] : [],

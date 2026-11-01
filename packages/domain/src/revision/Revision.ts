@@ -1,6 +1,7 @@
 import { DomainError } from "../shared/DomainError.ts";
 import type { RevisionId, UserId, WorkId } from "../shared/ids.ts";
 import { isBeforeDeadline, type Instant } from "../shared/time.ts";
+import { assertSubmitRevisionDeadline } from "./submitDeadline.ts";
 import type { RuleSetSnapshot } from "../notation/ruleset.ts";
 import type { RevisionDeclarations, SubmissionCheckId } from "../work/metadata.ts";
 
@@ -23,6 +24,8 @@ export interface Revision {
   submittedBy: UserId;
   submittedAt: Instant;
   deadlineAt: Instant;
+  /** 提出ダイアログの「緊急」で短い校正期日を付けた版（一覧・校画面の印） */
+  reviewUrgent?: boolean;
   reviewState: ReviewState;
   reviewClosedReason?: ReviewClosedReason;
   reviewClosedAt?: Instant;
@@ -94,6 +97,9 @@ export interface NewRevisionInput {
   submittedBy: UserId;
   now: Instant;
   deadlineAt: Instant;
+  reviewUrgent?: boolean;
+  /** 緊急の上限計算用。受付中の版を supersede するときはその deadlineAt */
+  openAcceptingDeadlineAt?: Instant;
   changeSummary: string;
   focusNotes: string;
   snapshotHash?: string;
@@ -102,12 +108,13 @@ export interface NewRevisionInput {
 }
 
 export function createRevision(input: NewRevisionInput, plan: RevisionPlan): NewRevision {
-  if (!isBeforeDeadline(input.now, input.deadlineAt)) {
-    throw new DomainError("revision_deadline_in_past", {
-      now: input.now,
-      deadlineAt: input.deadlineAt,
-    });
-  }
+  const openAccepting = input.openAcceptingDeadlineAt ?? plan.toSupersede?.deadlineAt ?? undefined;
+  assertSubmitRevisionDeadline({
+    now: input.now,
+    deadlineAt: input.deadlineAt,
+    ...(input.reviewUrgent === true ? { reviewUrgent: true } : {}),
+    ...(openAccepting !== undefined ? { openAcceptingDeadlineAt: openAccepting } : {}),
+  });
   const revision: NewRevision = {
     workId: input.workId,
     kind: input.kind,
@@ -127,6 +134,7 @@ export function createRevision(input: NewRevisionInput, plan: RevisionPlan): New
   if (input.declarations !== undefined) revision.declarations = { ...input.declarations };
   if (input.selfChecks !== undefined && input.selfChecks.length > 0)
     revision.selfChecks = [...input.selfChecks];
+  if (input.reviewUrgent === true) revision.reviewUrgent = true;
   return revision;
 }
 

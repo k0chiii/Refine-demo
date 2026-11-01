@@ -14,16 +14,16 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await app.go("/works");
     const dialog = await app.editWorkFromList(title);
     await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を編集");
-    // 目的・用途は 2 つ目の欄（1 つ目は制作物名）
-    const purpose = dialog.locator("textarea").first();
-    await purpose.fill("開催 1 週間前に投稿する告知。");
+    await dialog.locator("m3e-expansion-panel").click();
+    const category = dialog.locator("m3e-form-field", { hasText: "区分" }).locator("input");
+    await category.fill("開催告知（一覧から更新）");
     await dialog.locator("m3e-button", { hasText: "保存" }).click();
     await expect(dialog).toHaveCount(0);
-    // 一覧に戻ったまま（エディタへは移らない）。書いた用途は制作物の情報に残る
+    // 一覧に戻ったまま（エディタへは移らない）。書いた区分は制作物の情報に残る
     await expect(page).toHaveURL(/\/works(\?|$)/);
     await app.openWork(title);
     await app.drawer("情報");
-    await expect(page.locator(".drawer__body")).toContainText("開催 1 週間前に投稿する告知。");
+    await expect(page.locator(".drawer__body")).toContainText("開催告知（一覧から更新）");
   });
 
   test("⋮ → 複製で同じ情報の制作物がもう 1 件できる", async ({ app, page }) => {

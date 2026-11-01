@@ -77,7 +77,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), h
  * 動画のビューア（動画の校正。利用者指示 2026-10-17: タイムライン指定と範囲選択。Frame.io などに倣う。docs/UI_M3E.md §53）。
  *
  * - **映像を押す（タップ）**: 再生・停止。コメントにはならない（利用者指示 2026-10-20）
- * - **時点のコメント**: 「この時点にコメント」（C）で、止めた位置に付ける。映像の上をなぞる（範囲）か長押し（ピン）すると
+ * - **時点のコメント**: 「この時点にコメント」（T）で、止めた位置に付ける。全体へのコメントは C（Editor）。映像の上をなぞる（範囲）か長押し（ピン）すると
  *   その時点の画面の範囲（矩形）・ピンも付けられる（始めると映像が止まる）
  * - **範囲のコメント**: タイムラインの上の帯（印の段）をなぞる（押すだけなら再生位置を移すだけ）、I（ここから）と O（ここまで）を押す、
  *   ボタン「ここから」「ここまで」を押す、のどれかで範囲を選ぶ。選んだ範囲は両端のつまみで直せる
@@ -245,7 +245,7 @@ export function VideoViewer({
     ...(draft?.rect ? { rect: draft.rect } : {}),
     ...(draft?.point ? { point: draft.point } : {}),
   });
-  /** この時点にコメント（C） */
+  /** この時点にコメント（T） */
   const commentHere = () => {
     if (!canComment) return;
     videoRef.current?.pause();
@@ -325,8 +325,8 @@ export function VideoViewer({
       case "O":
         markOut();
         break;
-      case "c":
-      case "C":
+      case "t":
+      case "T":
         if (draft?.marking) commitMarking();
         else commentHere();
         break;
@@ -529,7 +529,7 @@ export function VideoViewer({
               <M3eButton
                 variant="tonal"
                 className="vplayer__comment"
-                aria-label="この時点にコメント（C）"
+                aria-label="この時点にコメント（T）"
                 onClick={draft?.marking ? commitMarking : commentHere}
               >
                 <M3eIcon slot="icon" name="add_comment" />
