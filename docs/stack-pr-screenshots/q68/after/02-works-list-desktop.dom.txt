@@ -1,0 +1,5 @@
+capturedAt=2026-11-01T08:44:40.780Z
+url=http://127.0.0.1:4568/works
+scene=q68-works-after
+captureUser=
+captureClip=.works-table

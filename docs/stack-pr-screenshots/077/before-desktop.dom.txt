@@ -1,0 +1,5 @@
+capturedAt=2026-11-01T08:37:29.240Z
+url=http://127.0.0.1:4537/works
+scene=dashboard-backlog-delay
+captureUser=
+captureClip=section[aria-labelledby="ov-backlog"]

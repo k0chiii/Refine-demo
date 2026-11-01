@@ -1,0 +1,9 @@
+capturedAt=2026-11-01T08:38:37.683Z
+url=http://127.0.0.1:4639/works/000000000000000000000010026works/detail
+scene=q72-detail-before-warn
+captureUser=
+captureClip=.detail-shell__main
+detail:version=版 1
+detail:preview=no
+forbidden:plan-info-warnings=1
+forbidden:not-found=0

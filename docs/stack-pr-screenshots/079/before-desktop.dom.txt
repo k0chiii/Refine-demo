@@ -1,0 +1,5 @@
+capturedAt=2026-11-01T08:37:50.994Z
+url=http://127.0.0.1:4693/works
+scene=dashboard-bureau-before
+captureUser=
+captureClip=section[aria-labelledby="ov-bureaus"]

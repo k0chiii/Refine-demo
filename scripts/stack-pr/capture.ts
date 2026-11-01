@@ -924,7 +924,13 @@ const SCENES: Record<string, SceneFn> = {
     await app.signInAs("mock-nogiku-manager");
     await app.go(`${workPath}/detail`);
     await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
-    await pdfReady(page);
+    await page.waitForFunction(
+      () =>
+        ((document.querySelector(".detail-shell__preview-frame canvas") as HTMLCanvasElement | null)
+          ?.width ?? 0) > 0,
+      null,
+      { timeout: 120_000 },
+    );
     await page.locator(".detail-shell__comments").waitFor({ state: "attached", timeout: 60_000 });
     if (process.env.CAPTURE_EXPECT_NO_ACTIVITY === "1") {
       if (await page.locator(".activity-log, [aria-label*='活動']").count()) {

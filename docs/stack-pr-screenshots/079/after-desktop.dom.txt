@@ -1,0 +1,6 @@
+capturedAt=2026-11-01T08:38:02.760Z
+url=http://127.0.0.1:4542/works
+scene=dashboard-bureau-graphs
+marker:制作物の状況=制作物の状況
+captureUser=
+captureClip=section[aria-labelledby="ov-bureaus"]

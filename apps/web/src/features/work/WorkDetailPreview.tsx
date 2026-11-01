@@ -17,7 +17,13 @@ export function WorkDetailPreview({
 }) {
   const data = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   const artifact = useMemo(
-    () => (data ? pickReviewArtifact(data.artifacts, data.work.mediaType) : null),
+    () =>
+      data
+        ? pickReviewArtifact(
+            data.artifacts,
+            data.work.mediaType === "web" ? "document" : data.work.mediaType,
+          )
+        : null,
     [data],
   );
   const blob = useArtifactBlob(artifact?.id ?? null, { persist: true });
@@ -27,11 +33,7 @@ export function WorkDetailPreview({
   }
   return (
     <Suspense fallback={<Loading label="PDF を表示しています" caption />}>
-      <PdfViewer
-        className="detail-shell__pdf"
-        download={blob.download}
-        label={`${data.revision.label}の添付`}
-      />
+      <PdfViewer download={blob.download} label={`${data.revision.label}の添付`} />
     </Suspense>
   );
 }
