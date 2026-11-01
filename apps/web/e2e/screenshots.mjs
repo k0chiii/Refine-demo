@@ -1582,7 +1582,7 @@ async function lateScenes() {
   // 13 管理画面 / 12 閲覧権限（管理者）: 管理画面のダイアログ（管理者は内容を閲覧しない: D3）
   await signInAs("mock-nogiku-admin");
   await go(`${BASE}/admin`);
-  const adminWorks = 'm3e-action-list[aria-label="制作物ごとの閲覧権限"] m3e-list-action';
+  const adminWorks = 'm3e-action-list[aria-label="制作物ごとの権限"] m3e-list-action';
   await page.waitForSelector(adminWorks);
   await shot("13-admin-works");
   await page.locator(adminWorks).first().click();
