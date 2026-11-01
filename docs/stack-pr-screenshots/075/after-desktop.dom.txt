@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T08:08:20.240Z
+url=http://127.0.0.1:4288/make
+scene=27-make-creator
+marker:進行中=進行中
