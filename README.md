@@ -87,7 +87,7 @@ cd apps/api
 pnpm dev                  # wrangler dev → http://127.0.0.1:8787（R2 はローカルエミュレーション）
 ```
 
-`wrangler.jsonc` の `vars` に `CONVEX_URL`（`https://xxx.convex.cloud`）と `CONVEX_SITE_URL`（`https://xxx.convex.site`）、`ALLOWED_ORIGINS` を設定。R2 バケットは `mf100-assets`（非公開）。
+`wrangler.jsonc` の `vars` に `CONVEX_URL`（`https://xxx.convex.cloud`）と `CONVEX_SITE_URL`（`https://xxx.convex.site`）、`ALLOWED_ORIGINS` を設定。R2 バケットは `mf100-refine-assets`（非公開。staging は `mf100-refine-assets-stg`）。
 
 秘密は `wrangler secret put`（本番は `--env production` を付ける。ローカルは `.dev.vars`）で設定し、Convex 側と同じ値にする:
 

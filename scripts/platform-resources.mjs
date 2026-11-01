@@ -1,7 +1,10 @@
 const environment = process.argv[2];
 if (!["development", "staging", "production"].includes(environment))
   throw new Error("Specify development/staging/production; this command prints a plan only");
-const bucket = environment === "production" ? "mf100-assets" : `mf100-assets-${environment}`;
+// 本番と staging は新 Cloudflare アカウントのバケット名（wrangler.jsonc と同じ）。development はローカルのエミュレーションだけで使う
+const bucket =
+  { production: "mf100-refine-assets", staging: "mf100-refine-assets-stg" }[environment] ??
+  `mf100-assets-${environment}`;
 const queue = `mf100-processing-${environment}`;
 console.log(
   [

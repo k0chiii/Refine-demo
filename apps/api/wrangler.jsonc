@@ -42,7 +42,7 @@
           "simple": { "limit": 30, "period": 60 },
         },
       ],
-      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-assets-staging" }],
+      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-refine-assets-stg" }],
       "vars": {
         "CONVEX_URL": "http://127.0.0.1:3210",
         "CONVEX_SITE_URL": "http://127.0.0.1:3211",
@@ -59,7 +59,7 @@
           "simple": { "limit": 30, "period": 60 },
         },
       ],
-      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-assets" }],
+      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-refine-assets" }],
       "vars": {
         "CONVEX_URL": "https://rosy-egret-142.convex.cloud",
         "CONVEX_SITE_URL": "https://rosy-egret-142.convex.site",
