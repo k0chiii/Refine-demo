@@ -30,20 +30,22 @@ export function WorkDetailPreview({
     return <Loading label="PDF を取得しています" caption />;
   }
   return (
-    <Suspense fallback={<Loading label="PDF を表示しています" caption />}>
-      <PdfViewer
-        download={blob.download}
-        artifactId={artifact.id}
-        threads={[]}
-        activeThreadId={null}
-        onSelectThread={() => {}}
-        canComment={false}
-        draft={null}
-        onDraft={() => {}}
-        page={1}
-        scale={1}
-        rotation={0}
-      />
-    </Suspense>
+    <div className="detail-shell__pdf">
+      <Suspense fallback={<Loading label="PDF を表示しています" caption />}>
+        <PdfViewer
+          download={blob.download}
+          artifactId={artifact.id}
+          threads={[]}
+          activeThreadId={null}
+          onSelectThread={() => {}}
+          canComment={false}
+          draft={null}
+          onDraft={() => {}}
+          page={1}
+          scale={1}
+          rotation={0}
+        />
+      </Suspense>
+    </div>
   );
 }
