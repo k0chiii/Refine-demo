@@ -1,3 +1,5 @@
-capturedAt=2026-11-01T07:13:13.682Z
-url=http://127.0.0.1:4668/works/000000000000000000000010026works/v/1
+capturedAt=2026-11-01T08:24:28.297Z
+url=http://127.0.0.1:4694/works/000000000000000000000010026works/write
 scene=q72-plan-info-recheck
+forbidden:plan-info-warnings=1
+forbidden:not-found=0
