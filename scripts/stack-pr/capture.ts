@@ -395,7 +395,7 @@ const SCENES: Record<string, SceneFn> = {
     await page
       .locator(".works-table tbody tr")
       .filter({ hasText: "【撮影】締切超過" })
-      .getByText("次版作成中")
+      .getByText(/予定提出/)
       .first()
       .waitFor({ state: "visible", timeout: 90_000 });
   },
@@ -422,9 +422,7 @@ const SCENES: Record<string, SceneFn> = {
   },
   "editor-shortcut-open": async (page) => {
     await SCENES["076-before-editor"]!(page);
-    await page.locator('[title*="キーボードショートカット"], [aria-label*="キーボードショートカット"]')
-      .first()
-      .click({ force: true, timeout: 60_000 });
+    await page.keyboard.press("?");
     await page
       .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
       .waitFor({ state: "visible", timeout: 30_000 });
@@ -779,6 +777,15 @@ const SCENES: Record<string, SceneFn> = {
       .click({ timeout: 60_000 });
     await page.waitForTimeout(2500);
     await openEditorDrawer(page, "コメント");
+    const resolve = page
+      .locator(".comments .thread")
+      .filter({ hasText: /開催日時.*一致しません/ })
+      .getByRole("button", { name: /解決|解決済みに/ })
+      .first();
+    if (await resolve.isVisible().catch(() => false)) {
+      await resolve.click({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+    }
     await page
       .getByText(/開催日時.*一致しません/)
       .first()
