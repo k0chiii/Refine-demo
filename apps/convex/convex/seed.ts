@@ -592,6 +592,7 @@ async function seedPlanInfoMismatchFixture(
     unresolvedCount: (revision.unresolvedCount ?? 0) + botCount,
     openBotCount: botCount,
   });
+  await ctx.db.patch(work._id, { acceptingRevisionId: revisionId });
 }
 
 /** 077 スクショ: 校正締切超過 1 日 / 2 日以上の行が backlog に並ぶ */

@@ -223,8 +223,8 @@ async function pdfReady(page: Page) {
 }
 
 async function openEditorDrawer(page: Page, label: string) {
-  await page.waitForSelector(".ws", { timeout: 60_000 });
-  const bar = page.locator(".ws__side-toolbar");
+  await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+  const bar = page.locator(".ws__side-toolbar, .write__side");
   if (await bar.isVisible().catch(() => false)) {
     await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click({ timeout: 60_000 });
   } else {
@@ -246,13 +246,13 @@ async function openWebWork(page: Page) {
   await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
 }
 
-async function navigateWebWorkV1(page: Page) {
+async function navigateWebWorkEditorRoute(page: Page) {
   const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
   if (workId) {
     await page.evaluate((id: string) => {
       return globalThis.__mf100router!.navigate({
-        to: "/works/$workId/v/$n",
-        params: { workId: id, n: "1" },
+        to: "/works/$workId/write",
+        params: { workId: id },
       });
     }, workId);
     await page.waitForTimeout(800);
@@ -261,8 +261,8 @@ async function navigateWebWorkV1(page: Page) {
 
 async function openWebWorkEditor(page: Page) {
   await openWebWork(page);
-  await navigateWebWorkV1(page);
-  await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+  await navigateWebWorkEditorRoute(page);
+  await page.waitForSelector(".write", { timeout: 60_000 });
 }
 
 async function seedReviewPamphlet(page: Page) {
@@ -646,13 +646,13 @@ const SCENES: Record<string, SceneFn> = {
     });
   },
   "q71-plan-info-warn": async (page) => {
-    await signInAs(page, "mock-nogiku-reviewer");
+    await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
-    await navigateWebWorkV1(page);
-    await page.waitForSelector(".ws, .write", { timeout: 60_000 });
-    await page.locator(".write .ProseMirror, .write .rt__content, .write").first().waitFor({
+    await navigateWebWorkEditorRoute(page);
+    await page.waitForSelector(".write", { timeout: 60_000 });
+    await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
       state: "visible",
       timeout: 60_000,
     });
@@ -664,12 +664,12 @@ const SCENES: Record<string, SceneFn> = {
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "q71-comments-web-clean": async (page) => {
-    await signInAs(page, "mock-nogiku-reviewer");
+    await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
-    await navigateWebWorkV1(page);
-    await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+    await navigateWebWorkEditorRoute(page);
+    await page.waitForSelector(".write", { timeout: 60_000 });
     await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
     await openEditorDrawer(page, "コメント");
     await page.locator(".comments").waitFor({ state: "visible", timeout: 60_000 });

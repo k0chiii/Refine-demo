@@ -7,14 +7,17 @@ cd "$ROOT"
 export STACK_PR_REPO="$ROOT"
 export CHROMIUM_PATH="${CHROMIUM_PATH:-/usr/bin/google-chrome}"
 export SKIP_PAMPHLET_COMMENTS=1
-export SKIP_PLAN_INFO_WARNINGS=1
 
 CAPTURE_TS="$ROOT/scripts/stack-pr/capture.ts"
 CAPTURE_BAK="$(mktemp)"
+SEED_TS="$ROOT/apps/convex/convex/seed.ts"
+SEED_BAK="$(mktemp)"
 cp "$CAPTURE_TS" "$CAPTURE_BAK"
+cp "$SEED_TS" "$SEED_BAK"
 
 restore_capture() {
   cp "$CAPTURE_BAK" "$CAPTURE_TS"
+  cp "$SEED_BAK" "$SEED_TS"
 }
 
 build_demo() {
@@ -26,6 +29,7 @@ run_one() {
   local scene="$1"
   local prefix="$2"
   local clip="${3:-}"
+  local skip_plan="${4:-1}"
   local port=$((4500 + RANDOM % 200))
   local req="/tmp/mf100-cap-$$.json"
   local opts="{}"
@@ -42,6 +46,8 @@ run_one() {
   "
   env CAPTURE_PORT="$port" BASE_URL="http://127.0.0.1:$port" \
     SKIP_DEMO_BUILD=1 \
+    SKIP_PAMPHLET_COMMENTS=1 \
+    SKIP_PLAN_INFO_WARNINGS="$skip_plan" \
     SCREENSHOT_CORPUS="$(dirname "$prefix")" \
     pnpm dlx tsx scripts/stack-pr/capture-cli.ts "$req"
   rm -f "$req"
@@ -55,21 +61,24 @@ capture_pair() {
   local after_scene="$5"
   local out_id="$6"
   local clip="${7:-}"
+  local before_skip_plan="${8:-1}"
+  local after_skip_plan="${9:-1}"
   local out="$ROOT/docs/stack-pr-screenshots/$out_id"
   mkdir -p "$out/before" "$out/after"
+  rm -f "$out/before"/*.png "$out/before"/*.dom.txt "$out/after"/*.png "$out/after"/*.dom.txt
 
   echo "=== PR #$pr BEFORE ref=$before_ref scene=$before_scene ==="
   git fetch origin "$before_ref" "$after_ref" 2>/dev/null || git fetch origin
   git checkout -f "origin/$before_ref"
   restore_capture
   build_demo
-  run_one "$before_scene" "$out/before/shot" "$clip"
+  run_one "$before_scene" "$out/before/shot" "$clip" "$before_skip_plan"
 
   echo "=== PR #$pr AFTER ref=$after_ref scene=$after_scene ==="
   git checkout -f "origin/$after_ref"
   restore_capture
   build_demo
-  run_one "$after_scene" "$out/after/shot" "$clip"
+  run_one "$after_scene" "$out/after/shot" "$clip" "$after_skip_plan"
 }
 
 PRS=("${@:-170 171 172 173 200 201 202 204}")
@@ -115,7 +124,10 @@ for pr in "${PRS[@]}"; do
         cursor/stack-q71-plan-info-warn-8b5a \
         q71-comments-web-clean \
         q71-plan-info-warn \
-        q71
+        q71 \
+        "" \
+        1 \
+        0
       ;;
     201)
       capture_pair 201 \
@@ -124,6 +136,14 @@ for pr in "${PRS[@]}"; do
         q70-work-form-no-plan \
         q70-work-form-plan \
         q70
+      mv -f "$ROOT/docs/stack-pr-screenshots/q70/before/shot-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/q70/before/work-form-no-plan-desktop.png"
+      mv -f "$ROOT/docs/stack-pr-screenshots/q70/before/shot-desktop.dom.txt" \
+        "$ROOT/docs/stack-pr-screenshots/q70/before/work-form-no-plan-desktop.dom.txt" 2>/dev/null || true
+      mv -f "$ROOT/docs/stack-pr-screenshots/q70/after/shot-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/q70/after/work-form-plan-desktop.png"
+      mv -f "$ROOT/docs/stack-pr-screenshots/q70/after/shot-desktop.dom.txt" \
+        "$ROOT/docs/stack-pr-screenshots/q70/after/work-form-plan-desktop.dom.txt" 2>/dev/null || true
       ;;
     202)
       capture_pair 202 \
@@ -131,7 +151,10 @@ for pr in "${PRS[@]}"; do
         cursor/stack-q72-plan-info-recheck-8b5a \
         q72-plan-info-before-warn \
         q72-plan-info-recheck \
-        q72
+        q72 \
+        "" \
+        0 \
+        0
       ;;
     204)
       capture_pair 204 \
@@ -140,6 +163,8 @@ for pr in "${PRS[@]}"; do
         dashboard-detail \
         detail-preview-73 \
         q73
+      mv -f "$ROOT/docs/stack-pr-screenshots/q73/after/shot-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/q73/after/detail-preview-desktop.png" 2>/dev/null || true
       ;;
     *)
       echo "unknown PR $pr" >&2
