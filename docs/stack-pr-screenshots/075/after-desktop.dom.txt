@@ -1,0 +1,6 @@
+capturedAt=2026-11-01T08:58:14.262Z
+url=http://127.0.0.1:4654/make
+scene=27-make-creator
+marker:進行中=進行中
+captureUser=
+captureClip=.shell__appbar
