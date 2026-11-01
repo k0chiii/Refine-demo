@@ -37,6 +37,7 @@ type Demo = {
     skipPamphletComments?: boolean;
     skipPlanInfoWarnings?: boolean;
     seedBacklogCapture?: boolean;
+    seedPlanInfoMismatch?: boolean;
     seedConfidentiality?: boolean;
     seedRevisionPlanned?: boolean;
   }): Promise<void>;

@@ -148,18 +148,23 @@ class DemoBackend {
   }
 
   /**
-   * 撮影の道具（scripts/stack-pr/capture.ts）が seed の選択肢を渡してくるが、seed.demo はいま選択肢を持たないので受け流す。
-   * 選択肢が要る撮影は、その撮影を足す PR で seed 側と一緒に入れる
+   * 撮影の道具（scripts/stack-pr/capture.ts）が渡す seed の選択肢。撮影用の fixture は頼まれたときだけ足す
+   * （e2e・デモの既定は変えない）。seed.demo に無い選択肢は受け流す
    */
-  ensureSeeded(_opts?: {
+  ensureSeeded(opts?: {
     skipPamphletComments?: boolean;
     skipPlanInfoWarnings?: boolean;
     seedBacklogCapture?: boolean;
+    seedPlanInfoMismatch?: boolean;
     seedConfidentiality?: boolean;
     seedRevisionPlanned?: boolean;
   }): Promise<void> {
     this.seeded ??= this.enqueue(async () => {
-      await this.t.mutation(internal.seed.demo, {});
+      await this.t.mutation(internal.seed.demo, {
+        ...(opts?.seedBacklogCapture ? { seedBacklogCapture: true } : {}),
+        ...(opts?.seedPlanInfoMismatch ? { seedPlanInfoMismatch: true } : {}),
+        ...(opts?.seedRevisionPlanned ? { seedRevisionPlanned: true } : {}),
+      });
     });
     return this.seeded;
   }
