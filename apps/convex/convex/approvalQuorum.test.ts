@@ -167,7 +167,6 @@ describe("Convex 統合: 複数の校了者と校了とみなす人数", () => {
         creatorIds: [cast.creator.id],
         approverId: cast.approver.id,
         lifecycle: "active",
-        confidentiality: "normal",
         version: 1,
       });
       for (const [userId, role] of [

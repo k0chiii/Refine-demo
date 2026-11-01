@@ -100,7 +100,7 @@ export function VersionsTab({
                   ) : r.reviewState === "void" ? (
                     reviewStateLabel.void
                   ) : (
-                    (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "締切済み")
+                    (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "次版作成中")
                   )}
                   {" · "}
                   {r.submitter?.name}・{formatJstShort(r.submittedAt)}

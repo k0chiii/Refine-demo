@@ -43,6 +43,16 @@ const tabItems: { id: Tab; label: string }[] = [
   { id: "audit", label: "監査ログ" },
 ];
 const groupsOnly = tabItems.filter((t) => t.id === "groups");
+const adminWorkIcon: Record<string, string> = {
+  pdf: "picture_as_pdf",
+  image: "image",
+  document: "article",
+  sns: "share",
+  video: "movie",
+  web: "language",
+  figma: "design_services",
+  other: "draft",
+};
 const searchFor = (t: Tab) => (t === "works" ? {} : { view: t });
 
 export const Route = createFileRoute("/_app/admin")({
@@ -179,7 +189,7 @@ function Admin() {
           ) : works.length === 0 ? (
             <div className="empty">制作物がありません</div>
           ) : (
-            <M3eActionList className="list" aria-label="制作物ごとの閲覧権限">
+            <M3eActionList className="list" aria-label="制作物ごとの権限">
               {[...works]
                 .sort((a, b) => a.title.localeCompare(b.title, "ja"))
                 .map((w) => (
@@ -188,20 +198,16 @@ function Admin() {
                     className={`list__item ${w.lifecycle === "finalized" || w.lifecycle === "cancelled" ? "list__item--done" : ""}`}
                     onClick={() => setAclFor(w)}
                   >
-                    <M3eIcon slot="leading" name="lock_person" />
-                    <span className="list__headline">
-                      {w.title}
-                      {w.confidentiality === "restricted" ? (
-                        <M3eIcon
-                          name="lock"
-                          className="ml list__lock"
-                          role="img"
-                          aria-label="非公開"
-                          title="非公開"
-                        />
-                      ) : null}
+                    <M3eIcon
+                      slot="leading"
+                      name={adminWorkIcon[w.mediaType] ?? "draft"}
+                      aria-hidden="true"
+                    />
+                    <span className="list__headline">{w.title}</span>
+                    <span slot="supporting-text">
+                      {lifecycleLabel[w.lifecycle] ?? w.lifecycle}
+                      {w.category ? ` · ${w.category}` : ""}
                     </span>
-                    <span slot="supporting-text">{lifecycleLabel[w.lifecycle] ?? w.lifecycle}</span>
                     <span slot="trailing" className="meta num">
                       個人の許可 {w.activeGrantCount}
                     </span>
@@ -320,7 +326,7 @@ function Admin() {
       ) : null}
       <ExportStatsDialog open={exporting} onClose={() => setExporting(false)} />
       <M3eDialog open={aclFor !== null} onClosed={() => setAclFor(null)} closeLabel="閉じる">
-        <span slot="header">閲覧権限: {aclFor?.title}</span>
+        <span slot="header">権限: {aclFor?.title}</span>
         <div className="dialog-body">{aclFor ? <AclPanel workId={aclFor.id} /> : null}</div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setAclFor(null)}>
