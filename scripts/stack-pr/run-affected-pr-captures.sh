@@ -52,6 +52,9 @@ checkout_sources() {
   git clean -fd apps packages apps/convex 2>/dev/null || true
   git checkout "$ref" -- apps packages apps/convex
   restore_capture
+  if ! git cat-file -e "$ref:apps/convex/convex/planInfo.ts" 2>/dev/null; then
+    rm -f "$ROOT/apps/convex/convex/planInfo.ts"
+  fi
   while read -r junk; do
     [[ -z "$junk" ]] && continue
     if ! git cat-file -e "$ref:$junk" 2>/dev/null; then
@@ -85,6 +88,9 @@ build_demo() {
   local cached="$cache_root/$cache_key/dist-demo"
   if [[ -f "$STYLES_BAK" ]]; then
     cp "$STYLES_BAK" "$ROOT/apps/web/src/styles.css"
+  fi
+  if [[ -f "$ROOT/apps/convex/convex/planInfo.ts" ]] && ! rg -q "syncPlanInfoWarnings" "$ROOT/packages/application/src/index.ts" 2>/dev/null; then
+    rm -f "$ROOT/apps/convex/convex/planInfo.ts"
   fi
   echo "  build:demo for $label"
   if [[ "${STACK_PR_CAPTURE_FORCE_REBUILD:-}" == "1" ]]; then
@@ -229,7 +235,7 @@ capture_pair() {
 : > /tmp/pr-capture-failures.log
 PRS=("$@")
 if [[ ${#PRS[@]} -eq 0 ]]; then
-  PRS=(167 170 171 172 173 194 196 198 200 201 202 203 204 205)
+  PRS=(167 170 172 173 194 196 200 201 202 203 204 205)
 fi
 
 for pr in "${PRS[@]}"; do
@@ -256,15 +262,8 @@ for pr in "${PRS[@]}"; do
       validate_pair "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png" || st=$?
       restore_sources
       ;;
-    171)
-      mkdir -p "$ROOT/docs/stack-pr-screenshots/078"
-      rm -f "$ROOT/docs/stack-pr-screenshots/078/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/078/after-desktop.png"
-      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 077 && \
-        CAPTURE_EXPECT_KPI_MOCK=0 run_one dashboard-kpi-summary "$ROOT/docs/stack-pr-screenshots/078/before" 1 'section[aria-label="サマリー"]' 1 || st=$?
-      checkout_sources cursor/stack-078-ui-kpi-row-mock-8b5a && build_demo 078 078 && \
-        CAPTURE_EXPECT_KPI_MOCK=1 run_one dashboard-kpi-summary "$ROOT/docs/stack-pr-screenshots/078/after" 1 'section[aria-label="サマリー"]' 1 || st=$?
-      validate_pair "$ROOT/docs/stack-pr-screenshots/078/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/078/after-desktop.png" || st=$?
-      restore_sources
+    171|198)
+      echo "skip PR $pr (closed; not in recapture list)" >&2
       ;;
     172)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/079"
@@ -310,16 +309,8 @@ for pr in "${PRS[@]}"; do
         "$ROOT/docs/stack-pr-screenshots/061/after-desktop.png" || st=$?
       restore_sources
       ;;
-    198)
-      mkdir -p "$ROOT/docs/stack-pr-screenshots/062"
-      rm -f "$ROOT/docs/stack-pr-screenshots/062/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/062/after-desktop.png"
-      checkout_sources develop && build_demo develop198 && \
-        run_one works-deadline-header-before "$ROOT/docs/stack-pr-screenshots/062/before" 1 ".works-table" 0 0 "" 0 || st=$?
-      checkout_sources cursor/stack-fix-deadline-diamond-8b5a && build_demo fix198 && \
-        run_one works-deadline-header-after "$ROOT/docs/stack-pr-screenshots/062/after" 1 ".works-table" 0 0 "" 1 || st=$?
-      validate_pair "$ROOT/docs/stack-pr-screenshots/062/before-desktop.png" \
-        "$ROOT/docs/stack-pr-screenshots/062/after-desktop.png" || st=$?
-      restore_sources
+    171|198)
+      echo "skip PR $pr (closed; not in recapture list)" >&2
       ;;
     200)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q71/before" "$ROOT/docs/stack-pr-screenshots/q71/after"
@@ -343,7 +334,7 @@ for pr in "${PRS[@]}"; do
     202)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q72/before" "$ROOT/docs/stack-pr-screenshots/q72/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q72/before"/* "$ROOT/docs/stack-pr-screenshots/q72/after"/*
-      checkout_sources cursor/stack-q71-plan-info-warn-8b5a && build_demo q71 && \
+      checkout_sources cursor/stack-q71-plan-info-warn-8b5a && wire_detail_capture && build_demo q71 && \
         run_one q72-detail-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 ".detail-shell__main" 0 0 "" 1 || st=$?
       checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && wire_detail_capture && build_demo q72 q72 && \
         run_one q72-detail-after-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 ".detail-shell__main" 0 0 "" 1 || st=$?
@@ -400,12 +391,11 @@ for pr in "${PRS[@]}"; do
   case "$pr" in
     167) AUDIT_DIRS+=(075) ;;
     170) AUDIT_DIRS+=(077) ;;
-    171) AUDIT_DIRS+=(078) ;;
+    171|198) ;;
     172) AUDIT_DIRS+=(079) ;;
     173) AUDIT_DIRS+=(080) ;;
     194) AUDIT_DIRS+=(q68) ;;
     196) AUDIT_DIRS+=(061) ;;
-    198) AUDIT_DIRS+=(062) ;;
     200) AUDIT_DIRS+=(q71) ;;
     201) AUDIT_DIRS+=(q70) ;;
     202) AUDIT_DIRS+=(q72) ;;

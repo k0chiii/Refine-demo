@@ -228,7 +228,19 @@ class DemoBackend {
     );
   }
 
-  /** stack-pr q72 after: open plan-info bot スレッドを解決済みにする（再照合デモ用） */
+  /** stack-pr q74: 詳細ヘッダを「版 —」にするデモ用（提出済み版のプレビューは残す） */
+  async clearAcceptingRevision(workId: string): Promise<void> {
+    await this.ensureSeeded();
+    await this.enqueue(() =>
+      this.t.run(async (ctx) => {
+        const work = await ctx.db.get(workId as import("@mf100/convex/dataModel").Id<"works">);
+        if (!work) return;
+        await ctx.db.patch(work._id, { acceptingRevisionId: undefined });
+      }),
+    );
+    this.bump();
+  }
+
   async resolveOpenPlanInfoBotThreads(): Promise<number> {
     await this.ensureSeeded();
     return this.enqueue(() =>

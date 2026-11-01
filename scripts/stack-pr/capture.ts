@@ -160,6 +160,13 @@ async function demoGo(page: Page, routePath: string) {
         params: { workId: work[1]! },
       });
     }
+    const detail = path.match(/^\/works\/([^/]+)\/detail$/);
+    if (detail) {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/detail",
+        params: { workId: detail[1]! },
+      });
+    }
     const [to, q] = path.split("?");
     const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
     return globalThis.__mf100router!.navigate(search ? { to: to!, search } : { to: to! });
@@ -788,7 +795,8 @@ const SCENES: Record<string, SceneFn> = {
     if (!workId) throw new Error(`workId missing from ${page.url()}`);
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, `/works/${workId}/detail`);
-    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    await page.waitForSelector(".detail-shell", { timeout: 60_000 });
+    await page.locator(".detail-shell__comments").waitFor({ state: "visible", timeout: 60_000 });
     await page
       .getByText(/開催日時.*一致しません/)
       .first()
@@ -815,7 +823,8 @@ const SCENES: Record<string, SceneFn> = {
     if (!workId) throw new Error(`workId missing from ${page.url()}`);
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, `/works/${workId}/detail`);
-    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    await page.waitForSelector(".detail-shell", { timeout: 60_000 });
+    await page.locator(".detail-shell__comments").waitFor({ state: "visible", timeout: 60_000 });
     const warn = await page.getByText(/開催日時.*一致しません/).count();
     if (warn > 0) {
       throw new Error(`plan-info warnings still visible on detail (${warn})`);
@@ -928,9 +937,13 @@ const SCENES: Record<string, SceneFn> = {
     await app.go(`${workPath}/detail`);
     await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
     await page.waitForFunction(
-      () =>
-        ((document.querySelector(".detail-shell__preview-frame canvas") as HTMLCanvasElement | null)
-          ?.width ?? 0) > 0,
+      () => {
+        const root = document.querySelector(".detail-shell__preview-frame");
+        if (!root) return false;
+        const iframe = root.querySelector("iframe[data-testid='detail-pdf-frame'], iframe");
+        if (iframe && (iframe as HTMLIFrameElement).src) return true;
+        return Boolean(root.querySelector('[data-testid="detail-doc-preview"]'));
+      },
       null,
       { timeout: 120_000 },
     );
@@ -999,13 +1012,17 @@ async function captureOne(
     const version = await page.locator(".detail-shell__version").innerText().catch(() => "");
     const previewParts = await page
       .locator(
-        ".detail-shell__preview-frame canvas, .detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame .rich-viewer__page, .detail-shell__preview-frame .write__page",
+        ".detail-shell__preview-frame canvas, .detail-shell__preview-frame iframe, .detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame .rich-viewer__page, .detail-shell__preview-frame .write__page, .detail-shell__preview-frame [data-testid='detail-doc-preview']",
       )
       .count();
     fs.appendFileSync(sidecar, `detail:version=${version.trim()}\n`);
     fs.appendFileSync(sidecar, `detail:preview=${previewParts > 0 ? "yes" : "no"}\n`);
     if (previewParts < 1 && sceneKey === "detail-preview-73") {
       throw new Error(`detail preview missing content for ${outPath}`);
+    }
+    if (/q72-detail/.test(sceneKey)) {
+      const warns = await page.getByText(/開催日時.*一致しません/).count();
+      fs.appendFileSync(sidecar, `detail:plan-info-warn=${warns}\n`);
     }
     if (process.env.CAPTURE_EXPECT_EMPTY_VERSION === "1" && !/^—/.test(version.trim())) {
       throw new Error(`expected empty version label, got ${version}`);
