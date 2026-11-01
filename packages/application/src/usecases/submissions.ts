@@ -11,6 +11,7 @@ import {
   assertSubmissionExternalUrl,
   discardAttempt,
   assertWorkActive,
+  assertSubmitRevisionDeadline,
   createRevision,
   DomainError,
   markItemFailed,
@@ -54,6 +55,7 @@ export interface PrepareSubmissionInput {
   kind: RevisionKind;
   reviewType: string;
   deadlineAt: number;
+  reviewUrgent?: boolean;
   changeSummary: string;
   focusNotes: string;
   items: Array<{
@@ -94,11 +96,17 @@ export async function prepareSubmission(
   const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "revision.submit");
   assertWorkActive(work);
   const now = ctx.clock.now();
-  if (input.deadlineAt <= now)
-    throw new DomainError("revision_deadline_in_past", { now, deadlineAt: input.deadlineAt });
-  // 0版の重複・通常版の後の0版は準備段階で早期に弾く（確定時にも再検証する）
   const baseRevisions = await ctx.revisions.listByWork(work.id);
-  planRevision(baseRevisions, input.kind);
+  const plan = planRevision(baseRevisions, input.kind);
+  assertSubmitRevisionDeadline({
+    now,
+    deadlineAt: input.deadlineAt,
+    ...(input.reviewUrgent === true ? { reviewUrgent: true } : {}),
+    ...(plan.toSupersede?.deadlineAt !== undefined
+      ? { openAcceptingDeadlineAt: plan.toSupersede.deadlineAt }
+      : {}),
+  });
+  // 0版の重複・通常版の後の0版は準備段階で早期に弾く（確定時にも再検証する）
   if (input.items.length === 0) throw new DomainError("revision_no_artifacts");
   // 1 ファイルの上限（Worker の本文の上限）。超える申告は準備の時点で理由つきで断る
   for (const it of input.items)
@@ -124,6 +132,7 @@ export async function prepareSubmission(
         kind: input.kind,
         reviewType: input.reviewType,
         deadlineAt: input.deadlineAt,
+        ...(input.reviewUrgent === true ? { reviewUrgent: true } : {}),
         changeSummary: input.changeSummary,
         focusNotes: input.focusNotes,
         state: "open",
@@ -400,6 +409,7 @@ export async function confirmSubmission(
         submittedBy: principal.userId,
         now,
         deadlineAt: session.deadlineAt,
+        ...(session.reviewUrgent === true ? { reviewUrgent: true } : {}),
         changeSummary: session.changeSummary,
         focusNotes: session.focusNotes,
         ...(session.declarations ? { declarations: session.declarations } : {}),

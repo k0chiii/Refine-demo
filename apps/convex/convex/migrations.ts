@@ -1,3 +1,4 @@
+import { upsertRevisionPlannedAt } from "@mf100/domain";
 import { syncWorkAggregate } from "./lib/workAggregate";
 import { Migrations } from "@convex-dev/migrations";
 import { components } from "./_generated/api";
@@ -29,5 +30,19 @@ export const backfillWorkSummaries = migrations.define({
   table: "works",
   migrateOne: async (ctx, doc) => {
     await syncWorkSummary(ctx.db, doc._id);
+  },
+});
+
+/** revisions.plannedSubmitAt → works.revisionPlannedAt（decisions 82 / 072 置換）。Idempotent。 */
+export const backfillRevisionPlannedAt = migrations.define({
+  table: "revisions",
+  migrateOne: async (ctx, rev) => {
+    const at = rev.plannedSubmitAt;
+    if (at == null) return;
+    const work = await ctx.db.get(rev.workId);
+    if (!work) return;
+    const next = upsertRevisionPlannedAt(work.revisionPlannedAt, rev.sequence, at);
+    if (JSON.stringify(work.revisionPlannedAt ?? []) === JSON.stringify(next)) return;
+    await ctx.db.patch(work._id, { revisionPlannedAt: next });
   },
 });

@@ -27,6 +27,7 @@ import {
   revisionHeadsOf,
   revisionLabel,
   revisionThreadStatsFromRevision,
+  nextRevisionPlannedAt,
   revisionThreadStatsOf,
   type Principal,
   type RevisionGlance,
@@ -64,6 +65,8 @@ const workPatch = {
   mediaType: v.optional(vMediaType),
   /** 納期（null で消す） */
   deadlineAt: v.optional(v.union(v.number(), v.null())),
+  /** ■仕上がり日（null で消す） */
+  finishAt: v.optional(v.union(v.number(), v.null())),
   creatorIds: v.optional(v.array(v.string())),
   /** 校了者。approverIds があればそちら（複数可）。approverId だけなら「その 1 人に置き換える」 */
   approverId: v.optional(v.string()),
@@ -99,6 +102,7 @@ export const create = mutation({
     approverIds: v.optional(v.array(v.string())),
     approvalQuorum: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
+    finishAt: v.optional(v.number()),
     notationCategories: v.optional(v.array(v.string())),
     reviewerIds: v.optional(v.array(v.id("users"))),
     activate: v.optional(v.boolean()),
@@ -132,6 +136,7 @@ export const importBatch = mutation({
         approverIds: v.array(v.id("users")),
         approvalQuorum: v.optional(v.number()),
         deadlineAt: v.optional(v.number()),
+        finishAt: v.optional(v.number()),
         legacyId: v.optional(v.string()),
         notationCategories: v.array(v.string()),
         /** 主管担当・制作担当・関係担当（teams の ID） */
@@ -419,9 +424,13 @@ function summarize(
     year: work.year,
     lifecycle: work.lifecycle,
     deadlineAt: work.deadlineAt ?? null,
+    finishAt: work.finishAt ?? null,
+    revisionPlannedAt: work.revisionPlannedAt ?? null,
+    nextRevisionPlannedAt: nextRevisionPlannedAt(work.revisionPlannedAt, Date.now()),
     latestRevisionLabel: latest?.label ?? null,
     acceptingRevisionId: accepting?.id ?? null,
     acceptingDeadlineAt: accepting?.deadlineAt ?? null,
+    acceptingReviewUrgent: accepting?.reviewUrgent === true,
     /** 主管担当・制作担当（teams の ID。担当別の表示に使う） */
     ownerTeamId: work.ownerTeamId ?? null,
     productionTeamIds: [...work.productionTeamIds],

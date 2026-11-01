@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { formatDeadlineUntil, remaining } from "@/lib/format";
+import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { M3eBadge } from "@m3e/react/badge";
 import { M3eHeading } from "@m3e/react/heading";
 import { M3eIcon } from "@m3e/react/icon";
@@ -43,6 +44,7 @@ export function WorkspaceRow({
   chip,
   chipIcon,
   urgent,
+  reviewUrgent,
   onOpen,
 }: {
   icon: string;
@@ -54,6 +56,8 @@ export function WorkspaceRow({
   chipIcon?: string;
   /** 期限超過など、注意が要る行（題名を error の色に） */
   urgent?: boolean;
+  /** 版提出の「緊急」 */
+  reviewUrgent?: boolean;
   onOpen: () => void;
 }) {
   const shown = lines.filter(Boolean) as string[];
@@ -70,6 +74,11 @@ export function WorkspaceRow({
         {suffix ? <span className="muted">　{suffix}</span> : null}
       </span>
       <span slot="supporting-text">
+        {reviewUrgent ? (
+          <span className="hub-row__line">
+            <UrgentReviewChip className="review-urgent-chip" />
+          </span>
+        ) : null}
         {shown.map((l, i) => (
           <span key={i} className="hub-row__line">
             {l}
@@ -88,7 +97,7 @@ export function WorkspaceRow({
   );
 }
 
-/** 見出し付きのまとまり（要対応・校正中・割り当てる など）。件数を添える */
+/** 見出し付きのまとまり（あなたの番・校正中・割り当てる など）。件数を添える */
 export function Group({
   title,
   count,
@@ -124,11 +133,7 @@ export function Group({
           </M3eBadge>
         ) : null}
       </div>
-      <M3eActionList
-        className={side ? "list" : "list list--segmented"}
-        {...(side ? {} : { variant: "segmented" })}
-        aria-label={label ?? title}
-      >
+      <M3eActionList className="list" aria-label={label ?? title}>
         {children}
       </M3eActionList>
     </section>
