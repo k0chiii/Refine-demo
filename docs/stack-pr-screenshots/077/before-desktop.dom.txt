@@ -1,4 +1,3 @@
-capturedAt=2026-11-01T04:49:39.959Z
-url=http://127.0.0.1:4642/works
-scene=dashboard-manager
-marker:制作物の状況=制作物の状況
+capturedAt=2026-11-01T07:09:32.568Z
+url=http://127.0.0.1:4582/works
+scene=dashboard-backlog-delay
