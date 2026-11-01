@@ -106,23 +106,26 @@ async function applyCaptureTheme(page: Page) {
 async function assertCaptureThemePrimary(page: Page) {
   const mode = process.env.CAPTURE_THEME;
   if (mode !== "before" && mode !== "after") return;
-  await page.evaluate((expected) => {
-    const t = document.querySelector("m3e-theme");
-    if (!t) throw new Error("CAPTURE_THEME: missing m3e-theme");
-    const color = t.getAttribute("color")?.toLowerCase();
-    const variant = t.getAttribute("variant");
-    if (color !== expected.color || variant !== expected.variant) {
-      throw new Error(
-        `CAPTURE_THEME ${expected.mode}: expected ${expected.color}/${expected.variant}, got ${color}/${variant}`,
-      );
-    }
-    const primary = getComputedStyle(document.documentElement)
-      .getPropertyValue("--md-sys-color-primary")
-      .trim();
-    if (!primary) throw new Error("CAPTURE_THEME: --md-sys-color-primary empty");
-  }, mode === "before"
-    ? { mode, color: "#1b5fb4", variant: "vibrant" }
-    : { mode, color: "#3f51b5", variant: "tonal-spot" });
+  await page.evaluate(
+    (expected) => {
+      const t = document.querySelector("m3e-theme");
+      if (!t) throw new Error("CAPTURE_THEME: missing m3e-theme");
+      const color = t.getAttribute("color")?.toLowerCase();
+      const variant = t.getAttribute("variant");
+      if (color !== expected.color || variant !== expected.variant) {
+        throw new Error(
+          `CAPTURE_THEME ${expected.mode}: expected ${expected.color}/${expected.variant}, got ${color}/${variant}`,
+        );
+      }
+      const primary = getComputedStyle(document.documentElement)
+        .getPropertyValue("--md-sys-color-primary")
+        .trim();
+      if (!primary) throw new Error("CAPTURE_THEME: --md-sys-color-primary empty");
+    },
+    mode === "before"
+      ? { mode, color: "#1b5fb4", variant: "vibrant" }
+      : { mode, color: "#3f51b5", variant: "tonal-spot" },
+  );
 }
 
 async function demoGo(page: Page, routePath: string) {
@@ -440,7 +443,10 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
     await openDashboardOverview(page);
-    await page.locator("#ov-title, .kpis .kpi").first().waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .locator("#ov-title, .kpis .kpi")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
     await page.locator(".works__controls").waitFor({ state: "visible", timeout: 60_000 });
   },
   "q63b-editor-toolbar": async (page) => {
@@ -450,15 +456,20 @@ const SCENES: Record<string, SceneFn> = {
     await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
     await page.waitForSelector(".ws", { timeout: 60_000 });
-    await page.locator(".ws__side-toolbar:not(.ws__side-toolbar--hidden), .drawer .pane-tabs").first().waitFor({
-      state: "visible",
-      timeout: 60_000,
-    });
+    await page
+      .locator(".ws__side-toolbar:not(.ws__side-toolbar--hidden), .drawer .pane-tabs")
+      .first()
+      .waitFor({
+        state: "visible",
+        timeout: 60_000,
+      });
   },
   "q63b-admin-tab": async (page) => {
     await signInAs(page, "mock-nogiku-admin");
     await demoGo(page, "/admin?view=teams");
-    await page.locator(".page-tabs m3e-tab[selected]").waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .locator(".page-tabs m3e-tab[selected]")
+      .waitFor({ state: "visible", timeout: 60_000 });
   },
   "34-acl": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -471,12 +482,16 @@ const SCENES: Record<string, SceneFn> = {
     if (await row.isVisible().catch(() => false)) {
       await row.click({ timeout: 60_000 });
     } else {
-      await page.locator("m3e-list-action").first().click({ timeout: 60_000 }).catch(() => {});
+      await page
+        .locator("m3e-list-action")
+        .first()
+        .click({ timeout: 60_000 })
+        .catch(() => {});
     }
     const submit = page.locator("m3e-button", { hasText: "版を提出" }).first();
     if (await submit.isVisible().catch(() => false)) {
       await submit.click({ timeout: 60_000 });
-      await page.waitForSelector('m3e-dialog[open] .submit-dialog__title', { timeout: 60_000 });
+      await page.waitForSelector("m3e-dialog[open] .submit-dialog__title", { timeout: 60_000 });
     }
   },
   "dashboard-manager": async (page) => {
@@ -547,7 +562,10 @@ async function runScene(page: Page, key: string) {
   const skipPamphletComments = process.env.SKIP_PAMPHLET_COMMENTS === "1";
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate((skip) => globalThis.__mf100demo!.ensureSeeded({ skipPamphletComments: skip }), skipPamphletComments);
+  await page.evaluate(
+    (skip) => globalThis.__mf100demo!.ensureSeeded({ skipPamphletComments: skip }),
+    skipPamphletComments,
+  );
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
 }

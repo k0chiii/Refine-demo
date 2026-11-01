@@ -26,13 +26,16 @@ export const PLAN_INFO_BOT_ID = "bot:plan-info";
 
 const MAX_LEN = 200;
 
+function invalid(field: string, reason: string, extra: Record<string, unknown> = {}) {
+  return new DomainError("work_invalid", { field, reason, ...extra });
+}
+
 function trimField(value: string | null | undefined, field: PlanInfoField): string | undefined {
   if (value === undefined) return undefined;
   if (value === null) return undefined;
   const s = value.trim();
   if (s === "") return undefined;
-  if (Array.from(s).length > MAX_LEN)
-    throw new DomainError("invalid_argument", { field, reason: "too_long", max: MAX_LEN });
+  if (Array.from(s).length > MAX_LEN) throw invalid(field, "too_long", { max: MAX_LEN });
   return s;
 }
 
@@ -50,7 +53,11 @@ export function normalizeRegisteredPlanInfo(
       any = true;
     }
   }
-  if (Object.keys(input).some((k) => planInfoFields.includes(k as PlanInfoField) && input[k as PlanInfoField] === null))
+  if (
+    Object.keys(input).some(
+      (k) => planInfoFields.includes(k as PlanInfoField) && input[k as PlanInfoField] === null,
+    )
+  )
     return any ? out : null;
   return any ? out : undefined;
 }
@@ -80,7 +87,7 @@ export function checkRegisteredPlanInfoInText(
       field,
       ok,
       registered,
-      excerpt: ok ? registered : undefined,
+      ...(ok ? { excerpt: registered } : {}),
       message: ok
         ? `${planInfoFieldLabels[field]}は本文と一致しています`
         : `${planInfoFieldLabels[field]}「${registered}」が本文に見つかりません`,

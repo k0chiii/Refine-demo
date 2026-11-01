@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { checkRegisteredPlanInfoInText, normalizeRegisteredPlanInfo } from "../work/planInfo.ts";
 
 describe("planInfo", () => {
