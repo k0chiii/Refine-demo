@@ -18,7 +18,16 @@ restore_capture() {
 
 checkout_sources() {
   git fetch origin "$1"
-  git checkout "origin/$1" -- apps packages apps/convex
+  local ref="origin/$1"
+  comm -23 \
+    <(git ls-files apps packages apps/convex | sort -u) \
+    <(git ls-tree -r --name-only "$ref" -- apps packages apps/convex 2>/dev/null | sort -u) \
+    | while read -r f; do
+        [[ -z "$f" ]] && continue
+        git rm -f -- "$f" 2>/dev/null || rm -f -- "$f"
+      done
+  git clean -fd apps packages apps/convex 2>/dev/null || true
+  git checkout "$ref" -- apps packages apps/convex
   restore_capture
 }
 
@@ -26,6 +35,8 @@ restore_sources() {
   git checkout HEAD -- apps packages apps/convex
   restore_capture
 }
+
+trap restore_sources EXIT
 
 build_demo() {
   echo "  build:demo for $1"
@@ -36,11 +47,18 @@ run_one() {
   local scene="$1"
   local prefix="$2"
   local skip_plan="${3:-1}"
+  local clip="${4:-}"
+  local seed_backlog="${5:-0}"
   local port=$((4500 + RANDOM % 200))
   local req="/tmp/mf100-cap-$$.json"
-  node -e "require('fs').writeFileSync('$req', JSON.stringify({shots:{desktop:'$scene'},prefix:'$prefix',opts:{}}));"
+  local opts="{}"
+  if [[ -n "$clip" ]]; then
+    opts=$(node -e "console.log(JSON.stringify({clipSelector:'$clip'}))")
+  fi
+  node -e "require('fs').writeFileSync('$req', JSON.stringify({shots:{desktop:'$scene'},prefix:'$prefix',opts:$opts}));"
   env CAPTURE_PORT="$port" BASE_URL="http://127.0.0.1:$port" \
     SKIP_DEMO_BUILD=1 SKIP_PAMPHLET_COMMENTS=1 SKIP_PLAN_INFO_WARNINGS="$skip_plan" \
+    SEED_BACKLOG_CAPTURE="$seed_backlog" \
     SCREENSHOT_CORPUS="$(dirname "$prefix")" \
     pnpm dlx tsx scripts/stack-pr/capture-cli.ts "$req"
   local st=$?
@@ -58,12 +76,12 @@ capture_pair() {
   echo "=== PR #$pr BEFORE $before_ref $before_scene ==="
   checkout_sources "$before_ref"
   build_demo "$before_ref"
-  run_one "$before_scene" "$out/before-desktop" "$before_skip" || return 1
+  run_one "$before_scene" "$out/before" "$before_skip" || return 1
 
   echo "=== PR #$pr AFTER $after_ref $after_scene ==="
   checkout_sources "$after_ref"
   build_demo "$after_ref"
-  run_one "$after_scene" "$out/after-desktop" "$after_skip" || return 1
+  run_one "$after_scene" "$out/after" "$after_skip" || return 1
 
   restore_sources
   return 0
@@ -77,8 +95,13 @@ for pr in "${PRS[@]}"; do
   st=0
   case "$pr" in
     170)
-      capture_pair 170 cursor/stack-076-detail-route-shell-v2-8b5a cursor/stack-077-ui-delay-color-tokens-8b5a \
-        dashboard-manager dashboard-backlog-delay 077 1 1 || st=$?
+      mkdir -p "$ROOT/docs/stack-pr-screenshots/077"
+      rm -f "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png"
+      checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 && \
+        run_one dashboard-manager "$ROOT/docs/stack-pr-screenshots/077/before" 1 || st=$?
+      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 && \
+        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 "#ov-backlog" 1 || st=$?
+      restore_sources
       ;;
     171)
       capture_pair 171 cursor/stack-077-ui-delay-color-tokens-8b5a cursor/stack-078-ui-kpi-row-mock-8b5a \
@@ -151,5 +174,6 @@ for pr in "${PRS[@]}"; do
 done
 
 restore_sources
+trap - EXIT
 rm -f "$CAPTURE_BAK" "$SEED_BAK"
 echo done

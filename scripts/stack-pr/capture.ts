@@ -224,14 +224,14 @@ async function pdfReady(page: Page) {
 
 async function openEditorDrawer(page: Page, label: string) {
   await page.waitForSelector(".ws, .write", { timeout: 60_000 });
-  const bar = page.locator(".ws__side-toolbar, .write__side");
-  if (await bar.isVisible().catch(() => false)) {
-    await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click({ timeout: 60_000 });
-  } else {
-    const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+  const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+  if (await tab.isVisible().catch(() => false)) {
     if ((await tab.getAttribute("selected").catch(() => null)) === null) {
       await tab.click({ timeout: 60_000 });
     }
+  } else {
+    const bar = page.locator(".ws__side-toolbar, .write__side");
+    await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click({ timeout: 60_000 });
   }
   await page.waitForSelector(".drawer__body", { timeout: 60_000 });
 }
@@ -639,7 +639,14 @@ const SCENES: Record<string, SceneFn> = {
       .catch(() => undefined);
   },
   "q70-info-tab-plan": async (page) => {
-    await openWebWorkEditor(page);
+    await openWebWork(page);
+    await page.evaluate((id: string) => {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/v/$revisionSeq",
+        params: { workId: id, revisionSeq: "1" },
+      });
+    }, new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)![1]!);
+    await page.waitForSelector(".ws", { timeout: 60_000 });
     await openEditorDrawer(page, "情報");
     await page.locator('.info-tab__section[aria-label="企画情報"]').waitFor({
       state: "visible",
@@ -656,12 +663,30 @@ const SCENES: Record<string, SceneFn> = {
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "q71-comments-web-clean": async (page) => {
-    await openWebWorkEditor(page);
-    await page.waitForSelector(".write", { timeout: 60_000 });
-    await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
-      state: "visible",
-      timeout: 60_000,
-    });
+    await openWebWork(page);
+    if (!(await page.locator(".write").isVisible().catch(() => false))) {
+      await navigateWebWorkEditorRoute(page);
+      await page.waitForTimeout(600);
+    }
+    if (!(await page.locator(".write").isVisible().catch(() => false))) {
+      const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+      if (!workId) throw new Error(`workId missing from ${page.url()}`);
+      await demoGo(page, `/works/${workId}/v/1`);
+      await page.waitForSelector(".ws", { timeout: 60_000 });
+    } else {
+      await page.waitForSelector(".write", { timeout: 60_000 });
+      await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
+        state: "visible",
+        timeout: 60_000,
+      });
+    }
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "hidden", timeout: 10_000 })
+      .catch(() => undefined);
   },
   "q72-plan-info-recheck": async (page) => {
     await SCENES["q70-info-tab-plan"]!(page);
@@ -684,19 +709,19 @@ const SCENES: Record<string, SceneFn> = {
     await SCENES["q71-plan-info-warn"]!(page);
   },
   "dashboard-backlog-delay": async (page) => {
+    await page.evaluate(() => localStorage.setItem("mf100.works-overview-open", "1"));
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
     await openDashboardOverview(page);
+    await page.locator("#ov-backlog").waitFor({ state: "attached", timeout: 90_000 });
     await page.locator("#ov-backlog").scrollIntoViewIfNeeded();
     await page
-      .locator("#ov-backlog")
-      .getByText("【撮影】締切超過 1 日")
+      .locator("#ov-backlog .list__headline", { hasText: "【撮影】締切超過 1 日" })
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
     await page
-      .locator("#ov-backlog")
-      .getByText("【撮影】締切超過 3 日")
+      .locator("#ov-backlog .list__headline", { hasText: "【撮影】締切超過 3 日" })
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
   },

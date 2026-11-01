@@ -690,6 +690,19 @@ async function seedBacklogDelayScreenshotFixture(
     } else if (revision.deadlineAt !== deadlineAt) {
       await ctx.db.patch(revision._id, { deadlineAt });
     }
+    const closedAt = now;
+    if (revision.reviewState === "open" && revision.deadlineAt <= now) {
+      await ctx.db.patch(revision._id, {
+        reviewState: "closed",
+        reviewClosedReason: "deadline",
+        reviewClosedAt: closedAt,
+      });
+      try {
+        await ctx.db.patch(work._id, { acceptingRevisionId: null });
+      } catch {
+        /* pre-detail schema */
+      }
+    }
   }
 }
 
