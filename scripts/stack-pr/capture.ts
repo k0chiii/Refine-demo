@@ -393,6 +393,8 @@ const SCENES: Record<string, SceneFn> = {
     await capRow.scrollIntoViewIfNeeded();
     await capRow.waitFor({ state: "visible", timeout: 90_000 });
     await page
+      .locator(".works-table tbody tr")
+      .filter({ hasText: "【撮影】締切超過" })
       .getByText("次版作成中")
       .first()
       .waitFor({ state: "visible", timeout: 90_000 });
@@ -775,12 +777,12 @@ const SCENES: Record<string, SceneFn> = {
       .locator('.info-tab__section[aria-label="企画情報"]')
       .getByRole("button", { name: "保存" })
       .click({ timeout: 60_000 });
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(2500);
     await openEditorDrawer(page, "コメント");
     await page
       .getByText(/開催日時.*一致しません/)
       .first()
-      .waitFor({ state: "hidden", timeout: 90_000 });
+      .waitFor({ state: "hidden", timeout: 120_000 });
     const notFound = await page.getByText(/見つかりません/).count();
     if (notFound > 0) {
       throw new Error(`plan-info recheck still shows ${notFound} 見つかりません warning(s)`);
