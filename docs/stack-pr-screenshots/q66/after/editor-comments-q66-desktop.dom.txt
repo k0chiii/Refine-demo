@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:51:11.888Z
+url=http://127.0.0.1:4320/works/000000000000000000000010016works/v/1
+scene=editor-comments-q66
+marker:解決済みを表示=解決済みを表示
