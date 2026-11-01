@@ -234,8 +234,8 @@ export function InfoTab({
     {
       title: "日程と入稿",
       rows: [
-        ["■仕上がり日", w.finishAt === undefined ? "—" : formatDeadline(w.finishAt)] as Row,
-        ["◆校了目標日", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
+        ["仕上がり日", w.finishAt === undefined ? "—" : formatDeadline(w.finishAt)] as Row,
+        ["校了目標日", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
         ...optional(
           "入稿日・投稿日・印刷日",
           w.publishAt === undefined
@@ -291,7 +291,7 @@ export function InfoTab({
           <h2 className="info-tab__h">{g.title}</h2>
           {g.title === "基本" ? (
             can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
-              <Field label="目的・用途" hint="登録後にここで記入・更新します">
+              <Field label="目的・用途">
                 <TextArea value={purposeDraft} onChange={(e) => setPurposeDraft(e.target.value)} />
                 <div className="row" style={{ marginTop: "0.5rem" }}>
                   <M3eButton
