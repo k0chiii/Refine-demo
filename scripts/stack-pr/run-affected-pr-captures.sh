@@ -131,8 +131,8 @@ validate_pair() {
     return 1
   fi
   pnpm dlx tsx -e "
-    import { assertBeforeAfterDistinct } from './scripts/stack-pr/screenshot-validate.ts';
-    assertBeforeAfterDistinct('${before}', '${after}');
+    import { assertPngPairValidated } from './scripts/stack-pr/screenshot-validate.ts';
+    assertPngPairValidated('${before}', '${after}', '${ROOT}/docs/stack-pr-screenshots');
   "
 }
 
@@ -173,10 +173,10 @@ for pr in "${PRS[@]}"; do
     167)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/075"
       rm -f "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png"
-      checkout_sources cursor/stack-073-domain-danger-kpi-v2-8b5a && build_demo 073 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 "" 0 || st=$?
+      checkout_sources cursor/stack-074-demo-dashboard-role-homes-v2-8b5a && build_demo 074 && \
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 ".hub[data-hub='make']" 0 0 || st=$?
       checkout_sources cursor/stack-075-ui-home-view-switcher-v2-8b5a && build_demo 075 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 "" 0 || st=$?
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".home-view-switcher" 0 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png" || st=$?
       restore_sources
       ;;
@@ -184,27 +184,39 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/077"
       rm -f "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png"
       checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 076 && \
-        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
+        CAPTURE_EXPECT_BACKLOG_DELAY=0 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
       checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 077 && \
-        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
+        CAPTURE_EXPECT_BACKLOG_DELAY=1 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png" || st=$?
       restore_sources
       ;;
     171)
-      capture_pair 171 cursor/stack-077-ui-delay-color-tokens-8b5a cursor/stack-078-ui-kpi-row-mock-8b5a \
-        dashboard-manager dashboard-manager 078 1 1 "" 1 || st=$?
+      mkdir -p "$ROOT/docs/stack-pr-screenshots/078"
+      rm -f "$ROOT/docs/stack-pr-screenshots/078/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/078/after-desktop.png"
+      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 077 && \
+        CAPTURE_EXPECT_KPI_MOCK=0 run_one dashboard-kpi-summary "$ROOT/docs/stack-pr-screenshots/078/before" 1 'section[aria-label="サマリー"]' 1 || st=$?
+      checkout_sources cursor/stack-078-ui-kpi-row-mock-8b5a && build_demo 078 078 && \
+        CAPTURE_EXPECT_KPI_MOCK=1 run_one dashboard-kpi-summary "$ROOT/docs/stack-pr-screenshots/078/after" 1 'section[aria-label="サマリー"]' 1 || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/078/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/078/after-desktop.png" || st=$?
+      restore_sources
       ;;
     172)
-      capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
-        dashboard-manager dashboard-manager 079 1 1 "" 1 '.ov' || st=$?
+      mkdir -p "$ROOT/docs/stack-pr-screenshots/079"
+      rm -f "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png"
+      checkout_sources cursor/stack-078-ui-kpi-row-mock-8b5a && build_demo 078 078 && \
+        run_one dashboard-manager "$ROOT/docs/stack-pr-screenshots/079/before" 1 '.stagebar' 1 || st=$?
+      checkout_sources cursor/stack-079-ui-graphs-stage-bureau-8b5a && build_demo 079 079 && \
+        CAPTURE_EXPECT_BUREAU_MOCK=1 run_one dashboard-bureau-graphs "$ROOT/docs/stack-pr-screenshots/079/after" 1 'section[aria-labelledby="ov-bureaus"]' 1 || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png" || st=$?
+      restore_sources
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"
       rm -f "$ROOT/docs/stack-pr-screenshots/080/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/080/after-desktop.png"
       checkout_sources cursor/stack-079-ui-graphs-stage-bureau-8b5a && build_demo 079 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/080/before" 1 "" 0 || st=$?
+        CAPTURE_EXPECT_SNS_BAND=0 run_one make-sns-band "$ROOT/docs/stack-pr-screenshots/080/before" 1 ".hub[data-hub='make']" 0 || st=$?
       checkout_sources cursor/stack-080-ui-sns-band-visibility-8b5a && build_demo 080 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/080/after" 1 "" 0 || st=$?
+        CAPTURE_EXPECT_SNS_BAND=1 run_one make-sns-band "$ROOT/docs/stack-pr-screenshots/080/after" 1 ".sns-home-band" 0 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/080/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/080/after-desktop.png" || st=$?
       restore_sources
       ;;
@@ -267,13 +279,16 @@ for pr in "${PRS[@]}"; do
         run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 || st=$?
       checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && build_demo q72 q72 && \
         run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 || st=$?
+      validate_pair "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck-desktop.png" \
+        "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck-desktop.png" || st=$?
       restore_sources
       ;;
     203)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q75/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q75/after"/*
       checkout_sources cursor/stack-q75c-detail-no-activity-8b5a && build_demo q75 q75 && \
-        run_one dashboard-detail "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity" 1 || st=$?
+        CAPTURE_EXPECT_NO_ACTIVITY=1 run_one dashboard-detail "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity" 1 ".detail-shell" || st=$?
+      node scripts/stack-pr/screenshot-validate.mjs "$ROOT/docs/stack-pr-screenshots/q75" || st=$?
       restore_sources
       ;;
     204)

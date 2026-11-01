@@ -381,6 +381,9 @@ const SCENES: Record<string, SceneFn> = {
     const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
     await capRow.scrollIntoViewIfNeeded();
     await capRow.waitFor({ state: "visible", timeout: 90_000 });
+    if (await page.getByText("次版作成中").count()) {
+      throw new Error("次版作成中 visible on develop before capture");
+    }
   },
   "q68-works-after": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -389,6 +392,10 @@ const SCENES: Record<string, SceneFn> = {
     const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
     await capRow.scrollIntoViewIfNeeded();
     await capRow.waitFor({ state: "visible", timeout: 90_000 });
+    await page
+      .getByText("次版作成中")
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 });
   },
   "works-deadline-header-before": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -771,10 +778,15 @@ const SCENES: Record<string, SceneFn> = {
     await page
       .getByText(/開催日時.*一致しません/)
       .first()
-      .waitFor({ state: "hidden", timeout: 60_000 })
-      .catch(async () => {
-        await page.locator(".comments__empty, .comments, .refs").first().waitFor({ state: "visible" });
-      });
+      .waitFor({ state: "hidden", timeout: 90_000 });
+    const notFound = await page.getByText(/見つかりません/).count();
+    if (notFound > 0) {
+      throw new Error(`plan-info recheck still shows ${notFound} 見つかりません warning(s)`);
+    }
+    const warn = await page.getByText(/開催日時.*一致しません/).count();
+    if (warn > 0) {
+      throw new Error(`plan-info recheck still shows ${warn} mismatch warning(s)`);
+    }
   },
   "q72-plan-info-before-warn": async (page) => {
     await SCENES["q71-plan-info-warn"]!(page);
@@ -796,6 +808,40 @@ const SCENES: Record<string, SceneFn> = {
       .getByText("【撮影】締切超過 3 日")
       .first()
       .waitFor({ state: "visible", timeout: 90_000 });
+    if (process.env.CAPTURE_EXPECT_BACKLOG_DELAY === "1") {
+      const delayItems = await backlogSection.locator(".list__item[class*='delay']").count();
+      if (delayItems < 1) {
+        throw new Error("expected backlog delay color class on after capture");
+      }
+    }
+  },
+  "make-sns-band": async (page) => {
+    await signInAs(page, "mock-nogiku-approver");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_SNS_BAND === "1") {
+      await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 60_000 });
+    } else if (await page.locator(".sns-home-band").isVisible().catch(() => false)) {
+      throw new Error("sns-home-band visible before PR 080");
+    }
+  },
+  "dashboard-kpi-summary": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    await page
+      .locator('section[aria-label="サマリー"]')
+      .waitFor({ state: "visible", timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_KPI_MOCK === "1") {
+      await page.locator(".kpis--mock-row").waitFor({ state: "visible", timeout: 60_000 });
+    } else if (await page.locator(".kpis--mock-row").count()) {
+      throw new Error("kpis--mock-row visible before PR 078");
+    }
+  },
+  "dashboard-bureau-graphs": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    await page.locator("#ov-bureaus").waitFor({ state: "visible", timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_BUREAU_MOCK === "1") {
+      await page.locator(".ov__block--bureau-mock").waitFor({ state: "visible", timeout: 60_000 });
+    }
   },
   "detail-preview-73": async (page) => {
     const app = new App(page);
@@ -817,6 +863,11 @@ const SCENES: Record<string, SceneFn> = {
       .waitFor({ state: "attached", timeout: 120_000 })
       .catch(() => {});
     await page.locator(".detail-shell__comments").waitFor({ state: "attached", timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_NO_ACTIVITY === "1") {
+      if (await page.locator(".activity-log, [aria-label*='活動']").count()) {
+        throw new Error("activity log UI still visible on q75 detail");
+      }
+    }
     await page.waitForTimeout(1200);
   },
 };
@@ -861,6 +912,15 @@ async function captureOne(
     await page.screenshot({ path: outPath, fullPage: true });
   }
   await writeSceneDomSidecar(page, sceneKey, outPath);
+  const sidecar = outPath.replace(/\.png$/i, ".dom.txt");
+  if (/plan-info|q72|q71-comments/.test(sceneKey)) {
+    const notFound = await page.getByText(/見つかりません/).count().catch(() => 0);
+    const warn = await page.getByText(/開催日時.*一致しません/).count().catch(() => 0);
+    fs.appendFileSync(
+      sidecar,
+      `forbidden:plan-info-warnings=${warn}\nforbidden:not-found=${notFound}\n`,
+    );
+  }
   validateScreenshotFile(outPath, { sceneKey, pagePath, corpusRoot, selfPath: outPath });
   validateDomSidecar(outPath, sceneKey);
 }

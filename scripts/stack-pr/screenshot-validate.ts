@@ -6,6 +6,12 @@ import type { Page } from "../../apps/web/e2e/support/app.ts";
 /** サインイン画面だけの PNG（禁止） */
 export const SIGNIN_SCREEN_MD5 = "ac741f735c6593b5cbdc397deb4a8004";
 
+/** 監査で検出した再利用 PNG（禁止） */
+export const BANNED_MD5_PREFIXES = [
+  "eb1139a2", // #170 after 旧再利用
+  "ac741f73", // sign-in
+] as const;
+
 /** 青帯+黄四角プレースホルダー等の典型サイズ（禁止） */
 export const PLACEHOLDER_MAX_BYTES = 4096;
 
@@ -27,6 +33,9 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "12-submit-dialog": ["版を提出"],
   "34-acl": ["閲覧権限"],
   "dashboard-manager": ["制作物の状況"],
+  "dashboard-kpi-summary": ["制作物の状況"],
+  "dashboard-bureau-graphs": ["制作物の状況"],
+  "make-sns-band": ["進行中"],
   "dashboard-manager-mobile": ["制作物の状況"],
   "dashboard-approver": ["MF100 公式パンフレット"],
   "dashboard-member": ["進行中"],
@@ -110,6 +119,11 @@ export function validateScreenshotFile(filePath: string, opts: ValidateOpts): vo
   const md5 = md5File(filePath);
   if (md5 === SIGNIN_SCREEN_MD5) {
     throw new Error(`signin md5 on ${filePath}`);
+  }
+  for (const prefix of BANNED_MD5_PREFIXES) {
+    if (md5.startsWith(prefix)) {
+      throw new Error(`banned md5 prefix ${prefix} on ${filePath}`);
+    }
   }
   if (opts.pagePath.includes("/signin")) {
     throw new Error(`signin URL ${opts.pagePath} for ${filePath}`);
@@ -207,4 +221,62 @@ export function validateDomSidecar(pngPath: string, sceneKey: string): void {
       throw new Error(`dom sidecar marker missing: ${text} in ${sidecar}`);
     }
   }
+  assertDomSidecarClean(sidecar, body);
+}
+
+/** DOM sidecar / 撮影後チェック: プレースホルダ・bot 警告を禁止 */
+export function assertDomSidecarClean(sidecarPath: string, body?: string): void {
+  const text = body ?? fs.readFileSync(sidecarPath, "utf8");
+  const lower = text.toLowerCase();
+  if (lower.includes("not found")) {
+    throw new Error(`dom sidecar contains "not found": ${sidecarPath}`);
+  }
+  if (text.includes("見つかりません")) {
+    throw new Error(`dom sidecar contains 見つかりません: ${sidecarPath}`);
+  }
+  const missingMarkers = [...text.matchAll(/marker:[^=]+=MISSING/g)];
+  if (missingMarkers.length > 0) {
+    throw new Error(`dom sidecar has MISSING markers: ${sidecarPath}`);
+  }
+  const warnMatch = text.match(/forbidden:plan-info-warnings=(\d+)/);
+  if (warnMatch && Number(warnMatch[1]) > 0) {
+    throw new Error(`plan-info warnings still visible (${warnMatch[1]}) in ${sidecarPath}`);
+  }
+  const nfMatch = text.match(/forbidden:not-found=(\d+)/);
+  if (nfMatch && Number(nfMatch[1]) > 0) {
+    throw new Error(`not-found warnings still visible (${nfMatch[1]}) in ${sidecarPath}`);
+  }
+}
+
+export function assertPngPairValidated(beforePath: string, afterPath: string, corpusRoot?: string): void {
+  assertBeforeAfterDistinct(beforePath, afterPath);
+  for (const p of [beforePath, afterPath]) {
+    if (!fs.existsSync(p)) throw new Error(`missing ${p}`);
+    validateScreenshotFile(p, {
+      sceneKey: "pair",
+      pagePath: "/works",
+      corpusRoot,
+      selfPath: p,
+    });
+    validateDomSidecar(p, "pair");
+  }
+}
+
+/** ディレクトリ内の before/after PNG ペアをすべて検証 */
+export function assertAllBeforeAfterPairs(root: string, corpusRoot?: string): void {
+  if (!fs.existsSync(root)) return;
+  const walk = (dir: string) => {
+    const ents = fs.readdirSync(dir, { withFileTypes: true });
+    const pngs = ents.filter((e) => e.isFile() && e.name.endsWith(".png")).map((e) => e.name);
+    for (const name of pngs) {
+      if (!name.includes("before")) continue;
+      const afterName = name.replace("before", "after");
+      if (!pngs.includes(afterName)) continue;
+      assertPngPairValidated(path.join(dir, name), path.join(dir, afterName), corpusRoot ?? root);
+    }
+    for (const ent of ents) {
+      if (ent.isDirectory()) walk(path.join(dir, ent.name));
+    }
+  };
+  walk(root);
 }
