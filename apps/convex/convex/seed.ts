@@ -56,6 +56,7 @@ export const demo = internalMutation({
   handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
       throw new Error("seed:demo is only available when NOGIKU_MOCK_ENABLED=true");
+    const seedConfidentiality = args.seedConfidentiality !== false;
     const ids: Record<string, string> = {};
     for (const u of MOCK_USERS) {
       const existing = await ctx.db

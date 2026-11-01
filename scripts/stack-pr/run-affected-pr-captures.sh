@@ -210,7 +210,7 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/079"
       rm -f "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png"
       checkout_sources cursor/stack-078-ui-kpi-row-mock-8b5a && build_demo 078 078 && \
-        run_one dashboard-manager "$ROOT/docs/stack-pr-screenshots/079/before" 1 '.stagebar' 1 || st=$?
+        run_one dashboard-manager "$ROOT/docs/stack-pr-screenshots/079/before" 1 ".ov" 1 || st=$?
       checkout_sources cursor/stack-079-ui-graphs-stage-bureau-8b5a && build_demo 079 079 && \
         CAPTURE_EXPECT_BUREAU_MOCK=1 run_one dashboard-bureau-graphs "$ROOT/docs/stack-pr-screenshots/079/after" 1 'section[aria-labelledby="ov-bureaus"]' 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/079/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/079/after-desktop.png" || st=$?
