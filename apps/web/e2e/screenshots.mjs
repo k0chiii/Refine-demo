@@ -176,7 +176,36 @@ const ready = () =>
 const go = async (path) => {
   const nav = page.evaluate(
     (p) => {
-      const [to, q] = p.split("?");
+      const pathOnly = p.replace(/^https?:\/\/[^/]+/, "");
+      const brokenRev = pathOnly.match(/^\/works\/(.+)works\/v\/(\d+)$/);
+      if (brokenRev) {
+        return globalThis.__mf100router.navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId: brokenRev[1], n: brokenRev[2] },
+        });
+      }
+      const rev = pathOnly.match(/^\/works\/([^/]+)\/v\/(\d+)$/);
+      if (rev) {
+        return globalThis.__mf100router.navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId: rev[1], n: rev[2] },
+        });
+      }
+      const detail = pathOnly.match(/^\/works\/([^/]+)\/detail$/);
+      if (detail) {
+        return globalThis.__mf100router.navigate({
+          to: "/works/$workId/detail",
+          params: { workId: detail[1] },
+        });
+      }
+      const workOnly = pathOnly.match(/^\/works\/([^/?#]+)$/);
+      if (workOnly) {
+        return globalThis.__mf100router.navigate({
+          to: "/works/$workId",
+          params: { workId: workOnly[1] },
+        });
+      }
+      const [to, q] = pathOnly.split("?");
       const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
       return globalThis.__mf100router.navigate(search ? { to, search } : { to });
     },
