@@ -539,8 +539,12 @@ export class App {
     await this.openWork(title);
     await this.drawer("情報");
     const body = this.page.locator(".drawer__body");
-    await body.locator("textarea").fill(purpose);
-    await body.locator("m3e-button", { hasText: "保存" }).click();
+    // 「企画情報」の節にも保存ボタンがあるので、目的・用途の textarea がある節の中で押す
+    const section = body
+      .locator("section.info-tab__section", { has: this.page.locator("textarea") })
+      .first();
+    await section.locator("textarea").fill(purpose);
+    await section.locator("m3e-button", { hasText: "保存" }).click();
     await this.settle();
   }
 
