@@ -1,3 +1,3 @@
-capturedAt=2026-11-01T04:48:45.637Z
-url=http://127.0.0.1:4560/works/000000000000000000000010026works/write
+capturedAt=2026-11-01T07:12:05.817Z
+url=http://127.0.0.1:4609/works/000000000000000000000010026works/write
 scene=q72-plan-info-before-warn
