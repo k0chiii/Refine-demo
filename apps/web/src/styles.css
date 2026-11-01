@@ -1357,6 +1357,15 @@ m3e-dialog {
   display: grid;
   gap: 4px;
 }
+/* 制作物の状況の「滞っている制作物」: 行の面（1 日=オレンジ・2 日以上=赤）は見出しの左端に揃える
+   （一覧の行の -16px のはみ出しをやめ、文字は面の中に 12px 入れる） */
+.ov .dash__group .list {
+  margin: 0;
+}
+.ov .dash__group .list__item {
+  --m3e-list-item-leading-space: 12px;
+  --m3e-list-item-trailing-space: 12px;
+}
 .dash__more {
   justify-self: start;
 }
@@ -4973,12 +4982,28 @@ m3e-snackbar {
   margin: -4px -8px -4px 0;
   vertical-align: middle;
 }
-/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える */
+/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える。
+   名前は長くても列を広げず、省略記号で切る（全文は title） */
 .works-table__approvers,
 .works-table__reviewers {
   margin-inline-start: -12px;
   max-width: 100%;
   text-align: start;
+}
+.works-table__approvers .works-table__clip,
+.works-table__reviewers .works-table__clip {
+  max-width: 120px;
+}
+.works-table__col--owner .works-table__clip,
+.works-table__col--production .works-table__clip {
+  max-width: 128px;
+}
+/* 版の下の「予定提出 11/16（月）」は 2 行に折り返してよい（列を広げない。日付の途中では折らない幅を確保） */
+.works-table__col--version {
+  min-width: 108px;
+}
+.works-table__col--version .mf-table__sub {
+  white-space: normal;
 }
 .works-table__approvers-text {
   display: block;
@@ -5008,7 +5033,8 @@ m3e-snackbar {
     display: none;
   }
 }
-@container (max-width: 1119px) {
+/* 1440px（表の幅 1294 前後）で校了する人まで入るように、制作担当を先に隠す（担当は残る） */
+@container (max-width: 1339px) {
   .works-table__col--production {
     display: none;
   }
