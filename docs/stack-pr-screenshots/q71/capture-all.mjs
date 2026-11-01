@@ -14,7 +14,7 @@ if (phase !== "before" && phase !== "after") {
 const outDir = path.join(here, phase);
 fs.mkdirSync(outDir, { recursive: true });
 
-const scene = phase === "before" ? "q70-info-tab-plan" : "q71-plan-info-warn";
+const scene = phase === "before" ? "q71-comments-web-clean" : "q71-plan-info-warn";
 const prefix = path.join(outDir, phase === "before" ? "plan-info-no-warn" : "plan-info-warn");
 const req = path.join(os.tmpdir(), `mf100-q71-${phase}.json`);
 fs.writeFileSync(req, JSON.stringify({ shots: { desktop: scene }, prefix, opts: {} }));

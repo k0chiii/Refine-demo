@@ -64,6 +64,7 @@ import type * as notation from "../notation.js";
 import type * as notationSeed from "../notationSeed.js";
 import type * as notificationPrefs from "../notificationPrefs.js";
 import type * as notifications from "../notifications.js";
+import type * as planInfo from "../planInfo.js";
 import type * as presence from "../presence.js";
 import type * as processing from "../processing.js";
 import type * as proofreading from "../proofreading.js";
@@ -146,6 +147,7 @@ declare const fullApi: ApiFromModules<{
   notationSeed: typeof notationSeed;
   notificationPrefs: typeof notificationPrefs;
   notifications: typeof notifications;
+  planInfo: typeof planInfo;
   presence: typeof presence;
   processing: typeof processing;
   proofreading: typeof proofreading;
