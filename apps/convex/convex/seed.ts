@@ -386,6 +386,7 @@ export const demo = internalMutation({
     if (!args.skipPlanInfoWarnings) {
       await seedPlanInfoMismatchFixture(ctx, ids, now, day);
     }
+    await seedBacklogDelayScreenshotFixture(ctx, ids, now, day);
     return { users: ids, createdWorks: created };
   },
 });
@@ -478,8 +479,12 @@ async function seedPlanInfoMismatchFixture(
     .query("documentDrafts")
     .withIndex("by_work", (q) => q.eq("workId", work._id))
     .unique();
-  const body =
-    "来場者向けの総合案内です。アクセスと注意事項のみ記載（企画名・番号は本文に含めないデモ）。";
+  const body = [
+    "企画名：五月祭メインステージ",
+    "企画番号 M-101",
+    "会場：正門前ステージ",
+    "開催：5/25(日) 10:00–17:00",
+  ].join("\n");
   if (draft)
     await ctx.db.patch(draft._id, {
       text: body,
@@ -531,18 +536,7 @@ async function seedPlanInfoMismatchFixture(
 
   const warnings = [
     {
-      body: "企画名「五月祭メインステージ」が本文に見つかりません",
-      field: "name",
-      registered: "五月祭メインステージ",
-    },
-    { body: "企画番号「M-101」が本文に見つかりません", field: "number", registered: "M-101" },
-    {
-      body: "開催場所「正門前ステージ」が本文に見つかりません",
-      field: "venue",
-      registered: "正門前ステージ",
-    },
-    {
-      body: "開催日時「5/24(土) 10:00–17:00」が本文に見つかりません",
+      body: "開催日時「5/24(土) 10:00–17:00」が本文と一致しません",
       field: "schedule",
       registered: "5/24(土) 10:00–17:00",
     },
@@ -579,6 +573,96 @@ async function seedPlanInfoMismatchFixture(
     unresolvedCount: (revision.unresolvedCount ?? 0) + botCount,
     openBotCount: botCount,
   });
+}
+
+/** 077 スクショ: 校正締切超過 1 日 / 2 日以上の行が backlog に並ぶ */
+async function seedBacklogDelayScreenshotFixture(
+  ctx: MutationCtx,
+  ids: Record<string, string>,
+  now: number,
+  day: number,
+) {
+  const specs = [
+    { legacyId: "CAP-DLY-1D", title: "【撮影】締切超過 1 日", lateDays: 1.2 },
+    { legacyId: "CAP-DLY-2D", title: "【撮影】締切超過 3 日", lateDays: 3 },
+  ] as const;
+  for (const spec of specs) {
+    let work = await ctx.db
+      .query("works")
+      .withIndex("by_year", (q) => q.eq("year", 100))
+      .filter((q) => q.eq(q.field("legacyId"), spec.legacyId))
+      .unique();
+    if (!work) {
+      const workId = await ctx.db.insert("works", {
+        title: spec.title,
+        purpose: "ダッシュボード遅延色の撮影用",
+        category: "撮影",
+        mediaType: "print",
+        year: 100,
+        legacyId: spec.legacyId,
+        relatedTeamIds: [],
+        managerIds: [ids["mock-nogiku-manager"]!],
+        creatorIds: [ids["mock-nogiku-creator"]!],
+        approverId: ids["mock-nogiku-approver"]!,
+        approverIds: [ids["mock-nogiku-approver"]!],
+        approvalQuorum: 1,
+        deadlineAt: endOfJstDay(now + 30 * day),
+        lifecycle: "active",
+        confidentiality: "normal",
+        version: 1,
+        ownerTeamId: undefined,
+        productionTeamIds: [],
+      });
+      work = (await ctx.db.get(workId))!;
+      await ctx.db.insert("workRoles", {
+        workId: work._id,
+        userId: ids["mock-nogiku-manager"]!,
+        role: "manager",
+      });
+      await ctx.db.insert("workPermissions", {
+        workId: work._id,
+        principalType: "user",
+        principalId: ids["mock-nogiku-reviewer"]!,
+        permission: "review",
+        grantedBy: ids["mock-nogiku-admin"]!,
+        grantedAt: now,
+      });
+    }
+    const deadlineAt = now - spec.lateDays * day;
+    let revision = await ctx.db
+      .query("revisions")
+      .withIndex("by_work", (q) => q.eq("workId", work!._id))
+      .filter((q) => q.eq(q.field("reviewState"), "open"))
+      .first();
+    if (!revision) {
+      const revisionId = await ctx.db.insert("revisions", {
+        workId: work._id,
+        kind: "standard",
+        sequence: 1,
+        reviewType: "general",
+        submittedBy: ids["mock-nogiku-creator"]!,
+        submittedAt: now - spec.lateDays * day - day,
+        deadlineAt,
+        reviewState: "open",
+        changeSummary: "撮影用",
+        focusNotes: "",
+        threadCount: 1,
+        unresolvedCount: 1,
+      });
+      revision = (await ctx.db.get(revisionId))!;
+      await ctx.db.insert("commentThreads", {
+        revisionId,
+        authorId: ids["mock-nogiku-reviewer"]!,
+        body: "確認お願いします",
+        kind: "correction",
+        severity: "info",
+        resolution: "open",
+        createdAt: now,
+      });
+    } else if (revision.deadlineAt !== deadlineAt) {
+      await ctx.db.patch(revision._id, { deadlineAt });
+    }
+  }
 }
 
 /** サンプルのアカウントのアイコン（アプリのアイコン 192px の PNG） */

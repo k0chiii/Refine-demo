@@ -311,10 +311,19 @@ async function workspaceCommentsReady(page: Page) {
   await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
   await openEditorDrawer(page, "コメント");
   await page.waitForSelector(".comments", { state: "visible", timeout: 60_000 });
-  await page
-    .locator(".comments__list, .comments__header, .thread-panel, .comments__empty, .thread")
+  const hasThread = await page
+    .locator(".comments .thread")
     .first()
-    .waitFor({ state: "visible", timeout: 60_000 });
+    .isVisible()
+    .catch(() => false);
+  if (!hasThread) {
+    await page.getByRole("button", { name: "全体へのコメント" }).click({ timeout: 60_000 });
+    await page.waitForSelector(".compose-pop .rt__content", { timeout: 60_000 });
+    await page.fill(".compose-pop .rt__content", "表記を確認してください");
+    await page.locator(".compose-pop .rt__send").click({ timeout: 60_000 });
+    await page.waitForSelector(".compose-pop", { state: "detached", timeout: 60_000 });
+  }
+  await page.locator(".comments .thread").first().waitFor({ state: "visible", timeout: 60_000 });
 }
 
 type CaptureSceneOpts = { expandOverview?: boolean; openViewSwitcher?: boolean };
@@ -602,10 +611,14 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
     await navigateWebWorkV1(page);
     await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+    await page.locator(".write .ProseMirror, .write .rt__content, .write").first().waitFor({
+      state: "visible",
+      timeout: 60_000,
+    });
     await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
     await openEditorDrawer(page, "コメント");
     await page
-      .locator(".comments .thread", { hasText: "が本文に見つかりません" })
+      .locator(".comments .thread", { hasText: "一致しません" })
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
   },
@@ -622,20 +635,52 @@ const SCENES: Record<string, SceneFn> = {
   },
   "q72-plan-info-recheck": async (page) => {
     await SCENES["q70-info-tab-plan"]!(page);
-    await page.getByRole("textbox", { name: "企画名" }).fill("来場者向けの総合案内");
+    await page.getByRole("textbox", { name: "開催日時" }).fill("5/25(日) 10:00–17:00");
     await page
       .locator('.info-tab__section[aria-label="企画情報"]')
       .getByRole("button", { name: "保存" })
       .click({ timeout: 60_000 });
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(800);
+    await openEditorDrawer(page, "コメント");
+    await page
+      .locator(".comments .thread", { hasText: "一致しません" })
+      .first()
+      .waitFor({ state: "hidden", timeout: 60_000 })
+      .catch(async () => {
+        await page.locator(".comments__empty, .comments").first().waitFor({ state: "visible" });
+      });
+  },
+  "q72-plan-info-before-warn": async (page) => {
+    await SCENES["q71-plan-info-warn"]!(page);
+  },
+  "dashboard-backlog-delay": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    await openDashboardOverview(page);
+    await page.locator("#ov-backlog").scrollIntoViewIfNeeded();
+    await page
+      .locator("#ov-backlog")
+      .getByText("【撮影】締切超過 1 日")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .locator("#ov-backlog")
+      .getByText("【撮影】締切超過 3 日")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
   },
   "detail-preview-73": async (page) => {
-    await openWebWork(page);
+    await workspaceCommentsReady(page);
     const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
-    if (!workId) throw new Error("workId missing");
+    if (!workId) throw new Error("workId missing after workspaceCommentsReady");
     await demoGo(page, `/works/${workId}/detail`);
-    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
-    await page.waitForSelector(".detail-shell__comments", { timeout: 60_000 });
+    await page.waitForSelector(".detail-shell__preview-frame .viewer canvas", {
+      timeout: 90_000,
+    });
+    await page.waitForSelector(".detail-shell__comments .detail-shell__thread, .detail-shell__comments .thread", {
+      timeout: 60_000,
+    });
   },
 };
 
@@ -657,13 +702,20 @@ async function captureOne(
   sceneKey: string,
   outPath: string,
   corpusRoot: string | undefined,
+  clipSelector?: string,
 ) {
   await runScene(page, sceneKey);
   await applyCaptureTheme(page);
   await assertSceneMarkers(page, sceneKey);
   await assertCaptureThemePrimary(page);
   const pagePath = new URL(page.url()).pathname;
-  await page.screenshot({ path: outPath, fullPage: true });
+  if (clipSelector) {
+    const loc = page.locator(clipSelector).first();
+    await loc.waitFor({ state: "visible", timeout: 60_000 });
+    await loc.screenshot({ path: outPath });
+  } else {
+    await page.screenshot({ path: outPath, fullPage: true });
+  }
   await writeSceneDomSidecar(page, sceneKey, outPath);
   validateScreenshotFile(outPath, { sceneKey, pagePath, corpusRoot, selfPath: outPath });
   validateDomSidecar(outPath, sceneKey);
@@ -680,11 +732,13 @@ export async function captureShots(
     expandOverview?: boolean;
     openViewSwitcher?: boolean;
     corpusRoot?: string;
+    clipSelector?: string;
   } = {},
 ) {
   ensureDemo();
   sceneRunOpts = { expandOverview: opts.expandOverview, openViewSwitcher: opts.openViewSwitcher };
   const corpusRoot = opts.corpusRoot ?? process.env.SCREENSHOT_CORPUS;
+  const clipSelector = opts.clipSelector ?? process.env.CAPTURE_CLIP;
   const mobileW = opts.mobileWidth ?? 412;
   const mobileH = opts.mobileHeight ?? 915;
   const desktopW = opts.desktopWidth ?? 1280;
@@ -705,7 +759,7 @@ export async function captureShots(
     });
   });
   const page = await desktop.newPage();
-  await captureOne(page, shots.desktop, `${prefix}-desktop.png`, corpusRoot);
+  await captureOne(page, shots.desktop, `${prefix}-desktop.png`, corpusRoot, clipSelector);
 
   if (shots.mobile) {
     const mobile = await browser.newContext({
@@ -719,7 +773,13 @@ export async function captureShots(
       });
     });
     const mp = await mobile.newPage();
-    await captureOne(mp, shots.mobile ?? shots.desktop, `${prefix}-mobile.png`, corpusRoot);
+    await captureOne(
+      mp,
+      shots.mobile ?? shots.desktop,
+      `${prefix}-mobile.png`,
+      corpusRoot,
+      clipSelector,
+    );
     await mobile.close();
   }
   await browser.close();
