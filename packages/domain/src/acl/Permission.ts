@@ -7,11 +7,11 @@ import type { Instant } from "../shared/time.ts";
  */
 export type PrincipalType = "user" | "group";
 
-/** 権限レベルは包含関係を持つ: manage ⊃ edit ⊃ review ⊃ view */
-export const permissionLevels = ["view", "review", "edit", "manage"] as const;
+/** 権限レベルは包含関係を持つ: manage ⊃ edit ⊃ review（104A: view は廃止） */
+export const permissionLevels = ["review", "edit", "manage"] as const;
 export type PermissionLevel = (typeof permissionLevels)[number];
 
-const levelRank: Record<PermissionLevel, number> = { view: 0, review: 1, edit: 2, manage: 3 };
+const levelRank: Record<PermissionLevel, number> = { review: 0, edit: 1, manage: 2 };
 
 export function permissionIncludes(granted: PermissionLevel, required: PermissionLevel): boolean {
   return levelRank[granted] >= levelRank[required];

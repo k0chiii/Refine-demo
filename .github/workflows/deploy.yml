@@ -63,13 +63,28 @@ jobs:
         run: |
           set -euo pipefail
           sha="$SHA"
-          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
-            --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
-          echo "verify conclusion=${conclusion:-missing} sha=${sha}"
-          if [ "$conclusion" = "success" ]; then
+          wait_verify() {
+            local i conclusion
+            for i in $(seq 1 40); do
+              conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
+                --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
+              echo "verify conclusion=${conclusion:-missing} sha=${sha} attempt=${i}"
+              if [ "$conclusion" = "success" ]; then
+                return 0
+              fi
+              if [ "$conclusion" = "failure" ] || [ "$conclusion" = "cancelled" ]; then
+                return 1
+              fi
+              sleep 30
+            done
+            return 1
+          }
+          if wait_verify; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
           echo "ok=false" >> "$GITHUB_OUTPUT"
           if [ "$REQUIRE" = "hard" ]; then
             echo "::error::SHA ${sha} の CI ジョブ verify が success ではありません（${conclusion:-missing}）。デモは配りません。"
@@ -116,14 +131,29 @@ jobs:
         run: |
           set -euo pipefail
           sha="$SHA"
-          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
-            --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
-          echo "verify conclusion=${conclusion:-missing} sha=${sha}"
-          if [ "$conclusion" = "success" ]; then
+          wait_verify() {
+            local i conclusion
+            for i in $(seq 1 40); do
+              conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
+                --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
+              echo "verify conclusion=${conclusion:-missing} sha=${sha} attempt=${i}"
+              if [ "$conclusion" = "success" ]; then
+                return 0
+              fi
+              if [ "$conclusion" = "failure" ] || [ "$conclusion" = "cancelled" ]; then
+                return 1
+              fi
+              sleep 30
+            done
+            return 1
+          }
+          if wait_verify; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
             echo "sha=${sha}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name=="verify")] | sort_by(.completed_at) | reverse | .[0].conclusion // empty')"
           echo "ok=false" >> "$GITHUB_OUTPUT"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
           if [ "$REQUIRE" = "hard" ]; then
