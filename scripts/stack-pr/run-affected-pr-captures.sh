@@ -2,6 +2,7 @@
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+export STACK_PR_CAPTURE_FORCE_REBUILD=1
 export STACK_PR_REPO="$ROOT"
 export CHROMIUM_PATH="${CHROMIUM_PATH:-/usr/bin/google-chrome}"
 export SKIP_PAMPHLET_COMMENTS=1
@@ -64,6 +65,9 @@ build_demo() {
   local cache_root="${STACK_PR_DEMO_CACHE:-/tmp/mf100-dist-cache}"
   local cached="$cache_root/$cache_key/dist-demo"
   echo "  build:demo for $label"
+  if [[ "${STACK_PR_CAPTURE_FORCE_REBUILD:-}" == "1" ]]; then
+    rm -rf "$cache_root/$cache_key"
+  fi
   if [[ -f "$cached/index.html" ]]; then
     rm -rf "$ROOT/apps/web/dist-demo"
     mkdir -p "$ROOT/apps/web/dist-demo"
