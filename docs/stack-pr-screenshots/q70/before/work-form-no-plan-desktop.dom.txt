@@ -1,4 +1,3 @@
-capturedAt=2026-11-01T02:04:22.010Z
-url=http://127.0.0.1:4321/works?new=true
-scene=33-work-form
-marker:制作物を登録=制作物を登録
+capturedAt=2026-11-01T07:11:39.904Z
+url=http://127.0.0.1:4579/admin
+scene=q70-work-form-no-plan

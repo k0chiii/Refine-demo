@@ -71,6 +71,10 @@ export type PlanInfoCheckItem = {
   message: string;
 };
 
+export function planInfoCheckFingerprint(field: PlanInfoField, registered: string): string {
+  return `plan-info|${field}|${registered.normalize("NFKC")}`;
+}
+
 /** 項目ごとのヒューリスティック照合（AI 前処理 / フォールバック。decision 70A） */
 export function checkRegisteredPlanInfoInText(
   text: string,

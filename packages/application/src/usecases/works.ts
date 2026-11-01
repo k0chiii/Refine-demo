@@ -22,6 +22,7 @@ import {
   type WorkImportInput,
   type WorkLifecycle,
   type WorkMetadataInput,
+  type RegisteredPlanInfo,
   WORK_IMPORT_MAX_ROWS,
   workMetadataKeys,
   type WorkPatch,
@@ -61,6 +62,7 @@ export interface CreateWorkInput extends WorkMetadataInput {
   addRegistrantAsManager?: boolean;
   /** 校正者の名簿。省略は空（校正者なし）。グループは画面で人に展開済み。 */
   reviewerIds?: string[];
+  registeredPlanInfo?: RegisteredPlanInfo | null;
 }
 
 /**
@@ -129,6 +131,8 @@ export async function createWork(
   if (input.finishAt !== undefined) data.finishAt = input.finishAt;
   if (input.notationCategories !== undefined)
     data.notationCategories = cleanCategories(input.notationCategories);
+  if (input.registeredPlanInfo !== undefined && input.registeredPlanInfo !== null)
+    data.registeredPlanInfo = input.registeredPlanInfo;
   assignWorkMetadata(data, meta);
   const work = await ctx.works.insert(data);
   await ctx.audit.record({
@@ -271,6 +275,7 @@ export async function updateWork(
   if (deadlineAt === null) delete next.deadlineAt;
   if (finishAt === null) delete next.finishAt;
   if (legacyId === null || (typeof legacyId === "string" && !legacyId.trim())) delete next.legacyId;
+  if (input.patch.registeredPlanInfo === null) delete next.registeredPlanInfo;
   if (socialProfileId === null) delete next.socialProfileId;
   else if (socialProfileId !== undefined) {
     if (!(await ctx.socialProfiles.findById(socialProfileId)))

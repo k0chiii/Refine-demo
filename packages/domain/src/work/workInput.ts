@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import { normalizeRegisteredPlanInfo } from "./planInfo.ts";
 import type { UserId } from "../shared/ids.ts";
 import {
   approvalSetupOf,
@@ -229,7 +230,10 @@ export type WorkPatch = {
       | "relatedTeamIds"
       | "notationCategories"
   ]?: Work[K] | undefined;
-} & WorkMetadataInput;
+} & WorkMetadataInput & {
+    /** 登録済み企画情報（null で消す。decisions 69–72） */
+    registeredPlanInfo?: import("./planInfo.ts").RegisteredPlanInfo | null;
+  };
 
 /**
  * Work に変更を当てた結果を返す（version を 1 進める）。生成時と同じ不変条件を検証する。
@@ -266,6 +270,14 @@ export function applyWorkPatch(
   if (!(mediaTypes as readonly string[]).includes(next.mediaType))
     throw invalid("mediaType", "unknown");
   assignWorkMetadata(next, normalizeWorkMetadata(meta));
+  if (patch.registeredPlanInfo !== undefined) {
+    if (patch.registeredPlanInfo === null) delete next.registeredPlanInfo;
+    else {
+      const norm = normalizeRegisteredPlanInfo(patch.registeredPlanInfo);
+      if (norm === null || norm === undefined) delete next.registeredPlanInfo;
+      else next.registeredPlanInfo = norm;
+    }
+  }
   return normalizeWorkEssentials(next, existingOverlap);
 }
 
