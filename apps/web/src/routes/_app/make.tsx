@@ -290,7 +290,7 @@ function Make() {
       <AppBarSlot slot="actions">
         <ViewSwitcher />
       </AppBarSlot>
-      <RoleHomeDashboard variant="approver" />
+      <RoleHomeDashboard variant="member" />
       <SnsHomeBand />
       {tabs}
       {tab === "active" ? activeBody() : tab === "draft" ? draftBody() : doneBody()}
