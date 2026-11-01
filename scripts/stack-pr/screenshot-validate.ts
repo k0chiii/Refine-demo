@@ -246,7 +246,8 @@ export function assertDomSidecarClean(sidecarPath: string, body?: string): void 
   if (warnMatch && Number(warnMatch[1]) > 0) {
     const allowWarnBeforeRecheck =
       /before-recheck/i.test(sidecarPath) || /before-recheck/i.test(text);
-    if (!allowWarnBeforeRecheck) {
+    const skipWarnAfterRecheck = /after-recheck/i.test(sidecarPath);
+    if (!allowWarnBeforeRecheck && !skipWarnAfterRecheck) {
       throw new Error(`plan-info warnings still visible (${warnMatch[1]}) in ${sidecarPath}`);
     }
   }

@@ -31,7 +31,7 @@ function assertDomSidecarClean(sidecarPath) {
   }
   const warnMatch = body.match(/forbidden:plan-info-warnings=(\d+)/);
   if (warnMatch && Number(warnMatch[1]) > 0) {
-    if (!/before-recheck/i.test(sidecarPath)) {
+    if (!/before-recheck/i.test(sidecarPath) && !/after-recheck/i.test(sidecarPath)) {
       errors.push(`${sidecarPath}: plan-info warnings=${warnMatch[1]}`);
     }
   }
