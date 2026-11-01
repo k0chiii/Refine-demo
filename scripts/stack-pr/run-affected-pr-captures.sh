@@ -67,6 +67,8 @@ build_demo() {
   echo "  build:demo for $label"
   if [[ "${STACK_PR_CAPTURE_FORCE_REBUILD:-}" == "1" ]]; then
     rm -rf "$cache_root/$cache_key"
+    rm -rf "$ROOT/apps/web/dist-demo" "$ROOT/apps/web/node_modules/.vite" 2>/dev/null || true
+    find "$ROOT/apps/web" -maxdepth 2 -name .turbo -type d -exec rm -rf {} + 2>/dev/null || true
   fi
   if [[ -f "$cached/index.html" ]]; then
     rm -rf "$ROOT/apps/web/dist-demo"
