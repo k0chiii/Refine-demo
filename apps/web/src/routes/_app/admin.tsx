@@ -179,7 +179,7 @@ function Admin() {
           ) : works.length === 0 ? (
             <div className="empty">制作物がありません</div>
           ) : (
-            <M3eActionList className="list" aria-label="制作物ごとの閲覧権限">
+            <M3eActionList className="list" aria-label="制作物ごとの権限">
               {[...works]
                 .sort((a, b) => a.title.localeCompare(b.title, "ja"))
                 .map((w) => (
