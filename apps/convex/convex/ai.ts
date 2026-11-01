@@ -38,7 +38,7 @@ export const status = query({
         workId,
         "work.view",
       );
-      const reason = aiBlockReason(config.policy, work);
+      const reason = aiBlockReason(config.policy);
       return {
         available: reason === null,
         reason,
@@ -66,7 +66,7 @@ export const prepare = internalQuery({
       const authz = { work, grants, principal };
       if (!isAllowed("revision.submit", authz) && !isAllowed("review.participate", authz))
         throw new DomainError("forbidden", { reason: "ai_not_allowed" });
-      const reason = aiBlockReason(aiConfig().policy, work);
+      const reason = aiBlockReason(aiConfig().policy);
       const set = await resolveRulesForWork(app, principal, workId);
       return {
         userId: principal.userId,
@@ -196,7 +196,7 @@ export async function reserveAi(
     workId,
     "review.participate",
   );
-  const blocked = aiBlockReason(aiConfig().policy, work);
+  const blocked = aiBlockReason(aiConfig().policy);
   if (blocked) return { ok: false, retryAfter: 0, blocked };
   if (!Number.isInteger(chars) || chars < 1 || chars > aiConfig().policy.maxChars)
     throw new DomainError("forbidden");
