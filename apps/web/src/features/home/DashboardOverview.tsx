@@ -1,5 +1,5 @@
 import type { api } from "@mf100/convex/api";
-import { workStages } from "@mf100/domain";
+import { workStages, backlogDelayClass, backlogDelayTone } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
@@ -211,22 +211,31 @@ function Backlog({ data }: { data: Data }) {
                 <span className="dash__count">{all.length}</span>
               </h4>
               <M3eActionList className="list" aria-label={title}>
-                {items.map((i) => (
-                  <M3eListAction
-                    key={`${i.workId}-${i.revisionId}`}
-                    className="list__item"
-                    onClick={() => {
-                      rememberWorkHint(i.workId, { title: i.workTitle });
-                      void navigate({ to: "/works/$workId", params: { workId: i.workId } });
-                    }}
-                  >
-                    <span className="list__headline">
-                      {i.workTitle}
-                      {i.revisionLabel ? <span className="muted">　{i.revisionLabel}</span> : null}
-                    </span>
-                    <span slot="supporting-text">{sub(i)}</span>
-                  </M3eListAction>
-                ))}
+                {items.map((i) => {
+                  const delayTone =
+                    k === "overdue" && i.deadlineAt
+                      ? backlogDelayTone(i.deadlineAt, data.overview.asOf)
+                      : "none";
+                  const delayClass = backlogDelayClass(delayTone);
+                  return (
+                    <M3eListAction
+                      key={`${i.workId}-${i.revisionId}`}
+                      className={`list__item ${delayClass}`.trim()}
+                      onClick={() => {
+                        rememberWorkHint(i.workId, { title: i.workTitle });
+                        void navigate({ to: "/works/$workId", params: { workId: i.workId } });
+                      }}
+                    >
+                      <span className="list__headline">
+                        {i.workTitle}
+                        {i.revisionLabel ? (
+                          <span className="muted">　{i.revisionLabel}</span>
+                        ) : null}
+                      </span>
+                      <span slot="supporting-text">{sub(i)}</span>
+                    </M3eListAction>
+                  );
+                })}
               </M3eActionList>
               {all.length > BACKLOG_ROWS ? (
                 <M3eButton variant="text" className="dash__more" onClick={() => toggle(k)}>
