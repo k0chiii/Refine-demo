@@ -196,7 +196,7 @@ for pr in "${PRS[@]}"; do
       ;;
     172)
       capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
-        dashboard-manager dashboard-manager 079 1 1 "" 1 'section[aria-labelledby="ov-stages"]' || st=$?
+        dashboard-manager dashboard-manager 079 1 1 "" 1 '.ov' || st=$?
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"
@@ -222,7 +222,7 @@ for pr in "${PRS[@]}"; do
     196)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/061"
       rm -f "$ROOT/docs/stack-pr-screenshots/061/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/061/after-desktop.png"
-      checkout_sources cursor/stack-q68-copy-next-revision-8b5a && build_demo q68b && \
+      checkout_sources cursor/stack-061-editor-shortcut-sheet-v2-8b5a && build_demo 061before 061-v2 && \
         run_one editor-shortcut-open "$ROOT/docs/stack-pr-screenshots/061/before" 1 "" 0 || st=$?
       checkout_sources cursor/stack-q62c-drop-shortcut-sheet-8b5a && build_demo q62 && \
         run_one editor-shortcut-closed "$ROOT/docs/stack-pr-screenshots/061/after" 1 "" 0 || st=$?
@@ -272,8 +272,8 @@ for pr in "${PRS[@]}"; do
     203)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q75/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q75/after"/*
-      checkout_sources cursor/stack-q75c-detail-no-activity-8b5a && build_demo q75 && \
-        run_one detail-preview-73 "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity" 1 || st=$?
+      checkout_sources cursor/stack-q75c-detail-no-activity-8b5a && build_demo q75 q75 && \
+        run_one dashboard-detail "$ROOT/docs/stack-pr-screenshots/q75/after/detail-no-activity" 1 || st=$?
       restore_sources
       ;;
     204)
