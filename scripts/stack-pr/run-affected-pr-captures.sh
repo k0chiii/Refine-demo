@@ -230,7 +230,7 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q68/before" "$ROOT/docs/stack-pr-screenshots/q68/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q68/before"/* "$ROOT/docs/stack-pr-screenshots/q68/after"/*
       checkout_sources develop && build_demo develop && \
-        run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
+        run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 0 "" 0 || st=$?
       checkout_sources cursor/stack-q68-copy-next-revision-8b5a && build_demo q68 && \
         run_one q68-works-after "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list-desktop.png" \
@@ -241,9 +241,9 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/061"
       rm -f "$ROOT/docs/stack-pr-screenshots/061/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/061/after-desktop.png"
       checkout_sources cursor/stack-061-editor-shortcut-sheet-v2-8b5a && build_demo 061before 061-v2 && \
-        run_one editor-shortcut-open "$ROOT/docs/stack-pr-screenshots/061/before" 1 "" 0 || st=$?
+        run_one editor-shortcut-open "$ROOT/docs/stack-pr-screenshots/061/before" 1 "" 0 0 "" 0 || st=$?
       checkout_sources cursor/stack-q62c-drop-shortcut-sheet-8b5a && build_demo q62 && \
-        run_one editor-shortcut-closed "$ROOT/docs/stack-pr-screenshots/061/after" 1 "" 0 || st=$?
+        run_one editor-shortcut-closed "$ROOT/docs/stack-pr-screenshots/061/after" 1 "" 0 0 "" 0 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/061/before-desktop.png" \
         "$ROOT/docs/stack-pr-screenshots/061/after-desktop.png" || st=$?
       restore_sources

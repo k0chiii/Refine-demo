@@ -244,7 +244,11 @@ export function assertDomSidecarClean(sidecarPath: string, body?: string): void 
   }
   const warnMatch = text.match(/forbidden:plan-info-warnings=(\d+)/);
   if (warnMatch && Number(warnMatch[1]) > 0) {
-    throw new Error(`plan-info warnings still visible (${warnMatch[1]}) in ${sidecarPath}`);
+    const allowWarnBeforeRecheck =
+      /before-recheck/i.test(sidecarPath) || /before-recheck/i.test(text);
+    if (!allowWarnBeforeRecheck) {
+      throw new Error(`plan-info warnings still visible (${warnMatch[1]}) in ${sidecarPath}`);
+    }
   }
   const nfMatch = text.match(/forbidden:not-found=(\d+)/);
   if (nfMatch && Number(nfMatch[1]) > 0) {

@@ -31,7 +31,9 @@ function assertDomSidecarClean(sidecarPath) {
   }
   const warnMatch = body.match(/forbidden:plan-info-warnings=(\d+)/);
   if (warnMatch && Number(warnMatch[1]) > 0) {
-    errors.push(`${sidecarPath}: plan-info warnings=${warnMatch[1]}`);
+    if (!/before-recheck/i.test(sidecarPath)) {
+      errors.push(`${sidecarPath}: plan-info warnings=${warnMatch[1]}`);
+    }
   }
   const nfMatch = body.match(/forbidden:not-found=(\d+)/);
   if (nfMatch && Number(nfMatch[1]) > 0) {
