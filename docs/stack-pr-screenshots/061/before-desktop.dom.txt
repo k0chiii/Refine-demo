@@ -1,3 +1,3 @@
-capturedAt=2026-11-01T07:13:35.928Z
-url=http://127.0.0.1:4605/works/000000000000000000000010016works/v/1
+capturedAt=2026-11-01T08:32:35.035Z
+url=http://127.0.0.1:4637/works/000000000000000000000010016works/v/1
 scene=editor-shortcut-open
