@@ -55,8 +55,6 @@ export interface WorkFormState {
   category: string;
   mediaType: string;
   legacyId: string;
-  confidentiality: string;
-  /** ◆校了目標日（deadlineAt） */
   deadlineAt: number | null;
   /** ■仕上がり日 */
   finishAt: number | null;
@@ -90,7 +88,6 @@ export function emptyWorkForm(): WorkFormState {
     category: "",
     mediaType: "pdf",
     legacyId: "",
-    confidentiality: "normal",
     deadlineAt: null,
     finishAt: null,
     approvalTargetManual: false,
@@ -124,7 +121,6 @@ export function workFormFromWork(work: Work): WorkFormState {
     category: work.category,
     mediaType: work.mediaType,
     legacyId: work.legacyId ?? "",
-    confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
     finishAt: work.finishAt ?? null,
     approvalTargetManual: false,
@@ -520,7 +516,7 @@ export function WorkFormFields({
 
       <M3eExpansionPanel className="expansion">
         <span slot="header">
-          詳細設定（区分・機密区分
+          詳細設定（制作物 ID・区分
           {form.mediaType === "sns" && mode === "edit" ? "・SNS アカウント" : ""}）
         </span>
         <div className="form">
@@ -531,12 +527,6 @@ export function WorkFormFields({
               value={form.category}
               onChange={set("category")}
             />
-          </Field>
-          <Field label="機密区分" hint="非公開・取扱注意は関係者だけが見られます">
-            <Select value={form.confidentiality} onChange={set("confidentiality")}>
-              <option value="normal">通常</option>
-              <option value="restricted">非公開・取扱注意</option>
-            </Select>
           </Field>
           {mode === "edit" && form.mediaType === "sns" ? (
             <Field label="SNS アカウント">

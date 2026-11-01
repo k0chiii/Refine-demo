@@ -348,7 +348,7 @@ export async function authorizeCommentFile(
       mimeType: file.thumbMime ?? "image/webp",
       fileName: file.fileName,
       size: file.thumbSize ?? null,
-      cacheable: work.confidentiality === "normal",
+      cacheable: true,
       attachment: false,
     };
   return {

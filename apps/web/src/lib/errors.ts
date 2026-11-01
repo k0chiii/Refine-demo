@@ -4,8 +4,8 @@ import { lifecycleLabel, resolutionLabel } from "./labels";
 /** ドメインのエラーコード → 利用者向けメッセージ（§13 可観測性: 利用者が操作失敗を判別できる）。 */
 const messages: Record<string, string> = {
   unauthenticated: "サインインしてください",
-  forbidden: "この操作をする権限がありません。対象が無いか、閲覧の権限がありません。",
-  acl_requires_system_admin: "閲覧権限を変更できるのはシステム管理者だけです",
+  forbidden: "権限がないか、対象が見つかりません",
+  acl_requires_system_admin: "権限を変更できるのはシステム管理者だけです",
   acl_invalid: "追加する人を確かめてください。空の選択や、いない人は追加できません。",
   work_not_editable: "校了・中止した制作物の校正者は変更できません。",
   acl_group_principal_not_enabled: "グループには権限を付けられません。個人を選んでください。",
@@ -228,7 +228,6 @@ function workInvalidMessage(details: unknown): string | null {
     approvalQuorum: "校了とみなす人数",
     managerIds: "主管・制作統括",
     mediaType: "媒体",
-    confidentiality: "機密区分",
     productionTeamIds: "制作担当",
   };
   const name = typeof d.field === "string" ? label[d.field] : undefined;

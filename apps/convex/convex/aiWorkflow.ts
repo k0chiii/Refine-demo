@@ -41,7 +41,7 @@ export const start = mutation({
       args.workId,
       "revision.submit",
     );
-    if (aiBlockReason(aiConfig().policy, work)) throw new Error("ai_unavailable");
+    if (aiBlockReason(aiConfig().policy)) throw new Error("ai_unavailable");
     const draft = await createReadContext(ctx.db).documents.findByWork(args.workId);
     if (!draft || draft.version !== args.draftVersion || !draft.text.trim())
       throw new Error("draft_changed");
@@ -87,7 +87,7 @@ export const prepare = internalQuery({
     );
     if (
       !isAllowed("revision.submit", { principal, work, grants }) ||
-      aiBlockReason(aiConfig().policy, work)
+      aiBlockReason(aiConfig().policy)
     )
       throw new Error("forbidden");
     const draft = await app.documents.findByWork(work.id);

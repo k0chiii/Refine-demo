@@ -46,7 +46,6 @@ export function EditWorkDialog({
         title: form.title,
         category: form.category,
         mediaType: form.mediaType as "pdf",
-        confidentiality: form.confidentiality as "normal",
         creatorIds: form.creatorIds,
         ...(canAssignApprovers ? approversFromForm(form) : {}),
         managerIds: form.managerIds,
