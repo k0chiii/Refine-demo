@@ -390,7 +390,9 @@ export const demo = internalMutation({
       await seedPlanInfoMismatchFixture(ctx, ids, now, day);
     }
     if (args.seedBacklogCapture || process.env.SEED_BACKLOG_CAPTURE === "1") {
-      await seedBacklogDelayScreenshotFixture(ctx, ids, now, day);
+      await seedBacklogDelayScreenshotFixture(ctx, ids, now, day, {
+        seedConfidentiality: args.seedConfidentiality === true,
+      });
     }
     return { users: ids, createdWorks: created };
   },
@@ -610,6 +612,7 @@ async function seedBacklogDelayScreenshotFixture(
   ids: Record<string, string>,
   now: number,
   day: number,
+  opts: { seedConfidentiality?: boolean } = {},
 ) {
   const specs = [
     { legacyId: "CAP-DLY-1D", title: "【撮影】締切超過 1 日", lateDays: 1.2 },
@@ -640,7 +643,7 @@ async function seedBacklogDelayScreenshotFixture(
         version: 1,
         ownerTeamId: undefined,
         productionTeamIds: [],
-        ...(args.seedConfidentiality ? { confidentiality: "normal" as const } : {}),
+        ...(opts.seedConfidentiality ? { confidentiality: "normal" as const } : {}),
       });
       work = (await ctx.db.get(workId))!;
       await ctx.db.insert("workRoles", {

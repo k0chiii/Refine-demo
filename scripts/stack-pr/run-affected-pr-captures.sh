@@ -144,11 +144,11 @@ for pr in "${PRS[@]}"; do
       ;;
     171)
       capture_pair 171 cursor/stack-077-ui-delay-color-tokens-8b5a cursor/stack-078-ui-kpi-row-mock-8b5a \
-        dashboard-manager dashboard-manager 078 1 1 "" 1 || st=$?
+        dashboard-manager dashboard-manager 078 1 1 ".kpis--mock-row, .kpis" 1 || st=$?
       ;;
     172)
       capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
-        dashboard-manager dashboard-manager 079 1 1 "" 1 || st=$?
+        dashboard-manager dashboard-manager 079 1 1 ".ov__block#ov-stages, .ov__block" 1 || st=$?
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"

@@ -167,14 +167,26 @@ async function demoGo(page: Page, routePath: string) {
   await page.waitForTimeout(800);
 }
 
+function demoSeedOptsFromEnv() {
+  return {
+    skipPamphletComments: process.env.SKIP_PAMPHLET_COMMENTS === "1",
+    skipPlanInfoWarnings: process.env.SKIP_PLAN_INFO_WARNINGS === "1",
+    seedBacklogCapture:
+      process.env.SEED_BACKLOG_CAPTURE === "1" ||
+      process.env.CAPTURE_SCENE === "dashboard-backlog-delay",
+    seedConfidentiality: process.env.SEED_CONFIDENTIALITY === "1",
+  };
+}
+
 async function signInAs(page: Page, sub: DemoUser) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate(async (s: DemoUser) => {
+  const seedOpts = demoSeedOptsFromEnv();
+  await page.evaluate(async ({ s, o }) => {
     await globalThis.__mf100demo!.signOut();
-    await globalThis.__mf100demo!.ensureSeeded();
+    await globalThis.__mf100demo!.ensureSeeded(o);
     await globalThis.__mf100demo!.signIn(s);
-  }, sub);
+  }, { s: sub, o: seedOpts });
   await page.waitForURL(
     (u: URL) =>
       !u.pathname.includes("/signin") &&
@@ -769,16 +781,11 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
     await openDashboardOverview(page);
-    await page.locator("#ov-backlog").waitFor({ state: "attached", timeout: 90_000 });
-    await page.locator("#ov-backlog").scrollIntoViewIfNeeded();
-    await page
-      .locator("#ov-backlog .list__headline", { hasText: "【撮影】締切超過 1 日" })
-      .first()
-      .waitFor({ state: "visible", timeout: 60_000 });
-    await page
-      .locator("#ov-backlog .list__headline", { hasText: "【撮影】締切超過 3 日" })
-      .first()
-      .waitFor({ state: "visible", timeout: 60_000 });
+    const backlog = page.locator("#ov-backlog");
+    await backlog.waitFor({ state: "visible", timeout: 90_000 });
+    await backlog.scrollIntoViewIfNeeded();
+    await backlog.getByText("【撮影】締切超過 1 日").first().waitFor({ state: "visible", timeout: 90_000 });
+    await backlog.getByText("【撮影】締切超過 3 日").first().waitFor({ state: "visible", timeout: 90_000 });
   },
   "detail-preview-73": async (page) => {
     const app = new App(page);

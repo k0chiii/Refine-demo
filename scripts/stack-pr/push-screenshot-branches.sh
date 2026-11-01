@@ -37,6 +37,7 @@ push_dir cursor/stack-077-ui-delay-color-tokens-8b5a 077 "docs: refresh stack-pr
 push_dir cursor/stack-078-ui-kpi-row-mock-8b5a 078 "docs: stack-pr 078 dashboard screenshots"
 push_dir cursor/stack-079-ui-graphs-stage-bureau-8b5a 079 "docs: stack-pr 079 dashboard screenshots"
 push_dir cursor/stack-080-ui-sns-band-visibility-8b5a 080 "docs: stack-pr 080 dashboard screenshots"
+push_dir cursor/stack-q70-plan-info-ui-8b5a q70 "docs: refresh q70 plan-info UI screenshots"
 push_dir cursor/stack-q71-plan-info-warn-8b5a q71 "docs: refresh q71 plan-info warn screenshots"
 push_dir cursor/stack-q72-plan-info-recheck-8b5a q72 "docs: refresh q72 plan-info recheck screenshots"
 push_dir cursor/stack-q73a-detail-preview-8b5a q73 "docs: refresh q73 detail preview screenshots"
