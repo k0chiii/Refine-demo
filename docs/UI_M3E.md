@@ -2871,3 +2871,10 @@ Slack の DM が届かず、経路が使えるかを本物の通知が来るま�
 ### ドキュメント
 
 - 本節と §97・§53 の表、利用者向けヘルプ（`.claude/skills/verify-mf100-web/features/comments.md`）を 90B に合わせて更新。armed の記述は削除または「廃止」と明記。
+
+### 63B — テーマ seed と variant（2026-11-01）
+
+- **M3E**: `<m3e-theme>` の `color` を **`#3F51B5`**（Indigo 500）、`variant` を **`tonal-spot`** に変更（[M3E theme](https://matraic.github.io/m3e/components/theme.html) の Dynamic scheme。G-01 見送りを 63B で反転）。
+- **設定の正本**: `apps/web/index.html`（初期属性）と `apps/web/src/theme.ts`（実行時の `setAttribute`）。`scheme="light"`・`motion="expressive"`・`strong-focus` は従来どおり。
+- **styles.css**: `--mf-*` のフォールバックコメントを seed #3F51B5・tonal-spot に更新（m3e-theme 無し時のみ）。意味色（成功・注意）と M3E 選択色の secondary 寄せ（`--m3e-option-selected-*`）は維持。
+- **スクリーンショット**: `docs/stack-pr-screenshots/q63b/before|after/`（制作物一覧・make/check・コメント・ダッシュボード・登録ダイアログ。demo + reducedMotion 相当の静止キャプチャ）。
