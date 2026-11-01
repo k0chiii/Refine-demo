@@ -1,0 +1,3 @@
+capturedAt=2026-10-31T07:27:55.324Z
+url=http://127.0.0.1:4277/make
+scene=dashboard-member-tablet
