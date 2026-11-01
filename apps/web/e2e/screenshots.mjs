@@ -176,14 +176,8 @@ const ready = () =>
 const go = async (path) => {
   const nav = page.evaluate(
     (p) => {
+      // デモの ID は末尾に表名が付く（…10016works）。これは壊れた URL ではないので削らない
       const pathOnly = p.replace(/^https?:\/\/[^/]+/, "");
-      const brokenRev = pathOnly.match(/^\/works\/(.+)works\/v\/(\d+)$/);
-      if (brokenRev) {
-        return globalThis.__mf100router.navigate({
-          to: "/works/$workId/v/$n",
-          params: { workId: brokenRev[1], n: brokenRev[2] },
-        });
-      }
       const rev = pathOnly.match(/^\/works\/([^/]+)\/v\/(\d+)$/);
       if (rev) {
         return globalThis.__mf100router.navigate({
@@ -251,6 +245,8 @@ const users = async () => page.evaluate(() => globalThis.__mf100demo.users());
 const btn = (text) => page.locator("m3e-button", { hasText: text }).first();
 /** 制作物一覧の行（「局 › 担当」の入れ子のリストの項目） */
 const WORKS_ENTRY = ".works .works-table tbody tr";
+/** 見本サイト（public/demo-site）を https で出すための架空オリジン（webFigmaScenes で preview へ中継する） */
+const DEMO_SITE_ORIGIN = "https://demo-site.mf100.invalid";
 /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人選ぶ。scope は picker を含む要素の locator。 */
 const pickUser = async (scope, name) => {
   const input = scope.locator(".picker__input").first();
@@ -477,7 +473,8 @@ async function main() {
   await settle();
   await page.locator(".works__sort").click();
   await settle();
-  await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: "担当順" }).click();
+  // 「制作担当順」にも部分一致するので完全一致で選ぶ
+  await page.locator("#works-sort-menu m3e-menu-item-radio", { hasText: /^担当順$/ }).click();
   await page.waitForURL(/sort=owner/);
   await settle();
   await shot("02b-works-filtered");
@@ -2930,7 +2927,14 @@ async function webFigmaScenes() {
     "Web の提出画面にファイル欄がある",
   );
   await page.fill("m3e-dialog[open] textarea >> nth=0", "公式サイトの初稿（ライブ表示で確認）");
-  await page.fill('m3e-dialog[open] input[type="url"]', `${BASE}/demo-site/index.html`);
+  // Web の URL は https のみ（利用者決定 95A）。preview は http なので、見本サイトを https の架空オリジンで
+  // 受けて preview から返す（ブリッジは postMessage なので別オリジンでも動く）
+  await page.route(`${DEMO_SITE_ORIGIN}/**`, async (route) => {
+    const u = new URL(route.request().url());
+    const res = await page.request.fetch(`${BASE}${u.pathname}${u.search}`);
+    await route.fulfill({ response: res });
+  });
+  await page.fill('m3e-dialog[open] input[type="url"]', `${DEMO_SITE_ORIGIN}/demo-site/index.html`);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/\d+$/, { timeout: 15_000 });
   await signInAs("mock-nogiku-reviewer");
