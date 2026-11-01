@@ -20,7 +20,8 @@ const { reviewer, creator, manager, approver, stranger } = principals;
 
 async function setup(confidentiality: "normal" | "restricted" = "normal") {
   const ctx = createInMemoryContext();
-  const work = await seedWork(ctx, { confidentiality });
+  void confidentiality;
+  const work = await seedWork(ctx);
   const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: work.id,
@@ -202,12 +203,10 @@ describe("コメントのスレッド: 返信の件数・参加者・未読", ()
     expect((await ctx.threads.findById(legacy.id))?.replyCount).toBe(2);
   });
 
-  it("読んだ印は見られる人だけが付けられ、削除済みのスレッドには付けられない", async () => {
-    const { ctx, post } = await setup("restricted");
+  it("読んだ印は委員なら付けられる。削除済みのスレッドには付けられない（105A）", async () => {
+    const { ctx, post } = await setup();
     const t = await post();
-    await expect(markCommentRead(ctx, stranger, { threadId: t.id })).rejects.toThrow(
-      code("forbidden"),
-    );
+    await expect(markCommentRead(ctx, stranger, { threadId: t.id })).resolves.toBeUndefined();
     await deleteThread(ctx, reviewer, { threadId: t.id });
     await expect(markCommentRead(ctx, creator, { threadId: t.id })).rejects.toThrow(
       code("comment_thread_deleted"),
@@ -264,15 +263,15 @@ describe("返信の通知: スレッドの参加者へ", () => {
     expect(replyNotes(t.id).some((n) => n.startsWith(creator.userId))).toBe(false);
   });
 
-  it("非公開の制作物で、今は見られなくなった参加者には送らない（伏せた通知も作らない）", async () => {
-    const { ctx, work, post, reply, replyNotes } = await setup("restricted");
+  it("ACL を取り消しても参加者には返信通知を送る（105A）", async () => {
+    const { ctx, work, post, reply, replyNotes } = await setup();
     const t = await post();
     await revokeWorkPermission(ctx, principals.sysadmin, {
       workId: work.id,
       userId: reviewer.userId,
     });
     await reply(t.id, creator);
-    expect(replyNotes(t.id)).toEqual([]);
+    expect(replyNotes(t.id)).toEqual([`${reviewer.userId}:comment_posted`]);
   });
 
   it("通知は端末の通知の「返信・コメント」の分類（設定で止められる）で、スレッドごとにまとまる", async () => {
@@ -319,14 +318,9 @@ describe("スレッドの購読: 参加していなくても返信の通知を�
     expect(replyNotes(t.id).some((n) => n.startsWith(approver.userId))).toBe(false);
   });
 
-  it("非公開の制作物で、購読した後に見られなくなった人には送らない（伏せた通知も作らない）", async () => {
-    const { ctx, work, post, reply } = await setup("restricted");
+  it("ACL を取り消しても購読者には返信通知を送る（105A）", async () => {
+    const { ctx, work, post, reply } = await setup();
     const t = await post();
-    await grantWorkPermission(ctx, principals.sysadmin, {
-      workId: work.id,
-      userIds: [stranger.userId],
-      permission: "review",
-    });
     await setThreadSubscription(ctx, stranger, { threadId: t.id, on: true });
     await reply(t.id, creator);
     const toStranger = () =>
@@ -337,15 +331,15 @@ describe("スレッドの購読: 参加していなくても返信の通知を�
       userId: stranger.userId,
     });
     await reply(t.id, creator);
-    expect(toStranger()).toHaveLength(1);
+    expect(toStranger()).toHaveLength(2);
   });
 
-  it("見られない人は購読できず、削除されたスレッドは購読できない", async () => {
-    const { ctx, post } = await setup("restricted");
+  it("委員なら購読できる。削除されたスレッドは購読できない（105A）", async () => {
+    const { ctx, post } = await setup();
     const t = await post();
     await expect(
       setThreadSubscription(ctx, stranger, { threadId: t.id, on: true }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toBeUndefined();
     await deleteThread(ctx, reviewer, { threadId: t.id });
     await expect(setThreadSubscription(ctx, creator, { threadId: t.id, on: true })).rejects.toThrow(
       code("comment_thread_deleted"),

@@ -67,7 +67,7 @@ describe("Web Push の内容", () => {
     createdAt: 1_700_000_000_000,
     preview: "相談です",
   };
-  const open = { title: "夏のポスター", restricted: false };
+  const open = { title: "夏のポスター" };
 
   it("題名は制作物名、本文は送り主と抜粋。押すと同じ画面を開く", () => {
     const p = pushOf({
@@ -126,7 +126,7 @@ describe("Web Push の内容", () => {
   it("長い題名・本文は切る", () => {
     const p = pushOf({
       notification: { ...n, preview: "あ".repeat(500) },
-      work: { title: "題".repeat(300), restricted: false },
+      work: { title: "題".repeat(300) },
       hidden: false,
       actorName: "本郷",
       unread: 0,
@@ -152,25 +152,7 @@ describe("Web Push の内容", () => {
     }
   });
 
-  it("非公開の制作物の名前・送り主・抜粋と、見られない通知の内容は載せない", () => {
-    const restricted = pushOf({
-      notification: n,
-      work: { title: "極秘", restricted: true },
-      hidden: false,
-      actorName: "本郷 校正",
-      unread: 1,
-    });
-    expect(restricted.body).toBe("非公開の制作物");
-    expect(JSON.stringify(restricted)).not.toMatch(/極秘|本郷|相談です/);
-    // 内容の表示を止めていても、非公開の制作物名は出ない
-    const restrictedOff = pushOf({
-      notification: n,
-      work: { title: "極秘", restricted: true },
-      hidden: false,
-      showPreview: false,
-      unread: 1,
-    });
-    expect(JSON.stringify(restrictedOff)).not.toContain("極秘");
+  it("見られない通知の内容は載せない", () => {
     const hidden = pushOf({
       notification: {
         id: "n1",

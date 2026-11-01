@@ -228,32 +228,18 @@ describe("外への通知の計画", () => {
     expect(saves).toEqual(["linked", "cannot_dm", "linked"]);
   });
 
-  it("非公開になった・閲覧権限が外れた制作物の通知は、どの経路にも制作物名・送り主・抜粋を出さない", async () => {
+  it("ACL を取り消しても外への通知に制作物名・送り主・抜粋を載せる（105A）", async () => {
     const { ctx, work, post } = await setup();
     const n = await post();
     await recordSlackLookup(ctx, member, { kind: "found", memberId: "U1" });
-    await ctx.works.update({
-      ...(await ctx.works.findById(work.id))!,
-      confidentiality: "restricted",
-    });
-    const restricted = await planDelivery(ctx, n.id, ALL);
-    expect(restricted?.targets).toHaveLength(3);
-    for (const t of restricted!.targets)
-      expect(renderedOf(t)).not.toMatch(/夏のポスター|本郷|相談です/);
+    const open = await planDelivery(ctx, n.id, ALL);
+    expect(open?.targets).toHaveLength(3);
+    for (const t of open!.targets) expect(renderedOf(t)).toMatch(/夏のポスター|本郷|相談です/);
 
     await revokeWorkPermission(ctx, principals.sysadmin, { workId: work.id, userId: me.userId });
-    const hidden = await planDelivery(ctx, n.id, ALL);
-    expect(hidden?.targets.map((t) => t.channel)).toEqual(["push", "email", "slack"]);
-    for (const t of hidden!.targets)
-      expect(renderedOf(t)).not.toMatch(new RegExp(`夏のポスター|本郷|相談です|thr-1|${work.id}`));
-    // 伏せた通知の決まった内容（非公開の制作物があることも出さない。行き先はトップ）
-    const fixed = composeNotificationMessage({ notification: n, work: null, hidden: true });
-    const [push, email, slack] = hidden!.targets;
-    if (push?.channel !== "push" || email?.channel !== "email" || slack?.channel !== "slack")
-      throw new Error("push, email and slack targets expected");
-    expect(push.payload).toEqual(toPushPayload(fixed, 1));
-    expect(email.content).toEqual(toEmail(fixed, ORIGIN));
-    expect(slack.text).toBe(toSlackText(fixed, ORIGIN));
+    const after = await planDelivery(ctx, n.id, ALL);
+    expect(after?.targets.map((t) => t.channel)).toEqual(["push", "email", "slack"]);
+    for (const t of after!.targets) expect(renderedOf(t)).toMatch(/夏のポスター|本郷|相談です/);
   });
 
   it("既読になった・止めた分類の通知は計画しない（アプリ内の通知は残る）", async () => {
