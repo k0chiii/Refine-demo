@@ -191,11 +191,11 @@ for pr in "${PRS[@]}"; do
       ;;
     171)
       capture_pair 171 cursor/stack-077-ui-delay-color-tokens-8b5a cursor/stack-078-ui-kpi-row-mock-8b5a \
-        dashboard-manager dashboard-manager 078 1 1 ".kpis" 1 || st=$?
+        dashboard-manager dashboard-manager 078 1 1 "" 1 || st=$?
       ;;
     172)
       capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
-        dashboard-manager dashboard-manager 079 1 1 "#ov-stages" 1 || st=$?
+        dashboard-manager dashboard-manager 079 1 1 "" 1 || st=$?
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"
@@ -263,9 +263,9 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q72/before" "$ROOT/docs/stack-pr-screenshots/q72/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q72/before"/* "$ROOT/docs/stack-pr-screenshots/q72/after"/*
       checkout_sources cursor/stack-q71-plan-info-warn-8b5a && build_demo q71 && \
-        run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 '.info-tab__section[aria-label="企画情報"]' || st=$?
+        run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 || st=$?
       checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && build_demo q72 && \
-        run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 '.info-tab__section[aria-label="企画情報"]' || st=$?
+        run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 || st=$?
       restore_sources
       ;;
     203)
