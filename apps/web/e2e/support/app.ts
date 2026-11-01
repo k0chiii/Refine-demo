@@ -32,7 +32,10 @@ export const SLIDE_DECK = "企画説明会スライド";
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
 type Demo = {
-  ensureSeeded(): Promise<void>;
+  ensureSeeded(opts?: {
+    skipPamphletComments?: boolean;
+    skipPlanInfoWarnings?: boolean;
+  }): Promise<void>;
   signIn(sub: string): Promise<void>;
   signOut(): Promise<void>;
   users(): Promise<{ id: string; sub: string; name: string }[]>;
