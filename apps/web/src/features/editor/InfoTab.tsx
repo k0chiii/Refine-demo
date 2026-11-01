@@ -43,7 +43,7 @@ type RevisionData = FunctionReturnType<typeof api.revisions.get>;
 
 /**
  * エディタの引き出し「情報」: 基本情報、専門確認、独立確認、校了履歴と、制作物に対する操作
- * （校了を宣言、理由付きで再開、校正者の割り当て、編集、閲覧権限、保留／中止）。
+ * （校了を宣言、理由付きで再開、校正者の割り当て、編集、権限、保留／中止）。
  */
 export function InfoTab({
   work,

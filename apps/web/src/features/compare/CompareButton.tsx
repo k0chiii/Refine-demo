@@ -38,7 +38,7 @@ function afterHidden(el: HTMLElement | null, run: () => void): void {
  * そこから何と比べるのかを選びたい。今の制作物の昔の版と、任意の制作物（検索）みたいな感じです」）。比べる入口はここ 1 つ。
  * - 押すと「何と比べるか」を選ぶ。広い画面は M3 の Menu、compact は Bottom sheet（M3 Breakpoints: 補助的な選択）
  *   - 「この制作物の版」: 表示中の版以外の、無効でない版（新しい順）。選ぶと同じ制作物の版と比べる
- *   - 「ほかの制作物」: 制作物を検索して選び、その版を選ぶ（CrossWorkPicker。閲覧権限のある制作物だけ）
+ *   - 「ほかの制作物」: 制作物を検索して選び、その版を選ぶ（CrossWorkPicker。アクセスできる制作物だけ）
  * - 比べている間はボタンが toggle の選択状態で、メニューの先頭に「比べるのをやめる」を出す
  */
 export function CompareButton({

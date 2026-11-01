@@ -595,7 +595,7 @@ export function Editor({
   const switchable = (data?.artifacts ?? []).filter(
     (a) => isReviewableArtifact(a) || a.role === "external",
   );
-  // 版比較: 同じ制作物の他の版、または別の制作物の版（利用者指示 2026-10-17）。閲覧権限は revisions.get が確かめる
+  // 版比較: 同じ制作物の他の版、または別の制作物の版（利用者指示 2026-10-17）。アクセス可否は revisions.get が確かめる
   const otherRaw = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
   // 相手を替えた直後に前の相手の結果が残ることがあるので、いま比べている版のものだけを使う
   const other =

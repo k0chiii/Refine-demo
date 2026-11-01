@@ -83,7 +83,7 @@ try {
     ".ai を触っている",
   );
 
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出を確定する" }).click();
+  await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/\d+$/, { timeout: 15_000 });
   // 右の引き出しが開いているあいだは縦のツールバーが隠れるので、開いていれば引き出しのタブで、畳んでいれば縦のツールバーで開く
   const bar = page.locator(".ws__side-toolbar");
