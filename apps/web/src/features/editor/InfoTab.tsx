@@ -107,7 +107,14 @@ export function InfoTab({
   useEffect(() => {
     setPurposeDraft(w.purpose ?? "");
     setPlanDraft(planFromWork());
-  }, [w.purpose, w.version, w.registeredPlanInfo?.name, w.registeredPlanInfo?.number, w.registeredPlanInfo?.venue, w.registeredPlanInfo?.schedule]);
+  }, [
+    w.purpose,
+    w.version,
+    w.registeredPlanInfo?.name,
+    w.registeredPlanInfo?.number,
+    w.registeredPlanInfo?.venue,
+    w.registeredPlanInfo?.schedule,
+  ]);
   const me = approval.approvers.find((a) => a.isMe) ?? null;
   const multiApprovers = approval.approvers.length > 1;
   // この宣言で「校了とみなす人数」に届くか（届かなければ宣言の記録だけで、校了にはまだ進まない）
@@ -338,9 +345,7 @@ export function InfoTab({
               <div className="row">
                 <M3eButton
                   variant="tonal"
-                  disabled={
-                    JSON.stringify(planDraft) === JSON.stringify(planFromWork())
-                  }
+                  disabled={JSON.stringify(planDraft) === JSON.stringify(planFromWork())}
                   onClick={() =>
                     void updateWork({
                       workId: w.id as Id<"works">,

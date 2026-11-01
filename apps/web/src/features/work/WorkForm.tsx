@@ -27,7 +27,6 @@ import {
   Field,
   Select,
   Switch,
-  TextArea,
   TextInput,
   useFieldId,
   useFieldLabelId,
@@ -196,10 +195,9 @@ export function workFormToFields(form: WorkFormState) {
 }
 
 /** 企画情報（decisions 69–72）。空なら null で消す */
-export function registeredPlanInfoFromForm(form: Pick<
-  WorkFormState,
-  "planName" | "planNumber" | "planVenue" | "planSchedule"
->) {
+export function registeredPlanInfoFromForm(
+  form: Pick<WorkFormState, "planName" | "planNumber" | "planVenue" | "planSchedule">,
+) {
   const name = form.planName.trim();
   const number = form.planNumber.trim();
   const venue = form.planVenue.trim();

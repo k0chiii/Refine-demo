@@ -1,5 +1,4 @@
 import { endOfJstDay } from "@mf100/domain";
-import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { SAMPLE_RULE_DRAFTS } from "./lib/notationSamples.ts";
@@ -48,7 +47,10 @@ export const MOCK_USERS = [
 ] as const;
 
 export const demo = internalMutation({
-  args: { skipPamphletComments: v.optional(v.boolean()) },
+  args: {
+    skipPamphletComments: v.optional(v.boolean()),
+    skipPlanInfoWarnings: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
       throw new Error("seed:demo is only available when NOGIKU_MOCK_ENABLED=true");
@@ -381,6 +383,9 @@ export const demo = internalMutation({
     if (!args.skipPamphletComments) {
       await seedPamphletCommentFixture(ctx, ids, now, day);
     }
+    if (!args.skipPlanInfoWarnings) {
+      await seedPlanInfoMismatchFixture(ctx, ids, now, day);
+    }
     return { users: ids, createdWorks: created };
   },
 });
@@ -446,6 +451,134 @@ async function seedPamphletCommentFixture(
     createdAt: now + 1,
   });
   await ctx.db.patch(revisionId, { threadCount: 2, unresolvedCount: 1 });
+}
+
+/** 71B/72 デモ: 企画情報と本文の不一致 → warn-only bot スレッド（WEB-003） */
+async function seedPlanInfoMismatchFixture(
+  ctx: MutationCtx,
+  ids: Record<string, string>,
+  now: number,
+  day: number,
+) {
+  const work = await ctx.db
+    .query("works")
+    .withIndex("by_year", (q) => q.eq("year", 100))
+    .filter((q) => q.eq(q.field("legacyId"), "WEB-003"))
+    .unique();
+  if (!work) return;
+  await ctx.db.patch(work._id, {
+    registeredPlanInfo: {
+      name: "五月祭メインステージ",
+      number: "M-101",
+      venue: "正門前ステージ",
+      schedule: "5/24(土) 10:00–17:00",
+    },
+  });
+  const draft = await ctx.db
+    .query("documentDrafts")
+    .withIndex("by_work", (q) => q.eq("workId", work._id))
+    .unique();
+  const body =
+    "来場者向けの総合案内です。アクセスと注意事項のみ記載（企画名・番号は本文に含めないデモ）。";
+  if (draft)
+    await ctx.db.patch(draft._id, {
+      text: body,
+      content: body,
+      version: draft.version + 1,
+      updatedAt: now,
+    });
+  else
+    await ctx.db.insert("documentDrafts", {
+      workId: work._id,
+      text: body,
+      content: body,
+      title: work.title,
+      version: 1,
+      updatedAt: now,
+      updatedBy: ids["mock-nogiku-creator"]!,
+    });
+
+  let revision = await ctx.db
+    .query("revisions")
+    .withIndex("by_work", (q) => q.eq("workId", work._id))
+    .filter((q) => q.eq(q.field("reviewState"), "open"))
+    .first();
+  if (!revision) {
+    const revisionId = await ctx.db.insert("revisions", {
+      workId: work._id,
+      kind: "standard",
+      sequence: 1,
+      reviewType: "general",
+      submittedBy: ids["mock-nogiku-creator"]!,
+      submittedAt: now,
+      deadlineAt: endOfJstDay(now + 14 * day),
+      reviewState: "open",
+      changeSummary: "Web 原稿",
+      focusNotes: "",
+      threadCount: 0,
+      unresolvedCount: 0,
+      openBotCount: 0,
+    });
+    revision = (await ctx.db.get(revisionId))!;
+  }
+  const revisionId = revision._id;
+  const existing = await ctx.db
+    .query("commentThreads")
+    .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+    .filter((q) => q.eq(q.field("authorId"), "bot:plan-info"))
+    .take(1);
+  if (existing.length > 0) return;
+
+  const warnings = [
+    {
+      body: "企画名「五月祭メインステージ」が本文に見つかりません",
+      field: "name",
+      registered: "五月祭メインステージ",
+    },
+    { body: "企画番号「M-101」が本文に見つかりません", field: "number", registered: "M-101" },
+    {
+      body: "開催場所「正門前ステージ」が本文に見つかりません",
+      field: "venue",
+      registered: "正門前ステージ",
+    },
+    {
+      body: "開催日時「5/24(土) 10:00–17:00」が本文に見つかりません",
+      field: "schedule",
+      registered: "5/24(土) 10:00–17:00",
+    },
+  ];
+  let botCount = 0;
+  for (const w of warnings) {
+    const fingerprint = `plan-info|${w.field}|${w.registered.normalize("NFKC")}`;
+    await ctx.db.insert("commentThreads", {
+      revisionId,
+      authorId: "bot:plan-info",
+      body: w.body,
+      kind: "correction",
+      severity: "minor",
+      resolution: "open",
+      createdAt: now + botCount,
+      origin: {
+        kind: "bot",
+        detector: "ai",
+        ruleId: "plan-info",
+        ruleRevision: 0,
+        runId: "plan-info",
+        fingerprint,
+        confidence: "medium",
+        needsReview: true,
+        original: w.registered,
+        suggestion: "",
+        textSource: "document",
+      },
+    });
+    botCount++;
+  }
+  await ctx.db.patch(revisionId, {
+    threadCount: (revision.threadCount ?? 0) + botCount,
+    unresolvedCount: (revision.unresolvedCount ?? 0) + botCount,
+    openBotCount: botCount,
+  });
 }
 
 /** サンプルのアカウントのアイコン（アプリのアイコン 192px の PNG） */
