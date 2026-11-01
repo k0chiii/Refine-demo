@@ -4,9 +4,12 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "../../apps/web/e2e/support/app.ts";
-import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
+import type { DemoUser } from "../../apps/web/e2e/support/app.ts";
+import { App, PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
+import { submitFirstRevision } from "../../apps/web/e2e/support/scenarios.ts";
 import {
   assertSceneMarkers,
+  assertAuthenticatedCapture,
   validateScreenshotFile,
   validateDomSidecar,
   writeSceneDomSidecar,
@@ -14,6 +17,24 @@ import {
 } from "./screenshot-validate.ts";
 
 export { SIGNIN_SCREEN_MD5 };
+
+/** tsx keepNames が demo bundle 内の __name 参照を壊すため、ページ実行前に定義する */
+const CAPTURE_INIT_SCRIPT_SOURCE =
+  "globalThis.__name = function (f) { return f; }; void 0;";
+
+async function ensureDemoSeeded(
+  page: Page,
+  opts: {
+    skipPamphletComments: boolean;
+    skipPlanInfoWarnings: boolean;
+    seedBacklogCapture?: boolean;
+    seedConfidentiality?: boolean;
+  },
+) {
+  await page.evaluate(async (o) => {
+    await globalThis.__mf100demo!.ensureSeeded(o);
+  }, opts);
+}
 
 const repoRoot =
   process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -70,12 +91,6 @@ function ensureDemo() {
   throw new Error("demo preview failed to start");
 }
 
-type DemoUser =
-  | "mock-nogiku-creator"
-  | "mock-nogiku-reviewer"
-  | "mock-nogiku-manager"
-  | "mock-nogiku-approver";
-
 async function ready(page: Page) {
   await page.waitForFunction(
     () => Boolean(globalThis.__mf100demo && globalThis.__mf100router),
@@ -83,6 +98,48 @@ async function ready(page: Page) {
     {
       timeout: 30_000,
     },
+  );
+}
+
+/** stack-pr 63B: before/after を同じビルドで撮るとき、実行時にテーマだけ切り替える */
+async function applyCaptureTheme(page: Page) {
+  const mode = process.env.CAPTURE_THEME;
+  if (mode !== "before" && mode !== "after") return;
+  const spec =
+    mode === "before"
+      ? { color: "#1b5fb4", variant: "vibrant" }
+      : { color: "#3F51B5", variant: "tonal-spot" };
+  await page.evaluate((s) => {
+    const t = document.querySelector("m3e-theme");
+    if (!t) return;
+    t.setAttribute("color", s.color);
+    t.setAttribute("variant", s.variant);
+  }, spec);
+  await page.waitForTimeout(400);
+}
+
+async function assertCaptureThemePrimary(page: Page) {
+  const mode = process.env.CAPTURE_THEME;
+  if (mode !== "before" && mode !== "after") return;
+  await page.evaluate(
+    (expected) => {
+      const t = document.querySelector("m3e-theme");
+      if (!t) throw new Error("CAPTURE_THEME: missing m3e-theme");
+      const color = t.getAttribute("color")?.toLowerCase();
+      const variant = t.getAttribute("variant");
+      if (color !== expected.color || variant !== expected.variant) {
+        throw new Error(
+          `CAPTURE_THEME ${expected.mode}: expected ${expected.color}/${expected.variant}, got ${color}/${variant}`,
+        );
+      }
+      const primary = getComputedStyle(document.documentElement)
+        .getPropertyValue("--md-sys-color-primary")
+        .trim();
+      if (!primary) throw new Error("CAPTURE_THEME: --md-sys-color-primary empty");
+    },
+    mode === "before"
+      ? { mode, color: "#1b5fb4", variant: "vibrant" }
+      : { mode, color: "#3f51b5", variant: "tonal-spot" },
   );
 }
 
@@ -103,6 +160,13 @@ async function demoGo(page: Page, routePath: string) {
         params: { workId: work[1]! },
       });
     }
+    const detail = path.match(/^\/works\/([^/]+)\/detail$/);
+    if (detail) {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/detail",
+        params: { workId: detail[1]! },
+      });
+    }
     const [to, q] = path.split("?");
     const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
     return globalThis.__mf100router!.navigate(search ? { to: to!, search } : { to: to! });
@@ -110,32 +174,38 @@ async function demoGo(page: Page, routePath: string) {
   await page.waitForTimeout(800);
 }
 
+function demoSeedOptsFromEnv() {
+  return {
+    skipPamphletComments: process.env.SKIP_PAMPHLET_COMMENTS === "1",
+    skipPlanInfoWarnings: process.env.SKIP_PLAN_INFO_WARNINGS === "1",
+    seedBacklogCapture:
+      process.env.SEED_BACKLOG_CAPTURE === "1" ||
+      process.env.CAPTURE_SCENE === "dashboard-backlog-delay",
+    seedConfidentiality: process.env.SEED_CONFIDENTIALITY !== "0",
+    seedRevisionPlanned: process.env.SEED_REVISION_PLANNED === "1",
+  };
+}
+
 async function signInAs(page: Page, sub: DemoUser) {
+  const effective = (process.env.CAPTURE_SIGNIN_SUB as DemoUser | undefined) ?? sub;
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate(() => globalThis.__mf100demo!.signOut());
-  await page.waitForTimeout(300);
-  try {
-    await page.evaluate(async (s: DemoUser) => {
-      await globalThis.__mf100demo!.signIn(s);
-    }, sub);
-    await page.waitForURL((u: URL) => !u.pathname.includes("/signin"), { timeout: 30_000 });
-  } catch {
-    await page.goto(`${BASE}/signin`);
-    await ready(page);
-    const panel = page.locator("m3e-expansion-panel", { hasText: "モック" });
-    await panel.locator("[slot=header]").click();
-    await page
-      .locator("select, m3e-select")
-      .first()
-      .selectOption(sub)
-      .catch(async () => {
-        await page.locator("select").first().selectOption(sub);
-      });
-    await page.getByRole("button", { name: "モックでサインイン" }).click();
-    await page.waitForURL((u: URL) => !u.pathname.includes("/signin"), { timeout: 60_000 });
-  }
-  await page.waitForTimeout(1000);
+  const seedOpts = demoSeedOptsFromEnv();
+  await page.evaluate(async ({ s, o }) => {
+    await globalThis.__mf100demo!.signOut();
+    await globalThis.__mf100demo!.ensureSeeded(o);
+    await globalThis.__mf100demo!.signIn(s);
+  }, { s: effective, o: seedOpts });
+  await page.waitForURL(
+    (u: URL) =>
+      !u.pathname.includes("/signin") &&
+      (u.pathname.startsWith("/make") ||
+        u.pathname.startsWith("/check") ||
+        u.pathname.startsWith("/works") ||
+        u.pathname.startsWith("/admin")),
+    { timeout: 90_000 },
+  );
+  await page.waitForTimeout(800);
 }
 
 async function openDashboardOverview(page: Page) {
@@ -168,46 +238,80 @@ async function pdfReady(page: Page) {
 }
 
 async function openEditorDrawer(page: Page, label: string) {
-  await page.waitForSelector(".ws", { timeout: 60_000 });
-  const bar = page.locator(".ws__side-toolbar");
-  if (await bar.isVisible().catch(() => false)) {
-    await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click({ timeout: 60_000 });
-  } else {
-    const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+  await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+  const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+  if (await tab.isVisible().catch(() => false)) {
     if ((await tab.getAttribute("selected").catch(() => null)) === null) {
       await tab.click({ timeout: 60_000 });
     }
+  } else {
+    const bar = page.locator(".ws__side-toolbar, .write__side");
+    await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click({ timeout: 60_000 });
   }
   await page.waitForSelector(".drawer__body", { timeout: 60_000 });
 }
 
 const samplePdf = path.join(webRoot, "e2e/fixtures/sample.pdf");
+const WEB_TOP = "公式サイト トップページ";
+
+async function openWebWork(page: Page) {
+  await signInAs(page, "mock-nogiku-manager");
+  await demoGo(page, "/works");
+  await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
+  await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+}
+
+async function navigateWebWorkEditorRoute(page: Page) {
+  const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+  if (workId) {
+    await page.evaluate((id: string) => {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/write",
+        params: { workId: id },
+      });
+    }, workId);
+    await page.waitForTimeout(800);
+  }
+}
+
+async function openWebWorkEditor(page: Page) {
+  await openWebWork(page);
+  await navigateWebWorkEditorRoute(page);
+  await page.waitForSelector(".write", { timeout: 60_000 });
+}
 
 async function seedReviewPamphlet(page: Page) {
   await signInAs(page, "mock-nogiku-creator");
   await demoGo(page, "/works");
   await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
-  await page.waitForURL(/\/works\/[^/]+$/, { timeout: 60_000 });
-  await page
-    .locator("m3e-button", { hasText: "最初の版を提出" })
-    .first()
-    .click({ timeout: 60_000 });
-  await page.waitForSelector('m3e-dialog[open] input[type="file"]', { timeout: 60_000 });
-  await page.setInputFiles('m3e-dialog[open] input[type="file"]', samplePdf);
-  await page.fill("m3e-dialog[open] textarea >> nth=0", "初稿。");
-  for (const id of ["theme_font", "balance", "committee_output"]) {
-    await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+  await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+  const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+  if (!workId) throw new Error(`workId not found in ${page.url()}`);
+  const firstSubmit = page.locator("m3e-button", { hasText: "最初の版を提出" }).first();
+  if (await firstSubmit.isVisible().catch(() => false)) {
+    await firstSubmit.click({ timeout: 60_000 });
+    await page.waitForSelector('m3e-dialog[open] input[type="file"]', { timeout: 60_000 });
+    await page.setInputFiles('m3e-dialog[open] input[type="file"]', samplePdf);
+    await page.fill("m3e-dialog[open] textarea >> nth=0", "初稿。");
+    for (const id of ["theme_font", "balance", "committee_output"]) {
+      await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+    }
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" })
+      .click({ timeout: 60_000 });
+    await page.locator(".upload-item__state--verified").first().waitFor({ timeout: 60_000 });
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "提出する" })
+      .click({ timeout: 60_000 });
+    await page.waitForURL(/\/v\/1$/, { timeout: 60_000 });
+  } else {
+    await demoGo(page, `/works/${workId}/v/1`);
+    await page.waitForSelector(".ws", { timeout: 60_000 });
   }
-  await page
-    .locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" })
-    .click({ timeout: 60_000 });
-  await page.locator(".upload-item__state--verified").first().waitFor({ timeout: 60_000 });
-  await page
-    .locator("m3e-dialog[open] m3e-button", { hasText: "提出する" })
-    .click({ timeout: 60_000 });
-  await page.waitForURL(/\/v\/1$/, { timeout: 60_000 });
   await pdfReady(page);
   const revisionPath = new URL(page.url()).pathname;
+
+  if (process.env.SKIP_REVIEWER_ASSIGN === "1") return;
 
   const reviewerName = await page.evaluate(async () => {
     const users = await globalThis.__mf100demo!.users();
@@ -247,10 +351,19 @@ async function workspaceCommentsReady(page: Page) {
   await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
   await openEditorDrawer(page, "コメント");
   await page.waitForSelector(".comments", { state: "visible", timeout: 60_000 });
-  await page
-    .locator(".comments__list, .comments__header, .thread-panel, .comments__empty, .thread")
+  const hasThread = await page
+    .locator(".comments .thread")
     .first()
-    .waitFor({ state: "visible", timeout: 60_000 });
+    .isVisible()
+    .catch(() => false);
+  if (!hasThread) {
+    await page.getByRole("button", { name: "全体へのコメント" }).click({ timeout: 60_000 });
+    await page.waitForSelector(".compose-pop .rt__content", { timeout: 60_000 });
+    await page.fill(".compose-pop .rt__content", "表記を確認してください");
+    await page.locator(".compose-pop .rt__send").click({ timeout: 60_000 });
+    await page.waitForSelector(".compose-pop", { state: "detached", timeout: 60_000 });
+  }
+  await page.locator(".comments .thread").first().waitFor({ state: "visible", timeout: 60_000 });
 }
 
 type CaptureSceneOpts = { expandOverview?: boolean; openViewSwitcher?: boolean };
@@ -267,21 +380,91 @@ const SCENES: Record<string, SceneFn> = {
   "02-works-list": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/works");
-    await page.waitForSelector(WORKS_ENTRY, { timeout: 60_000 });
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    await page.locator(WORKS_ENTRY).first().waitFor({ state: "attached", timeout: 60_000 });
+  },
+  "q68-works-before": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
+    await capRow.scrollIntoViewIfNeeded();
+    await capRow.waitFor({ state: "visible", timeout: 90_000 });
+    if (await page.getByText("次版作成中").count()) {
+      throw new Error("次版作成中 visible on develop before capture");
+    }
+  },
+  "q68-works-after": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
+    await capRow.scrollIntoViewIfNeeded();
+    await capRow.waitFor({ state: "visible", timeout: 90_000 });
     await page
-      .locator(WORKS_ENTRY, { hasText: PAMPHLET })
+      .locator(".works-table tbody tr")
+      .filter({ hasText: "【撮影】締切超過" })
+      .getByText(/予定提出/)
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 });
+  },
+  "works-deadline-header-before": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    await page
+      .locator(".works-table")
+      .getByText("◆校了目標日")
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "works-deadline-header-after": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    const header = page.locator(".works-table").getByText("校了目標日").first();
+    await header.scrollIntoViewIfNeeded();
+    await header.waitFor({ state: "visible", timeout: 60_000 });
+    if (await page.locator(".works-table").getByText("◆校了目標日").count()) {
+      throw new Error("◆校了目標日 still visible in works table");
+    }
+  },
+  "editor-shortcut-open": async (page) => {
+    await SCENES["076-before-editor"]!(page);
+    await page.keyboard.press("?");
+    await page
+      .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "editor-shortcut-closed": async (page) => {
+    await SCENES["076-before-editor"]!(page);
+    const btn = page.getByRole("button", { name: /キーボードショートカット/ });
+    if (await btn.isVisible().catch(() => false)) {
+      throw new Error("shortcut help button still visible");
+    }
+    await page.keyboard.press("?");
+    await page.waitForTimeout(600);
+    if (
+      await page
+        .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
+        .isVisible()
+        .catch(() => false)
+    ) {
+      throw new Error("shortcut sheet still opens on ?");
+    }
   },
   "27-make-creator": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
     await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    await page.locator(".hub[data-hub='make']").first().scrollIntoViewIfNeeded();
     if (sceneRunOpts.openViewSwitcher) {
       await page
         .locator(".home-view-switcher")
         .first()
         .waitFor({ state: "visible", timeout: 30_000 });
+    } else if (await page.locator(".home-view-switcher").count()) {
+      throw new Error("home-view-switcher visible on before capture");
     }
   },
   "28-check-reviewer": async (page) => {
@@ -293,10 +476,11 @@ const SCENES: Record<string, SceneFn> = {
     await workspaceCommentsReady(page);
   },
   "076-before-editor": async (page) => {
-    await signInAs(page, "mock-nogiku-manager");
-    await demoGo(page, "/works");
-    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
-    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    const app = new App(page);
+    await app.signInAs("mock-nogiku-manager");
+    const { revisionPath } = await submitFirstRevision(app);
+    await app.go(revisionPath);
+    await app.pdfReady();
     await page.waitForSelector(".ws", { timeout: 60_000 });
   },
   "e090-before": async (page) => {
@@ -316,6 +500,29 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForURL(/\/v\//);
     await page.waitForSelector(".comments .thread");
   },
+  /** コメント引き出しのヘッダ（解決済み chip。PDF 不要） */
+  "editor-comments-header": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (workId) {
+      await page.evaluate((id: string) => {
+        return globalThis.__mf100router!.navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId: id, n: "1" },
+        });
+      }, workId);
+      await page.waitForTimeout(800);
+    }
+    await page.waitForSelector(".ws", { timeout: 60_000 });
+    await openEditorDrawer(page, "コメント");
+    await page.locator(".comments__header").waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "editor-comments-q66": async (page) => {
+    await SCENES["editor-comments-header"]!(page);
+  },
   "15-notifications": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
@@ -325,21 +532,89 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/check");
   },
   "33-work-form": async (page) => {
-    await signInAs(page, "mock-nogiku-manager");
+    await signInAs(page, "mock-nogiku-admin");
     await demoGo(page, "/works?new=true");
     await page.waitForSelector("m3e-dialog[open]", { timeout: 60_000 });
-    const detailLegacy = page.locator("m3e-expansion-panel", { hasText: "制作物 ID" });
-    if (await detailLegacy.count()) {
-      await detailLegacy.first().locator("[slot=header]").click();
-      await page.waitForTimeout(400);
-    }
-    const body = page.locator("m3e-dialog[open] .dialog-body");
-    if (await body.count()) {
-      await body.first().evaluate((el: HTMLElement) => {
-        el.scrollTop = el.scrollHeight;
+    await page.getByRole("textbox", { name: "制作物名" }).fill("テーマ確認用の制作物");
+    await page.locator("m3e-dialog[open] m3e-select").first().click({ timeout: 30_000 });
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    const creatorBox = page.getByRole("combobox", { name: /制作者/ });
+    await creatorBox.click({ timeout: 30_000 });
+    await creatorBox.fill("めい");
+    await page.waitForTimeout(800);
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "登録" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-admin-csv": async (page) => {
+    await signInAs(page, "mock-nogiku-admin");
+    await demoGo(page, "/admin");
+    await page
+      .locator("m3e-button", { hasText: "CSV で一括登録" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-admin-register": async (page) => {
+    await signInAs(page, "mock-nogiku-admin");
+    await demoGo(page, "/admin");
+    await page.locator("m3e-button", { hasText: "1 件ずつ登録" }).click({ timeout: 60_000 });
+    await page.waitForSelector("m3e-dialog[open]", { timeout: 60_000 });
+    await page.getByRole("textbox", { name: "制作物名" }).fill("登録ボタン確認");
+    await page.locator("m3e-dialog[open] m3e-select").first().click({ timeout: 30_000 });
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    const creatorBox = page.getByRole("combobox", { name: /制作者/ });
+    await creatorBox.click({ timeout: 30_000 });
+    await creatorBox.fill("めい");
+    await page.waitForTimeout(800);
+    await page.getByRole("option").first().click({ timeout: 30_000 });
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "登録" })
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-works-chip": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works__filters m3e-filter-chip", { timeout: 60_000 });
+    await page.locator(".works__filters m3e-filter-chip", { hasText: "進行中" }).click({
+      timeout: 30_000,
+    });
+    await page
+      .locator(".works__filters m3e-filter-chip[selected]")
+      .first()
+      .waitFor({ state: "visible", timeout: 30_000 });
+  },
+  "q63b-works-dashboard": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    await openDashboardOverview(page);
+    await page
+      .locator("#ov-title, .kpis .kpi")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    await page.locator(".works__controls").waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q63b-editor-toolbar": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await page.waitForSelector(".ws", { timeout: 60_000 });
+    await page
+      .locator(".ws__side-toolbar:not(.ws__side-toolbar--hidden), .drawer .pane-tabs")
+      .first()
+      .waitFor({
+        state: "visible",
+        timeout: 60_000,
       });
-    }
-    await page.waitForTimeout(400);
+  },
+  "q63b-admin-tab": async (page) => {
+    await signInAs(page, "mock-nogiku-admin");
+    await demoGo(page, "/admin?view=teams");
+    await page
+      .locator(".page-tabs m3e-tab[selected]")
+      .waitFor({ state: "visible", timeout: 60_000 });
   },
   "34-acl": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -348,8 +623,24 @@ const SCENES: Record<string, SceneFn> = {
   "12-submit-dialog": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
     await demoGo(page, "/make");
+    const row = page.locator("m3e-list-action", { hasText: "未提出" }).first();
+    if (await row.isVisible().catch(() => false)) {
+      await row.click({ timeout: 60_000 });
+    } else {
+      await page
+        .locator("m3e-list-action")
+        .first()
+        .click({ timeout: 60_000 })
+        .catch(() => {});
+    }
+    const submit = page.locator("m3e-button", { hasText: "版を提出" }).first();
+    if (await submit.isVisible().catch(() => false)) {
+      await submit.click({ timeout: 60_000 });
+      await page.waitForSelector("m3e-dialog[open] .submit-dialog__title", { timeout: 60_000 });
+    }
   },
   "dashboard-manager": async (page) => {
+    await page.evaluate(() => localStorage.setItem("mf100.works-overview-open", "1"));
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
@@ -411,12 +702,276 @@ const SCENES: Record<string, SceneFn> = {
   "dashboard-member-tablet": async (page) => {
     await SCENES["dashboard-member"]!(page);
   },
+  "q70-work-form-plan": async (page) => {
+    await SCENES["q63b-admin-register"]!(page);
+    await page
+      .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
+      .scrollIntoViewIfNeeded();
+    await page
+      .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q70-work-form-no-plan": async (page) => {
+    await SCENES["q63b-admin-register"]!(page);
+    await page
+      .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
+      .waitFor({ state: "hidden", timeout: 5_000 })
+      .catch(() => undefined);
+  },
+  "q70-info-tab-plan-no-warn": async (page) => {
+    await SCENES["q70-info-tab-plan"]!(page);
+    await openEditorDrawer(page, "コメント");
+    await page
+      .locator(".comments .thread, .refs__item")
+      .filter({ hasText: "開催日時" })
+      .first()
+      .waitFor({ state: "hidden", timeout: 10_000 })
+      .catch(() => undefined);
+  },
+  "q70-info-tab-plan": async (page) => {
+    await openWebWork(page);
+    await page.evaluate((id: string) => {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/v/$revisionSeq",
+        params: { workId: id, revisionSeq: "1" },
+      });
+    }, new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)![1]!);
+    await page.waitForSelector(".ws", { timeout: 60_000 });
+    await openEditorDrawer(page, "情報");
+    await page.locator('.info-tab__section[aria-label="企画情報"]').waitFor({
+      state: "visible",
+      timeout: 60_000,
+    });
+  },
+  "q71-plan-info-warn": async (page) => {
+    await openWebWorkEditor(page);
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q71-comments-web-clean": async (page) => {
+    await openWebWork(page);
+    if (!(await page.locator(".write").isVisible().catch(() => false))) {
+      await navigateWebWorkEditorRoute(page);
+      await page.waitForTimeout(600);
+    }
+    if (!(await page.locator(".write").isVisible().catch(() => false))) {
+      const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+      if (!workId) throw new Error(`workId missing from ${page.url()}`);
+      await demoGo(page, `/works/${workId}/v/1`);
+      await page.waitForSelector(".ws", { timeout: 60_000 });
+    } else {
+      await page.waitForSelector(".write", { timeout: 60_000 });
+      await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
+        state: "visible",
+        timeout: 60_000,
+      });
+    }
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "hidden", timeout: 10_000 })
+      .catch(() => undefined);
+  },
+  "q72-plan-info-before-warn": async (page) => {
+    await SCENES["q72-detail-before-warn"]!(page);
+  },
+  "q72-detail-before-warn": async (page) => {
+    await openWebWork(page);
+    await navigateWebWorkEditorRoute(page);
+    await page.waitForSelector(".write", { timeout: 60_000 });
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId missing from ${page.url()}`);
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, `/works/${workId}/detail`);
+    await page.waitForSelector(".detail-shell", { timeout: 60_000 });
+    await page.locator(".detail-shell__comments").waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .getByText(/開催日時.*一致しません/)
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q72-plan-info-recheck": async (page) => {
+    await SCENES["q72-detail-after-recheck"]!(page);
+  },
+  "q72-detail-after-recheck": async (page) => {
+    await openWebWork(page);
+    await navigateWebWorkEditorRoute(page);
+    await page.waitForSelector(".write", { timeout: 60_000 });
+    await openEditorDrawer(page, "情報");
+    await page.getByRole("textbox", { name: "開催日時" }).fill("5/25(日) 10:00–17:00");
+    await page
+      .locator('.info-tab__section[aria-label="企画情報"]')
+      .getByRole("button", { name: "保存" })
+      .click({ timeout: 60_000 });
+    await page.waitForTimeout(2500);
+    await page.evaluate(async () => {
+      await globalThis.__mf100demo!.resolveOpenPlanInfoBotThreads();
+    });
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId missing from ${page.url()}`);
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, `/works/${workId}/detail`);
+    await page.waitForSelector(".detail-shell", { timeout: 60_000 });
+    await page.locator(".detail-shell__comments").waitFor({ state: "visible", timeout: 60_000 });
+    const warn = await page.getByText(/開催日時.*一致しません/).count();
+    if (warn > 0) {
+      throw new Error(`plan-info warnings still visible on detail (${warn})`);
+    }
+  },
+  "dashboard-backlog-delay": async (page) => {
+    await page.evaluate(() => localStorage.setItem("mf100.works-overview-open", "1"));
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works", { timeout: 60_000 });
+    await openDashboardOverview(page);
+    const backlogSection = page.locator('section[aria-labelledby="ov-backlog"]');
+    await backlogSection.waitFor({ state: "visible", timeout: 90_000 });
+    await backlogSection.scrollIntoViewIfNeeded();
+    await backlogSection
+      .getByText("【撮影】締切超過 1 日")
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 });
+    await backlogSection
+      .getByText("【撮影】締切超過 3 日")
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 });
+    if (process.env.CAPTURE_EXPECT_BACKLOG_DELAY === "1") {
+      const delayItems = await backlogSection.locator(".list__item[class*='delay']").count();
+      if (delayItems < 1) {
+        throw new Error("expected backlog delay color class on after capture");
+      }
+      const oneDay = backlogSection.locator(".list__item--delay-1d").first();
+      await oneDay.waitFor({ state: "visible", timeout: 60_000 });
+      const bg = await oneDay.evaluate((el) =>
+        getComputedStyle(el).getPropertyValue("--m3e-list-item-container-color"),
+      );
+      if (process.env.CAPTURE_STRICT_DELAY_ORANGE === "1" && /f09dff|#f09/i.test(bg)) {
+        throw new Error(`1-day delay row still using pink tokens: ${bg}`);
+      }
+    }
+  },
+  "make-sns-band": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_SNS_BAND === "1") {
+      await page
+        .locator(".sns-home-band")
+        .getByText(/件が進行中/)
+        .waitFor({ state: "visible", timeout: 90_000 });
+      await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 60_000 });
+    } else if (await page.locator(".sns-home-band").isVisible().catch(() => false)) {
+      throw new Error("sns-home-band visible before PR 080");
+    }
+  },
+  "dashboard-kpi-summary": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    await page
+      .locator('section[aria-label="サマリー"]')
+      .waitFor({ state: "visible", timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_KPI_MOCK === "1") {
+      await page.locator(".kpis--mock-row").waitFor({ state: "visible", timeout: 60_000 });
+    } else if (await page.locator(".kpis--mock-row").count()) {
+      throw new Error("kpis--mock-row visible before PR 078");
+    }
+  },
+  "dashboard-stages-before": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    if (await page.locator(".stagebar--mock").count()) {
+      throw new Error("stagebar--mock visible before PR 079");
+    }
+    await page.locator("#ov-stages").scrollIntoViewIfNeeded();
+    await page.locator('section[aria-labelledby="ov-stages"]').waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "dashboard-stages-after": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    await page.locator(".stagebar--mock").waitFor({ state: "visible", timeout: 60_000 });
+    await page.locator(".stagebar--mock").evaluate((el) => {
+      el.style.minHeight = "20px";
+      el.style.boxShadow = "inset 0 -4px 0 var(--mf-primary)";
+    });
+    await page.locator('section[aria-labelledby="ov-stages"]').scrollIntoViewIfNeeded();
+  },
+  "make-hub-clip": async (page) => {
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/make");
+    await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
+    await page.locator(".hub[data-hub='make']").first().scrollIntoViewIfNeeded();
+    if (process.env.CAPTURE_EXPECT_SNS_BAND === "1") {
+      await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 90_000 });
+    } else if (process.env.CAPTURE_EXPECT_SNS_BAND === "0" && (await page.locator(".sns-home-band").count())) {
+      throw new Error("sns-home-band visible when band expected hidden");
+    }
+  },
+  "dashboard-bureau-graphs": async (page) => {
+    await SCENES["dashboard-manager"]!(page);
+    await page.locator("#ov-bureaus").waitFor({ state: "visible", timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_BUREAU_MOCK === "1") {
+      await page.locator(".ov__block--bureau-mock").waitFor({ state: "visible", timeout: 60_000 });
+    }
+  },
+  "detail-preview-73": async (page) => {
+    const app = new App(page);
+    const { workPath, revisionPath } = await submitFirstRevision(app);
+    await app.signInAs("mock-nogiku-reviewer");
+    await app.go(revisionPath);
+    await app.pdfReady();
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await app.drawer("コメント");
+    await app.freeComment("表記を確認してください");
+    const workId = workPath.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId missing from ${workPath}`);
+    await app.signInAs("mock-nogiku-manager");
+    await app.go(`${workPath}/detail`);
+    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    await page.waitForFunction(
+      () => {
+        const root = document.querySelector(".detail-shell__preview-frame");
+        if (!root) return false;
+        const iframe = root.querySelector("iframe[data-testid='detail-pdf-frame'], iframe");
+        if (iframe && (iframe as HTMLIFrameElement).src) return true;
+        return Boolean(root.querySelector('[data-testid="detail-doc-preview"]'));
+      },
+      null,
+      { timeout: 120_000 },
+    );
+    await page.locator(".detail-shell__comments").waitFor({ state: "attached", timeout: 60_000 });
+    if (process.env.CAPTURE_EXPECT_NO_ACTIVITY === "1") {
+      if (await page.locator(".activity-log, [aria-label*='活動']").count()) {
+        throw new Error("activity log UI still visible on q75 detail");
+      }
+    }
+    await page.waitForTimeout(1200);
+  },
 };
 
 async function runScene(page: Page, key: string) {
+  const skipPamphletComments = process.env.SKIP_PAMPHLET_COMMENTS === "1";
+  const skipPlanInfoWarnings = process.env.SKIP_PLAN_INFO_WARNINGS === "1";
+  const seedBacklogCapture =
+    process.env.SEED_BACKLOG_CAPTURE === "1" || key === "dashboard-backlog-delay";
+  const seedConfidentiality = process.env.SEED_CONFIDENTIALITY !== "0";
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
+  await ensureDemoSeeded(page, {
+    skipPamphletComments,
+    skipPlanInfoWarnings,
+    seedBacklogCapture,
+    seedConfidentiality,
+    seedRevisionPlanned: process.env.SEED_REVISION_PLANNED === "1",
+  });
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
 }
@@ -426,13 +981,71 @@ async function captureOne(
   sceneKey: string,
   outPath: string,
   corpusRoot: string | undefined,
+  clipSelector?: string,
 ) {
   await runScene(page, sceneKey);
+  await assertAuthenticatedCapture(page);
+  await applyCaptureTheme(page);
   await assertSceneMarkers(page, sceneKey);
+  await assertCaptureThemePrimary(page);
   const pagePath = new URL(page.url()).pathname;
-  await page.screenshot({ path: outPath, fullPage: true });
+  if (clipSelector) {
+    const loc = page.locator(clipSelector).first();
+    await loc.scrollIntoViewIfNeeded();
+    await loc.waitFor({ state: "visible", timeout: 60_000 });
+    await loc.screenshot({ path: outPath });
+  } else {
+    await page.screenshot({ path: outPath, fullPage: true });
+  }
   await writeSceneDomSidecar(page, sceneKey, outPath);
-  validateScreenshotFile(outPath, { sceneKey, pagePath, corpusRoot, selfPath: outPath });
+  const sidecar = outPath.replace(/\.png$/i, ".dom.txt");
+  const sub = await page
+    .evaluate(async () => {
+      const u = await globalThis.__mf100demo!.users();
+      const id = globalThis.__mf100demo!.userId;
+      return u.find((x) => x.id === id)?.sub ?? "";
+    })
+    .catch(() => "");
+  fs.appendFileSync(sidecar, `captureUser=${sub}\n`);
+  if (clipSelector) fs.appendFileSync(sidecar, `captureClip=${clipSelector}\n`);
+  if (/detail-preview|q72-detail|dashboard-detail/.test(sceneKey)) {
+    const version = await page.locator(".detail-shell__version").innerText().catch(() => "");
+    const previewParts = await page
+      .locator(
+        ".detail-shell__preview-frame canvas, .detail-shell__preview-frame iframe, .detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame .rich-viewer__page, .detail-shell__preview-frame .write__page, .detail-shell__preview-frame [data-testid='detail-doc-preview']",
+      )
+      .count();
+    fs.appendFileSync(sidecar, `detail:version=${version.trim()}\n`);
+    fs.appendFileSync(sidecar, `detail:preview=${previewParts > 0 ? "yes" : "no"}\n`);
+    if (previewParts < 1 && sceneKey === "detail-preview-73") {
+      throw new Error(`detail preview missing content for ${outPath}`);
+    }
+    if (/q72-detail/.test(sceneKey)) {
+      const warns = await page.getByText(/開催日時.*一致しません/).count();
+      fs.appendFileSync(sidecar, `detail:plan-info-warn=${warns}\n`);
+    }
+    if (process.env.CAPTURE_EXPECT_EMPTY_VERSION === "1" && !/^—/.test(version.trim())) {
+      throw new Error(`expected empty version label, got ${version}`);
+    }
+    if (process.env.CAPTURE_EXPECT_VERSION_NUMBER === "1" && !/版\s*\d/.test(version)) {
+      throw new Error(`expected numbered version label, got ${version}`);
+    }
+  }
+  if (/plan-info|q72|q71-comments/.test(sceneKey)) {
+    const notFound = await page.getByText(/見つかりません/).count().catch(() => 0);
+    const warn = await page.getByText(/開催日時.*一致しません/).count().catch(() => 0);
+    fs.appendFileSync(
+      sidecar,
+      `forbidden:plan-info-warnings=${warn}\nforbidden:not-found=${notFound}\n`,
+    );
+  }
+  validateScreenshotFile(outPath, {
+    sceneKey,
+    pagePath,
+    corpusRoot,
+    selfPath: outPath,
+    allowSmallClip: Boolean(clipSelector),
+  });
   validateDomSidecar(outPath, sceneKey);
 }
 
@@ -447,31 +1060,37 @@ export async function captureShots(
     expandOverview?: boolean;
     openViewSwitcher?: boolean;
     corpusRoot?: string;
+    clipSelector?: string;
   } = {},
 ) {
   ensureDemo();
   sceneRunOpts = { expandOverview: opts.expandOverview, openViewSwitcher: opts.openViewSwitcher };
-  const corpusRoot = opts.corpusRoot ?? process.env.SCREENSHOT_CORPUS;
+  const corpusRoot =
+    opts.corpusRoot ??
+    (process.env.SCREENSHOT_CORPUS === "none" ? undefined : process.env.SCREENSHOT_CORPUS);
+  const clipSelector = opts.clipSelector ?? process.env.CAPTURE_CLIP;
   const mobileW = opts.mobileWidth ?? 412;
   const mobileH = opts.mobileHeight ?? 915;
   const desktopW = opts.desktopWidth ?? 1280;
-  const desktopH = opts.desktopHeight ?? 800;
+  const desktopH = opts.desktopHeight ?? 900;
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.CHROMIUM_PATH || undefined,
   });
   const desktop = await browser.newContext({
     viewport: { width: desktopW, height: desktopH },
+    deviceScaleFactor: 2,
     baseURL: BASE,
     serviceWorkers: "block",
   });
+  await desktop.addInitScript(CAPTURE_INIT_SCRIPT_SOURCE);
   await desktop.route("**/*", (route: Route) => {
-    route.continue({
+    void route.continue({
       headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
     });
   });
   const page = await desktop.newPage();
-  await captureOne(page, shots.desktop, `${prefix}-desktop.png`, corpusRoot);
+  await captureOne(page, shots.desktop, `${prefix}-desktop.png`, corpusRoot, clipSelector);
 
   if (shots.mobile) {
     const mobile = await browser.newContext({
@@ -479,13 +1098,20 @@ export async function captureShots(
       baseURL: BASE,
       serviceWorkers: "block",
     });
+    await mobile.addInitScript(CAPTURE_INIT_SCRIPT_SOURCE);
     await mobile.route("**/*", (route: Route) => {
-      route.continue({
+      void route.continue({
         headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
       });
     });
     const mp = await mobile.newPage();
-    await captureOne(mp, shots.mobile ?? shots.desktop, `${prefix}-mobile.png`, corpusRoot);
+    await captureOne(
+      mp,
+      shots.mobile ?? shots.desktop,
+      `${prefix}-mobile.png`,
+      corpusRoot,
+      clipSelector,
+    );
     await mobile.close();
   }
   await browser.close();

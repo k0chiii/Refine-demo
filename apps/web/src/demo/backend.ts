@@ -147,9 +147,21 @@ class DemoBackend {
       : this.t;
   }
 
-  ensureSeeded(): Promise<void> {
+  ensureSeeded(opts?: {
+    skipPamphletComments?: boolean;
+    skipPlanInfoWarnings?: boolean;
+    seedBacklogCapture?: boolean;
+    seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
+  }): Promise<void> {
     this.seeded ??= this.enqueue(async () => {
-      await this.t.mutation(internal.seed.demo, {});
+      await this.t.mutation(internal.seed.demo, {
+        skipPamphletComments: opts?.skipPamphletComments,
+        skipPlanInfoWarnings: opts?.skipPlanInfoWarnings,
+        seedBacklogCapture: opts?.seedBacklogCapture,
+        seedConfidentiality: opts?.seedConfidentiality !== false,
+        seedRevisionPlanned: opts?.seedRevisionPlanned === true,
+      });
     });
     return this.seeded;
   }
@@ -216,7 +228,51 @@ class DemoBackend {
     );
   }
 
-  /** internal 関数も呼べる（Hono のサービス境界の代わり。デモでは Worker が無いため） */
+  /** stack-pr q74: 詳細ヘッダを「版 —」にするデモ用（提出済み版のプレビューは残す） */
+  async clearAcceptingRevision(workId: string): Promise<void> {
+    await this.ensureSeeded();
+    await this.enqueue(() =>
+      this.t.run(async (ctx) => {
+        const work = await ctx.db.get(workId as import("@mf100/convex/dataModel").Id<"works">);
+        if (!work) return;
+        await ctx.db.patch(work._id, { acceptingRevisionId: undefined });
+      }),
+    );
+    this.bump();
+  }
+
+  async resolveOpenPlanInfoBotThreads(): Promise<number> {
+    await this.ensureSeeded();
+    return this.enqueue(() =>
+      this.t.run(async (ctx) => {
+        const work = await ctx.db
+          .query("works")
+          .withIndex("by_year", (q) => q.eq("year", 100))
+          .filter((q) => q.eq(q.field("legacyId"), "WEB-003"))
+          .unique();
+        if (!work) return 0;
+        const revision = await ctx.db
+          .query("revisions")
+          .withIndex("by_work", (q) => q.eq("workId", work._id))
+          .filter((q) => q.eq(q.field("reviewState"), "open"))
+          .first();
+        if (!revision) return 0;
+        const threads = await ctx.db
+          .query("commentThreads")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revision._id))
+          .collect();
+        let n = 0;
+        for (const th of threads) {
+          if (th.authorId === "bot:plan-info" && th.resolution === "open") {
+            await ctx.db.patch(th._id, { resolution: "resolved" });
+            n++;
+          }
+        }
+        return n;
+      }),
+    );
+  }
+
   async mutation<M extends FunctionReference<"mutation", "public" | "internal">>(
     ref: M,
     args: Record<string, unknown>,
