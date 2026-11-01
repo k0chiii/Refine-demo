@@ -14,9 +14,12 @@ import {
   isGraphicSubmissionFile,
   isIllustratorFile,
   isReviewableArtifact,
+  isSlideSubGenre,
   pickReviewArtifact,
   revisionDeclarationItems,
   suggestedChecksFor,
+  defaultSubmitDeadlineAt,
+  maxUrgentSubmitDeadlineAt,
   type CheckType,
   type MediaType,
   type RevisionDeclarations,
@@ -24,10 +27,10 @@ import {
 } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useId } from "react";
 import { figmaStatus, importFigmaFrames, uploadItem } from "@/integrations/api";
 import { describeError } from "@/lib/errors";
-import { endOfJstDay, formatBytes, formatDeadlineUntil } from "@/lib/format";
+import { deadlineFromJst, deadlineToJst, formatBytes } from "@/lib/format";
 import { StatusText } from "@/ui/Chip";
 import { DateField } from "@/ui/DateField";
 import { Checkbox, Field, Select, TextArea, TextInput } from "@/ui/Field";
@@ -39,6 +42,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eList, M3eListItem } from "@m3e/react/list";
 import { M3eLinearProgressIndicator } from "@m3e/react/progress-indicator";
+import { M3eSwitch } from "@m3e/react/switch";
 import { UserPicker } from "@/ui/UserPicker";
 import {
   SubmissionFlow,
@@ -100,16 +104,17 @@ function submitInputFor(mediaType: MediaType | undefined): SubmitInput {
     case "document":
     case "sns":
       return { kind: "files", link: false };
-    default:
+    case "other":
       return { kind: "files", link: true };
+    default:
+      return { kind: "files", link: false };
   }
 }
 
-/** http(s) の URL か（ライブ表示の iframe に渡せるもの） */
-const isHttpUrl = (raw: string) => {
+/** https の URL か（Web・外部リンク・スライド URL。利用者決定 95A） */
+const isHttpsUrl = (raw: string) => {
   try {
-    const u = new URL(raw.trim());
-    return u.protocol === "https:" || u.protocol === "http:";
+    return new URL(raw.trim()).protocol === "https:";
   } catch {
     return false;
   }
@@ -138,8 +143,11 @@ export function SubmitDialog({
   const reset = useMutation(api.submissions.reset);
   const confirm = useMutation(api.submissions.confirm);
 
+  const urgentSwitchId = useId();
+  const urgentLabelId = `${urgentSwitchId}-label`;
   // 既定は 3 日後の終わり（日付だけの締切＝その日の 23:59 まで）。当日の終わりも選べる
-  const defaultDeadline = useMemo(() => endOfJstDay(Date.now() + 3 * 86_400_000), []);
+  const defaultDeadline = useMemo(() => defaultSubmitDeadlineAt(Date.now()), []);
+  const [urgent, setUrgent] = useState(false);
   const [deadlineAt, setDeadlineAt] = useState<number | null>(defaultDeadline);
   const [form, setForm] = useState({
     kind: "standard",
@@ -228,6 +236,11 @@ export function SubmitDialog({
       });
   }, [failed]);
   useEffect(() => {
+    if (!open) return;
+    setUrgent(false);
+    setDeadlineAt(defaultSubmitDeadlineAt(Date.now()));
+  }, [open]);
+  useEffect(() => {
     if (open && initialFiles && initialFiles.length > 0) setFiles(initialFiles);
   }, [open, initialFiles]);
   useEffect(() => {
@@ -238,10 +251,32 @@ export function SubmitDialog({
   }, [state.confirmed?.revisionId]);
 
   const work = data?.work ?? null;
+  const slideSubmit = isSlideSubGenre(work?.subGenre);
   const revisions = data?.revisions ?? [];
   const hasRough = revisions.some((r) => r.kind === "rough");
   const hasStandard = revisions.some((r) => r.kind === "standard");
   const accepting = revisions.find((r) => r.id === data?.acceptingRevisionId) ?? null;
+  const maxUrgentDeadline = useMemo(
+    () =>
+      urgent
+        ? maxUrgentSubmitDeadlineAt(Date.now(), accepting?.deadlineAt ?? undefined)
+        : undefined,
+    [urgent, accepting?.deadlineAt],
+  );
+  const setUrgentReview = (next: boolean) => {
+    setUrgent(next);
+    setDeadlineAt((cur) => {
+      if (cur === null) return cur;
+      const parts = deadlineToJst(cur);
+      if (!next) return deadlineFromJst(parts.date, null);
+      const time = parts.time ?? "18:00";
+      let at = deadlineFromJst(parts.date, time);
+      if (at === null) return cur;
+      const max = maxUrgentSubmitDeadlineAt(Date.now(), accepting?.deadlineAt ?? undefined);
+      if (at > max) at = max;
+      return at;
+    });
+  };
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   // 文章エディタ・投稿の編集が下書きから作ったファイルを持って開いたときは、媒体に関わらずファイルの提出
@@ -286,15 +321,30 @@ export function SubmitDialog({
   const start = async () => {
     setError(null);
     if (!work) return;
-    if (!deadlineAt) return setError("校正期限を入力してください");
+    if (!deadlineAt) return setError("校正期日を入力してください");
     if (deadlineAt <= Date.now())
-      return setError("校正期限が過ぎています。今より後の日時にしてください");
+      return setError("校正期日が過ぎています。今より後の日時にしてください");
+    if (urgent) {
+      const parts = deadlineToJst(deadlineAt);
+      if (parts.time === null)
+        return setError("緊急の校正期日には日付と時刻の両方を指定してください");
+    }
+    if (urgent && maxUrgentDeadline !== undefined && deadlineAt > maxUrgentDeadline)
+      return setError(
+        "緊急の校正期日は、通常の既定（3 日後）またはいま受付中の版の校正期日より前にしてください",
+      );
     if (!token)
       return setError("サインインの有効期限が切れました。もう一度サインインしてください。");
-    if (input.kind === "web" && !isHttpUrl(form.externalUrl))
-      return setError("サイトの URL を https:// から入れてください");
+    const needsExternalUrl =
+      input.kind === "web" ||
+      slideSubmit ||
+      (input.kind === "files" && input.link && !!form.externalUrl.trim());
+    if (needsExternalUrl && !isHttpsUrl(form.externalUrl))
+      return setError("リンクは https:// から入れてください");
     if (input.kind === "figma" && figmaFrames.length === 0)
       return setError("Figma のフレームの URL を入れてください");
+    if (slideSubmit && !form.externalUrl.trim())
+      return setError("スライドのリンクを入力してください");
     // グラフィック制作物は、紙面に出して校正できるファイル（PDF・画像・PDF 互換の .ai）が要る。転送の前に知らせる
     // （サーバーも確定のときに同じ規則で断る）
     if (input.kind === "files" && graphic) {
@@ -354,7 +404,7 @@ export function SubmitDialog({
         externalUrl: f.url,
       })),
       ...(form.externalUrl.trim() &&
-      (input.kind === "web" || (input.kind === "files" && input.link))
+      (input.kind === "web" || slideSubmit || (input.kind === "files" && input.link))
         ? [
             {
               fileName: form.externalUrl.trim(),
@@ -385,6 +435,7 @@ export function SubmitDialog({
             kind: form.kind as "standard",
             reviewType: "general",
             deadlineAt,
+            ...(urgent ? { reviewUrgent: true } : {}),
             // 初回の「補足」は版の説明（changeSummary）の後ろに添える（データの持ち方は変えない）
             changeSummary:
               isFirst && form.notes.trim()
@@ -432,11 +483,32 @@ export function SubmitDialog({
       ? !form.externalUrl.trim()
       : input.kind === "figma"
         ? figmaFrames.length === 0
-        : files.length === 0 && !(input.link && form.externalUrl.trim()));
+        : slideSubmit
+          ? files.length === 0 || !form.externalUrl.trim()
+          : input.kind === "files" && input.link
+            ? files.length === 0 && !form.externalUrl.trim()
+            : files.length === 0);
 
   return (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
-      <span slot="header">版を提出</span>
+      <span slot="header" className="row submit-dialog__header">
+        <span className="submit-dialog__title">版を提出</span>
+        <span className="submit-dialog__urgent">
+          <label
+            htmlFor={urgentSwitchId}
+            id={urgentLabelId}
+            className="submit-dialog__urgent-label"
+          >
+            緊急
+          </label>
+          <M3eSwitch
+            id={urgentSwitchId}
+            checked={urgent}
+            aria-labelledby={urgentLabelId}
+            onChange={(e) => setUrgentReview((e.target as unknown as { checked: boolean }).checked)}
+          />
+        </span>
+      </span>
       <div className="dialog-body submit">
         {accepting ? (
           <p className="muted small" style={{ margin: 0 }}>
@@ -491,61 +563,79 @@ export function SubmitDialog({
                 ) : null}
               </>
             ) : (
-              <div
-                className={`file-drop ${dragging ? "file-drop--over" : ""}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragging(false);
-                  addFiles(e.dataTransfer.files, true);
-                }}
-              >
-                <M3eIcon name="upload_file" />
-                <span>
-                  {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
-                </span>
-                <label className="file-drop__pick">
-                  選択
-                  <input
-                    type="file"
-                    multiple
-                    {...(input.accept ? { accept: input.accept } : {})}
-                    aria-label="ファイルを選択"
-                    onChange={(e) => addFiles(e.target.files)}
-                  />
-                </label>
-                {files.length > 0 ? (
-                  <ul className="file-drop__files">
-                    {files.map((f) => (
-                      <li key={f.name}>
-                        {f.name}
-                        <span className="muted">
-                          　{formatBytes(f.size)}・
-                          {f === shownFile
-                            ? "プレビューに表示（コメントはこのファイルに）"
-                            : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
-                        </span>
-                        <M3eIconButton
-                          className="file-drop__remove"
-                          aria-label={`${f.name} を外す`}
-                          onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
-                        >
-                          <M3eIcon name="close" />
-                        </M3eIconButton>
-                      </li>
-                    ))}
-                  </ul>
+              <>
+                <div
+                  className={`file-drop ${dragging ? "file-drop--over" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    addFiles(e.dataTransfer.files, true);
+                  }}
+                >
+                  {slideSubmit ? (
+                    <p className="label-large" style={{ margin: "0 0 8px" }}>
+                      PDF（必須、校正対象）
+                    </p>
+                  ) : null}
+                  <M3eIcon name="upload_file" />
+                  <span>
+                    {input.noun ? `${input.noun} をここに置くか、` : "ここにファイルを置くか、"}
+                  </span>
+                  <label className="file-drop__pick">
+                    選択
+                    <input
+                      type="file"
+                      multiple
+                      {...(input.accept ? { accept: input.accept } : {})}
+                      aria-label="ファイルを選択"
+                      onChange={(e) => addFiles(e.target.files)}
+                    />
+                  </label>
+                  {files.length > 0 ? (
+                    <ul className="file-drop__files">
+                      {files.map((f) => (
+                        <li key={f.name}>
+                          {f.name}
+                          <span className="muted">
+                            　{formatBytes(f.size)}・
+                            {f === shownFile
+                              ? "プレビューに表示（コメントはこのファイルに）"
+                              : `${artifactFormatLabel({ type: typeOf(f), fileName: f.name })}（ダウンロード用）`}
+                          </span>
+                          <M3eIconButton
+                            className="file-drop__remove"
+                            aria-label={`${f.name} を外す`}
+                            onClick={() => setFiles((cur) => cur.filter((c) => c !== f))}
+                          >
+                            <M3eIcon name="close" />
+                          </M3eIconButton>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {files.length > 0 && graphic && !shownFile ? (
+                    <p className="small muted" style={{ margin: 0 }}>
+                      .ai・.indd はプレビューできません。PDF か画像も付けてください
+                    </p>
+                  ) : null}
+                </div>
+                {slideSubmit ? (
+                  <Field label="スライドのリンク" required hint="共有 URL（https）。校正は PDF 上">
+                    <TextInput
+                      type="text"
+                      inputMode="url"
+                      value={form.externalUrl}
+                      onChange={set("externalUrl")}
+                      placeholder="https://"
+                    />
+                  </Field>
                 ) : null}
-                {files.length > 0 && graphic && !shownFile ? (
-                  <p className="small muted" style={{ margin: 0 }}>
-                    .ai・.indd はプレビューできません。PDF か画像も付けてください
-                  </p>
-                ) : null}
-              </div>
+              </>
             )}
             <div className="form">
               <Field label="版の種別" required>
@@ -559,11 +649,14 @@ export function SubmitDialog({
                 </Select>
               </Field>
               <DateField
-                label="校正期限"
+                label="校正期日"
                 required
+                hideSummary
                 value={deadlineAt}
                 onChange={setDeadlineAt}
                 min={Date.now()}
+                timePolicy={urgent ? "required" : "hidden"}
+                {...(urgent && maxUrgentDeadline !== undefined ? { max: maxUrgentDeadline } : {})}
               />
             </div>
             <Field label={isFirst ? "この案の意図" : "変更した点とその理由"}>

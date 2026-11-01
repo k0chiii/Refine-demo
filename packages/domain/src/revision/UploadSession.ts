@@ -21,6 +21,8 @@ export interface UploadSession {
   kind: RevisionKind;
   reviewType: string;
   deadlineAt: Instant;
+  /** 提出ダイアログの「緊急」（確定時に版へ写す） */
+  reviewUrgent?: boolean;
   changeSummary: string;
   focusNotes: string;
   state: UploadSessionState;
@@ -221,6 +223,17 @@ export function assertItemsReadyForConfirm(items: readonly UploadItem[]): void {
         failureMessage: i.failureMessage ?? null,
       })),
     });
+  }
+}
+
+/** 版提出の external 添付に載せる URL（https のみ。利用者決定 95A） */
+export function assertSubmissionExternalUrl(url: string): void {
+  const trimmed = url.trim();
+  if (!/^https:\/\//i.test(trimmed)) {
+    throw new DomainError("anchor_invalid", { reason: "external_url_https_required" });
+  }
+  if (!/^https:\/\/[^\s/][^\s]*$/i.test(trimmed)) {
+    throw new DomainError("anchor_invalid", { reason: "external_url_invalid" });
   }
 }
 

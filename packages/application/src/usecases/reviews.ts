@@ -3,6 +3,7 @@ import {
   DomainError,
   formatDeadlineUntil,
   isDeadlineReached,
+  isEndOfJstDayDeadline,
   isUnresponded,
   markResponded,
   markViewed,
@@ -10,6 +11,8 @@ import {
   type ReviewAssignment,
   type Revision,
   revisionLabel,
+  startOfJstDay,
+  toJstDate,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
 import { about, notify } from "./notifications.ts";
@@ -33,8 +36,15 @@ export interface DeadlineReminderBatchResult {
   asOf: number;
 }
 
+/** 校正締切の「当日」（JST の表示日）か */
+function isRevisionDeadlineDay(now: number, deadlineAt: number): boolean {
+  const deadlineDay = isEndOfJstDayDeadline(deadlineAt)
+    ? toJstDate(deadlineAt - 1)
+    : toJstDate(deadlineAt);
+  return toJstDate(now) === deadlineDay;
+}
+
 /**
- * 期限接近リマインド（F-11 / §10-3）の 1 回分: 受付中で締切が windowMs 以内の版を締切順に limit 件読み、
  * その版の未確認（pending/viewed）の割当に 1 回だけ通知する（冪等キーで版×校正者につき 1 回）。
  * 対象は「期限内の受付中の版」から引く。未確認の割当を先頭から読む方式だと、受付終了・期限切れの古い割当が
  * 先頭に溜まって現行の割当に届かなくなる（レビュー指摘）。版が多いときは continueCursor で続きを読む。
@@ -47,7 +57,7 @@ export async function remindUpcomingDeadlinesBatch(
   const now = opts.asOf ?? ctx.clock.now();
   const windowMs = opts.windowMs ?? 24 * 3_600_000;
   const { page, continueCursor } = await ctx.revisions.listOpenDueWithin(
-    { after: now, upTo: now + windowMs },
+    { after: startOfJstDay(now), upTo: now + windowMs },
     { cursor: opts.cursor ?? null, limit: opts.limit ?? 100 },
   );
   let sent = 0;
@@ -55,6 +65,8 @@ export async function remindUpcomingDeadlinesBatch(
     // 索引の範囲で絞っているが、判定はドメインの規則でも確かめる
     if (revision.reviewState !== "open" || isDeadlineReached(now, revision.deadlineAt)) continue;
     if (revision.deadlineAt - now > windowMs) continue;
+    // 利用者合意（2026-10-30）: 締切当日だけ、まだ校正を完了していない人へ
+    if (!isRevisionDeadlineDay(now, revision.deadlineAt)) continue;
     const unresponded = (await ctx.assignments.listByRevision(revision.id)).filter(isUnresponded);
     if (unresponded.length === 0) continue;
     const work = await ctx.works.findById(revision.workId);

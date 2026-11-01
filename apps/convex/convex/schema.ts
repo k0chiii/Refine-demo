@@ -28,12 +28,7 @@ import {
  * - 認可は関数内で行う。テーブル構造だけで非公開作品の存在を隠すことはできないので、クエリ側で必ず絞る。
  */
 
-const permissionLevel = v.union(
-  v.literal("view"),
-  v.literal("review"),
-  v.literal("edit"),
-  v.literal("manage"),
-);
+const permissionLevel = v.union(v.literal("review"), v.literal("edit"), v.literal("manage"));
 const principalType = v.union(v.literal("user"), v.literal("group"));
 const lifecycle = v.union(
   v.literal("draft"),
@@ -42,7 +37,6 @@ const lifecycle = v.union(
   v.literal("finalized"),
   v.literal("cancelled"),
 );
-const confidentiality = v.union(v.literal("normal"), v.literal("restricted"));
 const mediaType = v.union(
   v.literal("pdf"),
   v.literal("image"),
@@ -67,6 +61,7 @@ const vRevisionGlance = v.object({
   kind: revisionKind,
   submittedAt: v.number(),
   deadlineAt: v.number(),
+  reviewUrgent: v.optional(v.boolean()),
   lapsed: v.boolean(),
 });
 const artifactRole = v.union(v.literal("source"), v.literal("preview"), v.literal("external"));
@@ -242,7 +237,6 @@ export default defineSchema({
     /** 第 n 版の予定提出日（decisions 82） */
     revisionPlannedAt: v.optional(v.array(v.object({ sequence: v.number(), at: v.number() }))),
     lifecycle,
-    confidentiality,
     finalRevisionId: v.optional(v.string()),
     /** 表記統一のルールカテゴリ（人が選ぶ） */
     notationCategories: v.optional(v.array(v.string())),
@@ -259,7 +253,6 @@ export default defineSchema({
     version: v.number(),
   })
     .index("by_aggregate_version", ["aggregateVersion"])
-    .index("by_aggregate_version_confidentiality", ["aggregateVersion", "confidentiality"])
     .index("by_search_tokens", ["searchTokens"])
     .searchIndex("search_substring", {
       searchField: "searchTokens",
@@ -271,8 +264,6 @@ export default defineSchema({
     .index("by_social_profile", ["socialProfileId"])
     .index("by_owner_team", ["ownerTeamId"])
     .index("by_lifecycle", ["lifecycle"])
-    /** 機密区分で引く（通常の制作物は委員なら誰でも見られるので、一覧は ACL を読まずに索引で集める。works.listMyWorks） */
-    .index("by_confidentiality", ["confidentiality"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
   /** 職責（制作者・校了者・主管）を「ユーザー → 作品」で引くための派生テーブル。works 書込み時に同期する。 */
@@ -334,7 +325,6 @@ export default defineSchema({
     workId: v.id("works"),
     year: v.number(),
     lifecycle: v.string(),
-    confidentiality: v.string(),
   }).index("by_work", ["workId"]),
 
   /** 制作物ごとの要約（lib/workSummary.ts）。summaryVersion の無い古い行は id だけを持ち、読む側が版から数え直す */
@@ -387,6 +377,7 @@ export default defineSchema({
     deadlineAt: v.number(),
     /** 廃止: 制作物 revisionPlannedAt へ移行（072 / e082。読取・移行のみ） */
     plannedSubmitAt: v.optional(v.number()),
+    reviewUrgent: v.optional(v.boolean()),
     reviewState,
     reviewClosedReason: v.optional(closedReason),
     reviewClosedAt: v.optional(v.number()),
@@ -431,6 +422,7 @@ export default defineSchema({
     kind: revisionKind,
     reviewType: v.string(),
     deadlineAt: v.number(),
+    reviewUrgent: v.optional(v.boolean()),
     changeSummary: v.string(),
     focusNotes: v.string(),
     state: v.union(v.literal("open"), v.literal("confirmed"), v.literal("abandoned")),

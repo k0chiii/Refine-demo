@@ -26,28 +26,22 @@ async function unreadOf(t: Harness, userId: string): Promise<number> {
 }
 
 describe("Convex 統合: 通知の認可（§5.2-10）", () => {
-  it("非公開の制作物: 閲覧 ACL の無い人への割当通知と、ACL 取消後の既存通知は作品名・確認観点を返さない", async () => {
+  it("閲覧 ACL がなくても割当通知に作品名を含む（105A）", async () => {
     vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
     const t = createHarness();
     const cast = await createCast(t);
     const workId = await setupWork(t, cast, {
       title: "極秘ポスター",
-      confidentiality: "restricted",
     });
     await submitFiles(cast, workId, pdf);
     await cast.manager.as.mutation(api.reviews.setReviewers, {
       workId,
       reviewerIds: [cast.stranger.id, cast.reviewer.id],
     });
-    // stranger は ACL も職責も無い（作品は forbidden）
     const strangers = await cast.stranger.as.query(api.notifications.list, {});
     expect(strangers).toHaveLength(1);
-    expect(JSON.stringify(strangers)).not.toContain("極秘ポスター");
-    expect(strangers[0]).toMatchObject({
-      kind: "review_assigned",
-      title: "閲覧できない制作物の通知です",
-    });
-    expect(strangers[0]).not.toHaveProperty("workId");
+    expect(strangers[0]?.body).toContain("極秘ポスター");
+    expect(strangers[0]).toMatchObject({ kind: "review_assigned", workId });
 
     const before = await cast.reviewer.as.query(api.notifications.list, {});
     expect(before[0]?.body).toContain("極秘ポスター");
@@ -56,9 +50,8 @@ describe("Convex 統合: 通知の認可（§5.2-10）", () => {
       userId: cast.reviewer.id,
     });
     const after = await cast.reviewer.as.query(api.notifications.list, {});
-    expect(JSON.stringify(after)).not.toContain("極秘ポスター");
-    expect(after[0]).not.toHaveProperty("workId");
-    expect(after[0]).not.toHaveProperty("revisionId");
+    expect(after[0]?.body).toContain("極秘ポスター");
+    expect(after[0]?.workId).toBe(workId);
   });
 });
 
@@ -111,7 +104,7 @@ describe("Convex 統合: 期限接近リマインドの対象", () => {
       workId,
       reviewerIds: [cast.reviewer.id],
     });
-    vi.setSystemTime(NOW + 30 * HOUR); // 締切まで 18 時間
+    vi.setSystemTime(Date.UTC(2026, 10, 2, 15, 0, 0)); // 締切日（JST）の 0:00（48h 後提出の当日）
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(0);
     const notes = await cast.reviewer.as.query(api.notifications.list, {});
@@ -139,7 +132,7 @@ describe("Convex 統合: 期限接近リマインドの対象", () => {
           state: "pending",
         });
     });
-    vi.setSystemTime(NOW + 30 * HOUR);
+    vi.setSystemTime(Date.UTC(2026, 10, 2, 15, 0, 0));
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(100);
     await t.finishAllScheduledFunctions(vi.runAllTimers);
     const sent = await t.run(

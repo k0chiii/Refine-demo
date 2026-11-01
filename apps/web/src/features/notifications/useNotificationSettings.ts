@@ -1,5 +1,5 @@
 import { api } from "@mf100/convex/api";
-import { ACCOUNT_CHANNELS } from "@mf100/domain";
+import { ACCOUNT_CHANNELS, SLACK_NOTIFICATION_UI_ENABLED } from "@mf100/domain";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useMemo } from "react";
@@ -21,7 +21,10 @@ export function useNotificationSettings(enabled: boolean): NotificationSettingsV
             ...settings,
             destinations: {
               email: { ...settings.destinations.email, available: true },
-              slack: { ...settings.destinations.slack, available: true },
+              slack: {
+                ...settings.destinations.slack,
+                available: SLACK_NOTIFICATION_UI_ENABLED,
+              },
             },
           }
         : settings,

@@ -18,6 +18,11 @@ export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
 export const ACCOUNT_CHANNELS = ["email", "slack"] as const satisfies readonly DeliveryChannel[];
 export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
+/**
+ * 大地さん判断（2026-10-30）: Slack 通知の実装・外への配信経路は残す。設定・管理など UI だけ出さない。
+ */
+export const SLACK_NOTIFICATION_UI_ENABLED = false;
+
 /** 通知の分類（設定でオン・オフする単位） */
 export const NOTIFICATION_CATEGORIES = [
   "mention", // メンション

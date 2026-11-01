@@ -27,7 +27,6 @@ it("意味検索の取得後に ACL と現行ルール版を照合して、古�
   await c.admin.as.mutation(api.notation.save, { rule, expectedRevision: 0 });
   const workId = await setupWork(t, c, {
     notationCategories: ["B"],
-    confidentiality: "restricted",
   });
   await t.mutation(internal.semanticRules.store, {
     ruleId: rule.ruleId,

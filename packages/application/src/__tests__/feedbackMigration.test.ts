@@ -374,7 +374,7 @@ describe("FB のスレッドをコメントへ移す", () => {
 describe("旧 FB の URL からの行き先", () => {
   it("移したスレッドは移し先のコメントへ。移していない・削除した・見られない制作物は null", async () => {
     const { ctx, work, rev2 } = await setup();
-    const secret = await seedWork(ctx, { title: "極秘", confidentiality: "restricted" });
+    const secret = await seedWork(ctx, { title: "極秘" });
     await submitRevision(ctx, secret.id);
     const t = addThread(ctx, work.id);
     addPost(ctx, t);
@@ -392,7 +392,10 @@ describe("旧 FB の URL からの行き先", () => {
     });
     expect(await resolveMigratedFeedbackThread(ctx, stranger, pending.id)).toBeNull();
     expect(await resolveMigratedFeedbackThread(ctx, stranger, "no-such")).toBeNull();
-    expect(await resolveMigratedFeedbackThread(ctx, stranger, hidden.id)).toBeNull();
+    expect(await resolveMigratedFeedbackThread(ctx, stranger, hidden.id)).toEqual({
+      revisionId: expect.any(String),
+      threadId: expect.any(String),
+    });
     await deleteThread(ctx, creator, { threadId: moved.id });
     expect(await resolveMigratedFeedbackThread(ctx, stranger, t.id)).toBeNull();
   });
@@ -401,7 +404,7 @@ describe("旧 FB の URL からの行き先", () => {
 describe("FB の通知の行き先", () => {
   it("移したスレッドの通知は移し先のコメントへ、移していない通知は行き先を持たない。見られない制作物は伏せる", async () => {
     const { ctx, work, rev2 } = await setup();
-    const secret = await seedWork(ctx, { title: "極秘ポスター", confidentiality: "restricted" });
+    const secret = await seedWork(ctx, { title: "極秘ポスター" });
     const t = addThread(ctx, work.id);
     addPost(ctx, t);
     const other = addThread(ctx, work.id);
@@ -431,7 +434,7 @@ describe("FB の通知の行き先", () => {
     expect(unmoved).toBeDefined();
     expect(unmoved).not.toHaveProperty("revisionId");
     expect(unmoved).not.toHaveProperty("workId");
-    expect(find("極秘ポスター")).toBeUndefined();
-    expect(list.filter((n) => n.title === "閲覧できない制作物の通知です")).toHaveLength(1);
+    expect(find("極秘ポスター")).toBeDefined();
+    expect(list.filter((n) => n.title === "閲覧できない制作物の通知です")).toHaveLength(0);
   });
 });
