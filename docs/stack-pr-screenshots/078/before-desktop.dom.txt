@@ -1,4 +1,4 @@
-capturedAt=2026-11-01T07:09:47.813Z
-url=http://127.0.0.1:4555/works
-scene=dashboard-manager
+capturedAt=2026-11-01T07:31:41.963Z
+url=http://127.0.0.1:4548/works
+scene=dashboard-kpi-summary
 marker:制作物の状況=制作物の状況
