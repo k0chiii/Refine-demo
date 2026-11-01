@@ -122,6 +122,7 @@ NODE
     SKIP_DEMO_BUILD=1 SKIP_PAMPHLET_COMMENTS=1 SKIP_PLAN_INFO_WARNINGS="$skip_plan" \
     SEED_BACKLOG_CAPTURE="$seed_backlog" \
     SEED_CONFIDENTIALITY="$seed_confidentiality" \
+    SEED_REVISION_PLANNED="${SEED_REVISION_PLANNED:-0}" \
     SCREENSHOT_CORPUS="$ROOT/docs/stack-pr-screenshots" \
     pnpm dlx tsx scripts/stack-pr/capture-cli.ts "$req"
   local st=$?
