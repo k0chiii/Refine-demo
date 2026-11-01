@@ -4,7 +4,6 @@ import {
   approversOf,
   assertExpectedVersion,
   assignWorkMetadata,
-  type Confidentiality,
   DomainError,
   type MediaType,
   newlyReferencedPeople,
@@ -51,7 +50,6 @@ export interface CreateWorkInput extends WorkMetadataInput {
   approvalQuorum?: number;
   deadlineAt?: number;
   finishAt?: number;
-  confidentiality?: Confidentiality;
   /** 表記統一のルールカテゴリ（人が選ぶ。空なら検査しない） */
   notationCategories?: string[];
   /** 登録と有効化を分ける案（§7.2）に備え、既定は即時 active。 */
@@ -123,7 +121,6 @@ export async function createWork(
     approvalQuorum: essentials.approvalQuorum,
     reviewerIds,
     lifecycle: input.activate === false ? "draft" : "active",
-    confidentiality: input.confidentiality ?? "normal",
     version: 1,
   };
   if (input.legacyId !== undefined) data.legacyId = input.legacyId;
