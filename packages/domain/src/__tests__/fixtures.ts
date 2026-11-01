@@ -19,7 +19,6 @@ export function makeWork(over: Partial<Work> = {}): Work {
     creatorIds: ["creator"],
     approverId: "approver",
     lifecycle: "active",
-    confidentiality: "normal",
     version: 1,
     ...over,
   };
