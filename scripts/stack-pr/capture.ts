@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "../../apps/web/e2e/support/app.ts";
+import type { DemoUser } from "../../apps/web/e2e/support/app.ts";
 import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 import {
   assertSceneMarkers,
@@ -69,12 +70,6 @@ function ensureDemo() {
   }
   throw new Error("demo preview failed to start");
 }
-
-type DemoUser =
-  | "mock-nogiku-creator"
-  | "mock-nogiku-reviewer"
-  | "mock-nogiku-manager"
-  | "mock-nogiku-approver";
 
 async function ready(page: Page) {
   await page.waitForFunction(
