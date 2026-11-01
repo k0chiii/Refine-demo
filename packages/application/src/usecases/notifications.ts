@@ -123,7 +123,6 @@ type LoadedSubject = { work: Work; grants: WorkPermissionGrant[]; teams: Team[] 
  */
 function subjectLoader(ctx: AppContext) {
   const cache = new Map<string, Promise<LoadedSubject>>();
-  let teams: Promise<Team[]> | undefined;
   return (workId: string): Promise<LoadedSubject> => {
     let hit = cache.get(workId);
     if (!hit) {
@@ -131,9 +130,7 @@ function subjectLoader(ctx: AppContext) {
         const work = await ctx.works.findById(workId).catch(() => null);
         if (!work) return null;
         const grants = await ctx.acl.listByWork(work.id);
-        if (work.confidentiality !== "restricted") return { work, grants, teams: [] };
-        teams ??= ctx.teams.list();
-        return { work, grants, teams: await teams };
+        return { work, grants, teams: [] };
       })();
       cache.set(workId, hit);
     }

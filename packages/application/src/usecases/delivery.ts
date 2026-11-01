@@ -164,7 +164,7 @@ async function composeAtSendTime(
   showPreview: boolean,
   policy: NotificationContentPolicy | undefined,
 ): Promise<NotificationMessage> {
-  // 受信者の担当の所属も添えて、非公開の制作物を所属で見られる人を伏せない
+  // 受信者の担当の所属も添えて presentNotifications と同じ判定にする
   const [shown] = await presentNotifications(
     ctx,
     principalOf(n.recipientId, await ctx.teams.list()),
@@ -173,15 +173,13 @@ async function composeAtSendTime(
   const hidden = n.workId !== undefined && shown?.workId === undefined;
   const work = !hidden && n.workId ? await ctx.works.findById(n.workId) : null;
   const notification = shown ?? n;
-  const restricted = work?.confidentiality === "restricted";
-  // 送り主の名前は、載せるときだけ引く（伏せるとき・内容を出さないときは読まない）
   const actorName =
-    showPreview && (policy?.showPreview ?? true) && !hidden && !restricted && notification.actorId
+    showPreview && (policy?.showPreview ?? true) && !hidden && notification.actorId
       ? await ctx.people.displayName(notification.actorId).catch(() => null)
       : null;
   return composeNotificationMessage({
     notification,
-    work: work ? { title: work.title, restricted } : null,
+    work: work ? { title: work.title } : null,
     hidden,
     actorName,
     showPreview,
