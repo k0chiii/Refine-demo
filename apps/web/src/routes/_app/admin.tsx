@@ -1,6 +1,7 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
+import { SLACK_NOTIFICATION_UI_ENABLED } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { useWindowClass } from "@/lib/useMedia";
@@ -38,7 +39,7 @@ const tabItems: { id: Tab; label: string }[] = [
   { id: "groups", label: "グループ" },
   { id: "users", label: "ユーザー" },
   { id: "sns", label: "SNS アカウント" },
-  { id: "slack", label: "Slack" },
+  ...(SLACK_NOTIFICATION_UI_ENABLED ? ([{ id: "slack" as const, label: "Slack" }] as const) : []),
   { id: "audit", label: "監査ログ" },
 ];
 const groupsOnly = tabItems.filter((t) => t.id === "groups");
@@ -51,9 +52,9 @@ export const Route = createFileRoute("/_app/admin")({
     s.view === "groups" ||
     s.view === "users" ||
     s.view === "sns" ||
-    s.view === "slack" ||
+    (SLACK_NOTIFICATION_UI_ENABLED && s.view === "slack") ||
     s.view === "audit"
-      ? { view: s.view }
+      ? { view: s.view as Tab }
       : {},
 });
 

@@ -166,6 +166,10 @@ describe("Convex 統合: 組織（局 › 担当）", () => {
     expect(works.some((w) => workTeamIds(w, "owner").length === 0)).toBe(true);
     const designTeam = list.find((x) => x.name === "デザイン担当" && x.parentId === pr.id)!;
     const design = works.filter((w) => workBelongsToTeam(w, list, "production", designTeam.id));
-    expect(design.map((w) => w.legacyId ?? "").sort(byText)).toEqual(["PR-001", "WEB-003"]);
+    expect(design.map((w) => w.legacyId ?? "").sort(byText)).toEqual([
+      "PR-001",
+      "SLD-050",
+      "WEB-003",
+    ]);
   });
 });

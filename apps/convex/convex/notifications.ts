@@ -2,6 +2,7 @@ import {
   listMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  markNotificationUnread,
   markUnreadNotificationsRead,
   sendTestNotification,
 } from "@mf100/application";
@@ -40,6 +41,17 @@ export const markRead = mutation({
     const { principal } = await requireUser(ctx);
     return runUseCase(async () => {
       await markNotificationRead(createAppContext(ctx), principal, notificationId);
+      return null;
+    });
+  },
+});
+
+export const markUnread = mutation({
+  args: { notificationId: v.id("notifications") },
+  handler: async (ctx, { notificationId }) => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(async () => {
+      await markNotificationUnread(createAppContext(ctx), principal, notificationId);
       return null;
     });
   },

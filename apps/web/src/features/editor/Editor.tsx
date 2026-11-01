@@ -77,11 +77,10 @@ import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
-import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
-import { ShortcutSheet } from "./ShortcutSheet";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
 import { formatDeadline, remaining } from "@/lib/format";
+import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { workHint } from "@/lib/workHint";
 import {
   blockedReasonLabel,
@@ -367,9 +366,6 @@ export function Editor({
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
-  /** 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける。置くか Esc で戻る） */
-  const armed = useMarkArmed();
-  useEffect(() => () => setMarkArmed(false), []);
   /** コメントの印（ピン・範囲・文字の強調・動画の印）を一時的に隠している（コメントそのものは消さない・一覧も隠さない） */
   const [marksHidden, setMarksHidden] = useState(() => marksHiddenFor === workId);
   /** 指で文字を選んだとき、コメントにするか端末の選択（コピーなど）に任せるか（§106） */
@@ -840,45 +836,30 @@ export function Editor({
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
   }, [draft, mobile]);
   // 比較中も表示中の版（右＝新しい版）には範囲・ピン・全体へのコメントできる。左の版は見るだけ
-  // 紙面のクリック・タップはいつもふつうの操作で、なぞる（範囲）・長押し（ピン）だけがコメントになる（features/annotation/AnchorOverlay）。
-  // 書き込みのモードはない。「コメントを追加」は、次の 1 回だけクリックでも印を付ける（armed）
-  // コメントを書き始めたら（位置つきの下書きができたら）印を付ける状態は戻し、隠していた印も出す
+  // 紙面の位置はなぞる（範囲）・長押し（ピン）だけ（features/annotation/AnchorOverlay）。全体へのコメントはツールバー・C
   useEffect(() => {
-    if (draft && !draft.free) {
-      setMarkArmed(false);
-      setMarksHidden(false);
-    }
+    if (draft && !draft.free) setMarksHidden(false);
   }, [draft]);
-  useEffect(() => {
-    if (!canComment) setMarkArmed(false);
-  }, [canComment]);
-  // ? でショートカット一覧、C でコメントを付ける（動画はビューアが C を受け持つ）。入力中は何もしない
-  const [keysOpen, setKeysOpen] = useState(false);
-  const commentKey = canComment && artifact?.type !== "video";
+  const openFreeComment = () => {
+    setDraft({ free: true });
+    setActiveThreadId(null);
+  };
+  // C で「全体へのコメント」（動画も同じ。時点へのコメントは VideoViewer の T）。入力中は何もしない
+  const commentKey = canComment;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if (e.key === "?") {
+      if ((e.key === "c" || e.key === "C") && commentKey) {
         e.preventDefault();
-        setKeysOpen(true);
-      } else if ((e.key === "c" || e.key === "C") && commentKey) {
-        e.preventDefault();
-        setMarkArmed(true);
+        setDraft({ free: true });
+        setActiveThreadId(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [commentKey]);
-  useEffect(() => {
-    if (!armed) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMarkArmed(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [armed]);
   // 隠していても、コメントを選んだ（一覧のカード・URL・通知）ら印を出す（その印へ移れるように）
   useEffect(() => {
     if (activeThreadId) setMarksHidden(false);
@@ -1292,7 +1273,9 @@ export function Editor({
           <a href={url || "#"} target="_blank" rel="noreferrer noopener">
             <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} /> {url}
           </a>
-          <p className="muted small">結論はここに書いてください</p>
+          <p className="muted small">
+            外部ツール上のコメントは同期されません。結論はここに記録してください。
+          </p>
           {record}
         </div>
       );
@@ -1639,20 +1622,6 @@ export function Editor({
         <div className="comments__main">
           <AutoProofreadStatus auto={auto} />
           <div className="comments__header">
-            {/* 「全体へのコメント」はここから（紙面の位置に付けるのは、なぞる・長押し・ツールバーの「コメントを追加」） */}
-            {canComment ? (
-              <M3eButton
-                variant="tonal"
-                className="comments__free"
-                onClick={() => {
-                  setDraft({ free: true });
-                  setActiveThreadId(null);
-                }}
-              >
-                <M3eIcon slot="icon" name="add_comment" />
-                全体へのコメント
-              </M3eButton>
-            ) : null}
             <M3eFilterChipSet aria-label="コメントの絞り込み">
               {botCount > 0 ? (
                 <>
@@ -1683,8 +1652,8 @@ export function Editor({
             onScroll={(e) => setListScrolled(e.currentTarget.scrollTop > 0)}
           >
             {carryCandidates && carryCandidates.length > 0 ? (
-              <div className="carry-box" aria-label="前版の未対応コメント">
-                <div className="label-large">前版の未対応コメント {carryCandidates.length}</div>
+              <div className="carry-box" aria-label="前版の未解決コメント">
+                <div className="label-large">前版の未解決コメント {carryCandidates.length}</div>
                 {carryCandidates.map((c) => (
                   <div key={c.id} className="carry">
                     <div className="small muted">
@@ -1713,15 +1682,15 @@ export function Editor({
               <p className="muted small comments__empty">
                 {canComment
                   ? artifact?.type === "video"
-                    ? "C でこの時点にコメント"
+                    ? "C で全体へのコメント（T でこの時点）"
                     : artifact && isWebLiveArtifact(artifact)
-                      ? "「コメント」に切り替えて要素を押す"
+                      ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
                       : artifact?.role === "external" && isLiveExternal
-                        ? "「このフレームにコメント」から"
+                        ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
                         : touch
-                          ? "長押しでコメント（なぞると範囲）"
-                          : "まだありません（C でコメント）"
-                  : "まだありません"}
+                          ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
+                          : "ファイルの上でドラッグすると、その場にコメントできます"
+                  : "コメントはありません"}
               </p>
             ) : (
               threads.map((t) => card(t))
@@ -1740,7 +1709,7 @@ export function Editor({
   );
   const drawerTabs = (current: Drawer | null, onPick: (d: Drawer) => void) => (
     <PaneTabs
-      label="サイドパネル"
+      label="引き出し"
       stretch
       value={current ?? "comments"}
       onChange={onPick}
@@ -1832,6 +1801,7 @@ export function Editor({
           {revision && work && !initial ? (
             <>
               {revision.label} ·{" "}
+              {revision.reviewUrgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
               {open
                 ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
@@ -1969,7 +1939,7 @@ export function Editor({
                   {isPdf ? (
                     <>
                       {/* ページ送りは connected のボタングループ（前・次）。数値はその左（M3 Button groups。監査 E-03）。
-                          狭い画面はページの位置をスクロールで見るので数値を省き、サイドパネルのボタンに場所を譲る */}
+                          狭い画面はページの位置をスクロールで見るので数値を省き、引き出しのボタンに場所を譲る */}
                       {mobile ? null : (
                         <span className="ws__toolbar-text">
                           {pageCount ? `${page} / ${pageCount}` : "…"}
@@ -2045,18 +2015,18 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {/* コメントはいつでもここから（⋯ やジェスチャーに隠さない）。次のクリック・ドラッグ 1 回で位置を付ける */}
-                  {canComment && !isFigmaEmbed && artifact.type !== "video" ? (
+                  {/* 全体へのコメント（位置なし）。紙面の位置はなぞる・長押しだけ */}
+                  {canComment && !isFigmaEmbed ? (
                     <M3eButton
                       className="ws__comment"
-                      variant={armed ? "filled" : "tonal"}
+                      variant="tonal"
                       size="small"
-                      aria-pressed={armed}
-                      title="コメント（C）"
-                      onClick={() => setMarkArmed(!armed)}
+                      aria-label="全体へのコメント"
+                      title="全体へのコメント（C）"
+                      onClick={() => openFreeComment()}
                     >
                       <M3eIcon slot="icon" name="add_comment" />
-                      {mobile ? null : "コメント"}
+                      {mobile ? null : "全体コメント"}
                     </M3eButton>
                   ) : null}
                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
@@ -2088,16 +2058,6 @@ export function Editor({
                     </M3eIconButton>
                   ) : null}
                   {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
-                  {!mobile ? (
-                    <M3eIconButton
-                      className="ws__keys"
-                      aria-label="キーボードショートカット（?）"
-                      title="キーボードショートカット（?）"
-                      onClick={() => setKeysOpen(true)}
-                    >
-                      <M3eIcon name="keyboard" />
-                    </M3eIconButton>
-                  ) : null}
                   {!mobile ? (
                     <M3eIconButton
                       className="ws__more"
@@ -2181,7 +2141,7 @@ export function Editor({
                 className="ws__toolbar"
                 shape="rounded"
                 elevated
-                aria-label="サイドパネルの操作"
+                aria-label="引き出しの操作"
               >
                 <div className="ws__toolbar-items">{sheetButtons}</div>
               </M3eToolbar>
@@ -2268,14 +2228,14 @@ export function Editor({
             ) : null}
             {!mobile ? (
               /* ペインの操作は縦の浮遊ツールバー（レールの反対側。Scaffold の trailing rail 領域）。
-                 右のサイドパネルが開いているあいだは隠す（サイドパネルのタブで切り替えられる）。畳んだときだけ出して、開き直す入口にする
+                 右の引き出しが開いているあいだは隠す（引き出しのタブで切り替えられる）。畳んだときだけ出して、開き直す入口にする
                  （利用者決定 2026-10-20「右の欄が表示されてない時はフローティングバー出したい。表示されてる時は消して良い」） */
               <M3eToolbar
                 vertical
                 className={`ws__side-toolbar ${desktopDrawer ? "ws__side-toolbar--hidden" : ""}`}
                 shape="rounded"
                 elevated
-                aria-label="サイドパネルの操作"
+                aria-label="引き出しの操作"
               >
                 <M3eIconButton
                   aria-label={`コメント（${openCount}）`}
@@ -2317,7 +2277,7 @@ export function Editor({
             </div>
           ) : null}
           {desktopDrawer ? (
-            <aside className="drawer" aria-label="サイドパネル">
+            <aside className="drawer" aria-label="引き出し">
               {drawerTabs(drawer, (d) => openDrawer(d))}
               <div className="drawer__body">{drawerBody(drawer)}</div>
             </aside>
@@ -2328,7 +2288,7 @@ export function Editor({
             ref={attachSheet as never}
             handle
             hideable
-            handleLabel="サイドパネル"
+            handleLabel="引き出し"
             className="ws__sheet"
           >
             <div className="drawer drawer--sheet">
@@ -2390,7 +2350,6 @@ export function Editor({
             />
           </Suspense>
         ) : null}
-        <ShortcutSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
       </div>
     </MentionProvider>
   );
@@ -2420,7 +2379,7 @@ function CompareStatus({
       ).length;
       parts.push(
         [
-          `ページの対応（前の版 ${cmp.pdf.leftCount}・この版 ${cmp.pdf.rightCount}）`,
+          `ページ対応: 旧 ${cmp.pdf.leftCount} → 新 ${cmp.pdf.rightCount}`,
           inserted ? `追加 ${inserted}` : "",
           deleted ? `削除 ${deleted}` : "",
           moved ? `移動 ${moved}` : "",

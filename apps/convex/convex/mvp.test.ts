@@ -412,8 +412,8 @@ describe("Convex 統合: 認可と状態遷移", () => {
     });
     const revisionId = rid1 as Id<"revisions">;
 
-    // 提出通知: 職責者（manager/approver）に届き、本人（creator）には届かない。確認担当にも依頼が届く
-    expect(await cast.manager.as.query(api.notifications.unreadCount, {})).toBe(1);
+    // 版提出通知は停止（2026-10-30 合意）。確認依頼は担当へ届く
+    expect(await cast.manager.as.query(api.notifications.unreadCount, {})).toBe(0);
     expect(await cast.creator.as.query(api.notifications.unreadCount, {})).toBe(0);
     const reviewerNotes = await cast.reviewer.as.query(api.notifications.list, {});
     expect(reviewerNotes.map((n) => n.kind)).toContain("check_requested");
@@ -517,6 +517,8 @@ describe("Convex 統合: 認可と状態遷移", () => {
       workId,
       reviewerIds: [cast.reviewer.id],
     });
+    // 第 3 版の締切日（JST）0:00 にリマインド（当日のみ）
+    vi.setSystemTime(Date.UTC(2026, 10, 1, 15, 0, 0));
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(0);
     const notes = await cast.reviewer.as.query(api.notifications.list, {});

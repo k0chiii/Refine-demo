@@ -32,11 +32,7 @@ export const SLIDE_DECK = "企画説明会スライド";
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
 type Demo = {
-  ensureSeeded(opts?: {
-    skipPamphletComments?: boolean;
-    skipPlanInfoWarnings?: boolean;
-    seedBacklogCapture?: boolean;
-  }): Promise<void>;
+  ensureSeeded(): Promise<void>;
   signIn(sub: string): Promise<void>;
   signOut(): Promise<void>;
   users(): Promise<{ id: string; sub: string; name: string }[]>;
@@ -159,12 +155,9 @@ export class App {
       await globalThis.__mf100demo!.ensureSeeded();
       await globalThis.__mf100demo!.signIn(s);
     }, sub);
-    await this.page.waitForURL(
-      (u) => ["/make", "/check", "/"].includes(u.pathname) || u.pathname.startsWith("/works"),
-      {
-        timeout: 30_000,
-      },
-    );
+    await this.page.waitForURL((u) => ["/make", "/check"].includes(u.pathname), {
+      timeout: 10_000,
+    });
     await this.settle();
   }
 

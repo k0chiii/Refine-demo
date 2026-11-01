@@ -75,6 +75,7 @@ export const vWorkSubGenre = v.union(
   v.literal("print_other"),
   v.literal("print_banner"),
   v.literal("print_booklet"),
+  v.literal("slide"),
   v.literal("solid_decoration"),
   v.literal("print_large"),
   v.literal("print_decoration"),

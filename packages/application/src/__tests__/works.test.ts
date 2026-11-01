@@ -36,6 +36,24 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
     expect(await ctx.works.findById(work.id)).toEqual(work);
   });
 
+  it("制作者だけの変更は、統括と校了する人ができる。制作者本人はできない", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const creatorsOnly = { creatorIds: [principals.reviewer.userId] };
+    await expect(
+      updateWork(ctx, principals.manager, { workId: work.id, patch: creatorsOnly }),
+    ).resolves.toMatchObject({ creatorIds: [principals.reviewer.userId] });
+    await expect(
+      updateWork(ctx, principals.approver, { workId: work.id, patch: creatorsOnly }),
+    ).resolves.toMatchObject({ creatorIds: [principals.reviewer.userId] });
+    await expect(
+      updateWork(ctx, principals.creator, { workId: work.id, patch: creatorsOnly }),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    await expect(
+      updateWork(ctx, principals.creator, { workId: work.id, patch: { title: "改題" } }),
+    ).rejects.toMatchObject({ code: "forbidden" });
+  });
+
   it("変更で名簿にいない人を職責に入れられない。既にいる人はそのまま", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);

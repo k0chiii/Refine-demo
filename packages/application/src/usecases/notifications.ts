@@ -299,6 +299,21 @@ export async function markNotificationRead(
   await ctx.notifications.update({ ...n, readAt: ctx.clock.now() });
 }
 
+/** 既読を取り消して未読に戻す（利用者要望 2026-10-30・中嶋さん） */
+export async function markNotificationUnread(
+  ctx: AppContext,
+  principal: Principal,
+  id: string,
+): Promise<void> {
+  const n = await ctx.notifications.findById(id);
+  if (!n || n.recipientId !== principal.userId)
+    throw new DomainError("forbidden", { notificationId: id });
+  if (n.readAt === undefined) return;
+  const { readAt: _removed, ...rest } = n;
+  void _removed;
+  await ctx.notifications.update(rest);
+}
+
 /** 「すべて既読」の 1 回分の結果。hasMore なら asOf を渡して続きを呼ぶ */
 export interface MarkAllReadResult {
   marked: number;

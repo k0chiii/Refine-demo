@@ -1,5 +1,5 @@
 import { api } from "@mf100/convex/api";
-import { TEST_NOTIFICATION_INTERVAL_MS } from "@mf100/domain";
+import { TEST_NOTIFICATION_INTERVAL_MS, SLACK_NOTIFICATION_UI_ENABLED } from "@mf100/domain";
 import { useMutation } from "convex/react";
 import { useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
@@ -38,7 +38,9 @@ function TestNotificationButton() {
           if (!(await send.run())) return;
           setCooling(true);
           toast(
-            "テスト通知を送りました。オンにした経路に届きます（Slack・メールは少し遅れることがあります）",
+            SLACK_NOTIFICATION_UI_ENABLED
+              ? "テスト通知を送りました。オンにした経路に届きます（Slack・メールは少し遅れることがあります）"
+              : "テスト通知を送りました。オンにした経路に届きます（メールは少し遅れることがあります）",
           );
         }}
       >
