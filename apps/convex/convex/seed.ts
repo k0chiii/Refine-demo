@@ -486,14 +486,18 @@ async function seedPlanInfoMismatchFixture(
     .filter((q) => q.eq(q.field("legacyId"), "WEB-003"))
     .unique();
   if (!work) return;
-  await ctx.db.patch(work._id, {
-    registeredPlanInfo: {
-      name: "五月祭メインステージ",
-      number: "M-101",
-      venue: "正門前ステージ",
-      schedule: "5/24(土) 10:00–17:00",
-    },
-  });
+  try {
+    await ctx.db.patch(work._id, {
+      registeredPlanInfo: {
+        name: "五月祭メインステージ",
+        number: "M-101",
+        venue: "正門前ステージ",
+        schedule: "5/24(土) 10:00–17:00",
+      },
+    });
+  } catch {
+    return;
+  }
   const draft = await ctx.db
     .query("documentDrafts")
     .withIndex("by_work", (q) => q.eq("workId", work._id))
@@ -592,7 +596,11 @@ async function seedPlanInfoMismatchFixture(
     unresolvedCount: (revision.unresolvedCount ?? 0) + botCount,
     openBotCount: botCount,
   });
-  await ctx.db.patch(work._id, { acceptingRevisionId: revisionId });
+  try {
+    await ctx.db.patch(work._id, { acceptingRevisionId: revisionId });
+  } catch {
+    /* pre-detail schema */
+  }
 }
 
 /** 077 スクショ: 校正締切超過 1 日 / 2 日以上の行が backlog に並ぶ */
