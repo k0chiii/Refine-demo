@@ -1,0 +1,5 @@
+capturedAt=2026-11-01T09:12:40.492Z
+url=http://127.0.0.1:4623/works
+scene=dashboard-stages-after
+captureUser=
+captureClip=section[aria-labelledby="ov-stages"]
