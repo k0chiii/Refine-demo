@@ -32,6 +32,23 @@ checkout_sources() {
   git clean -fd apps packages apps/convex 2>/dev/null || true
   git checkout "$ref" -- apps packages apps/convex
   restore_capture
+  while read -r junk; do
+    [[ -z "$junk" ]] && continue
+    if ! git cat-file -e "$ref:$junk" 2>/dev/null; then
+      rm -f "$junk"
+    fi
+  done <<'JUNK'
+apps/convex/convex/emergencyReview.test.ts
+apps/web/e2e/specs/stack-pr-c30a-capture.spec.ts
+apps/web/e2e/specs/stack-pr-e090-capture.spec.ts
+apps/web/src/features/notifications/notificationRowMenu.tsx
+apps/web/src/features/review/UrgentReviewChip.tsx
+apps/web/src/features/review/urgentReview.test.ts
+apps/web/src/features/work/TransferCreatorsDialog.tsx
+packages/application/src/__tests__/emergencyReview.test.ts
+packages/domain/src/__tests__/submitDeadline.test.ts
+packages/domain/src/revision/submitDeadline.ts
+JUNK
 }
 
 restore_sources() {
@@ -42,16 +59,30 @@ restore_sources() {
 trap restore_sources EXIT
 
 build_demo() {
-  echo "  build:demo for $1"
+  local label="$1"
+  local cache_key="${2:-$label}"
+  local cache_root="${STACK_PR_DEMO_CACHE:-/tmp/mf100-dist-cache}"
+  local cached="$cache_root/$cache_key/dist-demo"
+  echo "  build:demo for $label"
+  if [[ -f "$cached/index.html" ]]; then
+    rm -rf "$ROOT/apps/web/dist-demo"
+    mkdir -p "$ROOT/apps/web/dist-demo"
+    cp -a "$cached/." "$ROOT/apps/web/dist-demo/"
+    echo "  build:demo cache hit $cache_key"
+    return 0
+  fi
   local attempt
   for attempt in 1 2 3; do
-    if (cd "$ROOT/apps/web" && NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}" VP_CACHE=0 pnpm build:demo); then
+    if (cd "$ROOT/apps/web" && NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}" VP_CACHE=0 pnpm build:demo); then
+      mkdir -p "$cache_root/$cache_key"
+      rm -rf "$cache_root/$cache_key/dist-demo"
+      cp -a "$ROOT/apps/web/dist-demo" "$cache_root/$cache_key/dist-demo"
       return 0
     fi
     echo "  build failed (attempt $attempt), retrying after cleanup" >&2
     rm -rf "$ROOT/apps/web/dist-demo" "$ROOT/apps/web/node_modules/.vite" 2>/dev/null || true
     sync
-    sleep 5
+    sleep 8
   done
   return 1
 }
@@ -151,9 +182,9 @@ for pr in "${PRS[@]}"; do
     170)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/077"
       rm -f "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png"
-      checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 && \
+      checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 076 && \
         run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
-      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 && \
+      checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 077 && \
         run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png" || st=$?
       restore_sources
