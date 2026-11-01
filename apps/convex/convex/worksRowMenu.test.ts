@@ -21,7 +21,6 @@ describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () 
       year: 100,
       creatorIds: [cast.creator.id],
       approverId: cast.approver.id,
-      confidentiality: "restricted",
     })) as Id<"works">;
     const canEdit = async (who: (typeof cast)[keyof typeof cast]) =>
       (await who.as.query(api.works.listMine, {})).find((w) => w.id === workId)?.canEdit;

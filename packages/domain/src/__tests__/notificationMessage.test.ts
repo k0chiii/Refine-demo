@@ -23,9 +23,7 @@ const n = {
   createdAt: 1_700_000_000_000,
   preview: "相談です",
 };
-const open = { title: "夏のポスター", restricted: false };
-const secret = { title: "極秘の冊子", restricted: true };
-const secretN = { ...n, body: `「極秘の冊子」第2版・${ACTOR}さん: 相談です（${DETAIL_ONLY}）` };
+const open = { title: "夏のポスター" };
 
 const rendered = {
   push: (m) => JSON.stringify(toPushPayload(m, 1)),
@@ -39,24 +37,6 @@ const rendered = {
 type Input = Parameters<typeof composeNotificationMessage>[0];
 
 const withheldCases: { name: string; input: Input; disclosure: Disclosure; absent: string[] }[] = [
-  {
-    name: "非公開の制作物",
-    input: { notification: secretN, work: secret, hidden: false, actorName: ACTOR },
-    disclosure: "restricted",
-    absent: ["極秘の冊子", "本郷", "相談です", DETAIL_ONLY],
-  },
-  {
-    name: "非公開の制作物で、内容の表示も止めている",
-    input: {
-      notification: secretN,
-      work: secret,
-      hidden: false,
-      actorName: ACTOR,
-      showPreview: false,
-    },
-    disclosure: "withheld",
-    absent: ["極秘の冊子", "本郷", "相談です", DETAIL_ONLY],
-  },
   {
     // 伏せ直す前の通知が渡っても、手がかり（ID）ごと出さない
     name: "今は見られない制作物",
@@ -190,7 +170,7 @@ describe("経路ごとの安全な形", () => {
     const evil = "<!channel> <@U123> <https://evil.example|ここ> & more";
     const m = composeNotificationMessage({
       notification: { ...n, preview: evil, body: `「<!here>」第2版: ${evil}` },
-      work: { title: "<!here>", restricted: false },
+      work: { title: "<!here>" },
       hidden: false,
       actorName: "<@U999>",
     });
@@ -208,7 +188,7 @@ describe("経路ごとの安全な形", () => {
   it("メールの件名は改行を含まない 1 行で、120 字まで", () => {
     const m = composeNotificationMessage({
       notification: { ...n, preview: `一行目\r\n二行目\n${"あ".repeat(500)}` },
-      work: { title: "夏の\r\nポスター\u2028", restricted: false },
+      work: { title: "夏の\r\nポスター\u2028" },
       hidden: false,
       actorName: "本郷\n校正",
     });
