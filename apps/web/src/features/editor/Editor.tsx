@@ -565,7 +565,7 @@ export function Editor({
   useEffect(() => {
     if (artifact?.type === "document") setZoom(scale);
   }, [scale, artifact?.type]);
-  const persistFiles = mayPersist(data?.work.confidentiality);
+  const persistFiles = mayPersist();
   const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null, {
     persist: persistFiles,
   });
@@ -611,7 +611,7 @@ export function Editor({
     : null;
   const otherArtifact = other ? pickCompareArtifact(other.artifacts, artifact, scope) : null;
   const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null, {
-    persist: mayPersist(other?.work.confidentiality),
+    persist: mayPersist(),
   });
   // 高度な版比較: ページの自動対応・スクロール同期・文章差分（features/compare）
   const cmp = useCompareSession({
@@ -938,7 +938,6 @@ export function Editor({
         canDecide={can?.decide ?? false}
         canReply={can?.reply ?? false}
         pending={busy}
-        confidentiality={data?.work.confidentiality}
         now={now}
         {...(className ? { className } : {})}
         onSelect={() => jumpTo(t, { reveal: false })}
@@ -1606,7 +1605,6 @@ export function Editor({
         canDecide={can?.decide ?? false}
         canReply={can?.reply ?? false}
         revisionId={revisionId}
-        confidentiality={data?.work.confidentiality}
         pending={busy}
         now={now}
         onBack={() => setOpenThreadId(null)}
@@ -1805,7 +1803,7 @@ export function Editor({
               {open
                 ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
-                  ? `締切済み（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  ? `次版作成中（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
               {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
