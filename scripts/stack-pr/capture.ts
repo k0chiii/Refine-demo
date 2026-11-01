@@ -453,6 +453,8 @@ const SCENES: Record<string, SceneFn> = {
         .locator(".home-view-switcher")
         .first()
         .waitFor({ state: "visible", timeout: 30_000 });
+    } else if (await page.locator(".home-view-switcher").count()) {
+      throw new Error("home-view-switcher visible on before capture");
     }
   },
   "28-check-reviewer": async (page) => {
@@ -921,7 +923,13 @@ async function captureOne(
       `forbidden:plan-info-warnings=${warn}\nforbidden:not-found=${notFound}\n`,
     );
   }
-  validateScreenshotFile(outPath, { sceneKey, pagePath, corpusRoot, selfPath: outPath });
+  validateScreenshotFile(outPath, {
+    sceneKey,
+    pagePath,
+    corpusRoot,
+    selfPath: outPath,
+    allowSmallClip: Boolean(clipSelector),
+  });
   validateDomSidecar(outPath, sceneKey);
 }
 

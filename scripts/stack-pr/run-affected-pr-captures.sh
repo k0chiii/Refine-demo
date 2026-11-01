@@ -179,10 +179,10 @@ for pr in "${PRS[@]}"; do
     167)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/075"
       rm -f "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png"
-      checkout_sources cursor/stack-074-demo-dashboard-role-homes-v2-8b5a && build_demo 074 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 ".hub[data-hub='make']" 0 0 || st=$?
+      checkout_sources cursor/stack-073-domain-danger-kpi-v2-8b5a && build_demo 073 && \
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 ".shell__appbar" 0 0 || st=$?
       checkout_sources cursor/stack-075-ui-home-view-switcher-v2-8b5a && build_demo 075 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".hub[data-hub='make']" 0 1 || st=$?
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".home-view-switcher" 0 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png" || st=$?
       restore_sources
       ;;
@@ -327,7 +327,25 @@ trap - EXIT
 rm -f "$CAPTURE_BAK" "$SEED_BAK" "$BACKEND_BAK"
 fail=0
 if [[ -s /tmp/pr-capture-failures.log ]]; then fail=1; fi
-AUDIT_DIRS=(075 077 078 079 080 q68 061 062 q70 q71 q72 q75 q74 q73)
+AUDIT_DIRS=()
+for pr in "${PRS[@]}"; do
+  case "$pr" in
+    167) AUDIT_DIRS+=(075) ;;
+    170) AUDIT_DIRS+=(077) ;;
+    171) AUDIT_DIRS+=(078) ;;
+    172) AUDIT_DIRS+=(079) ;;
+    173) AUDIT_DIRS+=(080) ;;
+    194) AUDIT_DIRS+=(q68) ;;
+    196) AUDIT_DIRS+=(061) ;;
+    198) AUDIT_DIRS+=(062) ;;
+    200) AUDIT_DIRS+=(q71) ;;
+    201) AUDIT_DIRS+=(q70) ;;
+    202) AUDIT_DIRS+=(q72) ;;
+    203) AUDIT_DIRS+=(q75) ;;
+    204) AUDIT_DIRS+=(q73) ;;
+    205) AUDIT_DIRS+=(q74 q73) ;;
+  esac
+done
 for d in "${AUDIT_DIRS[@]}"; do
   dir="$ROOT/docs/stack-pr-screenshots/$d"
   if [[ -d "$dir" ]]; then
