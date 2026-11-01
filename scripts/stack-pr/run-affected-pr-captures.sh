@@ -232,7 +232,7 @@ for pr in "${PRS[@]}"; do
       checkout_sources develop && build_demo develop && \
         run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 0 "" 0 || st=$?
       checkout_sources cursor/stack-q68-copy-next-revision-8b5a && build_demo q68 && \
-        run_one q68-works-after "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
+        SEED_REVISION_PLANNED=1 run_one q68-works-after "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list-desktop.png" \
         "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list-desktop.png" || st=$?
       restore_sources

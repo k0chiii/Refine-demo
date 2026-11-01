@@ -421,11 +421,15 @@ const SCENES: Record<string, SceneFn> = {
     }
   },
   "editor-shortcut-open": async (page) => {
-    await SCENES["076-before-editor"]!(page);
+    await signInAs(page, "mock-nogiku-creator");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: "WEB-003" }).click();
+    await page.waitForURL(/\/write/, { timeout: 60_000 });
+    await page.waitForSelector(".write", { timeout: 60_000 });
     await page.keyboard.press("?");
     await page
       .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
-      .waitFor({ state: "visible", timeout: 30_000 });
+      .waitFor({ state: "visible", timeout: 60_000 });
   },
   "editor-shortcut-closed": async (page) => {
     await SCENES["076-before-editor"]!(page);
@@ -776,16 +780,10 @@ const SCENES: Record<string, SceneFn> = {
       .getByRole("button", { name: "保存" })
       .click({ timeout: 60_000 });
     await page.waitForTimeout(2500);
+    await page.evaluate(async () => {
+      await globalThis.__mf100demo!.resolveOpenPlanInfoBotThreads();
+    });
     await openEditorDrawer(page, "コメント");
-    const resolve = page
-      .locator(".comments .thread")
-      .filter({ hasText: /開催日時.*一致しません/ })
-      .getByRole("button", { name: /解決|解決済みに/ })
-      .first();
-    if (await resolve.isVisible().catch(() => false)) {
-      await resolve.click({ timeout: 30_000 });
-      await page.waitForTimeout(800);
-    }
     await page
       .getByText(/開催日時.*一致しません/)
       .first()

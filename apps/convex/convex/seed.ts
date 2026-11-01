@@ -644,6 +644,9 @@ async function seedBacklogDelayScreenshotFixture(
         ownerTeamId: undefined,
         productionTeamIds: [],
         ...(opts.seedConfidentiality ? { confidentiality: "normal" as const } : {}),
+        ...(process.env.SEED_REVISION_PLANNED === "1"
+          ? { revisionPlannedAt: [{ sequence: 2, at: endOfJstDay(now + 14 * day) }] }
+          : {}),
       });
       work = (await ctx.db.get(workId))!;
       await ctx.db.insert("workRoles", {
@@ -693,6 +696,15 @@ async function seedBacklogDelayScreenshotFixture(
       });
     } else if (revision.deadlineAt !== deadlineAt) {
       await ctx.db.patch(revision._id, { deadlineAt });
+    }
+    if (process.env.SEED_REVISION_PLANNED === "1") {
+      try {
+        await ctx.db.patch(work._id, {
+          revisionPlannedAt: [{ sequence: 2, at: endOfJstDay(now + 14 * day) }],
+        });
+      } catch {
+        /* schema without revisionPlannedAt */
+      }
     }
     const closedAt = now;
     if (revision.reviewState === "open" && revision.deadlineAt <= now) {
