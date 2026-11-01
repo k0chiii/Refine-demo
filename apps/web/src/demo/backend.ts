@@ -147,19 +147,9 @@ class DemoBackend {
       : this.t;
   }
 
-  ensureSeeded(opts?: {
-    skipPamphletComments?: boolean;
-    skipPlanInfoWarnings?: boolean;
-    seedBacklogCapture?: boolean;
-    seedConfidentiality?: boolean;
-  }): Promise<void> {
+  ensureSeeded(): Promise<void> {
     this.seeded ??= this.enqueue(async () => {
-      await this.t.mutation(internal.seed.demo, {
-        skipPamphletComments: opts?.skipPamphletComments,
-        skipPlanInfoWarnings: opts?.skipPlanInfoWarnings,
-        seedBacklogCapture: opts?.seedBacklogCapture,
-        seedConfidentiality: opts?.seedConfidentiality !== false,
-      });
+      await this.t.mutation(internal.seed.demo, {});
     });
     return this.seeded;
   }
