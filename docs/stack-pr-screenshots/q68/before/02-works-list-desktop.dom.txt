@@ -1,3 +1,3 @@
-capturedAt=2026-11-01T07:10:34.465Z
-url=http://127.0.0.1:4681/works
+capturedAt=2026-11-01T08:32:09.840Z
+url=http://127.0.0.1:4576/works
 scene=q68-works-before
