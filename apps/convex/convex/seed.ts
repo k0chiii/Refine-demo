@@ -50,6 +50,7 @@ export const demo = internalMutation({
   args: {
     skipPamphletComments: v.optional(v.boolean()),
     skipPlanInfoWarnings: v.optional(v.boolean()),
+    seedBacklogCapture: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
@@ -387,7 +388,9 @@ export const demo = internalMutation({
     if (!args.skipPlanInfoWarnings) {
       await seedPlanInfoMismatchFixture(ctx, ids, now, day);
     }
-    await seedBacklogDelayScreenshotFixture(ctx, ids, now, day);
+    if (args.seedBacklogCapture || process.env.SEED_BACKLOG_CAPTURE === "1") {
+      await seedBacklogDelayScreenshotFixture(ctx, ids, now, day);
+    }
     return { users: ids, createdWorks: created };
   },
 });
@@ -613,7 +616,7 @@ async function seedBacklogDelayScreenshotFixture(
         title: spec.title,
         purpose: "ダッシュボード遅延色の撮影用",
         category: "撮影",
-        mediaType: "print",
+        mediaType: "pdf" as const,
         year: 100,
         legacyId: spec.legacyId,
         relatedTeamIds: [],

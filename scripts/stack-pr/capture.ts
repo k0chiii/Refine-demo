@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { Page, Route } from "../../apps/web/e2e/support/app.ts";
 import type { DemoUser } from "../../apps/web/e2e/support/app.ts";
 import { App, PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
-import { reviewerComments, submitFirstRevision } from "../../apps/web/e2e/support/scenarios.ts";
+import { submitFirstRevision } from "../../apps/web/e2e/support/scenarios.ts";
 import {
   assertSceneMarkers,
   validateScreenshotFile,
@@ -16,6 +16,23 @@ import {
 } from "./screenshot-validate.ts";
 
 export { SIGNIN_SCREEN_MD5 };
+
+/** tsx keepNames が demo bundle 内の __name 参照を壊すため、ページ実行前に定義する */
+const CAPTURE_INIT_SCRIPT_SOURCE =
+  "globalThis.__name = function (f) { return f; }; void 0;";
+
+async function ensureDemoSeeded(
+  page: Page,
+  opts: {
+    skipPamphletComments: boolean;
+    skipPlanInfoWarnings: boolean;
+    seedBacklogCapture?: boolean;
+  },
+) {
+  await page.evaluate(async (o) => {
+    await globalThis.__mf100demo!.ensureSeeded(o);
+  }, opts);
+}
 
 const repoRoot =
   process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -604,6 +621,22 @@ const SCENES: Record<string, SceneFn> = {
       .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
       .waitFor({ state: "visible", timeout: 60_000 });
   },
+  "q70-work-form-no-plan": async (page) => {
+    await SCENES["q63b-admin-register"]!(page);
+    await page
+      .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
+      .waitFor({ state: "hidden", timeout: 5_000 })
+      .catch(() => undefined);
+  },
+  "q70-info-tab-plan-no-warn": async (page) => {
+    await SCENES["q70-info-tab-plan"]!(page);
+    await openEditorDrawer(page, "コメント");
+    await page
+      .locator(".comments .thread", { hasText: "一致しません" })
+      .first()
+      .waitFor({ state: "hidden", timeout: 10_000 })
+      .catch(() => undefined);
+  },
   "q70-info-tab-plan": async (page) => {
     await openWebWorkEditor(page);
     await openEditorDrawer(page, "情報");
@@ -681,14 +714,27 @@ const SCENES: Record<string, SceneFn> = {
   "detail-preview-73": async (page) => {
     const app = new App(page);
     const { workPath, revisionPath } = await submitFirstRevision(app);
-    await reviewerComments(app, revisionPath, "表記を確認してください");
+    await app.signInAs("mock-nogiku-reviewer");
+    await app.go(revisionPath);
+    await app.pdfReady();
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await app.drawer("コメント");
+    await app.freeComment("表記を確認してください");
     const workId = workPath.match(/\/works\/([^/?#]+)/)?.[1];
     if (!workId) throw new Error(`workId missing from ${workPath}`);
     await app.signInAs("mock-nogiku-manager");
     await app.go(`${workPath}/detail`);
-    await page.waitForSelector(".detail-shell__preview-frame .viewer canvas", {
-      timeout: 120_000,
-    });
+    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    await page.waitForFunction(
+      () => {
+        const c = document.querySelector<HTMLCanvasElement>(
+          ".detail-shell__preview-frame .viewer__page canvas",
+        );
+        return (c?.width ?? 0) > 0;
+      },
+      null,
+      { timeout: 120_000 },
+    );
     await page.locator(".detail-shell__comments .thread").first().waitFor({
       state: "visible",
       timeout: 60_000,
@@ -699,11 +745,14 @@ const SCENES: Record<string, SceneFn> = {
 async function runScene(page: Page, key: string) {
   const skipPamphletComments = process.env.SKIP_PAMPHLET_COMMENTS === "1";
   const skipPlanInfoWarnings = process.env.SKIP_PLAN_INFO_WARNINGS === "1";
+  const seedBacklogCapture =
+    process.env.SEED_BACKLOG_CAPTURE === "1" || key === "dashboard-backlog-delay";
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate((seedOpts) => globalThis.__mf100demo!.ensureSeeded(seedOpts), {
+  await ensureDemoSeeded(page, {
     skipPamphletComments,
     skipPlanInfoWarnings,
+    seedBacklogCapture,
   });
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
@@ -765,6 +814,7 @@ export async function captureShots(
     baseURL: BASE,
     serviceWorkers: "block",
   });
+  await desktop.addInitScript(CAPTURE_INIT_SCRIPT_SOURCE);
   await desktop.route("**/*", (route: Route) => {
     void route.continue({
       headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
@@ -779,6 +829,7 @@ export async function captureShots(
       baseURL: BASE,
       serviceWorkers: "block",
     });
+    await mobile.addInitScript(CAPTURE_INIT_SCRIPT_SOURCE);
     await mobile.route("**/*", (route: Route) => {
       void route.continue({
         headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },

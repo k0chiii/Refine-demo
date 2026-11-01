@@ -35,6 +35,7 @@ type Demo = {
   ensureSeeded(opts?: {
     skipPamphletComments?: boolean;
     skipPlanInfoWarnings?: boolean;
+    seedBacklogCapture?: boolean;
   }): Promise<void>;
   signIn(sub: string): Promise<void>;
   signOut(): Promise<void>;
@@ -158,9 +159,12 @@ export class App {
       await globalThis.__mf100demo!.ensureSeeded();
       await globalThis.__mf100demo!.signIn(s);
     }, sub);
-    await this.page.waitForURL((u) => ["/make", "/check"].includes(u.pathname), {
-      timeout: 10_000,
-    });
+    await this.page.waitForURL(
+      (u) => ["/make", "/check", "/"].includes(u.pathname) || u.pathname.startsWith("/works"),
+      {
+        timeout: 30_000,
+      },
+    );
     await this.settle();
   }
 

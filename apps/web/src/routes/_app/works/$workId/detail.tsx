@@ -2,8 +2,8 @@ import { api } from "@mf100/convex/api";
 import { isReviewableArtifact } from "@mf100/domain";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { Suspense, useMemo, useState } from "react";
-import { PdfViewer } from "@/features/annotation/lazyViewers";
+import { useMemo, useState } from "react";
+import { PdfViewer } from "@/features/annotation/PdfViewer";
 import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { ThreadCard } from "@/features/review/ThreadCard";
 import { workHint } from "@/lib/workHint";
@@ -16,6 +16,21 @@ export const Route = createFileRoute("/_app/works/$workId/detail")({
   component: WorkDetailShell,
 });
 
+function pickDetailRevisionId(
+  workData:
+    | {
+        acceptingRevisionId: string | null;
+        revisions: readonly { id: string; reviewState: string; sequence: number }[];
+      }
+    | undefined,
+): string | null {
+  if (!workData) return null;
+  if (workData.acceptingRevisionId) return workData.acceptingRevisionId;
+  const open = workData.revisions.filter((r) => r.reviewState === "open");
+  if (open.length === 0) return null;
+  return [...open].sort((a, b) => b.sequence - a.sequence)[0]!.id;
+}
+
 /**
  * 制作物詳細（決定 73A）: 大きなプレビュー + コメント列。データは works.get / revisions.get。
  */
@@ -24,14 +39,14 @@ function WorkDetailShell() {
   const hint = workHint(workId);
   const workData = useQuery(api.works.get, { workId });
   const title = workData?.work.title ?? hint?.title ?? "制作物";
-  const acceptingRev = workData?.revisions?.find((r) => r.id === workData.acceptingRevisionId);
+  const revisionId = pickDetailRevisionId(workData);
+  const acceptingRev = workData?.revisions?.find((r) => r.id === revisionId);
   const version =
     acceptingRev != null
       ? acceptingRev.kind === "rough"
         ? "ラフ"
         : `版 ${acceptingRev.sequence}`
       : "—";
-  const revisionId = workData?.acceptingRevisionId ?? null;
 
   return (
     <div className="detail-shell">
@@ -107,8 +122,7 @@ function DetailPreviewFrame({ revisionId }: { revisionId: string }) {
       data-testid="detail-preview"
     >
       {artifact?.type === "pdf" && pdfReady ? (
-        <Suspense fallback={<Loading label="PDF を読み込んでいます" />}>
-          <PdfViewer
+        <PdfViewer
             download={blob.download}
             blob={blob.blob}
             artifactId={artifact.id}
@@ -123,7 +137,6 @@ function DetailPreviewFrame({ revisionId }: { revisionId: string }) {
             scale={1}
             rotation={0}
           />
-        </Suspense>
       ) : artifact && !pdfReady && !blob.error ? (
         <Loading label="ファイルを取得しています" />
       ) : (
