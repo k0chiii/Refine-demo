@@ -1790,7 +1790,9 @@ async function compactScenes() {
   await page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
   const writeWorkUrl = page.url();
-  await page.waitForSelector(".editor__empty");
+  // seed（ロール別ホーム用）でこの制作物には第1版があるので、引き出し「版」の「文章を書く」から入る
+  await pdfReady();
+  await drawer("版");
   await btn("文章を書く").click();
   await page.waitForSelector(".doc[contenteditable=true]");
   await page.click(".doc");
@@ -1851,7 +1853,7 @@ async function compactScenes() {
   await shot("42-write-word-count");
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "完了" }).click();
   await settle();
-  // 版として提出 → HTML の版スナップショット（書式付き）が第1版になる
+  // 版として提出 → HTML の版スナップショット（書式付き）が次の版になる
   await page.locator("m3e-button", { hasText: "版として提出" }).click();
   await page.waitForSelector("m3e-dialog[open] textarea");
   await page.fill("m3e-dialog[open] textarea >> nth=0", "トップページの文章 初稿");
@@ -1862,7 +1864,7 @@ async function compactScenes() {
     { timeout: 30_000 },
   );
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
-  await page.waitForURL(/\/v\/1(\?|$)/, { timeout: 15_000 });
+  await page.waitForURL(/\/v\/\d+(\?|$)/, { timeout: 15_000 });
   // 校正者を割り当てる（主管）
   await signInAs("mock-nogiku-manager");
   await go(writeWorkUrl);
@@ -2929,9 +2931,19 @@ async function webFigmaScenes() {
   await page.fill("m3e-dialog[open] textarea >> nth=0", "公式サイトの初稿（ライブ表示で確認）");
   // Web の URL は https のみ（利用者決定 95A）。preview は http なので、見本サイトを https の架空オリジンで
   // 受けて preview から返す（ブリッジは postMessage なので別オリジンでも動く）
+  // 見本サイトのブリッジは既定で同じオリジンにしか送らないので、本番の外部サイトと同じく
+  // data-allow-origin で校正システムのオリジンを許す（public/bridge.js の冒頭の説明）
   await page.route(`${DEMO_SITE_ORIGIN}/**`, async (route) => {
     const u = new URL(route.request().url());
     const res = await page.request.fetch(`${BASE}${u.pathname}${u.search}`);
+    if (u.pathname.endsWith(".html")) {
+      const html = (await res.text()).replace(
+        'src="/bridge.js"',
+        `src="/bridge.js" data-allow-origin="${BASE}"`,
+      );
+      await route.fulfill({ status: res.status(), contentType: "text/html", body: html });
+      return;
+    }
     await route.fulfill({ response: res });
   });
   await page.fill('m3e-dialog[open] input[type="url"]', `${DEMO_SITE_ORIGIN}/demo-site/index.html`);
