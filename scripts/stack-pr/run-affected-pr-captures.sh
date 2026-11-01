@@ -146,9 +146,9 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/077"
       rm -f "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png"
       checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 && \
-        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 "#ov-backlog" 1 || st=$?
+        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
       checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 && \
-        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 "#ov-backlog" 1 || st=$?
+        run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png" || st=$?
       restore_sources
       ;;
@@ -158,7 +158,7 @@ for pr in "${PRS[@]}"; do
       ;;
     172)
       capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
-        dashboard-manager dashboard-manager 079 1 1 ".ov__block#ov-stages, .ov__block" 1 || st=$?
+        dashboard-manager dashboard-manager 079 1 1 "#ov-stages" 1 || st=$?
       ;;
     173)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/080"

@@ -630,6 +630,7 @@ const SCENES: Record<string, SceneFn> = {
     }
   },
   "dashboard-manager": async (page) => {
+    await page.evaluate(() => localStorage.setItem("mf100.works-overview-open", "1"));
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
@@ -793,11 +794,17 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
     await openDashboardOverview(page);
-    const backlog = page.locator("#ov-backlog");
-    await backlog.waitFor({ state: "visible", timeout: 90_000 });
-    await backlog.scrollIntoViewIfNeeded();
-    await backlog.getByText("【撮影】締切超過 1 日").first().waitFor({ state: "visible", timeout: 90_000 });
-    await backlog.getByText("【撮影】締切超過 3 日").first().waitFor({ state: "visible", timeout: 90_000 });
+    const backlogSection = page.locator('section[aria-labelledby="ov-backlog"]');
+    await backlogSection.waitFor({ state: "visible", timeout: 90_000 });
+    await backlogSection.scrollIntoViewIfNeeded();
+    await backlogSection
+      .getByText("【撮影】締切超過 1 日")
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 });
+    await backlogSection
+      .getByText("【撮影】締切超過 3 日")
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 });
   },
   "detail-preview-73": async (page) => {
     const app = new App(page);
@@ -858,6 +865,7 @@ async function captureOne(
   const pagePath = new URL(page.url()).pathname;
   if (clipSelector) {
     const loc = page.locator(clipSelector).first();
+    await loc.scrollIntoViewIfNeeded();
     await loc.waitFor({ state: "visible", timeout: 60_000 });
     await loc.screenshot({ path: outPath });
   } else {
