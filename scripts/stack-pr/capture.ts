@@ -9,6 +9,7 @@ import { App, PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 import { submitFirstRevision } from "../../apps/web/e2e/support/scenarios.ts";
 import {
   assertSceneMarkers,
+  assertAuthenticatedCapture,
   validateScreenshotFile,
   validateDomSidecar,
   writeSceneDomSidecar,
@@ -27,6 +28,7 @@ async function ensureDemoSeeded(
     skipPamphletComments: boolean;
     skipPlanInfoWarnings: boolean;
     seedBacklogCapture?: boolean;
+    seedConfidentiality?: boolean;
   },
 ) {
   await page.evaluate(async (o) => {
@@ -367,6 +369,67 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.waitForSelector(".works", { timeout: 60_000 });
     await page.locator(WORKS_ENTRY).first().waitFor({ state: "attached", timeout: 60_000 });
+  },
+  "q68-works-before": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    await page.getByText("【撮影】締切超過").first().waitFor({ state: "visible", timeout: 90_000 });
+    await page.getByText("受付終了").first().waitFor({ state: "visible", timeout: 90_000 });
+  },
+  "q68-works-after": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    await page.getByText("【撮影】締切超過").first().waitFor({ state: "visible", timeout: 90_000 });
+    await page.getByText("次版作成中").first().waitFor({ state: "visible", timeout: 90_000 });
+  },
+  "works-deadline-header-before": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    await page
+      .locator(".works-table")
+      .getByText("◆校了目標日")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "works-deadline-header-after": async (page) => {
+    await signInAs(page, "mock-nogiku-manager");
+    await demoGo(page, "/works");
+    await page.waitForSelector(".works-table", { timeout: 60_000 });
+    await page
+      .locator(".works-table")
+      .getByText("校了目標日", { exact: true })
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    if (await page.locator(".works-table").getByText("◆校了目標日").count()) {
+      throw new Error("◆校了目標日 still visible in works table");
+    }
+  },
+  "editor-shortcut-open": async (page) => {
+    await SCENES["076-before-editor"]!(page);
+    await page.getByRole("button", { name: /キーボードショートカット/ }).click({ timeout: 60_000 });
+    await page
+      .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
+      .waitFor({ state: "visible", timeout: 30_000 });
+  },
+  "editor-shortcut-closed": async (page) => {
+    await SCENES["076-before-editor"]!(page);
+    const btn = page.getByRole("button", { name: /キーボードショートカット/ });
+    if (await btn.isVisible().catch(() => false)) {
+      throw new Error("shortcut help button still visible");
+    }
+    await page.keyboard.press("?");
+    await page.waitForTimeout(600);
+    if (
+      await page
+        .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
+        .isVisible()
+        .catch(() => false)
+    ) {
+      throw new Error("shortcut sheet still opens on ?");
+    }
   },
   "27-make-creator": async (page) => {
     await signInAs(page, "mock-nogiku-creator");
@@ -739,16 +802,11 @@ const SCENES: Record<string, SceneFn> = {
     await app.signInAs("mock-nogiku-manager");
     await app.go(`${workPath}/detail`);
     await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
-    await page.waitForFunction(
-      () => {
-        const c = document.querySelector<HTMLCanvasElement>(
-          ".detail-shell__preview-frame .viewer__page canvas",
-        );
-        return (c?.width ?? 0) > 0;
-      },
-      null,
-      { timeout: 120_000 },
-    );
+    await page
+      .locator(".detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame canvas")
+      .first()
+      .waitFor({ state: "attached", timeout: 120_000 })
+      .catch(() => {});
     await page.locator(".detail-shell__comments .thread").first().waitFor({
       state: "visible",
       timeout: 60_000,
@@ -761,12 +819,14 @@ async function runScene(page: Page, key: string) {
   const skipPlanInfoWarnings = process.env.SKIP_PLAN_INFO_WARNINGS === "1";
   const seedBacklogCapture =
     process.env.SEED_BACKLOG_CAPTURE === "1" || key === "dashboard-backlog-delay";
+  const seedConfidentiality = process.env.SEED_CONFIDENTIALITY === "1";
   await page.goto(`${BASE}/signin`);
   await ready(page);
   await ensureDemoSeeded(page, {
     skipPamphletComments,
     skipPlanInfoWarnings,
     seedBacklogCapture,
+    seedConfidentiality,
   });
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
@@ -780,6 +840,7 @@ async function captureOne(
   clipSelector?: string,
 ) {
   await runScene(page, sceneKey);
+  await assertAuthenticatedCapture(page);
   await applyCaptureTheme(page);
   await assertSceneMarkers(page, sceneKey);
   await assertCaptureThemePrimary(page);

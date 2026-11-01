@@ -72,6 +72,32 @@ export type ValidateOpts = {
   selfPath?: string;
 };
 
+/** 撮影直後: サインイン画面のまま／ログイン URL なら失敗 */
+export async function assertAuthenticatedCapture(page: Page): Promise<void> {
+  const url = new URL(page.url());
+  const path = url.pathname;
+  if (path.includes("/signin") || path === "/login") {
+    throw new Error(`capture still on auth URL ${path}`);
+  }
+  const mockSignIn = page.getByRole("button", { name: "モックでサインイン" });
+  if (await mockSignIn.isVisible().catch(() => false)) {
+    throw new Error("capture shows mock sign-in button");
+  }
+  const heading = page.getByRole("heading", { name: /サインイン/ });
+  if (await heading.isVisible().catch(() => false)) {
+    throw new Error("capture shows sign-in heading");
+  }
+}
+
+export function assertBeforeAfterDistinct(beforePath: string, afterPath: string): void {
+  if (!fs.existsSync(beforePath) || !fs.existsSync(afterPath)) return;
+  const a = md5File(beforePath);
+  const b = md5File(afterPath);
+  if (a === b) {
+    throw new Error(`before and after identical md5 ${a} (${beforePath} vs ${afterPath})`);
+  }
+}
+
 export function validateScreenshotFile(filePath: string, opts: ValidateOpts): void {
   if (!fs.existsSync(filePath)) throw new Error(`missing screenshot ${filePath}`);
   const stat = fs.statSync(filePath);

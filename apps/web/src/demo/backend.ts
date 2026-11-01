@@ -151,6 +151,7 @@ class DemoBackend {
     skipPamphletComments?: boolean;
     skipPlanInfoWarnings?: boolean;
     seedBacklogCapture?: boolean;
+    seedConfidentiality?: boolean;
   }): Promise<void> {
     const skipComments =
       opts?.skipPamphletComments === true || g.process?.env?.SKIP_PAMPHLET_COMMENTS === "1";
@@ -158,11 +159,14 @@ class DemoBackend {
       opts?.skipPlanInfoWarnings === true || g.process?.env?.SKIP_PLAN_INFO_WARNINGS === "1";
     const seedBacklog =
       opts?.seedBacklogCapture === true || g.process?.env?.SEED_BACKLOG_CAPTURE === "1";
+    const seedConfidentiality =
+      opts?.seedConfidentiality === true || g.process?.env?.SEED_CONFIDENTIALITY === "1";
     this.seeded ??= this.enqueue(async () => {
       await this.t.mutation(internal.seed.demo, {
         skipPamphletComments: skipComments,
         skipPlanInfoWarnings: skipPlan,
         seedBacklogCapture: seedBacklog,
+        seedConfidentiality,
       });
     });
     return this.seeded;

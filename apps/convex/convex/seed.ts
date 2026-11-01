@@ -51,6 +51,7 @@ export const demo = internalMutation({
     skipPamphletComments: v.optional(v.boolean()),
     skipPlanInfoWarnings: v.optional(v.boolean()),
     seedBacklogCapture: v.optional(v.boolean()),
+    seedConfidentiality: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
@@ -329,8 +330,8 @@ export const demo = internalMutation({
         // 納期は日付だけ（その日の終わり＝翌日 0:00 JST）。30 日後の 23:59 まで
         deadlineAt: endOfJstDay(now + 30 * day),
         lifecycle: "active",
-        confidentiality: "normal",
         version: 1,
+        ...(args.seedConfidentiality ? { confidentiality: "normal" as const } : {}),
       });
       for (const [userId, role] of [
         [ids["mock-nogiku-manager"]!, "manager"],
@@ -636,10 +637,10 @@ async function seedBacklogDelayScreenshotFixture(
         approvalQuorum: 1,
         deadlineAt: endOfJstDay(now + 30 * day),
         lifecycle: "active",
-        confidentiality: "normal",
         version: 1,
         ownerTeamId: undefined,
         productionTeamIds: [],
+        ...(args.seedConfidentiality ? { confidentiality: "normal" as const } : {}),
       });
       work = (await ctx.db.get(workId))!;
       await ctx.db.insert("workRoles", {
