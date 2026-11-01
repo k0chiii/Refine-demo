@@ -121,6 +121,7 @@ export const vWorkMetadataPatch = {
   productionDays: v.optional(v.union(v.number(), v.null())),
   tags: v.optional(v.union(v.array(v.string()), v.null())),
 };
+export const vRegisteredPlanInfoPatch = v.optional(v.union(vRegisteredPlanInfo, v.null()));
 /** 版の提出時の申告（写真・めい・指針外の色の使用） */
 export const vRevisionDeclarations = v.object({
   usesPhotos: v.boolean(),

@@ -59,11 +59,13 @@ import {
   vWorkGenre,
   vWorkMetadataFields,
   vWorkMetadataPatch,
+  vRegisteredPlanInfoPatch,
 } from "./lib/validators.ts";
 
 const workPatch = {
   /** Notion の制作物 DB に揃えた項目（null で消す。docs/NOTION_ALIGNMENT.md） */
   ...vWorkMetadataPatch,
+  registeredPlanInfo: vRegisteredPlanInfoPatch,
   title: v.optional(v.string()),
   purpose: v.optional(v.string()),
   category: v.optional(v.string()),
