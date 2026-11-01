@@ -170,29 +170,21 @@ async function demoGo(page: Page, routePath: string) {
 async function signInAs(page: Page, sub: DemoUser) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate(() => globalThis.__mf100demo!.signOut());
-  await page.waitForTimeout(300);
-  try {
-    await page.evaluate(async (s: DemoUser) => {
-      await globalThis.__mf100demo!.signIn(s);
-    }, sub);
-    await page.waitForURL((u: URL) => !u.pathname.includes("/signin"), { timeout: 30_000 });
-  } catch {
-    await page.goto(`${BASE}/signin`);
-    await ready(page);
-    const panel = page.locator("m3e-expansion-panel", { hasText: "モック" });
-    await panel.locator("[slot=header]").click();
-    await page
-      .locator("select, m3e-select")
-      .first()
-      .selectOption(sub)
-      .catch(async () => {
-        await page.locator("select").first().selectOption(sub);
-      });
-    await page.getByRole("button", { name: "モックでサインイン" }).click();
-    await page.waitForURL((u: URL) => !u.pathname.includes("/signin"), { timeout: 60_000 });
-  }
-  await page.waitForTimeout(1000);
+  await page.evaluate(async (s: DemoUser) => {
+    await globalThis.__mf100demo!.signOut();
+    await globalThis.__mf100demo!.ensureSeeded();
+    await globalThis.__mf100demo!.signIn(s);
+  }, sub);
+  await page.waitForURL(
+    (u: URL) =>
+      !u.pathname.includes("/signin") &&
+      (u.pathname.startsWith("/make") ||
+        u.pathname.startsWith("/check") ||
+        u.pathname.startsWith("/works") ||
+        u.pathname.startsWith("/admin")),
+    { timeout: 90_000 },
+  );
+  await page.waitForTimeout(800);
 }
 
 async function openDashboardOverview(page: Page) {

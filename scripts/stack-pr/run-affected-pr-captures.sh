@@ -116,7 +116,7 @@ capture_pair() {
 : > /tmp/pr-capture-failures.log
 PRS=("$@")
 if [[ ${#PRS[@]} -eq 0 ]]; then
-  PRS=(167 170 171 172 173 194 196 198 203 205)
+  PRS=(167 170 171 172 173 194 196 198 200 201 202 203 204 205)
 fi
 
 for pr in "${PRS[@]}"; do
@@ -164,9 +164,9 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q68/before" "$ROOT/docs/stack-pr-screenshots/q68/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q68/before"/* "$ROOT/docs/stack-pr-screenshots/q68/after"/*
       checkout_sources develop && build_demo develop && \
-        run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 || st=$?
+        run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 0 "" 0 || st=$?
       checkout_sources cursor/stack-q68-copy-next-revision-8b5a && build_demo q68 && \
-        run_one q68-works-after "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list" 1 ".works-table" 1 || st=$?
+        run_one q68-works-after "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list-desktop.png" \
         "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list-desktop.png" || st=$?
       restore_sources
@@ -186,7 +186,7 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/062"
       rm -f "$ROOT/docs/stack-pr-screenshots/062/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/062/after-desktop.png"
       checkout_sources develop && build_demo develop198 && \
-        run_one works-deadline-header-before "$ROOT/docs/stack-pr-screenshots/062/before" 1 ".works-table" 0 || st=$?
+        run_one works-deadline-header-before "$ROOT/docs/stack-pr-screenshots/062/before" 1 ".works-table" 0 0 "" 0 || st=$?
       checkout_sources cursor/stack-fix-deadline-diamond-8b5a && build_demo fix198 && \
         run_one works-deadline-header-after "$ROOT/docs/stack-pr-screenshots/062/after" 1 ".works-table" 0 0 "" 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/062/before-desktop.png" \
@@ -256,7 +256,7 @@ done
 restore_sources
 trap - EXIT
 rm -f "$CAPTURE_BAK" "$SEED_BAK" "$BACKEND_BAK"
-AUDIT_DIRS=(075 077 078 079 080 q68 061 062 q75 q74 q73)
+AUDIT_DIRS=(075 077 078 079 080 q68 061 062 q70 q71 q72 q75 q74 q73)
 for d in "${AUDIT_DIRS[@]}"; do
   dir="$ROOT/docs/stack-pr-screenshots/$d"
   if [[ -d "$dir" ]]; then
