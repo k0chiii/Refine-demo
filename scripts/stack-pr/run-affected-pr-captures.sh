@@ -67,13 +67,19 @@ run_one() {
   local seed_confidentiality="${8:-1}"
   local port=$((4500 + RANDOM % 200))
   local req="/tmp/mf100-cap-$$.json"
-  node <<NODE
+  CLIP="$clip" SCENE="$scene" PREFIX="$prefix" OPEN_SW="$open_switcher" EXPAND_OV="$expand_overview" REQ="$req" node <<'NODE'
 const fs = require("fs");
+const clip = process.env.CLIP || "";
+const scene = process.env.SCENE || "";
+const prefix = process.env.PREFIX || "";
+const openSwitcher = process.env.OPEN_SW || "";
+const expandOverview = process.env.EXPAND_OV || "";
+const req = process.env.REQ || "";
 const o = {};
-if ("$clip") o.clipSelector = "$clip";
-if ("$open_switcher" === "1") o.openViewSwitcher = true;
-if ("$expand_overview" === "0") o.expandOverview = false;
-fs.writeFileSync("$req", JSON.stringify({shots:{desktop:"$scene"},prefix:"$prefix",opts:o}));
+if (clip) o.clipSelector = clip;
+if (openSwitcher === "1") o.openViewSwitcher = true;
+if (expandOverview === "0") o.expandOverview = false;
+fs.writeFileSync(req, JSON.stringify({ shots: { desktop: scene }, prefix, opts: o }));
 NODE
   env CAPTURE_PORT="$port" BASE_URL="http://127.0.0.1:$port" \
     SKIP_DEMO_BUILD=1 SKIP_PAMPHLET_COMMENTS=1 SKIP_PLAN_INFO_WARNINGS="$skip_plan" \
@@ -154,7 +160,7 @@ for pr in "${PRS[@]}"; do
       ;;
     171)
       capture_pair 171 cursor/stack-077-ui-delay-color-tokens-8b5a cursor/stack-078-ui-kpi-row-mock-8b5a \
-        dashboard-manager dashboard-manager 078 1 1 ".kpis--mock-row, .kpis" 1 || st=$?
+        dashboard-manager dashboard-manager 078 1 1 ".kpis" 1 || st=$?
       ;;
     172)
       capture_pair 172 cursor/stack-078-ui-kpi-row-mock-8b5a cursor/stack-079-ui-graphs-stage-bureau-8b5a \
@@ -226,9 +232,9 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q72/before" "$ROOT/docs/stack-pr-screenshots/q72/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q72/before"/* "$ROOT/docs/stack-pr-screenshots/q72/after"/*
       checkout_sources cursor/stack-q71-plan-info-warn-8b5a && build_demo q71 && \
-        run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 || st=$?
+        run_one q72-plan-info-before-warn "$ROOT/docs/stack-pr-screenshots/q72/before/before-recheck" 0 '.info-tab__section[aria-label="企画情報"]' || st=$?
       checkout_sources cursor/stack-q72-plan-info-recheck-8b5a && build_demo q72 && \
-        run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 || st=$?
+        run_one q72-plan-info-recheck "$ROOT/docs/stack-pr-screenshots/q72/after/after-recheck" 0 '.info-tab__section[aria-label="企画情報"]' || st=$?
       restore_sources
       ;;
     203)

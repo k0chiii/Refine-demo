@@ -381,8 +381,9 @@ const SCENES: Record<string, SceneFn> = {
     const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
     await capRow.scrollIntoViewIfNeeded();
     await capRow.waitFor({ state: "visible", timeout: 90_000 });
-    await page.getByText("受付終了").first().scrollIntoViewIfNeeded();
-    await page.getByText("受付終了").first().waitFor({ state: "visible", timeout: 90_000 });
+    const stageCell = page.locator(".works-table").getByText("受付終了").first();
+    await stageCell.scrollIntoViewIfNeeded();
+    await stageCell.waitFor({ state: "visible", timeout: 90_000 });
   },
   "q68-works-after": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -391,8 +392,9 @@ const SCENES: Record<string, SceneFn> = {
     const capRow = page.locator(".works-table").getByText("【撮影】締切超過").first();
     await capRow.scrollIntoViewIfNeeded();
     await capRow.waitFor({ state: "visible", timeout: 90_000 });
-    await page.getByText("次版作成中").first().scrollIntoViewIfNeeded();
-    await page.getByText("次版作成中").first().waitFor({ state: "visible", timeout: 90_000 });
+    const stageCell = page.locator(".works-table").getByText("次版作成中").first();
+    await stageCell.scrollIntoViewIfNeeded();
+    await stageCell.waitFor({ state: "visible", timeout: 90_000 });
   },
   "works-deadline-header-before": async (page) => {
     await signInAs(page, "mock-nogiku-manager");
@@ -408,23 +410,19 @@ const SCENES: Record<string, SceneFn> = {
     await signInAs(page, "mock-nogiku-manager");
     await demoGo(page, "/works");
     await page.waitForSelector(".works-table", { timeout: 60_000 });
-    await page
-      .locator(".works-table")
-      .getByText("校了目標日", { exact: true })
-      .first()
-      .waitFor({ state: "visible", timeout: 60_000 });
+    const header = page.locator(".works-table").getByText("校了目標日", { exact: true }).first();
+    await header.scrollIntoViewIfNeeded();
+    await header.waitFor({ state: "visible", timeout: 60_000 });
     if (await page.locator(".works-table").getByText("◆校了目標日").count()) {
       throw new Error("◆校了目標日 still visible in works table");
     }
   },
   "editor-shortcut-open": async (page) => {
     await SCENES["076-before-editor"]!(page);
-    const btn = page.getByRole("button", { name: /キーボードショートカット/ });
-    if (await btn.isVisible().catch(() => false)) {
-      await btn.click({ timeout: 60_000 });
-    } else {
-      await page.keyboard.press("?");
-    }
+    await page.locator(".ws").click({ position: { x: 8, y: 8 } });
+    const btn = page.locator('[aria-label*="キーボードショートカット"]').first();
+    await btn.waitFor({ state: "visible", timeout: 60_000 });
+    await btn.click({ timeout: 60_000 });
     await page
       .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
       .waitFor({ state: "visible", timeout: 30_000 });
