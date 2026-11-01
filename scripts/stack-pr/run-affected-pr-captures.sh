@@ -176,7 +176,7 @@ for pr in "${PRS[@]}"; do
       checkout_sources cursor/stack-074-demo-dashboard-role-homes-v2-8b5a && build_demo 074 && \
         run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/before" 1 ".hub[data-hub='make']" 0 0 || st=$?
       checkout_sources cursor/stack-075-ui-home-view-switcher-v2-8b5a && build_demo 075 && \
-        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".home-view-switcher" 0 1 || st=$?
+        run_one 27-make-creator "$ROOT/docs/stack-pr-screenshots/075/after" 1 ".hub[data-hub='make']" 0 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/075/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/075/after-desktop.png" || st=$?
       restore_sources
       ;;
@@ -224,7 +224,7 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/q68/before" "$ROOT/docs/stack-pr-screenshots/q68/after"
       rm -f "$ROOT/docs/stack-pr-screenshots/q68/before"/* "$ROOT/docs/stack-pr-screenshots/q68/after"/*
       checkout_sources develop && build_demo develop && \
-        run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 0 "" 0 || st=$?
+        run_one q68-works-before "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
       checkout_sources cursor/stack-q68-copy-next-revision-8b5a && build_demo q68 && \
         run_one q68-works-after "$ROOT/docs/stack-pr-screenshots/q68/after/02-works-list" 1 ".works-table" 1 0 "" 1 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/q68/before/02-works-list-desktop.png" \

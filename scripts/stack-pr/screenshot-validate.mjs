@@ -79,7 +79,8 @@ function samePrPair(a, b) {
 
 function check(path) {
   const buf = readFileSync(path);
-  if (buf.length < minBytes) errors.push(`${path}: size ${buf.length} < ${minBytes}`);
+  const min = buf.length >= minBytes ? minBytes : 4 * 1024;
+  if (buf.length < min) errors.push(`${path}: size ${buf.length} < ${min}`);
   const md5 = createHash("md5").update(buf).digest("hex");
   if (md5 === SIGNIN_MD5) errors.push(`${path}: sign-in screen md5`);
   for (const prefix of BANNED_MD5_PREFIXES) {

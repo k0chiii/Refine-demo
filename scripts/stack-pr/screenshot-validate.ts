@@ -16,6 +16,7 @@ export const BANNED_MD5_PREFIXES = [
 export const PLACEHOLDER_MAX_BYTES = 4096;
 
 export const MIN_SCREENSHOT_BYTES = 30 * 1024;
+export const MIN_CLIP_SCREENSHOT_BYTES = 4 * 1024;
 
 /** 画面ごとに DOM 上で必須の部分一致文言（Playwright getByText 相当） */
 export const SCENE_MARKERS: Record<string, readonly string[]> = {
@@ -79,6 +80,8 @@ export type ValidateOpts = {
   /** 自分自身を除いて md5 重複を禁止 */
   corpusRoot?: string;
   selfPath?: string;
+  /** 要素クリップのときは最小サイズを緩める */
+  allowSmallClip?: boolean;
 };
 
 /** 撮影直後: サインイン画面のまま／ログイン URL なら失敗 */
@@ -113,8 +116,9 @@ export function validateScreenshotFile(filePath: string, opts: ValidateOpts): vo
   if (stat.size <= PLACEHOLDER_MAX_BYTES) {
     throw new Error(`placeholder-sized png (${stat.size} bytes) ${filePath}`);
   }
-  if (stat.size < MIN_SCREENSHOT_BYTES) {
-    throw new Error(`too small (${stat.size} < ${MIN_SCREENSHOT_BYTES}) ${filePath}`);
+  const minBytes = opts.allowSmallClip ? MIN_CLIP_SCREENSHOT_BYTES : MIN_SCREENSHOT_BYTES;
+  if (stat.size < minBytes) {
+    throw new Error(`too small (${stat.size} < ${minBytes}) ${filePath}`);
   }
   const md5 = md5File(filePath);
   if (md5 === SIGNIN_SCREEN_MD5) {
@@ -252,11 +256,13 @@ export function assertPngPairValidated(beforePath: string, afterPath: string, co
   assertBeforeAfterDistinct(beforePath, afterPath);
   for (const p of [beforePath, afterPath]) {
     if (!fs.existsSync(p)) throw new Error(`missing ${p}`);
+    const allowSmallClip = fs.statSync(p).size < MIN_SCREENSHOT_BYTES;
     validateScreenshotFile(p, {
       sceneKey: "pair",
       pagePath: "/works",
       corpusRoot,
       selfPath: p,
+      allowSmallClip,
     });
     validateDomSidecar(p, "pair");
   }

@@ -391,7 +391,7 @@ export const demo = internalMutation({
     }
     if (args.seedBacklogCapture || process.env.SEED_BACKLOG_CAPTURE === "1") {
       await seedBacklogDelayScreenshotFixture(ctx, ids, now, day, {
-        seedConfidentiality: args.seedConfidentiality === true,
+        seedConfidentiality,
       });
     }
     return { users: ids, createdWorks: created };

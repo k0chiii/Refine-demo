@@ -174,7 +174,7 @@ function demoSeedOptsFromEnv() {
     seedBacklogCapture:
       process.env.SEED_BACKLOG_CAPTURE === "1" ||
       process.env.CAPTURE_SCENE === "dashboard-backlog-delay",
-    seedConfidentiality: process.env.SEED_CONFIDENTIALITY === "1",
+    seedConfidentiality: process.env.SEED_CONFIDENTIALITY !== "0",
   };
 }
 
