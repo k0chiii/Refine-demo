@@ -71,12 +71,6 @@ function ensureDemo() {
   throw new Error("demo preview failed to start");
 }
 
-type DemoUser =
-  | "mock-nogiku-creator"
-  | "mock-nogiku-reviewer"
-  | "mock-nogiku-manager"
-  | "mock-nogiku-approver";
-
 async function ready(page: Page) {
   await page.waitForFunction(
     () => Boolean(globalThis.__mf100demo && globalThis.__mf100router),
