@@ -1,0 +1,5 @@
+capturedAt=2026-11-01T09:15:23.047Z
+url=http://127.0.0.1:4687/make
+scene=make-hub-clip
+captureUser=mock-nogiku-reviewer
+captureClip=.hub[data-hub='make']
