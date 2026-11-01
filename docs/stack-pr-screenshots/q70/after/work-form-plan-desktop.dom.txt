@@ -1,3 +1,3 @@
-capturedAt=2026-11-01T04:48:24.127Z
-url=http://127.0.0.1:4677/admin
+capturedAt=2026-11-01T07:11:49.247Z
+url=http://127.0.0.1:4519/admin
 scene=q70-work-form-plan
