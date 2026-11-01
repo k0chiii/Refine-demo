@@ -1,5 +1,4 @@
-capturedAt=2026-11-01T09:12:29.093Z
-url=http://127.0.0.1:4690/works
+capturedAt=2026-11-01T13:04:17.326Z
+url=http://127.0.0.1:4358/works
 scene=dashboard-stages-before
-captureUser=
-captureClip=section[aria-labelledby="ov-stages"]
+captureUser=mock-nogiku-manager

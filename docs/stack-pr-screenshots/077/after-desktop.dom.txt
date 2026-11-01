@@ -1,5 +1,4 @@
-capturedAt=2026-11-01T09:01:10.449Z
-url=http://127.0.0.1:4632/works
+capturedAt=2026-11-01T13:21:34.534Z
+url=http://127.0.0.1:4311/works
 scene=dashboard-backlog-delay
-captureUser=
-captureClip=section[aria-labelledby="ov-backlog"]
+captureUser=mock-nogiku-manager
