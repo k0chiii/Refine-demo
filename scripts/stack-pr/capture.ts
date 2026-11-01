@@ -233,6 +233,25 @@ async function openWebWork(page: Page) {
   await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
 }
 
+async function navigateWebWorkV1(page: Page) {
+  const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+  if (workId) {
+    await page.evaluate((id: string) => {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/v/$n",
+        params: { workId: id, n: "1" },
+      });
+    }, workId);
+    await page.waitForTimeout(800);
+  }
+}
+
+async function openWebWorkEditor(page: Page) {
+  await openWebWork(page);
+  await navigateWebWorkV1(page);
+  await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+}
+
 async function seedReviewPamphlet(page: Page) {
   await signInAs(page, "mock-nogiku-creator");
   await demoGo(page, "/works");
@@ -565,9 +584,7 @@ const SCENES: Record<string, SceneFn> = {
     await SCENES["dashboard-member"]!(page);
   },
   "q70-work-form-plan": async (page) => {
-    await openWebWork(page);
-    await page.locator("m3e-button", { hasText: "編集" }).first().click({ timeout: 60_000 });
-    await page.waitForSelector("m3e-dialog[open]", { timeout: 60_000 });
+    await SCENES["q63b-admin-register"]!(page);
     await page
       .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
       .scrollIntoViewIfNeeded();
@@ -576,7 +593,7 @@ const SCENES: Record<string, SceneFn> = {
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "q70-info-tab-plan": async (page) => {
-    await openWebWork(page);
+    await openWebWorkEditor(page);
     await openEditorDrawer(page, "情報");
     await page.locator('.info-tab__section[aria-label="企画情報"]').waitFor({
       state: "visible",
@@ -588,18 +605,31 @@ const SCENES: Record<string, SceneFn> = {
     await demoGo(page, "/works");
     await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await navigateWebWorkV1(page);
+    await page.waitForSelector(".ws, .write", { timeout: 60_000 });
     await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
     await openEditorDrawer(page, "コメント");
     await page
-      .locator(".comments .thread", { hasText: "企画名" })
+      .locator(".comments .thread", { hasText: "が本文に見つかりません" })
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q71-comments-web-clean": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await navigateWebWorkV1(page);
+    await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page.locator(".comments").waitFor({ state: "visible", timeout: 60_000 });
   },
   "q72-plan-info-recheck": async (page) => {
     await SCENES["q70-info-tab-plan"]!(page);
     await page.getByRole("textbox", { name: "企画名" }).fill("来場者向けの総合案内");
     await page
-      .locator(".info-tab")
+      .locator('.info-tab__section[aria-label="企画情報"]')
       .getByRole("button", { name: "保存" })
       .click({ timeout: 60_000 });
     await page.waitForTimeout(600);
