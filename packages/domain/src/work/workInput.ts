@@ -8,7 +8,7 @@ import {
   normalizeApprovalSetup,
 } from "./approvers.ts";
 import { normalizeWorkTags, WORK_SIZE_MAX, workGenres, workSubGenreCodes } from "./metadata.ts";
-import { confidentialities, mediaTypes, type Work } from "./Work.ts";
+import { mediaTypes, type Work } from "./Work.ts";
 
 /**
  * 制作物（Work）の生成・変更で共通に守る不変条件。
@@ -225,7 +225,6 @@ export type WorkPatch = {
       | "approverIds"
       | "approvalQuorum"
       | "managerIds"
-      | "confidentiality"
       | "legacyId"
       | "productionTeamIds"
       | "relatedTeamIds"
@@ -270,8 +269,6 @@ export function applyWorkPatch(
   }
   if (!(mediaTypes as readonly string[]).includes(next.mediaType))
     throw invalid("mediaType", "unknown");
-  if (!(confidentialities as readonly string[]).includes(next.confidentiality))
-    throw invalid("confidentiality", "unknown");
   assignWorkMetadata(next, normalizeWorkMetadata(meta));
   if (patch.registeredPlanInfo !== undefined) {
     if (patch.registeredPlanInfo === null) delete next.registeredPlanInfo;
