@@ -177,6 +177,13 @@ const go = async (path) => {
   const nav = page.evaluate(
     (p) => {
       const pathOnly = p.replace(/^https?:\/\/[^/]+/, "");
+      const brokenRev = pathOnly.match(/^\/works\/(.+)works\/v\/(\d+)$/);
+      if (brokenRev) {
+        return globalThis.__mf100router.navigate({
+          to: "/works/$workId/v/$n",
+          params: { workId: brokenRev[1], n: brokenRev[2] },
+        });
+      }
       const rev = pathOnly.match(/^\/works\/([^/]+)\/v\/(\d+)$/);
       if (rev) {
         return globalThis.__mf100router.navigate({
