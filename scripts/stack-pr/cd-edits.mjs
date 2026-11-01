@@ -107,15 +107,15 @@ export function SnsHomeBand() {
   const me = useQuery(api.me.me, {});
   const make = useQuery(api.dashboard.make, {});
   if (!me?.canAssignApprovers && !me?.canCreateWorks) return null;
-  const sns = make?.works.filter((w) => w.mediaType === "sns") ?? [];
-  if (sns.length === 0) return null;
+  const snsCount = make?.works.filter((w) => w.isCreator).length ?? 0;
+  if (snsCount === 0) return null;
   return (
     <M3eCard variant="filled" className="sns-home-band">
       <div slot="content">
         <M3eHeading variant="title" size="small" level={2}>
           SNS 投稿
         </M3eHeading>
-        <p className="sns-home-band__meta">{sns.length} 件が進行中</p>
+        <p className="sns-home-band__meta">{snsCount} 件が進行中</p>
       </div>
     </M3eCard>
   );
