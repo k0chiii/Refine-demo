@@ -8,29 +8,19 @@ export const counts = query({
   handler: async (ctx, { year }) => {
     const { principal } = await requireUser(ctx);
     // Missing component entries during rollout must not silently undercount.
-    const legacy = principal.isSystemAdmin
-      ? await ctx.db
-          .query("works")
-          .withIndex("by_aggregate_version", (q) => q.eq("aggregateVersion", undefined))
-          .first()
-      : await ctx.db
-          .query("works")
-          .withIndex("by_aggregate_version_confidentiality", (q) =>
-            q.eq("aggregateVersion", undefined).eq("confidentiality", "normal"),
-          )
-          .first();
+    const legacy = await ctx.db
+      .query("works")
+      .withIndex("by_aggregate_version", (q) => q.eq("aggregateVersion", undefined))
+      .first();
     if (legacy) return { ready: false, counts: [] };
     const counts = [];
     for (const lifecycle of ["draft", "active", "on_hold", "finalized", "cancelled"]) {
-      let count = await workAggregate.count(ctx, {
-        bounds: { prefix: [year, lifecycle, "normal"] },
+      const count = await workAggregate.count(ctx, {
+        bounds: { prefix: [year, lifecycle] },
       });
-      if (principal.isSystemAdmin)
-        count += await workAggregate.count(ctx, {
-          bounds: { prefix: [year, lifecycle, "restricted"] },
-        });
       counts.push({ lifecycle, count });
     }
+    void principal;
     return { ready: true, counts };
   },
 });

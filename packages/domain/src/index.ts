@@ -5,7 +5,6 @@ export * from "./shared/ids.ts";
 export * from "./shared/csvValues.ts";
 export * from "./shared/reactions.ts";
 export * from "./acl/Permission.ts";
-export * from "./acl/WorkViewPolicy.ts";
 export * from "./acl/authorize.ts";
 export * from "./acl/OrgPermission.ts";
 export * from "./work/Work.ts";

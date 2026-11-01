@@ -658,15 +658,8 @@ describe("AI 校正の候補（サーバーでの確認）", () => {
     ]);
     expect(f.every((x) => x.detector === "ai" && x.needsReview)).toBe(true);
   });
-  it("機密区分で使えるかを決める（既定は非公開に送らない）", () => {
-    expect(aiBlockReason(defaultAiPolicy, { confidentiality: "normal" })).toMatch(
-      /設定されていません/,
-    );
-    const on = { ...defaultAiPolicy, enabled: true };
-    expect(aiBlockReason(on, { confidentiality: "normal" })).toBeNull();
-    expect(aiBlockReason(on, { confidentiality: "restricted" })).toMatch(/非公開/);
-    expect(
-      aiBlockReason({ ...on, allowRestricted: true }, { confidentiality: "restricted" }),
-    ).toBeNull();
+  it("有効なときだけ使える（API キー・enabled）", () => {
+    expect(aiBlockReason(defaultAiPolicy)).toMatch(/設定されていません/);
+    expect(aiBlockReason({ ...defaultAiPolicy, enabled: true })).toBeNull();
   });
 });

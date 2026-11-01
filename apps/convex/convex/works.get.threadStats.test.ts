@@ -21,7 +21,6 @@ async function setupWork(t: Harness) {
     year: 100,
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
-    confidentiality: "normal",
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
