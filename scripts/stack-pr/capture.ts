@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "../../apps/web/e2e/support/app.ts";
+import type { DemoUser } from "../../apps/web/e2e/support/app.ts";
 import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
 import {
   assertSceneMarkers,
@@ -224,6 +225,33 @@ async function openEditorDrawer(page: Page, label: string) {
 }
 
 const samplePdf = path.join(webRoot, "e2e/fixtures/sample.pdf");
+const WEB_TOP = "公式サイト トップページ";
+
+async function openWebWork(page: Page) {
+  await signInAs(page, "mock-nogiku-manager");
+  await demoGo(page, "/works");
+  await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
+  await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+}
+
+async function navigateWebWorkV1(page: Page) {
+  const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+  if (workId) {
+    await page.evaluate((id: string) => {
+      return globalThis.__mf100router!.navigate({
+        to: "/works/$workId/v/$n",
+        params: { workId: id, n: "1" },
+      });
+    }, workId);
+    await page.waitForTimeout(800);
+  }
+}
+
+async function openWebWorkEditor(page: Page) {
+  await openWebWork(page);
+  await navigateWebWorkV1(page);
+  await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+}
 
 async function seedReviewPamphlet(page: Page) {
   await signInAs(page, "mock-nogiku-creator");
@@ -556,16 +584,76 @@ const SCENES: Record<string, SceneFn> = {
   "dashboard-member-tablet": async (page) => {
     await SCENES["dashboard-member"]!(page);
   },
+  "q70-work-form-plan": async (page) => {
+    await SCENES["q63b-admin-register"]!(page);
+    await page
+      .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
+      .scrollIntoViewIfNeeded();
+    await page
+      .locator('m3e-dialog[open] .form-section[aria-label="企画情報"]')
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q70-info-tab-plan": async (page) => {
+    await openWebWorkEditor(page);
+    await openEditorDrawer(page, "情報");
+    await page.locator('.info-tab__section[aria-label="企画情報"]').waitFor({
+      state: "visible",
+      timeout: 60_000,
+    });
+  },
+  "q71-plan-info-warn": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await navigateWebWorkV1(page);
+    await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page
+      .locator(".comments .thread", { hasText: "が本文に見つかりません" })
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q71-comments-web-clean": async (page) => {
+    await signInAs(page, "mock-nogiku-reviewer");
+    await demoGo(page, "/works");
+    await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
+    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+    await navigateWebWorkV1(page);
+    await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
+    await openEditorDrawer(page, "コメント");
+    await page.locator(".comments").waitFor({ state: "visible", timeout: 60_000 });
+  },
+  "q72-plan-info-recheck": async (page) => {
+    await SCENES["q70-info-tab-plan"]!(page);
+    await page.getByRole("textbox", { name: "企画名" }).fill("来場者向けの総合案内");
+    await page
+      .locator('.info-tab__section[aria-label="企画情報"]')
+      .getByRole("button", { name: "保存" })
+      .click({ timeout: 60_000 });
+    await page.waitForTimeout(600);
+  },
+  "detail-preview-73": async (page) => {
+    await openWebWork(page);
+    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error("workId missing");
+    await demoGo(page, `/works/${workId}/detail`);
+    await page.waitForSelector(".detail-shell__preview-frame", { timeout: 60_000 });
+    await page.waitForSelector(".detail-shell__comments", { timeout: 60_000 });
+  },
 };
 
 async function runScene(page: Page, key: string) {
   const skipPamphletComments = process.env.SKIP_PAMPHLET_COMMENTS === "1";
+  const skipPlanInfoWarnings = process.env.SKIP_PLAN_INFO_WARNINGS === "1";
   await page.goto(`${BASE}/signin`);
   await ready(page);
-  await page.evaluate(
-    (skip) => globalThis.__mf100demo!.ensureSeeded({ skipPamphletComments: skip }),
+  await page.evaluate((seedOpts) => globalThis.__mf100demo!.ensureSeeded(seedOpts), {
     skipPamphletComments,
-  );
+    skipPlanInfoWarnings,
+  });
   const fn = SCENES[key] ?? SCENES["27-make-creator"]!;
   await fn(page);
 }
@@ -618,7 +706,7 @@ export async function captureShots(
     serviceWorkers: "block",
   });
   await desktop.route("**/*", (route: Route) => {
-    route.continue({
+    void route.continue({
       headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
     });
   });
@@ -632,7 +720,7 @@ export async function captureShots(
       serviceWorkers: "block",
     });
     await mobile.route("**/*", (route: Route) => {
-      route.continue({
+      void route.continue({
         headers: { ...route.request().headers(), "Cache-Control": "no-cache, no-store" },
       });
     });
