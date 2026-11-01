@@ -1,0 +1,3 @@
+capturedAt=2026-10-31T07:27:00.048Z
+url=http://127.0.0.1:4262/works/000000000000000000000010016works/detail
+scene=dashboard-detail-mobile

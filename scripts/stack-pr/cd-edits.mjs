@@ -364,10 +364,7 @@ import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
     case "086":
       appendCss(
         "ui-detail-shell-mock",
-        `.detail-shell {
-  background: var(--mf-surface-container-lowest);
-}
-.detail-shell__head {
+        `.detail-shell__head {
   border-bottom: 1px solid var(--mf-outline-variant);
 }`,
       );
@@ -389,6 +386,9 @@ import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
       appendCss(
         "ui-dark-theme-home",
         `@media (prefers-color-scheme: dark) {
+  .works {
+    background: var(--mf-surface);
+  }
   .home-dashboard--manager .kpi,
   .ov .kpi {
     --m3e-filled-card-container-color: var(--mf-surface-container-high);

@@ -379,7 +379,7 @@ export function VideoViewer({
           style={viewport && !full ? { width: controlsW } : undefined}
           tabIndex={0}
           role="group"
-          aria-label={`${label}（ショートカットは ? で一覧）`}
+          aria-label={label}
           onKeyDown={onKeyDown}
         >
           <div

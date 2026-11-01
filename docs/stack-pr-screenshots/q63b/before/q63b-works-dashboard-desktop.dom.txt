@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:38:05.703Z
+url=http://127.0.0.1:4304/works
+scene=q63b-works-dashboard
+marker:制作物の状況=制作物の状況
