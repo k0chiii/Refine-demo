@@ -9,6 +9,7 @@ import { useEffect, useMemo } from "react";
 import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
 import { ViewSwitcher } from "@/features/home/ViewSwitcher";
 import { SnsHomeBand } from "@/features/home/SnsHomeBand";
+import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";
 import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
 import { formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
@@ -289,6 +290,7 @@ function Make() {
       <AppBarSlot slot="actions">
         <ViewSwitcher />
       </AppBarSlot>
+      <RoleHomeDashboard variant="manager" />
       <SnsHomeBand />
       {tabs}
       {tab === "active" ? activeBody() : tab === "draft" ? draftBody() : doneBody()}
