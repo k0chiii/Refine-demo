@@ -780,6 +780,8 @@ const SCENES: Record<string, SceneFn> = {
     await page.evaluate(async () => {
       await globalThis.__mf100demo!.resolveOpenPlanInfoBotThreads();
     });
+    await page.reload({ waitUntil: "networkidle" });
+    await openWebWorkEditor(page);
     await openEditorDrawer(page, "コメント");
     await page.waitForTimeout(800);
     const notFound = await page.getByText(/見つかりません/).count();
