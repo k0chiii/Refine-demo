@@ -175,6 +175,7 @@ function demoSeedOptsFromEnv() {
       process.env.SEED_BACKLOG_CAPTURE === "1" ||
       process.env.CAPTURE_SCENE === "dashboard-backlog-delay",
     seedConfidentiality: process.env.SEED_CONFIDENTIALITY !== "0",
+    seedRevisionPlanned: process.env.SEED_REVISION_PLANNED === "1",
   };
 }
 
@@ -421,11 +422,10 @@ const SCENES: Record<string, SceneFn> = {
     }
   },
   "editor-shortcut-open": async (page) => {
-    await openWebWorkEditor(page);
-    await page.waitForSelector(".write", { timeout: 60_000 });
+    await SCENES["076-before-editor"]!(page);
     await page.keyboard.press("?");
     await page
-      .locator('m3e-dialog[open]', { hasText: "ショートカット" })
+      .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "editor-shortcut-closed": async (page) => {

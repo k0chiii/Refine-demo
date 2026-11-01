@@ -152,6 +152,7 @@ class DemoBackend {
     skipPlanInfoWarnings?: boolean;
     seedBacklogCapture?: boolean;
     seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
   }): Promise<void> {
     this.seeded ??= this.enqueue(async () => {
       await this.t.mutation(internal.seed.demo, {
@@ -159,6 +160,7 @@ class DemoBackend {
         skipPlanInfoWarnings: opts?.skipPlanInfoWarnings,
         seedBacklogCapture: opts?.seedBacklogCapture,
         seedConfidentiality: opts?.seedConfidentiality !== false,
+        seedRevisionPlanned: opts?.seedRevisionPlanned === true,
       });
     });
     return this.seeded;

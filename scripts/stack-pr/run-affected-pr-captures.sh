@@ -93,6 +93,10 @@ build_demo() {
   return 1
 }
 
+wire_061_shortcut_editor() {
+  patch -p1 -d "$ROOT" < "$ROOT/scripts/stack-pr/patches/p04-061-shortcut-wiring.patch"
+}
+
 run_one() {
   local scene="$1"
   local prefix="$2"
@@ -241,7 +245,7 @@ for pr in "${PRS[@]}"; do
     196)
       mkdir -p "$ROOT/docs/stack-pr-screenshots/061"
       rm -f "$ROOT/docs/stack-pr-screenshots/061/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/061/after-desktop.png"
-      checkout_sources cursor/stack-061-editor-shortcut-sheet-v2-8b5a && build_demo 061before 061-v2 && \
+      checkout_sources cursor/stack-061-editor-shortcut-sheet-v2-8b5a && wire_061_shortcut_editor && build_demo 061before 061-v2 && \
         run_one editor-shortcut-open "$ROOT/docs/stack-pr-screenshots/061/before" 1 "" 0 0 "" 1 || st=$?
       checkout_sources cursor/stack-q62c-drop-shortcut-sheet-8b5a && build_demo q62 && \
         run_one editor-shortcut-closed "$ROOT/docs/stack-pr-screenshots/061/after" 1 "" 0 0 "" 1 || st=$?

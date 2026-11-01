@@ -52,6 +52,7 @@ export const demo = internalMutation({
     skipPlanInfoWarnings: v.optional(v.boolean()),
     seedBacklogCapture: v.optional(v.boolean()),
     seedConfidentiality: v.optional(v.boolean()),
+    seedRevisionPlanned: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (process.env.NOGIKU_MOCK_ENABLED !== "true")
@@ -391,7 +392,9 @@ export const demo = internalMutation({
     }
     if (args.seedBacklogCapture || process.env.SEED_BACKLOG_CAPTURE === "1") {
       await seedBacklogDelayScreenshotFixture(ctx, ids, now, day, {
-        seedConfidentiality: args.seedConfidentiality === true,
+        seedConfidentiality: seedConfidentiality,
+        seedRevisionPlanned:
+          args.seedRevisionPlanned === true || process.env.SEED_REVISION_PLANNED === "1",
       });
     }
     return { users: ids, createdWorks: created };
@@ -612,7 +615,7 @@ async function seedBacklogDelayScreenshotFixture(
   ids: Record<string, string>,
   now: number,
   day: number,
-  opts: { seedConfidentiality?: boolean } = {},
+  opts: { seedConfidentiality?: boolean; seedRevisionPlanned?: boolean } = {},
 ) {
   const specs = [
     { legacyId: "CAP-DLY-1D", title: "【撮影】締切超過 1 日", lateDays: 1.2 },
@@ -644,7 +647,7 @@ async function seedBacklogDelayScreenshotFixture(
         ownerTeamId: undefined,
         productionTeamIds: [],
         ...(opts.seedConfidentiality ? { confidentiality: "normal" as const } : {}),
-        ...(process.env.SEED_REVISION_PLANNED === "1"
+        ...(opts.seedRevisionPlanned
           ? { revisionPlannedAt: [{ sequence: 2, at: endOfJstDay(now + 14 * day) }] }
           : {}),
       });
@@ -697,7 +700,7 @@ async function seedBacklogDelayScreenshotFixture(
     } else if (revision.deadlineAt !== deadlineAt) {
       await ctx.db.patch(revision._id, { deadlineAt });
     }
-    if (process.env.SEED_REVISION_PLANNED === "1") {
+    if (opts.seedRevisionPlanned) {
       try {
         await ctx.db.patch(work._id, {
           revisionPlannedAt: [{ sequence: 2, at: endOfJstDay(now + 14 * day) }],
