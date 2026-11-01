@@ -14,6 +14,8 @@ import {
   workSubGenres,
   type WorkGenre,
   type WorkSubGenre,
+  planInfoFieldLabels,
+  type PlanInfoField,
 } from "@mf100/domain";
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex/react";
@@ -25,7 +27,6 @@ import {
   Field,
   Select,
   Switch,
-  TextArea,
   TextInput,
   useFieldId,
   useFieldLabelId,
@@ -77,6 +78,10 @@ export interface WorkFormState {
   relatedTeamIds: string[];
   notationCategories: string[];
   socialProfileId: string;
+  planName: string;
+  planNumber: string;
+  planVenue: string;
+  planSchedule: string;
 }
 
 export function emptyWorkForm(): WorkFormState {
@@ -107,6 +112,10 @@ export function emptyWorkForm(): WorkFormState {
     relatedTeamIds: [],
     notationCategories: [],
     socialProfileId: "",
+    planName: "",
+    planNumber: "",
+    planVenue: "",
+    planSchedule: "",
   };
 }
 
@@ -140,6 +149,10 @@ export function workFormFromWork(work: Work): WorkFormState {
     relatedTeamIds: [...(work.relatedTeamIds ?? [])],
     notationCategories: [...(work.notationCategories ?? [])],
     socialProfileId: work.socialProfileId ?? "",
+    planName: work.registeredPlanInfo?.name ?? "",
+    planNumber: work.registeredPlanInfo?.number ?? "",
+    planVenue: work.registeredPlanInfo?.venue ?? "",
+    planSchedule: work.registeredPlanInfo?.schedule ?? "",
   };
 }
 
@@ -173,6 +186,24 @@ export function workFormToFields(form: WorkFormState) {
     sizeOrLength: form.sizeOrLength.trim() || null,
     productionDays: num(form.productionDays),
     tags: form.tags,
+    registeredPlanInfo: registeredPlanInfoFromForm(form),
+  };
+}
+
+/** 企画情報（decisions 69–72）。空なら null で消す */
+export function registeredPlanInfoFromForm(
+  form: Pick<WorkFormState, "planName" | "planNumber" | "planVenue" | "planSchedule">,
+) {
+  const name = form.planName.trim();
+  const number = form.planNumber.trim();
+  const venue = form.planVenue.trim();
+  const schedule = form.planSchedule.trim();
+  if (!name && !number && !venue && !schedule) return null;
+  return {
+    ...(name ? { name } : {}),
+    ...(number ? { number } : {}),
+    ...(venue ? { venue } : {}),
+    ...(schedule ? { schedule } : {}),
   };
 }
 
@@ -221,8 +252,36 @@ export function FormSection({ title, children }: { title: string; children: Reac
   );
 }
 
+function PlanInfoFields({
+  form,
+  setForm,
+}: {
+  form: WorkFormState;
+  setForm: (update: (f: WorkFormState) => WorkFormState) => void;
+}) {
+  const rows: Array<{ field: PlanInfoField; key: keyof WorkFormState; label: string }> = [
+    { field: "name", key: "planName", label: planInfoFieldLabels.name },
+    { field: "number", key: "planNumber", label: planInfoFieldLabels.number },
+    { field: "venue", key: "planVenue", label: planInfoFieldLabels.venue },
+    { field: "schedule", key: "planSchedule", label: planInfoFieldLabels.schedule },
+  ];
+  return (
+    <FormSection title="企画情報">
+      <div className="form">
+        {rows.map(({ key, label }) => (
+          <Field key={key} label={label}>
+            <TextInput
+              value={form[key] as string}
+              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+            />
+          </Field>
+        ))}
+      </div>
+    </FormSection>
+  );
+}
+
 /**
- * 小ジャンル（Notion の select）。大ジャンルを選んでいればその中だけ、いなければ大ジャンルごとの組で全部を出す。
  * 選ぶと大ジャンル（未選択なら）・区分・媒体の既定を入れる
  */
 function SubGenreSelect({
@@ -362,6 +421,7 @@ export function WorkFormFields({
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
         </FormSection>
+        <PlanInfoFields form={form} setForm={setForm} />
       </>
     );
   }
@@ -406,6 +466,8 @@ export function WorkFormFields({
         </div>
         <TagPicker value={form.tags} onChange={(tags) => setForm((f) => ({ ...f, tags }))} />
       </FormSection>
+
+      <PlanInfoFields form={form} setForm={setForm} />
 
       <FormSection title="担当と人">
         <div className="form">
