@@ -27,6 +27,7 @@ async function ensureDemoSeeded(
     skipPamphletComments: boolean;
     skipPlanInfoWarnings: boolean;
     seedBacklogCapture?: boolean;
+    seedPlanInfoMismatch?: boolean;
     seedConfidentiality?: boolean;
     seedRevisionPlanned?: boolean;
   },
@@ -182,6 +183,10 @@ function demoSeedOptsFromEnv() {
       process.env.SEED_BACKLOG_CAPTURE === "1" ||
       process.env.CAPTURE_SCENE === "dashboard-backlog-delay",
     seedConfidentiality: process.env.SEED_CONFIDENTIALITY !== "0",
+    // 企画情報の不一致（bot の注意）は q71 / q72 の撮影だけが要る
+    seedPlanInfoMismatch:
+      process.env.SEED_PLAN_INFO_MISMATCH === "1" ||
+      /^q7[12]-/.test(process.env.CAPTURE_SCENE ?? ""),
     seedRevisionPlanned: process.env.SEED_REVISION_PLANNED === "1",
   };
 }
@@ -968,6 +973,9 @@ const SCENES: Record<string, SceneFn> = {
         if (!root) return false;
         const iframe = root.querySelector("iframe[data-testid='detail-pdf-frame'], iframe");
         if (iframe && (iframe as HTMLIFrameElement).src) return true;
+        // 73A の実装は PdfViewer（canvas）で描く
+        const canvas = root.querySelector("canvas");
+        if (canvas && (canvas as HTMLCanvasElement).width > 0) return true;
         return Boolean(root.querySelector('[data-testid="detail-doc-preview"]'));
       },
       null,
@@ -995,6 +1003,7 @@ async function runScene(page: Page, key: string) {
     skipPamphletComments,
     skipPlanInfoWarnings,
     seedBacklogCapture,
+    seedPlanInfoMismatch: process.env.SEED_PLAN_INFO_MISMATCH === "1" || /^q7[12]-/.test(key),
     seedConfidentiality,
     seedRevisionPlanned: process.env.SEED_REVISION_PLANNED === "1",
   });
