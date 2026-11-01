@@ -2377,7 +2377,7 @@ function CompareStatus({
       ).length;
       parts.push(
         [
-          `ページ対応: 旧 ${cmp.pdf.leftCount} → 新 ${cmp.pdf.rightCount}`,
+          `ページの対応（前の版 ${cmp.pdf.leftCount}・この版 ${cmp.pdf.rightCount}）`,
           inserted ? `追加 ${inserted}` : "",
           deleted ? `削除 ${deleted}` : "",
           moved ? `移動 ${moved}` : "",

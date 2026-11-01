@@ -1,3 +1,4 @@
+import { DomainError } from "@mf100/domain";
 import { ConvexError } from "convex/values";
 import { describe, expect, it } from "vite-plus/test";
 import { describeError, messageForCode } from "./errors";
@@ -25,6 +26,15 @@ describe("describeError（UI_M3E §35 W-02）", () => {
     for (const code of ["revision_no_reviewable_file", "upload_file_too_large"])
       expect(describeError(new ConvexError({ code })).message).not.toContain(code);
     expect(messageForCode("upload_file_too_large")).not.toContain("コード");
+  });
+
+  it("画面側で domain の規則に当たったとき（DomainError）も、サーバーと同じ案内を出す", () => {
+    const fromDomain = describeError(new DomainError("revision_no_reviewable_file"));
+    expect(fromDomain.code).toBe("revision_no_reviewable_file");
+    expect(fromDomain.message).toBe(
+      describeError(new ConvexError({ code: "revision_no_reviewable_file" })).message,
+    );
+    expect(fromDomain.message).not.toContain("もう一度お試しください");
   });
 
   it("Slack のワークスペースの登録の失敗は、決まった案内を出し、名前と team_id のどちらが悪いかで分ける", () => {
