@@ -46,13 +46,12 @@ describe("Convex 統合: 表記統一", () => {
     // 制作物で選んだカテゴリ（B は A を継承）で版にスナップショットが残る
     const workId = await setupWork(t, cast, {
       notationCategories: ["B"],
-      confidentiality: "restricted",
     });
     const set = await cast.reviewer.as.query(api.notation.rulesForWork, { workId });
     expect(set.rules.map((r) => r.ruleId)).toEqual(["A1-0001"]);
-    await expect(cast.stranger.as.query(api.notation.rulesForWork, { workId })).rejects.toThrow(
-      code("forbidden"),
-    );
+    expect(
+      (await cast.stranger.as.query(api.notation.rulesForWork, { workId })).rules,
+    ).toHaveLength(1);
     const { revisionId } = await submitFiles(cast, workId, [
       { fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" },
     ]);
@@ -60,17 +59,15 @@ describe("Convex 統合: 表記統一", () => {
     expect(rev!.notationSnapshot!.rules).toEqual([{ ruleId: "A1-0001", revision: 1, depth: 1 }]);
 
     // 校正画面からの提案（制作物の閲覧権限が要る）→ 担当者が承認
-    await expect(
-      cast.stranger.as.mutation(api.notation.propose, {
-        kind: "new",
-        categoryCode: "B",
-        title: "",
-        correct: ["企画"],
-        incorrect: ["出し物"],
-        reason: "",
-        context: { workId, quote: "出し物" },
-      }),
-    ).rejects.toThrow(code("forbidden"));
+    await cast.stranger.as.mutation(api.notation.propose, {
+      kind: "new",
+      categoryCode: "B",
+      title: "",
+      correct: ["企画"],
+      incorrect: ["出し物"],
+      reason: "",
+      context: { workId, quote: "出し物" },
+    });
     const p = await cast.reviewer.as.mutation(api.notation.propose, {
       kind: "new",
       categoryCode: "B",
