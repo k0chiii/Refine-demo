@@ -2110,6 +2110,8 @@ const expectTrue = (cond, msg) => {
  * 一覧のカードを押すだけではパネルは開かない（選んで紙面のピンへ移るだけ）
  */
 const openPanel = async (card) => {
+  // 下の行は選んだカードにだけ出るので、先に本文を押して選ぶ
+  await card.locator(".thread__body").first().click();
   await card.locator(".thread__footer").click();
   await page.waitForSelector(".thread-panel");
   await settle();
