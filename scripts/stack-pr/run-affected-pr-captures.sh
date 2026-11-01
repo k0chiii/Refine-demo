@@ -144,10 +144,12 @@ capture_sns_side_by_side() {
   local tmp
   tmp="$(mktemp -d)"
   CAPTURE_SIGNIN_SUB=mock-nogiku-reviewer \
-    SCREENSHOT_CORPUS= run_one make-hub-clip "$tmp/non-sns" 1 ".hub[data-hub='make']" 0 0 "" 1 || return 1
+    SCREENSHOT_CORPUS=none \
+    run_one make-hub-clip "$tmp/non-sns" 1 ".hub[data-hub='make']" 0 0 "" 1 || return 1
   CAPTURE_SIGNIN_SUB=mock-nogiku-creator \
     CAPTURE_EXPECT_SNS_BAND="$expect_band" \
-    SCREENSHOT_CORPUS= run_one make-hub-clip "$tmp/sns" 1 ".hub[data-hub='make']" 0 0 "" 1 || return 1
+    SCREENSHOT_CORPUS=none \
+    run_one make-hub-clip "$tmp/sns" 1 ".hub[data-hub='make']" 0 0 "" 1 || return 1
   stitch_make_sns_pair "${prefix}-desktop.png" "$tmp/non-sns-desktop.png" "$tmp/sns-desktop.png"
   cp "$tmp/non-sns-desktop.dom.txt" "${prefix}-desktop.dom.txt" 2>/dev/null || true
   rm -rf "$tmp"
@@ -187,7 +189,7 @@ NODE
     CAPTURE_EXPECT_SNS_BAND="${CAPTURE_EXPECT_SNS_BAND:-}" \
     CAPTURE_EXPECT_EMPTY_VERSION="${CAPTURE_EXPECT_EMPTY_VERSION:-}" \
     CAPTURE_EXPECT_VERSION_NUMBER="${CAPTURE_EXPECT_VERSION_NUMBER:-}" \
-    SCREENSHOT_CORPUS="$ROOT/docs/stack-pr-screenshots" \
+    SCREENSHOT_CORPUS="${SCREENSHOT_CORPUS:-$ROOT/docs/stack-pr-screenshots}" \
     pnpm dlx tsx scripts/stack-pr/capture-cli.ts "$req"
   local st=$?
   rm -f "$req"
@@ -256,9 +258,9 @@ for pr in "${PRS[@]}"; do
       mkdir -p "$ROOT/docs/stack-pr-screenshots/077"
       rm -f "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png"
       checkout_sources cursor/stack-076-detail-route-shell-v2-8b5a && build_demo 076 076 && \
-        CAPTURE_EXPECT_BACKLOG_DELAY=0 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
+        CAPTURE_EXPECT_BACKLOG_DELAY=0 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/before" 1 'section[aria-labelledby="ov-backlog"]' 1 0 "" 0 || st=$?
       checkout_sources cursor/stack-077-ui-delay-color-tokens-8b5a && build_demo 077 077 && \
-        CAPTURE_EXPECT_BACKLOG_DELAY=1 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 || st=$?
+        CAPTURE_EXPECT_BACKLOG_DELAY=1 run_one dashboard-backlog-delay "$ROOT/docs/stack-pr-screenshots/077/after" 1 'section[aria-labelledby="ov-backlog"]' 1 0 "" 0 || st=$?
       validate_pair "$ROOT/docs/stack-pr-screenshots/077/before-desktop.png" "$ROOT/docs/stack-pr-screenshots/077/after-desktop.png" || st=$?
       restore_sources
       ;;

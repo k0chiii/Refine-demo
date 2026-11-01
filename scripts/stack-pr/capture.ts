@@ -1065,7 +1065,9 @@ export async function captureShots(
 ) {
   ensureDemo();
   sceneRunOpts = { expandOverview: opts.expandOverview, openViewSwitcher: opts.openViewSwitcher };
-  const corpusRoot = opts.corpusRoot ?? process.env.SCREENSHOT_CORPUS;
+  const corpusRoot =
+    opts.corpusRoot ??
+    (process.env.SCREENSHOT_CORPUS === "none" ? undefined : process.env.SCREENSHOT_CORPUS);
   const clipSelector = opts.clipSelector ?? process.env.CAPTURE_CLIP;
   const mobileW = opts.mobileWidth ?? 412;
   const mobileH = opts.mobileHeight ?? 915;
