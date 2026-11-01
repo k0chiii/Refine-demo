@@ -215,7 +215,7 @@ export const demo = internalMutation({
         legacyId: "SLD-050",
         notationCategories: ["A1"],
         genre: "graphic" as const,
-        subGenre: "slide" as const,
+        subGenre: "print_booklet" as const,
         ...teamsOf("広報局/デザイン担当", ["広報局/デザイン担当"]),
       },
       {
@@ -380,6 +380,7 @@ export const demo = internalMutation({
         assignedAt: now,
       });
     }
+    await resetEmptyPamphletRevisions(ctx);
     if (!args.skipPamphletComments) {
       await seedPamphletCommentFixture(ctx, ids, now, day);
     }
@@ -392,6 +393,32 @@ export const demo = internalMutation({
 });
 
 /** 66A スクリーンショット用: 公式パンフに版1と解決済みコメントを1件以上 */
+async function resetEmptyPamphletRevisions(ctx: MutationCtx) {
+  const work = await ctx.db
+    .query("works")
+    .withIndex("by_year", (q) => q.eq("year", 100))
+    .filter((q) => q.eq(q.field("legacyId"), "PR-001"))
+    .unique();
+  if (!work) return;
+  const revisions = await ctx.db
+    .query("revisions")
+    .withIndex("by_work", (q) => q.eq("workId", work._id))
+    .collect();
+  for (const revision of revisions) {
+    const artifact = await ctx.db
+      .query("artifacts")
+      .withIndex("by_revision", (q) => q.eq("revisionId", revision._id))
+      .first();
+    if (artifact) continue;
+    const threads = await ctx.db
+      .query("commentThreads")
+      .withIndex("by_revision", (q) => q.eq("revisionId", revision._id))
+      .collect();
+    for (const t of threads) await ctx.db.delete(t._id);
+    await ctx.db.delete(revision._id);
+  }
+}
+
 async function seedPamphletCommentFixture(
   ctx: MutationCtx,
   ids: Record<string, string>,
@@ -408,23 +435,12 @@ async function seedPamphletCommentFixture(
     .query("revisions")
     .withIndex("by_work", (q) => q.eq("workId", work._id))
     .first();
-  if (!revision) {
-    const revisionId = await ctx.db.insert("revisions", {
-      workId: work._id,
-      kind: "standard",
-      sequence: 1,
-      reviewType: "general",
-      submittedBy: ids["mock-nogiku-creator"]!,
-      submittedAt: now,
-      deadlineAt: endOfJstDay(now + 14 * day),
-      reviewState: "open",
-      changeSummary: "デモ初稿",
-      focusNotes: "",
-      threadCount: 2,
-      unresolvedCount: 1,
-    });
-    revision = (await ctx.db.get(revisionId))!;
-  }
+  if (!revision) return;
+  const artifact = await ctx.db
+    .query("artifacts")
+    .withIndex("by_revision", (q) => q.eq("revisionId", revision._id))
+    .first();
+  if (!artifact) return;
   const revisionId = revision._id;
   const existing = await ctx.db
     .query("commentThreads")

@@ -5,7 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "../../apps/web/e2e/support/app.ts";
 import type { DemoUser } from "../../apps/web/e2e/support/app.ts";
-import { PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
+import { App, PAMPHLET, WORKS_ENTRY } from "../../apps/web/e2e/support/app.ts";
+import { reviewerComments, submitFirstRevision } from "../../apps/web/e2e/support/scenarios.ts";
 import {
   assertSceneMarkers,
   validateScreenshotFile,
@@ -251,27 +252,34 @@ async function seedReviewPamphlet(page: Page) {
   await signInAs(page, "mock-nogiku-creator");
   await demoGo(page, "/works");
   await page.locator(WORKS_ENTRY, { hasText: PAMPHLET }).first().click({ timeout: 60_000 });
-  await page.waitForURL(/\/works\/[^/]+$/, { timeout: 60_000 });
-  await page
-    .locator("m3e-button", { hasText: "最初の版を提出" })
-    .first()
-    .click({ timeout: 60_000 });
-  await page.waitForSelector('m3e-dialog[open] input[type="file"]', { timeout: 60_000 });
-  await page.setInputFiles('m3e-dialog[open] input[type="file"]', samplePdf);
-  await page.fill("m3e-dialog[open] textarea >> nth=0", "初稿。");
-  for (const id of ["theme_font", "balance", "committee_output"]) {
-    await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+  await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
+  const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
+  if (!workId) throw new Error(`workId not found in ${page.url()}`);
+  const firstSubmit = page.locator("m3e-button", { hasText: "最初の版を提出" }).first();
+  if (await firstSubmit.isVisible().catch(() => false)) {
+    await firstSubmit.click({ timeout: 60_000 });
+    await page.waitForSelector('m3e-dialog[open] input[type="file"]', { timeout: 60_000 });
+    await page.setInputFiles('m3e-dialog[open] input[type="file"]', samplePdf);
+    await page.fill("m3e-dialog[open] textarea >> nth=0", "初稿。");
+    for (const id of ["theme_font", "balance", "committee_output"]) {
+      await page.locator(`m3e-dialog[open] m3e-checkbox#self-check-${id}`).click();
+    }
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" })
+      .click({ timeout: 60_000 });
+    await page.locator(".upload-item__state--verified").first().waitFor({ timeout: 60_000 });
+    await page
+      .locator("m3e-dialog[open] m3e-button", { hasText: "提出する" })
+      .click({ timeout: 60_000 });
+    await page.waitForURL(/\/v\/1$/, { timeout: 60_000 });
+  } else {
+    await demoGo(page, `/works/${workId}/v/1`);
+    await page.waitForSelector(".ws", { timeout: 60_000 });
   }
-  await page
-    .locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" })
-    .click({ timeout: 60_000 });
-  await page.locator(".upload-item__state--verified").first().waitFor({ timeout: 60_000 });
-  await page
-    .locator("m3e-dialog[open] m3e-button", { hasText: "提出する" })
-    .click({ timeout: 60_000 });
-  await page.waitForURL(/\/v\/1$/, { timeout: 60_000 });
   await pdfReady(page);
   const revisionPath = new URL(page.url()).pathname;
+
+  if (process.env.SKIP_REVIEWER_ASSIGN === "1") return;
 
   const reviewerName = await page.evaluate(async () => {
     const users = await globalThis.__mf100demo!.users();
@@ -671,14 +679,18 @@ const SCENES: Record<string, SceneFn> = {
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "detail-preview-73": async (page) => {
-    await workspaceCommentsReady(page);
-    const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
-    if (!workId) throw new Error("workId missing after workspaceCommentsReady");
-    await demoGo(page, `/works/${workId}/detail`);
+    const app = new App(page);
+    const { workPath, revisionPath } = await submitFirstRevision(app);
+    await reviewerComments(app, revisionPath, "表記を確認してください");
+    const workId = workPath.match(/\/works\/([^/?#]+)/)?.[1];
+    if (!workId) throw new Error(`workId missing from ${workPath}`);
+    await app.signInAs("mock-nogiku-manager");
+    await app.go(`${workPath}/detail`);
     await page.waitForSelector(".detail-shell__preview-frame .viewer canvas", {
-      timeout: 90_000,
+      timeout: 120_000,
     });
-    await page.waitForSelector(".detail-shell__comments .detail-shell__thread, .detail-shell__comments .thread", {
+    await page.locator(".detail-shell__comments .thread").first().waitFor({
+      state: "visible",
       timeout: 60_000,
     });
   },
