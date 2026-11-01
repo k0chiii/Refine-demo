@@ -3,7 +3,6 @@ import {
   isAccepting,
   PLAN_INFO_BOT_ID,
   planInfoCheckFingerprint,
-  planInfoFieldLabels,
   type CommentThread,
   type Principal,
   type Revision,
@@ -45,10 +44,8 @@ export async function syncPlanInfoWarnings(
   const revision =
     (opts.revisionId ? await ctx.revisions.findById(opts.revisionId) : null) ??
     (await acceptingRevisionForWork(ctx, work));
-  if (!revision || !isAccepting(revision))
-    return { created: 0, skipped: "no_accepting_revision" };
-  if (work.lifecycle === "finalized")
-    return { created: 0, skipped: "work_finalized" };
+  if (!revision || !isAccepting(revision)) return { created: 0, skipped: "no_accepting_revision" };
+  if (work.lifecycle === "finalized") return { created: 0, skipped: "work_finalized" };
   const text = opts.textOverride ?? (await revisionText(ctx, work));
   if (!text) return { created: 0, skipped: "no_text" };
 

@@ -232,9 +232,9 @@ export type WorkPatch = {
       | "notationCategories"
   ]?: Work[K] | undefined;
 } & WorkMetadataInput & {
-  /** 登録済み企画情報（null で消す。decisions 69–72） */
-  registeredPlanInfo?: import("./planInfo.ts").RegisteredPlanInfo | null;
-};
+    /** 登録済み企画情報（null で消す。decisions 69–72） */
+    registeredPlanInfo?: import("./planInfo.ts").RegisteredPlanInfo | null;
+  };
 
 /**
  * Work に変更を当てた結果を返す（version を 1 進める）。生成時と同じ不変条件を検証する。
