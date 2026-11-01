@@ -20,6 +20,7 @@ export * from "./usecases/groups.ts";
 export * from "./usecases/comparisons.ts";
 export * from "./usecases/notation.ts";
 export * from "./usecases/autoProofread.ts";
+export * from "./usecases/planInfoCheck.ts";
 export * from "./usecases/feedbackMigration.ts";
 export * from "./usecases/workStats.ts";
 export * from "./usecases/notificationPrefs.ts";

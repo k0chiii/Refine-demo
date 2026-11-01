@@ -18,9 +18,14 @@ async function revisionText(ctx: AppContext, work: Work): Promise<string> {
   return draft?.text?.trim() ?? "";
 }
 
-async function acceptingRevision(ctx: AppContext, work: Work): Promise<Revision | null> {
-  if (!work.acceptingRevisionId) return null;
-  return (await ctx.revisions.findById(work.acceptingRevisionId)) ?? null;
+async function acceptingRevisionForWork(ctx: AppContext, work: Work): Promise<Revision | null> {
+  const revisions = await ctx.revisions.listByWork(work.id);
+  let found: Revision | null = null;
+  for (const revision of revisions) {
+    if (!isAccepting(revision)) continue;
+    if (!found || revision.sequence > found.sequence) found = revision;
+  }
+  return found;
 }
 
 /**
@@ -39,7 +44,7 @@ export async function syncPlanInfoWarnings(
     return { created: 0, skipped: "no_registered_plan_info" };
   const revision =
     (opts.revisionId ? await ctx.revisions.findById(opts.revisionId) : null) ??
-    (await acceptingRevision(ctx, work));
+    (await acceptingRevisionForWork(ctx, work));
   if (!revision || !isAccepting(revision))
     return { created: 0, skipped: "no_accepting_revision" };
   if (work.lifecycle === "finalized")
@@ -65,15 +70,20 @@ export async function syncPlanInfoWarnings(
       authorId: PLAN_INFO_BOT_ID,
       body: item.message,
       kind: "correction",
-      severity: "warning",
+      severity: "minor",
       resolution: "open",
       createdAt: now,
       origin: {
         kind: "bot",
-        detector: "plan-info",
+        detector: "ai",
+        ruleId: "plan-info",
+        ruleRevision: 0,
+        runId: "plan-info",
         fingerprint,
+        confidence: "medium",
         needsReview: true,
         original: item.registered,
+        suggestion: "",
         textSource: "document",
       },
     };
@@ -88,6 +98,5 @@ export async function syncPlanInfoWarnings(
     existing.add(fingerprint);
     created++;
   }
-  void planInfoFieldLabels;
   return { created, skipped: null };
 }
