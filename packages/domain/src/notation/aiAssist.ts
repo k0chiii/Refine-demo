@@ -1,4 +1,3 @@
-import type { Confidentiality } from "../work/Work.ts";
 import type { Finding } from "./proofreader.ts";
 import { fnv1a } from "./ruleset.ts";
 
@@ -6,32 +5,23 @@ import { fnv1a } from "./ruleset.ts";
  * 任意の AI 校正（外部の AI に文章を送る）。
  * - 利用者が明示的に押したときだけ送る。送る前に送り先を画面で知らせる
  * - API キーはサーバーだけが持つ。キーが無ければ機能ごと無効（画面にも出さない理由を返す）
- * - 機密区分で使えるかを決める（既定: 非公開・取扱注意は送らない）。制度上の判断は設定で変えられるポリシー
  * - 結果は候補だけ。ルールやコメントを AI が自動で作ったり変えたりしない
  */
 export interface AiPolicy {
   /** API キーがあり、運用で有効にしている */
   enabled: boolean;
-  /** 非公開・取扱注意の制作物でも送ってよいか（既定 false。承認されたら設定で true） */
-  allowRestricted: boolean;
   /** 1 回に送る最大の文字数 */
   maxChars: number;
 }
 
 export const defaultAiPolicy: AiPolicy = {
   enabled: false,
-  allowRestricted: false,
   maxChars: 20_000,
 };
 
 /** 使えない理由（使えるなら null） */
-export function aiBlockReason(
-  policy: AiPolicy,
-  work: { confidentiality: Confidentiality },
-): string | null {
+export function aiBlockReason(policy: AiPolicy): string | null {
   if (!policy.enabled) return "AI 校正は設定されていません（API キー未設定または無効）";
-  if (work.confidentiality === "restricted" && !policy.allowRestricted)
-    return "非公開・取扱注意の制作物では AI 校正を使えません（外部に送らないため）";
   return null;
 }
 

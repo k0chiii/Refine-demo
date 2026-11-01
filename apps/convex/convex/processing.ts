@@ -44,8 +44,7 @@ export const status = query({
     const enabled =
       process.env.PROCESSING_ENABLED === "true" &&
       isAllowed("revision.submit", { principal, work, grants }) &&
-      work.lifecycle === "active" &&
-      (work.confidentiality !== "restricted" || process.env.PROCESSING_ALLOW_RESTRICTED === "true");
+      work.lifecycle === "active";
     return { enabled, kinds: enabled ? enabledKinds() : [] };
   },
 });
@@ -62,8 +61,6 @@ async function authorize(ctx: QueryCtx | MutationCtx, job: Doc<"processingJobs">
     write ? "revision.submit" : "work.view",
   );
   if (write && work.lifecycle !== "active") throw new Error("work_not_active");
-  if (work.confidentiality === "restricted" && process.env.PROCESSING_ALLOW_RESTRICTED !== "true")
-    throw new Error("restricted_processing_disabled");
   return principal;
 }
 
@@ -140,11 +137,7 @@ export const create = mutation({
       workId,
       "revision.submit",
     );
-    if (
-      work.lifecycle !== "active" ||
-      (work.confidentiality === "restricted" && process.env.PROCESSING_ALLOW_RESTRICTED !== "true")
-    )
-      throw new Error("processing_not_allowed");
+    if (work.lifecycle !== "active") throw new Error("processing_not_allowed");
     if (existingJob) return existingJob;
     const jobs = await ctx.db
       .query("processingJobs")
