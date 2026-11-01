@@ -1790,8 +1790,9 @@ async function compactScenes() {
   await page.locator(WORKS_ENTRY, { hasText: "公式サイト トップページ" }).first().click();
   await page.waitForURL(/\/works\/[^/]+$/);
   const writeWorkUrl = page.url();
-  // seed（ロール別ホーム用）でこの制作物には第1版があるので、引き出し「版」の「文章を書く」から入る
-  await pdfReady();
+  // seed（ロール別ホーム用）でこの制作物には添付の無い第1版があるので、引き出し「版」の「文章を書く」から入る
+  await page.waitForSelector(".ws__side-toolbar, .drawer .pane-tabs", { state: "attached" });
+  await settle();
   await drawer("版");
   await btn("文章を書く").click();
   await page.waitForSelector(".doc[contenteditable=true]");
