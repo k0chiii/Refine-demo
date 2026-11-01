@@ -38,7 +38,6 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
-import { useMarkArmed } from "./markArm";
 import { useWebBridge, webDeviceLabel, type BridgeHit, type BridgeRects } from "./webBridge";
 
 /** コメントの下書き（ブリッジが返した要素と、付けたときの端末） */
@@ -122,7 +121,6 @@ export function WebLiveViewer({
   onReady,
 }: Props) {
   const compact = useWindowClass() === "compact";
-  const armed = useMarkArmed();
   const [deviceId, setDeviceId] = useState(readDevice);
   const [landscape, setLandscape] = useState(false);
   /** PC の幅の直接指定（端末を選ぶと消える） */
@@ -223,10 +221,9 @@ export function WebLiveViewer({
   const targetsKey = mine.map((t) => t.id).join(",");
   useEffect(() => {
     if (state !== "ready") return;
-    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作）。
-    // 「コメントを追加」の直後だけ、クリックした要素もコメントになる
-    sendMode(!canComment ? "off" : armed ? "comment" : "browse");
-  }, [state, readyKey, armed, canComment, sendMode]);
+    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作）
+    sendMode(!canComment ? "off" : "comment");
+  }, [state, readyKey, canComment, sendMode]);
   useEffect(() => {
     if (state !== "ready") return;
     resolve(

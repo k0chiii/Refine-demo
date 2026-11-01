@@ -60,7 +60,8 @@ describe("通知の文面（UI_M3E §35 W-14）", () => {
     expect(posted?.title).toBeTruthy();
     for (const part of ["MF100 パンフレット", "第1版", "査読 太郎", "表紙の誤字"])
       expect(posted?.body).toContain(part);
-    expect(posted?.body.endsWith("…")).toBe(true); // 長い本文は抜粋にして「…」で切る
+    expect(posted?.body.endsWith("…")).toBe(true);
+    ctx.clock.current = startOfJstDay(revision.deadlineAt); // 長い本文は抜粋にして「…」で切る
 
     ctx.clock.current = startOfJstDay(revision.deadlineAt);
     expect(await remindUpcomingDeadlines(ctx)).toBe(1);

@@ -50,7 +50,12 @@ export interface Work {
   approverIds?: readonly UserId[];
   /** 校了とみなす人数（1..校了者の数）。無ければ 1（誰か 1 人が宣言すれば校了） */
   approvalQuorum?: number;
+  /** ◆校了目標日（decisions 81。旧「納期」語の deadlineAt） */
   deadlineAt?: Instant;
+  /** ■仕上がり日（decisions 81） */
+  finishAt?: Instant;
+  /** 第 n 版の予定提出日（decisions 82） */
+  revisionPlannedAt?: readonly { sequence: number; at: Instant }[];
   lifecycle: WorkLifecycle;
   confidentiality: Confidentiality;
   finalRevisionId?: RevisionId;
