@@ -215,7 +215,8 @@ export function InfoTab({
         ...optional("小ジャンル", workSubGenreLabel(w.subGenre)),
         ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
         ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
-        ...(w.confidentiality === "restricted" ? ([["機密", "非公開・取扱注意"]] as Row[]) : []),
+        // 提出時の「見てほしい点」はここではなく、コメントの一覧の先頭（制作者からのコメント。CreatorNoteCard）に出す
+        ["制作物 ID", w.legacyId || "なし"] as Row,
       ],
     },
     {
@@ -666,8 +667,8 @@ export function InfoTab({
       ) : null}
 
       {can.viewAudit ? (
-        <section className="info-tab__section" aria-label="閲覧権限">
-          <h2 className="info-tab__h">閲覧権限</h2>
+        <section className="info-tab__section" aria-label="権限">
+          <h2 className="info-tab__h">権限</h2>
           <AclPanel workId={w.id} readOnly={!can.manageAcl} />
         </section>
       ) : null}
