@@ -277,7 +277,7 @@ export async function replyToThread(
     ...at,
   });
   // スレッドの参加者（投稿者とこれまでに返信した人）と購読した人には「返信」を知らせる。メンションした人には「メンション」だけ。
-  const teams = work.confidentiality === "restricted" ? await ctx.teams.list() : [];
+  const teams = await ctx.teams.list();
   const subscribers = await ctx.threads.listSubscribers(thread.id);
   const participants = replyRecipients(
     thread,
