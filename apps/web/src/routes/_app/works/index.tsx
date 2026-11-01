@@ -168,151 +168,156 @@ function Works() {
     });
 
   return (
-    <div className="works">
-      <AppBarSlot slot="title">制作物</AppBarSlot>
-      {canCreate ? (
-        <AppBarSlot slot="actions">
-          <M3eIconButton
-            aria-label="制作物を登録"
-            title="制作物を登録"
-            onClick={() => setCreating(true)}
-          >
-            <M3eIcon name="note_add" />
-          </M3eIconButton>
-        </AppBarSlot>
-      ) : null}
-      {dash ? (
-        <div className="home-dashboard home-dashboard--manager">
-          <p className="role-home-tag">主管ビュー</p>
-          <DashboardOverview data={dash} twoColumns={twoColumns} />
-        </div>
-      ) : null}
-      <div className="works__controls">
-        {pinnedIds.size > 0 || search.pinned ? (
-          <M3eFilterChipSet aria-label="ピン留めで絞り込み" className="works__filters">
-            <M3eFilterChip
-              selected={search.pinned === true}
-              onClick={() => setSearch({ pinned: search.pinned ? undefined : true })}
+    <>
+      <RoleHomeDashboard variant="approver" />
+      <div className="works">
+        <AppBarSlot slot="title">制作物</AppBarSlot>
+        {canCreate ? (
+          <AppBarSlot slot="actions">
+            <M3eIconButton
+              aria-label="制作物を登録"
+              title="制作物を登録"
+              onClick={() => setCreating(true)}
             >
-              <M3eIcon slot="icon" name="push_pin" />
-              ピン留め
-            </M3eFilterChip>
-          </M3eFilterChipSet>
+              <M3eIcon name="note_add" />
+            </M3eIconButton>
+          </AppBarSlot>
         ) : null}
-        <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
-          {(["active", "on_hold", "finalized"] as const).map((k) => (
-            <M3eFilterChip
-              key={k}
-              selected={lifecycle === k}
-              onClick={() => setLifecycle((cur) => (cur === k ? "" : k))}
-            >
-              {lifecycleLabel[k]}
-            </M3eFilterChip>
-          ))}
-        </M3eFilterChipSet>
-        {hasTeams ? (
-          // 状態のチップとは別のまとまり。M3E の filter chip set は 1 つしか選べないか（radiogroup）、multi にすると
-          // 持てない属性（aria-allowed-attr）が付くので、ただの group にする（チップはメニューを開くボタン）
-          <div role="group" aria-label="担当で絞り込み" className="works__filters works__teams">
-            {(["owner", "production"] as const).map((axis) => (
-              <TeamFilterChip
-                key={axis}
-                axis={axis}
-                teams={teams}
-                value={axis === "owner" ? owner : production}
-                onChange={(id) => setSearch({ [axis]: id })}
-              />
-            ))}
+        {dash ? (
+          <div className="home-dashboard home-dashboard--manager">
+            <p className="role-home-tag">主管ビュー</p>
+            <DashboardOverview data={dash} twoColumns={twoColumns} />
           </div>
         ) : null}
-        {/* 大ジャンル（Notion の制作物 DB の select）で絞る。利用者決定 2026-10-17 */}
-        <MenuChip
-          id="works-genre-menu"
-          className="works__genre"
-          label={search.genre ? workGenreLabels[search.genre] : "大ジャンル"}
-          ariaLabel={`大ジャンルで絞り込み: ${search.genre ? workGenreLabels[search.genre] : "指定なし"}（変える）`}
-          active={search.genre !== undefined}
-        >
-          <M3eMenuItemGroup aria-label="大ジャンル">
-            <M3eMenuItemRadio
-              checked={!search.genre}
-              onClick={() => setSearch({ genre: undefined })}
-            >
-              指定しない
-            </M3eMenuItemRadio>
-            {workGenres.map((g) => (
-              <M3eMenuItemRadio
-                key={g}
-                checked={search.genre === g}
-                onClick={() => setSearch({ genre: g })}
+        <div className="works__controls">
+          {pinnedIds.size > 0 || search.pinned ? (
+            <M3eFilterChipSet aria-label="ピン留めで絞り込み" className="works__filters">
+              <M3eFilterChip
+                selected={search.pinned === true}
+                onClick={() => setSearch({ pinned: search.pinned ? undefined : true })}
               >
-                {workGenreLabels[g]}
-              </M3eMenuItemRadio>
-            ))}
-          </M3eMenuItemGroup>
-        </MenuChip>
-        <MenuChip
-          id="works-sort-menu"
-          className="works__sort"
-          icon="sort"
-          label={sortLabel[effectiveSort]}
-          ariaLabel={`並べ替え: ${sortLabel[effectiveSort]}（変える）`}
-          active={false}
-        >
-          <M3eMenuItemGroup aria-label="並べ替え">
-            {SORT_KEYS.filter((k) => hasTeams || (k !== "owner" && k !== "production")).map((k) => (
-              <M3eMenuItemRadio
+                <M3eIcon slot="icon" name="push_pin" />
+                ピン留め
+              </M3eFilterChip>
+            </M3eFilterChipSet>
+          ) : null}
+          <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
+            {(["active", "on_hold", "finalized"] as const).map((k) => (
+              <M3eFilterChip
                 key={k}
-                checked={effectiveSort === k}
-                onClick={() => setSearch({ sort: k, dir: undefined })}
+                selected={lifecycle === k}
+                onClick={() => setLifecycle((cur) => (cur === k ? "" : k))}
               >
-                {sortLabel[k]}
-              </M3eMenuItemRadio>
+                {lifecycleLabel[k]}
+              </M3eFilterChip>
             ))}
-          </M3eMenuItemGroup>
-        </MenuChip>
-      </div>
-      {shown === undefined || teams === undefined ? (
-        <Loading label="制作物を読み込んでいます" />
-      ) : shown.length === 0 ? (
-        <div className="empty">
-          {q
-            ? `「${q}」に一致する制作物はありません`
-            : filtered
-              ? "条件に合う制作物はありません"
-              : canRegister
-                ? "制作物がありません。「制作物を登録」から登録できます。"
-                : "制作物がありません"}
+          </M3eFilterChipSet>
+          {hasTeams ? (
+            // 状態のチップとは別のまとまり。M3E の filter chip set は 1 つしか選べないか（radiogroup）、multi にすると
+            // 持てない属性（aria-allowed-attr）が付くので、ただの group にする（チップはメニューを開くボタン）
+            <div role="group" aria-label="担当で絞り込み" className="works__filters works__teams">
+              {(["owner", "production"] as const).map((axis) => (
+                <TeamFilterChip
+                  key={axis}
+                  axis={axis}
+                  teams={teams}
+                  value={axis === "owner" ? owner : production}
+                  onChange={(id) => setSearch({ [axis]: id })}
+                />
+              ))}
+            </div>
+          ) : null}
+          {/* 大ジャンル（Notion の制作物 DB の select）で絞る。利用者決定 2026-10-17 */}
+          <MenuChip
+            id="works-genre-menu"
+            className="works__genre"
+            label={search.genre ? workGenreLabels[search.genre] : "大ジャンル"}
+            ariaLabel={`大ジャンルで絞り込み: ${search.genre ? workGenreLabels[search.genre] : "指定なし"}（変える）`}
+            active={search.genre !== undefined}
+          >
+            <M3eMenuItemGroup aria-label="大ジャンル">
+              <M3eMenuItemRadio
+                checked={!search.genre}
+                onClick={() => setSearch({ genre: undefined })}
+              >
+                指定しない
+              </M3eMenuItemRadio>
+              {workGenres.map((g) => (
+                <M3eMenuItemRadio
+                  key={g}
+                  checked={search.genre === g}
+                  onClick={() => setSearch({ genre: g })}
+                >
+                  {workGenreLabels[g]}
+                </M3eMenuItemRadio>
+              ))}
+            </M3eMenuItemGroup>
+          </MenuChip>
+          <MenuChip
+            id="works-sort-menu"
+            className="works__sort"
+            icon="sort"
+            label={sortLabel[effectiveSort]}
+            ariaLabel={`並べ替え: ${sortLabel[effectiveSort]}（変える）`}
+            active={false}
+          >
+            <M3eMenuItemGroup aria-label="並べ替え">
+              {SORT_KEYS.filter((k) => hasTeams || (k !== "owner" && k !== "production")).map(
+                (k) => (
+                  <M3eMenuItemRadio
+                    key={k}
+                    checked={effectiveSort === k}
+                    onClick={() => setSearch({ sort: k, dir: undefined })}
+                  >
+                    {sortLabel[k]}
+                  </M3eMenuItemRadio>
+                ),
+              )}
+            </M3eMenuItemGroup>
+          </MenuChip>
         </div>
-      ) : (
-        <WorksTable
-          works={shown}
-          teams={teams}
-          sort={effectiveSort}
-          dir={dir}
-          resetKey={[
-            q,
-            lifecycle,
-            search.genre,
-            search.pinned,
-            owner,
-            production,
-            effectiveSort,
-            dir,
-          ].join("|")}
-          compact={compact}
-          canDuplicate={canCreate === true}
-          onSort={onSortColumn}
-          onOpen={(workId) => {
-            // 開く画面が works.get を待つあいだも題名を出せるように、行の値を渡しておく（§65）
-            const w = shown.find((x) => x.id === workId);
-            if (w) rememberWorkHint(workId, { title: w.title, mediaType: w.mediaType });
-            void navigate({ to: "/works/$workId", params: { workId } });
-          }}
-        />
-      )}
-      <NewWorkDialog open={creating === true && canCreate} onClose={() => setCreating(false)} />
-    </div>
+        {shown === undefined || teams === undefined ? (
+          <Loading label="制作物を読み込んでいます" />
+        ) : shown.length === 0 ? (
+          <div className="empty">
+            {q
+              ? `「${q}」に一致する制作物はありません`
+              : filtered
+                ? "条件に合う制作物はありません"
+                : canRegister
+                  ? "制作物がありません。「制作物を登録」から登録できます。"
+                  : "制作物がありません"}
+          </div>
+        ) : (
+          <WorksTable
+            works={shown}
+            teams={teams}
+            sort={effectiveSort}
+            dir={dir}
+            resetKey={[
+              q,
+              lifecycle,
+              search.genre,
+              search.pinned,
+              owner,
+              production,
+              effectiveSort,
+              dir,
+            ].join("|")}
+            compact={compact}
+            canDuplicate={canCreate === true}
+            onSort={onSortColumn}
+            onOpen={(workId) => {
+              // 開く画面が works.get を待つあいだも題名を出せるように、行の値を渡しておく（§65）
+              const w = shown.find((x) => x.id === workId);
+              if (w) rememberWorkHint(workId, { title: w.title, mediaType: w.mediaType });
+              void navigate({ to: "/works/$workId", params: { workId } });
+            }}
+          />
+        )}
+        <NewWorkDialog open={creating === true && canCreate} onClose={() => setCreating(false)} />
+      </div>
+    </>
   );
 }
 
