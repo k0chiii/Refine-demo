@@ -386,6 +386,9 @@ import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";`,
       appendCss(
         "ui-dark-theme-home",
         `@media (prefers-color-scheme: dark) {
+  .works {
+    background: var(--mf-surface);
+  }
   .home-dashboard--manager .kpi,
   .ov .kpi {
     --m3e-filled-card-container-color: var(--mf-surface-container-high);
