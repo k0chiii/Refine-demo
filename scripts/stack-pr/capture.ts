@@ -670,9 +670,10 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
     await navigateWebWorkEditorRoute(page);
     await page.waitForSelector(".write", { timeout: 60_000 });
-    await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
-    await openEditorDrawer(page, "コメント");
-    await page.locator(".comments").waitFor({ state: "visible", timeout: 60_000 });
+    await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
+      state: "visible",
+      timeout: 60_000,
+    });
   },
   "q72-plan-info-recheck": async (page) => {
     await SCENES["q70-info-tab-plan"]!(page);
