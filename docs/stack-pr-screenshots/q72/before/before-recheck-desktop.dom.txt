@@ -1,5 +1,9 @@
-capturedAt=2026-11-01T08:24:09.176Z
-url=http://127.0.0.1:4500/works/000000000000000000000010026works/write
-scene=q72-plan-info-before-warn
+capturedAt=2026-11-01T13:21:57.235Z
+url=http://127.0.0.1:4373/works/000000000000000000000010026works/detail
+scene=q72-detail-before-warn
+captureUser=mock-nogiku-manager
+detail:version=版 1
+detail:preview=no
+detail:plan-info-warn=1
 forbidden:plan-info-warnings=1
 forbidden:not-found=0

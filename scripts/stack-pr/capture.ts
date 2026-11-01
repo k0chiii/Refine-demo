@@ -247,6 +247,14 @@ async function pdfReady(page: Page) {
 
 async function openEditorDrawer(page: Page, label: string) {
   await page.waitForSelector(".ws, .write", { timeout: 60_000 });
+  // 引き出しのタブか、畳んでいるときの縦のツールバーのどちらかが出るまで待ってから選ぶ
+  await page
+    .locator(
+      ".drawer .pane-tabs m3e-tab, .ws__side-toolbar:not(.ws__side-toolbar--hidden) m3e-icon-button, .write__side m3e-icon-button",
+    )
+    .first()
+    .waitFor({ state: "visible", timeout: 60_000 })
+    .catch(() => {});
   const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
   if (await tab.isVisible().catch(() => false)) {
     if ((await tab.getAttribute("selected").catch(() => null)) === null) {
@@ -827,9 +835,9 @@ const SCENES: Record<string, SceneFn> = {
     await SCENES["q72-detail-after-recheck"]!(page);
   },
   "q72-detail-after-recheck": async (page) => {
+    // 企画情報は校正画面の引き出し「情報」で直す（文章エディタには「情報」の引き出しが無い）
     await openWebWork(page);
-    await navigateWebWorkEditorRoute(page);
-    await page.waitForSelector(".write", { timeout: 60_000 });
+    await page.waitForSelector(".ws", { timeout: 60_000 });
     await openEditorDrawer(page, "情報");
     await page.getByRole("textbox", { name: "開催日時" }).fill("5/25(日) 10:00–17:00");
     await page
