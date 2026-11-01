@@ -1,10 +1,11 @@
 import { api } from "@mf100/convex/api";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { workHint } from "@/lib/workHint";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { Loading } from "@/ui/Loading";
 import { M3eStep, M3eStepper } from "@/ui/m3e";
+import { M3eButton } from "@m3e/react/button";
 
 export const Route = createFileRoute("/_app/works/$workId/detail")({
   component: WorkDetailShell,
@@ -46,6 +47,33 @@ function WorkDetailShell() {
           )}
         </div>
       </header>
+      <main className="detail-shell__main">
+        <section className="detail-shell__preview" aria-label="プレビュー">
+          {workData === undefined ? (
+            <Loading label="プレビューを読み込んでいます" />
+          ) : (
+            <>
+              <div className="detail-shell__preview-frame" data-testid="detail-preview">
+                <p className="body-medium" style={{ margin: 0 }}>
+                  {title}
+                </p>
+                <p className="small muted" style={{ margin: "0.5rem 0 0" }}>
+                  版 {version}
+                </p>
+              </div>
+              <M3eButton variant="tonal" component={Link} to="/works/$workId" params={{ workId }}>
+                校正画面を開く
+              </M3eButton>
+            </>
+          )}
+        </section>
+        <aside className="detail-shell__comments" aria-label="コメント">
+          <h2 className="title-small detail-shell__comments-h">コメント</h2>
+          <p className="small muted" style={{ margin: 0 }}>
+            詳細では一覧のみ。返信は校正画面で行います。
+          </p>
+        </aside>
+      </main>
     </div>
   );
 }

@@ -6066,6 +6066,38 @@ m3e-snackbar {
   width: 100%;
 }
 
+.detail-shell__main {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(260px, 1fr);
+  gap: 16px;
+  padding: 0 16px 24px;
+  align-items: stretch;
+}
+.detail-shell__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: min(72vh, 720px);
+}
+.detail-shell__preview-frame {
+  flex: 1;
+  min-height: 420px;
+  padding: 24px;
+  border-radius: var(--mf-shape-xl);
+  background: var(--mf-surface-container-lowest);
+  border: 1px solid var(--mf-outline-variant);
+}
+.detail-shell__comments {
+  padding: 16px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container);
+  max-height: min(72vh, 720px);
+  overflow: auto;
+}
+.detail-shell__comments-h {
+  margin: 0 0 8px;
+}
+
 /* stack-pr:m3e-shape-table */
 
 /* M3E shape: 表の角を large に */
