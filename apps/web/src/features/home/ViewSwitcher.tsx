@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
 
-/** ホームの見え方（ロール名は出さない。アイコンだけ） */
+/** ホームの見え方（ロール名は出さない。アイコンだけ）: 個人＝自分の制作、共同＝制作物の状況、確認＝校了・専門確認 */
 export type HomeView = "personal" | "collaboration" | "verified";
 
 const STORAGE_KEY = "mf100.homeView";
@@ -12,16 +12,16 @@ const choices = [
   { value: "verified" as const, label: "確認", icon: "verified" },
 ] as const;
 
-function readStored(): HomeView {
+function readStored(): HomeView | null {
   try {
     const v = sessionStorage.getItem(STORAGE_KEY);
-    return choices.some((c) => c.value === v) ? (v as HomeView) : "personal";
+    return choices.some((c) => c.value === v) ? (v as HomeView) : null;
   } catch {
-    return "personal";
+    return null;
   }
 }
 
-/** 画面上にロール名を出さないビュー切替（decisions 38A）。選択は sessionStorage に保存 */
+/** 画面上にロール名を出さないビュー切替（decisions 38A）。自分で選んだときだけ sessionStorage に覚える */
 export function ViewSwitcher({
   value,
   onChange,
@@ -29,17 +29,15 @@ export function ViewSwitcher({
   value?: HomeView;
   onChange?: (next: HomeView) => void;
 } = {}) {
-  const [internal, setInternal] = useState<HomeView>(() => readStored());
+  const [internal, setInternal] = useState<HomeView>(() => readStored() ?? "personal");
   const current = value ?? internal;
-  useEffect(() => {
+  const set = (next: HomeView) => {
+    setInternal(next);
     try {
-      sessionStorage.setItem(STORAGE_KEY, current);
+      sessionStorage.setItem(STORAGE_KEY, next);
     } catch {
       /* private mode */
     }
-  }, [current]);
-  const set = (next: HomeView) => {
-    setInternal(next);
     onChange?.(next);
   };
   return (
@@ -57,6 +55,7 @@ export function ViewSwitcher({
   );
 }
 
-export function storedHomeView(): HomeView {
+/** 覚えている見え方（無ければ null。画面が中身から既定を決める） */
+export function storedHomeView(): HomeView | null {
   return readStored();
 }
