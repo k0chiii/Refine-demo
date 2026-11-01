@@ -632,7 +632,8 @@ const SCENES: Record<string, SceneFn> = {
     await SCENES["q70-info-tab-plan"]!(page);
     await openEditorDrawer(page, "コメント");
     await page
-      .locator(".comments .thread", { hasText: "一致しません" })
+      .locator(".comments .thread, .refs__item")
+      .filter({ hasText: "開催日時" })
       .first()
       .waitFor({ state: "hidden", timeout: 10_000 })
       .catch(() => undefined);
@@ -646,29 +647,16 @@ const SCENES: Record<string, SceneFn> = {
     });
   },
   "q71-plan-info-warn": async (page) => {
-    await signInAs(page, "mock-nogiku-manager");
-    await demoGo(page, "/works");
-    await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
-    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
-    await navigateWebWorkEditorRoute(page);
-    await page.waitForSelector(".write", { timeout: 60_000 });
-    await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
-      state: "visible",
-      timeout: 60_000,
-    });
+    await openWebWorkEditor(page);
     await page.evaluate(() => localStorage.setItem("mf100.workspace.layout", "panel"));
     await openEditorDrawer(page, "コメント");
     await page
-      .locator(".comments .thread", { hasText: "一致しません" })
+      .getByText(/開催日時.*一致しません/)
       .first()
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "q71-comments-web-clean": async (page) => {
-    await signInAs(page, "mock-nogiku-manager");
-    await demoGo(page, "/works");
-    await page.locator(WORKS_ENTRY, { hasText: WEB_TOP }).first().click({ timeout: 60_000 });
-    await page.waitForURL(/\/works\/[^/?#]+/, { timeout: 60_000 });
-    await navigateWebWorkEditorRoute(page);
+    await openWebWorkEditor(page);
     await page.waitForSelector(".write", { timeout: 60_000 });
     await page.locator(".write .ProseMirror, .write .rt__content").first().waitFor({
       state: "visible",
@@ -685,11 +673,11 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForTimeout(800);
     await openEditorDrawer(page, "コメント");
     await page
-      .locator(".comments .thread", { hasText: "一致しません" })
+      .getByText(/開催日時.*一致しません/)
       .first()
       .waitFor({ state: "hidden", timeout: 60_000 })
       .catch(async () => {
-        await page.locator(".comments__empty, .comments").first().waitFor({ state: "visible" });
+        await page.locator(".comments__empty, .comments, .refs").first().waitFor({ state: "visible" });
       });
   },
   "q72-plan-info-before-warn": async (page) => {
