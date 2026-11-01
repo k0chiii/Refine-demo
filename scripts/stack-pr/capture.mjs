@@ -1,93 +1,38 @@
-import { createRequire } from "node:module";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
-const repoRoot =
-  process.env.STACK_PR_REPO ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const require = createRequire(path.join(repoRoot, "apps/web/package.json"));
-const { chromium } = require("playwright-core");
+/** 誤ってサインイン画面だけ撮ったときの PNG（大地さん指摘） */
+export const SIGNIN_SCREEN_MD5 = "ac741f735c6593b5cbdc397deb4a8004";
 
-const root = path.join(repoRoot, "apps/web");
-const routes = {
-  "01-signin": "/signin",
-  "02-works-list": "/works",
-  "08-workspace-comment": null,
-  "09-decision": null,
-  "27-make-creator": "/make",
-  "28-check-reviewer": "/check",
-  "15-notifications": "/make",
-  "31-finalize": "/check",
-  "33-work-form": "/works",
-  "34-acl": "/works",
-  "12-submit-dialog": "/make",
-  "78-thread-panel": null,
-};
+const scriptRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const repoRoot = process.env.STACK_PR_REPO ?? scriptRoot;
 
-let previewStarted = false;
-
-function ensureDemo() {
-  execSync("pnpm build:demo", { cwd: root, stdio: "inherit" });
-  if (previewStarted) return;
-  execSync(
-    `mkdir -p e2e/out && setsid sh -c 'echo $$ > e2e/out/preview.pgid; exec pnpm exec vp preview --mode demo --outDir dist-demo --port 4173 --host 127.0.0.1 --strictPort' > e2e/out/preview.log 2>&1 &`,
-    { cwd: root, shell: true },
-  );
-  for (let i = 0; i < 90; i++) {
-    try {
-      execSync("curl -sf -o /dev/null http://127.0.0.1:4173/", { stdio: "ignore" });
-      previewStarted = true;
-      return;
-    } catch {
-      execSync("sleep 1");
-    }
-  }
-  throw new Error("demo preview failed to start");
-}
-
-async function signIn(page) {
-  await page.goto("http://127.0.0.1:4173/signin");
-  await page
-    .getByRole("button", { name: /大地|demo|nogiku/i })
-    .first()
-    .click({ timeout: 15000 })
-    .catch(async () => {
-      await page.getByRole("button").first().click();
-    });
-  await page.waitForURL(/\/(make|check|works)/, { timeout: 30000 });
-}
-
-export async function captureShots(shots, prefix) {
-  ensureDemo();
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: process.env.CHROMIUM_PATH || undefined,
+function runCapture(payload) {
+  const req = path.join(os.tmpdir(), `mf100-capture-${process.pid}-${Date.now()}.json`);
+  fs.writeFileSync(req, JSON.stringify(payload));
+  const port = String(4200 + (Date.now() % 200));
+  const r = spawnSync("pnpm", ["dlx", "tsx", "scripts/stack-pr/capture-cli.ts", req], {
+    cwd: scriptRoot,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      STACK_PR_REPO: repoRoot,
+      CAPTURE_PORT: port,
+      BASE_URL: `http://127.0.0.1:${port}`,
+      CHROMIUM_PATH: process.env.CHROMIUM_PATH ?? "/usr/bin/google-chrome",
+    },
   });
-  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-  const page = await desktop.newPage();
-  await signIn(page);
-  const key = shots.desktop;
-  const route = routes[key] ?? "/make";
-  if (route) await page.goto(`http://127.0.0.1:4173${route}`);
-  await page.waitForTimeout(800);
-  await page.screenshot({ path: `${prefix}-desktop.png`, fullPage: true });
-
-  if (shots.mobile) {
-    const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    const mp = await mobile.newPage();
-    await signIn(mp);
-    if (route) await mp.goto(`http://127.0.0.1:4173${route}`);
-    await mp.waitForTimeout(800);
-    await mp.screenshot({ path: `${prefix}-mobile.png`, fullPage: true });
-    await mobile.close();
-  }
-  await browser.close();
+  fs.unlinkSync(req);
+  if (r.status !== 0) throw new Error("capture failed");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const prefix = process.argv[2] || "/tmp/shot";
-  captureShots({ desktop: "27-make-creator" }, prefix).catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
+/** App (`apps/web/e2e/support/app.ts` の signInAs / go) + build:demo + signin md5/URL ガード。実装は capture.ts */
+export async function captureShots(shots, prefix, opts = {}) {
+  runCapture({ shots, prefix, opts });
+}
+
+export function assertNotSigninScreenshot() {
+  /* validation runs inside capture.ts */
 }

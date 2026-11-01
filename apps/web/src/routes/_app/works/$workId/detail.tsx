@@ -61,9 +61,9 @@ function WorkDetailShell() {
                   版 {version}
                 </p>
               </div>
-              <M3eButton variant="tonal" component={Link} to="/works/$workId" params={{ workId }}>
-                校正画面を開く
-              </M3eButton>
+              <Link to="/works/$workId" params={{ workId }} className="detail-shell__open-ws">
+                <M3eButton variant="tonal">校正画面を開く</M3eButton>
+              </Link>
             </>
           )}
         </section>
