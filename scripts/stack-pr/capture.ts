@@ -19,8 +19,7 @@ import {
 export { SIGNIN_SCREEN_MD5 };
 
 /** tsx keepNames が demo bundle 内の __name 参照を壊すため、ページ実行前に定義する */
-const CAPTURE_INIT_SCRIPT_SOURCE =
-  "globalThis.__name = function (f) { return f; }; void 0;";
+const CAPTURE_INIT_SCRIPT_SOURCE = "globalThis.__name = function (f) { return f; }; void 0;";
 
 async function ensureDemoSeeded(
   page: Page,
@@ -29,6 +28,7 @@ async function ensureDemoSeeded(
     skipPlanInfoWarnings: boolean;
     seedBacklogCapture?: boolean;
     seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
   },
 ) {
   await page.evaluate(async (o) => {
@@ -191,11 +191,14 @@ async function signInAs(page: Page, sub: DemoUser) {
   await page.goto(`${BASE}/signin`);
   await ready(page);
   const seedOpts = demoSeedOptsFromEnv();
-  await page.evaluate(async ({ s, o }) => {
-    await globalThis.__mf100demo!.signOut();
-    await globalThis.__mf100demo!.ensureSeeded(o);
-    await globalThis.__mf100demo!.signIn(s);
-  }, { s: effective, o: seedOpts });
+  await page.evaluate(
+    async ({ s, o }) => {
+      await globalThis.__mf100demo!.signOut();
+      await globalThis.__mf100demo!.ensureSeeded(o);
+      await globalThis.__mf100demo!.signIn(s);
+    },
+    { s: effective, o: seedOpts },
+  );
   await page.waitForURL(
     (u: URL) =>
       !u.pathname.includes("/signin") &&
@@ -433,7 +436,7 @@ const SCENES: Record<string, SceneFn> = {
     await SCENES["076-before-editor"]!(page);
     await page.keyboard.press("?");
     await page
-      .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
+      .locator("m3e-dialog[open]", { hasText: "キーボードショートカット" })
       .waitFor({ state: "visible", timeout: 60_000 });
   },
   "editor-shortcut-closed": async (page) => {
@@ -446,7 +449,7 @@ const SCENES: Record<string, SceneFn> = {
     await page.waitForTimeout(600);
     if (
       await page
-        .locator('m3e-dialog[open]', { hasText: "キーボードショートカット" })
+        .locator("m3e-dialog[open]", { hasText: "キーボードショートカット" })
         .isVisible()
         .catch(() => false)
     ) {
@@ -730,12 +733,15 @@ const SCENES: Record<string, SceneFn> = {
   },
   "q70-info-tab-plan": async (page) => {
     await openWebWork(page);
-    await page.evaluate((id: string) => {
-      return globalThis.__mf100router!.navigate({
-        to: "/works/$workId/v/$revisionSeq",
-        params: { workId: id, revisionSeq: "1" },
-      });
-    }, new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)![1]!);
+    await page.evaluate(
+      (id: string) => {
+        return globalThis.__mf100router!.navigate({
+          to: "/works/$workId/v/$revisionSeq",
+          params: { workId: id, revisionSeq: "1" },
+        });
+      },
+      new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)![1]!,
+    );
     await page.waitForSelector(".ws", { timeout: 60_000 });
     await openEditorDrawer(page, "情報");
     await page.locator('.info-tab__section[aria-label="企画情報"]').waitFor({
@@ -754,11 +760,21 @@ const SCENES: Record<string, SceneFn> = {
   },
   "q71-comments-web-clean": async (page) => {
     await openWebWork(page);
-    if (!(await page.locator(".write").isVisible().catch(() => false))) {
+    if (
+      !(await page
+        .locator(".write")
+        .isVisible()
+        .catch(() => false))
+    ) {
       await navigateWebWorkEditorRoute(page);
       await page.waitForTimeout(600);
     }
-    if (!(await page.locator(".write").isVisible().catch(() => false))) {
+    if (
+      !(await page
+        .locator(".write")
+        .isVisible()
+        .catch(() => false))
+    ) {
       const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
       if (!workId) throw new Error(`workId missing from ${page.url()}`);
       await demoGo(page, `/works/${workId}/v/1`);
@@ -817,7 +833,7 @@ const SCENES: Record<string, SceneFn> = {
       .click({ timeout: 60_000 });
     await page.waitForTimeout(2500);
     await page.evaluate(async () => {
-      await globalThis.__mf100demo!.resolveOpenPlanInfoBotThreads();
+      await globalThis.__mf100demo!.resolveOpenPlanInfoBotThreads?.();
     });
     const workId = new URL(page.url()).pathname.match(/\/works\/([^/?#]+)/)?.[1];
     if (!workId) throw new Error(`workId missing from ${page.url()}`);
@@ -872,7 +888,12 @@ const SCENES: Record<string, SceneFn> = {
         .getByText(/件が進行中/)
         .waitFor({ state: "visible", timeout: 90_000 });
       await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 60_000 });
-    } else if (await page.locator(".sns-home-band").isVisible().catch(() => false)) {
+    } else if (
+      await page
+        .locator(".sns-home-band")
+        .isVisible()
+        .catch(() => false)
+    ) {
       throw new Error("sns-home-band visible before PR 080");
     }
   },
@@ -893,7 +914,9 @@ const SCENES: Record<string, SceneFn> = {
       throw new Error("stagebar--mock visible before PR 079");
     }
     await page.locator("#ov-stages").scrollIntoViewIfNeeded();
-    await page.locator('section[aria-labelledby="ov-stages"]').waitFor({ state: "visible", timeout: 60_000 });
+    await page
+      .locator('section[aria-labelledby="ov-stages"]')
+      .waitFor({ state: "visible", timeout: 60_000 });
   },
   "dashboard-stages-after": async (page) => {
     await SCENES["dashboard-manager"]!(page);
@@ -911,7 +934,10 @@ const SCENES: Record<string, SceneFn> = {
     await page.locator(".hub[data-hub='make']").first().scrollIntoViewIfNeeded();
     if (process.env.CAPTURE_EXPECT_SNS_BAND === "1") {
       await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 90_000 });
-    } else if (process.env.CAPTURE_EXPECT_SNS_BAND === "0" && (await page.locator(".sns-home-band").count())) {
+    } else if (
+      process.env.CAPTURE_EXPECT_SNS_BAND === "0" &&
+      (await page.locator(".sns-home-band").count())
+    ) {
       throw new Error("sns-home-band visible when band expected hidden");
     }
   },
@@ -1009,7 +1035,10 @@ async function captureOne(
   fs.appendFileSync(sidecar, `captureUser=${sub}\n`);
   if (clipSelector) fs.appendFileSync(sidecar, `captureClip=${clipSelector}\n`);
   if (/detail-preview|q72-detail|dashboard-detail/.test(sceneKey)) {
-    const version = await page.locator(".detail-shell__version").innerText().catch(() => "");
+    const version = await page
+      .locator(".detail-shell__version")
+      .innerText()
+      .catch(() => "");
     const previewParts = await page
       .locator(
         ".detail-shell__preview-frame canvas, .detail-shell__preview-frame iframe, .detail-shell__preview-frame .viewer__page, .detail-shell__preview-frame .rich-viewer__page, .detail-shell__preview-frame .write__page, .detail-shell__preview-frame [data-testid='detail-doc-preview']",
@@ -1032,8 +1061,14 @@ async function captureOne(
     }
   }
   if (/plan-info|q72|q71-comments/.test(sceneKey)) {
-    const notFound = await page.getByText(/見つかりません/).count().catch(() => 0);
-    const warn = await page.getByText(/開催日時.*一致しません/).count().catch(() => 0);
+    const notFound = await page
+      .getByText(/見つかりません/)
+      .count()
+      .catch(() => 0);
+    const warn = await page
+      .getByText(/開催日時.*一致しません/)
+      .count()
+      .catch(() => 0);
     fs.appendFileSync(
       sidecar,
       `forbidden:plan-info-warnings=${warn}\nforbidden:not-found=${notFound}\n`,

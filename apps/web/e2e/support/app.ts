@@ -32,7 +32,18 @@ export const SLIDE_DECK = "企画説明会スライド";
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
 type Demo = {
-  ensureSeeded(): Promise<void>;
+  /** 撮影の道具（scripts/stack-pr）は seed の選択肢を渡す。いまの seed.demo は選択肢を持たず受け流す */
+  ensureSeeded(opts?: {
+    skipPamphletComments?: boolean;
+    skipPlanInfoWarnings?: boolean;
+    seedBacklogCapture?: boolean;
+    seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
+  }): Promise<void>;
+  /** サインイン中の利用者の ID（未サインインは null） */
+  userId: string | null;
+  /** 企画情報 bot のスレッドを解決済みにする（q72 の撮影用。無い版もある） */
+  resolveOpenPlanInfoBotThreads?: () => Promise<number>;
   signIn(sub: string): Promise<void>;
   signOut(): Promise<void>;
   users(): Promise<{ id: string; sub: string; name: string }[]>;

@@ -264,7 +264,11 @@ export function assertDomSidecarClean(sidecarPath: string, body?: string): void 
   }
 }
 
-export function assertPngPairValidated(beforePath: string, afterPath: string, corpusRoot?: string): void {
+export function assertPngPairValidated(
+  beforePath: string,
+  afterPath: string,
+  corpusRoot?: string,
+): void {
   assertBeforeAfterDistinct(beforePath, afterPath);
   for (const p of [beforePath, afterPath]) {
     if (!fs.existsSync(p)) throw new Error(`missing ${p}`);
