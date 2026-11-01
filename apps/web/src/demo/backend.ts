@@ -147,7 +147,17 @@ class DemoBackend {
       : this.t;
   }
 
-  ensureSeeded(): Promise<void> {
+  /**
+   * 撮影の道具（scripts/stack-pr/capture.ts）が seed の選択肢を渡してくるが、seed.demo はいま選択肢を持たないので受け流す。
+   * 選択肢が要る撮影は、その撮影を足す PR で seed 側と一緒に入れる
+   */
+  ensureSeeded(_opts?: {
+    skipPamphletComments?: boolean;
+    skipPlanInfoWarnings?: boolean;
+    seedBacklogCapture?: boolean;
+    seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
+  }): Promise<void> {
     this.seeded ??= this.enqueue(async () => {
       await this.t.mutation(internal.seed.demo, {});
     });
