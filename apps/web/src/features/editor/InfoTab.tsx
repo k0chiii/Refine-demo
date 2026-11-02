@@ -727,7 +727,7 @@ export function InfoTab({
               </p>
             ) : (
               <div className="alert--warn alert">
-                <span>ほかの人（主管・校正者）の確認が済むまで校了できません</span>
+                <span>ほかの人の確認が済むまで校了できません</span>
               </div>
             )
           ) : null}

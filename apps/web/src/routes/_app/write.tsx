@@ -37,7 +37,7 @@ function WritePicker() {
       ) : works.length === 0 ? (
         <div className="empty">
           <M3eIcon name="edit_document" />
-          いま書ける担当の制作物はありません。制作者・主管担当になっている進行中の制作物がここに出ます。
+          いま書ける制作物はありません
         </div>
       ) : (
         <M3eActionList className="list" aria-label="書ける制作物">

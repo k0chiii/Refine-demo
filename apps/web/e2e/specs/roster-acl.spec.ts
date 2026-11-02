@@ -18,7 +18,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
 
     await app.go("/works");
     const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await expect(row.getByRole("button", { name: /の校正者を選ぶ（いま: / })).toBeVisible();
+    await expect(row.getByRole("button", { name: /の担当者を選ぶ（いま: / })).toBeVisible();
 
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin");
@@ -36,7 +36,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await app.signInAs("mock-nogiku-manager");
     await app.go("/works");
     const rowAfter = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await rowAfter.getByRole("button", { name: /の校正者を選ぶ/ }).click();
+    await rowAfter.getByRole("button", { name: /の担当者を選ぶ/ }).click();
     const reviewers = app.dialog();
     await app.pickUser(reviewers, "こうせいはん");
     await reviewers.locator("m3e-button", { hasText: "保存" }).click();
