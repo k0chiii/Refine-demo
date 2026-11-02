@@ -137,7 +137,16 @@ function Meter({
  * 開け閉めは覚える（localStorage。使えないときは閉じたまま）。
  * 全部が空（制作物が 1 件も無い）のときは出さない
  */
-export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns: boolean }) {
+export function DashboardOverview({
+  data,
+  twoColumns,
+  flat,
+}: {
+  data: Data;
+  twoColumns: boolean;
+  /** 開け閉めせず、見出しと中身をそのまま出す（ホームの「共同」） */
+  flat?: boolean;
+}) {
   const o = data.overview;
   const [open, setOpen] = useState(readOpen);
   if (o.total === 0) return null;
@@ -149,6 +158,37 @@ export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns
       <BureauTable data={data} />
     </>
   );
+  const asOf = (
+    <time className="ov__asof" dateTime={new Date(o.asOf).toISOString()}>
+      {formatJstShort(o.asOf)} 時点
+    </time>
+  );
+  if (flat)
+    return (
+      <section className="ov ov--flat" aria-labelledby="ov-title">
+        <div className="ov__header">
+          <M3eHeading variant="title" size="medium" level={2} emphasized id="ov-title">
+            制作物の状況
+          </M3eHeading>
+          {asOf}
+        </div>
+        <div className="ov__body">
+          <DashboardKpis data={data} />
+          {hasBacklog ? (
+            <div className={twoColumns ? "dash dash--columns" : "dash"}>
+              <div className="dash__column ov__main">
+                <Backlog data={data} />
+              </div>
+              <div className="dash__column dash__column--side ov__side">{breakdown}</div>
+            </div>
+          ) : (
+            <div className="dash__column dash__column--side ov__side ov__side--flat">
+              {breakdown}
+            </div>
+          )}
+        </div>
+      </section>
+    );
   return (
     <M3eExpansionPanel
       open={open}
@@ -160,9 +200,7 @@ export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns
         <M3eHeading variant="title" size="medium" level={2} emphasized id="ov-title">
           制作物の状況
         </M3eHeading>
-        <time className="ov__asof" dateTime={new Date(o.asOf).toISOString()}>
-          {formatJstShort(o.asOf)} 時点
-        </time>
+        {asOf}
       </span>
       <div className="ov__body">
         <DashboardKpis data={data} />
