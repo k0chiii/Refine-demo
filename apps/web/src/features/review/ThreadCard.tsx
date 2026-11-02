@@ -27,8 +27,8 @@ export { closedResolutions, isClosed, type Thread } from "./thread";
  * 最新の 3 件。アバター・名前・時刻・本文 3 行まで・添付）、返信がそれより多いときは「ほか n 件の返信」、最後に未読の点。
  * 押すとコメントを選んで紙面のピンへ移るだけで、カードは開かない。
  * 開く（返信・採否・担当・訂正・削除・リアクションなど全部）のは返信の欄か下の行から、スレッドのパネル（ThreadPanel）で。
- * 反映する／反映しない／次の版で対応のボタンは、選んだ（押した・キーボードでフォーカスした）カードにだけ出す
- * （Google ドキュメント・Filestage と同じく、操作は選んだ 1 件に。ほかのカードは状態の行だけ）。
+ * 反映する／反映しない／次の版で対応のボタンと、下の行（返信・スレッドを開く）は、選んだ（押した・キーボードでフォーカスした）
+ * カードにだけ出す（Google ドキュメント・Filestage と同じく、操作は選んだ 1 件に。ほかのカードは本文と状態、返信の数だけ）。
  * 反映しない・次の版で対応は理由が要るので、スレッドのパネルをその入力欄を開いた状態で開く。
  */
 export function ThreadCard({
@@ -75,7 +75,11 @@ export function ThreadCard({
   // キーボードでカードの中にフォーカスがある間も、選んだのと同じに採否のボタンを出す
   const [focused, setFocused] = useState(false);
   const pressing = useRef(false);
-  const showDecide = canDecide && !closed && (active || focused);
+  // 操作（採否・返信・開く）は選んだカードだけ。ほかのカードは読むだけの見た目にする
+  const selected = active || focused;
+  const showDecide = canDecide && !closed && selected;
+  const repliesText =
+    hidden > 0 ? `ほか ${hidden} 件の返信` : t.replyCount > 0 ? `${t.replyCount}件の返信` : null;
   return (
     <M3eCard
       variant="filled"
@@ -87,6 +91,14 @@ export function ThreadCard({
       <div
         slot="content"
         className="thread__content"
+        // キーボードでもカードを選べる（選ぶと操作の行が出る）
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
         onPointerDown={() => (pressing.current = true)}
         onPointerUp={() => (pressing.current = false)}
         onPointerCancel={() => (pressing.current = false)}
@@ -224,30 +236,37 @@ export function ThreadCard({
             ))}
           </div>
         ) : null}
-        <button
-          type="button"
-          className="thread__footer"
-          aria-label={
-            t.replyCount > 0
-              ? `${t.replyCount}件の返信。スレッドを開く${t.unread ? "（未読）" : ""}`
-              : `スレッドを開く${t.unread ? "（未読）" : ""}`
-          }
-          onClick={(e) => {
-            stop(e);
-            onOpen();
-          }}
-        >
-          {hidden > 0 ? (
-            <span className="thread__replies">ほか {hidden} 件の返信</span>
-          ) : t.replyCount > 0 ? (
-            <span className="thread__replies">{t.replyCount}件の返信</span>
-          ) : canReply ? (
-            <span className="thread__replies">返信</span>
-          ) : null}
-          <span className="spacer" />
-          {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
-          <M3eIcon name="chevron_right" className="icon--mirror thread__chevron" />
-        </button>
+        {selected ? (
+          <button
+            type="button"
+            className="thread__footer"
+            aria-label={
+              t.replyCount > 0
+                ? `${t.replyCount}件の返信。スレッドを開く${t.unread ? "（未読）" : ""}`
+                : `スレッドを開く${t.unread ? "（未読）" : ""}`
+            }
+            onClick={(e) => {
+              stop(e);
+              onOpen();
+            }}
+          >
+            {repliesText ? (
+              <span className="thread__replies">{repliesText}</span>
+            ) : canReply ? (
+              <span className="thread__replies">返信</span>
+            ) : null}
+            <span className="spacer" />
+            {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
+            <M3eIcon name="chevron_right" className="icon--mirror thread__chevron" />
+          </button>
+        ) : repliesText || t.unread ? (
+          // 選んでいないカードは、返信の数と未読の点だけ（押す行は出さない）
+          <div className="thread__footer thread__footer--still">
+            {repliesText ? <span className="thread__replies-still">{repliesText}</span> : null}
+            <span className="spacer" />
+            {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
+          </div>
+        ) : null}
       </div>
     </M3eCard>
   );

@@ -425,8 +425,9 @@ export class App {
     return card.locator(".thread__footer");
   }
 
-  /** 一覧のカードの下の行を押してスレッドのパネルを開く */
+  /** 一覧のカードを選んで（下の行は選んだカードにだけ出る）、下の行を押してスレッドのパネルを開く */
   async openPanel(card: Locator) {
+    await card.locator(".thread__body").first().click();
     await this.threadOpener(card).click();
     await this.page.waitForSelector(".thread-panel");
     await this.settle();
