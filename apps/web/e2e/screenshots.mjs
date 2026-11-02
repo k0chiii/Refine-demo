@@ -2485,7 +2485,7 @@ async function v2Scenes() {
 
   // 56–59 SNS 投稿: 編集とプレビュー → 提出 → 校正画面のプレビュー → 校了版の書き出し
   const sns = await openWork("公式 Instagram 開催告知");
-  await btn("投稿を作る").click();
+  await btn("最初の版を提出").click(); // SNS 投稿は投稿の編集が開く
   await page.waitForSelector(".post-edit");
   // アカウントは制作物に割り当てた SNS アカウント（本体の設定）から写る。編集欄は本文と画像だけ
   await page.waitForSelector(".sp-figure");

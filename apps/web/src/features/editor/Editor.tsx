@@ -1146,13 +1146,23 @@ export function Editor({
           まだ版がありません
           {workData.can.submit && work?.lifecycle === "active" ? (
             <div className="row">
-              <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
-                最初の版を提出
-              </M3eButton>
-              <M3eButton variant="tonal" onClick={openAuthoring}>
-                <M3eIcon slot="icon" name={isSns ? "post_add" : "edit_document"} />
-                {isSns ? "投稿を作る" : "文章を書く"}
-              </M3eButton>
+              {/* SNS 投稿の版は投稿の編集（本文・画像・記録を 1 つの版にする）から出す。添付のダイアログは出さない */}
+              {isSns ? (
+                <M3eButton variant="filled" onClick={openAuthoring}>
+                  <M3eIcon slot="icon" name="post_add" />
+                  最初の版を提出
+                </M3eButton>
+              ) : (
+                <>
+                  <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
+                    最初の版を提出
+                  </M3eButton>
+                  <M3eButton variant="tonal" onClick={openAuthoring}>
+                    <M3eIcon slot="icon" name="edit_document" />
+                    文章を書く
+                  </M3eButton>
+                </>
+              )}
             </div>
           ) : null}
         </div>
