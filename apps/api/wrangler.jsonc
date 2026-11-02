@@ -60,10 +60,13 @@
         },
       ],
       "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-refine-assets" }],
+      // 公開 URL は委員会の gogatsusai.jp ゾーンに固定する（Cloudflare アカウントが変わっても URL は変わらない）。
+      // Custom Domain は deploy のたびにここから作られ、証明書は自動発行。ダッシュボードで付けると次の deploy と食い違う
+      "routes": [{ "pattern": "api.refine.gogatsusai.jp", "custom_domain": true }],
       "vars": {
         "CONVEX_URL": "https://rosy-egret-142.convex.cloud",
         "CONVEX_SITE_URL": "https://rosy-egret-142.convex.site",
-        "ALLOWED_ORIGINS": "https://mf100-refine.pages.dev",
+        "ALLOWED_ORIGINS": "https://refine.gogatsusai.jp",
       },
     },
   },

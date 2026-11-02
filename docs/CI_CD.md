@@ -4,11 +4,11 @@ GitHub Actions で回す。設定は `.github/workflows/`。
 
 ## ブランチ（`main ← develop ← feat-*`）
 
-| ブランチ  | 役割             | PR の向き                      | 配布                                  |
-| --------- | ---------------- | ------------------------------ | ------------------------------------- |
-| `feat-*`  | 機能・修正の作業 | → `develop`                    | なし（CI のみ）                       |
-| `develop` | 統合。デモの正   | ← feat、→ `main` へ昇格        | デモ Pages（`mf100-refine-demo`）     |
-| `main`    | 本番の正         | ← `develop` のみ（運用で守る） | 本番（Convex / Workers / Pages 本番） |
+| ブランチ  | 役割             | PR の向き                      | 配布                                   |
+| --------- | ---------------- | ------------------------------ | -------------------------------------- |
+| `feat-*`  | 機能・修正の作業 | → `develop`                    | なし（CI のみ）                        |
+| `develop` | 統合。デモの正   | ← feat、→ `main` へ昇格        | デモ Pages（`refine-gogatsusai-demo`） |
+| `main`    | 本番の正         | ← `develop` のみ（運用で守る） | 本番（Convex / Workers / Pages 本番）  |
 
 GitHub の Settings › Branches / Rulesets で、`develop` と `main` に PR 必須・`verify` 必須を置く。`main` への PR の base は `develop` に限る運用にする（Rulesets の制限は利用者が設定する）。
 
@@ -66,10 +66,10 @@ CI の壁時計（GitHub Actions）:
 
 ## CD（`deploy.yml`）
 
-| 先                     | いつ                                                                                                                                                                                                                                                       | 必要な設定                                                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| デモ版（実データなし） | **`develop` への push** で CI 完了後、集約ジョブ `verify` が success なら配る（e2e / visual の成否は問わない）。手動のデモ配布も同じ門。Secrets が無いあいだは配らずに飛ばす                                                                               | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                     |
-| 本番                   | **`main` への push**（通常は develop→main の merge）で CI 完了後、`verify` が success なら配る。Environment `production` に承認者を置けば配布前に止まる。手動 `workflow_dispatch`（`target: production`）も可。`seed_notation` / `fb_migration` は手動のみ | Environment `production` に Secrets: `CONVEX_DEPLOY_KEY`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`。Pages `mf100-refine`、R2 `mf100-refine-assets` を一度だけ作る |
+| 先                     | いつ                                                                                                                                                                                                                                                       | 必要な設定                                                                                                                                                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| デモ版（実データなし） | **`develop` への push** で CI 完了後、集約ジョブ `verify` が success なら配る（e2e / visual の成否は問わない）。手動のデモ配布も同じ門。Secrets が無いあいだは配らずに飛ばす                                                                               | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `refine-gogatsusai-demo` を一度だけ作っておく                                                                                   |
+| 本番                   | **`main` への push**（通常は develop→main の merge）で CI 完了後、`verify` が success なら配る。Environment `production` に承認者を置けば配布前に止まる。手動 `workflow_dispatch`（`target: production`）も可。`seed_notation` / `fb_migration` は手動のみ | Environment `production` に Secrets: `CONVEX_DEPLOY_KEY`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`。Pages `refine-gogatsusai`（独自ドメイン `refine.gogatsusai.jp`）、R2 `mf100-refine-assets` を一度だけ作る |
 
 ## バックアップ照合（`backup-verify.yml`）
 
@@ -109,7 +109,7 @@ FB（フィードバック）を廃止してコメントへ移した（docs/UI_M
 
 ### 固定 staging（手動のみ）
 
-`.github/workflows/staging.yml` は GitHub environment `staging` の独立した鍵と URL を使う。production の値を複製して動かさない。Cloudflare の R2 `mf100-refine-assets-stg`、Worker `mf100-api-staging`、Pages `mf100-refine-staging` を事前に管理者が用意する。
+`.github/workflows/staging.yml` は GitHub environment `staging` の独立した鍵と URL を使う。production の値を複製して動かさない。Cloudflare の R2 `mf100-refine-assets-stg`、Worker `mf100-api-staging`、Pages `refine-gogatsusai-staging` を事前に管理者が用意する。
 
 必要な Variables: `STAGING_CONVEX_URL`、`STAGING_CONVEX_SITE_URL`、`STAGING_ALLOWED_ORIGINS`（staging Web の HTTPS origin）、`STAGING_API_URL`。
 Secrets は staging 専用 `CONVEX_DEPLOY_KEY`、`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。Convex の `CONVEX_SITE_ORIGIN` とキーの対象を読み取りで照合してから配信する。Nogiku mock/redirect、共有 upload secret、CORS を staging ごとに設定し、本番データを取り込まない。
