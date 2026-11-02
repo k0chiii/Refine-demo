@@ -1677,19 +1677,10 @@ export function Editor({
             {!target ? (
               <p className="muted small comments__empty">版を提出するとコメントできます</p>
             ) : threads.length === 0 ? (
-              <p className="muted small comments__empty">
-                {canComment
-                  ? artifact?.type === "video"
-                    ? "C で全体へのコメント（T でこの時点）"
-                    : artifact && isWebLiveArtifact(artifact)
-                      ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
-                      : artifact?.role === "external" && isLiveExternal
-                        ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
-                        : touch
-                          ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
-                          : "ファイルの上でドラッグすると、その場にコメントできます"
-                  : "コメントはありません"}
-              </p>
+              // 操作の説明は書かない（ツールバーの「全体コメント」と紙面の操作で分かる）。コメントできない人にだけ状態を出す
+              canComment ? null : (
+                <p className="muted small comments__empty">コメントはありません</p>
+              )
             ) : (
               threads.map((t) => card(t))
             )}

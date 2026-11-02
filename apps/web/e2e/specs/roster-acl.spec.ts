@@ -12,13 +12,13 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await dialog.locator("input").first().fill(title);
     await app.pickSelectOption(dialog, "小ジャンル", "印刷物（紙・ビラ）");
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
-    await app.fillOutlinedDate(dialog, "■仕上がり日", "2026-12-01");
+    await app.fillOutlinedDate(dialog, "仕上がり日", "2026-12-01");
     await dialog.locator("m3e-button", { hasText: "登録" }).click();
     await page.waitForURL(/\/works\/[^/]+$/);
 
     await app.go("/works");
     const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await expect(row.getByRole("button", { name: /の校正者を選ぶ（いま: / })).toBeVisible();
+    await expect(row.getByRole("button", { name: /の担当者を選ぶ（いま: / })).toBeVisible();
 
     await app.signInAs("mock-nogiku-admin");
     await app.go("/admin");
@@ -36,7 +36,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await app.signInAs("mock-nogiku-manager");
     await app.go("/works");
     const rowAfter = page.locator(WORKS_ENTRY, { hasText: title }).first();
-    await rowAfter.getByRole("button", { name: /の校正者を選ぶ/ }).click();
+    await rowAfter.getByRole("button", { name: /の担当者を選ぶ/ }).click();
     const reviewers = app.dialog();
     await app.pickUser(reviewers, "こうせいはん");
     await reviewers.locator("m3e-button", { hasText: "保存" }).click();

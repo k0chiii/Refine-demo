@@ -1357,6 +1357,15 @@ m3e-dialog {
   display: grid;
   gap: 4px;
 }
+/* 制作物の状況の「滞っている制作物」: 行の面（1 日=オレンジ・2 日以上=赤）は見出しの左端に揃える
+   （一覧の行の -16px のはみ出しをやめ、文字は面の中に 12px 入れる） */
+.ov .dash__group .list {
+  margin: 0;
+}
+.ov .dash__group .list__item {
+  --m3e-list-item-leading-space: 12px;
+  --m3e-list-item-trailing-space: 12px;
+}
 .dash__more {
   justify-self: start;
 }
@@ -4973,12 +4982,28 @@ m3e-snackbar {
   margin: -4px -8px -4px 0;
   vertical-align: middle;
 }
-/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える */
+/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える。
+   名前は長くても列を広げず、省略記号で切る（全文は title） */
 .works-table__approvers,
 .works-table__reviewers {
   margin-inline-start: -12px;
   max-width: 100%;
   text-align: start;
+}
+.works-table__approvers .works-table__clip,
+.works-table__reviewers .works-table__clip {
+  max-width: 120px;
+}
+.works-table__col--owner .works-table__clip,
+.works-table__col--production .works-table__clip {
+  max-width: 128px;
+}
+/* 版の下の「予定提出 11/16（月）」は 2 行に折り返してよい（列を広げない。日付の途中では折らない幅を確保） */
+.works-table__col--version {
+  min-width: 108px;
+}
+.works-table__col--version .mf-table__sub {
+  white-space: normal;
 }
 .works-table__approvers-text {
   display: block;
@@ -5008,7 +5033,8 @@ m3e-snackbar {
     display: none;
   }
 }
-@container (max-width: 1119px) {
+/* 1440px（表の幅 1294 前後）で校了する人まで入るように、制作担当を先に隠す（担当は残る） */
+@container (max-width: 1339px) {
   .works-table__col--production {
     display: none;
   }
@@ -6075,7 +6101,6 @@ m3e-snackbar {
 /* stack-pr:detail-shell */
 
 .detail-shell {
-  min-height: 3500px;
   background: linear-gradient(
     180deg,
     var(--mf-surface-container-low) 0%,
@@ -6110,23 +6135,59 @@ m3e-snackbar {
 .detail-shell__stepper {
   width: 100%;
 }
-/* 73A: プレビューを最大にし、コメントは右の列（#204） */
+/* 73A: プレビューを最大にし、コメントは右の列（#204）。
+   プレビューの枠は見出しの下から画面の下端（「校正画面を開く」の分を除く）まで使い、紙面は枠の幅いっぱいに出す。
+   長い紙面は枠の中でスクロールする。コメントの列は幅を固定し、残りを全部プレビューに渡す */
 .detail-shell__main {
   display: grid;
-  grid-template-columns: 1fr min(360px, 38%);
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
   padding: 0 16px 24px;
   align-items: start;
 }
+@media (max-width: 839px) {
+  .detail-shell__main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.detail-shell__preview {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
 .detail-shell__preview-frame {
+  /* アプリバー 64 ＋ 見出し（題名の行・進行・余白）約 150 ＋ 下のボタン 64 を引いた残り */
+  height: calc(100dvh - var(--mf-appbar-h, 64px) - 214px);
   min-height: 420px;
   border-radius: var(--mf-shape-lg);
   overflow: hidden;
   background: var(--mf-surface-container-lowest);
+  display: flex;
+  flex-direction: column;
+}
+.detail-shell__preview-frame > * {
+  flex: 1;
+  min-height: 0;
+}
+.detail-shell__pdf,
+.detail-shell__pdf .viewer {
+  height: 100%;
+  min-height: 0;
+}
+.detail-shell__pdf .viewer {
+  border-radius: 0;
+  background: var(--mf-surface-container-lowest);
+}
+/* 紙面は枠の幅いっぱい（エディタの左右の余白とフローティングツールバーの分の下の余白は無し） */
+.detail-shell__pdf .viewer__stage {
+  padding: 0;
 }
 .detail-shell__pdf .viewer__pages {
-  max-height: 520px;
-  overflow: auto;
+  gap: 8px;
+}
+.detail-shell__pdf .viewer__page {
+  box-shadow: none;
+  border-radius: 0;
 }
 .detail-shell__comments {
   padding: 12px 16px;
@@ -6198,31 +6259,14 @@ m3e-snackbar {
   color: var(--mf-on-secondary-container);
 }
 
-/* stack-pr:ui-role-home-manager */
-.home-dashboard--manager .ov {
-  margin-inline: 16px;
+/* ホームの「共同」: 制作物の状況を開け閉めせずにそのまま出す（DashboardOverview の flat） */
+.ov--flat {
+  display: grid;
+  gap: 4px;
+  margin-block-end: 0;
 }
-.role-home-tag {
-  margin: 0 16px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--mf-on-surface-variant);
-}
-
-/* stack-pr:ui-role-home-approver */
-.home-dashboard--approver {
-  margin: 8px 16px;
-  padding: 12px 16px;
-  border-radius: var(--mf-shape-lg);
-  background: var(--mf-tertiary-container);
-  color: var(--mf-on-tertiary-container);
+.ov--flat .ov__header {
   min-height: 48px;
-}
-
-/* stack-pr:ui-role-home-member */
-.home-dashboard--member {
-  margin: 8px 16px;
-  min-height: 32px;
 }
 
 /* stack-pr:ui-detail-shell-mock */
@@ -6235,7 +6279,7 @@ m3e-snackbar {
   .dash--columns {
     grid-template-columns: 1fr;
   }
-  .home-dashboard--manager .kpis--three {
+  .hub .kpis--three {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -6251,7 +6295,6 @@ m3e-snackbar {
   .works {
     background: var(--mf-surface);
   }
-  .home-dashboard--manager .kpi,
   .ov .kpi {
     --m3e-filled-card-container-color: var(--mf-surface-container-high);
   }
