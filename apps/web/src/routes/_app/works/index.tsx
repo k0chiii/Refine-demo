@@ -17,7 +17,6 @@ import { useWorkSummaries } from "@/lib/useWorkSummaries";
 import type { M3eFilterChipElement } from "@m3e/web/chips";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DashboardOverview } from "@/features/home/DashboardOverview";
-import { RoleHomeDashboard } from "@/features/home/RoleHomeDashboard";
 import { NewWorkDialog } from "@/features/work/NewWorkDialog";
 import { WorksTable, type WorkRow } from "@/features/work/WorksTable";
 import { lifecycleLabel } from "@/lib/labels";
@@ -169,7 +168,6 @@ function Works() {
 
   return (
     <>
-      <RoleHomeDashboard variant="approver" />
       <div className="works">
         <AppBarSlot slot="title">制作物</AppBarSlot>
         {canCreate ? (
@@ -185,7 +183,6 @@ function Works() {
         ) : null}
         {dash ? (
           <div className="home-dashboard home-dashboard--manager">
-            <p className="role-home-tag">主管ビュー</p>
             <DashboardOverview data={dash} twoColumns={twoColumns} />
           </div>
         ) : null}
