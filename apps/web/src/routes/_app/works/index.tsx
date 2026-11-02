@@ -33,7 +33,7 @@ type TeamAxis = "owner" | "production";
 const SORT_KEYS = ["accepting", "deadline", "title", "stage", "owner", "production"] as const;
 const sortLabel: Record<WorkSortKey, string> = {
   accepting: "校正期日順",
-  deadline: "◆校了目標日順",
+  deadline: "校了目標日順",
   title: "制作物名順",
   stage: "状態順",
   owner: "担当順",

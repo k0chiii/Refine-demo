@@ -12,7 +12,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await dialog.locator("input").first().fill(title);
     await app.pickSelectOption(dialog, "小ジャンル", "印刷物（紙・ビラ）");
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
-    await app.fillOutlinedDate(dialog, "■仕上がり日", "2026-12-01");
+    await app.fillOutlinedDate(dialog, "仕上がり日", "2026-12-01");
     await dialog.locator("m3e-button", { hasText: "登録" }).click();
     await page.waitForURL(/\/works\/[^/]+$/);
 
