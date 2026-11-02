@@ -16,7 +16,6 @@ import { useEffect, useMemo, useState } from "react";
 import { CollaborationHome, VerifiedHome } from "@/features/home/HomeViews";
 import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
 import { storedHomeView, ViewSwitcher, type HomeView } from "@/features/home/ViewSwitcher";
-import { SnsHomeBand } from "@/features/home/SnsHomeBand";
 import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
 import { formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
@@ -319,7 +318,6 @@ function Make() {
       <AppBarSlot slot="actions">
         <ViewSwitcher value={view ?? "personal"} onChange={setChosenView} />
       </AppBarSlot>
-      <SnsHomeBand />
       {view === null ? (
         <Loading label="制作を読み込んでいます" />
       ) : view === "collaboration" ? (

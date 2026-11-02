@@ -558,7 +558,7 @@ async function summarizeWorkList(
     })),
     approvalQuorum: approvalSetupOf(work).quorum,
     approvalDeclared: declared,
-    /** 統括（managerIds）。SNS の帯など、自分の職責で絞る表示に使う */
+    /** 統括（managerIds）。自分の職責で絞る表示に使う */
     managerIds: [...work.managerIds],
     /** 制作者の ID（校了者の選択肢から外すため。制作者は校了者になれない） */
     creatorIds: [...work.creatorIds],

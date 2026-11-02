@@ -6249,16 +6249,6 @@ m3e-snackbar {
   --mf-table-header-bg: var(--mf-surface-container-high);
 }
 
-/* stack-pr:ui-sns-band-visibility */
-.sns-home-band {
-  margin: 0 16px 12px;
-  --m3e-filled-card-container-color: var(--mf-secondary-container);
-}
-.sns-home-band__meta {
-  margin: 4px 0 0;
-  color: var(--mf-on-secondary-container);
-}
-
 /* ホームの「共同」: 制作物の状況を開け閉めせずにそのまま出す（DashboardOverview の flat） */
 .ov--flat {
   display: grid;
@@ -6297,8 +6287,5 @@ m3e-snackbar {
   }
   .ov .kpi {
     --m3e-filled-card-container-color: var(--mf-surface-container-high);
-  }
-  .sns-home-band {
-    --m3e-filled-card-container-color: var(--mf-surface-container);
   }
 }

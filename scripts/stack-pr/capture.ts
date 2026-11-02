@@ -891,25 +891,6 @@ const SCENES: Record<string, SceneFn> = {
       }
     }
   },
-  "make-sns-band": async (page) => {
-    await signInAs(page, "mock-nogiku-creator");
-    await demoGo(page, "/make");
-    await page.waitForSelector(".hub[data-hub='make']", { timeout: 60_000 });
-    if (process.env.CAPTURE_EXPECT_SNS_BAND === "1") {
-      await page
-        .locator(".sns-home-band")
-        .getByText(/件が進行中/)
-        .waitFor({ state: "visible", timeout: 90_000 });
-      await page.locator(".sns-home-band").waitFor({ state: "visible", timeout: 60_000 });
-    } else if (
-      await page
-        .locator(".sns-home-band")
-        .isVisible()
-        .catch(() => false)
-    ) {
-      throw new Error("sns-home-band visible before PR 080");
-    }
-  },
   "dashboard-kpi-summary": async (page) => {
     await SCENES["dashboard-manager"]!(page);
     await page

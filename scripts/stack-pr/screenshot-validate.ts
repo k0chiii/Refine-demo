@@ -36,7 +36,6 @@ export const SCENE_MARKERS: Record<string, readonly string[]> = {
   "dashboard-manager": ["制作物の状況"],
   "dashboard-kpi-summary": ["制作物の状況"],
   "dashboard-bureau-graphs": ["制作物の状況"],
-  "make-sns-band": ["進行中"],
   "dashboard-manager-mobile": ["制作物の状況"],
   "dashboard-approver": ["MF100 公式パンフレット"],
   "dashboard-member": ["進行中"],
