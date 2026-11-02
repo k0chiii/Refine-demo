@@ -1,3 +1,4 @@
+import { isDomainError } from "@mf100/domain";
 import { ConvexError } from "convex/values";
 import { lifecycleLabel, resolutionLabel } from "./labels";
 
@@ -264,6 +265,14 @@ export function describeError(error: unknown): AppError {
     const code = data.code ?? "unknown";
     const message = withDetails(code, data.details) ?? messages[code] ?? genericErrorMessage(code);
     return { code, message, details: data.details ?? null };
+  }
+  // 画面側で domain の規則を先に当てたとき（提出前の .indd だけの検査など）も、サーバーと同じ文言にする
+  if (isDomainError(error)) {
+    const message =
+      withDetails(error.code, error.details) ??
+      messages[error.code] ??
+      genericErrorMessage(error.code);
+    return { code: error.code, message, details: error.details };
   }
   // 画面側で投げた日本語の文言はそのまま、英語のメッセージ（ライブラリ・ネットワーク）は決まった文言にする
   if (error instanceof Error)

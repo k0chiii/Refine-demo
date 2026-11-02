@@ -221,8 +221,9 @@ export function WebLiveViewer({
   const targetsKey = mine.map((t) => t.id).join(",");
   useEffect(() => {
     if (state !== "ready") return;
-    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作）
-    sendMode(!canComment ? "off" : "comment");
+    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作 = browse。
+    // comment はクリックもコメントにするモードで、90B で「コメントを追加」を無くしてから使わない）
+    sendMode(!canComment ? "off" : "browse");
   }, [state, readyKey, canComment, sendMode]);
   useEffect(() => {
     if (state !== "ready") return;

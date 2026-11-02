@@ -1294,22 +1294,18 @@ async function lateScenes() {
   await shot("27b-works-overview", ".ov");
   await page.evaluate(() => localStorage.removeItem("mf100.works-overview-open"));
 
-  // 09 採否判断（制作者）: ⋮ → 不採用（理由）
+  // 09 採否判断（制作者）: パネルの「反映しない」→ 理由を書いて確定（⋮ の「不採用」は無くなった。specs/decision.spec と同じ流れ）
   await go(revisionUrl);
   await page.waitForSelector(".comments .thread");
   const first = page.locator(".comments .thread").first();
   const decisionPanel = await openPanel(first);
-  await decisionPanel
-    .locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]')
-    .click();
-  await settle();
-  await page.locator("m3e-menu-item:visible", { hasText: "不採用" }).click();
+  await decisionPanel.locator(".thread__decide m3e-button", { hasText: "反映しない" }).click();
   await page.fill(
     ".thread-panel textarea",
     "正式名称は「五月祭常任委員会」で正しいことを規約で確認済み",
   );
-  await decisionPanel.locator("m3e-button", { hasText: "不採用にする" }).click();
-  // 一覧はパネルの下に隠れているので、パネルが閉じた（不採用の）状態になるのを待つ
+  await decisionPanel.locator(".thread__form m3e-button", { hasText: "反映しない" }).click();
+  // 一覧はパネルの下に隠れているので、パネルが閉じた（反映しない）状態になるのを待つ
   await page.waitForSelector(".thread-panel.thread--closed");
   await shot("09-decision");
 
@@ -1574,14 +1570,7 @@ async function lateScenes() {
   await go(revision2Url);
   await pdfReady();
   await drawer("コメント");
-  for (let i = 0; i < 5; i++) {
-    const sel = '.comments .thread m3e-icon-button[aria-label="反映する"]';
-    const left = await page.locator(sel).count();
-    if (left === 0) break;
-    await page.locator(".comments .thread .thread__body").first().click();
-    await page.locator(sel).first().click();
-    await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
-  }
+  await resolveOpenCards(".comments");
   await page.waitForSelector(".comments .thread--closed");
 
   // 10 校了ダイアログ（校了権限者）と校了後: 引き出し「情報」
@@ -1873,8 +1862,14 @@ async function compactScenes() {
   await drawer("情報");
   await btn("校正者を割り当てる").click();
   await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
-  await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
-  await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click();
+  // 種になった制作物に校正者が最初から付いていれば（選択済みの人は候補に出ない）、そのまま閉じる
+  const reviewerPicker = page.locator("m3e-dialog[open]");
+  if ((await reviewerPicker.locator("m3e-input-chip", { hasText: reviewer.name }).count()) > 0) {
+    await reviewerPicker.locator("m3e-button", { hasText: "キャンセル" }).click();
+  } else {
+    await pickUser(reviewerPicker, reviewer.name);
+    await reviewerPicker.locator("m3e-button", { hasText: "保存" }).click();
+  }
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   // 43 校正（校正者）: 書式付きのまま表示され、文字を選ぶとその場に投稿欄
   await signInAs("mock-nogiku-reviewer");
@@ -2104,6 +2099,26 @@ const expectTrue = (cond, msg) => {
   if (cond) return;
   failures.push(msg);
   console.error("  NG:", msg);
+};
+/**
+ * 一覧の未解決のカードを上から順に「反映する」にする（採否のボタンは選んだカードにだけ出るので、先に本文を押して選ぶ）。
+ * 反映できないカード（採否の権限が無い）が先頭に来たら止める
+ */
+const resolveOpenCards = async (scope) => {
+  const openSel = `${scope} .thread:not(.thread--closed)`;
+  for (let i = 0; i < 10; i++) {
+    const left = await page.locator(openSel).count();
+    if (left === 0) break;
+    const card = page.locator(openSel).first();
+    await card.locator(".thread__body").first().click();
+    const accept = card.locator(".thread__decide m3e-button", { hasText: "反映する" });
+    if ((await accept.count()) === 0) break;
+    await accept.click();
+    await page.waitForFunction(
+      ([s, n]) => document.querySelectorAll(s).length < n,
+      [openSel, left],
+    );
+  }
 };
 /**
  * 一覧のカード（Slack のスレッド式。1 件を短く見せる）の下の行を押して、スレッドのパネルを開く。パネルの locator を返す。
@@ -2780,18 +2795,9 @@ async function v2Scenes() {
     await settle();
   };
   await openComments();
-  for (let i = 0; i < 10; i++) {
-    const sel = 'm3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]';
-    const left = await page.locator(sel).count();
-    if (left === 0) break;
-    await page.locator("m3e-bottom-sheet.ws__sheet .thread .thread__body").first().click();
-    await page.locator(sel).first().click();
-    await page.waitForFunction(([s, n]) => document.querySelectorAll(s).length < n, [sel, left]);
-  }
+  await resolveOpenCards("m3e-bottom-sheet.ws__sheet");
   expectTrue(
-    (await page
-      .locator('m3e-bottom-sheet.ws__sheet .thread m3e-icon-button[aria-label="反映する"]')
-      .count()) === 0,
+    (await page.locator("m3e-bottom-sheet.ws__sheet .thread:not(.thread--closed)").count()) === 0,
     "プレビューに付けたコメントを反映済みにできない",
   );
   await page.evaluate(() => document.querySelector("m3e-bottom-sheet.ws__sheet").hide());
@@ -3193,12 +3199,22 @@ async function webFigmaScenes() {
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll("m3e-dialog[open] .file-drop__files li")].some(
-        (li) => li.textContent.includes("poster.ai") && li.textContent.includes("紙面に表示"),
+        // 「プレビューに表示（コメントはこのファイルに）」。文言は変わりうるので「ダウンロード用でない」で見る
+        (li) => li.textContent.includes("poster.ai") && !li.textContent.includes("ダウンロード用"),
       ),
     null,
     { timeout: 10_000 },
   );
   await shot("72a-submit-ai-indd");
+  // .indd だけのときの知らせ（失敗の snackbar は自分では消えない）がボタンに重なっているので、閉じてから押す
+  await page.evaluate(() =>
+    document.querySelectorAll("m3e-snackbar[open]").forEach((s) => {
+      s.open = false;
+    }),
+  );
+  await page
+    .waitForSelector("m3e-snackbar[open]", { state: "detached", timeout: 5_000 })
+    .catch(() => {});
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "アップロードを開始" }).click();
   await page.waitForFunction(
     () => document.querySelectorAll(".upload-item__state--verified").length >= 2,
