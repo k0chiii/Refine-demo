@@ -49,17 +49,24 @@ export function VersionsTab({
     <div className="versions">
       {work.can.submit && active ? (
         <div className="row versions__actions">
-          <M3eButton variant="filled" className="versions__submit" onClick={onSubmit}>
-            <M3eIcon slot="icon" name="upload_file" />
-            新しい版を提出
-          </M3eButton>
-          <M3eButton variant="tonal" onClick={onWrite}>
-            <M3eIcon
-              slot="icon"
-              name={work.work.mediaType === "sns" ? "post_add" : "edit_document"}
-            />
-            {work.work.mediaType === "sns" ? "投稿を作る" : "文章を書く"}
-          </M3eButton>
+          {/* SNS 投稿の版は投稿の編集から出す（本文・画像・記録を 1 つの版にする）。添付のダイアログは出さない */}
+          {work.work.mediaType === "sns" ? (
+            <M3eButton variant="filled" className="versions__submit" onClick={onWrite}>
+              <M3eIcon slot="icon" name="post_add" />
+              新しい版を提出
+            </M3eButton>
+          ) : (
+            <>
+              <M3eButton variant="filled" className="versions__submit" onClick={onSubmit}>
+                <M3eIcon slot="icon" name="upload_file" />
+                新しい版を提出
+              </M3eButton>
+              <M3eButton variant="tonal" onClick={onWrite}>
+                <M3eIcon slot="icon" name="edit_document" />
+                文章を書く
+              </M3eButton>
+            </>
+          )}
         </div>
       ) : null}
       {work.revisions.length === 0 ? (
