@@ -26,7 +26,8 @@ export function ReviewDeadlineCell({
   return (
     <>
       {urgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
-      {formatDeadline(deadlineAt, now)} · {remaining(deadlineAt, now)}
+      {formatDeadline(deadlineAt, now)}
+      <span className="mf-table__sub">{remaining(deadlineAt, now)}</span>
     </>
   );
 }

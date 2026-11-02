@@ -1,7 +1,14 @@
 import { useWorkSummaries } from "@/lib/useWorkSummaries";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { classifyMakeRow, isMakeTab, type MakeAction, type MakeTab } from "@mf100/domain";
+import {
+  backlogDelayTone,
+  classifyMakeRow,
+  isMakeTab,
+  type BacklogDelayTone,
+  type MakeAction,
+  type MakeTab,
+} from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -81,6 +88,7 @@ function Make() {
 
   const rows = useMemo(() => {
     if (!data) return null;
+    const now = Date.now();
     const respond = new Map(data.respond.map((i) => [i.workId, i.count]));
     const submit = new Map(data.submit.map((i) => [i.workId, i]));
     return data.works
@@ -92,7 +100,13 @@ function Make() {
           toRespond: respond.get(r.workId) ?? 0,
           canSubmit: target !== undefined,
         });
-        return { r, target, toRespond: respond.get(r.workId) ?? 0, ...c };
+        // 期限超過の長さ（107A）: 過ぎた締切（校正期日・納期）のうち古いほうから数える。制作物の状況の「滞っている制作物」と同じ
+        const passed = [r.reviewDeadlineAt, r.deliveryAt].filter(
+          (d): d is number => d !== null && d <= now,
+        );
+        const delay: BacklogDelayTone =
+          passed.length > 0 ? backlogDelayTone(Math.min(...passed), now) : "none";
+        return { r, target, toRespond: respond.get(r.workId) ?? 0, delay, ...c };
       });
   }, [data]);
 
@@ -149,7 +163,7 @@ function Make() {
     return (
       <>
         {turn.length > 0 ? (
-          <Group title="" label="今すぐ" count={turn.length} className="dash__section--now">
+          <Group title="今すぐ" count={turn.length} className="dash__section--now">
             {turn.map((x) => (
               <WorkspaceRow
                 key={x.r.workId}
@@ -173,6 +187,7 @@ function Make() {
                 chip={actionLabel[x.action]}
                 chipIcon={actionIcon[x.action]}
                 urgent={x.r.urgency === "overdue" || x.r.stage === "lapsed"}
+                delay={x.delay}
                 onOpen={() =>
                   x.action === "submit" && x.target
                     ? launcher.start({ workId: x.r.workId, route: x.target.route ?? "upload" })
@@ -198,6 +213,7 @@ function Make() {
                 chip={actionLabel[x.action]}
                 chipIcon={actionIcon[x.action]}
                 urgent={x.r.urgency === "overdue"}
+                delay={x.delay}
                 onOpen={() => open(x.r.workId, x.r.title, { tab: "comments" })}
               />
             ))}
