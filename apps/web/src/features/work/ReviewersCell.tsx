@@ -27,7 +27,7 @@ export function ReviewersCell({ w }: { w: ReviewersCellWork }) {
         <M3eButton
           variant="text"
           className="works-table__reviewers"
-          aria-label={`${w.title} の校正者を選ぶ（いま: ${names || "なし"}）`}
+          aria-label={`${w.title} の担当者を選ぶ（いま: ${names || "なし"}）`}
           title={names || undefined}
           onClick={(e) => {
             e.stopPropagation();

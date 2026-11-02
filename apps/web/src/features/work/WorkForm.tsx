@@ -57,9 +57,9 @@ export interface WorkFormState {
   mediaType: string;
   legacyId: string;
   deadlineAt: number | null;
-  /** ■仕上がり日 */
+  /** 仕上がり日 */
   finishAt: number | null;
-  /** ◆を手で直したあとは自動計算しない（画面だけ） */
+  /** 校了目標日を手で直したあとは自動計算しない（画面だけ） */
   approvalTargetManual: boolean;
   publishAt: number | null;
   requiresPrinterSubmission: boolean;
@@ -415,7 +415,7 @@ export function WorkFormFields({
             }
           />
           <DateField
-            label="■仕上がり日"
+            label="仕上がり日"
             kind="date"
             value={form.finishAt}
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
@@ -513,13 +513,13 @@ export function WorkFormFields({
       <FormSection title="日程と入稿">
         <div className="form">
           <DateField
-            label="■仕上がり日"
+            label="仕上がり日"
             kind="date"
             value={form.finishAt}
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
           <DateField
-            label="◆校了目標日"
+            label="校了目標日"
             value={form.deadlineAt}
             onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v, approvalTargetManual: true }))}
           />
