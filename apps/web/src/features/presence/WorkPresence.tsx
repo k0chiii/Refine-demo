@@ -73,4 +73,3 @@ function LiveWorkPresence({ workId }: { workId: string }) {
     </span>
   );
 }
-
