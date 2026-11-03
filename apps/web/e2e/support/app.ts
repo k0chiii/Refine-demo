@@ -541,7 +541,7 @@ export class App {
     await this.openWork(title);
     await this.drawer("情報");
     const body = this.page.locator(".drawer__body");
-    // 「企画情報」の節にも保存ボタンがあるので、目的・用途の textarea がある節の中で押す
+    // ほかの節にも保存ボタンがあるので、目的・用途の textarea がある節の中で押す
     const section = body
       .locator("section.info-tab__section", { has: this.page.locator("textarea") })
       .first();
