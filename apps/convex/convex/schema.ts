@@ -30,6 +30,14 @@ import {
  */
 
 const permissionLevel = v.union(v.literal("review"), v.literal("edit"), v.literal("manage"));
+/**
+ * 本番のデータに残っている廃止済みの値。スキーマで許さないと `convex deploy` の検証で止まるので、
+ * 移行（migrations/decision104・decision105）を本番で流し終えるまで読めるようにしておく。新しく書くことはない
+ * - workPermissions.permission の "view"（104A: review に昇格する）
+ * - works / workAggregateEntries の confidentiality（105A: 機密区分の廃止）
+ */
+const legacyPermissionLevel = v.union(permissionLevel, v.literal("view"));
+const legacyConfidentiality = v.optional(v.string());
 const principalType = v.union(v.literal("user"), v.literal("group"));
 const lifecycle = v.union(
   v.literal("draft"),
@@ -238,6 +246,8 @@ export default defineSchema({
     /** 第 n 版の予定提出日（decisions 82） */
     revisionPlannedAt: v.optional(v.array(v.object({ sequence: v.number(), at: v.number() }))),
     lifecycle,
+    /** 廃止（105A）。本番の既存データにだけ残る。移行 decision105 で消す */
+    confidentiality: legacyConfidentiality,
     finalRevisionId: v.optional(v.string()),
     /** 表記統一のルールカテゴリ（人が選ぶ） */
     notationCategories: v.optional(v.array(v.string())),
@@ -327,6 +337,8 @@ export default defineSchema({
     workId: v.id("works"),
     year: v.number(),
     lifecycle: v.string(),
+    /** 廃止（105A）。本番の既存データにだけ残る。移行 decision105 で消す */
+    confidentiality: legacyConfidentiality,
   }).index("by_work", ["workId"]),
 
   /** 制作物ごとの要約（lib/workSummary.ts）。summaryVersion の無い古い行は id だけを持ち、読む側が版から数え直す */
@@ -360,7 +372,7 @@ export default defineSchema({
     workId: v.id("works"),
     principalType,
     principalId: v.string(),
-    permission: permissionLevel,
+    permission: legacyPermissionLevel,
     grantedBy: v.string(),
     grantedAt: v.number(),
     revokedBy: v.optional(v.string()),

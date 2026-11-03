@@ -90,6 +90,17 @@ Web のビルドは、`VITE_CONVEX_URL` があるとき `dist/_worker.js` と `_
 
 FB（フィードバック）を廃止してコメントへ移した（docs/UI_M3E.md §95）。本番のデータは、Deploy を手で起動して `target: production` と一緒に入力 `fb_migration` を選んで移す。配り終えてから、Convex の内部関数 `feedbackMigration:run` をデプロイキー（`CONVEX_DEPLOY_KEY`）で `convex run` し、返ったまとめ（JSON）を実行の Summary に出す。
 
+### 104A / 105A の移行（本番で 1 回）
+
+閲覧権限 `view` の廃止（104A）と機密区分 `confidentiality` の廃止（105A）は、本番のデータにまだ古い値が残っている。スキーマは当面その値を許している（`schema.ts` の `legacyPermissionLevel`・`legacyConfidentiality`）ので配ることはできるが、配り終えたら Convex の内部関数をデプロイキーで 1 回ずつ流す。
+
+```bash
+npx convex run migrations/decision104:upgradeViewPermissionGrants --prod
+npx convex run migrations/decision105:removeWorkConfidentiality --prod
+```
+
+返る数（`upgraded` / `patchedWorks` / `patchedEntries`）を記録する。流し終えたら、次の版でスキーマの許容を外してよい。
+
 1. `dry-run`: 何も書かず、移すスレッド・返信・添付・既読の数、未解決／解決済みの数、版が無くて移さない数、制作物ごとの上位 20 を数える。
 2. `migrate`: コメントへ移す。何度流しても増えない（移行済みは飛ばす）。
 3. `delete`: 全て移行済みであることを確かめてから、FB の行を全て消す。移っていないスレッドがあれば何も消さず `refused: true` を返す。R2 の実体には触れない。
