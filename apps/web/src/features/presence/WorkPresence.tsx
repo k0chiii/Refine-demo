@@ -1,7 +1,8 @@
 import { api } from "@mf100/convex/api";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { UserAvatar } from "@/ui/UserAvatar";
+import { M3eTooltip } from "@m3e/react/tooltip";
 
 /** 並べて出すアバターの数。それより多い分は「+n」 */
 const SHOWN = 3;
@@ -49,27 +50,52 @@ function LiveWorkPresence({ workId }: { workId: string }) {
   }, [workId, heartbeat, disconnect]);
   const others = viewers?.filter((user) => !user.isMe) ?? [];
   if (!others.length) return null;
-  const names = others.map((user) => user.name).join("、");
-  const shown = others.slice(0, SHOWN);
-  const rest = others.length - shown.length;
-  // 見ている人はアバターを重ねて出す（Google ドキュメントと同じ）。誰かは title と読み上げ名で
+  return <ViewerAvatars viewers={others} />;
+}
+
+/**
+ * 見ている人のアバターを少し重ねて並べる（Google ドキュメントと同じ）。乗せる・フォーカスすると名前がツールチップで出る。
+ * 4 人目からは「+n」（乗せると残りの名前）
+ */
+function ViewerAvatars({
+  viewers,
+}: {
+  viewers: Array<{ userId: string; name: string; email: string | null }>;
+}) {
+  const idPrefix = useId();
+  const shown = viewers.slice(0, SHOWN);
+  const hidden = viewers.slice(SHOWN);
+  const moreId = `${idPrefix}-more`;
   return (
     <span
       className="work-presence"
       role="status"
-      aria-label={`${others.length} 人が閲覧中: ${names}`}
-      title={names}
+      aria-label={`${viewers.length} 人が閲覧中: ${viewers.map((user) => user.name).join("、")}`}
     >
-      {shown.map((user) => (
-        <UserAvatar
-          key={user.userId}
-          seed={user.email ?? user.userId}
-          userId={user.userId}
-          size={28}
-          className="work-presence__avatar"
-        />
-      ))}
-      {rest > 0 ? <span className="work-presence__more">+{rest}</span> : null}
+      {shown.map((user, i) => {
+        const id = `${idPrefix}-${i}`;
+        return (
+          <span key={user.userId} id={id} className="work-presence__person" tabIndex={0}>
+            <UserAvatar
+              seed={user.email ?? user.userId}
+              userId={user.userId}
+              size={28}
+              className="work-presence__avatar"
+            />
+            <M3eTooltip htmlFor={id} touchGestures="auto">
+              {user.name}
+            </M3eTooltip>
+          </span>
+        );
+      })}
+      {hidden.length > 0 ? (
+        <span id={moreId} className="work-presence__person" tabIndex={0}>
+          <span className="work-presence__more">+{hidden.length}</span>
+          <M3eTooltip htmlFor={moreId} touchGestures="auto">
+            {hidden.map((user) => user.name).join("、")}
+          </M3eTooltip>
+        </span>
+      ) : null}
     </span>
   );
 }

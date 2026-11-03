@@ -1206,8 +1206,15 @@ m3e-dialog {
   box-sizing: content-box;
   border: 2px solid var(--mf-surface);
 }
-.work-presence__avatar + .work-presence__avatar,
-.work-presence__avatar + .work-presence__more {
+.work-presence__person {
+  display: inline-flex;
+  border-radius: var(--mf-shape-full);
+  outline-offset: 2px;
+}
+.work-presence__person:focus-visible {
+  outline: var(--mf-focus-ring);
+}
+.work-presence__person + .work-presence__person {
   margin-inline-start: -8px;
 }
 .work-presence__more {
