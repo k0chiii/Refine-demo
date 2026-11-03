@@ -1,6 +1,10 @@
 import { api } from "@mf100/convex/api";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect } from "react";
+import { UserAvatar } from "@/ui/UserAvatar";
+
+/** 並べて出すアバターの数。それより多い分は「+n」 */
+const SHOWN = 3;
 
 /** Show only viewers of this authorized work; independent tabs share one person in the list. */
 export function WorkPresence(props: { workId: string }) {
@@ -45,9 +49,28 @@ function LiveWorkPresence({ workId }: { workId: string }) {
   }, [workId, heartbeat, disconnect]);
   const others = viewers?.filter((user) => !user.isMe) ?? [];
   if (!others.length) return null;
+  const names = others.map((user) => user.name).join("、");
+  const shown = others.slice(0, SHOWN);
+  const rest = others.length - shown.length;
+  // 見ている人はアバターを重ねて出す（Google ドキュメントと同じ）。誰かは title と読み上げ名で
   return (
-    <span role="status" title={others.map((user) => user.name).join("、")}>
-      {others.length} 人が閲覧中
+    <span
+      className="work-presence"
+      role="status"
+      aria-label={`${others.length} 人が閲覧中: ${names}`}
+      title={names}
+    >
+      {shown.map((user) => (
+        <UserAvatar
+          key={user.userId}
+          seed={user.email ?? user.userId}
+          userId={user.userId}
+          size={28}
+          className="work-presence__avatar"
+        />
+      ))}
+      {rest > 0 ? <span className="work-presence__more">+{rest}</span> : null}
     </span>
   );
 }
+

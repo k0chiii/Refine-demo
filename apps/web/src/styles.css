@@ -1195,6 +1195,34 @@ m3e-dialog {
 .user-avatar--placeholder {
   display: inline-block;
 }
+/* アプリバーの「閲覧中」: 見ている人のアバターを少し重ねて並べる（縁は面の色で切る）。4 人目からは「+n」 */
+.work-presence {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 4px;
+}
+.work-presence__avatar {
+  flex: none;
+  box-sizing: content-box;
+  border: 2px solid var(--mf-surface);
+}
+.work-presence__avatar + .work-presence__avatar,
+.work-presence__avatar + .work-presence__more {
+  margin-inline-start: -8px;
+}
+.work-presence__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding-inline: 4px;
+  border: 2px solid var(--mf-surface);
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+  font: var(--mf-type-label-medium);
+}
 .account-menu__header {
   display: flex;
   align-items: center;
