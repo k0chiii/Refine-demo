@@ -46,6 +46,8 @@ export const list = query({
     return online.map((user) => ({
       userId: user.userId,
       name: users.get(user.userId)?.name ?? "委員",
+      /** アバターの種（設定が無い人はメールから決まる絵） */
+      email: users.get(user.userId)?.email ?? null,
       isMe: user.userId === principal.userId,
     }));
   },
