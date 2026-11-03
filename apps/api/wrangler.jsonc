@@ -5,10 +5,12 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  // namespace_id は同じアカウントなら別の Worker ともカウンタを共有する（公式）。委員会アカウントの他の Worker と
+  // 重ならないよう、ドキュメントの例（1001）ではなく MF100 専用の値にする（環境ごとに別）
   "ratelimits": [
     {
       "name": "EXPENSIVE_REQUESTS",
-      "namespace_id": "1001",
+      "namespace_id": "100101",
       "simple": { "limit": 30, "period": 60 },
     },
   ],
@@ -38,7 +40,7 @@
       "ratelimits": [
         {
           "name": "EXPENSIVE_REQUESTS",
-          "namespace_id": "1002",
+          "namespace_id": "100102",
           "simple": { "limit": 30, "period": 60 },
         },
       ],
@@ -55,7 +57,7 @@
       "ratelimits": [
         {
           "name": "EXPENSIVE_REQUESTS",
-          "namespace_id": "1003",
+          "namespace_id": "100103",
           "simple": { "limit": 30, "period": 60 },
         },
       ],
