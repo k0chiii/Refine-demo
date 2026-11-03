@@ -2131,6 +2131,11 @@ m3e-dialog {
   max-width: 880px;
   min-width: 0;
 }
+/* 共同（制作物の状況）は数字のカード・滞っている制作物・内訳の 2 列なので、読みやすい幅に絞らず画面の横幅いっぱいに
+ * 広げる（利用者指示 2026-11-03）。個人・確認の 1 列のリストは 880 のまま */
+.hub[data-view="collaboration"] {
+  max-width: none;
+}
 /* 切り替え（進行中／下書き／校了済み、未着手／確認中／完了）: M3E の connected button group の toggle（色は M3E の既定。上書きしない。監査 G-06） */
 .hub__tabs {
   /* 横に流す箱（overflow）の中では hover の影が切れるので、影は付けず state layer だけで示す */
