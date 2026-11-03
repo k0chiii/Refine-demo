@@ -92,10 +92,7 @@ export function FigmaEmbedViewer({
       <div className="viewer__stage figma-embed__stage">
         <p className="wlive__banner" role="note">
           <M3eIcon name="info" />
-          Figma
-          の埋め込みは今のファイルの内容で、位置は取れません。コメントは「このフレームについて」として付きます。
-          位置を指すには Figma から取り込んだ画像（添付）の上でコメントしてください。Figma
-          のサインインを求められることがあります
+          Figma の最新の内容です。位置を指すなら取り込んだ画像にコメントしてください
         </p>
         <div className="wlive__bar" role="toolbar" aria-label="Figma の表示の操作">
           {frames.length > 1 && frames.length <= 4 ? (
@@ -166,10 +163,7 @@ export function FigmaEmbedViewer({
           ) : null}
         </div>
         {here.length > 0 ? (
-          <p className="wlive__caption">
-            このフレームへのコメント {here.length} 件（右の一覧）。Figma
-            側のコメントはここには出ません
-          </p>
+          <p className="wlive__caption">このフレームのコメント {here.length} 件</p>
         ) : null}
         {footer}
       </div>

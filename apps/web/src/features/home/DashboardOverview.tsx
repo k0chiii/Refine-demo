@@ -1,5 +1,5 @@
 import type { api } from "@mf100/convex/api";
-import { workStages } from "@mf100/domain";
+import { workStages, backlogDelayClass, backlogDelayTone } from "@mf100/domain";
 import { useNavigate } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
@@ -58,14 +58,14 @@ function DashboardKpis({ data }: { data: Data }) {
   const { summary, overview, nextDeadline } = data;
   const comments = overview.threads.open + overview.threads.done;
   return (
-    <section className="kpis kpis--three" aria-label="サマリー">
+    <section className="kpis kpis--three kpis--mock-row" aria-label="サマリー">
       <Kpi label="締切が近い" value={summary.dueSoon}>
         {nextDeadline?.deadlineAt ? (
           <span className="kpi__sub">次は {formatDeadline(nextDeadline.deadlineAt)}</span>
         ) : null}
       </Kpi>
       <Kpi label="期限超過" value={summary.overdue} tone={summary.overdue > 0 ? "error" : "none"} />
-      <Kpi label="未解決のコメント" value={overview.threads.open}>
+      <Kpi label="未対応のコメント" value={overview.threads.open}>
         {comments > 0 ? (
           <Meter
             value={overview.threads.done}
@@ -137,7 +137,16 @@ function Meter({
  * 開け閉めは覚える（localStorage。使えないときは閉じたまま）。
  * 全部が空（制作物が 1 件も無い）のときは出さない
  */
-export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns: boolean }) {
+export function DashboardOverview({
+  data,
+  twoColumns,
+  flat,
+}: {
+  data: Data;
+  twoColumns: boolean;
+  /** 開け閉めせず、見出しと中身をそのまま出す（ホームの「共同」） */
+  flat?: boolean;
+}) {
   const o = data.overview;
   const [open, setOpen] = useState(readOpen);
   if (o.total === 0) return null;
@@ -149,6 +158,37 @@ export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns
       <BureauTable data={data} />
     </>
   );
+  const asOf = (
+    <time className="ov__asof" dateTime={new Date(o.asOf).toISOString()}>
+      {formatJstShort(o.asOf)} 時点
+    </time>
+  );
+  if (flat)
+    return (
+      <section className="ov ov--flat" aria-labelledby="ov-title">
+        <div className="ov__header">
+          <M3eHeading variant="title" size="medium" level={2} emphasized id="ov-title">
+            制作物の状況
+          </M3eHeading>
+          {asOf}
+        </div>
+        <div className="ov__body">
+          <DashboardKpis data={data} />
+          {hasBacklog ? (
+            <div className={twoColumns ? "dash dash--columns" : "dash"}>
+              <div className="dash__column ov__main">
+                <Backlog data={data} />
+              </div>
+              <div className="dash__column dash__column--side ov__side">{breakdown}</div>
+            </div>
+          ) : (
+            <div className="dash__column dash__column--side ov__side ov__side--flat">
+              {breakdown}
+            </div>
+          )}
+        </div>
+      </section>
+    );
   return (
     <M3eExpansionPanel
       open={open}
@@ -160,9 +200,7 @@ export function DashboardOverview({ data, twoColumns }: { data: Data; twoColumns
         <M3eHeading variant="title" size="medium" level={2} emphasized id="ov-title">
           制作物の状況
         </M3eHeading>
-        <time className="ov__asof" dateTime={new Date(o.asOf).toISOString()}>
-          {formatJstShort(o.asOf)} 時点
-        </time>
+        {asOf}
       </span>
       <div className="ov__body">
         <DashboardKpis data={data} />
@@ -211,22 +249,31 @@ function Backlog({ data }: { data: Data }) {
                 <span className="dash__count">{all.length}</span>
               </h4>
               <M3eActionList className="list" aria-label={title}>
-                {items.map((i) => (
-                  <M3eListAction
-                    key={`${i.workId}-${i.revisionId}`}
-                    className="list__item"
-                    onClick={() => {
-                      rememberWorkHint(i.workId, { title: i.workTitle });
-                      void navigate({ to: "/works/$workId", params: { workId: i.workId } });
-                    }}
-                  >
-                    <span className="list__headline">
-                      {i.workTitle}
-                      {i.revisionLabel ? <span className="muted">　{i.revisionLabel}</span> : null}
-                    </span>
-                    <span slot="supporting-text">{sub(i)}</span>
-                  </M3eListAction>
-                ))}
+                {items.map((i) => {
+                  const delayTone =
+                    k === "overdue" && i.deadlineAt
+                      ? backlogDelayTone(i.deadlineAt, data.overview.asOf)
+                      : "none";
+                  const delayClass = backlogDelayClass(delayTone);
+                  return (
+                    <M3eListAction
+                      key={`${i.workId}-${i.revisionId}`}
+                      className={`list__item ${delayClass}`.trim()}
+                      onClick={() => {
+                        rememberWorkHint(i.workId, { title: i.workTitle });
+                        void navigate({ to: "/works/$workId", params: { workId: i.workId } });
+                      }}
+                    >
+                      <span className="list__headline">
+                        {i.workTitle}
+                        {i.revisionLabel ? (
+                          <span className="muted">　{i.revisionLabel}</span>
+                        ) : null}
+                      </span>
+                      <span slot="supporting-text">{sub(i)}</span>
+                    </M3eListAction>
+                  );
+                })}
               </M3eActionList>
               {all.length > BACKLOG_ROWS ? (
                 <M3eButton variant="text" className="dash__more" onClick={() => toggle(k)}>
@@ -260,7 +307,7 @@ function StageBreakdown({ data }: { data: Data }) {
         <span className="spacer" />
         <span className="dash__count">全 {total} 件</span>
       </div>
-      <div className="stagebar" role="img" aria-label={`状態の内訳: ${summary}`}>
+      <div className="stagebar stagebar--mock" role="img" aria-label={`状態の内訳: ${summary}`}>
         {present.map((s) => (
           <span
             key={s}
@@ -348,7 +395,7 @@ function BureauTable({ data }: { data: Data }) {
   const rows = data.overview.bureaus;
   if (rows.every((b) => b.bureau === "")) return null;
   return (
-    <section className="ov__block" aria-labelledby="ov-bureaus">
+    <section className="ov__block ov__block--bureau-mock" aria-labelledby="ov-bureaus">
       <M3eHeading
         variant="title"
         size="small"
@@ -364,7 +411,7 @@ function BureauTable({ data }: { data: Data }) {
             <ColumnHeader>局</ColumnHeader>
             <ColumnHeader numeric>制作物</ColumnHeader>
             <ColumnHeader numeric>校正中</ColumnHeader>
-            <ColumnHeader numeric>未解決</ColumnHeader>
+            <ColumnHeader numeric>未対応</ColumnHeader>
             <ColumnHeader numeric>校了</ColumnHeader>
           </tr>
         </thead>

@@ -19,6 +19,7 @@ import {
   vRevisionDeclarations,
   vStoredAvatarConfig,
   vWorkMetadataFields,
+  vRegisteredPlanInfo,
 } from "./lib/validators.ts";
 
 /**
@@ -28,12 +29,15 @@ import {
  * - 認可は関数内で行う。テーブル構造だけで非公開作品の存在を隠すことはできないので、クエリ側で必ず絞る。
  */
 
-const permissionLevel = v.union(
-  v.literal("view"),
-  v.literal("review"),
-  v.literal("edit"),
-  v.literal("manage"),
-);
+const permissionLevel = v.union(v.literal("review"), v.literal("edit"), v.literal("manage"));
+/**
+ * 本番のデータに残っている廃止済みの値。スキーマで許さないと `convex deploy` の検証で止まるので、
+ * 移行（migrations/decision104・decision105）を本番で流し終えるまで読めるようにしておく。新しく書くことはない
+ * - workPermissions.permission の "view"（104A: review に昇格する）
+ * - works / workAggregateEntries の confidentiality（105A: 機密区分の廃止）
+ */
+const legacyPermissionLevel = v.union(permissionLevel, v.literal("view"));
+const legacyConfidentiality = v.optional(v.string());
 const principalType = v.union(v.literal("user"), v.literal("group"));
 const lifecycle = v.union(
   v.literal("draft"),
@@ -42,7 +46,6 @@ const lifecycle = v.union(
   v.literal("finalized"),
   v.literal("cancelled"),
 );
-const confidentiality = v.union(v.literal("normal"), v.literal("restricted"));
 const mediaType = v.union(
   v.literal("pdf"),
   v.literal("image"),
@@ -67,6 +70,7 @@ const vRevisionGlance = v.object({
   kind: revisionKind,
   submittedAt: v.number(),
   deadlineAt: v.number(),
+  reviewUrgent: v.optional(v.boolean()),
   lapsed: v.boolean(),
 });
 const artifactRole = v.union(v.literal("source"), v.literal("preview"), v.literal("external"));
@@ -237,8 +241,13 @@ export default defineSchema({
     /** 校正者の名簿。無い行は未設定（次の版の確定で直前の版から作る）。空配列は校正者なし。 */
     reviewerIds: v.optional(v.array(v.id("users"))),
     deadlineAt: v.optional(v.number()),
+    /** ■仕上がり日（decisions 81） */
+    finishAt: v.optional(v.number()),
+    /** 第 n 版の予定提出日（decisions 82） */
+    revisionPlannedAt: v.optional(v.array(v.object({ sequence: v.number(), at: v.number() }))),
     lifecycle,
-    confidentiality,
+    /** 廃止（105A）。本番の既存データにだけ残る。移行 decision105 で消す */
+    confidentiality: legacyConfidentiality,
     finalRevisionId: v.optional(v.string()),
     /** 表記統一のルールカテゴリ（人が選ぶ） */
     notationCategories: v.optional(v.array(v.string())),
@@ -246,6 +255,7 @@ export default defineSchema({
     socialProfileId: v.optional(v.string()),
     /** Notion の制作物 DB に揃えた項目（大ジャンル・小ジャンル・関係者・入稿・タグ。docs/NOTION_ALIGNMENT.md） */
     ...vWorkMetadataFields,
+    registeredPlanInfo: v.optional(vRegisteredPlanInfo),
     /**
      * 廃止（利用者指示 2026-10-17「SlackのチャンネルとGoogleドライブはいらない」）。読み書きしない。
      * すでに保存された制作物の検証を通すためだけに残す（データ移行はしない）
@@ -255,7 +265,6 @@ export default defineSchema({
     version: v.number(),
   })
     .index("by_aggregate_version", ["aggregateVersion"])
-    .index("by_aggregate_version_confidentiality", ["aggregateVersion", "confidentiality"])
     .index("by_search_tokens", ["searchTokens"])
     .searchIndex("search_substring", {
       searchField: "searchTokens",
@@ -267,8 +276,6 @@ export default defineSchema({
     .index("by_social_profile", ["socialProfileId"])
     .index("by_owner_team", ["ownerTeamId"])
     .index("by_lifecycle", ["lifecycle"])
-    /** 機密区分で引く（通常の制作物は委員なら誰でも見られるので、一覧は ACL を読まずに索引で集める。works.listMyWorks） */
-    .index("by_confidentiality", ["confidentiality"])
     .searchIndex("search_title", { searchField: "title", filterFields: ["year", "lifecycle"] }),
 
   /** 職責（制作者・校了者・主管）を「ユーザー → 作品」で引くための派生テーブル。works 書込み時に同期する。 */
@@ -330,7 +337,8 @@ export default defineSchema({
     workId: v.id("works"),
     year: v.number(),
     lifecycle: v.string(),
-    confidentiality: v.string(),
+    /** 廃止（105A）。本番の既存データにだけ残る。移行 decision105 で消す */
+    confidentiality: legacyConfidentiality,
   }).index("by_work", ["workId"]),
 
   /** 制作物ごとの要約（lib/workSummary.ts）。summaryVersion の無い古い行は id だけを持ち、読む側が版から数え直す */
@@ -364,7 +372,7 @@ export default defineSchema({
     workId: v.id("works"),
     principalType,
     principalId: v.string(),
-    permission: permissionLevel,
+    permission: legacyPermissionLevel,
     grantedBy: v.string(),
     grantedAt: v.number(),
     revokedBy: v.optional(v.string()),
@@ -381,6 +389,9 @@ export default defineSchema({
     submittedBy: v.string(),
     submittedAt: v.number(),
     deadlineAt: v.number(),
+    /** 廃止: 制作物 revisionPlannedAt へ移行（072 / e082。読取・移行のみ） */
+    plannedSubmitAt: v.optional(v.number()),
+    reviewUrgent: v.optional(v.boolean()),
     reviewState,
     reviewClosedReason: v.optional(closedReason),
     reviewClosedAt: v.optional(v.number()),
@@ -425,6 +436,7 @@ export default defineSchema({
     kind: revisionKind,
     reviewType: v.string(),
     deadlineAt: v.number(),
+    reviewUrgent: v.optional(v.boolean()),
     changeSummary: v.string(),
     focusNotes: v.string(),
     state: v.union(v.literal("open"), v.literal("confirmed"), v.literal("abandoned")),

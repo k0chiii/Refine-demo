@@ -1,11 +1,12 @@
+import { isDomainError } from "@mf100/domain";
 import { ConvexError } from "convex/values";
 import { lifecycleLabel, resolutionLabel } from "./labels";
 
 /** ドメインのエラーコード → 利用者向けメッセージ（§13 可観測性: 利用者が操作失敗を判別できる）。 */
 const messages: Record<string, string> = {
   unauthenticated: "サインインしてください",
-  forbidden: "この操作をする権限がありません。対象が無いか、閲覧の権限がありません。",
-  acl_requires_system_admin: "閲覧権限を変更できるのはシステム管理者だけです",
+  forbidden: "権限がないか、対象が見つかりません",
+  acl_requires_system_admin: "権限を変更できるのはシステム管理者だけです",
   acl_invalid: "追加する人を確かめてください。空の選択や、いない人は追加できません。",
   work_not_editable: "校了・中止した制作物の校正者は変更できません。",
   acl_group_principal_not_enabled: "グループには権限を付けられません。個人を選んでください。",
@@ -14,10 +15,13 @@ const messages: Record<string, string> = {
     "この制作物は校了済みです。変更するには校了権限者が理由を書いて再開してください。",
   work_not_finalized: "この制作物は校了されていません",
   revision_rough_after_standard: "通常版を提出した後は 0版（ラフ）を提出できません",
-  revision_not_accepting: "この版は校正を受け付けていません",
-  revision_deadline_passed: "校正の締切を過ぎています",
-  revision_not_latest: "最新の受付中の版ではありません",
-  revision_deadline_in_past: "校正の締切は今より後にしてください",
+  revision_not_accepting: "この版は校正中ではありません",
+  revision_deadline_passed: "校正期日を過ぎています",
+  revision_not_latest: "最新の版ではありません",
+  revision_deadline_in_past: "校正期日は今より後にしてください",
+  revision_deadline_required: "校正期日を入力してください",
+  revision_deadline_after_max:
+    "緊急の校正期日は、通常の既定（3 日後）またはいま受付中の版の校正期日より前にしてください",
   revision_artifacts_not_verified:
     "確認できていないファイルがあります。確認できなかったファイルをアップロードし直してから提出してください。",
   revision_no_artifacts: "ファイルか外部リンクを 1 件以上追加してください",
@@ -225,7 +229,6 @@ function workInvalidMessage(details: unknown): string | null {
     approvalQuorum: "校了とみなす人数",
     managerIds: "主管・制作統括",
     mediaType: "媒体",
-    confidentiality: "機密区分",
     productionTeamIds: "制作担当",
   };
   const name = typeof d.field === "string" ? label[d.field] : undefined;
@@ -262,6 +265,14 @@ export function describeError(error: unknown): AppError {
     const code = data.code ?? "unknown";
     const message = withDetails(code, data.details) ?? messages[code] ?? genericErrorMessage(code);
     return { code, message, details: data.details ?? null };
+  }
+  // 画面側で domain の規則を先に当てたとき（提出前の .indd だけの検査など）も、サーバーと同じ文言にする
+  if (isDomainError(error)) {
+    const message =
+      withDetails(error.code, error.details) ??
+      messages[error.code] ??
+      genericErrorMessage(error.code);
+    return { code: error.code, message, details: error.details };
   }
   // 画面側で投げた日本語の文言はそのまま、英語のメッセージ（ライブラリ・ネットワーク）は決まった文言にする
   if (error instanceof Error)

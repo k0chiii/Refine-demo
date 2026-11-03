@@ -12,11 +12,7 @@ import {
 
 const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
-async function setupWork(
-  t: Harness,
-  cast: Awaited<ReturnType<typeof createCast>>,
-  confidentiality: "normal" | "restricted" = "normal",
-) {
+async function setupWork(t: Harness, cast: Awaited<ReturnType<typeof createCast>>) {
   const workId = (await cast.manager.as.mutation(api.works.create, {
     title: "MF100 パンフレット",
     purpose: "来場者案内",
@@ -25,7 +21,6 @@ async function setupWork(
     year: 100,
     creatorIds: [cast.creator.id],
     approverId: cast.approver.id,
-    confidentiality,
   })) as Id<"works">;
   await cast.admin.as.mutation(api.acl.grant, {
     workId,
@@ -69,15 +64,16 @@ describe("Convex 統合: 認可と状態遷移", () => {
     vi.useRealTimers();
   });
 
-  it("A-01 / A-20: 非公開の作品は、権限のない Nogiku ユーザーが作品 ID を直接指定しても一覧・詳細・添付を得られない。個人 ACL だけで閲覧できる", async () => {
+  it("A-01 / A-20: 委員は作品 ID を直接指定して一覧・詳細を得られる（105A）。未ログインは拒否", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, "restricted");
+    const workId = await setupWork(t, cast);
 
-    await expect(cast.stranger.as.query(api.works.get, { workId })).rejects.toThrow(
-      code("forbidden"),
-    );
-    expect(await cast.stranger.as.query(api.works.listMine, {})).toEqual([]);
+    const asStranger = await cast.stranger.as.query(api.works.get, { workId });
+    expect(asStranger.work.title).toBe("MF100 パンフレット");
+    expect((await cast.stranger.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([
+      workId,
+    ]);
     // システム管理者は職責/ACL が無くても見え、すべての操作ができる（利用者決定 2026-10-30）
     const asAdmin = await cast.admin.as.query(api.works.get, { workId });
     expect(Object.values(asAdmin.can).every(Boolean)).toBe(true);
@@ -99,10 +95,10 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await expect(t.query(api.works.get, { workId })).rejects.toThrow(code("unauthenticated"));
   });
 
-  it("A-19 / A-11: 管理者のみ ACL を変更でき、剥奪後は閲覧・投稿・添付認可ができない（非公開の作品）", async () => {
+  it("A-19 / A-11: 管理者のみ ACL を変更でき、剥奪後も閲覧・投稿は可能（105A）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, "restricted");
+    const workId = await setupWork(t, cast);
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
     const rev = await cast.reviewer.as.query(api.revisions.get, { revisionId });
@@ -112,7 +108,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
       cast.manager.as.mutation(api.acl.grant, {
         workId,
         userIds: [cast.stranger.id],
-        permission: "view",
+        permission: "review",
       }),
     ).rejects.toThrow(code("acl_requires_system_admin"));
     await expect(
@@ -129,12 +125,12 @@ describe("Convex 統合: 認可と状態遷移", () => {
       workId,
       userId: cast.reviewer.id,
     });
-    await expect(cast.reviewer.as.query(api.works.get, { workId })).rejects.toThrow(
-      code("forbidden"),
-    );
+    await expect(cast.reviewer.as.query(api.works.get, { workId })).resolves.toMatchObject({
+      work: { title: "MF100 パンフレット" },
+    });
     await expect(
       cast.reviewer.as.query(api.artifacts.authorizeAccess, { artifactId }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toMatchObject({ mimeType: "application/pdf" });
     await expect(
       cast.reviewer.as.mutation(api.comments.post, {
         revisionId: revisionId as Id<"revisions">,
@@ -142,7 +138,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
         kind: "question",
         severity: "info",
       }),
-    ).rejects.toThrow(code("forbidden"));
+    ).resolves.toBeTruthy();
     const history = await cast.admin.as.query(api.acl.list, { workId });
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({
@@ -181,7 +177,7 @@ describe("Convex 統合: 認可と状態遷移", () => {
     await cast.admin.as.mutation(api.acl.grant, {
       workId,
       userIds: [cast.stranger.id],
-      permission: "view",
+      permission: "review",
     });
     await cast.admin.as.mutation(api.acl.revoke, {
       workId,
@@ -412,8 +408,8 @@ describe("Convex 統合: 認可と状態遷移", () => {
     });
     const revisionId = rid1 as Id<"revisions">;
 
-    // 提出通知: 職責者（manager/approver）に届き、本人（creator）には届かない。確認担当にも依頼が届く
-    expect(await cast.manager.as.query(api.notifications.unreadCount, {})).toBe(1);
+    // 版提出通知は停止（2026-10-30 合意）。確認依頼は担当へ届く
+    expect(await cast.manager.as.query(api.notifications.unreadCount, {})).toBe(0);
     expect(await cast.creator.as.query(api.notifications.unreadCount, {})).toBe(0);
     const reviewerNotes = await cast.reviewer.as.query(api.notifications.list, {});
     expect(reviewerNotes.map((n) => n.kind)).toContain("check_requested");
@@ -517,6 +513,8 @@ describe("Convex 統合: 認可と状態遷移", () => {
       workId,
       reviewerIds: [cast.reviewer.id],
     });
+    // 第 3 版の締切日（JST）0:00 にリマインド（当日のみ）
+    vi.setSystemTime(Date.UTC(2026, 10, 1, 15, 0, 0));
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(1);
     expect(await t.mutation(internal.revisions.remindDeadlines, {})).toBe(0);
     const notes = await cast.reviewer.as.query(api.notifications.list, {});
@@ -609,10 +607,10 @@ describe("Convex 統合: 認可と状態遷移", () => {
     expect(await t.mutation(internal.submissions.listOrphanObjects, {})).toEqual([]);
   });
 
-  it("メンション: 候補は見られる人だけ、見られない人は拒否、メンションされた人に通知が届き名前が返る（非公開の作品）", async () => {
+  it("メンション: 委員全員が候補・メンション可（105A）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
-    const workId = await setupWork(t, cast, "restricted");
+    const workId = await setupWork(t, cast);
     const { sessionId } = await submit(t, cast, workId);
     const { revisionId } = await cast.creator.as.mutation(api.submissions.confirm, { sessionId });
 
@@ -620,26 +618,24 @@ describe("Convex 統合: 認可と状態遷移", () => {
       workId,
       text: "",
     });
-    expect(candidates.map((u) => u.id).sort()).toEqual(
-      [cast.creator.id, cast.approver.id, cast.manager.id, cast.reviewer.id].sort(),
-    );
+    expect(candidates.map((u) => u.id)).toContain(cast.creator.id);
+    expect(candidates.map((u) => u.id)).toContain(cast.stranger.id);
     // 打った文字で絞る（名前・メールの部分一致）
     expect(
       await cast.reviewer.as.query(api.comments.searchMentionCandidates, { workId, text: "appr" }),
     ).toEqual([{ id: cast.approver.id, name: "approver", email: "approver@example.invalid" }]);
-    await expect(
-      cast.stranger.as.query(api.comments.searchMentionCandidates, { workId, text: "" }),
-    ).rejects.toThrow(code("forbidden"));
-    await expect(
-      cast.reviewer.as.mutation(api.comments.post, {
-        revisionId: revisionId as Id<"revisions">,
-        body: "@x",
-        kind: "question",
-        severity: "info",
-        mentions: [cast.stranger.id],
-      }),
-    ).rejects.toThrow(code("mention_not_allowed"));
-
+    const strangerCandidates = await cast.stranger.as.query(api.comments.searchMentionCandidates, {
+      workId,
+      text: "",
+    });
+    expect(strangerCandidates.map((u) => u.id)).toContain(cast.creator.id);
+    await cast.reviewer.as.mutation(api.comments.post, {
+      revisionId: revisionId as Id<"revisions">,
+      body: "@x",
+      kind: "question",
+      severity: "info",
+      mentions: [cast.stranger.id],
+    });
     await cast.reviewer.as.mutation(api.comments.post, {
       revisionId: revisionId as Id<"revisions">,
       body: "@駒場 校了 ご確認ください",
@@ -648,7 +644,10 @@ describe("Convex 統合: 認可と状態遷移", () => {
       mentions: [cast.approver.id],
     });
     const rev = await cast.approver.as.query(api.revisions.get, { revisionId });
-    expect(rev.threads[0]!.mentionUsers.map((u) => u.id)).toEqual([cast.approver.id]);
+    const withApprover = rev.threads.find((t) =>
+      t.mentionUsers.some((u) => u.id === cast.approver.id),
+    )!;
+    expect(withApprover.mentionUsers.map((u) => u.id)).toEqual([cast.approver.id]);
     const notes = await cast.approver.as.query(api.notifications.list, {});
     expect(notes.some((n) => n.kind === "mentioned")).toBe(true);
   });

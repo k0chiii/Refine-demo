@@ -41,7 +41,7 @@ export function landingWorkspace(
 
 // ---------- 制作 ----------
 
-/** 進行中の分け方: あなたの番（自分の手が要る）／校正中（待っている） */
+/** 進行中の分け方: 要対応（自分の手が要る）／校正中（待っている） */
 export type MakeGroup = "turn" | "waiting";
 /** 行の次の操作: 対応する／版を提出／見る */
 export type MakeAction = "respond" | "submit" | "view";
@@ -57,9 +57,9 @@ export interface MakeFacts {
 }
 
 /**
- * 進行中の制作物を「あなたの番」と「校正中」に分け、次の操作を 1 つ決める。
- * - 未対応のコメントがある → あなたの番・対応する
- * - 受付中の版が無く、版を出せる（まだ出していない・受付が終わった）→ あなたの番・版を提出
+ * 進行中の制作物を「要対応」と「校正中」に分け、次の操作を 1 つ決める。
+ * - 未対応のコメントがある → 要対応・対応する
+ * - 受付中の版が無く、版を出せる（まだ出していない・受付が終わった）→ 要対応・版を提出
  * - それ以外 → 校正中（待っている）・見る
  */
 export function classifyMakeRow(f: MakeFacts): { group: MakeGroup; action: MakeAction } {

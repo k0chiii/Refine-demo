@@ -38,7 +38,6 @@ export const vStoredAvatarConfig = v.object({
 });
 
 export const vPermissionLevel = v.union(
-  v.literal("view"),
   v.literal("review"),
   v.literal("edit"),
   v.literal("manage"),
@@ -54,7 +53,6 @@ export const vMediaType = v.union(
   v.literal("figma"),
   v.literal("other"),
 );
-export const vConfidentiality = v.union(v.literal("normal"), v.literal("restricted"));
 
 // ---------------------------------------------------------------- Notion の制作物 DB・版 DB・担当 DB に揃えた項目（docs/NOTION_ALIGNMENT.md）
 /** 大ジャンル（domain の workGenres） */
@@ -75,6 +73,7 @@ export const vWorkSubGenre = v.union(
   v.literal("print_other"),
   v.literal("print_banner"),
   v.literal("print_booklet"),
+  v.literal("slide"),
   v.literal("solid_decoration"),
   v.literal("print_large"),
   v.literal("print_decoration"),
@@ -90,6 +89,12 @@ export const vWorkSubGenre = v.union(
   v.literal("web_design"),
   v.literal("committee_screen"),
 );
+export const vRegisteredPlanInfo = v.object({
+  name: v.optional(v.string()),
+  number: v.optional(v.string()),
+  venue: v.optional(v.string()),
+  schedule: v.optional(v.string()),
+});
 /** 制作物の Notion に揃えた任意の項目（表の形。登録・保存の形） */
 export const vWorkMetadataFields = {
   genre: v.optional(vWorkGenre),
@@ -114,6 +119,7 @@ export const vWorkMetadataPatch = {
   productionDays: v.optional(v.union(v.number(), v.null())),
   tags: v.optional(v.union(v.array(v.string()), v.null())),
 };
+export const vRegisteredPlanInfoPatch = v.optional(v.union(vRegisteredPlanInfo, v.null()));
 /** 版の提出時の申告（写真・めい・指針外の色の使用） */
 export const vRevisionDeclarations = v.object({
   usesPhotos: v.boolean(),

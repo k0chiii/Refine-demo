@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/e2e/specs/finalize.spec.ts b/apps/web/e2e/specs/finalize.spec.ts
+index 5e3bdbe..0c4f337 100644
+--- a/apps/web/e2e/specs/finalize.spec.ts
++++ b/apps/web/e2e/specs/finalize.spec.ts
+@@ -27,7 +27,7 @@ test.describe("校了", { tag: "@smoke" }, () => {
+     await expectFinalizedForCreator(app);
+   });
+ 
+-  test("未解決のコメントが残っていると理由なしでは校了できず、例外校了の理由を書けば校了できる", async ({
++  test("未対応のコメントが残っていると理由なしでは校了できず、例外校了の理由を書けば校了できる", async ({
+     app,
+   }) => {
+     const { workPath, revisionPath } = await submitFirstRevision(app);

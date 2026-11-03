@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/e2e/specs/comment.spec.ts b/apps/web/e2e/specs/comment.spec.ts
+index 6f6c548..eded860 100644
+--- a/apps/web/e2e/specs/comment.spec.ts
++++ b/apps/web/e2e/specs/comment.spec.ts
+@@ -2,7 +2,7 @@ import { expect, test } from "../support/app";
+ import { assignReviewer, submitFirstRevision } from "../support/scenarios";
+ 
+ // 旧 screenshots.mjs の 08（紙面にコメント）
+-test.describe("紙面へのコメント", { tag: "@smoke" }, () => {
++test.describe("プレビューへのコメント", { tag: "@smoke" }, () => {
+   test("校正者が「校正」の行から開き、なぞってコメント・位置なしのコメントを付けられる", async ({
+     app,
+     page,

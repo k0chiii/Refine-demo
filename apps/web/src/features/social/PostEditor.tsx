@@ -309,10 +309,8 @@ function PostSurface({
   useEffect(() => {
     if (hinted.current || !canEdit || rules === undefined || profiles === undefined) return;
     hinted.current = true;
-    if (!profile)
-      toast("SNS アカウントが割り当てられていません。制作物の「情報」で選ぶと見た目がそろいます。");
-    else if (rules && !rules.categories.length)
-      toast("表記の検査をしていません。制作物の「編集」で表記統一のカテゴリを選んでください。");
+    if (!profile) toast("SNS アカウントが未設定です");
+    else if (rules && !rules.categories.length) toast("表記ルールのカテゴリが未設定です");
   }, [rules, profiles, profile, canEdit]);
   const previewImages = post.images
     .map((im) => assets.get(im.key))
@@ -400,7 +398,7 @@ function PostSurface({
 
   const count =
     post.platform === "x"
-      ? `${xWeightedLength(post.body)} / ${socialLimits.x.weightedMax}（日本語 2・URL 23 の近似）`
+      ? `${xWeightedLength(post.body)} / ${socialLimits.x.weightedMax}`
       : `${charLength(post.body)} / ${socialLimits.instagram.bodyMax} 文字・ハッシュタグ ${extractHashtags(post.body).length} / ${socialLimits.instagram.hashtagsMax}`;
   const statusText =
     status.kind === "saving"
@@ -550,7 +548,7 @@ function PostSurface({
                       {...((edited.current || triedSubmit) && !im.alt.trim()
                         ? { error: "代替テキストを入力してください" }
                         : {})}
-                      hint={`画像の内容を短く書きます。画像の中の文字（日時・場所など）も書き、「〜の画像」で始めません（${Array.from(im.alt).length} / ${ALT_TEXT_GUIDE_MAX}）`}
+                      hint={`画像の内容と、画像内の文字を短く（${Array.from(im.alt).length} / ${ALT_TEXT_GUIDE_MAX}）`}
                     >
                       <TextInput
                         value={im.alt}

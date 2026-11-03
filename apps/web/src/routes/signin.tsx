@@ -19,7 +19,7 @@ const MOCK_USERS = [
   { sub: "mock-nogiku-manager", name: "さつき しゅかん（制作統括）" },
   { sub: "mock-nogiku-creator", name: "さつき めい（制作者）" },
   { sub: "mock-nogiku-reviewer", name: "ほんごう こうせい（校正者）" },
-  { sub: "mock-nogiku-approver", name: "こまば こうりょう（校了権限者）" },
+  { sub: "mock-nogiku-approver", name: "こまば こうりょう（校了者）" },
 ];
 
 function SignIn() {
@@ -60,7 +60,7 @@ function SignIn() {
         </M3eButton>
         {showMock ? (
           <M3eExpansionPanel className="expansion">
-            <span slot="header">モックのユーザーでサインイン</span>
+            <span slot="header">テスト用のユーザーでサインイン</span>
             <div className="stack">
               <Field label="役割">
                 <Select value={mockSub} onChange={(e) => setMockSub(e.target.value)}>

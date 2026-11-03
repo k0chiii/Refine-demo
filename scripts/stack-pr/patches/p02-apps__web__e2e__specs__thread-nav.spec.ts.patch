@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/e2e/specs/thread-nav.spec.ts b/apps/web/e2e/specs/thread-nav.spec.ts
+index 2a73edb..2fe96c8 100644
+--- a/apps/web/e2e/specs/thread-nav.spec.ts
++++ b/apps/web/e2e/specs/thread-nav.spec.ts
+@@ -3,7 +3,7 @@ import { reviewerComments, submitFirstRevision } from "../support/scenarios";
+ 
+ // 利用者指示 2026-10-28「コメントで2列取るのはやめよう」→ 試作 B（一覧を差し替え、上の段で前後へ）。docs/UI_M3E.md §104
+ test.describe("スレッドのパネルの前後", { tag: "@core" }, () => {
+-  test("スレッドを開いても引き出しは広がらずに一覧を差し替え、上の段の前後で一覧の並びの隣のスレッドへ移り、戻ると一覧が出る", async ({
++  test("スレッドを開いてもサイドパネルは広がらずに一覧を差し替え、上の段の前後で一覧の並びの隣のスレッドへ移り、戻ると一覧が出る", async ({
+     app,
+   }) => {
+     const { revisionPath } = await submitFirstRevision(app);

@@ -1,0 +1,7 @@
+capturedAt=2026-11-01T13:02:36.039Z
+url=http://127.0.0.1:4313/works/000000000000000000000010016works/detail
+scene=dashboard-detail
+marker:未提出=未提出
+captureUser=mock-nogiku-manager
+detail:version=—
+detail:preview=no

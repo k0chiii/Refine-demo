@@ -1,4 +1,5 @@
 import { DomainError } from "../shared/DomainError.ts";
+import { normalizeRegisteredPlanInfo } from "./planInfo.ts";
 import type { UserId } from "../shared/ids.ts";
 import {
   approvalSetupOf,
@@ -7,7 +8,7 @@ import {
   normalizeApprovalSetup,
 } from "./approvers.ts";
 import { normalizeWorkTags, WORK_SIZE_MAX, workGenres, workSubGenreCodes } from "./metadata.ts";
-import { confidentialities, mediaTypes, type Work } from "./Work.ts";
+import { mediaTypes, type Work } from "./Work.ts";
 
 /**
  * 制作物（Work）の生成・変更で共通に守る不変条件。
@@ -218,18 +219,21 @@ export type WorkPatch = {
       | "category"
       | "mediaType"
       | "deadlineAt"
+      | "finishAt"
       | "creatorIds"
       | "approverId"
       | "approverIds"
       | "approvalQuorum"
       | "managerIds"
-      | "confidentiality"
       | "legacyId"
       | "productionTeamIds"
       | "relatedTeamIds"
       | "notationCategories"
   ]?: Work[K] | undefined;
-} & WorkMetadataInput;
+} & WorkMetadataInput & {
+    /** 登録済み企画情報（null で消す。decisions 69–72） */
+    registeredPlanInfo?: import("./planInfo.ts").RegisteredPlanInfo | null;
+  };
 
 /**
  * Work に変更を当てた結果を返す（version を 1 進める）。生成時と同じ不変条件を検証する。
@@ -265,9 +269,15 @@ export function applyWorkPatch(
   }
   if (!(mediaTypes as readonly string[]).includes(next.mediaType))
     throw invalid("mediaType", "unknown");
-  if (!(confidentialities as readonly string[]).includes(next.confidentiality))
-    throw invalid("confidentiality", "unknown");
   assignWorkMetadata(next, normalizeWorkMetadata(meta));
+  if (patch.registeredPlanInfo !== undefined) {
+    if (patch.registeredPlanInfo === null) delete next.registeredPlanInfo;
+    else {
+      const norm = normalizeRegisteredPlanInfo(patch.registeredPlanInfo);
+      if (norm === null || norm === undefined) delete next.registeredPlanInfo;
+      else next.registeredPlanInfo = norm;
+    }
+  }
   return normalizeWorkEssentials(next, existingOverlap);
 }
 

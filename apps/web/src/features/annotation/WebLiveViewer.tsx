@@ -38,7 +38,6 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItemGroup, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 import { AnchorOverlay, type OverlayThread } from "./AnchorOverlay";
-import { useMarkArmed } from "./markArm";
 import { useWebBridge, webDeviceLabel, type BridgeHit, type BridgeRects } from "./webBridge";
 
 /** コメントの下書き（ブリッジが返した要素と、付けたときの端末） */
@@ -122,7 +121,6 @@ export function WebLiveViewer({
   onReady,
 }: Props) {
   const compact = useWindowClass() === "compact";
-  const armed = useMarkArmed();
   const [deviceId, setDeviceId] = useState(readDevice);
   const [landscape, setLandscape] = useState(false);
   /** PC の幅の直接指定（端末を選ぶと消える） */
@@ -223,10 +221,10 @@ export function WebLiveViewer({
   const targetsKey = mine.map((t) => t.id).join(",");
   useEffect(() => {
     if (state !== "ready") return;
-    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作）。
-    // 「コメントを追加」の直後だけ、クリックした要素もコメントになる
-    sendMode(!canComment ? "off" : armed ? "comment" : "browse");
-  }, [state, readyKey, armed, canComment, sendMode]);
+    // 付けられるときは、サイトの中でなぞる・長押しがコメントになる（クリックはサイトのふつうの操作 = browse。
+    // comment はクリックもコメントにするモードで、90B で「コメントを追加」を無くしてから使わない）
+    sendMode(!canComment ? "off" : "browse");
+  }, [state, readyKey, canComment, sendMode]);
   useEffect(() => {
     if (state !== "ready") return;
     resolve(
@@ -430,7 +428,7 @@ export function WebLiveViewer({
         {/* CM-03: ライブ表示は今の内容。版の内容は添付 */}
         <p className="wlive__banner" role="note">
           <M3eIcon name="info" />
-          ライブ表示は今のサイトの内容です。この版の内容はこの版の添付（スクリーンショット・画像）で確かめてください。サイト側のコメントは同期されません
+          公開中のサイトです。提出時の見た目は添付の画像で見てください
         </p>
         <div className="wlive__bar" role="toolbar" aria-label="ライブ表示の操作">
           <M3eButton
@@ -523,10 +521,7 @@ export function WebLiveViewer({
               <div>
                 <p className="title-small">このサイトはここに表示できません</p>
                 <p className="small muted">
-                  サイトが埋め込みを拒否している（X-Frame-Options・CSP の
-                  frame-ancestors）か、校正システムのブリッジ（bridge.js）が置かれていません。
-                  委員会のサイトなら Web
-                  担当にブリッジの設置を頼んでください。それまでは、この版に添付したスクリーンショットの上でコメントしてください
+                  新しいタブで開くか、添付のスクリーンショットにコメントしてください
                 </p>
                 <div className="row">{openNew}</div>
               </div>

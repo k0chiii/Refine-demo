@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/features/work/ApproverFields.tsx b/apps/web/src/features/work/ApproverFields.tsx
+index faa1154..deb3538 100644
+--- a/apps/web/src/features/work/ApproverFields.tsx
++++ b/apps/web/src/features/work/ApproverFields.tsx
+@@ -27,7 +27,7 @@ export function ApproverFields({
+   return (
+     <>
+       <UserPicker
+-        label="校了者（校了権限者）"
++        label="校了者（校了者）"
+         {...(required && !readOnly ? { required } : {})}
+         {...(readOnly ? { readOnly } : {})}
+         value={ids}

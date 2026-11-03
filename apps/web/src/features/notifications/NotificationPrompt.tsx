@@ -55,7 +55,7 @@ export function NotificationPrompt() {
     try {
       const ok = await push.enable();
       if (!ok)
-        toast("通知は許可されませんでした。端末の設定 › 通知 から変えられます", {
+        toast("通知がオフです。端末の設定で許可してください", {
           kind: "warning",
         });
       setOpen(false);
@@ -81,12 +81,8 @@ export function NotificationPrompt() {
         通知をオンにしますか？
       </span>
       <div className="dialog-body">
-        <p className="notify-prompt__lead">
-          コメントやメンション、締切の知らせを、この端末のバナーで受け取れます。未読の数はアプリのアイコンにも出ます。
-        </p>
-        <p className="small muted">
-          あとからでも、右上のアカウントの「通知の設定」でオン・オフできます
-        </p>
+        <p className="notify-prompt__lead">コメントと校正期日をこの端末に通知します</p>
+        <p className="small muted">あとで「通知の設定」から変えられます</p>
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" disabled={busy} onClick={later}>

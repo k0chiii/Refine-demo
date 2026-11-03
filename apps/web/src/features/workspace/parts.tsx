@@ -1,5 +1,7 @@
+import { backlogDelayClass, type BacklogDelayTone } from "@mf100/domain";
 import type { ReactNode } from "react";
 import { formatDeadlineUntil, remaining } from "@/lib/format";
+import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { M3eBadge } from "@m3e/react/badge";
 import { M3eHeading } from "@m3e/react/heading";
 import { M3eIcon } from "@m3e/react/icon";
@@ -43,6 +45,8 @@ export function WorkspaceRow({
   chip,
   chipIcon,
   urgent,
+  reviewUrgent,
+  delay,
   onOpen,
 }: {
   icon: string;
@@ -54,6 +58,10 @@ export function WorkspaceRow({
   chipIcon?: string;
   /** 期限超過など、注意が要る行（題名を error の色に） */
   urgent?: boolean;
+  /** 版提出の「緊急」 */
+  reviewUrgent?: boolean;
+  /** 期限超過の長さ（107A: 1 日=オレンジ・2 日以上=赤。制作物の状況の「滞っている制作物」と同じ色） */
+  delay?: BacklogDelayTone;
   onOpen: () => void;
 }) {
   const shown = lines.filter(Boolean) as string[];
@@ -61,7 +69,7 @@ export function WorkspaceRow({
   const chipProps = chipIcon ? { icon: chipIcon } : {};
   return (
     <M3eListAction
-      className={`list__item hub-row ${urgent ? "list__item--urgent" : ""}`}
+      className={`list__item hub-row ${urgent ? "list__item--urgent" : ""} ${delay ? backlogDelayClass(delay) : ""}`}
       onClick={onOpen}
     >
       <M3eIcon slot="leading" name={icon} />
@@ -70,6 +78,11 @@ export function WorkspaceRow({
         {suffix ? <span className="muted">　{suffix}</span> : null}
       </span>
       <span slot="supporting-text">
+        {reviewUrgent ? (
+          <span className="hub-row__line">
+            <UrgentReviewChip className="review-urgent-chip" />
+          </span>
+        ) : null}
         {shown.map((l, i) => (
           <span key={i} className="hub-row__line">
             {l}

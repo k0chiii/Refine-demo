@@ -1,12 +1,22 @@
 import { useWorkSummaries } from "@/lib/useWorkSummaries";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
-import { classifyMakeRow, isMakeTab, type MakeAction, type MakeTab } from "@mf100/domain";
+import {
+  backlogDelayTone,
+  classifyMakeRow,
+  isMakeTab,
+  type BacklogDelayTone,
+  type MakeAction,
+  type MakeTab,
+} from "@mf100/domain";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { CollaborationHome, VerifiedHome } from "@/features/home/HomeViews";
 import { submitRouteIcon, useSubmitLauncher } from "@/features/home/SubmitPicker";
+import { storedHomeView, ViewSwitcher, type HomeView } from "@/features/home/ViewSwitcher";
+import { SnsHomeBand } from "@/features/home/SnsHomeBand";
 import { Empty, Group, WorkspaceRow, deadlineLine } from "@/features/workspace/parts";
 import { formatJstShort } from "@/lib/format";
 import { mediaLabel } from "@/lib/labels";
@@ -44,11 +54,14 @@ const inProgress = new Set(["unsubmitted", "reviewing", "lapsed"]);
 
 /**
  * 制作（自分が作るもの）の入口。制作者になっている制作物を 進行中 / 下書き / 校了済み で見る（利用者決定 2026-10-19）。
- * - 進行中: 「あなたの番」（未対応のコメントに返事をする・次の版を出す）と「校正中」（校正と校了を待っている）。
+ * - 進行中: 今すぐ（未対応のコメント・次の版。見出しは件数バッジで示す）と「校正中」（校正と校了を待っている）。
  *   材料はダッシュボードの制作の節（dashboard.make。「返事をする」「提出する」と制作者の行）。分け方は domain の classifyMakeRow
  * - 下書き: 文章・SNS 投稿の下書き（documents.writable）。校了済み: 自分が制作者の校了した制作物（works.listMine）。どちらも開いたときだけ読む
  * - 行は 1 つの「次の操作」の印を持ち、押すとエディタが開く（返事をする・見るは、未解決のコメントが並ぶコメントの引き出しで）。
  *   版を出す行だけは提出の入口（添付は版提出ダイアログ、文章・SNS はそれぞれのエディタ）へ
+ * - アプリバーの切替（個人／共同／確認。decisions 38A: ロール名は出さない）で中身が替わる。個人は上の自分の制作、
+ *   共同は制作物の状況（HomeViews.CollaborationHome）、確認は自分が校了・専門確認するもの（VerifiedHome）。
+ *   既定は、自分が制作者の進行中の制作物があれば個人、無くて制作物を登録できる人（統括）なら共同。選んだ見え方はセッションに残る
  */
 function Make() {
   const { show: tab = "active" } = Route.useSearch();
@@ -56,6 +69,7 @@ function Make() {
   useEffect(() => rememberWorkspace("make"), []);
   const data = useQuery(api.dashboard.make, {});
   const me = useQuery(api.me.me, {});
+  const [chosenView, setChosenView] = useState<HomeView | null>(storedHomeView);
   const drafts = useQuery(api.documents.writable, tab === "draft" ? {} : "skip");
   const finished = useWorkSummaries(tab === "done" ? { lifecycle: "finalized" as const } : "skip");
   const launcher = useSubmitLauncher();
@@ -74,6 +88,7 @@ function Make() {
 
   const rows = useMemo(() => {
     if (!data) return null;
+    const now = Date.now();
     const respond = new Map(data.respond.map((i) => [i.workId, i.count]));
     const submit = new Map(data.submit.map((i) => [i.workId, i]));
     return data.works
@@ -85,7 +100,13 @@ function Make() {
           toRespond: respond.get(r.workId) ?? 0,
           canSubmit: target !== undefined,
         });
-        return { r, target, toRespond: respond.get(r.workId) ?? 0, ...c };
+        // 期限超過の長さ（107A）: 過ぎた締切（校正期日・納期）のうち古いほうから数える。制作物の状況の「滞っている制作物」と同じ
+        const passed = [r.reviewDeadlineAt, r.deliveryAt].filter(
+          (d): d is number => d !== null && d <= now,
+        );
+        const delay: BacklogDelayTone =
+          passed.length > 0 ? backlogDelayTone(Math.min(...passed), now) : "none";
+        return { r, target, toRespond: respond.get(r.workId) ?? 0, delay, ...c };
       });
   }, [data]);
 
@@ -142,7 +163,7 @@ function Make() {
     return (
       <>
         {turn.length > 0 ? (
-          <Group title="あなたの番" count={turn.length}>
+          <Group title="今すぐ" count={turn.length} className="dash__section--now">
             {turn.map((x) => (
               <WorkspaceRow
                 key={x.r.workId}
@@ -153,11 +174,12 @@ function Make() {
                   x.action === "respond"
                     ? [
                         `未対応のコメント ${x.toRespond}`,
-                        deadlineLine("校正の締切", x.r.reviewDeadlineAt),
+                        deadlineLine("校正期日", x.r.reviewDeadlineAt),
                       ]
                     : [
+                        // 未提出は右の「版を提出」で分かるので、行に書かない
                         x.r.stage === "unsubmitted"
-                          ? "まだ版がありません"
+                          ? null
                           : `${x.r.revisionLabel ?? "この版"}は受付終了`,
                         deadlineLine("納期", x.r.deliveryAt),
                       ]
@@ -165,6 +187,7 @@ function Make() {
                 chip={actionLabel[x.action]}
                 chipIcon={actionIcon[x.action]}
                 urgent={x.r.urgency === "overdue" || x.r.stage === "lapsed"}
+                delay={x.delay}
                 onOpen={() =>
                   x.action === "submit" && x.target
                     ? launcher.start({ workId: x.r.workId, route: x.target.route ?? "upload" })
@@ -184,12 +207,13 @@ function Make() {
                 suffix={x.r.revisionLabel}
                 lines={[
                   progressLine(x.r),
-                  deadlineLine("校正の締切", x.r.reviewDeadlineAt) ||
+                  deadlineLine("校正期日", x.r.reviewDeadlineAt) ||
                     deadlineLine("納期", x.r.deliveryAt),
                 ]}
                 chip={actionLabel[x.action]}
                 chipIcon={actionIcon[x.action]}
                 urgent={x.r.urgency === "overdue"}
+                delay={x.delay}
                 onOpen={() => open(x.r.workId, x.r.title, { tab: "comments" })}
               />
             ))}
@@ -280,11 +304,34 @@ function Make() {
     );
   };
 
+  // 見え方: 自分で選んだもの。無ければ中身から決める（自分の制作があれば個人、無くて登録できる人なら共同）
+  const view: HomeView | null =
+    chosenView ??
+    (rows === null || me === undefined
+      ? null
+      : rows.length > 0 || !me?.canCreateWorks
+        ? "personal"
+        : "collaboration");
+
   return (
-    <div className="hub" data-hub="make">
+    <div className="hub" data-hub="make" data-view={view ?? undefined}>
       <AppBarSlot slot="title">制作</AppBarSlot>
-      {tabs}
-      {tab === "active" ? activeBody() : tab === "draft" ? draftBody() : doneBody()}
+      <AppBarSlot slot="actions">
+        <ViewSwitcher value={view ?? "personal"} onChange={setChosenView} />
+      </AppBarSlot>
+      <SnsHomeBand />
+      {view === null ? (
+        <Loading label="制作を読み込んでいます" />
+      ) : view === "collaboration" ? (
+        <CollaborationHome />
+      ) : view === "verified" ? (
+        <VerifiedHome />
+      ) : (
+        <>
+          {tabs}
+          {tab === "active" ? activeBody() : tab === "draft" ? draftBody() : doneBody()}
+        </>
+      )}
       {launcher.element}
     </div>
   );

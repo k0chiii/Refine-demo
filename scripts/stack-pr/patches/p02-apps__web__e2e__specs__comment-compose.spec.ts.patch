@@ -1,0 +1,16 @@
+---
+diff --git a/apps/web/e2e/specs/comment-compose.spec.ts b/apps/web/e2e/specs/comment-compose.spec.ts
+index 45c6839..3ebdfa7 100644
+--- a/apps/web/e2e/specs/comment-compose.spec.ts
++++ b/apps/web/e2e/specs/comment-compose.spec.ts
+@@ -2,8 +2,8 @@ import { expect, PAMPHLET, test } from "../support/app";
+ import { assignReviewer, submitFirstRevision } from "../support/scenarios";
+ 
+ // 840px 以上の新しいコメントの投稿欄は、紙面に浮かべず引き出し「コメント」の一番下（利用者指示 2026-10-26。docs/UI_M3E.md §101）
+-test.describe("引き出しの投稿欄", { tag: "@core" }, () => {
+-  test("広い画面で紙面をなぞると、引き出しがコメントに替わり、その下の欄から投稿できる", async ({
++test.describe("サイドパネルの投稿欄", { tag: "@core" }, () => {
++  test("広い画面でプレビューをなぞると、サイドパネルがコメントに替わり、その下の欄から投稿できる", async ({
+     app,
+     page,
+   }) => {

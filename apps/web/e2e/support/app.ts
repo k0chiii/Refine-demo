@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page, type Route } from "@playwright/test";
+
+export type { Page, Route };
 
 /**
  * デモ版の画面を操る部品。e2e/screenshots.mjs の同名の関数を、spec から使えるように切り出したもの。
@@ -24,11 +26,25 @@ export const WORKS_ENTRY = ".works .works-table tbody tr";
 /** シードの制作物 */
 export const PAMPHLET = "MF100 公式パンフレット";
 export const LONG_TITLE = "100nc_デザインガイドライン";
+/** 小ジャンル「スライド」の提出（PDF + 共有 URL） */
+export const SLIDE_DECK = "企画説明会スライド";
 /** 提出前の確認（§58）。提出は止めないが、ふだんの提出に合わせて印を付けておく */
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
 type Demo = {
-  ensureSeeded(): Promise<void>;
+  /** 撮影の道具（scripts/stack-pr）は seed の選択肢を渡す。いまの seed.demo は選択肢を持たず受け流す */
+  ensureSeeded(opts?: {
+    skipPamphletComments?: boolean;
+    skipPlanInfoWarnings?: boolean;
+    seedBacklogCapture?: boolean;
+    seedPlanInfoMismatch?: boolean;
+    seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
+  }): Promise<void>;
+  /** サインイン中の利用者の ID（未サインインは null） */
+  userId: string | null;
+  /** 企画情報 bot のスレッドを解決済みにする（q72 の撮影用。無い版もある） */
+  resolveOpenPlanInfoBotThreads?: () => Promise<number>;
   signIn(sub: string): Promise<void>;
   signOut(): Promise<void>;
   users(): Promise<{ id: string; sub: string; name: string }[]>;
@@ -45,7 +61,13 @@ type Demo = {
     ): Promise<T>;
   };
 };
-type Router = { navigate(opts: { to: string; search?: Record<string, string> }): Promise<void> };
+type Router = {
+  navigate(opts: {
+    to: string;
+    search?: Record<string, string>;
+    params?: Record<string, string>;
+  }): Promise<void>;
+};
 declare global {
   var __mf100demo: Demo | undefined;
   var __mf100router: Router | undefined;
@@ -173,26 +195,47 @@ export class App {
     );
   }
 
-  /** シードの制作物を非公開・取扱注意にする（画面に機密区分を変える入口は無いので、デモの Convex を直接書く） */
-  async restrictWork(title: string) {
-    await this.page.evaluate((t) => {
-      const demo = globalThis.__mf100demo!;
-      return demo.enqueue(() =>
-        demo.t.run(async (ctx) => {
-          const work = (await ctx.db.query("works").collect()).find((w) => w.title === t);
-          if (!work) throw new Error(`デモの制作物がない: ${t}`);
-          await ctx.db.patch(work._id, { confidentiality: "restricted" });
-        }),
-      );
-    }, title);
-  }
-
   btn(text: string) {
     return this.page.locator("m3e-button", { hasText: text }).first();
   }
 
   dialog() {
     return this.page.locator("m3e-dialog[open]");
+  }
+
+  /** outlined form-field 内の M3E 日付（YYYY-MM-DD） */
+  async fillOutlinedDate(scope: Locator, fieldLabel: string, isoDate: string) {
+    const [y, m, d] = isoDate.split("-");
+    const group = scope.getByRole("group", { name: new RegExp(fieldLabel) });
+    await group.getByRole("spinbutton", { name: "年" }).fill(y!);
+    await group.getByRole("spinbutton", { name: "月" }).fill(m!);
+    await group.getByRole("spinbutton", { name: "日" }).fill(d!);
+    await group.getByRole("spinbutton", { name: "日" }).press("Tab");
+    // spinbutton だけでは React の onChange が走らないことがあるので date-input にも反映する
+    const dateInput = group.locator("xpath=ancestor::m3e-form-field[1]//m3e-date-input").first();
+    if ((await dateInput.count()) > 0) {
+      await dateInput.evaluate((el, iso) => {
+        const [yy, mm, dd] = iso.split("-").map((x) => Number(x));
+        const target = el as unknown as { value: Date | null };
+        target.value = new Date(yy!, mm! - 1, dd!);
+        el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+      }, isoDate);
+    }
+    await this.settle();
+  }
+
+  /** M3E select（form-field 内）で選択肢を選ぶ（候補は overlay で page 直下に出る） */
+  async pickSelectOption(scope: Locator, fieldLabel: string, option: string) {
+    const combo = scope.getByRole("combobox", { name: fieldLabel });
+    if ((await combo.count()) > 0) {
+      await combo.click();
+    } else {
+      const field = scope.locator("m3e-form-field", { hasText: fieldLabel });
+      await field.locator("m3e-select").click();
+    }
+    await this.settle();
+    await this.page.getByRole("option", { name: option, exact: true }).click();
+    await this.settle();
   }
 
   /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人（または 1 グループ）選ぶ */
@@ -274,7 +317,7 @@ export class App {
 
   /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ（既定は PDF。文章は textReady）。版の URL を返す */
   async confirmRevision(n: number, ready: () => Promise<unknown> = () => this.pdfReady()) {
-    await this.dialog().locator("m3e-button", { hasText: "提出を確定する" }).click();
+    await this.dialog().locator("m3e-button", { hasText: "提出する" }).click();
     await this.page.waitForURL(new RegExp(`/v/${n}$`), { timeout: 15_000 });
     await ready();
     return new URL(this.page.url()).pathname;
@@ -343,7 +386,7 @@ export class App {
 
   /** 位置なしのコメント（コメントの一覧の下の入口） */
   async freeComment(body: string) {
-    await this.page.locator(".comments__free").click();
+    await this.page.getByRole("button", { name: "全体へのコメント" }).click();
     await this.send(body);
   }
 
@@ -382,8 +425,9 @@ export class App {
     return card.locator(".thread__footer");
   }
 
-  /** 一覧のカードの下の行を押してスレッドのパネルを開く */
+  /** 一覧のカードを選んで（下の行は選んだカードにだけ出る）、下の行を押してスレッドのパネルを開く */
   async openPanel(card: Locator) {
+    await card.locator(".thread__body").first().click();
     await this.threadOpener(card).click();
     await this.page.waitForSelector(".thread-panel");
     await this.settle();
@@ -490,6 +534,20 @@ export class App {
     await this.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
     await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
     return this.dialog();
+  }
+
+  /** 校正画面の「情報」で目的・用途を保存（WorkForm の編集ダイアログには目的欄が無い） */
+  async setWorkPurpose(title: string, purpose: string) {
+    await this.openWork(title);
+    await this.drawer("情報");
+    const body = this.page.locator(".drawer__body");
+    // 「企画情報」の節にも保存ボタンがあるので、目的・用途の textarea がある節の中で押す
+    const section = body
+      .locator("section.info-tab__section", { has: this.page.locator("textarea") })
+      .first();
+    await section.locator("textarea").fill(purpose);
+    await section.locator("m3e-button", { hasText: "保存" }).click();
+    await this.settle();
   }
 
   /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */

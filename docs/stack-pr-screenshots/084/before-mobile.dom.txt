@@ -1,0 +1,3 @@
+capturedAt=2026-10-31T07:26:07.613Z
+url=http://127.0.0.1:4306/works
+scene=dashboard-approver-mobile

@@ -23,7 +23,7 @@ export function SemanticRuleSearch({ workId }: { workId: string }) {
       </label>
       <label>
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        検索文を Cloudflare Workers AI に送ることに同意する
+        検索文を AI に送ることに同意する
       </label>
       <M3eButton
         variant="outlined"

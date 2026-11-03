@@ -1,0 +1,34 @@
+---
+diff --git a/apps/web/src/features/review/ThreadPanel.tsx b/apps/web/src/features/review/ThreadPanel.tsx
+index 481d590..381cb5c 100644
+--- a/apps/web/src/features/review/ThreadPanel.tsx
++++ b/apps/web/src/features/review/ThreadPanel.tsx
+@@ -33,8 +33,8 @@ import "./ThreadPanel.css";
+ type Mode = null | "rejected" | "deferred" | "assign" | "edit";
+ 
+ /** 採否の確定ボタン（動詞）と理由欄の見出し */
+-const decisionAction = { rejected: "不採用にする", deferred: "次版へ持ち越す" } as const;
+-const decisionLabel = { rejected: "不採用の", deferred: "持ち越しの" } as const;
++const decisionAction = { rejected: "反映しないにする", deferred: "次版へ持ち越す" } as const;
++const decisionLabel = { rejected: "反映しないの", deferred: "持ち越しの" } as const;
+ 
+ type ThreadEvent = NonNullable<FunctionReturnType<typeof api.comments.events>>["events"][number];
+ 
+@@ -176,7 +176,7 @@ export function ThreadPanel({
+   const actions: ActionSheetItem[] = [
+     ...(canDecide && !closed
+       ? [
+-          { icon: "block", label: "不採用にする", onSelect: () => openMode("rejected") },
++          { icon: "block", label: "反映しないにする", onSelect: () => openMode("rejected") },
+           { icon: "move_down", label: "次版へ持ち越す", onSelect: () => openMode("deferred") },
+         ]
+       : []),
+@@ -578,7 +578,7 @@ export function ThreadPanel({
+           {canDecide && !closed ? (
+             <M3eMenuItem onClick={() => openMode("rejected")}>
+               <M3eIcon slot="icon" name="block" />
+-              不採用にする
++              反映しないにする
+             </M3eMenuItem>
+           ) : null}
+           {canDecide && !closed ? (

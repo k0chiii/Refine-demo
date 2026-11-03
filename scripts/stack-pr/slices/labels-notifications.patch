@@ -1,0 +1,21 @@
+--- a/apps/web/src/lib/labels.ts
++++ b/apps/web/src/lib/labels.ts
+@@ -82,14 +82,14 @@ export const notificationKindLabel: Record<string, string> = {
+   revision_submitted: "版の提出",
+   review_assigned: "校正の割り当て",
+   comment_posted: "コメント",
+-  comment_decided: "採否",
+-  comment_assigned: "対応担当",
++  comment_decided: "反映するかどうか",
++  comment_assigned: "対応する人",
+   check_requested: "専門確認の依頼",
+   check_completed: "専門確認の完了",
+-  deadline_approaching: "期限接近",
++  deadline_approaching: "校正期日が近い",
+   work_finalized: "校了",
+   work_reopened: "再開",
+-  revision_voided: "版の無効化",
++  revision_voided: "版を無効にした",
+   auto_proofread_done: "自動校正",
+   rule_proposed: "表記ルールの提案",
+   rule_proposal_decided: "提案の結果",

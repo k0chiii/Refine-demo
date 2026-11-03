@@ -34,7 +34,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
   const grant = useMutation(api.acl.grant);
   const revoke = useMutation(api.acl.revoke);
   const [userIds, setUserIds] = useState<string[]>([]);
-  const [permission, setPermission] = useState<"view" | "review" | "edit" | "manage">("review");
+  const [permission, setPermission] = useState<"review" | "edit" | "manage">("review");
   const [history, setHistory] = useState(false);
   const doGrant = useAction(async () => {
     if (userIds.length === 0) return;
@@ -48,22 +48,17 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
   const doRevoke = useAction(async (id: string) => {
     await revoke({ workId: workId as Id<"works">, userId: id as Id<"users"> });
   });
-  const change = useAction(async (id: string, p: "view" | "review" | "edit" | "manage") => {
+  const change = useAction(async (id: string, p: "review" | "edit" | "manage") => {
     await grant({
       workId: workId as Id<"works">,
       userIds: [id as Id<"users">],
       permission: p,
     });
   });
-  if (grants === undefined) return <Loading size="small" label="閲覧権限を読み込んでいます" />;
+  if (grants === undefined) return <Loading size="small" label="権限を読み込んでいます" />;
   const active = grants.filter((g) => g.revokedAt === undefined);
   return (
     <div className="acl">
-      {readOnly ? null : (
-        <p className="muted small">
-          通常の制作物は委員なら誰でも見られます。ここで付けるのは、非公開・取扱注意の制作物を見られる人（関係者と担当の所属する人には自動で付きます）と、校正・編集・管理の権限です
-        </p>
-      )}
       {active.length === 0 ? (
         <p className="muted small">個人の許可はありません</p>
       ) : (
@@ -95,7 +90,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
                   {readOnly ? null : (
                     <M3eMenu id={menuId} positionX="before">
                       <M3eMenuItemGroup aria-label="権限">
-                        {(["view", "review", "edit", "manage"] as const).map((v) => (
+                        {(["review", "edit", "manage"] as const).map((v) => (
                           <M3eMenuItemRadio
                             key={v}
                             checked={g.permission === v}
@@ -127,7 +122,10 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
             exclude={active.map((g) => g.principalId)}
           />
           <Field label="権限">
-            <Select value={permission} onChange={(e) => setPermission(e.target.value as "view")}>
+            <Select
+              value={permission}
+              onChange={(e) => setPermission(e.target.value as "review" | "edit" | "manage")}
+            >
               {Object.entries(permissionLabel).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
@@ -155,7 +153,7 @@ export function AclPanel({ workId, readOnly = false }: { workId: string; readOnl
           onClosed={() => setHistory(false)}
         >
           <span slot="header">変更履歴</span>
-          <M3eList className="list" aria-label="閲覧権限の変更履歴">
+          <M3eList className="list" aria-label="権限の変更履歴">
             {[...grants]
               .sort((a, b) => b.grantedAt - a.grantedAt)
               .map((g) => (

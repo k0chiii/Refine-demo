@@ -60,6 +60,7 @@ export const workSubGenres = [
   { code: "print_other", label: "印刷物（その他）", genre: "graphic", mediaType: "pdf" },
   { code: "print_banner", label: "印刷物（のぼり・ヘッダー）", genre: "graphic", mediaType: "pdf" },
   { code: "print_booklet", label: "印刷物（冊子）", genre: "graphic", mediaType: "pdf" },
+  { code: "slide", label: "スライド", genre: "graphic", mediaType: "pdf" },
   { code: "solid_decoration", label: "立体装飾物", genre: "graphic", mediaType: "pdf" },
   { code: "print_large", label: "印刷物（大判印刷物）", genre: "graphic", mediaType: "pdf" },
   { code: "print_decoration", label: "印刷物（装飾物）", genre: "graphic", mediaType: "pdf" },
@@ -95,6 +96,11 @@ export function genreOfSubGenre(code: string | undefined | null): WorkGenre | nu
 /** 大ジャンルごとの小ジャンル（選択欄の option group） */
 export function subGenresOf(genre: WorkGenre): WorkSubGenreDef[] {
   return workSubGenres.filter((s) => s.genre === genre);
+}
+
+/** 小ジャンル「スライド」（PDF 校正 + スライド URL のセット提出） */
+export function isSlideSubGenre(subGenre: string | undefined | null): boolean {
+  return subGenre === "slide";
 }
 
 /** 大ジャンルだけが分かるときの媒体の既定値 */
@@ -148,8 +154,6 @@ export function optionKey(value: string): string {
 // ---------------------------------------------------------------- タグ（Notion: multi_select）
 /** Notion にある選択肢（候補として出す。これ以外のタグも付けられる） */
 export const workTagOptions = [
-  "a",
-  "b",
   "マスター",
   "流し込み",
   "公式パンフ",

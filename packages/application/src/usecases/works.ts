@@ -4,7 +4,6 @@ import {
   approversOf,
   assertExpectedVersion,
   assignWorkMetadata,
-  type Confidentiality,
   DomainError,
   type MediaType,
   newlyReferencedPeople,
@@ -13,6 +12,7 @@ import {
   normalizeWorkEssentials,
   normalizeWorkMetadata,
   orgPermissions,
+  overridesAllPermissions,
   type Principal,
   hasOrgPermission,
   requireOrgPermission,
@@ -22,6 +22,7 @@ import {
   type WorkImportInput,
   type WorkLifecycle,
   type WorkMetadataInput,
+  type RegisteredPlanInfo,
   WORK_IMPORT_MAX_ROWS,
   workMetadataKeys,
   type WorkPatch,
@@ -49,7 +50,7 @@ export interface CreateWorkInput extends WorkMetadataInput {
   /** 校了とみなす人数（1..校了者の数。省略は 1） */
   approvalQuorum?: number;
   deadlineAt?: number;
-  confidentiality?: Confidentiality;
+  finishAt?: number;
   /** 表記統一のルールカテゴリ（人が選ぶ。空なら検査しない） */
   notationCategories?: string[];
   /** 登録と有効化を分ける案（§7.2）に備え、既定は即時 active。 */
@@ -61,6 +62,7 @@ export interface CreateWorkInput extends WorkMetadataInput {
   addRegistrantAsManager?: boolean;
   /** 校正者の名簿。省略は空（校正者なし）。グループは画面で人に展開済み。 */
   reviewerIds?: string[];
+  registeredPlanInfo?: RegisteredPlanInfo | null;
 }
 
 /**
@@ -121,14 +123,16 @@ export async function createWork(
     approvalQuorum: essentials.approvalQuorum,
     reviewerIds,
     lifecycle: input.activate === false ? "draft" : "active",
-    confidentiality: input.confidentiality ?? "normal",
     version: 1,
   };
   if (input.legacyId !== undefined) data.legacyId = input.legacyId;
   if (ownerTeamId !== undefined) data.ownerTeamId = ownerTeamId;
   if (input.deadlineAt !== undefined) data.deadlineAt = input.deadlineAt;
+  if (input.finishAt !== undefined) data.finishAt = input.finishAt;
   if (input.notationCategories !== undefined)
     data.notationCategories = cleanCategories(input.notationCategories);
+  if (input.registeredPlanInfo !== undefined && input.registeredPlanInfo !== null)
+    data.registeredPlanInfo = input.registeredPlanInfo;
   assignWorkMetadata(data, meta);
   const work = await ctx.works.insert(data);
   await ctx.audit.record({
@@ -202,7 +206,13 @@ export async function importWorks(
 export interface UpdateWorkInput {
   workId: string;
   expectedVersion?: number;
-  patch: WorkPatch & {
+  patch: Omit<WorkPatch, "deadlineAt" | "legacyId" | "finishAt"> & {
+    /** 納期（null で消す） */
+    deadlineAt?: number | null;
+    /** ■仕上がり日（null で消す） */
+    finishAt?: number | null;
+    /** 制作物 ID（null か空文字で消す） */
+    legacyId?: string | null;
     /** 主管担当（空文字で外す） */
     ownerTeamId?: string;
     /** SNS のアカウント（本体の設定）の割り当て。null で外す */
@@ -216,21 +226,30 @@ export async function updateWork(
   input: UpdateWorkInput,
 ): Promise<Work> {
   // 校了者だけを変える更新は、校了者を決める権限（approvers:assign）があれば、閲覧できる制作物で通る（その人が校了者の決め手）。
+  // 制作者だけを変える更新は、現在の制作者・主管（work.edit と同じ職責）・システム管理者が通る（利用者要望 2026-10-30）。
   // ほかの項目の変更は従来どおり work.edit
   const approversOnly = isApproversOnlyPatch(input.patch);
+  const creatorsOnly = isCreatorsOnlyPatch(input.patch);
   const viaApproversAssign =
     approversOnly && hasOrgPermission(principal, orgPermissions.approversAssign);
   const { work } = await loadAuthorizedWork(
     ctx,
     principal,
     input.workId,
-    viaApproversAssign ? "work.view" : "work.edit",
+    viaApproversAssign || creatorsOnly ? "work.view" : "work.edit",
   );
+  if (creatorsOnly && !canChangeCreators(work, principal))
+    throw new DomainError("forbidden", { action: "work.transferCreators", workId: work.id });
   assertExpectedVersion(work, input.expectedVersion);
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
-  const { socialProfileId, ownerTeamId, ...rest } = input.patch;
-  const patch: WorkPatch = stripUndefined(rest);
+  const { socialProfileId, ownerTeamId, deadlineAt, finishAt, legacyId, ...rest } = input.patch;
+  const patch: WorkPatch = stripUndefined({
+    ...rest,
+    ...(typeof deadlineAt === "number" ? { deadlineAt } : {}),
+    ...(typeof finishAt === "number" ? { finishAt } : {}),
+    ...(typeof legacyId === "string" && legacyId.trim() ? { legacyId } : {}),
+  });
   if (patch.notationCategories)
     patch.notationCategories = cleanCategories(patch.notationCategories);
   // 制作担当・関係担当は全体の置き換え（重複・空を除く）。制作担当の数の上限は applyWorkPatch（WorkTeamPolicy）で確かめる
@@ -253,6 +272,10 @@ export async function updateWork(
   // 主管担当: 空文字は「主管担当なし」（外す）
   if (owner === "") delete next.ownerTeamId;
   else if (owner !== undefined) next.ownerTeamId = owner;
+  if (deadlineAt === null) delete next.deadlineAt;
+  if (finishAt === null) delete next.finishAt;
+  if (legacyId === null || (typeof legacyId === "string" && !legacyId.trim())) delete next.legacyId;
+  if (input.patch.registeredPlanInfo === null) delete next.registeredPlanInfo;
   if (socialProfileId === null) delete next.socialProfileId;
   else if (socialProfileId !== undefined) {
     if (!(await ctx.socialProfiles.findById(socialProfileId)))
@@ -277,6 +300,20 @@ function isApproversOnlyPatch(patch: UpdateWorkInput["patch"]): boolean {
   const approverKeys = ["approverId", "approverIds", "approvalQuorum"];
   const defined = Object.entries(patch).filter(([, v]) => v !== undefined);
   return defined.length > 0 && defined.every(([k]) => approverKeys.includes(k));
+}
+
+/** 制作者（creatorIds）だけを含む更新か */
+function isCreatorsOnlyPatch(patch: UpdateWorkInput["patch"]): boolean {
+  const defined = Object.entries(patch).filter(([, v]) => v !== undefined);
+  return defined.length === 1 && defined[0]![0] === "creatorIds";
+}
+
+/** 制作者の変更ができる人: 統括（主管）・校了する人。制作者本人は不可。校了後は不可 */
+export function canChangeCreators(work: Work, principal: Principal): boolean {
+  if (work.lifecycle === "finalized") return false;
+  if (overridesAllPermissions(principal)) return true;
+  if (work.managerIds.includes(principal.userId)) return true;
+  return approversOf(work).includes(principal.userId);
 }
 
 export async function changeWorkLifecycle(

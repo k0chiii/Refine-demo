@@ -1,4 +1,3 @@
-import { useAction } from "@/lib/useAction";
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { countText, draftFormatFor, draftFormatOf } from "@mf100/domain";
@@ -13,6 +12,7 @@ import { PaneHandle } from "@/features/editor/PaneHandle";
 import { SubmitDialog } from "@/features/upload/SubmitDialog";
 import { DraftFormatMismatch, EditorMediaMismatch } from "./EditorMismatch";
 import { describeError } from "@/lib/errors";
+import { toast } from "@/lib/toast";
 import { formatJstShort } from "@/lib/format";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { useMedia, useWindowClass } from "@/lib/useMedia";
@@ -64,15 +64,45 @@ export function WriteEditor({ workId }: { workId: string }) {
   const workData = useQuery(api.works.get, { workId });
   const docData = useQuery(api.documents.get, { workId });
   const [reloadKey, setReloadKey] = useState(0);
+  // 媒体に合わないエディタでは編集させない（SNS 投稿の下書きを文章で上書きしないため）
+  const expected = workData ? draftFormatFor(workData.work.mediaType) : null;
+  const stored = docData?.draft ? draftFormatOf(docData.draft.content) : null;
+  const formatOk = expected === "document" && (!docData?.draft || !stored || stored === "document");
+  // 共同編集は押さなくても始まっている（利用者指示 2026-11-02「共同編集を開始を押さなくてもデフォルトでオン」）。
+  // 書ける人が開いたら、まだ共同原稿が無ければここで作る（保存済みの下書きから。無ければ空の原稿）。
+  // 作り終わるまで紙面を出さない（先に打った文字が、共同原稿に切り替わるときに消えないように）。
+  // デモ版（ブラウザ内の Convex）には共同編集の部品が無いので従来どおり 1 人ずつ
+  const enableCollaboration = useMutation(api.collaboration.enable);
+  const enabling = useRef(false);
+  const [enableFailed, setEnableFailed] = useState(false);
+  const needsCollaboration =
+    import.meta.env.MODE !== "demo" &&
+    formatOk &&
+    docData !== undefined &&
+    docData.canEdit &&
+    !docData.collaborative &&
+    !enableFailed;
+  useEffect(() => {
+    if (!needsCollaboration || enabling.current) return;
+    enabling.current = true;
+    enableCollaboration({ workId }).catch((error: unknown) => {
+      enabling.current = false;
+      setEnableFailed(true);
+      toast(describeError(error).message, { kind: "error" });
+    });
+  }, [needsCollaboration, workId, enableCollaboration]);
   if (workData === undefined || docData === undefined)
     return <Loading label="原稿を読み込んでいます" className="write-loading" />;
-  // 媒体に合わないエディタでは編集させない（SNS 投稿の下書きを文章で上書きしないため）
-  const expected = draftFormatFor(workData.work.mediaType);
   if (expected !== "document")
     return (
-      <EditorMediaMismatch workId={workId} workTitle={workData.work.title} expected={expected} />
+      <EditorMediaMismatch
+        workId={workId}
+        workTitle={workData.work.title}
+        expected={expected ?? draftFormatFor(workData.work.mediaType)}
+      />
     );
-  const stored = docData.draft ? draftFormatOf(docData.draft.content) : null;
+  if (needsCollaboration)
+    return <Loading label="共同原稿を用意しています" className="write-loading" />;
   if (docData.draft && stored && stored !== "document")
     return (
       <DraftFormatMismatch
@@ -150,7 +180,6 @@ function WriteSurface({
 }) {
   const navigate = useNavigate();
   const save = useMutation(api.documents.save);
-  const enableCollaboration = useMutation(api.collaboration.enable);
   const saveSnapshot = useMutation(api.collaboration.submitSnapshot);
   const cls = useWindowClass();
   const compact = cls === "compact";
@@ -340,12 +369,6 @@ function WriteSurface({
       if (dirty.current && !conflict.current) schedule();
     }
   }, [editor, save, saveSnapshot, collaboration, workId, workTitle, canEdit]);
-  const beginCollaboration = useAction(async () => {
-    await flush();
-    if (saving.current || dirty.current || conflict.current)
-      throw new Error("原稿を保存してから共同編集を開始してください");
-    await enableCollaboration({ workId });
-  });
   const flushRef = useRef(flush);
   flushRef.current = flush;
   function schedule() {
@@ -526,7 +549,7 @@ function WriteSurface({
     ) : null;
   const panelTabs = (current: Panel | null, onPick: (p: Panel) => void) => (
     <PaneTabs
-      label="補助ペイン"
+      label="サイドパネル"
       value={current ?? "outline"}
       onChange={onPick}
       items={panels.map((p) => ({
@@ -564,19 +587,10 @@ function WriteSurface({
           className={`write__status write__status--${status.kind}`}
           {...(status.kind === "error" || status.kind === "conflict" ? { role: "alert" } : {})}
         >
-          {canEdit ? statusText : "閲覧のみ（書けるのは版を提出できる人です）"}
+          {canEdit ? statusText : "閲覧のみ"}
         </span>
       </AppBarSlot>
       <AppBarSlot slot="actions">
-        {canEdit && !doc.collaborative && import.meta.env.MODE !== "demo" ? (
-          <M3eButton
-            variant="text"
-            disabled={beginCollaboration.pending || status.kind === "saving"}
-            onClick={() => void beginCollaboration.run()}
-          >
-            共同編集を開始
-          </M3eButton>
-        ) : null}
         {canEdit && canSubmit ? (
           compact ? (
             <M3eIconButton
@@ -630,7 +644,7 @@ function WriteSurface({
               className="ws__side-toolbar write__side"
               shape="rounded"
               elevated
-              aria-label="補助ペイン"
+              aria-label="サイドパネル"
             >
               {panels.map((p) => (
                 <span key={p.id} className="write__side-item">
@@ -689,7 +703,7 @@ function WriteSurface({
           </div>
         ) : null}
         {desktopPanel ? (
-          <aside className="drawer" aria-label="補助ペイン">
+          <aside className="drawer" aria-label="サイドパネル">
             {panelTabs(panel, (p) => setPanel(p))}
             <div className="drawer__body">{panelBody(panel)}</div>
           </aside>
@@ -701,7 +715,7 @@ function WriteSurface({
           modal
           hideable
           handle
-          handleLabel="補助ペイン"
+          handleLabel="サイドパネル"
           className="write__sheet"
           onClosed={() => setPanel(null)}
         >
@@ -753,11 +767,10 @@ function WriteSurface({
         <div className="dialog-body">
           <p style={{ margin: 0 }}>
             {doc.draft?.updatedBy?.name ?? "別の人"} さんが{" "}
-            {doc.draft ? formatJstShort(doc.draft.updatedAt) : ""} に保存した内容があります。
-            この原稿では通常の保存を使用しています。
+            {doc.draft ? formatJstShort(doc.draft.updatedAt) : ""} に保存しました
           </p>
           <p className="small muted" style={{ margin: 0 }}>
-            最新を読み込むまで、この画面の変更は保存されません。読み込むと、まだ保存していない変更は消えます。残したい文章は先にコピーしてください。
+            読み込むと、保存していない変更は消えます
           </p>
         </div>
         <div slot="actions" className="row">

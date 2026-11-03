@@ -1,5 +1,6 @@
 import { api } from "@mf100/convex/api";
 import {
+  approvalTargetFromFinish,
   defaultMediaTypeFor,
   genreOfSubGenre,
   socialPlatformLabels,
@@ -13,6 +14,8 @@ import {
   workSubGenres,
   type WorkGenre,
   type WorkSubGenre,
+  planInfoFieldLabels,
+  type PlanInfoField,
 } from "@mf100/domain";
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex/react";
@@ -24,7 +27,6 @@ import {
   Field,
   Select,
   Switch,
-  TextArea,
   TextInput,
   useFieldId,
   useFieldLabelId,
@@ -54,8 +56,11 @@ export interface WorkFormState {
   category: string;
   mediaType: string;
   legacyId: string;
-  confidentiality: string;
   deadlineAt: number | null;
+  /** 仕上がり日 */
+  finishAt: number | null;
+  /** 校了目標日を手で直したあとは自動計算しない（画面だけ） */
+  approvalTargetManual: boolean;
   publishAt: number | null;
   requiresPrinterSubmission: boolean;
   printQuantity: string;
@@ -73,6 +78,10 @@ export interface WorkFormState {
   relatedTeamIds: string[];
   notationCategories: string[];
   socialProfileId: string;
+  planName: string;
+  planNumber: string;
+  planVenue: string;
+  planSchedule: string;
 }
 
 export function emptyWorkForm(): WorkFormState {
@@ -84,8 +93,9 @@ export function emptyWorkForm(): WorkFormState {
     category: "",
     mediaType: "pdf",
     legacyId: "",
-    confidentiality: "normal",
     deadlineAt: null,
+    finishAt: null,
+    approvalTargetManual: false,
     publishAt: null,
     requiresPrinterSubmission: false,
     printQuantity: "",
@@ -102,6 +112,10 @@ export function emptyWorkForm(): WorkFormState {
     relatedTeamIds: [],
     notationCategories: [],
     socialProfileId: "",
+    planName: "",
+    planNumber: "",
+    planVenue: "",
+    planSchedule: "",
   };
 }
 
@@ -116,8 +130,9 @@ export function workFormFromWork(work: Work): WorkFormState {
     category: work.category,
     mediaType: work.mediaType,
     legacyId: work.legacyId ?? "",
-    confidentiality: work.confidentiality,
     deadlineAt: work.deadlineAt ?? null,
+    finishAt: work.finishAt ?? null,
+    approvalTargetManual: false,
     publishAt: work.publishAt ?? null,
     requiresPrinterSubmission: work.requiresPrinterSubmission ?? false,
     printQuantity: work.printQuantity === undefined ? "" : String(work.printQuantity),
@@ -134,6 +149,10 @@ export function workFormFromWork(work: Work): WorkFormState {
     relatedTeamIds: [...(work.relatedTeamIds ?? [])],
     notationCategories: [...(work.notationCategories ?? [])],
     socialProfileId: work.socialProfileId ?? "",
+    planName: work.registeredPlanInfo?.name ?? "",
+    planNumber: work.registeredPlanInfo?.number ?? "",
+    planVenue: work.registeredPlanInfo?.venue ?? "",
+    planSchedule: work.registeredPlanInfo?.schedule ?? "",
   };
 }
 
@@ -141,6 +160,16 @@ const num = (s: string): number | null => {
   const v = s.normalize("NFKC").replace(/[,，\s]/g, "");
   return v === "" ? null : Number(v);
 };
+
+const prepDaysFromForm = (form: WorkFormState): number => num(form.productionDays) ?? 0;
+
+function withFinishAt(form: WorkFormState, finishAt: number | null): WorkFormState {
+  const next = { ...form, finishAt };
+  if (!form.approvalTargetManual && finishAt != null) {
+    next.deadlineAt = approvalTargetFromFinish(finishAt, prepDaysFromForm(form));
+  }
+  return next;
+}
 
 /**
  * Notion に揃えた項目を送る形に直す（null は「無し」。変更では null で消し、登録では null を落として送る）。
@@ -157,6 +186,24 @@ export function workFormToFields(form: WorkFormState) {
     sizeOrLength: form.sizeOrLength.trim() || null,
     productionDays: num(form.productionDays),
     tags: form.tags,
+    registeredPlanInfo: registeredPlanInfoFromForm(form),
+  };
+}
+
+/** 企画情報（decisions 69–72）。空なら null で消す */
+export function registeredPlanInfoFromForm(
+  form: Pick<WorkFormState, "planName" | "planNumber" | "planVenue" | "planSchedule">,
+) {
+  const name = form.planName.trim();
+  const number = form.planNumber.trim();
+  const venue = form.planVenue.trim();
+  const schedule = form.planSchedule.trim();
+  if (!name && !number && !venue && !schedule) return null;
+  return {
+    ...(name ? { name } : {}),
+    ...(number ? { number } : {}),
+    ...(venue ? { venue } : {}),
+    ...(schedule ? { schedule } : {}),
   };
 }
 
@@ -177,8 +224,16 @@ export function approversFromForm(form: Pick<WorkFormState, "approverIds" | "app
   };
 }
 
-/** 登録・保存できるか（必須: 名称・区分（小ジャンルから入る）・制作者・校了権限者） */
-export function workFormReady(form: WorkFormState): boolean {
+/** 登録・保存できるか（編集: 名称・区分・制作者・校了する人。登録: 名称・小ジャンル・制作者・仕上がり日） */
+export function workFormReady(form: WorkFormState, mode: "create" | "edit" = "edit"): boolean {
+  if (mode === "create") {
+    return (
+      form.title.trim() !== "" &&
+      form.subGenre !== "" &&
+      form.creatorIds.length > 0 &&
+      form.finishAt !== null
+    );
+  }
   return (
     form.title.trim() !== "" &&
     form.category.trim() !== "" &&
@@ -197,8 +252,36 @@ export function FormSection({ title, children }: { title: string; children: Reac
   );
 }
 
+function PlanInfoFields({
+  form,
+  setForm,
+}: {
+  form: WorkFormState;
+  setForm: (update: (f: WorkFormState) => WorkFormState) => void;
+}) {
+  const rows: Array<{ field: PlanInfoField; key: keyof WorkFormState; label: string }> = [
+    { field: "name", key: "planName", label: planInfoFieldLabels.name },
+    { field: "number", key: "planNumber", label: planInfoFieldLabels.number },
+    { field: "venue", key: "planVenue", label: planInfoFieldLabels.venue },
+    { field: "schedule", key: "planSchedule", label: planInfoFieldLabels.schedule },
+  ];
+  return (
+    <FormSection title="企画情報">
+      <div className="form">
+        {rows.map(({ key, label }) => (
+          <Field key={key} label={label}>
+            <TextInput
+              value={form[key] as string}
+              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+            />
+          </Field>
+        ))}
+      </div>
+    </FormSection>
+  );
+}
+
 /**
- * 小ジャンル（Notion の select）。大ジャンルを選んでいればその中だけ、いなければ大ジャンルごとの組で全部を出す。
  * 選ぶと大ジャンル（未選択なら）・区分・媒体の既定を入れる
  */
 function SubGenreSelect({
@@ -238,7 +321,7 @@ function SubGenreSelect({
 
 /**
  * 登録・編集で共通の入力。節は Notion の制作物 DB の並びに沿って 基本／担当と人／日程と入稿、
- * 表記統一のカテゴリ、詳細設定（制作物 ID・区分・機密区分・SNS アカウント）。
+ * 表記統一のカテゴリ、詳細設定（区分・機密区分・SNS アカウント）。
  */
 export function WorkFormFields({
   form,
@@ -308,6 +391,41 @@ export function WorkFormFields({
         next.category = f.genre ? workGenreLabels[f.genre] : "";
       return next;
     });
+  if (mode === "create") {
+    return (
+      <>
+        <FormSection title="基本">
+          <Field label="制作物名" required>
+            <TextInput
+              required
+              maxLength={WORK_TITLE_MAX}
+              value={form.title}
+              onChange={set("title")}
+            />
+          </Field>
+          <Field label="小ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
+            <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
+          </Field>
+          <UserPicker
+            label="制作者"
+            required
+            value={form.creatorIds}
+            onChange={(ids) =>
+              setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))
+            }
+          />
+          <DateField
+            label="仕上がり日"
+            kind="date"
+            value={form.finishAt}
+            onChange={(v) => setForm((f) => withFinishAt(f, v))}
+          />
+        </FormSection>
+        <PlanInfoFields form={form} setForm={setForm} />
+      </>
+    );
+  }
+
   return (
     <>
       <FormSection title="基本">
@@ -318,9 +436,6 @@ export function WorkFormFields({
             value={form.title}
             onChange={set("title")}
           />
-        </Field>
-        <Field label="目的・用途">
-          <TextArea value={form.purpose} onChange={set("purpose")} />
         </Field>
         <div className="form">
           <Field label="大ジャンル">
@@ -339,11 +454,7 @@ export function WorkFormFields({
           <Field label="小ジャンル" hint="選ぶと区分と媒体の既定が入ります">
             <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
           </Field>
-          <Field
-            label="媒体"
-            required
-            hint="このアプリでの提出・紙面の扱い（PDF・画像・文章・SNS 投稿・動画・Web・Figma）"
-          >
+          <Field label="媒体" required>
             <Select value={form.mediaType} onChange={set("mediaType")}>
               {Object.entries(mediaLabel).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -356,13 +467,11 @@ export function WorkFormFields({
         <TagPicker value={form.tags} onChange={(tags) => setForm((f) => ({ ...f, tags }))} />
       </FormSection>
 
+      <PlanInfoFields form={form} setForm={setForm} />
+
       <FormSection title="担当と人">
         <div className="form">
-          <TeamSelect
-            label="担当（主管担当）"
-            value={form.ownerTeam}
-            onChange={setIds("ownerTeam")}
-          />
+          <TeamSelect label="担当" value={form.ownerTeam} onChange={setIds("ownerTeam")} />
           <TeamSelect
             label="制作担当"
             hint="1 つ（あとから変えられます）"
@@ -392,15 +501,10 @@ export function WorkFormFields({
             setForm((f) => ({ ...f, approverIds: next.ids, approvalQuorum: next.quorum }))
           }
         />
-        <UserPicker
-          label="主管・制作統括"
-          {...(mode === "create" ? { hint: "登録するあなたは自動で入ります" } : {})}
-          value={form.managerIds}
-          onChange={setIds("managerIds")}
-        />
+        <UserPicker label="統括" value={form.managerIds} onChange={setIds("managerIds")} />
         <UserPicker
           label="関係者"
-          hint="職責ではありません（提出・採否・校了はできません）。非公開・取扱注意の制作物でも見られます"
+          hint="見るだけの人です（非公開でも見られます）"
           value={form.stakeholderIds}
           onChange={setIds("stakeholderIds")}
         />
@@ -409,9 +513,15 @@ export function WorkFormFields({
       <FormSection title="日程と入稿">
         <div className="form">
           <DateField
-            label="納期"
+            label="仕上がり日"
+            kind="date"
+            value={form.finishAt}
+            onChange={(v) => setForm((f) => withFinishAt(f, v))}
+          />
+          <DateField
+            label="校了目標日"
             value={form.deadlineAt}
-            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v }))}
+            onChange={(v) => setForm((f) => ({ ...f, deadlineAt: v, approvalTargetManual: true }))}
           />
           <DateField
             label="入稿日・投稿日・印刷日"
@@ -468,18 +578,11 @@ export function WorkFormFields({
 
       <M3eExpansionPanel className="expansion">
         <span slot="header">
-          詳細設定（制作物 ID・区分・機密区分
+          詳細設定（制作物 ID・区分
           {form.mediaType === "sns" && mode === "edit" ? "・SNS アカウント" : ""}）
         </span>
         <div className="form">
-          <Field label="制作物 ID" hint="Notion の制作物 ID や過年度の ID">
-            <TextInput value={form.legacyId} onChange={set("legacyId")} />
-          </Field>
-          <Field
-            label="区分"
-            required
-            hint="小ジャンルから自動で入ります。必要なら書き換えられます"
-          >
+          <Field label="区分" required>
             <TextInput
               required
               maxLength={WORK_CATEGORY_MAX}
@@ -487,17 +590,8 @@ export function WorkFormFields({
               onChange={set("category")}
             />
           </Field>
-          <Field
-            label="機密区分"
-            hint="通常は委員なら誰でも見られます。非公開・取扱注意は職責・関係者・担当の所属する人と、管理者が閲覧権限を付けた人だけ"
-          >
-            <Select value={form.confidentiality} onChange={set("confidentiality")}>
-              <option value="normal">通常</option>
-              <option value="restricted">非公開・取扱注意</option>
-            </Select>
-          </Field>
           {mode === "edit" && form.mediaType === "sns" ? (
-            <Field label="SNS アカウント" hint="管理 › SNS アカウントで登録したもの">
+            <Field label="SNS アカウント">
               <Select value={form.socialProfileId} onChange={set("socialProfileId")}>
                 <option value="">未設定</option>
                 {(profiles ?? []).map((p) => (

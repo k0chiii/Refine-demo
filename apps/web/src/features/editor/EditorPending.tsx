@@ -53,7 +53,7 @@ export function EditorPending({ workId }: { workId: string }) {
               className="ws__toolbar"
               shape="rounded"
               elevated
-              aria-label="引き出しの操作"
+              aria-label="サイドパネルの操作"
               inert
             >
               <div className="ws__toolbar-items">

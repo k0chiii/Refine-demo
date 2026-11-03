@@ -12,7 +12,7 @@ import { M3eAvatar } from "@m3e/react/avatar";
 import { M3eButton } from "@m3e/react/button";
 import { M3eCard } from "@m3e/react/card";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eIconButton } from "@m3e/react/icon-button";
+import { useRef, useState } from "react";
 import { CommentAttachments } from "./CommentAttachments";
 import { CommentBody } from "./CommentBody";
 import { ThreadMeta } from "./ThreadMeta";
@@ -27,7 +27,9 @@ export { closedResolutions, isClosed, type Thread } from "./thread";
  * 最新の 3 件。アバター・名前・時刻・本文 3 行まで・添付）、返信がそれより多いときは「ほか n 件の返信」、最後に未読の点。
  * 押すとコメントを選んで紙面のピンへ移るだけで、カードは開かない。
  * 開く（返信・採否・担当・訂正・削除・リアクションなど全部）のは返信の欄か下の行から、スレッドのパネル（ThreadPanel）で。
- * 手早く済ませる「✓ 解決」と、紙面の位置へ移るボタンだけカードに残す。
+ * 反映する／反映しない／次の版で対応のボタンと、下の行（返信・スレッドを開く）は、選んだ（押した・キーボードでフォーカスした）
+ * カードにだけ出す（Google ドキュメント・Filestage と同じく、操作は選んだ 1 件に。ほかのカードは本文と状態、返信の数だけ）。
+ * 反映しない・次の版で対応は理由が要るので、スレッドのパネルをその入力欄を開いた状態で開く。
  */
 export function ThreadCard({
   thread: t,
@@ -37,11 +39,11 @@ export function ThreadCard({
   onSelect,
   onOpen,
   onResolve,
+  onDecideStart,
   pending,
   className,
   index,
   placeState,
-  confidentiality,
   now,
 }: {
   /** 紙面のピンと同じ番号（ピンの名前「コメント N」と対応させる） */
@@ -53,7 +55,6 @@ export function ThreadCard({
   canDecide: boolean;
   canReply: boolean;
   /** 制作物の機密区分（添付の写しを端末に残してよいかの判断） */
-  confidentiality?: "normal" | "restricted" | undefined;
   /** 最後の返信の「n 分前」を数える現在時刻 */
   now: number;
   /** カードを押した（選んで位置へ移る。パネルは開かない） */
@@ -61,6 +62,8 @@ export function ThreadCard({
   /** スレッドのパネルを開く */
   onOpen: () => void;
   onResolve: () => Promise<void>;
+  /** 反映しない・次の版で対応（理由の欄を開いたパネルを開く） */
+  onDecideStart: (mode: "rejected" | "deferred") => void;
   pending?: boolean;
   className?: string;
 }) {
@@ -69,6 +72,14 @@ export function ThreadCard({
   // 直近の返信（古い順）。見せきれない分は「ほか n 件の返信」
   const replies = t.latestReplies.slice(-THREAD_LATEST_REPLIES_SHOWN);
   const hidden = Math.max(0, t.replyCount - replies.length);
+  // キーボードでカードの中にフォーカスがある間も、選んだのと同じに採否のボタンを出す
+  const [focused, setFocused] = useState(false);
+  const pressing = useRef(false);
+  // 操作（採否・返信・開く）は選んだカードだけ。ほかのカードは読むだけの見た目にする
+  const selected = active || focused;
+  const showDecide = canDecide && !closed && selected;
+  const repliesText =
+    hidden > 0 ? `ほか ${hidden} 件の返信` : t.replyCount > 0 ? `${t.replyCount}件の返信` : null;
   return (
     <M3eCard
       variant="filled"
@@ -77,7 +88,28 @@ export function ThreadCard({
       data-thread-id={t.id}
       onClick={onSelect}
     >
-      <div slot="content" className="thread__content">
+      <div
+        slot="content"
+        className="thread__content"
+        // キーボードでもカードを選べる（選ぶと操作の行が出る）
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
+        onPointerDown={() => (pressing.current = true)}
+        onPointerUp={() => (pressing.current = false)}
+        onPointerCancel={() => (pressing.current = false)}
+        onFocus={() => {
+          if (!pressing.current) setFocused(true);
+        }}
+        onBlur={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (!next || !e.currentTarget.contains(next)) setFocused(false);
+        }}
+      >
         <div className="thread__head">
           {t.origin ? (
             <M3eAvatar className="thread__bot" aria-hidden="true">
@@ -121,20 +153,6 @@ export function ThreadCard({
                     : index}
             </M3eButton>
           ) : null}
-          {canDecide && !closed ? (
-            <M3eIconButton
-              aria-label="解決済みにする"
-              size="extra-small"
-              className="thread__resolve"
-              disabled={pending === true}
-              onClick={(e: Event) => {
-                stop(e);
-                void onResolve();
-              }}
-            >
-              <M3eIcon name="check" />
-            </M3eIconButton>
-          ) : null}
         </div>
         {t.anchor?.type === "text_range" ? (
           <blockquote className="thread__quote thread__quote--clamp">
@@ -152,10 +170,29 @@ export function ThreadCard({
           format={t.bodyFormat}
           mentionUsers={t.mentionUsers}
         />
-        {t.files.length > 0 ? (
-          <CommentAttachments files={t.files} confidentiality={confidentiality} variant="thumbs" />
-        ) : null}
+        {t.files.length > 0 ? <CommentAttachments files={t.files} variant="thumbs" /> : null}
         <ThreadMeta thread={t} placeState={placeState} />
+        {showDecide ? (
+          <div className="thread__decide" role="group" aria-label="反映するかどうか" onClick={stop}>
+            <M3eButton
+              variant="filled"
+              size="small"
+              disabled={pending === true}
+              onClick={() => void onResolve()}
+            >
+              <M3eIcon slot="icon" name="check" />
+              反映する
+            </M3eButton>
+            <M3eButton variant="tonal" size="small" onClick={() => onDecideStart("rejected")}>
+              <M3eIcon slot="icon" name="block" />
+              反映しない
+            </M3eButton>
+            <M3eButton variant="text" size="small" onClick={() => onDecideStart("deferred")}>
+              <M3eIcon slot="icon" name="move_down" />
+              次の版で対応
+            </M3eButton>
+          </div>
+        ) : null}
         {replies.length > 0 ? (
           <div
             className="thread__replylist"
@@ -187,11 +224,7 @@ export function ThreadCard({
                   {r.fileCount > 0 ? (
                     <div className="thread__reply-files">
                       {r.firstFile ? (
-                        <CommentAttachments
-                          files={[r.firstFile]}
-                          confidentiality={confidentiality}
-                          variant="thumbs"
-                        />
+                        <CommentAttachments files={[r.firstFile]} variant="thumbs" />
                       ) : null}
                       {r.fileCount > 1 ? (
                         <span className="thread__reply-filecount">+{r.fileCount - 1}</span>
@@ -203,28 +236,37 @@ export function ThreadCard({
             ))}
           </div>
         ) : null}
-        <button
-          type="button"
-          className="thread__footer"
-          aria-label={
-            t.replyCount > 0
-              ? `返信 ${t.replyCount} 件。スレッドを開く${t.unread ? "（未読）" : ""}`
-              : `スレッドを開く${t.unread ? "（未読）" : ""}`
-          }
-          onClick={(e) => {
-            stop(e);
-            onOpen();
-          }}
-        >
-          {hidden > 0 ? (
-            <span className="thread__replies">ほか {hidden} 件の返信</span>
-          ) : canReply ? (
-            <span className="thread__replies">返信</span>
-          ) : null}
-          <span className="spacer" />
-          {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
-          <M3eIcon name="chevron_right" className="icon--mirror thread__chevron" />
-        </button>
+        {selected ? (
+          <button
+            type="button"
+            className="thread__footer"
+            aria-label={
+              t.replyCount > 0
+                ? `${t.replyCount}件の返信。スレッドを開く${t.unread ? "（未読）" : ""}`
+                : `スレッドを開く${t.unread ? "（未読）" : ""}`
+            }
+            onClick={(e) => {
+              stop(e);
+              onOpen();
+            }}
+          >
+            {repliesText ? (
+              <span className="thread__replies">{repliesText}</span>
+            ) : canReply ? (
+              <span className="thread__replies">返信</span>
+            ) : null}
+            <span className="spacer" />
+            {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
+            <M3eIcon name="chevron_right" className="icon--mirror thread__chevron" />
+          </button>
+        ) : repliesText || t.unread ? (
+          // 選んでいないカードは、返信の数と未読の点だけ（押す行は出さない）
+          <div className="thread__footer thread__footer--still">
+            {repliesText ? <span className="thread__replies-still">{repliesText}</span> : null}
+            <span className="spacer" />
+            {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
+          </div>
+        ) : null}
       </div>
     </M3eCard>
   );

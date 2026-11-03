@@ -77,10 +77,10 @@ import { Loading } from "@/ui/Loading";
 import { PaneTabs } from "@/ui/PaneTabs";
 import { AutoProofreadStatus } from "@/features/proofread/AutoProofreadStatus";
 import { useAutoProofread } from "@/features/proofread/useAutoProofread";
-import { setMarkArmed, useMarkArmed } from "@/features/annotation/markArm";
 import { CompareButton } from "@/features/compare/CompareButton";
 import { useCompareSession } from "@/features/compare/useCompareSession";
-import { remaining } from "@/lib/format";
+import { formatDeadline, remaining } from "@/lib/format";
+import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { workHint } from "@/lib/workHint";
 import {
   blockedReasonLabel,
@@ -358,12 +358,14 @@ export function Editor({
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くとスレッドが一覧・シートを差し替える） */
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  /** 一覧のカードの「反映しない」「次の版で対応」から開いたスレッドと、開いておく理由の欄 */
+  const [openThreadMode, setOpenThreadMode] = useState<{
+    id: string;
+    mode: "rejected" | "deferred";
+  } | null>(null);
   /** コメントを選んだ要求（選ぶたびに n が増える）。一覧をそのカードまでスクロールする（features/review/revealThread） */
   const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
   const requestReveal = (id: string) => setReveal((r) => ({ id, n: (r?.n ?? 0) + 1 }));
-  /** 「コメントを追加」を押した直後（次のクリック・ドラッグ 1 回だけ印を付ける。置くか Esc で戻る） */
-  const armed = useMarkArmed();
-  useEffect(() => () => setMarkArmed(false), []);
   /** コメントの印（ピン・範囲・文字の強調・動画の印）を一時的に隠している（コメントそのものは消さない・一覧も隠さない） */
   const [marksHidden, setMarksHidden] = useState(() => marksHiddenFor === workId);
   /** 指で文字を選んだとき、コメントにするか端末の選択（コピーなど）に任せるか（§106） */
@@ -563,7 +565,7 @@ export function Editor({
   useEffect(() => {
     if (artifact?.type === "document") setZoom(scale);
   }, [scale, artifact?.type]);
-  const persistFiles = mayPersist(data?.work.confidentiality);
+  const persistFiles = mayPersist();
   const blob = useArtifactBlob(artifact && artifact.role !== "external" ? artifact.id : null, {
     persist: persistFiles,
   });
@@ -609,7 +611,7 @@ export function Editor({
     : null;
   const otherArtifact = other ? pickCompareArtifact(other.artifacts, artifact, scope) : null;
   const otherBlob = useArtifactBlob(compareWith && otherArtifact ? otherArtifact.id : null, {
-    persist: mayPersist(other?.work.confidentiality),
+    persist: mayPersist(),
   });
   // 高度な版比較: ページの自動対応・スクロール同期・文章差分（features/compare）
   const cmp = useCompareSession({
@@ -833,27 +835,31 @@ export function Editor({
     if (drawer !== "comments") setDrawer("comments");
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
   }, [draft, mobile]);
-  // 比較中も表示中の版（右＝新しい版）には範囲・ピン・位置なしでコメントできる。左の版は見るだけ
-  // 紙面のクリック・タップはいつもふつうの操作で、なぞる（範囲）・長押し（ピン）だけがコメントになる（features/annotation/AnchorOverlay）。
-  // 書き込みのモードはない。「コメントを追加」は、次の 1 回だけクリックでも印を付ける（armed）
-  // コメントを書き始めたら（位置つきの下書きができたら）印を付ける状態は戻し、隠していた印も出す
+  // 比較中も表示中の版（右＝新しい版）には範囲・ピン・全体へのコメントできる。左の版は見るだけ
+  // 紙面の位置はなぞる（範囲）・長押し（ピン）だけ（features/annotation/AnchorOverlay）。全体へのコメントはツールバー・C
   useEffect(() => {
-    if (draft && !draft.free) {
-      setMarkArmed(false);
-      setMarksHidden(false);
-    }
+    if (draft && !draft.free) setMarksHidden(false);
   }, [draft]);
+  const openFreeComment = () => {
+    setDraft({ free: true });
+    setActiveThreadId(null);
+  };
+  // C で「全体へのコメント」（動画も同じ。時点へのコメントは VideoViewer の T）。入力中は何もしない
+  const commentKey = canComment;
   useEffect(() => {
-    if (!canComment) setMarkArmed(false);
-  }, [canComment]);
-  useEffect(() => {
-    if (!armed) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMarkArmed(false);
+      if (e.isComposing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if ((e.key === "c" || e.key === "C") && commentKey) {
+        e.preventDefault();
+        setDraft({ free: true });
+        setActiveThreadId(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [armed]);
+  }, [commentKey]);
   // 隠していても、コメントを選んだ（一覧のカード・URL・通知）ら印を出す（その印へ移れるように）
   useEffect(() => {
     if (activeThreadId) setMarksHidden(false);
@@ -911,7 +917,8 @@ export function Editor({
    * スレッドのパネルを開く（コメントを選んで紙面のピンへ移り、パネルを開く）。広い画面は引き出しの「コメント」に、狭い画面は
    * シートをいっぱいに開いて。開いたら既読にする（パネルが行う）
    */
-  const openThread = (t: Thread, opts?: { reveal?: boolean }) => {
+  const openThread = (t: Thread, opts?: { reveal?: boolean; mode?: "rejected" | "deferred" }) => {
+    setOpenThreadMode(opts?.mode ? { id: t.id, mode: opts.mode } : null);
     // 一覧のカードから開くときは一覧を動かさない（今そのカードを見て押している）。紙面のピンから開くときはカードまで送る
     // （狭い画面の一覧はシートの中に隠れるので送らない）
     jumpTo(t, { reveal: opts?.reveal === true && !mobile });
@@ -931,11 +938,11 @@ export function Editor({
         canDecide={can?.decide ?? false}
         canReply={can?.reply ?? false}
         pending={busy}
-        confidentiality={data?.work.confidentiality}
         now={now}
         {...(className ? { className } : {})}
         onSelect={() => jumpTo(t, { reveal: false })}
         onOpen={() => openThread(t)}
+        onDecideStart={(mode) => openThread(t, { mode })}
         onResolve={onResolve}
       />
     );
@@ -1139,13 +1146,23 @@ export function Editor({
           まだ版がありません
           {workData.can.submit && work?.lifecycle === "active" ? (
             <div className="row">
-              <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
-                最初の版を提出
-              </M3eButton>
-              <M3eButton variant="tonal" onClick={openAuthoring}>
-                <M3eIcon slot="icon" name={isSns ? "post_add" : "edit_document"} />
-                {isSns ? "投稿を作る" : "文章を書く"}
-              </M3eButton>
+              {/* SNS 投稿の版は投稿の編集（本文・画像・記録を 1 つの版にする）から出す。添付のダイアログは出さない */}
+              {isSns ? (
+                <M3eButton variant="filled" onClick={openAuthoring}>
+                  <M3eIcon slot="icon" name="post_add" />
+                  最初の版を提出
+                </M3eButton>
+              ) : (
+                <>
+                  <M3eButton variant="filled" onClick={() => setSubmitOpen(true)}>
+                    最初の版を提出
+                  </M3eButton>
+                  <M3eButton variant="tonal" onClick={openAuthoring}>
+                    <M3eIcon slot="icon" name="edit_document" />
+                    文章を書く
+                  </M3eButton>
+                </>
+              )}
             </div>
           ) : null}
         </div>
@@ -1588,6 +1605,7 @@ export function Editor({
     openedThread && revisionId ? (
       <ThreadPanel
         key={openedThread.id}
+        {...(openThreadMode?.id === openedThread.id ? { initialMode: openThreadMode.mode } : {})}
         thread={openedThread}
         index={openedThread.index}
         {...(webStates.has(openedThread.id) ? { placeState: webStates.get(openedThread.id)! } : {})}
@@ -1597,7 +1615,6 @@ export function Editor({
         canDecide={can?.decide ?? false}
         canReply={can?.reply ?? false}
         revisionId={revisionId}
-        confidentiality={data?.work.confidentiality}
         pending={busy}
         now={now}
         onBack={() => setOpenThreadId(null)}
@@ -1613,20 +1630,6 @@ export function Editor({
         <div className="comments__main">
           <AutoProofreadStatus auto={auto} />
           <div className="comments__header">
-            {/* 「位置なしでコメント」はここから（紙面の位置に付けるのは、なぞる・長押し・ツールバーの「コメントを追加」） */}
-            {canComment ? (
-              <M3eButton
-                variant="tonal"
-                className="comments__free"
-                onClick={() => {
-                  setDraft({ free: true });
-                  setActiveThreadId(null);
-                }}
-              >
-                <M3eIcon slot="icon" name="add_comment" />
-                位置なしでコメント
-              </M3eButton>
-            ) : null}
             <M3eFilterChipSet aria-label="コメントの絞り込み">
               {botCount > 0 ? (
                 <>
@@ -1647,7 +1650,7 @@ export function Editor({
               ) : null}
               {resolvedCount > 0 ? (
                 <M3eFilterChip selected={showResolved} onClick={() => setShowResolved((v) => !v)}>
-                  解決済み {resolvedCount}
+                  {showResolved ? `解決済み ${resolvedCount}` : "解決済みを表示"}
                 </M3eFilterChip>
               ) : null}
             </M3eFilterChipSet>
@@ -1684,19 +1687,10 @@ export function Editor({
             {!target ? (
               <p className="muted small comments__empty">版を提出するとコメントできます</p>
             ) : threads.length === 0 ? (
-              <p className="muted small comments__empty">
-                {canComment
-                  ? artifact?.type === "video"
-                    ? "止めた位置で「この時点にコメント」、タイムラインの上の段をなぞると範囲、映像の上をドラッグすると画面の位置にコメントできます"
-                    : artifact && isWebLiveArtifact(artifact)
-                      ? "ライブ表示を「コメント」に切り替え、サイトの要素を押すとその要素にコメントできます"
-                      : artifact?.role === "external" && isLiveExternal
-                        ? "「このフレームにコメント」で、表示中のフレームについてコメントできます（位置を指すには取り込んだ画像の上で）"
-                        : touch
-                          ? "ファイルの上で長押しして、そのままなぞると範囲、離すとその場にコメントできます"
-                          : "ファイルの上でドラッグすると、その場にコメントできます"
-                  : "コメントはありません"}
-              </p>
+              // 操作の説明は書かない（ツールバーの「全体コメント」と紙面の操作で分かる）。コメントできない人にだけ状態を出す
+              canComment ? null : (
+                <p className="muted small comments__empty">コメントはありません</p>
+              )
             ) : (
               threads.map((t) => card(t))
             )}
@@ -1806,10 +1800,11 @@ export function Editor({
           {revision && work && !initial ? (
             <>
               {revision.label} ·{" "}
+              {revision.reviewUrgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
               {open
-                ? `受付中 · ${remaining(revision.deadlineAt, now)}`
+                ? `校正中 · 校正期日 ${formatDeadline(revision.deadlineAt)}（${remaining(revision.deadlineAt, now)}）`
                 : revision.reviewClosedReason
-                  ? `受付終了（${closedReasonLabel[revision.reviewClosedReason]}）`
+                  ? `次版作成中（${closedReasonLabel[revision.reviewClosedReason]}）`
                   : reviewStateLabel[revision.reviewState]}
               {work.finalRevisionId === revision.id ? " · 校了版" : ""}
             </>
@@ -2018,6 +2013,20 @@ export function Editor({
                         </M3eButtonGroup>
                       )}
                     </>
+                  ) : null}
+                  {/* 全体へのコメント（位置なし）。紙面の位置はなぞる・長押しだけ */}
+                  {canComment && !isFigmaEmbed ? (
+                    <M3eButton
+                      className="ws__comment"
+                      variant="tonal"
+                      size="small"
+                      aria-label="全体へのコメント"
+                      title="全体へのコメント（C）"
+                      onClick={() => openFreeComment()}
+                    >
+                      <M3eIcon slot="icon" name="add_comment" />
+                      {mobile ? null : "全体コメント"}
+                    </M3eButton>
                   ) : null}
                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
                   {!isFigmaEmbed ? (
@@ -2369,7 +2378,7 @@ function CompareStatus({
       ).length;
       parts.push(
         [
-          `ページ対応: 旧 ${cmp.pdf.leftCount} → 新 ${cmp.pdf.rightCount}`,
+          `ページの対応（前の版 ${cmp.pdf.leftCount}・この版 ${cmp.pdf.rightCount}）`,
           inserted ? `追加 ${inserted}` : "",
           deleted ? `削除 ${deleted}` : "",
           moved ? `移動 ${moved}` : "",

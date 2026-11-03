@@ -10,7 +10,7 @@
     "Noto Sans JP Variable", "Noto Sans JP", "Roboto", system-ui, -apple-system, "Segoe UI",
     sans-serif;
 
-  /* 色役割（M3 color roles）。フォールバックはいまの配色（seed #1b5fb4・vibrant。m3e-theme が無いときだけ使う） */
+  /* 色役割（M3 color roles）。フォールバックは seed #3F51B5・tonal-spot（m3e-theme が無いときだけ使う） */
   --mf-surface: var(--md-sys-color-surface, #f6f5ff);
   --mf-surface-dim: var(--md-sys-color-surface-dim, #c8d3ff);
   --mf-surface-container-lowest: var(--md-sys-color-surface-container-lowest, #ffffff);
@@ -1195,6 +1195,41 @@ m3e-dialog {
 .user-avatar--placeholder {
   display: inline-block;
 }
+/* アプリバーの「閲覧中」: 見ている人のアバターを少し重ねて並べる（縁は面の色で切る）。4 人目からは「+n」 */
+.work-presence {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 4px;
+}
+.work-presence__avatar {
+  flex: none;
+  box-sizing: content-box;
+  border: 2px solid var(--mf-surface);
+}
+.work-presence__person {
+  display: inline-flex;
+  border-radius: var(--mf-shape-full);
+  outline-offset: 2px;
+}
+.work-presence__person:focus-visible {
+  outline: var(--mf-focus-ring);
+}
+.work-presence__person + .work-presence__person {
+  margin-inline-start: -8px;
+}
+.work-presence__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding-inline: 4px;
+  border: 2px solid var(--mf-surface);
+  border-radius: var(--mf-shape-full);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+  font: var(--mf-type-label-medium);
+}
 .account-menu__header {
   display: flex;
   align-items: center;
@@ -1248,6 +1283,24 @@ m3e-dialog {
   color: var(--mf-on-surface-variant);
 }
 .list__item--urgent {
+  --m3e-list-item-label-text-color: var(--mf-error);
+}
+/* 滞っている制作物: 期限超過から 1 日=オレンジ・2 日以上=赤（モック / decisions 107A）。
+   1 日は注意色（--mf-warning は黄）ではなくモックどおりのオレンジを使う */
+.list__item--delay-1d {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    #ffb270 45%,
+    var(--mf-surface-container-lowest)
+  );
+  --m3e-list-item-label-text-color: #7a3b00;
+}
+.list__item--delay-2d {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    var(--mf-error-container) 40%,
+    var(--mf-surface-container-lowest)
+  );
   --m3e-list-item-label-text-color: var(--mf-error);
 }
 .list__item--selected {
@@ -1338,6 +1391,15 @@ m3e-dialog {
 .dash__group {
   display: grid;
   gap: 4px;
+}
+/* 制作物の状況の「滞っている制作物」: 行の面（1 日=オレンジ・2 日以上=赤）は見出しの左端に揃える
+   （一覧の行の -16px のはみ出しをやめ、文字は面の中に 12px 入れる） */
+.ov .dash__group .list {
+  margin: 0;
+}
+.ov .dash__group .list__item {
+  --m3e-list-item-leading-space: 12px;
+  --m3e-list-item-trailing-space: 12px;
 }
 .dash__more {
   justify-self: start;
@@ -2349,6 +2411,17 @@ m3e-dialog {
 .notif__time {
   font: var(--mf-type-body-small);
   color: var(--mf-on-surface-variant);
+}
+/* 通知行: ホバーで ⋮（Slack 式。右クリック / Shift+F10 も同じメニュー） */
+.notif-row__more {
+  opacity: 0;
+  margin: -4px -8px;
+  transition: opacity 0.15s ease;
+}
+.notif:hover .notif-row__more,
+.notif:focus-within .notif-row__more,
+.notif-row__more:focus-visible {
+  opacity: 1;
 }
 
 /* ---------- エディタの引き出し「情報」 */
@@ -4944,12 +5017,28 @@ m3e-snackbar {
   margin: -4px -8px -4px 0;
   vertical-align: middle;
 }
-/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える */
+/* 校了者のセル（編集できる人には押せるボタン）。文字は左に揃え、ボタンの余白ぶん左へ寄せて他の列と揃える。
+   名前は長くても列を広げず、省略記号で切る（全文は title） */
 .works-table__approvers,
 .works-table__reviewers {
   margin-inline-start: -12px;
   max-width: 100%;
   text-align: start;
+}
+.works-table__approvers .works-table__clip,
+.works-table__reviewers .works-table__clip {
+  max-width: 120px;
+}
+.works-table__col--owner .works-table__clip,
+.works-table__col--production .works-table__clip {
+  max-width: 128px;
+}
+/* 版の下の「予定提出 11/16（月）」は 2 行に折り返してよい（列を広げない。日付の途中では折らない幅を確保） */
+.works-table__col--version {
+  min-width: 108px;
+}
+.works-table__col--version .mf-table__sub {
+  white-space: normal;
 }
 .works-table__approvers-text {
   display: block;
@@ -4979,7 +5068,8 @@ m3e-snackbar {
     display: none;
   }
 }
-@container (max-width: 1119px) {
+/* 1440px（表の幅 1294 前後）で校了する人まで入るように、制作担当を先に隠す（担当は残る） */
+@container (max-width: 1339px) {
   .works-table__col--production {
     display: none;
   }
@@ -5873,6 +5963,39 @@ m3e-snackbar {
   display: block;
   color: var(--mf-on-surface-variant);
 }
+/* 版提出: ヘッダーの緊急スイッチ・一覧の緊急表示 */
+.submit-dialog__header {
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* m3e-dialog 見出し slot の typography を子全体に継承させない */
+  font: inherit;
+}
+.submit-dialog__header > span:first-child,
+.submit-dialog__header > .submit-dialog__title {
+  font: var(--mf-type-title-medium);
+}
+.submit-dialog__urgent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.submit-dialog__urgent-label {
+  font: var(--mf-type-body-large);
+  color: var(--mf-on-surface);
+  line-height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+.submit-dialog__urgent m3e-switch {
+  flex-shrink: 0;
+}
+.review-urgent-chip {
+  margin-inline-end: 6px;
+  vertical-align: middle;
+}
 /* 版の提出: 提出前の確認（Notion の版 DB のチェックボックス）と申告 */
 .submit-checklist {
   display: grid;
@@ -5913,4 +6036,304 @@ m3e-snackbar {
   vertical-align: -4px;
   margin-inline-end: 4px;
   color: var(--mf-on-surface-variant);
+}
+
+/* ---------- M3 Expressive の仕上げ（形を一段大きく、強調は太さと色で。色は必ず色役割から） ---------- */
+/* 表とカードは角を一段大きく（M3E shape: medium → large / large → extra-large） */
+.mf-table:not(.mf-table--flush) {
+  border-radius: var(--mf-shape-lg);
+}
+/* 見出し行は面の色を変えず、文字の色と太さで分ける（青い帯にしない。太さは 2026-10-15 の決定どおり 500 のまま） */
+.mf-table__th {
+  background: var(--mf-surface-container-low);
+  color: var(--mf-on-surface-variant);
+}
+.kpi {
+  --m3e-card-shape: var(--mf-shape-xl);
+}
+.kpi__num {
+  font-weight: 500;
+  color: var(--mf-primary);
+}
+.comments .thread,
+.thread-panel .creator-note,
+.comments .creator-note {
+  --m3e-card-shape: var(--mf-shape-lg);
+}
+/* 選んだカードは帯を太く、面は primary 系で一目で分かるように */
+.thread--active::before {
+  width: 4px;
+}
+.comments .thread--active {
+  --m3e-filled-card-container-color: color-mix(
+    in srgb,
+    var(--mf-primary) 10%,
+    var(--mf-surface-container-lowest)
+  );
+}
+/* 反映するかどうかのボタン列: 主操作（反映する）は filled、ほかは同じ高さで並べる */
+.thread__decide m3e-button {
+  --m3e-button-shape: var(--mf-shape-full);
+}
+/* ツールバーのコメントボタンは常に見える主操作。ほかのアイコンより一段目立たせる */
+.ws__comment {
+  margin-inline: 4px;
+}
+
+.dash__title--sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.dash__section--now .dash__head {
+  gap: 8px;
+}
+
+/* stack-pr:m3e-segmented-list */
+
+@container (min-width: 1240px) and (max-width: 1439px) {
+  .works-table tr {
+    --mf-table-pad: 12px;
+  }
+}
+.list--segmented {
+  --m3e-segmented-list-segment-gap: 2px;
+  --m3e-segmented-list-container-shape: var(--md-sys-shape-corner-large-increased, 20px);
+  --m3e-segmented-list-item-container-shape: var(--mf-shape-xs);
+  --m3e-segmented-list-item-hover-container-shape: var(--mf-shape-lg);
+  --m3e-segmented-list-item-focus-container-shape: var(--mf-shape-lg);
+  --m3e-segmented-list-item-container-color: var(--mf-surface-container-lowest);
+  --m3e-list-item-container-color: var(--mf-surface-container-lowest);
+  margin: 0;
+}
+.list--segmented .list__item {
+  --m3e-list-item-container-shape: var(--mf-shape-xs);
+}
+.hub .list.list--segmented {
+  width: 100%;
+  max-width: 100%;
+}
+.list--segmented .list__item--urgent {
+  --m3e-list-item-container-color: color-mix(
+    in srgb,
+    var(--mf-error-container) 35%,
+    var(--mf-surface-container-lowest)
+  );
+}
+
+/* stack-pr:ui-home-view-switcher */
+
+.home-view-switcher__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* stack-pr:detail-shell */
+
+.detail-shell {
+  background: linear-gradient(
+    180deg,
+    var(--mf-surface-container-low) 0%,
+    var(--mf-surface-container) 100%
+  );
+}
+
+.detail-shell__head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.detail-shell__row--title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.detail-shell__title {
+  margin: 0;
+  min-width: 0;
+}
+.detail-shell__version {
+  color: var(--mf-on-surface-variant);
+  flex-shrink: 0;
+}
+.detail-shell__row--steps {
+  min-height: 48px;
+}
+.detail-shell__stepper {
+  width: 100%;
+}
+/* 73A: プレビューを最大にし、コメントは右の列（#204）。
+   プレビューの枠は見出しの下から画面の下端（「校正画面を開く」の分を除く）まで使い、紙面は枠の幅いっぱいに出す。
+   長い紙面は枠の中でスクロールする。コメントの列は幅を固定し、残りを全部プレビューに渡す */
+.detail-shell__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  padding: 0 16px 24px;
+  align-items: start;
+}
+@media (max-width: 839px) {
+  .detail-shell__main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.detail-shell__preview {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.detail-shell__preview-frame {
+  /* アプリバー 64 ＋ 見出し（題名の行・進行・余白）約 150 ＋ 下のボタン 64 を引いた残り */
+  height: calc(100dvh - var(--mf-appbar-h, 64px) - 214px);
+  min-height: 420px;
+  border-radius: var(--mf-shape-lg);
+  overflow: hidden;
+  background: var(--mf-surface-container-lowest);
+  display: flex;
+  flex-direction: column;
+}
+.detail-shell__preview-frame > * {
+  flex: 1;
+  min-height: 0;
+}
+.detail-shell__pdf,
+.detail-shell__pdf .viewer {
+  height: 100%;
+  min-height: 0;
+}
+.detail-shell__pdf .viewer {
+  border-radius: 0;
+  background: var(--mf-surface-container-lowest);
+}
+/* 紙面は枠の幅いっぱい（エディタの左右の余白とフローティングツールバーの分の下の余白は無し） */
+.detail-shell__pdf .viewer__stage {
+  padding: 0;
+}
+.detail-shell__pdf .viewer__pages {
+  gap: 8px;
+}
+.detail-shell__pdf .viewer__page {
+  box-shadow: none;
+  border-radius: 0;
+}
+.detail-shell__comments {
+  padding: 12px 16px;
+  border-radius: var(--mf-shape-lg);
+  background: var(--mf-surface-container);
+}
+
+/* stack-pr:m3e-shape-table */
+
+/* M3E shape: 表の角を large に */
+.mf-table:not(.mf-table--flush) {
+  border-radius: var(--mf-shape-lg);
+}
+
+/* stack-pr:m3e-kpi-active */
+
+.kpi {
+  --m3e-card-shape: var(--mf-shape-xl);
+}
+.kpi__num {
+  font-weight: 500;
+  color: var(--mf-primary);
+}
+.comments .thread,
+.thread-panel .creator-note,
+.comments .creator-note {
+  --m3e-card-shape: var(--mf-shape-lg);
+}
+.thread--active::before {
+  width: 4px;
+}
+.comments .thread--active {
+  --m3e-filled-card-container-color: color-mix(
+    in srgb,
+    var(--mf-primary) 10%,
+    var(--mf-surface-container-lowest)
+  );
+}
+.thread__decide m3e-button {
+  --m3e-button-shape: var(--mf-shape-full);
+}
+
+/* stack-pr:ui-kpi-row-mock */
+.kpis--mock-row {
+  margin-block-end: 4px;
+}
+@media (min-width: 840px) {
+  .kpis--mock-row {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+}
+
+/* stack-pr:ui-graphs-stage-bureau */
+.stagebar--mock {
+  min-height: 12px;
+  border-radius: var(--mf-shape-sm);
+}
+.ov__block--bureau-mock .mf-table {
+  --mf-table-header-bg: var(--mf-surface-container-high);
+}
+
+/* stack-pr:ui-sns-band-visibility */
+.sns-home-band {
+  margin: 0 16px 12px;
+  --m3e-filled-card-container-color: var(--mf-secondary-container);
+}
+.sns-home-band__meta {
+  margin: 4px 0 0;
+  color: var(--mf-on-secondary-container);
+}
+
+/* ホームの「共同」: 制作物の状況を開け閉めせずにそのまま出す（DashboardOverview の flat） */
+.ov--flat {
+  display: grid;
+  gap: 4px;
+  margin-block-end: 0;
+}
+.ov--flat .ov__header {
+  min-height: 48px;
+}
+
+/* stack-pr:ui-detail-shell-mock */
+.detail-shell__head {
+  border-bottom: 1px solid var(--mf-outline-variant);
+}
+
+/* stack-pr:ui-tablet-layout */
+@media (min-width: 600px) and (max-width: 839px) {
+  .dash--columns {
+    grid-template-columns: 1fr;
+  }
+  .hub .kpis--three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* stack-pr:ui-dark-theme-home */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    background: var(--mf-surface);
+  }
+  .works {
+    background: var(--mf-surface);
+  }
+  .ov .kpi {
+    --m3e-filled-card-container-color: var(--mf-surface-container-high);
+  }
+  .sns-home-band {
+    --m3e-filled-card-container-color: var(--mf-surface-container);
+  }
 }

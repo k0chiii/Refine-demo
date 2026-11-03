@@ -1,0 +1,4 @@
+capturedAt=2026-11-01T13:21:14.951Z
+url=http://127.0.0.1:4396/works
+scene=dashboard-backlog-delay
+captureUser=mock-nogiku-manager

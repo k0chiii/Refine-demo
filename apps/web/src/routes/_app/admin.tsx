@@ -1,6 +1,7 @@
 import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
+import { SLACK_NOTIFICATION_UI_ENABLED } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { useWindowClass } from "@/lib/useMedia";
@@ -38,10 +39,20 @@ const tabItems: { id: Tab; label: string }[] = [
   { id: "groups", label: "グループ" },
   { id: "users", label: "ユーザー" },
   { id: "sns", label: "SNS アカウント" },
-  { id: "slack", label: "Slack" },
+  ...(SLACK_NOTIFICATION_UI_ENABLED ? ([{ id: "slack" as const, label: "Slack" }] as const) : []),
   { id: "audit", label: "監査ログ" },
 ];
 const groupsOnly = tabItems.filter((t) => t.id === "groups");
+const adminWorkIcon: Record<string, string> = {
+  pdf: "picture_as_pdf",
+  image: "image",
+  document: "article",
+  sns: "share",
+  video: "movie",
+  web: "language",
+  figma: "design_services",
+  other: "draft",
+};
 const searchFor = (t: Tab) => (t === "works" ? {} : { view: t });
 
 export const Route = createFileRoute("/_app/admin")({
@@ -51,9 +62,9 @@ export const Route = createFileRoute("/_app/admin")({
     s.view === "groups" ||
     s.view === "users" ||
     s.view === "sns" ||
-    s.view === "slack" ||
+    (SLACK_NOTIFICATION_UI_ENABLED && s.view === "slack") ||
     s.view === "audit"
-      ? { view: s.view }
+      ? { view: s.view as Tab }
       : {},
 });
 
@@ -115,9 +126,7 @@ function Admin() {
     return (
       <>
         {title}
-        <div className="alert">
-          管理画面を使う権限がありません（システム管理者か、グループを管理する権限が要ります）
-        </div>
+        <div className="alert">この画面を開く権限がありません</div>
       </>
     );
   if (!tabs.some((t) => t.id === tab))
@@ -174,15 +183,13 @@ function Admin() {
               </M3eMenu>
             )}
           </div>
-          <p className="admin__lead">
-            制作物ごとに、個人へ閲覧・校正・編集・管理の権限を付けます。通常の制作物は委員なら誰でも見られるので、閲覧の権限が要るのは非公開・取扱注意の制作物だけです（関係者と担当の所属する人には自動で付きます）
-          </p>
+
           {works === undefined ? (
             <Loading label="制作物を読み込んでいます" />
           ) : works.length === 0 ? (
             <div className="empty">制作物がありません</div>
           ) : (
-            <M3eActionList className="list" aria-label="制作物ごとの閲覧権限">
+            <M3eActionList className="list" aria-label="制作物ごとの権限">
               {[...works]
                 .sort((a, b) => a.title.localeCompare(b.title, "ja"))
                 .map((w) => (
@@ -191,20 +198,16 @@ function Admin() {
                     className={`list__item ${w.lifecycle === "finalized" || w.lifecycle === "cancelled" ? "list__item--done" : ""}`}
                     onClick={() => setAclFor(w)}
                   >
-                    <M3eIcon slot="leading" name="lock_person" />
-                    <span className="list__headline">
-                      {w.title}
-                      {w.confidentiality === "restricted" ? (
-                        <M3eIcon
-                          name="lock"
-                          className="ml list__lock"
-                          role="img"
-                          aria-label="非公開"
-                          title="非公開"
-                        />
-                      ) : null}
+                    <M3eIcon
+                      slot="leading"
+                      name={adminWorkIcon[w.mediaType] ?? "draft"}
+                      aria-hidden="true"
+                    />
+                    <span className="list__headline">{w.title}</span>
+                    <span slot="supporting-text">
+                      {lifecycleLabel[w.lifecycle] ?? w.lifecycle}
+                      {w.category ? ` · ${w.category}` : ""}
                     </span>
-                    <span slot="supporting-text">{lifecycleLabel[w.lifecycle] ?? w.lifecycle}</span>
                     <span slot="trailing" className="meta num">
                       個人の許可 {w.activeGrantCount}
                     </span>
@@ -323,7 +326,7 @@ function Admin() {
       ) : null}
       <ExportStatsDialog open={exporting} onClose={() => setExporting(false)} />
       <M3eDialog open={aclFor !== null} onClosed={() => setAclFor(null)} closeLabel="閉じる">
-        <span slot="header">閲覧権限: {aclFor?.title}</span>
+        <span slot="header">権限: {aclFor?.title}</span>
         <div className="dialog-body">{aclFor ? <AclPanel workId={aclFor.id} /> : null}</div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setAclFor(null)}>

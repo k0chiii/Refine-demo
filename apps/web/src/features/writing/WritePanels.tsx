@@ -49,11 +49,7 @@ export function OutlinePanel({ editor }: { editor: Editor }) {
     },
   });
   if (headings.length === 0)
-    return (
-      <p className="small muted write-panel__empty">
-        見出し（見出し 1〜3）を付けると、ここに表示されます
-      </p>
-    );
+    return <p className="small muted write-panel__empty">見出しがここに出ます</p>;
   return (
     <M3eActionList className="list outline" aria-label="ドキュメントの概要">
       {headings.map((h) => (
@@ -220,9 +216,7 @@ export function ReferencePanel({
   };
   return (
     <div className="refs">
-      <p className="small muted refs__head">
-        {label} の未対応のコメント（押すと本文の該当箇所を選びます）
-      </p>
+      <p className="small muted refs__head">{label} の未対応のコメント</p>
       <M3eActionList className="list" aria-label="直近の版のコメント">
         {threads.map((t) => (
           <M3eListAction key={t.id} className="list__item refs__item" onClick={() => find(t)}>

@@ -53,7 +53,7 @@ export function CreatorNoteCard({ note }: { note: CreatorNote }) {
             </span>
           </div>
           <span className="spacer" />
-          <span className="thread__pinned" title="制作者からのコメント（先頭に留めています）">
+          <span className="thread__pinned" title="制作者からのコメント">
             <M3eIcon name="push_pin" aria-hidden="true" />
             <span className="sr-only">先頭に留めています</span>
           </span>

@@ -354,6 +354,17 @@
   font: var(--mf-type-label-large);
   color: var(--mf-primary);
 }
+/* 選んでいないカードの下の行: 返信の数と未読の点だけ（押せない。高さは押せる行と同じにして、選んだときに動かない） */
+.thread__footer--still {
+  cursor: default;
+}
+.thread__footer--still:hover {
+  background: none;
+}
+.thread__replies-still {
+  font: var(--mf-type-label-large);
+  color: var(--mf-on-surface-variant);
+}
 .thread__unread {
   flex: none;
   width: 8px;
@@ -363,4 +374,27 @@
 }
 .thread__chevron {
   flex: none;
+}
+
+/* 反映するかどうかは ⋯ に隠さず、本文のすぐ下に並べる。一覧では選んだカードにだけ出る */
+.thread__decide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.thread--compact .thread__decide {
+  margin-top: 4px;
+  animation: thread-decide-in var(--mf-motion-spatial-fast);
+}
+@keyframes thread-decide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread--compact .thread__decide {
+    animation: none;
+  }
 }

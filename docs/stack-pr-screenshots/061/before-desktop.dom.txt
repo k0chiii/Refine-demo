@@ -1,0 +1,4 @@
+capturedAt=2026-11-01T09:00:07.103Z
+url=http://127.0.0.1:4575/works/000000000000000000000010016works/v/1
+scene=editor-shortcut-open
+captureUser=mock-nogiku-creator

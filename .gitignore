@@ -57,3 +57,4 @@ coverage/
 
 # pstack / show-me-your-work の決定ログ（既定は手元のみ。必要なときだけ明示してコミット）
 .audit/
+test-results/

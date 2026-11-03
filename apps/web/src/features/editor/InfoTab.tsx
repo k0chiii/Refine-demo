@@ -5,6 +5,8 @@ import {
   checkTypeLabels,
   checkTypes,
   isEndOfJstDayDeadline,
+  planInfoFieldLabels,
+  type PlanInfoField,
   revisionDeclarationItems,
   socialPlatformLabels,
   teamPath,
@@ -14,10 +16,11 @@ import {
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
 import { ReviewersDialog } from "@/features/work/ReviewersDialog";
 import { EditWorkDialog } from "@/features/work/EditWorkDialog";
+import { registeredPlanInfoFromForm } from "@/features/work/WorkForm";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
@@ -59,6 +62,7 @@ export function InfoTab({
   const finalize = useMutation(api.approvals.finalize);
   const reopen = useMutation(api.approvals.reopen);
   const changeLifecycle = useMutation(api.works.changeLifecycle);
+  const updateWork = useMutation(api.works.update);
   const completeCheck = useMutation(api.checks.complete);
   const waiveCheck = useMutation(api.checks.waive);
   const addCheck = useMutation(api.checks.add);
@@ -80,6 +84,37 @@ export function InfoTab({
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
   const { work: w, people, approvals, approval, can } = work;
+  const [purposeDraft, setPurposeDraft] = useState(w.purpose ?? "");
+  const planFieldKeys = {
+    name: "planName",
+    number: "planNumber",
+    venue: "planVenue",
+    schedule: "planSchedule",
+  } as const;
+  type PlanDraft = {
+    planName: string;
+    planNumber: string;
+    planVenue: string;
+    planSchedule: string;
+  };
+  const planFromWork = (): PlanDraft => ({
+    planName: w.registeredPlanInfo?.name ?? "",
+    planNumber: w.registeredPlanInfo?.number ?? "",
+    planVenue: w.registeredPlanInfo?.venue ?? "",
+    planSchedule: w.registeredPlanInfo?.schedule ?? "",
+  });
+  const [planDraft, setPlanDraft] = useState<PlanDraft>(planFromWork);
+  useEffect(() => {
+    setPurposeDraft(w.purpose ?? "");
+    setPlanDraft(planFromWork());
+  }, [
+    w.purpose,
+    w.version,
+    w.registeredPlanInfo?.name,
+    w.registeredPlanInfo?.number,
+    w.registeredPlanInfo?.venue,
+    w.registeredPlanInfo?.schedule,
+  ]);
   const me = approval.approvers.find((a) => a.isMe) ?? null;
   const multiApprovers = approval.approvers.length > 1;
   // この宣言で「校了とみなす人数」に届くか（届かなければ宣言の記録だけで、校了にはまだ進まない）
@@ -176,32 +211,31 @@ export function InfoTab({
       title: "基本",
       rows: [
         ["制作物名", w.title] as Row,
-        ["目的・用途", w.purpose || "未入力"] as Row,
         ...optional("大ジャンル", w.genre ? workGenreLabels[w.genre] : null),
         ...optional("小ジャンル", workSubGenreLabel(w.subGenre)),
         ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
         ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
         // 提出時の「見てほしい点」はここではなく、コメントの一覧の先頭（制作者からのコメント。CreatorNoteCard）に出す
         ["制作物 ID", w.legacyId || "なし"] as Row,
-        ...(w.confidentiality === "restricted" ? ([["機密", "非公開・取扱注意"]] as Row[]) : []),
       ],
     },
     {
       title: "担当と人",
       rows: [
-        ...optional("担当（主管担当）", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
+        ...optional("担当", w.ownerTeamId ? teamNames([w.ownerTeamId]) : null),
         ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
         ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
         ["制作者", names(people.creators) || "—"] as Row,
-        ["校了者", <ApproverList key="approvers" approval={approval} />] as Row,
-        ["主管", names(people.managers) || "—"] as Row,
+        ["校了する人", <ApproverList key="approvers" approval={approval} />] as Row,
+        ["統括", names(people.managers) || "—"] as Row,
         ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
       ],
     },
     {
       title: "日程と入稿",
       rows: [
-        ["納期", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
+        ["仕上がり日", w.finishAt === undefined ? "—" : formatDeadline(w.finishAt)] as Row,
+        ["校了目標日", w.deadlineAt === undefined ? "—" : formatDeadline(w.deadlineAt)] as Row,
         ...optional(
           "入稿日・投稿日・印刷日",
           w.publishAt === undefined
@@ -255,6 +289,32 @@ export function InfoTab({
       {propGroups.map((g) => (
         <section key={g.title} className="info-tab__section" aria-label={g.title}>
           <h2 className="info-tab__h">{g.title}</h2>
+          {g.title === "基本" ? (
+            can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
+              <Field label="目的・用途">
+                <TextArea value={purposeDraft} onChange={(e) => setPurposeDraft(e.target.value)} />
+                <div className="row" style={{ marginTop: "0.5rem" }}>
+                  <M3eButton
+                    variant="tonal"
+                    disabled={purposeDraft === (w.purpose ?? "")}
+                    onClick={() =>
+                      void updateWork({
+                        workId: w.id as Id<"works">,
+                        expectedVersion: w.version,
+                        patch: { purpose: purposeDraft.trim() },
+                      })
+                    }
+                  >
+                    保存
+                  </M3eButton>
+                </div>
+              </Field>
+            ) : (
+              <p className="small" style={{ margin: "0 0 0.75rem" }}>
+                目的・用途: {w.purpose?.trim() ? w.purpose : "未入力"}
+              </p>
+            )
+          ) : null}
           <M3eList className="list prop-list">
             {g.rows.map(([label, value]) => (
               <M3eListItem key={label} className="list__item">
@@ -265,6 +325,58 @@ export function InfoTab({
           </M3eList>
         </section>
       ))}
+      {(w.registeredPlanInfo || can.edit) &&
+      w.lifecycle !== "finalized" &&
+      w.lifecycle !== "cancelled" ? (
+        <section className="info-tab__section" aria-label="企画情報">
+          <h2 className="info-tab__h">企画情報</h2>
+          {can.edit ? (
+            <div className="form">
+              {(Object.keys(planFieldKeys) as PlanInfoField[]).map((field) => {
+                const key = planFieldKeys[field];
+                return (
+                  <Field key={field} label={planInfoFieldLabels[field]}>
+                    <TextInput
+                      value={planDraft[key]}
+                      onChange={(e) => setPlanDraft((d) => ({ ...d, [key]: e.target.value }))}
+                    />
+                  </Field>
+                );
+              })}
+              <div className="row">
+                <M3eButton
+                  variant="tonal"
+                  disabled={JSON.stringify(planDraft) === JSON.stringify(planFromWork())}
+                  onClick={() =>
+                    void updateWork({
+                      workId: w.id as Id<"works">,
+                      expectedVersion: w.version,
+                      patch: {
+                        registeredPlanInfo: registeredPlanInfoFromForm(planDraft),
+                      },
+                    })
+                  }
+                >
+                  保存
+                </M3eButton>
+              </div>
+            </div>
+          ) : w.registeredPlanInfo ? (
+            <M3eList className="list prop-list">
+              {(Object.keys(planFieldKeys) as PlanInfoField[]).map((field) => {
+                const v = w.registeredPlanInfo?.[field]?.trim();
+                if (!v) return null;
+                return (
+                  <M3eListItem key={field} className="list__item">
+                    <span slot="overline">{planInfoFieldLabels[field]}</span>
+                    <span className="prop-list__value">{v}</span>
+                  </M3eListItem>
+                );
+              })}
+            </M3eList>
+          ) : null}
+        </section>
+      ) : null}
       {/* 「現在の版」の申告（写真・めい・指針外の色の使用）と、表示中の版の提出前の確認。Notion の版 DB の formula に相当 */}
       {work.currentDeclarations || (revision?.revision.selfChecks?.length ?? 0) > 0 ? (
         <section className="info-tab__section" aria-label="現在の版の申告">
@@ -517,9 +629,7 @@ export function InfoTab({
             ) : null}
           </h2>
           <p className="small muted" style={{ margin: 0 }}>
-            制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）が
-            {confirmationTarget ? `${confirmationTarget.label}を` : "最新の版を"}
-            確認した記録が要ります。
+            制作者が校了するには、ほかの人の確認が必要です
           </p>
           {confirmation.valid ? (
             <div className="small">
@@ -529,9 +639,7 @@ export function InfoTab({
             </div>
           ) : null}
           {confirmation.confirmedByMe && !confirmation.valid ? (
-            <div className="small muted">
-              あなたの確認は記録されていますが、いまは有効ではありません（職責・閲覧権限が変わったため）。
-            </div>
+            <div className="small muted">役割が変わったため、この確認は無効です</div>
           ) : null}
         </section>
       ) : null}
@@ -559,8 +667,8 @@ export function InfoTab({
       ) : null}
 
       {can.viewAudit ? (
-        <section className="info-tab__section" aria-label="閲覧権限">
-          <h2 className="info-tab__h">閲覧権限</h2>
+        <section className="info-tab__section" aria-label="権限">
+          <h2 className="info-tab__h">権限</h2>
           <AclPanel workId={w.id} readOnly={!can.manageAcl} />
         </section>
       ) : null}
@@ -577,30 +685,24 @@ export function InfoTab({
           </p>
           {multiApprovers ? (
             <StatusText tone={reachesNow ? "success" : "neutral"}>
-              校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
-              {approval.declaredCount} 人{reachesNow ? "・あなたの宣言で校了" : ""}
+              校了する人 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
+              {approval.declaredCount} 人{reachesNow ? "・この宣言で校了" : ""}
             </StatusText>
           ) : null}
           {candidate && candidate.pendingChecks.length > 0 ? (
             <div className="alert--warn alert">
-              <span>
-                未完了の専門確認: {candidate.pendingChecks.join("、")}
-                。完了または免除されるまで、理由なしの校了はできません。
-              </span>
+              <span>専門確認が残っています: {candidate.pendingChecks.join("、")}</span>
             </div>
           ) : null}
           {blocking > 0 ? (
             <div className="alert--warn alert">
-              <span>未対応のコメントが {blocking} 件あります。理由なしでは校了できません。</span>
+              <span>未対応のコメント {blocking} 件</span>
             </div>
           ) : null}
           {candidate && candidate.openBotCount > 0 ? (
             <>
               <div className="alert--warn alert">
-                <span>
-                  自動校正のコメントが {candidate.openBotCount}{" "}
-                  件、まだ確認されていません。校了はできますが、件数とメモが校了の記録に残ります。
-                </span>
+                <span>未確認の自動校正 {candidate.openBotCount} 件（校了の記録に残ります）</span>
               </div>
               <Field label="自動校正についてのメモ（任意）">
                 <TextInput value={autoNote} onChange={(e) => setAutoNote(e.target.value)} />
@@ -609,7 +711,7 @@ export function InfoTab({
           ) : null}
           <Field
             label="例外校了の理由"
-            hint="未解決のコメントや専門確認を残して校了するときだけ書きます"
+            hint="未対応のコメントや専門確認を残して校了するときだけ書きます"
           >
             <TextArea
               value={exceptionReason}
@@ -625,9 +727,7 @@ export function InfoTab({
               </p>
             ) : (
               <div className="alert--warn alert">
-                <span>
-                  制作者本人が校了するため、制作者・校了権限者以外の人（主管・校正者など）がこの版の独立確認をするまで校了できません。確認する人は、引き出し「情報」の「独立確認をする」から記録します。
-                </span>
+                <span>ほかの人の確認が済むまで校了できません</span>
               </div>
             )
           ) : null}
@@ -651,8 +751,8 @@ export function InfoTab({
         <span slot="header">独立確認をする</span>
         <div className="dialog-body">
           <p style={{ margin: 0 }}>
-            対象版: <strong>{confirmationTarget?.label ?? "（通常版がありません）"}</strong>
-            。制作者・校了権限者とは別の立場で、この版の内容を確認したことを記録します。記録はあなたの名前で残り、校了の証跡になります。
+            <strong>{confirmationTarget?.label ?? "（通常版がありません）"}</strong>{" "}
+            の内容を確認したことを記録します
           </p>
           <Field label="確認のメモ（任意）" hint="確認した範囲など。500 文字まで">
             <TextArea
@@ -704,9 +804,7 @@ export function InfoTab({
       <M3eDialog open={cancelOpen} onClosed={() => setCancelOpen(false)} closeLabel="閉じる">
         <span slot="header">この制作物を中止しますか？</span>
         <div className="dialog-body">
-          <p style={{ margin: 0 }}>
-            中止すると、版の提出・校正・校了ができなくなります。中止は取り消せません。
-          </p>
+          <p style={{ margin: 0 }}>中止すると元に戻せません</p>
         </div>
         <div slot="actions" className="row">
           <M3eButton variant="text" onClick={() => setCancelOpen(false)}>

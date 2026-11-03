@@ -1,0 +1,12 @@
+--- a/apps/web/src/lib/labels.ts
++++ b/apps/web/src/lib/labels.ts
+@@ -60,9 +60,9 @@ export const mediaLabel: Record<string, string> = {
+ };
+ export const approvalActionLabel: Record<string, string> = {
+-  declared: "校了を宣言",
++  declared: "校了する",
+   finalized: "校了",
+-  exception_finalized: "例外校了",
++  exception_finalized: "未対応のまま校了",
+   reopened: "再開",
+ };

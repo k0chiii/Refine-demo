@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/features/review/ThreadCard.tsx b/apps/web/src/features/review/ThreadCard.tsx
+index bd085dd..86ac30a 100644
+--- a/apps/web/src/features/review/ThreadCard.tsx
++++ b/apps/web/src/features/review/ThreadCard.tsx
+@@ -123,7 +123,7 @@ export function ThreadCard({
+           ) : null}
+           {canDecide && !closed ? (
+             <M3eIconButton
+-              aria-label="解決済みにする"
++              aria-label="反映する"
+               size="extra-small"
+               className="thread__resolve"
+               disabled={pending === true}

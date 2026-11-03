@@ -16,7 +16,7 @@ describe("failureText（自動校正の失敗として記録する文言）", ()
 
   it("ConvexError は利用者向けの文言とコードを残す", () => {
     const text = failureText(new ConvexError({ code: "revision_not_accepting" }));
-    expect(text).toContain("この版は校正を受け付けていません");
+    expect(text).toContain("この版は校正中ではありません");
     expect(text).toContain("revision_not_accepting");
   });
 

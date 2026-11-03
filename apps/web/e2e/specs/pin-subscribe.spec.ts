@@ -1,4 +1,4 @@
-import { expect, test } from "../support/app";
+import { expect, PAMPHLET, test } from "../support/app";
 import { submitFirstRevision, submitNextRevision } from "../support/scenarios";
 
 // 利用者決定 2026-10-27「制作物を購読（構成者に割り当てられてなくても、ダッシュボードに出たり版更新の通知が出たりするようにしたい）」。
@@ -23,7 +23,10 @@ test.describe("ピン留め（制作物の購読）", { tag: "@core" }, () => {
     await app.signInAs("mock-nogiku-reviewer");
     await app.go("/check");
     await expect(app.checkPinned()).toHaveCount(1);
-    await expect(page.locator(".hub[data-hub='check'] .hub-row")).toHaveCount(1);
+    // ピン留めした制作物は「ピン留め」にだけ出て、未着手の一覧に重複して出ない（seed の割り当て済みの版は別の制作物）
+    await expect(
+      page.locator(".hub[data-hub='check'] .hub-row", { hasText: PAMPHLET }),
+    ).toHaveCount(1);
 
     const notes = await app.notifications();
     await expect(notes).toHaveCount(1);

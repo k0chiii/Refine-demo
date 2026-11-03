@@ -1,0 +1,34 @@
+--- a/apps/web/src/lib/errors.ts
++++ b/apps/web/src/lib/errors.ts
+---
+diff --git a/apps/web/src/lib/errors.ts b/apps/web/src/lib/errors.ts
+index fac51aa..e53ba51 100644
+--- a/apps/web/src/lib/errors.ts
++++ b/apps/web/src/lib/errors.ts
+@@ -127,7 +119,7 @@ export function messageForCode(code: string): string {
+ 
+ /** 失敗の理由が分からないときの文言（内部のコードは問い合わせ用に添える） */
+ export function genericErrorMessage(code?: string): string {
+-  return `操作を完了できませんでした。もう一度お試しください${code ? `（コード: ${code}）` : ""}。`;
++  return `操作を完了できませんでした。もう一度お試しください${code ? `（${code}）` : ""}`;
+ }
+ 
+ /** 日本語の文か（ライブラリやブラウザの英語のメッセージをそのまま見せないための判定） */
+@@ -168,7 +160,7 @@ function withDetails(code: string, details: unknown): string | null {
+     if (typeof index === "number" && why) return `${index + 1} 件目を登録できません: ${why}`;
+   }
+   if (code === "document_format_mismatch" && d.reason === "existing_draft")
+-    return "この制作物には別の形式の下書きがあります。そのまま保存すると原稿が消えるため保存しませんでした。置き換える場合は、エディタの案内から明示的に置き換えてください。";
++    return "別の形式の下書きがあるため保存しませんでした";
+   if (code === "post_snapshot_mismatch" && Array.isArray(d.problems)) {
+     const first = d.problems.find((p): p is string => typeof p === "string");
+     if (first) return `提出できません: ${first}。画像をそろえ直してから提出してください。`;
+@@ -181,7 +173,7 @@ function withDetails(code: string, details: unknown): string | null {
+     return `グループはこれ以上作れません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
+   if (code === "slack_workspace_invalid") {
+     if (d.field === "name") return "ワークスペースの名前を 80 文字までで入れてください";
+-    if (d.field === "teamId") return "team_id は T で始まる英数字です（例: T0123ABCD）";
++    if (d.field === "teamId") return "ワークスペース ID は T で始まる英数字です（例: T0123ABCD）";
+     if (d.reason === "limit")
+       return `ワークスペースはこれ以上登録できません${typeof d.max === "number" ? `（${d.max} まで）` : ""}`;
+   }

@@ -124,10 +124,7 @@ export function ImportDialog({
     <M3eDialog open={open} onClosed={close} closeLabel="閉じる" className="dialog--full">
       <span slot="header">ルールを取り込む</span>
       <div className="dialog-body stack">
-        <p className="small muted">
-          CSV（表記統一のスプレッドシート）か、この画面で書き出した JSON
-          を選びます。年度の無い行には下で選んだ年度を付けます。取り込む前に内容を確認できます。
-        </p>
+        <p className="small muted">CSV か JSON を選んでください</p>
         <div className="row">
           <input
             ref={fileRef}

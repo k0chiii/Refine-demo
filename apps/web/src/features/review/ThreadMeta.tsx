@@ -7,6 +7,7 @@ import { isClosed, type Thread } from "./thread";
 /** カードの状態の行（解決済み・重大・持ち越し・担当・位置が外れた…）を出す必要があるか */
 export function hasThreadMeta(t: Thread, placeState: WebAnchorState | undefined): boolean {
   return (
+    (!isClosed(t) && t.resolution !== "open") ||
     isClosed(t) ||
     t.severity === "critical" ||
     Boolean(t.carriedFromThreadId) ||
@@ -62,6 +63,11 @@ export function ThreadMeta({
       {t.origin?.needsReview ? <StatusText icon="help">要確認</StatusText> : null}
       {t.origin?.textSource === "ocr" ? (
         <StatusText icon="document_scanner">画像から読み取り</StatusText>
+      ) : null}
+      {!closed && t.resolution !== "open" ? (
+        <StatusText tone="neutral" icon="pending">
+          {resolutionLabel[t.resolution]}
+        </StatusText>
       ) : null}
       {closed ? (
         <StatusText

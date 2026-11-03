@@ -1,0 +1,13 @@
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -1251,11 +1251,11 @@
+ .list__item--delay-1d {
+   --m3e-list-item-container-color: color-mix(
+     in srgb,
+-    var(--mf-tertiary-container) 45%,
++    var(--mf-warning-container, #ffdcc2) 55%,
+     var(--mf-surface-container-lowest)
+   );
+-  --m3e-list-item-label-text-color: var(--mf-on-tertiary-container);
++  --m3e-list-item-label-text-color: var(--mf-on-warning-container, #5c2e00);
+ }

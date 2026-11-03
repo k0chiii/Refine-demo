@@ -58,7 +58,7 @@ export function ApproversCell({ w }: { w: ApproversCellWork }) {
         <M3eButton
           variant="text"
           className="works-table__approvers"
-          aria-label={`${w.title} の校了者を選ぶ（いま: ${names || "なし"}）`}
+          aria-label={`${w.title} の校了する人を選ぶ（いま: ${names || "なし"}）`}
           title={names || undefined}
           onClick={(e) => {
             e.stopPropagation();
@@ -110,7 +110,7 @@ function ApproversDialog({ w, onClose }: { w: ApproversCellWork; onClose: () => 
   });
   return (
     <M3eDialog open onClosed={onClose} closeLabel="閉じる">
-      <span slot="header">校了者を選ぶ</span>
+      <span slot="header">校了する人を選ぶ</span>
       <div className="dialog-body">
         <p className="muted small" style={{ margin: 0 }}>
           {w.title}

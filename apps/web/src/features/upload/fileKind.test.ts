@@ -36,7 +36,7 @@ describe("Illustrator・InDesign（グラフィック制作物）", () => {
     expect(guessMimeType("a.ai", "application/pdf")).toBe("application/illustrator");
     expect(guessMimeType("a.indd", "application/octet-stream")).toBe("application/x-indesign");
   });
-  it("種類は other（.ai が PDF として紙面に出せるかは実体の先頭を見て決める）", () => {
+  it("種類は other（.ai が PDF としてプレビューに出せるかは実体の先頭を見て決める）", () => {
     expect(guessArtifactType("a.ai", "application/pdf")).toBe("other");
     expect(guessArtifactType("a.indd", "")).toBe("other");
   });

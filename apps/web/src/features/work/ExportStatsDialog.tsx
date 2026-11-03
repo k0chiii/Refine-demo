@@ -39,9 +39,7 @@ export function ExportStatsDialog({ open, onClose }: { open: boolean; onClose: (
     <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる">
       <span slot="header">集計を CSV で書き出す</span>
       <div className="dialog-body">
-        <p className="small muted">
-          制作物ごとに、版の数・提出から校了までの日数・コメント数（版ごと）・不採用と持ち越しの件数と理由を書き出します。
-        </p>
+        <p className="small muted">制作物ごとの集計を CSV で書き出します</p>
         <TeamSelect label="担当で絞る（なしならすべて）" value={team} onChange={setTeam} />
       </div>
       <div slot="actions" className="row">

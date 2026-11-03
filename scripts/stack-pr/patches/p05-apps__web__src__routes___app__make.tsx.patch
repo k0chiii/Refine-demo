@@ -1,0 +1,23 @@
+---
+diff --git a/apps/web/src/routes/_app/make.tsx b/apps/web/src/routes/_app/make.tsx
+index 407417e..1c2d526 100644
+--- a/apps/web/src/routes/_app/make.tsx
++++ b/apps/web/src/routes/_app/make.tsx
+@@ -153,7 +153,7 @@ function Make() {
+                   x.action === "respond"
+                     ? [
+                         `未対応のコメント ${x.toRespond}`,
+-                        deadlineLine("校正の締切", x.r.reviewDeadlineAt),
++                        deadlineLine("校正期日", x.r.reviewDeadlineAt),
+                       ]
+                     : [
+                         x.r.stage === "unsubmitted"
+@@ -184,7 +184,7 @@ function Make() {
+                 suffix={x.r.revisionLabel}
+                 lines={[
+                   progressLine(x.r),
+-                  deadlineLine("校正の締切", x.r.reviewDeadlineAt) ||
++                  deadlineLine("校正期日", x.r.reviewDeadlineAt) ||
+                     deadlineLine("納期", x.r.deliveryAt),
+                 ]}
+                 chip={actionLabel[x.action]}

@@ -4,6 +4,7 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { formatDeadlineUntil, formatJstShort } from "@/lib/format";
+import { UrgentReviewChip } from "@/features/review/UrgentReviewChip";
 import { closedReasonLabel, reviewStateLabel } from "@/lib/labels";
 import { useAction } from "@/lib/useAction";
 import { StatusText } from "@/ui/Chip";
@@ -48,17 +49,24 @@ export function VersionsTab({
     <div className="versions">
       {work.can.submit && active ? (
         <div className="row versions__actions">
-          <M3eButton variant="filled" className="versions__submit" onClick={onSubmit}>
-            <M3eIcon slot="icon" name="upload_file" />
-            新しい版を提出
-          </M3eButton>
-          <M3eButton variant="tonal" onClick={onWrite}>
-            <M3eIcon
-              slot="icon"
-              name={work.work.mediaType === "sns" ? "post_add" : "edit_document"}
-            />
-            {work.work.mediaType === "sns" ? "投稿を作る" : "文章を書く"}
-          </M3eButton>
+          {/* SNS 投稿の版は投稿の編集から出す（本文・画像・記録を 1 つの版にする）。添付のダイアログは出さない */}
+          {work.work.mediaType === "sns" ? (
+            <M3eButton variant="filled" className="versions__submit" onClick={onWrite}>
+              <M3eIcon slot="icon" name="post_add" />
+              新しい版を提出
+            </M3eButton>
+          ) : (
+            <>
+              <M3eButton variant="filled" className="versions__submit" onClick={onSubmit}>
+                <M3eIcon slot="icon" name="upload_file" />
+                新しい版を提出
+              </M3eButton>
+              <M3eButton variant="tonal" onClick={onWrite}>
+                <M3eIcon slot="icon" name="edit_document" />
+                文章を書く
+              </M3eButton>
+            </>
+          )}
         </div>
       ) : null}
       {work.revisions.length === 0 ? (
@@ -91,12 +99,18 @@ export function VersionsTab({
                   ) : null}
                 </div>
                 <div className="small muted">
-                  {r.reviewState === "open"
-                    ? `受付中・締切 ${formatDeadlineUntil(r.deadlineAt)}`
-                    : r.reviewState === "void"
-                      ? reviewStateLabel.void
-                      : (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "受付終了")}
-                  ・{r.submitter?.name}・{formatJstShort(r.submittedAt)}
+                  {r.reviewState === "open" ? (
+                    <>
+                      {r.reviewUrgent ? <UrgentReviewChip className="review-urgent-chip" /> : null}
+                      {`校正中・校正期日 ${formatDeadlineUntil(r.deadlineAt)}`}
+                    </>
+                  ) : r.reviewState === "void" ? (
+                    reviewStateLabel.void
+                  ) : (
+                    (closedReasonLabel[r.reviewClosedReason ?? ""] ?? "次版作成中")
+                  )}
+                  {" · "}
+                  {r.submitter?.name}・{formatJstShort(r.submittedAt)}
                   {r.unresolvedCount > 0 ? `・未対応 ${r.unresolvedCount}` : ""}
                   {r.pendingChecks.length > 0 ? `・専門確認 ${r.pendingChecks.length}` : ""}
                 </div>

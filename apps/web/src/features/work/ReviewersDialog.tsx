@@ -29,15 +29,13 @@ export function ReviewersDialog({
   });
   return (
     <M3eDialog open onClosed={onClose} closeLabel="閉じる">
-      <span slot="header">校正者を選ぶ</span>
+      <span slot="header">担当者を選ぶ</span>
       <div className="dialog-body">
         <p className="muted small" style={{ margin: 0 }}>
           {title}
         </p>
-        <UserPicker label="校正者" groups value={ids} onChange={setIds} />
-        <p className="muted small">
-          受付中の版にもすぐ反映します。次の版からはこの名簿で割り当てます
-        </p>
+        <UserPicker label="担当者" groups value={ids} onChange={setIds} />
+        <p className="muted small">いまの版から反映します</p>
       </div>
       <div slot="actions" className="row">
         <M3eButton variant="text" onClick={onClose}>
