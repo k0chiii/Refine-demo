@@ -6,6 +6,7 @@ import {
   type SocialAspect,
   type SocialPost,
 } from "@mf100/domain";
+import { Loading } from "@/ui/Loading";
 import {
   useCallback,
   useContext,
@@ -183,6 +184,7 @@ function IgCarousel({
             >
               <CroppedImage
                 image={images.find((x) => x.key === im.key)}
+                pending={Boolean(im.artifactId)}
                 aspect={frame}
                 focus={im.focus}
                 alt={im.alt}
@@ -235,6 +237,7 @@ export function CroppedImage({
   alt,
   className,
   markIndex,
+  pending,
 }: {
   image: PreviewImage | undefined;
   aspect: SocialAspect;
@@ -243,6 +246,8 @@ export function CroppedImage({
   className?: string;
   /** 校正画面: この画像が記録の何枚目か（0 始まり）。渡すとコメントの印と位置の入力を重ねる */
   markIndex?: number;
+  /** 投稿に画像はあり（提出済みで取り寄せられる）、まだ取り寄せている途中（「画像なし」ではなく読み込み中と出す） */
+  pending?: boolean;
 }) {
   const r = image ? cropRect(aspect, image.w, image.h, focus) : { x: 0, y: 0, w: 1, h: 1 };
   return (
@@ -262,6 +267,10 @@ export function CroppedImage({
             top: `${(-r.y / r.h) * 100}%`,
           }}
         />
+      ) : pending ? (
+        <span className="sp-img__none sp-img__loading">
+          <Loading label="画像を読み込んでいます" size="small" caption="読み込み中" />
+        </span>
       ) : (
         <span className="sp-img__none">画像なし</span>
       )}
@@ -675,6 +684,7 @@ function InstagramStory({
           <div key={im?.key ?? i} className="sp-story__slide">
             <CroppedImage
               image={im ? images.find((x) => x.key === im.key) : undefined}
+              pending={Boolean(im?.artifactId)}
               aspect="9:16"
               focus={im?.focus}
               alt={im?.alt ?? ""}
@@ -814,6 +824,7 @@ function InstagramProfile({
               <div key={i} className="sp-grid__cell">
                 <CroppedImage
                   image={images.find((x) => x.key === t.key)}
+                  pending={Boolean(t.artifactId)}
                   aspect={"3:4" as SocialAspect}
                   focus={t.focus}
                   alt={t.alt}
@@ -865,6 +876,7 @@ function XPost({ post, images, pc }: { post: SocialPost; images: PreviewImage[];
                 key={im.key}
                 markIndex={i}
                 image={images.find((x) => x.key === im.key)}
+                pending={Boolean(im.artifactId)}
                 aspect={
                   list.length === 1
                     ? im.aspect
