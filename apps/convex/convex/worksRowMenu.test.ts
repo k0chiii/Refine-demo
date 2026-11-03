@@ -47,7 +47,7 @@ describe("Convex: works.listMine の canEdit（一覧の行メニュー）", () 
     expect(rows.find((w) => w.id === workId)?.canEdit).toBe(true);
   });
 
-  it("統括と校了する人が制作者だけを変更できる（制作者本人は不可）", async () => {
+  it("統括と校了者が制作者だけを変更できる（制作者本人は不可）", async () => {
     const t = createHarness();
     const cast = await createCast(t);
     const workId = (await cast.manager.as.mutation(api.works.create, {

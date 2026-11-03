@@ -27,7 +27,7 @@ export function ApproverFields({
   return (
     <>
       <UserPicker
-        label="校了する人"
+        label="校了者"
         {...(required && !readOnly ? { required } : {})}
         {...(readOnly ? { readOnly } : {})}
         value={ids}

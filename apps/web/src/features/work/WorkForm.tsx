@@ -224,7 +224,7 @@ export function approversFromForm(form: Pick<WorkFormState, "approverIds" | "app
   };
 }
 
-/** 登録・保存できるか（編集: 名称・区分・制作者・校了する人。登録: 名称・小ジャンル・制作者・仕上がり日） */
+/** 登録・保存できるか（編集: 名称・区分・制作者・校了者。登録: 名称・小ジャンル・制作者・仕上がり日） */
 export function workFormReady(form: WorkFormState, mode: "create" | "edit" = "edit"): boolean {
   if (mode === "create") {
     return (
