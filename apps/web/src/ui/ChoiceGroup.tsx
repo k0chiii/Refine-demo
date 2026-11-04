@@ -27,6 +27,7 @@ export function ChoiceGroup<T extends string>({
   onChange,
   className,
   disabled,
+  inMenu = false,
 }: {
   label: string;
   value: T;
@@ -34,6 +35,11 @@ export function ChoiceGroup<T extends string>({
   onChange: (value: T) => void;
   className?: string;
   disabled?: boolean;
+  /**
+   * menu（m3e-menu）の中に置くとき。menu の直下に置ける役割は group・menuitem 系だけなので、
+   * 全体を group、各ボタンを menuitemradio にする（axe aria-required-children。通知のパネルの すべて／未読）
+   */
+  inMenu?: boolean;
 }) {
   const ref = useRef<M3eButtonGroupElement>(null);
   const latest = useRef(value);
@@ -47,11 +53,20 @@ export function ChoiceGroup<T extends string>({
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const fix = (b: Element) => {
-      if (b.getAttribute("role") !== "radio" || !b.hasAttribute("aria-pressed")) return;
-      b.setAttribute("aria-checked", String((b as ToggleButton).selected));
-      b.removeAttribute("aria-pressed");
+    const fix = (el: Element) => {
+      if (el === root) {
+        if (inMenu && root.getAttribute("role") === "radiogroup")
+          root.setAttribute("role", "group");
+        return;
+      }
+      const role = el.getAttribute("role");
+      if (inMenu && role === "radio") el.setAttribute("role", "menuitemradio");
+      else if (role !== "radio" && role !== "menuitemradio") return;
+      if (!el.hasAttribute("aria-pressed")) return;
+      el.setAttribute("aria-checked", String((el as ToggleButton).selected));
+      el.removeAttribute("aria-pressed");
     };
+    fix(root);
     root.querySelectorAll("m3e-button").forEach(fix);
     const mo = new MutationObserver((records) => records.forEach((r) => fix(r.target as Element)));
     mo.observe(root, {
@@ -60,7 +75,7 @@ export function ChoiceGroup<T extends string>({
       attributeFilter: ["aria-pressed", "role"],
     });
     return () => mo.disconnect();
-  }, []);
+  }, [inMenu]);
   return (
     <M3eButtonGroup
       ref={ref}
