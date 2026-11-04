@@ -92,14 +92,14 @@ FB（フィードバック）を廃止してコメントへ移した（docs/UI_M
 
 ### 104A / 105A の移行（本番で 1 回）
 
-閲覧権限 `view` の廃止（104A）と機密区分 `confidentiality` の廃止（105A）は、本番のデータにまだ古い値が残っている。スキーマは当面その値を許している（`schema.ts` の `legacyPermissionLevel`・`legacyConfidentiality`）ので配ることはできるが、配り終えたら Convex の内部関数をデプロイキーで 1 回ずつ流す。
+閲覧権限 `view` の廃止（104A）と機密区分 `confidentiality` の廃止（105A）。本番では 2026-11-03 に流し終えた（#253 の配布後）。スキーマの一時的な許容（`legacyPermissionLevel`・`legacyConfidentiality`）はその後に外した。別の環境（staging など）に古いデータがあるときは、配り終えたら同じ内部関数をデプロイキーで 1 回ずつ流す。
 
 ```bash
 npx convex run migrations/decision104:upgradeViewPermissionGrants --prod
 npx convex run migrations/decision105:removeWorkConfidentiality --prod
 ```
 
-返る数（`upgraded` / `patchedWorks` / `patchedEntries`）を記録する。流し終えたら、次の版でスキーマの許容を外してよい。
+返る数（`upgraded` / `patchedWorks` / `patchedEntries`）を記録する。
 
 1. `dry-run`: 何も書かず、移すスレッド・返信・添付・既読の数、未解決／解決済みの数、版が無くて移さない数、制作物ごとの上位 20 を数える。
 2. `migrate`: コメントへ移す。何度流しても増えない（移行済みは飛ばす）。
