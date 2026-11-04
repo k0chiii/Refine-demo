@@ -1032,10 +1032,10 @@ export function DeviceFrame({
   );
 }
 
-/** 置き場所の幅と画面の高さに収まるように縮める倍率（拡大はしない） */
+/** 置き場所の幅と画面の高さに収まるように縮める倍率（拡大はしない）。測るまでは null */
 function useFitScale(outer: { w: number; h: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState<number | null>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || outer.h === 0) {
@@ -1065,7 +1065,7 @@ const isStory = (post: SocialPost, view: PreviewView) =>
 
 /** 画面の中身（サービス・形式・表示に応じた模擬画面） */
 function PreviewContent({
-  post,
+  post: recorded,
   images,
   view,
   safeArea,
@@ -1081,6 +1081,19 @@ function PreviewContent({
   width: number;
   pc: boolean;
 }) {
+  // アカウントの見た目（表示名・ユーザー名・アイコン・認証の印）は、制作物に割り当てた SNS アカウント（本体の設定）を
+  // 常に使う。版の記録（mf100-post.json）の account は、割り当てが無い古い制作物のときだけ（利用者指示 2026-11-03）
+  const post = profile
+    ? {
+        ...recorded,
+        account: {
+          displayName: profile.displayName,
+          username: profile.username,
+          ...(profile.avatar ? { avatar: profile.avatar } : {}),
+          ...(profile.verified ? { verified: true } : {}),
+        },
+      }
+    : recorded;
   if (post.platform === "x") return <XPost post={post} images={images} pc={pc} />;
   if (isStory(post, view))
     return <InstagramStory post={post} images={images} safeArea={safeArea} />;
@@ -1205,6 +1218,8 @@ export function PostPreview({
   view,
   safeArea = false,
   profile,
+  zoom = 1,
+  onZoom,
 }: {
   post: SocialPost;
   images: PreviewImage[];
@@ -1214,19 +1229,28 @@ export function PostPreview({
   view: PreviewView;
   safeArea?: boolean;
   profile?: PreviewProfile;
+  /** 端末ごと拡大・縮小する倍率（1 ＝ 置き場所に収まる大きさ） */
+  zoom?: number;
+  /** 実寸比（端末の画面の px に対する倍率）が決まった・変わったときに知らせる */
+  onZoom?: ((actual: number) => void) | undefined;
 }) {
   const spec = deviceById(device);
   const outer = outerSize(spec);
-  const { ref, scale } = useFitScale(outer);
+  const { ref, scale: fit } = useFitScale(outer);
+  // 見せる倍率 ＝ 置き場所に収まる倍率 × 利用者が選んだ倍率（校正画面の下のバー・ピンチ。端末ごと大きくなる）
+  const scale = (fit ?? 1) * zoom;
+  useEffect(() => {
+    if (fit !== null) onZoom?.(scale);
+  }, [fit, scale]);
   const story = isStory(post, view);
   return (
     <figure
       className="sp-figure"
       aria-label="投稿のプレビュー"
-      // 縮めて表示しているあいだ、コメントの印を実際の大きさ（画面の px）に保つための倍率
+      // 縮めて（大きくして）表示しているあいだ、コメントの印を実際の大きさ（画面の px）に保つための倍率
       style={{ "--sp-k": 1 / scale } as CSSProperties}
     >
-      <div className="sp-frame-fit" ref={ref} style={scale < 1 ? { zoom: scale } : undefined}>
+      <div className="sp-frame-fit" ref={ref} style={scale !== 1 ? { zoom: scale } : undefined}>
         <DeviceFrame spec={spec} color={color} dark={story}>
           <PreviewContent
             post={post}

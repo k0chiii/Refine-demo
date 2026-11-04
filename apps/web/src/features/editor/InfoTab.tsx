@@ -5,8 +5,6 @@ import {
   checkTypeLabels,
   checkTypes,
   isEndOfJstDayDeadline,
-  planInfoFieldLabels,
-  type PlanInfoField,
   revisionDeclarationItems,
   socialPlatformLabels,
   teamPath,
@@ -20,7 +18,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
 import { ReviewersDialog } from "@/features/work/ReviewersDialog";
 import { EditWorkDialog } from "@/features/work/EditWorkDialog";
-import { registeredPlanInfoFromForm } from "@/features/work/WorkForm";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
@@ -85,36 +82,9 @@ export function InfoTab({
 
   const { work: w, people, approvals, approval, can } = work;
   const [purposeDraft, setPurposeDraft] = useState(w.purpose ?? "");
-  const planFieldKeys = {
-    name: "planName",
-    number: "planNumber",
-    venue: "planVenue",
-    schedule: "planSchedule",
-  } as const;
-  type PlanDraft = {
-    planName: string;
-    planNumber: string;
-    planVenue: string;
-    planSchedule: string;
-  };
-  const planFromWork = (): PlanDraft => ({
-    planName: w.registeredPlanInfo?.name ?? "",
-    planNumber: w.registeredPlanInfo?.number ?? "",
-    planVenue: w.registeredPlanInfo?.venue ?? "",
-    planSchedule: w.registeredPlanInfo?.schedule ?? "",
-  });
-  const [planDraft, setPlanDraft] = useState<PlanDraft>(planFromWork);
   useEffect(() => {
     setPurposeDraft(w.purpose ?? "");
-    setPlanDraft(planFromWork());
-  }, [
-    w.purpose,
-    w.version,
-    w.registeredPlanInfo?.name,
-    w.registeredPlanInfo?.number,
-    w.registeredPlanInfo?.venue,
-    w.registeredPlanInfo?.schedule,
-  ]);
+  }, [w.purpose, w.version]);
   const me = approval.approvers.find((a) => a.isMe) ?? null;
   const multiApprovers = approval.approvers.length > 1;
   // この宣言で「校了とみなす人数」に届くか（届かなければ宣言の記録だけで、校了にはまだ進まない）
@@ -226,7 +196,7 @@ export function InfoTab({
         ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
         ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
         ["制作者", names(people.creators) || "—"] as Row,
-        ["校了する人", <ApproverList key="approvers" approval={approval} />] as Row,
+        ["校了者", <ApproverList key="approvers" approval={approval} />] as Row,
         ["統括", names(people.managers) || "—"] as Row,
         ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
       ],
@@ -325,58 +295,6 @@ export function InfoTab({
           </M3eList>
         </section>
       ))}
-      {(w.registeredPlanInfo || can.edit) &&
-      w.lifecycle !== "finalized" &&
-      w.lifecycle !== "cancelled" ? (
-        <section className="info-tab__section" aria-label="企画情報">
-          <h2 className="info-tab__h">企画情報</h2>
-          {can.edit ? (
-            <div className="form">
-              {(Object.keys(planFieldKeys) as PlanInfoField[]).map((field) => {
-                const key = planFieldKeys[field];
-                return (
-                  <Field key={field} label={planInfoFieldLabels[field]}>
-                    <TextInput
-                      value={planDraft[key]}
-                      onChange={(e) => setPlanDraft((d) => ({ ...d, [key]: e.target.value }))}
-                    />
-                  </Field>
-                );
-              })}
-              <div className="row">
-                <M3eButton
-                  variant="tonal"
-                  disabled={JSON.stringify(planDraft) === JSON.stringify(planFromWork())}
-                  onClick={() =>
-                    void updateWork({
-                      workId: w.id as Id<"works">,
-                      expectedVersion: w.version,
-                      patch: {
-                        registeredPlanInfo: registeredPlanInfoFromForm(planDraft),
-                      },
-                    })
-                  }
-                >
-                  保存
-                </M3eButton>
-              </div>
-            </div>
-          ) : w.registeredPlanInfo ? (
-            <M3eList className="list prop-list">
-              {(Object.keys(planFieldKeys) as PlanInfoField[]).map((field) => {
-                const v = w.registeredPlanInfo?.[field]?.trim();
-                if (!v) return null;
-                return (
-                  <M3eListItem key={field} className="list__item">
-                    <span slot="overline">{planInfoFieldLabels[field]}</span>
-                    <span className="prop-list__value">{v}</span>
-                  </M3eListItem>
-                );
-              })}
-            </M3eList>
-          ) : null}
-        </section>
-      ) : null}
       {/* 「現在の版」の申告（写真・めい・指針外の色の使用）と、表示中の版の提出前の確認。Notion の版 DB の formula に相当 */}
       {work.currentDeclarations || (revision?.revision.selfChecks?.length ?? 0) > 0 ? (
         <section className="info-tab__section" aria-label="現在の版の申告">
@@ -685,7 +603,7 @@ export function InfoTab({
           </p>
           {multiApprovers ? (
             <StatusText tone={reachesNow ? "success" : "neutral"}>
-              校了する人 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
+              校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
               {approval.declaredCount} 人{reachesNow ? "・この宣言で校了" : ""}
             </StatusText>
           ) : null}
@@ -746,7 +664,7 @@ export function InfoTab({
         </div>
       </M3eDialog>
 
-      {/* 独立確認（D2）: 確認者本人の操作で記録する。校了する人が確認者を選ぶのではない */}
+      {/* 独立確認（D2）: 確認者本人の操作で記録する。校了者が確認者を選ぶのではない */}
       <M3eDialog open={confirmOpen} onClosed={() => setConfirmOpen(false)} closeLabel="閉じる">
         <span slot="header">独立確認をする</span>
         <div className="dialog-body">

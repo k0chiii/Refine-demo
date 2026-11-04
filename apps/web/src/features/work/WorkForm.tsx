@@ -14,8 +14,6 @@ import {
   workSubGenres,
   type WorkGenre,
   type WorkSubGenre,
-  planInfoFieldLabels,
-  type PlanInfoField,
 } from "@mf100/domain";
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex/react";
@@ -190,7 +188,11 @@ export function workFormToFields(form: WorkFormState) {
   };
 }
 
-/** 企画情報（decisions 69–72）。空なら null で消す */
+/**
+ * 企画情報（decisions 69–72）。空なら null で消す。
+ * 入力欄は画面から外している（企画情報は専用の API から入る。利用者指示 2026-11-03）。フォームの値は制作物の値を
+ * そのまま持ち回るので、登録・編集の保存で消えない
+ */
 export function registeredPlanInfoFromForm(
   form: Pick<WorkFormState, "planName" | "planNumber" | "planVenue" | "planSchedule">,
 ) {
@@ -224,7 +226,7 @@ export function approversFromForm(form: Pick<WorkFormState, "approverIds" | "app
   };
 }
 
-/** 登録・保存できるか（編集: 名称・区分・制作者・校了する人。登録: 名称・小ジャンル・制作者・仕上がり日） */
+/** 登録・保存できるか（編集: 名称・区分・制作者・校了者。登録: 名称・小ジャンル・制作者・仕上がり日） */
 export function workFormReady(form: WorkFormState, mode: "create" | "edit" = "edit"): boolean {
   if (mode === "create") {
     return (
@@ -249,35 +251,6 @@ export function FormSection({ title, children }: { title: string; children: Reac
       <h3 className="form-section__h">{title}</h3>
       {children}
     </section>
-  );
-}
-
-function PlanInfoFields({
-  form,
-  setForm,
-}: {
-  form: WorkFormState;
-  setForm: (update: (f: WorkFormState) => WorkFormState) => void;
-}) {
-  const rows: Array<{ field: PlanInfoField; key: keyof WorkFormState; label: string }> = [
-    { field: "name", key: "planName", label: planInfoFieldLabels.name },
-    { field: "number", key: "planNumber", label: planInfoFieldLabels.number },
-    { field: "venue", key: "planVenue", label: planInfoFieldLabels.venue },
-    { field: "schedule", key: "planSchedule", label: planInfoFieldLabels.schedule },
-  ];
-  return (
-    <FormSection title="企画情報">
-      <div className="form">
-        {rows.map(({ key, label }) => (
-          <Field key={key} label={label}>
-            <TextInput
-              value={form[key] as string}
-              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-            />
-          </Field>
-        ))}
-      </div>
-    </FormSection>
   );
 }
 
@@ -421,7 +394,6 @@ export function WorkFormFields({
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
         </FormSection>
-        <PlanInfoFields form={form} setForm={setForm} />
       </>
     );
   }
@@ -466,8 +438,6 @@ export function WorkFormFields({
         </div>
         <TagPicker value={form.tags} onChange={(tags) => setForm((f) => ({ ...f, tags }))} />
       </FormSection>
-
-      <PlanInfoFields form={form} setForm={setForm} />
 
       <FormSection title="担当と人">
         <div className="form">

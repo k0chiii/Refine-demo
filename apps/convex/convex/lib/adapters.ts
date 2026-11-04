@@ -751,12 +751,16 @@ export function createAppContext(
           .take(limit);
         return docs.map((d) => fromDoc(d) as Notification);
       },
-      async listUnreadForUser(userId, { createdAtOrBefore, limit }) {
+      async listUnreadForUser(userId, { createdAtOrBefore, limit, order = "asc" }) {
         const docs = await db
           .query("notifications")
-          .withIndex("by_recipient_read_created", (q) =>
-            q.eq("recipientId", userId).eq("readAt", undefined).lte("createdAt", createdAtOrBefore),
-          )
+          .withIndex("by_recipient_read_created", (q) => {
+            const unread = q.eq("recipientId", userId).eq("readAt", undefined);
+            return createdAtOrBefore === undefined
+              ? unread
+              : unread.lte("createdAt", createdAtOrBefore);
+          })
+          .order(order)
           .take(limit);
         return docs.map((d) => fromDoc(d) as Notification);
       },

@@ -8,7 +8,7 @@ import type { Work } from "../work/Work.ts";
 /**
  * 独立確認（D2: 制作者本人が校了するときの事前確認の証跡）。
  * 制作者・校了権限者（何人いても全員）以外の人が、**自分の認証済みの操作で**「この制作物のこの版を確認した」と記録したもの。
- * 校了する人が確認者の ID を申告するだけでは証跡にならない（PR #1 レビュー指摘）。
+ * 校了者が確認者の ID を申告するだけでは証跡にならない（PR #1 レビュー指摘）。
  * 校了の時点で、制作物・対象版・確認者・確認時刻がいまも有効かを {@link isConfirmationValid} で確かめ直す。
  */
 export interface ApprovalConfirmation {
@@ -44,7 +44,7 @@ export interface ConfirmationValidityContext {
   /** 校了しようとしている版 */
   revisionId: RevisionId;
   grants: readonly WorkPermissionGrant[];
-  /** 校了する人 */
+  /** 校了者 */
   actorId: UserId;
   /** これより前の確認は無効（再開した後は確認し直す） */
   notBefore?: Instant;
@@ -53,7 +53,7 @@ export interface ConfirmationValidityContext {
 /**
  * 記録された独立確認が、いま校了しようとしている版に対して有効か。
  * - 同じ制作物・同じ版の確認であること（版が変われば確認し直す）
- * - 確認者が校了する人でなく、いまも制作者・校了権限者でないこと（後から職責が変わった場合も無効）
+ * - 確認者が校了者でなく、いまも制作者・校了権限者でないこと（後から職責が変わった場合も無効）
  * - 確認者がいまもこの制作物の確認ができること（閲覧権限を取り消された人の確認は数えない）
  * - 再開より後の確認であること
  */

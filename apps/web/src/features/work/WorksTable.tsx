@@ -121,7 +121,7 @@ export function WorksTable({
             {hasTeams ? header("production", "制作担当", "works-table__col--production") : null}
             <ColumnHeader className="works-table__col--creators">制作者</ColumnHeader>
             <ColumnHeader className="works-table__col--reviewers">担当者</ColumnHeader>
-            <ColumnHeader className="works-table__col--approvers">校了する人</ColumnHeader>
+            <ColumnHeader className="works-table__col--approvers">校了者</ColumnHeader>
             {/* 見出しの文字は読み上げだけ（aria-label は span に付けられない: aria-prohibited-attr） */}
             <ColumnHeader className="works-table__col--actions">
               <span className="sr-only">操作</span>
@@ -203,7 +203,7 @@ function Row({
     <tr
       className={`mf-table__row mf-table__row--action ${done ? "mf-table__row--off" : ""}`}
       onClick={(e) => {
-        // リンク（題名）はそれ自身で開く。行の中のボタン・メニュー（校了する人・担当者・⋮）は自分の操作をする。
+        // リンク（題名）はそれ自身で開く。行の中のボタン・メニュー（校了者・担当者・⋮）は自分の操作をする。
         // 行のほかの場所を押したときだけ開く
         if ((e.target as HTMLElement).closest("a, button, m3e-icon-button, m3e-menu")) return;
         onOpen(w.id);

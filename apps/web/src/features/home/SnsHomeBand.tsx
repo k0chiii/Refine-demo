@@ -5,7 +5,7 @@ import { M3eCard } from "@m3e/react/card";
 import { M3eHeading } from "@m3e/react/heading";
 
 /**
- * SNS 帯: 進行中の SNS 投稿のうち、自分が統括か校了する人のもの（#173。制作者には出さない）。
+ * SNS 帯: 進行中の SNS 投稿のうち、自分が統括か校了者のもの（#173。制作者には出さない）。
  * 組織権限（Nogiku Access 未接続のあいだは全員が持つ）ではなく、制作物の職責で決める
  */
 export function SnsHomeBand() {
