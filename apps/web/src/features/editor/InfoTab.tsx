@@ -196,7 +196,7 @@ export function InfoTab({
         ...optional("制作担当", w.productionTeamIds.length ? teamNames(w.productionTeamIds) : null),
         ...optional("関係担当", w.relatedTeamIds.length ? teamNames(w.relatedTeamIds) : null),
         ["制作者", names(people.creators) || "—"] as Row,
-        ["校了する人", <ApproverList key="approvers" approval={approval} />] as Row,
+        ["校了者", <ApproverList key="approvers" approval={approval} />] as Row,
         ["統括", names(people.managers) || "—"] as Row,
         ...optional("関係者", people.stakeholders.length ? names(people.stakeholders) : null),
       ],
@@ -603,7 +603,7 @@ export function InfoTab({
           </p>
           {multiApprovers ? (
             <StatusText tone={reachesNow ? "success" : "neutral"}>
-              校了する人 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
+              校了者 {approval.approvers.length} 人中 {approval.quorum} 人で校了・宣言済み{" "}
               {approval.declaredCount} 人{reachesNow ? "・この宣言で校了" : ""}
             </StatusText>
           ) : null}
@@ -664,7 +664,7 @@ export function InfoTab({
         </div>
       </M3eDialog>
 
-      {/* 独立確認（D2）: 確認者本人の操作で記録する。校了する人が確認者を選ぶのではない */}
+      {/* 独立確認（D2）: 確認者本人の操作で記録する。校了者が確認者を選ぶのではない */}
       <M3eDialog open={confirmOpen} onClosed={() => setConfirmOpen(false)} closeLabel="閉じる">
         <span slot="header">独立確認をする</span>
         <div className="dialog-body">

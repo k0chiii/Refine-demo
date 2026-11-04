@@ -14,15 +14,17 @@ import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 
 /**
- * 自分宛のアプリ内通知（F-11 最小通知）。新しい順。
+ * 自分宛のアプリ内通知（F-11 最小通知）。新しい順。unreadOnly は未読だけ（未読の索引で読む）。
  * 今見られない制作物の通知は文面と ID を伏せて返す（§5.2-10。listMyNotifications が判定する）。
  */
 export const list = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: { limit: v.optional(v.number()), unreadOnly: v.optional(v.boolean()) },
+  handler: async (ctx, { limit, unreadOnly }) => {
     const { principal } = await requireUser(ctx);
     return runUseCase(() =>
-      listMyNotifications(createReadContext(ctx.db), principal, Math.min(limit ?? 50, 200)),
+      listMyNotifications(createReadContext(ctx.db), principal, Math.min(limit ?? 50, 200), {
+        unreadOnly: unreadOnly === true,
+      }),
     );
   },
 });

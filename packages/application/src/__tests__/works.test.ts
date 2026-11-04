@@ -36,7 +36,7 @@ describe("制作物の登録・変更の不変条件（PR #1 レビュー P2）"
     expect(await ctx.works.findById(work.id)).toEqual(work);
   });
 
-  it("制作者だけの変更は、統括と校了する人ができる。制作者本人はできない", async () => {
+  it("制作者だけの変更は、統括と校了者ができる。制作者本人はできない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     const creatorsOnly = { creatorIds: [principals.reviewer.userId] };

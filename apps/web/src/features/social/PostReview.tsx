@@ -84,6 +84,8 @@ export function PostReview({
   socialProfileId,
   revisionLabel,
   annotate,
+  scale = 1,
+  onZoom,
 }: {
   manifestArtifactId: string;
   artifacts: readonly ArtifactLike[];
@@ -93,6 +95,10 @@ export function PostReview({
   socialProfileId?: string | undefined;
   revisionLabel: string;
   annotate?: PostAnnotate | undefined;
+  /** 端末ごと拡大・縮小する倍率（1 ＝ 置き場所に収まる大きさ。Editor の下のバー・ピンチ・Ctrl＋ホイールから） */
+  scale?: number;
+  /** 実寸比（端末の画面の px に対する倍率）を知らせる。Editor が下のバーの数値に出す */
+  onZoom?: (actual: number) => void;
 }) {
   const profiles = useQuery(api.social.list, socialProfileId ? {} : "skip");
   const profile = profiles?.find((p) => p.id === socialProfileId);
@@ -366,6 +372,8 @@ export function PostReview({
               view={view}
               safeArea
               {...(profile ? { profile } : {})}
+              zoom={scale}
+              {...(onZoom ? { onZoom } : {})}
             />
             {!full && annotate?.draftAnchor && composeAt ? annotate.renderCompose(composeAt) : null}
           </div>

@@ -11,13 +11,16 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
 }
-/* 端末の外形（ベゼル画像か CSS の枠）。中の .sp-device が実機の画面の大きさ */
+/* 端末の外形（ベゼル画像か CSS の枠）。中の .sp-device が実機の画面の大きさ。
+ * 中央寄せは auto の余白で行う（justify-content: center だと、端末ごと拡大して置き場所からはみ出したとき左端へスクロールできない） */
 .sp-frame-fit {
   display: flex;
-  justify-content: center;
+}
+.sp-frame-fit > * {
+  margin-inline: auto;
 }
 .sp-frame {
   position: relative;
