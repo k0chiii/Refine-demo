@@ -105,14 +105,27 @@ export async function extractPageFeature(
 
 const cache = new Map<string, Promise<PdfPageFeature[]>>();
 
-/** 文書全体の特徴。添付 ID ごとに一度だけ計算する（縮小画像は 200 ページまで） */
-export function pdfFeatures(key: string, doc: PDFDocumentProxy): Promise<PdfPageFeature[]> {
+/**
+ * キャッシュの鍵は「添付 ID ＋ 開いた PDF 自身の指紋」。添付 ID だけだと、比べる相手を替えた直後の描画で
+ * 新しい添付 ID に前の文書が組になって渡ったとき、その特徴が新しい ID の名で残り続ける（版比較のページ対応が
+ * 別の版のものになる）。同じ添付を開き直したときは指紋が同じなので、これまでどおり計算し直さない
+ */
+const cacheKey = (artifactId: string, doc: Pick<PDFDocumentProxy, "fingerprints">) =>
+  `${artifactId}|${doc.fingerprints[0] ?? ""}`;
+
+/** 文書全体の特徴。添付 ID と文書の組ごとに一度だけ計算する（縮小画像は 200 ページまで） */
+export function pdfFeatures(
+  artifactId: string,
+  doc: PDFDocumentProxy,
+  extract: typeof extractPageFeature = extractPageFeature,
+): Promise<PdfPageFeature[]> {
+  const key = cacheKey(artifactId, doc);
   const hit = cache.get(key);
   if (hit) return hit;
   const p = (async () => {
     const out: PdfPageFeature[] = [];
     for (let n = 1; n <= doc.numPages; n++)
-      out.push(await extractPageFeature(doc, n, { thumb: doc.numPages <= 200 }));
+      out.push(await extract(doc, n, { thumb: doc.numPages <= 200 }));
     return out;
   })();
   cache.set(key, p);

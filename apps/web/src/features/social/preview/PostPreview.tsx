@@ -1053,7 +1053,7 @@ const isStory = (post: SocialPost, view: PreviewView) =>
 
 /** 画面の中身（サービス・形式・表示に応じた模擬画面） */
 function PreviewContent({
-  post,
+  post: recorded,
   images,
   view,
   safeArea,
@@ -1069,6 +1069,19 @@ function PreviewContent({
   width: number;
   pc: boolean;
 }) {
+  // アカウントの見た目（表示名・ユーザー名・アイコン・認証の印）は、制作物に割り当てた SNS アカウント（本体の設定）を
+  // 常に使う。版の記録（mf100-post.json）の account は、割り当てが無い古い制作物のときだけ（利用者指示 2026-11-03）
+  const post = profile
+    ? {
+        ...recorded,
+        account: {
+          displayName: profile.displayName,
+          username: profile.username,
+          ...(profile.avatar ? { avatar: profile.avatar } : {}),
+          ...(profile.verified ? { verified: true } : {}),
+        },
+      }
+    : recorded;
   if (post.platform === "x") return <XPost post={post} images={images} pc={pc} />;
   if (isStory(post, view))
     return <InstagramStory post={post} images={images} safeArea={safeArea} />;
