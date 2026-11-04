@@ -257,7 +257,7 @@ export function ImportWorksDialog({
                       ・{r.row.mediaType ? mediaLabel[r.row.mediaType] : "媒体なし"}・制作者{" "}
                       {people(r.creators)}・統括 {people(r.managers)}・担当{" "}
                       {r.ownerTeam ? teamRef(r.ownerTeam, teams ?? []) : "—"}・制作担当{" "}
-                      {teamRefs(r.productionTeams, teams ?? [])}・校了する人 {people(r.approvers)}
+                      {teamRefs(r.productionTeams, teams ?? [])}・校了者 {people(r.approvers)}
                       {r.row.approvalQuorum !== null && r.approvers.length > 1
                         ? `（${r.row.approvalQuorum} 人で校了）`
                         : ""}
