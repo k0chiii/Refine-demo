@@ -60,9 +60,12 @@ const filterChoices = [
 function NotifFilterGroup({
   value,
   onChange,
+  inMenu = false,
 }: {
   value: NotifFilter;
   onChange: (next: NotifFilter) => void;
+  /** パネル（m3e-menu）の中: menu に置ける役割（group・menuitemradio）にする */
+  inMenu?: boolean;
 }) {
   return (
     <ChoiceGroup<NotifFilter>
@@ -71,6 +74,7 @@ function NotifFilterGroup({
       onChange={onChange}
       choices={filterChoices}
       className="notif-filter"
+      inMenu={inMenu}
     />
   );
 }
@@ -208,7 +212,7 @@ function Menu({ id }: { id: string }) {
         <div className="notif-menu__header">
           <span className="label-large">通知</span>
           <span className="spacer" />
-          <NotifFilterGroup value={filter} onChange={setFilter} />
+          <NotifFilterGroup value={filter} onChange={setFilter} inMenu />
         </div>
         {unread > 0 ? (
           <M3eMenuItem disabled={doMarkAll.pending} onClick={() => void doMarkAll.run()}>
