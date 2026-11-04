@@ -109,6 +109,8 @@ export const create = mutation({
     notationCategories: v.optional(v.array(v.string())),
     reviewerIds: v.optional(v.array(v.id("users"))),
     activate: v.optional(v.boolean()),
+    /** 登録した本人を統括に足すか（既定 true）。画面で統括を選んだときは false（選んだとおりに保存する） */
+    addRegistrantAsManager: v.optional(v.boolean()),
     /** Notion の制作物 DB に揃えた項目 */
     ...vWorkMetadataFields,
   },

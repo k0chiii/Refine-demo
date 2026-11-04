@@ -673,7 +673,12 @@ export function InfoTab({
         </section>
       ) : null}
 
-      <EditWorkDialog work={w} open={editOpen} onClose={() => setEditOpen(false)} />
+      <EditWorkDialog
+        work={w}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        canEditReviewers={can.editReviewers}
+      />
 
       {/* U-07 校了: 校了版・必須確認・重大未解決・例外理由・実行者を最終確認して確定。二重クリック防止。 */}
       <M3eDialog open={finalizeOpen} onClosed={() => setFinalizeOpen(false)} closeLabel="閉じる">

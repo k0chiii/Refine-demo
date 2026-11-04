@@ -43,7 +43,7 @@ export function DuplicateWorkDialog({
       onClose={onClose}
       header="制作物を複製"
       submitLabel="複製して登録"
-      initial={{ form, reviewerIds: work.reviewerIds ?? [] }}
+      initial={{ form }}
       onCreated={async (id) => {
         if (work.socialProfileId)
           await update({ workId: id, patch: { socialProfileId: work.socialProfileId } });

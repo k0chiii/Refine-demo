@@ -73,6 +73,8 @@ export interface WorkFormState {
   approvalQuorum: string;
   managerIds: string[];
   stakeholderIds: string[];
+  /** 校正者（名簿）。登録では works.create に、編集では reviews.setReviewers に渡す */
+  reviewerIds: string[];
   ownerTeam: string[];
   productionTeamIds: string[];
   relatedTeamIds: string[];
@@ -107,6 +109,7 @@ export function emptyWorkForm(): WorkFormState {
     approvalQuorum: "1",
     managerIds: [],
     stakeholderIds: [],
+    reviewerIds: [],
     ownerTeam: [],
     productionTeamIds: [],
     relatedTeamIds: [],
@@ -144,6 +147,7 @@ export function workFormFromWork(work: Work): WorkFormState {
     approvalQuorum: String(clampQuorum(work.approvalQuorum ?? 1, approverIds.length)),
     managerIds: [...work.managerIds],
     stakeholderIds: [...(work.stakeholderIds ?? [])],
+    reviewerIds: [...(work.reviewerIds ?? [])],
     ownerTeam: work.ownerTeamId ? [work.ownerTeamId] : [],
     productionTeamIds: [...work.productionTeamIds],
     relatedTeamIds: [...(work.relatedTeamIds ?? [])],
@@ -224,13 +228,14 @@ export function approversFromForm(form: Pick<WorkFormState, "approverIds" | "app
   };
 }
 
-/** 登録・保存できるか（編集: 名称・区分・制作者・校了する人。登録: 名称・小ジャンル・制作者・仕上がり日） */
+/** 登録・保存できるか（編集: 名称・区分・制作者・校了者。登録: 名称・小ジャンル・制作者・校了者・仕上がり日） */
 export function workFormReady(form: WorkFormState, mode: "create" | "edit" = "edit"): boolean {
   if (mode === "create") {
     return (
       form.title.trim() !== "" &&
       form.subGenre !== "" &&
       form.creatorIds.length > 0 &&
+      form.approverIds.length > 0 &&
       form.finishAt !== null
     );
   }
@@ -282,6 +287,58 @@ function PlanInfoFields({
 }
 
 /**
+ * 制作物の人（制作者・統括・校了者・校正者）。登録と編集で同じ並び。
+ * 制作者は校了者になれない（approverSelection）。校了者・校正者は権限が無い人には見るだけ
+ */
+function PeopleFields({
+  form,
+  setForm,
+  mode,
+  canAssignApprovers = true,
+  canEditReviewers = true,
+}: {
+  form: WorkFormState;
+  setForm: (update: (f: WorkFormState) => WorkFormState) => void;
+  mode: "create" | "edit";
+  canAssignApprovers?: boolean;
+  canEditReviewers?: boolean;
+}) {
+  const readOnlyReviewers = mode === "edit" && !canEditReviewers;
+  return (
+    <>
+      <UserPicker
+        label="制作者"
+        required
+        value={form.creatorIds}
+        onChange={(ids) => setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))}
+      />
+      <UserPicker
+        label="統括"
+        value={form.managerIds}
+        onChange={(ids) => setForm((f) => ({ ...f, managerIds: ids }))}
+      />
+      <ApproverFields
+        required
+        {...(mode === "edit" && !canAssignApprovers ? { readOnly: true } : {})}
+        ids={form.approverIds}
+        excludeIds={form.creatorIds}
+        quorum={form.approvalQuorum}
+        onChange={(next) =>
+          setForm((f) => ({ ...f, approverIds: next.ids, approvalQuorum: next.quorum }))
+        }
+      />
+      <UserPicker
+        label="校正者"
+        groups
+        {...(readOnlyReviewers ? { readOnly: true } : {})}
+        value={form.reviewerIds}
+        onChange={(ids) => setForm((f) => ({ ...f, reviewerIds: ids }))}
+      />
+    </>
+  );
+}
+
+/**
  * 選ぶと大ジャンル（未選択なら）・区分・媒体の既定を入れる
  */
 function SubGenreSelect({
@@ -328,12 +385,15 @@ export function WorkFormFields({
   setForm,
   mode,
   canAssignApprovers = true,
+  canEditReviewers = true,
 }: {
   form: WorkFormState;
   setForm: (update: (f: WorkFormState) => WorkFormState) => void;
   mode: "create" | "edit";
   /** 校了者を決める権限（approvers:assign）。無い人には、編集で校了者を見るだけにする（登録はこの権限が要る） */
   canAssignApprovers?: boolean;
+  /** 校正者を割り当てる権限（review.assign）。無い人には、編集で校正者を見るだけにする */
+  canEditReviewers?: boolean;
 }) {
   const set = (k: keyof WorkFormState) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -343,6 +403,7 @@ export function WorkFormFields({
         | "creatorIds"
         | "managerIds"
         | "stakeholderIds"
+        | "reviewerIds"
         | "ownerTeam"
         | "productionTeamIds"
         | "relatedTeamIds",
@@ -406,14 +467,6 @@ export function WorkFormFields({
           <Field label="小ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
             <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
           </Field>
-          <UserPicker
-            label="制作者"
-            required
-            value={form.creatorIds}
-            onChange={(ids) =>
-              setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))
-            }
-          />
           <DateField
             label="仕上がり日"
             kind="date"
@@ -421,7 +474,11 @@ export function WorkFormFields({
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
         </FormSection>
-        <PlanInfoFields form={form} setForm={setForm} />
+        {/* 人は登録のときに全部決める（利用者指示 2026-11-04「製作者・統括・校了者・校正者をしっかり選べるように」）。
+            校了者は黙って名簿の先頭を入れず、選んでもらう */}
+        <FormSection title="人">
+          <PeopleFields form={form} setForm={setForm} mode="create" />
+        </FormSection>
       </>
     );
   }
@@ -485,23 +542,13 @@ export function WorkFormFields({
             onChange={setIds("relatedTeamIds")}
           />
         </div>
-        <UserPicker
-          label="制作者"
-          required
-          value={form.creatorIds}
-          onChange={(ids) => setForm((f) => withoutCreatorsAsApprovers({ ...f, creatorIds: ids }))}
+        <PeopleFields
+          form={form}
+          setForm={setForm}
+          mode="edit"
+          canAssignApprovers={canAssignApprovers}
+          canEditReviewers={canEditReviewers}
         />
-        <ApproverFields
-          required
-          {...(mode === "edit" && !canAssignApprovers ? { readOnly: true } : {})}
-          ids={form.approverIds}
-          excludeIds={form.creatorIds}
-          quorum={form.approvalQuorum}
-          onChange={(next) =>
-            setForm((f) => ({ ...f, approverIds: next.ids, approvalQuorum: next.quorum }))
-          }
-        />
-        <UserPicker label="統括" value={form.managerIds} onChange={setIds("managerIds")} />
         <UserPicker
           label="関係者"
           hint="見るだけの人です（非公開でも見られます）"
