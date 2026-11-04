@@ -1171,10 +1171,15 @@ export function Editor({
     if (!artifact) return <div className="empty">添付がありません</div>;
     if (artifact.fileName === POST_MANIFEST_NAME && data.revision)
       return (
-        <div className="post-review-wrap">
+        <div className="post-review-wrap zoom-stage">
           <Suspense fallback={<ViewerLoading />}>
             <PostReview
               manifestArtifactId={artifact.id}
+              scale={scale}
+              onZoom={(z) => {
+                pdfLimits.current = null;
+                setZoom(z);
+              }}
               artifacts={data.artifacts}
               isFinal={workData.work.finalRevisionId === data.revision.id}
               workTitle={workData.work.title}
@@ -1573,6 +1578,9 @@ export function Editor({
 
   const isPdf = artifact?.type === "pdf";
   const isImage = artifact?.type === "image";
+  /** 拡大縮小できる紙面（PDF・画像・文章・SNS 投稿のプレビュー。動画・外部リンクは拡大しない） */
+  const zoomable =
+    isPdf || isImage || artifact?.type === "document" || artifact?.fileName === POST_MANIFEST_NAME;
   /** Figma の埋め込み（位置を取れず、コメントはフレーム単位。印を置く・隠すものがない） */
   const isFigmaEmbed =
     artifact?.role === "external" && !!artifact.externalUrl && isFigmaUrl(artifact.externalUrl);
@@ -1967,7 +1975,7 @@ export function Editor({
                       )}
                     </>
                   ) : null}
-                  {isPdf || isImage || artifact.type === "document" ? (
+                  {zoomable ? (
                     <>
                       {/* 狭い画面はピンチで拡大縮小するので − ＋ は省き、引き出しのボタンに場所を譲る（数値を押すと幅に合わせる）。
                           広い画面は − 数値 ＋ を 1 つの connected のボタングループにする（M3 Button groups。監査 E-03） */}
@@ -2118,9 +2126,7 @@ export function Editor({
                   {mobile ? (
                     <>
                       {/* 前に拡大縮小があるときだけ区切る（動画は拡大縮小しない） */}
-                      {isPdf || isImage || artifact.type === "document" ? (
-                        <span className="ws__toolbar-sep" />
-                      ) : null}
+                      {zoomable ? <span className="ws__toolbar-sep" /> : null}
                       {sheetButtons}
                     </>
                   ) : null}

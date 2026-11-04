@@ -81,10 +81,17 @@ export function useCompareSession(opts: {
   const [syncOn, setSyncOnRaw] = useState(true);
   const [diffOn, setDiffOn] = useState(true);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  // ビューアが開いた PDF の文書。どの添付を開いたものかを添えて持ち、今のその側の添付と合うときだけ使う
+  // （比べる相手を替えた直後の描画で、新しい添付の ID に前の文書を組にして渡さない）
   const [docs, setDocs] = useState<{
-    left: PDFDocumentProxy | null;
-    right: PDFDocumentProxy | null;
+    left: { id: string; doc: PDFDocumentProxy } | null;
+    right: { id: string; doc: PDFDocumentProxy } | null;
   }>({ left: null, right: null });
+  const docFor = (side: Side): PDFDocumentProxy | null => {
+    const d = docs[side];
+    const id = side === "left" ? left?.id : right?.id;
+    return d && id !== undefined && d.id === id ? d.doc : null;
+  };
   // PDF・画像のビューア（左右とも同じ種類）
   const viewCtl = {
     left: useRef<ViewerController | null>(null),
@@ -110,21 +117,13 @@ export function useCompareSession(opts: {
             ? "image"
             : "other";
 
-  // 添付が替わった側だけ PDF の文書を忘れる（ビューアは読み込んだときにしか onDoc を呼ばないので、
-  // 替わっていない側まで消すと、比べる相手を替えた後にページの対応が二度と解析されない）
-  useEffect(() => {
-    setDocs((cur) => (cur.left === null ? cur : { ...cur, left: null }));
-  }, [left?.id]);
-  useEffect(() => {
-    setDocs((cur) => (cur.right === null ? cur : { ...cur, right: null }));
-  }, [right?.id]);
   useEffect(() => {
     setSyncNote(null);
   }, [left?.id, right?.id]);
 
   const pdf = usePdfComparison(
-    active && kind === "pdf" && left ? { artifactId: left.id, doc: docs.left } : null,
-    active && kind === "pdf" && right ? { artifactId: right.id, doc: docs.right } : null,
+    active && kind === "pdf" && left ? { artifactId: left.id, doc: docFor("left") } : null,
+    active && kind === "pdf" && right ? { artifactId: right.id, doc: docFor("right") } : null,
   );
 
   // 旧版の文章
@@ -292,7 +291,14 @@ export function useCompareSession(opts: {
     syncNote,
     pdf,
     pdfProps: (side) => ({
-      onDoc: (d) => setDocs((cur) => (cur[side] === d ? cur : { ...cur, [side]: d })),
+      onDoc: (d) => {
+        // この描画でその側に出している添付の文書として覚える（ビューアは添付が替わると読み直して、また知らせる）
+        const id = side === "left" ? left?.id : right?.id;
+        if (id === undefined) return;
+        setDocs((cur) =>
+          cur[side]?.id === id && cur[side]?.doc === d ? cur : { ...cur, [side]: { id, doc: d } },
+        );
+      },
       controller: viewCtl[side],
       onUserScroll: (pos) => onScroll(side, pos),
       onZoomKept: (at, gesture) => onZoomKept(side, at, gesture),

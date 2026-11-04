@@ -201,10 +201,14 @@ export interface NotificationRepository {
   insert(notification: Omit<Notification, "id">): Promise<Notification>;
   /** 既読を含む新しい順 */
   listForUser(userId: UserId, limit: number): Promise<Notification[]>;
-  /** 未読（readAt なし）で createdAt <= createdAtOrBefore のものを古い順に最大 limit 件（未読の索引で読む） */
+  /**
+   * 未読（readAt なし）だけを未読の索引で最大 limit 件。既定は createdAt <= createdAtOrBefore のものを古い順
+   * （「すべて既読」が押した時刻までを順に処理する）。order "desc" は新しい順（通知の一覧の「未読」の絞り込み。
+   * 既読を含む最新 N 件の外に埋もれた古い未読も出る）
+   */
   listUnreadForUser(
     userId: UserId,
-    opts: { createdAtOrBefore: Instant; limit: number },
+    opts: { createdAtOrBefore?: Instant; limit: number; order?: "asc" | "desc" },
   ): Promise<Notification[]>;
   findById(id: string): Promise<Notification | null>;
   update(notification: Notification): Promise<void>;
