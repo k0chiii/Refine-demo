@@ -275,7 +275,7 @@ async function glanceWork(
   const summary = await ctx.workSummaries.findByWork(work.id);
   let revisions: Revision[] | null = null;
   const revisionsOf = async () => (revisions ??= await ctx.revisions.listByWork(work.id));
-  // 校了の宣言の履歴は、校了者が 2 人以上のときだけ、必要な人（制作者・校了する人）のために 1 回だけ読む
+  // 校了の宣言の履歴は、校了者が 2 人以上のときだけ、必要な人（制作者・校了者）のために 1 回だけ読む
   let approvals: ApprovalEvent[] | null = null;
   const approvalsOf = async () => (approvals ??= await ctx.approvals.listByWork(work.id));
   const heads = summary ?? revisionHeadsOf(await revisionsOf());

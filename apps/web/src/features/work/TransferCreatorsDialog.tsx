@@ -14,7 +14,7 @@ import type { FunctionReturnType } from "convex/server";
 type Work = FunctionReturnType<typeof api.works.get>["work"];
 
 /**
- * 制作者だけを変える（利用者要望 2026-10-30 / 決定 94）。統括・校了する人・システム管理者が使える。
+ * 制作者だけを変える（利用者要望 2026-10-30 / 決定 94）。統括・校了者・システム管理者が使える。
  */
 export function TransferCreatorsDialog({
   work,

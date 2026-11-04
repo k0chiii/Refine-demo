@@ -116,9 +116,10 @@ export function usePinchZoom(
           ]
         : null;
     };
+    // 舞台（スクロールする箱）: 紙面のビューアの .viewer__stage か、SNS 投稿の校正画面の .zoom-stage
     const stageOf = (target: EventTarget | null) =>
-      (target as Element | null)?.closest<HTMLElement>(".viewer__stage") ??
-      el.querySelector<HTMLElement>(".viewer__stage");
+      (target as Element | null)?.closest<HTMLElement>(".viewer__stage, .zoom-stage") ??
+      el.querySelector<HTMLElement>(".viewer__stage, .zoom-stage");
 
     /** 倍率を確定し、描き直しの後で中点の下の箇所を元の画面位置に戻す */
     const bounds = () => limitsRef.current?.() ?? DEFAULT_ZOOM_LIMITS;
