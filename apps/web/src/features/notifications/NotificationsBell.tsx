@@ -3,8 +3,9 @@ import type { Id } from "@mf100/convex/dataModel";
 import { notificationPath, pushTagOf } from "@mf100/domain";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatJstShort } from "@/lib/format";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { showDeviceNotification } from "@/lib/push";
 import { useDevicePush } from "./useDevicePush";
 import { useSystemNotificationSync } from "./useSystemNotificationSync";
@@ -48,10 +49,39 @@ function useUnread() {
   return useQuery(api.notifications.unreadCount, {}) ?? 0;
 }
 
-/** 通知の一覧と操作（パネルとシートで共用） */
-function useNotifications() {
+/** 一覧の絞り込み: すべて（既読を含む最新）か未読だけ（古い未読も埋もれない。利用者指示 2026-11-04） */
+type NotifFilter = "all" | "unread";
+
+const filterChoices = [
+  { value: "all", label: "すべて" },
+  { value: "unread", label: "未読" },
+] as const satisfies readonly { value: NotifFilter; label: string }[];
+
+function NotifFilterGroup({
+  value,
+  onChange,
+}: {
+  value: NotifFilter;
+  onChange: (next: NotifFilter) => void;
+}) {
+  return (
+    <ChoiceGroup<NotifFilter>
+      label="通知の絞り込み"
+      value={value}
+      onChange={onChange}
+      choices={filterChoices}
+      className="notif-filter"
+    />
+  );
+}
+
+/** 通知の一覧と操作（パネルとシートで共用）。未読だけのときは未読の索引で新しい順に読む */
+function useNotifications(filter: NotifFilter) {
   const navigate = useNavigate();
-  const list = useQuery(api.notifications.list, { limit: 20 });
+  const list = useQuery(api.notifications.list, {
+    limit: 20,
+    ...(filter === "unread" ? { unreadOnly: true } : {}),
+  });
   const markRead = useMutation(api.notifications.markRead);
   const markUnread = useMutation(api.notifications.markUnread);
   const markAllRead = useMutation(api.notifications.markAllRead);
@@ -165,7 +195,9 @@ function NotifMenuPanelRow({
 }
 
 function Menu({ id }: { id: string }) {
-  const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } = useNotifications();
+  const [filter, setFilter] = useState<NotifFilter>("all");
+  const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } =
+    useNotifications(filter);
   const handlers = {
     markRead: (notificationId: Id<"notifications">) => void doMarkReadOnly.run(notificationId),
     markUnread: (notificationId: Id<"notifications">) => void doMarkUnread.run(notificationId),
@@ -175,6 +207,8 @@ function Menu({ id }: { id: string }) {
       <M3eMenu id={id} positionX="before" className="notif-menu">
         <div className="notif-menu__header">
           <span className="label-large">通知</span>
+          <span className="spacer" />
+          <NotifFilterGroup value={filter} onChange={setFilter} />
         </div>
         {unread > 0 ? (
           <M3eMenuItem disabled={doMarkAll.pending} onClick={() => void doMarkAll.run()}>
@@ -183,7 +217,9 @@ function Menu({ id }: { id: string }) {
           </M3eMenuItem>
         ) : null}
         {!list || list.length === 0 ? (
-          <p className="muted small notif-menu__empty">通知はありません</p>
+          <p className="muted small notif-menu__empty">
+            {filter === "unread" ? "未読の通知はありません" : "通知はありません"}
+          </p>
         ) : (
           list.map((n) => <NotifMenuPanelRow key={n.id} n={n} openOne={openOne} />)
         )}
@@ -204,7 +240,9 @@ function Menu({ id }: { id: string }) {
  * 下部バーの「通知」から開き、外側を押す・下へ払う・通知を押すと閉じる。
  */
 function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } = useNotifications();
+  const [filter, setFilter] = useState<NotifFilter>("all");
+  const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } =
+    useNotifications(filter);
   const { sheetHandlers, sheet } = useNotificationLongPressSheet({
     markRead: (notificationId) => void doMarkReadOnly.run(notificationId),
     markUnread: (notificationId) => void doMarkUnread.run(notificationId),
@@ -246,8 +284,13 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
           </M3eButton>
         ) : null}
       </div>
+      <div className="notif-sheet__filter">
+        <NotifFilterGroup value={filter} onChange={setFilter} />
+      </div>
       {!list || list.length === 0 ? (
-        <p className="muted notif-sheet__empty">通知はありません</p>
+        <p className="muted notif-sheet__empty">
+          {filter === "unread" ? "未読の通知はありません" : "通知はありません"}
+        </p>
       ) : (
         <M3eActionList className="list notif-list" aria-label="通知">
           {list.map((n) => (

@@ -272,15 +272,22 @@ async function relinkFeedbackNotification(ctx: AppContext, n: Notification): Pro
   return rest;
 }
 
+/**
+ * 自分宛の通知を新しい順に最大 limit 件。unreadOnly は未読だけ（未読の索引で読むので、既読を含む最新 N 件の外に
+ * 埋もれた古い未読も出る。利用者指示 2026-11-04「過去のものが埋もれる」）
+ */
 export async function listMyNotifications(
   ctx: AppContext,
   principal: Principal,
   limit = 50,
+  opts: { unreadOnly?: boolean } = {},
 ): Promise<Notification[]> {
   return presentNotifications(
     ctx,
     principal,
-    await ctx.notifications.listForUser(principal.userId, limit),
+    opts.unreadOnly
+      ? await ctx.notifications.listUnreadForUser(principal.userId, { limit, order: "desc" })
+      : await ctx.notifications.listForUser(principal.userId, limit),
   );
 }
 
