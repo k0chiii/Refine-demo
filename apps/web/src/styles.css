@@ -2378,6 +2378,13 @@ m3e-dialog {
   padding: 8px 8px 4px 16px;
   min-width: 320px;
 }
+.notif-menu__header .spacer {
+  flex: 1;
+}
+/* 絞り込み（すべて／未読）: シートでは見出しの下の行に */
+.notif-sheet__filter {
+  padding: 0 16px 8px;
+}
 .notif-menu__empty {
   padding: 8px 16px 12px;
 }
