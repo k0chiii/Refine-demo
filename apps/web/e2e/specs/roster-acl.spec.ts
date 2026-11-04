@@ -3,6 +3,7 @@ import { expect, test, WORKS_ENTRY } from "../support/app";
 test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
   test("登録でグループを校正者にし、管理者が同じグループに閲覧を付ける", async ({ app, page }) => {
     const creator = await app.user("mock-nogiku-creator");
+    const approver = await app.user("mock-nogiku-manager");
     const title = "名簿確認の制作物";
 
     await app.signInAs("mock-nogiku-creator");
@@ -11,8 +12,13 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     const dialog = app.dialog();
     await dialog.locator("input").first().fill(title);
     await app.pickSelectOption(dialog, "小ジャンル", "印刷物（紙・ビラ）");
-    await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
     await app.fillOutlinedDate(dialog, "仕上がり日", "2026-12-01");
+    await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
+    // 校了者は登録で選ぶ（名簿から黙って入れない）
+    await app.pickUser(
+      dialog.locator("m3e-form-field", { hasText: "校了" }).first(),
+      approver.name,
+    );
     await dialog.locator("m3e-button", { hasText: "登録" }).click();
     await page.waitForURL(/\/works\/[^/]+$/);
 
