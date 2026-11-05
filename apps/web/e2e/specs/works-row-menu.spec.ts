@@ -16,6 +16,8 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await app.go("/works");
     const dialog = await app.editWorkFromList(title);
     await expect(dialog.locator(':scope > [slot="header"]')).toHaveText("制作物を編集");
+    // 大ジャンルはジャンルから決まるので、欄は出さない（利用者指示 2026-11-05）
+    await expect(dialog.locator("m3e-form-field", { hasText: "大ジャンル" })).toHaveCount(0);
     await dialog.locator("m3e-expansion-panel").click();
     const category = dialog.locator("m3e-form-field", { hasText: "区分" }).locator("input");
     await category.fill("開催告知（一覧から更新）");

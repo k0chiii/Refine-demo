@@ -14,7 +14,7 @@ import {
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
@@ -518,7 +518,8 @@ export function InfoTab({
       {can.viewAudit ? (
         <section className="info-tab__section" aria-label="権限">
           <h2 className="info-tab__h">権限</h2>
-          <AclPanel workId={w.id} readOnly={!can.manageAcl} />
+          {/* 権限は見るだけ。付与・変更はシステム管理の「制作物ごとの権限」から（利用者指示 2026-11-05） */}
+          <AclPanel workId={w.id} readOnly />
         </section>
       ) : null}
 

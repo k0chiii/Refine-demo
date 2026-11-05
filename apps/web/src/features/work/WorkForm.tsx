@@ -1,7 +1,6 @@
 import { api } from "@mf100/convex/api";
 import {
   approvalTargetFromFinish,
-  defaultMediaTypeFor,
   genreOfSubGenre,
   socialPlatformLabels,
   subGenresOf,
@@ -180,7 +179,8 @@ function withFinishAt(form: WorkFormState, finishAt: number | null): WorkFormSta
  */
 export function workFormToFields(form: WorkFormState) {
   return {
-    genre: form.genre || (form.subGenre ? genreOfSubGenre(form.subGenre) : null),
+    // 大ジャンルはジャンルから決める。ジャンルの無い前からの制作物は、入っていた大ジャンルのまま
+    genre: form.subGenre ? genreOfSubGenre(form.subGenre) : form.genre || null,
     subGenre: form.subGenre || null,
     stakeholderIds: form.stakeholderIds,
     publishAt: form.publishAt,
@@ -313,20 +313,18 @@ function PeopleFields({
 }
 
 /**
- * 選ぶと大ジャンル（未選択なら）・区分・媒体の既定を入れる
+ * 選ぶと大ジャンル・区分・媒体の既定を入れる（大ジャンルの見出しの下に、すべてのジャンルを並べる）
  */
 function SubGenreSelect({
-  genre,
   value,
   onChange,
 }: {
-  genre: WorkGenre | "";
   value: WorkSubGenre | "";
   onChange: (code: WorkSubGenre | "") => void;
 }) {
   const fieldId = useFieldId(undefined);
   const labelId = useFieldLabelId();
-  const groups = (genre ? [genre] : workGenres).map((g) => ({ genre: g, items: subGenresOf(g) }));
+  const groups = workGenres.map((g) => ({ genre: g, items: subGenresOf(g) }));
   return (
     <ControlledSelect
       {...(fieldId ? { id: fieldId } : {})}
@@ -389,31 +387,14 @@ export function WorkFormFields({
     api.social.list,
     mode === "edit" && form.mediaType === "sns" ? {} : "skip",
   );
-  const pickGenre = (genre: WorkGenre | "") =>
-    setForm((f) => {
-      const sub = f.subGenre && genre && genreOfSubGenre(f.subGenre) !== genre ? "" : f.subGenre;
-      const next = { ...f, genre, subGenre: sub };
-      if (sub === "" && f.subGenre !== "") {
-        // 小ジャンルを外したら、小ジャンルから入れていた区分は大ジャンルの名前に
-        if (f.category === workSubGenreLabel(f.subGenre))
-          next.category = genre ? workGenreLabels[genre] : "";
-      } else if (
-        !f.subGenre &&
-        genre &&
-        (f.category === "" || f.category === (f.genre && workGenreLabels[f.genre]))
-      )
-        next.category = workGenreLabels[genre];
-      if (!sub && genre && !f.subGenre)
-        next.mediaType = defaultMediaTypeFor(null, genre) ?? f.mediaType;
-      return next;
-    });
   const pickSubGenre = (code: WorkSubGenre | "") =>
     setForm((f) => {
       const def = workSubGenres.find((s) => s.code === code);
       const prevLabel = workSubGenreLabel(f.subGenre);
       const next = { ...f, subGenre: code };
       if (def) {
-        if (!f.genre) next.genre = def.genre;
+        // 大ジャンルはジャンルから決まる（大ジャンルの欄は出さない。利用者指示 2026-11-05）
+        next.genre = def.genre;
         // 区分と媒体は既定を入れる（区分は人が書き換えていなければ）
         if (
           f.category === "" ||
@@ -442,7 +423,7 @@ export function WorkFormFields({
             <TextArea rows={2} value={form.purpose} onChange={set("purpose")} />
           </Field>
           <Field label="ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
-            <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
+            <SubGenreSelect value={form.subGenre} onChange={pickSubGenre} />
           </Field>
           <DateField
             label="仕上がり日"
@@ -476,21 +457,8 @@ export function WorkFormFields({
           <TextArea rows={2} value={form.purpose} onChange={set("purpose")} />
         </Field>
         <div className="form">
-          <Field label="大ジャンル">
-            <Select
-              value={form.genre}
-              onChange={(e) => pickGenre(e.target.value as WorkGenre | "")}
-            >
-              <option value="">未選択</option>
-              {workGenres.map((g) => (
-                <option key={g} value={g}>
-                  {workGenreLabels[g]}
-                </option>
-              ))}
-            </Select>
-          </Field>
           <Field label="ジャンル" hint="選ぶと区分と媒体の既定が入ります">
-            <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
+            <SubGenreSelect value={form.subGenre} onChange={pickSubGenre} />
           </Field>
           <Field label="媒体" required>
             <Select value={form.mediaType} onChange={set("mediaType")}>
