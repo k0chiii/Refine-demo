@@ -14,6 +14,8 @@ export interface WorkRowMenuWork {
   canTransferCreators?: boolean;
   /** 進行中・保留・中止・校了（保留・中止・戻すの項目を出し分ける） */
   lifecycle?: string;
+  /** 中止できるか（listMine の canCancel: 統括・校了者・管理者） */
+  canCancel?: boolean;
 }
 
 /** 行メニューから変えられる状態（情報タブからは変えない。利用者指示 2026-11-05） */
@@ -34,7 +36,7 @@ const lifecycleIcon: Record<RowLifecycleTarget, string> = {
 /**
  * 制作物一覧の行の「⋮」（利用者 QA 2026-10-24: 「制作物の画面の表から、三点リーダーとかを設置して変更できるようにしたい」
  * 「コピーも同じメニューの中に」）。M3 の補助的な選択: medium 以上は `m3e-menu`、compact はボトムシート（ActionSheet。docs/UI_M3E.md #4）。
- * 項目は、できることだけ出す（編集・保留・中止は主管、複製は登録の権限のある人）。どれも無い行には「⋮」自体を出さない。
+ * 項目は、できることだけ出す（編集・保留は統括、中止は統括・校了者、複製は登録の権限のある人）。どれも無い行には「⋮」自体を出さない。
  * 制作物の情報・状態を変えるのはここと登録だけ（校正画面の「情報」からは変えない。利用者指示 2026-11-05）。
  */
 export function WorkRowMenu({
@@ -61,12 +63,15 @@ export function WorkRowMenu({
     ...(w.canTransferCreators
       ? [{ icon: "group", label: "制作者を変更", onSelect: onTransferCreators }]
       : []),
-    ...(w.canEdit && onLifecycle
-      ? rowLifecycleTargets(w.lifecycle).map((to) => ({
-          icon: lifecycleIcon[to],
-          label: lifecycleActionLabel[to],
-          onSelect: () => onLifecycle(to),
-        }))
+    ...(onLifecycle
+      ? rowLifecycleTargets(w.lifecycle)
+          // 保留・進行中に戻すは編集できる人（統括・管理者）、中止は統括・校了者・管理者
+          .filter((to) => (to === "cancelled" ? w.canCancel : w.canEdit))
+          .map((to) => ({
+            icon: lifecycleIcon[to],
+            label: lifecycleActionLabel[to],
+            onSelect: () => onLifecycle(to),
+          }))
       : []),
     ...(canDuplicate
       ? [
