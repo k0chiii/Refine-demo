@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { lifecycleActionLabel } from "@/lib/labels";
 import { ActionSheet, type ActionSheetItem } from "@/ui/ActionSheet";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -11,12 +12,30 @@ export interface WorkRowMenuWork {
   canEdit: boolean;
   /** 制作者だけを変えられるか（listMine の canTransferCreators） */
   canTransferCreators?: boolean;
+  /** 進行中・保留・中止・校了（保留・中止・戻すの項目を出し分ける） */
+  lifecycle?: string;
 }
+
+/** 行メニューから変えられる状態（情報タブからは変えない。利用者指示 2026-11-05） */
+export type RowLifecycleTarget = "active" | "on_hold" | "cancelled";
+
+export function rowLifecycleTargets(lifecycle: string | undefined): RowLifecycleTarget[] {
+  if (lifecycle === "active") return ["on_hold", "cancelled"];
+  if (lifecycle === "on_hold" || lifecycle === "draft") return ["active", "cancelled"];
+  return [];
+}
+
+const lifecycleIcon: Record<RowLifecycleTarget, string> = {
+  active: "play_arrow",
+  on_hold: "pause",
+  cancelled: "block",
+};
 
 /**
  * 制作物一覧の行の「⋮」（利用者 QA 2026-10-24: 「制作物の画面の表から、三点リーダーとかを設置して変更できるようにしたい」
  * 「コピーも同じメニューの中に」）。M3 の補助的な選択: medium 以上は `m3e-menu`、compact はボトムシート（ActionSheet。docs/UI_M3E.md #4）。
- * 項目は、できることだけ出す（編集は主管、複製は登録の権限のある人）。どちらも無い行には「⋮」自体を出さない。
+ * 項目は、できることだけ出す（編集・保留・中止は主管、複製は登録の権限のある人）。どれも無い行には「⋮」自体を出さない。
+ * 制作物の情報・状態を変えるのはここと登録だけ（校正画面の「情報」からは変えない。利用者指示 2026-11-05）。
  */
 export function WorkRowMenu({
   w,
@@ -25,6 +44,7 @@ export function WorkRowMenu({
   onEdit,
   onTransferCreators,
   onDuplicate,
+  onLifecycle,
 }: {
   w: WorkRowMenuWork;
   canDuplicate: boolean;
@@ -32,12 +52,21 @@ export function WorkRowMenu({
   onEdit: () => void;
   onTransferCreators: () => void;
   onDuplicate: () => void;
+  /** 保留にする・進行中に戻す・中止する（中止は親が確認してから） */
+  onLifecycle?: (to: RowLifecycleTarget) => void;
 }) {
   const [sheet, setSheet] = useState(false);
   const items: ActionSheetItem[] = [
     ...(w.canEdit ? [{ icon: "edit", label: "情報を編集", onSelect: onEdit }] : []),
     ...(w.canTransferCreators
       ? [{ icon: "group", label: "制作者を変更", onSelect: onTransferCreators }]
+      : []),
+    ...(w.canEdit && onLifecycle
+      ? rowLifecycleTargets(w.lifecycle).map((to) => ({
+          icon: lifecycleIcon[to],
+          label: lifecycleActionLabel[to],
+          onSelect: () => onLifecycle(to),
+        }))
       : []),
     ...(canDuplicate
       ? [

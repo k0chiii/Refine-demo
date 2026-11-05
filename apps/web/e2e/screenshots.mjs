@@ -584,13 +584,9 @@ async function main() {
   await autoProofreadDone(90_000);
   await shot("05-submit-confirmed");
 
-  // 06 校正者を割り当てる（主管）: 引き出し「情報」から
+  // 06 校正者を割り当てる（主管）: 制作物一覧の「担当者」のセルから（情報タブからは割り当てない）
   await signInAs("mock-nogiku-manager");
-  await go(workUrl);
-  await pdfReady();
-  await drawer("情報");
-  await btn("校正者を割り当てる").click();
-  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  await openReviewersFromList("MF100 公式パンフレット");
   // 13c 校正者をグループでまとめて加える（利用者指示 2026-10-21）: 候補にグループが出て、選ぶと所属する人のチップが並ぶ。
   // サンプルの「こうせいはん」は校正者と校了者。校了者は外して、校正者だけを割り当てる
   {
@@ -612,14 +608,16 @@ async function main() {
   }
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
+  await go(workUrl);
+  await pdfReady();
+  await drawer("情報");
   // 基本情報が長くなった（§58）ので、引き出しを上端に戻してから撮る
   await page.evaluate(() => document.querySelector(".drawer__body")?.scrollTo(0, 0));
   await settle();
   await shot("06-editor-info");
 
-  // 15 制作物の編集（主管）: 引き出し「情報」の「編集」
-  await btn("編集").click();
-  await page.waitForSelector("m3e-dialog[open] m3e-input-chip");
+  // 15 制作物の編集（主管）: 制作物一覧の「⋮ → 情報を編集」（情報タブからは編集しない）
+  await editWorkFromList("MF100 公式パンフレット");
   await shot("15-work-edit");
   // 71 Notion の制作物 DB に揃えた節（§58）: 「日程と入稿」「リンク」まで送る
   await page
@@ -640,11 +638,8 @@ async function main() {
   await page.waitForURL(/\/v\/1$/, { timeout: 15_000 });
   await pdfReady();
   await signInAs("mock-nogiku-manager");
-  await go(longPath);
-  await pdfReady();
-  await drawer("情報");
-  await btn("校正者を割り当てる").click();
-  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  void longPath;
+  await openReviewersFromList(LONG_TITLE);
   await pickUser(page.locator("m3e-dialog[open]"), reviewer.name);
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "保存" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });
@@ -1855,13 +1850,10 @@ async function compactScenes() {
   );
   await page.locator("m3e-dialog[open] m3e-button", { hasText: "提出する" }).click();
   await page.waitForURL(/\/v\/\d+(\?|$)/, { timeout: 15_000 });
-  // 校正者を割り当てる（主管）
+  // 校正者を割り当てる（主管）: 制作物一覧の「担当者」のセルから
   await signInAs("mock-nogiku-manager");
-  await go(writeWorkUrl);
-  await page.waitForSelector(".rich-viewer__page .doc");
-  await drawer("情報");
-  await btn("校正者を割り当てる").click();
-  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  void writeWorkUrl;
+  await openReviewersFromList("公式サイト トップページ");
   // 種になった制作物に校正者が最初から付いていれば（選択済みの人は候補に出ない）、そのまま閉じる
   const reviewerPicker = page.locator("m3e-dialog[open]");
   if ((await reviewerPicker.locator("m3e-input-chip", { hasText: reviewer.name }).count()) > 0) {
@@ -2092,6 +2084,26 @@ const openWork = async (title) => {
   await page.waitForURL(/\/works\/[^/]+$/);
   await settle();
   return new URL(page.url()).pathname;
+};
+/** 制作物一覧の「担当者」のセルから校正者を選ぶダイアログを開く（情報タブからは割り当てない。利用者指示 2026-11-05） */
+const openReviewersFromList = async (title) => {
+  await go("/works");
+  const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
+  await row.waitFor();
+  await row.getByRole("button", { name: /の担当者を選ぶ/ }).click();
+  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+};
+/** 制作物一覧の「⋮ → 情報を編集」で編集のダイアログを開く */
+const editWorkFromList = async (title) => {
+  await go("/works");
+  const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
+  const more = row.locator(`m3e-icon-button[aria-label="${title} の操作"]`);
+  await more.scrollIntoViewIfNeeded();
+  await settle();
+  await more.click();
+  await settle();
+  await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
+  await page.waitForSelector("m3e-dialog[open] m3e-input-chip");
 };
 /** 外れても止めずに集め、最後にまとめて失敗にする（1 回の実行で落ちた確認を全部見る） */
 const failures = [];
