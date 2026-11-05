@@ -199,7 +199,7 @@ function Works() {
             </M3eFilterChipSet>
           ) : null}
           <M3eFilterChipSet aria-label="状態で絞り込み" className="works__filters">
-            {(["active", "on_hold", "finalized"] as const).map((k) => (
+            {(["active", "finalized"] as const).map((k) => (
               <M3eFilterChip
                 key={k}
                 selected={lifecycle === k}

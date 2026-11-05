@@ -30,6 +30,14 @@ export async function seedWork(
 }
 
 /**
+ * 前から保留の制作物を作る（保留は 2026-11-05 から新しくは付けられないので、リポジトリへ直接書く）。
+ */
+export async function putOnHoldDirectly(ctx: InMemoryContext, workId: string) {
+  const work = (await ctx.works.findById(workId))!;
+  await ctx.works.update({ ...work, lifecycle: "on_hold", version: work.version + 1 });
+}
+
+/**
  * 決定（2026-10-18「制作者が校了者になることはないです」）より前に保存された行を作る: 制作者が校了者でもある制作物。
  * 登録・変更はこの形を作れないので、リポジトリへ直接書く（旧データの再現。approverIds・approvalQuorum の無い 1 人の校了者）。
  */

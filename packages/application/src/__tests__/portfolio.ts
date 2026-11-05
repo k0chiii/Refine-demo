@@ -4,9 +4,14 @@ import { decideThread, postComment } from "../usecases/comments.ts";
 import { setWorkPinned } from "../usecases/home.ts";
 import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { closeExpiredReviews } from "../usecases/reviews.ts";
-import { changeWorkLifecycle } from "../usecases/works.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
-import { HOUR, principals, seedWork, submitRevision } from "../testing/scenario.ts";
+import {
+  HOUR,
+  principals,
+  putOnHoldDirectly,
+  seedWork,
+  submitRevision,
+} from "../testing/scenario.ts";
 
 const DAY = 24 * HOUR;
 
@@ -60,7 +65,7 @@ export async function seedPortfolio() {
     workId: quorum.id,
     revisionId: quorumRevision.id,
   });
-  await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
+  await putOnHoldDirectly(ctx, held.id);
   for (const w of [reviewing, lapsed, held])
     await setWorkPinned(ctx, principals.creator, { workId: w.id, pinned: true });
 

@@ -217,11 +217,11 @@ describe("changeWorkLifecycle: 中止は統括・校了者・管理者だけ（�
         changeWorkLifecycle(ctx, who, { workId: work.id, to: "cancelled" }),
       ).rejects.toMatchObject({ code: "forbidden" });
   });
-  it("校了者は保留にはできない（保留は制作物の編集と同じ）", async () => {
+  it("保留にはだれもできない（保留は使わない。利用者指示 2026-11-05）", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     await expect(
-      changeWorkLifecycle(ctx, principals.approver, { workId: work.id, to: "on_hold" }),
-    ).rejects.toMatchObject({ code: "forbidden" });
+      changeWorkLifecycle(ctx, principals.manager, { workId: work.id, to: "on_hold" }),
+    ).rejects.toMatchObject({ code: "work_invalid_lifecycle_transition" });
   });
 });
