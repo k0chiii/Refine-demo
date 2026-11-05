@@ -2449,9 +2449,21 @@ m3e-dialog {
   /* menu item の trailing-icon の枠（1em）に収めず、ボタンの幅で出す */
   width: auto;
 }
-/* パネルの ⋮ は右クリック・Shift+F10 のメニューの口としてだけ残す（既読は行のボタン、未読に戻すはメニュー） */
+/* パネルの ⋮ は右クリック・Shift+F10 のメニューの口としてだけ残す（既読⇄未読 は行のボタン）。
+ * 見えないが行の右端に 1px で置き、メニューがその位置に開くようにする（display: none だと画面の左上に開いていた） */
 #notif-menu .notif-row__more {
-  display: none;
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+#notif-menu .notif {
+  position: relative;
 }
 /* 既読にする（未読の行だけ）。常に見える */
 .notif-row__read {
