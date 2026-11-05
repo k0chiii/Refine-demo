@@ -182,7 +182,7 @@ export function InfoTab({
       rows: [
         ["制作物名", w.title] as Row,
         ...optional("大ジャンル", w.genre ? workGenreLabels[w.genre] : null),
-        ...optional("小ジャンル", workSubGenreLabel(w.subGenre)),
+        ...optional("ジャンル", workSubGenreLabel(w.subGenre)),
         ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
         ...optional("タグ", w.tags?.length ? w.tags.join("、") : null),
         // 提出時の「見てほしい点」はここではなく、コメントの一覧の先頭（制作者からのコメント。CreatorNoteCard）に出す
