@@ -12,7 +12,7 @@ test.describe("スマホの校正", { tag: "@core" }, () => {
       page,
     }) => {
       const { workPath } = await submitFirstRevision(app, LONG_TITLE);
-      await assignReviewer(app, workPath);
+      await assignReviewer(app, workPath, LONG_TITLE);
       await app.signInAs("mock-nogiku-reviewer");
       await page.setViewportSize({ width, height });
       await app.go("/check");
