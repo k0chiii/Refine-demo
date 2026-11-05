@@ -22,7 +22,14 @@ import { DuplicateWorkDialog } from "./DuplicateWorkDialog";
 import { EditWorkById } from "./EditWorkDialog";
 import { TransferCreatorsById } from "./TransferCreatorsDialog";
 import { ReviewersCell } from "./ReviewersCell";
-import { WorkRowMenu } from "./WorkRowMenu";
+import { WorkRowMenu, type RowLifecycleTarget } from "./WorkRowMenu";
+import { api as convexApi } from "@mf100/convex/api";
+import type { Id } from "@mf100/convex/dataModel";
+import { useMutation } from "convex/react";
+import { useAction } from "@/lib/useAction";
+import { toast } from "@/lib/toast";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
 
 export type WorkRow = FunctionReturnType<typeof api.works.listMine>[number] & {
   /** 段階（domain の workStageOf。下書き・中止は null） */
@@ -76,6 +83,14 @@ export function WorksTable({
   onOpen: (workId: string) => void;
 }) {
   const [page, setPage] = useState({ index: 0, size: DEFAULT_PAGE_SIZE });
+  const changeLifecycle = useMutation(convexApi.works.changeLifecycle);
+  // 進行中に戻すはすぐ、中止は確認してから（元に戻せないため）
+  const [cancelTarget, setCancelTarget] = useState<{ workId: string; title: string } | null>(null);
+  const doLifecycle = useAction(async (workId: string, to: RowLifecycleTarget) => {
+    await changeLifecycle({ workId: workId as Id<"works">, to });
+    toast(to === "active" ? "進行中に戻しました" : "中止しました");
+    if (to === "cancelled") setCancelTarget(null);
+  });
   /** 行メニューから開いているダイアログ（編集・複製）。表の外に 1 つだけ置く */
   const [dialog, setDialog] = useState<{
     kind: "edit" | "duplicate" | "transferCreators";
@@ -142,10 +157,35 @@ export function WorksTable({
               onEdit={() => setDialog({ kind: "edit", workId: w.id })}
               onTransferCreators={() => setDialog({ kind: "transferCreators", workId: w.id })}
               onDuplicate={() => setDialog({ kind: "duplicate", workId: w.id })}
+              onLifecycle={(to) =>
+                to === "cancelled"
+                  ? setCancelTarget({ workId: w.id, title: w.title })
+                  : void doLifecycle.run(w.id, to)
+              }
             />
           ))}
         </tbody>
       </DataTable>
+      {cancelTarget ? (
+        <M3eDialog open onClosed={() => setCancelTarget(null)} closeLabel="閉じる">
+          <span slot="header">「{cancelTarget.title}」を中止しますか？</span>
+          <div className="dialog-body">
+            <p style={{ margin: 0 }}>中止すると元に戻せません</p>
+          </div>
+          <div slot="actions" className="row">
+            <M3eButton variant="text" onClick={() => setCancelTarget(null)}>
+              キャンセル
+            </M3eButton>
+            <M3eButton
+              variant="filled"
+              disabled={doLifecycle.pending}
+              onClick={() => void doLifecycle.run(cancelTarget.workId, "cancelled")}
+            >
+              中止する
+            </M3eButton>
+          </div>
+        </M3eDialog>
+      ) : null}
       {dialog?.kind === "edit" ? (
         <EditWorkById key={dialog.workId} workId={dialog.workId} onClose={() => setDialog(null)} />
       ) : null}
@@ -178,6 +218,7 @@ function Row({
   onEdit,
   onTransferCreators,
   onDuplicate,
+  onLifecycle,
 }: {
   w: WorkRow;
   teams: readonly Team[];
@@ -189,6 +230,7 @@ function Row({
   onEdit: () => void;
   onTransferCreators: () => void;
   onDuplicate: () => void;
+  onLifecycle: (to: RowLifecycleTarget) => void;
 }) {
   const done = w.lifecycle === "finalized" || w.lifecycle === "cancelled";
   const info = w.stage ? stageInfo[w.stage] : null;
@@ -296,6 +338,7 @@ function Row({
           onEdit={onEdit}
           onTransferCreators={onTransferCreators}
           onDuplicate={onDuplicate}
+          onLifecycle={onLifecycle}
         />
       </td>
     </tr>

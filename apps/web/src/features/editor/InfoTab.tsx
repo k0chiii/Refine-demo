@@ -14,16 +14,13 @@ import {
 } from "@mf100/domain";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AclPanel } from "@/features/work/AclPanel";
-import { ReviewersDialog } from "@/features/work/ReviewersDialog";
-import { EditWorkDialog } from "@/features/work/EditWorkDialog";
 import { formatDeadline, formatJstDate, formatJstShort } from "@/lib/format";
 import {
   approvalActionLabel,
   assignmentLabel,
   checkStateLabel,
-  lifecycleActionLabel,
   lifecycleLabel,
   mediaLabel,
 } from "@/lib/labels";
@@ -58,17 +55,12 @@ export function InfoTab({
 }) {
   const finalize = useMutation(api.approvals.finalize);
   const reopen = useMutation(api.approvals.reopen);
-  const changeLifecycle = useMutation(api.works.changeLifecycle);
-  const updateWork = useMutation(api.works.update);
   const completeCheck = useMutation(api.checks.complete);
   const waiveCheck = useMutation(api.checks.waive);
   const addCheck = useMutation(api.checks.add);
   const confirmIndependently = useMutation(api.approvals.confirm);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
-  const [reviewersOpen, setReviewersOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState("");
   const [autoNote, setAutoNote] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -81,10 +73,6 @@ export function InfoTab({
   const [requestId] = useState(newRequestId); // 二重クリック・再送でも同じ requestId（A-10）
 
   const { work: w, people, approvals, approval, can } = work;
-  const [purposeDraft, setPurposeDraft] = useState(w.purpose ?? "");
-  useEffect(() => {
-    setPurposeDraft(w.purpose ?? "");
-  }, [w.purpose, w.version]);
   const me = approval.approvers.find((a) => a.isMe) ?? null;
   const multiApprovers = approval.approvers.length > 1;
   // この宣言で「校了とみなす人数」に届くか（届かなければ宣言の記録だけで、校了にはまだ進まない）
@@ -106,12 +94,6 @@ export function InfoTab({
   const pendingChecks = checks.filter((c) => c.state === "pending").length;
   // 人の未対応のコメント（自動校正は校了を止めないので別に数える）
   const blocking = Math.max(0, (candidate?.unresolvedCount ?? 0) - (candidate?.openBotCount ?? 0));
-  const lifecycleTargets: Array<"active" | "on_hold" | "cancelled"> =
-    w.lifecycle === "active"
-      ? ["on_hold", "cancelled"]
-      : w.lifecycle === "on_hold" || w.lifecycle === "draft"
-        ? ["active", "cancelled"]
-        : [];
 
   // SNS 投稿の制作物: どのアカウント（本体の設定）で投稿するか
   const profiles = useQuery(api.social.list, w.mediaType === "sns" ? {} : "skip");
@@ -141,10 +123,6 @@ export function InfoTab({
   const doReopen = useAction(async () => {
     await reopen({ workId: w.id as Id<"works">, reason: reopenReason, expectedVersion: w.version });
     setReopenOpen(false);
-  });
-  const doLifecycle = useAction(async (to: "active" | "on_hold" | "cancelled") => {
-    await changeLifecycle({ workId: w.id as Id<"works">, to, expectedVersion: w.version });
-    if (to === "cancelled") setCancelOpen(false);
   });
   const doCompleteCheck = useAction(async (checkId: string) => {
     await completeCheck({ checkId: checkId as Id<"requiredChecks"> });
@@ -181,6 +159,7 @@ export function InfoTab({
       title: "基本",
       rows: [
         ["制作物名", w.title] as Row,
+        ...optional("目的・用途", w.purpose?.trim() || null),
         ...optional("大ジャンル", w.genre ? workGenreLabels[w.genre] : null),
         ...optional("ジャンル", workSubGenreLabel(w.subGenre)),
         ["区分 / 媒体", `${w.category} / ${mediaLabel[w.mediaType]}`] as Row,
@@ -254,37 +233,12 @@ export function InfoTab({
           {lifecycleLabel[w.lifecycle]}
         </StatusText>
       ) : null}
-      {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは「編集」のダイアログ。
+      {/* 基本情報は項目名（overline）と値の M3 リスト（読むだけ。M3 に表は無い。§49）。直すのは制作物一覧の「情報を編集」
+          （利用者指示 2026-11-05「情報タブから整理することはない。基本は全て制作物登録の時か制作物一覧から」）。
           節は Notion の制作物 DB に揃えて 基本／担当と人／日程と入稿（SNS は媒体が SNS のときだけ。利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md） */}
       {propGroups.map((g) => (
         <section key={g.title} className="info-tab__section" aria-label={g.title}>
           <h2 className="info-tab__h">{g.title}</h2>
-          {g.title === "基本" ? (
-            can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
-              <Field label="目的・用途">
-                <TextArea value={purposeDraft} onChange={(e) => setPurposeDraft(e.target.value)} />
-                <div className="row" style={{ marginTop: "0.5rem" }}>
-                  <M3eButton
-                    variant="tonal"
-                    disabled={purposeDraft === (w.purpose ?? "")}
-                    onClick={() =>
-                      void updateWork({
-                        workId: w.id as Id<"works">,
-                        expectedVersion: w.version,
-                        patch: { purpose: purposeDraft.trim() },
-                      })
-                    }
-                  >
-                    保存
-                  </M3eButton>
-                </div>
-              </Field>
-            ) : (
-              <p className="small" style={{ margin: "0 0 0.75rem" }}>
-                目的・用途: {w.purpose?.trim() ? w.purpose : "未入力"}
-              </p>
-            )
-          ) : null}
           <M3eList className="list prop-list">
             {g.rows.map(([label, value]) => (
               <M3eListItem key={label} className="list__item">
@@ -345,29 +299,6 @@ export function InfoTab({
             理由付きで再開
           </M3eButton>
         ) : null}
-        {can.editReviewers ? (
-          <M3eButton variant="outlined" onClick={() => setReviewersOpen(true)}>
-            校正者を割り当てる
-          </M3eButton>
-        ) : null}
-        {can.edit && w.lifecycle !== "finalized" && w.lifecycle !== "cancelled" ? (
-          <M3eButton variant="text" onClick={() => setEditOpen(true)}>
-            編集
-          </M3eButton>
-        ) : null}
-        {can.edit
-          ? lifecycleTargets.map((to) => (
-              <M3eButton
-                key={to}
-                variant="text"
-                onClick={() =>
-                  to === "cancelled" ? setCancelOpen(true) : void doLifecycle.run(to)
-                }
-              >
-                {lifecycleActionLabel[to]}
-              </M3eButton>
-            ))
-          : null}
       </div>
 
       {/* 校正者ごとの状態。読了印として、校正完了にした人と時刻を制作者・主管が見られる（割り当てる権限のある人だけ） */}
@@ -587,16 +518,10 @@ export function InfoTab({
       {can.viewAudit ? (
         <section className="info-tab__section" aria-label="権限">
           <h2 className="info-tab__h">権限</h2>
-          <AclPanel workId={w.id} readOnly={!can.manageAcl} />
+          {/* 権限は見るだけ。付与・変更はシステム管理の「制作物ごとの権限」から（利用者指示 2026-11-05） */}
+          <AclPanel workId={w.id} readOnly />
         </section>
       ) : null}
-
-      <EditWorkDialog
-        work={w}
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        canEditReviewers={can.editReviewers}
-      />
 
       {/* U-07 校了: 校了版・必須確認・重大未解決・例外理由・実行者を最終確認して確定。二重クリック防止。 */}
       <M3eDialog open={finalizeOpen} onClosed={() => setFinalizeOpen(false)} closeLabel="閉じる">
@@ -723,34 +648,6 @@ export function InfoTab({
           </M3eButton>
         </div>
       </M3eDialog>
-
-      <M3eDialog open={cancelOpen} onClosed={() => setCancelOpen(false)} closeLabel="閉じる">
-        <span slot="header">この制作物を中止しますか？</span>
-        <div className="dialog-body">
-          <p style={{ margin: 0 }}>中止すると元に戻せません</p>
-        </div>
-        <div slot="actions" className="row">
-          <M3eButton variant="text" onClick={() => setCancelOpen(false)}>
-            キャンセル
-          </M3eButton>
-          <M3eButton
-            variant="filled"
-            disabled={doLifecycle.pending}
-            onClick={() => void doLifecycle.run("cancelled")}
-          >
-            中止する
-          </M3eButton>
-        </div>
-      </M3eDialog>
-
-      {reviewersOpen ? (
-        <ReviewersDialog
-          workId={w.id}
-          title={w.title}
-          initialIds={w.reviewerIds ?? []}
-          onClose={() => setReviewersOpen(false)}
-        />
-      ) : null}
     </div>
   );
 }

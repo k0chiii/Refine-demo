@@ -96,6 +96,5 @@ export const notificationKindLabel: Record<string, string> = {
 };
 export const lifecycleActionLabel: Record<string, string> = {
   active: "進行中に戻す",
-  on_hold: "保留にする",
   cancelled: "中止する",
 };

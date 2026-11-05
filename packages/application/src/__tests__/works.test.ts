@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { createWork, importWorks, updateWork } from "../usecases/works.ts";
+import { changeWorkLifecycle, createWork, importWorks, updateWork } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedLegacyCreatorApproverWork, seedWork } from "../testing/scenario.ts";
 
@@ -198,5 +198,30 @@ describe("制作者は校了者になれない（利用者決定 2026-10-18）",
     });
     const fixed = await edit({ approverIds: [principals.reviewer.userId] });
     expect(fixed).toMatchObject({ approverId: principals.reviewer.userId });
+  });
+});
+
+describe("changeWorkLifecycle: 中止は統括・校了者・管理者だけ（利用者指示 2026-11-05）", () => {
+  it("校了者は中止できる", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    await expect(
+      changeWorkLifecycle(ctx, principals.approver, { workId: work.id, to: "cancelled" }),
+    ).resolves.toMatchObject({ lifecycle: "cancelled" });
+  });
+  it("制作者・校正者は中止できない", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    for (const who of [principals.creator, principals.reviewer])
+      await expect(
+        changeWorkLifecycle(ctx, who, { workId: work.id, to: "cancelled" }),
+      ).rejects.toMatchObject({ code: "forbidden" });
+  });
+  it("保留にはだれもできない（保留は使わない。利用者指示 2026-11-05）", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    await expect(
+      changeWorkLifecycle(ctx, principals.manager, { workId: work.id, to: "on_hold" }),
+    ).rejects.toMatchObject({ code: "work_invalid_lifecycle_transition" });
   });
 });

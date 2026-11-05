@@ -575,6 +575,11 @@ async function summarizeWorkList(
       work.lifecycle !== "finalized" &&
       (overridesAllPermissions(principal) || work.managerIds.includes(principal.userId)),
     canTransferCreators: canChangeCreators(work, principal),
+    /** 一覧の「⋮」から中止できるか。統括・校了者・システム管理者だけ（work.cancel。利用者指示 2026-11-05） */
+    canCancel:
+      work.lifecycle !== "finalized" &&
+      work.lifecycle !== "cancelled" &&
+      isAllowed("work.cancel", { work, grants: [], principal }),
     reviewers: (work.reviewerIds ?? []).map((id) => ({
       id,
       name: users.get(id)?.name ?? "（不明なユーザー）",

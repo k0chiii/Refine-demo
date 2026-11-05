@@ -146,6 +146,29 @@ describe("isAllowed（§7.2 操作権限）", () => {
   });
 });
 
+describe("中止（work.cancel）は統括・校了者・管理者だけ（利用者指示 2026-11-05）", () => {
+  const work = makeWork();
+  const ctxOf = (who: string, grants: WorkPermissionGrant[] = [], admin = false) => ({
+    work,
+    grants,
+    principal: principal(who, admin),
+  });
+  it("統括・校了者・システム管理者は中止できる", () => {
+    expect(isAllowed("work.cancel", ctxOf("manager"))).toBe(true);
+    expect(isAllowed("work.cancel", ctxOf("approver"))).toBe(true);
+    expect(isAllowed("work.cancel", ctxOf("sysadmin", [], true))).toBe(true);
+  });
+  it("制作者・校正者・ACL の manage だけの人は中止できない", () => {
+    expect(isAllowed("work.cancel", ctxOf("creator"))).toBe(false);
+    expect(isAllowed("work.cancel", ctxOf("viewer", [grant({ permission: "review" })]))).toBe(
+      false,
+    );
+    expect(isAllowed("work.cancel", ctxOf("viewer", [grant({ permission: "manage" })]))).toBe(
+      false,
+    );
+  });
+});
+
 describe("システム管理者はすべての操作権限を持つ（利用者決定 2026-10-30）", () => {
   const actions = Object.keys({
     "work.view": true,
@@ -158,6 +181,7 @@ describe("システム管理者はすべての操作権限を持つ（利用者�
     "review.assign": true,
     "work.finalize": true,
     "work.reopen": true,
+    "work.cancel": true,
     "approval.confirm": true,
     "acl.manage": true,
     "audit.view": true,
