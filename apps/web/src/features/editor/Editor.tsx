@@ -102,7 +102,6 @@ import { prepareBottomSheet } from "@/ui/bottomSheet";
 import { useRevealThread } from "@/features/review/revealThread";
 import type { Drawer, EditorSearch } from "./search";
 import { AppBarSlot } from "@/ui/AppBarSlot";
-import { Field, TextArea } from "@/ui/Field";
 import { StatusText } from "@/ui/Chip";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
@@ -439,7 +438,6 @@ export function Editor({
   const [pickerMounted, setPickerMounted] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitMounted, setSubmitMounted] = useState(false);
-  const [externalNote, setExternalNote] = useState("");
   const [now, setNow] = useState(Date.now());
   const sheetRef = useRef<HTMLElement | null>(null);
   // 狭い画面の引き出し（ボトムシート）が開いているか。ツールバーのボタンの選択状態に使う
@@ -739,19 +737,6 @@ export function Editor({
       threadId: threadId as Id<"commentThreads">,
       targetRevisionId: revisionId as Id<"revisions">,
     });
-  });
-  const doRecordExternal = useAction(async () => {
-    if (!artifact || !externalNote.trim() || !revisionId) return;
-    await post({
-      revisionId: revisionId as Id<"revisions">,
-      body: externalNote.trim(),
-      kind: "decision",
-      severity: "info",
-      requestId,
-      anchor: { type: "external", artifactId: artifact.id, note: artifact.externalUrl ?? "" },
-    });
-    setExternalNote("");
-    setRequestId(newRequestId());
   });
 
   const allThreads = useMemo(
@@ -1221,27 +1206,6 @@ export function Editor({
         </div>
       );
     if (artifact.role === "external") {
-      // 外部での議論の結果の記録（F-10 / CM-04）。ライブ表示・Figma の埋め込みでも下に残す
-      const record = canComment ? (
-        <div className="external external--record">
-          <Field
-            label="外部での議論の結果"
-            hint="外部で話した結論は合意事項としてコメントに残ります"
-          >
-            <TextArea value={externalNote} onChange={(e) => setExternalNote(e.target.value)} />
-          </Field>
-          <div className="row">
-            <span className="spacer" />
-            <M3eButton
-              variant="tonal"
-              disabled={doRecordExternal.pending || !externalNote.trim()}
-              onClick={() => void doRecordExternal.run()}
-            >
-              合意事項として記録
-            </M3eButton>
-          </div>
-        </div>
-      ) : null;
       const url = artifact.externalUrl ?? "";
       if (isFigmaUrl(url)) {
         const frames = data.artifacts.flatMap((a) =>
@@ -1264,7 +1228,6 @@ export function Editor({
               setActiveThreadId(null);
             }}
             renderInPage={(vp) => compose(vp, null)}
-            footer={record}
             onReady={() => setPaintedFor(artifact.id)}
           />
         );
@@ -1284,7 +1247,6 @@ export function Editor({
             focusRequest={webFocus}
             onStates={setWebStates}
             renderInPage={(vp, box) => compose(vp, box)}
-            footer={record}
             onReady={() => setPaintedFor(artifact.id)}
           />
         );
@@ -1293,10 +1255,6 @@ export function Editor({
           <a href={url || "#"} target="_blank" rel="noreferrer noopener">
             <M3eIcon name="open_in_new" style={{ fontSize: 16, verticalAlign: "middle" }} /> {url}
           </a>
-          <p className="muted small">
-            外部ツール上のコメントは同期されません。結論はここに記録してください。
-          </p>
-          {record}
         </div>
       );
     }

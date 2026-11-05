@@ -5774,11 +5774,6 @@ m3e-snackbar {
 .wlive__refused-body p {
   margin: 0 0 8px;
 }
-.external--record {
-  width: 100%;
-  max-width: 720px;
-  padding: 16px 0 0;
-}
 /* タブレットの枠（ベゼル画像は無いので CSS） */
 .sp-frame--tablet .sp-frame__body {
   background: #2b2b2e;
