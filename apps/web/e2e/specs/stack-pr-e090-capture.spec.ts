@@ -50,10 +50,9 @@ async function videoReviewWorkspace(
   );
   const reviewer = await app.user("mock-nogiku-reviewer");
   await app.signInAs("mock-nogiku-manager");
-  await app.go(revisionPath);
-  await app.drawer("情報");
-  await app.btn("校正者を割り当てる").click();
-  await page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+  void revisionPath;
+  // 校正者は制作物一覧の「担当者」のセルから選ぶ（情報タブからは割り当てない）
+  await app.openReviewersFromList(VIDEO_TITLE);
   await app.pickUser(app.dialog(), reviewer.name);
   await app.dialog().locator("m3e-button", { hasText: "保存" }).click();
   await page.waitForSelector("m3e-dialog[open]", { state: "detached" });

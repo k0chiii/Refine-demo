@@ -25,6 +25,7 @@ import {
   Field,
   Select,
   Switch,
+  TextArea,
   TextInput,
   useFieldId,
   useFieldLabelId,
@@ -437,6 +438,9 @@ export function WorkFormFields({
               onChange={set("title")}
             />
           </Field>
+          <Field label="目的・用途">
+            <TextArea rows={2} value={form.purpose} onChange={set("purpose")} />
+          </Field>
           <Field label="ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
             <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
           </Field>
@@ -467,6 +471,9 @@ export function WorkFormFields({
             value={form.title}
             onChange={set("title")}
           />
+        </Field>
+        <Field label="目的・用途">
+          <TextArea rows={2} value={form.purpose} onChange={set("purpose")} />
         </Field>
         <div className="form">
           <Field label="大ジャンル">

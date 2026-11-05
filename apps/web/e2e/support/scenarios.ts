@@ -41,14 +41,13 @@ export async function submitNextRevision(app: App, n: number, summary = `第${n}
 export async function assignReviewer(app: App, workPath: string) {
   const reviewer = await app.user("mock-nogiku-reviewer");
   await app.signInAs("mock-nogiku-manager");
+  // 校正者は制作物一覧の「担当者」のセルから選ぶ（情報タブからは割り当てない）
+  const dialog = await app.openReviewersFromList(PAMPHLET);
+  await app.pickUser(dialog, reviewer.name);
+  await dialog.locator("m3e-button", { hasText: "保存" }).click();
+  await app.page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   await app.go(workPath);
   await app.pdfReady();
-  await app.drawer("情報");
-  await app.btn("校正者を割り当てる").click();
-  await app.page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
-  await app.pickUser(app.dialog(), reviewer.name);
-  await app.dialog().locator("m3e-button", { hasText: "保存" }).click();
-  await app.page.waitForSelector("m3e-dialog[open]", { state: "detached" });
   return reviewer;
 }
 

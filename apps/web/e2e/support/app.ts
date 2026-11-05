@@ -536,18 +536,26 @@ export class App {
     return this.dialog();
   }
 
-  /** 校正画面の「情報」で目的・用途を保存（WorkForm の編集ダイアログには目的欄が無い） */
+  /** 制作物一覧の「⋮ → 情報を編集」で目的・用途を保存する（情報タブからは編集しない。利用者指示 2026-11-05） */
   async setWorkPurpose(title: string, purpose: string) {
-    await this.openWork(title);
-    await this.drawer("情報");
-    const body = this.page.locator(".drawer__body");
-    // ほかの節にも保存ボタンがあるので、目的・用途の textarea がある節の中で押す
-    const section = body
-      .locator("section.info-tab__section", { has: this.page.locator("textarea") })
-      .first();
-    await section.locator("textarea").fill(purpose);
-    await section.locator("m3e-button", { hasText: "保存" }).click();
+    await this.go("/works");
+    const dialog = await this.editWorkFromList(title);
+    await dialog
+      .locator("m3e-form-field", { hasText: "目的・用途" })
+      .locator("textarea")
+      .fill(purpose);
+    await dialog.locator("m3e-button", { hasText: "保存" }).click();
+    await this.page.waitForSelector("m3e-dialog[open]", { state: "detached" });
     await this.settle();
+  }
+
+  /** 制作物一覧の「担当者」のセルから校正者を選ぶダイアログを開く（情報タブからは割り当てない） */
+  async openReviewersFromList(title: string) {
+    await this.go("/works");
+    const row = this.page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await row.getByRole("button", { name: /の担当者を選ぶ/ }).click();
+    await this.page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+    return this.dialog();
   }
 
   /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */

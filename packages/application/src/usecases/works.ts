@@ -321,7 +321,13 @@ export async function changeWorkLifecycle(
   principal: Principal,
   input: { workId: string; to: Exclude<WorkLifecycle, "finalized">; expectedVersion?: number },
 ): Promise<Work> {
-  const { work } = await loadAuthorizedWork(ctx, principal, input.workId, "work.edit");
+  // 中止は統括・校了者・管理者だけ（work.cancel）。保留・進行中に戻すは制作物の編集（work.edit）
+  const { work } = await loadAuthorizedWork(
+    ctx,
+    principal,
+    input.workId,
+    input.to === "cancelled" ? "work.cancel" : "work.edit",
+  );
   assertExpectedVersion(work, input.expectedVersion);
   // 校了・再開は approvals ユースケース経由のみ（監査イベントを伴う）。
   if (work.lifecycle === "finalized")

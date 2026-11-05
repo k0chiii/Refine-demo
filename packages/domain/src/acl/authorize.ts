@@ -27,6 +27,7 @@ export type WorkAction =
   | "review.assign"
   | "work.finalize"
   | "work.reopen"
+  | "work.cancel"
   | "approval.confirm"
   | "acl.manage"
   | "audit.view";
@@ -119,6 +120,9 @@ export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolea
     case "work.finalize":
     case "work.reopen":
       return roles.isApprover;
+    // 中止は統括・校了者（とシステム管理者）だけ。ACL の manage では中止できない（利用者指示 2026-11-05）
+    case "work.cancel":
+      return roles.isManager || roles.isApprover;
     case "approval.confirm":
       return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "review");
     case "acl.manage":

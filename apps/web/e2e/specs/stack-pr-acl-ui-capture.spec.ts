@@ -98,8 +98,9 @@ test.describe("stack PR acl UI screenshots", () => {
     }
     await shot(page, app, "06-editor-info.png");
 
-    await page.getByRole("button", { name: "編集" }).click();
-    await page.waitForSelector("m3e-dialog[open] m3e-input-chip");
+    // 編集は制作物一覧の「⋮ → 情報を編集」から（情報タブからは編集しない）
+    await app.go("/works");
+    await app.editWorkFromList(PAMPHLET);
     if (PHASE === "after") {
       await expect(page.locator("m3e-dialog[open]")).not.toContainText("機密区分");
     }

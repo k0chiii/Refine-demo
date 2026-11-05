@@ -11,11 +11,9 @@ test.describe("校正者の割り当て", { tag: "@smoke" }, () => {
     const reviewer = await app.user("mock-nogiku-reviewer");
 
     await app.signInAs("mock-nogiku-manager");
-    await app.go(workPath);
-    await app.pdfReady();
-    await app.drawer("情報");
-    await app.btn("校正者を割り当てる").click();
-    const dialog = app.dialog();
+    void workPath;
+    // 校正者は制作物一覧の「担当者」のセルから選ぶ（情報タブからは割り当てない。利用者指示 2026-11-05）
+    const dialog = await app.openReviewersFromList(PAMPHLET);
     // グループ「こうせいはん」は校正者と校了者。選ぶと 2 人のチップが並ぶ
     await app.pickUser(dialog, "こうせいはん");
     await expect(dialog.locator("m3e-input-chip")).toHaveCount(2);

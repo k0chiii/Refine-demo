@@ -5,6 +5,8 @@ import { expect, test, WORKS_ENTRY } from "../support/app";
  * - 主管は「情報を編集」で目的・用途をあとから書ける（保存すると制作物の情報に残る）
  * - 登録できる人は「複製」で、同じ情報の新しい制作物を登録できる（題名は「（コピー）」付きで始まり、行が 1 つ増える）
  * - 主管でない人（制作者）の行には「情報を編集」が出ない
+ * - 主管は ⋮ から保留にして、進行中に戻せる（情報タブからは変えない。利用者指示 2026-11-05）
+ * - 中止は統括・校了者・管理者だけ。校了者の行には「中止する」だけが出る（保留・編集は無い）
  */
 test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
   const title = "公式 Instagram 開催告知";
@@ -46,6 +48,23 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await expect(rows.filter({ hasText: `${title}（コピー）` })).toHaveCount(1);
   });
 
+  test("主管が ⋮ から保留にして、進行中に戻せる", async ({ app, page }) => {
+    await app.signInAs("mock-nogiku-manager");
+    await app.go("/works");
+    const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
+    const more = row.locator(`m3e-icon-button[aria-label="${title} の操作"]`);
+    await app.openMenu(more);
+    const item = (label: string) => row.locator("m3e-menu m3e-menu-item", { hasText: label });
+    await item("保留にする").click();
+    // 保留のあいだは「進行中に戻す」に替わる
+    await app.openMenu(more);
+    await expect(item("保留にする")).toHaveCount(0);
+    await item("進行中に戻す").click();
+    await app.openMenu(more);
+    await expect(item("進行中に戻す")).toHaveCount(0);
+    await expect(item("保留にする")).toHaveCount(1);
+  });
+
   test("制作者の行には「情報を編集」が無く、複製だけ出る", async ({ app, page }) => {
     await app.signInAs("mock-nogiku-creator");
     await app.go("/works");
@@ -53,6 +72,18 @@ test.describe("制作物一覧の行メニュー", { tag: "@smoke" }, () => {
     await app.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
     const menu = row.locator("m3e-menu");
     await expect(menu.locator("m3e-menu-item", { hasText: "複製" })).toBeVisible();
+    await expect(menu.locator("m3e-menu-item", { hasText: "情報を編集" })).toHaveCount(0);
+    await expect(menu.locator("m3e-menu-item", { hasText: "中止する" })).toHaveCount(0);
+  });
+
+  test("校了者の行には「中止する」が出て、保留・編集は出ない", async ({ app, page }) => {
+    await app.signInAs("mock-nogiku-approver");
+    await app.go("/works");
+    const row = page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await app.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
+    const menu = row.locator("m3e-menu");
+    await expect(menu.locator("m3e-menu-item", { hasText: "中止する" })).toBeVisible();
+    await expect(menu.locator("m3e-menu-item", { hasText: "保留にする" })).toHaveCount(0);
     await expect(menu.locator("m3e-menu-item", { hasText: "情報を編集" })).toHaveCount(0);
   });
 });
