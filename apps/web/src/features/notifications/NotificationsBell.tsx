@@ -143,6 +143,45 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
 }
 
 /**
+ * ポインタで押す印。行（m3e-list-action）は素の click を自分で受けて開くので、React の合成イベントではなく
+ * 素のリスナーで止める（React は root で受けるため、stopPropagation しても行には届いてしまう）
+ */
+function PointerMarkRead({ slot, onClick }: { slot?: string | undefined; onClick: () => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const latest = useRef(onClick);
+  latest.current = onClick;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const stop = (e: Event) => e.stopPropagation();
+    const click = (e: Event) => {
+      e.stopPropagation();
+      e.preventDefault();
+      latest.current();
+    };
+    el.addEventListener("pointerdown", stop);
+    el.addEventListener("pointerup", stop);
+    el.addEventListener("click", click);
+    return () => {
+      el.removeEventListener("pointerdown", stop);
+      el.removeEventListener("pointerup", stop);
+      el.removeEventListener("click", click);
+    };
+  }, []);
+  return (
+    <span
+      ref={ref}
+      {...(slot ? { slot } : {})}
+      className="notif-row__read notif-row__read--pointer"
+      aria-hidden="true"
+      title="既読にする"
+    >
+      <M3eIcon name="done" />
+    </span>
+  );
+}
+
+/**
  * 行の「既読にする」。行を開かずにその通知だけ既読にする（押しても画面は移らない）。
  * pointerOnly: 行そのものがボタン（m3e-list-action）のときは、中にボタンを入れ子にしない（a11y nested-interactive）。
  * ポインタで押せる印だけにし、キーボード・読み上げでは行を開く／「すべて既読にする」／長押しのメニューで既読にする
@@ -158,22 +197,7 @@ export function MarkReadButton({
   slot?: string;
   pointerOnly?: boolean;
 }) {
-  if (pointerOnly)
-    return (
-      <span
-        {...(slot ? { slot } : {})}
-        className="notif-row__read notif-row__read--pointer"
-        aria-hidden="true"
-        title="既読にする"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
-      >
-        <M3eIcon name="done" />
-      </span>
-    );
+  if (pointerOnly) return <PointerMarkRead slot={slot} onClick={onClick} />;
   return (
     <M3eIconButton
       {...(slot ? { slot } : {})}
