@@ -229,14 +229,19 @@ export async function sendTestNotification(
  * 通知を読む人に返す形にする。作った後に ACL が取り消された・制作物が消えた等で今は見られない通知は、
  * 文面と ID を伏せて返す（§5.2-10。作成時の判定だけに頼らない）。
  */
+/** 読む人に返す通知。見られる制作物の通知には制作物名を添える（全画面の「制作物で絞り込み」に使う） */
+export interface PresentedNotification extends Notification {
+  workTitle?: string;
+}
+
 export async function presentNotifications(
   ctx: AppContext,
   principal: Principal,
   notifications: readonly Notification[],
-): Promise<Notification[]> {
+): Promise<PresentedNotification[]> {
   const load = subjectLoader(ctx);
   const deleted = deletedThreadLoader(ctx);
-  const out: Notification[] = [];
+  const out: PresentedNotification[] = [];
   for (const n of notifications) {
     if (n.workId === undefined) {
       out.push(n);
@@ -255,7 +260,8 @@ export async function presentNotifications(
       continue;
     }
     const shown = isFeedbackNotificationKind(n.kind) ? await relinkFeedbackNotification(ctx, n) : n;
-    out.push((await deleted(shown)) ? degradeDeletedComment(shown) : shown);
+    const final = (await deleted(shown)) ? degradeDeletedComment(shown) : shown;
+    out.push({ ...final, workTitle: loaded.work.title });
   }
   return out;
 }
@@ -281,7 +287,7 @@ export async function listMyNotifications(
   principal: Principal,
   limit = 50,
   opts: { unreadOnly?: boolean } = {},
-): Promise<Notification[]> {
+): Promise<PresentedNotification[]> {
   return presentNotifications(
     ctx,
     principal,

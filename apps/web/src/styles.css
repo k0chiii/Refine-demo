@@ -2371,6 +2371,26 @@ m3e-dialog {
   min-height: 56px;
   padding-block: 4px;
 }
+/* 通知の全画面: 絞り込み（すべて／未読・制作物・種類）を 1 行に。狭ければ折り返す */
+.notif-page__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.notif-page__select {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 320px;
+}
+.notif-page__list {
+  margin: 0 -16px;
+}
+.notif-page__list .list__item {
+  --m3e-list-item-container-shape: 0;
+  --m3e-list-item-hover-container-shape: 0;
+  --m3e-list-item-focus-container-shape: 0;
+}
 .notif-menu__header {
   display: flex;
   align-items: center;
