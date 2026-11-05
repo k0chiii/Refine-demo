@@ -355,6 +355,12 @@ export function Editor({
     return () => ro.disconnect();
   }, [bodyEl]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  // スレッドを開いたら、そのスレッドの通知はまとめて既読にする（同じ人からの続けてのコメントの通知が残らない。利用者指示 2026-11-05）
+  const markThreadRead = useMutation(api.notifications.markThreadRead);
+  useEffect(() => {
+    if (!activeThreadId) return;
+    void markThreadRead({ threadId: activeThreadId }).catch(() => undefined);
+  }, [activeThreadId]);
   /** スレッドのパネルで開いているコメント（一覧のカードは選ぶだけ。開くとスレッドが一覧・シートを差し替える） */
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   /** 一覧のカードの「反映しない」「次の版で対応」から開いたスレッドと、開いておく理由の欄 */
