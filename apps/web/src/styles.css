@@ -2383,9 +2383,6 @@ m3e-dialog {
   min-width: 160px;
   max-width: 320px;
 }
-.notif-page__list {
-  margin: 0 -16px;
-}
 .notif-page__list .list__item {
   --m3e-list-item-container-shape: 0;
   --m3e-list-item-hover-container-shape: 0;
@@ -2459,6 +2456,21 @@ m3e-dialog {
 /* 既読にする（未読の行だけ）。常に見える */
 .notif-row__read {
   margin: -4px 0 -4px -8px;
+}
+/* 行がボタンのとき（シート・全画面）の、ポインタで押す印。大きさと当たり判定はアイコンボタンと同じ 40 */
+.notif-row__read--pointer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px -8px 0;
+  border-radius: var(--mf-shape-full);
+  color: var(--mf-on-surface-variant);
+  cursor: pointer;
+}
+.notif-row__read--pointer:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
 }
 .notif-row__more {
   opacity: 0;
