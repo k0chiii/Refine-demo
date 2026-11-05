@@ -2445,6 +2445,21 @@ m3e-dialog {
   color: var(--mf-on-surface-variant);
 }
 /* 通知行: ホバーで ⋮（Slack 式。右クリック / Shift+F10 も同じメニュー） */
+.notif-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  /* menu item の trailing-icon の枠（1em）に収めず、ボタンの幅で出す */
+  width: auto;
+}
+/* パネルの ⋮ は右クリック・Shift+F10 のメニューの口としてだけ残す（既読は行のボタン、未読に戻すはメニュー） */
+#notif-menu .notif-row__more {
+  display: none;
+}
+/* 既読にする（未読の行だけ）。常に見える */
+.notif-row__read {
+  margin: -4px 0 -4px -8px;
+}
 .notif-row__more {
   opacity: 0;
   margin: -4px -8px;
@@ -5778,11 +5793,6 @@ m3e-snackbar {
 }
 .wlive__refused-body p {
   margin: 0 0 8px;
-}
-.external--record {
-  width: 100%;
-  max-width: 720px;
-  padding: 16px 0 0;
 }
 /* タブレットの枠（ベゼル画像は無いので CSS） */
 .sp-frame--tablet .sp-frame__body {

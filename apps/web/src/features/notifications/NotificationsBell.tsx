@@ -142,6 +142,33 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
   );
 }
 
+/** 行の「既読にする」。行を開かずにその通知だけ既読にする（押しても画面は移らない） */
+function MarkReadButton({
+  title,
+  onClick,
+  slot,
+}: {
+  title: string;
+  onClick: () => void;
+  slot?: string;
+}) {
+  return (
+    <M3eIconButton
+      {...(slot ? { slot } : {})}
+      className="notif-row__read"
+      aria-label={`${title} を既読にする`}
+      title="既読にする"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <M3eIcon name="done" />
+    </M3eIconButton>
+  );
+}
+
 /**
  * medium 以上の通知パネル（F-11 最小通知 / D8）。M3 の Scaffold では「浮遊する一時的なペイン」。幅は推奨値 360。
  * 押した通知は既読にして、対象（その版のエディタ）へ飛ぶ。
@@ -149,9 +176,11 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
 function NotifMenuPanelRow({
   n,
   openOne,
+  onMarkRead,
 }: {
   n: NonNullable<ReturnType<typeof useNotifications>["list"]>[number];
   openOne: ReturnType<typeof useNotifications>["openOne"];
+  onMarkRead: (id: Id<"notifications">) => void;
 }) {
   const menuId = `notif-ctx-${n.id}`;
   const ctxOpen = useNotificationRowContextOpen(menuId);
@@ -172,10 +201,16 @@ function NotifMenuPanelRow({
         <span className="notif__sub">{n.body}</span>
         <span className="notif__time">{formatJstShort(n.createdAt)}</span>
       </span>
-      <NotificationRowMoreTrigger
-        n={{ id: n.id, readAt: n.readAt, title: n.title }}
-        menuId={menuId}
-      />
+      <span slot="trailing-icon" className="notif-row__actions">
+        {/* 未読の行には、開かずに既読にするボタンを常に出す（利用者指示 2026-11-05） */}
+        {n.readAt === undefined ? (
+          <MarkReadButton title={n.title} onClick={() => onMarkRead(n.id as Id<"notifications">)} />
+        ) : null}
+        <NotificationRowMoreTrigger
+          n={{ id: n.id, readAt: n.readAt, title: n.title }}
+          menuId={menuId}
+        />
+      </span>
     </M3eMenuItem>
   );
 }
@@ -220,7 +255,9 @@ function Menu({ id }: { id: string }) {
             {filter === "unread" ? "未読の通知はありません" : "通知はありません"}
           </p>
         ) : (
-          list.map((n) => <NotifMenuPanelRow key={n.id} n={n} openOne={openOne} />)
+          list.map((n) => (
+            <NotifMenuPanelRow key={n.id} n={n} openOne={openOne} onMarkRead={handlers.markRead} />
+          ))
         )}
       </M3eMenu>
       {(list ?? []).map((n) => (
@@ -325,6 +362,13 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
               </span>
+              {n.readAt === undefined ? (
+                <MarkReadButton
+                  slot="trailing"
+                  title={n.title}
+                  onClick={() => void doMarkReadOnly.run(n.id as Id<"notifications">)}
+                />
+              ) : null}
             </M3eListAction>
           ))}
         </M3eActionList>

@@ -437,12 +437,13 @@ export function WorkFormFields({
               onChange={set("title")}
             />
           </Field>
-          <Field label="小ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
+          <Field label="ジャンル" required hint="選ぶと区分と媒体の既定が入ります">
             <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
           </Field>
           <DateField
             label="仕上がり日"
             kind="date"
+            timePolicy="hidden"
             value={form.finishAt}
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
@@ -481,7 +482,7 @@ export function WorkFormFields({
               ))}
             </Select>
           </Field>
-          <Field label="小ジャンル" hint="選ぶと区分と媒体の既定が入ります">
+          <Field label="ジャンル" hint="選ぶと区分と媒体の既定が入ります">
             <SubGenreSelect genre={form.genre} value={form.subGenre} onChange={pickSubGenre} />
           </Field>
           <Field label="媒体" required>
@@ -533,6 +534,7 @@ export function WorkFormFields({
           <DateField
             label="仕上がり日"
             kind="date"
+            timePolicy="hidden"
             value={form.finishAt}
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />

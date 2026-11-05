@@ -36,7 +36,6 @@ interface Props {
   /** 「このフレームにコメント」 */
   onCommentFrame: (d: FigmaDraft) => void;
   renderInPage?: (vp: Viewport) => ReactNode;
-  footer?: ReactNode;
   /** 埋め込みの読み込みが終わった（親はそれまで紙面を隠して読み込み中の指標を出す。docs/UI_M3E.md §65） */
   onReady?: () => void;
 }
@@ -62,7 +61,6 @@ export function FigmaEmbedViewer({
   canComment,
   onCommentFrame,
   renderInPage,
-  footer,
   onReady,
 }: Props) {
   const current = frames.find((f) => f.id === currentId) ?? frames[0];
@@ -165,7 +163,6 @@ export function FigmaEmbedViewer({
         {here.length > 0 ? (
           <p className="wlive__caption">このフレームのコメント {here.length} 件</p>
         ) : null}
-        {footer}
       </div>
     </div>
   );

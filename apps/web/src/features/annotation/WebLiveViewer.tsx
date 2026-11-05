@@ -81,8 +81,6 @@ interface Props {
   onStates?: (states: ReadonlyMap<string, WebAnchorState>) => void;
   /** 投稿欄（ビューアの上）。vp は画面（縮小後）の大きさ、box は選んだ要素の位置（縮小後の px） */
   renderInPage?: (vp: Viewport, box: PageRect | null) => ReactNode;
-  /** 下に置くもの（外部での議論の結果の記録） */
-  footer?: ReactNode;
   /** サイトの読み込みが済んだ（ブリッジが応えた・応えないと分かったとき）。親が読み込み中の指標をひとつだけ出して待つ（§65） */
   onReady?: () => void;
 }
@@ -117,7 +115,6 @@ export function WebLiveViewer({
   focusRequest,
   onStates,
   renderInPage,
-  footer,
   onReady,
 }: Props) {
   const compact = useWindowClass() === "compact";
@@ -571,7 +568,6 @@ export function WebLiveViewer({
             </div>
           ) : null}
         </div>
-        {footer}
       </div>
     </div>
   );
