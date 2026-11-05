@@ -146,7 +146,17 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
  * ポインタで押す印。行（m3e-list-action）は素の click を自分で受けて開くので、React の合成イベントではなく
  * 素のリスナーで止める（React は root で受けるため、stopPropagation しても行には届いてしまう）
  */
-function PointerMarkRead({ slot, onClick }: { slot?: string | undefined; onClick: () => void }) {
+function PointerReadToggle({
+  slot,
+  onClick,
+  icon: iconName,
+  label,
+}: {
+  slot?: string | undefined;
+  onClick: () => void;
+  icon: string;
+  label: string;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   const latest = useRef(onClick);
   latest.current = onClick;
@@ -174,43 +184,50 @@ function PointerMarkRead({ slot, onClick }: { slot?: string | undefined; onClick
       {...(slot ? { slot } : {})}
       className="notif-row__read notif-row__read--pointer"
       aria-hidden="true"
-      title="既読にする"
+      title={label}
     >
-      <M3eIcon name="done" />
+      <M3eIcon name={iconName} />
     </span>
   );
 }
 
 /**
- * 行の「既読にする」。行を開かずにその通知だけ既読にする（押しても画面は移らない）。
+ * 行の 既読⇄未読 の切り替え（利用者指示 2026-11-05）。未読の行は ✓（既読にする）、既読の行は「未読にする」。
+ * 行を開かずにその通知だけ切り替える（押しても画面は移らない）。
  * pointerOnly: 行そのものがボタン（m3e-list-action）のときは、中にボタンを入れ子にしない（a11y nested-interactive）。
- * ポインタで押せる印だけにし、キーボード・読み上げでは行を開く／「すべて既読にする」／長押しのメニューで既読にする
+ * ポインタで押せる印だけにし、キーボード・読み上げでは行を開く／「すべて既読にする」／長押しのメニューで切り替える
  */
-export function MarkReadButton({
+export function ReadToggle({
   title,
-  onClick,
+  read,
+  onToggle,
   slot,
   pointerOnly = false,
 }: {
   title: string;
-  onClick: () => void;
+  /** いま既読か（既読なら「未読にする」を出す） */
+  read: boolean;
+  onToggle: () => void;
   slot?: string;
   pointerOnly?: boolean;
 }) {
-  if (pointerOnly) return <PointerMarkRead slot={slot} onClick={onClick} />;
+  const iconName = read ? "mark_chat_unread" : "done";
+  const label = read ? "未読にする" : "既読にする";
+  if (pointerOnly)
+    return <PointerReadToggle slot={slot} onClick={onToggle} icon={iconName} label={label} />;
   return (
     <M3eIconButton
       {...(slot ? { slot } : {})}
       className="notif-row__read"
-      aria-label={`${title} を既読にする`}
-      title="既読にする"
+      aria-label={`${title} を${label}`}
+      title={label}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
-        onClick();
+        onToggle();
       }}
     >
-      <M3eIcon name="done" />
+      <M3eIcon name={iconName} />
     </M3eIconButton>
   );
 }
@@ -223,10 +240,12 @@ function NotifMenuPanelRow({
   n,
   openOne,
   onMarkRead,
+  onMarkUnread,
 }: {
   n: NonNullable<ReturnType<typeof useNotifications>["list"]>[number];
   openOne: ReturnType<typeof useNotifications>["openOne"];
   onMarkRead: (id: Id<"notifications">) => void;
+  onMarkUnread: (id: Id<"notifications">) => void;
 }) {
   const menuId = `notif-ctx-${n.id}`;
   const ctxOpen = useNotificationRowContextOpen(menuId);
@@ -248,10 +267,14 @@ function NotifMenuPanelRow({
         <span className="notif__time">{formatJstShort(n.createdAt)}</span>
       </span>
       <span slot="trailing-icon" className="notif-row__actions">
-        {/* 未読の行には、開かずに既読にするボタンを常に出す（利用者指示 2026-11-05） */}
-        {n.readAt === undefined ? (
-          <MarkReadButton title={n.title} onClick={() => onMarkRead(n.id as Id<"notifications">)} />
-        ) : null}
+        {/* 開かずに 既読⇄未読 を切り替えるボタンを常に出す（利用者指示 2026-11-05） */}
+        <ReadToggle
+          title={n.title}
+          read={n.readAt !== undefined}
+          onToggle={() =>
+            (n.readAt === undefined ? onMarkRead : onMarkUnread)(n.id as Id<"notifications">)
+          }
+        />
         <NotificationRowMoreTrigger
           n={{ id: n.id, readAt: n.readAt, title: n.title }}
           menuId={menuId}
@@ -302,7 +325,13 @@ function Menu({ id }: { id: string }) {
           </p>
         ) : (
           list.map((n) => (
-            <NotifMenuPanelRow key={n.id} n={n} openOne={openOne} onMarkRead={handlers.markRead} />
+            <NotifMenuPanelRow
+              key={n.id}
+              n={n}
+              openOne={openOne}
+              onMarkRead={handlers.markRead}
+              onMarkUnread={handlers.markUnread}
+            />
           ))
         )}
       </M3eMenu>
@@ -408,14 +437,17 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
               </span>
-              {n.readAt === undefined ? (
-                <MarkReadButton
-                  slot="trailing"
-                  pointerOnly
-                  title={n.title}
-                  onClick={() => void doMarkReadOnly.run(n.id as Id<"notifications">)}
-                />
-              ) : null}
+              <ReadToggle
+                slot="trailing"
+                pointerOnly
+                title={n.title}
+                read={n.readAt !== undefined}
+                onToggle={() =>
+                  void (n.readAt === undefined ? doMarkReadOnly : doMarkUnread).run(
+                    n.id as Id<"notifications">,
+                  )
+                }
+              />
             </M3eListAction>
           ))}
         </M3eActionList>

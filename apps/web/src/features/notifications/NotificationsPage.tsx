@@ -14,7 +14,7 @@ import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eListAction } from "@m3e/react/list";
 import { M3eOption } from "@m3e/react/option";
-import { MarkReadButton } from "./NotificationsBell";
+import { ReadToggle } from "./NotificationsBell";
 import {
   notificationDestination,
   notificationIcon,
@@ -72,12 +72,16 @@ export function NotificationsPage({ search }: { search: NotificationsSearch }) {
     ...(unread ? { unreadOnly: true } : {}),
   });
   const markRead = useMutation(api.notifications.markRead);
+  const markUnread = useMutation(api.notifications.markUnread);
   const markAllRead = useMutation(api.notifications.markAllRead);
   const doMarkAll = useAction(async () => {
     await markAllRead({});
   });
   const doMarkRead = useAction(async (id: Id<"notifications">) => {
     await markRead({ notificationId: id });
+  });
+  const doMarkUnread = useAction(async (id: Id<"notifications">) => {
+    await markUnread({ notificationId: id });
   });
   const setSearch = (next: {
     unread?: boolean | undefined;
@@ -195,14 +199,17 @@ export function NotificationsPage({ search }: { search: NotificationsSearch }) {
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
               </span>
-              {n.readAt === undefined ? (
-                <MarkReadButton
-                  slot="trailing"
-                  pointerOnly
-                  title={n.title}
-                  onClick={() => void doMarkRead.run(n.id as Id<"notifications">)}
-                />
-              ) : null}
+              <ReadToggle
+                slot="trailing"
+                pointerOnly
+                title={n.title}
+                read={n.readAt !== undefined}
+                onToggle={() =>
+                  void (n.readAt === undefined ? doMarkRead : doMarkUnread).run(
+                    n.id as Id<"notifications">,
+                  )
+                }
+              />
             </M3eListAction>
           ))}
         </Group>

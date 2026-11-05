@@ -43,5 +43,16 @@ test.describe("通知", { tag: "@core" }, () => {
     await expect(rows).toHaveCount(0);
     await page.locator(".notif-page__filters .hub__tabs m3e-button", { hasText: "すべて" }).click();
     await expect(rows.first()).toBeVisible();
+
+    // 既読の行は同じ位置のボタンで未読に戻せる
+    const read = page.locator('.hub[data-hub="notifications"] .notif:not(.notif--unread)').first();
+    await expect(read).toBeVisible();
+    const unreadBefore = await page
+      .locator('.hub[data-hub="notifications"] .notif--unread')
+      .count();
+    await read.locator(".notif-row__read").click();
+    await expect(page.locator('.hub[data-hub="notifications"] .notif--unread')).toHaveCount(
+      unreadBefore + 1,
+    );
   });
 });
