@@ -9,6 +9,7 @@ import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { showDeviceNotification } from "@/lib/push";
 import { useDevicePush } from "./useDevicePush";
 import { useSystemNotificationSync } from "./useSystemNotificationSync";
+import { notificationIcon } from "./notificationKinds";
 import {
   useNotificationLongPressSheet,
   NotificationRowContextMenu,
@@ -24,26 +25,7 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 
-const icon: Record<string, string> = {
-  revision_submitted: "upload_file",
-  review_assigned: "assignment_ind",
-  comment_posted: "chat",
-  comment_decided: "rule",
-  comment_assigned: "person_pin",
-  check_requested: "fact_check",
-  check_completed: "task_alt",
-  deadline_approaching: "alarm",
-  work_finalized: "verified",
-  work_reopened: "lock_open",
-  revision_voided: "block",
-  auto_proofread_done: "smart_toy",
-  rule_proposed: "spellcheck",
-  rule_proposal_decided: "rule",
-  mentioned: "alternate_email",
-  feedback_posted: "forum",
-  feedback_mentioned: "alternate_email",
-  test: "send",
-};
+const icon = notificationIcon;
 
 function useUnread() {
   return useQuery(api.notifications.unreadCount, {}) ?? 0;
@@ -199,6 +181,7 @@ function NotifMenuPanelRow({
 }
 
 function Menu({ id }: { id: string }) {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<NotifFilter>("all");
   const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } =
     useNotifications(filter);
@@ -220,6 +203,18 @@ function Menu({ id }: { id: string }) {
             すべて既読にする
           </M3eMenuItem>
         ) : null}
+        {/* 全画面の通知（制作物・種類で絞り込める）。menu の中なので menu item で置く */}
+        <M3eMenuItem
+          onClick={() =>
+            void navigate({
+              to: "/notifications",
+              search: filter === "unread" ? { unread: true } : {},
+            })
+          }
+        >
+          <M3eIcon slot="icon" name="fullscreen" />
+          すべての通知
+        </M3eMenuItem>
         {!list || list.length === 0 ? (
           <p className="muted small notif-menu__empty">
             {filter === "unread" ? "未読の通知はありません" : "通知はありません"}
@@ -244,6 +239,7 @@ function Menu({ id }: { id: string }) {
  * 下部バーの「通知」から開き、外側を押す・下へ払う・通知を押すと閉じる。
  */
 function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<NotifFilter>("all");
   const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } =
     useNotifications(filter);
@@ -278,6 +274,18 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div slot="header" className="notif-sheet__header">
         <span className="title-small">通知</span>
         <span className="spacer" />
+        <M3eIconButton
+          aria-label="すべての通知を開く"
+          onClick={() => {
+            onClose();
+            void navigate({
+              to: "/notifications",
+              search: filter === "unread" ? { unread: true } : {},
+            });
+          }}
+        >
+          <M3eIcon name="fullscreen" />
+        </M3eIconButton>
         {unread > 0 ? (
           <M3eButton
             variant="text"
