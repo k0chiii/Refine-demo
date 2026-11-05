@@ -443,6 +443,7 @@ export function WorkFormFields({
           <DateField
             label="仕上がり日"
             kind="date"
+            timePolicy="hidden"
             value={form.finishAt}
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
@@ -533,6 +534,7 @@ export function WorkFormFields({
           <DateField
             label="仕上がり日"
             kind="date"
+            timePolicy="hidden"
             value={form.finishAt}
             onChange={(v) => setForm((f) => withFinishAt(f, v))}
           />
