@@ -11,7 +11,7 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await page.locator('.shell__appbar m3e-icon-button[aria-label="制作物を登録"]').click();
     const dialog = app.dialog();
     await dialog.locator("input").first().fill(title);
-    await app.pickSelectOption(dialog, "小ジャンル", "印刷物（紙・ビラ）");
+    await app.pickSelectOption(dialog, "ジャンル", "印刷物（紙・ビラ）");
     await app.fillOutlinedDate(dialog, "仕上がり日", "2026-12-01");
     await app.pickUser(dialog.locator("m3e-form-field", { hasText: "制作者" }), creator.name);
     // 校了者は登録で選ぶ（名簿から黙って入れない）
