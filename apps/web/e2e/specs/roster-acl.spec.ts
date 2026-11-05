@@ -58,5 +58,9 @@ test.describe("校正者名簿と閲覧権限", { tag: "@smoke" }, () => {
     await app.openWork(title);
     await app.drawer("情報");
     await expect(page.locator(".drawer__body")).toContainText(purpose);
+    // 権限は情報タブでは見るだけ（付与はシステム管理から。利用者指示 2026-11-05）
+    const acl = page.locator(".info-tab__section[aria-label='権限']");
+    await expect(acl).toBeVisible();
+    await expect(acl.locator("m3e-button", { hasText: "追加" })).toHaveCount(0);
   });
 });
