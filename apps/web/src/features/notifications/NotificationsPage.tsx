@@ -8,18 +8,48 @@ import { formatJstShort } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { AppBarSlot } from "@/ui/AppBarSlot";
 import { ChoiceGroup } from "@/ui/ChoiceGroup";
-import { ControlledSelect, Field } from "@/ui/Field";
+import { ControlledSelect, Field, useFieldId, useFieldLabelId } from "@/ui/Field";
 import { Loading } from "@/ui/Loading";
 import { M3eButton } from "@m3e/react/button";
 import { M3eIcon } from "@m3e/react/icon";
-import { M3eIconButton } from "@m3e/react/icon-button";
-import { M3eActionList, M3eListAction } from "@m3e/react/list";
+import { M3eListAction } from "@m3e/react/list";
 import { M3eOption } from "@m3e/react/option";
+import { MarkReadButton } from "./NotificationsBell";
 import {
   notificationDestination,
   notificationIcon,
   notificationKindLabel,
 } from "./notificationKinds";
+
+/** 絞り込みの select。項目名（Field）と結び付けて読み上げ名を持たせる */
+function FilterSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (value: string | undefined) => void;
+  options: readonly (readonly [string, string])[];
+}) {
+  const fieldId = useFieldId(undefined);
+  const labelId = useFieldLabelId();
+  return (
+    <ControlledSelect
+      {...(fieldId ? { id: fieldId } : {})}
+      {...(labelId ? { "aria-labelledby": labelId } : {})}
+      className="select"
+      value={value}
+      onValueChange={(v) => onChange(v[0])}
+    >
+      <M3eOption value="">すべて</M3eOption>
+      {options.map(([v, label]) => (
+        <M3eOption key={v} value={v}>
+          {label}
+        </M3eOption>
+      ))}
+    </ControlledSelect>
+  );
+}
 
 export interface NotificationsSearch {
   unread?: boolean;
@@ -117,34 +147,20 @@ export function NotificationsPage({ search }: { search: NotificationsSearch }) {
         />
         <div className="notif-page__select">
           <Field label="制作物">
-            <ControlledSelect
-              className="select"
+            <FilterSelect
               value={search.work ?? ""}
-              onValueChange={(v) => setSearch({ ...search, work: v[0] })}
-            >
-              <M3eOption value="">すべて</M3eOption>
-              {works.map(([id, title]) => (
-                <M3eOption key={id} value={id}>
-                  {title}
-                </M3eOption>
-              ))}
-            </ControlledSelect>
+              onChange={(v) => setSearch({ ...search, work: v })}
+              options={works.map(([id, title]) => [id, title])}
+            />
           </Field>
         </div>
         <div className="notif-page__select">
           <Field label="種類">
-            <ControlledSelect
-              className="select"
+            <FilterSelect
               value={search.kind ?? ""}
-              onValueChange={(v) => setSearch({ ...search, kind: v[0] })}
-            >
-              <M3eOption value="">すべて</M3eOption>
-              {kinds.map((k) => (
-                <M3eOption key={k} value={k}>
-                  {notificationKindLabel[k] ?? k}
-                </M3eOption>
-              ))}
-            </ControlledSelect>
+              onChange={(v) => setSearch({ ...search, kind: v })}
+              options={kinds.map((k) => [k, notificationKindLabel[k] ?? k])}
+            />
           </Field>
         </div>
       </div>
@@ -157,42 +173,38 @@ export function NotificationsPage({ search }: { search: NotificationsSearch }) {
           </span>
         </Empty>
       ) : (
-        <Group title={unread ? "未読" : "通知"} count={rows.length} label="通知">
-          <M3eActionList className="list notif-list notif-page__list" aria-label="通知">
-            {rows.map((n) => (
-              <M3eListAction
-                key={n.id}
-                className={`list__item notif ${n.readAt === undefined ? "notif--unread" : ""}`}
-                data-kind={n.kind}
-                onClick={() => void open(n)}
-              >
-                <M3eIcon slot="leading" name={notificationIcon[n.kind] ?? "notifications"} />
-                <span className="list__headline notif__title">
-                  {n.readAt === undefined ? <span className="sr-only">未読 </span> : null}
-                  {n.title}
-                </span>
-                <span slot="supporting-text">
-                  {n.body}
-                  <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
-                </span>
-                {n.readAt === undefined ? (
-                  <M3eIconButton
-                    slot="trailing"
-                    className="notif-row__read"
-                    aria-label={`${n.title} を既読にする`}
-                    title="既読にする"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void doMarkRead.run(n.id as Id<"notifications">);
-                    }}
-                  >
-                    <M3eIcon name="done" />
-                  </M3eIconButton>
-                ) : null}
-              </M3eListAction>
-            ))}
-          </M3eActionList>
+        <Group
+          title={unread ? "未読" : "通知"}
+          count={rows.length}
+          label="通知"
+          className="notif-page__list"
+        >
+          {rows.map((n) => (
+            <M3eListAction
+              key={n.id}
+              className={`list__item notif ${n.readAt === undefined ? "notif--unread" : ""}`}
+              data-kind={n.kind}
+              onClick={() => void open(n)}
+            >
+              <M3eIcon slot="leading" name={notificationIcon[n.kind] ?? "notifications"} />
+              <span className="list__headline notif__title">
+                {n.readAt === undefined ? <span className="sr-only">未読 </span> : null}
+                {n.title}
+              </span>
+              <span slot="supporting-text">
+                {n.body}
+                <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
+              </span>
+              {n.readAt === undefined ? (
+                <MarkReadButton
+                  slot="trailing"
+                  pointerOnly
+                  title={n.title}
+                  onClick={() => void doMarkRead.run(n.id as Id<"notifications">)}
+                />
+              ) : null}
+            </M3eListAction>
+          ))}
         </Group>
       )}
     </div>

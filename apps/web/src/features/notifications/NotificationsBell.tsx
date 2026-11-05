@@ -142,16 +142,38 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
   );
 }
 
-/** 行の「既読にする」。行を開かずにその通知だけ既読にする（押しても画面は移らない） */
-function MarkReadButton({
+/**
+ * 行の「既読にする」。行を開かずにその通知だけ既読にする（押しても画面は移らない）。
+ * pointerOnly: 行そのものがボタン（m3e-list-action）のときは、中にボタンを入れ子にしない（a11y nested-interactive）。
+ * ポインタで押せる印だけにし、キーボード・読み上げでは行を開く／「すべて既読にする」／長押しのメニューで既読にする
+ */
+export function MarkReadButton({
   title,
   onClick,
   slot,
+  pointerOnly = false,
 }: {
   title: string;
   onClick: () => void;
   slot?: string;
+  pointerOnly?: boolean;
 }) {
+  if (pointerOnly)
+    return (
+      <span
+        {...(slot ? { slot } : {})}
+        className="notif-row__read notif-row__read--pointer"
+        aria-hidden="true"
+        title="既読にする"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+      >
+        <M3eIcon name="done" />
+      </span>
+    );
   return (
     <M3eIconButton
       {...(slot ? { slot } : {})}
@@ -365,6 +387,7 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
               {n.readAt === undefined ? (
                 <MarkReadButton
                   slot="trailing"
+                  pointerOnly
                   title={n.title}
                   onClick={() => void doMarkReadOnly.run(n.id as Id<"notifications">)}
                 />
