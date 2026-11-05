@@ -466,16 +466,16 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
           .filter((n) => n.recipientId === userId)
           .sort((a, b) => b.createdAt - a.createdAt)
           .slice(0, limit),
-      listUnreadForUser: async (userId, { createdAtOrBefore, limit }) =>
+      listUnreadForUser: async (userId, { createdAtOrBefore, limit, order = "asc" }) =>
         state.notifications
           .all()
           .filter(
             (n) =>
               n.recipientId === userId &&
               n.readAt === undefined &&
-              n.createdAt <= createdAtOrBefore,
+              (createdAtOrBefore === undefined || n.createdAt <= createdAtOrBefore),
           )
-          .sort((a, b) => a.createdAt - b.createdAt)
+          .sort((a, b) => (order === "asc" ? a.createdAt - b.createdAt : b.createdAt - a.createdAt))
           .slice(0, limit),
       findById: async (id) => state.notifications.get(id),
       update: async (n) => state.notifications.put(n),

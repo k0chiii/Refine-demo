@@ -24,12 +24,16 @@ export function EditWorkDialog({
   work,
   open,
   onClose,
+  canEditReviewers = false,
 }: {
   work: Work;
   open: boolean;
   onClose: () => void;
+  /** 校正者を割り当てる権限（works.get の can.editReviewers）。無ければ校正者は見るだけ */
+  canEditReviewers?: boolean;
 }) {
   const update = useMutation(api.works.update);
+  const setReviewers = useMutation(api.reviews.setReviewers);
   const me = useQuery(api.me.me, {});
   // 校了者を決める権限が無い人は、校了者の項目を送らない（変えられないので、見せるだけ）
   const canAssignApprovers = me?.canAssignApprovers === true;
@@ -60,6 +64,12 @@ export function EditWorkDialog({
         ...workFormToFields(form),
       },
     });
+    // 校正者は版の割り当て（reviews.setReviewers）なので、変わったときだけ別に保存する
+    if (canEditReviewers && !sameIds(form.reviewerIds, work.reviewerIds ?? []))
+      await setReviewers({
+        workId: work.id as Id<"works">,
+        reviewerIds: form.reviewerIds as Id<"users">[],
+      });
     onClose();
   });
 
@@ -72,6 +82,7 @@ export function EditWorkDialog({
           setForm={setForm}
           mode="edit"
           canAssignApprovers={canAssignApprovers}
+          canEditReviewers={canEditReviewers}
         />
       </div>
       <div slot="actions" className="row">
@@ -97,5 +108,19 @@ export function EditWorkDialog({
 export function EditWorkById({ workId, onClose }: { workId: string; onClose: () => void }) {
   const data = useQuery(api.works.get, { workId });
   if (!data) return null;
-  return <EditWorkDialog work={data.work} open onClose={onClose} />;
+  return (
+    <EditWorkDialog
+      work={data.work}
+      open
+      onClose={onClose}
+      canEditReviewers={data.can.editReviewers}
+    />
+  );
+}
+
+/** 同じ人の集まりか（順序は問わない） */
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sb = [...b].sort();
+  return [...a].sort().every((id, i) => id === sb[i]);
 }

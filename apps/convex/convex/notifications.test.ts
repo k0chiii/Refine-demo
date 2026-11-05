@@ -55,6 +55,30 @@ describe("Convex 統合: 通知の認可（§5.2-10）", () => {
   });
 });
 
+describe("Convex 統合: 通知の一覧の未読の絞り込み", () => {
+  it("unreadOnly は未読だけを返し、既読にすると消える（既読を含む一覧には残る）", async () => {
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast, { title: "ポスター" });
+    await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: [cast.reviewer.id],
+    });
+    const unread = await cast.reviewer.as.query(api.notifications.list, { unreadOnly: true });
+    expect(unread.map((n) => n.kind)).toContain("review_assigned");
+    const target = unread.find((n) => n.kind === "review_assigned")!;
+    await cast.reviewer.as.mutation(api.notifications.markRead, {
+      notificationId: target.id as Id<"notifications">,
+    });
+    const unreadAfter = await cast.reviewer.as.query(api.notifications.list, { unreadOnly: true });
+    expect(unreadAfter.map((n) => n.id)).not.toContain(target.id);
+    const all = await cast.reviewer.as.query(api.notifications.list, {});
+    expect(all.map((n) => n.id)).toContain(target.id);
+  });
+});
+
 describe("Convex 統合: すべて既読（未読の索引で続きまで処理する）", () => {
   it("未読 201 件: 1 回目は 200 件を既読にし、続きは予約された処理で 0 件になる", async () => {
     vi.useFakeTimers({ now: NOW });
