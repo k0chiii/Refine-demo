@@ -3,6 +3,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   markNotificationUnread,
+  markThreadNotificationsRead,
   markUnreadNotificationsRead,
   sendTestNotification,
 } from "@mf100/application";
@@ -45,6 +46,17 @@ export const markRead = mutation({
       await markNotificationRead(createAppContext(ctx), principal, notificationId);
       return null;
     });
+  },
+});
+
+/** 校正画面でスレッドを開いたとき: そのスレッドの未読の通知をまとめて既読にする（利用者指示 2026-11-05） */
+export const markThreadRead = mutation({
+  args: { threadId: v.string() },
+  handler: async (ctx, { threadId }): Promise<number> => {
+    const { principal } = await requireUser(ctx);
+    return runUseCase(() =>
+      markThreadNotificationsRead(createAppContext(ctx), principal, threadId),
+    );
   },
 });
 
