@@ -466,9 +466,13 @@ export async function confirmSubmission(
       at: now,
     });
     const who = await personName(ctx, principal.userId);
-    const reviewers = (await ctx.assignments.listByRevision(revision.id)).map((a) => a.reviewerId);
-    const pinners = await ctx.home.listPinners(work.id);
-    await notify(ctx, [...reviewers, ...pinners], principal.userId, {
+    // 校正者には同じ版の「校正を割り当てられました」（syncRevisionToRoster）が届くので、「新しい版」は重ねて送らない
+    // （利用者指示 2026-11-05「二重で来ていらない」）。ピン留めした人だけに送る
+    const reviewers = new Set(
+      (await ctx.assignments.listByRevision(revision.id)).map((a) => a.reviewerId),
+    );
+    const pinners = (await ctx.home.listPinners(work.id)).filter((id) => !reviewers.has(id));
+    await notify(ctx, pinners, principal.userId, {
       kind: "revision_submitted",
       title: "新しい版が提出されました",
       body: `${about(work.title, revisionLabel(revision), who)}: ${

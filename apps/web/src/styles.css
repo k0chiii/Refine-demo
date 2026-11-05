@@ -2371,6 +2371,23 @@ m3e-dialog {
   min-height: 56px;
   padding-block: 4px;
 }
+/* 通知の全画面: 絞り込み（すべて／未読・制作物・種類）を 1 行に。狭ければ折り返す */
+.notif-page__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.notif-page__select {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 320px;
+}
+.notif-page__list .list__item {
+  --m3e-list-item-container-shape: 0;
+  --m3e-list-item-hover-container-shape: 0;
+  --m3e-list-item-focus-container-shape: 0;
+}
 .notif-menu__header {
   display: flex;
   align-items: center;
@@ -2425,6 +2442,36 @@ m3e-dialog {
   color: var(--mf-on-surface-variant);
 }
 /* 通知行: ホバーで ⋮（Slack 式。右クリック / Shift+F10 も同じメニュー） */
+.notif-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  /* menu item の trailing-icon の枠（1em）に収めず、ボタンの幅で出す */
+  width: auto;
+}
+/* パネルの ⋮ は右クリック・Shift+F10 のメニューの口としてだけ残す（既読は行のボタン、未読に戻すはメニュー） */
+#notif-menu .notif-row__more {
+  display: none;
+}
+/* 既読にする（未読の行だけ）。常に見える */
+.notif-row__read {
+  margin: -4px 0 -4px -8px;
+}
+/* 行がボタンのとき（シート・全画面）の、ポインタで押す印。大きさと当たり判定はアイコンボタンと同じ 40 */
+.notif-row__read--pointer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px -8px 0;
+  border-radius: var(--mf-shape-full);
+  color: var(--mf-on-surface-variant);
+  cursor: pointer;
+}
+.notif-row__read--pointer:hover {
+  background: color-mix(in srgb, var(--mf-on-surface) 8%, transparent);
+}
 .notif-row__more {
   opacity: 0;
   margin: -4px -8px;
@@ -5758,11 +5805,6 @@ m3e-snackbar {
 }
 .wlive__refused-body p {
   margin: 0 0 8px;
-}
-.external--record {
-  width: 100%;
-  max-width: 720px;
-  padding: 16px 0 0;
 }
 /* タブレットの枠（ベゼル画像は無いので CSS） */
 .sp-frame--tablet .sp-frame__body {

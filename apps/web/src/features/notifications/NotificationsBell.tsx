@@ -9,6 +9,7 @@ import { ChoiceGroup } from "@/ui/ChoiceGroup";
 import { showDeviceNotification } from "@/lib/push";
 import { useDevicePush } from "./useDevicePush";
 import { useSystemNotificationSync } from "./useSystemNotificationSync";
+import { notificationIcon } from "./notificationKinds";
 import {
   useNotificationLongPressSheet,
   NotificationRowContextMenu,
@@ -24,26 +25,7 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eActionList, M3eListAction } from "@m3e/react/list";
 import { M3eMenu, M3eMenuItem, M3eMenuTrigger } from "@m3e/react/menu";
 
-const icon: Record<string, string> = {
-  revision_submitted: "upload_file",
-  review_assigned: "assignment_ind",
-  comment_posted: "chat",
-  comment_decided: "rule",
-  comment_assigned: "person_pin",
-  check_requested: "fact_check",
-  check_completed: "task_alt",
-  deadline_approaching: "alarm",
-  work_finalized: "verified",
-  work_reopened: "lock_open",
-  revision_voided: "block",
-  auto_proofread_done: "smart_toy",
-  rule_proposed: "spellcheck",
-  rule_proposal_decided: "rule",
-  mentioned: "alternate_email",
-  feedback_posted: "forum",
-  feedback_mentioned: "alternate_email",
-  test: "send",
-};
+const icon = notificationIcon;
 
 function useUnread() {
   return useQuery(api.notifications.unreadCount, {}) ?? 0;
@@ -161,15 +143,90 @@ function Bell({ menuId, onOpen }: { menuId?: string; onOpen?: () => void }) {
 }
 
 /**
+ * ポインタで押す印。行（m3e-list-action）は素の click を自分で受けて開くので、React の合成イベントではなく
+ * 素のリスナーで止める（React は root で受けるため、stopPropagation しても行には届いてしまう）
+ */
+function PointerMarkRead({ slot, onClick }: { slot?: string | undefined; onClick: () => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const latest = useRef(onClick);
+  latest.current = onClick;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const stop = (e: Event) => e.stopPropagation();
+    const click = (e: Event) => {
+      e.stopPropagation();
+      e.preventDefault();
+      latest.current();
+    };
+    el.addEventListener("pointerdown", stop);
+    el.addEventListener("pointerup", stop);
+    el.addEventListener("click", click);
+    return () => {
+      el.removeEventListener("pointerdown", stop);
+      el.removeEventListener("pointerup", stop);
+      el.removeEventListener("click", click);
+    };
+  }, []);
+  return (
+    <span
+      ref={ref}
+      {...(slot ? { slot } : {})}
+      className="notif-row__read notif-row__read--pointer"
+      aria-hidden="true"
+      title="既読にする"
+    >
+      <M3eIcon name="done" />
+    </span>
+  );
+}
+
+/**
+ * 行の「既読にする」。行を開かずにその通知だけ既読にする（押しても画面は移らない）。
+ * pointerOnly: 行そのものがボタン（m3e-list-action）のときは、中にボタンを入れ子にしない（a11y nested-interactive）。
+ * ポインタで押せる印だけにし、キーボード・読み上げでは行を開く／「すべて既読にする」／長押しのメニューで既読にする
+ */
+export function MarkReadButton({
+  title,
+  onClick,
+  slot,
+  pointerOnly = false,
+}: {
+  title: string;
+  onClick: () => void;
+  slot?: string;
+  pointerOnly?: boolean;
+}) {
+  if (pointerOnly) return <PointerMarkRead slot={slot} onClick={onClick} />;
+  return (
+    <M3eIconButton
+      {...(slot ? { slot } : {})}
+      className="notif-row__read"
+      aria-label={`${title} を既読にする`}
+      title="既読にする"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <M3eIcon name="done" />
+    </M3eIconButton>
+  );
+}
+
+/**
  * medium 以上の通知パネル（F-11 最小通知 / D8）。M3 の Scaffold では「浮遊する一時的なペイン」。幅は推奨値 360。
  * 押した通知は既読にして、対象（その版のエディタ）へ飛ぶ。
  */
 function NotifMenuPanelRow({
   n,
   openOne,
+  onMarkRead,
 }: {
   n: NonNullable<ReturnType<typeof useNotifications>["list"]>[number];
   openOne: ReturnType<typeof useNotifications>["openOne"];
+  onMarkRead: (id: Id<"notifications">) => void;
 }) {
   const menuId = `notif-ctx-${n.id}`;
   const ctxOpen = useNotificationRowContextOpen(menuId);
@@ -190,15 +247,22 @@ function NotifMenuPanelRow({
         <span className="notif__sub">{n.body}</span>
         <span className="notif__time">{formatJstShort(n.createdAt)}</span>
       </span>
-      <NotificationRowMoreTrigger
-        n={{ id: n.id, readAt: n.readAt, title: n.title }}
-        menuId={menuId}
-      />
+      <span slot="trailing-icon" className="notif-row__actions">
+        {/* 未読の行には、開かずに既読にするボタンを常に出す（利用者指示 2026-11-05） */}
+        {n.readAt === undefined ? (
+          <MarkReadButton title={n.title} onClick={() => onMarkRead(n.id as Id<"notifications">)} />
+        ) : null}
+        <NotificationRowMoreTrigger
+          n={{ id: n.id, readAt: n.readAt, title: n.title }}
+          menuId={menuId}
+        />
+      </span>
     </M3eMenuItem>
   );
 }
 
 function Menu({ id }: { id: string }) {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<NotifFilter>("all");
   const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } =
     useNotifications(filter);
@@ -220,12 +284,26 @@ function Menu({ id }: { id: string }) {
             すべて既読にする
           </M3eMenuItem>
         ) : null}
+        {/* 全画面の通知（制作物・種類で絞り込める）。menu の中なので menu item で置く */}
+        <M3eMenuItem
+          onClick={() =>
+            void navigate({
+              to: "/notifications",
+              search: filter === "unread" ? { unread: true } : {},
+            })
+          }
+        >
+          <M3eIcon slot="icon" name="fullscreen" />
+          すべての通知
+        </M3eMenuItem>
         {!list || list.length === 0 ? (
           <p className="muted small notif-menu__empty">
             {filter === "unread" ? "未読の通知はありません" : "通知はありません"}
           </p>
         ) : (
-          list.map((n) => <NotifMenuPanelRow key={n.id} n={n} openOne={openOne} />)
+          list.map((n) => (
+            <NotifMenuPanelRow key={n.id} n={n} openOne={openOne} onMarkRead={handlers.markRead} />
+          ))
         )}
       </M3eMenu>
       {(list ?? []).map((n) => (
@@ -244,6 +322,7 @@ function Menu({ id }: { id: string }) {
  * 下部バーの「通知」から開き、外側を押す・下へ払う・通知を押すと閉じる。
  */
 function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<NotifFilter>("all");
   const { list, unread, doMarkAll, doMarkUnread, doMarkReadOnly, openOne } =
     useNotifications(filter);
@@ -278,6 +357,18 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div slot="header" className="notif-sheet__header">
         <span className="title-small">通知</span>
         <span className="spacer" />
+        <M3eIconButton
+          aria-label="すべての通知を開く"
+          onClick={() => {
+            onClose();
+            void navigate({
+              to: "/notifications",
+              search: filter === "unread" ? { unread: true } : {},
+            });
+          }}
+        >
+          <M3eIcon name="fullscreen" />
+        </M3eIconButton>
         {unread > 0 ? (
           <M3eButton
             variant="text"
@@ -317,6 +408,14 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
                 {n.body}
                 <span className="notif__time">　{formatJstShort(n.createdAt)}</span>
               </span>
+              {n.readAt === undefined ? (
+                <MarkReadButton
+                  slot="trailing"
+                  pointerOnly
+                  title={n.title}
+                  onClick={() => void doMarkReadOnly.run(n.id as Id<"notifications">)}
+                />
+              ) : null}
             </M3eListAction>
           ))}
         </M3eActionList>

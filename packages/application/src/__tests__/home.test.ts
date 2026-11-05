@@ -124,7 +124,7 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     who: (typeof principals)[keyof typeof principals],
   ) => (await listMyNotifications(ctx, who)).filter((n) => n.kind === "revision_submitted");
 
-  it("版提出で、その版の校正者とピン留めした人に revision_submitted が届く。名簿だけの関係者には届かない", async () => {
+  it("版提出で、ピン留めした人に revision_submitted が届く。校正者には割り当ての通知が届くので重ねて送らない。名簿だけの関係者には届かない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
     await grantWorkPermission(ctx, principals.sysadmin, {
@@ -138,12 +138,17 @@ describe("ピン留めは制作物の購読（利用者決定 2026-10-27）", ()
     });
     await setWorkPinned(ctx, principals.stranger, { workId: work.id, pinned: true });
     const rev = await submitRevision(ctx, work.id);
-    expect(await submitted(ctx, principals.reviewer)).toHaveLength(1);
-    expect((await submitted(ctx, principals.reviewer))[0]).toMatchObject({
+    expect(await submitted(ctx, principals.reviewer)).toHaveLength(0);
+    expect(
+      (await listMyNotifications(ctx, principals.reviewer)).filter(
+        (n) => n.kind === "review_assigned" && n.revisionId === rev.id,
+      ),
+    ).toHaveLength(1);
+    expect(await submitted(ctx, principals.stranger)).toHaveLength(1);
+    expect((await submitted(ctx, principals.stranger))[0]).toMatchObject({
       workId: work.id,
       revisionId: rev.id,
     });
-    expect(await submitted(ctx, principals.stranger)).toHaveLength(1);
     expect(await submitted(ctx, principals.manager)).toHaveLength(0);
     expect(await submitted(ctx, principals.approver)).toHaveLength(0);
     expect(await submitted(ctx, principals.creator)).toHaveLength(0);

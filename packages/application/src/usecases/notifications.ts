@@ -229,14 +229,19 @@ export async function sendTestNotification(
  * 通知を読む人に返す形にする。作った後に ACL が取り消された・制作物が消えた等で今は見られない通知は、
  * 文面と ID を伏せて返す（§5.2-10。作成時の判定だけに頼らない）。
  */
+/** 読む人に返す通知。見られる制作物の通知には制作物名を添える（全画面の「制作物で絞り込み」に使う） */
+export interface PresentedNotification extends Notification {
+  workTitle?: string;
+}
+
 export async function presentNotifications(
   ctx: AppContext,
   principal: Principal,
   notifications: readonly Notification[],
-): Promise<Notification[]> {
+): Promise<PresentedNotification[]> {
   const load = subjectLoader(ctx);
   const deleted = deletedThreadLoader(ctx);
-  const out: Notification[] = [];
+  const out: PresentedNotification[] = [];
   for (const n of notifications) {
     if (n.workId === undefined) {
       out.push(n);
@@ -255,7 +260,8 @@ export async function presentNotifications(
       continue;
     }
     const shown = isFeedbackNotificationKind(n.kind) ? await relinkFeedbackNotification(ctx, n) : n;
-    out.push((await deleted(shown)) ? degradeDeletedComment(shown) : shown);
+    const final = (await deleted(shown)) ? degradeDeletedComment(shown) : shown;
+    out.push({ ...final, workTitle: loaded.work.title });
   }
   return out;
 }
@@ -281,7 +287,7 @@ export async function listMyNotifications(
   principal: Principal,
   limit = 50,
   opts: { unreadOnly?: boolean } = {},
-): Promise<Notification[]> {
+): Promise<PresentedNotification[]> {
   return presentNotifications(
     ctx,
     principal,
@@ -301,6 +307,31 @@ export async function markNotificationRead(
     throw new DomainError("forbidden", { notificationId: id });
   if (n.readAt !== undefined) return;
   await ctx.notifications.update({ ...n, readAt: ctx.clock.now() });
+  // 同じスレッドの通知（同じ人からの続けてのコメントなど）もまとめて既読にする（利用者指示 2026-11-05）
+  if (n.threadId !== undefined) await markThreadNotificationsRead(ctx, principal, n.threadId);
+}
+
+/**
+ * 同じスレッド（コメント）の未読の通知をまとめて既読にする。通知を 1 つ開いたとき、校正画面でそのスレッドを開いたときに使う
+ * （利用者指示 2026-11-05「スレッド内のどれかの通知を開いたら、他のコメントの通知も既読に」）。既読にした件数を返す
+ */
+export async function markThreadNotificationsRead(
+  ctx: AppContext,
+  principal: Principal,
+  threadId: string,
+): Promise<number> {
+  const unread = await ctx.notifications.listUnreadForUser(principal.userId, {
+    limit: 200,
+    order: "desc",
+  });
+  const now = ctx.clock.now();
+  let marked = 0;
+  for (const n of unread) {
+    if (n.threadId !== threadId || n.readAt !== undefined) continue;
+    await ctx.notifications.update({ ...n, readAt: now });
+    marked++;
+  }
+  return marked;
 }
 
 /** 既読を取り消して未読に戻す（利用者要望 2026-10-30・中嶋さん） */
