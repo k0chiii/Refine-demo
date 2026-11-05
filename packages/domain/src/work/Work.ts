@@ -103,7 +103,8 @@ export function isWorkEffective(work: Pick<Work, "lifecycle">): boolean {
 
 const transitions: Record<WorkLifecycle, readonly WorkLifecycle[]> = {
   draft: ["active", "cancelled"],
-  active: ["on_hold", "cancelled", "finalized"],
+  // 保留は使わない（利用者指示 2026-11-05「保留はいらない」）。前から保留の制作物は進行中に戻すか中止できる
+  active: ["cancelled", "finalized"],
   on_hold: ["active", "cancelled"],
   finalized: ["active"], // 再開（reopen）のみ。別の監査イベントを伴う。
   cancelled: [],
