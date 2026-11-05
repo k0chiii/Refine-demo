@@ -3,9 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { buildDashboard } from "../usecases/dashboard.ts";
 import { listSubmitTargets } from "../usecases/home.ts";
 import { currentRuleSet, resolveRulesForWork, saveRule } from "../usecases/notation.ts";
-import { changeWorkLifecycle } from "../usecases/works.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
-import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
+import { principals, seedWork, submitRevision, putOnHoldDirectly } from "../testing/scenario.ts";
 
 /**
  * 読み取りの量（Convex ではデータベースの帯域と、購読が再実行される範囲になる）が増えないことの確かめ。
@@ -53,7 +52,7 @@ describe("提出先の候補（常時購読）は、候補にならない制作�
         await seedWork(ctx, { title: `他人の${i}`, creatorIds: [principals.manager.userId] }),
       );
     const held = await seedWork(ctx, { title: "保留" });
-    await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
+    await putOnHoldDirectly(ctx, held.id);
     await submitRevision(ctx, mine.id);
     const works = await Promise.all(
       [mine, ...others, held].map(async (w) => (await ctx.works.findById(w.id))!),
@@ -72,9 +71,9 @@ describe("ダッシュボード: 進行中でない通常の制作物は ACL を
   it("保留の制作物は ACL を読まずに表に出る（105A）", async () => {
     const ctx = createInMemoryContext();
     const held = await seedWork(ctx, { title: "保留" });
-    await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
+    await putOnHoldDirectly(ctx, held.id);
     const secret = await seedWork(ctx, { title: "非公開" });
-    await changeWorkLifecycle(ctx, principals.manager, { workId: secret.id, to: "on_hold" });
+    await putOnHoldDirectly(ctx, secret.id);
     const works = await Promise.all(
       [held, secret].map(async (w) => (await ctx.works.findById(w.id))!),
     );

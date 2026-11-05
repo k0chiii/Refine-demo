@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { getDocumentDraft, listWritableWorks, saveDocumentDraft } from "../usecases/documents.ts";
-import { changeWorkLifecycle } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
-import { principals, seedWork } from "../testing/scenario.ts";
+import { principals, seedWork, putOnHoldDirectly } from "../testing/scenario.ts";
 
 const code = (c: string) => expect.objectContaining({ code: c });
 const doc = (t: string) =>
@@ -79,7 +78,7 @@ describe("文章の下書き", () => {
   it("進行中でない制作物には書けない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);
-    await changeWorkLifecycle(ctx, principals.manager, { workId: work.id, to: "on_hold" });
+    await putOnHoldDirectly(ctx, work.id);
     expect((await getDocumentDraft(ctx, principals.creator, work.id)).canEdit).toBe(false);
     await expect(
       saveDocumentDraft(ctx, principals.creator, {
@@ -167,7 +166,7 @@ describe("エディタの入口（書ける担当の制作物）", () => {
     const a = await seedWork(ctx, { title: "A パンフレット" });
     const b = await seedWork(ctx, { title: "B ポスター" });
     const c = await seedWork(ctx, { title: "C 保留中" });
-    await changeWorkLifecycle(ctx, principals.manager, { workId: c.id, to: "on_hold" });
+    await putOnHoldDirectly(ctx, c.id);
     await saveDocumentDraft(ctx, principals.creator, {
       workId: b.id,
       title: "ポスター文案",

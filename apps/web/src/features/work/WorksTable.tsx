@@ -84,13 +84,11 @@ export function WorksTable({
 }) {
   const [page, setPage] = useState({ index: 0, size: DEFAULT_PAGE_SIZE });
   const changeLifecycle = useMutation(convexApi.works.changeLifecycle);
-  // 保留にする・進行中に戻すはすぐ、中止は確認してから（元に戻せないため）
+  // 進行中に戻すはすぐ、中止は確認してから（元に戻せないため）
   const [cancelTarget, setCancelTarget] = useState<{ workId: string; title: string } | null>(null);
   const doLifecycle = useAction(async (workId: string, to: RowLifecycleTarget) => {
     await changeLifecycle({ workId: workId as Id<"works">, to });
-    toast(
-      to === "on_hold" ? "保留にしました" : to === "active" ? "進行中に戻しました" : "中止しました",
-    );
+    toast(to === "active" ? "進行中に戻しました" : "中止しました");
     if (to === "cancelled") setCancelTarget(null);
   });
   /** 行メニューから開いているダイアログ（編集・複製）。表の外に 1 つだけ置く */

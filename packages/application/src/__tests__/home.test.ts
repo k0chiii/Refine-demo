@@ -12,9 +12,9 @@ import {
 } from "../usecases/home.ts";
 import { listMyNotifications, REDACTED_NOTIFICATION } from "../usecases/notifications.ts";
 import { setWorkReviewers } from "../usecases/reviewers.ts";
-import { changeWorkLifecycle, importWorks } from "../usecases/works.ts";
+import { importWorks } from "../usecases/works.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
-import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
+import { principals, seedWork, submitRevision, putOnHoldDirectly } from "../testing/scenario.ts";
 
 const DAY = 86_400_000;
 
@@ -29,7 +29,7 @@ async function setup() {
   const soon = await seedWork(ctx, { title: "A 近い納期", deadlineAt: now + 3 * DAY });
   const text = await seedWork(ctx, { title: "C 文章", mediaType: "document" });
   const held = await seedWork(ctx, { title: "D 保留" });
-  await changeWorkLifecycle(ctx, principals.manager, { workId: held.id, to: "on_hold" });
+  await putOnHoldDirectly(ctx, held.id);
   await grantWorkPermission(ctx, principals.sysadmin, {
     workId: soon.id,
     userIds: [principals.reviewer.userId],
