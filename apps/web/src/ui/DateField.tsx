@@ -196,7 +196,9 @@ export function DateField({
           <p className="field__summary" id={summaryId} aria-live="polite">
             {kind === "date"
               ? value === null
-                ? "時刻（任意）"
+                ? timePolicy === "hidden"
+                  ? ""
+                  : "時刻（任意）"
                 : time === null
                   ? formatJstDate(value - 1)
                   : formatJstShort(value)
