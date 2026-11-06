@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ServiceSecret } from "./functions/define.ts";
 import { findFunction } from "./functions/index.ts";
+import { PROCESSING_OPERATIONS } from "./functions/processing.ts";
 import type { Identify, Identity } from "./identity.ts";
 import { statusOf, type CallResult } from "./run.ts";
 import { verifyServiceSecret } from "./serviceAuth.ts";
@@ -31,6 +32,7 @@ const notFound = (name: string) => ({ code: "function_not_found", details: { nam
 /**
  * HTTP の境界。ここでは「誰か」「どの関数か」「引数の形」だけを決め、業務は Durable Object の中の関数に任せる。
  * - POST /f/:name  body は引数の object そのもの（Convex の args と同じ）。名前は Convex の getFunctionName と同じ `works:create`
+ * - POST /internal/processing  apps/api の Queue / Workflow が処理の台帳を更新する（契約は Convex の http.ts と同じ。下の route）
  * - GET  /ws       変更の通知（書いたテーブルの名前）を WebSocket で配る。Convex の購読の代わり（粒度はテーブル）
  */
 export function createApp(deps: AppDeps) {
@@ -62,6 +64,31 @@ export function createApp(deps: AppDeps) {
       }
       if (!(await deps.identify(request))) return c.text("Unauthorized", 401);
       return deps.db().fetch(request);
+    })
+    // Convex の http.ts の /internal/processing と同じ契約: Bearer PROCESSING_SECRET（32 文字以上。無ければ 404）、
+    // body は { operation, args }、成功は関数の戻りの JSON そのもの（{ value } で包まない）、知らない operation は 400、
+    // 関数が拒否したら理由を伏せて 409 { code: "processing_rejected" }（apps/api は 409 だけを「拒否」として読む）
+    .post("/internal/processing", async (c) => {
+      if (!verifyServiceSecret(c.req.raw, "PROCESSING_SECRET", deps.secret("PROCESSING_SECRET")))
+        return c.body(null, 404);
+      let body: { operation?: unknown; args?: unknown } | null;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.body(null, 400);
+      }
+      const operation = PROCESSING_OPERATIONS.find((o) => o === body?.operation);
+      if (!operation) return c.body(null, 400);
+      const name = `processing:${operation}`;
+      const rejected = () => c.json({ code: "processing_rejected" }, 409);
+      const parsed = findFunction(name)!.args.safeParse(body?.args ?? {});
+      if (!parsed.success) return rejected();
+      try {
+        const result = await deps.db().call(name, null, parsed.data, true);
+        return result.ok ? c.json(result.value, 200, { "Cache-Control": "no-store" }) : rejected();
+      } catch {
+        return rejected();
+      }
     })
     .post("/f/:name", async (c) => {
       const name = c.req.param("name");

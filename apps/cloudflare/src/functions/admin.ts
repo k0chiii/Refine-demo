@@ -1,18 +1,10 @@
 import { exportWorkStats } from "@mf100/application";
-import { DomainError, type DomainErrorCode } from "@mf100/domain";
 import { z } from "zod";
-import { mutation, query, type FnDef } from "./define.ts";
+import { mutation, query, reject, type FnDef } from "./define.ts";
 import { requireAdmin } from "./users.ts";
 import { object } from "./validators.ts";
 
 // apps/convex/convex/admin.ts の写し
-
-/**
- * ponytail: domain のコード表に「最後の管理者」「代の範囲」「利用者なし」が無い。表に足すまで cast で運ぶ
- * （run.ts は DomainError の code をそのまま返し、statusOf は *_not_found を 404、他を 400 にする）
- */
-const reject = (code: string, details: Record<string, unknown> = {}) =>
-  new DomainError(code as DomainErrorCode, details);
 
 export const admin = {
   /** 校正システム管理者の付与・剥奪。管理者のみ。自分自身の剥奪は最後の一人なら拒否する */

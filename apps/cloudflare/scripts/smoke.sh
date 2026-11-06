@@ -48,6 +48,21 @@ if [ -n "${UPLOAD_SECRET:-}" ]; then
   assert "$(call submissions:beginUpload "$me" '{"itemId":"x"}' "X-MF100-Service-Key: $UPLOAD_SECRET")" 404 "service function with the key -> reaches the use case (item not found -> 404)"
   assert_field code upload_item_not_found "reached the use case, not the boundary"
 fi
+# ファイル処理の台帳（apps/api の Queue / Workflow が呼ぶ /internal/processing）。秘密が無ければ在ることも教えない。
+# 合っていれば通る（起こすときに `--var PROCESSING_SECRET:<32 文字以上>` を足し、同じ値を環境変数 PROCESSING_SECRET で渡す）
+internal() { curl -s -o "$body" -w '%{http_code}' -X POST "$base/internal/processing" -H 'Content-Type: application/json' ${2:+-H "$2"} -d "$1"; }
+assert "$(internal '{"operation":"cleanupCandidates","args":{}}')" 404 "/internal/processing without secret -> 404"
+assert "$(internal '{"operation":"cleanupCandidates","args":{}}' 'Authorization: Bearer wrong-wrong-wrong-wrong-wrong-wrong')" 404 "/internal/processing with a wrong secret -> 404"
+assert "$(call processing:status "$me" "{\"workId\":\"$id\"}")" 200 "processing:status -> 200"
+assert_field value.enabled false "processing disabled unless PROCESSING_ENABLED"
+if [ -n "${PROCESSING_SECRET:-}" ]; then
+  assert "$(internal '{"operation":"cleanupCandidates","args":{}}' "Authorization: Bearer $PROCESSING_SECRET")" 200 "/internal/processing with the secret -> 200"
+  assert "$(cat "$body")" "[]" "cleanupCandidates -> []"
+  assert "$(internal '{"operation":"inspect","args":{"jobId":"nope"}}' "Authorization: Bearer $PROCESSING_SECRET")" 409 "inspect of an unknown job -> 409"
+  assert_field code processing_rejected "rejected without a reason"
+  assert "$(internal '{"operation":"nope"}' "Authorization: Bearer $PROCESSING_SECRET")" 400 "unknown operation -> 400"
+fi
+assert "$(call documents:get "$creator" "{\"workId\":\"$id\"}")" 200 "documents:get -> 200"
 # 書いたテーブル名が WebSocket で届く（Node の WebSocket はヘッダに ASCII しか載せられないので、名前の無い本人で）
 node -e '
 const h = { "X-MF100-Identity": process.argv[2] };

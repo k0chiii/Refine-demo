@@ -9,6 +9,7 @@ import { comments } from "./comments.ts";
 import { comparisons } from "./comparisons.ts";
 import { dashboard } from "./dashboard.ts";
 import type { FnDef } from "./define.ts";
+import { documents } from "./documents.ts";
 import { groups } from "./groups.ts";
 import { home } from "./home.ts";
 import { me } from "./me.ts";
@@ -17,6 +18,7 @@ import { notificationPrefs } from "./notificationPrefs.ts";
 import { notifications } from "./notifications.ts";
 import { planInfo } from "./planInfo.ts";
 import { presence } from "./presence.ts";
+import { processing } from "./processing.ts";
 import { proofreading } from "./proofreading.ts";
 import { push } from "./push.ts";
 import { reviews } from "./reviews.ts";
@@ -41,6 +43,7 @@ export const modules = {
   comments,
   comparisons,
   dashboard,
+  documents,
   groups,
   home,
   me,
@@ -49,6 +52,7 @@ export const modules = {
   notifications,
   planInfo,
   presence,
+  processing,
   proofreading,
   push,
   reviews,

@@ -1,3 +1,4 @@
+import { migrateRateLimits } from "../rateLimit.ts";
 import type { Sql } from "./sql.ts";
 
 /**
@@ -11,9 +12,9 @@ import type { Sql } from "./sql.ts";
 export interface TableSpec {
   name: string;
   keyless?: true;
-  /** doc の同名の項目を生成列にする */
+  /** doc の同名の項目を生成列にする。入れ子は `options.itemId` と書く（列の名前は `options_itemId`） */
   cols?: readonly string[];
-  /** index を張る列の組 */
+  /** index を張る列の組（cols と同じ書き方） */
   indexes?: readonly (readonly string[])[];
   /** 一意 index を張る列の組（NULL は重複してよい） */
   unique?: readonly (readonly string[])[];
@@ -125,15 +126,30 @@ export const TABLES: readonly TableSpec[] = [
   { name: "notificationCounters" },
   { name: "audit", keyless: true },
   { name: "idempotency" },
+  // ファイル処理の台帳（src/functions/processing.ts。apps/api の Queue / Workflow が /internal/processing で更新する）。
+  // index は Convex の by_user / by_state / by_state_cleaned / by_item と同じ。cleaned は未設定（NULL）が「まだ清掃していない」
+  {
+    name: "processingJobs",
+    cols: ["userId", "state", "cleaned", "createdAt", "options.itemId"],
+    indexes: [
+      ["userId"],
+      ["state", "createdAt"],
+      ["state", "cleaned", "createdAt"],
+      ["options.itemId"],
+    ],
+  },
   // あとで動く仕事（src/jobs.ts）。ユースケースと同じトランザクションで積むので、巻き戻れば消える。id は仕事ごと
   { name: "jobs", cols: ["kind", "runAt"], indexes: [["runAt"]] },
   // 仕事の側の小さな状態（Slack の DM の枠など）。id は項目名
   { name: "meta" },
 ];
 
+/** 入れ子の項目（`options.itemId`）は、SQL の列の名前では `.` を `_` にする */
+const columnOf = (c: string): string => c.replaceAll(".", "_");
+
 function createTable(t: TableSpec): string {
   const generated = (t.cols ?? []).map(
-    (c) => `${c} GENERATED ALWAYS AS (json_extract(doc, '$.${c}')) VIRTUAL`,
+    (c) => `${columnOf(c)} GENERATED ALWAYS AS (json_extract(doc, '$.${c}')) VIRTUAL`,
   );
   const head = t.keyless ? [] : ["id TEXT PRIMARY KEY"];
   return `CREATE TABLE IF NOT EXISTS ${t.name} (${[...head, "doc TEXT NOT NULL", ...generated].join(", ")})`;
@@ -154,14 +170,15 @@ export function migrate(sql: Sql): void {
     sql.exec(createTable(t));
     for (const cols of t.indexes ?? [])
       sql.exec(
-        `CREATE INDEX IF NOT EXISTS ix_${t.name}_${cols.join("_")} ON ${t.name} (${cols.join(", ")})`,
+        `CREATE INDEX IF NOT EXISTS ix_${t.name}_${cols.map(columnOf).join("_")} ON ${t.name} (${cols.map(columnOf).join(", ")})`,
       );
     for (const cols of t.unique ?? [])
       sql.exec(
-        `CREATE UNIQUE INDEX IF NOT EXISTS ux_${t.name}_${cols.join("_")} ON ${t.name} (${cols.join(", ")})`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS ux_${t.name}_${cols.map(columnOf).join("_")} ON ${t.name} (${cols.map(columnOf).join(", ")})`,
       );
   }
   sql.exec(
     "CREATE VIRTUAL TABLE IF NOT EXISTS workSearch USING fts5(tokens, workId UNINDEXED, year UNINDEXED, lifecycle UNINDEXED)",
   );
+  migrateRateLimits(sql);
 }

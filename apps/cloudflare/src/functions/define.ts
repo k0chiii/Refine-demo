@@ -1,5 +1,5 @@
 import type { AppContext } from "@mf100/application";
-import type { Principal } from "@mf100/domain";
+import { DomainError, type DomainErrorCode, type Principal } from "@mf100/domain";
 import type { z } from "zod";
 import type { Job } from "../jobs.ts";
 import type { Sql } from "../sqlite/sql.ts";
@@ -66,3 +66,11 @@ function define(kind: Kind) {
 export const query = define("query");
 export const mutation = define("mutation");
 export const action = define("action");
+
+/**
+ * ponytail: domain のコード表に無い失敗（Convex は素の Error の message で運ぶもの）を、code のまま返すために cast する。
+ * 素の Error のままだと run.ts が 500 にしてしまう。run.ts は code をそのまま返し、statusOf は *_not_found を 404、他を 400 にする。
+ * 表に足せたものから足していく
+ */
+export const reject = (code: string, details: Record<string, unknown> = {}): DomainError =>
+  new DomainError(code as DomainErrorCode, details);

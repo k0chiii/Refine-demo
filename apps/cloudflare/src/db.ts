@@ -11,6 +11,7 @@ import { execute, tracked, type CallResult, type Host } from "./run.ts";
 import { migrate } from "./sqlite/schema.ts";
 import { createAuthStore, migrateAuth, type AuthStore } from "./auth/store.ts";
 import { migrateCollab } from "./collab/store.ts";
+import { expireProcessingJobs } from "./functions/processing.ts";
 import type { Sql } from "./sqlite/sql.ts";
 
 /** Durable Object の SqlStorage を application のアダプタが使う最小の口に合わせる */
@@ -78,7 +79,7 @@ export class MF100Database extends DurableObject<Env> {
 
   /**
    * cron（毎分）。Convex の crons.ts の配分: 受付終了は毎分、残りは毎時。あとで動く仕事の取りこぼしも毎分拾う。
-   * U7: aiWorkflow.expire（5 分ごと）と processing.expire（毎時）は、表ができたらここに足す
+   * processing.expire は毎時。U7b: aiWorkflow.expire（5 分ごと）は、表ができたらここに足す
    */
   async runJobs(at: Date): Promise<void> {
     const touched = new Set<string>();
@@ -92,6 +93,7 @@ export class MF100Database extends DurableObject<Env> {
       await remindUpcomingDeadlines(ctx);
       await expireUploadSessions(ctx);
       await expireCommentFiles(ctx);
+      expireProcessingJobs(tracked(this.sql, touched), at.getTime());
     });
     this.notify(touched);
     // alarm が落ちていても、毎分ここで拾う

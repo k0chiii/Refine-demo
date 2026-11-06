@@ -1,10 +1,15 @@
 import { isWorkPinned, listSubmitTargets, setWorkPinned } from "@mf100/application";
 import { z } from "zod";
-import { mutation, query, type FnDef } from "./define.ts";
+import { mutation, query, type FnCtx, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
 
 /** 候補にする制作物を読む上限（dashboard.ts の WORKS_SCAN_LIMIT と同じ） */
 const WORKS_SCAN_LIMIT = 2000;
+
+/** 進行中の制作物（書ける・提出できる候補。権限は use case が確かめる） */
+export async function activeWorks(ctx: FnCtx) {
+  return (await ctx.db.works.list(WORKS_SCAN_LIMIT)).filter((w) => w.lifecycle === "active");
+}
 
 export const home = {
   /**
@@ -16,10 +21,7 @@ export const home = {
     auth: "user",
     args: object({}),
     handler: async (ctx) => {
-      const works = (await ctx.db.works.list(WORKS_SCAN_LIMIT)).filter(
-        (w) => w.lifecycle === "active",
-      );
-      return listSubmitTargets(ctx.db, ctx.principal!, works);
+      return listSubmitTargets(ctx.db, ctx.principal!, await activeWorks(ctx));
     },
   }),
 

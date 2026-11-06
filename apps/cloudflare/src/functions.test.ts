@@ -50,7 +50,7 @@ describe("登録表の形（全関数）", () => {
     }
   });
 
-  it("サービス専用は Convex の internal だった upload 系だけ（公開の口に出さない）", () => {
+  it("サービス専用は Convex の internal だった upload 系と processing だけ（公開の口に出さない）", () => {
     const service = all.filter(([, d]) => typeof d.auth === "object").map(([n]) => n);
     expect(service.sort()).toEqual([
       "commentFiles:beginFileUpload",
@@ -58,6 +58,14 @@ describe("登録表の形（全関数）", () => {
       "commentFiles:completeFileUpload",
       "commentFiles:completeThumbUpload",
       "commentFiles:failFileUpload",
+      "processing:cleanupCandidates",
+      "processing:complete",
+      "processing:expire",
+      "processing:fail",
+      "processing:figmaComplete",
+      "processing:inspect",
+      "processing:markCleaned",
+      "processing:streamSession",
       "submissions:beginUpload",
       "submissions:completeUpload",
       "submissions:failUpload",

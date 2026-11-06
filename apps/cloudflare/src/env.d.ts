@@ -15,6 +15,9 @@ interface Env {
   MF100_UPLOAD_SECRET?: string;
   MF100_CLEANUP_SECRET?: string;
   PROCESSING_SECRET?: string;
+  // ファイル処理（src/functions/processing.ts。Convex と同じ）。"true" のときだけ受け付け、kinds はカンマ区切り
+  PROCESSING_ENABLED?: string;
+  PROCESSING_CAPABILITIES?: string;
   // 外への通知（src/delivery/channels.ts）。揃わない経路は使わない
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
