@@ -28,6 +28,8 @@ export interface FnCtx {
   userId: string | null;
   env: Env;
   now: () => number;
+  /** 外への HTTP（action の AI 呼び出し）。テストは偽物を渡す */
+  fetch: typeof fetch;
   /** あとで動く仕事を、この呼び出しと同じトランザクションで積む（巻き戻れば消える。src/jobs.ts） */
   schedule: (job: Job) => void;
 }

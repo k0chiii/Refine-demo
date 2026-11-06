@@ -27,4 +27,15 @@ interface Env {
   SLACK_BASE_URL?: string;
   // "true" のときだけ、ルールの埋め込みの索引づけ（indexRule）を積む（Convex と同じ）
   RULE_EMBEDDINGS_ENABLED?: string;
+  // AI 校正（src/ai/provider.ts。Convex の lib/ai と同じ名前）。AI_PROVIDER は anthropic（既定）か workers-ai
+  AI_PROVIDER?: string;
+  AI_MODEL?: string;
+  ANTHROPIC_API_KEY?: string;
+  AI_GATEWAY_URL?: string;
+  AI_MAX_CHARS?: string;
+  // "false" で止める。キーがあっても、運用でいつでも切れる
+  AI_PROOFREAD_ENABLED?: string;
+  // Workers AI の代理（apps/api の /internal/ai/proofread）。WORKERS_AI_SECRET は 32 文字以上
+  WORKERS_AI_URL?: string;
+  WORKERS_AI_SECRET?: string;
 }

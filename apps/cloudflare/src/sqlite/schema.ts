@@ -140,6 +140,14 @@ export const TABLES: readonly TableSpec[] = [
   },
   // あとで動く仕事（src/jobs.ts）。ユースケースと同じトランザクションで積むので、巻き戻れば消える。id は仕事ごと
   { name: "jobs", cols: ["kind", "runAt"], indexes: [["runAt"]] },
+  // AI 校正の一時保存（src/functions/aiWorkflow.ts）。本文は持たず、結果は 1 時間で消える。index は Convex の by_expiry / by_user_work と同じ
+  {
+    name: "aiJobs",
+    cols: ["userId", "workId", "expiresAt"],
+    indexes: [["expiresAt"], ["userId", "workId"]],
+  },
+  // ルールの埋め込み（src/functions/semanticRules.ts）。id は ruleId、vector は 1024 次元の配列
+  { name: "ruleEmbeddings" },
   // 仕事の側の小さな状態（Slack の DM の枠など）。id は項目名
   { name: "meta" },
 ];

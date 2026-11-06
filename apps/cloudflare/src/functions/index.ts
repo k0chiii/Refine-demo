@@ -1,4 +1,6 @@
 import { acl } from "./acl.ts";
+import { ai } from "./ai.ts";
+import { aiWorkflow } from "./aiWorkflow.ts";
 import { admin } from "./admin.ts";
 import { approvals } from "./approvals.ts";
 import { artifacts } from "./artifacts.ts";
@@ -23,6 +25,7 @@ import { proofreading } from "./proofreading.ts";
 import { push } from "./push.ts";
 import { reviews } from "./reviews.ts";
 import { revisions } from "./revisions.ts";
+import { semanticRules } from "./semanticRules.ts";
 import { slackWorkspaces } from "./slackWorkspaces.ts";
 import { social } from "./social.ts";
 import { submissions } from "./submissions.ts";
@@ -35,6 +38,8 @@ import { works } from "./works.ts";
 export const modules = {
   acl,
   admin,
+  ai,
+  aiWorkflow,
   approvals,
   artifacts,
   checks,
@@ -57,6 +62,7 @@ export const modules = {
   push,
   reviews,
   revisions,
+  semanticRules,
   slackWorkspaces,
   social,
   submissions,

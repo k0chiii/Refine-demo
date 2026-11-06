@@ -63,6 +63,11 @@ if [ -n "${PROCESSING_SECRET:-}" ]; then
   assert "$(internal '{"operation":"nope"}' "Authorization: Bearer $PROCESSING_SECRET")" 400 "unknown operation -> 400"
 fi
 assert "$(call documents:get "$creator" "{\"workId\":\"$id\"}")" 200 "documents:get -> 200"
+# AI 校正: キー（ANTHROPIC_API_KEY など）が無ければ使えず、外へは何も送らない（action も理由を返すだけ）
+assert "$(call ai:status "$creator" "{\"workId\":\"$id\"}")" 200 "ai:status -> 200"
+assert_field value.available false "AI unavailable without a key"
+assert "$(call ai:proofread "$creator" "{\"workId\":\"$id\",\"text\":\"5月祭\"}")" 200 "ai:proofread (action) -> 200"
+assert_field value.candidates.length 0 "ai:proofread returns no candidates without a key"
 # 書いたテーブル名が WebSocket で届く（Node の WebSocket はヘッダに ASCII しか載せられないので、名前の無い本人で）
 node -e '
 const h = { "X-MF100-Identity": process.argv[2] };

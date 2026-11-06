@@ -17,7 +17,9 @@ import {
   nextRetryDelayMs,
   resolveSlackForUser,
 } from "./delivery/deliver.ts";
+import { executeAiJob } from "./functions/aiWorkflow.ts";
 import { adminSubjectsOf, loadUser, principalOf } from "./functions/principal.ts";
+import { indexRule } from "./functions/semanticRules.ts";
 import { type Host, tracked } from "./run.ts";
 import { createSqliteContext } from "./sqlite/context.ts";
 import { randomId } from "./sqlite/docs.ts";
@@ -36,7 +38,8 @@ export type Job =
   | { kind: "resolveSlack"; userId: string }
   | { kind: "planInfoSync"; workId: string; userId: string }
   | { kind: "continueMarkAllRead"; recipientId: string; asOf: number }
-  | { kind: "indexRule"; ruleId: string };
+  | { kind: "indexRule"; ruleId: string }
+  | { kind: "aiProofread"; jobId: string };
 
 /** jobs 表の doc。payload は kind を除いた引数 */
 interface JobDoc {
@@ -142,6 +145,13 @@ export function reserveSlackDm(sql: Sql, now: number): { ok: boolean; retryAfter
 /** alarm の 1 回で動かす仕事の上限。残りは次の alarm へ（1 回の alarm を長く占めない） */
 const RUN_LIMIT = 20;
 
+/**
+ * kind ごとの「同時に動かす数」。無い kind は 1 件ずつ。
+ * aiProofread は Convex の workflow（maxParallelism: 2）と同じ 2。外への長い fetch を待つ間に次を始める
+ * ponytail: 同時に動かすのは、古い順に拾った先頭の kind の分だけ（別の kind とは混ぜない）。数が増えたら待ち行列にする
+ */
+const PARALLELISM: Partial<Record<Job["kind"], number>> = { aiProofread: 2 };
+
 /** 外の世界（テストは偽の fetch・sleep を渡す） */
 export type JobIo = Pick<DeliveryIo, "fetch" | "sleep">;
 
@@ -149,7 +159,8 @@ type Outcome = { retry: false } | { retry: true; retryAfterMs?: number; error?: 
 const DONE: Outcome = { retry: false };
 
 /**
- * 期限の来た仕事を古い順に 1 件ずつ動かす（最大 RUN_LIMIT 件）。
+ * 期限の来た仕事を古い順に動かす（最大 RUN_LIMIT 件）。1 件ずつ。ただし PARALLELISM のある kind は、先頭の 1 件に続く
+ * 同じ kind の期限の来たものを上限まで同時に動かす。
  * - 成功: 消す。retry: attempts を数え、runAt = now + max(待ち, retryAfterMs)。待ちは配信の方針（DELIVERY_RETRY）に従い、使い切ったらあきらめて消す
  * - 例外は retry 扱い。ただし DomainError は何度やっても同じなので、あきらめて消す（Convex でも scheduler は ConvexError を再実行しない）
  * 戻りの nextRunAt は残りの仕事の最小の runAt（無ければ null）、touched は仕事が書いた表（購読者に配る分）
@@ -161,51 +172,76 @@ export async function runDueJobs(
   limit: number = RUN_LIMIT,
 ): Promise<{ nextRunAt: number | null; touched: Set<string> }> {
   const touched = new Set<string>();
-  for (let n = 0; n < limit; n++) {
-    const [row] = host.sql.exec(
+  for (let n = 0; n < limit;) {
+    const [first] = host.sql.exec(
       "SELECT id, doc FROM jobs WHERE runAt <= ? ORDER BY runAt, rowid LIMIT 1",
       now,
     );
-    if (!row) break;
-    const id = row.id as string;
-    const doc = JSON.parse(row.doc as string) as JobDoc;
-    const job = { kind: doc.kind, ...doc.payload } as Job;
-
-    let outcome: Outcome;
-    try {
-      outcome = await runJob(host, io, now, job, touched);
-    } catch (error) {
-      if (error instanceof DomainError) {
-        console.warn(JSON.stringify({ event: "job_failed", kind: doc.kind, id, code: error.code }));
-        outcome = DONE;
-      } else {
-        outcome = { retry: true, error: error instanceof Error ? error.name : "error" };
-      }
-    }
-
-    if (!outcome.retry) {
-      host.sql.exec("DELETE FROM jobs WHERE id = ?", id);
-      continue;
-    }
-    const attempts = doc.attempts + 1;
-    const wait = nextRetryDelayMs(attempts);
-    if (wait === null) {
-      console.warn(JSON.stringify({ event: "job_gave_up", kind: doc.kind, id, attempts }));
-      host.sql.exec("DELETE FROM jobs WHERE id = ?", id);
-      continue;
-    }
-    host.sql.exec(
-      "UPDATE jobs SET doc = ? WHERE id = ?",
-      JSON.stringify({
-        ...doc,
-        attempts,
-        runAt: now + Math.max(wait, outcome.retryAfterMs ?? 0),
-        lastError: outcome.error ?? "retry",
-      } satisfies JobDoc),
-      id,
-    );
+    if (!first) break;
+    const kind = (JSON.parse(first.doc as string) as JobDoc).kind;
+    const parallel = Math.min(PARALLELISM[kind] ?? 1, limit - n);
+    const batch = [first];
+    if (parallel > 1)
+      batch.push(
+        ...host.sql.exec(
+          "SELECT id, doc FROM jobs WHERE runAt <= ? AND kind = ? AND id != ? ORDER BY runAt, rowid LIMIT ?",
+          now,
+          kind,
+          first.id as string,
+          parallel - 1,
+        ),
+      );
+    await Promise.all(batch.map((row) => settle(host, io, now, row, touched)));
+    n += batch.length;
   }
   return { nextRunAt: nextJobAt(host.sql), touched };
+}
+
+/** 1 件を動かして、結果（消す・やり直し・あきらめる）を jobs 表に書く */
+async function settle(
+  host: Host,
+  io: JobIo,
+  now: number,
+  row: Record<string, unknown>,
+  touched: Set<string>,
+): Promise<void> {
+  const id = row.id as string;
+  const doc = JSON.parse(row.doc as string) as JobDoc;
+  const job = { kind: doc.kind, ...doc.payload } as Job;
+
+  let outcome: Outcome;
+  try {
+    outcome = await runJob(host, io, now, job, touched);
+  } catch (error) {
+    if (error instanceof DomainError) {
+      console.warn(JSON.stringify({ event: "job_failed", kind: doc.kind, id, code: error.code }));
+      outcome = DONE;
+    } else {
+      outcome = { retry: true, error: error instanceof Error ? error.name : "error" };
+    }
+  }
+
+  if (!outcome.retry) {
+    host.sql.exec("DELETE FROM jobs WHERE id = ?", id);
+    return;
+  }
+  const attempts = doc.attempts + 1;
+  const wait = nextRetryDelayMs(attempts);
+  if (wait === null) {
+    console.warn(JSON.stringify({ event: "job_gave_up", kind: doc.kind, id, attempts }));
+    host.sql.exec("DELETE FROM jobs WHERE id = ?", id);
+    return;
+  }
+  host.sql.exec(
+    "UPDATE jobs SET doc = ? WHERE id = ?",
+    JSON.stringify({
+      ...doc,
+      attempts,
+      runAt: now + Math.max(wait, outcome.retryAfterMs ?? 0),
+      lastError: outcome.error ?? "retry",
+    } satisfies JobDoc),
+    id,
+  );
 }
 
 async function runJob(
@@ -255,7 +291,30 @@ async function runJob(
       });
       return DONE;
     case "indexRule":
-      // ponytail: 埋め込みの索引づけは U7（semanticRules）で入れる。今は積むだけで何もしない
+      // 送るのは外への fetch をまたぐので transaction で包まない。書くのは最後の 1 文。通信の失敗は例外で retry になる
+      await indexRule(
+        {
+          db: ctx(),
+          sql: tracked(host.sql, touched),
+          env: host.env,
+          now: () => now,
+          fetch: io.fetch,
+        },
+        job.ruleId,
+      );
+      return DONE;
+    case "aiProofread":
+      // 失敗は aiJobs の行に書いて完了で返る（Convex の step は retry: false）。外へ送る間は transaction の外
+      await executeAiJob(
+        {
+          db: ctx(),
+          sql: tracked(host.sql, touched),
+          env: host.env,
+          now: host.now,
+          fetch: io.fetch,
+        },
+        job.jobId,
+      );
       return DONE;
   }
 }

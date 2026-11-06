@@ -24,6 +24,8 @@ export interface Host {
   sql: Sql;
   env: Env;
   now: () => number;
+  /** 外への HTTP（action が使う）。省略は global の fetch */
+  fetch?: typeof fetch;
   /** throw で巻き戻る 1 トランザクション（DO は storage.transaction、テストは SAVEPOINT） */
   transaction<T>(fn: () => Promise<T>): Promise<T>;
 }
@@ -98,6 +100,8 @@ export async function execute(
       userId: user?.id ?? null,
       env: host.env,
       now: host.now,
+      // Workers の fetch は global から外すと Illegal invocation になるので、包んで渡す
+      fetch: host.fetch ?? ((input, init) => fetch(input, init)),
       schedule,
     };
     return def.handler(ctx, args);

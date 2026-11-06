@@ -33,6 +33,7 @@ function world() {
     userId: principal.userId,
     env: {} as Env,
     now: () => mem.clock.now(),
+    fetch: globalThis.fetch,
     schedule: () => {},
   });
   const newWork = (mediaType: "document" | "sns" = "document") =>

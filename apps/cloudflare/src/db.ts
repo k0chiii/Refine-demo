@@ -11,6 +11,7 @@ import { execute, tracked, type CallResult, type Host } from "./run.ts";
 import { migrate } from "./sqlite/schema.ts";
 import { createAuthStore, migrateAuth, type AuthStore } from "./auth/store.ts";
 import { migrateCollab } from "./collab/store.ts";
+import { expireAiJobs } from "./functions/aiWorkflow.ts";
 import { expireProcessingJobs } from "./functions/processing.ts";
 import type { Sql } from "./sqlite/sql.ts";
 
@@ -79,7 +80,7 @@ export class MF100Database extends DurableObject<Env> {
 
   /**
    * cron（毎分）。Convex の crons.ts の配分: 受付終了は毎分、残りは毎時。あとで動く仕事の取りこぼしも毎分拾う。
-   * processing.expire は毎時。U7b: aiWorkflow.expire（5 分ごと）は、表ができたらここに足す
+   * processing.expire は毎時、aiWorkflow.expire（AI の一時結果の期限切れ）は 5 分ごと
    */
   async runJobs(at: Date): Promise<void> {
     const touched = new Set<string>();
@@ -89,6 +90,7 @@ export class MF100Database extends DurableObject<Env> {
     );
     await this.ctx.storage.transaction(async () => {
       await closeExpiredReviews(ctx);
+      if (at.getUTCMinutes() % 5 === 0) expireAiJobs(tracked(this.sql, touched), at.getTime());
       if (at.getUTCMinutes() !== 0) return;
       await remindUpcomingDeadlines(ctx);
       await expireUploadSessions(ctx);
