@@ -14,7 +14,8 @@
     "@mf100/application": "workspace:*",
     "@mf100/domain": "workspace:*",
     "hono": "4.13.13",
-    "jose": "6.2.10"
+    "jose": "6.2.10",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "typescript": "5.9.3",

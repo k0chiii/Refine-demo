@@ -15,10 +15,13 @@ export interface TableSpec {
   cols?: readonly string[];
   /** index を張る列の組 */
   indexes?: readonly (readonly string[])[];
+  /** 一意 index を張る列の組（NULL は重複してよい） */
+  unique?: readonly (readonly string[])[];
 }
 
 export const TABLES: readonly TableSpec[] = [
-  { name: "users", cols: ["name", "email", "nameKanji"] },
+  // id は払い出した利用者 ID（Principal.userId）。subject は Nogiku の sub で、本人の特定（subject → id）にだけ使う
+  { name: "users", cols: ["name", "email", "nameKanji", "subject"], unique: [["subject"]] },
   { name: "works", cols: ["socialProfileId", "ownerTeamId"], indexes: [["socialProfileId"]] },
   {
     name: "revisions",
@@ -113,13 +116,20 @@ function createTable(t: TableSpec): string {
   return `CREATE TABLE IF NOT EXISTS ${t.name} (${[...head, "doc TEXT NOT NULL", ...generated].join(", ")})`;
 }
 
-/** 何度呼んでも同じ（CREATE ... IF NOT EXISTS だけ）。 */
+/**
+ * 何度呼んでも同じ（CREATE ... IF NOT EXISTS だけ）。
+ * ponytail: 既にある表へ列は足さない。手元の `.wrangler/state` が古ければ消す（本番の DO はまだ無い）
+ */
 export function migrate(sql: Sql): void {
   for (const t of TABLES) {
     sql.exec(createTable(t));
     for (const cols of t.indexes ?? [])
       sql.exec(
         `CREATE INDEX IF NOT EXISTS ix_${t.name}_${cols.join("_")} ON ${t.name} (${cols.join(", ")})`,
+      );
+    for (const cols of t.unique ?? [])
+      sql.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ux_${t.name}_${cols.join("_")} ON ${t.name} (${cols.join(", ")})`,
       );
   }
 }

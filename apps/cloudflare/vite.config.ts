@@ -13,8 +13,7 @@ export default defineConfig({
   run: {
     tasks: {
       "verify-types": {
-        // 登録表（src/registry.ts）が application の export と食い違っていたら、型より先にここで止める
-        command: "node scripts/registry.mjs --check && tsc -p tsconfig.json --noEmit",
+        command: "tsc -p tsconfig.json --noEmit",
         dependsOn: [],
         cache: taskCache(),
       },

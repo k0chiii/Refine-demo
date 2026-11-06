@@ -1,122 +1,314 @@
+import { DomainError } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
-import { principals } from "@mf100/application/testing";
 import { createApp } from "./app.ts";
 import { devIdentifier } from "./identity.ts";
-import type { usecases } from "./registry.ts";
-import { runUsecase, settle } from "./run.ts";
-import { createInMemoryContext, nodeSql } from "./testing/context.ts";
+import { execute, type Host } from "./run.ts";
+import { createSqliteContext } from "./sqlite/context.ts";
+import { migrate } from "./sqlite/schema.ts";
+import type { Sql } from "./sqlite/sql.ts";
+import { nodeSql } from "./testing/context.ts";
+
+const UPLOAD_SECRET = "upload-secret-0123456789";
 
 /**
- * Durable Object の代わり: 同じ SQLite のアダプタを Node の中で直に包む。
- * 1 呼び出し = 1 トランザクションは SAVEPOINT で真似る（DO では storage.transaction）
+ * Durable Object の代わり: 同じ SQLite のアダプタ・同じ execute を Node の中で直に包む。
+ * 1 呼び出し = 1 トランザクションは SAVEPOINT で真似る（DO では storage.transaction）。
+ * `wrap` で SQL に故障を仕込める（途中で落ちたときの巻き戻しを確かめる）
  */
-function fakeDb() {
-  const sql = nodeSql();
-  const ctx = createInMemoryContext(undefined, sql);
-  const deps = { adminSubjects: new Set<string>(), upsertUser: async () => {} };
+function fakeDb(wrap: (sql: Sql) => Sql = (s) => s) {
+  const raw = nodeSql();
+  migrate(raw);
+  const sql = wrap(raw);
+  const host: Host = {
+    sql,
+    env: { MF100_SYSTEM_ADMIN_SUBJECTS: "" } as Env,
+    now: () => Date.UTC(2026, 10, 1),
+    transaction: async (fn) => {
+      raw.exec("SAVEPOINT call");
+      try {
+        const value = await fn();
+        raw.exec("RELEASE call");
+        return value;
+      } catch (e) {
+        raw.exec("ROLLBACK TO call");
+        raw.exec("RELEASE call");
+        throw e;
+      }
+    },
+  };
+  const notified: string[][] = [];
   return {
-    ctx,
-    run: (identity: { subject: string }, name: string, args: unknown[]) =>
-      settle(async () => {
-        sql.exec("SAVEPOINT call");
-        try {
-          const value = await runUsecase(ctx, identity, name as keyof typeof usecases, args, deps);
-          sql.exec("RELEASE call");
-          return value;
-        } catch (e) {
-          sql.exec("ROLLBACK TO call");
-          sql.exec("RELEASE call");
-          throw e;
-        }
-      }),
+    /** テストが結果を覗く用（アプリを通さない） */
+    db: createSqliteContext(raw, { clock: { now: host.now } }),
+    notified,
+    call: async (
+      name: string,
+      identity: Parameters<typeof execute>[2],
+      args: unknown,
+      ok: boolean,
+    ) => {
+      const { result, touched } = await execute(host, name, identity, args, ok);
+      notified.push([...touched].sort());
+      return result;
+    },
     fetch: async () => new Response(null, { status: 101 }),
   };
 }
 
-function app(db = fakeDb()) {
-  return createApp({ identify: devIdentifier, db: () => db, allowedOrigins: [] });
+function app(
+  db = fakeDb(),
+  secrets: Record<string, string> = { MF100_UPLOAD_SECRET: UPLOAD_SECRET },
+) {
+  return createApp({
+    identify: devIdentifier,
+    db: () => db,
+    secret: (name) => secrets[name],
+    allowedOrigins: [],
+  });
 }
 
 const as = (subject: string) => ({
-  "X-MF100-Identity": JSON.stringify({ subject }),
+  "X-MF100-Identity": JSON.stringify({ subject, name: subject }),
   "Content-Type": "application/json",
 });
 const post = (
   a: ReturnType<typeof app>,
   name: string,
-  args: unknown[],
-  subject = principals.manager.userId,
+  args: unknown,
+  subject: string | null = "u_manager",
+  headers: Record<string, string> = {},
 ) =>
-  a.request(`/u/${name}`, { method: "POST", headers: as(subject), body: JSON.stringify({ args }) });
+  a.request(`/f/${name}`, {
+    method: "POST",
+    headers: { ...(subject ? as(subject) : { "Content-Type": "application/json" }), ...headers },
+    body: JSON.stringify(args),
+  });
 
-const workInput = {
-  title: "MF100 パンフレット",
-  purpose: "来場者向け案内",
-  category: "印刷物",
-  mediaType: "pdf",
-  year: 100,
-  creatorIds: [principals.creator.userId],
-  approverId: principals.approver.userId,
-};
+/** サインインして利用者 ID を得る（users.id は払い出し値なので、subject からは決まらない） */
+async function signIn(a: ReturnType<typeof app>, subject: string): Promise<string> {
+  const res = await post(a, "me:me", {}, subject);
+  return ((await res.json()) as { value: { id: string } }).value.id;
+}
 
-describe("POST /u/:name", () => {
-  it("本人が分からなければ 401、知らない名前は 404、args の無い body は 400", async () => {
+async function workInput(a: ReturnType<typeof app>, title = "MF100 パンフレット") {
+  return {
+    title,
+    purpose: "来場者向け案内",
+    category: "印刷物",
+    mediaType: "pdf",
+    year: 100,
+    creatorIds: [await signIn(a, "u_creator")],
+    approverId: await signIn(a, "u_approver"),
+  };
+}
+
+async function createWork(a: ReturnType<typeof app>, title?: string): Promise<string> {
+  const res = await post(a, "works:create", await workInput(a, title));
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { value: string }).value;
+}
+
+describe("POST /f/:name", () => {
+  it("本人が分からなければ 401、知らない名前は 404（body に code）", async () => {
     const a = app();
-    expect((await a.request("/u/createWork", { method: "POST" })).status).toBe(401);
-    expect((await post(a, "noSuchUsecase", [])).status).toBe(404);
-    const bad = await a.request("/u/createWork", {
+    const unauthenticated = await post(a, "works:create", {}, null);
+    expect(unauthenticated.status).toBe(401);
+    expect(await unauthenticated.json()).toMatchObject({ code: "unauthenticated" });
+
+    const unknown = await post(a, "works:noSuchFunction", {});
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ code: "function_not_found" });
+    // Object.prototype の名前を関数として引けない
+    expect((await post(a, "constructor", {})).status).toBe(404);
+  });
+
+  it("引数が zod に合わなければ 400（invalid_args と、どの項目が悪いかの issues）。未知の鍵も拒む", async () => {
+    const a = app();
+    const res = await post(a, "works:create", { title: 1 });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string; details: { issues: { path: string[] }[] } };
+    expect(body.code).toBe("invalid_args");
+    expect(body.details.issues.map((i) => i.path[0])).toContain("title");
+
+    const extra = await post(a, "works:update", { workId: "w", patch: { id: "other" } });
+    expect(extra.status).toBe(400);
+    expect(await extra.json()).toMatchObject({ code: "invalid_args" });
+
+    const broken = await a.request("/f/works:create", {
       method: "POST",
-      headers: as("u1"),
-      body: "{}",
+      headers: as("u_manager"),
+      body: "{",
     });
-    expect(bad.status).toBe(400);
+    expect(broken.status).toBe(400);
   });
 
-  it("サービス専用のユースケース（実体の検証後に apps/api が呼ぶもの）は公開の口から呼べない", async () => {
-    const res = await post(app(), "completeItemUpload", [
-      { attemptId: "x", size: 1, sha256: "forged" },
-    ]);
-    expect(res.status).toBe(404);
-  });
-
-  it("ユースケースを (ctx, principal, ...args) で呼び、結果をそのまま返す。書いたものは次の呼び出しで読める", async () => {
-    const db = fakeDb();
-    const a = app(db);
-    const created = await post(a, "createWork", [workInput]);
-    expect(created.status).toBe(200);
-    const work = (await created.json()) as { id: string; title: string };
-    expect(work.title).toBe("MF100 パンフレット");
-    expect(await db.ctx.works.findById(work.id)).toMatchObject({ title: "MF100 パンフレット" });
-  });
-
-  it("DomainError は code と details を body に、状態は code から決める。見えない制作物は存在ごと隠す（forbidden → 403）", async () => {
+  it("mutation は { value } を返し、書いたものは次の呼び出しで読める。空の body は引数なし", async () => {
     const a = app();
-    const res = await post(a, "updateWork", [{ workId: "nope", patch: {} }], "stranger");
+    const id = await createWork(a);
+    expect(id).toEqual(expect.any(String));
+
+    const og = await post(a, "works:ogSummary", { workId: id }, null);
+    expect(await og.json()).toMatchObject({ value: { title: "MF100 パンフレット" } });
+
+    const noBody = await a.request("/f/me:me", { method: "POST", headers: as("u_manager") });
+    expect(noBody.status).toBe(200);
+  });
+
+  it("DomainError は code と details を body に、状態は code から決める（見えない制作物は存在ごと隠す: forbidden → 403）", async () => {
+    const a = app();
+    const res = await post(a, "works:update", { workId: "nope", patch: {} }, "stranger");
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ code: "forbidden" });
   });
 
-  it("途中で DomainError になった呼び出しは、それまでの書き込みも残さない（2 行目が不正な一括登録で 1 行目も登録されない）", async () => {
+  it("expectedVersion が合わなければ version_conflict（409）で、書き込みは残らない", async () => {
     const db = fakeDb();
     const a = app(db);
-    const res = await post(a, "importWorks", [{ rows: [workInput, { ...workInput, title: "" }] }]);
-    expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ code: "work_import_invalid", details: { index: 1 } });
-    expect(await db.ctx.works.list(10)).toEqual([]);
+    const id = await createWork(a);
+    const res = await post(a, "works:update", {
+      workId: id,
+      expectedVersion: 99,
+      patch: { title: "上書き" },
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "version_conflict" });
+    expect(await db.db.works.findById(id)).toMatchObject({ title: "MF100 パンフレット" });
   });
 
-  it("patch に id を紛れ込ませても、別の制作物は書き換わらない", async () => {
+  it("mutation の途中（制作物を書いたあと、監査の記録で）落ちたら、制作物の書き込みも残らず、配る表もない", async () => {
+    let armed = false;
+    const db = fakeDb((sql) => ({
+      exec: (query, ...params) => {
+        if (armed && /^\s*INSERT INTO audit/i.test(query))
+          throw new DomainError("version_conflict", { injected: true });
+        return sql.exec(query, ...params);
+      },
+    }));
+    const a = app(db);
+    const id = await createWork(a);
+    armed = true;
+    db.notified.length = 0;
+    const res = await post(a, "works:update", { workId: id, patch: { title: "途中で落ちる" } });
+    expect(res.status).toBe(409);
+    expect(await db.db.works.findById(id)).toMatchObject({ title: "MF100 パンフレット" });
+    expect(db.notified).toEqual([[]]);
+  });
+
+  it("成功した mutation は、書いた表の名前を配る（本人の名簿への反映は数えない）", async () => {
     const db = fakeDb();
     const a = app(db);
-    const mine = (await (await post(a, "createWork", [workInput])).json()) as { id: string };
-    const other = (await (
-      await post(a, "createWork", [{ ...workInput, title: "他人の制作物" }])
-    ).json()) as { id: string };
-    const res = await post(a, "updateWork", [
-      { workId: mine.id, patch: { title: "乗っ取り", id: other.id } },
-    ]);
-    expect(res.status).toBe(200);
-    expect(await db.ctx.works.findById(other.id)).toMatchObject({ title: "他人の制作物" });
-    expect(await db.ctx.works.findById(mine.id)).toMatchObject({ title: "乗っ取り" });
+    await createWork(a);
+    expect(db.notified.at(-1)).toContain("works");
+    expect(db.notified.at(-1)).not.toContain("users");
+  });
+
+  it("query の応答には、読んだ表の名前（reads）が付く。mutation には付かない", async () => {
+    const a = app();
+    const id = await createWork(a);
+    const og = (await (await post(a, "works:ogSummary", { workId: id }, null)).json()) as {
+      value: unknown;
+      reads: string[];
+    };
+    expect(og.reads).toContain("works");
+
+    const unread = (await (await post(a, "notifications:unreadCount", {})).json()) as {
+      value: number;
+      reads: string[];
+    };
+    expect(unread.value).toBe(0);
+    expect(unread.reads).toContain("notifications");
+
+    const pin = await (await post(a, "home:setPinned", { workId: id, pinned: true })).json();
+    expect(pin).toEqual({ value: true });
+    const pinned = await (await post(a, "home:pinned", { workId: id })).json();
+    expect(pinned).toMatchObject({ value: true, reads: expect.arrayContaining(["pins"]) });
+  });
+
+  it("Auth: user は JWT 必須、optional は無ければ null、public は誰でも", async () => {
+    const a = app();
+    expect((await post(a, "notifications:unreadCount", {}, null)).status).toBe(401);
+    expect(await (await post(a, "me:me", {}, null)).json()).toMatchObject({ value: null });
+    expect((await post(a, "works:ogSummary", { workId: "x" }, null)).status).toBe(200);
+  });
+
+  it("本人の特定は subject → users.id。同じ subject は同じ ID、別の subject は別の ID", async () => {
+    const a = app();
+    const first = await signIn(a, "u_creator");
+    expect(await signIn(a, "u_creator")).toBe(first);
+    expect(await signIn(a, "u_other")).not.toBe(first);
+    expect(first).not.toBe("u_creator");
+  });
+});
+
+describe("サービス認証（submissions:beginUpload: MF100_UPLOAD_SECRET + 利用者）", () => {
+  const key = (secret: string) => ({ "X-MF100-Service-Key": secret });
+  const begin = (
+    a: ReturnType<typeof app>,
+    headers: Record<string, string>,
+    subject = "u_manager",
+  ) => post(a, "submissions:beginUpload", { itemId: "item" }, subject, headers);
+
+  it("秘密が無い・間違い・未設定・短いなら、その関数ごと 404（利用者の JWT が正しくても）", async () => {
+    const a = app();
+    expect((await begin(a, {})).status).toBe(404);
+    expect((await begin(a, key("wrong"))).status).toBe(404);
+    expect((await begin(a, key(UPLOAD_SECRET.slice(0, -1)))).status).toBe(404);
+    expect((await begin(app(fakeDb(), {}), key(UPLOAD_SECRET))).status).toBe(404);
+    const short = "short-secret";
+    expect((await begin(app(fakeDb(), { MF100_UPLOAD_SECRET: short }), key(short))).status).toBe(
+      404,
+    );
+    // ヘッダの場所も合わせる: UPLOAD は Authorization: Bearer では受けない
+    expect((await begin(a, { Authorization: `Bearer ${UPLOAD_SECRET}` })).status).toBe(404);
+  });
+
+  it("秘密が合っても、利用者の JWT が無ければ 401", async () => {
+    const res = await post(
+      app(),
+      "submissions:beginUpload",
+      { itemId: "i" },
+      null,
+      key(UPLOAD_SECRET),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("秘密が合い、利用者も居れば関数まで届く（引数の検証も、use case の判定もそのまま）", async () => {
+    const a = app();
+    const invalid = await post(a, "submissions:beginUpload", {}, "u_manager", key(UPLOAD_SECRET));
+    expect(invalid.status).toBe(400);
+    const reached = await begin(a, key(UPLOAD_SECRET));
+    // 項目が無いので use case が not_found を返す。境界の 404（function_not_found）とは code で区別できる
+    const body = (await reached.json()) as { code: string };
+    expect(body.code).toMatch(/_not_found$/);
+    expect(body.code).not.toBe("function_not_found");
+  });
+
+  it("Bearer の秘密（CLEANUP / PROCESSING）は Authorization ヘッダで受ける。PROCESSING は 32 文字以上", async () => {
+    // 登録表にはまだ無いので、境界の部品だけを確かめる
+    const { verifyServiceSecret } = await import("./serviceAuth.ts");
+    const bearer = (s: string) =>
+      new Request("http://x/", { headers: { Authorization: `Bearer ${s}` } });
+    const cleanup = "c".repeat(16);
+    expect(verifyServiceSecret(bearer(cleanup), "MF100_CLEANUP_SECRET", cleanup)).toBe(true);
+    expect(verifyServiceSecret(bearer("d".repeat(16)), "MF100_CLEANUP_SECRET", cleanup)).toBe(
+      false,
+    );
+    const processing = "p".repeat(32);
+    expect(verifyServiceSecret(bearer(processing), "PROCESSING_SECRET", processing)).toBe(true);
+    expect(verifyServiceSecret(bearer("p".repeat(31)), "PROCESSING_SECRET", "p".repeat(31))).toBe(
+      false,
+    );
+  });
+
+  it("サービス専用の関数は、サービス認証を経ていない呼び出しを Durable Object の中でも 404 にする", async () => {
+    const db = fakeDb();
+    const result = await db.call(
+      "submissions:beginUpload",
+      { subject: "u" },
+      { itemId: "i" },
+      false,
+    );
+    expect(result).toMatchObject({ ok: false, code: "function_not_found" });
   });
 });

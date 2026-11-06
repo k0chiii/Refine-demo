@@ -1,70 +1,119 @@
-import { DomainError, memberTeamIds, type Principal } from "@mf100/domain";
-import type { AppContext } from "@mf100/application";
+import { DomainError } from "@mf100/domain";
+import { createSqliteContext } from "./sqlite/context.ts";
+import { TABLES } from "./sqlite/schema.ts";
+import type { Sql } from "./sqlite/sql.ts";
+import { upsertUser } from "./sqlite/users.ts";
+import type { FnCtx } from "./functions/define.ts";
+import { findFunction } from "./functions/index.ts";
+import { principalOf } from "./functions/principal.ts";
 import type { Identity } from "./identity.ts";
-import { usecases, type UsecaseName } from "./registry.ts";
-
-/** ユースケースの結果。DomainError は値で返す（Durable Object の RPC は Error の code・details を運ばない） */
-export type RunResult =
-  | { ok: true; value: unknown }
-  | { ok: false; code: string; details: Record<string, unknown> };
-
-export interface RunDeps {
-  /** 初期ブートストラップの管理者（subject）。Convex の MF100_SYSTEM_ADMIN_SUBJECTS と同じ */
-  adminSubjects: ReadonlySet<string>;
-  /** 本人の行を名簿（users）に置く。ふりがな・組織権限は Nogiku 連携後 */
-  upsertUser(identity: Identity): Promise<void>;
-}
 
 /**
- * 本人 → ドメインの主体。Convex の lib/principal.ts と同じ組み立て。
- * - orgPermissions は Nogiku Access 連携まで ["*"]（制限なし）
- * - teamIds は所属する局・担当（teams.memberIds）。Convex は購読の再実行を避けて要るときだけ読むが、ここは購読の単位が
- *   テーブルなので毎回読んでよい
+ * 関数の結果。DomainError は値で返す（Durable Object の RPC は Error の code・details を運ばない）。
+ * reads は query だけ: 読んだ表の名前（購読者が「どの表が変わったら読み直すか」を知る単位）
  */
-export async function principalOf(
-  ctx: AppContext,
-  identity: Identity,
-  deps: RunDeps,
-): Promise<Principal> {
-  await deps.upsertUser(identity);
-  const [groups, teams] = await Promise.all([ctx.groups.list(), ctx.teams.list()]);
+export type CallResult =
+  | { ok: true; value: unknown; reads?: string[] }
+  | { ok: false; code: string; details: Record<string, unknown> };
+
+/** 関数を走らせる場所。Durable Object（本番）も Node の SQLite（テスト）も、これを満たせば同じ道を通る */
+export interface Host {
+  /** 追跡しない生の SQL */
+  sql: Sql;
+  env: Env;
+  now: () => number;
+  /** throw で巻き戻る 1 トランザクション（DO は storage.transaction、テストは SAVEPOINT） */
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
+}
+
+const WRITE = /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(\w+)"?/i;
+const READ = /\b(?:FROM|JOIN)\s+"?(\w+)"?/gi;
+const TABLE_NAMES: ReadonlySet<string> = new Set(TABLES.map((t) => t.name));
+
+/**
+ * 書いた表と読んだ表の名前を集める。読みは `FROM <表>` / `JOIN <表>` を拾う（json_each(...) は表ではないので、
+ * 名簿にある表の名前だけを数える。DELETE FROM の対象は書きであって読みではない）
+ */
+export function tracked(sql: Sql, touched: Set<string>, reads: Set<string> = new Set()): Sql {
   return {
-    userId: identity.subject,
-    isSystemAdmin: deps.adminSubjects.has(identity.subject),
-    groupIds: groups.filter((g) => g.memberIds.includes(identity.subject)).map((g) => g.id),
-    orgPermissions: ["*"],
-    teamIds: memberTeamIds(teams, identity.subject),
+    exec: (query, ...params) => {
+      const write = WRITE.exec(query);
+      if (write?.[1]) touched.add(write[1]);
+      for (const m of query.slice(write ? write[0].length : 0).matchAll(READ))
+        if (m[1] && TABLE_NAMES.has(m[1])) reads.add(m[1]);
+      return sql.exec(query, ...params);
+    },
   };
 }
 
-/**
- * `POST /u/:name` の本体。ctx は呼び出し側が 1 トランザクションに包む。
- * DomainError はここでは受け止めない: トランザクションの外へ投げて、途中までの書き込みを巻き戻させる（Convex の mutation と同じ）
- */
-export async function runUsecase(
-  ctx: AppContext,
-  identity: Identity,
-  name: UsecaseName,
-  args: readonly unknown[],
-  deps: RunDeps,
-): Promise<unknown> {
-  const fn = usecases[name] as (
-    ctx: AppContext,
-    principal: Principal,
-    ...rest: unknown[]
-  ) => Promise<unknown>;
-  const principal = await principalOf(ctx, identity, deps);
-  return fn(ctx, principal, ...args);
-}
+const fail = (code: string, details: Record<string, unknown> = {}): CallResult => ({
+  ok: false,
+  code,
+  details,
+});
 
-/** トランザクションの外で、DomainError だけを値に直す。それ以外はそのまま落とす（500） */
-export async function settle(run: () => Promise<unknown>): Promise<RunResult> {
+/**
+ * `POST /f/:name` の本体（Durable Object の call も、テストの偽物もここを呼ぶ）。
+ * - 認可の最後の砦: HTTP の境界が確かめた結果（identity / serviceOk）を、関数の auth と突き合わせる
+ * - query / action は transaction に包まない（query は書かない）。mutation は包み、DomainError は外へ出して巻き戻させる
+ * - 本人の行（users）への反映は transaction の外・追跡の外: サインインは業務の書き込みではなく、巻き戻さず、購読者も起こさない
+ */
+export async function execute(
+  host: Host,
+  name: string,
+  identity: Identity | null,
+  args: unknown,
+  serviceOk: boolean,
+): Promise<{ result: CallResult; touched: Set<string> }> {
+  const touched = new Set<string>();
+  const reads = new Set<string>();
+  const done = (result: CallResult) => ({ result, touched });
+
+  const def = findFunction(name);
+  // サービス専用が公開の口から来たら、存在ごと隠す（HTTP の境界と同じ 404）
+  if (!def || (typeof def.auth === "object" && !serviceOk))
+    return done(fail("function_not_found", { name }));
+  const needsUser = def.auth === "user" || (typeof def.auth === "object" && def.auth.withUser);
+  const wantsUser = needsUser || def.auth === "optional";
+  if (needsUser && !identity) return done(fail("unauthenticated"));
+
+  const user =
+    wantsUser && identity
+      ? { id: upsertUser(host.sql, identity), subject: identity.subject }
+      : null;
+
+  const sql = tracked(host.sql, touched, reads);
+  const adminSubjects = new Set(
+    (host.env.MF100_SYSTEM_ADMIN_SUBJECTS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const run = async (): Promise<unknown> => {
+    const db = createSqliteContext(sql, { clock: { now: host.now } });
+    const ctx: FnCtx = {
+      db,
+      sql,
+      principal: user ? await principalOf(db, user, adminSubjects) : null,
+      userId: user?.id ?? null,
+      env: host.env,
+      now: host.now,
+    };
+    return def.handler(ctx, args);
+  };
+
   try {
-    return { ok: true, value: await run() };
+    const value = def.kind === "mutation" ? await host.transaction(run) : await run();
+    return done({
+      ok: true,
+      value: value ?? null,
+      ...(def.kind === "query" ? { reads: [...reads].sort() } : {}),
+    });
   } catch (error) {
-    if (error instanceof DomainError)
-      return { ok: false, code: error.code, details: error.details };
-    throw error;
+    if (!(error instanceof DomainError)) throw error;
+    // 巻き戻ったので、書いたはずの表は変わっていない（配らない）
+    if (def.kind === "mutation") touched.clear();
+    return done(fail(error.code, error.details));
   }
 }
 

@@ -24,6 +24,7 @@ export default {
     const app = createApp({
       identify: identifierFor(env),
       db: () => env.DB.get(env.DB.idFromName("main")),
+      secret: (name) => env[name],
       allowedOrigins: (env.ALLOWED_ORIGINS ?? "")
         .split(",")
         .map((s) => s.trim())

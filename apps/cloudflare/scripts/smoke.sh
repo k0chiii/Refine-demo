@@ -1,40 +1,63 @@
 #!/usr/bin/env bash
-# wrangler dev で起こした本物の Worker + Durable Object に対して、HTTP の境界からユースケースを 1 周させる。
-# 使い方: apps/cloudflare で `pnpm dev --port 8790 --var MF100_SYSTEM_ADMIN_SUBJECTS:u_admin` を起こしてから `scripts/smoke.sh 8790`
-# （管理者は、全制作物の一覧（exportWorkStats）で巻き戻しを確かめるのに要る）
+# wrangler dev で起こした本物の Worker + Durable Object に対して、HTTP の境界から関数を 1 周させる。
+# 使い方: apps/cloudflare で `pnpm dev --port 8790` を起こしてから `scripts/smoke.sh 8790`
+# サービス認証の「合っていれば通る」まで見るなら、起こすときに `--var MF100_UPLOAD_SECRET:<16 文字以上>` を足し、
+# 同じ値を環境変数 UPLOAD_SECRET で渡す（無ければ「秘密が未設定なら 404」だけを確かめる）
 set -euo pipefail
 port="${1:-8790}"
 base="http://127.0.0.1:$port"
+body=$(mktemp)
+trap 'rm -f "$body"' EXIT
 me='{"subject":"u_manager","name":"統括"}'
 creator='{"subject":"u_creator","name":"制作者"}'
+approver='{"subject":"u_approver","name":"校了者"}'
 
-call() { curl -s -o /tmp/smoke.body -w '%{http_code}' -X POST "$base/u/$1" -H 'Content-Type: application/json' -H "X-MF100-Identity: $2" -d "{\"args\":$3}"; }
-assert() { if [ "$1" != "$2" ]; then echo "FAIL $3: expected $2, got $1: $(cat /tmp/smoke.body)"; exit 1; fi; echo "ok   $3"; }
+# call <関数名> <本人の JSON> <引数の JSON> [追加のヘッダ]
+call() { curl -s -o "$body" -w '%{http_code}' -X POST "$base/f/$1" -H 'Content-Type: application/json' -H "X-MF100-Identity: $2" ${4:+-H "$4"} -d "$3"; }
+assert() { if [ "$1" != "$2" ]; then echo "FAIL $3: expected $2, got $1: $(cat "$body")"; exit 1; fi; echo "ok   $3"; }
+field() { node -e 'const v=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); const r=process.argv[2].split(".").reduce((o,k)=>o?.[k],v); process.stdout.write(String(r))' "$body" "$1"; }
+assert_field() { if [ "$(field "$1")" != "$2" ]; then echo "FAIL $3: $1 expected $2, got $(cat "$body")"; exit 1; fi; echo "ok   $3"; }
 
-assert "$(curl -s -o /tmp/smoke.body -w '%{http_code}' "$base/health")" 200 "health"
-assert "$(curl -s -o /tmp/smoke.body -w '%{http_code}' -X POST "$base/u/createWork" -d '{"args":[]}')" 401 "no identity -> 401"
-assert "$(call noSuchUsecase "$me" '[]')" 404 "unknown usecase -> 404"
-# 名簿（users）に居ない人は職責に入れられない。先に本人として 1 回呼ぶ（サインインと同じ効き目）
-assert "$(call listMyNotifications "$creator" '[]')" 200 "creator signs in"
-assert "$(call listMyNotifications '{"subject":"u_approver","name":"校了者"}' '[]')" 200 "approver signs in"
-assert "$(call createWork "$me" '[{"title":"MF100 パンフレット","purpose":"案内","category":"印刷物","mediaType":"pdf","year":100,"creatorIds":["u_creator"],"approverId":"u_approver"}]')" 200 "createWork -> 200"
-id=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("/tmp/smoke.body","utf8")).id)')
-assert "$(call updateWork "$creator" "[{\"workId\":\"$id\",\"patch\":{\"title\":\"改題\"}}]")" 403 "creator cannot rename -> 403 (forbidden)"
-assert "$(call updateWork '{"subject":"stranger"}' '[{"workId":"nope","patch":{}}]')" 403 "unknown work -> 403 (does not leak existence)"
-# 途中で DomainError になった呼び出しは何も残さない（Durable Object の storage.transaction の巻き戻し）
-assert "$(call importWorks "$me" '[{"rows":[{"title":"巻き戻し 1","purpose":"p","category":"印刷物","mediaType":"pdf","year":100,"creatorIds":["u_creator"],"approverId":"u_approver"},{"title":"","purpose":"p","category":"印刷物","mediaType":"pdf","year":100,"creatorIds":["u_creator"],"approverId":"u_approver"}]}]')" 400 "importWorks with a bad 2nd row -> 400"
-assert "$(call exportWorkStats '{"subject":"u_admin","name":"管理者"}' '[{}]')" 200 "exportWorkStats as admin"
-if grep -q "巻き戻し 1" /tmp/smoke.body; then echo "FAIL rollback: 1st row survived the failed import"; exit 1; fi; echo "ok   failed import left nothing behind"
-# サービス専用（apps/api が実体を検証してから呼ぶ）は公開の口に無い
-assert "$(call completeItemUpload "$me" '[{"attemptId":"x","size":1,"sha256":"forged"}]')" 404 "service-only usecase is not public"
+assert "$(curl -s -o "$body" -w '%{http_code}' "$base/health")" 200 "health"
+assert "$(curl -s -o "$body" -w '%{http_code}' -X POST "$base/f/works:create" -d '{}')" 401 "no identity -> 401"
+assert "$(call works:noSuchFunction "$me" '{}')" 404 "unknown function -> 404"
+assert "$(call works:create "$me" '{"title":1}')" 400 "invalid args -> 400"
+assert_field code invalid_args "invalid args -> code invalid_args"
+
+# 名簿（users）に居ない人は職責に入れられない。先に本人として 1 回呼ぶ（サインインと同じ効き目）。ID は払い出し値なので me:me で知る
+assert "$(call me:me "$me" '{}')" 200 "manager signs in (me:me)"
+assert "$(call me:me "$creator" '{}')" 200 "creator signs in"
+creator_id=$(field value.id)
+assert "$(call me:me "$approver" '{}')" 200 "approver signs in"
+approver_id=$(field value.id)
+assert "$(call works:create "$me" "{\"title\":\"MF100 パンフレット\",\"purpose\":\"案内\",\"category\":\"印刷物\",\"mediaType\":\"pdf\",\"year\":100,\"creatorIds\":[\"$creator_id\"],\"approverId\":\"$approver_id\"}")" 200 "works:create -> 200"
+id=$(field value)
+assert "$(call works:update "$creator" "{\"workId\":\"$id\",\"patch\":{\"title\":\"改題\"}}")" 403 "creator cannot rename -> 403 (forbidden)"
+assert "$(call works:update '{"subject":"stranger"}' '{"workId":"nope","patch":{}}')" 403 "unknown work -> 403 (does not leak existence)"
+assert "$(call works:update "$me" "{\"workId\":\"$id\",\"expectedVersion\":99,\"patch\":{\"title\":\"上書き\"}}")" 409 "stale expectedVersion -> 409"
+assert_field code version_conflict "version_conflict"
+# 公開の関数は本人なしで引ける。query の応答には読んだ表の名前（reads）が付く
+assert "$(curl -s -o "$body" -w '%{http_code}' -X POST "$base/f/works:ogSummary" -d "{\"workId\":\"$id\"}")" 200 "works:ogSummary without identity -> 200"
+assert_field value.title "MF100 パンフレット" "409 left the title as it was"
+node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).reads; if(!r.includes("works")){console.log("FAIL reads: "+r);process.exit(1)} console.log("ok   query reads "+JSON.stringify(r))' "$body"
+assert "$(call notifications:unreadCount "$me" '{}')" 200 "notifications:unreadCount -> 200"
+# サービス専用（apps/api が実体を検証してから呼ぶ）は、秘密が無ければ在ることも教えない
+assert "$(call submissions:beginUpload "$me" '{"itemId":"x"}')" 404 "service function without key -> 404"
+assert "$(call submissions:beginUpload "$me" '{"itemId":"x"}' 'X-MF100-Service-Key: wrong-wrong-wrong-wrong')" 404 "service function with a wrong key -> 404"
+if [ -n "${UPLOAD_SECRET:-}" ]; then
+  assert "$(call submissions:beginUpload "$me" '{"itemId":"x"}' "X-MF100-Service-Key: $UPLOAD_SECRET")" 404 "service function with the key -> reaches the use case (item not found -> 404)"
+  assert_field code upload_item_not_found "reached the use case, not the boundary"
+fi
 # 書いたテーブル名が WebSocket で届く（Node の WebSocket はヘッダに ASCII しか載せられないので、名前の無い本人で）
 node -e '
 const h = { "X-MF100-Identity": process.argv[2] };
 const ws = new WebSocket(process.argv[1] + "/ws", { headers: h });
-ws.onopen = () => fetch(process.argv[1] + "/u/setWorkPinned", { method: "POST", headers: { ...h, "Content-Type": "application/json" }, body: JSON.stringify({ args: [{ workId: process.argv[3], pinned: true }] }) });
+ws.onopen = () => fetch(process.argv[1] + "/f/home:setPinned", { method: "POST", headers: { ...h, "Content-Type": "application/json" }, body: JSON.stringify({ workId: process.argv[3], pinned: true }) });
 ws.onmessage = (m) => { const c = JSON.parse(m.data).changed; if (!c.includes("pins")) { console.log("FAIL ws: " + m.data); process.exit(1); } console.log("ok   ws change notice " + m.data); process.exit(0); };
 setTimeout(() => { console.log("FAIL ws: no message within 5s"); process.exit(1); }, 5000);
 ' "$base" '{"subject":"u_manager"}' "$id"
+assert "$(call home:pinned "$me" "{\"workId\":\"$id\"}")" 200 "home:pinned -> 200"
+assert_field value true "pinned"
 # cron の入口（wrangler dev の scheduled handler）
-assert "$(curl -s -o /tmp/smoke.body -w '%{http_code}' "$base/cdn-cgi/handler/scheduled?cron=0+*+*+*+*")" 200 "scheduled handler (hourly jobs)"
+assert "$(curl -s -o "$body" -w '%{http_code}' "$base/cdn-cgi/handler/scheduled?cron=0+*+*+*+*")" 200 "scheduled handler (hourly jobs)"
 echo "all ok (work $id)"
