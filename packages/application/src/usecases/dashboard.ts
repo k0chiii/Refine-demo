@@ -41,7 +41,7 @@ import {
   type WorkStage,
   type WorkSummary,
 } from "@mf100/domain";
-import { canView } from "../shared.ts";
+import { canView, myGrantsLoader } from "../shared.ts";
 import type { AppContext, NotificationKind } from "../ports.ts";
 import { listSubmitTargets, submitTargetPolicy, type DashboardRole } from "./home.ts";
 
@@ -231,18 +231,24 @@ function isReviewPending(a: ReviewAssignment | undefined): a is ReviewAssignment
   return a?.state === "pending" || a?.state === "viewed";
 }
 
-/** 見られる制作物なら、その ACL。見られなければ null */
+/**
+ * 見られる制作物なら、その人に当たる許可。見られなければ null。許可は本人の分を 1 回だけ読んだもの（{@link myGrantsLoader}）で、
+ * 制作物ごとに ACL を読まない（認可が見るのは本人に当たる許可だけ）
+ */
 async function visibleGrants(
   ctx: AppContext,
   principal: Principal,
   work: Work,
+  grantsOf: GrantsOf,
 ): Promise<readonly WorkPermissionGrant[] | null> {
   // 進行中でない制作物（完了・保留・取消）は表の 1 行に数えるだけ。ACL は「見られるか」の判定にだけ要るので、
   // ACL を見ずに見られると分かる（通常の制作物）なら読まない。ホームの購読が読む範囲が狭まり、ACL の書込みで再実行されなくなる
   if (work.lifecycle !== "active" && canViewWork({ work, grants: [], principal })) return [];
-  const grants = await ctx.acl.listByWork(work.id);
+  const grants = await grantsOf(work.id);
   return (await canView(ctx, principal, work, grants)) ? grants : null;
 }
+
+type GrantsOf = (workId: string) => Promise<readonly WorkPermissionGrant[]>;
 
 /** 見られる進行中の制作物 1 件の材料。どの節もここから自分の行を作る */
 interface WorkGlance {
@@ -602,13 +608,16 @@ async function mentionItems(
 }
 
 /** ピン留め（見られなくなった制作物は出さない） */
-async function pinnedItems(ctx: AppContext, principal: Principal): Promise<DashboardItem[]> {
+async function pinnedItems(
+  ctx: AppContext,
+  principal: Principal,
+  grantsOf: GrantsOf,
+): Promise<DashboardItem[]> {
   const out: DashboardItem[] = [];
   for (const p of await ctx.home.listPins(principal.userId)) {
     const work = await ctx.works.findById(p.workId);
     if (!work) continue;
-    const grants = await ctx.acl.listByWork(work.id);
-    if (!(await canView(ctx, principal, work, grants))) continue;
+    if (!(await canView(ctx, principal, work, await grantsOf(work.id)))) continue;
     const { accepting, latest } =
       (await ctx.workSummaries.findByWork(work.id)) ??
       revisionHeadsOf(await ctx.revisions.listByWork(work.id));
@@ -637,6 +646,7 @@ export async function buildDashboard(
   works: Work[],
   opts: { submitPolicy?: SubmitTargetPolicy } = {},
 ): Promise<Dashboard> {
+  const grantsOf = myGrantsLoader(ctx, principal);
   const now = ctx.clock.now();
   const parts = emptyOverviewParts(principal, await ctx.teams.list(), now);
   const tasks = emptyCheckTasks();
@@ -650,7 +660,7 @@ export async function buildDashboard(
   };
   const visible: Work[] = [];
   for (const work of works) {
-    const grants = await visibleGrants(ctx, principal, work);
+    const grants = await visibleGrants(ctx, principal, work, grantsOf);
     if (grants === null) continue;
     visible.push(work);
     if (work.lifecycle !== "active") {
@@ -687,7 +697,7 @@ export async function buildDashboard(
     done: tasks.done,
     upcoming,
     mentions,
-    pinned: await pinnedItems(ctx, principal),
+    pinned: await pinnedItems(ctx, principal, grantsOf),
     backlog: parts.backlog,
     roles,
     nextDeadline,
@@ -711,16 +721,17 @@ export async function buildCheckDashboard(
   principal: Principal,
   works: Work[],
 ): Promise<CheckDashboard> {
+  const grantsOf = myGrantsLoader(ctx, principal);
   const out = emptyCheckTasks();
   for (const work of works) {
     if (work.lifecycle !== "active") continue;
-    const grants = await visibleGrants(ctx, principal, work);
+    const grants = await visibleGrants(ctx, principal, work, grantsOf);
     if (grants === null) continue;
     await addCheckTasks(out, await glanceWork(ctx, principal, work, grants));
   }
   for (const list of Object.values(out.mine)) list.sort(byDeadline);
   const shown = new Set([...Object.values(out.mine).flat(), ...out.done].map((i) => i.workId));
-  const pinned = (await pinnedItems(ctx, principal)).filter((i) => !shown.has(i.workId));
+  const pinned = (await pinnedItems(ctx, principal, grantsOf)).filter((i) => !shown.has(i.workId));
   return { ...out, pinned };
 }
 
@@ -734,12 +745,13 @@ export async function buildMakeDashboard(
   works: Work[],
   opts: { submitPolicy?: SubmitTargetPolicy } = {},
 ): Promise<MakeDashboard> {
+  const grantsOf = myGrantsLoader(ctx, principal);
   const now = ctx.clock.now();
   const parts = emptyOverviewParts(principal, await ctx.teams.list(), now);
   const respond: DashboardItem[] = [];
   const visible: Work[] = [];
   for (const work of works) {
-    const grants = await visibleGrants(ctx, principal, work);
+    const grants = await visibleGrants(ctx, principal, work, grantsOf);
     if (grants === null) continue;
     visible.push(work);
     if (!rolesOf(work, principal).isCreator) continue;
@@ -768,10 +780,11 @@ export async function buildWorksDashboard(
   principal: Principal,
   works: Work[],
 ): Promise<WorksDashboard> {
+  const grantsOf = myGrantsLoader(ctx, principal);
   const now = ctx.clock.now();
   const parts = emptyOverviewParts(principal, await ctx.teams.list(), now);
   for (const work of works) {
-    const grants = await visibleGrants(ctx, principal, work);
+    const grants = await visibleGrants(ctx, principal, work, grantsOf);
     if (grants === null) continue;
     if (work.lifecycle !== "active") addInactiveRow(parts, work);
     else await addOverview(parts, await glanceWork(ctx, principal, work, grants));
@@ -779,7 +792,7 @@ export async function buildWorksDashboard(
   sortBacklog(parts.backlog);
   const { upcoming, nextDeadline } = deadlinesAhead(parts.deadlines, now);
   return {
-    pinned: await pinnedItems(ctx, principal),
+    pinned: await pinnedItems(ctx, principal, grantsOf),
     backlog: parts.backlog,
     nextDeadline,
     summary: { dueSoon: upcoming.length, overdue: parts.backlog.overdue.length },
