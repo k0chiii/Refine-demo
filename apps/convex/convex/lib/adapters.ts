@@ -1074,6 +1074,21 @@ export function createAppContext(
           .collect();
         return docs.map(stripGrant);
       },
+      async listForPrincipal(principal) {
+        const out = [];
+        for (const [principalType, principalId] of [
+          ["user", principal.userId] as const,
+          ...principal.groupIds.map((id) => ["group", id] as const),
+        ])
+          for (const doc of await db
+            .query("workPermissions")
+            .withIndex("by_principal", (q) =>
+              q.eq("principalType", principalType).eq("principalId", principalId),
+            )
+            .take(1000))
+            out.push(stripGrant(doc));
+        return out;
+      },
       async insert(grant) {
         await db.insert(
           "workPermissions",

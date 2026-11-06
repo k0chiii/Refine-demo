@@ -1,5 +1,5 @@
 import { Presence } from "@convex-dev/presence";
-import { loadAuthorizedWork } from "@mf100/application";
+import { loadWorkAllowing } from "@mf100/application";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
@@ -19,7 +19,8 @@ export const heartbeat = mutation({
   args: { workId: v.string(), sessionId: v.string() },
   handler: async (ctx, { workId, sessionId }) => {
     const { principal } = await requireUser(ctx);
-    await loadAuthorizedWork(createReadContext(ctx.db), principal, workId, "work.view");
+    // 閲覧は職責・ACL に依らず許される（105A）。ACL は読まない
+    await loadWorkAllowing(createReadContext(ctx.db), principal, workId, "work.view");
     if (!/^[0-9a-f-]{36}$/.test(sessionId)) throw new Error("invalid_session");
     const { sessionToken } = await presence.heartbeat(
       ctx,
@@ -37,7 +38,8 @@ export const list = query({
   args: { workId: v.string() },
   handler: async (ctx, { workId }) => {
     const { principal } = await requireUser(ctx);
-    await loadAuthorizedWork(createReadContext(ctx.db), principal, workId, "work.view");
+    // 閲覧は職責・ACL に依らず許される（105A）。ACL は読まない
+    await loadWorkAllowing(createReadContext(ctx.db), principal, workId, "work.view");
     const online = await presence.listRoom(ctx, workId, true, 100);
     const users = await resolveUsers(
       ctx.db,

@@ -40,6 +40,43 @@ export async function loadAuthorizedWork(
   return { work, grants };
 }
 
+/**
+ * 本人に付いた許可を制作物ごとに引く関数。初めて要るときに 1 回だけ読む（制作物ごとに ACL を読まない）。
+ * 認可（isAllowed・canViewWork）が見るのは本人に当たる許可だけなので、制作物の ACL 全体の代わりに渡せる。
+ * 制作物の一覧を回るダッシュボード・通知の一覧が使う（Convex の読み取りの量と、購読が再実行される範囲を減らす）
+ */
+export function myGrantsLoader(
+  ctx: AppContext,
+  principal: Principal,
+): (workId: string) => Promise<readonly WorkPermissionGrant[]> {
+  let byWork: Promise<Map<string, WorkPermissionGrant[]>> | null = null;
+  return async (workId) => {
+    byWork ??= ctx.acl.listForPrincipal(principal).then((grants) => {
+      const m = new Map<string, WorkPermissionGrant[]>();
+      for (const g of grants) m.set(g.workId, [...(m.get(g.workId) ?? []), g]);
+      return m;
+    });
+    return (await byWork).get(workId) ?? [];
+  };
+}
+
+/**
+ * 職責だけで許されるなら ACL を読まずに制作物を返す（閲覧・制作者の提出など）。職責で足りないときだけ ACL を読む。
+ * 返すのは制作物だけ（ACL を返さない）。心拍・共同編集の確認など、毎回呼ばれて許可の一覧を使わないところ向け
+ */
+export async function loadWorkAllowing(
+  ctx: AppContext,
+  principal: Principal,
+  workId: string,
+  action: WorkAction,
+): Promise<Work> {
+  const work = await ctx.works.findById(workId);
+  if (!work) throw new DomainError("forbidden", { workId, action });
+  if (isAllowed(action, { work, grants: [], principal })) return work;
+  requireAllowed(action, { work, grants: await ctx.acl.listByWork(workId), principal });
+  return work;
+}
+
 /** @deprecated 105A: 閲覧は常に可。メンション候補用に主体をそのまま返す */
 export async function withTeamMembership(
   _ctx: AppContext,

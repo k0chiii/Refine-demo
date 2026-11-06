@@ -11,6 +11,7 @@ import {
   type WorkPermissionGrant,
 } from "@mf100/domain";
 import type { AppContext, Notification, NotificationKind } from "../ports.ts";
+import { myGrantsLoader } from "../shared.ts";
 
 export interface NotifyInput {
   kind: NotificationKind;
@@ -139,6 +140,27 @@ function subjectLoader(ctx: AppContext) {
 }
 
 /**
+ * 一覧を読む本人から見た、通知の制作物。許可は本人の分を 1 回だけ読む（制作物ごとに ACL を読まない。
+ * 見られるかの判定が見るのは本人に当たる許可だけ）
+ */
+function viewerSubjectLoader(ctx: AppContext, principal: Principal) {
+  const grantsOf = myGrantsLoader(ctx, principal);
+  const cache = new Map<string, Promise<LoadedSubject>>();
+  return (workId: string): Promise<LoadedSubject> => {
+    let hit = cache.get(workId);
+    if (!hit) {
+      hit = (async () => {
+        const work = await ctx.works.findById(workId).catch(() => null);
+        if (!work) return null;
+        return { work, grants: [...(await grantsOf(work.id))], teams: [] };
+      })();
+      cache.set(workId, hit);
+    }
+    return hit;
+  };
+}
+
+/**
  * 複数の受信者にアプリ内通知を作る。本人（actor）には送らない。重複受信者は 1 回。
  * 制作物に関する通知は、受信者がその制作物を今見られるかを確かめ、
  * 見られない人には文面を伏せた通知（REDACTED_NOTIFICATION）を作る（§5.2-10）。
@@ -239,7 +261,7 @@ export async function presentNotifications(
   principal: Principal,
   notifications: readonly Notification[],
 ): Promise<PresentedNotification[]> {
-  const load = subjectLoader(ctx);
+  const load = viewerSubjectLoader(ctx, principal);
   const deleted = deletedThreadLoader(ctx);
   const out: PresentedNotification[] = [];
   for (const n of notifications) {
