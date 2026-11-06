@@ -1,3 +1,4 @@
+import { ReplyComposer } from "./ReplyComposer";
 import {
   formatFigmaPlace,
   formatVideoSpan,
@@ -46,6 +47,7 @@ export function ThreadCard({
   index,
   placeState,
   now,
+  reply,
 }: {
   /** 紙面のピンと同じ番号（ピンの名前「コメント N」と対応させる） */
   index?: number;
@@ -69,6 +71,14 @@ export function ThreadCard({
   onDecideStart: (mode: "rejected" | "deferred") => void;
   pending?: boolean;
   className?: string;
+  /**
+   * 選んだカードの下に返信欄を出す（紙面の横にカードを並べるレイアウト用）。返信のたびに引き出しを開くと紙面が縮むため、
+   * カードの中で返す。スレッドの全体（採否の理由・担当・訂正など）は下の行からパネルで開く
+   */
+  reply?: {
+    revisionId: string;
+    onSubmit: (body: string, mentions: string[], fileIds: string[]) => Promise<boolean | undefined>;
+  };
 }) {
   const closed = isClosed(t);
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -269,7 +279,7 @@ export function ThreadCard({
           >
             {repliesText ? (
               <span className="thread__replies">{repliesText}</span>
-            ) : canReply ? (
+            ) : canReply && !reply ? (
               <span className="thread__replies">返信</span>
             ) : null}
             <span className="spacer" />
@@ -282,6 +292,23 @@ export function ThreadCard({
             {repliesText ? <span className="thread__replies-still">{repliesText}</span> : null}
             <span className="spacer" />
             {t.unread ? <span className="thread__unread" aria-hidden="true" /> : null}
+          </div>
+        ) : null}
+        {selected && canReply && reply ? (
+          // カードを押した扱い（選び直し）にしない。入力中のキーもカードの操作に回さない
+          <div
+            className="thread__inline-reply"
+            onClick={stop}
+            onKeyDown={stop}
+            onPointerDown={stop}
+          >
+            <ReplyComposer
+              revisionId={reply.revisionId}
+              id={`card-${t.id}`}
+              draftKey={t.id}
+              {...(pending === true ? { pending: true } : {})}
+              onSubmit={reply.onSubmit}
+            />
           </div>
         ) : null}
       </div>
