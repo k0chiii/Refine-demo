@@ -450,6 +450,88 @@ function summarize(
   };
 }
 
+/**
+ * 職責・割当・許可の索引から、自分に行が出うる制作物だけを読む（ダッシュボードの校正・制作の節）。works の全件は読まない。
+ * - roles: workRoles に入っている自分の職責（制作者・統括・校了者）
+ * - assignments: 自分の校正の割当（全状態）と専門確認の担当がある、受付中の版の制作物
+ * - grants: 自分（・所属グループ）に edit 以上の許可がある制作物
+ * - 職責の索引が未整備の古い行（rolesVersion 未設定）は、取りこぼさないよう必ず含める
+ * 並びは works の全件と同じ（作成順）。システム管理者はすべての操作ができるので、呼び出し側が全件を使う
+ */
+export async function listWorksRelatedTo(
+  db: DatabaseReader,
+  principal: Principal,
+  opts: { assignments: boolean },
+): Promise<Work[]> {
+  const ids = new Set<Id<"works">>();
+  for await (const row of db
+    .query("workRoles")
+    .withIndex("by_user", (q) => q.eq("userId", principal.userId)))
+    ids.add(row.workId);
+  for (const [principalType, principalId] of [
+    ["user", principal.userId] as const,
+    ...principal.groupIds.map((id) => ["group", id] as const),
+  ])
+    for await (const grant of db
+      .query("workPermissions")
+      .withIndex("by_principal", (q) =>
+        q.eq("principalType", principalType).eq("principalId", principalId),
+      ))
+      if (
+        grant.revokedAt === undefined &&
+        (grant.permission === "edit" || grant.permission === "manage")
+      )
+        ids.add(grant.workId);
+  if (opts.assignments) {
+    const revisionIds = new Set<Id<"revisions">>();
+    for (const state of ["pending", "viewed", "responded", "excused"] as const)
+      for await (const a of db
+        .query("reviewAssignments")
+        .withIndex("by_reviewer_state", (q) =>
+          q.eq("reviewerId", principal.userId).eq("state", state),
+        ))
+        revisionIds.add(a.revisionId);
+    for (const state of ["pending", "done", "waived"] as const)
+      for await (const c of db
+        .query("requiredChecks")
+        .withIndex("by_assignee_state", (q) =>
+          q.eq("assigneeId", principal.userId).eq("state", state),
+        ))
+        revisionIds.add(c.revisionId);
+    // 受付中の版の割当・専門確認だけが行になる。要約の受付中の版から引けば、版を読まずに受付中かも分かる。
+    // 要約の無い制作物（古い行）だけ版を読む
+    for (const id of revisionIds) {
+      const summary = await db
+        .query("workSummaries")
+        .withIndex("by_acceptingId", (q) => q.eq("acceptingId", id))
+        .first();
+      if (summary) {
+        ids.add(summary.workId);
+        continue;
+      }
+      const revision = await db.get(id);
+      if (revision?.reviewState !== "open") continue;
+      const own = await db
+        .query("workSummaries")
+        .withIndex("by_work", (q) => q.eq("workId", revision.workId))
+        .unique();
+      // 要約があるのに受付中の版が違う（＝この版は受付中でない）なら候補にしない
+      if (!own || own.acceptingId === null || own.acceptingId === id) ids.add(revision.workId);
+    }
+  }
+  for await (const work of db
+    .query("works")
+    .withIndex("by_roles_version", (q) => q.eq("rolesVersion", undefined)))
+    ids.add(work._id);
+  const docs = [];
+  for (const id of ids) {
+    const doc = await db.get(id);
+    if (doc) docs.push(doc);
+  }
+  docs.sort((a, b) => a._creationTime - b._creationTime);
+  return docs.map(workFromDoc);
+}
+
 /** Submission candidates from transactional role rows and explicit ACL; legacy rows remain a safe fallback until backfilled. */
 export async function listSubmissionCandidates(
   db: DatabaseReader,
@@ -634,13 +716,19 @@ export const listMinePage = query({
     const search = args.text?.trim();
     let result;
     if (search) {
-      type SearchCursor = { phase: "search" | "legacy"; cursor: string | null };
+      // 1) workSearch の検索索引で候補の行を引き、制作物を 1 件ずつ読む（ページの大きさまで）。
+      // 2) 続けて、まだ検索の行が無い制作物（移行 moveWorkSearchTokens の前の行。searchVersion が無い）を順に読む。
+      //    絞り込みは summarizeWorkList が本文で確かめる。移行を流し終えれば 2) は空で、すぐ終わる
+      // "search" / "legacy" は works に token を持っていたときの続きの印
+      type SearchCursor = {
+        phase: "rows" | "unindexed" | "search" | "legacy";
+        cursor: string | null;
+      };
       const cursor: SearchCursor = args.paginationOpts.cursor
         ? JSON.parse(args.paginationOpts.cursor)
-        : { phase: "search", cursor: null };
-      if (cursor.phase !== "search" && cursor.phase !== "legacy") throw new Error("invalid_cursor");
-      if (cursor.phase === "search") {
-        const indexed = ctx.db.query("works").withSearchIndex("search_substring", (q) => {
+        : { phase: "rows", cursor: null };
+      if (cursor.phase === "rows") {
+        const indexed = ctx.db.query("workSearch").withSearchIndex("search_substring", (q) => {
           const query = q.search("searchTokens", substringQuery(search));
           if (args.year !== undefined && args.lifecycle !== undefined)
             return query.eq("year", args.year).eq("lifecycle", args.lifecycle);
@@ -649,25 +737,34 @@ export const listMinePage = query({
           return query;
         });
         const page = await indexed.paginate({ ...args.paginationOpts, cursor: cursor.cursor });
+        const works = [];
+        for (const row of page.page) {
+          const doc = await ctx.db.get(row.workId);
+          if (doc) works.push(doc);
+        }
         result = {
           ...page,
+          page: works,
           isDone: false,
           continueCursor: JSON.stringify(
             page.isDone
-              ? { phase: "legacy", cursor: null }
-              : { phase: "search", cursor: page.continueCursor },
+              ? { phase: "unindexed", cursor: null }
+              : { phase: "rows", cursor: page.continueCursor },
           ),
         };
-      } else {
+      } else if (cursor.phase === "unindexed") {
         const page = await ctx.db
           .query("works")
-          .withIndex("by_search_tokens", (q) => q.eq("searchTokens", undefined))
+          .withIndex("by_search_version", (q) => q.eq("searchVersion", undefined))
           .paginate({ ...args.paginationOpts, cursor: cursor.cursor });
         result = {
           ...page,
-          continueCursor: JSON.stringify({ phase: "legacy", cursor: page.continueCursor }),
+          continueCursor: JSON.stringify({ phase: "unindexed", cursor: page.continueCursor }),
         };
-      }
+      } else if (cursor.phase === "search" || cursor.phase === "legacy") {
+        // この変更より前に配った続きの印（works の索引の位置）。新しい表では使えないので、そこで終える
+        result = { page: [], isDone: true, continueCursor: JSON.stringify(cursor) };
+      } else throw new Error("invalid_cursor");
     } else result = await source.paginate(args.paginationOpts);
     const visible = result.page.map((doc) => workFromDoc(doc));
     return { ...result, page: await summarizeWorkList(ctx, principal, visible, args) };

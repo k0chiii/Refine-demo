@@ -2,6 +2,7 @@ import {
   allMembersCanView,
   canViewWork,
   DomainError,
+  isAccepting,
   isAllowed,
   memberTeamIds,
   personMatchesText,
@@ -11,6 +12,7 @@ import {
   splitMentionTokens,
   validateMentions,
   type Principal,
+  type Revision,
   type Team,
   type Work,
   type WorkAction,
@@ -38,6 +40,62 @@ export async function loadAuthorizedWork(
   const grants = await ctx.acl.listByWork(workId);
   requireAllowed(action, { work, grants, principal });
   return { work, grants };
+}
+
+/**
+ * 制作物の受付中の版の ID（無ければ null）。制作物の全ての版を読んで探した結果（`find(isAccepting)`）と同じものを、
+ * なるべく読まずに返す。
+ * - 開いた版が受付中ならそれ（受付中の版は制作物に高々 1 件）。読まない。
+ * - そうでなければ制作物の要約（書込みの側が同じ transaction で作り直す）の受付中の版。
+ *   ただし要約がこの版を受付中と言うのに、この版が受付中でなければ要約が古いので信じない。
+ * - 要約が無い（揃っていない古い制作物）・信じられないときは、全ての版から探す。
+ */
+export async function acceptingRevisionIdOf(
+  ctx: AppContext,
+  revision: Revision,
+): Promise<string | null> {
+  if (isAccepting(revision)) return revision.id;
+  const summary = await ctx.workSummaries.findByWork(revision.workId);
+  if (summary && summary.accepting?.id !== revision.id) return summary.accepting?.id ?? null;
+  const siblings = await ctx.revisions.listByWork(revision.workId);
+  return siblings.find(isAccepting)?.id ?? null;
+}
+
+/**
+ * 本人に付いた許可を制作物ごとに引く関数。初めて要るときに 1 回だけ読む（制作物ごとに ACL を読まない）。
+ * 認可（isAllowed・canViewWork）が見るのは本人に当たる許可だけなので、制作物の ACL 全体の代わりに渡せる。
+ * 制作物の一覧を回るダッシュボード・通知の一覧が使う（Convex の読み取りの量と、購読が再実行される範囲を減らす）
+ */
+export function myGrantsLoader(
+  ctx: AppContext,
+  principal: Principal,
+): (workId: string) => Promise<readonly WorkPermissionGrant[]> {
+  let byWork: Promise<Map<string, WorkPermissionGrant[]>> | null = null;
+  return async (workId) => {
+    byWork ??= ctx.acl.listForPrincipal(principal).then((grants) => {
+      const m = new Map<string, WorkPermissionGrant[]>();
+      for (const g of grants) m.set(g.workId, [...(m.get(g.workId) ?? []), g]);
+      return m;
+    });
+    return (await byWork).get(workId) ?? [];
+  };
+}
+
+/**
+ * 職責だけで許されるなら ACL を読まずに制作物を返す（閲覧・制作者の提出など）。職責で足りないときだけ ACL を読む。
+ * 返すのは制作物だけ（ACL を返さない）。心拍・共同編集の確認など、毎回呼ばれて許可の一覧を使わないところ向け
+ */
+export async function loadWorkAllowing(
+  ctx: AppContext,
+  principal: Principal,
+  workId: string,
+  action: WorkAction,
+): Promise<Work> {
+  const work = await ctx.works.findById(workId);
+  if (!work) throw new DomainError("forbidden", { workId, action });
+  if (isAllowed(action, { work, grants: [], principal })) return work;
+  requireAllowed(action, { work, grants: await ctx.acl.listByWork(workId), principal });
+  return work;
 }
 
 /** @deprecated 105A: 閲覧は常に可。メンション候補用に主体をそのまま返す */

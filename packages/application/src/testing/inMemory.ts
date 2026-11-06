@@ -300,6 +300,13 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       },
       listEvents: async (threadId) =>
         state.events.filter((e) => e.threadId === threadId).map((e) => clone(e)),
+      listLatestEvents: async (threadId, limit) =>
+        limit > 0
+          ? state.events
+              .filter((e) => e.threadId === threadId)
+              .slice(-limit)
+              .map((e) => clone(e))
+          : [],
       setEventReactions: async (eventId, reactions) => {
         const e = state.events.find((x) => x.id === eventId);
         if (!e) return;
@@ -364,6 +371,14 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     acl: {
       listByWork: async (workId) =>
         state.grants.filter((g) => g.workId === workId).map((g) => clone(g)),
+      listForPrincipal: async (p) =>
+        state.grants
+          .filter(
+            (g) =>
+              (g.principalType === "user" && g.principalId === p.userId) ||
+              (g.principalType === "group" && p.groupIds.includes(g.principalId)),
+          )
+          .map((g) => clone(g)),
       insert: async (g) => {
         state.grants.push(clone(g));
       },
