@@ -23,6 +23,19 @@ const starExported = new Set(
   ),
 );
 
+// Convex では internalMutation（apps/api が実体を検証してから、サービス認証で呼ぶ）。利用者の認証だけで呼べる口には出さない
+const SERVICE_ONLY = new Set([
+  "beginItemUpload",
+  "resumeItemUpload",
+  "completeItemUpload",
+  "failItemUpload",
+  "beginCommentFileUpload",
+  "completeCommentFileUpload",
+  "failCommentFileUpload",
+  "beginCommentThumbUpload",
+  "completeCommentThumbUpload",
+]);
+
 const names = [];
 for (const file of fs.readdirSync(usecasesDir).sort()) {
   if (!file.endsWith(".ts") || file.endsWith(".test.ts")) continue;
@@ -35,15 +48,22 @@ for (const file of fs.readdirSync(usecasesDir).sort()) {
   }
 }
 names.sort();
+const pub = names.filter((n) => !SERVICE_ONLY.has(n));
+const service = names.filter((n) => SERVICE_ONLY.has(n));
 
 const text = `// このファイルは scripts/registry.mjs が書く。手で編集しない
 import {
 ${names.map((n) => `  ${n},`).join("\n")}
 } from "@mf100/application";
 
-/** HTTP から呼べるユースケース（引数が (ctx, principal, ...) のもの）。cron の仕事（ctx だけ）は含めない */
+/** 利用者の認証で呼べるユースケース（引数が (ctx, principal, ...) のもの）。cron の仕事（ctx だけ）は含めない */
 export const usecases = {
-${names.map((n) => `  ${n},`).join("\n")}
+${pub.map((n) => `  ${n},`).join("\n")}
+} as const;
+
+/** apps/api（実体の検証）からサービス認証で呼ぶもの。Convex の internalMutation に当たる。公開の口（/u/:name）には出さない */
+export const serviceUsecases = {
+${service.map((n) => `  ${n},`).join("\n")}
 } as const;
 
 export type UsecaseName = keyof typeof usecases;

@@ -71,13 +71,16 @@ export interface InMemoryContext extends AppContext {
   };
 }
 
-function nodeSql(): Sql {
+/** メモリ上の node:sqlite。Durable Object の代わりにテストが使う */
+export function nodeSql(): Sql {
   const db = new DatabaseSync(":memory:");
   return { exec: (query, ...params) => db.prepare(query).all(...params) };
 }
 
-export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryContext {
-  const sql = nodeSql();
+export function createInMemoryContext(
+  now = Date.UTC(2026, 10, 1),
+  sql = nodeSql(),
+): InMemoryContext {
   migrate(sql);
   const clock = new FakeClock(now);
   // 2 つの文脈に同じ操作をして結果を突き合わせるテストがあるので、ID は文脈ごとに 1 から数える

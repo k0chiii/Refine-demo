@@ -23,11 +23,12 @@ Convex に依存せず、Cloudflare の中だけで業務データの正本を�
 
 ## 証明のしかた
 
-`apps/cloudflare/vite.config.ts` の alias が、application のテスト 40 本の `../testing/inMemory.ts` だけを `src/testing/context.ts`（SQLite 版）へ差し替える。テストは 1 行も変えない。
+`apps/cloudflare/vite.config.ts` の alias が、application のテスト 40 本の `../testing/inMemory.ts` だけを `src/testing/context.ts`（SQLite 版）へ差し替える（inMemory を使わない `publicSurface.test.ts` を除く 39 本が SQLite で走る）。テストは 1 行も変えない。
 
 ```
-pnpm --filter @mf100/cloudflare test     # 40 ファイル / 351 件 + apps/cloudflare 自身のテスト
-pnpm --filter @mf100/cloudflare dev      # wrangler dev（DO の SQLite はローカル）
+pnpm --filter @mf100/cloudflare test     # application の 40 ファイル / 351 件 + apps/cloudflare 自身のテスト
+pnpm --filter @mf100/cloudflare dev      # wrangler dev（DO の SQLite はローカル。X-MF100-Identity を本人として受け付ける）
+apps/cloudflare/scripts/smoke.sh 8790    # 起こした Worker に HTTP で 1 周（401/404/200/403・巻き戻し・WebSocket・cron）
 ```
 
 ## Convex の機能 → Cloudflare の部品
@@ -65,4 +66,5 @@ pnpm --filter @mf100/cloudflare dev      # wrangler dev（DO の SQLite はロ�
 
 - D1 ではなく Durable Object の SQLite: D1 には対話的トランザクションが無く、ユースケース（async）を 1 トランザクションに包めない。DO は `transaction()` で包めて、購読の配信も同じ場所でできる。
 - ORM・クエリビルダは入れない: ポートの数（31）に対して SQL は素朴で足りる。依存を増やすより inMemory と並べて読める方が安い。
-- 登録表（registry.ts）は生成する: ユースケースを足して登録を忘れる事故を、テスト（registry.test.ts）で赤くする。
+- 登録表（registry.ts）は生成する: ユースケースを足して登録を忘れる事故を、`pnpm typecheck`（verify-types の `registry.mjs --check`）で止める。
+- 手元の本人ヘッダ（X-MF100-Identity）は `pnpm dev` の `--var DEV_IDENTITY:allow` でだけ効く。設定ファイルの既定は deny（Access の秘密を置き忘れた deploy で口が開かないように）。

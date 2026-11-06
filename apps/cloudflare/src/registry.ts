@@ -110,15 +110,12 @@ import {
   waiveRequiredCheck,
 } from "@mf100/application";
 
-/** HTTP から呼べるユースケース（引数が (ctx, principal, ...) のもの）。cron の仕事（ctx だけ）は含めない */
+/** 利用者の認証で呼べるユースケース（引数が (ctx, principal, ...) のもの）。cron の仕事（ctx だけ）は含めない */
 export const usecases = {
   addRequiredCheck,
   addSlackWorkspace,
   assignThread,
   authorizeCommentFile,
-  beginCommentFileUpload,
-  beginCommentThumbUpload,
-  beginItemUpload,
   buildCheckDashboard,
   buildDashboard,
   buildMakeDashboard,
@@ -127,9 +124,6 @@ export const usecases = {
   changeWorkLifecycle,
   checkCommentFiles,
   claimProofreadArtifact,
-  completeCommentFileUpload,
-  completeCommentThumbUpload,
-  completeItemUpload,
   completeMyReview,
   completeRequiredCheck,
   confirmIndependently,
@@ -146,8 +140,6 @@ export const usecases = {
   editReply,
   editThread,
   exportWorkStats,
-  failCommentFileUpload,
-  failItemUpload,
   failProofreadArtifact,
   finalizeWork,
   getAlignmentOverride,
@@ -193,7 +185,6 @@ export const usecases = {
   resetItem,
   resolveMigratedFeedbackThread,
   resolveRulesForWork,
-  resumeItemUpload,
   retryProofreadingRun,
   revokeWorkPermission,
   saveAlignmentOverride,
@@ -220,6 +211,19 @@ export const usecases = {
   updateWork,
   voidRevisionUseCase,
   waiveRequiredCheck,
+} as const;
+
+/** apps/api（実体の検証）からサービス認証で呼ぶもの。Convex の internalMutation に当たる。公開の口（/u/:name）には出さない */
+export const serviceUsecases = {
+  beginCommentFileUpload,
+  beginCommentThumbUpload,
+  beginItemUpload,
+  completeCommentFileUpload,
+  completeCommentThumbUpload,
+  completeItemUpload,
+  failCommentFileUpload,
+  failItemUpload,
+  resumeItemUpload,
 } as const;
 
 export type UsecaseName = keyof typeof usecases;

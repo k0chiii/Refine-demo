@@ -37,22 +37,30 @@ export async function principalOf(
   };
 }
 
-/** `POST /u/:name` の本体。ctx は呼び出し側が 1 トランザクションに包む */
+/**
+ * `POST /u/:name` の本体。ctx は呼び出し側が 1 トランザクションに包む。
+ * DomainError はここでは受け止めない: トランザクションの外へ投げて、途中までの書き込みを巻き戻させる（Convex の mutation と同じ）
+ */
 export async function runUsecase(
   ctx: AppContext,
   identity: Identity,
   name: UsecaseName,
   args: readonly unknown[],
   deps: RunDeps,
-): Promise<RunResult> {
+): Promise<unknown> {
   const fn = usecases[name] as (
     ctx: AppContext,
     principal: Principal,
     ...rest: unknown[]
   ) => Promise<unknown>;
+  const principal = await principalOf(ctx, identity, deps);
+  return fn(ctx, principal, ...args);
+}
+
+/** トランザクションの外で、DomainError だけを値に直す。それ以外はそのまま落とす（500） */
+export async function settle(run: () => Promise<unknown>): Promise<RunResult> {
   try {
-    const principal = await principalOf(ctx, identity, deps);
-    return { ok: true, value: await fn(ctx, principal, ...args) };
+    return { ok: true, value: await run() };
   } catch (error) {
     if (error instanceof DomainError)
       return { ok: false, code: error.code, details: error.details };

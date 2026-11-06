@@ -14,8 +14,9 @@
   "vars": {
     // `wrangler dev` 用の既定値。本番の環境（env.production）はデプロイを決めたときに足す（DO の binding は環境に引き継がれない）
     "ALLOWED_ORIGINS": "http://localhost:5173",
-    // 開発だけ: Cloudflare Access が無いとき X-MF100-Identity ヘッダ（JSON）を本人として受け付ける。本番では必ず deny
-    "DEV_IDENTITY": "allow",
+    // X-MF100-Identity ヘッダ（JSON）を本人として受け付けるのは手元だけ（package.json の dev が --var で allow にする）。
+    // 設定ファイルの既定は deny: Access の秘密を置き忘れた deploy で、誰でも名乗れる口が開かないように
+    "DEV_IDENTITY": "deny",
     // 初期ブートストラップ: ここに列挙した subject を校正システム管理者として扱う（Convex の MF100_SYSTEM_ADMIN_SUBJECTS と同じ）
     "MF100_SYSTEM_ADMIN_SUBJECTS": "",
   },

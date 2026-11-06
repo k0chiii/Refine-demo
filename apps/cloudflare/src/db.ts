@@ -6,12 +6,12 @@ import {
   remindUpcomingDeadlines,
 } from "@mf100/application";
 import type { Identity } from "./identity.ts";
-import { runUsecase, type RunResult } from "./run.ts";
+import type { UsecaseName } from "./registry.ts";
+import { runUsecase, settle, type RunResult } from "./run.ts";
 import { createSqliteContext } from "./sqlite/context.ts";
 import { migrate } from "./sqlite/schema.ts";
 import type { Sql } from "./sqlite/sql.ts";
 import { upsertUser } from "./sqlite/users.ts";
-import type { UsecaseName } from "./registry.ts";
 
 /** Durable Object の SqlStorage を application のアダプタが使う最小の口に合わせる */
 function durableSql(storage: SqlStorage): Sql {
@@ -51,8 +51,9 @@ export class MF100Database extends DurableObject<Env> {
 
   async run(identity: Identity, name: UsecaseName, args: unknown[]): Promise<RunResult> {
     const touched = new Set<string>();
-    const sql = tracked(this.sql, touched);
-    const ctx = createSqliteContext(sql, { clock: { now: () => Date.now() } });
+    const ctx = createSqliteContext(tracked(this.sql, touched), {
+      clock: { now: () => Date.now() },
+    });
     const deps = {
       adminSubjects: new Set(
         (this.env.MF100_SYSTEM_ADMIN_SUBJECTS ?? "")
@@ -60,19 +61,23 @@ export class MF100Database extends DurableObject<Env> {
           .map((s) => s.trim())
           .filter(Boolean),
       ),
-      upsertUser: async (who: Identity) => upsertUser(sql, who),
+      // 名簿への本人の反映は数えない: 読む側が毎回読み直す理由にならない
+      upsertUser: async (who: Identity) => upsertUser(this.sql, who),
     };
-    const result = await this.ctx.storage.transaction(() =>
-      runUsecase(ctx, identity, name, args, deps),
+    // DomainError も transaction の外へ出す。そうしないと途中までの書き込みが commit される
+    const result = await settle(() =>
+      this.ctx.storage.transaction(() => runUsecase(ctx, identity, name, args, deps)),
     );
-    // DomainError で終わった呼び出しも transaction は commit する（throw していない）。読み直しの合図は書いたときだけ
-    if (result.ok && touched.size > 0) this.broadcast({ changed: [...touched] });
+    this.notify(touched);
     return result;
   }
 
   /** cron（毎分）。Convex の crons.ts の配分: 受付終了は毎分、残りは毎時 */
   async runJobs(at: Date): Promise<void> {
-    const ctx = createSqliteContext(this.sql, { clock: { now: () => at.getTime() } });
+    const touched = new Set<string>();
+    const ctx = createSqliteContext(tracked(this.sql, touched), {
+      clock: { now: () => at.getTime() },
+    });
     await this.ctx.storage.transaction(async () => {
       await closeExpiredReviews(ctx);
       if (at.getUTCMinutes() !== 0) return;
@@ -80,7 +85,7 @@ export class MF100Database extends DurableObject<Env> {
       await expireUploadSessions(ctx);
       await expireCommentFiles(ctx);
     });
-    this.broadcast({ changed: ["revisions", "notifications", "uploadSessions", "commentFiles"] });
+    this.notify(touched);
   }
 
   /** WebSocket の受け付け（休止 API。接続中は DO が寝ても切れない） */
@@ -90,8 +95,10 @@ export class MF100Database extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  private broadcast(message: { changed: string[] }): void {
-    const text = JSON.stringify(message);
+  /** 書いた表があれば、その名前を全部の接続へ。巻き戻った呼び出しでも touched は残るが、読み直して困るものではない */
+  private notify(touched: Set<string>): void {
+    if (touched.size === 0) return;
+    const text = JSON.stringify({ changed: [...touched] });
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(text);
