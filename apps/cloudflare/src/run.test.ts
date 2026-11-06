@@ -30,6 +30,18 @@ describe("tracked: 書いた表と読んだ表を SQL から拾う", () => {
     });
   });
 
+  it("購読者に配らない表（SILENT_TABLES）は、書いても読んでも数えない。在席（presence）は数える", () => {
+    expect(
+      run(
+        "INSERT INTO jobs (id, doc) VALUES (?, ?)",
+        "INSERT INTO rateLimits (name, key, value, ts) VALUES (?, ?, ?, ?)",
+        "INSERT INTO meta (id, doc) VALUES (?, ?)",
+        "SELECT doc FROM jobs WHERE runAt <= ?",
+        "INSERT INTO presence (roomId, userId, sessionId, lastSeenAt) VALUES (?, ?, ?, ?)",
+      ),
+    ).toEqual({ touched: ["presence"], reads: [] });
+  });
+
   it("DELETE FROM の対象は読みではない。json_each は表ではない", () => {
     expect(run("DELETE FROM pins WHERE id = ?")).toEqual({ touched: ["pins"], reads: [] });
     expect(

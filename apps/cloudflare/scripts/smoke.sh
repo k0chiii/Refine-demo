@@ -2,7 +2,9 @@
 # wrangler dev で起こした本物の Worker + Durable Object に対して、HTTP の境界から関数を 1 周させる。
 # 使い方: apps/cloudflare で `pnpm dev --port 8790` を起こしてから `scripts/smoke.sh 8790`
 # サービス認証の「合っていれば通る」まで見るなら、起こすときに `--var MF100_UPLOAD_SECRET:<16 文字以上>` を足し、
-# 同じ値を環境変数 UPLOAD_SECRET で渡す（無ければ「秘密が未設定なら 404」だけを確かめる）
+# 同じ値を環境変数 UPLOAD_SECRET で渡す（無ければ「秘密が未設定なら 404」だけを確かめる）。
+# 清掃（submissions:listOrphanObjects / markObjectsPurged）と取り込み（/internal/import）は MF100_CLEANUP_SECRET、
+# ファイル処理は PROCESSING_SECRET を同じ要領で足す（--var と環境変数）
 set -euo pipefail
 port="${1:-8790}"
 base="http://127.0.0.1:$port"
@@ -61,6 +63,26 @@ if [ -n "${PROCESSING_SECRET:-}" ]; then
   assert "$(internal '{"operation":"inspect","args":{"jobId":"nope"}}' "Authorization: Bearer $PROCESSING_SECRET")" 409 "inspect of an unknown job -> 409"
   assert_field code processing_rejected "rejected without a reason"
   assert "$(internal '{"operation":"nope"}' "Authorization: Bearer $PROCESSING_SECRET")" 400 "unknown operation -> 400"
+fi
+# R2 の清掃（apps/api の cron が Bearer MF100_CLEANUP_SECRET で呼ぶ。利用者は要らない）と、データ移行の取り込み口。
+# どちらも秘密が無ければ在ることも教えない。合っていれば通る（起こすときに `--var MF100_CLEANUP_SECRET:<16 文字以上>`、同じ値を環境変数 MF100_CLEANUP_SECRET で渡す）
+cleanup() { curl -s -o "$body" -w '%{http_code}' -X POST "$base/f/submissions:$1" -H 'Content-Type: application/json' ${3:+-H "$3"} -d "$2"; }
+import_rows() { curl -s -o "$body" -w '%{http_code}' -X POST "$base/internal/import" -H 'Content-Type: application/json' ${2:+-H "$2"} -d "$1"; }
+assert "$(cleanup listOrphanObjects '{}')" 404 "submissions:listOrphanObjects without secret -> 404"
+assert "$(cleanup markObjectsPurged '{"itemIds":[]}' 'Authorization: Bearer wrong-wrong-wrong-wrong')" 404 "submissions:markObjectsPurged with a wrong secret -> 404"
+assert "$(import_rows '{"rows":[]}')" 404 "/internal/import without secret -> 404"
+if [ -n "${MF100_CLEANUP_SECRET:-}" ]; then
+  auth="Authorization: Bearer $MF100_CLEANUP_SECRET"
+  assert "$(cleanup listOrphanObjects '{"limit":10}' "$auth")" 200 "submissions:listOrphanObjects with the secret -> 200 (no user needed)"
+  assert "$(cat "$body")" '{"value":[]}' "no orphans yet"
+  assert "$(cleanup markObjectsPurged '{"itemIds":["comment:nope","attempt:nope","feedback:old","nope"]}' "$auth")" 200 "submissions:markObjectsPurged -> 200"
+  assert_field value 0 "unknown ids are not counted"
+  # 取り込みの往復: 1 行を入れて finish（派生表の作り直しと確認）まで通し、入れた本人でサインインすると取り込んだ id が返る
+  assert "$(import_rows '{"rows":[{"table":"users","id":"smoke_imported_user","doc":{"subject":"u_smoke_imported","name":"取り込み","isSystemAdmin":false}}],"begin":true,"finish":true}' "$auth")" 200 "/internal/import with the secret -> 200"
+  assert_field counts.users 1 "one user imported"
+  assert_field verify.tables.users 5 "users table counted by verify (4 signed-in + 1 imported)"
+  assert "$(call me:me '{"subject":"u_smoke_imported"}' '{}')" 200 "the imported user signs in"
+  assert_field value.id smoke_imported_user "me:me returns the imported id"
 fi
 assert "$(call documents:get "$creator" "{\"workId\":\"$id\"}")" 200 "documents:get -> 200"
 # AI 校正: キー（ANTHROPIC_API_KEY など）が無ければ使えず、外へは何も送らない（action も理由を返すだけ）

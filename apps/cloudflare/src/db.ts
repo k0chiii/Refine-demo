@@ -6,6 +6,12 @@ import {
   remindUpcomingDeadlines,
 } from "@mf100/application";
 import type { Identity } from "./identity.ts";
+import {
+  importChunk,
+  type ImportChunkOptions,
+  type ImportChunkResult,
+  type ImportRow,
+} from "./migrate/import.ts";
 import { createJobContext, nextJobAt, runDueJobs } from "./jobs.ts";
 import { execute, tracked, type CallResult, type Host } from "./run.ts";
 import { migrate } from "./sqlite/schema.ts";
@@ -76,6 +82,14 @@ export class MF100Database extends DurableObject<Env> {
     // query は書かない。mutation が仕事を積んだかもしれないので、alarm を立て直す（巻き戻っていれば何も増えていない）
     if (!(result.ok && result.reads)) await this.armAlarm(nextJobAt(this.sql));
     return result;
+  }
+
+  /**
+   * データ移行の取り込み 1 回分（src/migrate/import.ts の importChunk）。1 トランザクションで、途中で落ちたら何も残らない。
+   * 取り込みは切り替え前の空の DO に流す前提なので、購読者には配らない
+   */
+  importRows(rows: ImportRow[], options: ImportChunkOptions): ImportChunkResult {
+    return this.ctx.storage.transactionSync(() => importChunk(this.sql, rows, options));
   }
 
   /**

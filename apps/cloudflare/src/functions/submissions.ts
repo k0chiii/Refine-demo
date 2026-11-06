@@ -1,8 +1,16 @@
 import {
+  ATTEMPT_ORPHAN_PREFIX,
+  COMMENT_ORPHAN_PREFIX,
   beginItemUpload,
   completeItemUpload,
   confirmSubmission,
   failItemUpload,
+  listOrphanAttemptObjects,
+  listOrphanCommentObjects,
+  listOrphanUploadObjects,
+  markAttemptObjectsPurged,
+  markCommentObjectsPurged,
+  markUploadObjectsPurged,
   prepareSubmission,
   resetItem,
   resumeItemUpload,
@@ -23,13 +31,25 @@ import {
   vRevisionKind,
 } from "./validators.ts";
 
-// apps/convex/convex/submissions.ts の写し（expireSessions / listOrphanObjects / markObjectsPurged は清掃の cron・サービスで別の単位）
+// apps/convex/convex/submissions.ts の写し（expireSessions は cron の単位で、src/db.ts の runJobs が持つ）
 
 /**
  * 実体の転送（Worker 専用）。Convex では internalMutation を http.ts が引く（X-MF100-Service-Key + 利用者の JWT）。
  * 公開関数にしない: 利用者が自分で「検証済み」を申告して版を確定させられないようにする。項目の持ち主・提出権限は use case が確かめる
  */
 const upload = { service: "MF100_UPLOAD_SECRET", withUser: true } as const;
+
+/**
+ * R2 の清掃（apps/api の cron）。Convex では internalMutation を http.ts の /internal/upload-orphans が引く（Bearer MF100_CLEANUP_SECRET）。
+ * ここでは同じ秘密で /f/submissions:listOrphanObjects などを呼ぶ。利用者は要らない（withUser: false）
+ */
+const cleanup = { service: "MF100_CLEANUP_SECRET", withUser: false } as const;
+
+/** 1 回の一覧・記録の上限（Convex と同じ） */
+const CLEANUP_LIMIT = 500;
+
+/** 旧 FB の添付の清掃の印。FB は廃止し、移した添付は同じ実体を指すので、記録は何もせず読み捨てる */
+const LEGACY_FEEDBACK_ORPHAN_PREFIX = "feedback:";
 
 export const submissions = {
   /** 版提出の準備（U-04 / F-04）。Revision はまだ作らない */
@@ -160,6 +180,46 @@ export const submissions = {
     handler: async (ctx, args) => {
       const r = await voidRevisionUseCase(ctx.db, ctx.principal!, args);
       return { reviewState: r.reviewState };
+    },
+  }),
+
+  /**
+   * 清掃: R2 に実体が残っている孤立の一覧。版の提出物（abandoned セッション）→ コメントの添付（itemId は `comment:{添付 ID}`、
+   * サムネイルは extraObjectKeys）→ 採用されなかった転送の試行（`attempt:{試行 ID}`）の順に、上限まで詰める。
+   * 一覧のついでに、消す実体が無いものを清掃済みにするので mutation
+   */
+  "submissions:listOrphanObjects": mutation({
+    auth: cleanup,
+    args: object({ limit: z.number().optional() }),
+    handler: async (ctx, { limit }) => {
+      const max = Math.min(limit ?? 100, CLEANUP_LIMIT);
+      const out: Array<{ itemId: string; objectKey: string; extraObjectKeys?: string[] }> =
+        await listOrphanUploadObjects(ctx.db, max);
+      if (out.length < max) out.push(...(await listOrphanCommentObjects(ctx.db, max - out.length)));
+      if (out.length < max) out.push(...(await listOrphanAttemptObjects(ctx.db, max - out.length)));
+      return out;
+    },
+  }),
+
+  /** 清掃: R2 から消した印を付ける（冪等）。`comment:` はコメントの添付、`attempt:` は転送の試行、`feedback:` は読み捨て、ほかは版の提出物 */
+  "submissions:markObjectsPurged": mutation({
+    auth: cleanup,
+    args: object({ itemIds: z.array(z.string()) }),
+    handler: async (ctx, { itemIds }) => {
+      const ids = itemIds.slice(0, CLEANUP_LIMIT);
+      const withPrefix = (prefix: string) =>
+        ids.filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length));
+      const uploads = ids.filter(
+        (id) =>
+          !id.startsWith(LEGACY_FEEDBACK_ORPHAN_PREFIX) &&
+          !id.startsWith(COMMENT_ORPHAN_PREFIX) &&
+          !id.startsWith(ATTEMPT_ORPHAN_PREFIX),
+      );
+      return (
+        (await markUploadObjectsPurged(ctx.db, uploads)) +
+        (await markCommentObjectsPurged(ctx.db, withPrefix(COMMENT_ORPHAN_PREFIX))) +
+        (await markAttemptObjectsPurged(ctx.db, withPrefix(ATTEMPT_ORPHAN_PREFIX)))
+      );
     },
   }),
 

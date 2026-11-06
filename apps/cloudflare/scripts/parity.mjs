@@ -24,7 +24,8 @@ const block = /ApiFromModules<\{([\s\S]*?)\}>/.exec(apiDts)?.[1] ?? "";
 const modules = [...block.matchAll(/^\s*"?([\w/]+)"?:\s*typeof\s+\w+;/gm)].map((m) => m[1]);
 if (modules.length === 0) throw new Error("api.d.ts から ApiFromModules を読めなかった");
 
-const KIND = { query: "query", mutation: "mutation", action: "action" };
+// dashboardQuery は dashboard.ts の読み取りの包み（query）
+const KIND = { query: "query", mutation: "mutation", action: "action", dashboardquery: "query" };
 const convex = new Map(); // "module:fn" -> { kind, visibility }
 for (const module of modules) {
   const file = path.join(convexDir, `${module}.ts`);

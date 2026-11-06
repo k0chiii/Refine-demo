@@ -732,6 +732,29 @@ describe("POST /internal/import（分けて送る）", () => {
     expect(dump(sql)).toEqual(dump(once));
   });
 
+  it("createApp に組み込んだ口も同じ道を通る（Durable Object の importRows 越し）。秘密が未設定なら 404", async () => {
+    const db = fakeDb();
+    const secrets: Record<string, string> = { MF100_CLEANUP_SECRET: SECRET };
+    const a = app(db, secrets);
+    const r = converted();
+    const send = (a2: typeof a, secret = SECRET) =>
+      a2.request("/internal/import", {
+        method: "POST",
+        headers: bearer(secret),
+        body: JSON.stringify({ rows: r.rows, begin: true, finish: true, expected: r.counts }),
+      });
+    const res = await send(a);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { verify: { problemCount: number } };
+    expect(body.verify.problemCount).toBe(0);
+    const once = target();
+    importSnapshot(once, r.rows);
+    expect(dump(db.sql)).toEqual(dump(once));
+
+    expect((await send(a, "wrong-secret-0123456789")).status).toBe(404);
+    expect((await send(app(fakeDb(), {}))).status).toBe(404);
+  });
+
   it("resetKeyless は keyless の表だけを空にする", () => {
     const sql = target();
     importSnapshot(sql, converted().rows);

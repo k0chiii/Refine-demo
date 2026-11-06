@@ -3,8 +3,8 @@ import { verifyServiceSecret } from "../serviceAuth.ts";
 import type { ImportChunkOptions, ImportChunkResult, ImportRow } from "./import.ts";
 
 /**
- * Durable Object 越しの取り込み口。実装は `(rows, options) => importChunk(this.sql, rows, options)` を 1 トランザクションで包むだけ
- * （src/migrate/import.ts）。
+ * Durable Object 越しの取り込み口。実装は src/db.ts の MF100Database.importRows（importChunk を 1 トランザクションで包む）。
+ * src/app.ts が `.route("/", importApp({ store: () => deps.db(), secret }))` で組み込む。
  */
 export interface ImportStore {
   importRows(rows: ImportRow[], options: ImportChunkOptions): Promise<ImportChunkResult>;

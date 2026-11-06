@@ -50,7 +50,7 @@ describe("登録表の形（全関数）", () => {
     }
   });
 
-  it("サービス専用は Convex の internal だった upload 系と processing だけ（公開の口に出さない）", () => {
+  it("サービス専用は Convex の internal だった upload 系・processing・清掃だけ（公開の口に出さない）", () => {
     const service = all.filter(([, d]) => typeof d.auth === "object").map(([n]) => n);
     expect(service.sort()).toEqual([
       "commentFiles:beginFileUpload",
@@ -69,6 +69,8 @@ describe("登録表の形（全関数）", () => {
       "submissions:beginUpload",
       "submissions:completeUpload",
       "submissions:failUpload",
+      "submissions:listOrphanObjects",
+      "submissions:markObjectsPurged",
       "submissions:resumeUpload",
     ]);
   });

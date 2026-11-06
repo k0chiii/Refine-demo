@@ -7,6 +7,7 @@ import { migrate } from "../sqlite/schema.ts";
 import type { Sql } from "../sqlite/sql.ts";
 import { nodeSql } from "./context.ts";
 import { migrateCollab } from "../collab/store.ts";
+import { importChunk, type ImportChunkOptions, type ImportRow } from "../migrate/import.ts";
 
 // app.test.ts と functions.test.ts が共有する、Durable Object の代わりの Node 上の App
 
@@ -80,6 +81,19 @@ export function fakeDb(wrap: (sql: Sql) => Sql = (s) => s, env: Record<string, s
       const { result, touched } = await execute(host, name, identity, args, ok);
       notified.push([...touched].sort());
       return result;
+    },
+    /** DO の importRows の代わり（1 トランザクションは SAVEPOINT で真似る） */
+    importRows: async (rows: ImportRow[], options: ImportChunkOptions) => {
+      raw.exec("SAVEPOINT import");
+      try {
+        const result = importChunk(raw, rows, options);
+        raw.exec("RELEASE import");
+        return result;
+      } catch (e) {
+        raw.exec("ROLLBACK TO import");
+        raw.exec("RELEASE import");
+        throw e;
+      }
     },
     fetch: async (request: Request) => {
       upgrades.push(request);

@@ -7,6 +7,8 @@ import type { Identify, Identity } from "./identity.ts";
 import { statusOf, type CallResult } from "./run.ts";
 import { verifyServiceSecret } from "./serviceAuth.ts";
 import { authApp, type AuthDeps } from "./auth/app.ts";
+import type { ImportChunkOptions, ImportChunkResult, ImportRow } from "./migrate/import.ts";
+import { importApp } from "./migrate/route.ts";
 
 export interface AppDeps {
   identify: Identify;
@@ -19,6 +21,8 @@ export interface AppDeps {
       serviceOk: boolean,
     ): Promise<CallResult>;
     fetch(request: Request): Promise<Response>;
+    /** データ移行の取り込み（src/migrate。POST /internal/import だけが使う） */
+    importRows(rows: ImportRow[], options: ImportChunkOptions): Promise<ImportChunkResult>;
   };
   /** サービス間の共有秘密（wrangler secret）。未設定なら undefined */
   secret(name: ServiceSecret): string | undefined;
@@ -33,6 +37,7 @@ const notFound = (name: string) => ({ code: "function_not_found", details: { nam
  * HTTP の境界。ここでは「誰か」「どの関数か」「引数の形」だけを決め、業務は Durable Object の中の関数に任せる。
  * - POST /f/:name  body は引数の object そのもの（Convex の args と同じ）。名前は Convex の getFunctionName と同じ `works:create`
  * - POST /internal/processing  apps/api の Queue / Workflow が処理の台帳を更新する（契約は Convex の http.ts と同じ。下の route）
+ * - POST /internal/import  Convex の export を取り込む（移行の間だけ。src/migrate/route.ts）
  * - GET  /ws       変更の通知（書いたテーブルの名前）を WebSocket で配る。Convex の購読の代わり（粒度はテーブル）
  */
 export function createApp(deps: AppDeps) {
@@ -50,6 +55,8 @@ export function createApp(deps: AppDeps) {
       }),
     )
     .route("/", authApp(deps.auth))
+    // ponytail: 取り込みが済んだら、この 1 行を外す（本番に残さない。docs/CLOUDFLARE_BACKEND.md の切り替え）
+    .route("/", importApp({ store: () => deps.db(), secret: (n) => deps.secret(n) }))
     .get("/health", (c) => c.json({ ok: true }))
     .get("/ws", async (c) => {
       if (c.req.header("Upgrade") !== "websocket") return c.text("Expected WebSocket", 426);

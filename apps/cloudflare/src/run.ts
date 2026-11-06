@@ -32,21 +32,39 @@ export interface Host {
 
 const WRITE = /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(\w+)"?/i;
 const READ = /\b(?:FROM|JOIN)\s+"?(\w+)"?/gi;
-const TABLE_NAMES: ReadonlySet<string> = new Set([
-  ...TABLES.map((t) => t.name),
-  ...FTS_TABLES,
-  ...collabTables,
-]);
 
 /**
- * 書いた表と読んだ表の名前を集める。読みは `FROM <表>` / `JOIN <表>` を拾う（json_each(...) は表ではないので、
+ * 購読者に配らない表（書いても配らず、読んでも読みに数えない）。1 か所の値:
+ * - jobs: あとで動く仕事の台帳（src/jobs.ts）。利用者の画面は読まない
+ * - meta: 仕事の側の小さな状態（Slack の DM の枠）
+ * - rateLimits: AI の利用の枠（src/rateLimit.ts）。残りを画面に出す読みは無い
+ * - idempotency: 同じ requestId の再送の記録。mutation の中でしか引かない
+ * - ruleEmbeddings: ルールの埋め込み。引くのは semanticRules:search（action）だけ
+ * presence は 30 秒ごとの心拍で書くが、在席の一覧（presence:list）の購読者が読み直す表なので、ここには入れない
+ */
+export const SILENT_TABLES: ReadonlySet<string> = new Set([
+  "jobs",
+  "meta",
+  "rateLimits",
+  "idempotency",
+  "ruleEmbeddings",
+]);
+
+const TABLE_NAMES: ReadonlySet<string> = new Set(
+  [...TABLES.map((t) => t.name), ...FTS_TABLES, ...collabTables].filter(
+    (name) => !SILENT_TABLES.has(name),
+  ),
+);
+
+/**
+ * 書いた表と読んだ表の名前を集める（SILENT_TABLES は数えない）。読みは `FROM <表>` / `JOIN <表>` を拾う（json_each(...) は表ではないので、
  * 名簿にある表の名前だけを数える。DELETE FROM の対象は書きであって読みではない）
  */
 export function tracked(sql: Sql, touched: Set<string>, reads: Set<string> = new Set()): Sql {
   return {
     exec: (query, ...params) => {
       const write = WRITE.exec(query);
-      if (write?.[1]) touched.add(write[1]);
+      if (write?.[1] && !SILENT_TABLES.has(write[1])) touched.add(write[1]);
       for (const m of query.slice(write ? write[0].length : 0).matchAll(READ))
         if (m[1] && TABLE_NAMES.has(m[1])) reads.add(m[1]);
       return sql.exec(query, ...params);
