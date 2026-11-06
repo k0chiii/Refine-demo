@@ -1,6 +1,0 @@
-capturedAt=2026-11-01T13:28:14.414Z
-url=http://127.0.0.1:4324/works/000000000000000000000010016works/detail
-scene=detail-preview-73
-captureUser=mock-nogiku-manager
-detail:version=版 1
-detail:preview=yes

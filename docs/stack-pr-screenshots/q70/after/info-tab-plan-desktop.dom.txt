@@ -1,3 +1,0 @@
-capturedAt=2026-11-01T07:11:57.096Z
-url=http://127.0.0.1:4564/works/000000000000000000000010026works/v/1
-scene=q70-info-tab-plan

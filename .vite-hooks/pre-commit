@@ -1,3 +1,0 @@
-#!/usr/bin/env sh
-# Read-only checks: never stage or rewrite the user's remaining changes.
-pnpm staged

@@ -1,3 +1,0 @@
-capturedAt=2026-10-31T07:26:32.282Z
-url=http://127.0.0.1:4380/make
-scene=dashboard-member-mobile
