@@ -10,8 +10,14 @@ import {
   replyToThread,
   THREAD_RECENT_EVENTS_READ,
 } from "../usecases/comments.ts";
-import { buildDashboard } from "../usecases/dashboard.ts";
-import { listSubmitTargets } from "../usecases/home.ts";
+import {
+  buildCheckDashboard,
+  buildDashboard,
+  buildMakeDashboard,
+  buildWorksDashboard,
+} from "../usecases/dashboard.ts";
+import { listSubmitTargets, setWorkPinned } from "../usecases/home.ts";
+import { listMyNotifications, notify } from "../usecases/notifications.ts";
 import { currentRuleSet, resolveRulesForWork, saveRule } from "../usecases/notation.ts";
 import { voidRevisionUseCase } from "../usecases/submissions.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
@@ -30,11 +36,23 @@ import {
 
 /** ポートの呼び出し回数を数える（結果は変えない） */
 function counted(ctx: InMemoryContext) {
-  const calls = { acl: 0, revisions: 0, summaries: 0, rulesAll: 0, rulesIn: [] as string[][] };
+  const calls = {
+    acl: 0,
+    aclMine: 0,
+    revisions: 0,
+    summaries: 0,
+    rulesAll: 0,
+    rulesIn: [] as string[][],
+  };
   const acl = ctx.acl.listByWork.bind(ctx.acl);
   ctx.acl.listByWork = (id) => {
     calls.acl++;
     return acl(id);
+  };
+  const mine = ctx.acl.listForPrincipal.bind(ctx.acl);
+  ctx.acl.listForPrincipal = (p) => {
+    calls.aclMine++;
+    return mine(p);
   };
   const revisions = ctx.revisions.listByWork.bind(ctx.revisions);
   ctx.revisions.listByWork = (id) => {
@@ -77,8 +95,9 @@ describe("提出先の候補（常時購読）は、候補にならない制作�
     const calls = counted(ctx);
     const targets = await listSubmitTargets(ctx, principals.creator, works);
     expect(targets.map((t) => t.workTitle)).toEqual(["自分の制作物"]);
-    // 読んだのは候補の 1 件ぶんだけ（他の 6 件は制作物そのものの値で除外）
-    expect(calls.acl).toBe(1);
+    // 制作者は職責で提出できるので ACL は読まない。読んだのは候補の 1 件ぶんの要約だけ（他の 6 件は制作物そのものの値で除外）
+    expect(calls.acl).toBe(0);
+    expect(calls.aclMine).toBe(0);
     expect(calls.summaries).toBe(1);
     expect(calls.revisions).toBe(0);
   });
@@ -100,6 +119,49 @@ describe("ダッシュボード: 進行中でない通常の制作物は ACL を
     expect(calls.acl).toBe(0);
     const own = await buildDashboard(ctx, principals.manager, works);
     expect(own.overview.works.map((r) => r.title).sort()).toEqual(["保留", "非公開"]);
+  });
+});
+
+describe("ダッシュボード・通知は、制作物ごとに ACL を読まない（自分に付いた許可を 1 回だけ読む）", () => {
+  async function setup() {
+    const ctx = createInMemoryContext();
+    const ids = [];
+    for (let i = 0; i < 4; i++) {
+      const w = await seedWork(ctx, { title: `制作物${i}` });
+      await submitRevision(ctx, w.id);
+      ids.push(w.id);
+    }
+    await setWorkPinned(ctx, principals.reviewer, { workId: ids[0]!, pinned: true });
+    const works = await Promise.all(ids.map(async (id) => (await ctx.works.findById(id))!));
+    return { ctx, works, ids };
+  }
+
+  it("校正・制作・制作物の節は、進行中の制作物が何件あっても ACL を 1 回まで", async () => {
+    const { ctx, works } = await setup();
+    for (const who of [principals.reviewer, principals.creator, principals.manager]) {
+      for (const build of [buildCheckDashboard, buildMakeDashboard, buildWorksDashboard]) {
+        const calls = counted(ctx);
+        await build(ctx, who, works);
+        expect(calls.acl, build.name).toBe(0);
+        expect(calls.aclMine, build.name).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("通知の一覧は、制作物ごとに ACL を読まない", async () => {
+    const { ctx, ids } = await setup();
+    for (const id of ids)
+      await notify(ctx, [principals.reviewer.userId], principals.manager.userId, {
+        kind: "comment_posted",
+        title: "コメント",
+        body: "本文",
+        workId: id,
+      });
+    const calls = counted(ctx);
+    const list = await listMyNotifications(ctx, principals.reviewer, 50);
+    expect(list.filter((n) => n.kind === "comment_posted")).toHaveLength(4);
+    expect(calls.acl).toBe(0);
+    expect(calls.aclMine).toBeLessThanOrEqual(1);
   });
 });
 

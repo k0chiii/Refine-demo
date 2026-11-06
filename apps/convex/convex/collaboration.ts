@@ -1,5 +1,5 @@
 import { ProsemirrorSync } from "@convex-dev/prosemirror-sync";
-import { getDocumentDraft, loadAuthorizedWork, saveDocumentDraft } from "@mf100/application";
+import { getDocumentDraft, loadWorkAllowing, saveDocumentDraft } from "@mf100/application";
 import { DomainError, draftFormatFor } from "@mf100/domain";
 import { v } from "convex/values";
 import type { GenericDataModel } from "convex/server";
@@ -11,7 +11,8 @@ import { requireUser } from "./lib/principal.ts";
 export const sync = new ProsemirrorSync(components.prosemirrorSync);
 async function authorize(ctx: QueryCtx | MutationCtx, id: string, write = false) {
   const { principal } = await requireUser(ctx);
-  const { work } = await loadAuthorizedWork(
+  // 職責で足りるなら ACL を読まない（共同編集は保存のたびに呼ばれる）
+  const work = await loadWorkAllowing(
     createReadContext(ctx.db),
     principal,
     id,

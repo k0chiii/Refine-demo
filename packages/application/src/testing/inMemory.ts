@@ -371,6 +371,14 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     acl: {
       listByWork: async (workId) =>
         state.grants.filter((g) => g.workId === workId).map((g) => clone(g)),
+      listForPrincipal: async (p) =>
+        state.grants
+          .filter(
+            (g) =>
+              (g.principalType === "user" && g.principalId === p.userId) ||
+              (g.principalType === "group" && p.groupIds.includes(g.principalId)),
+          )
+          .map((g) => clone(g)),
       insert: async (g) => {
         state.grants.push(clone(g));
       },
