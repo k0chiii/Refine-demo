@@ -41,6 +41,7 @@ import type * as lib_email from "../lib/email.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_nogikuAccess from "../lib/nogikuAccess.js";
 import type * as lib_notationSamples from "../lib/notationSamples.js";
+import type * as lib_notificationCounters from "../lib/notificationCounters.js";
 import type * as lib_principal from "../lib/principal.js";
 import type * as lib_processingValidators from "../lib/processingValidators.js";
 import type * as lib_reactions from "../lib/reactions.js";
@@ -124,6 +125,7 @@ declare const fullApi: ApiFromModules<{
   "lib/errors": typeof lib_errors;
   "lib/nogikuAccess": typeof lib_nogikuAccess;
   "lib/notationSamples": typeof lib_notationSamples;
+  "lib/notificationCounters": typeof lib_notificationCounters;
   "lib/principal": typeof lib_principal;
   "lib/processingValidators": typeof lib_processingValidators;
   "lib/reactions": typeof lib_reactions;
