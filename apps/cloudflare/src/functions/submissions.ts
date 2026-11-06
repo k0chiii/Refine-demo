@@ -8,8 +8,9 @@ import {
   resumeItemUpload,
   voidRevisionUseCase,
 } from "@mf100/application";
+import { DomainError } from "@mf100/domain";
 import { z } from "zod";
-import { mutation, type FnDef } from "./define.ts";
+import { mutation, query, type FnDef } from "./define.ts";
 import {
   object,
   vArtifactOrigin,
@@ -22,7 +23,7 @@ import {
   vRevisionKind,
 } from "./validators.ts";
 
-// apps/convex/convex/submissions.ts の写し（get は画面向けの読み。expireSessions / listOrphanObjects / markObjectsPurged は清掃の cron・サービスで別の単位）
+// apps/convex/convex/submissions.ts の写し（expireSessions / listOrphanObjects / markObjectsPurged は清掃の cron・サービスで別の単位）
 
 /**
  * 実体の転送（Worker 専用）。Convex では internalMutation を http.ts が引く（X-MF100-Service-Key + 利用者の JWT）。
@@ -159,6 +160,21 @@ export const submissions = {
     handler: async (ctx, args) => {
       const r = await voidRevisionUseCase(ctx.db, ctx.principal!, args);
       return { reviewState: r.reviewState };
+    },
+  }),
+
+  /**
+   * 自分のアップロードセッションの状態（U-04 の進捗表示）。本人のセッションだけ（他人の・無いものは forbidden）。
+   * 戻りは doc そのもの（id を持つ。Convex の _id / _creationTime に当たる）
+   */
+  "submissions:get": query({
+    auth: "user",
+    args: object({ sessionId: vId }),
+    handler: async (ctx, { sessionId }) => {
+      const session = await ctx.db.uploads.findById(sessionId);
+      if (!session || session.submittedBy !== ctx.principal!.userId)
+        throw new DomainError("forbidden", { sessionId });
+      return { session, items: await ctx.db.uploads.listItems(sessionId) };
     },
   }),
 } satisfies Record<string, FnDef>;

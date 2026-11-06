@@ -1,9 +1,11 @@
 import { deleteTeam, importTeams, listTeams, saveTeam } from "@mf100/application";
+import { normalizePersonKey, type DirectoryUser } from "@mf100/domain";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
+import { takeUsers, userDisplayName } from "./users.ts";
 import { object, vBureauCode } from "./validators.ts";
 
-// apps/convex/convex/teams.ts の写し（importDirectory は利用者の名簿を読む画面向けの読みなので別の単位）。
+// apps/convex/convex/teams.ts の写し。
 // 登録・変更・削除・取り込みはシステム管理者だけ（use case が確かめる）
 
 export const teams = {
@@ -79,6 +81,34 @@ export const teams = {
         };
       });
       return importTeams(ctx.db, ctx.principal!, lines, members);
+    },
+  }),
+
+  /**
+   * 担当の CSV の「ユーザ」（所属する人）の照合に使う利用者（CSV に書かれたメールアドレス・名前に当たる人だけ）。
+   * システム管理者だけが引ける（組織の管理は管理者だけ）。それ以外は空（Convex と同じ。エラーにしない）
+   */
+  "teams:importDirectory": query({
+    auth: "user",
+    args: object({ keys: z.array(z.string()) }),
+    handler: async (ctx, { keys }): Promise<DirectoryUser[]> => {
+      if (!ctx.principal!.isSystemAdmin) return [];
+      const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
+      if (wanted.size === 0) return [];
+      return takeUsers(ctx.sql, 5000)
+        .filter((u) => u.subject !== undefined)
+        .filter(
+          (u) =>
+            wanted.has(normalizePersonKey(u.name ?? "")) ||
+            wanted.has(normalizePersonKey(userDisplayName(u))) ||
+            (u.email !== undefined && wanted.has(normalizePersonKey(u.email))),
+        )
+        .map((u) => ({
+          id: u.id,
+          name: userDisplayName(u),
+          email: u.email ?? null,
+          ...(u.name ? { otherNames: [u.name] } : {}),
+        }));
     },
   }),
 } satisfies Record<string, FnDef>;

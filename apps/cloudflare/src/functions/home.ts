@@ -1,9 +1,28 @@
-import { isWorkPinned, setWorkPinned } from "@mf100/application";
+import { isWorkPinned, listSubmitTargets, setWorkPinned } from "@mf100/application";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
 
+/** 候補にする制作物を読む上限（dashboard.ts の WORKS_SCAN_LIMIT と同じ） */
+const WORKS_SCAN_LIMIT = 2000;
+
 export const home = {
+  /**
+   * FAB「版を提出」の候補: 自分が版を提出できる進行中の制作物（納期順）。
+   * ponytail: Convex は職責・ACL の索引で「自分が関わる制作物」に絞ってから渡す。ここは進行中を全件渡す
+   * （閲覧・提出の権限は listSubmitTargets が必ず確かめるので結果は同じ。読みが多いだけ）
+   */
+  "home:submitTargets": query({
+    auth: "user",
+    args: object({}),
+    handler: async (ctx) => {
+      const works = (await ctx.db.works.list(WORKS_SCAN_LIMIT)).filter(
+        (w) => w.lifecycle === "active",
+      );
+      return listSubmitTargets(ctx.db, ctx.principal!, works);
+    },
+  }),
+
   /** ホームにピン留め／外す */
   "home:setPinned": mutation({
     auth: "user",
