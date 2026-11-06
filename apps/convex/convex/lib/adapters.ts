@@ -1,6 +1,6 @@
 import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
-import { syncRevisionThreadStats } from "./revisionThreadStats";
+import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
 import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
 import type {
@@ -427,10 +427,14 @@ export function createAppContext(
         return { ...thread, id } as CommentThread;
       },
       async update(thread) {
-        await db.replace(
-          thread.id as Id<"commentThreads">,
-          compact(toFields(thread) as Strip<Doc<"commentThreads">>),
-        );
+        const id = thread.id as Id<"commentThreads">;
+        const before = await db.get("commentThreads", id);
+        const after = compact(toFields(thread) as Strip<Doc<"commentThreads">>);
+        await db.replace(id, after);
+        // リアクション・返信のやり取り・担当などは件数を変えない。版と要約の同期（版のスレッド全件・版の一覧を読む）を省く
+        if (before && !threadCountsMayChange(before, after)) return;
+        if (before && before.revisionId !== after.revisionId)
+          await syncRevisionThreadStats(db, before.revisionId);
         await syncRevisionThreadStats(db, thread.revisionId);
       },
       async appendEvent(event) {
