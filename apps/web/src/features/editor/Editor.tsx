@@ -944,6 +944,10 @@ export function Editor({
         onOpen={() => openThread(t)}
         onDecideStart={(mode) => openThread(t, { mode })}
         onResolve={onResolve}
+        // 紙面の横・ピンのそばのカードは、その場で返信する（引き出しを開くと紙面が縮み、倍率が変わるため）
+        {...(layout !== "panel" && !mobile && revisionId
+          ? { reply: { revisionId, onSubmit: threadActions(t).onReply } }
+          : {})}
       />
     );
   };
