@@ -27,6 +27,7 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { M3eTooltip } from "@m3e/react/tooltip";
+import { UndoAutoFormat } from "./undoAutoFormat";
 import { documentExtensions, highlightColors, paragraphStyles, textColors } from "./extensions";
 import { buildPlainText, documentHtml } from "./plainText";
 import { NotationMarks, SearchReplace } from "./plugins";
@@ -277,6 +278,7 @@ function WriteSurface({
 
   const editor = useEditor({
     extensions: [
+      UndoAutoFormat,
       ...documentExtensions({
         placeholder: canEdit ? "ここに入力するか、# で見出し、- で箇条書き" : "",
         editable: canEdit,
