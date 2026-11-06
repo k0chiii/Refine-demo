@@ -12,3 +12,4 @@ ts	phase	decision	why	evidence	result
 2026-11-06T13:07:12Z	gap	引数の実行時検証（Convex の v.object に当たるもの）は未着手。docs に『本番前の必須』と明記	108 本ぶんの検証はこの PR の範囲外。JSON をそのまま渡す口を本番に出さない約束を文書に残す	docs/CLOUDFLARE_BACKEND.md の対応表	open
 2026-11-06T13:10:03Z	verify	直したあとの本物の Worker で smoke 全部 green: 巻き戻し（不正な 2 行目で 1 行目も残らない）・サービス専用は 404・WebSocket {changed:[pins]}・cron。最初の 403 は古い wrangler dev が 8790 を握っていたのが原因	観察の手段を先に疑う（同じ port に 2 つ起きていた）。smoke.sh は WebSocket と cron の確認も含むようにした	apps/cloudflare/scripts/smoke.sh（実行ログは会話中）	VERIFIED
 2026-11-06T13:10:03Z	verify	domain / application / cloudflare のテスト 138 ファイル / 1302 件 green、lint 0 error	domain（workPatchKeys）を触ったので 3 プロジェクトを通す	vp test run --project domain --project application --project cloudflare	VERIFIED
+2026-11-06T13:10:42Z	ship	PR #295 を develop 向けに開いた（feat-cloudflare-backend、2 commit）	機能は develop へ（CLAUDE.md のブランチ規則）。本番 CD は main への merge でだけ走るので、この PR で本番は変わらない	https://github.com/k0chiii/Refine-demo/pull/295	open
