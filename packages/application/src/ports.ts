@@ -289,6 +289,13 @@ export interface SlackMemberRepository {
 export interface AclRepository {
   /** 取消済みを含む全履歴。認可判定では isGrantActive で絞る。 */
   listByWork(workId: WorkId): Promise<WorkPermissionGrant[]>;
+  /**
+   * その人（本人と所属グループ）に付いた許可（取消済みを含む）。制作物をまたいで 1 回で読む。
+   * 認可の判定（isAllowed）が見るのは本人に当たる許可だけなので、制作物ごとに listByWork を読む代わりに使える
+   */
+  listForPrincipal(
+    principal: Pick<Principal, "userId" | "groupIds">,
+  ): Promise<WorkPermissionGrant[]>;
   insert(grant: WorkPermissionGrant): Promise<void>;
   update(grant: WorkPermissionGrant): Promise<void>;
 }
