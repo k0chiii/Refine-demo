@@ -426,6 +426,20 @@ export function createAppContext(
         await syncRevisionThreadStats(db, thread.revisionId);
         return { ...thread, id } as CommentThread;
       },
+      async insertMany(threads) {
+        const out: CommentThread[] = [];
+        for (const thread of threads) {
+          const id = await db.insert(
+            "commentThreads",
+            compact(thread as Strip<Doc<"commentThreads">>),
+          );
+          out.push({ ...thread, id } as CommentThread);
+        }
+        // 数え直しは版ごとに 1 回（足したあとの全件から数えるので、1 件ずつ数えたときと同じ値）
+        for (const revisionId of new Set(threads.map((t) => t.revisionId)))
+          await syncRevisionThreadStats(db, revisionId);
+        return out;
+      },
       async update(thread) {
         const id = thread.id as Id<"commentThreads">;
         const before = await db.get("commentThreads", id);

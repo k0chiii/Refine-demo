@@ -58,7 +58,8 @@ export async function syncPlanInfoWarnings(
     threads.map((t) => t.origin?.fingerprint).filter((x): x is string => !!x),
   );
   const now = ctx.clock.now();
-  let created = 0;
+  // 作る指摘を先に集め、まとめて足す（件数の数え直しは最後に 1 回）
+  const toCreate: Array<{ data: Omit<CommentThread, "id">; field: string }> = [];
   for (const item of failures) {
     const fingerprint = planInfoCheckFingerprint(item.field, item.registered);
     if (existing.has(fingerprint)) continue;
@@ -84,16 +85,18 @@ export async function syncPlanInfoWarnings(
         textSource: "document",
       },
     };
-    const thread = await ctx.threads.insert(data);
+    toCreate.push({ data, field: item.field });
+    existing.add(fingerprint);
+  }
+  const inserted = await ctx.threads.insertMany(toCreate.map((c) => c.data));
+  for (const [i, thread] of inserted.entries())
     await ctx.threads.appendEvent({
       threadId: thread.id,
       eventType: "created",
       actorId: PLAN_INFO_BOT_ID,
-      payload: { source: "plan_info_check", field: item.field },
+      payload: { source: "plan_info_check", field: toCreate[i]!.field },
       createdAt: now,
     });
-    existing.add(fingerprint);
-    created++;
-  }
+  const created = toCreate.length;
   return { created, skipped: null };
 }

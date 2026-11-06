@@ -196,3 +196,51 @@ describe("版のスレッド件数の同期（読み書きの削減）", () => {
     });
   });
 });
+
+describe("まとめて足すスレッド（自動校正・企画情報の確認）は、最後に 1 回だけ数え直す", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 9, 0, 0), toFake: ["Date"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("5 件足しても、版のスレッドを読むのは 1 回。件数・要約は全部を数え直した値と同じ", async () => {
+    const t = createHarness();
+    const { workId, revisionId } = await seed(t);
+    const counts = await t.run(async (ctx) => {
+      const rec = recording(ctx.db);
+      const app = createAppContext(rec.db);
+      const now = Date.now();
+      const created = await app.threads.insertMany(
+        ["a", "b", "c", "d", "e"].map((body) => ({
+          revisionId,
+          authorId: "bot:proofreader",
+          body,
+          kind: "correction" as const,
+          severity: "minor" as const,
+          resolution: "open" as const,
+          createdAt: now,
+        })),
+      );
+      return {
+        created: created.length,
+        ids: created.every((c) => typeof c.id === "string"),
+        threadQueries: rec.queries.filter((q) => q === "commentThreads").length,
+      };
+    });
+    expect(counts).toEqual({ created: 5, ids: true, threadQueries: 1 });
+    await expectDerivedMatchesThreads(t, workId, revisionId);
+  });
+
+  it("0 件なら何も読まない・書かない", async () => {
+    const t = createHarness();
+    await seed(t);
+    const rec = await t.run(async (ctx) => {
+      const r = recording(ctx.db);
+      await createAppContext(r.db).threads.insertMany([]);
+      return { queries: r.queries.length, writes: r.writes.length };
+    });
+    expect(rec).toEqual({ queries: 0, writes: 0 });
+  });
+});
