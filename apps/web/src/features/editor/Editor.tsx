@@ -106,7 +106,6 @@ import { StatusText } from "@/ui/Chip";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
 import { M3eButtonGroup } from "@m3e/react/button-group";
-import { M3eDivider } from "@m3e/react/divider";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -2037,7 +2036,14 @@ export function Editor({
                       <M3eIcon name={textSelect ? "text_select_start" : "chat_bubble"} />
                     </M3eIconButton>
                   ) : null}
-                  {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
+                  {/* 添付の切り替え（投稿のプレビュー・ファイルごと）はクリップのボタン。コメントの位置（ピン）とは分ける */}
+                  {!mobile && switchable.length > 1 ? (
+                    <M3eIconButton aria-label="添付を切り替え" title="添付を切り替え">
+                      <M3eIcon name="attach_file" />
+                      <M3eMenuTrigger htmlFor="artifact-menu" />
+                    </M3eIconButton>
+                  ) : null}
+                  {/* コメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
                   {!mobile ? (
                     <M3eIconButton
                       className="ws__more"
@@ -2142,27 +2148,6 @@ export function Editor({
             ) : null}
             {!mobile ? (
               <M3eMenu id="viewer-more-menu" positionY="above">
-                {switchable.length > 1 ? (
-                  <>
-                    <M3eMenuItemGroup aria-label="添付">
-                      {switchable.map((a) => (
-                        <M3eMenuItemRadio
-                          key={a.id}
-                          checked={a.id === artifactId}
-                          onClick={() => {
-                            setArtifactId(a.id);
-                            setPage(1);
-                            resetCompose();
-                          }}
-                        >
-                          <M3eIcon slot="icon" name={choiceOf(a).icon} />
-                          {choiceOf(a).label}
-                        </M3eMenuItemRadio>
-                      ))}
-                    </M3eMenuItemGroup>
-                    <M3eDivider />
-                  </>
-                ) : null}
                 <M3eMenuItemGroup aria-label="コメントの表示">
                   {layouts.map((l) => (
                     <M3eMenuItemRadio
@@ -2177,21 +2162,24 @@ export function Editor({
                 </M3eMenuItemGroup>
               </M3eMenu>
             ) : null}
-            {switchable.length > 1 && mobile && !compact ? (
+            {switchable.length > 1 && !compact ? (
               <M3eMenu id="artifact-menu" positionY="above">
-                {switchable.map((a) => (
-                  <M3eMenuItem
-                    key={a.id}
-                    onClick={() => {
-                      setArtifactId(a.id);
-                      setPage(1);
-                      resetCompose();
-                    }}
-                  >
-                    <M3eIcon slot="icon" name={a.id === artifactId ? "check" : choiceOf(a).icon} />
-                    {choiceOf(a).label}
-                  </M3eMenuItem>
-                ))}
+                <M3eMenuItemGroup aria-label="添付">
+                  {switchable.map((a) => (
+                    <M3eMenuItemRadio
+                      key={a.id}
+                      checked={a.id === artifactId}
+                      onClick={() => {
+                        setArtifactId(a.id);
+                        setPage(1);
+                        resetCompose();
+                      }}
+                    >
+                      <M3eIcon slot="icon" name={choiceOf(a).icon} />
+                      {choiceOf(a).label}
+                    </M3eMenuItemRadio>
+                  ))}
+                </M3eMenuItemGroup>
               </M3eMenu>
             ) : null}
             {!mobile ? (

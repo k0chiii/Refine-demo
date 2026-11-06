@@ -353,6 +353,17 @@ export class App {
     return this.page.locator(".ws__toolbar m3e-icon-button.ws__select-mode");
   }
 
+  /** 紙面に出す添付を選ぶ（下部ツールバーのクリップのボタンのメニュー。SNS の版は「投稿のプレビュー」も並ぶ） */
+  async pickArtifact(name: string) {
+    await this.page.locator('.ws__toolbar m3e-icon-button[aria-label="添付を切り替え"]').click();
+    await this.page
+      .locator("#artifact-menu m3e-menu-item-radio", { hasText: name })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await this.settle();
+  }
+
   /** エディタの引き出し（コメント／版／情報）を開く */
   async drawer(label: "コメント" | "版" | "情報") {
     const page = this.page;

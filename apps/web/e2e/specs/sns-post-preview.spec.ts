@@ -26,13 +26,16 @@ test.describe("SNS 投稿の版の表示の切り替え", { tag: "@core" }, () =
     await page.waitForURL(/\/v\/1$/);
     await expect(page.locator(".post-review .sp-figure").first()).toBeVisible({ timeout: 20_000 });
 
-    const menu = page.locator('m3e-icon-button[aria-label="コメントの表示"]');
-    await menu.click();
-    await page.locator("m3e-menu-item-radio", { hasText: "poster.png" }).click();
-    await expect(page.locator(".post-review")).toHaveCount(0);
+    // 添付の切り替えはクリップのボタン。ピンのボタン（コメントの並べ方）には並べない
+    await page.locator('m3e-icon-button[aria-label="コメントの表示"]').click();
+    await expect(
+      page.locator("#viewer-more-menu m3e-menu-item-radio", { hasText: "poster.png" }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
-    await menu.click();
-    await page.locator("m3e-menu-item-radio", { hasText: "投稿のプレビュー" }).click();
+    await app.pickArtifact("poster.png");
+    await expect(page.locator(".post-review")).toHaveCount(0);
+    await app.pickArtifact("投稿のプレビュー");
     await expect(page.locator(".post-review .sp-figure").first()).toBeVisible();
   });
 });
