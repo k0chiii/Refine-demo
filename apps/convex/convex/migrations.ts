@@ -6,6 +6,7 @@ import type { GenericDataModel } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { syncWorkRoles, workFromDoc } from "./lib/adapters.ts";
 import { syncWorkSummary } from "./lib/workSummary";
+import { WORK_SEARCH_VERSION, syncWorkSearch } from "./lib/workSearch";
 import schema from "./schema";
 
 const migrations = new Migrations<GenericDataModel, typeof schema>(components.migrations, {
@@ -44,5 +45,19 @@ export const backfillRevisionPlannedAt = migrations.define({
     const next = upsertRevisionPlannedAt(work.revisionPlannedAt, rev.sequence, at);
     if (JSON.stringify(work.revisionPlannedAt ?? []) === JSON.stringify(next)) return;
     await ctx.db.patch(work._id, { revisionPlannedAt: next });
+  },
+});
+
+/**
+ * works.searchTokens → workSearch（2026-11-06。docs/DECISIONS.md「検索の token を別の表に」）。
+ * 制作物ごとに検索の行を作り（今の題名などから作り直す）、works から token を外して印 searchVersion を付ける。
+ * 業務の version は変えない。Idempotent。Operator-approved only: run after deploy, never as part of deployment.
+ */
+export const moveWorkSearchTokens = migrations.define({
+  table: "works",
+  migrateOne: async (ctx, doc) => {
+    await syncWorkSearch(ctx.db, workFromDoc(doc));
+    if (doc.searchTokens !== undefined || doc.searchVersion !== WORK_SEARCH_VERSION)
+      await ctx.db.patch(doc._id, { searchTokens: undefined, searchVersion: WORK_SEARCH_VERSION });
   },
 });

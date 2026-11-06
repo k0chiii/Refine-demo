@@ -634,13 +634,19 @@ export const listMinePage = query({
     const search = args.text?.trim();
     let result;
     if (search) {
-      type SearchCursor = { phase: "search" | "legacy"; cursor: string | null };
+      // 1) workSearch の検索索引で候補の行を引き、制作物を 1 件ずつ読む（ページの大きさまで）。
+      // 2) 続けて、まだ検索の行が無い制作物（移行 moveWorkSearchTokens の前の行。searchVersion が無い）を順に読む。
+      //    絞り込みは summarizeWorkList が本文で確かめる。移行を流し終えれば 2) は空で、すぐ終わる
+      // "search" / "legacy" は works に token を持っていたときの続きの印
+      type SearchCursor = {
+        phase: "rows" | "unindexed" | "search" | "legacy";
+        cursor: string | null;
+      };
       const cursor: SearchCursor = args.paginationOpts.cursor
         ? JSON.parse(args.paginationOpts.cursor)
-        : { phase: "search", cursor: null };
-      if (cursor.phase !== "search" && cursor.phase !== "legacy") throw new Error("invalid_cursor");
-      if (cursor.phase === "search") {
-        const indexed = ctx.db.query("works").withSearchIndex("search_substring", (q) => {
+        : { phase: "rows", cursor: null };
+      if (cursor.phase === "rows") {
+        const indexed = ctx.db.query("workSearch").withSearchIndex("search_substring", (q) => {
           const query = q.search("searchTokens", substringQuery(search));
           if (args.year !== undefined && args.lifecycle !== undefined)
             return query.eq("year", args.year).eq("lifecycle", args.lifecycle);
@@ -649,25 +655,34 @@ export const listMinePage = query({
           return query;
         });
         const page = await indexed.paginate({ ...args.paginationOpts, cursor: cursor.cursor });
+        const works = [];
+        for (const row of page.page) {
+          const doc = await ctx.db.get(row.workId);
+          if (doc) works.push(doc);
+        }
         result = {
           ...page,
+          page: works,
           isDone: false,
           continueCursor: JSON.stringify(
             page.isDone
-              ? { phase: "legacy", cursor: null }
-              : { phase: "search", cursor: page.continueCursor },
+              ? { phase: "unindexed", cursor: null }
+              : { phase: "rows", cursor: page.continueCursor },
           ),
         };
-      } else {
+      } else if (cursor.phase === "unindexed") {
         const page = await ctx.db
           .query("works")
-          .withIndex("by_search_tokens", (q) => q.eq("searchTokens", undefined))
+          .withIndex("by_search_version", (q) => q.eq("searchVersion", undefined))
           .paginate({ ...args.paginationOpts, cursor: cursor.cursor });
         result = {
           ...page,
-          continueCursor: JSON.stringify({ phase: "legacy", cursor: page.continueCursor }),
+          continueCursor: JSON.stringify({ phase: "unindexed", cursor: page.continueCursor }),
         };
-      }
+      } else if (cursor.phase === "search" || cursor.phase === "legacy") {
+        // この変更より前に配った続きの印（works の索引の位置）。新しい表では使えないので、そこで終える
+        result = { page: [], isDone: true, continueCursor: JSON.stringify(cursor) };
+      } else throw new Error("invalid_cursor");
     } else result = await source.paginate(args.paginationOpts);
     const visible = result.page.map((doc) => workFromDoc(doc));
     return { ...result, page: await summarizeWorkList(ctx, principal, visible, args) };

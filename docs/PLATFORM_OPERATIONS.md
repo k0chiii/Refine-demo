@@ -45,6 +45,8 @@ AI Gateway/Access/既存 upload/cleanup の秘密については [PLATFORM_IMPLE
 
 `migrations.backfillWorkRoles` は職責・検索 token・一覧要約・Aggregate を同時に修復する。先に隔離環境と dry-run で確認し、バックアップを照合する。旧行は検索・要約の fallback で読み、Aggregate は未移行行があれば ready:false を返す。移行を自動配備に混ぜない。
 
+`migrations:moveWorkSearchTokens` は works に残った検索の token（`works.searchTokens`）を表 `workSearch` へ移す（2026-11-06。[DECISIONS.md](DECISIONS.md)「検索の token を別の表に」）。配り終えてから運用者が `npx convex run migrations:moveWorkSearchTokens '{dryRun: true}' --prod`、続けて `--prod` で流し、`npx convex run --component migrations lib:getStatus --prod` で終わりを確かめる。流す前の行も検索には出る（印 `searchVersion` の無い行を順に読む）が、その間の検索は遅い。
+
 埋め込みは有効化後に変更されたルールを更新する。既存ルールは `semanticRules.indexRule` を管理用 internal action として必要な ruleId ごとに実行する。対象は有効な現行ルール、モデルは bge-m3/1024 次元。意味検索の結果は現行版・適用カテゴリ・作品 ACL で再照合する。モデル変更時は別索引で作り直す。
 
 共同編集は通常保存の完了後に「共同編集を開始」する。切替後に古いクライアントから通常保存すると拒否する。提出済み版の原本・座標・コメントは書き換えない。デモの DB はタブごとに独立するため、共同編集/Presence/外部処理は本バックエンドで受入確認する。
