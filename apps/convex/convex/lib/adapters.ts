@@ -1,7 +1,7 @@
 import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats } from "./revisionThreadStats";
-import { substringTokens, workSearchText } from "./workSearch";
+import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
 import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
 import type {
   AlignmentOverride,
@@ -71,7 +71,7 @@ function fromDoc<T extends TableNames, D extends Doc<T>>(doc: D): Strip<D> & { i
   return { ...(rest as Strip<D>), id: _id as string };
 }
 
-/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks） */
+/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks）。移行前の行に残る検索の token は捨てる */
 export const workFromDoc = (doc: Doc<"works">): Work => {
   const { searchTokens: _tokens, ...work } = doc;
   void _tokens;
@@ -132,7 +132,13 @@ export async function syncWorkRoles(db: DatabaseWriter, work: Work) {
     seen.add(key);
     await db.insert("workRoles", { workId, ...r });
   }
-  await db.patch(workId, { rolesVersion: 1, searchTokens: substringTokens(workSearchText(work)) });
+  await syncWorkSearch(db, work);
+  // 検索の token は workSearch に持つ。移行前の行に残った works.searchTokens はここで外す
+  await db.patch(workId, {
+    rolesVersion: 1,
+    searchVersion: WORK_SEARCH_VERSION,
+    searchTokens: undefined,
+  });
   await syncWorkSummary(db, work.id);
 }
 

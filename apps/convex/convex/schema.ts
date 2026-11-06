@@ -209,9 +209,32 @@ export default defineSchema({
     ["workId"],
   ),
 
+  /**
+   * 制作物の部分一致検索の token（lib/workSearch の substringTokens）。works の行に持つと、制作物を読むたびに
+   * （ダッシュボード・在席・通知・一覧）この長い文字列も読むので、別の表に分けた（2026-11-06）。
+   * 書くのは lib/adapters の syncWorkRoles（制作物の登録・更新のたび）と移行 moveWorkSearchTokens
+   */
+  workSearch: defineTable({
+    workId: v.id("works"),
+    searchTokens: v.string(),
+    year: v.number(),
+    lifecycle,
+  })
+    .index("by_work", ["workId"])
+    .searchIndex("search_substring", {
+      searchField: "searchTokens",
+      filterFields: ["year", "lifecycle"],
+    }),
+
   works: defineTable({
     rolesVersion: v.optional(v.number()),
+    /**
+     * 廃止（2026-11-06）。検索の token は `workSearch` に移した。読み書きしない。
+     * 移行 `migrations:moveWorkSearchTokens` を流す前の行の検証を通すためだけに残す（流し終えたら外す）
+     */
     searchTokens: v.optional(v.string()),
+    /** `workSearch` に検索の行を作った印（1）。無い行は移行前で、検索は works を順に読んで拾う */
+    searchVersion: v.optional(v.number()),
     aggregateVersion: v.optional(v.number()),
     legacyId: v.optional(v.string()),
     year: v.number(),
@@ -255,11 +278,7 @@ export default defineSchema({
     version: v.number(),
   })
     .index("by_aggregate_version", ["aggregateVersion"])
-    .index("by_search_tokens", ["searchTokens"])
-    .searchIndex("search_substring", {
-      searchField: "searchTokens",
-      filterFields: ["year", "lifecycle"],
-    })
+    .index("by_search_version", ["searchVersion"])
     .index("by_roles_version", ["rolesVersion"])
     .index("by_year_and_lifecycle", ["year", "lifecycle"])
     .index("by_year", ["year"])
