@@ -268,6 +268,21 @@ export class App {
     });
   }
 
+  /**
+   * 日本語入力のまま文字を打って確定する（変換中の文字を出してから確定。Chrome の IME と同じ合図の順）。
+   * Playwright の type は半角のキーしか送れないので、CDP の Input.imeSetComposition / insertText を使う。フォーカスは先に当てておく
+   */
+  async imeType(text: string) {
+    const cdp = await this.page.context().newCDPSession(this.page);
+    await cdp.send("Input.imeSetComposition", {
+      text,
+      selectionStart: text.length,
+      selectionEnd: text.length,
+    });
+    await cdp.send("Input.insertText", { text });
+    await cdp.detach();
+  }
+
   /** PDF の最初のページが描かれるまで待つ */
   pdfReady() {
     return this.page.waitForFunction(
