@@ -1,9 +1,9 @@
 import type { FunctionReturnType } from "convex/server";
 import { describe, expect, it } from "vite-plus/test";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness } from "../test/harness";
-import { substringQuery, substringTokens } from "./lib/workSearch";
+import { substringQuery, substringTokens, workSearchText } from "./lib/workSearch";
 
 it("日本語・空白・大小文字・サロゲートペアを語の境界によらず候補化する", () => {
   for (const [text, query] of [
@@ -15,45 +15,84 @@ it("日本語・空白・大小文字・サロゲートペアを語の境界に�
   }
 });
 
+type T = ReturnType<typeof createHarness>;
+type Cast = Awaited<ReturnType<typeof createCast>>;
+
+async function setup() {
+  const t = createHarness();
+  const c = await createCast(t);
+  const create = async (title: string, year = 100) =>
+    (await c.manager.as.mutation(api.works.create, {
+      title,
+      purpose: "構内の案内",
+      category: "文章",
+      tags: ["来場者向け"],
+      mediaType: "document",
+      year,
+      creatorIds: [c.creator.id],
+      approverId: c.approver.id,
+    })) as Id<"works">;
+  return { t, c, create };
+}
+
+async function pages(
+  c: Cast,
+  text: string,
+  filters: { year?: number; lifecycle?: "active" | "cancelled" } = { year: 100 },
+) {
+  const all: string[] = [];
+  let cursor: string | null = null;
+  for (let n = 0; n < 30; n++) {
+    const page: FunctionReturnType<typeof api.works.listMinePage> = await c.stranger.as.query(
+      api.works.listMinePage,
+      { text, ...filters, paginationOpts: { cursor, numItems: 1 } },
+    );
+    all.push(...page.page.map((w) => w.id));
+    if (page.isDone) return all.sort();
+    cursor = page.continueCursor;
+  }
+  throw new Error("cursor did not finish");
+}
+
+const searchRows = (t: T, workId: Id<"works">) =>
+  t.run((ctx) =>
+    ctx.db
+      .query("workSearch")
+      .withIndex("by_work", (q) => q.eq("workId", workId))
+      .collect(),
+  );
+
+/** この変更より前の行: 検索の行が無く、works に token を持つ（old）か、何も持たない（unindexed） */
+async function makeLegacy(t: T, workId: Id<"works">, kind: "old" | "unindexed") {
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db
+      .query("workSearch")
+      .withIndex("by_work", (q) => q.eq("workId", workId))
+      .collect())
+      await ctx.db.delete(row._id);
+    const doc = (await ctx.db.get(workId))!;
+    await ctx.db.patch(workId, {
+      searchVersion: undefined,
+      searchTokens: kind === "old" ? substringTokens(workSearchText(doc)) : undefined,
+    });
+  });
+}
+
 describe("検索と要約の派生データ", () => {
   it("新旧索引のページを継続し、複数項目部分一致・ACL・更新・移行を保つ", async () => {
-    const t = createHarness();
-    const c = await createCast(t);
-    const create = async (title: string) =>
-      (await c.manager.as.mutation(api.works.create, {
-        title,
-        purpose: "構内の案内",
-        category: "文章",
-        tags: ["来場者向け"],
-        mediaType: "document",
-        year: 100,
-        creatorIds: [c.creator.id],
-        approverId: c.approver.id,
-      })) as Id<"works">;
+    const { t, c, create } = await setup();
     const current = await create("五月祭の受付");
-    const legacy = await create("五月祭の旧受付");
+    const old = await create("五月祭の旧受付");
+    const unindexed = await create("五月祭の未索引");
     const secret = await create("五月祭の非公開");
-    await t.run(async (ctx) => {
-      await ctx.db.patch(legacy, { searchTokens: undefined });
-    });
-    const pages = async (text: string) => {
-      const all: string[] = [];
-      let cursor: string | null = null;
-      for (let n = 0; n < 20; n++) {
-        const page: FunctionReturnType<typeof api.works.listMinePage> = await c.stranger.as.query(
-          api.works.listMinePage,
-          { text, year: 100, paginationOpts: { cursor, numItems: 1 } },
-        );
-        all.push(...page.page.map((w) => w.id));
-        if (page.isDone) return all;
-        cursor = page.continueCursor;
-      }
-      throw new Error("cursor did not finish");
-    };
-    expect((await pages("祭の")).sort()).toEqual([current, legacy, secret].sort());
-    expect((await pages("場者")).sort()).toEqual([current, legacy, secret].sort());
+    await makeLegacy(t, old, "old");
+    await makeLegacy(t, unindexed, "unindexed");
+    const everything = [current, old, unindexed, secret].sort();
+    expect(await pages(c, "祭の")).toEqual(everything);
+    expect(await pages(c, "場者")).toEqual(everything);
     await c.manager.as.mutation(api.works.update, { workId: current, patch: { title: "新受付" } });
-    expect((await pages("祭の")).sort()).toEqual([legacy, secret].sort());
+    expect(await pages(c, "祭の")).toEqual([old, unindexed, secret].sort());
+    expect(await pages(c, "新受")).toEqual([current]);
     expect(
       await t.run((ctx) =>
         ctx.db
@@ -62,5 +101,59 @@ describe("検索と要約の派生データ", () => {
           .unique(),
       ),
     ).not.toBeNull();
+  });
+
+  it("works の行に token を持たず、検索の行を登録・更新・状態の変更に合わせる", async () => {
+    const { t, c, create } = await setup();
+    const workId = await create("五月祭の受付");
+    const other = await create("五月祭の別年度", 99);
+    const doc = await t.run((ctx) => ctx.db.get(workId));
+    expect(doc).not.toHaveProperty("searchTokens");
+    expect(doc?.searchVersion).toBe(1);
+    expect(await searchRows(t, workId)).toMatchObject([{ year: 100, lifecycle: "active" }]);
+    expect(await pages(c, "祭の", {})).toEqual([workId, other].sort());
+    expect(await pages(c, "祭の", { year: 99 })).toEqual([other]);
+
+    await c.manager.as.mutation(api.works.update, {
+      workId,
+      patch: { title: "春の受付", tags: ["案内所"] },
+    });
+    expect(await t.run((ctx) => ctx.db.get(workId))).not.toHaveProperty("searchTokens");
+    expect(await searchRows(t, workId)).toHaveLength(1);
+    expect(await pages(c, "祭の")).toEqual([]);
+    expect(await pages(c, "内所")).toEqual([workId]);
+
+    await c.manager.as.mutation(api.works.changeLifecycle, { workId, to: "cancelled" });
+    expect(await searchRows(t, workId)).toMatchObject([{ year: 100, lifecycle: "cancelled" }]);
+    expect(await pages(c, "春の", { year: 100, lifecycle: "cancelled" })).toEqual([workId]);
+    expect(await pages(c, "春の", { year: 100, lifecycle: "active" })).toEqual([]);
+  });
+
+  it("移行は token を検索の行へ移し、works から外す（何度流しても同じ）", async () => {
+    const { t, c, create } = await setup();
+    const old = await create("五月祭の旧受付");
+    const unindexed = await create("五月祭の未索引");
+    await makeLegacy(t, old, "old");
+    await makeLegacy(t, unindexed, "unindexed");
+    const before = await t.run((ctx) => ctx.db.get(old));
+    expect(before?.searchTokens).toBeTruthy();
+
+    await t.mutation(internal.migrations.moveWorkSearchTokens, {
+      cursor: null,
+      oneBatchOnly: true,
+    });
+    await t.mutation(internal.migrations.moveWorkSearchTokens, {
+      cursor: null,
+      oneBatchOnly: true,
+      reset: true,
+    });
+    for (const workId of [old, unindexed]) {
+      const doc = await t.run((ctx) => ctx.db.get(workId));
+      expect(doc).not.toHaveProperty("searchTokens");
+      expect(doc).toMatchObject({ searchVersion: 1, version: before!.version });
+      expect(await searchRows(t, workId)).toHaveLength(1);
+    }
+    expect((await searchRows(t, old))[0]!.searchTokens).toBe(before!.searchTokens);
+    expect(await pages(c, "祭の")).toEqual([old, unindexed].sort());
   });
 });

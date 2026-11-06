@@ -27,8 +27,21 @@ export function workSummaryFromDoc(doc: Doc<"workSummaries">): WorkSummary | nul
   return { latest, accepting, threads, declared };
 }
 
-/** Derived summaries are rebuilt inside the source mutation; legacy rows fall back until backfill. */
-export async function syncWorkSummary(db: DatabaseWriter, workId: string) {
+/** 呼び出し側がこのトランザクションで読み終えた、ある版の削除されていないスレッド */
+export interface KnownRevisionThreads {
+  revisionId: Id<"revisions">;
+  liveThreads: ReadonlyArray<Pick<Doc<"commentThreads">, "resolution" | "createdAt">>;
+}
+
+/**
+ * Derived summaries are rebuilt inside the source mutation; legacy rows fall back until backfill.
+ * `known` がこの制作物の数える版のスレッドなら、それを使って同じスレッドを読み直さない。
+ */
+export async function syncWorkSummary(
+  db: DatabaseWriter,
+  workId: string,
+  known?: KnownRevisionThreads,
+) {
   const workDoc = await db.get("works", workId as Id<"works">);
   if (!workDoc) return;
   const work = workFromDoc(workDoc);
@@ -41,14 +54,16 @@ export async function syncWorkSummary(db: DatabaseWriter, workId: string) {
     id: _id,
   })) as Revision[];
   const focusId = focusRevisionIdOf(revisionHeadsOf(revisions));
-  const focusThreads = focusId
-    ? (
-        await db
-          .query("commentThreads")
-          .withIndex("by_revision", (q) => q.eq("revisionId", focusId as Id<"revisions">))
-          .collect()
-      ).filter((t) => t.deletedAt === undefined)
-    : [];
+  const focusThreads = !focusId
+    ? []
+    : known && known.revisionId === focusId
+      ? known.liveThreads
+      : (
+          await db
+            .query("commentThreads")
+            .withIndex("by_revision", (q) => q.eq("revisionId", focusId as Id<"revisions">))
+            .collect()
+        ).filter((t) => t.deletedAt === undefined);
   const approvalEvents = countsDeclarations(work)
     ? ((await db
         .query("approvalEvents")

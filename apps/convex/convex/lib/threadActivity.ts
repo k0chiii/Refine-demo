@@ -3,15 +3,23 @@ import { groupMentionToken } from "@mf100/domain";
 import type { DatabaseReader } from "../_generated/server";
 import type { UserSummary } from "./users.ts";
 
-/** メンションしたグループの名前（ID → 名前）。グループのメンションが無ければ読まない。消えたグループは入らない */
+/**
+ * メンションしたグループの名前（ID → 名前）。メンションしたグループだけを 1 件ずつ引く（グループの一覧は読まない）。
+ * グループのメンションが無ければ読まない。消えたグループ・グループの ID でないものは入らない
+ */
 export async function loadGroupNames(
   db: DatabaseReader,
   groupIds: Iterable<string>,
 ): Promise<Map<string, string>> {
-  const wanted = new Set(groupIds);
-  if (wanted.size === 0) return new Map();
-  const groups = await db.query("memberGroups").take(1000);
-  return new Map(groups.filter((g) => wanted.has(g._id)).map((g) => [g._id as string, g.name]));
+  const out = new Map<string, string>();
+  await Promise.all(
+    [...new Set(groupIds)].map(async (id) => {
+      const groupId = db.normalizeId("memberGroups", id);
+      const group = groupId ? await db.get("memberGroups", groupId) : null;
+      if (group) out.set(id, group.name);
+    }),
+  );
+  return out;
 }
 
 /**

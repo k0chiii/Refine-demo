@@ -1,7 +1,7 @@
 import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
-import { syncRevisionThreadStats } from "./revisionThreadStats";
-import { substringTokens, workSearchText } from "./workSearch";
+import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
+import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
 import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
 import type {
   AlignmentOverride,
@@ -55,6 +55,7 @@ import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
 import type { Scheduler } from "convex/server";
 import { availableChannels, deliveryConfigFromEnv } from "./channels.ts";
 import { personProfileOf, userDisplayName } from "./users.ts";
+import { adjustUnreadCounter, readUnreadCount } from "./notificationCounters.ts";
 
 /**
  * application 層のポートを Convex の ctx.db で実装するアダプタ。
@@ -70,7 +71,7 @@ function fromDoc<T extends TableNames, D extends Doc<T>>(doc: D): Strip<D> & { i
   return { ...(rest as Strip<D>), id: _id as string };
 }
 
-/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks） */
+/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks）。移行前の行に残る検索の token は捨てる */
 export const workFromDoc = (doc: Doc<"works">): Work => {
   const { searchTokens: _tokens, ...work } = doc;
   void _tokens;
@@ -131,7 +132,13 @@ export async function syncWorkRoles(db: DatabaseWriter, work: Work) {
     seen.add(key);
     await db.insert("workRoles", { workId, ...r });
   }
-  await db.patch(workId, { rolesVersion: 1, searchTokens: substringTokens(workSearchText(work)) });
+  await syncWorkSearch(db, work);
+  // 検索の token は workSearch に持つ。移行前の行に残った works.searchTokens はここで外す
+  await db.patch(workId, {
+    rolesVersion: 1,
+    searchVersion: WORK_SEARCH_VERSION,
+    searchTokens: undefined,
+  });
   await syncWorkSummary(db, work.id);
 }
 
@@ -151,6 +158,8 @@ export function createAppContext(
     ids: [],
     scheduled: null,
   };
+  /** 未読が多くて数の行をその場で作れなかった利用者（同じトランザクションで数え直さない。lib/notificationCounters.ts） */
+  const uncountable = new Set<string>();
   /**
    * 受信者に外への届け先があるか（通知の種類によらない。止めた分類は送る時点の計画が落とす）。
    * 読むのは使える経路が要るものだけ（設定は email・slack が使えるとき、端末は push が使えるとき）
@@ -418,10 +427,14 @@ export function createAppContext(
         return { ...thread, id } as CommentThread;
       },
       async update(thread) {
-        await db.replace(
-          thread.id as Id<"commentThreads">,
-          compact(toFields(thread) as Strip<Doc<"commentThreads">>),
-        );
+        const id = thread.id as Id<"commentThreads">;
+        const before = await db.get("commentThreads", id);
+        const after = compact(toFields(thread) as Strip<Doc<"commentThreads">>);
+        await db.replace(id, after);
+        // リアクション・返信のやり取り・担当などは件数を変えない。版と要約の同期（版のスレッド全件・版の一覧を読む）を省く
+        if (before && !threadCountsMayChange(before, after)) return;
+        if (before && before.revisionId !== after.revisionId)
+          await syncRevisionThreadStats(db, before.revisionId);
         await syncRevisionThreadStats(db, thread.revisionId);
       },
       async appendEvent(event) {
@@ -435,11 +448,17 @@ export function createAppContext(
           .query("commentEvents")
           .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"commentThreads">))
           .collect();
-        return docs.map((d) => {
-          const { _id, _creationTime, ...rest } = d;
-          void _creationTime;
-          return { ...rest, id: _id as string } as CommentEvent;
-        });
+        return docs.map(commentEventFromDoc);
+      },
+      async listLatestEvents(threadId, limit) {
+        if (limit <= 0) return [];
+        // by_thread は同じスレッドの中を追記順（_creationTime）に並べる。後ろから limit 件だけ読み、古い順に戻す
+        const docs = await db
+          .query("commentEvents")
+          .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"commentThreads">))
+          .order("desc")
+          .take(limit);
+        return docs.reverse().map(commentEventFromDoc);
       },
       async setEventReactions(eventId, reactions) {
         // 空にしたらフィールドごと外す（undefined を渡すと patch は項目を消す）
@@ -733,6 +752,7 @@ export function createAppContext(
     notifications: {
       async insert(n) {
         const id = await db.insert("notifications", compact(n));
+        if (n.readAt === undefined) await adjustUnreadCounter(db, n.recipientId, 1, uncountable);
         // 届け先があれば送信を予約する（送る内容は送る時点で作り直す）
         if (scheduler && (await hasReachableChannel(n.recipientId))) {
           deliveryBatch.ids.push(id);
@@ -769,17 +789,18 @@ export function createAppContext(
         return doc ? (fromDoc(doc) as Notification) : null;
       },
       async update(n) {
-        await db.replace(n.id as Id<"notifications">, compact(toFields(n)));
+        const id = n.id as Id<"notifications">;
+        const prev = await db.get("notifications", id);
+        await db.replace(id, compact(toFields(n)));
+        // 未読の数を同じトランザクションで合わせる（既読にする・未読に戻す。未読のまま・既読のままなら触らない）
+        const wasUnreadOf = prev && prev.readAt === undefined ? prev.recipientId : null;
+        const isUnreadOf = n.readAt === undefined ? n.recipientId : null;
+        if (wasUnreadOf !== isUnreadOf) {
+          if (wasUnreadOf !== null) await adjustUnreadCounter(db, wasUnreadOf, -1, uncountable);
+          if (isUnreadOf !== null) await adjustUnreadCounter(db, isUnreadOf, 1, uncountable);
+        }
       },
-      async countUnread(userId) {
-        const docs = await db
-          .query("notifications")
-          .withIndex("by_recipient_read_created", (q) =>
-            q.eq("recipientId", userId).eq("readAt", undefined),
-          )
-          .take(100);
-        return docs.length;
-      },
+      countUnread: (userId) => readUnreadCount(db, userId),
     },
     groups: {
       async list() {
@@ -1273,6 +1294,12 @@ export function createAppContext(
 /** query 関数から読み取り専用で使う。書込みメソッドは呼ばれない前提（呼べばランタイムで失敗する）。 */
 export function createReadContext(db: DatabaseReader): AppContext {
   return createAppContext(db as DatabaseWriter);
+}
+
+function commentEventFromDoc(d: Doc<"commentEvents">): CommentEvent {
+  const { _id, _creationTime, ...rest } = d;
+  void _creationTime;
+  return { ...rest, id: _id as string } as CommentEvent;
 }
 
 function stripAssignment(d: Doc<"reviewAssignments">): ReviewAssignment {
