@@ -6,6 +6,7 @@ import type { GenericDataModel } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { syncWorkRoles, workFromDoc } from "./lib/adapters.ts";
 import { syncWorkSummary } from "./lib/workSummary";
+import { recountUnread } from "./lib/notificationCounters";
 import schema from "./schema";
 
 const migrations = new Migrations<GenericDataModel, typeof schema>(components.migrations, {
@@ -44,5 +45,19 @@ export const backfillRevisionPlannedAt = migrations.define({
     const next = upsertRevisionPlannedAt(work.revisionPlannedAt, rev.sequence, at);
     if (JSON.stringify(work.revisionPlannedAt ?? []) === JSON.stringify(next)) return;
     await ctx.db.patch(work._id, { revisionPlannedAt: next });
+  },
+});
+
+/**
+ * 利用者ごとの未読の通知の数（notificationCounters）を数え直して埋める（2026-11-06）。
+ * 行が無い利用者は unreadCount が未読の索引で 100 件まで数える（移行前も正しい）。埋めると 1 行だけ読む。
+ * Idempotent（数え直して書く）。運用者が実行する。デプロイでは走らない。
+ * 未読が多い利用者は 1 人で多くの行を読むので、1 回の人数を少なくする。
+ */
+export const backfillNotificationCounters = migrations.define({
+  table: "users",
+  batchSize: 10,
+  migrateOne: async (ctx, user) => {
+    await recountUnread(ctx.db, user._id);
   },
 });
