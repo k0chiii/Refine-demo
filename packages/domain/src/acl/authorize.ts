@@ -24,6 +24,8 @@ export type WorkAction =
   | "comment.reply"
   | "review.participate"
   | "comment.decide"
+  /** コメントを解決で閉じる（採否のうち「解決」だけ）。採否を決められる人に加えて校了者（利用者指示 2026-11-06） */
+  | "comment.resolve"
   | "review.assign"
   | "work.finalize"
   | "work.reopen"
@@ -115,6 +117,8 @@ export function isAllowed(action: WorkAction, ctx: AuthorizationContext): boolea
       return roles.isCreator || roles.isApprover || roles.isManager || hasLevel(ctx, "review");
     case "comment.decide":
       return roles.isCreator || hasLevel(ctx, "edit");
+    case "comment.resolve":
+      return roles.isCreator || roles.isApprover || hasLevel(ctx, "edit");
     case "review.assign":
       return roles.isManager || roles.isCreator || hasLevel(ctx, "edit");
     case "work.finalize":

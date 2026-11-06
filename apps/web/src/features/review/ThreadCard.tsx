@@ -36,6 +36,7 @@ export function ThreadCard({
   thread: t,
   active,
   canDecide,
+  canResolve = false,
   canReply,
   onSelect,
   onOpen,
@@ -55,6 +56,8 @@ export function ThreadCard({
   thread: Thread;
   active: boolean;
   canDecide: boolean;
+  /** 解決で閉じられる（採否は決められない校了者。「解決」のボタンだけを出す） */
+  canResolve?: boolean;
   canReply: boolean;
   /** 制作物の機密区分（添付の写しを端末に残してよいかの判断） */
   /** 最後の返信の「n 分前」を数える現在時刻 */
@@ -88,6 +91,7 @@ export function ThreadCard({
   // 操作（採否・返信・開く）は選んだカードだけ。ほかのカードは読むだけの見た目にする
   const selected = active || focused;
   const showDecide = canDecide && !closed && selected;
+  const showResolve = canResolve && !canDecide && !closed && selected;
   const repliesText =
     hidden > 0 ? `ほか ${hidden} 件の返信` : t.replyCount > 0 ? `${t.replyCount}件の返信` : null;
   return (
@@ -182,6 +186,19 @@ export function ThreadCard({
         />
         {t.files.length > 0 ? <CommentAttachments files={t.files} variant="thumbs" /> : null}
         <ThreadMeta thread={t} placeState={placeState} />
+        {showResolve ? (
+          <div className="thread__decide" onClick={stop}>
+            <M3eButton
+              variant="filled"
+              size="small"
+              disabled={pending === true}
+              onClick={() => void onResolve()}
+            >
+              <M3eIcon slot="icon" name="check" />
+              解決
+            </M3eButton>
+          </div>
+        ) : null}
         {showDecide ? (
           <div className="thread__decide" role="group" aria-label="反映するかどうか" onClick={stop}>
             <M3eButton

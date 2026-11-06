@@ -936,6 +936,7 @@ export function Editor({
         {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
         active={t.id === activeThreadId}
         canDecide={can?.decide ?? false}
+        canResolve={can?.resolve ?? false}
         canReply={can?.reply ?? false}
         pending={busy}
         now={now}
@@ -1598,6 +1599,7 @@ export function Editor({
         {...(threadNav ? { nav: threadNav } : {})}
         meId={me?.id ?? null}
         canDecide={can?.decide ?? false}
+        canResolve={can?.resolve ?? false}
         canReply={can?.reply ?? false}
         revisionId={revisionId}
         pending={busy}

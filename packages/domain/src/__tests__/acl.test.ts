@@ -130,6 +130,24 @@ describe("isAllowed（§7.2 操作権限）", () => {
       true,
     );
   });
+  // 利用者指示 2026-11-06: 校了者もコメントを閉じられる（解決のみ）。反映しない・次の版で対応は制作者側のまま
+  it("校了者はコメントを解決で閉じられるが、採否は決められない。校正者はどちらもできない", () => {
+    const ctxOf = (who: string, grants: WorkPermissionGrant[] = []) => ({
+      work,
+      grants,
+      principal: principal(who),
+    });
+    expect(isAllowed("comment.resolve", ctxOf("approver"))).toBe(true);
+    expect(isAllowed("comment.decide", ctxOf("approver"))).toBe(false);
+    expect(isAllowed("comment.resolve", ctxOf("creator"))).toBe(true);
+    expect(isAllowed("comment.resolve", ctxOf("viewer", [grant({ permission: "edit" })]))).toBe(
+      true,
+    );
+    expect(isAllowed("comment.resolve", ctxOf("viewer", [grant({ permission: "review" })]))).toBe(
+      false,
+    );
+    expect(isAllowed("comment.resolve", ctxOf("manager"))).toBe(false);
+  });
   it("ACL 変更はシステム管理者のみ。校了は校了権限者（とシステム管理者）", () => {
     expect(isAllowed("acl.manage", { work, grants: [], principal: principal("manager") })).toBe(
       false,
@@ -178,6 +196,7 @@ describe("システム管理者はすべての操作権限を持つ（利用者�
     "comment.reply": true,
     "review.participate": true,
     "comment.decide": true,
+    "comment.resolve": true,
     "review.assign": true,
     "work.finalize": true,
     "work.reopen": true,
