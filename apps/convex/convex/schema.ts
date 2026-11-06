@@ -345,7 +345,10 @@ export default defineSchema({
         lastCreatedAt: v.union(v.number(), v.null()),
       }),
     ),
-  }).index("by_work", ["workId"]),
+  })
+    .index("by_work", ["workId"])
+    /** 受付中の版から制作物を引く（ダッシュボードの候補。版を読まずに、受付中かも同時に分かる） */
+    .index("by_acceptingId", ["acceptingId"]),
 
   workRoles: defineTable({
     workId: v.id("works"),

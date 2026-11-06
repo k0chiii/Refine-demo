@@ -569,9 +569,19 @@ async function mentionItems(
   principal: Principal,
   visible: readonly Work[],
   now: Instant,
+  grantsOf: GrantsOf,
 ): Promise<DashboardItem[]> {
   const out: DashboardItem[] = [];
-  const titles = new Map(visible.map((w) => [w.id, w.title]));
+  // 渡された制作物（候補だけのこともある）に無い制作物は、通知に付いた ID から読んで見られるか確かめる
+  const titles = new Map<string, string | null>(visible.map((w) => [w.id, w.title]));
+  const titleOf = async (workId: string): Promise<string | null> => {
+    if (titles.has(workId)) return titles.get(workId)!;
+    const work = await ctx.works.findById(workId).catch(() => null);
+    const title =
+      work && (await canView(ctx, principal, work, await grantsOf(work.id))) ? work.title : null;
+    titles.set(workId, title);
+    return title;
+  };
   const goneThreads = new Map<string, boolean>();
   const isCommentGone = async (n: { threadId?: string }): Promise<boolean> => {
     if (n.threadId === undefined) return false;
@@ -587,12 +597,14 @@ async function mentionItems(
     if (out.length >= dashboardPolicy.mentionsMax) break;
     if (!dashboardPolicy.mentionKinds.includes(n.kind)) continue;
     if (now - n.createdAt > dashboardPolicy.mentionsWithinMs) continue;
-    if (!n.workId || !titles.has(n.workId)) continue;
+    if (!n.workId) continue;
+    const workTitle = await titleOf(n.workId);
+    if (workTitle === null) continue;
     // 削除されたコメントへの通知は出さない（本文を伏せ、飛び先も無い）
     if (await isCommentGone(n)) continue;
     out.push({
       workId: n.workId,
-      workTitle: titles.get(n.workId)!,
+      workTitle,
       revisionId: n.revisionId ?? null,
       revisionLabel: null,
       deadlineAt: null,
@@ -691,7 +703,7 @@ export async function buildDashboard(
   for (const list of Object.values(mine)) list.sort(byDeadline);
   sortBacklog(parts.backlog);
   const { upcoming, nextDeadline } = deadlinesAhead(parts.deadlines, now);
-  const mentions = await mentionItems(ctx, principal, visible, now);
+  const mentions = await mentionItems(ctx, principal, visible, now, grantsOf);
   return {
     mine,
     done: tasks.done,
@@ -770,7 +782,7 @@ export async function buildMakeDashboard(
     ).sort(byDeadline),
     respond: respond.sort(byDeadline),
     works: openRows(parts.rows),
-    mentions: await mentionItems(ctx, principal, visible, now),
+    mentions: await mentionItems(ctx, principal, visible, now, grantsOf),
   };
 }
 
