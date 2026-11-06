@@ -5,6 +5,7 @@ import { createSqliteContext } from "../sqlite/context.ts";
 import { migrate } from "../sqlite/schema.ts";
 import type { Sql } from "../sqlite/sql.ts";
 import { nodeSql } from "./context.ts";
+import { migrateCollab } from "../collab/store.ts";
 
 // app.test.ts と functions.test.ts が共有する、Durable Object の代わりの Node 上の App
 
@@ -18,6 +19,7 @@ export const UPLOAD_SECRET = "upload-secret-0123456789";
 export function fakeDb(wrap: (sql: Sql) => Sql = (s) => s, env: Record<string, string> = {}) {
   const raw = nodeSql();
   migrate(raw);
+  migrateCollab(raw);
   const sql = wrap(raw);
   /** テストが進める時計（期限・「今」を使う読みを確かめる）。既定は 2026-11-01 */
   const clock = { current: Date.UTC(2026, 10, 1) };

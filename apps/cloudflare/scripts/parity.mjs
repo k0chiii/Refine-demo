@@ -31,7 +31,7 @@ for (const module of modules) {
   if (!fs.existsSync(file)) continue;
   const src = fs.readFileSync(file, "utf8");
   for (const m of src.matchAll(
-    /^export const (\w+) = (internal)?(Query|Mutation|Action|query|mutation|action)\s*[(<]/gm,
+    /^export const (\w+) = (internal)?(Query|Mutation|Action|query|mutation|action|dashboardQuery)\s*[(<]/gm,
   )) {
     const kind = KIND[m[3].toLowerCase()];
     convex.set(`${module}:${m[1]}`, { kind, visibility: m[2] ? "internal" : "public" });

@@ -10,6 +10,7 @@ import { execute, tracked, type CallResult } from "./run.ts";
 import { createSqliteContext } from "./sqlite/context.ts";
 import { migrate } from "./sqlite/schema.ts";
 import { createAuthStore, migrateAuth, type AuthStore } from "./auth/store.ts";
+import { migrateCollab } from "./collab/store.ts";
 import type { Sql } from "./sqlite/sql.ts";
 
 /** Durable Object の SqlStorage を application のアダプタが使う最小の口に合わせる */
@@ -38,6 +39,7 @@ export class MF100Database extends DurableObject<Env> {
     // users の表ができてから、その上の subject の index（migrateAuth）。順番を入れ替えると落ちる
     migrate(this.sql);
     migrateAuth(this.sql);
+    migrateCollab(this.sql);
     this.authStore = createAuthStore(this.sql);
   }
 

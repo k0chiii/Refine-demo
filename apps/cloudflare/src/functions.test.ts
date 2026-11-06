@@ -3,6 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { functions, modules } from "./functions/index.ts";
 import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
+// 動的 import の変数展開は Vite の変換時の一覧に縛られる（後から足したファイルを知らない）。eager な glob なら同じ時点で揃う
+const files = import.meta.glob("./functions/*.ts", { eager: true }) as Record<string, unknown>;
+
 describe("登録表の形（全関数）", () => {
   const all = Object.entries(functions);
 
@@ -12,8 +15,10 @@ describe("登録表の形（全関数）", () => {
       expect(rest, name).toEqual([]);
       expect(module, name).toMatch(/^[a-zA-Z]+$/);
       expect(fn, name).toMatch(/^[a-zA-Z]+$/);
-      // ファイルが無ければ import が落ちる。出している名前も module と同じ（index の modules の鍵）
-      const file = (await import(`./functions/${module}.ts`)) as Record<string, unknown>;
+      // ファイルが無ければ glob に無い。出している名前も module と同じ（index の modules の鍵）
+      const file = files[`./functions/${module}.ts`] as Record<string, unknown> | undefined;
+      expect(file, name).toBeDefined();
+      if (!file) continue;
       expect(Object.keys((file[module] as object | undefined) ?? {}), name).toContain(name);
       expect(file[module], name).toBe(modules[module as keyof typeof modules]);
       expect(["query", "mutation", "action"], name).toContain(def.kind);

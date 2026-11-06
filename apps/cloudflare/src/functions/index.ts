@@ -2,6 +2,7 @@ import { acl } from "./acl.ts";
 import { admin } from "./admin.ts";
 import { approvals } from "./approvals.ts";
 import { checks } from "./checks.ts";
+import { collaboration } from "./collaboration.ts";
 import { commentFiles } from "./commentFiles.ts";
 import { comments } from "./comments.ts";
 import { comparisons } from "./comparisons.ts";
@@ -14,6 +15,7 @@ import { notation } from "./notation.ts";
 import { notificationPrefs } from "./notificationPrefs.ts";
 import { notifications } from "./notifications.ts";
 import { planInfo } from "./planInfo.ts";
+import { presence } from "./presence.ts";
 import { proofreading } from "./proofreading.ts";
 import { push } from "./push.ts";
 import { reviews } from "./reviews.ts";
@@ -30,6 +32,7 @@ export const modules = {
   admin,
   approvals,
   checks,
+  collaboration,
   commentFiles,
   comments,
   comparisons,
@@ -41,6 +44,7 @@ export const modules = {
   notificationPrefs,
   notifications,
   planInfo,
+  presence,
   proofreading,
   push,
   reviews,

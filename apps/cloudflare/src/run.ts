@@ -1,6 +1,7 @@
 import { DomainError } from "@mf100/domain";
 import { createSqliteContext } from "./sqlite/context.ts";
 import { FTS_TABLES, TABLES } from "./sqlite/schema.ts";
+import { collabTables } from "./collab/store.ts";
 import type { Sql } from "./sqlite/sql.ts";
 import { upsertUser } from "./sqlite/users.ts";
 import type { FnCtx } from "./functions/define.ts";
@@ -28,7 +29,11 @@ export interface Host {
 
 const WRITE = /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(\w+)"?/i;
 const READ = /\b(?:FROM|JOIN)\s+"?(\w+)"?/gi;
-const TABLE_NAMES: ReadonlySet<string> = new Set([...TABLES.map((t) => t.name), ...FTS_TABLES]);
+const TABLE_NAMES: ReadonlySet<string> = new Set([
+  ...TABLES.map((t) => t.name),
+  ...FTS_TABLES,
+  ...collabTables,
+]);
 
 /**
  * 書いた表と読んだ表の名前を集める。読みは `FROM <表>` / `JOIN <表>` を拾う（json_each(...) は表ではないので、
