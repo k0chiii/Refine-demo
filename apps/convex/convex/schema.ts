@@ -228,11 +228,6 @@ export default defineSchema({
 
   works: defineTable({
     rolesVersion: v.optional(v.number()),
-    /**
-     * 廃止（2026-11-06）。検索の token は `workSearch` に移した。読み書きしない。
-     * 移行 `migrations:moveWorkSearchTokens` を流す前の行の検証を通すためだけに残す（流し終えたら外す）
-     */
-    searchTokens: v.optional(v.string()),
     /** `workSearch` に検索の行を作った印（1）。無い行は移行前で、検索は works を順に読んで拾う */
     searchVersion: v.optional(v.number()),
     aggregateVersion: v.optional(v.number()),

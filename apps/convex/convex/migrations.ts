@@ -50,16 +50,17 @@ export const backfillRevisionPlannedAt = migrations.define({
 });
 
 /**
- * works.searchTokens → workSearch（2026-11-06。docs/DECISIONS.md「検索の token を別の表に」）。
- * 制作物ごとに検索の行を作り（今の題名などから作り直す）、works から token を外して印 searchVersion を付ける。
+ * 検索の行（workSearch）を揃える（2026-11-06。docs/DECISIONS.md「検索の token を別の表に」）。
+ * 制作物ごとに検索の行を作り（今の題名などから作り直す）、印 searchVersion を付ける。works の searchTokens の欄は
+ * この移行を流したあとで外した（同日）。検索の行が無い制作物（シードなど）を揃えるのにも使える。
  * 業務の version は変えない。Idempotent。Operator-approved only: run after deploy, never as part of deployment.
  */
 export const moveWorkSearchTokens = migrations.define({
   table: "works",
   migrateOne: async (ctx, doc) => {
     await syncWorkSearch(ctx.db, workFromDoc(doc));
-    if (doc.searchTokens !== undefined || doc.searchVersion !== WORK_SEARCH_VERSION)
-      await ctx.db.patch(doc._id, { searchTokens: undefined, searchVersion: WORK_SEARCH_VERSION });
+    if (doc.searchVersion !== WORK_SEARCH_VERSION)
+      await ctx.db.patch(doc._id, { searchVersion: WORK_SEARCH_VERSION });
   },
 });
 
