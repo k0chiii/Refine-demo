@@ -18,6 +18,8 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@mf100/convex": "workspace:*",
+    "convex-test": "0.0.61",
     "typescript": "5.9.3",
     "vite-plus": "1.2.0",
     "wrangler": "^4.151.3"

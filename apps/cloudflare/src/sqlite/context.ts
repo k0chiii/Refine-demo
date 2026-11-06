@@ -125,11 +125,18 @@ export function createSqliteContext(
         const [u] = users.select("WHERE id = ?", id);
         return u?.name ?? null;
       },
-      // 名簿は users の全員。表示名の無い委員も数える（inMemory の members ∪ names と同じ）。email は名簿の一覧では返さない
+      // 名簿は users の全員。表示名の無い委員も数える（inMemory の members ∪ names と同じ）。
+      // Convex は nogikuSubject の無い行を除くが、ここの users はサインインでしか作られず（subject は必ず入る）、除いても結果は同じ。
+      // 除くと subject 無しで人を置くテストの土台（testing/context.ts）が通らなくなるので、除かない（ponytail:）
       listMembers: async (limit) =>
         sql
-          .exec("SELECT id, name FROM users ORDER BY rowid LIMIT ?", limit)
-          .map((r) => ({ id: r.id as string, name: (r.name as string | null) ?? "", email: null })),
+          .exec("SELECT id, name, email, nameKanji FROM users ORDER BY rowid LIMIT ?", limit)
+          .map((r) => ({
+            id: r.id as string,
+            name: (r.name as string | null) ?? "",
+            email: (r.email as string | null) ?? null,
+            ...(r.nameKanji === null ? {} : { nameKanji: r.nameKanji as string }),
+          })),
       profiles: async (ids) => {
         const rows = sql.exec(
           "SELECT id, name, email, nameKanji FROM users WHERE id IN (SELECT value FROM json_each(?)) ORDER BY rowid",
@@ -424,17 +431,17 @@ export function createSqliteContext(
         schedule?.({ kind: "deliver", notificationId: row.id });
         return row;
       },
-      // 同じ時刻の通知は追加順のまま（inMemory の安定ソートと同じ）
+      // 同じ時刻の通知は新しく入れた方が先（Convex は索引の末尾が _creationTime なので、降順なら後から入れた方が先に来る）
       listForUser: async (userId, limit) =>
         notifications.select(
-          "WHERE recipientId = ? ORDER BY createdAt DESC, rowid LIMIT ?",
+          "WHERE recipientId = ? ORDER BY createdAt DESC, rowid DESC LIMIT ?",
           userId,
           limit,
         ),
       listUnreadForUser: async (userId, { createdAtOrBefore, limit, order = "asc" }) =>
         notifications.select(
           `WHERE recipientId = ? AND readAt IS NULL AND (? IS NULL OR createdAt <= ?)
-           ORDER BY createdAt ${order === "asc" ? "ASC" : "DESC"}, rowid LIMIT ?`,
+           ORDER BY createdAt ${order === "asc" ? "ASC" : "DESC"}, rowid ${order === "asc" ? "ASC" : "DESC"} LIMIT ?`,
           userId,
           createdAtOrBefore ?? null,
           createdAtOrBefore ?? null,
