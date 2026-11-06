@@ -534,6 +534,7 @@ export interface DecideThreadInput {
 
 /**
  * コメントの採否判断（C4 / F-07 / A-07）。制作者または明示委任（edit）のみ。
+ * 「解決」（resolved）だけは校了者もできる（comment.resolve。利用者指示 2026-11-06「校了者もコメント閉じれるように（解決のみ）」）。
  * 旧版の受付終了後でも処置記録は可能（D5 暫定）。校了済み作品では不可（A-09）。
  */
 export async function decideThread(
@@ -545,7 +546,12 @@ export async function decideThread(
   if (!thread) throw new DomainError("forbidden", { threadId: input.threadId });
   const revision = await ctx.revisions.findById(thread.revisionId);
   if (!revision) throw new DomainError("forbidden", { threadId: input.threadId });
-  const { work } = await loadAuthorizedWork(ctx, principal, revision.workId, "comment.decide");
+  const { work } = await loadAuthorizedWork(
+    ctx,
+    principal,
+    revision.workId,
+    input.action === "resolved" ? "comment.resolve" : "comment.decide",
+  );
   if (work.lifecycle === "finalized")
     throw new DomainError("work_already_finalized", { workId: work.id });
 
