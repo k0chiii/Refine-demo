@@ -334,30 +334,30 @@ pnpm dev --port 8790     # .dev.vars に AUTH_PRIVATE_KEY_JWK が無ければ作
 
 名前は Convex 側と同じ（値をそのまま持ってこられる）。秘密は `wrangler secret put` か手元の `.dev.vars`。`wrangler.jsonc` の `vars` は手元の既定で、本番の環境（`env.production`）はまだ無い（DO の binding と vars は環境に引き継がれないので、足すときに書き直す）。
 
-| 名前                                                                           | 種類   | 用途                                                                                         |
-| ------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------- |
-| `SITE_URL`                                                                     | var    | この Worker の origin。JWT の iss、OIDC の redirect_uri（`${SITE_URL}/auth/callback`）、JWKS |
-| `FRONTEND_URL`                                                                 | var    | サインイン後に戻す web の origin。メール・Slack のリンクの前につく                           |
-| `ALLOWED_ORIGINS`                                                              | var    | CORS で許す origin（カンマ区切り）                                                           |
-| `DEV_IDENTITY`                                                                 | var    | `allow` のときだけ `X-MF100-Identity` を受ける。本番は `deny`                                |
-| `MF100_SYSTEM_ADMIN_SUBJECTS`                                                  | var    | 初回ログインで校正システム管理者にする Nogiku の sub（カンマ区切り）                         |
-| `NOGIKU_MOCK_ENABLED`                                                          | var    | `true` でモックのサインインだけが使える。本番は必ず `false`                                  |
-| `AUTH_PRIVATE_KEY_JWK`                                                         | secret | ES256 の秘密鍵（JWK）。`node scripts/auth-keygen.mjs` が出す                                 |
-| `NOGIKU_CLIENT_ID` / `NOGIKU_CLIENT_SECRET` / `NOGIKU_ISSUER`                  | secret | Nogiku の OIDC。`${NOGIKU_ISSUER}/.well-known/openid-configuration` を読む                   |
-| `NOGIKU_ACCESS_API_URL` / `NOGIKU_ACCESS_ORG_SLUG` / `NOGIKU_ACCESS_SYSTEM_ID` | secret | 組織権限。3 つ揃ったときだけ有効（`NOGIKU_ACCESS_ENABLED` で切る）                           |
-| `ACCESS_TEAM` / `ACCESS_AUDIENCE`                                              | secret | Cloudflare Access で守るとき                                                                 |
-| `MF100_UPLOAD_SECRET`                                                          | secret | apps/api が提出・添付の転送で使う。16 文字以上。`X-MF100-Service-Key` で渡る                 |
-| `MF100_CLEANUP_SECRET`                                                         | secret | R2 の清掃。16 文字以上。Bearer                                                               |
+| 名前                                                                           | 種類   | 用途                                                                                                                                   |
+| ------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `SITE_URL`                                                                     | var    | この Worker の origin。JWT の iss、OIDC の redirect_uri（`${SITE_URL}/auth/callback`）、JWKS                                           |
+| `FRONTEND_URL`                                                                 | var    | サインイン後に戻す web の origin。メール・Slack のリンクの前につく                                                                     |
+| `ALLOWED_ORIGINS`                                                              | var    | CORS で許す origin（カンマ区切り）                                                                                                     |
+| `DEV_IDENTITY`                                                                 | var    | `allow` のときだけ `X-MF100-Identity` を受ける。本番は `deny`                                                                          |
+| `MF100_SYSTEM_ADMIN_SUBJECTS`                                                  | var    | 初回ログインで校正システム管理者にする Nogiku の sub（カンマ区切り）                                                                   |
+| `NOGIKU_MOCK_ENABLED`                                                          | var    | `true` でモックのサインインだけが使える。本番は必ず `false`                                                                            |
+| `AUTH_PRIVATE_KEY_JWK`                                                         | secret | ES256 の秘密鍵（JWK）。`node scripts/auth-keygen.mjs` が出す                                                                           |
+| `NOGIKU_CLIENT_ID` / `NOGIKU_CLIENT_SECRET` / `NOGIKU_ISSUER`                  | secret | Nogiku の OIDC。`${NOGIKU_ISSUER}/.well-known/openid-configuration` を読む                                                             |
+| `NOGIKU_ACCESS_API_URL` / `NOGIKU_ACCESS_ORG_SLUG` / `NOGIKU_ACCESS_SYSTEM_ID` | secret | 組織権限。3 つ揃ったときだけ有効（`NOGIKU_ACCESS_ENABLED` で切る）                                                                     |
+| `ACCESS_TEAM` / `ACCESS_AUDIENCE`                                              | secret | Cloudflare Access で守るとき                                                                                                           |
+| `MF100_UPLOAD_SECRET`                                                          | secret | apps/api が提出・添付の転送で使う。16 文字以上。`X-MF100-Service-Key` で渡る                                                           |
+| `MF100_CLEANUP_SECRET`                                                         | secret | R2 の清掃。16 文字以上。Bearer                                                                                                         |
 | `MF100_IMPORT_SECRET`                                                          | secret | `/internal/import`（データ移行の間だけ）。清掃の秘密とは分ける（apps/api が持つ秘密で管理者の行を書けないように）。16 文字以上。Bearer |
-| `PROCESSING_SECRET`                                                            | secret | `/internal/processing`。32 文字以上。Bearer                                                  |
-| `PROCESSING_ENABLED` / `PROCESSING_CAPABILITIES`                               | var    | ファイル処理を受けるか（`true`）と、受ける kind（カンマ区切り）                              |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`                     | secret | Web Push。揃わなければ送らない                                                               |
-| `RESEND_API_KEY` / `NOTIFY_EMAIL_FROM`                                         | secret | メール。`FRONTEND_URL` も要る                                                                |
-| `SLACK_BASE_URL`                                                               | secret | Slack（めいちゃん）の入口。`FRONTEND_URL` も要る                                             |
-| `AI_PROVIDER` / `AI_MODEL` / `AI_MAX_CHARS` / `AI_PROOFREAD_ENABLED`           | var    | AI 校正。提供元は `anthropic`（既定）か `workers-ai`。`AI_PROOFREAD_ENABLED=false` で止める  |
-| `ANTHROPIC_API_KEY` / `AI_GATEWAY_URL`                                         | secret | Anthropic のキーと、経由する Gateway                                                         |
-| `WORKERS_AI_URL` / `WORKERS_AI_SECRET`                                         | secret | apps/api の `/internal/ai/*`（Workers AI の代理と埋め込み）。32 文字以上                     |
-| `RULE_EMBEDDINGS_ENABLED`                                                      | var    | `true` のときだけルールの埋め込みの索引づけを積む                                            |
+| `PROCESSING_SECRET`                                                            | secret | `/internal/processing`。32 文字以上。Bearer                                                                                            |
+| `PROCESSING_ENABLED` / `PROCESSING_CAPABILITIES`                               | var    | ファイル処理を受けるか（`true`）と、受ける kind（カンマ区切り）                                                                        |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`                     | secret | Web Push。揃わなければ送らない                                                                                                         |
+| `RESEND_API_KEY` / `NOTIFY_EMAIL_FROM`                                         | secret | メール。`FRONTEND_URL` も要る                                                                                                          |
+| `SLACK_BASE_URL`                                                               | secret | Slack（めいちゃん）の入口。`FRONTEND_URL` も要る                                                                                       |
+| `AI_PROVIDER` / `AI_MODEL` / `AI_MAX_CHARS` / `AI_PROOFREAD_ENABLED`           | var    | AI 校正。提供元は `anthropic`（既定）か `workers-ai`。`AI_PROOFREAD_ENABLED=false` で止める                                            |
+| `ANTHROPIC_API_KEY` / `AI_GATEWAY_URL`                                         | secret | Anthropic のキーと、経由する Gateway                                                                                                   |
+| `WORKERS_AI_URL` / `WORKERS_AI_SECRET`                                         | secret | apps/api の `/internal/ai/*`（Workers AI の代理と埋め込み）。32 文字以上                                                               |
+| `RULE_EMBEDDINGS_ENABLED`                                                      | var    | `true` のときだけルールの埋め込みの索引づけを積む                                                                                      |
 
 サービス秘密が未設定・短いときは、それで守られた関数と口が 404 になる（在ることも教えない）。
 
