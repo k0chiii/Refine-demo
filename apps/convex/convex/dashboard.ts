@@ -7,7 +7,7 @@ import {
 } from "@mf100/application";
 import { isAccepting, overridesAllPermissions, type Principal, type Work } from "@mf100/domain";
 import type { Id } from "./_generated/dataModel";
-import { query, type DatabaseReader } from "./_generated/server";
+import { internalQuery, query, type DatabaseReader, type QueryCtx } from "./_generated/server";
 import { createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
@@ -19,18 +19,25 @@ type Candidates = (db: DatabaseReader, principal: Principal) => Promise<Work[]>;
  * 自分が関わる制作物から、ダッシュボードの節を作る問い合わせ。candidates は節に行が出うる制作物の読み方。
  * 全件（制作物の状況）以外は索引から候補だけを読む: 読む量が減り、関係のない制作物の書込みで購読が再実行されない
  */
-function dashboardQuery<T>(
+function dashboardHandler<T>(
   build: (ctx: AppContext, principal: Principal, works: Work[]) => Promise<T>,
   candidates: Candidates = listMyWorks,
 ) {
-  return query({
+  return {
     args: {},
-    handler: async (ctx): Promise<T> => {
+    handler: async (ctx: QueryCtx): Promise<T> => {
       const { principal } = await requireUser(ctx);
       const works = await candidates(ctx.db, principal);
       return runUseCase(() => build(createReadContext(ctx.db), principal, works));
     },
-  });
+  };
+}
+
+function dashboardQuery<T>(
+  build: (ctx: AppContext, principal: Principal, works: Work[]) => Promise<T>,
+  candidates?: Candidates,
+) {
+  return query(dashboardHandler(build, candidates));
 }
 
 /** システム管理者はすべての操作ができるので全件。それ以外は職責・割当・許可から（{@link listWorksRelatedTo}） */
@@ -42,10 +49,11 @@ const related =
       : listWorksRelatedTo(db, principal, { assignments });
 
 /**
- * ダッシュボード（U-00）の全部の節。画面は節ごとの check・make・works を読む。
- * 配信済みの古い画面（SW のキャッシュ）が呼ぶので、次のリリースまで残す
+ * ダッシュボード（U-00）の全部の節。画面は節ごとの check・make・works を読み、これは呼ばない。
+ * 古い画面（SW のキャッシュ）からの呼び出しで全件読みが続いていたので、外からは呼べないようにした（利用者決定 2026-11-06）。
+ * 各節がこの全部入りの同じ節と一致することを確かめるテストのためだけに、内部の問い合わせとして残す
  */
-export const get = dashboardQuery(buildDashboard);
+export const get = internalQuery(dashboardHandler(buildDashboard));
 
 /** 校正の入口と `/` の振り分け: 校正する・専門確認・校了・割り当てると、自分の分が終わったもの */
 export const check = dashboardQuery(buildCheckDashboard, related(true));
