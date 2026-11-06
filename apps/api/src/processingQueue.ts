@@ -1,4 +1,5 @@
 import type { Id } from "@mf100/convex/dataModel";
+import { backendSiteUrl } from "./env";
 import { processingGateway } from "./processingGateway";
 import type { ProcessingEnv } from "./processFileJob";
 
@@ -24,7 +25,7 @@ export async function consumeProcessingQueue(
       continue;
     }
     try {
-      const info = await processingGateway(env.CONVEX_SITE_URL, env.PROCESSING_SECRET)("inspect", {
+      const info = await processingGateway(backendSiteUrl(env), env.PROCESSING_SECRET)("inspect", {
         jobId: id as Id<"processingJobs">,
       });
       if (info.job.state !== "ready") {

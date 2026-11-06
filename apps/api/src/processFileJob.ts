@@ -1,5 +1,5 @@
 import puppeteer from "@cloudflare/puppeteer";
-import type { Bindings } from "./env";
+import { backendSiteUrl, type Bindings } from "./env";
 import { createFigmaClient } from "./adapters/figmaClient";
 import { outputKey, publicSnapshotUrl } from "./processingSecurity";
 import { processingGateway } from "./processingGateway";
@@ -46,7 +46,7 @@ async function putDerived(
 }
 
 export async function processFileJob(env: ProcessingEnv, id: string): Promise<void> {
-  const service = processingGateway(env.CONVEX_SITE_URL, env.PROCESSING_SECRET);
+  const service = processingGateway(backendSiteUrl(env), env.PROCESSING_SECRET);
   const jobId = id as Id<"processingJobs">;
   const info = await service("inspect", { jobId });
   if (info.job.state === "ready") return;
