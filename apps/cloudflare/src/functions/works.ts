@@ -166,7 +166,9 @@ export const works = {
     }),
     handler: async (ctx, args) => {
       const work = await updateWork(ctx.db, ctx.principal!, args);
-      // ponytail: registeredPlanInfo を変えたときの planInfo.sync（scheduler.runAfter）は、alarm の単位でまとめて移す
+      // 登録情報を変えたら、本文との照合をあとで流す（decision 72。本人の権限で）
+      if (args.patch.registeredPlanInfo !== undefined)
+        ctx.schedule({ kind: "planInfoSync", workId: args.workId, userId: ctx.userId! });
       return work.version;
     },
   }),

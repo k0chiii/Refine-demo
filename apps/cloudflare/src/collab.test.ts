@@ -33,6 +33,7 @@ function world() {
     userId: principal.userId,
     env: {} as Env,
     now: () => mem.clock.now(),
+    schedule: () => {},
   });
   const newWork = (mediaType: "document" | "sns" = "document") =>
     createWork(mem, principals.manager, {

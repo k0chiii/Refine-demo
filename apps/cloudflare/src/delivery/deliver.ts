@@ -10,7 +10,12 @@ import {
   slackLookupTarget,
 } from "@mf100/application";
 import type { DeliveryChannel, DestinationKey, RejectReason, SendOutcome } from "@mf100/domain";
-import { type DeliveryConfig, deliveryConfigFromEnv, deliveryEnvOf } from "./channels.ts";
+import {
+  type DeliveryConfig,
+  type DeliveryVars,
+  deliveryConfigFromEnv,
+  deliveryEnvOf,
+} from "./channels.ts";
 import { sendEmail } from "./email.ts";
 import { type Fetch, type Sleep, sleepFor } from "./http.ts";
 import { type MeichanConfig, resolveSlackMember, sendSlackDm } from "./slack.ts";
@@ -74,7 +79,7 @@ interface Attempt {
 export async function deliverNotification(
   ctx: AppContext,
   notificationId: string,
-  env: Record<string, string | undefined>,
+  env: DeliveryVars,
   io: DeliveryIo,
 ): Promise<DeliveryResult> {
   const config = deliveryConfigFromEnv(env);
@@ -226,7 +231,7 @@ export type ResolveSlackResult =
 export async function resolveSlackForUser(
   ctx: AppContext,
   userId: string,
-  env: Record<string, string | undefined>,
+  env: DeliveryVars,
   io: Pick<DeliveryIo, "fetch" | "sleep">,
 ): Promise<ResolveSlackResult> {
   const slack = deliveryConfigFromEnv(env).slack;

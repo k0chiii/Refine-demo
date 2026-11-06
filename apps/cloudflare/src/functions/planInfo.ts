@@ -4,7 +4,7 @@ import { z } from "zod";
 import { mutation, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
 
-// apps/convex/convex/planInfo.ts の写し（sync は alarm から呼ばれる内部関数で U6）
+// apps/convex/convex/planInfo.ts の写し（sync は alarm の仕事 planInfoSync。src/jobs.ts）
 
 export const planInfo = {
   /**

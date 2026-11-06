@@ -51,8 +51,17 @@ export function createApp(deps: AppDeps) {
     .get("/health", (c) => c.json({ ok: true }))
     .get("/ws", async (c) => {
       if (c.req.header("Upgrade") !== "websocket") return c.text("Expected WebSocket", 426);
-      if (!(await deps.identify(c.req.raw))) return c.text("Unauthorized", 401);
-      return deps.db().fetch(c.req.raw);
+      // ブラウザの WebSocket はヘッダを付けられない。?token= を Authorization: Bearer と同じに扱う（URL にはログに残るので、渡す前に外す）
+      const url = new URL(c.req.url);
+      const token = url.searchParams.get("token");
+      let request = c.req.raw;
+      if (token) {
+        url.searchParams.delete("token");
+        request = new Request(url, request);
+        request.headers.set("Authorization", `Bearer ${token}`);
+      }
+      if (!(await deps.identify(request))) return c.text("Unauthorized", 401);
+      return deps.db().fetch(request);
     })
     .post("/f/:name", async (c) => {
       const name = c.req.param("name");

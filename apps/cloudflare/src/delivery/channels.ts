@@ -19,7 +19,21 @@ export interface DeliveryConfig {
   origin: string | null;
 }
 
-export function deliveryConfigFromEnv(env: Record<string, string | undefined>): DeliveryConfig {
+/** 配信が読む env の項目。Worker の Env も素のオブジェクトも渡せるよう、読む名前だけを並べる */
+export type DeliveryVars = Partial<
+  Record<
+    | "FRONTEND_URL"
+    | "RESEND_API_KEY"
+    | "NOTIFY_EMAIL_FROM"
+    | "SLACK_BASE_URL"
+    | "VAPID_PUBLIC_KEY"
+    | "VAPID_PRIVATE_KEY"
+    | "VAPID_SUBJECT",
+    string | undefined
+  >
+>;
+
+export function deliveryConfigFromEnv(env: DeliveryVars): DeliveryConfig {
   const origin = httpUrlOf(env.FRONTEND_URL);
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.NOTIFY_EMAIL_FROM?.trim();

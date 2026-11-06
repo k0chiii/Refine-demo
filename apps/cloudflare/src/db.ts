@@ -6,8 +6,8 @@ import {
   remindUpcomingDeadlines,
 } from "@mf100/application";
 import type { Identity } from "./identity.ts";
-import { execute, tracked, type CallResult } from "./run.ts";
-import { createSqliteContext } from "./sqlite/context.ts";
+import { createJobContext, nextJobAt, runDueJobs } from "./jobs.ts";
+import { execute, tracked, type CallResult, type Host } from "./run.ts";
 import { migrate } from "./sqlite/schema.ts";
 import { createAuthStore, migrateAuth, type AuthStore } from "./auth/store.ts";
 import { migrateCollab } from "./collab/store.ts";
@@ -27,6 +27,7 @@ function durableSql(storage: SqlStorage): Sql {
  *   途中で投げたら何も残らない。入力ゲートがあるので同時に走る呼び出しは無く、Convex の mutation と同じ直列化になる。
  *   query は読んだ表の名前を返す
  * - WebSocket: 書き込みのあと、書いたテーブル名を配る。受け手は関係する読み直しをする
+ * - alarm: あとで動く仕事（src/jobs.ts の jobs 表）。外への通知の配信・やり直しもここ
  * ponytail: DO 1 つ = 書き込みが全体で直列。足りなくなったら年度や制作物で分ける
  */
 export class MF100Database extends DurableObject<Env> {
@@ -52,35 +53,39 @@ export class MF100Database extends DurableObject<Env> {
     return (await fn.call(this.authStore, ...args)) as Awaited<ReturnType<AuthStore[K]>>;
   }
 
+  private get host(): Host {
+    return {
+      sql: this.sql,
+      env: this.env,
+      now: () => Date.now(),
+      // DomainError も transaction の外へ出す。そうしないと途中までの書き込みが commit される
+      transaction: (fn) => this.ctx.storage.transaction(fn),
+    };
+  }
+
   async call(
     name: string,
     identity: Identity | null,
     args: unknown,
     serviceOk: boolean,
   ): Promise<CallResult> {
-    const { result, touched } = await execute(
-      {
-        sql: this.sql,
-        env: this.env,
-        now: () => Date.now(),
-        // DomainError も transaction の外へ出す。そうしないと途中までの書き込みが commit される
-        transaction: (fn) => this.ctx.storage.transaction(fn),
-      },
-      name,
-      identity,
-      args,
-      serviceOk,
-    );
+    const { result, touched } = await execute(this.host, name, identity, args, serviceOk);
     this.notify(touched);
+    // query は書かない。mutation が仕事を積んだかもしれないので、alarm を立て直す（巻き戻っていれば何も増えていない）
+    if (!(result.ok && result.reads)) await this.armAlarm(nextJobAt(this.sql));
     return result;
   }
 
-  /** cron（毎分）。Convex の crons.ts の配分: 受付終了は毎分、残りは毎時 */
+  /**
+   * cron（毎分）。Convex の crons.ts の配分: 受付終了は毎分、残りは毎時。あとで動く仕事の取りこぼしも毎分拾う。
+   * U7: aiWorkflow.expire（5 分ごと）と processing.expire（毎時）は、表ができたらここに足す
+   */
   async runJobs(at: Date): Promise<void> {
     const touched = new Set<string>();
-    const ctx = createSqliteContext(tracked(this.sql, touched), {
-      clock: { now: () => at.getTime() },
-    });
+    const ctx = createJobContext(
+      { sql: this.sql, env: this.env, now: () => at.getTime() },
+      tracked(this.sql, touched),
+    );
     await this.ctx.storage.transaction(async () => {
       await closeExpiredReviews(ctx);
       if (at.getUTCMinutes() !== 0) return;
@@ -89,6 +94,39 @@ export class MF100Database extends DurableObject<Env> {
       await expireCommentFiles(ctx);
     });
     this.notify(touched);
+    // alarm が落ちていても、毎分ここで拾う
+    await this.drainJobs();
+  }
+
+  /** alarm: 期限の来た仕事を動かし、残りがあれば次の alarm を立てる */
+  override async alarm(): Promise<void> {
+    await this.drainJobs();
+  }
+
+  /**
+   * 仕事を動かす。alarm と cron が重なると同じ仕事を二重に送るので、動いている間は後から来たものは何もしない
+   * （残りは今動いているものが拾い、最後に次の alarm を立てる）
+   */
+  private draining = false;
+  private async drainJobs(): Promise<void> {
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      const { nextRunAt, touched } = await runDueJobs(
+        this.host,
+        { fetch: (input, init) => fetch(input, init) },
+        Date.now(),
+      );
+      this.notify(touched);
+      await this.armAlarm(nextRunAt);
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  /** 次の仕事の時刻に alarm を立てる（過ぎていれば今）。仕事が無ければ立てない */
+  private async armAlarm(nextRunAt: number | null): Promise<void> {
+    if (nextRunAt !== null) await this.ctx.storage.setAlarm(Math.max(nextRunAt, Date.now()));
   }
 
   /** WebSocket の受け付け（休止 API。接続中は DO が寝ても切れない） */

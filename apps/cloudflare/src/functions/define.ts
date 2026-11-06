@@ -1,6 +1,7 @@
 import type { AppContext } from "@mf100/application";
 import type { Principal } from "@mf100/domain";
 import type { z } from "zod";
+import type { Job } from "../jobs.ts";
 import type { Sql } from "../sqlite/sql.ts";
 
 export type Kind = "query" | "mutation" | "action";
@@ -27,6 +28,8 @@ export interface FnCtx {
   userId: string | null;
   env: Env;
   now: () => number;
+  /** あとで動く仕事を、この呼び出しと同じトランザクションで積む（巻き戻れば消える。src/jobs.ts） */
+  schedule: (job: Job) => void;
 }
 
 export interface FnDef<A = unknown, R = unknown> {

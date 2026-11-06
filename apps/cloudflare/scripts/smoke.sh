@@ -58,6 +58,13 @@ setTimeout(() => { console.log("FAIL ws: no message within 5s"); process.exit(1)
 ' "$base" '{"subject":"u_manager"}' "$id"
 assert "$(call home:pinned "$me" "{\"workId\":\"$id\"}")" 200 "home:pinned -> 200"
 assert_field value true "pinned"
+# あとで動く仕事: 端末を登録して通知を 1 件作ると、alarm が配信の仕事を動かす。VAPID_* を --var で渡して起こしたときだけ、
+# wrangler dev のログに delivery_report が出る（端末の宛先は引けない名前なので retry のまま 4 回で job_gave_up になる。外へは送らない）。
+# 渡さなかったときは仕事が積まれず、ログには何も出ない
+notifier="{\"subject\":\"u_notify_$RANDOM\",\"name\":\"通知\"}"
+keys=$(node -e 'const c=require("crypto");const d=c.createECDH("prime256v1");d.generateKeys();console.log(JSON.stringify({p256dh:d.getPublicKey().toString("base64url"),auth:c.randomBytes(16).toString("base64url")}))')
+assert "$(call push:subscribe "$notifier" "{\"endpoint\":\"https://smoke-nxdomain.push.services.mozilla.com/x\",\"p256dh\":$(node -p 'JSON.stringify(JSON.parse(process.argv[1]).p256dh)' "$keys"),\"auth\":$(node -p 'JSON.stringify(JSON.parse(process.argv[1]).auth)' "$keys")}")" 200 "push:subscribe -> 200"
+assert "$(call notifications:sendTest "$notifier" '{}')" 200 "notifications:sendTest -> 200 (queues a delivery job when VAPID_* are set)"
 # cron の入口（wrangler dev の scheduled handler）
 assert "$(curl -s -o "$body" -w '%{http_code}' "$base/cdn-cgi/handler/scheduled?cron=0+*+*+*+*")" 200 "scheduled handler (hourly jobs)"
 echo "all ok (work $id)"

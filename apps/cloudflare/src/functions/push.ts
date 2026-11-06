@@ -12,8 +12,7 @@ export const push = {
     auth: "user",
     args: object({}),
     handler: async (ctx) => {
-      // ponytail: wrangler types の Env に秘密は出ない（VAPID_* は未宣言）。delivery と同じく、型を緩めて名前で読む
-      const keys = vapidKeysFromEnv(ctx.env as unknown as Record<string, string | undefined>);
+      const keys = vapidKeysFromEnv(ctx.env);
       return keys ? { publicKey: keys.publicKey } : null;
     },
   }),

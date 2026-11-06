@@ -125,6 +125,10 @@ export const TABLES: readonly TableSpec[] = [
   { name: "notificationCounters" },
   { name: "audit", keyless: true },
   { name: "idempotency" },
+  // あとで動く仕事（src/jobs.ts）。ユースケースと同じトランザクションで積むので、巻き戻れば消える。id は仕事ごと
+  { name: "jobs", cols: ["kind", "runAt"], indexes: [["runAt"]] },
+  // 仕事の側の小さな状態（Slack の DM の枠など）。id は項目名
+  { name: "meta" },
 ];
 
 function createTable(t: TableSpec): string {

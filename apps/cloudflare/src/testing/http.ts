@@ -1,5 +1,6 @@
 import { createApp } from "../app.ts";
 import { devIdentifier } from "../identity.ts";
+import { type JobIo, nextJobAt, runDueJobs } from "../jobs.ts";
 import { execute, type Host } from "../run.ts";
 import { createSqliteContext } from "../sqlite/context.ts";
 import { migrate } from "../sqlite/schema.ts";
@@ -8,6 +9,16 @@ import { nodeSql } from "./context.ts";
 import { migrateCollab } from "../collab/store.ts";
 
 // app.test.ts と functions.test.ts が共有する、Durable Object の代わりの Node 上の App
+
+/** jobs 表の 1 行の中身（src/jobs.ts の JobDoc） */
+interface JobDoc {
+  kind: string;
+  payload: Record<string, unknown>;
+  runAt: number;
+  attempts: number;
+  lastError?: string;
+  createdAt: number;
+}
 
 export const UPLOAD_SECRET = "upload-secret-0123456789";
 
@@ -41,8 +52,20 @@ export function fakeDb(wrap: (sql: Sql) => Sql = (s) => s, env: Record<string, s
     },
   };
   const notified: string[][] = [];
+  /** WebSocket の受け付け（fetch）に届いた Request */
+  const upgrades: Request[] = [];
   return {
     clock,
+    host,
+    /** あとで動く仕事（jobs 表）を古い順に覗く */
+    jobs: () =>
+      raw
+        .exec("SELECT id, doc FROM jobs ORDER BY runAt, rowid")
+        .map((r) => ({ id: r.id as string, ...(JSON.parse(r.doc as string) as JobDoc) })),
+    /** alarm の代わり: 期限の来た仕事を、時計の「今」で動かす */
+    runDue: (io: JobIo, limit?: number) => runDueJobs(host, io, clock.current, limit),
+    nextJobAt: () => nextJobAt(raw),
+    upgrades,
     /** 派生表を直に覗く・壊す用（追跡も巻き戻しも通さない） */
     sql: raw,
     /** テストが結果を覗く用（アプリを通さない） */
@@ -58,7 +81,11 @@ export function fakeDb(wrap: (sql: Sql) => Sql = (s) => s, env: Record<string, s
       notified.push([...touched].sort());
       return result;
     },
-    fetch: async () => new Response(null, { status: 101 }),
+    fetch: async (request: Request) => {
+      upgrades.push(request);
+      // Node の Response は 101 を作れない。DO は 101 で返すが、ここでは「受け付けた」印に 200 を返す
+      return new Response("upgraded");
+    },
   };
 }
 

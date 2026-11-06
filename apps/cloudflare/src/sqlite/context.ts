@@ -51,6 +51,7 @@ import {
   threadCountsMayChange,
 } from "./derived.ts";
 import { Docs, keyOf, randomId, Rows, type NewId } from "./docs.ts";
+import type { Job } from "../jobs.ts";
 import type { Sql } from "./sql.ts";
 
 /**
@@ -61,7 +62,11 @@ import type { Sql } from "./sql.ts";
  *
  * ponytail: BEGIN しない。1 リクエスト = 1 トランザクションは呼び出し側（Durable Object の入力ゲート）が保つ前提。DO 以外で動かすなら Sql の実装側で包む。
  */
-export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewId }): AppContext {
+export function createSqliteContext(
+  sql: Sql,
+  deps: { clock: Clock; newId?: NewId; schedule?: (job: Job) => void },
+): AppContext {
+  const schedule = deps.schedule;
   const newId = deps.newId ?? randomId;
   const users = new Rows<{ name?: string; email?: string; nameKanji?: string }>(sql, "users");
   const works = new Docs<Work>(sql, "works", newId);
@@ -373,7 +378,18 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
     },
     notificationPrefs: {
       find: async (userId) => prefs.select("WHERE id = ?", userId)[0] ?? null,
-      save: async (p) => prefs.upsert(p.userId, p),
+      save: async (p) => {
+        const prev = prefs.select("WHERE id = ?", p.userId)[0];
+        prefs.upsert(p.userId, p);
+        // Slack をオンにした・オンのままワークスペースか Slack のメールアドレスを替えたら、最初の通知を待たずにメンバーを引く
+        // （設定画面に状態を出すため。Convex の adapters と同じ条件）
+        const sameTarget =
+          prev?.channels.includes("slack") &&
+          prev.slackWorkspaceId === p.slackWorkspaceId &&
+          prev.slackEmail === p.slackEmail;
+        if (p.channels.includes("slack") && p.slackWorkspaceId !== undefined && !sameTarget)
+          schedule?.({ kind: "resolveSlack", userId: p.userId });
+      },
     },
     deliveries: {
       listSettled: async (notificationId) =>
@@ -404,6 +420,8 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
       insert: async (n) => {
         const row = notifications.insert(n);
         if (n.readAt === undefined) adjustUnreadCounter(sql, n.recipientId, 1, uncountable);
+        // 外へ送るのはあとの仕事（送る内容は送る時点で計画が作り直す）。同じトランザクションで積むので、巻き戻れば消える
+        schedule?.({ kind: "deliver", notificationId: row.id });
         return row;
       },
       // 同じ時刻の通知は追加順のまま（inMemory の安定ソートと同じ）
@@ -506,8 +524,14 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
           JSON.stringify(codes),
         ),
       findRule: async (id) => rules.select("WHERE id = ?", id)[0] ?? null,
-      insertRule: async (r) => rules.upsert(r.ruleId, r),
-      updateRule: async (r) => rules.upsert(r.ruleId, r),
+      insertRule: async (r) => {
+        rules.upsert(r.ruleId, r);
+        schedule?.({ kind: "indexRule", ruleId: r.ruleId });
+      },
+      updateRule: async (r) => {
+        rules.upsert(r.ruleId, r);
+        schedule?.({ kind: "indexRule", ruleId: r.ruleId });
+      },
       appendRevision: async (r) => ruleRevisions.append(r),
       listRevisions: async (ruleId) =>
         ruleRevisions.select("WHERE ruleId = ? ORDER BY rowid", ruleId),

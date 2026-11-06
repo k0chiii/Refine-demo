@@ -66,7 +66,13 @@ export const notifications = {
     args: object({}),
     handler: async (ctx): Promise<number> => {
       const r = await markAllNotificationsRead(ctx.db, ctx.principal!);
-      // ponytail: scheduler.runAfter(notifications:continueMarkAllRead) は alarm の単位（U6）で移す
+      // 上限を超えたら続きをあとの仕事に積む（Convex の scheduler.runAfter と同じ）
+      if (r.hasMore)
+        ctx.schedule({
+          kind: "continueMarkAllRead",
+          recipientId: ctx.principal!.userId,
+          asOf: r.asOf,
+        });
       return r.marked;
     },
   }),

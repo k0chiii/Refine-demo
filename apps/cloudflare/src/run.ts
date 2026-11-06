@@ -1,12 +1,13 @@
 import { DomainError } from "@mf100/domain";
-import { createSqliteContext } from "./sqlite/context.ts";
 import { FTS_TABLES, TABLES } from "./sqlite/schema.ts";
 import { collabTables } from "./collab/store.ts";
 import type { Sql } from "./sqlite/sql.ts";
 import { upsertUser } from "./sqlite/users.ts";
 import type { FnCtx } from "./functions/define.ts";
 import { findFunction } from "./functions/index.ts";
-import { principalOf } from "./functions/principal.ts";
+import { adminSubjectsOf, loadUser, principalOf } from "./functions/principal.ts";
+import { schedulerOf } from "./jobs.ts";
+import { createSqliteContext } from "./sqlite/context.ts";
 import type { Identity } from "./identity.ts";
 
 /**
@@ -51,19 +52,6 @@ export function tracked(sql: Sql, touched: Set<string>, reads: Set<string> = new
   };
 }
 
-/** 主体の組み立てに要る分だけ users から読む。JWT の本人は行が無いこともない（発行時に作っている） */
-function loadUser(sql: Sql, id: string): { id: string; subject: string; isSystemAdmin?: boolean } {
-  const [row] = sql.exec(
-    "SELECT json_extract(doc, '$.subject') AS subject, json_extract(doc, '$.isSystemAdmin') AS admin FROM users WHERE id = ?",
-    id,
-  );
-  return {
-    id,
-    subject: (row?.subject as string | null) ?? "",
-    ...(row?.admin === 1 ? { isSystemAdmin: true } : {}),
-  };
-}
-
 const fail = (code: string, details: Record<string, unknown> = {}): CallResult => ({
   ok: false,
   code,
@@ -98,14 +86,11 @@ export async function execute(
   const user = wantsUser && identity ? loadUser(host.sql, upsertUser(host.sql, identity)) : null;
 
   const sql = tracked(host.sql, touched, reads);
-  const adminSubjects = new Set(
-    (host.env.MF100_SYSTEM_ADMIN_SUBJECTS ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  const adminSubjects = adminSubjectsOf(host.env);
+  // 仕事の INSERT は追跡しない sql で行う（jobs は購読者に配らない）。transaction の中なので、巻き戻れば消える
+  const schedule = schedulerOf(host);
   const run = async (): Promise<unknown> => {
-    const db = createSqliteContext(sql, { clock: { now: host.now } });
+    const db = createSqliteContext(sql, { clock: { now: host.now }, schedule });
     const ctx: FnCtx = {
       db,
       sql,
@@ -113,6 +98,7 @@ export async function execute(
       userId: user?.id ?? null,
       env: host.env,
       now: host.now,
+      schedule,
     };
     return def.handler(ctx, args);
   };

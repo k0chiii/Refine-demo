@@ -1,5 +1,31 @@
 import type { AppContext } from "@mf100/application";
 import { memberTeamIds, type Principal } from "@mf100/domain";
+import type { Sql } from "../sqlite/sql.ts";
+
+/** 主体の組み立てに要る分だけ users から読む。JWT の本人は行が無いこともない（発行時に作っている） */
+export function loadUser(
+  sql: Sql,
+  id: string,
+): { id: string; subject: string; isSystemAdmin?: boolean } {
+  const [row] = sql.exec(
+    "SELECT json_extract(doc, '$.subject') AS subject, json_extract(doc, '$.isSystemAdmin') AS admin FROM users WHERE id = ?",
+    id,
+  );
+  return {
+    id,
+    subject: (row?.subject as string | null) ?? "",
+    ...(row?.admin === 1 ? { isSystemAdmin: true } : {}),
+  };
+}
+
+/** 初期ブートストラップの管理者（env の subject の列）。関数の実行も alarm の仕事も同じ読み方をする */
+export const adminSubjectsOf = (env: Env): Set<string> =>
+  new Set(
+    (env.MF100_SYSTEM_ADMIN_SUBJECTS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
 
 /**
  * 利用者 ID → ドメインの主体。Convex の lib/principal.ts と同じ組み立て。

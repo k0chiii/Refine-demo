@@ -15,4 +15,13 @@ interface Env {
   MF100_UPLOAD_SECRET?: string;
   MF100_CLEANUP_SECRET?: string;
   PROCESSING_SECRET?: string;
+  // 外への通知（src/delivery/channels.ts）。揃わない経路は使わない
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  RESEND_API_KEY?: string;
+  NOTIFY_EMAIL_FROM?: string;
+  SLACK_BASE_URL?: string;
+  // "true" のときだけ、ルールの埋め込みの索引づけ（indexRule）を積む（Convex と同じ）
+  RULE_EMBEDDINGS_ENABLED?: string;
 }

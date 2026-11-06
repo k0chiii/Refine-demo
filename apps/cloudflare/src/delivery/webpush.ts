@@ -60,7 +60,11 @@ export interface VapidKeys {
 }
 
 /** env の鍵。揃っていなければ null（Web Push を使わない） */
-export function vapidKeysFromEnv(env: Record<string, string | undefined>): VapidKeys | null {
+export function vapidKeysFromEnv(
+  env: Partial<
+    Record<"VAPID_PUBLIC_KEY" | "VAPID_PRIVATE_KEY" | "VAPID_SUBJECT", string | undefined>
+  >,
+): VapidKeys | null {
   const publicKey = env.VAPID_PUBLIC_KEY?.trim();
   const privateKey = env.VAPID_PRIVATE_KEY?.trim();
   const subject = env.VAPID_SUBJECT?.trim();
