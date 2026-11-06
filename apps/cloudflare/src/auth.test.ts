@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vite-plus/test";
 import { authApp } from "./auth/app.ts";
 import type { AuthEnv } from "./auth/env.ts";
 import { jwtIdentifier } from "./auth/identify.ts";
-import { createAuthStore, migrateAuth } from "./auth/store.ts";
+import { createAuthStore, migrateAuth, randomToken, sha256Base64url } from "./auth/store.ts";
 import { migrate } from "./sqlite/schema.ts";
 import { nodeSql } from "./testing/context.ts";
 
@@ -51,11 +51,20 @@ type Tokens = { accessToken: string; refreshToken: string };
 
 const mockEnv = (): AuthEnv => ({ ...baseEnv(), NOGIKU_MOCK_ENABLED: "true" });
 
+/** Web がサインインの前に作る組。verifier はブラウザに残り、challenge だけがサーバーへ行く */
+async function pkce() {
+  const verifier = randomToken();
+  return { verifier, challenge: await sha256Base64url(verifier) };
+}
+
 /** モックでサインインして、一時コードを access / refresh に替えるところまで */
 async function mockSignIn(s: Setup, body: Record<string, unknown> = { sub: "sub-1" }) {
-  const { code } = (await (await s.post("/auth/mock", body)).json()) as { code: string };
-  const res = await s.post("/auth/token", { code });
-  return { code, res, tokens: (await res.json()) as Tokens };
+  const { verifier, challenge } = await pkce();
+  const { code } = (await (await s.post("/auth/mock", { ...body, challenge })).json()) as {
+    code: string;
+  };
+  const res = await s.post("/auth/token", { code, verifier });
+  return { code, verifier, res, tokens: (await res.json()) as Tokens };
 }
 
 describe("モックのサインイン", () => {
@@ -110,21 +119,67 @@ describe("モックのサインイン", () => {
 describe("一時コード", () => {
   it("1 回しか使えない", async () => {
     const s = setup(mockEnv());
-    const { code } = await mockSignIn(s);
-    expect((await s.post("/auth/token", { code })).status).toBe(401);
+    const { code, verifier } = await mockSignIn(s);
+    expect((await s.post("/auth/token", { code, verifier })).status).toBe(401);
   });
 
   it("60 秒を過ぎたら使えない", async () => {
     const s = setup(mockEnv());
-    const { code } = (await (await s.post("/auth/mock", { sub: "a" })).json()) as { code: string };
+    const { verifier, challenge } = await pkce();
+    const { code } = (await (await s.post("/auth/mock", { sub: "a", challenge })).json()) as {
+      code: string;
+    };
     s.clock.t += 61_000;
-    expect((await s.post("/auth/token", { code })).status).toBe(401);
+    expect((await s.post("/auth/token", { code, verifier })).status).toBe(401);
   });
 
   it("知らないコード・コード無しは 401", async () => {
     const s = setup(mockEnv());
     expect((await s.post("/auth/token", { code: "nope" })).status).toBe(401);
     expect((await s.post("/auth/token", {})).status).toBe(401);
+  });
+
+  it("challenge の無い・形の違う /auth/mock は 400 challenge_required で、コードを出さない", async () => {
+    const s = setup(mockEnv());
+    for (const body of [
+      { sub: "a" },
+      { sub: "a", challenge: "short" },
+      { sub: "a", challenge: 1 },
+    ]) {
+      const res = await s.post("/auth/mock", body);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ code: "challenge_required", details: {} });
+    }
+    expect(s.sql.exec("SELECT count(*) AS n FROM authCodes")[0]!.n).toBe(0);
+  });
+
+  it("verifier が違う・無いなら 401 invalid_code で、そのコードは正しい verifier でも使えなくなる", async () => {
+    const s = setup(mockEnv());
+    const mine = await pkce();
+    const thief = await pkce();
+    const issue = async () =>
+      (
+        (await (await s.post("/auth/mock", { sub: "a", challenge: mine.challenge })).json()) as {
+          code: string;
+        }
+      ).code;
+
+    const stolen = await issue();
+    const wrong = await s.post("/auth/token", { code: stolen, verifier: thief.verifier });
+    expect(wrong.status).toBe(401);
+    expect(await wrong.json()).toEqual({ code: "invalid_code", details: {} });
+    expect((await s.post("/auth/token", { code: stolen, verifier: mine.verifier })).status).toBe(
+      401,
+    );
+
+    // verifier を付けないのも同じ
+    const bare = await issue();
+    expect((await s.post("/auth/token", { code: bare })).status).toBe(401);
+    expect((await s.post("/auth/token", { code: bare, verifier: mine.verifier })).status).toBe(401);
+
+    // 持ち主の verifier なら通る
+    const ok = await issue();
+    expect((await s.post("/auth/token", { code: ok, verifier: mine.verifier })).status).toBe(200);
   });
 });
 
@@ -313,11 +368,14 @@ const oidcEnv = (): AuthEnv => ({
   NOGIKU_ISSUER: ISSUER,
 });
 
-/** /auth/signin を踏み、Nogiku へ向かう URL と、state を返す */
+/** /auth/signin を踏み、Nogiku へ向かう URL と、Web が持つ verifier を返す */
 async function signIn(s: Setup, query = "redirectTo=/works%2F1") {
-  const res = await s.app.request(`/auth/signin?provider=nogiku&${query}`);
+  const { verifier, challenge } = await pkce();
+  const res = await s.app.request(
+    `/auth/signin?provider=nogiku&${query}&challenge=${encodeURIComponent(challenge)}`,
+  );
   const location = res.headers.get("location");
-  return { res, url: location ? new URL(location) : null };
+  return { res, url: location ? new URL(location) : null, verifier };
 }
 
 describe("OIDC（Nogiku）", () => {
@@ -326,7 +384,7 @@ describe("OIDC（Nogiku）", () => {
     const nogiku = fakeNogiku({ nonce: () => nonce });
     const s = setup(oidcEnv(), nogiku.impl);
 
-    const { res, url } = await signIn(s);
+    const { res, url, verifier } = await signIn(s);
     expect(res.status).toBe(302);
     expect(url!.origin + url!.pathname).toBe(`${ISSUER}/oauth2/authorize`);
     const q = url!.searchParams;
@@ -362,7 +420,10 @@ describe("OIDC（Nogiku）", () => {
     ).toBe(q.get("code_challenge"));
     expect(nogiku.seen.tokenAuth).toBe(`Basic ${btoa("client-1:secret-1")}`);
 
-    const tokenRes = await s.post("/auth/token", { code: back.searchParams.get("code") });
+    const tokenRes = await s.post("/auth/token", {
+      code: back.searchParams.get("code"),
+      verifier,
+    });
     expect(tokenRes.status).toBe(200);
     const tokens = (await tokenRes.json()) as Tokens;
     const who = await s.identify(s.bearer(tokens.accessToken));
@@ -379,6 +440,39 @@ describe("OIDC（Nogiku）", () => {
     });
     // 組織権限の設定が無ければ取りに行かない
     expect(nogiku.seen.checked).toBe(false);
+  });
+
+  it("signin に challenge が無い・形が違うなら 400 challenge_required で、state も残さない", async () => {
+    const s = setup(oidcEnv(), fakeNogiku().impl);
+    for (const q of ["", "&challenge=short"]) {
+      const res = await s.app.request(`/auth/signin?provider=nogiku&redirectTo=/${q}`);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ code: "challenge_required", details: {} });
+    }
+    expect(s.sql.exec("SELECT count(*) AS n FROM authStates")[0]!.n).toBe(0);
+  });
+
+  it("callback の一時コードは signin の challenge に結び付く: 別の verifier では 401、そのコードも使えなくなる", async () => {
+    let nonce = "";
+    const s = setup(oidcEnv(), fakeNogiku({ nonce: () => nonce }).impl);
+    const codeOf = async () => {
+      const { url, verifier } = await signIn(s);
+      nonce = url!.searchParams.get("nonce")!;
+      const cb = await s.app.request(
+        `/auth/callback?code=c&state=${url!.searchParams.get("state")}`,
+      );
+      return { code: new URL(cb.headers.get("location")!).searchParams.get("code"), verifier };
+    };
+
+    const stolen = await codeOf();
+    const thief = await pkce();
+    expect(
+      (await s.post("/auth/token", { code: stolen.code, verifier: thief.verifier })).status,
+    ).toBe(401);
+    expect((await s.post("/auth/token", stolen)).status).toBe(401);
+
+    const mine = await codeOf();
+    expect((await s.post("/auth/token", mine)).status).toBe(200);
   });
 
   it("組織権限は設定が揃っているときだけ取り、scope と resource も変わる", async () => {
@@ -398,7 +492,7 @@ describe("OIDC（Nogiku）", () => {
       },
       nogiku.impl,
     );
-    const { url } = await signIn(s);
+    const { url, verifier } = await signIn(s);
     expect(url!.searchParams.get("scope")).toBe(
       "openid profile email https://engine.nogiku.test/api/permissions.read",
     );
@@ -407,7 +501,7 @@ describe("OIDC（Nogiku）", () => {
 
     const cb = await s.app.request(`/auth/callback?code=c&state=${url!.searchParams.get("state")}`);
     const code = new URL(cb.headers.get("location")!).searchParams.get("code");
-    const tokens = (await (await s.post("/auth/token", { code })).json()) as Tokens;
+    const tokens = (await (await s.post("/auth/token", { code, verifier })).json()) as Tokens;
     const who = await s.identify(s.bearer(tokens.accessToken));
     const doc = JSON.parse(
       s.sql.exec("SELECT doc FROM users WHERE id = ?", who!.userId)[0]!.doc as string,
@@ -575,8 +669,14 @@ describe("利用者の保存", () => {
     const s = setup(mockEnv());
     await mockSignIn(s); // セッション 1（コードは使用済み）
     const live = await s.store.createSession("u");
-    await s.store.issueCode(live.sessionId);
-    await s.store.putState({ state: "st", verifier: "v", nonce: "n", redirectTo: FRONTEND });
+    await s.store.issueCode(live.sessionId, "c");
+    await s.store.putState({
+      state: "st",
+      verifier: "v",
+      nonce: "n",
+      redirectTo: FRONTEND,
+      challenge: "c",
+    });
     s.clock.t += 11 * 60_000;
     await s.store.sweep();
     const n = (t: string) => s.sql.exec(`SELECT count(*) AS n FROM ${t}`)[0]!.n;

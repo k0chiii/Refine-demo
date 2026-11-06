@@ -5,7 +5,7 @@ import type { Sql } from "./sqlite/sql.ts";
 import { upsertUser } from "./sqlite/users.ts";
 import type { FnCtx } from "./functions/define.ts";
 import { findFunction } from "./functions/index.ts";
-import { adminSubjectsOf, loadUser, principalOf } from "./functions/principal.ts";
+import { loadUser, principalOf } from "./functions/principal.ts";
 import { schedulerOf } from "./jobs.ts";
 import { createSqliteContext } from "./sqlite/context.ts";
 import type { Identity } from "./identity.ts";
@@ -106,7 +106,6 @@ export async function execute(
   const user = wantsUser && identity ? loadUser(host.sql, upsertUser(host.sql, identity)) : null;
 
   const sql = tracked(host.sql, touched, reads);
-  const adminSubjects = adminSubjectsOf(host.env);
   // 仕事の INSERT は追跡しない sql で行う（jobs は購読者に配らない）。transaction の中なので、巻き戻れば消える
   const schedule = schedulerOf(host);
   const run = async (): Promise<unknown> => {
@@ -114,7 +113,7 @@ export async function execute(
     const ctx: FnCtx = {
       db,
       sql,
-      principal: user ? await principalOf(db, user, adminSubjects) : null,
+      principal: user ? await principalOf(db, user, host.env) : null,
       userId: user?.id ?? null,
       env: host.env,
       now: host.now,

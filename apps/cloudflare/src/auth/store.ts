@@ -32,6 +32,14 @@ export interface AuthState {
   nonce: string;
   /** 検証済みの絶対 URL */
   redirectTo: string;
+  /** Web の verifier の SHA-256（base64url）。callback の一時コードに引き継ぐ */
+  challenge: string;
+}
+
+/** 一時コードの中身。verifier との突き合わせは呼ぶ側（auth/app.ts）がやる */
+export interface ConsumedCode {
+  sessionId: string;
+  challenge: string;
 }
 
 /**
@@ -46,9 +54,10 @@ export interface AuthStore {
   /** refresh を新しいものに替える。古いものは使えなくなる。知らない・期限切れは null */
   rotateSession(refreshToken: string): Promise<SessionGrant | null>;
   revokeSession(refreshToken: string): Promise<void>;
-  /** 60 秒・1 回きりの一時コード（トークンを URL に載せないため） */
-  issueCode(sessionId: string): Promise<string>;
-  consumeCode(code: string): Promise<string | null>;
+  /** 60 秒・1 回きりの一時コード（トークンを URL に載せないため）。challenge でサインインしたブラウザに結び付ける */
+  issueCode(sessionId: string, challenge: string): Promise<string>;
+  /** 取った時点で消す（verifier が合わなくても 2 度目は無い） */
+  consumeCode(code: string): Promise<ConsumedCode | null>;
   putState(state: AuthState): Promise<void>;
   takeState(state: string): Promise<AuthState | null>;
   /** 期限切れの掃除 */
@@ -78,13 +87,14 @@ export function migrateAuth(sql: Sql): void {
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_authSessions_refreshHash ON authSessions (refreshHash)",
   );
   sql.exec(
-    "CREATE TABLE IF NOT EXISTS authCodes (code TEXT PRIMARY KEY, sessionId TEXT NOT NULL, expiresAt INTEGER NOT NULL)",
+    `CREATE TABLE IF NOT EXISTS authCodes (
+      code TEXT PRIMARY KEY, sessionId TEXT NOT NULL, challenge TEXT NOT NULL, expiresAt INTEGER NOT NULL)`,
   );
   // verifier（PKCE）と nonce は callback まで持ち回る
   sql.exec(
     `CREATE TABLE IF NOT EXISTS authStates (
       state TEXT PRIMARY KEY, verifier TEXT NOT NULL, nonce TEXT NOT NULL,
-      redirectTo TEXT NOT NULL, expiresAt INTEGER NOT NULL)`,
+      redirectTo TEXT NOT NULL, challenge TEXT NOT NULL, expiresAt INTEGER NOT NULL)`,
   );
 }
 
@@ -213,12 +223,13 @@ export function createAuthStore(sql: Sql, now: () => number = Date.now): AuthSto
       );
     },
 
-    async issueCode(sessionId) {
+    async issueCode(sessionId, challenge) {
       const code = randomToken();
       sql.exec(
-        "INSERT INTO authCodes (code, sessionId, expiresAt) VALUES (?, ?, ?)",
+        "INSERT INTO authCodes (code, sessionId, challenge, expiresAt) VALUES (?, ?, ?, ?)",
         code,
         sessionId,
+        challenge,
         now() + CODE_TTL_MS,
       );
       return code;
@@ -226,27 +237,30 @@ export function createAuthStore(sql: Sql, now: () => number = Date.now): AuthSto
 
     async consumeCode(code) {
       const [row] = sql.exec(
-        "DELETE FROM authCodes WHERE code = ? RETURNING sessionId, expiresAt",
+        "DELETE FROM authCodes WHERE code = ? RETURNING sessionId, challenge, expiresAt",
         code,
       );
       // 期限切れも消してから断る（残しておく理由がない）
-      return row && (row.expiresAt as number) > now() ? (row.sessionId as string) : null;
+      return row && (row.expiresAt as number) > now()
+        ? { sessionId: row.sessionId as string, challenge: row.challenge as string }
+        : null;
     },
 
     async putState(s) {
       sql.exec(
-        "INSERT INTO authStates (state, verifier, nonce, redirectTo, expiresAt) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO authStates (state, verifier, nonce, redirectTo, challenge, expiresAt) VALUES (?, ?, ?, ?, ?, ?)",
         s.state,
         s.verifier,
         s.nonce,
         s.redirectTo,
+        s.challenge,
         now() + STATE_TTL_MS,
       );
     },
 
     async takeState(state) {
       const [row] = sql.exec(
-        "DELETE FROM authStates WHERE state = ? RETURNING verifier, nonce, redirectTo, expiresAt",
+        "DELETE FROM authStates WHERE state = ? RETURNING verifier, nonce, redirectTo, challenge, expiresAt",
         state,
       );
       if (!row || (row.expiresAt as number) <= now()) return null;
@@ -255,6 +269,7 @@ export function createAuthStore(sql: Sql, now: () => number = Date.now): AuthSto
         verifier: row.verifier as string,
         nonce: row.nonce as string,
         redirectTo: row.redirectTo as string,
+        challenge: row.challenge as string,
       };
     },
 

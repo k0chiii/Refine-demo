@@ -4,7 +4,7 @@ import type { AuthEnv } from "./env.ts";
 import { createJwt, type Jwt } from "./jwt.ts";
 import { createOidc } from "./oidc.ts";
 import { resolveRedirectTo } from "./redirect.ts";
-import type { AuthProfile, AuthStore, SessionGrant } from "./store.ts";
+import { sha256Base64url, type AuthProfile, type AuthStore, type SessionGrant } from "./store.ts";
 
 export interface AuthDeps {
   /** Durable Object 越しの口。テストは SQLite を直に包んだものを渡す */
@@ -29,7 +29,9 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v !== 
  *
  * ログインの流れは Convex Auth と同じ: callback は URL にトークンを載せず、60 秒・1 回きりの一時コードだけを
  * Web へ返し、Web が POST /auth/token で access / refresh に替える。
- * ponytail: 一時コードは Web 側の verifier に結び付けていない（URL を横取りされたら 60 秒の間は替えられる）
+ * 一時コードは PKCE と同じ形で、サインインを始めたブラウザに結び付ける。Web が乱数の verifier を作り、
+ * その SHA-256（challenge）を /auth/signin か /auth/mock に渡す。/auth/token は verifier が合うときだけ通す
+ * （戻りの URL を横取りされても、verifier はそのブラウザの sessionStorage にしか無いので替えられない）。
  */
 export function authApp(deps: AuthDeps) {
   const { env } = deps;
@@ -67,20 +69,28 @@ export function authApp(deps: AuthDeps) {
   );
 
   /** callback とモックで共通: プロフィール → 利用者 → セッション → 一時コード */
-  const signedIn = async (profile: AuthProfile, source: "nogiku" | "nogiku_mock") => {
+  const signedIn = async (
+    profile: AuthProfile,
+    source: "nogiku" | "nogiku_mock",
+    challenge: string,
+  ) => {
     const store = deps.store();
     const userId = await store.upsertUserFromProfile(profile, {
       source,
       admin: adminSubjects.has(profile.sub),
     });
     const { sessionId } = await store.createSession(userId);
-    return store.issueCode(sessionId);
+    return store.issueCode(sessionId, challenge);
   };
 
   const tokens = async (grant: SessionGrant) => ({
     accessToken: await jwt().issueAccessToken(grant),
     refreshToken: grant.refreshToken,
   });
+
+  // base64url(SHA-256) は 43 文字。形が違うものは verifier から作られたものではない
+  const challengeOf = (v: unknown) =>
+    typeof v === "string" && /^[A-Za-z0-9_-]{43}$/.test(v) ? v : null;
 
   const readBody = async (req: Request): Promise<Record<string, unknown>> => {
     const body: unknown = await req.json().catch(() => null);
@@ -108,6 +118,8 @@ export function authApp(deps: AuthDeps) {
       } catch {
         return c.json({ code: "invalid_redirect", details: {} }, 400);
       }
+      const challenge = challengeOf(c.req.query("challenge"));
+      if (!challenge) return c.json({ code: "challenge_required", details: {} }, 400);
       let auth;
       try {
         auth = await oidc.authorize();
@@ -123,6 +135,7 @@ export function authApp(deps: AuthDeps) {
         verifier: auth.verifier,
         nonce: auth.nonce,
         redirectTo,
+        challenge,
       });
       return c.redirect(auth.url, 302);
     })
@@ -145,7 +158,7 @@ export function authApp(deps: AuthDeps) {
         console.warn("OIDC exchange failed", e);
         return c.json({ code: "oidc_failed", details: {} }, 502);
       }
-      const oneTime = await signedIn(profile, "nogiku");
+      const oneTime = await signedIn(profile, "nogiku", saved.challenge);
       const to = new URL(saved.redirectTo);
       to.searchParams.set("code", oneTime);
       return c.redirect(to.href, 302);
@@ -154,9 +167,14 @@ export function authApp(deps: AuthDeps) {
     .post("/auth/token", async (c) => {
       const missing = missingOf([...base]);
       if (missing.length > 0) return c.json(notConfigured(missing), 500);
-      const code = str((await readBody(c.req.raw)).code);
-      const sessionId = code ? await deps.store().consumeCode(code) : null;
-      const grant = sessionId ? await deps.store().reissueRefresh(sessionId) : null;
+      const body = await readBody(c.req.raw);
+      const code = str(body.code);
+      const verifier = str(body.verifier);
+      // コードは先に消える。verifier が違っても、当てずっぽうを繰り返せない
+      const consumed = code ? await deps.store().consumeCode(code) : null;
+      const bound =
+        consumed && verifier && (await sha256Base64url(verifier)) === consumed.challenge;
+      const grant = bound ? await deps.store().reissueRefresh(consumed.sessionId) : null;
       if (!grant) return c.json({ code: "invalid_code", details: {} }, 401);
       return c.json(await tokens(grant));
     })
@@ -190,6 +208,8 @@ export function authApp(deps: AuthDeps) {
       const missing = missingOf([...base]);
       if (missing.length > 0) return c.json(notConfigured(missing), 500);
       const body = await readBody(c.req.raw);
+      const challenge = challengeOf(body.challenge);
+      if (!challenge) return c.json({ code: "challenge_required", details: {} }, 400);
       const sub = str(body.sub) ?? MOCK_DEFAULT.sub;
       const hurigana =
         str(body.hurigana) ?? (sub === MOCK_DEFAULT.sub ? MOCK_DEFAULT.hurigana : undefined);
@@ -199,7 +219,7 @@ export function authApp(deps: AuthDeps) {
         email: typeof body.email === "string" ? body.email : `${sub}@example.invalid`,
         ...(hurigana ? { hurigana } : {}),
       };
-      return c.json({ code: await signedIn(profile, "nogiku_mock") });
+      return c.json({ code: await signedIn(profile, "nogiku_mock", challenge) });
     });
 
   return app;

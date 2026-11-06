@@ -14,6 +14,8 @@ import { jwtUser } from "../lib/jwt";
 
 const STORAGE_KEY = "mf100.cloudflare.session";
 const LOCK_NAME = "mf100.cloudflare.refresh";
+/** サインインを始めたタブだけが持つ verifier（一時コードの引き換えに要る。localStorage には置かない） */
+const VERIFIER_KEY = "mf100.cloudflare.verifier";
 /** 期限のこの手前で更新する（呼び出しの途中で切れないように） */
 const REFRESH_MARGIN_MS = 5 * 60_000;
 /** 使われなくなった購読を、この間は持っておく（StrictMode の付け外し・画面遷移の往復で読み直さないため） */
@@ -74,6 +76,30 @@ function writeStored(session: Session | null) {
     else localStorage.removeItem(STORAGE_KEY);
   } catch {
     // 保存できなくても、このタブの中では動く
+  }
+}
+
+const base64url = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+/** PKCE と同じ形: 乱数の verifier と、その SHA-256 の challenge。challenge だけがサーバーへ行く */
+async function newPkce() {
+  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return { verifier, challenge: base64url(new Uint8Array(digest)) };
+}
+
+/** 取り出したら消す（1 回きり）。無ければ、このタブが始めたサインインではない */
+function takeVerifier(): string | null {
+  try {
+    const verifier = sessionStorage.getItem(VERIFIER_KEY);
+    sessionStorage.removeItem(VERIFIER_KEY);
+    return verifier;
+  } catch {
+    return null;
   }
 }
 
@@ -249,9 +275,11 @@ export class CloudflareClient {
   constructor(url: string) {
     this.url = url.replace(/\/$/, "");
     // URL から消すのは同期で（ルーターが作られる前に。交換は非同期でよい）
+    // verifier が無い code は、このタブが始めたサインインのものではない（横取り・貼り付け）ので採らない
     const code = takeCodeFromUrl();
+    const verifier = code ? takeVerifier() : null;
     this.session = readStored();
-    this.ready = this.start(code);
+    this.ready = this.start(code && verifier ? { code, verifier } : null);
     if (typeof window !== "undefined")
       // 別のタブが更新・サインイン・サインアウトしたら、こちらも追従する（refresh token は 1 回きりなので、2 つのタブで別々に更新できない）
       window.addEventListener("storage", (e) => {
@@ -272,9 +300,9 @@ export class CloudflareClient {
   getToken = () => this.auth.token;
   getEpoch = () => this.epoch;
 
-  private async start(code: string | null) {
+  private async start(login: { code: string; verifier: string } | null) {
     try {
-      if (code) await this.exchange(code);
+      if (login) await this.exchange(login.code, login.verifier);
       else if (this.session) {
         this.setSession(this.session, { persist: false });
         if (this.session.expiresAt - Date.now() < REFRESH_MARGIN_MS) await this.refresh();
@@ -330,8 +358,8 @@ export class CloudflareClient {
   }
 
   /** 一時コード → access / refresh */
-  private async exchange(code: string) {
-    const res = await this.post("/auth/token", { code });
+  private async exchange(code: string, verifier: string) {
+    const res = await this.post("/auth/token", { code, verifier });
     if (!res.ok) throw new Error(`token exchange failed: ${res.status}`);
     this.adopt((await res.json()) as { accessToken: string; refreshToken: string });
   }
@@ -346,17 +374,23 @@ export class CloudflareClient {
       const profile: Record<string, unknown> = {};
       for (const key of ["sub", "name", "email", "hurigana"])
         if (typeof params[key] === "string" && params[key]) profile[key] = params[key];
-      const res = await this.post("/auth/mock", profile);
+      // 本物と同じ流れを 1 つのリクエストの中で回す（verifier は保存せずに使い切る）
+      const { verifier, challenge } = await newPkce();
+      const res = await this.post("/auth/mock", { ...profile, challenge });
       if (!res.ok) throw new Error(`mock sign-in failed: ${res.status}`);
-      await this.exchange(((await res.json()) as { code: string }).code);
+      await this.exchange(((await res.json()) as { code: string }).code, verifier);
       return { signingIn: true };
     }
     const redirectTo =
       typeof params.redirectTo === "string" && params.redirectTo.startsWith("/")
         ? params.redirectTo
         : location.pathname + location.search;
+    const { verifier, challenge } = await newPkce();
+    // 戻ってきたとき、同じタブがこれを持っていなければ一時コードは採らない
+    sessionStorage.setItem(VERIFIER_KEY, verifier);
     const target = new URL(`${this.url}/auth/signin`);
     target.searchParams.set("redirectTo", redirectTo);
+    target.searchParams.set("challenge", challenge);
     location.assign(target.href);
     return { signingIn: false, redirect: target };
   }

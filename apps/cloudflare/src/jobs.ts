@@ -18,7 +18,7 @@ import {
   resolveSlackForUser,
 } from "./delivery/deliver.ts";
 import { executeAiJob } from "./functions/aiWorkflow.ts";
-import { adminSubjectsOf, loadUser, principalOf } from "./functions/principal.ts";
+import { loadUser, principalOf } from "./functions/principal.ts";
 import { indexRule } from "./functions/semanticRules.ts";
 import { type Host, tracked } from "./run.ts";
 import { createSqliteContext } from "./sqlite/context.ts";
@@ -274,11 +274,7 @@ async function runJob(
         const [user] = host.sql.exec("SELECT id FROM users WHERE id = ?", job.userId);
         if (!user) return;
         const db = ctx();
-        const principal = await principalOf(
-          db,
-          loadUser(host.sql, job.userId),
-          adminSubjectsOf(host.env),
-        );
+        const principal = await principalOf(db, loadUser(host.sql, job.userId), host.env);
         await syncPlanInfoWarnings(db, principal, job.workId);
       });
       return DONE;

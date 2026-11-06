@@ -11,7 +11,7 @@ import { consume } from "../rateLimit.ts";
 import { Docs } from "../sqlite/docs.ts";
 import type { Sql } from "../sqlite/sql.ts";
 import { mutation, query, reject, type FnCtx, type FnDef } from "./define.ts";
-import { adminSubjectsOf, loadUser, principalOf } from "./principal.ts";
+import { loadUser, principalOf } from "./principal.ts";
 import { object, vFigmaImportMeta, vId } from "./validators.ts";
 
 // apps/convex/convex/processing.ts と lib/processingValidators.ts の写し。ファイル処理（画像・動画のフレーム・Stream・
@@ -96,11 +96,7 @@ const isTerminal = (state: ProcessingState) => state === "failed" || state === "
 async function authorizeJob(ctx: FnCtx, job: ProcessingJob, write = true) {
   const [owner] = ctx.sql.exec("SELECT id FROM users WHERE id = ?", job.userId);
   if (!owner) throw new DomainError("forbidden", { jobId: job.id });
-  const principal = await principalOf(
-    ctx.db,
-    loadUser(ctx.sql, job.userId),
-    adminSubjectsOf(ctx.env),
-  );
+  const principal = await principalOf(ctx.db, loadUser(ctx.sql, job.userId), ctx.env);
   const { work } = await loadAuthorizedWork(
     ctx.db,
     principal,

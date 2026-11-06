@@ -44,7 +44,13 @@ test.describe("Cloudflare 版", { tag: "@cloudflare" }, () => {
     // 校了者は登録で選ぶので、先に 1 人サインインさせて利用者の行を作っておく（画面からは作れない）
     const approverName = "こまば こうりょう";
     const mock = await request.post(`${CLOUDFLARE_URL}/auth/mock`, {
-      data: { sub: "mock-nogiku-approver", name: approverName, hurigana: approverName },
+      // コードは使わない（行を作るだけ）が、challenge は要る
+      data: {
+        sub: "mock-nogiku-approver",
+        name: approverName,
+        hurigana: approverName,
+        challenge: "A".repeat(43),
+      },
     });
     expect(mock.ok()).toBe(true);
 

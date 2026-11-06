@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { DomainError } from "@mf100/domain";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { Sql } from "./sqlite/sql.ts";
 import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
@@ -641,5 +642,35 @@ describe("POST /internal/processing（Convex の http.ts と同じ契約）", ()
     // 引数の形が違っても同じ 409（理由は漏らさない）
     expect((await w.gateway("inspect", { jobId: 1 })).status).toBe(409);
     expect((await w.gateway("markCleaned", {})).status).toBe(409);
+  });
+
+  it("想定外の例外は 409 にせず 500 internal_error（apps/api は 5xx を再試行する）。DomainError は 409 のまま", async () => {
+    const w = world();
+    const failOnce = (error: unknown) => {
+      const real = w.db.call;
+      let thrown = false;
+      w.db.call = async (...args: Parameters<typeof real>) => {
+        if (thrown) return real(...args);
+        thrown = true;
+        throw error;
+      };
+    };
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      failOnce(new Error("SQLITE_BUSY"));
+      const res = await w.gateway("cleanupCandidates", {});
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ code: "internal_error" });
+      expect(log).toHaveBeenCalledOnce();
+      // 1 回きりの故障だったので、次の呼び出しは通る
+      expect((await w.gateway("cleanupCandidates", {})).status).toBe(200);
+
+      failOnce(new DomainError("forbidden"));
+      const rejected = await w.gateway("cleanupCandidates", {});
+      expect(rejected.status).toBe(409);
+      expect(await rejected.json()).toEqual({ code: "processing_rejected" });
+    } finally {
+      log.mockRestore();
+    }
   });
 });

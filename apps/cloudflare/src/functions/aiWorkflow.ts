@@ -6,7 +6,7 @@ import { Docs } from "../sqlite/docs.ts";
 import type { Sql } from "../sqlite/sql.ts";
 import { reserveAi } from "./ai.ts";
 import { mutation, query, reject, type FnDef } from "./define.ts";
-import { adminSubjectsOf, loadUser, principalOf } from "./principal.ts";
+import { loadUser, principalOf } from "./principal.ts";
 import { object } from "./validators.ts";
 
 // apps/convex/convex/aiWorkflow.ts の写し。AI 校正を、画面を閉じても動く仕事にする。
@@ -51,7 +51,7 @@ async function prepareJob(rt: Pick<AiJobRuntime, "db" | "sql" | "env" | "now">, 
   if (!job || job.expiresAt <= rt.now() || job.state === "cancelled") throw reject("job_expired");
   const [user] = rt.sql.exec("SELECT id FROM users WHERE id = ?", job.userId);
   if (!user) throw new DomainError("forbidden", { jobId });
-  const principal = await principalOf(rt.db, loadUser(rt.sql, job.userId), adminSubjectsOf(rt.env));
+  const principal = await principalOf(rt.db, loadUser(rt.sql, job.userId), rt.env);
   const { work, grants } = await loadAuthorizedWork(
     rt.db,
     principal,

@@ -1,3 +1,4 @@
+import { DomainError } from "@mf100/domain";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ServiceSecret } from "./functions/define.ts";
@@ -74,7 +75,7 @@ export function createApp(deps: AppDeps) {
     })
     // Convex の http.ts の /internal/processing と同じ契約: Bearer PROCESSING_SECRET（32 文字以上。無ければ 404）、
     // body は { operation, args }、成功は関数の戻りの JSON そのもの（{ value } で包まない）、知らない operation は 400、
-    // 関数が拒否したら理由を伏せて 409 { code: "processing_rejected" }（apps/api は 409 だけを「拒否」として読む）
+    // 関数が拒否したら理由を伏せて 409 { code: "processing_rejected" }（apps/api は 409 だけを「拒否」として読み、5xx は再試行する）
     .post("/internal/processing", async (c) => {
       if (!verifyServiceSecret(c.req.raw, "PROCESSING_SECRET", deps.secret("PROCESSING_SECRET")))
         return c.body(null, 404);
@@ -93,8 +94,12 @@ export function createApp(deps: AppDeps) {
       try {
         const result = await deps.db().call(name, null, parsed.data, true);
         return result.ok ? c.json(result.value, 200, { "Cache-Control": "no-store" }) : rejected();
-      } catch {
-        return rejected();
+      } catch (e) {
+        // 409 は「確定した拒否」で、apps/api は再試行しない。想定外の例外（DB の一時的な失敗など）まで 409 にすると、
+        // 直るはずの処理が捨てられるので、5xx（再試行される）で返す
+        if (e instanceof DomainError) return rejected();
+        console.error("/internal/processing failed", e);
+        return c.json({ code: "internal_error" }, 500);
       }
     })
     .post("/f/:name", async (c) => {

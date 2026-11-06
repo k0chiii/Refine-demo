@@ -1,4 +1,4 @@
-import { DomainError } from "@mf100/domain";
+import { DomainError, orgPermissions } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { app, fakeDb, post, signIn, UPLOAD_SECRET, as } from "./testing/http.ts";
 
@@ -222,5 +222,62 @@ describe("サービス認証（submissions:beginUpload: MF100_UPLOAD_SECRET + �
       false,
     );
     expect(result).toMatchObject({ ok: false, code: "function_not_found" });
+  });
+});
+
+describe("組織権限（NOGIKU_ACCESS_ENABLED）", () => {
+  const flags = async (a: ReturnType<typeof app>, subject: string) =>
+    ((await (await post(a, "me:me", {}, subject)).json()) as { value: Record<string, boolean> })
+      .value;
+  const save = async (a: ReturnType<typeof app>, subject: string) => {
+    const res = await post(a, "groups:save", { name: "校正班", memberIds: [] }, subject);
+    return { status: res.status, ...((await res.json()) as { code?: string }) };
+  };
+  const grant = async (
+    db: ReturnType<typeof fakeDb>,
+    a: ReturnType<typeof app>,
+    s: string,
+    p: unknown,
+  ) => {
+    const id = await signIn(a, s);
+    db.sql.exec(
+      "UPDATE users SET doc = json_set(doc, '$.orgPermissions', json(?)) WHERE id = ?",
+      JSON.stringify(p),
+      id,
+    );
+  };
+
+  it("有効なら users.orgPermissions が主体に載る。空の人は groups:save が forbidden、groups:manage があれば通る", async () => {
+    const db = fakeDb(undefined, { NOGIKU_ACCESS_ENABLED: "true" });
+    const a = app(db);
+    await signIn(a, "u_none"); // orgPermissions の無い行は [] 扱い
+    await grant(db, a, "u_empty", []);
+    await grant(db, a, "u_manager", [orgPermissions.groupsManage]);
+
+    expect(await save(a, "u_none")).toMatchObject({ status: 403, code: "forbidden" });
+    expect(await save(a, "u_empty")).toMatchObject({ status: 403, code: "forbidden" });
+    expect((await save(a, "u_manager")).status).toBe(200);
+
+    expect(await flags(a, "u_empty")).toMatchObject({
+      canCreateWorks: false,
+      canAssignApprovers: false,
+      canManageGroups: false,
+    });
+    expect(await flags(a, "u_manager")).toMatchObject({
+      canCreateWorks: false,
+      canManageGroups: true,
+    });
+  });
+
+  it('env が無ければ従来どおり ["*"]（制限なし）', async () => {
+    const db = fakeDb();
+    const a = app(db);
+    await grant(db, a, "u_empty", []);
+    expect((await save(a, "u_empty")).status).toBe(200);
+    expect(await flags(a, "u_empty")).toMatchObject({
+      canCreateWorks: true,
+      canAssignApprovers: true,
+      canManageGroups: true,
+    });
   });
 });
