@@ -448,11 +448,17 @@ export function createAppContext(
           .query("commentEvents")
           .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"commentThreads">))
           .collect();
-        return docs.map((d) => {
-          const { _id, _creationTime, ...rest } = d;
-          void _creationTime;
-          return { ...rest, id: _id as string } as CommentEvent;
-        });
+        return docs.map(commentEventFromDoc);
+      },
+      async listLatestEvents(threadId, limit) {
+        if (limit <= 0) return [];
+        // by_thread は同じスレッドの中を追記順（_creationTime）に並べる。後ろから limit 件だけ読み、古い順に戻す
+        const docs = await db
+          .query("commentEvents")
+          .withIndex("by_thread", (q) => q.eq("threadId", threadId as Id<"commentThreads">))
+          .order("desc")
+          .take(limit);
+        return docs.reverse().map(commentEventFromDoc);
       },
       async setEventReactions(eventId, reactions) {
         // 空にしたらフィールドごと外す（undefined を渡すと patch は項目を消す）
@@ -1288,6 +1294,12 @@ export function createAppContext(
 /** query 関数から読み取り専用で使う。書込みメソッドは呼ばれない前提（呼べばランタイムで失敗する）。 */
 export function createReadContext(db: DatabaseReader): AppContext {
   return createAppContext(db as DatabaseWriter);
+}
+
+function commentEventFromDoc(d: Doc<"commentEvents">): CommentEvent {
+  const { _id, _creationTime, ...rest } = d;
+  void _creationTime;
+  return { ...rest, id: _id as string } as CommentEvent;
 }
 
 function stripAssignment(d: Doc<"reviewAssignments">): ReviewAssignment {
