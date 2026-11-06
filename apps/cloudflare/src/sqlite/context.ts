@@ -29,7 +29,6 @@ import type {
   Work,
   WorkPermissionGrant,
 } from "@mf100/domain";
-import { focusRevisionIdOf, revisionHeadsOf, workSummaryOf } from "@mf100/domain";
 import type {
   AlignmentOverride,
   AppContext,
@@ -41,6 +40,16 @@ import type {
   PushSubscriptionRecord,
   WorkPin,
 } from "@mf100/application";
+import {
+  adjustUnreadCounter,
+  computeWorkSummary,
+  readUnreadCount,
+  readWorkSummary,
+  syncRevisionThreadStats,
+  syncWorkRoles,
+  syncWorkSummary,
+  threadCountsMayChange,
+} from "./derived.ts";
 import { Docs, keyOf, randomId, Rows, type NewId } from "./docs.ts";
 import type { Sql } from "./sql.ts";
 
@@ -101,6 +110,8 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
   const commentFiles = new Docs<CommentFile>(sql, "commentFiles", newId);
   const audit = new Rows<AuditEntry>(sql, "audit");
   const idempotency = new Rows<{ result?: unknown }>(sql, "idempotency");
+  /** 未読が多くて数の行をその場で作れなかった利用者（同じトランザクションで数え直さない。derived.ts） */
+  const uncountable = new Set<string>();
 
   return {
     clock: deps.clock,
@@ -129,15 +140,30 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
     },
     works: {
       findById: async (id) => works.get(id),
-      insert: async (w) => works.insert(w),
-      update: async (w) => works.put(w),
+      // 職責・検索・要約の派生表は、書いたのと同じトランザクションで作り直す（Convex の syncRoles と同じ）
+      insert: async (w) => {
+        const row = works.insert(w);
+        syncWorkRoles(sql, row);
+        return row;
+      },
+      update: async (w) => {
+        works.put(w);
+        syncWorkRoles(sql, w);
+      },
       list: async (limit) => works.select("ORDER BY rowid LIMIT ?", limit),
     },
     revisions: {
       findById: async (id) => revisions.get(id),
       listByWork: async (workId) => revisions.select("WHERE workId = ? ORDER BY rowid", workId),
-      insert: async (r) => revisions.insert(r),
-      update: async (r) => revisions.put(r),
+      insert: async (r) => {
+        const row = revisions.insert(r);
+        syncWorkSummary(sql, row.workId);
+        return row;
+      },
+      update: async (r) => {
+        revisions.put(r);
+        syncWorkSummary(sql, r.workId);
+      },
       listOpenExpired: async (now, limit) =>
         revisions.select(
           "WHERE reviewState = 'open' AND deadlineAt <= ? ORDER BY rowid LIMIT ?",
@@ -209,9 +235,28 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
         )[0] ?? null,
       listByRevision: async (revisionId) =>
         threads.select("WHERE revisionId = ? AND deletedAt IS NULL ORDER BY rowid", revisionId),
-      insert: async (t) => threads.insert(t),
-      insertMany: async (ts) => ts.map((t) => threads.insert(t)),
-      update: async (t) => threads.put(t),
+      // 版の件数と要約は、スレッドを書いたあとに数え直す（Convex の syncRevisionThreadStats と同じ）
+      insert: async (t) => {
+        const row = threads.insert(t);
+        syncRevisionThreadStats(sql, t.revisionId);
+        return row;
+      },
+      insertMany: async (ts) => {
+        const rows = ts.map((t) => threads.insert(t));
+        // 数え直しは版ごとに 1 回（足したあとの全件から数えるので、1 件ずつ数えたときと同じ値）
+        for (const revisionId of new Set(ts.map((t) => t.revisionId)))
+          syncRevisionThreadStats(sql, revisionId);
+        return rows;
+      },
+      update: async (t) => {
+        const before = threads.get(t.id);
+        threads.put(t);
+        // リアクション・返信・担当などは件数を変えない。版と要約の数え直し（スレッド全件を読む）を省く
+        if (before && !threadCountsMayChange(before, t)) return;
+        if (before && before.revisionId !== t.revisionId)
+          syncRevisionThreadStats(sql, before.revisionId);
+        syncRevisionThreadStats(sql, t.revisionId);
+      },
       appendEvent: async (e) => events.insert(e).id,
       listEvents: async (threadId) => events.select("WHERE threadId = ? ORDER BY rowid", threadId),
       listLatestEvents: async (threadId, limit) =>
@@ -300,7 +345,10 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
       },
     },
     approvals: {
-      append: async (e) => approvals.append(e),
+      append: async (e) => {
+        approvals.append(e);
+        syncWorkSummary(sql, e.workId);
+      },
       listByWork: async (workId) => approvals.select("WHERE workId = ? ORDER BY rowid", workId),
       insertConfirmation: async (c) => confirmations.insert(c),
       listConfirmationsByRevision: async (revisionId) =>
@@ -353,7 +401,11 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
       save: async (teamId, email, link) => slackMembers.upsert(keyOf(teamId, email), link),
     },
     notifications: {
-      insert: async (n) => notifications.insert(n),
+      insert: async (n) => {
+        const row = notifications.insert(n);
+        if (n.readAt === undefined) adjustUnreadCounter(sql, n.recipientId, 1, uncountable);
+        return row;
+      },
       // 同じ時刻の通知は追加順のまま（inMemory の安定ソートと同じ）
       listForUser: async (userId, limit) =>
         notifications.select(
@@ -371,9 +423,18 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
           limit,
         ),
       findById: async (id) => notifications.get(id),
-      update: async (n) => notifications.put(n),
-      countUnread: async (userId) =>
-        notifications.count("recipientId = ? AND readAt IS NULL", userId),
+      update: async (n) => {
+        const prev = notifications.get(n.id);
+        notifications.put(n);
+        // 未読の数を同じトランザクションで合わせる（既読にする・未読に戻す。未読のまま・既読のままなら触らない）
+        const wasUnreadOf = prev && prev.readAt === undefined ? prev.recipientId : null;
+        const isUnreadOf = n.readAt === undefined ? n.recipientId : null;
+        if (wasUnreadOf !== isUnreadOf) {
+          if (wasUnreadOf !== null) adjustUnreadCounter(sql, wasUnreadOf, -1, uncountable);
+          if (isUnreadOf !== null) adjustUnreadCounter(sql, isUnreadOf, 1, uncountable);
+        }
+      },
+      countUnread: async (userId) => readUnreadCount(sql, userId),
     },
     documents: {
       findByWork: async (workId) =>
@@ -413,17 +474,8 @@ export function createSqliteContext(sql: Sql, deps: { clock: Clock; newId?: NewI
       async findByWork(workId) {
         const work = works.get(workId);
         if (!work) return null;
-        const all = revisions.select("WHERE workId = ? ORDER BY rowid", workId);
-        const focus = focusRevisionIdOf(revisionHeadsOf(all));
-        return workSummaryOf({
-          work,
-          revisions: all,
-          focusThreads: threads.select(
-            "WHERE revisionId = ? AND deletedAt IS NULL ORDER BY rowid",
-            focus,
-          ),
-          approvalEvents: approvals.select("WHERE workId = ? ORDER BY rowid", workId),
-        });
+        // 書込み側が作り直した表を読む。行が無い・古い版の行だけ、元から数え直す（Convex の読みと同じ）
+        return readWorkSummary(sql, workId) ?? computeWorkSummary(sql, work);
       },
     },
     home: {

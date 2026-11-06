@@ -1,10 +1,34 @@
-import { changeWorkLifecycle, createWork, importWorks, updateWork } from "@mf100/application";
+import {
+  canChangeCreators,
+  changeWorkLifecycle,
+  createWork,
+  importWorks,
+  loadAuthorizedWork,
+  updateWork,
+} from "@mf100/application";
+import {
+  approvalProgressOf,
+  canRegisterWorks,
+  currentDeclarations,
+  isAccepting,
+  isAllowed,
+  isGrantActive,
+  mayAssignReviewers,
+  normalizePersonKey,
+  revisionLabel,
+  revisionThreadStatsFromRevision,
+  revisionThreadStatsOf,
+  type DirectoryUser,
+} from "@mf100/domain";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
+import { resolveUsers, userDisplayName } from "./users.ts";
+import { listMinePageOf, listMyWorks, summarizeWorkList } from "./workList.ts";
 import {
   object,
   vId,
   vLifecycleTarget,
+  vWorkGenre,
   vMediaType,
   vRegisteredPlanInfoPatch,
   vWorkMetadataFields,
@@ -40,6 +64,15 @@ const workPatch = {
   notationCategories: z.array(z.string()).optional(),
   /** SNS のアカウントの割り当て（null で外す） */
   socialProfileId: z.string().nullable().optional(),
+};
+
+/** 一覧の絞り込み（listMine と listMinePage で同じ） */
+const listArgs = {
+  year: z.number().optional(),
+  lifecycle: z.enum(["draft", "active", "on_hold", "finalized", "cancelled"]).optional(),
+  text: z.string().optional(),
+  /** 大ジャンルで絞る（Notion の select） */
+  genre: vWorkGenre.optional(),
 };
 
 export const works = {
@@ -148,6 +181,47 @@ export const works = {
   }),
 
   /**
+   * 一括登録の担当者の照合に使う利用者（CSV に書かれたメールアドレス・名前に当たる人だけ）。
+   * 一度でもサインインした委員（subject を持つ行）が対象。登録の権限（works:create と approvers:assign）がある人だけが引ける
+   */
+  "works:importDirectory": query({
+    auth: "user",
+    args: object({ keys: z.array(z.string()) }),
+    handler: async (ctx, { keys }): Promise<DirectoryUser[]> => {
+      if (!canRegisterWorks(ctx.principal!)) return [];
+      const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
+      if (wanted.size === 0) return [];
+      return ctx.sql
+        .exec(
+          `SELECT id, json_extract(doc, '$.name') AS name, json_extract(doc, '$.hurigana') AS hurigana, email
+           FROM users WHERE subject IS NOT NULL ORDER BY rowid LIMIT 5000`,
+        )
+        .flatMap((r) => {
+          const kanji = typeof r.name === "string" ? r.name : undefined;
+          const display = userDisplayName({
+            ...(kanji !== undefined ? { name: kanji } : {}),
+            ...(typeof r.hurigana === "string" ? { hurigana: r.hurigana } : {}),
+          });
+          const email = typeof r.email === "string" ? r.email : undefined;
+          const hit =
+            wanted.has(normalizePersonKey(kanji ?? "")) ||
+            wanted.has(normalizePersonKey(display)) ||
+            (email !== undefined && wanted.has(normalizePersonKey(email)));
+          return hit
+            ? [
+                {
+                  id: r.id as string,
+                  name: display,
+                  email: email ?? null,
+                  ...(kanji ? { otherNames: [kanji] } : {}),
+                },
+              ]
+            : [];
+        });
+    },
+  }),
+
+  /**
    * リンクのプレビュー（OGP）に出す題名。サインインしていない取得（Slack など）に返すので、題名だけ。
    * Convex では internalQuery を http.ts の `/og/work` が引く。ここでは public の関数として直に引ける
    */
@@ -158,5 +232,152 @@ export const works = {
       const work = await ctx.db.works.findById(workId);
       return work ? { title: work.title } : null;
     },
+  }),
+  /** 制作物詳細（U-03）。権限のない利用者には作品の存在も返さない（A-01） */
+  "works:get": query({
+    auth: "user",
+    args: object({ workId: z.string() }),
+    handler: async (ctx, { workId }) => {
+      const principal = ctx.principal!;
+      const { work, grants } = await loadAuthorizedWork(ctx.db, principal, workId, "work.view");
+      const revisions = (await ctx.db.revisions.listByWork(work.id)).sort((a, b) =>
+        a.kind === b.kind ? b.sequence - a.sequence : a.kind === "rough" ? 1 : -1,
+      );
+      const approvals = await ctx.db.approvals.listByWork(work.id);
+      const authz = { work, grants, principal };
+      // 校了者の全員と、宣言の進み具合（n 人中 m 人）。古い行（approverId だけ）も同じに読める
+      const approvers = approvalProgressOf(work, approvals, revisions);
+      const users = resolveUsers(ctx.sql, [
+        ...work.creatorIds,
+        ...work.managerIds,
+        ...(work.stakeholderIds ?? []),
+        ...(work.reviewerIds ?? []),
+        ...approvers.approverIds,
+        ...revisions.map((r) => r.submittedBy),
+        ...approvals.map((a) => a.actorId),
+      ]);
+      const openCounts = new Map<string, number>();
+      const openBotCounts = new Map<string, number>();
+      const pendingChecks = new Map<string, string[]>();
+      // 指摘件数は版の派生フィールドを優先し、無い古い行だけスレッドを読む（Convex と同じ）
+      for (const r of revisions) {
+        const checks = await ctx.db.checks.listByRevision(r.id);
+        pendingChecks.set(
+          r.id,
+          checks.filter((c) => c.state === "pending").map((c) => c.label),
+        );
+        const stats =
+          revisionThreadStatsFromRevision(r) ??
+          revisionThreadStatsOf(await ctx.db.threads.listByRevision(r.id));
+        openCounts.set(r.id, stats.unresolved);
+        openBotCounts.set(r.id, stats.openBot);
+      }
+      // 既定で開く版（受付中、無ければ最新の有効な版）の添付の要約。画面がファイルの先取りを 1 回早く始められる（web の EditorPrefetch）
+      const openRevision =
+        revisions.find(isAccepting) ??
+        revisions
+          .filter((r) => r.reviewState !== "void")
+          .sort((a, b) => b.submittedAt - a.submittedAt)[0] ??
+        null;
+      const openArtifacts = openRevision
+        ? await ctx.db.artifacts.listByRevision(openRevision.id)
+        : [];
+      return {
+        work,
+        defaultArtifacts: openRevision
+          ? {
+              revisionId: openRevision.id,
+              artifacts: openArtifacts.map((a) => ({
+                id: a.id,
+                type: a.type,
+                role: a.role,
+                fileName: a.fileName,
+              })),
+            }
+          : null,
+        people: {
+          creators: work.creatorIds.map((id) => users.get(id)),
+          managers: work.managerIds.map((id) => users.get(id)),
+          stakeholders: (work.stakeholderIds ?? []).map((id) => users.get(id)),
+          approver: users.get(approvers.approverIds[0]!),
+          approvers: approvers.approverIds.map((id) => users.get(id)),
+        },
+        /** 校了の進み具合: 校了者ごとの宣言（数えている版の分）と、校了とみなす人数 */
+        approval: {
+          quorum: approvers.quorum,
+          revisionId: approvers.revisionId,
+          reached: approvers.reached,
+          approvers: approvers.approverIds.map((id) => ({
+            user: users.get(id),
+            declared: approvers.declaredIds.includes(id),
+            isMe: id === principal.userId,
+          })),
+          declaredCount: approvers.declaredIds.length,
+          /** 閲覧している人が校了者で、まだ宣言していないか（校了の操作を出す） */
+          canDeclare:
+            approvers.approverIds.includes(principal.userId) &&
+            !approvers.declaredIds.includes(principal.userId),
+        },
+        /** 「現在の版」の申告（写真・めい・指針外の色。Notion の formula に相当）。申告の無い版なら null */
+        currentDeclarations: currentDeclarations(revisions),
+        revisions: revisions.map((r) => ({
+          ...r,
+          label: revisionLabel(r),
+          submitter: users.get(r.submittedBy),
+          unresolvedCount: openCounts.get(r.id) ?? 0,
+          openBotCount: openBotCounts.get(r.id) ?? 0,
+          pendingChecks: pendingChecks.get(r.id) ?? [],
+        })),
+        acceptingRevisionId: revisions.find(isAccepting)?.id ?? null,
+        approvals: approvals
+          .map((a) => ({ ...a, actor: users.get(a.actorId) }))
+          .sort((a, b) => a.createdAt - b.createdAt),
+        activeGrantCount: grants.filter(isGrantActive).length,
+        can: {
+          edit: isAllowed("work.edit", authz),
+          transferCreators: canChangeCreators(work, principal),
+          submit: isAllowed("revision.submit", authz),
+          decide: isAllowed("comment.decide", authz),
+          comment: isAllowed("comment.post", authz),
+          assign: isAllowed("review.assign", authz),
+          editReviewers:
+            mayAssignReviewers(authz) &&
+            work.lifecycle !== "finalized" &&
+            work.lifecycle !== "cancelled",
+          finalize: isAllowed("work.finalize", authz),
+          reopen: isAllowed("work.reopen", authz),
+          manageAcl: isAllowed("acl.manage", authz),
+          viewAudit: isAllowed("audit.view", authz),
+        },
+      };
+    },
+  }),
+
+  /** 制作物一覧（U-02）。自分が見られる制作物を返す（通常の制作物は委員なら誰でも。非公開は関わる人だけ） */
+  "works:listMine": query({
+    auth: "user",
+    args: object(listArgs),
+    handler: async (ctx, args) =>
+      summarizeWorkList(ctx, ctx.principal!, await listMyWorks(ctx), args),
+  }),
+
+  /**
+   * 制作物一覧のページ。year / lifecycle は索引で絞り、genre / text はページの後で絞るので、ページは短い・空のことがある
+   * （続きは isDone まで continueCursor で読む）。text ありの続きの印は `{ phase, cursor }` の JSON
+   */
+  "works:listMinePage": query({
+    auth: "user",
+    args: object({
+      paginationOpts: object({
+        numItems: z.number(),
+        cursor: z.string().nullable(),
+        endCursor: z.string().nullable().optional(),
+        id: z.number().optional(),
+        maximumRowsRead: z.number().optional(),
+        maximumBytesRead: z.number().optional(),
+      }),
+      ...listArgs,
+    }),
+    handler: async (ctx, args) => listMinePageOf(ctx, ctx.principal!, args),
   }),
 } satisfies Record<string, FnDef>;

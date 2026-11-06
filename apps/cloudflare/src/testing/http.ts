@@ -19,10 +19,12 @@ export function fakeDb(wrap: (sql: Sql) => Sql = (s) => s, env: Record<string, s
   const raw = nodeSql();
   migrate(raw);
   const sql = wrap(raw);
+  /** テストが進める時計（期限・「今」を使う読みを確かめる）。既定は 2026-11-01 */
+  const clock = { current: Date.UTC(2026, 10, 1) };
   const host: Host = {
     sql,
     env: { MF100_SYSTEM_ADMIN_SUBJECTS: "", ...env } as Env,
-    now: () => Date.UTC(2026, 10, 1),
+    now: () => clock.current,
     transaction: async (fn) => {
       raw.exec("SAVEPOINT call");
       try {
@@ -38,6 +40,9 @@ export function fakeDb(wrap: (sql: Sql) => Sql = (s) => s, env: Record<string, s
   };
   const notified: string[][] = [];
   return {
+    clock,
+    /** 派生表を直に覗く・壊す用（追跡も巻き戻しも通さない） */
+    sql: raw,
     /** テストが結果を覗く用（アプリを通さない） */
     db: createSqliteContext(raw, { clock: { now: host.now } }),
     notified,

@@ -7,6 +7,7 @@ import {
   sendTestNotification,
 } from "@mf100/application";
 import { z } from "zod";
+import { readUnreadCount } from "../sqlite/derived.ts";
 import { mutation, query, type FnDef } from "./define.ts";
 import { object, vId } from "./validators.ts";
 
@@ -26,11 +27,11 @@ export const notifications = {
       }),
   }),
 
-  // Convex は notificationCounters 表を読む。ここは集計の派生表を持たず、notifications を数える
+  /** 未読の数。全画面で購読されるので、通知の行は数えず notificationCounters の 1 行を読む（無ければ 100 件まで数える） */
   "notifications:unreadCount": query({
     auth: "user",
     args: object({}),
-    handler: async (ctx) => ctx.db.notifications.countUnread(ctx.userId!),
+    handler: async (ctx) => readUnreadCount(ctx.sql, ctx.userId!),
   }),
 
   "notifications:markRead": mutation({

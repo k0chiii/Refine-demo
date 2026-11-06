@@ -22,7 +22,11 @@ export interface TableSpec {
 export const TABLES: readonly TableSpec[] = [
   // id は払い出した利用者 ID（Principal.userId）。subject は Nogiku の sub で、本人の特定（subject → id）にだけ使う
   { name: "users", cols: ["name", "email", "nameKanji", "subject"], unique: [["subject"]] },
-  { name: "works", cols: ["socialProfileId", "ownerTeamId"], indexes: [["socialProfileId"]] },
+  {
+    name: "works",
+    cols: ["socialProfileId", "ownerTeamId", "year", "lifecycle"],
+    indexes: [["socialProfileId"], ["year", "lifecycle"]],
+  },
   {
     name: "revisions",
     cols: ["workId", "reviewState", "deadlineAt"],
@@ -48,7 +52,11 @@ export const TABLES: readonly TableSpec[] = [
   { name: "events", cols: ["threadId"], indexes: [["threadId"]] },
   { name: "commentReads", cols: ["userId", "threadId"], indexes: [["userId"]] },
   { name: "threadSubscriptions", cols: ["userId", "threadId"], indexes: [["threadId"]] },
-  { name: "assignments", cols: ["revisionId", "reviewerId"], indexes: [["revisionId"]] },
+  {
+    name: "assignments",
+    cols: ["revisionId", "reviewerId"],
+    indexes: [["revisionId"], ["reviewerId"]],
+  },
   {
     name: "grants",
     keyless: true,
@@ -61,7 +69,11 @@ export const TABLES: readonly TableSpec[] = [
     cols: ["revisionId", "confirmedAt"],
     indexes: [["revisionId"]],
   },
-  { name: "checks", cols: ["revisionId"], indexes: [["revisionId"]] },
+  {
+    name: "checks",
+    cols: ["revisionId", "assigneeId"],
+    indexes: [["revisionId"], ["assigneeId"]],
+  },
   {
     name: "notifications",
     cols: ["recipientId", "readAt", "createdAt"],
@@ -104,6 +116,13 @@ export const TABLES: readonly TableSpec[] = [
     cols: ["threadId", "createdAt", "abandonedAt", "removedAt", "purgedAt"],
     indexes: [["threadId"]],
   },
+  // ---- 派生表（書き込みと同じトランザクションで作り直す。sqlite/derived.ts。Convex の lib/adapters.ts と同じ契約）
+  // 制作物ごとの要約。id は workId。acceptingId から「受付中の版の制作物」を引く（ダッシュボードの候補）
+  { name: "workSummaries", cols: ["acceptingId"], indexes: [["acceptingId"]] },
+  // 制作者・統括・校了者の職責の索引（by_user で「自分に関係する制作物」を引く）。id は workId|role|userId
+  { name: "workRoles", cols: ["workId", "userId"], indexes: [["userId"], ["workId"]] },
+  // 利用者ごとの未読の通知の数。id は userId
+  { name: "notificationCounters" },
   { name: "audit", keyless: true },
   { name: "idempotency" },
 ];
@@ -115,6 +134,12 @@ function createTable(t: TableSpec): string {
   const head = t.keyless ? [] : ["id TEXT PRIMARY KEY"];
   return `CREATE TABLE IF NOT EXISTS ${t.name} (${[...head, "doc TEXT NOT NULL", ...generated].join(", ")})`;
 }
+
+/**
+ * 全文検索の仮想表（FTS5）。TABLES の「doc 1 つの表」ではないので別に持つ。名前は書き込みと読みの追跡（run.ts）が使う。
+ * tokens は 1/2-gram の token（sqlite/workSearch.ts）。rowid は works の rowid と揃える（並びと、行の引き直しのため）
+ */
+export const FTS_TABLES: readonly string[] = ["workSearch"];
 
 /**
  * 何度呼んでも同じ（CREATE ... IF NOT EXISTS だけ）。
@@ -132,4 +157,7 @@ export function migrate(sql: Sql): void {
         `CREATE UNIQUE INDEX IF NOT EXISTS ux_${t.name}_${cols.join("_")} ON ${t.name} (${cols.join(", ")})`,
       );
   }
+  sql.exec(
+    "CREATE VIRTUAL TABLE IF NOT EXISTS workSearch USING fts5(tokens, workId UNINDEXED, year UNINDEXED, lifecycle UNINDEXED)",
+  );
 }
