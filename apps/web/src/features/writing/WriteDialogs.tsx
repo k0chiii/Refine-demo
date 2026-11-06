@@ -161,7 +161,7 @@ const shortcutGroups: Array<[string, Array<[string, string]>]> = [
     [
       ["太字 / 斜体 / 下線", "Ctrl+B / Ctrl+I / Ctrl+U"],
       ["取り消し線", "Alt+Shift+5"],
-      ["上付き / 下付き", "Ctrl+. / Ctrl+,"],
+      ["ハイライト", "Ctrl+Shift+H"],
       ["書式をクリア", "Ctrl+\\"],
     ],
   ],
@@ -170,7 +170,6 @@ const shortcutGroups: Array<[string, Array<[string, string]>]> = [
     [
       ["標準テキスト", "Ctrl+Alt+0"],
       ["見出し 1〜3", "Ctrl+Alt+1〜3"],
-      ["左 / 中央 / 右 / 両端揃え", "Ctrl+Shift+L / E / R / J"],
       ["番号付き / 箇条書き / チェックリスト", "Ctrl+Shift+7 / 8 / 9"],
       ["インデント減 / 増（リスト）", "Ctrl+[ / Ctrl+]"],
     ],

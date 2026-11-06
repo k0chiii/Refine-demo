@@ -27,7 +27,10 @@ import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { M3eTooltip } from "@m3e/react/tooltip";
-import { documentExtensions, highlightColors, paragraphStyles, textColors } from "./extensions";
+import { UndoAutoFormat } from "./undoAutoFormat";
+import { documentExtensions, paragraphStyles } from "./extensions";
+import { MarkdownSource } from "./MarkdownSource";
+import { stripUnrepresentableFromSlice } from "./markdownFidelity";
 import { buildPlainText, documentHtml } from "./plainText";
 import { NotationMarks, SearchReplace } from "./plugins";
 import { PaneTabs } from "@/ui/PaneTabs";
@@ -43,6 +46,7 @@ import {
   type FormatState,
   type ToolbarActions,
   type ToolbarTier,
+  type WriteMode,
 } from "./WriteToolbar";
 
 type Panel = "outline" | "find" | "notation" | "refs";
@@ -224,6 +228,9 @@ function WriteSurface({
       return false;
     }
   });
+  // 原文（Markdown）で書くか、プレビュー（ふだんの編集）か。原文での入力は MarkdownSource が止まってからエディタへ入れる
+  const [mode, setMode] = useState<WriteMode>("preview");
+  const sourceApply = useRef<(() => void) | null>(null);
   const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null);
   const [mainW, setMainW] = useState(0);
   const [bodyW, setBodyW] = useState(0);
@@ -277,6 +284,7 @@ function WriteSurface({
 
   const editor = useEditor({
     extensions: [
+      UndoAutoFormat,
       ...documentExtensions({
         placeholder: canEdit ? "ここに入力するか、# で見出し、- で箇条書き" : "",
         editable: canEdit,
@@ -289,6 +297,8 @@ function WriteSurface({
     content: collaboration?.initialContent ?? initial,
     editable: canEdit,
     editorProps: {
+      // 色・ハイライトの色・揃え・上付き/下付きは Markdown で表せないので、貼り付けでは入れない
+      transformPasted: stripUnrepresentableFromSlice,
       attributes: {
         class: "doc",
         "aria-label": "本文",
@@ -443,6 +453,7 @@ function WriteSurface({
   };
   const download = (kind: "html" | "txt" | "md") => {
     if (!editor) return;
+    sourceApply.current?.();
     const body =
       kind === "html"
         ? documentHtml(workTitle, editor.getHTML())
@@ -457,17 +468,28 @@ function WriteSurface({
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
+  // 原文のあいだは紙面（エディタ）を隠しているので、プレビューに戻してから印刷する
+  const print = () => {
+    if (mode === "preview") return window.print();
+    sourceApply.current?.();
+    setMode("preview");
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  };
+  const changeMode = (next: WriteMode) => {
+    if (next === "preview") sourceApply.current?.();
+    setMode(next);
+  };
   const actions: ToolbarActions = {
     openLink,
     openFind,
     openCount: () => setCountOpen(true),
     openShortcuts: () => setShortcutsOpen(true),
-    print: () => window.print(),
+    print: () => print(),
     download,
   };
   const startSubmit = async () => {
     if (!editor) return;
-    dirty.current = dirty.current || false;
+    sourceApply.current?.();
     await flush();
     if (collaboration && (dirty.current || sendableSteps(editor.state))) return;
     const html = documentHtml(workTitle, editor.getHTML());
@@ -487,7 +509,7 @@ function WriteSurface({
       sink: () => (canEdit ? cmd.sink() : false),
       lift: () => (canEdit ? cmd.lift() : false),
       save: () => (void flush(), true),
-      print: () => (window.print(), true),
+      print: () => (print(), true),
     };
   }
 
@@ -516,7 +538,10 @@ function WriteSurface({
 
   const plain = editor ? buildPlainText(editor.state.doc).text : "";
   const counts = liveCount ? countText(plain) : null;
-  const tier: ToolbarTier = mainW >= 920 ? "full" : mainW >= 700 ? "mid" : "narrow";
+  // 入らない操作は末尾側から順にその他メニューへ畳む（full: 文字ラベル付きの切り替え＋インデント、mid: アイコンだけの切り替え、
+  // narrow: リストもメニューへ、tight: ハイライトと切り替えもメニューへ）
+  const tier: ToolbarTier =
+    mainW >= 1180 ? "full" : mainW >= 960 ? "mid" : mainW >= 800 ? "narrow" : "tight";
   const desktopPanel = !mobile && panel !== null;
 
   const statusText =
@@ -591,6 +616,16 @@ function WriteSurface({
         </span>
       </AppBarSlot>
       <AppBarSlot slot="actions">
+        {canEdit && compact ? (
+          <M3eIconButton
+            aria-label="原文（Markdown）で編集"
+            toggle
+            selected={mode === "source"}
+            onClick={() => changeMode(mode === "source" ? "preview" : "source")}
+          >
+            <M3eIcon name="markdown" className={mode === "source" ? "icon--on" : ""} />
+          </M3eIconButton>
+        ) : null}
         {canEdit && canSubmit ? (
           compact ? (
             <M3eIconButton
@@ -621,12 +656,35 @@ function WriteSurface({
         <div className="write__main" ref={mainRef}>
           {editor && fmt && canEdit && !compact ? (
             <div className="write__toolbar">
-              <WriteToolbar editor={editor} state={fmt} tier={tier} actions={actions} />
+              <WriteToolbar
+                editor={editor}
+                state={fmt}
+                tier={tier}
+                actions={actions}
+                mode={mode}
+                onMode={changeMode}
+              />
             </div>
           ) : null}
           <div className="write__canvas">
             <div className="write__page">
-              <EditorContent editor={editor} />
+              {/* 原文のあいだはエディタを消さずに隠す（共同編集・検索の仕組みをそのまま動かしておく） */}
+              <div hidden={mode === "source"}>
+                <EditorContent editor={editor} />
+              </div>
+              {mode === "source" && editor && canEdit ? (
+                <MarkdownSource
+                  editor={editor}
+                  applyRef={sourceApply}
+                  onEdit={() => {
+                    dirty.current = true;
+                    if (!conflict.current) setStatus({ kind: "dirty" });
+                    schedule();
+                  }}
+                  onSave={() => void flush()}
+                  onPrint={print}
+                />
+              ) : null}
             </div>
           </div>
           {counts ? (
@@ -664,27 +722,12 @@ function WriteSurface({
               ))}
             </M3eToolbar>
           ) : null}
-          {editor && fmt && canEdit && compact ? (
+          {editor && fmt && canEdit && compact && mode === "preview" ? (
             <MobileFormatBar
               editor={editor}
               state={fmt}
               keyboard={kb > 0}
               onStyle={() => setSheet(styleSheet(editor, fmt))}
-              onColor={() =>
-                setSheet(
-                  colorSheet("文字の色", textColors, formatCommands(editor).color, fmt.color),
-                )
-              }
-              onHighlight={() =>
-                setSheet(
-                  colorSheet(
-                    "ハイライトの色",
-                    highlightColors,
-                    formatCommands(editor).highlight,
-                    fmt.highlight,
-                  ),
-                )
-              }
               onLink={actions.openLink}
               onMore={() => setSheet(moreSheet(editor, actions, openPanel))}
             />
@@ -818,23 +861,6 @@ function styleSheet(editor: Editor, s: FormatState) {
       label: p.label,
       selected: s.style === p.id,
       onSelect: () => void cmd.style(p.id),
-    })),
-  };
-}
-
-function colorSheet(
-  title: string,
-  list: typeof textColors,
-  run: (v: string | null) => unknown,
-  current: string | null,
-) {
-  return {
-    title,
-    items: list.map((c) => ({
-      icon: c.value ? "circle" : "block",
-      label: c.label,
-      selected: current === c.value,
-      onSelect: () => void run(c.value),
     })),
   };
 }
