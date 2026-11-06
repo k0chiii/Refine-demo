@@ -1,11 +1,23 @@
 import { isPushSubscribed, subscribePush, unsubscribePush } from "@mf100/application";
 import { z } from "zod";
+import { vapidKeysFromEnv } from "../delivery/webpush.ts";
 import { mutation, query, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
 
-// apps/convex/convex/push.ts の写し（端末への通知 Web Push。config は VAPID の鍵を読む別の単位）
+// apps/convex/convex/push.ts の写し（端末への通知 Web Push。enqueue / completed は Convex の旧い予約の名残なので移さない）
 
 export const push = {
+  /** ブラウザに渡す公開鍵。鍵（VAPID_PUBLIC_KEY・VAPID_PRIVATE_KEY・VAPID_SUBJECT）が揃わない環境では null */
+  "push:config": query({
+    auth: "user",
+    args: object({}),
+    handler: async (ctx) => {
+      // ponytail: wrangler types の Env に秘密は出ない（VAPID_* は未宣言）。delivery と同じく、型を緩めて名前で読む
+      const keys = vapidKeysFromEnv(ctx.env as unknown as Record<string, string | undefined>);
+      return keys ? { publicKey: keys.publicKey } : null;
+    },
+  }),
+
   /** この端末（endpoint）に自分宛ての通知を送っているか */
   "push:status": query({
     auth: "user",

@@ -6,20 +6,198 @@ import {
   deleteThread,
   editReply as editReplyUseCase,
   editThread,
+  listCarryCandidates,
+  listCommentFileViews,
+  loadAuthorizedWork,
   markCommentRead,
   postComment,
+  replyFileIds,
   replyToThread,
   resolveMigratedFeedbackThread,
+  searchMentionCandidates as searchMentionCandidatesUseCase,
+  searchMentionGroups as searchMentionGroupsUseCase,
   setThreadSubscription,
   toggleCommentReaction,
+  type AppContext,
 } from "@mf100/application";
+import {
+  DomainError,
+  groupMentionToken,
+  isAllowed,
+  projectThreadEvents,
+  revisionLabel,
+  summarizeCommentReactions,
+  type ReactionEntry,
+} from "@mf100/domain";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
+import { resolveUsers, type UserSummary } from "./users.ts";
 import { object, vAnchor, vDecision, vId, vSeverity, vThreadKind } from "./validators.ts";
 
-// apps/convex/convex/comments.ts の写し（use case の薄い包みだけ。events / carryCandidates / searchMentionCandidates は画面向けの読みで別の単位）
+// apps/convex/convex/comments.ts の写し（lib/reactions.ts と lib/threadActivity.ts の必要な分を、下の helper に写した）
+
+/** 画面に渡すリアクションの集計（絵文字・人数・自分が付けたか・付けた人の名前） */
+const reactionViews = (
+  entries: readonly ReactionEntry[] | undefined,
+  viewerId: string,
+  users: ReadonlyMap<string, UserSummary>,
+) =>
+  summarizeCommentReactions(entries, viewerId).map(({ userIds, ...r }) => ({
+    ...r,
+    users: userIds.map((id) => ({ id, name: users.get(id)?.name ?? "（不明なユーザー）" })),
+  }));
+
+/** メンションしたグループの名前（ID → 名前）。消えたグループは入らない */
+async function loadGroupNames(
+  db: AppContext,
+  groupIds: Iterable<string>,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const id of new Set(groupIds)) {
+    const group = await db.groups.findById(id);
+    if (group) out.set(id, group.name);
+  }
+  return out;
+}
+
+/**
+ * 本文の「@名前」を強調するための名前の一覧: メンションした人と、メンションしたグループ（ID は「group:ID」）。
+ * 知らない人・消えたグループは出さない
+ */
+function mentionViews(
+  userIds: readonly string[],
+  groupIds: readonly string[],
+  users: ReadonlyMap<string, UserSummary>,
+  groupNames: ReadonlyMap<string, string>,
+): UserSummary[] {
+  const out = userIds.flatMap((id) => {
+    const u = users.get(id);
+    return u ? [u] : [];
+  });
+  for (const id of groupIds) {
+    const name = groupNames.get(id);
+    if (name) out.push({ id: groupMentionToken(id), name, email: null });
+  }
+  return out;
+}
+
+const stringsOf = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
 export const comments = {
+  /** スレッドの流れ（返信・採否・担当・持越）。削除・訂正の記録は並べず、訂正した返信には edited が付く */
+  "comments:events": query({
+    auth: "user",
+    args: object({ threadId: vId }),
+    handler: async (ctx, { threadId }) => {
+      const principal = ctx.principal!;
+      const thread = await ctx.db.threads.findById(threadId);
+      if (!thread) throw new DomainError("forbidden", { threadId });
+      const revision = await ctx.db.revisions.findById(thread.revisionId);
+      if (!revision) throw new DomainError("forbidden", { threadId });
+      const { work, grants } = await loadAuthorizedWork(
+        ctx.db,
+        principal,
+        revision.workId,
+        "work.view",
+      );
+      // 削除されたスレッドは一覧に出ないので、履歴も返さない
+      const events =
+        thread.deletedAt === undefined
+          ? projectThreadEvents(
+              await ctx.db.threads.listEvents(threadId),
+              principal.userId,
+              work.lifecycle,
+              principal,
+            )
+          : [];
+      const mentionsOf = (e: (typeof events)[number]) =>
+        stringsOf((e.payload as { mentions?: unknown } | undefined)?.mentions);
+      const groupsOf = (e: (typeof events)[number]) =>
+        stringsOf((e.payload as { mentionGroupIds?: unknown } | undefined)?.mentionGroupIds);
+      const groupNames = await loadGroupNames(ctx.db, events.flatMap(groupsOf));
+      const users = resolveUsers(ctx.sql, [
+        ...events.map((e) => e.actorId),
+        ...events.flatMap(mentionsOf),
+        ...events.flatMap((e) => (e.reactions ?? []).flatMap((r) => r.userIds)),
+      ]);
+      return {
+        /** 自分がこのスレッドを最後に読んだ時刻（「ここから未読」の線の位置。読んだことが無ければ null） */
+        readAt: await ctx.db.threads.readAt(principal.userId, threadId),
+        subscribed: await ctx.db.threads.isSubscribed(principal.userId, threadId),
+        canDecide:
+          thread.deletedAt === undefined &&
+          isAllowed("comment.decide", { work, grants, principal }) &&
+          work.lifecycle !== "finalized",
+        events: (
+          await Promise.all(
+            events.map(async (e) => ({
+              ...e,
+              actor: users.get(e.actorId),
+              reactions: reactionViews(e.reactions, principal.userId, users),
+              mentionUsers: mentionViews(mentionsOf(e), groupsOf(e), users, groupNames),
+              /** 返信の添付（検証済みで削除されていないもの） */
+              files:
+                e.eventType === "replied"
+                  ? await listCommentFileViews(ctx.db, replyFileIds(e.payload))
+                  : [],
+            })),
+          )
+        ).sort((a, b) => a.createdAt - b.createdAt),
+      };
+    },
+  }),
+
+  /** 前版の未解決指摘のうち、この版へ持ち越せる候補（v1 / C5） */
+  "comments:carryCandidates": query({
+    auth: "user",
+    args: object({ revisionId: vId }),
+    handler: async (ctx, { revisionId }) => {
+      const candidates = await listCarryCandidates(ctx.db, ctx.principal!, revisionId);
+      const labels = new Map<string, string>();
+      for (const c of candidates) {
+        if (!labels.has(c.revisionId)) {
+          const r = await ctx.db.revisions.findById(c.revisionId);
+          labels.set(c.revisionId, r ? revisionLabel(r) : "?");
+        }
+      }
+      const users = resolveUsers(
+        ctx.sql,
+        candidates.map((c) => c.authorId),
+      );
+      return candidates
+        .map((c) => ({
+          ...c,
+          author: users.get(c.authorId),
+          revisionLabel: labels.get(c.revisionId) ?? "?",
+        }))
+        .sort((a, b) => a.createdAt - b.createdAt);
+    },
+  }),
+
+  /**
+   * メンションの候補を「@」に続けて打った文字で探す（その制作物を見られる人のうち名前・メールが一致する人。名前順・20 人まで）。
+   * 候補を取れるのも見られる人だけ。名前が当たるグループは人より前に並べる。グループの ID は「group:ID」で返し、
+   * memberCount（知らせる人数）を添える
+   */
+  "comments:searchMentionCandidates": query({
+    auth: "user",
+    args: object({ workId: z.string(), text: z.string() }),
+    handler: async (ctx, args) => {
+      const groups = await searchMentionGroupsUseCase(ctx.db, ctx.principal!, args);
+      const people = await searchMentionCandidatesUseCase(ctx.db, ctx.principal!, args);
+      return [
+        ...groups.map((g) => ({
+          id: groupMentionToken(g.id),
+          name: g.name,
+          email: null,
+          memberCount: g.memberCount,
+        })),
+        ...people.map((p) => ({ id: p.id, name: p.name, email: p.email })),
+      ];
+    },
+  }),
+
   /** 新規指摘（F-06 / F-07 / A-04） */
   "comments:post": mutation({
     auth: "user",

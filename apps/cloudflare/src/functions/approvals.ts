@@ -1,6 +1,12 @@
-import { confirmIndependently, finalizeWork, reopenWork } from "@mf100/application";
+import {
+  confirmIndependently,
+  finalizeWork,
+  getConfirmationStatus,
+  reopenWork,
+} from "@mf100/application";
 import { z } from "zod";
-import { mutation, type FnDef } from "./define.ts";
+import { mutation, query, type FnDef } from "./define.ts";
+import { resolveUsers } from "./users.ts";
 import { object, vId } from "./validators.ts";
 
 // apps/convex/convex/approvals.ts の写し
@@ -48,6 +54,30 @@ export const approvals = {
     handler: async (ctx, args) => {
       const c = await confirmIndependently(ctx.db, ctx.principal!, args);
       return { id: c.id, revisionId: c.revisionId, confirmedAt: c.confirmedAt };
+    },
+  }),
+
+  /** 独立確認の状況（校了ダイアログと「情報」に出す）。制作物を見られる人だけが引ける */
+  "approvals:confirmationStatus": query({
+    auth: "user",
+    args: object({ workId: vId }),
+    handler: async (ctx, { workId }) => {
+      const s = await getConfirmationStatus(ctx.db, ctx.principal!, { workId });
+      const users = resolveUsers(ctx.sql, s.valid ? [s.valid.confirmerId] : []);
+      return {
+        required: s.required,
+        requiredForMe: s.requiredForMe,
+        candidateRevisionId: s.candidateRevisionId,
+        valid: s.valid
+          ? {
+              confirmer: users.get(s.valid.confirmerId) ?? null,
+              confirmedAt: s.valid.confirmedAt,
+              note: s.valid.note ?? null,
+            }
+          : null,
+        canConfirm: s.canConfirm,
+        confirmedByMe: s.confirmedByMe,
+      };
     },
   }),
 } satisfies Record<string, FnDef>;

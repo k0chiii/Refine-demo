@@ -1,6 +1,7 @@
 import { acl } from "./acl.ts";
 import { admin } from "./admin.ts";
 import { approvals } from "./approvals.ts";
+import { artifacts } from "./artifacts.ts";
 import { checks } from "./checks.ts";
 import { commentFiles } from "./commentFiles.ts";
 import { comments } from "./comments.ts";
@@ -22,6 +23,8 @@ import { slackWorkspaces } from "./slackWorkspaces.ts";
 import { social } from "./social.ts";
 import { submissions } from "./submissions.ts";
 import { teams } from "./teams.ts";
+import { users } from "./users.ts";
+import { workMetrics } from "./workMetrics.ts";
 import { works } from "./works.ts";
 
 /** モジュール名（= apps/convex/convex/<module>.ts と同じ）→ その関数。鍵は `<module>:<function>` */
@@ -29,6 +32,7 @@ export const modules = {
   acl,
   admin,
   approvals,
+  artifacts,
   checks,
   commentFiles,
   comments,
@@ -49,6 +53,8 @@ export const modules = {
   social,
   submissions,
   teams,
+  users,
+  workMetrics,
   works,
 };
 
