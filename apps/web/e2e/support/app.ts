@@ -203,6 +203,16 @@ export class App {
     return this.page.locator("m3e-dialog[open]");
   }
 
+  /** 文章エディタの上のツールバーの「原文／プレビュー」の切り替え（radio） */
+  writeMode(name: "原文" | "プレビュー") {
+    return this.page.getByRole("radio", { name });
+  }
+
+  /** 文章エディタの Markdown の原文（原文のあいだだけ出る） */
+  writeSource() {
+    return this.page.getByRole("textbox", { name: "Markdown の原文" });
+  }
+
   /** outlined form-field 内の M3E 日付（YYYY-MM-DD） */
   async fillOutlinedDate(scope: Locator, fieldLabel: string, isoDate: string) {
     const [y, m, d] = isoDate.split("-");
