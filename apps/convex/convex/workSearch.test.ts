@@ -62,19 +62,15 @@ const searchRows = (t: T, workId: Id<"works">) =>
       .collect(),
   );
 
-/** この変更より前の行: 検索の行が無く、works に token を持つ（old）か、何も持たない（unindexed） */
-async function makeLegacy(t: T, workId: Id<"works">, kind: "old" | "unindexed") {
+/** 検索の行が無い制作物（移行前の行・シードの行）。works には token を持たない */
+async function makeLegacy(t: T, workId: Id<"works">) {
   await t.run(async (ctx) => {
     for (const row of await ctx.db
       .query("workSearch")
       .withIndex("by_work", (q) => q.eq("workId", workId))
       .collect())
       await ctx.db.delete(row._id);
-    const doc = (await ctx.db.get(workId))!;
-    await ctx.db.patch(workId, {
-      searchVersion: undefined,
-      searchTokens: kind === "old" ? substringTokens(workSearchText(doc)) : undefined,
-    });
+    await ctx.db.patch(workId, { searchVersion: undefined });
   });
 }
 
@@ -85,8 +81,8 @@ describe("検索と要約の派生データ", () => {
     const old = await create("五月祭の旧受付");
     const unindexed = await create("五月祭の未索引");
     const secret = await create("五月祭の非公開");
-    await makeLegacy(t, old, "old");
-    await makeLegacy(t, unindexed, "unindexed");
+    await makeLegacy(t, old);
+    await makeLegacy(t, unindexed);
     const everything = [current, old, unindexed, secret].sort();
     expect(await pages(c, "祭の")).toEqual(everything);
     expect(await pages(c, "場者")).toEqual(everything);
@@ -129,14 +125,14 @@ describe("検索と要約の派生データ", () => {
     expect(await pages(c, "春の", { year: 100, lifecycle: "active" })).toEqual([]);
   });
 
-  it("移行は token を検索の行へ移し、works から外す（何度流しても同じ）", async () => {
+  it("移行は検索の行を作り、印を付ける（何度流しても同じ）", async () => {
     const { t, c, create } = await setup();
     const old = await create("五月祭の旧受付");
     const unindexed = await create("五月祭の未索引");
-    await makeLegacy(t, old, "old");
-    await makeLegacy(t, unindexed, "unindexed");
+    await makeLegacy(t, old);
+    await makeLegacy(t, unindexed);
     const before = await t.run((ctx) => ctx.db.get(old));
-    expect(before?.searchTokens).toBeTruthy();
+    expect(await searchRows(t, old)).toHaveLength(0);
 
     await t.mutation(internal.migrations.moveWorkSearchTokens, {
       cursor: null,
@@ -153,7 +149,9 @@ describe("検索と要約の派生データ", () => {
       expect(doc).toMatchObject({ searchVersion: 1, version: before!.version });
       expect(await searchRows(t, workId)).toHaveLength(1);
     }
-    expect((await searchRows(t, old))[0]!.searchTokens).toBe(before!.searchTokens);
+    expect((await searchRows(t, old))[0]!.searchTokens).toBe(
+      substringTokens(workSearchText(before!)),
+    );
     expect(await pages(c, "祭の")).toEqual([old, unindexed].sort());
   });
 });

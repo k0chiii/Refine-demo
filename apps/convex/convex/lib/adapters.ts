@@ -71,12 +71,8 @@ function fromDoc<T extends TableNames, D extends Doc<T>>(doc: D): Strip<D> & { i
   return { ...(rest as Strip<D>), id: _id as string };
 }
 
-/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks）。移行前の行に残る検索の token は捨てる */
-export const workFromDoc = (doc: Doc<"works">): Work => {
-  const { searchTokens: _tokens, ...work } = doc;
-  void _tokens;
-  return fromDoc(work as Doc<"works">) as Work;
-};
+/** works の行をドメインの Work に（索引で直接引いたところで使う。works.listMyWorks） */
+export const workFromDoc = (doc: Doc<"works">): Work => fromDoc(doc) as Work;
 
 /** id を持たない行（ruleId などの業務キーで引く表） */
 function strip<D extends { _id: unknown; _creationTime: number }>(
@@ -133,12 +129,8 @@ export async function syncWorkRoles(db: DatabaseWriter, work: Work) {
     await db.insert("workRoles", { workId, ...r });
   }
   await syncWorkSearch(db, work);
-  // 検索の token は workSearch に持つ。移行前の行に残った works.searchTokens はここで外す
-  await db.patch(workId, {
-    rolesVersion: 1,
-    searchVersion: WORK_SEARCH_VERSION,
-    searchTokens: undefined,
-  });
+  // 検索の token は workSearch に持つ（works には持たない）
+  await db.patch(workId, { rolesVersion: 1, searchVersion: WORK_SEARCH_VERSION });
   await syncWorkSummary(db, work.id);
 }
 
