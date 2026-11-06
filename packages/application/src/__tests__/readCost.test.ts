@@ -1,10 +1,27 @@
-import type { RuleDraft } from "@mf100/domain";
+import { latestReplies, type RuleDraft } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
+import { acceptingRevisionIdOf } from "../shared.ts";
+import { grantWorkPermission } from "../usecases/acl.ts";
+import {
+  deleteReply,
+  editReply,
+  postComment,
+  presentThreadActivity,
+  replyToThread,
+  THREAD_RECENT_EVENTS_READ,
+} from "../usecases/comments.ts";
 import { buildDashboard } from "../usecases/dashboard.ts";
 import { listSubmitTargets } from "../usecases/home.ts";
 import { currentRuleSet, resolveRulesForWork, saveRule } from "../usecases/notation.ts";
+import { voidRevisionUseCase } from "../usecases/submissions.ts";
 import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
-import { principals, seedWork, submitRevision, putOnHoldDirectly } from "../testing/scenario.ts";
+import {
+  HOUR,
+  principals,
+  putOnHoldDirectly,
+  seedWork,
+  submitRevision,
+} from "../testing/scenario.ts";
 
 /**
  * 読み取りの量（Convex ではデータベースの帯域と、購読が再実行される範囲になる）が増えないことの確かめ。
@@ -133,5 +150,179 @@ describe("制作物のルールの組: 当てはまるカテゴリのルール�
     expect((await currentRuleSet(ctx, [], 100)).rules).toEqual([]);
     expect(calls.rulesIn).toHaveLength(before);
     expect(calls.rulesAll).toBe(0);
+  });
+});
+
+describe("版の画面のスレッド一覧: 直近の返信は最後の数件のイベントだけから出す", () => {
+  /** イベントの読み方を数える（全件・最後の数件） */
+  function countEvents(ctx: InMemoryContext) {
+    const calls = { all: 0, latest: [] as number[] };
+    const all = ctx.threads.listEvents.bind(ctx.threads);
+    ctx.threads.listEvents = (id) => {
+      calls.all++;
+      return all(id);
+    };
+    const latest = ctx.threads.listLatestEvents.bind(ctx.threads);
+    ctx.threads.listLatestEvents = (id, limit) => {
+      calls.latest.push(limit);
+      return latest(id, limit);
+    };
+    return calls;
+  }
+
+  async function setup() {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const revision = await submitRevision(ctx, work.id, { deadlineInHours: 24 });
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.reviewer.userId],
+      permission: "review",
+    });
+    const thread = await postComment(ctx, principals.reviewer, {
+      revisionId: revision.id,
+      body: "団体名が誤り",
+      kind: "correction",
+      severity: "major",
+    });
+    const reply = async (body: string, who = principals.creator) => {
+      ctx.clock.current += 1000;
+      await replyToThread(ctx, who, { threadId: thread.id, body });
+    };
+    const replyIds = async () =>
+      (await ctx.threads.listEvents(thread.id))
+        .filter((e) => e.eventType === "replied")
+        .map((e) => e.id!);
+    const present = async () => {
+      const threads = await ctx.threads.listByRevision(revision.id);
+      return (await presentThreadActivity(ctx, principals.reviewer, threads)).get(thread.id)!;
+    };
+    /** 全件のイベントから導いた直近の返信（今までの読み方と同じ結果） */
+    const expected = async () =>
+      latestReplies(await ctx.threads.listEvents(thread.id)).map((r) => r.body);
+    return { ctx, revision, thread, reply, replyIds, present, expected };
+  }
+
+  it("返信の多いスレッドでも、全件は読まずに最後の数件だけを読む。結果は全件から導いたものと同じ", async () => {
+    const { ctx, thread, reply, replyIds, present, expected } = await setup();
+    for (let i = 1; i <= THREAD_RECENT_EVENTS_READ * 2; i++) await reply(`返信${i}`);
+    // 最後の返信を消すと、さかのぼって残りの返信が入る（消した印も最後の数件に入る）
+    ctx.clock.current += 1000;
+    await deleteReply(ctx, principals.creator, {
+      threadId: thread.id,
+      replyEventId: (await replyIds()).at(-1)!,
+    });
+    const want = await expected();
+    expect(want).toEqual([
+      `返信${THREAD_RECENT_EVENTS_READ * 2 - 3}`,
+      `返信${THREAD_RECENT_EVENTS_READ * 2 - 2}`,
+      `返信${THREAD_RECENT_EVENTS_READ * 2 - 1}`,
+    ]);
+    const calls = countEvents(ctx);
+    const v = await present();
+    expect(v.latestReplies.map((r) => r.body)).toEqual(want);
+    expect(v.replyCount).toBe(THREAD_RECENT_EVENTS_READ * 2 - 1);
+    expect(calls.all).toBe(0);
+    expect(calls.latest).toEqual([THREAD_RECENT_EVENTS_READ]);
+  });
+
+  it("最後の数件に出すべき返信が揃わない（返信の後に削除・訂正が続いた）ときは、全件を読む。結果は同じ", async () => {
+    const { ctx, thread, reply, replyIds, present, expected } = await setup();
+    for (let i = 1; i <= 4; i++) await reply(`返信${i}`);
+    for (let i = 5; i <= THREAD_RECENT_EVENTS_READ; i++) await reply(`消す${i}`);
+    // 後ろの返信を消し、残った返信を何度も訂正する（最後の数件は削除・訂正の印で埋まる）
+    for (const id of (await replyIds()).slice(4)) {
+      ctx.clock.current += 1000;
+      await deleteReply(ctx, principals.creator, { threadId: thread.id, replyEventId: id });
+    }
+    const first = (await replyIds())[0]!;
+    for (let i = 0; i < THREAD_RECENT_EVENTS_READ; i++) {
+      ctx.clock.current += 1000;
+      await editReply(ctx, principals.creator, {
+        threadId: thread.id,
+        replyEventId: first,
+        body: `訂正${i}`,
+      });
+    }
+    const want = await expected();
+    expect(want).toEqual(["返信2", "返信3", "返信4"]);
+    const calls = countEvents(ctx);
+    const v = await present();
+    expect(v.latestReplies.map((r) => r.body)).toEqual(want);
+    expect(calls.latest).toEqual([THREAD_RECENT_EVENTS_READ]);
+    expect(calls.all).toBe(1);
+  });
+
+  it("やり取りを持たない古いスレッドは、今まで通り全件から導く", async () => {
+    const { ctx, revision } = await setup();
+    const legacy = await ctx.threads.insert({
+      revisionId: revision.id,
+      authorId: principals.reviewer.userId,
+      body: "古いコメント",
+      kind: "correction",
+      severity: "major",
+      resolution: "open",
+      createdAt: ctx.clock.now(),
+    });
+    await ctx.threads.appendEvent({
+      threadId: legacy.id,
+      eventType: "replied",
+      actorId: principals.creator.userId,
+      payload: { body: "返信" },
+      createdAt: legacy.createdAt + 10,
+    });
+    const calls = countEvents(ctx);
+    const v = (await presentThreadActivity(ctx, principals.reviewer, [legacy])).get(legacy.id)!;
+    expect(v.replyCount).toBe(1);
+    expect(v.latestReplies.map((r) => r.body)).toEqual(["返信"]);
+    expect(calls.all).toBe(1);
+    expect(calls.latest).toEqual([]);
+  });
+});
+
+describe("版の画面: 受付中の版は、制作物の全ての版を読まずに決める", () => {
+  it("開いた版が受付中ならそれ。そうでなければ要約から。要約が無ければ版から数える。結果は全ての版から探したものと同じ", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const first = await submitRevision(ctx, work.id);
+    ctx.clock.current += HOUR;
+    const second = await submitRevision(ctx, work.id);
+    const old = (await ctx.revisions.findById(first.id))!;
+    const now = (await ctx.revisions.findById(second.id))!;
+    expect(old.reviewState).not.toBe("open");
+    expect(now.reviewState).toBe("open");
+
+    const calls = counted(ctx);
+    expect(await acceptingRevisionIdOf(ctx, now)).toBe(second.id);
+    expect(calls).toMatchObject({ revisions: 0, summaries: 0 });
+    expect(await acceptingRevisionIdOf(ctx, old)).toBe(second.id);
+    expect(calls).toMatchObject({ revisions: 0, summaries: 1 });
+
+    // 要約の無い（古い）制作物は版から数える
+    ctx.workSummaries.findByWork = async () => null;
+    expect(await acceptingRevisionIdOf(ctx, old)).toBe(second.id);
+    expect(calls.revisions).toBe(1);
+
+    // 受付中の版が無ければ null
+    await voidRevisionUseCase(ctx, principals.creator, { revisionId: second.id, reason: "誤提出" });
+    const voided = (await ctx.revisions.findById(second.id))!;
+    expect(await acceptingRevisionIdOf(ctx, voided)).toBeNull();
+    expect(await acceptingRevisionIdOf(ctx, old)).toBeNull();
+  });
+
+  it("要約がこの版を受付中と言うのに版が受付中でない（要約が古い）ときは、要約を信じず版から数える", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const revision = await submitRevision(ctx, work.id);
+    const summary = (await ctx.workSummaries.findByWork(work.id))!;
+    await voidRevisionUseCase(ctx, principals.creator, {
+      revisionId: revision.id,
+      reason: "誤提出",
+    });
+    ctx.workSummaries.findByWork = async () => summary; // 書き換えられる前の要約
+    const calls = counted(ctx);
+    const voided = (await ctx.revisions.findById(revision.id))!;
+    expect(await acceptingRevisionIdOf(ctx, voided)).toBeNull();
+    expect(calls.revisions).toBe(1);
   });
 });

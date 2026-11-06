@@ -122,6 +122,8 @@ export interface ThreadRepository {
   /** イベントを追記する。払い出されたイベントの ID を返す（返信に添付を付けるとき使う） */
   appendEvent(event: CommentEvent): Promise<string>;
   listEvents(threadId: string): Promise<CommentEvent[]>;
+  /** 最後に追記した `limit` 件のイベント（古い順）。一覧のカードの直近の返信のように、後ろだけで足りるとき使う */
+  listLatestEvents(threadId: string, limit: number): Promise<CommentEvent[]>;
   /** 返信（イベント）のリアクションを置き換える（空にすると持たない状態に戻す） */
   setEventReactions(eventId: string, reactions: ReactionEntry[]): Promise<void>;
   /** 返信（replied イベント）の本文と書式を置き換える（訂正。書式が無ければ平文。メンション・添付などほかの項目は変えない） */
