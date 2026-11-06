@@ -152,7 +152,7 @@ function ogWorker(): Plugin {
     apply: "build",
     configResolved(config) {
       siteUrl = null;
-      if (config.mode === "demo") return;
+      if (config.mode === "demo" || config.mode === "cloudflare") return;
       const explicit = config.env.VITE_CONVEX_SITE_URL;
       const cloud = config.env.VITE_CONVEX_URL;
       const value =
@@ -200,7 +200,7 @@ function preconnect(): Plugin {
     name: "mf100-preconnect",
     configResolved(config) {
       tags = [];
-      if (config.mode === "demo") return;
+      if (config.mode === "demo" || config.mode === "cloudflare") return;
       const origin = (value: unknown) => {
         try {
           return typeof value === "string" && value ? new URL(value).origin : null;
@@ -298,6 +298,18 @@ export default defineConfig(({ mode }) => ({
             ),
           }
         : {}),
+      // Cloudflare 版（apps/cloudflare の Hono + Durable Object）。差し替えるのは Convex の 2 つだけ。
+      // ファイルの API（@/integrations/api）は本物のまま
+      ...(mode === "cloudflare"
+        ? {
+            "convex/react": fileURLToPath(
+              new URL("./src/cloudflare/convexReact.ts", import.meta.url),
+            ),
+            "@convex-dev/auth/react": fileURLToPath(
+              new URL("./src/cloudflare/convexAuthReact.tsx", import.meta.url),
+            ),
+          }
+        : {}),
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
@@ -316,7 +328,12 @@ export default defineConfig(({ mode }) => ({
             "@convex-dev/batch-worker/test",
           ],
         }
-      : {},
+      : mode === "cloudflare"
+        ? {
+            // 中で convex/react を import するので、事前バンドルに入れると alias が効かず本物の Convex が混ざる
+            exclude: ["@convex-dev/prosemirror-sync"],
+          }
+        : {},
   // convex-test / @auth/core が参照する Node グローバルをブラウザで解決する（デモモードのみ）
   define:
     mode === "demo"

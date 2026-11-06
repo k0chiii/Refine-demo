@@ -11,6 +11,8 @@
     "test": "vp test run",
     "typecheck": "vp run verify-types",
     "dev:demo": "vp dev --mode demo",
+    "dev:cloudflare": "vp dev --mode cloudflare",
+    "build:cloudflare": "vp build --mode cloudflare",
     "build:demo": "vp run bundle-demo",
     "screenshots": "node e2e/screenshots.mjs",
     "a11y": "A11Y=1 node e2e/screenshots.mjs",
