@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness, HOUR, uploadVerified } from "../test/harness";
 
@@ -88,7 +88,7 @@ describe("Convex 統合: Notion に揃えた制作物・版・担当・ユーザ
       workId,
     ]);
     expect((await cast.admin.as.query(api.works.listMine, {})).map((w) => w.id)).toEqual([workId]);
-    await expect(cast.stranger.as.query(api.dashboard.get, {})).resolves.toBeTruthy();
+    await expect(cast.stranger.as.query(internal.dashboard.get, {})).resolves.toBeTruthy();
     // 105A: 所属を外しても委員は見られる
     await cast.admin.as.mutation(api.teams.save, {
       id: design,

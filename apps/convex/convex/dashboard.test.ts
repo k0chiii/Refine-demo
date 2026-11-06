@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { createCast, createHarness } from "../test/harness";
 import { setupWork, submitFiles } from "../test/flows";
 import { principalOf } from "./lib/principal";
@@ -62,7 +62,7 @@ describe("Convex 統合: ダッシュボードの節ごとの問い合わせ", (
       cast.approver,
       cast.stranger,
     ]) {
-      const full = await who.as.query(api.dashboard.get, {});
+      const full = await who.as.query(internal.dashboard.get, {});
       const { review, checks, finalize, assign } = full.mine;
       const rows = new Set(
         [...review, ...checks, ...finalize, ...assign, ...full.done].map((i) => i.workId),

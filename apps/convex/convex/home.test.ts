@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness } from "../test/harness";
 import { setupWork, submitFiles } from "../test/flows";
@@ -14,7 +14,7 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     const targets = await cast.creator.as.query(api.home.submitTargets, {});
     expect(targets.map((x) => x.workId)).toEqual([workId]);
     expect(await cast.reviewer.as.query(api.home.submitTargets, {})).toEqual([]);
-    const dash = await cast.creator.as.query(api.dashboard.get, {});
+    const dash = await cast.creator.as.query(internal.dashboard.get, {});
     expect(dash.mine.submit.map((i) => i.workId)).toEqual([workId]);
   });
 
@@ -24,10 +24,10 @@ describe("Convex 統合: 版を提出・自分だけのダッシュボード・�
     const workId = await setupWork(t, cast);
     await cast.reviewer.as.mutation(api.home.setPinned, { workId, pinned: true });
     expect(await cast.reviewer.as.query(api.home.pinned, { workId })).toBe(true);
-    const d = await cast.reviewer.as.query(api.dashboard.get, {});
+    const d = await cast.reviewer.as.query(internal.dashboard.get, {});
     expect(d.pinned.map((i) => i.workId)).toEqual([workId]);
     // ほかの人には影響しない。委員ならピン留めできる（105A）
-    const other = await cast.creator.as.query(api.dashboard.get, {});
+    const other = await cast.creator.as.query(internal.dashboard.get, {});
     expect(other.pinned).toHaveLength(0);
     await cast.stranger.as.mutation(api.home.setPinned, { workId, pinned: true });
     expect(await cast.stranger.as.query(api.home.pinned, { workId })).toBe(true);

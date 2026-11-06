@@ -42,7 +42,7 @@ async function readAll(cast: Cast) {
   for (const who of [cast.creator, cast.manager, cast.reviewer, cast.approver])
     out.push({
       list: await who.as.query(api.works.listMine, {}),
-      dashboard: await who.as.query(api.dashboard.get, {}),
+      dashboard: await who.as.query(internal.dashboard.get, {}),
       check: await who.as.query(api.dashboard.check, {}),
       make: await who.as.query(api.dashboard.make, {}),
       works: await who.as.query(api.dashboard.works, {}),
