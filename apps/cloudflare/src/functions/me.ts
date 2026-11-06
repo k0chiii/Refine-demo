@@ -34,7 +34,7 @@ export const me = {
         canAssignApprovers: hasOrgPermission(principal, orgPermissions.approversAssign),
         canManageGroups: canManageGroups(principal),
         source: user.source ?? null,
-        mock: ctx.env.NOGIKU_MOCK_ENABLED === "true",
+        mock: (ctx.env.NOGIKU_MOCK_ENABLED as string | undefined) === "true",
         avatar: parseAvatarConfig(user.avatar),
       };
     },

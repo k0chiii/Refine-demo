@@ -3,7 +3,7 @@
 # 使い方: apps/cloudflare で `pnpm dev --port 8790` を起こしてから `scripts/smoke.sh 8790`
 # サービス認証の「合っていれば通る」まで見るなら、起こすときに `--var MF100_UPLOAD_SECRET:<16 文字以上>` を足し、
 # 同じ値を環境変数 UPLOAD_SECRET で渡す（無ければ「秘密が未設定なら 404」だけを確かめる）。
-# 清掃（submissions:listOrphanObjects / markObjectsPurged）と取り込み（/internal/import）は MF100_CLEANUP_SECRET、
+# 清掃（submissions:listOrphanObjects / markObjectsPurged）は MF100_CLEANUP_SECRET、取り込み（/internal/import）は MF100_IMPORT_SECRET、
 # ファイル処理は PROCESSING_SECRET を同じ要領で足す（--var と環境変数）
 set -euo pipefail
 port="${1:-8790}"
@@ -77,6 +77,10 @@ if [ -n "${MF100_CLEANUP_SECRET:-}" ]; then
   assert "$(cat "$body")" '{"value":[]}' "no orphans yet"
   assert "$(cleanup markObjectsPurged '{"itemIds":["comment:nope","attempt:nope","feedback:old","nope"]}' "$auth")" 200 "submissions:markObjectsPurged -> 200"
   assert_field value 0 "unknown ids are not counted"
+  assert "$(import_rows '{"rows":[]}' "$auth")" 404 "/internal/import with the cleanup secret -> 404 (needs its own secret)"
+fi
+if [ -n "${MF100_IMPORT_SECRET:-}" ]; then
+  auth="Authorization: Bearer $MF100_IMPORT_SECRET"
   # 取り込みの往復: 1 行を入れて finish（派生表の作り直しと確認）まで通し、入れた本人でサインインすると取り込んだ id が返る
   assert "$(import_rows '{"rows":[{"table":"users","id":"smoke_imported_user","doc":{"subject":"u_smoke_imported","name":"取り込み","isSystemAdmin":false}}],"begin":true,"finish":true}' "$auth")" 200 "/internal/import with the secret -> 200"
   assert_field counts.users 1 "one user imported"
@@ -84,6 +88,16 @@ if [ -n "${MF100_CLEANUP_SECRET:-}" ]; then
   assert "$(call me:me '{"subject":"u_smoke_imported"}' '{}')" 200 "the imported user signs in"
   assert_field value.id smoke_imported_user "me:me returns the imported id"
 fi
+# 本物の Durable Object の巻き戻し: 2 行目が不正な一括登録で、1 行目も残らない（管理者の全件の統計で数える）
+admin='{"subject":"u_admin","name":"管理者"}'
+assert "$(call me:me "$admin" '{}')" 200 "admin signs in"
+assert "$(call admin:workStats "$admin" '{}')" 200 "admin:workStats before"
+before=$(node -e 'process.stdout.write(String(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).value).split("巻き戻し").length-1))' "$body")
+row='{"year":100,"purpose":"p","category":"印刷物","mediaType":"pdf","creatorIds":["'"$creator_id"'"],"managerIds":[],"approverIds":["'"$approver_id"'"],"notationCategories":[],"title":"TITLE"}'
+assert "$(call works:importBatch "$me" "{\"rows\":[${row/TITLE/巻き戻し 1},${row/TITLE/}]}")" 400 "importBatch with a bad 2nd row -> 400"
+assert "$(call admin:workStats "$admin" '{}')" 200 "admin:workStats after"
+after=$(node -e 'process.stdout.write(String(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).value).split("巻き戻し").length-1))' "$body")
+if [ "$before" != "$after" ]; then echo "FAIL rollback: 1st row survived the failed import"; exit 1; fi; echo "ok   failed import left nothing behind (real DO rollback)"
 assert "$(call documents:get "$creator" "{\"workId\":\"$id\"}")" 200 "documents:get -> 200"
 # AI 校正: キー（ANTHROPIC_API_KEY など）が無ければ使えず、外へは何も送らない（action も理由を返すだけ）
 assert "$(call ai:status "$creator" "{\"workId\":\"$id\"}")" 200 "ai:status -> 200"

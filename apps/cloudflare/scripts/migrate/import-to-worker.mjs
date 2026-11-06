@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // export-convex.mjs が作った JSONL を、Worker の POST /internal/import へ分けて送る。
 //
-//   SITE_URL=https://<worker のホスト> MF100_CLEANUP_SECRET=... \
+//   SITE_URL=https://<worker のホスト> MF100_IMPORT_SECRET=... \
 //     node scripts/migrate/import-to-worker.mjs snapshot.jsonl [--chunk 1000] [--dry-run]
 //
 // - 1 回 1000 行（--chunk）か約 4 MB のどちらか先に届いた所で区切る。最初の塊に begin、最後の塊に finish を付ける
@@ -26,10 +26,10 @@ const CHUNK_BYTES = 4 * 1024 * 1024;
 const dryRun = process.argv.includes("--dry-run");
 
 const site = process.env.SITE_URL?.replace(/\/$/, "");
-const secret = process.env.MF100_CLEANUP_SECRET;
+const secret = process.env.MF100_IMPORT_SECRET;
 if (!file || (!dryRun && (!site || !secret))) {
   console.error(
-    "usage: SITE_URL=... MF100_CLEANUP_SECRET=... import-to-worker.mjs <snapshot.jsonl> [--chunk 1000] [--dry-run]",
+    "usage: SITE_URL=... MF100_IMPORT_SECRET=... import-to-worker.mjs <snapshot.jsonl> [--chunk 1000] [--dry-run]",
   );
   process.exit(2);
 }

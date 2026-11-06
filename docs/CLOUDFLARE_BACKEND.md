@@ -47,10 +47,10 @@ rm -rf .wrangler/state
 pnpm dev --port 8790 --var MF100_SYSTEM_ADMIN_SUBJECTS:u_admin \
   --var MF100_UPLOAD_SECRET:0123456789abcdef0123456789abcdef \
   --var PROCESSING_SECRET:0123456789abcdef0123456789abcdef \
-  --var MF100_CLEANUP_SECRET:0123456789abcdef0123456789abcdef
+  --var MF100_CLEANUP_SECRET:0123456789abcdef0123456789abcdef --var MF100_IMPORT_SECRET:fedcba9876543210fedcba9876543210
 # 別の端末で
 UPLOAD_SECRET=0123456789abcdef0123456789abcdef PROCESSING_SECRET=0123456789abcdef0123456789abcdef \
-  MF100_CLEANUP_SECRET=0123456789abcdef0123456789abcdef bash scripts/smoke.sh 8790
+  MF100_CLEANUP_SECRET=0123456789abcdef0123456789abcdef MF100_IMPORT_SECRET=fedcba9876543210fedcba9876543210 bash scripts/smoke.sh 8790
 pkill -f wrangler; pkill -f workerd
 ```
 
@@ -326,7 +326,7 @@ pnpm dev --port 8790     # .dev.vars に AUTH_PRIVATE_KEY_JWK が無ければ作
 ```
 
 - 手元の本人の特定は 3 通り。Worker の JWT（サインイン済み）、Cloudflare Access の JWT、`X-MF100-Identity` ヘッダ（JSON。`pnpm dev` の `DEV_IDENTITY:allow` のときだけ）。設定ファイルの既定は `deny`。
-- 手元のサインインは Nogiku のモック（`NOGIKU_MOCK_ENABLED=true`、`POST /auth/mock`）。
+- 手元のサインインは Nogiku のモック（`pnpm dev` が `--var NOGIKU_MOCK_ENABLED:true` で有効にする。設定ファイルの既定は `false`。`POST /auth/mock`）。
 - web は `cd apps/web && pnpm dev:cloudflare`（`vp dev --mode cloudflare`）か `pnpm build:cloudflare`。Worker の URL は `VITE_CLOUDFLARE_URL`（既定 `http://localhost:8790`）。ビルドに焼き込まれる。
 - api は `BACKEND=cloudflare` と `CLOUDFLARE_SITE_URL`（Worker の `SITE_URL` と同じ値）で Worker を向く。既定は `convex`。JWT の `aud` は `convex` のまま、issuer と JWKS の向き先だけが変わる。
 
@@ -347,7 +347,8 @@ pnpm dev --port 8790     # .dev.vars に AUTH_PRIVATE_KEY_JWK が無ければ作
 | `NOGIKU_ACCESS_API_URL` / `NOGIKU_ACCESS_ORG_SLUG` / `NOGIKU_ACCESS_SYSTEM_ID` | secret | 組織権限。3 つ揃ったときだけ有効（`NOGIKU_ACCESS_ENABLED` で切る）                           |
 | `ACCESS_TEAM` / `ACCESS_AUDIENCE`                                              | secret | Cloudflare Access で守るとき                                                                 |
 | `MF100_UPLOAD_SECRET`                                                          | secret | apps/api が提出・添付の転送で使う。16 文字以上。`X-MF100-Service-Key` で渡る                 |
-| `MF100_CLEANUP_SECRET`                                                         | secret | R2 の清掃と `/internal/import`。16 文字以上。Bearer                                          |
+| `MF100_CLEANUP_SECRET`                                                         | secret | R2 の清掃。16 文字以上。Bearer                                                               |
+| `MF100_IMPORT_SECRET`                                                          | secret | `/internal/import`（データ移行の間だけ）。清掃の秘密とは分ける（apps/api が持つ秘密で管理者の行を書けないように）。16 文字以上。Bearer |
 | `PROCESSING_SECRET`                                                            | secret | `/internal/processing`。32 文字以上。Bearer                                                  |
 | `PROCESSING_ENABLED` / `PROCESSING_CAPABILITIES`                               | var    | ファイル処理を受けるか（`true`）と、受ける kind（カンマ区切り）                              |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`                     | secret | Web Push。揃わなければ送らない                                                               |
@@ -369,7 +370,7 @@ pnpm dev --port 8790     # .dev.vars に AUTH_PRIVATE_KEY_JWK が無ければ作
 3. 過去データを移す（下。**利用者の明示承認を得てから**）。
 4. apps/api の `BACKEND` を `cloudflare`、`CLOUDFLARE_SITE_URL` を Worker の `SITE_URL` にして deploy する。`staging` と `production` の vars には既定で書いていない（無ければ `convex`）。
 5. web を `VITE_CLOUDFLARE_URL=<SITE_URL> vp build --mode cloudflare` でビルドして配信する。
-6. 取り込みの口（`src/app.ts` の `importApp` の 1 行）を外して Worker を deploy し直す。口は `MF100_CLEANUP_SECRET` で守られているが、清掃も同じ秘密を使うので、秘密の発行し直しでは塞がらない。
+6. 取り込みの口（`src/app.ts` の `importApp` の 1 行）を外して Worker を deploy し直す。口は専用の `MF100_IMPORT_SECRET` で守られている。移行が済んだら秘密を消し、口も外す。
 7. 戻すときは `BACKEND` を `convex` に戻し、web を Convex 向けにビルドし直す。切り替え後に Cloudflare へ書いた分は Convex に戻らない。
 
 ## データ移行
@@ -385,7 +386,7 @@ pnpm dev --port 8790     # .dev.vars に AUTH_PRIVATE_KEY_JWK が無ければ作
 2. 変換する。対応表に無い場所があれば何も書かずに 1 で止まる。
    `node scripts/migrate/export-convex.mjs --zip snapshot.zip --out snapshot.jsonl`
 3. 塊の数と大きさを見る（送らない）。
-   `SITE_URL=... MF100_CLEANUP_SECRET=... node scripts/migrate/import-to-worker.mjs snapshot.jsonl --dry-run`
+   `SITE_URL=... MF100_IMPORT_SECRET=... node scripts/migrate/import-to-worker.mjs snapshot.jsonl --dry-run`
    続けて `wrangler dev` か Preview の空の Worker に、同じコマンドから `--dry-run` を外して通しで流して確かめる。
 4. 空の本番の Worker へ同じように流す。1000 行か約 4 MB ごとの塊で送り、最初の塊で keyless の表（grants / approvals / ruleRevisions / audit）を空にし、最後の塊で派生表を作り直して確認（verify）を返す。何度流しても同じ結果になる。
 5. verify の問題が 0 件になるまで直す。確認は件数・users の本人の特定（subject）・参照の欠け・進行中の仕事・派生表の欠けを見る。

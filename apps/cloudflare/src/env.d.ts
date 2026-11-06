@@ -14,6 +14,7 @@ interface Env {
   // サービス間の共有秘密。未設定・短いときは、それで守られた関数ごと 404（src/serviceAuth.ts）
   MF100_UPLOAD_SECRET?: string;
   MF100_CLEANUP_SECRET?: string;
+  MF100_IMPORT_SECRET?: string;
   PROCESSING_SECRET?: string;
   // ファイル処理（src/functions/processing.ts。Convex と同じ）。"true" のときだけ受け付け、kinds はカンマ区切り
   PROCESSING_ENABLED?: string;

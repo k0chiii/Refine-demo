@@ -132,15 +132,17 @@ export async function execute(
       ...(def.kind === "query" ? { reads: [...reads].sort() } : {}),
     });
   } catch (error) {
-    if (!(error instanceof DomainError)) throw error;
-    // 巻き戻ったので、書いたはずの表は変わっていない（配らない）
+    // mutation は巻き戻ったので、書いたはずの表は変わっていない（配らない）。action は書いた分が残るので配る
     if (def.kind === "mutation") touched.clear();
-    return done(fail(error.code, error.details));
+    if (error instanceof DomainError) return done(fail(error.code, error.details));
+    console.error(JSON.stringify({ event: "function_failed", name, error: String(error) }));
+    return done(fail("internal_error"));
   }
 }
 
 /** DomainError の code → HTTP の状態。Convex は ConvexError で運ぶが、HTTP では状態で分ける */
-export function statusOf(code: string): 400 | 401 | 403 | 404 | 409 {
+export function statusOf(code: string): 400 | 401 | 403 | 404 | 409 | 500 {
+  if (code === "internal_error") return 500;
   if (code === "unauthenticated") return 401;
   if (code === "forbidden") return 403;
   if (code.endsWith("_not_found")) return 404;

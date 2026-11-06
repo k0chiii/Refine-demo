@@ -12,23 +12,21 @@ export interface ImportStore {
 
 export interface ImportDeps {
   store(): ImportStore;
-  /** wrangler secret の MF100_CLEANUP_SECRET。未設定・短いなら常に 404（口があることも教えない） */
-  secret(name: "MF100_CLEANUP_SECRET"): string | undefined;
+  /** wrangler secret の MF100_IMPORT_SECRET。未設定・短いなら常に 404（口があることも教えない） */
+  secret(name: "MF100_IMPORT_SECRET"): string | undefined;
 }
 
 /**
  * POST /internal/import — scripts/migrate/import-to-worker.mjs が Convex の export を分けて送る。
  * body: `{ rows: [{ table, id?, doc }], begin?: boolean, finish?: boolean, expected?: { [table]: 行数 } }`
- * 認証は Authorization: Bearer MF100_CLEANUP_SECRET（Convex の http.ts の清掃と同じ約束。serviceAuth.ts）。
+ * 認証は Authorization: Bearer MF100_IMPORT_SECRET（清掃の秘密とは分ける。apps/api が持つ秘密で管理者の行を書けてはいけない。serviceAuth.ts）。
  * 返すのは取り込んだ表ごとの件数と、finish のときの確認（verify）。
  *
  * ponytail: 取り込みが済んだら、この口は app.ts から外す（本番に残さない）。秘密を発行し直すだけでも塞がる。
  */
 export function importApp(deps: ImportDeps) {
   return new Hono().post("/internal/import", async (c) => {
-    if (
-      !verifyServiceSecret(c.req.raw, "MF100_CLEANUP_SECRET", deps.secret("MF100_CLEANUP_SECRET"))
-    )
+    if (!verifyServiceSecret(c.req.raw, "MF100_IMPORT_SECRET", deps.secret("MF100_IMPORT_SECRET")))
       return c.body(null, 404);
     let body: {
       rows?: unknown;

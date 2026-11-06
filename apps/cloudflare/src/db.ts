@@ -102,15 +102,31 @@ export class MF100Database extends DurableObject<Env> {
       { sql: this.sql, env: this.env, now: () => at.getTime() },
       tracked(this.sql, touched),
     );
-    await this.ctx.storage.transaction(async () => {
-      await closeExpiredReviews(ctx);
-      if (at.getUTCMinutes() % 5 === 0) expireAiJobs(tracked(this.sql, touched), at.getTime());
-      if (at.getUTCMinutes() !== 0) return;
-      await remindUpcomingDeadlines(ctx);
-      await expireUploadSessions(ctx);
-      await expireCommentFiles(ctx);
-      expireProcessingJobs(tracked(this.sql, touched), at.getTime());
-    });
+    const minute = at.getUTCMinutes();
+    type Task = [name: string, run: () => unknown];
+    const tasks: Task[] = [["closeExpiredReviews", () => closeExpiredReviews(ctx)]];
+    if (minute % 5 === 0)
+      tasks.push(["expireAiJobs", () => expireAiJobs(tracked(this.sql, touched), at.getTime())]);
+    if (minute === 0)
+      tasks.push(
+        ["remindUpcomingDeadlines", () => remindUpcomingDeadlines(ctx)],
+        ["expireUploadSessions", () => expireUploadSessions(ctx)],
+        ["expireCommentFiles", () => expireCommentFiles(ctx)],
+        [
+          "expireProcessingJobs",
+          () => expireProcessingJobs(tracked(this.sql, touched), at.getTime()),
+        ],
+      );
+    // 仕事ごとに 1 トランザクション: 1 つが落ちても他の仕事と、下の drainJobs まで道連れにしない
+    for (const [name, task] of tasks) {
+      try {
+        await this.ctx.storage.transaction(async () => {
+          await task();
+        });
+      } catch (error) {
+        console.error(JSON.stringify({ event: "cron_task_failed", name, error: String(error) }));
+      }
+    }
     this.notify(touched);
     // alarm が落ちていても、毎分ここで拾う
     await this.drainJobs();

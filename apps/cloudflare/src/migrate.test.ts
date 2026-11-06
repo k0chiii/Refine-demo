@@ -734,7 +734,7 @@ describe("POST /internal/import（分けて送る）", () => {
 
   it("createApp に組み込んだ口も同じ道を通る（Durable Object の importRows 越し）。秘密が未設定なら 404", async () => {
     const db = fakeDb();
-    const secrets: Record<string, string> = { MF100_CLEANUP_SECRET: SECRET };
+    const secrets: Record<string, string> = { MF100_IMPORT_SECRET: SECRET };
     const a = app(db, secrets);
     const r = converted();
     const send = (a2: typeof a, secret = SECRET) =>

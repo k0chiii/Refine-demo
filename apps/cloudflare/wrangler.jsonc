@@ -22,7 +22,7 @@
     // 認証（src/auth）。手元は Nogiku のモック（POST /auth/mock）。本番の env では必ず "false"
     "SITE_URL": "http://localhost:8790",
     "FRONTEND_URL": "http://localhost:5173",
-    "NOGIKU_MOCK_ENABLED": "true",
+    "NOGIKU_MOCK_ENABLED": "false",
   },
   // 秘密: `wrangler secret put AUTH_PRIVATE_KEY_JWK`（`node scripts/auth-keygen.mjs` が出す JWK）。手元は .dev.vars（pnpm dev が作る）
   // Nogiku 本番: NOGIKU_CLIENT_ID / NOGIKU_CLIENT_SECRET / NOGIKU_ISSUER（redirect_uri は `${SITE_URL}/auth/callback`）

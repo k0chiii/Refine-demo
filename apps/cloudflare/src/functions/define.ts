@@ -6,7 +6,12 @@ import type { Sql } from "../sqlite/sql.ts";
 
 export type Kind = "query" | "mutation" | "action";
 
-export type ServiceSecret = "MF100_UPLOAD_SECRET" | "MF100_CLEANUP_SECRET" | "PROCESSING_SECRET";
+export type ServiceSecret =
+  | "MF100_UPLOAD_SECRET"
+  | "MF100_CLEANUP_SECRET"
+  | "PROCESSING_SECRET"
+  /** データ移行の取り込み口だけ。清掃の秘密（apps/api も持つ）で users.isSystemAdmin を書けないように分ける */
+  | "MF100_IMPORT_SECRET";
 
 /**
  * 誰が呼べるか。Convex の「関数の種類 + http.ts の認証」を 1 か所に寄せたもの。
