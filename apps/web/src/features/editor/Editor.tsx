@@ -596,9 +596,19 @@ export function Editor({
     data?.can.carryForward && revisionId ? { revisionId: revisionId as Id<"revisions"> } : "skip",
   );
   // 「添付を切り替え」には紙面に出せる添付（と外部リンク）だけを並べる。.ai などは 情報 › この版のファイル から落とす
-  const switchable = (data?.artifacts ?? []).filter(
-    (a) => isReviewableArtifact(a) || a.role === "external",
-  );
+  // SNS 投稿の版は、投稿のプレビュー（台帳）を先頭に置く。画像・本文を 1 つずつ開いたあとも、プレビューへ戻れるように
+  const switchable = [
+    ...(data?.artifacts ?? []).filter((a) => a.fileName === POST_MANIFEST_NAME),
+    ...(data?.artifacts ?? []).filter((a) => isReviewableArtifact(a) || a.role === "external"),
+  ];
+  /** 添付の切り替えの項目（アイコンと名前）。投稿のプレビューはファイル名でなく、端末のアイコンで見分ける */
+  const choiceOf = (a: (typeof switchable)[number]) =>
+    a.fileName === POST_MANIFEST_NAME
+      ? { icon: "smartphone", label: "投稿のプレビュー" }
+      : {
+          icon: "draft",
+          label: `${a.role === "external" ? (a.externalUrl && isFigmaUrl(a.externalUrl) ? "Figma: " : "外部: ") : ""}${a.fileName}`,
+        };
   // 版比較: 同じ制作物の他の版、または別の制作物の版（利用者指示 2026-10-17）。閲覧権限は revisions.get が確かめる
   const otherRaw = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
   // 相手を替えた直後に前の相手の結果が残ることがあるので、いま比べている版のものだけを使う
@@ -1833,8 +1843,7 @@ export function Editor({
             onClose={() => setArtifactSheet(false)}
             title="添付"
             items={switchable.map((a) => ({
-              icon: "draft",
-              label: `${a.role === "external" ? (a.externalUrl && isFigmaUrl(a.externalUrl) ? "Figma: " : "外部: ") : ""}${a.fileName}`,
+              ...choiceOf(a),
               selected: a.id === artifactId,
               onSelect: () => {
                 setArtifactId(a.id);
@@ -2146,13 +2155,8 @@ export function Editor({
                             resetCompose();
                           }}
                         >
-                          <M3eIcon slot="icon" name="draft" />
-                          {a.role === "external"
-                            ? a.externalUrl && isFigmaUrl(a.externalUrl)
-                              ? "Figma: "
-                              : "外部: "
-                            : ""}
-                          {a.fileName}
+                          <M3eIcon slot="icon" name={choiceOf(a).icon} />
+                          {choiceOf(a).label}
                         </M3eMenuItemRadio>
                       ))}
                     </M3eMenuItemGroup>
@@ -2184,13 +2188,8 @@ export function Editor({
                       resetCompose();
                     }}
                   >
-                    <M3eIcon slot="icon" name={a.id === artifactId ? "check" : "draft"} />
-                    {a.role === "external"
-                      ? a.externalUrl && isFigmaUrl(a.externalUrl)
-                        ? "Figma: "
-                        : "外部: "
-                      : ""}
-                    {a.fileName}
+                    <M3eIcon slot="icon" name={a.id === artifactId ? "check" : choiceOf(a).icon} />
+                    {choiceOf(a).label}
                   </M3eMenuItem>
                 ))}
               </M3eMenu>
