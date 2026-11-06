@@ -1,9 +1,10 @@
-import { createWork, updateWork } from "@mf100/application";
+import { changeWorkLifecycle, createWork, importWorks, updateWork } from "@mf100/application";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
 import {
   object,
   vId,
+  vLifecycleTarget,
   vMediaType,
   vRegisteredPlanInfoPatch,
   vWorkMetadataFields,
@@ -76,6 +77,53 @@ export const works = {
     },
   }),
 
+  /**
+   * 制作物の一括登録（CSV）。画面が CSV を解析し、担当者を照合して確認した行だけを送る。
+   * 登録は application の importWorks（権限 works:create と approvers:assign・1 件ずつの登録と同じ検証と監査・まとめて 1 トランザクション）
+   */
+  "works:importBatch": mutation({
+    auth: "user",
+    args: object({
+      rows: z.array(
+        object({
+          title: z.string(),
+          year: z.number(),
+          purpose: z.string(),
+          category: z.string(),
+          mediaType: vMediaType,
+          creatorIds: z.array(vId),
+          managerIds: z.array(vId),
+          approverIds: z.array(vId),
+          approvalQuorum: z.number().optional(),
+          deadlineAt: z.number().optional(),
+          finishAt: z.number().optional(),
+          legacyId: z.string().optional(),
+          notationCategories: z.array(z.string()),
+          /** 主管担当・制作担当・関係担当（teams の ID） */
+          ownerTeamId: z.string().optional(),
+          productionTeamIds: z.array(z.string()).optional(),
+          relatedTeamIds: z.array(z.string()).optional(),
+          /** 制作物 DB に揃えた項目（docs/NOTION_ALIGNMENT.md） */
+          ...vWorkMetadataFields,
+        }),
+      ),
+      source: z.string().optional(),
+    }),
+    handler: async (ctx, args) => {
+      const works = await importWorks(ctx.db, ctx.principal!, {
+        ...args,
+        rows: args.rows.map((r) => ({
+          ...r,
+          stakeholderIds: r.stakeholderIds ?? [],
+          tags: r.tags ?? [],
+          productionTeamIds: r.productionTeamIds ?? [],
+          relatedTeamIds: r.relatedTeamIds ?? [],
+        })),
+      });
+      return works.map((w) => w.id);
+    },
+  }),
+
   "works:update": mutation({
     auth: "user",
     args: object({
@@ -87,6 +135,15 @@ export const works = {
       const work = await updateWork(ctx.db, ctx.principal!, args);
       // ponytail: registeredPlanInfo を変えたときの planInfo.sync（scheduler.runAfter）は、alarm の単位でまとめて移す
       return work.version;
+    },
+  }),
+
+  "works:changeLifecycle": mutation({
+    auth: "user",
+    args: object({ workId: vId, to: vLifecycleTarget, expectedVersion: z.number().optional() }),
+    handler: async (ctx, args) => {
+      await changeWorkLifecycle(ctx.db, ctx.principal!, args);
+      return null;
     },
   }),
 

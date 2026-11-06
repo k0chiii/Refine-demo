@@ -1,12 +1,56 @@
+import { acl } from "./acl.ts";
+import { admin } from "./admin.ts";
+import { approvals } from "./approvals.ts";
+import { checks } from "./checks.ts";
+import { commentFiles } from "./commentFiles.ts";
+import { comments } from "./comments.ts";
+import { comparisons } from "./comparisons.ts";
+import { dashboard } from "./dashboard.ts";
 import type { FnDef } from "./define.ts";
+import { groups } from "./groups.ts";
 import { home } from "./home.ts";
 import { me } from "./me.ts";
+import { notation } from "./notation.ts";
+import { notificationPrefs } from "./notificationPrefs.ts";
 import { notifications } from "./notifications.ts";
+import { planInfo } from "./planInfo.ts";
+import { proofreading } from "./proofreading.ts";
+import { push } from "./push.ts";
+import { reviews } from "./reviews.ts";
+import { revisions } from "./revisions.ts";
+import { slackWorkspaces } from "./slackWorkspaces.ts";
+import { social } from "./social.ts";
 import { submissions } from "./submissions.ts";
+import { teams } from "./teams.ts";
 import { works } from "./works.ts";
 
 /** モジュール名（= apps/convex/convex/<module>.ts と同じ）→ その関数。鍵は `<module>:<function>` */
-export const modules = { home, me, notifications, submissions, works };
+export const modules = {
+  acl,
+  admin,
+  approvals,
+  checks,
+  commentFiles,
+  comments,
+  comparisons,
+  dashboard,
+  groups,
+  home,
+  me,
+  notation,
+  notificationPrefs,
+  notifications,
+  planInfo,
+  proofreading,
+  push,
+  reviews,
+  revisions,
+  slackWorkspaces,
+  social,
+  submissions,
+  teams,
+  works,
+};
 
 /** 全関数。`POST /f/:name` の名前引きと、scripts/parity.mjs の突き合わせの正本 */
 export const functions: Readonly<Record<string, FnDef>> = Object.assign(
