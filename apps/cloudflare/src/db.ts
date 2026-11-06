@@ -9,6 +9,7 @@ import type { Identity } from "./identity.ts";
 import { execute, tracked, type CallResult } from "./run.ts";
 import { createSqliteContext } from "./sqlite/context.ts";
 import { migrate } from "./sqlite/schema.ts";
+import { createAuthStore, migrateAuth, type AuthStore } from "./auth/store.ts";
 import type { Sql } from "./sqlite/sql.ts";
 
 /** Durable Object の SqlStorage を application のアダプタが使う最小の口に合わせる */
@@ -29,11 +30,24 @@ function durableSql(storage: SqlStorage): Sql {
  */
 export class MF100Database extends DurableObject<Env> {
   private readonly sql: Sql;
+  private readonly authStore: AuthStore;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = durableSql(ctx.storage.sql);
+    // users の表ができてから、その上の subject の index（migrateAuth）。順番を入れ替えると落ちる
     migrate(this.sql);
+    migrateAuth(this.sql);
+    this.authStore = createAuthStore(this.sql);
+  }
+
+  /** 認証の保存（セッション・一時コード・state）。Hono 側は src/index.ts の authStoreOf で AuthStore の形に戻す */
+  async auth<K extends keyof AuthStore>(
+    op: K,
+    ...args: Parameters<AuthStore[K]>
+  ): Promise<Awaited<ReturnType<AuthStore[K]>>> {
+    const fn = this.authStore[op] as (...a: unknown[]) => Promise<unknown>;
+    return (await fn.call(this.authStore, ...args)) as Awaited<ReturnType<AuthStore[K]>>;
   }
 
   async call(

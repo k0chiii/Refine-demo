@@ -46,6 +46,19 @@ export function tracked(sql: Sql, touched: Set<string>, reads: Set<string> = new
   };
 }
 
+/** 主体の組み立てに要る分だけ users から読む。JWT の本人は行が無いこともない（発行時に作っている） */
+function loadUser(sql: Sql, id: string): { id: string; subject: string; isSystemAdmin?: boolean } {
+  const [row] = sql.exec(
+    "SELECT json_extract(doc, '$.subject') AS subject, json_extract(doc, '$.isSystemAdmin') AS admin FROM users WHERE id = ?",
+    id,
+  );
+  return {
+    id,
+    subject: (row?.subject as string | null) ?? "",
+    ...(row?.admin === 1 ? { isSystemAdmin: true } : {}),
+  };
+}
+
 const fail = (code: string, details: Record<string, unknown> = {}): CallResult => ({
   ok: false,
   code,
@@ -77,10 +90,7 @@ export async function execute(
   const wantsUser = needsUser || def.auth === "optional";
   if (needsUser && !identity) return done(fail("unauthenticated"));
 
-  const user =
-    wantsUser && identity
-      ? { id: upsertUser(host.sql, identity), subject: identity.subject }
-      : null;
+  const user = wantsUser && identity ? loadUser(host.sql, upsertUser(host.sql, identity)) : null;
 
   const sql = tracked(host.sql, touched, reads);
   const adminSubjects = new Set(

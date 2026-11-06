@@ -1,22 +1,44 @@
 import { createApp } from "./app.ts";
 import { MF100Database } from "./db.ts";
 import { accessIdentifier, devIdentifier, type Identify } from "./identity.ts";
+import { jwtIdentifier } from "./auth/identify.ts";
+import type { AuthStore } from "./auth/store.ts";
 
 export { MF100Database };
 
 /** JWKS の写しを isolate で使い回す（apps/api と同じ理由: リクエストごとに作ると毎回 certs を取りに行く） */
 let identifier: { key: string; identify: Identify } | null = null;
 function identifierFor(env: Env): Identify {
-  const key = JSON.stringify([env.ACCESS_TEAM, env.ACCESS_AUDIENCE, env.DEV_IDENTITY]);
+  const key = JSON.stringify([
+    env.ACCESS_TEAM,
+    env.ACCESS_AUDIENCE,
+    env.DEV_IDENTITY,
+    env.AUTH_PRIVATE_KEY_JWK,
+    env.SITE_URL,
+  ]);
   if (identifier?.key === key) return identifier.identify;
-  const identify =
+  // 本物の順: Worker の JWT（サインイン済み）→ Cloudflare Access → 手元のヘッダ
+  const jwt = env.AUTH_PRIVATE_KEY_JWK ? jwtIdentifier(env) : null;
+  const fallback: Identify =
     env.ACCESS_TEAM && env.ACCESS_AUDIENCE
       ? accessIdentifier(env.ACCESS_TEAM, env.ACCESS_AUDIENCE)
-      : env.DEV_IDENTITY === "allow"
+      : (env.DEV_IDENTITY as string) === "allow"
         ? devIdentifier
         : async () => null;
+  const identify: Identify = async (request) =>
+    (jwt ? await jwt(request) : null) ?? (await fallback(request));
   identifier = { key, identify };
   return identify;
+}
+
+/** Durable Object の auth(op, ...args) を AuthStore の形に戻す */
+function authStoreOf(stub: DurableObjectStub<MF100Database>): AuthStore {
+  return new Proxy({} as AuthStore, {
+    get:
+      (_target, op: keyof AuthStore) =>
+      (...args: unknown[]) =>
+        (stub.auth as (op: string, ...a: unknown[]) => Promise<unknown>)(op, ...args),
+  });
 }
 
 export default {
@@ -25,6 +47,7 @@ export default {
       identify: identifierFor(env),
       db: () => env.DB.get(env.DB.idFromName("main")),
       secret: (name) => env[name],
+      auth: { store: () => authStoreOf(env.DB.get(env.DB.idFromName("main"))), env },
       allowedOrigins: (env.ALLOWED_ORIGINS ?? "")
         .split(",")
         .map((s) => s.trim())

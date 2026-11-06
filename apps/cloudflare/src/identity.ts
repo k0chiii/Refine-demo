@@ -1,11 +1,13 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 
-/** 境界で確かめた本人。誰か（subject）だけが確か。名前・メールは Access の claim にあれば持つ */
-export interface Identity {
-  subject: string;
-  email?: string;
-  name?: string;
-}
+/**
+ * 境界で確かめた本人。
+ * - Worker の JWT（src/auth）なら users.id が分かる（userId）
+ * - Cloudflare Access の claim や手元のヘッダなら subject（Nogiku の sub）だけが確か。名前・メールは claim にあれば持つ
+ */
+export type Identity =
+  | { userId: string; sessionId: string }
+  | { subject: string; email?: string; name?: string };
 
 export type Identify = (request: Request) => Promise<Identity | null>;
 

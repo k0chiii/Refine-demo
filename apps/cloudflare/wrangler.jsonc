@@ -19,6 +19,12 @@
     "DEV_IDENTITY": "deny",
     // 初期ブートストラップ: ここに列挙した subject を校正システム管理者として扱う（Convex の MF100_SYSTEM_ADMIN_SUBJECTS と同じ）
     "MF100_SYSTEM_ADMIN_SUBJECTS": "",
+    // 認証（src/auth）。手元は Nogiku のモック（POST /auth/mock）。本番の env では必ず "false"
+    "SITE_URL": "http://localhost:8790",
+    "FRONTEND_URL": "http://localhost:5173",
+    "NOGIKU_MOCK_ENABLED": "true",
   },
+  // 秘密: `wrangler secret put AUTH_PRIVATE_KEY_JWK`（`node scripts/auth-keygen.mjs` が出す JWK）。手元は .dev.vars（pnpm dev が作る）
+  // Nogiku 本番: NOGIKU_CLIENT_ID / NOGIKU_CLIENT_SECRET / NOGIKU_ISSUER（redirect_uri は `${SITE_URL}/auth/callback`）
   // Cloudflare Access で守るとき: `wrangler secret put ACCESS_TEAM` / `ACCESS_AUDIENCE`
 }

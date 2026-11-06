@@ -5,7 +5,7 @@
   "description": "MF100 業務データの正本の Cloudflare 版（Hono + Durable Object SQLite）。application 層のポートを SQLite で実装するアダプタ。Convex と同じ契約を、同じテストで確かめる。",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --var DEV_IDENTITY:allow",
+    "dev": "node scripts/ensure-dev-vars.mjs && wrangler dev --var DEV_IDENTITY:allow",
     "test": "vp test run",
     "typecheck": "vp run verify-types",
     "types": "wrangler types worker-configuration.d.ts --config wrangler.jsonc"

@@ -64,6 +64,8 @@ function app(
     db: () => db,
     secret: (name) => secrets[name],
     allowedOrigins: [],
+    // 認証の経路はこのテストでは使わない（src/auth.test.ts が持つ）。形だけ満たす
+    auth: { store: () => ({}) as never, env: {} },
   });
 }
 

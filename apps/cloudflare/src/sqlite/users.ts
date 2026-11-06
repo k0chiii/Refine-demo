@@ -9,6 +9,7 @@ import type { Sql } from "./sql.ts";
  * Access の claim に無い項目（ふりがな・組織権限）は消さない: 持っている doc に上書きで重ねるだけ
  */
 export function upsertUser(sql: Sql, identity: Identity): string {
+  if ("userId" in identity) return identity.userId;
   const patch = {
     subject: identity.subject,
     ...(identity.name ? { name: identity.name } : {}),

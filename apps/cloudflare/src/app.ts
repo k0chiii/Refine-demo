@@ -5,6 +5,7 @@ import { findFunction } from "./functions/index.ts";
 import type { Identify, Identity } from "./identity.ts";
 import { statusOf, type CallResult } from "./run.ts";
 import { verifyServiceSecret } from "./serviceAuth.ts";
+import { authApp, type AuthDeps } from "./auth/app.ts";
 
 export interface AppDeps {
   identify: Identify;
@@ -21,6 +22,8 @@ export interface AppDeps {
   /** サービス間の共有秘密（wrangler secret）。未設定なら undefined */
   secret(name: ServiceSecret): string | undefined;
   allowedOrigins: readonly string[];
+  /** 認証（src/auth）。store は Durable Object 越し。テストは SQLite を直に包んだものを渡す */
+  auth: Pick<AuthDeps, "store" | "env" | "fetch" | "now">;
 }
 
 const notFound = (name: string) => ({ code: "function_not_found", details: { name } });
@@ -36,9 +39,15 @@ export function createApp(deps: AppDeps) {
       "*",
       cors({
         origin: (origin) => (deps.allowedOrigins.includes(origin) ? origin : null),
-        allowHeaders: ["Content-Type", "X-MF100-Identity", "Cf-Access-Jwt-Assertion"],
+        allowHeaders: [
+          "Content-Type",
+          "Authorization",
+          "X-MF100-Identity",
+          "Cf-Access-Jwt-Assertion",
+        ],
       }),
     )
+    .route("/", authApp(deps.auth))
     .get("/health", (c) => c.json({ ok: true }))
     .get("/ws", async (c) => {
       if (c.req.header("Upgrade") !== "websocket") return c.text("Expected WebSocket", 426);
