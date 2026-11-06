@@ -118,6 +118,11 @@ export interface ThreadRepository {
   /** 版のスレッド。削除済み（deletedAt あり）は含めない（一覧・件数・未解決・校了の判定はこれで足りる） */
   listByRevision(revisionId: RevisionId): Promise<CommentThread[]>;
   insert(thread: Omit<CommentThread, "id">): Promise<CommentThread>;
+  /**
+   * 同じ版のスレッドをまとめて足す（自動校正・企画情報の確認の指摘）。派生の件数（版・制作物の要約）は最後に 1 回だけ
+   * 数え直す（1 件ずつ insert すると、そのたびに版のスレッドを全部読み直す）。順番は渡した順
+   */
+  insertMany(threads: readonly Omit<CommentThread, "id">[]): Promise<CommentThread[]>;
   update(thread: CommentThread): Promise<void>;
   /** イベントを追記する。払い出されたイベントの ID を返す（返信に添付を付けるとき使う） */
   appendEvent(event: CommentEvent): Promise<string>;

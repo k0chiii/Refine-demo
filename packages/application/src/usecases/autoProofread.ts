@@ -204,8 +204,9 @@ export async function submitProofreadSegments(
   // 重複（保存済み）を除いた後で残りの枠に収めるので、計画は上限いっぱいまで作る
   const plan = planBotThreads(artifact.id, input.segments, rules);
   let truncated = plan.truncated;
-  let created = 0;
   let duplicates = 0;
+  // 作る指摘を先に集め、まとめて足す（件数の数え直しは最後に 1 回。1 件ずつだと版のスレッドを毎回読み直す）
+  const toCreate: Omit<CommentThread, "id">[] = [];
   for (const p of plan.planned) {
     if (existing.has(p.fingerprint)) {
       duplicates++;
@@ -232,7 +233,11 @@ export async function submitProofreadSegments(
       createdAt: now,
       origin: { ...p.origin, runId: run.id },
     };
-    const thread = await ctx.threads.insert(data);
+    toCreate.push(data);
+    existing.add(p.fingerprint);
+    quota--;
+  }
+  for (const thread of await ctx.threads.insertMany(toCreate))
     await ctx.threads.appendEvent({
       threadId: thread.id,
       eventType: "created",
@@ -240,10 +245,7 @@ export async function submitProofreadSegments(
       payload: { runId: run.id, submittedBy: principal.userId },
       createdAt: now,
     });
-    existing.add(p.fingerprint);
-    created++;
-    quota--;
-  }
+  const created = toCreate.length;
   const source: TextSource = kind === "text" ? "document" : kind === "page" ? "pdf_text" : "ocr";
   // この添付の自動校正の指摘の数（分割送信・再試行でも数え直す）
   const findings = (await ctx.threads.listByRevision(revision.id)).filter(
