@@ -1,0 +1,5 @@
+capturedAt=2026-11-01T13:02:13.189Z
+url=http://127.0.0.1:4387/make
+scene=make-sns-band
+marker:進行中=8 件が進行中
+captureUser=mock-nogiku-creator

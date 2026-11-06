@@ -1,0 +1,33 @@
+{
+  "name": "@mf100/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MF100 HTTP 境界（Hono on Cloudflare Workers）。R2 へのファイル提出・実体検証・認可付き配信。業務 CRUD は持たない（Convex に一元化）。",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "node ../../scripts/deploy-api.mjs",
+    "test": "vp test run",
+    "typecheck": "vp run verify-types",
+    "types": "wrangler types worker-configuration.d.ts --config wrangler.jsonc",
+    "types:check": "node ../../scripts/check-worker-types.mjs",
+    "dev:vite": "vp dev --host 127.0.0.1 --port 8788",
+    "build:worker": "vp build",
+    "preview:worker": "vp preview --host 127.0.0.1 --port 8788"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
+    "@cloudflare/puppeteer": "^1.4.0",
+    "@mf100/convex": "workspace:*",
+    "@mf100/domain": "workspace:*",
+    "convex": "1.46.0",
+    "hono": "4.13.13",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.64.0",
+    "typescript": "5.9.3",
+    "vite-plus": "1.2.0",
+    "wrangler": "^4.151.3"
+  }
+}

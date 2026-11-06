@@ -1,0 +1,60 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+dist-demo/
+.vite/
+.wrangler/
+*.tsbuildinfo
+
+# env files（秘密情報はコミットしない）
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Convex のデプロイメント設定（個人の dev deployment を指す）
+apps/convex/.env.local
+
+# TanStack Router の自動生成ファイル
+apps/web/src/routeTree.gen.ts
+
+# OS / editor
+.DS_Store
+.idea/
+*.log
+
+# Vite+ task cache
+.vite-plus/
+node_modules/.vite-plus/
+
+# pnpm dev がサービスごとに書くログ
+.logs/
+apps/web/public/ocr/
+# PDF.js 画像コーデック（wasm）と ICC。ビルド開始時に node_modules から写す
+apps/web/public/pdfjs/wasm/
+apps/web/public/pdfjs/iccs/
+
+# 撮影の出力（画像はリポジトリに置かない）と Playwright Test の報告・trace
+apps/web/e2e/out/
+apps/web/playwright-report/
+apps/web/all-blob-reports/
+# verify-mf100-web の一時的な spec
+apps/web/e2e/specs/_verify-*
+
+# Claude Code の作業用ワークツリー
+.claude/worktrees/
+
+# Vite hook dispatcher (generated locally)
+.vite-hooks/_/
+# Python helper caches
+__pycache__/
+apps/api/wrangler.platform.generated.json
+
+coverage/
+*.tgz
+
+# pstack / show-me-your-work の決定ログ（既定は手元のみ。必要なときだけ明示してコミット）
+.audit/
+test-results/

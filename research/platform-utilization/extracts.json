@@ -1,0 +1,180 @@
+{
+  "title": "MF100 Refine：Vite+・Convex・Cloudflare の原文抜き書き",
+  "question": "現状に照らして活用可能な機能と制約を確かめる。評価・優先度は analysis.md に分けて記載。",
+  "stopped": "1周目：6つの問いすべてに原文の場所が付いたため終了。クラウドの実設定・負荷・請求は未確認。",
+  "claims": [
+    {
+      "claim": "3製品の知見と機能一覧が集まる場",
+      "status": "付いた",
+      "quotes": [
+        {
+          "file": "vite-config.md",
+          "line": 6,
+          "text": "Vite+ keeps project configuration in one place: `vite.config.ts`, allowing you to consolidate many top-level configuration files",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "convex-components.md",
+          "line": 3,
+          "text": "Convex Components package up code and data in a sandbox that allows you to confidently and",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "cloudflare-observability.md",
+          "line": 17,
+          "text": "Cloudflare Workers provides comprehensive observability tools to help you understand how your applications are performing, diagnose",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        }
+      ]
+    },
+    {
+      "claim": "Vite+ のタスク・キャッシュ・CI と失効条件",
+      "status": "付いた",
+      "quotes": [
+        {
+          "file": "vite-cache.md",
+          "line": 47,
+          "text": "| `cache.scripts` | `false` | Cache `package.json` scripts            |",
+          "mark": "公式"
+        },
+        {
+          "file": "vite-run.md",
+          "line": 102,
+          "text": "dependsOn: ['lint'],",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "vite-ci-cache.md",
+          "line": 6,
+          "text": "Experimental",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        }
+      ]
+    },
+    {
+      "claim": "Convex の一覧・検索・購読の改善と限界",
+      "status": "付いた",
+      "quotes": [
+        {
+          "file": "convex-pagination.md",
+          "line": 14,
+          "text": "usePaginatedQuery`](/api/modules/react.md#usepaginatedquery) React hook.",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "convex-search.md",
+          "line": 184,
+          "text": "Search indexes work best with English or other Latin-script languages. Text is tokenized using Tantivy's [`SimpleTokenizer`](https://docs.rs/tantivy/latest/tantivy/tokenizer/struct.SimpleTokenizer.html),",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "convex-aggregate.md",
+          "line": 52,
+          "text": "O(log(n))`-time lookups, instead of the `O(n)`",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        }
+      ]
+    },
+    {
+      "claim": "外部処理の再試行・冪等性・長時間処理",
+      "status": "付いた",
+      "quotes": [
+        {
+          "file": "convex-scheduling.md",
+          "line": 205,
+          "text": "actions may have side effects, they are not automatically retried by Convex. Thus, actions will be",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "convex-workpool.md",
+          "line": 8,
+          "text": "limiting how many run in parallel.",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "cloudflare-queues.md",
+          "line": 2,
+          "text": "Queues provides at-least-once message delivery by default.",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        }
+      ]
+    },
+    {
+      "claim": "非公開ファイル・画像・動画の機能と制約",
+      "status": "付いた",
+      "quotes": [
+        {
+          "file": "cloudflare-r2-upload.md",
+          "line": 23,
+          "text": "Large files, or when you need parallelism and resumability |",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "cloudflare-images.md",
+          "line": 19,
+          "text": "binding works with raw image bytes. You can pass images from any source, including [Images](https://developers.cloudflare.com/images/storage/upload-images/methods/), [R2](https://developers.cloudflare.com/r2/),",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "cloudflare-images-limits.md",
+          "line": 64,
+          "text": "maximum input size for `.input()` is 20 MB.",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "cloudflare-media.md",
+          "line": 30,
+          "text": "public open beta. During this period:",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        }
+      ]
+    },
+    {
+      "claim": "環境・監視・認可・費用・復旧の制約",
+      "status": "付いた",
+      "quotes": [
+        {
+          "file": "cloudflare-types.md",
+          "line": 19,
+          "text": "We recommend you generate types for your Worker by running [`wrangler types`](https://developers.cloudflare.com/workers/wrangler/commands/general/#types). Cloudflare also publishes type",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "cloudflare-rate-limit.md",
+          "line": 19,
+          "text": "approximate and apply separately in each Cloudflare location. Requests can exceed your configured limit while counts",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        },
+        {
+          "file": "convex-backups.md",
+          "line": 15,
+          "text": "Deployment configuration and other data (code, environment variables, scheduled functions, etc.) will not be included.",
+          "mark": "公式",
+          "context_note": "評価・導入条件は analysis.md を参照"
+        }
+      ]
+    }
+  ],
+  "unreached": [
+    "Turnstile の原文保存：公式本文の captcha を fetch.py が壁と判定。公開本文の検出誤りの可能性。導入仕様は評価外。",
+    "管理画面の設定、契約プラン、実データ規模、実環境の性能と料金。",
+    "Cloudflare Vite plugin と現在の Vite+ 1.2.0 の実動互換性。"
+  ]
+}

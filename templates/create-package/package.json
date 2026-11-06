@@ -1,0 +1,9 @@
+{
+  "name": "@mf100/create-package-template",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "create-mf100-package": "index.mjs"
+  },
+  "type": "module"
+}

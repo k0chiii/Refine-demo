@@ -1,0 +1,32 @@
+/** Explicit workspace inputs include shared sources; generated outputs never invalidate their own tasks. */
+export const sourceInputs = [
+  "apps/*/src/**",
+  "apps/web/public/**",
+  "!apps/web/public/ocr/**",
+  "apps/web/pwa/**",
+  "apps/web/index.html",
+  "apps/web/e2e/**",
+  "!apps/web/e2e/out/**",
+  "apps/convex/convex/**",
+  "apps/convex/scripts/**",
+  "apps/convex/test/**",
+  "packages/*/src/**",
+  "**/package.json",
+  "!**/node_modules/**",
+  "**/vite.config.ts",
+  "**/tsconfig*.json",
+  "apps/api/worker-configuration.d.ts",
+  "apps/api/wrangler.jsonc",
+  "scripts/**",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  ".node-version",
+  ".npmrc",
+  "!apps/web/src/routeTree.gen.ts",
+].map((pattern) => ({ pattern, base: "workspace" as const }));
+export const taskCache = (output: string[] = []) => ({
+  input: sourceInputs,
+  output,
+  env: ["NODE_ENV", "VITE_CONVEX_URL", "VITE_API_URL"],
+  untrackedEnv: ["XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "npm_config_cache"],
+});

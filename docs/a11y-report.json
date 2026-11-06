@@ -1,0 +1,340 @@
+[
+  {
+    "screen": "01-signin",
+    "violations": []
+  },
+  {
+    "screen": "02-works-list",
+    "violations": []
+  },
+  {
+    "screen": "02b-works-production",
+    "violations": []
+  },
+  {
+    "screen": "22-account-menu",
+    "violations": []
+  },
+  {
+    "screen": "31b-submit-picker",
+    "violations": []
+  },
+  {
+    "screen": "31-new-work",
+    "violations": []
+  },
+  {
+    "screen": "03-editor-empty",
+    "violations": []
+  },
+  {
+    "screen": "21-date-picker",
+    "violations": [
+      {
+        "id": "aria-command-name",
+        "impact": "serious",
+        "help": "ARIA commands must have an accessible name",
+        "nodes": [
+          {
+            "target": [
+              ["#_r_n_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-1-2026"]
+            ],
+            "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          },
+          {
+            "target": [
+              ["#_r_n_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-2-2026"]
+            ],
+            "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          },
+          {
+            "target": [
+              ["#_r_n_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-3-2026"]
+            ],
+            "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          },
+          {
+            "target": [
+              ["#_r_n_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-4-2026"]
+            ],
+            "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          },
+          {
+            "target": [
+              ["#_r_n_-picker", "m3e-calendar", "m3e-month-view[active=\"\"]", "#date-9-5-2026"]
+            ],
+            "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "screen": "14-submit-required-checks",
+    "violations": []
+  },
+  {
+    "screen": "04-submit-verified",
+    "violations": []
+  },
+  {
+    "screen": "05-submit-confirmed",
+    "violations": []
+  },
+  {
+    "screen": "06-editor-info",
+    "violations": []
+  },
+  {
+    "screen": "15-work-edit",
+    "violations": []
+  },
+  {
+    "screen": "07-dashboard-reviewer",
+    "violations": []
+  },
+  {
+    "screen": "29-rail-expanded",
+    "violations": []
+  },
+  {
+    "screen": "08-workspace-comment",
+    "violations": []
+  },
+  {
+    "screen": "35-pane-drag-handle",
+    "violations": []
+  },
+  {
+    "screen": "23-layout-aligned",
+    "violations": []
+  },
+  {
+    "screen": "24-layout-pins",
+    "violations": []
+  },
+  {
+    "screen": "16-required-check-done",
+    "violations": []
+  },
+  {
+    "screen": "19-text-range",
+    "violations": []
+  },
+  {
+    "screen": "27-dashboard-creator",
+    "violations": []
+  },
+  {
+    "screen": "61-home-edit",
+    "violations": []
+  },
+  {
+    "screen": "09-decision",
+    "violations": []
+  },
+  {
+    "screen": "17-carry-forward",
+    "violations": []
+  },
+  {
+    "screen": "28-versions",
+    "violations": []
+  },
+  {
+    "screen": "25-compare",
+    "violations": []
+  },
+  {
+    "screen": "38-compare-comment",
+    "violations": []
+  },
+  {
+    "screen": "10-finalize-dialog",
+    "violations": []
+  },
+  {
+    "screen": "11-work-finalized",
+    "violations": []
+  },
+  {
+    "screen": "18-notifications",
+    "violations": []
+  },
+  {
+    "screen": "13-admin-works",
+    "violations": []
+  },
+  {
+    "screen": "12-acl",
+    "violations": []
+  },
+  {
+    "screen": "13a-admin-users",
+    "violations": []
+  },
+  {
+    "screen": "13b-admin-audit",
+    "violations": []
+  },
+  {
+    "screen": "13c-admin-sns",
+    "violations": []
+  },
+  {
+    "screen": "13d-admin-teams",
+    "violations": []
+  },
+  {
+    "screen": "62-feedback-list",
+    "violations": []
+  },
+  {
+    "screen": "63-feedback-thread",
+    "violations": []
+  },
+  {
+    "screen": "30-rail-modal",
+    "violations": []
+  },
+  {
+    "screen": "20-mobile-dashboard",
+    "violations": []
+  },
+  {
+    "screen": "32-mobile-notifications",
+    "violations": []
+  },
+  {
+    "screen": "33-mobile-works",
+    "violations": []
+  },
+  {
+    "screen": "26-mobile-workspace",
+    "violations": []
+  },
+  {
+    "screen": "37-mobile-action-sheet",
+    "violations": []
+  },
+  {
+    "screen": "34-mobile-sheet-half",
+    "violations": []
+  },
+  {
+    "screen": "39-write-editor",
+    "violations": []
+  },
+  {
+    "screen": "39a-write-picker",
+    "violations": []
+  },
+  {
+    "screen": "40-write-style-menu",
+    "violations": []
+  },
+  {
+    "screen": "41-write-find",
+    "violations": []
+  },
+  {
+    "screen": "42-write-word-count",
+    "violations": []
+  },
+  {
+    "screen": "43-write-review-select",
+    "violations": []
+  },
+  {
+    "screen": "44-write-review-comment",
+    "violations": []
+  },
+  {
+    "screen": "44a-mobile-text-comment",
+    "violations": []
+  },
+  {
+    "screen": "45-write-refs",
+    "violations": []
+  },
+  {
+    "screen": "46-write-compact",
+    "violations": []
+  },
+  {
+    "screen": "46a-write-compact-expand",
+    "violations": []
+  },
+  {
+    "screen": "46b-write-compact-keyboard",
+    "violations": []
+  },
+  {
+    "screen": "46c-write-compact-fab",
+    "violations": []
+  },
+  {
+    "screen": "47-write-compact-more",
+    "violations": []
+  },
+  {
+    "screen": "50-notation-rules",
+    "violations": []
+  },
+  {
+    "screen": "50a-notation-cell-edit",
+    "violations": []
+  },
+  {
+    "screen": "50b-notation-rule-detail",
+    "violations": []
+  },
+  {
+    "screen": "51-notation-try",
+    "violations": []
+  },
+  {
+    "screen": "52-notation-proposals",
+    "violations": []
+  },
+  {
+    "screen": "52a-notation-categories",
+    "violations": []
+  },
+  {
+    "screen": "53-write-notation",
+    "violations": []
+  },
+  {
+    "screen": "54-auto-proofread",
+    "violations": []
+  },
+  {
+    "screen": "55-compare-pdf",
+    "violations": []
+  },
+  {
+    "screen": "26a-mobile-long-press",
+    "violations": []
+  },
+  {
+    "screen": "56-sns-editor",
+    "violations": []
+  },
+  {
+    "screen": "57-sns-preview-grid",
+    "violations": []
+  },
+  {
+    "screen": "58-sns-review",
+    "violations": []
+  },
+  {
+    "screen": "59-sns-export",
+    "violations": []
+  },
+  {
+    "screen": "60-notation-compact",
+    "violations": []
+  }
+]

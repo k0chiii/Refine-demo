@@ -1,0 +1,39 @@
+--- a/apps/web/src/lib/errors.ts
++++ b/apps/web/src/lib/errors.ts
+@@ -218,12 +210,12 @@ function workInvalidMessage(details: unknown): string | null {
+   const d = (details ?? {}) as { field?: unknown; reason?: unknown; max?: unknown };
+   const max = typeof d.max === "number" ? d.max : null;
+   const label: Record<string, string> = {
+-    title: "名称",
++    title: "制作物名",
+     category: "区分",
+     creatorIds: "制作者",
+-    approverIds: "校了権限者",
++    approverIds: "校了者",
+     approvalQuorum: "校了とみなす人数",
+-    managerIds: "主管・制作統括",
++    managerIds: "主管",
+     mediaType: "媒体",
+     confidentiality: "機密区分",
+     productionTeamIds: "制作担当",
+@@ -236,17 +228,16 @@ function workInvalidMessage(details: unknown): string | null {
+     return d.field === "creatorIds"
+       ? "制作者を 1 人以上選んでください"
+       : d.field === "approverIds"
+-        ? "校了権限者を 1 人以上選んでください"
++        ? "校了者を 1 人以上選んでください"
+         : `${name}を入力してください`;
+   if (d.reason === "too_long") return `${name}は ${max ?? "決められた"} 文字までです`;
+-  if (d.reason === "creator_is_approver")
+-    return "制作者は校了権限者にできません。校了権限者は制作者以外の人から選んでください";
++  if (d.reason === "creator_is_approver") return "制作者は校了者にできません";
+   if (d.reason === "blank_id") return `${name}に空の値があります。選び直してください`;
+   if (d.reason === "unknown_user")
+     return `${name}に名簿にいない人が含まれています。一度サインインした人から選び直してください`;
+   if (d.reason === "unknown") return `${name}の値が正しくありません`;
+   if (d.reason === "out_of_range")
+-    return `${name}は 1 以上、校了権限者の人数（${max ?? "選んだ人数"}）以下にしてください`;
++    return `${name}は 1 以上、校了者の人数（${max ?? "選んだ人数"}）以下にしてください`;
+   return null;
+ }
+ 

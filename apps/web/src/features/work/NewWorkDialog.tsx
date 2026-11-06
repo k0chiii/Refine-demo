@@ -1,0 +1,101 @@
+import { api } from "@mf100/convex/api";
+import type { Id } from "@mf100/convex/dataModel";
+import { useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useAction } from "@/lib/useAction";
+import { M3eDialog } from "@/ui/LazyDialog";
+import { M3eButton } from "@m3e/react/button";
+import {
+  approversFromForm,
+  emptyWorkForm,
+  withoutNulls,
+  WorkFormFields,
+  workFormReady,
+  workFormToFields,
+  type WorkFormState,
+} from "./WorkForm";
+
+/**
+ * 制作物登録（UC-01）のダイアログ。項目は Notion の制作物 DB に揃える（利用者決定 2026-10-17。docs/NOTION_ALIGNMENT.md）。
+ * 人（制作者・統括・校了者・校正者）は登録のときに選ぶ（利用者指示 2026-11-04）。統括は登録する本人を最初に入れておき、
+ * 画面で選んだとおりに保存する（外した本人をサーバーが足し戻さない）。
+ * 登録後はそのままエディタへ（`onCreated` を渡せば、そちらに任せる。複製で使う）。
+ * `initial` を渡すと、その値で埋めた状態から始める（複製。DuplicateWorkDialog）
+ */
+export function NewWorkDialog({
+  open,
+  onClose,
+  header = "制作物を登録",
+  submitLabel = "登録",
+  initial,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  header?: string;
+  submitLabel?: string;
+  /** 最初に入っている値（複製の元）。省略すると空 */
+  initial?: { form: WorkFormState } | undefined;
+  /** 登録できたあと（省略すると新しい制作物のエディタへ移る） */
+  onCreated?: ((workId: Id<"works">) => void | Promise<void>) | undefined;
+}) {
+  const navigate = useNavigate();
+  const create = useMutation(api.works.create);
+  const me = useQuery(api.me.me, {});
+  const fullForm = initial !== undefined;
+  const [form, setForm] = useState<WorkFormState>(() => initial?.form ?? emptyWorkForm());
+  // 統括は登録する本人から始める（本人の ID が分かった時点で 1 回だけ。複製は元の統括のまま）
+  const [managerSeeded, setManagerSeeded] = useState(fullForm);
+  useEffect(() => {
+    if (managerSeeded || !me) return;
+    setManagerSeeded(true);
+    setForm((f) => (f.managerIds.length === 0 ? { ...f, managerIds: [me.id] } : f));
+  }, [managerSeeded, me?.id]);
+  const { run, pending } = useAction(async () => {
+    const meta = withoutNulls(workFormToFields(form));
+    const id = await create({
+      title: form.title,
+      purpose: form.purpose,
+      category: form.category,
+      mediaType: form.mediaType as "pdf",
+      year: 100,
+      creatorIds: form.creatorIds,
+      ...approversFromForm(form),
+      managerIds: form.managerIds,
+      // 画面で統括を選んだとおりに保存する（本人を外したら足し戻さない）。空なら従来どおり本人を統括にする
+      ...(form.managerIds.length > 0 ? { addRegistrantAsManager: false } : {}),
+      ...(form.finishAt ? { finishAt: form.finishAt } : {}),
+      ...(form.deadlineAt ? { deadlineAt: form.deadlineAt } : {}),
+      notationCategories: form.notationCategories,
+      ...(form.ownerTeam[0] ? { ownerTeamId: form.ownerTeam[0] } : {}),
+      productionTeamIds: form.productionTeamIds,
+      relatedTeamIds: form.relatedTeamIds,
+      reviewerIds: form.reviewerIds as Id<"users">[],
+      ...meta,
+    });
+    onClose();
+    if (onCreated) await onCreated(id as Id<"works">);
+    else void navigate({ to: "/works/$workId", params: { workId: id } });
+  });
+  return (
+    <M3eDialog open={open} onClosed={onClose} closeLabel="閉じる" className="dialog--full">
+      <span slot="header">{header}</span>
+      <div className="dialog-body work-form">
+        <WorkFormFields form={form} setForm={setForm} mode="create" />
+      </div>
+      <div slot="actions" className="row">
+        <M3eButton variant="text" onClick={onClose}>
+          キャンセル
+        </M3eButton>
+        <M3eButton
+          variant="filled"
+          disabled={pending || !workFormReady(form, "create")}
+          onClick={() => void run()}
+        >
+          {submitLabel}
+        </M3eButton>
+      </div>
+    </M3eDialog>
+  );
+}

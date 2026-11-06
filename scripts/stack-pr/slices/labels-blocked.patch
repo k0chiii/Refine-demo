@@ -1,0 +1,19 @@
+--- a/apps/web/src/lib/labels.ts
++++ b/apps/web/src/lib/labels.ts
+@@ -68,12 +68,12 @@ export const approvalActionLabel: Record<string, string> = {
+ };
+ export const blockedReasonLabel: Record<string, string> = {
+-  finalized: "この制作物は校了済みのため、新しいコメントはできません",
+-  superseded: "新版が提出されたため、この版の受付は終了しました",
+-  deadline: "校正期限を過ぎたため、この版の受付は終了しました",
+-  closed: "この版の受付は終了しています",
+-  void: "この版は無効化されています",
+-  not_latest: "最新の受付対象版ではありません",
++  finalized: "校了済みのため、コメントできません",
++  superseded: "新しい版が出たため、この版の校正は終わりました",
++  deadline: "校正期日を過ぎたため、この版の校正は終わりました",
++  closed: "この版の校正は終わりました",
++  void: "この版は無効です",
++  not_latest: "最新の版ではありません",
+   forbidden: "この制作物にコメントする権限がありません",
+ };

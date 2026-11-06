@@ -1,0 +1,16 @@
+---
+diff --git a/apps/web/src/features/work/ReviewersDialog.tsx b/apps/web/src/features/work/ReviewersDialog.tsx
+index c297d4b..2321cdf 100644
+--- a/apps/web/src/features/work/ReviewersDialog.tsx
++++ b/apps/web/src/features/work/ReviewersDialog.tsx
+@@ -35,9 +35,7 @@ export function ReviewersDialog({
+           {title}
+         </p>
+         <UserPicker label="校正者" groups value={ids} onChange={setIds} />
+-        <p className="muted small">
+-          受付中の版にもすぐ反映します。次の版からはこの名簿で割り当てます
+-        </p>
++        <p className="muted small">いまの版から反映します</p>
+       </div>
+       <div slot="actions" className="row">
+         <M3eButton variant="text" onClick={onClose}>

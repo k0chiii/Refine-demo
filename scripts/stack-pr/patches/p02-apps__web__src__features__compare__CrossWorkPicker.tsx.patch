@@ -1,0 +1,26 @@
+---
+diff --git a/apps/web/src/features/compare/CrossWorkPicker.tsx b/apps/web/src/features/compare/CrossWorkPicker.tsx
+index 483a6ba..23b08c9 100644
+--- a/apps/web/src/features/compare/CrossWorkPicker.tsx
++++ b/apps/web/src/features/compare/CrossWorkPicker.tsx
+@@ -94,9 +94,7 @@ export function CrossWorkPicker({
+                 onChange={(e) => setQuery(e.target.value)}
+               />
+             </M3eSearchBar>
+-            <p className="small muted cross-picker__hint">
+-              あなたが見られる制作物から選びます。選んだ制作物の版が左、いま開いている版が右に並びます。
+-            </p>
++
+             {works === undefined ? (
+               <Loading size="small" label="制作物を読み込んでいます" />
+             ) : candidates.length === 0 ? (
+@@ -135,9 +133,6 @@ export function CrossWorkPicker({
+           </>
+         ) : (
+           <>
+-            <p className="small muted cross-picker__hint">
+-              比べる版を選びます（最新の版が選ばれています）
+-            </p>
+             {picked === undefined ? (
+               <Loading size="small" label="版を読み込んでいます" />
+             ) : revisions.length === 0 ? (

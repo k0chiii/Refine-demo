@@ -1,0 +1,23 @@
+---
+diff --git a/apps/web/e2e/specs/carry-forward.spec.ts b/apps/web/e2e/specs/carry-forward.spec.ts
+index 7c629b6..0f0495d 100644
+--- a/apps/web/e2e/specs/carry-forward.spec.ts
++++ b/apps/web/e2e/specs/carry-forward.spec.ts
+@@ -3,7 +3,7 @@ import { reviewerComments, submitFirstRevision, submitNextRevision } from "../su
+ 
+ // 旧 screenshots.mjs の 17（第2版の提出と、前版の未解決コメントの持ち越し）
+ test.describe("次の版への持ち越し", { tag: "@core" }, () => {
+-  test("第2版を出すと前版の未解決コメントが候補に出て、持ち越すと第2版のコメントになる", async ({
++  test("第2版を出すと前版の未対応コメントが候補に出て、持ち越すと第2版のコメントになる", async ({
+     app,
+     page,
+   }) => {
+@@ -16,7 +16,7 @@ test.describe("次の版への持ち越し", { tag: "@core" }, () => {
+     await submitNextRevision(app, 2, "凡例の文字サイズを調整。");
+     await app.drawer("コメント");
+ 
+-    const carry = page.locator('[aria-label="前版の未解決コメント"]');
++    const carry = page.locator('[aria-label="前版の未対応コメント"]');
+     await expect(carry).toContainText("凡例の文字が小さく");
+     const before = await app.threads().count();
+     await carry.locator("m3e-button", { hasText: "この版へ持ち越す" }).first().click();

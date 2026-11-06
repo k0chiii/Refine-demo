@@ -1,0 +1,19 @@
+---
+diff --git a/apps/web/e2e/specs/decision.spec.ts b/apps/web/e2e/specs/decision.spec.ts
+index fd3d8b4..31edc1f 100644
+--- a/apps/web/e2e/specs/decision.spec.ts
++++ b/apps/web/e2e/specs/decision.spec.ts
+@@ -12,11 +12,9 @@ test.describe("コメントの反映するかどうか", { tag: "@smoke" }, () =
+     await app.drawer("コメント");
+     const card = app.threads().filter({ hasText: "団体名の表記" });
+     const panel = await app.openPanel(card);
+-    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+-    await app.settle();
+-    await page.locator("m3e-menu-item:visible", { hasText: "反映しない" }).click();
++    await panel.locator(".thread__decide m3e-button", { hasText: "反映しない" }).click();
+     await page.fill(".thread-panel textarea", "正式名称は規約で確認済み");
+-    await panel.locator("m3e-button", { hasText: "反映しないにする" }).click();
++    await panel.locator(".thread__form m3e-button", { hasText: "反映しない" }).click();
+ 
+     await expect(card.first()).toHaveClass(/thread--closed/);
+   });

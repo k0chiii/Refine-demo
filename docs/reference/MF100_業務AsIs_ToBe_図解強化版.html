@@ -1,0 +1,4900 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1" name="viewport" />
+    <meta content="MF100 校正業務再設計と実装仕様" name="description" />
+    <title>MF100 校正業務 As-Is / To-Be</title>
+    <style>
+      :root {
+        --ink: #14252a;
+        --soft: #526367;
+        --muted: #718184;
+        --bg: #f3f5f3;
+        --paper: #fff;
+        --border: #dce4df;
+        --teal: #155a53;
+        --teal2: #e5f0ec;
+        --orange: #bb5b2d;
+        --orangebg: #fff3e9;
+        --nav: #17312e;
+        --shadow: 0 11px 45px rgba(26, 41, 41, 0.065);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+          "Yu Gothic", sans-serif;
+        line-height: 1.77;
+        font-size: 15px;
+      }
+      a {
+        color: var(--teal);
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+      p {
+        margin: 0 0 1.1em;
+      }
+      h1,
+      h2,
+      h3,
+      h4 {
+        line-height: 1.36;
+        letter-spacing: -0.035em;
+        margin: 0;
+      }
+      h1 {
+        font-size: clamp(31px, 5vw, 59px);
+        font-weight: 780;
+      }
+      h2 {
+        font-size: clamp(24px, 3.1vw, 36px);
+        margin-bottom: 25px;
+      }
+      h3 {
+        font-size: 20px;
+        margin-bottom: 13px;
+      }
+      h4 {
+        font-size: 15px;
+        margin-bottom: 7px;
+      }
+      strong {
+        font-weight: 750;
+      }
+      small,
+      .small {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .overline {
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--teal);
+        display: block;
+        margin-bottom: 13px;
+      }
+      .lead {
+        font-size: clamp(17px, 2vw, 22px);
+        line-height: 1.85;
+        max-width: 950px;
+        color: #344c4d;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 244px minmax(0, 1fr);
+        max-width: 1660px;
+        margin: auto;
+      }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 34px 23px;
+        background: var(--nav);
+        color: #dcefe5;
+        overflow-y: auto;
+      }
+      .brand {
+        font-size: 15px;
+        font-weight: 750;
+        letter-spacing: 0.02em;
+        line-height: 1.55;
+        margin-bottom: 5px;
+      }
+      .brand-sub {
+        font-size: 11px;
+        line-height: 1.6;
+        color: #99b6ad;
+        margin-bottom: 24px;
+      }
+      .sidebar a {
+        color: #cde2d9;
+        text-decoration: none;
+        display: block;
+        padding: 7px 10px;
+        border-radius: 7px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .sidebar a:hover {
+        background: #2d4943;
+        color: white;
+      }
+      .sidebar .group {
+        font-weight: 850;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        color: #79a79c;
+        text-transform: uppercase;
+        margin: 23px 10px 5px;
+      }
+      .sidebar .note {
+        font-size: 10px;
+        color: #8aa79e;
+        margin: 28px 10px;
+      }
+      .shell {
+        min-width: 0;
+        padding: 36px clamp(20px, 4.4vw, 70px) 110px;
+      }
+      .hero {
+        max-width: 1220px;
+        min-height: 360px;
+        padding: clamp(34px, 6vw, 80px);
+        background: #eaf0ec;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        margin-bottom: 28px;
+        position: relative;
+        overflow: hidden;
+      }
+      .hero:before {
+        content: "";
+        position: absolute;
+        width: 320px;
+        height: 320px;
+        right: -160px;
+        top: -145px;
+        border-radius: 50%;
+        border: 65px solid #d8e8dd;
+      }
+      .hero > * {
+        position: relative;
+      }
+      .hero h1 {
+        max-width: 1000px;
+        margin-bottom: 25px;
+      }
+      .hero .lead {
+        max-width: 940px;
+      }
+      .hero .eyebrow {
+        margin-top: 20px;
+        color: #50746a;
+        font-size: 13px;
+      }
+      .section {
+        max-width: 1220px;
+        margin: 0 0 25px;
+        padding: clamp(28px, 4.1vw, 57px);
+        background: var(--paper);
+        border: 1px solid var(--border);
+        border-radius: 17px;
+        box-shadow: var(--shadow);
+        scroll-margin-top: 20px;
+      }
+      .section .num {
+        font-size: 12px;
+        color: var(--teal);
+        letter-spacing: 0.1em;
+        font-weight: 750;
+        margin-bottom: 11px;
+      }
+      .section > .section-lead {
+        font-size: 17px;
+        color: #466263;
+        max-width: 980px;
+        margin: -6px 0 28px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .cols.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .cols.four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .tile {
+        min-width: 0;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 20px;
+        background: white;
+      }
+      .tile.tint {
+        background: #f8faf8;
+      }
+      .tile h3 {
+        font-size: 17px;
+        margin: 4px 0 12px;
+      }
+      .tile p,
+      .tile li {
+        font-size: 14px;
+      }
+      .metric {
+        font-size: 36px;
+        line-height: 1.05;
+        font-weight: 780;
+        color: var(--teal);
+        letter-spacing: -0.04em;
+        margin-bottom: 9px;
+      }
+      .kicker {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .label {
+        font-weight: 730;
+        color: var(--teal);
+        font-size: 12px;
+      }
+      .em {
+        font-size: 20px;
+        line-height: 1.7;
+        font-weight: 680;
+      }
+      .row-steps {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        margin: 20px 0;
+      }
+      .step {
+        padding: 15px 10px;
+        background: #eaf1ed;
+        border-top: 4px solid #7caaa0;
+        border-radius: 6px;
+        min-width: 0;
+      }
+      .step .idx {
+        font-size: 11px;
+        color: var(--teal);
+        font-weight: 800;
+      }
+      .step strong {
+        display: block;
+        font-size: 14px;
+        margin: 5px 0;
+      }
+      .step span {
+        font-size: 11px;
+        color: #49615c;
+        line-height: 1.6;
+        display: block;
+      }
+      .flow7 {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+      }
+      .flow7 .step {
+        padding: 14px 8px;
+      }
+      .flow7 .step strong {
+        font-size: 13px;
+      }
+      ul,
+      ol {
+        padding-left: 21px;
+        margin: 10px 0 14px;
+      }
+      li {
+        margin: 6px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px 13px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      th {
+        font-weight: 750;
+        background: #f4f7f5;
+        color: #385a54;
+      }
+      td strong {
+        font-weight: 750;
+      }
+      .tablewrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin: 20px 0;
+      }
+      .tablewrap table {
+        min-width: 650px;
+      }
+      .cite {
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .cite a {
+        color: #718582;
+      }
+      .fact {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        background: #e7f2ee;
+        border-radius: 7px;
+        font-weight: 750;
+        color: #14584e;
+        font-size: 11px;
+      }
+      .proposal {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        background: #fff0e5;
+        border-radius: 7px;
+        font-weight: 750;
+        color: #955127;
+        font-size: 11px;
+      }
+      .assumption {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        background: #eef1f7;
+        border-radius: 7px;
+        font-weight: 750;
+        color: #52627b;
+        font-size: 11px;
+      }
+      .quote {
+        font-size: 18px;
+        font-weight: 650;
+        border-left: 4px solid var(--teal);
+        padding: 7px 18px 7px 21px;
+        margin: 17px 0 25px;
+        color: #294b45;
+      }
+      .band {
+        background: #f3f7f4;
+        border-radius: 11px;
+        padding: 21px;
+        margin: 18px 0;
+      }
+      .band strong {
+        color: var(--teal);
+      }
+      .paper-note {
+        border-left: 3px solid #d4985b;
+        background: #fbf6ef;
+        padding: 14px 17px;
+        color: #715137;
+        font-size: 13px;
+        margin: 16px 0;
+      }
+      .silent {
+        color: var(--soft);
+      }
+      .diagram {
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 23px;
+        background: linear-gradient(135deg, #f8faf9, #f0f5f2);
+        margin: 19px 0;
+      }
+      .triple {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        gap: 12px;
+        align-items: center;
+      }
+      .node {
+        border: 1px solid #b8cfc5;
+        background: white;
+        border-radius: 11px;
+        padding: 20px;
+        text-align: center;
+        min-width: 0;
+      }
+      .node strong {
+        display: block;
+      }
+      .node .minor {
+        display: block;
+        color: var(--soft);
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      .arrow {
+        font-size: 23px;
+        color: #6c9086;
+      }
+      .legend {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 12px 0 20px;
+      }
+      .source-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 20px;
+        padding: 0;
+        list-style: none;
+      }
+      .source-list li {
+        font-size: 12px;
+        border-bottom: 1px solid var(--border);
+        padding: 5px 0;
+      }
+      .anchor-num {
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        font-weight: 800;
+        color: #83a79f;
+      }
+      .code {
+        background: #162b2a;
+        color: #dff2e8;
+        padding: 20px 23px;
+        border-radius: 11px;
+        white-space: pre;
+        overflow: auto;
+        line-height: 1.8;
+        font-size: 12px;
+      }
+      .tools {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 18px 0 0;
+      }
+      .tag {
+        display: inline-block;
+        border: 1px solid #b9cec5;
+        color: #315b53;
+        padding: 3px 9px;
+        font-size: 12px;
+        border-radius: 8px;
+        font-weight: 600;
+      }
+      .maturity {
+        margin: 7px 0;
+        padding: 6px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+      .maturity:last-child {
+        border: 0;
+      }
+      .callout {
+        border: 1px solid #e2d4c5;
+        background: #fff9f2;
+        padding: 19px;
+        border-radius: 10px;
+      }
+      .footer {
+        font-size: 12px;
+        color: #61756f;
+        margin: 20px 10px;
+      }
+      .actions {
+        position: fixed;
+        right: 23px;
+        bottom: 20px;
+        display: flex;
+        gap: 8px;
+        z-index: 40;
+      }
+      .action {
+        border: 1px solid #c5d7cc;
+        border-radius: 40px;
+        padding: 10px 16px;
+        color: #fff;
+        background: #1d5951;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        box-shadow: 0 7px 24px #14252a22;
+      }
+      .action.secondary {
+        background: white;
+        color: #1b534b;
+      }
+      .nojs {
+        display: none;
+      }
+      @media (max-width: 1050px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          position: relative;
+          height: auto;
+          padding: 15px 23px;
+        }
+        .sidebar nav {
+          display: none;
+        }
+        .brand {
+          margin: 0;
+        }
+        .brand-sub,
+        .sidebar .note {
+          display: none;
+        }
+        .shell {
+          padding: 18px 17px 80px;
+        }
+        .row-steps,
+        .flow7 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .cols.four {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 670px) {
+        body {
+          font-size: 14px;
+        }
+        .cols,
+        .cols.three,
+        .cols.four {
+          grid-template-columns: 1fr;
+        }
+        .row-steps,
+        .flow7 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .hero {
+          min-height: 0;
+        }
+        .hero h1 {
+          font-size: 26px;
+          line-height: 1.47;
+        }
+        .section {
+          padding: 25px 20px;
+        }
+        .triple {
+          grid-template-columns: 1fr;
+        }
+        .arrow {
+          transform: rotate(90deg);
+          text-align: center;
+        }
+        .source-list {
+          grid-template-columns: 1fr;
+        }
+        .actions {
+          right: 9px;
+          bottom: 10px;
+        }
+        .action {
+          padding: 9px 12px;
+        }
+        .step {
+          padding: 12px;
+        }
+      }
+      @media print {
+        body {
+          background: white !important;
+          print-color-adjust: exact;
+        }
+        .layout {
+          display: block;
+        }
+        .sidebar,
+        .actions {
+          display: none !important;
+        }
+        .shell {
+          padding: 0;
+        }
+        .hero,
+        .section {
+          box-shadow: none;
+          break-inside: avoid;
+          page-break-inside: avoid;
+          margin: 0 0 12mm;
+          padding: 14mm;
+          border-radius: 0;
+        }
+        .hero {
+          min-height: 0;
+        }
+        .section {
+          break-before: page;
+        }
+        .tablewrap {
+          overflow: visible;
+        }
+        .tablewrap table {
+          min-width: 0;
+        }
+        a {
+          color: var(--teal);
+        }
+      }
+      body.present .sidebar {
+        display: none;
+      }
+      body.present .layout {
+        display: block;
+        max-width: none;
+      }
+      body.present .shell {
+        padding: 0;
+        max-width: none;
+      }
+      body.present .hero,
+      body.present .section {
+        display: none !important;
+      }
+      body.present .hero.active,
+      body.present .section.active {
+        display: block !important;
+        max-width: none;
+        margin: 0;
+        border-radius: 0;
+        border: 0;
+        min-height: 100vh;
+        padding: clamp(50px, 6vw, 100px) clamp(45px, 7vw, 130px);
+        box-shadow: none;
+      }
+      body.present .section h2 {
+        font-size: clamp(30px, 4.3vw, 54px);
+      }
+      body.present .section {
+        font-size: clamp(15px, 1.6vw, 20px);
+      }
+      body.present .section .section-lead {
+        font-size: clamp(17px, 2vw, 23px);
+      }
+      body.present .section .tile p {
+        font-size: clamp(13px, 1.18vw, 18px);
+      }
+      body.present .row-steps .step strong {
+        font-size: clamp(14px, 1.3vw, 19px);
+      }
+      body.present .actions .action {
+        font-size: 14px;
+      }
+      body.present .section .source-list {
+        font-size: 12px;
+      }
+      body.present .section .tablewrap {
+        max-height: 63vh;
+        overflow: auto;
+      }
+
+      /* Conceptual diagrams are first-class parts of the documents. 100% inline/offline SVG. */
+      .atlas-figure {
+        margin: 24px 0 28px;
+        background: #fff;
+        border: 1px solid #d6e1db;
+        border-radius: 15px;
+        padding: 16px 19px 19px;
+        box-shadow: 0 7px 27px rgba(17, 47, 42, 0.04);
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .atlas-figure figcaption {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 6px 15px;
+        margin-bottom: 12px;
+        line-height: 1.6;
+      }
+      .atlas-title {
+        font-weight: 760;
+        letter-spacing: -0.015em;
+        color: #174b43;
+        font-size: 17px;
+      }
+      .atlas-caption {
+        font-size: 12px;
+        color: #60756f;
+      }
+      .atlas-stage {
+        overflow-x: auto;
+        scrollbar-color: #a7c6b8 #eef4f0;
+      }
+      .atlas-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        min-width: 640px;
+      }
+      .atlas-fact .atlas-title:before {
+        content: "既存の運用  /  ";
+        font-size: 10px;
+        letter-spacing: 0.03em;
+        color: #5d8276;
+      }
+      .atlas-proposal .atlas-title:before {
+        content: "設計の提案  /  ";
+        font-size: 10px;
+        letter-spacing: 0.03em;
+        color: #b47940;
+      }
+      @media (max-width: 720px) {
+        .atlas-figure {
+          padding: 13px 11px;
+        }
+        .atlas-title {
+          font-size: 15px;
+        }
+        .atlas-svg {
+          min-width: 740px;
+        }
+        .atlas-stage {
+          overscroll-behavior-inline: contain;
+        }
+      }
+      @media print {
+        .atlas-figure {
+          break-inside: avoid;
+          box-shadow: none;
+        }
+        .atlas-svg {
+          min-width: 0 !important;
+        }
+        .atlas-stage {
+          overflow: visible;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">MF100<br />校正業務再設計</div>
+        <div class="brand-sub">業務／制度とシステムの可能性<br />2026.10.08 / 検討用ドラフト</div>
+        <nav>
+          <div class="group">BUSINESS / PRESENTATION</div>
+          <a href="#cover">表紙</a><a href="#thesis">校正の役割</a><a href="#scope">対象・例外</a
+          ><a href="#asis-flow">As-Is業務フロー</a><a href="#evidence">問題の根拠</a
+          ><a href="#tobe-flow">To-Be業務フロー</a><a href="#three-states">3つの状態</a
+          ><a href="#responsibility">役割と責任</a><a href="#exceptions">対面・0版</a
+          ><a href="#outcomes">As-Is/To-Be比較</a><a href="#opportunities">システムで何ができるか</a
+          ><a href="#personas">利用者体験</a><a href="#roadmap">制度の合意事項</a
+          ><a href="#sources">一次資料</a>
+        </nav>
+        <div class="note">
+          一次資料と設計提案を区別して記載。<br />スクロール・印刷・投影に対応。
+        </div>
+      </aside>
+      <main class="shell">
+        <header class="hero" data-slide="" id="cover">
+          <span class="overline">May Festival 100 / Business process redesign</span>
+          <h1>校正を、<br />「指摘する作業」から<br />「品質を決めるプロセス」へ。</h1>
+          <p class="lead">
+            五月祭における校正業務のAs-IsとTo-Be。既存制度を否定せず、何が機能し、どこで業務が止まるのかを切り分け、制度としての理想とシステムによる実現可能性を提案する。
+          </p>
+          <p class="eyebrow">
+            PR・制作者・校正者・校了者・SYSの対話用 ｜
+            制度／業務にコストと実装技術の話を持ち込まない
+          </p>
+        </header>
+        <section class="section" data-slide="" id="thesis">
+          <div class="num">SECTION 01</div>
+          <h2>最初に決めるべきは、校正の役割</h2>
+          <p class="section-lead">
+            システム導入は目的ではなく、品質の高い制作物を、必要なタイミングで、責任を明確にして完成させるための手段。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">校正の3つの目的</span
+              ><span class="atlas-caption">指摘をたくさん集めること自体が目的ではない。</span>
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="品質・対話・責任から成る校正の目的"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 290"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm1"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#DFEEE7"
+                  height="115"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="260"
+                  x="30"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="160.0"
+                  y="83"
+                >
+                  品質を高める
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="160.0"
+                  y="114"
+                >
+                  情報・文章・デザイン
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="115"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="260"
+                  x="410"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="83"
+                >
+                  判断を残す
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="114"
+                >
+                  反映・不採用・保留
+                </text>
+                <rect
+                  fill="#F0EBF8"
+                  height="115"
+                  rx="13"
+                  stroke="#D6C7ED"
+                  stroke-width="1.5"
+                  width="260"
+                  x="790"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="920.0"
+                  y="83"
+                >
+                  責任を確定する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="920.0"
+                  y="114"
+                >
+                  校了者の判断と記録
+                </text>
+                <path
+                  d="M290,112 L410,112"
+                  fill="none"
+                  marker-end="url(#arrm1)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M670,112 L790,112"
+                  fill="none"
+                  marker-end="url(#arrm1)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M540,170 L540,220"
+                  fill="none"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#FFF1E4"
+                  height="30"
+                  rx="15"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="390"
+                  x="345"
+                  y="227"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="247"
+                >
+                  一連の業務としての「校正」
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="quote">
+            校正とは、制作者のアウトプットを材料に、関係者が指摘・議論・確認を行い、より良い制作物へ近づける活動である。
+          </div>
+          <div class="cols three">
+            <div class="tile">
+              <div class="kicker">目的 01</div>
+              <h3>品質を高める</h3>
+              <p>情報の正確性、表記、視認性、ブランド、利用場面との整合性を確認する。</p>
+            </div>
+            <div class="tile">
+              <div class="kicker">目的 02</div>
+              <h3>判断を残す</h3>
+              <p>何を指摘し、何を採用・不採用としたか。決定の理由が次の版や次年度に残る。</p>
+            </div>
+            <div class="tile">
+              <div class="kicker">目的 03</div>
+              <h3>責任を確定する</h3>
+              <p>公開可能と誰が判断したか、どの版か、例外は何かを明確にする。</p>
+            </div>
+          </div>
+          <div class="band">
+            <strong>一次資料：</strong
+            >MF99校正・校了指針では、指摘が常に正しいとは限らず、反映判断は制作者に委ねると説明している。
+            <a
+              href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207"
+              rel="noopener"
+              target="_blank"
+              >校正・校了指針</a
+            >
+          </div>
+        </section>
+        <section class="section" data-slide="" id="scope">
+          <div class="num">SECTION 02</div>
+          <h2>対象を揃えなければ、業務は揃わない</h2>
+          <p class="section-lead">
+            「すべての制作物」を無条件に同じ校正工程へ載せるのではなく、何を、どの観点で確認するかを定義する。
+          </p>
+          <figure class="atlas-figure atlas-fact">
+            <figcaption>
+              <span class="atlas-title">最初に対象を分ける</span
+              ><span class="atlas-caption">対象外の制作物を無理に同じ手続きへ押し込まない。</span>
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="校正制度に含める対象と別制度の関係"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 320"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm2"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#DFEEE7"
+                  height="72"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="960"
+                  x="60"
+                  y="42"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="67"
+                >
+                  委員会の対外的な制作物を整理
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="96"
+                >
+                  対象・例外は現行指針に基づき関係者と確定
+                </text>
+                <path
+                  d="M540,114 L540,155"
+                  fill="none"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M260,155 L820,155"
+                  fill="none"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M260,155 L260,182"
+                  fill="none"
+                  marker-end="url(#arrm2)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M820,155 L820,182"
+                  fill="none"
+                  marker-end="url(#arrm2)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#E8F0F8"
+                  height="90"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="420"
+                  x="50"
+                  y="185"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="260.0"
+                  y="213"
+                >
+                  校正・校了の対象
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="260.0"
+                  y="244"
+                >
+                  グラフィック／映像／UI／文章
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="90"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="420"
+                  x="610"
+                  y="185"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="820.0"
+                  y="213"
+                >
+                  対象外・別の管理制度
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="820.0"
+                  y="244"
+                >
+                  公式文書／規則類／一部の企画対応制作物
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols">
+            <div class="tile tint">
+              <span class="fact">MF99の規定</span>
+              <h3>主な対象</h3>
+              <p>
+                委員会外部に向けて制作するグラフィック・映像・UI・文章。担当・制作担当・関係担当が異なる場合もある。
+              </p>
+              <p class="small">ただし制度上の対象は「制作物集約」と連動。</p>
+            </div>
+            <div class="tile tint">
+              <span class="fact">MF99の規定</span>
+              <h3>対象外・別制度</h3>
+              <p>
+                公式文書番号付きの文書、規則類、一部の企画対応制作物などは別制度。回収対象にはアクセス制限の要件がある。
+              </p>
+              <p class="small">対象拡張はMF100の制度上の合意が必要。</p>
+            </div>
+          </div>
+          <div class="paper-note">
+            例外をすべて「対応不可」にするのではなく、①通常校正 ②専門確認 ③方向性レビュー（0版）
+            ④対面／外部媒体 ⑤機密性の高い回収物、という業務類型で管理する案を提示する。
+          </div>
+          <p class="small">
+            根拠：<a
+              href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207"
+              rel="noopener"
+              target="_blank"
+              >校正・校了指針</a
+            >
+            ／
+            <a
+              href="https://app.notion.com/p/3015cf3bfa76800298ead9e94c9c3979"
+              rel="noopener"
+              target="_blank"
+              >制作物集約</a
+            >
+          </p>
+        </section>
+        <section class="section" data-slide="" id="asis-flow">
+          <div class="num">SECTION 03</div>
+          <h2>As-Is：現在の校正は、情報が複数の場所を往復する</h2>
+          <p class="section-lead">
+            以下はMF99のrefine運用、制作物集約、振り返り、指針を基にした代表的な業務経路。制作担当・媒体によって例外がある。
+          </p>
+          <figure class="atlas-figure atlas-fact atlas-scroll">
+            <figcaption>
+              <span class="atlas-title">As-Is｜作業のたびに「場所」を移動する</span
+              ><span class="atlas-caption">MF99の代表的な経路。担当・媒体ごとに差がある。</span>
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="MF99の校正が複数ツールを渡り歩く様子"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1180 430"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm3"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#DFEEE7"
+                  height="116"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="165"
+                  x="23"
+                  y="88"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="105.5"
+                  y="116"
+                >
+                  制作物登録
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="105.5"
+                  y="147"
+                >
+                  Notion DB
+                </text>
+                <rect
+                  fill="#FFF"
+                  height="116"
+                  rx="13"
+                  stroke="#AECBC0"
+                  stroke-width="1.5"
+                  width="165"
+                  x="216"
+                  y="88"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="298.5"
+                  y="116"
+                >
+                  制作
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="298.5"
+                  y="147"
+                >
+                  Docs / AI / Figma
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="116"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="165"
+                  x="409"
+                  y="88"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="491.5"
+                  y="116"
+                >
+                  版を提出
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="491.5"
+                  y="147"
+                >
+                  ID確認→フォーム
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="116"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="165"
+                  x="602"
+                  y="88"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="684.5"
+                  y="116"
+                >
+                  校正通知
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="684.5"
+                  y="147"
+                >
+                  Slack
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="116"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="165"
+                  x="795"
+                  y="88"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="877.5"
+                  y="116"
+                >
+                  本文に指摘
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="877.5"
+                  y="147"
+                >
+                  Drive / Docs /
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="877.5"
+                  y="165"
+                >
+                  Figma / frame.io
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="116"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="165"
+                  x="988"
+                  y="88"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="1070.5"
+                  y="116"
+                >
+                  判断・更新
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="1070.5"
+                  y="147"
+                >
+                  制作者の判断
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="1070.5"
+                  y="165"
+                >
+                  再提出／校了
+                </text>
+                <path
+                  d="M188,146 L204,146"
+                  fill="none"
+                  marker-end="url(#arrm3)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M381,146 L397,146"
+                  fill="none"
+                  marker-end="url(#arrm3)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M574,146 L590,146"
+                  fill="none"
+                  marker-end="url(#arrm3)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M767,146 L783,146"
+                  fill="none"
+                  marker-end="url(#arrm3)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M960,146 L976,146"
+                  fill="none"
+                  marker-end="url(#arrm3)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#FBE8E6"
+                  height="30"
+                  rx="15"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="210"
+                  x="32"
+                  y="254"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="137.0"
+                  y="274"
+                >
+                  探し直し・入力し直し
+                </text>
+                <rect
+                  fill="#FBE8E6"
+                  height="30"
+                  rx="15"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="210"
+                  x="278"
+                  y="254"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="383.0"
+                  y="274"
+                >
+                  通知の大量発生
+                </text>
+                <rect
+                  fill="#FBE8E6"
+                  height="30"
+                  rx="15"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="242"
+                  x="526"
+                  y="254"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="647.0"
+                  y="274"
+                >
+                  指摘が媒体ごとに分断
+                </text>
+                <rect
+                  fill="#FBE8E6"
+                  height="30"
+                  rx="15"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="329"
+                  x="810"
+                  y="254"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="974.5"
+                  y="274"
+                >
+                  前版からの継承が追いにくい
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="590"
+                  y="354"
+                >
+                  制作物の品質改善という一つの業務が、複数の場所に分散する
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols">
+            <div class="tile">
+              <h3>維持すべき強み</h3>
+              <ul>
+                <li>Notion DBの制作物検索性。担当・制作担当・関係担当を横断できる。</li>
+                <li>KF75で高く評価された軽快な提出・過去版参照。</li>
+                <li>Drive / Figma / Docsの対象位置にコメントできる点。</li>
+              </ul>
+            </div>
+            <div class="tile">
+              <h3>分断が生む負担</h3>
+              <ul>
+                <li>NotionでID、Slackで通知、別ツールで内容確認、さらに別場所で判断。</li>
+                <li>通知が多く、必要な依頼・コメントが埋もれる。</li>
+                <li>前版の指摘と今版の修正結果の対応を追いにくい。</li>
+              </ul>
+            </div>
+          </div>
+          <p class="small">
+            根拠：<a
+              href="https://app.notion.com/p/2d15cf3bfa76804fa0c7d54e05c8888a"
+              rel="noopener"
+              target="_blank"
+              >refine仕様</a
+            >
+            ／
+            <a
+              href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+              rel="noopener"
+              target="_blank"
+              >MF99振り返り</a
+            >
+            ／
+            <a
+              href="https://app.notion.com/p/15b5cf3bfa7680f486ccf7550d5407ce"
+              rel="noopener"
+              target="_blank"
+              >KF75フィードバック</a
+            >
+          </p>
+        </section>
+        <section class="section" data-slide="" id="evidence">
+          <div class="num">SECTION 04</div>
+          <h2>課題は単なる「ツールの多さ」ではない</h2>
+          <p class="section-lead">
+            ツールを一つにしても、誰が何をいつするべきかが曖昧なままなら校正漏れは解消しない。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">課題 → 原因 → 業務上の解決</span
+              ><span class="atlas-caption"
+                >「通知が多いから減らす」では、校正漏れの問題は解決しない。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="利用者の困りごとと構造的な原因の対応"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 385"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm4"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#FBE8E6"
+                  height="76"
+                  rx="13"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="275"
+                  x="25"
+                  y="70"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="162.5"
+                  y="95"
+                >
+                  校正依頼の見落とし
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="76"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="275"
+                  x="400"
+                  y="70"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="537.5"
+                  y="95"
+                >
+                  担当者ごとの依頼が散在
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="76"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="275"
+                  x="775"
+                  y="70"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="912.5"
+                  y="95"
+                >
+                  自分の未対応一覧を正本に
+                </text>
+                <path
+                  d="M300,108 L400,108"
+                  fill="none"
+                  marker-end="url(#arrm4)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M675,108 L775,108"
+                  fill="none"
+                  marker-end="url(#arrm4)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#FBE8E6"
+                  height="76"
+                  rx="13"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="275"
+                  x="25"
+                  y="175"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="162.5"
+                  y="200"
+                >
+                  提出が面倒・失敗する
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="76"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="275"
+                  x="400"
+                  y="175"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="537.5"
+                  y="200"
+                >
+                  ファイルとメタ情報が別経路
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="76"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="275"
+                  x="775"
+                  y="175"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="912.5"
+                  y="200"
+                >
+                  版提出を一つの行為に
+                </text>
+                <path
+                  d="M300,213 L400,213"
+                  fill="none"
+                  marker-end="url(#arrm4)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M675,213 L775,213"
+                  fill="none"
+                  marker-end="url(#arrm4)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#FBE8E6"
+                  height="76"
+                  rx="13"
+                  stroke="#ECC0BD"
+                  stroke-width="1.5"
+                  width="275"
+                  x="25"
+                  y="280"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="162.5"
+                  y="305"
+                >
+                  前版の指摘が埋もれる
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="76"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="275"
+                  x="400"
+                  y="280"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="537.5"
+                  y="305"
+                >
+                  指摘と修正の判断が未接続
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="76"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="275"
+                  x="775"
+                  y="280"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="912.5"
+                  y="305"
+                >
+                  判断を履歴として持ち越す
+                </text>
+                <path
+                  d="M300,318 L400,318"
+                  fill="none"
+                  marker-end="url(#arrm4)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M675,318 L775,318"
+                  fill="none"
+                  marker-end="url(#arrm4)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="14"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="163"
+                  y="40"
+                >
+                  観察された課題
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="14"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="538"
+                  y="40"
+                >
+                  構造上の原因
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="14"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="912"
+                  y="40"
+                >
+                  改善の方向
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 23%">見えている症状</th>
+                  <th style="width: 41%">業務に起きること</th>
+                  <th>確認できた根拠</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>提出が煩雑</td>
+                  <td>制作物IDの入力、リンク・ファイルの操作が増え、版更新が後回しになり得る。</td>
+                  <td>
+                    <a
+                      href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+                      rel="noopener"
+                      target="_blank"
+                      >MF99振り返り</a
+                    >
+                    ／
+                    <a
+                      href="https://app.notion.com/p/3f25cf3bfa7680abb6fbc2b5b4855f03"
+                      rel="noopener"
+                      target="_blank"
+                      >MF100要件素案</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>通知の過不足</td>
+                  <td>重要な校正依頼を見落とす／必要のない通知を無視する習慣が生まれる。</td>
+                  <td>
+                    21人の回答中、校正リマインド「多い」10人、「必要」19人。<a
+                      href="https://app.notion.com/p/2ff5cf3bfa76810c8395e4e8052324fa"
+                      rel="noopener"
+                      target="_blank"
+                      >利用者アンケート</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>確認状況が不明</td>
+                  <td>未読、確認済み、指摘済み、反映済みが混同される。</td>
+                  <td>
+                    <a
+                      href="https://app.notion.com/p/3f25cf3bfa7680abb6fbc2b5b4855f03"
+                      rel="noopener"
+                      target="_blank"
+                      >MF100要件素案</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>例外的な対面校正</td>
+                  <td>有意義な議論が履歴に残らず、後から議論を再開しにくい。</td>
+                  <td>
+                    <a
+                      href="https://app.notion.com/p/3755cf3bfa7680a78933c300fc1f8c1e"
+                      rel="noopener"
+                      target="_blank"
+                      >MF99引き継ぎ</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>導入の遅れ</td>
+                  <td>制度を整える前に現場で版更新が始まり、暫定フローが常態化する。</td>
+                  <td>
+                    EVE合宿への導入に遅れた記録。<a
+                      href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+                      rel="noopener"
+                      target="_blank"
+                      >MF99振り返り</a
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="band">
+            設計上の問いは「校正をどこで行うか」より先に、<strong>「現在の版は何か」「いま誰の判断を待っているか」「未解決の論点は何か」</strong>を誰でも答えられるか、である。
+          </div>
+        </section>
+        <section class="section" data-slide="" id="tobe-flow">
+          <div class="num">SECTION 05</div>
+          <h2>To-Be：校正を7つの責任ある行為に分ける</h2>
+          <p class="section-lead">
+            ここはツール非依存の理想業務。対面・オンライン・外部媒体のいずれでも同じ意味になることを重視する。
+          </p>
+          <figure class="atlas-figure atlas-proposal atlas-scroll">
+            <figcaption>
+              <span class="atlas-title">To-Be｜確認と判断を繰り返し、校了する</span
+              ><span class="atlas-caption">05は受付期限の終了であり、全員の確認完了ではない。</span>
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="校正のTo-Be: 7つの業務ステップと版を繰り返す循環"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1180 440"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm5"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#DFEEE7"
+                  height="94"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="250"
+                  x="25"
+                  y="45"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="150.0"
+                  y="73"
+                >
+                  01 対象定義
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="150.0"
+                  y="104"
+                >
+                  目的・納期・責任
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="94"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="250"
+                  x="316"
+                  y="45"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="441.0"
+                  y="73"
+                >
+                  02 方向性共有
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="441.0"
+                  y="104"
+                >
+                  対面・0版
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="94"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="250"
+                  x="607"
+                  y="45"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="732.0"
+                  y="73"
+                >
+                  03 版提出
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="732.0"
+                  y="104"
+                >
+                  変更点・期限
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="94"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="250"
+                  x="898"
+                  y="45"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="1023.0"
+                  y="73"
+                >
+                  04 確認・対話
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="1023.0"
+                  y="104"
+                >
+                  指摘・質問
+                </text>
+                <path
+                  d="M275,91 L308,91"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M566,91 L599,91"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M857,91 L890,91"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M1023,139 L1023,191"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#FFF1E4"
+                  height="94"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="250"
+                  x="898"
+                  y="195"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="1023.0"
+                  y="223"
+                >
+                  05 期限で締切
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="1023.0"
+                  y="254"
+                >
+                  新規指摘を停止
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="94"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="250"
+                  x="607"
+                  y="195"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="732.0"
+                  y="223"
+                >
+                  06 判断・反映
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="732.0"
+                  y="254"
+                >
+                  採否・保留・継承
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="94"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="250"
+                  x="316"
+                  y="195"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="441.0"
+                  y="223"
+                >
+                  次版が必要か
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="441.0"
+                  y="254"
+                >
+                  必要なら版を提出
+                </text>
+                <path
+                  d="M890,243 L857,243"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M599,243 L566,243"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M441,195 L441,165 L585,165 L585,92 L605,92"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-dasharray="7 5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="517"
+                  y="180"
+                >
+                  次の版へ
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="94"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="252"
+                  x="25"
+                  y="195"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="151.0"
+                  y="223"
+                >
+                  07 制作物の校了
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="151.0"
+                  y="254"
+                >
+                  権限者が最終確定
+                </text>
+                <path
+                  d="M316,242 L278,242"
+                  fill="none"
+                  marker-end="url(#arrm5)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="590"
+                  y="395"
+                >
+                  03〜06を必要なだけ繰り返す。校了は制作物単位の終点。
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols">
+            <div class="tile">
+              <span class="proposal">MF100提案</span>
+              <h3>版ごとに同じサイクルを繰り返す</h3>
+              <p>
+                03〜06は必要なだけ反復する。校正が無限に続かないよう、版ごとの受付期限を明確にする。
+              </p>
+            </div>
+            <div class="tile">
+              <span class="proposal">MF100提案</span>
+              <h3>校了だけは制作物単位</h3>
+              <p>
+                最終的に一人が校了を宣言。未解決の重大指摘がある場合は原則不可、例外は理由を記録する。
+              </p>
+            </div>
+          </div>
+          <div class="paper-note">
+            「期限により校正受付が終了する」と「各校正者が確認を完了した」は別の事実。期限到来で未確認者を確認済みに変更したり、指摘を解決済みにしたりしない。
+          </div>
+        </section>
+        <section class="section" data-slide="" id="three-states">
+          <div class="num">SECTION 06</div>
+          <h2>混同をなくす：版・指摘・制作物を別々に管理する</h2>
+          <p class="section-lead">
+            同じ「完了」という言葉を使うと、後で誰かが困る。制度の核心はこの3つの独立した状態である。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">3つの「状態」は連動しても同一ではない</span
+              ><span class="atlas-caption"
+                >校正受付が終了してもコメントは消えず、校了も自動確定しない。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="版受付・コメント・制作物の独立した状態遷移"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1090 400"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm6"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="24"
+                  y="90"
+                >
+                  版の校正受付
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="75"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="255"
+                  x="230"
+                  y="45"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="357.5"
+                  y="70"
+                >
+                  提出・受付中
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="75"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="295"
+                  x="590"
+                  y="45"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="737.5"
+                  y="70"
+                >
+                  期限到来で終了
+                </text>
+                <path
+                  d="M485,82 L590,82"
+                  fill="none"
+                  marker-end="url(#arrm6)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="13"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="915"
+                  y="86"
+                >
+                  期限≠指摘の解決
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="24"
+                  y="208"
+                >
+                  校正指摘
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="75"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="255"
+                  x="230"
+                  y="163"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="357.5"
+                  y="188"
+                >
+                  未対応
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="75"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="295"
+                  x="590"
+                  y="163"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="737.5"
+                  y="188"
+                >
+                  採用／不採用／保留
+                </text>
+                <path
+                  d="M485,200 L590,200"
+                  fill="none"
+                  marker-end="url(#arrm6)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="13"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="915"
+                  y="204"
+                >
+                  別版へ引き継ぎ可
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="24"
+                  y="326"
+                >
+                  制作物全体
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="75"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="255"
+                  x="230"
+                  y="281"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="357.5"
+                  y="306"
+                >
+                  制作中
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="75"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="295"
+                  x="590"
+                  y="281"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="737.5"
+                  y="306"
+                >
+                  校了宣言
+                </text>
+                <path
+                  d="M485,318 L590,318"
+                  fill="none"
+                  marker-end="url(#arrm6)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="13"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="915"
+                  y="322"
+                >
+                  例外的な再開は記録
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols three">
+            <div class="tile tint">
+              <span class="label">A / 版の校正期間</span>
+              <h3>受付中 → 期限終了</h3>
+              <p>この版に新しく指摘できる期間。終了しても制作物は進行中。</p>
+            </div>
+            <div class="tile tint">
+              <span class="label">B / 校正指摘</span>
+              <h3>未対応 → 対応判断 → 処置</h3>
+              <p>受入・不採用・保留・次版引継ぎなど。版が閉じても指摘は残る。</p>
+            </div>
+            <div class="tile tint">
+              <span class="label">C / 制作物全体</span>
+              <h3>制作中 → 校了</h3>
+              <p>最終判断権限者が校了を宣言するまでは更新可能。校了後の再開は例外管理。</p>
+            </div>
+          </div>
+          <div class="diagram">
+            <div class="triple">
+              <div class="node">
+                <strong>第3版：受付終了</strong><span class="minor">指摘は履歴に保持</span>
+              </div>
+              <div class="arrow">→</div>
+              <div class="node">
+                <strong>第4版：校正中</strong><span class="minor">未解決の指摘を参照</span>
+              </div>
+              <div class="arrow">→</div>
+              <div class="node">
+                <strong>作品：校了</strong><span class="minor">権限者の宣言で確定</span>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="section" data-slide="" id="responsibility">
+          <div class="num">SECTION 07</div>
+          <h2>誰が何を決めるか</h2>
+          <p class="section-lead">
+            役割と業務上の権限を混同しない。制作物ごとの例外や、自身が制作者である場合の牽制も残す。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">RACIより先に「誰が判断するか」</span
+              ><span class="atlas-caption">制作者の採否判断と校了権限者の最終責任を分離する。</span>
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="役割ごとの校正責任と情報の手渡し"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1090 400"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm7"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#DFEEE7"
+                  height="65"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="300"
+                  x="28"
+                  y="35"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="49"
+                  y="60"
+                >
+                  制作統括
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="49"
+                  y="85"
+                >
+                  案件・担当・納期を定義
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="65"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="300"
+                  x="28"
+                  y="125"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="49"
+                  y="150"
+                >
+                  制作者
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="49"
+                  y="175"
+                >
+                  制作・版提出・対応判断
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="65"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="300"
+                  x="28"
+                  y="215"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="49"
+                  y="240"
+                >
+                  校正者／専門確認
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="49"
+                  y="265"
+                >
+                  指摘・検査・相談
+                </text>
+                <rect
+                  fill="#F0EBF8"
+                  height="65"
+                  rx="13"
+                  stroke="#D6C7ED"
+                  stroke-width="1.5"
+                  width="300"
+                  x="28"
+                  y="305"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="49"
+                  y="330"
+                >
+                  校了権限者
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="start"
+                  x="49"
+                  y="355"
+                >
+                  公開の可否を最終判断
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="75"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="290"
+                  x="475"
+                  y="38"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="620.0"
+                  y="63"
+                >
+                  要件と制作物の登録
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="75"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="290"
+                  x="475"
+                  y="129"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="620.0"
+                  y="154"
+                >
+                  版の提出・指摘の処置
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="75"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="290"
+                  x="475"
+                  y="220"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="620.0"
+                  y="245"
+                >
+                  確認と指摘・専門判断
+                </text>
+                <rect
+                  fill="#F0EBF8"
+                  height="75"
+                  rx="13"
+                  stroke="#D6C7ED"
+                  stroke-width="1.5"
+                  width="290"
+                  x="475"
+                  y="310"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="620.0"
+                  y="335"
+                >
+                  条件確認と校了宣言
+                </text>
+                <path
+                  d="M330,74 L460,74"
+                  fill="none"
+                  marker-end="url(#arrm7)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M330,165 L460,165"
+                  fill="none"
+                  marker-end="url(#arrm7)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M330,255 L460,255"
+                  fill="none"
+                  marker-end="url(#arrm7)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M330,340 L460,340"
+                  fill="none"
+                  marker-end="url(#arrm7)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M835,256 L835,165"
+                  fill="none"
+                  marker-end="url(#arrm7)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M835,165 L835,345"
+                  fill="none"
+                  marker-end="url(#arrm7)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="850"
+                  y="215"
+                >
+                  対話と判断
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>役割</th>
+                  <th>業務上の責任</th>
+                  <th>その人だけでは決められないこと</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>制作統括・担当代表</strong></td>
+                  <td>制作物登録、進行・納期の管理、役割の割り当て。</td>
+                  <td>校了権限を持たなければ最終校了は不可。</td>
+                </tr>
+                <tr>
+                  <td><strong>制作者</strong></td>
+                  <td>版提出、指摘の対応判断、反映しない理由の提示。</td>
+                  <td>自分の制作物を無条件に校了はできない。</td>
+                </tr>
+                <tr>
+                  <td><strong>校正者</strong></td>
+                  <td>期限内に確認、指摘・質問、専門事項の判断材料を提供。</td>
+                  <td>指摘の存在だけで制作方針を強制変更しない。</td>
+                </tr>
+                <tr>
+                  <td><strong>専門確認者</strong></td>
+                  <td>めい・写真・言語・意匠・規定など所管の判断。</td>
+                  <td>全制作物の最終校了を単独で代行しない。</td>
+                </tr>
+                <tr>
+                  <td><strong>校了権限者</strong></td>
+                  <td>必要な確認を踏まえ、制作物単位で公開可否を確定。</td>
+                  <td>合議が必要な例外条件や記録を無視しない。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="small">
+            参考：<a
+              href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207"
+              rel="noopener"
+              target="_blank"
+              >MF99の校了者割り当てと合議の例外</a
+            >. MF100の役職・部局別の決定ルールは改めて確認が必要。
+          </p>
+        </section>
+        <section class="section" data-slide="" id="exceptions">
+          <div class="num">SECTION 08</div>
+          <h2>対面・0版・専門確認を無理に一本化しない</h2>
+          <p class="section-lead">
+            目的が違う行為を同じ画面・同じ承認フローに押し込むと、結局Slackなどに逃げる。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">業務の記録は統一、作業の場は多様</span
+              ><span class="atlas-caption"
+                >校正者が既に慣れている外部ツールや対面の強みを維持する。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="中央の案件と校正履歴に異なる確認形態を接続"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 345"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm8"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#DFEEE7"
+                  height="112"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="320"
+                  x="380"
+                  y="118"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="146"
+                >
+                  制作物・版・指摘の共通記録
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="177"
+                >
+                  何が、いつ、誰により判断されたか
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="74"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="280"
+                  x="20"
+                  y="22"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="160.0"
+                  y="47"
+                >
+                  対面作業会
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="160.0"
+                  y="76"
+                >
+                  口頭の合意を要点で残す
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="74"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="280"
+                  x="780"
+                  y="22"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="920.0"
+                  y="47"
+                >
+                  0版・ラフ
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="920.0"
+                  y="76"
+                >
+                  方向性を早期確認
+                </text>
+                <rect
+                  fill="#F0EBF8"
+                  height="74"
+                  rx="13"
+                  stroke="#D6C7ED"
+                  stroke-width="1.5"
+                  width="280"
+                  x="20"
+                  y="250"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="160.0"
+                  y="275"
+                >
+                  専門確認
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="160.0"
+                  y="304"
+                >
+                  写真・めい・言語
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="74"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="280"
+                  x="780"
+                  y="250"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="920.0"
+                  y="275"
+                >
+                  外部媒体で校正
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="920.0"
+                  y="304"
+                >
+                  Figma・動画・Web
+                </text>
+                <path
+                  d="M300,60 L377,143"
+                  fill="none"
+                  marker-end="url(#arrm8)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M780,60 L703,143"
+                  fill="none"
+                  marker-end="url(#arrm8)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M300,290 L377,205"
+                  fill="none"
+                  marker-end="url(#arrm8)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M780,290 L703,205"
+                  fill="none"
+                  marker-end="url(#arrm8)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols three">
+            <div class="tile">
+              <h3>対面校正／作業会</h3>
+              <p>議論の場として自然。必要なのは、後からわかる「何に合意し、何が未決か」の記録。</p>
+              <span class="proposal">提案</span>
+              <p>口頭での決定事項を短い議事コメントとして残す。</p>
+            </div>
+            <div class="tile">
+              <h3>0版／方向性レビュー</h3>
+              <p>完成度より意図・構成を確認。Webデザイン等の先行運用を尊重する。</p>
+              <span class="proposal">提案</span>
+              <p>細部をチェックする「通常版」と目的を分けて表示する。</p>
+            </div>
+            <div class="tile">
+              <h3>媒体別・専門別確認</h3>
+              <p>写真・マスコット・映像・Web・英語等は確認観点や作業場所が異なる。</p>
+              <span class="proposal">提案</span>
+              <p>媒体の違いは許容し、対象版・担当・判断は統一する。</p>
+            </div>
+          </div>
+          <div class="paper-note">
+            機密性の高い回収対象は、閲覧と通知の範囲そのものを通常案件から分離する必要がある。
+          </div>
+          <p class="small">
+            出典：<a
+              href="https://app.notion.com/p/2c95cf3bfa768069826fc72257cc307d"
+              rel="noopener"
+              target="_blank"
+              >0版制度</a
+            >
+            ／
+            <a
+              href="https://app.notion.com/p/3755cf3bfa7680a78933c300fc1f8c1e"
+              rel="noopener"
+              target="_blank"
+              >対面校正を重視した引き継ぎ</a
+            >
+            ／
+            <a
+              href="https://app.notion.com/p/2d15cf3bfa76804fa0c7d54e05c8888a"
+              rel="noopener"
+              target="_blank"
+              >媒体別運用</a
+            >
+          </p>
+        </section>
+        <section class="section" data-slide="" id="outcomes">
+          <div class="num">SECTION 09</div>
+          <h2>As-Is / To-Be：変えるのはどこか</h2>
+          <p class="section-lead">
+            過去の良い体験を残しながら、業務を「記録すれば終わり」から「次の行動が分かる」に変える。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">何を統一するのか</span
+              ><span class="atlas-caption"
+                >媒体を統一するのではなく、仕事の入口と意思決定の記録をつなぐ。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="分散された作業導線から一元的な入口と追跡可能な履歴への転換"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 360"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm9"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="250"
+                  y="36"
+                >
+                  As-Is｜複数の入口・断絶した記録
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="79"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="190"
+                  x="45"
+                  y="75"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="140.0"
+                  y="100"
+                >
+                  Notion
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="140.0"
+                  y="129"
+                >
+                  制作物情報
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="79"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="190"
+                  x="270"
+                  y="75"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="365.0"
+                  y="100"
+                >
+                  Slack
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="365.0"
+                  y="129"
+                >
+                  通知
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="79"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="190"
+                  x="45"
+                  y="205"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="140.0"
+                  y="230"
+                >
+                  Drive / Figma
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="140.0"
+                  y="259"
+                >
+                  校正対象
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="79"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="190"
+                  x="270"
+                  y="205"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="365.0"
+                  y="230"
+                >
+                  メッセージ
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="365.0"
+                  y="259"
+                >
+                  対応判断
+                </text>
+                <path
+                  d="M235,114 L270,114"
+                  fill="none"
+                  marker-end="url(#arrm9)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M365,155 L365,200"
+                  fill="none"
+                  marker-end="url(#arrm9)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M270,245 L235,245"
+                  fill="none"
+                  marker-end="url(#arrm9)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <text
+                  fill="#799C8E"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="36"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="542"
+                  y="179"
+                >
+                  →
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="16"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="807"
+                  y="36"
+                >
+                  To-Be｜同じ案件につながる記録
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="120"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="310"
+                  x="654"
+                  y="110"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="809.0"
+                  y="138"
+                >
+                  校正の共通窓口
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="809.0"
+                  y="169"
+                >
+                  制作物・担当・版・指摘・判断
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="30"
+                  rx="15"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="178"
+                  x="620"
+                  y="266"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="709.0"
+                  y="286"
+                >
+                  作業の見通し
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="30"
+                  rx="15"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="204"
+                  x="810"
+                  y="266"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="912.0"
+                  y="286"
+                >
+                  判断・履歴の継続
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 21%">業務</th>
+                  <th>As-Isの代表例</th>
+                  <th>To-Beで目指す状態</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>制作物を探す</strong></td>
+                  <td>DBでは探せるが、ID確認と他媒体への移動が必要。</td>
+                  <td>名前・担当・目的から対象と現在版にすぐ到達。</td>
+                </tr>
+                <tr>
+                  <td><strong>版を出す</strong></td>
+                  <td>フォーム・リンク・ファイル・通知が分かれている。</td>
+                  <td>変更点・期限・校正対象を一度に共有。</td>
+                </tr>
+                <tr>
+                  <td><strong>校正を入れる</strong></td>
+                  <td>複数の媒体に分散し、依頼の優先順位が見えにくい。</td>
+                  <td>自分が見るべき版、締切、見る観点が明確。</td>
+                </tr>
+                <tr>
+                  <td><strong>議論する</strong></td>
+                  <td>対面やSlackの議論が版履歴から離れがち。</td>
+                  <td>発言場所が違っても、結論と未解決事項は版に結び付く。</td>
+                </tr>
+                <tr>
+                  <td><strong>修正する</strong></td>
+                  <td>前版のコメントを手動で探し、対応結果を確認する。</td>
+                  <td>受入・不採用・持ち越しの判断と理由が追跡できる。</td>
+                </tr>
+                <tr>
+                  <td><strong>校了する</strong></td>
+                  <td>校了状態の記録と実際の意思決定にずれが起こる余地。</td>
+                  <td>公開可能な版と、権限者・判断理由・条件を確定。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="section" data-slide="" id="opportunities">
+          <div class="num">SECTION 10</div>
+          <h2>では、システムがあれば何ができるか</h2>
+          <p class="section-lead">
+            以下は「業務To-Be」を支える機能の提案。これが制度そのものに代わるわけではない。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">システムが可能にする6つの業務改善</span
+              ><span class="atlas-caption"
+                >この6機能は制度To-Beの実行を補助するもので、制度自体ではない。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="システム機能が校正の各業務課題をどう解決するか"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 385"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm10"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#E8F0F8"
+                  height="105"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="330"
+                  x="15"
+                  y="58"
+                ></rect>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="31"
+                  y="79"
+                >
+                  01
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="180.0"
+                  y="86"
+                >
+                  見つける
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="180.0"
+                  y="117"
+                >
+                  自分の担当・未確認だけ表示
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="105"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="330"
+                  x="375"
+                  y="58"
+                ></rect>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="391"
+                  y="79"
+                >
+                  02
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="86"
+                >
+                  提出する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="117"
+                >
+                  版・添付・期限を同時登録
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="105"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="330"
+                  x="735"
+                  y="58"
+                ></rect>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="751"
+                  y="79"
+                >
+                  03
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="900.0"
+                  y="86"
+                >
+                  指摘する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="900.0"
+                  y="117"
+                >
+                  対象箇所にコメントを固定
+                </text>
+                <rect
+                  fill="#FFF1E4"
+                  height="105"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="330"
+                  x="15"
+                  y="204"
+                ></rect>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="31"
+                  y="225"
+                >
+                  04
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="180.0"
+                  y="232"
+                >
+                  判断する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="180.0"
+                  y="263"
+                >
+                  採否・保留と理由を記録
+                </text>
+                <rect
+                  fill="#F0EBF8"
+                  height="105"
+                  rx="13"
+                  stroke="#D6C7ED"
+                  stroke-width="1.5"
+                  width="330"
+                  x="375"
+                  y="204"
+                ></rect>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="391"
+                  y="225"
+                >
+                  05
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="232"
+                >
+                  引き継ぐ
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="263"
+                >
+                  未解決指摘を次版へ提案
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="105"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="330"
+                  x="735"
+                  y="204"
+                ></rect>
+                <text
+                  fill="#1F574D"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="751"
+                  y="225"
+                >
+                  06
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="900.0"
+                  y="232"
+                >
+                  校了する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="900.0"
+                  y="263"
+                >
+                  権限・重要指摘を確認
+                </text>
+                <path
+                  d="M345,110 L375,110"
+                  fill="none"
+                  marker-end="url(#arrm10)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M705,110 L735,110"
+                  fill="none"
+                  marker-end="url(#arrm10)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M180,163 L180,191"
+                  fill="none"
+                  marker-end="url(#arrm10)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M540,163 L540,191"
+                  fill="none"
+                  marker-end="url(#arrm10)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <path
+                  d="M900,163 L900,191"
+                  fill="none"
+                  marker-end="url(#arrm10)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols three">
+            <div class="tile">
+              <span class="label">01 / 発見</span>
+              <h3>自分の校正待ち一覧</h3>
+              <p>未読、期限、担当、重要度で絞り込み。「自分が今やること」がわかる。</p>
+            </div>
+            <div class="tile">
+              <span class="label">02 / 提出</span>
+              <h3>版更新を一画面で</h3>
+              <p>制作物IDの再入力をなくし、変更点・見てほしい観点・ファイルをまとめて提出。</p>
+            </div>
+            <div class="tile">
+              <span class="label">03 / 指摘</span>
+              <h3>位置を指定して話す</h3>
+              <p>PDF・画像にはピンと範囲指定。文章では対象箇所と表記統一の警告を連携。</p>
+            </div>
+            <div class="tile">
+              <span class="label">04 / 整理</span>
+              <h3>指摘を意味で整理</h3>
+              <p>要修正／質問／議論、専門分野、未解決、担当者などでフィルタ。</p>
+            </div>
+            <div class="tile">
+              <span class="label">05 / 継承</span>
+              <h3>未解決を次版へ</h3>
+              <p>前版の指摘を見失わない。AIは引き継ぎ候補を提案し、人が確定。</p>
+            </div>
+            <div class="tile">
+              <span class="label">06 / 決定</span>
+              <h3>理由の残る校了</h3>
+              <p>例外の警告、未解決事項の確認、権限者の一操作で版を確定。</p>
+            </div>
+          </div>
+          <div class="band">
+            <strong>設計原則：</strong
+            >動画・Webまで一度に内製しない。まずは資料・関係者・判断・履歴をつなぐことを優先し、媒体による機能差を残す。
+          </div>
+        </section>
+        <section class="section" data-slide="" id="personas">
+          <div class="num">SECTION 11</div>
+          <h2>利用体験の変化を、2人の視点で見る</h2>
+          <p class="section-lead">
+            同じ仕事でも、画面を増やすことではなく「探す・確認する・判断する」の摩擦を減らす。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">同じ制作物を、役割に応じて見る</span
+              ><span class="atlas-caption"
+                >校正者が判断することと、制作者が判断することを区別。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="校正者と制作者のユーザージャーニー"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1080 355"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm11"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="15"
+                  y="42"
+                >
+                  校正者
+                </text>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="start"
+                  x="15"
+                  y="208"
+                >
+                  制作者
+                </text>
+                <rect
+                  fill="#E8F0F8"
+                  height="89"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="205"
+                  x="160"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="262.5"
+                  y="83"
+                >
+                  自分の依頼
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="262.5"
+                  y="114"
+                >
+                  期限・未読で絞る
+                </text>
+                <path
+                  d="M365,98 L384,98"
+                  fill="none"
+                  marker-end="url(#arrm11)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#E8F0F8"
+                  height="89"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="205"
+                  x="389"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="491.5"
+                  y="83"
+                >
+                  版を確認
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="491.5"
+                  y="114"
+                >
+                  変更点を見る
+                </text>
+                <path
+                  d="M594,98 L613,98"
+                  fill="none"
+                  marker-end="url(#arrm11)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#E8F0F8"
+                  height="89"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="205"
+                  x="618"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="720.5"
+                  y="83"
+                >
+                  指摘する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="720.5"
+                  y="114"
+                >
+                  対象位置に残す
+                </text>
+                <path
+                  d="M823,98 L842,98"
+                  fill="none"
+                  marker-end="url(#arrm11)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#E8F0F8"
+                  height="89"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="205"
+                  x="847"
+                  y="55"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="949.5"
+                  y="83"
+                >
+                  確認状況
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="949.5"
+                  y="114"
+                >
+                  未対応だけ把握
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="89"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="205"
+                  x="160"
+                  y="215"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="262.5"
+                  y="243"
+                >
+                  提出する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="262.5"
+                  y="274"
+                >
+                  対象案件を選ぶ
+                </text>
+                <path
+                  d="M365,258 L384,258"
+                  fill="none"
+                  marker-end="url(#arrm11)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#DFEEE7"
+                  height="89"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="205"
+                  x="389"
+                  y="215"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="491.5"
+                  y="243"
+                >
+                  反応を確認
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="491.5"
+                  y="274"
+                >
+                  校正・質問を分類
+                </text>
+                <path
+                  d="M594,258 L613,258"
+                  fill="none"
+                  marker-end="url(#arrm11)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#DFEEE7"
+                  height="89"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="205"
+                  x="618"
+                  y="215"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="720.5"
+                  y="243"
+                >
+                  判断する
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="720.5"
+                  y="274"
+                >
+                  採否と理由
+                </text>
+                <path
+                  d="M823,258 L842,258"
+                  fill="none"
+                  marker-end="url(#arrm11)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#DFEEE7"
+                  height="89"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="205"
+                  x="847"
+                  y="215"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="15"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="949.5"
+                  y="243"
+                >
+                  次版／校了
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="949.5"
+                  y="274"
+                >
+                  引継ぎ・最後の確認
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols">
+            <div class="tile tint">
+              <span class="kicker">校正者</span>
+              <h3>今日見るべきものが分かる</h3>
+              <ol>
+                <li>担当に割り当てられた校正待ちを開く。</li>
+                <li>版と前版との差分、見てほしい観点を確認する。</li>
+                <li>必要な箇所へ指摘・質問を残す。</li>
+                <li>残りの校正は自分の一覧で把握する。</li>
+              </ol>
+              <p><span class="fact">業務上の成果</span> 校正漏れの発見・優先順位の共有。</p>
+            </div>
+            <div class="tile tint">
+              <span class="kicker">制作者</span>
+              <h3>次の版を出すための判断が分かる</h3>
+              <ol>
+                <li>今版で届いた指摘を一覧にする。</li>
+                <li>取り入れる／理由付きで反映しない／次版へ持ち越すを決める。</li>
+                <li>前回との変更点を添えて次版を提出する。</li>
+                <li>校了前に残る重大指摘を確認する。</li>
+              </ol>
+              <p><span class="fact">業務上の成果</span> 手戻り低減と意思決定の継続性。</p>
+            </div>
+          </div>
+        </section>
+        <section class="section" data-slide="" id="roadmap">
+          <div class="num">SECTION 12</div>
+          <h2>導入前に合意したいのは、機能より運用条件</h2>
+          <p class="section-lead">
+            推奨する検討順序：対象 → 役割 → 締切 → 判断 →
+            操作体験。これを飛ばすと「新しい入力欄だけ増えたシステム」になる。
+          </p>
+          <figure class="atlas-figure atlas-proposal">
+            <figcaption>
+              <span class="atlas-title">最初に合意するのは業務のルール</span
+              ><span class="atlas-caption"
+                >この4点が曖昧だと、使いにくいツールを作り直すことになる。</span
+              >
+            </figcaption>
+            <div class="atlas-stage">
+              <svg
+                aria-label="導入前に意思決定する順番"
+                class="atlas-svg"
+                preserveaspectratio="xMidYMid meet"
+                role="img"
+                viewbox="0 0 1070 310"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <marker
+                    id="arrm12"
+                    markerheight="9"
+                    markerwidth="9"
+                    orient="auto"
+                    refx="8"
+                    refy="4.5"
+                  >
+                    <path d="M0 0L9 4.5L0 9Z" fill="#799C8E"></path>
+                  </marker>
+                </defs>
+                <rect
+                  fill="#E8F0F8"
+                  height="98"
+                  rx="13"
+                  stroke="#B4D0ED"
+                  stroke-width="1.5"
+                  width="235"
+                  x="20"
+                  y="71"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="137.5"
+                  y="99"
+                >
+                  01 対象
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="137.5"
+                  y="130"
+                >
+                  媒体・制作物の例外
+                </text>
+                <path
+                  d="M255,120 L280,120"
+                  fill="none"
+                  marker-end="url(#arrm12)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#DFEEE7"
+                  height="98"
+                  rx="13"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="235"
+                  x="285"
+                  y="71"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="402.5"
+                  y="99"
+                >
+                  02 役割
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="402.5"
+                  y="130"
+                >
+                  校了者・専門確認
+                </text>
+                <path
+                  d="M520,120 L545,120"
+                  fill="none"
+                  marker-end="url(#arrm12)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#FFF1E4"
+                  height="98"
+                  rx="13"
+                  stroke="#F4D2AE"
+                  stroke-width="1.5"
+                  width="235"
+                  x="550"
+                  y="71"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="667.5"
+                  y="99"
+                >
+                  03 制度
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="667.5"
+                  y="130"
+                >
+                  期限・合議・再開
+                </text>
+                <path
+                  d="M785,120 L810,120"
+                  fill="none"
+                  marker-end="url(#arrm12)"
+                  stroke="#799C8E"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.4"
+                ></path>
+                <rect
+                  fill="#F0EBF8"
+                  height="98"
+                  rx="13"
+                  stroke="#D6C7ED"
+                  stroke-width="1.5"
+                  width="235"
+                  x="815"
+                  y="71"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="17"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="932.5"
+                  y="99"
+                >
+                  04 試行
+                </text>
+                <text
+                  fill="#526C66"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="450"
+                  text-anchor="middle"
+                  x="932.5"
+                  y="130"
+                >
+                  PR／EVE／Web案件
+                </text>
+                <rect
+                  fill="#DFEEE7"
+                  height="30"
+                  rx="15"
+                  stroke="#C2E3D5"
+                  stroke-width="1.5"
+                  width="480"
+                  x="300"
+                  y="210"
+                ></rect>
+                <text
+                  fill="#173A35"
+                  font-family="-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif"
+                  font-size="12"
+                  font-weight="750"
+                  text-anchor="middle"
+                  x="540.0"
+                  y="230"
+                >
+                  制度に合意してから、実装範囲を確定
+                </text>
+              </svg>
+            </div>
+          </figure>
+          <div class="cols four">
+            <div class="tile">
+              <div class="metric">01</div>
+              <h3>対象・類型</h3>
+              <p>どこまで通常校正に載せるか。専門確認・0版・回収物・Webの扱い。</p>
+            </div>
+            <div class="tile">
+              <div class="metric">02</div>
+              <h3>役割と牽制</h3>
+              <p>制作担当と主管、校了者、自己校了時の合議。</p>
+            </div>
+            <div class="tile">
+              <div class="metric">03</div>
+              <h3>期限・例外</h3>
+              <p>版の受付終了、遅延時対応、校了例外の理由。</p>
+            </div>
+            <div class="tile">
+              <div class="metric">04</div>
+              <h3>実証</h3>
+              <p>PR・EVE・Web・制作者・校了者の業務テスト。</p>
+            </div>
+          </div>
+          <div class="paper-note">
+            重要な教訓：MF99では導入が遅れ、先に実務が始まったため暫定的なSlack版更新が発生した。制度を使う人の早期参加と試験導入が必要。
+          </div>
+        </section>
+        <section class="section" data-slide="" id="sources">
+          <div class="num">SECTION 13</div>
+          <h2>根拠資料と読み方</h2>
+          <p class="section-lead">
+            青緑の「MF99の規定」はNotion上の実績・文書。薄茶の「MF100提案」は今回の設計案。制度変更は正式な合意が必要。
+          </p>
+          <ul class="source-list">
+            <li>
+              <span class="anchor-num">01</span>
+              <a
+                href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207"
+                rel="noopener"
+                target="_blank"
+                >MF99 校正・校了指針（定義・対象・権限・校了基準）</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">02</span>
+              <a
+                href="https://app.notion.com/p/3015cf3bfa76800298ead9e94c9c3979"
+                rel="noopener"
+                target="_blank"
+                >MF99 制作物集約（登録範囲・担当）</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">03</span>
+              <a
+                href="https://app.notion.com/p/2d15cf3bfa76804fa0c7d54e05c8888a"
+                rel="noopener"
+                target="_blank"
+                >refine仕様書（As-Isの媒体・連携・通知）</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">04</span>
+              <a
+                href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+                rel="noopener"
+                target="_blank"
+                >refine 振り返りmtg（運用実態・問題）</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">05</span>
+              <a
+                href="https://app.notion.com/p/2ff5cf3bfa76810c8395e4e8052324fa"
+                rel="noopener"
+                target="_blank"
+                >校正システムアンケート（利用者21名）</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">06</span>
+              <a
+                href="https://app.notion.com/p/15b5cf3bfa7680f486ccf7550d5407ce"
+                rel="noopener"
+                target="_blank"
+                >KF75 校正システムのフィードバック</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">07</span>
+              <a
+                href="https://app.notion.com/p/3755cf3bfa7680a78933c300fc1f8c1e"
+                rel="noopener"
+                target="_blank"
+                >MF99 校正システムの引き継ぎ（対面・運用）</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">08</span>
+              <a
+                href="https://app.notion.com/p/3f25cf3bfa7680abb6fbc2b5b4855f03"
+                rel="noopener"
+                target="_blank"
+                >校正システム要件定義の素 第2版</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">09</span>
+              <a
+                href="https://app.notion.com/p/29c5cf3bfa7680e6b7b7fb06ebedc859"
+                rel="noopener"
+                target="_blank"
+                >文章校正・校了指針</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">10</span>
+              <a
+                href="https://app.notion.com/p/2ba5cf3bfa7680fa9b34d380da70ff13"
+                rel="noopener"
+                target="_blank"
+                >notationシステム</a
+              >
+            </li>
+            <li>
+              <span class="anchor-num">11</span>
+              <a
+                href="https://app.notion.com/p/2c95cf3bfa768069826fc72257cc307d"
+                rel="noopener"
+                target="_blank"
+                >0版制度設計</a
+              >
+            </li>
+          </ul>
+          <div class="paper-note">
+            注意：MF99の「校了」の定義や制作物の除外範囲は文書に基づく事実。版の期限終了による受付停止、理由付き例外校了、AIによる次版引継ぎなどは本対話で提示されたMF100向け方針・提案として区別した。
+          </div>
+        </section>
+        <div class="footer">MF100 校正業務再設計 / 2026-10-08 / 検討用</div>
+      </main>
+    </div>
+    <div class="actions">
+      <button class="action secondary" hidden="" id="prev-btn">前へ</button
+      ><button class="action secondary" hidden="" id="next-btn">次へ</button
+      ><button class="action" id="present-btn">投影モード</button>
+    </div>
+    <script>
+      (function () {
+        const pages = [...document.querySelectorAll("[data-slide]")];
+        let idx = 0;
+        const btn = document.getElementById("present-btn"),
+          prev = document.getElementById("prev-btn"),
+          next = document.getElementById("next-btn");
+        function show(i) {
+          idx = (i + pages.length) % pages.length;
+          pages.forEach((p, j) => p.classList.toggle("active", j === idx));
+          if (document.body.classList.contains("present")) window.scrollTo(0, 0);
+          document.title =
+            (document.body.classList.contains("present") ? `${idx + 1}/${pages.length} | ` : "") +
+            document.title.split(" | ")[document.title.split(" | ").length - 1];
+        }
+        function toggle() {
+          document.body.classList.toggle("present");
+          const on = document.body.classList.contains("present");
+          btn.textContent = on ? "通常表示に戻る" : "投影モード";
+          prev.hidden = next.hidden = !on;
+          show(idx);
+        }
+        btn?.addEventListener("click", toggle);
+        prev?.addEventListener("click", () => show(idx - 1));
+        next?.addEventListener("click", () => show(idx + 1));
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && document.body.classList.contains("present")) toggle();
+          else if (
+            document.body.classList.contains("present") &&
+            ["ArrowRight", "PageDown", " "].includes(e.key)
+          ) {
+            e.preventDefault();
+            show(idx + 1);
+          } else if (
+            document.body.classList.contains("present") &&
+            ["ArrowLeft", "PageUp"].includes(e.key)
+          ) {
+            e.preventDefault();
+            show(idx - 1);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

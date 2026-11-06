@@ -1,0 +1,28 @@
+{
+  "name": "@mf100/application",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MF100 アプリケーション層。ユースケースとポート（リポジトリ・時計・監査・冪等性）。インフラ非依存。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "default": "./src/testing/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "vp test run",
+    "typecheck": "vp run verify-types"
+  },
+  "dependencies": {
+    "@mf100/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite-plus": "1.2.0"
+  }
+}

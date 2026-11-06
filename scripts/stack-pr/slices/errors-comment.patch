@@ -1,0 +1,14 @@
+--- a/apps/web/src/lib/errors.ts
++++ b/apps/web/src/lib/errors.ts
+@@ -109,9 +102,8 @@ const messages: Record<string, string> = {
+     "この端末への通知を設定できませんでした。ブラウザを更新してやり直してください。",
+   notification_prefs_invalid: "通知の設定を保存できませんでした。もう一度お試しください。",
+   test_notification_too_soon: "テスト通知は 1 分に 1 回まで送れます",
+-  slack_workspace_invalid:
+-    "ワークスペースの内容を確かめてください。名前は 80 文字まで、team_id は T で始まる英数字です。",
+-  slack_workspace_duplicate: "同じ team_id のワークスペースはもう登録されています",
++  slack_workspace_invalid: "名前は 80 文字まで、ワークスペース ID は T で始まる英数字です",
++  slack_workspace_duplicate: "同じワークスペース ID がもう登録されています",
+   comment_file_invalid: "添付を確かめてください。1 つのコメントに付けられるのは 10 件までです。",
+   comment_file_not_found: "この添付は見つかりません。",
+   comment_file_not_ready:

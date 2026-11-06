@@ -1,0 +1,1869 @@
+<!doctype html>
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>MF100 校正システム 要件定義・Claude実装引き継ぎ書 v1.1</title>
+    <style>
+      :root {
+        --ink: #263247;
+        --muted: #607187;
+        --line: #dde6ee;
+        --bg: #f6f8fc;
+        --paper: #ffffff;
+        --primary: #2457ad;
+        --primary-weak: #eaf1ff;
+        --indigo: #4e44a7;
+        --accent: #16a085;
+        --gold: #b07b29;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 28px;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--bg);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+          "Yu Gothic", Meiryo, sans-serif;
+        line-height: 1.9;
+        font-size: 15px;
+        letter-spacing: 0.008em;
+      }
+      a {
+        color: var(--primary);
+        text-underline-offset: 3px;
+      }
+      a:hover {
+        color: #10376d;
+      }
+      .layout {
+        max-width: 1520px;
+        margin: auto;
+        display: grid;
+        grid-template-columns: 290px minmax(0, 1fr);
+        gap: 28px;
+        padding: 26px;
+      }
+      aside {
+        height: calc(100vh - 52px);
+        position: sticky;
+        top: 26px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: #fff;
+        padding: 22px 18px;
+      }
+      .brand {
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.13em;
+        color: var(--primary);
+      }
+      aside .mini {
+        margin: 5px 0 16px;
+        font-size: 20px;
+        font-weight: 750;
+        line-height: 1.5;
+      }
+      aside nav {
+        display: grid;
+        gap: 2px;
+      }
+      aside nav a {
+        padding: 9px 10px;
+        border-radius: 10px;
+        color: #45576d;
+        text-decoration: none;
+        font-size: 12.5px;
+        line-height: 1.5;
+        display: block;
+      }
+      aside nav a:hover {
+        background: var(--primary-weak);
+        color: #19418a;
+      }
+      main {
+        min-width: 0;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 8px 4px 21px;
+      }
+      .eyebrow {
+        color: #516580;
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+      }
+      .meta {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .pill {
+        display: inline-block;
+        border-radius: 100px;
+        background: #eaf1ff;
+        color: #31579f;
+        font-size: 12px;
+        padding: 4px 12px;
+        font-weight: 650;
+      }
+      .pill.warn {
+        background: #fff3da;
+        color: #8a6526;
+      }
+      article {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: 0 12px 50px rgba(26, 50, 95, 0.04);
+        border-radius: 22px;
+        padding: clamp(22px, 4.5vw, 74px);
+      }
+      h1 {
+        font-size: clamp(31px, 3.2vw, 43px);
+        line-height: 1.4;
+        letter-spacing: -0.025em;
+        margin: 0 0 22px;
+        font-weight: 850;
+        color: #192e51;
+      }
+      h2 {
+        font-size: clamp(23px, 2.1vw, 29px);
+        margin: 3.2em 0 1.1em;
+        line-height: 1.4;
+        letter-spacing: -0.012em;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+        color: #1f3a62;
+      }
+      h3 {
+        font-size: 19px;
+        margin: 2em 0 0.8em;
+        line-height: 1.45;
+        color: #233c61;
+      }
+      h4 {
+        font-size: 16px;
+        margin: 1.5em 0 0.6em;
+      }
+      p {
+        margin: 1em 0;
+      }
+      article > blockquote:first-of-type {
+        border-left: 4px solid var(--primary);
+        background: #f0f5ff;
+        padding: 12px 20px;
+        border-radius: 0 10px 10px 0;
+        color: #385478;
+      }
+      blockquote {
+        border-left: 3px solid #c2d3ee;
+        margin: 1.5em 0;
+        padding: 5px 20px;
+        color: #465872;
+        background: #f7f9ff;
+        border-radius: 0 10px 10px 0;
+      }
+      blockquote p {
+        margin: 0.5em 0;
+      }
+      strong {
+        font-weight: 750;
+        color: #20375f;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 30px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+        line-height: 1.7;
+        display: block;
+        overflow-x: auto;
+        margin: 20px 0 24px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      th,
+      td {
+        padding: 12px 15px;
+        min-width: 100px;
+        border-bottom: 1px solid #e8eef5;
+        vertical-align: top;
+        text-align: left;
+        overflow-wrap: anywhere;
+      }
+      th {
+        font-weight: 700;
+        color: #254a80;
+        background: #edf3fc;
+        white-space: nowrap;
+      }
+      tr:nth-child(even) td {
+        background: #fafcff;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.5em;
+      }
+      li {
+        margin: 0.4em 0;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #edf2f7;
+        padding: 2px 5px;
+        border-radius: 5px;
+        font-size: 0.88em;
+        color: #234b78;
+      }
+      pre {
+        background: #1d2b43;
+        color: #e9f3ff;
+        padding: 20px;
+        overflow-x: auto;
+        border-radius: 13px;
+        line-height: 1.55;
+        white-space: pre;
+        max-width: 100%;
+        font-size: 13px;
+      }
+      pre code {
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        line-height: 1.6;
+      }
+      .foot {
+        font-size: 12px;
+        color: var(--muted);
+        padding: 20px 6px;
+        text-align: center;
+      }
+      .actions a {
+        font-size: 12px;
+        color: #34568f;
+        text-decoration: none;
+        padding: 9px 13px;
+        border: 1px solid var(--line);
+        border-radius: 100px;
+        background: #fff;
+      }
+      .actions a:hover {
+        background: #edf3ff;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        padding: 8px 13px;
+        cursor: pointer;
+        color: #285398;
+        font-weight: 600;
+      }
+      .mobiletoc {
+        display: none;
+      }
+      :target {
+        scroll-margin-top: 24px;
+      }
+      @media (max-width: 850px) {
+        .layout {
+          display: block;
+          padding: 13px;
+        }
+        aside {
+          display: none;
+        }
+        article {
+          padding: 22px 17px;
+          border-radius: 16px;
+        }
+        .mobiletoc {
+          display: block;
+          margin: 10px 0 22px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: white;
+        }
+        .mobiletoc summary {
+          padding: 13px 15px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .mobiletoc nav {
+          display: grid;
+          max-height: 40vh;
+          overflow: auto;
+          padding: 0 14px 14px;
+        }
+        .mobiletoc a {
+          display: block;
+          font-size: 13px;
+          text-decoration: none;
+          padding: 6px 0;
+        }
+        .topbar {
+          align-items: flex-start;
+        }
+        .meta {
+          justify-content: flex-end;
+        }
+        table {
+          font-size: 12px;
+        }
+        h2 {
+          margin-top: 2em;
+        }
+        pre {
+          font-size: 11px;
+        }
+      }
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+          font-size: 11px;
+        }
+        aside,
+        .mobiletoc,
+        .topbar,
+        .foot {
+          display: none !important;
+        }
+        .layout {
+          display: block;
+          padding: 0;
+        }
+        article {
+          border: 0;
+          box-shadow: none;
+          border-radius: 0;
+          padding: 0;
+        }
+        h1 {
+          font-size: 27px;
+        }
+        h2 {
+          font-size: 19px;
+          break-after: avoid;
+          margin-top: 22px;
+        }
+        h3 {
+          font-size: 15px;
+          break-after: avoid;
+        }
+        table {
+          display: table;
+          font-size: 9px;
+          break-inside: avoid;
+        }
+        tr,
+        pre,
+        blockquote {
+          break-inside: avoid;
+        }
+        pre {
+          font-size: 9px;
+          white-space: pre-wrap;
+        }
+        a {
+          color: #000;
+          text-decoration: underline;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside>
+        <div class="brand">MF100 / REQUIREMENTS</div>
+        <div class="mini">校正システム<br />実装引き継ぎ書</div>
+        <nav>
+          <a href="#sec-01">0. 最初に読む：確定していること・決めていないこと</a
+          ><a href="#sec-02">1. 業務の目的とAs-Is</a
+          ><a href="#sec-03">2. To-Beの業務フロー（ツール非依存）</a
+          ><a href="#sec-04">3. MVPと後続機能</a><a href="#sec-05">4. 画面・ユーザー体験</a
+          ><a href="#sec-06">5. 状態管理の不変条件</a
+          ><a href="#sec-07">6. データモデル（論理構造案）</a><a href="#sec-08">7. 認証・認可</a
+          ><a href="#sec-09">8. 技術構成（採用案）</a><a href="#sec-10">9. コメント・媒体別の詳細</a
+          ><a href="#sec-11">10. 通知と期限</a
+          ><a href="#sec-12">11. 受け入れ条件（最低限のE2Eテスト）</a
+          ><a href="#sec-13">12. 未決事項と安全な暫定方針</a
+          ><a href="#sec-14">13. 品質・運用・非機能</a
+          ><a href="#sec-15">14. 実装の分割と着手手順（Claudeへ）</a
+          ><a href="#sec-16">15. Claudeに最初に渡す依頼文（コピーして使える）</a
+          ><a href="#sec-17">16. 根拠・関連資料</a>
+        </nav>
+      </aside>
+      <main>
+        <div class="topbar">
+          <div class="eyebrow">MF100　/　校正業務の再設計　/　v1.1</div>
+          <div class="meta">
+            <span class="pill">Claude向け</span><span class="pill warn">制度承認前</span>
+          </div>
+        </div>
+        <details class="mobiletoc">
+          <summary>目次を開く</summary>
+          <nav>
+            <a href="#sec-01">0. 最初に読む：確定していること・決めていないこと</a
+            ><a href="#sec-02">1. 業務の目的とAs-Is</a
+            ><a href="#sec-03">2. To-Beの業務フロー（ツール非依存）</a
+            ><a href="#sec-04">3. MVPと後続機能</a><a href="#sec-05">4. 画面・ユーザー体験</a
+            ><a href="#sec-06">5. 状態管理の不変条件</a
+            ><a href="#sec-07">6. データモデル（論理構造案）</a><a href="#sec-08">7. 認証・認可</a
+            ><a href="#sec-09">8. 技術構成（採用案）</a
+            ><a href="#sec-10">9. コメント・媒体別の詳細</a><a href="#sec-11">10. 通知と期限</a
+            ><a href="#sec-12">11. 受け入れ条件（最低限のE2Eテスト）</a
+            ><a href="#sec-13">12. 未決事項と安全な暫定方針</a
+            ><a href="#sec-14">13. 品質・運用・非機能</a
+            ><a href="#sec-15">14. 実装の分割と着手手順（Claudeへ）</a
+            ><a href="#sec-16">15. Claudeに最初に渡す依頼文（コピーして使える）</a
+            ><a href="#sec-17">16. 根拠・関連資料</a>
+          </nav>
+        </details>
+        <article>
+          <h1>MF100 校正システム 要件定義・Claude実装引き継ぎ書</h1>
+          <blockquote>
+            <p>
+              版: 1.1（2026-10-10） / 状態: <strong>設計叩き台・制度承認前</strong><br />
+              対象: 東京大学五月祭常任委員会 MF100 校正業務<br />
+              目的:
+              本書だけを読んだエンジニア／Claudeが、業務の意図を損なわずに実装設計・基礎実装・テストを開始できること。
+            </p>
+          </blockquote>
+          <h2 id="sec-01">0. 最初に読む：確定していること・決めていないこと</h2>
+          <p>
+            本書は「発注済みで、全仕様が承認された完成版」ではない。<strong>利用者から確認できた方針／MF99などの既存業務の事実／今回の設計提案／関係者の承認待ち</strong>を区別する。未承認の項目を、実装者の判断で委員会の業務規則として確定しない。
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>区分</th>
+                <th>内容</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>確定方針 C1</td>
+                <td>
+                  校正の目的は、制作物の品質を高め、指摘・判断を追跡可能にし、校了の責任を明確にすること。単なるコメント掲示板ではない。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C2</td>
+                <td>
+                  <strong>版ごとの校正受付は、期限到来または新版の提出確定で終了</strong
+                  >する。新版確定前に旧版を閉じない。通常の「任意の早期締切」操作は設けない。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C3</td>
+                <td>
+                  <strong>制作物単位の校了は、権限ある一人が明示的に宣言</strong
+                  >する。受付期限到来や校正者のコメント投稿で自動校了しない。必要な合議・事前確認がある場合は満たす。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C4</td>
+                <td>
+                  校正者による指摘の採否は制作者が判断する。反映しない／保留・次版へ持ち越す場合は理由・参照関係を保持する。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C5</td>
+                <td>
+                  PDF・画像の範囲／位置指定コメントを本体に実装する。文章は内部で校正可能な方向。動画・Web・Figmaなどは外部ツールでの作業を許容する。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C6</td>
+                <td>
+                  未対応の重大な指摘が残るときは校了を原則ブロックし、<strong>正当な理由と権限を伴う例外処理</strong>のみ許す。重大度・対象範囲は要承認。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C7</td>
+                <td>
+                  Nogiku Auth / Nogiku Access を既存IdP・組織権限の正本とする。<strong
+                    >MF99 UniQでNogiku × Convex連携は実証済み</strong
+                  >。その実装を調査・再利用する。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C8</td>
+                <td>
+                  <strong>第0版＝ラフ／方向性確認</strong
+                  >と<strong>第1版以降＝通常の制作・校正段階</strong>を別の種別として扱う。0版は必要な作品にのみ使用し、0版を第1版と見なさない。
+                </td>
+              </tr>
+              <tr>
+                <td>確定方針 C9</td>
+                <td>
+                  複数案は原則1版に添付する一つのファイル内にまとめる。<strong>案のブランチ管理／分岐した版番号は初期要件にしない</strong>。
+                </td>
+              </tr>
+              <tr>
+                <td>採用方針 C10</td>
+                <td>
+                  制作物の閲覧許可は、校正システムの管理者が作品ごとに調整できるようにする。Nogikuのグループ・役職を使った権限連動は<strong>後続機能</strong>とし、初期は個人単位の許可をサーバー側で強制する。
+                </td>
+              </tr>
+              <tr>
+                <td>確定範囲 C11</td>
+                <td>
+                  <strong>MF99以前の過去データ一括移行は初期スコープ外</strong
+                  >。当面は新規のMF100データで運用検証する。
+                </td>
+              </tr>
+              <tr>
+                <td>採用技術 T1</td>
+                <td>
+                  React 19 / TypeScript / Vite / TanStack Router / <code>@m3e/react</code> (Material
+                  3 Expressive) / Convex / Hono / Cloudflare R2 / Nogiku。最初はWeb +
+                  PWA。Tauriは必要時に追加。
+                </td>
+              </tr>
+              <tr>
+                <td>運用条件 O1</td>
+                <td>
+                  <strong>繁忙期11月〜翌5月／閑散期6月〜10月</strong
+                  >。閑散期も必要な履歴・バックアップは維持。初期は最小コストを志向。
+                </td>
+              </tr>
+              <tr>
+                <td>既存の知見 E1</td>
+                <td>
+                  MF99 refineはNotion + n8n + Slack +
+                  Driveなど。Notionの検索性には好評があり、通知の多さ・フォーム不具合・大容量提出・導入遅延は課題だった。
+                </td>
+              </tr>
+              <tr>
+                <td>要承認 D2/D3</td>
+                <td>
+                  校了時の自己承認・合議、非公開作品の初期公開範囲と管理者の権限境界。旧版終了・0版区分・移行延期は決定済み。§12参照。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>開発着手可否:</strong>
+            今すぐ、ローカルの開発環境、Nogiku認証の再利用調査、データモデルの基礎、制作物一覧、版提出、PDF/画像注釈、テスト基盤を実装してよい。<strong>本番用の自己校了・合議条件と非公開作品の閲覧初期値</strong>はD2・D3の制度承認まで保留する。D1（新版提出による旧版終了）とD4（旧データ移行延期）は本書v1.1で決定済み。
+          </p>
+          <hr />
+          <h2 id="sec-02">1. 業務の目的とAs-Is</h2>
+          <h3 id="sec-03">1.1 校正・版・校了の定義</h3>
+          <ul>
+            <li>
+              <strong>制作物（Work）</strong>:
+              対外的に提示する文章・グラフィック・UI・映像等。制作物の目的・主管担当・制作担当・関係担当・制作者・校了権限者・納期を持つ。
+            </li>
+            <li>
+              <strong>版（Revision）</strong>:
+              制作物の提出スナップショット。**第0版（ラフ／構想・方向性の確認）<strong>と</strong>第1版以降（通常版）**は異なる段階として扱い、前者は任意。ひとつの版に複数ファイル／参照URLを持てる。複数デザイン案は通常ひとつのファイルに含まれ、分岐版管理は行わない。
+            </li>
+            <li>
+              <strong>校正</strong>:
+              校正者が観点を示して評価・指摘・質問・議論し、制作者が改善を進める活動。対面校正の結果も記録対象。
+            </li>
+            <li>
+              <strong>版の校正受付（Review window）</strong>:
+              その版に新しい指摘を受け付ける時間窓。<strong>期限到来、または次の版の提出確定で受付終了する</strong>。いずれの場合も未対応指摘は自動解消しない。
+            </li>
+            <li>
+              <strong>指摘（Comment / Issue）</strong>:
+              特定の版・ファイル・箇所と結びつく内容。採否、対応状況、次版への引き継ぎを別属性で保持する。
+            </li>
+            <li>
+              <strong>校了（Final approval）</strong>:
+              校了権限者が、指定の最終版を委員会の成果物として外部に出して問題ないと明示的に判断すること。
+            </li>
+          </ul>
+          <h3 id="sec-03">1.2 As-Isの代表例（媒体・担当により変動）</h3>
+          <ol>
+            <li>制作統括が制作物を集約し、担当・制作者・校了者・期限などを登録する。</li>
+            <li>
+              制作者が制作し、Notionなどで制作物IDを確かめて、提出フォームや外部ツールから版を提出する。
+            </li>
+            <li>
+              Slackに版更新通知・リマインドが流れ、校正者はDrive / Google Docs / Figma / frame.io /
+              PDF等の外部リンクを開く。
+            </li>
+            <li>
+              校正者が対象媒体で指摘し、制作者はコメントを追い、必要に応じて対面・Slackで議論する。
+            </li>
+            <li>
+              制作者が修正して次版を提出。過去の指摘を再確認し、最終的に校了権限者が校了を判断する。
+            </li>
+          </ol>
+          <p>
+            <strong>維持したい利点</strong>:
+            関係担当を横断する検索、軽快な提出、過去版の参照、媒体に適した範囲コメント。<br />
+            <strong>解消したい課題</strong>:
+            情報の分断、IDの手入力、通知の過不足、指摘と対応結果の不一致、複雑な権限、重いファイルの提出失敗、試験運用不足。
+          </p>
+          <h3 id="sec-03">1.3 対象と例外</h3>
+          <p>
+            MF99の校正・校了指針では、基本的に<strong>委員会外部の人が目にする制作物</strong>を扱い、文書番号付きの公式文書、規則類、一部の企画対応制作物などに例外・別管理がある。<strong>MF100の適用範囲は未承認</strong>であるため、媒体・対象外理由・管理方式を分類できるモデルにする。未承認対象を自動で正式な校正フローへ取り込まない。
+          </p>
+          <hr />
+          <h2 id="sec-03">2. To-Beの業務フロー（ツール非依存）</h2>
+          <pre><code class="language-text">制作物の必要性と目的を定義
+      │
+      ▼
+制作物登録・担当/制作/校正/校了者の確認
+      │
+      ▼
+第0版（必要な作品のみ）／第1版以降を提出
+（ラフ/通常版を明示、期限、見てほしい点）
+      │
+      ▼
+版の校正受付 ───────▶ 対面・Figma・動画等での議論
+      │                       │
+      │                       └─ 合意/未解決を対象版に記録
+      ▼
+【期限到来 または 新版の提出確定】
+第n版の新規校正受付を終了
+      │   ※ 既存の指摘は消さない / 自動解決しない
+      ▼
+制作者が指摘を採否判断し、修正内容・保留理由を記録
+      │
+      ├─ 次版が必要 ──▶ 第n+1版の提出（指摘の引継ぎ） ─┐
+      │                                              │
+      │       ◀──────────────────────────────────────┘
+      ▼
+校了前の必須確認・未解決の重大指摘の確認
+      │
+      ▼
+校了権限者が対象版を明示して校了を宣言
+      │
+      ▼
+公開・納品／履歴保存（再開が必要なら理由付き）
+</code></pre>
+          <p>
+            <strong>重要</strong>:
+            校正受付終了、校正者が読んだか、指摘が解決したか、制作物が校了したかは<strong>独立した状態</strong>であり、相互に自動変換しない。
+          </p>
+          <p>
+            <strong>新版確定の原子性</strong>:
+            提出準備・ファイル転送中は旧版の受付を維持する。サーバーで新しい版が確定した際に限り、旧版を<code>superseded</code>として閉じる。確定失敗なら旧版の状態は変更しない。すでに期限で閉鎖済みの版は閉鎖状態を保つ。
+          </p>
+          <h3 id="sec-04">2.1 役割と業務責任</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>役割</th>
+                <th>やること</th>
+                <th>やってはいけないこと</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>制作統括・主管担当</td>
+                <td>制作物の登録・管理、担当・期限設定、優先度調整</td>
+                <td>校了権限がなければ校了できない</td>
+              </tr>
+              <tr>
+                <td>制作者</td>
+                <td>版を提出し、指摘の採否と処置理由を決める</td>
+                <td>校正の受付期限を独断で閉じたり、必要な合議なしに自己校了しない</td>
+              </tr>
+              <tr>
+                <td>校正者</td>
+                <td>自分の割当・期限を把握し、指摘や議論をする</td>
+                <td>コメントをしただけで「対応完了」と扱わせない</td>
+              </tr>
+              <tr>
+                <td>専門確認者</td>
+                <td>めい、写真、外国語、規則、デザイン等の所管事項を確認</td>
+                <td>専門確認と最終校了を無条件に混同しない</td>
+              </tr>
+              <tr>
+                <td>校了権限者</td>
+                <td>対象版と確認内容を踏まえ、公開可否を最終宣言</td>
+                <td>必須確認未達・重大未解決のガードを無断で回避しない</td>
+              </tr>
+              <tr>
+                <td>システム管理者</td>
+                <td>設定、障害対応、監査、復旧</td>
+                <td>業務上の校了権限を当然には取得しない</td>
+              </tr>
+            </tbody>
+          </table>
+          <h3 id="sec-04">2.2 業務上の原則</h3>
+          <ol>
+            <li>
+              <strong>第0版はラフとして独立した段階</strong
+              >で、方向性・構成などのレビューに用いる。第1版以降とは画面表示・フィルタ・校正観点を区別する。0版は任意で、通常版を「第0版から始まる通算番号」にしない。<strong>0版からの直接校了不可は初期の設計提案</strong>（制度承認要）。
+            </li>
+            <li>
+              対面レビューと外部ツールを排除しない。結論・未解決事項・対象版への参照を残せればよい。
+            </li>
+            <li>制作物／版／指摘／判断の正本と、コメントを行う外部媒体の役割を混同しない。</li>
+            <li>
+              写真・めい・外国語など、専門確認に必要な事前申告を記録し、対象者を割り当てられること。
+            </li>
+            <li>
+              制作が中止・取下げ・回収対象化した場合も、過去の版・判断履歴を単に消さない。閲覧制限や保存期間のルールは別途決める。
+            </li>
+          </ol>
+          <h3 id="sec-04">2.3 版の系列（v1.1確定事項と設計上の前提）</h3>
+          <pre><code class="language-text">0版（ラフ）[任意] ──提出──▶ 0版レビュー ────┐
+                                             ▼
+                              1版（通常版）提出確定
+                                             │
+                        旧版の受付を同時に終了（提出失敗なら維持）
+                                             ▼
+                                  1版レビュー
+                                             │
+                                  2版（通常版）提出確定
+                                             ▼
+                                  2版レビュー → …
+</code></pre>
+          <ul>
+            <li>
+              <strong>決定</strong
+              >：0版と通常版は別種別。通常版の番号は必ず1以上。0版は必要な作品にだけ存在する。
+            </li>
+            <li>
+              <strong>決定</strong
+              >：同時に新規校正を受け付ける版は制作物につき高々1件。新版提出確定が旧版を閉じる。
+            </li>
+            <li>
+              <strong>決定</strong
+              >：案A/Bのような分岐系列は用意しない。複数案は同一版のファイル内容として扱う。
+            </li>
+            <li>
+              <strong>実装上の仮置き</strong
+              >：0版は1制作物につき1件。0版の再提出を繰り返す運用や0版からの直接校了は、制度確認があるまで実装しない。
+            </li>
+          </ul>
+          <hr />
+          <h2 id="sec-04">3. MVPと後続機能</h2>
+          <h3 id="sec-05">3.1 MVP（最初の現場試験で一周させる範囲）</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>機能 / 業務成果</th>
+                <th>優先度</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>F-01</td>
+                <td>Nogiku SSO、ユーザーの組織情報参照、対象単位のサーバー側認可</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-02</td>
+                <td>
+                  制作物登録・更新・検索。担当・制作担当・関連担当・制作者・状態・納期で絞れる
+                </td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-03</td>
+                <td>
+                  制作物詳細の版履歴。<strong>0版（ラフ）と第1版以降を別区分</strong>で表示し、複数添付／外部リンクを保持。分岐案管理は不要
+                </td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-04</td>
+                <td>
+                  ファイル提出の準備・アップロード・実体確認・版公開の分離、失敗表示と安全な再実行
+                </td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-05</td>
+                <td>校正者の「自分が確認する版」一覧。未読・確認済・指摘有・期限超過を区別</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-06</td>
+                <td>PDF.jsでPDFのページ・領域指定、画像のピン・範囲指定でコメント。返信・一覧</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-07</td>
+                <td>指摘の分類、重大度、担当者、採否・理由・対応状態・履歴の記録</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-08</td>
+                <td>
+                  <strong>期限到来または新版の提出確定で旧版の受付終了</strong
+                  >。いずれもサーバーで強制し、失敗した新版提出では旧版を閉じない
+                </td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-09</td>
+                <td>校了宣言、重大指摘のガード、例外理由・承認根拠、再開履歴</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-10</td>
+                <td>対面・外部ツール（Figma / 動画 / Web / Drive等）のリンクと議論結果の記録</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-11</td>
+                <td>必要最小限の通知（版提出、本人宛の言及、期限・校了）、重複防止・失敗記録</td>
+                <td>Should</td>
+              </tr>
+              <tr>
+                <td>F-12</td>
+                <td>
+                  文章の版スナップショット、本文の閲覧・範囲指摘、notation由来の決定的表記検査
+                </td>
+                <td>Should ※文章の共同編集は後続</td>
+              </tr>
+              <tr>
+                <td>F-13</td>
+                <td>監査ログ、バックアップ・復元の検証、運用者が見られるエラー情報</td>
+                <td>Must</td>
+              </tr>
+              <tr>
+                <td>F-14</td>
+                <td>
+                  <strong>管理者による制作物単位の閲覧ACL設定</strong
+                  >（許可ユーザー追加・除外、閲覧範囲、変更履歴）。グループ同期は後続
+                </td>
+                <td>Must</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>MVPはF-01〜F-10、F-13、F-14を中心に、校了までの単一経路を通す。</strong>
+            F-11/F-12は試験対象の媒体・運用事情によって導入順序を調整する。文章校正が初回パイロットに必須ならF-12の閲覧・範囲指摘までをMVPへ前倒しする。
+          </p>
+          <h3 id="sec-05">3.2 後続（MVPのリリースを妨げない）</h3>
+          <ul>
+            <li>
+              AIによる前版未解決指摘の次版位置推定・引き継ぎ候補提示。<strong>人が確認するまでは確定しない</strong>。
+            </li>
+            <li>
+              <strong>Nogiku Accessグループ・役職を利用した権限の自動付与／同期</strong
+              >。初期は管理者設定の個人ACLを利用し、後からグループ主体を追加できる設計にする。
+            </li>
+            <li>
+              <strong>MF99以前の過去データの移行</strong
+              >。必要性と対象範囲は後で決める。初期運用では実施しない。
+            </li>
+            <li>文章の高機能な共同編集・コメントアンカーの自動追随・差分比較。</li>
+            <li>PDFの高度な比較、OCR、各種Adobe原稿のネイティブ編集。</li>
+            <li>frame.io / Figma / 外部動画コメントの双方向同期、Web DOMに追随する注釈。</li>
+            <li>TauriによるmacOS / Windows専用アプリ。初期はWeb/PWA。</li>
+            <li>
+              運営ダッシュボードの高度な分析、LLMによる全自動校正・校了判断（<strong>後者は採用方針外</strong>）。
+            </li>
+          </ul>
+          <hr />
+          <h2 id="sec-05">4. 画面・ユーザー体験</h2>
+          <p>
+            <strong>U-01 自分の校正待ち</strong>:
+            締切が近い順に、制作物、版、制作担当、用途、必要確認、未確認／確認済み、緊急度を表示。情報密度を保ち、検索・フィルタ・ソート。校正対象がゼロの理由も分かる。<br />
+            <strong>U-02 制作物一覧</strong>:
+            名称・旧ID・主管／制作／関連担当・媒体・校了状況で検索し、権限のない作品は一覧上にも表示しない。<br />
+            <strong>U-03 制作物詳細</strong>:
+            目的、対象者、担当、制作者、校了者、納期、現在版、履歴、未対応指摘、外部リンク、専門確認、活動履歴。<br />
+            <strong>U-04 版提出</strong>:
+            元の制作物から開き、自動的に対象を引き継ぐ。変更点、見てほしい観点、校正期限、公開対象ファイルを指定。巨大ファイルはアップロード状態と再送可能な範囲を表示。<br />
+            <strong>U-05 校正ワークスペース</strong>:
+            左にPDF/画像/文章、右にコメント。ページ・矩形・ピン等の位置とスレッドを双方向リンク。版、残り時間、校正対象者を常に確認できる。<br />
+            <strong>U-06 指摘対応</strong>:
+            制作者がコメントを種別／重大度／状態／担当で絞り、採用・不採用・保留・次版引き継ぎを理由付きで記録。<br />
+            <strong>U-07 校了</strong>:
+            校了版・必須確認・重大未解決件数・例外理由・実行者を最終確認して確定。二重クリック防止。<br />
+            <strong>U-08 管理</strong>:
+            <strong>作品ごとの閲覧許可をNogikuユーザー単位で追加・変更・剥奪</strong
+            >し、変更者・時刻を記録。専門確認ルール・通知・監査・障害を管理。グループからの自動権限付与は将来拡張。
+          </p>
+          <p>
+            <strong>デザイン</strong>: Material Design 3
+            Expressiveは画面の階層・操作強調・状態表現で使用する。校正用テーブルの情報密度、キーボード操作、アクセシビリティを犠牲にしない。<code>@m3e/react</code>はコミュニティ実装なので必要コンポーネントの実在・API・保守性をPoCで確認し、不足分はトークンに合わせて補完する。
+          </p>
+          <hr />
+          <h2 id="sec-06">5. 状態管理の不変条件</h2>
+          <h3 id="sec-07">5.1 独立する状態</h3>
+          <pre><code class="language-text">Work.lifecycle       draft / active / on_hold / finalized / cancelled
+Revision.review      scheduled / open / closed / void
+ReviewAssignment     pending / viewed / responded / excused
+Comment.resolution   open / acknowledged / accepted / rejected / deferred / resolved
+Approval             none / completed / revoked (履歴イベントを保持)
+Revision.kind        rough(0版) / standard(第1版以降)
+</code></pre>
+          <p>
+            <em>注</em>:
+            列挙値は<strong>設計提案</strong>。確定の前に制度担当と照合する。<code>accepted</code>は「反映すると判断した」ことであり、<code>resolved</code>は「反映済みなど確認された」ことである。単一の「校正済」フラグへ統合しない。
+          </p>
+          <h3 id="sec-07">5.2 厳守すべき制約</h3>
+          <ol>
+            <li>
+              版の受付期限を
+              <code>deadlineAt</code>
+              のタイムスタンプ（内部UTC、表示Asia/Tokyo）で保持する。新規指摘は
+              <strong><code>now &lt; deadlineAt</code></strong>
+              かつ<strong>当該制作物の最新の受付対象版</strong>である場合にのみ可能。表示上の期限閉鎖ジョブが遅れても、バックエンドの比較で拒否する。
+            </li>
+            <li>
+              <strong>新版の提出が確定したら、旧版の受付を即時終了</strong
+              >し、その版への<strong>新規指摘</strong>を止める。既存指摘への制作者の採否判断・対応記録は残す（期限後・新版提出後の返信可否は§12
+              D5で別途決定）。
+            </li>
+            <li>
+              受付期限到来・新版提出確定はWorkを<code>finalized</code>にしない。レビュー担当者を勝手に「確認済」にしない。指摘を勝手に「解決済」にしない。
+            </li>
+            <li>
+              校了を確定するには、ログイン本人、対象制作物、校了権限、必須確認、最終版が一致し、重大未解決がないこと。ただし、許可された例外処理では理由と所定の事前確認を残す。
+            </li>
+            <li>
+              校了確定後、版提出や校正指摘などの編集は通常禁止。再開する場合は別の監査イベントを追記し、過去の校了を消さない。
+            </li>
+            <li>
+              版番号は制作物内で一意。<strong
+                >ラフは<code>kind=rough, sequence=0</code>、通常版は<code
+                  >kind=standard, sequence&gt;=1</code
+                ></strong
+              >。この二つを混在する連番として数えない。複数案のための枝番号は設けない。すでに確定した版のファイルを無言で差し替えない。誤提出の訂正は履歴を持つ。
+            </li>
+            <li>
+              <code>requestId</code> /
+              冪等キー、楽観的排他条件などにより、二重投稿・二重校了・二重版生成・Webhook重複通知を防ぐ。
+            </li>
+            <li>
+              PDF/画像上の座標はプレビュー表示の拡大率に依存しない。PDFはページ番号＋正規化座標、画像は原画像基準の正規化座標。原版のアンカーは後の差し替えで破壊しない。
+            </li>
+            <li>
+              指摘の原文、投稿者、投稿日時、対象版と位置、処置履歴は監査可能にする。内容修正は編集履歴を残すか、原文・訂正記録を別に持つ。
+            </li>
+            <li>
+              版の存在・コメント数・検索結果・添付URL・通知本文など、<strong>非公開作品の存在を漏らすメタ情報も認可対象</strong>。署名付きURLだけで認可を代替しない。
+            </li>
+            <li>
+              新版の提出確定と旧版の受付終了は、<strong>同じ業務上の一貫した状態遷移</strong>として確定する。ファイルの転送準備・失敗・未検証の状態では旧版を終了しない。競合する同時提出を一件だけ確定する。
+            </li>
+            <li>
+              <strong
+                >閲覧ACLの作成・変更・取消は校正システム管理者だけが実施でき、本人認証・対象権限検証・監査記録が必要</strong
+              >。許可されない作品は検索・一覧・添付も拒否する。管理権限は業務の校了権限を意味しない。
+            </li>
+          </ol>
+          <hr />
+          <h2 id="sec-07">6. データモデル（論理構造案）</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>エンティティ</th>
+                <th>主要フィールド</th>
+                <th>制約・備考</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>UserRef</code></td>
+                <td><code>nogikuSubject</code>, <code>displayName</code>, <code>active</code></td>
+                <td>IdPを正本にし、アプリ側には必要最小限の参照のみ</td>
+              </tr>
+              <tr>
+                <td><code>TeamRef</code></td>
+                <td><code>nogikuGroupId?</code>, <code>name</code>, <code>year</code></td>
+                <td>
+                  将来的なNogikuグループ権限との連携用。<strong>MVPでグループ同期はしない</strong>
+                </td>
+              </tr>
+              <tr>
+                <td><code>Work</code></td>
+                <td>
+                  <code>id</code>, <code>legacyId?</code>, <code>year</code>, <code>title</code>,
+                  <code>purpose</code>, <code>category</code>, <code>ownerTeamId</code>,
+                  <code>productionTeamIds[]</code>, <code>relatedTeamIds[]</code>,
+                  <code>creatorIds[]</code>, <code>approverId</code>, <code>deadlineAt</code>,
+                  <code>lifecycle</code>, <code>confidentiality</code>,
+                  <code>finalRevisionId?</code>
+                </td>
+                <td>「主管」と「制作担当」は区別。媒体・用途を表現。年度切替にも対応</td>
+              </tr>
+              <tr>
+                <td><code>WorkPermission</code></td>
+                <td>
+                  <code>workId</code>, <code>principalType(user/group)</code>,
+                  <code>principalId</code>, <code>permission(view/review/edit/manage)</code>,
+                  <code>grantedBy</code>, <code>grantedAt</code>, <code>revokedBy?</code>,
+                  <code>revokedAt?</code>
+                </td>
+                <td>
+                  <strong>MVPはNogikuユーザーIDに対する個人ACL</strong
+                  >。管理者が作品別に設定。<code>group</code>は後続で有効化。サーバーで強制・監査
+                </td>
+              </tr>
+              <tr>
+                <td><code>ReviewAssignment</code></td>
+                <td>
+                  <code>revisionId</code>, <code>reviewerSubject</code>, <code>reviewType</code>,
+                  <code>state</code>, <code>viewedAt?</code>, <code>respondedAt?</code>
+                </td>
+                <td>校正者ごとの確認状態をコメント状態と分離</td>
+              </tr>
+              <tr>
+                <td><code>Revision</code></td>
+                <td>
+                  <code>id</code>, <code>workId</code>, <code>sequence</code>,
+                  <code>kind(rough/standard)</code>, <code>reviewType</code>,
+                  <code>submittedBy</code>, <code>submittedAt</code>, <code>deadlineAt</code>,
+                  <code>reviewState</code>,
+                  <code>reviewClosedReason?(deadline/superseded/void)</code>,
+                  <code>supersededByRevisionId?</code>, <code>changeSummary</code>,
+                  <code>focusNotes</code>, <code>snapshotHash</code>
+                </td>
+                <td>
+                  0版と通常版を型で区別。<strong>新版本登録時に旧版を閉じる</strong>。同時受付1件以下
+                </td>
+              </tr>
+              <tr>
+                <td><code>Artifact</code></td>
+                <td>
+                  <code>id</code>, <code>revisionId</code>, <code>type</code>,
+                  <code>role</code> (<code>source/preview/external</code>), <code>objectKey?</code>,
+                  <code>externalUrl?</code>, <code>sha256?</code>, <code>size?</code>,
+                  <code>mimeType</code>, <code>pageCount?</code>
+                </td>
+                <td>複数ファイル可。R2キー・外部URLを混同しない</td>
+              </tr>
+              <tr>
+                <td><code>CommentThread</code></td>
+                <td>
+                  <code>id</code>, <code>revisionId</code>, <code>artifactId?</code>,
+                  <code>authorId</code>, <code>body</code>, <code>kind</code>,
+                  <code>severity</code>, <code>anchor?</code>, <code>resolution</code>,
+                  <code>createdAt</code>
+                </td>
+                <td>対象版・対象箇所に紐づく。本文・状態の追記履歴を別記録</td>
+              </tr>
+              <tr>
+                <td><code>CommentEvent</code></td>
+                <td>
+                  <code>threadId</code>, <code>eventType</code>, <code>actorId</code>,
+                  <code>reason?</code>, <code>payload?</code>, <code>createdAt</code>
+                </td>
+                <td>指摘への採否・返信・保留・解決の履歴。監査</td>
+              </tr>
+              <tr>
+                <td><code>CarryForward</code></td>
+                <td>
+                  <code>sourceThreadId</code>, <code>targetRevisionId</code>,
+                  <code>targetThreadId?</code>, <code>proposal?</code>, <code>confidence?</code>,
+                  <code>humanDecision</code>
+                </td>
+                <td>前版の原指摘を書き換えない。AIは後続</td>
+              </tr>
+              <tr>
+                <td><code>ApprovalEvent</code></td>
+                <td>
+                  <code>workId</code>, <code>revisionId</code>, <code>actorId</code>,
+                  <code>action</code>, <code>requiredChecksSnapshot</code>,
+                  <code>exceptionReason?</code>, <code>createdAt</code>
+                </td>
+                <td>校了/再開の記録。必要な合議の証跡を関連付ける</td>
+              </tr>
+              <tr>
+                <td><code>NotificationJob</code></td>
+                <td>
+                  <code>eventId</code>, <code>recipient</code>, <code>channel</code>,
+                  <code>status</code>, <code>attempts</code>, <code>lastError?</code>
+                </td>
+                <td>アプリデータ正本と外部送信を分離、再試行可能</td>
+              </tr>
+              <tr>
+                <td><code>AuditEvent</code></td>
+                <td>
+                  <code>entityId</code>, <code>operation</code>, <code>actor</code>,
+                  <code>before/after</code>, <code>timestamp</code>, <code>requestId</code>
+                </td>
+                <td>機微情報を過剰保存しない。重要操作追跡</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>実装ルール</strong>:
+            Convexの関数を正本とし、検索用のインデックスを制作物・担当・期限・版ID・指摘状態に張る。画面で全作品・全コメントを購読しない。過年度ID（例：既存制作物ID）と内部IDは明示的に区別する。
+          </p>
+          <hr />
+          <h2 id="sec-08">7. 認証・認可</h2>
+          <h3 id="sec-09">7.1 既存実績の利用</h3>
+          <ul>
+            <li><strong>Nogiku Auth</strong>: OIDCでSSOするIdP。独自パスワードを作らない。</li>
+            <li>
+              <strong>Nogiku Access</strong>:
+              局・担当・役職などの権限を提供する既存の組織情報源。<strong>組織グループを作品権限へ自動反映する機能は後続</strong>。Nogiku
+              AuthによるSSOは初期から使用。
+            </li>
+            <li>
+              <strong>MF99 UniQ</strong>:
+              NogikuとConvexを連携した実証済み実装。実際の認証クライアント・JWT・権限判定を確認して再利用する。
+            </li>
+            <li>
+              <strong>MF100</strong>:
+              初期はNogikuユーザーを特定して、制作物単位の個人ACL・職責（制作者、校了者等）による権限を評価する。校正システム管理者が閲覧者を追加・除外できる管理画面を設ける。
+            </li>
+            <li>
+              <strong>将来</strong>: Nogiku
+              Accessのグループ・役職を権限主体として利用できる設計にし、同期や失効伝播、手動ACLとの優先順位を改めて決定する。
+            </li>
+          </ul>
+          <h3 id="sec-09">7.2 操作権限の最小モデル</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>操作</th>
+                <th>主に許可されるロール</th>
+                <th>例外／注意</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>制作物一覧・詳細</td>
+                <td>その作品を閲覧できる校正者・制作者・主管・校了者</td>
+                <td>非公開作品は検索や通知にも出さない</td>
+              </tr>
+              <tr>
+                <td>制作物登録・変更</td>
+                <td>主管／制作統括</td>
+                <td>登録と「有効化・正式校正開始」は別概念とする案</td>
+              </tr>
+              <tr>
+                <td>版提出</td>
+                <td>その作品の制作者／委任された担当</td>
+                <td>受付・校了・中止状態で制限</td>
+              </tr>
+              <tr>
+                <td>新規指摘</td>
+                <td>割り当てられた校正者・専門確認者等</td>
+                <td>版ごとの受付期限で制限</td>
+              </tr>
+              <tr>
+                <td>指摘の採否判断</td>
+                <td>制作者・明示的委任者</td>
+                <td>校正者は指摘投稿だけで採否を決定しない</td>
+              </tr>
+              <tr>
+                <td>校了</td>
+                <td>制作物の校了権限者</td>
+                <td>重大未解決・自己校了例外・専門確認に条件あり</td>
+              </tr>
+              <tr>
+                <td>履歴閲覧・監査</td>
+                <td>対象権限者／監査権限者</td>
+                <td>管理者でもすべての非公開作品を当然に閲覧できるとは限らない</td>
+              </tr>
+              <tr>
+                <td><strong>作品の閲覧権限設定</strong></td>
+                <td><strong>校正システム管理者</strong></td>
+                <td>
+                  初期はNogikuユーザー単位で付与・解除。変更履歴を残し、一般利用者には不可。グループ一括付与は後続
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>セキュリティ要件</strong>: 認証済みであっても、Convex
+            query/mutation/actionとHono
+            APIの両方で認可する。初期の個人ACL剥奪・委員交代時の権限剥奪をテストし、将来のNogikuグループ失効連動は追加テストする。アクセス制御はUIや署名付きURLだけに頼らない。機密区分と取扱規則は§12で承認待ち。
+          </p>
+          <hr />
+          <h2 id="sec-09">8. 技術構成（採用案）</h2>
+          <pre><code class="language-text">           [Web / PWA]
+ React 19 + Vite + TanStack Router
+ @m3e/react / PDF.js / TanStack Table
+                 │
+       ┌─────────┴─────────┐
+       ▼                   ▼
+   [Convex]            [Hono API]
+ 業務データ正本          Cloudflare Workers
+ リアルタイム購読        ファイル提出準備
+ 認可/状態遷移           署名URL発行/外部Webhook
+ 監査ログ                 │
+       │                  ▼
+       └──────────── [Cloudflare R2]
+                     PDF/画像/原本/プレビュー
+                 ▲
+                 │
+       [Nogiku Auth / Access]
+       既存SSOと組織権限の正本
+</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>層</th>
+                <th>技術</th>
+                <th>責務</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Frontend</td>
+                <td>React 19, TypeScript, Vite, TanStack Router</td>
+                <td>校正画面、ロール別ダッシュボード、URL検索状態、PWA</td>
+              </tr>
+              <tr>
+                <td>UI</td>
+                <td><code>@m3e/react</code>, M3E Design Tokens, カスタムCSS</td>
+                <td>Material 3 Expressive。テーブル・エディタは使いやすさ優先</td>
+              </tr>
+              <tr>
+                <td>Realtime / Domain</td>
+                <td>Convex</td>
+                <td>制作物、版、コメント、校了、監査の正本とトランザクション</td>
+              </tr>
+              <tr>
+                <td>HTTP境界</td>
+                <td>Hono + Zod on Workers</td>
+                <td>R2提出セッション、URL署名、外部連携。業務CRUDの二重化禁止</td>
+              </tr>
+              <tr>
+                <td>Assets</td>
+                <td>Cloudflare R2</td>
+                <td>PDF/画像/原本/プレビュー。原則非公開バケット</td>
+              </tr>
+              <tr>
+                <td>認証</td>
+                <td>Nogiku OIDC / Access</td>
+                <td>既存IDおよび組織権限。UniQ実装の再利用</td>
+              </tr>
+              <tr>
+                <td>PDF/Images</td>
+                <td>PDF.js + SVG / Canvas</td>
+                <td>範囲指定、ピン、ページ/回転/倍率の整合</td>
+              </tr>
+              <tr>
+                <td>Documents</td>
+                <td>Tiptap / ProseMirror（導入範囲要調整）</td>
+                <td>文書スナップショット、範囲コメント、notation検査</td>
+              </tr>
+              <tr>
+                <td>Hosting</td>
+                <td>Cloudflare Workers静的配信など</td>
+                <td>本番ホスティング方式はPoCで決定。不要な常時稼働基盤を増やさない</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>Convex運用</strong>: Cloud
+            Starterを低コストの初期候補とする。ただしUniQにはセルフホストの実績があるため、開発・保守・監視・復旧を含めて比較する。<strong
+              >インフラ費用を理由にバックアップ・認可・監視を削らない。</strong
+            >
+            本書は見積書ではない。
+          </p>
+          <h3 id="sec-10">8.1 HonoとConvexの境界（重複実装を禁止）</h3>
+          <ul>
+            <li>
+              Convexにすべき: <code>listWorks</code>, <code>getWork</code>,
+              <code>submitRevision</code>, <code>openReview</code>, <code>addComment</code>,
+              <code>recordDecision</code>, <code>finalizeWork</code>,
+              <code>reopenWork</code> 等の業務コマンド。
+            </li>
+            <li>
+              Honoにすべき: <code>POST /uploads/prepare</code>, <code>POST /uploads/complete</code>,
+              <code>GET /files/:id/access</code
+              >、外部Webhook等のHTTP処理。<strong>経路名は例示</strong>。
+            </li>
+            <li>
+              ファイル:
+              Browserが短命の署名付きURLを利用してR2へ直接転送し、サーバーがサイズ・MIME・ハッシュ・実体存在・権限を検証してから版を提出完了とする。
+            </li>
+            <li>
+              複数サービスをまたぐ処理は一括トランザクションではない。<code>uploadSession</code>,
+              <code>idempotencyKey</code>,
+              失敗時の再試行、孤立した未確定ファイルの削除、補償処理を設計する。
+            </li>
+          </ul>
+          <hr />
+          <h2 id="sec-10">9. コメント・媒体別の詳細</h2>
+          <h3 id="sec-11">9.1 PDF / 画像</h3>
+          <ul>
+            <li>
+              PDFにはページ番号・正規化矩形／ピンを保存。ズーム、ページ回転、異なるビューポート幅でも位置が変わらない。
+            </li>
+            <li>
+              画像は元画像に対する座標を0〜1へ正規化。画像のトリミング・表示枠と注釈位置を独立させる。
+            </li>
+            <li>
+              スレッドの種別: <code>correction</code>（修正提案）, <code>question</code>（質問）,
+              <code>discussion</code>（議論）,
+              <code>decision</code>（対面等の合意内容）。重大度は独立属性。分類は設計案。
+            </li>
+            <li>同じ版に複数ファイルがあっても、アンカーが対象ファイルを取り違えない。</li>
+            <li>
+              署名付きファイル閲覧URLは短命で、権限剥奪後に新たなURLを発行しない。キャッシュ・CDNも考慮。
+            </li>
+          </ul>
+          <h3 id="sec-11">9.2 文章</h3>
+          <ul>
+            <li>
+              初期は版の固定スナップショットと範囲コメントを重視。Google
+              Docs並みのリアルタイム共同編集は<strong>未決・後続</strong>。
+            </li>
+            <li>
+              既存<code>notation</code>の正規表現・表記辞書の再利用を検討。辞書には年度・言語・利用用途・ルール版・例外を持たせる。
+            </li>
+            <li>
+              <strong>ルール検査</strong
+              >と<strong>LLM提案</strong>は分ける。置換候補を自動反映しない。正表記自身を誤検知する・ルールが重なった場合の挙動をテストする。
+            </li>
+            <li>
+              文書位置の安定性が必要なため、範囲コメントは確定した版のスナップショットに結び付ける。
+            </li>
+          </ul>
+          <h3 id="sec-11">9.3 外部媒体</h3>
+          <ul>
+            <li>
+              Figma、frame.io、サイトURL、対面打ち合わせ等の<strong>媒体固有の議論の場</strong>は残せる。
+            </li>
+            <li>各版に外部URLと校正結果（判断概要・未解決点・確認者・日時）を登録できる。</li>
+            <li>外部コメントを完全同期したと誤認させない。取得不可・同期外の状態を明示する。</li>
+          </ul>
+          <hr />
+          <h2 id="sec-11">10. 通知と期限</h2>
+          <ol>
+            <li>
+              アプリ内の「自分の確認待ち」と版の状態が正本。Slackは補助通知であり、通知が届かなくても業務履歴が失われない。
+            </li>
+            <li>
+              版提出、明示メンション、期限が近い未確認、重要な判断依頼、校了などに限定した通知を優先する。
+            </li>
+            <li>
+              リマインドは担当・本人の必要性に応じて制御。何度も同じ内容を送らない。MF99調査では21人中、校正リマインドが「多い」10人、必要19人。
+            </li>
+            <li>
+              通知成功≠相手の既読≠レビュー完了。送信失敗時はジョブ再試行し、業務データはロールバックしない。
+            </li>
+            <li>
+              期限はAsia/Tokyo表示、バックエンドではタイムスタンプで判定。タイムゾーン・日付のみ入力の場合の具体的締切時刻をUIで必ず明示する。期限延長・取消・緊急案件のルールは承認待ち。
+            </li>
+          </ol>
+          <hr />
+          <h2 id="sec-12">11. 受け入れ条件（最低限のE2Eテスト）</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>テスト条件</th>
+                <th>期待結果</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>A-01</td>
+                <td>対象権限を持たないNogikuユーザーが制作物IDを直接指定する</td>
+                <td>一覧・詳細・コメント数・添付を返さない</td>
+              </tr>
+              <tr>
+                <td>A-02</td>
+                <td>制作者がPDF2件＋ai原本1件を提出、1件のアップロードだけ失敗</td>
+                <td>提出確定にならない。原因と復旧／再アップロードの手順が分かる</td>
+              </tr>
+              <tr>
+                <td>A-03</td>
+                <td>PDFを複数倍率・回転・ページ切替で閲覧する</td>
+                <td>コメント矩形が同じ原本位置を示す</td>
+              </tr>
+              <tr>
+                <td>A-04</td>
+                <td>校正期限の1秒前／ちょうど時刻／1秒後に指摘を送る</td>
+                <td>期限未満のみ成功、境界・期限以降はサーバーで拒否</td>
+              </tr>
+              <tr>
+                <td>A-05</td>
+                <td>校正期限に達しても未読者と未対応指摘がある</td>
+                <td>受付だけ終了。未読や指摘・校了状態は変わらない</td>
+              </tr>
+              <tr>
+                <td>A-06</td>
+                <td>校正者がコメントを1件投稿する</td>
+                <td>レビュー済み・指摘解決済み・制作物校了へは勝手に遷移しない</td>
+              </tr>
+              <tr>
+                <td>A-07</td>
+                <td>制作者が指摘を不採用にする</td>
+                <td>理由と判断者、日時、元コメントが残る</td>
+              </tr>
+              <tr>
+                <td>A-08</td>
+                <td>重大未解決がある作品で校了を試す</td>
+                <td>通常校了は拒否。許可された例外権限と理由がある場合だけ監査付きで可能</td>
+              </tr>
+              <tr>
+                <td>A-09</td>
+                <td>校了後の版提出・再校正と、理由付き再開</td>
+                <td>通常操作は拒否。再開で履歴が消えない</td>
+              </tr>
+              <tr>
+                <td>A-10</td>
+                <td>同じ提出・校了リクエストを通信再送する</td>
+                <td>二重版・二重校了・二重通知を生成しない</td>
+              </tr>
+              <tr>
+                <td>A-11</td>
+                <td>管理者が校正者の個人ACLを解除する</td>
+                <td>
+                  権限剥奪後に新たな閲覧・投稿・署名URL発行ができない。将来のNogikuグループ変更同期は別途試験
+                </td>
+              </tr>
+              <tr>
+                <td>A-12</td>
+                <td>導入対象外媒体にFigma／frame.io URLを登録する</td>
+                <td>外部リンクは正しく管理され、同期していないコメントを同期済みと表示しない</td>
+              </tr>
+              <tr>
+                <td>A-13</td>
+                <td>600制作物×6版×各版5人×10指摘／人の負荷用サンプル</td>
+                <td>検索・一覧が全件購読せず、合意した負荷指標内で応答する（数値はPoCで決定）</td>
+              </tr>
+              <tr>
+                <td>A-14</td>
+                <td>DBと添付のバックアップを復元する</td>
+                <td>制作物・版・指摘・位置・校了・閲覧権限が対応付いた状態で再現できる</td>
+              </tr>
+              <tr>
+                <td>A-15</td>
+                <td>閲覧者がキーボードで校正画面を操作する</td>
+                <td>一覧・コメントへのフォーカス移動、状態判読、必要なアクセシビリティを満たす</td>
+              </tr>
+              <tr>
+                <td>A-16</td>
+                <td>第1版受付中に第2版のファイルアップロードが失敗</td>
+                <td><strong>第1版の受付を維持</strong>し、第2版は未確定。レビュー履歴は維持する</td>
+              </tr>
+              <tr>
+                <td>A-17</td>
+                <td>第1版受付中に第2版の提出確定が成功</td>
+                <td>
+                  <strong>同一確定処理により第1版をsupersededで閉じ、第2版だけを受付可能</strong
+                  >にする。第1版の新規コメントは拒否する
+                </td>
+              </tr>
+              <tr>
+                <td>A-18</td>
+                <td>0版（ラフ）を提出し、後に通常の第1版を提出</td>
+                <td>
+                  0版はラフとして独立表示。通常版は第1版から始まり、0版の指摘は履歴として残る。案A/Bの分岐UIは要求しない
+                </td>
+              </tr>
+              <tr>
+                <td>A-19</td>
+                <td>権限管理者が特定の作品の閲覧者を追加／除外</td>
+                <td>
+                  許可がある人だけが一覧・詳細・添付を取得。操作履歴が残る。一般ユーザーはACL変更できない
+                </td>
+              </tr>
+              <tr>
+                <td>A-20</td>
+                <td>Nogikuグループ情報が得られない初期環境で個人ACLを使用</td>
+                <td>
+                  SSOログインと明示的に許可された作品閲覧が機能する。グループ同期が未実装でもMVPを稼働可能
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>備考</strong>:
+            600件、6版、5人、10コメントは<strong>負荷試験用シナリオ</strong>。MF100の正式な業務件数を意味しない。「1版あたり10コメント」の前提を明示し、通算10コメントのケースも別途確認する。
+          </p>
+          <hr />
+          <h2 id="sec-13">12. 未決事項と安全な暫定方針</h2>
+          <h3 id="sec-14">12.1 v1.1で整理したD1〜D4（決定と残余論点）</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>状態</th>
+                <th>現時点の結論</th>
+                <th>今後の確認・実装境界</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>D1 新版と旧版</strong></td>
+                <td><strong>決定済み</strong></td>
+                <td>
+                  新版を<strong>提出確定</strong>した時点で旧版の新規校正受付を閉じる。制作物あたり開いている校正受付は高々1版。0版と第1版以降は別区分。複数案の分岐管理不要
+                </td>
+                <td>
+                  0版から直接校了すること、0版を複数回提出することなど例外的な運用だけ未承認。提出準備の失敗では旧版を閉じない
+                </td>
+              </tr>
+              <tr>
+                <td><strong>D2 自己校了・合議</strong></td>
+                <td><strong>本番前要承認</strong></td>
+                <td>
+                  最後に校了を宣言する人は一人。ただし本人が制作者でもある場合や専門確認・合議が必要なケースでは、事前確認の証跡を残す
+                </td>
+                <td>
+                  誰を承認者とするか・全員合議をどの媒体に適用するか。暫定実装では自己校了は独立承認なしに拒否
+                </td>
+              </tr>
+              <tr>
+                <td><strong>D3 閲覧権限と管理者</strong></td>
+                <td><strong>方針決定／細則要承認</strong></td>
+                <td>
+                  作品単位の閲覧ACLを校正システム管理者が設定する。初期はNogikuユーザーを個別指定。グループ・役職による自動割当は後続
+                </td>
+                <td>
+                  通常作品の初期閲覧範囲、非公開・回収物の公開範囲、管理者自身の参照権、権限失効の許容遅延、手動設定と将来のグループ権限の優先関係は未決
+                </td>
+              </tr>
+              <tr>
+                <td><strong>D4 過去データ移行</strong></td>
+                <td><strong>延期決定</strong></td>
+                <td>
+                  MF99以前のデータ移行・変換は<strong>MVPの対象外</strong>。MF100の新規データで検証する
+                </td>
+                <td>
+                  後から必要と判断した場合にだけ別プロジェクトとして計画。古いデータや既存DBは改変・削除しない
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>Claude向け注意</strong>:
+            D1は実装してよい。D4は実装しない。D2は合議条件を決め打ちしない。D3の管理者による個人ACL設定はMVPに含める一方、Nogikuのグループ自動同期は後続とする。
+          </p>
+          <h3 id="sec-14">12.2 制度・UXとして決める項目（P1）</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>未決</th>
+                <th>暫定の扱い</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>D5</td>
+                <td>受付期限後、既存コメントへの返信・議論・制作者の処置をどこまで認めるか</td>
+                <td>
+                  <strong>新規指摘は禁止</strong
+                  >、既存指摘の制作者による処置は可能。返信条件はポリシー設定に分離
+                </td>
+              </tr>
+              <tr>
+                <td>D6</td>
+                <td>「重大指摘」の定義、特定の専門確認の必須条件、例外権限者</td>
+                <td>重大度分類・必須確認ルールを設定可能にし、業務側の確定までは安全側で運用</td>
+              </tr>
+              <tr>
+                <td>D7</td>
+                <td>文章を本体内でどこまで編集するか</td>
+                <td>
+                  MVPは版スナップショット＋範囲指摘＋notationのルール検査。高機能共同編集は後続
+                </td>
+              </tr>
+              <tr>
+                <td>D8</td>
+                <td>Slack通知先と頻度、期限延長、緊急校正の手順</td>
+                <td>最小通知から着手。重複防止、オフ設定、監査。運用設定は後決め可能にする</td>
+              </tr>
+              <tr>
+                <td>D9</td>
+                <td>本番切替時期、並行運用・旧版の更新停止</td>
+                <td>PR・EVE・Webの代表案件で試験し、合意した日付に切り替える</td>
+              </tr>
+              <tr>
+                <td>D10</td>
+                <td>
+                  どの媒体・制作物を正式な校正対象にするか、0版の例外運用（再提出、ラフから直接校了等）
+                </td>
+                <td>
+                  0版が<strong>ラフとして通常版と別区分</strong>なのは決定済み。適用媒体と例外は未決。MF99の対象範囲を自動継承しない
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <h3 id="sec-14">12.3 技術検証で決める項目（P2）</h3>
+          <ul>
+            <li>
+              D11 Convex Cloud
+              StarterかUniQの自己ホスト経験を生かしたセルフホストか。管理責任と復元試験を含めて判断。
+            </li>
+            <li>
+              D12 UniQのNogiku統合コードの実際の契約、権限失効・トークン更新、Honoとの共有認可関数。
+            </li>
+            <li>D13 OCR・高度な差分やAI引継ぎの実装時期／実データ精度と人間の確認負荷。</li>
+            <li>
+              D14
+              データ保持期間・削除手続き・バックアップ保持期間、原本の著作権等の取扱い。規程確認が必要。
+            </li>
+            <li>
+              D15
+              大容量ファイル上限、分割アップロードの復旧方式、p95応答目標、同時利用負荷。実測と技術検証により決定。
+            </li>
+          </ul>
+          <blockquote>
+            <p>
+              <strong>Claudeへの重要な指示</strong>:
+              <strong>D1は決定・D4は延期</strong
+              >。D2の合議とD3の公開範囲細則だけは未承認の制度として扱う。データモデルとポリシーを差し替えやすく実装し、本番前に制度レビューする。無関係なMVPの実装は止めない。
+            </p>
+          </blockquote>
+          <hr />
+          <h2 id="sec-14">13. 品質・運用・非機能</h2>
+          <ul>
+            <li>
+              <strong>セキュリティ</strong>:
+              Nogikuで認証し全てのサーバーアクションで対象認可。隠しURLを権限制御代わりにしない。署名付きR2
+              URLは短命、対象ファイルの権限を検査。
+            </li>
+            <li>
+              <strong>可観測性</strong>:
+              認証失敗、アップロード失敗、期限ジョブ、Webhook再試行、通知失敗、重要監査イベントを追跡。機微情報をログへ丸ごと流さない。
+            </li>
+            <li>
+              <strong>データ保全</strong>:
+              DB・R2の整合したバックアップと復元試験。辞書・設定・索引再構築手順も管理。具体的RPO/RTOは合意待ち。
+            </li>
+            <li>
+              <strong>性能</strong>:
+              制作物・版・コメント数の増加に耐えるインデックス、遅延読込・ページング。大容量PDF/画像でも画面全体をブロックしない。
+            </li>
+            <li>
+              <strong>アクセシビリティ</strong>:
+              キーボード、フォーカス可視、スクリーンリーダー、コントラスト、アニメーション低減（reduced
+              motion）。M3E演出より仕事の可読性を優先。
+            </li>
+            <li>
+              <strong>年度交代</strong>:
+              権限見直し、鍵の交換・破棄、データエクスポート、システム所有者、監視・復元手順の引き継ぎ。
+            </li>
+            <li>
+              <strong>低利用期</strong>:
+              6月〜10月は重いバッチ・LLM処理・不要な通知を停止または抑制し、保管と安全な閲覧・復旧能力を維持。休眠状態への切替はデータ復旧要件を満たす場合のみ。
+            </li>
+            <li>
+              <strong>外部データ</strong>:
+              将来LLMにコメントや制作物を送る場合は、送信先・機微情報・保存条件・承認を設計し、明示的な権限なしに自動送信しない。
+            </li>
+          </ul>
+          <hr />
+          <h2 id="sec-15">14. 実装の分割と着手手順（Claudeへ）</h2>
+          <h3 id="sec-16">Phase 0：調査と設計の土台</h3>
+          <ol>
+            <li>
+              既存repoが指定されたら<strong>最初に読み込み、破壊的な初期化をしない</strong>。まだ無ければモノレポ／単一リポジトリを提案する。
+            </li>
+            <li>
+              UniQで実証済みのNogiku→Convex連携コードと、既存Nogiku
+              SDKの実際の利用方法を確認する。<strong>未確認のAPIを捏造しない</strong>。
+            </li>
+            <li>
+              <code>docs/DECISIONS.md</code
+              >にD1〜D15を記載し、<strong>D1決定・D4延期・D2/D3要承認</strong>の現在値を明記する。
+            </li>
+            <li>
+              データモデル図、制作物・版・コメント・校了の独立状態遷移、認可境界を文章と図で提出する。
+            </li>
+            <li>認可テストと期限・校了・冪等性のユニットテストを先に設計する。</li>
+          </ol>
+          <h3 id="sec-16">Phase 1：縦に一周するMVP</h3>
+          <ol>
+            <li>React/Vite/TanStack Router/M3Eで、制作物一覧・詳細・版提出の画面枠を作る。</li>
+            <li>
+              ConvexにWork/Revision/Artifact/Comment/Approval/Auditと<strong>作品単位ACL</strong>を実装し、サーバー上の認可・状態ガードを実装する。
+            </li>
+            <li>
+              Hono WorkersにR2提出と短命アクセスURLの発行を実装する。業務CRUDはConvex経由に一元化。
+            </li>
+            <li>
+              PDF・画像の注釈UI、コメント／指摘処置、レビュー割当と校正待ちダッシュボードを実装する。
+            </li>
+            <li>校了と再開、重大未解決ガード、監査、同時操作と権限テストを実装する。</li>
+            <li>
+              代表作品を使って、<strong>0版（任意）→1版→指摘→2版提出確定と1版受付終了→指摘処置→校了</strong>をE2Eで検証する。提出失敗と権限変更も検証する。
+            </li>
+          </ol>
+          <h3 id="sec-16">Phase 2：現場運用向け補強</h3>
+          <ul>
+            <li>
+              Slack通知とエラーハンドリング、専門確認、文章の範囲指摘とnotation、バックアップと復元、アクセシビリティ、性能測定、委員への案内。<strong>過去データ移行は本フェーズにも含めず別途将来判断</strong>。
+            </li>
+            <li>
+              AIの持越候補、共同編集、外部コメント同期、<strong>Nogiku Accessグループ連動</strong
+              >などは必要性が確認されてから。
+            </li>
+          </ul>
+          <h3 id="sec-16">Claudeに期待する成果物</h3>
+          <ul>
+            <li>
+              <code>README.md</code>: 開発起動、環境変数の名称、権限・デプロイ概念、検証方法。
+            </li>
+            <li><code>docs/REQUIREMENTS.md</code>: 本書（改変するなら差分を明記）。</li>
+            <li><code>docs/DECISIONS.md</code>: D1〜D15の決定ログ。未決定を未決定のまま表示。</li>
+            <li><code>docs/ARCHITECTURE.md</code>: コンポーネント図と認可・ファイルフロー。</li>
+            <li><code>docs/TEST_PLAN.md</code>: A-01〜A-20に対応するテスト一覧。</li>
+            <li>
+              実装ソース、型定義、データスキーマ、ユニット／E2Eテスト、サンプルデータ生成スクリプト。
+            </li>
+            <li>動くローカルMVPと、できていない点・実行していない試験を区別した引き継ぎメモ。</li>
+          </ul>
+          <h3 id="sec-16">やってはいけないこと</h3>
+          <ul>
+            <li>既存repoやUniQの認証コードを見ずに、Nogiku認証を適当に自作する。</li>
+            <li>委員のSSOと同じ資格情報をもう一つのユーザーDB・パスワードDBに複製する。</li>
+            <li>受付期限と校了を一つの<code>completed</code>フラグにまとめる。</li>
+            <li>重大未解決の校了ガードをフロント画面の警告だけで済ませる。</li>
+            <li>PDF/画像・コメントを公開バケットで無制限に配信する。</li>
+            <li>
+              Claude独自判断で本番環境にデプロイ、課金、現行データ削除、既存システム変更、外部LLMへの実データ送信をする。
+            </li>
+            <li>高額な外部有料コンポーネントを事前承認なく採用する。</li>
+          </ul>
+          <hr />
+          <h2 id="sec-16">15. Claudeに最初に渡す依頼文（コピーして使える）</h2>
+          <blockquote>
+            <p>
+              添付の「MF100 校正システム 要件定義・Claude実装引き継ぎ書
+              <strong>v1.1</strong>」を要件の正本として読んでください。既存repoとMF99
+              UniQのNogiku×Convex資産を確認し、確定／採用方針／制度承認待ちを区別して実装してください。<strong>D1は決定済みで、D4は延期決定</strong>です。未承認なのは主として自己校了・合議ルール（D2）と公開範囲細則（D3）です。
+              技術はReact 19 + Vite + TanStack Router + Material 3 Expressive（@m3e/react）+ Convex
+              + Hono + Cloudflare R2 + Nogikuを採用します。まずNogiku
+              SSO、作品ごとの個人ACL、制作物登録、0版（ラフ）と通常版の分離、版提出と同時に旧版の校正受付を閉じる状態遷移、PDF/画像注釈、指摘・校了の独立管理を一周するMVPを作ってください。<strong>新版本登録失敗時に旧版受付を閉じないこと</strong>は必須です。
+              Nogiku
+              Accessの<strong>グループ・役職に基づく権限自動連携</strong>、MF99以前のデータ移行、AIによる高度な引き継ぎ、Tauri版は<strong>今回実装しない</strong>でください。管理者が作品の閲覧者を個人単位で調整できるMVPにし、将来グループを追加できる拡張可能な権限モデルにしてください。
+              初回は（1）既存資産の調査結果、（2）設計図・データモデルと受け入れテストA-01〜A-20の対応表、（3）D2/D3の要承認箇所、（4）小さな動く実装とテストを提示してください。<strong
+                >本番デプロイ、課金、過去データ移行、既存環境の変更、外部への実データ送信は明示承認まで行わないでください。</strong
+              >
+            </p>
+          </blockquote>
+          <hr />
+          <h2 id="sec-17">16. 根拠・関連資料</h2>
+          <p>
+            以下は関係担当と実装者が必要時に照合する原資料。<strong>Notionの認証が必要なため、ClaudeがURLを必ず直接閲覧できるとは限らない</strong>。必要なら内容を別途提供する。MF99のルールがMF100でも自動的に有効とはみなさない。
+          </p>
+          <ul>
+            <li>
+              <a href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207"
+                >MF99 校正・校了指針 総論</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/29c5cf3bfa7680e6b7b7fb06ebedc859"
+                >MF99 文章 校正・校了指針</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/3015cf3bfa76800298ead9e94c9c3979"
+                >MF99 制作物集約</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/2d15cf3bfa76804fa0c7d54e05c8888a"
+                >MF99 refine仕様書</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+                >refine 振り返りmtg</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/3f25cf3bfa7680abb6fbc2b5b4855f03"
+                >MF100 校正システム 要件定義の素 第2版</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/2ff5cf3bfa76810c8395e4e8052324fa"
+                >校正システム利用者アンケート（21人）</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/15b5cf3bfa7680f486ccf7550d5407ce"
+                >KF75 校正システムのフィードバック</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/3755cf3bfa7680a78933c300fc1f8c1e"
+                >校正システム引き継ぎ</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/2c95cf3bfa768069826fc72257cc307d">0版制度設計</a>
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/2ba5cf3bfa7680fa9b34d380da70ff13">notation</a>
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/28f5cf3bfa768083ade0f202938a7d21"
+                >notation改善要望</a
+              >
+            </li>
+            <li><a href="https://app.notion.com/p/2d15cf3bfa768056a351c89ff384f3f6">UniQ</a></li>
+            <li>
+              <a href="https://app.notion.com/p/3445cf3bfa7680588d34c6212370adbe"
+                >UniQ / Convexセルフホスト手順</a
+              >
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/2ba5cf3bfa76806fb1a7fe146f82c3fb">Nogiku引き継ぎ</a>
+            </li>
+            <li>
+              <a href="https://app.notion.com/p/3ef5cf3bfa76804bb15cf8a76f104a6b"
+                >MF99 システム局引き継ぎ</a
+              >
+            </li>
+          </ul>
+          <h3 id="sec-18">添付すると有益な既存資料</h3>
+          <ul>
+            <li>MF100の業務As-Is / To-Be図解強化版HTML。</li>
+            <li>MF100の技術仕様書案・図解強化版HTML。</li>
+            <li>友人向け検討ブリーフ v0.5（Notion横断調査）。</li>
+            <li>UniQの認証実装コード（閲覧権限がある場合）と、Nogiku API仕様。</li>
+          </ul>
+          <h3 id="sec-18">v1.1での決定事項（旧v1.0より優先）</h3>
+          <ul>
+            <li>
+              新版の<strong>提出確定時に</strong>旧版の新規校正受付を終了。アップロード途中や失敗時は閉じない。
+            </li>
+            <li>0版はラフ、1版以降は通常版。案ごと分岐管理は実装不要。</li>
+            <li>
+              校正システム管理者が作品の閲覧者を<strong>個人単位</strong>で設定。Nogikuグループ連動は後続。
+            </li>
+            <li>MF99以前の過去データ移行は延期。本番前の制度承認は主にD2とD3。</li>
+          </ul>
+          <hr />
+          <p>
+            <em
+              >本書は実装に進むための共通仕様の叩き台であり、運用責任者の承認・実データ移行・本番デプロイを行ったことを意味しない。</em
+            >
+          </p>
+        </article>
+        <div class="foot">
+          MF100 /
+          校正業務要件・実装引継ぎの叩き台。制度の最終承認や実装完了を示すものではありません。
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+---
+diff --git a/apps/web/src/lib/push.ts b/apps/web/src/lib/push.ts
+index a4bad25..c08d18d 100644
+--- a/apps/web/src/lib/push.ts
++++ b/apps/web/src/lib/push.ts
+@@ -90,8 +90,7 @@ function deviceLabel(): string {
+  */
+ export async function enablePush(publicKey: string): Promise<PushSubscriptionJson | null> {
+   const reg = await registration();
+-  if (!reg)
+-    throw new Error("Service Worker がまだ準備できていません。少し待ってからやり直してください");
++  if (!reg) throw new Error("準備中です。少し待ってからやり直してください");
+   const permission = await Notification.requestPermission();
+   if (permission !== "granted") return null;
+   const sub =

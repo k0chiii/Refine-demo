@@ -1,0 +1,343 @@
+/* 第100回五月祭 公式サイト（見本）。レスポンシブ: 599 以下は 1 列・ハンバーガー、600–1023 は 2 列、1024 以上は 3 列＋横のナビ */
+:root {
+  --c-primary: #1b5fb4;
+  --c-primary-dark: #124a90;
+  --c-accent: #e54d2e;
+  --c-ink: #1d2434;
+  --c-muted: #5b6678;
+  --c-line: #d9dde6;
+  --c-bg: #ffffff;
+  --c-tint: #f1f5fd;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  font-family:
+    "Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--c-ink);
+  background: var(--c-bg);
+  line-height: 1.7;
+}
+a {
+  color: var(--c-primary);
+}
+
+/* ヘッダー */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--c-primary);
+  color: #fff;
+}
+.brand {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+.nav-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.nav-burger {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.nav-burger span,
+.nav-burger span::before,
+.nav-burger span::after {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #fff;
+  content: "";
+  position: relative;
+}
+.nav-burger span::before {
+  position: absolute;
+  top: -7px;
+}
+.nav-burger span::after {
+  position: absolute;
+  top: 7px;
+}
+.site-nav {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: var(--c-primary-dark);
+  flex-direction: column;
+  padding: 8px 0;
+}
+.site-nav a {
+  color: #fff;
+  text-decoration: none;
+  padding: 12px 20px;
+  font-weight: 600;
+}
+.nav-toggle:checked ~ .site-nav {
+  display: flex;
+}
+.nav-toggle:focus-visible + .nav-burger {
+  outline: 2px solid #fff;
+}
+
+/* ヒーロー */
+.hero {
+  padding: 48px 16px 40px;
+  background: linear-gradient(160deg, #e6edff 0%, #f8faff 70%);
+}
+.hero__eyebrow {
+  margin: 0 0 8px;
+  color: var(--c-primary);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 14px;
+}
+.hero__title {
+  margin: 0 0 16px;
+  font-size: clamp(28px, 6vw, 48px);
+  line-height: 1.25;
+}
+.hero__lead {
+  margin: 0 0 24px;
+  color: var(--c-muted);
+  max-width: 44em;
+}
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.btn {
+  display: inline-block;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--c-primary);
+  color: var(--c-primary);
+  text-decoration: none;
+  font-weight: 700;
+}
+.btn--primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+
+/* 節 */
+.section {
+  padding: 40px 16px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.section--tint {
+  max-width: none;
+  background: var(--c-tint);
+}
+.section--tint > * {
+  max-width: 1120px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.section__title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  border-left: 6px solid var(--c-accent);
+  padding-left: 12px;
+  line-height: 1.3;
+}
+.section__lead {
+  margin: 0 0 24px;
+  color: var(--c-muted);
+}
+
+/* 企画カード */
+.cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.card {
+  border: 1px solid var(--c-line);
+  border-radius: 16px;
+  padding: 16px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card__media {
+  height: 120px;
+  border-radius: 12px;
+}
+.card__media--a {
+  background: linear-gradient(135deg, #bcd2ff, #7fa6f2);
+}
+.card__media--b {
+  background: linear-gradient(135deg, #ffd7b5, #ff9b6a);
+}
+.card__media--c {
+  background: linear-gradient(135deg, #cdeccc, #7fcf8a);
+}
+.card__media--d {
+  background: linear-gradient(135deg, #f3d4ff, #c58af2);
+}
+.card__title {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+.card__text {
+  margin: 0;
+  color: var(--c-muted);
+  font-size: 14px;
+  flex: 1;
+}
+.card__link {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* アクセス */
+.access {
+  display: grid;
+  gap: 24px;
+}
+.access__list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+}
+.access__list dt {
+  font-weight: 700;
+  color: var(--c-primary);
+}
+.access__list dd {
+  margin: 0;
+}
+.access__map {
+  min-height: 180px;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 38px, #d7e0f3 38px 40px),
+    repeating-linear-gradient(90deg, transparent 0 38px, #d7e0f3 38px 40px), #e9eff9;
+  display: grid;
+  place-items: center;
+  color: var(--c-muted);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+/* お知らせ */
+.news {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--c-line);
+}
+.news li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--c-line);
+}
+.news time {
+  color: var(--c-muted);
+  min-width: 6em;
+}
+
+/* フッター */
+.site-footer {
+  margin-top: 24px;
+  padding: 32px 16px 40px;
+  background: var(--c-ink);
+  color: #cfd6e4;
+  font-size: 14px;
+}
+.site-footer p {
+  margin: 0 0 8px;
+}
+.site-footer__org {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* 600 以上: 2 列 */
+@media (min-width: 600px) {
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .access {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hero {
+    padding: 72px 32px 56px;
+  }
+  .section {
+    padding: 56px 32px;
+  }
+}
+/* 1024 以上: 横のナビ・3 列 */
+@media (min-width: 1024px) {
+  .site-header {
+    padding: 12px 40px;
+  }
+  .nav-burger {
+    display: none;
+  }
+  .site-nav,
+  .nav-toggle:checked ~ .site-nav {
+    display: flex;
+    position: static;
+    flex-direction: row;
+    background: transparent;
+    padding: 0;
+    gap: 4px;
+  }
+  .site-nav a {
+    padding: 8px 14px;
+    border-radius: 999px;
+  }
+  .site-nav a:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .cards .card:nth-child(4) {
+    grid-column: span 3;
+    flex-direction: row;
+    align-items: center;
+  }
+  .cards .card:nth-child(4) .card__media {
+    width: 240px;
+    flex: none;
+  }
+  .hero {
+    padding: 96px 40px 72px;
+  }
+}

@@ -1,0 +1,41 @@
+---
+diff --git a/apps/web/src/features/team/TeamsAdmin.tsx b/apps/web/src/features/team/TeamsAdmin.tsx
+index 1d45dad..87b72ed 100644
+--- a/apps/web/src/features/team/TeamsAdmin.tsx
++++ b/apps/web/src/features/team/TeamsAdmin.tsx
+@@ -205,10 +205,7 @@ export function TeamsAdmin() {
+           雛形を書き出す
+         </M3eButton>
+       </div>
+-      <p className="muted small">
+-        制作物には主管担当と制作担当（1 つずつ）・関係担当を選べます。項目は委員会の「担当」DB
+-        と同じ（局のコード・絵文字・所属する人）
+-      </p>
++
+       {teams === undefined ? (
+         <Loading label="担当を読み込んでいます" />
+       ) : bureaus.length === 0 ? (
+@@ -299,8 +296,8 @@ export function TeamsAdmin() {
+             </Field>
+           </div>
+           <UserPicker
+-            label="所属する人（ユーザ）"
+-            hint="所属する人は、この担当が主管担当・制作担当・関係担当の制作物を（非公開でも）見られます"
++            label="所属する人"
++            hint="この担当の制作物を非公開でも見られます"
+             value={form.memberIds}
+             onChange={(ids) => setForm((f) => ({ ...f, memberIds: ids }))}
+           />
+@@ -449,11 +446,7 @@ function ImportTeamsDialog({
+     <M3eDialog open={open} onClosed={close} closeLabel="閉じる" className="dialog--full">
+       <span slot="header">CSV で局と担当を取り込む</span>
+       <div className="dialog-body stack">
+-        <p className="small muted">
+-          列は委員会の担当 DB
+-          の項目名と同じ（局・担当名・付番・絵文字・ユーザ）。局は名前かコード（PR・JIM など）で 1
+-          つ書き、担当を空にすると局だけを作ります。既にある局・担当は作りません。
+-        </p>
++        <p className="small muted">雛形と同じ列の CSV を選んでください</p>
+         <div className="row">
+           <input
+             ref={fileRef}

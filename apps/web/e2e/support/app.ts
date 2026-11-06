@@ -1,0 +1,671 @@
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { test as base, expect, type Locator, type Page, type Route } from "@playwright/test";
+
+export type { Page, Route };
+
+/**
+ * デモ版の画面を操る部品。e2e/screenshots.mjs の同名の関数を、spec から使えるように切り出したもの。
+ * 画面の構造（M3E の部品・クラス名）に依存する知識はここに集め、spec は「誰が・何をして・どうなるか」だけを書く。
+ * 画面が変わって壊れたら、まずここを直す（spec を書き換えて回るのではなく）
+ */
+
+export const FIXTURES = fileURLToPath(new URL("../fixtures/", import.meta.url));
+export const fixture = (name: string) => resolve(FIXTURES, name);
+
+/** デモのアカウント（apps/web/src/demo のシード） */
+export type DemoUser =
+  | "mock-nogiku-creator"
+  | "mock-nogiku-reviewer"
+  | "mock-nogiku-manager"
+  | "mock-nogiku-approver"
+  | "mock-nogiku-admin";
+
+/** 制作物一覧の行（「局 › 担当」の入れ子のリストの項目） */
+export const WORKS_ENTRY = ".works .works-table tbody tr";
+/** シードの制作物 */
+export const PAMPHLET = "MF100 公式パンフレット";
+export const LONG_TITLE = "100nc_デザインガイドライン";
+/** 小ジャンル「スライド」の提出（PDF + 共有 URL） */
+export const SLIDE_DECK = "企画説明会スライド";
+/** 提出前の確認（§58）。提出は止めないが、ふだんの提出に合わせて印を付けておく */
+export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
+
+type Demo = {
+  /** 撮影の道具（scripts/stack-pr）は seed の選択肢を渡す。いまの seed.demo は選択肢を持たず受け流す */
+  ensureSeeded(opts?: {
+    skipPamphletComments?: boolean;
+    skipPlanInfoWarnings?: boolean;
+    seedBacklogCapture?: boolean;
+    seedPlanInfoMismatch?: boolean;
+    seedConfidentiality?: boolean;
+    seedRevisionPlanned?: boolean;
+  }): Promise<void>;
+  /** サインイン中の利用者の ID（未サインインは null） */
+  userId: string | null;
+  /** 企画情報 bot のスレッドを解決済みにする（q72 の撮影用。無い版もある） */
+  resolveOpenPlanInfoBotThreads?: () => Promise<number>;
+  signIn(sub: string): Promise<void>;
+  signOut(): Promise<void>;
+  users(): Promise<{ id: string; sub: string; name: string }[]>;
+  /** デモの Convex の呼び出しを直列にする口（TS では private。ほかの呼び出しとぶつけずに t.run するため） */
+  enqueue<T>(fn: () => Promise<T>): Promise<T>;
+  t: {
+    run<T>(
+      fn: (ctx: {
+        db: {
+          patch(id: string, fields: Record<string, unknown>): Promise<void>;
+          query(table: "works"): { collect(): Promise<{ _id: string; title: string }[]> };
+        };
+      }) => Promise<T>,
+    ): Promise<T>;
+  };
+};
+type Router = {
+  navigate(opts: {
+    to: string;
+    search?: Record<string, string>;
+    params?: Record<string, string>;
+  }): Promise<void>;
+};
+declare global {
+  var __mf100demo: Demo | undefined;
+  var __mf100router: Router | undefined;
+}
+
+export class App {
+  constructor(readonly page: Page) {}
+
+  /** サインイン画面を開き、デモのデータを用意する。各 spec の入口（データはページを読み直すたびに作り直される） */
+  async start() {
+    await this.page.goto("/signin");
+    await this.ready();
+    await this.page.evaluate(() => globalThis.__mf100demo!.ensureSeeded());
+  }
+
+  ready() {
+    return this.page.waitForFunction(
+      () => Boolean(globalThis.__mf100demo && globalThis.__mf100router),
+      null,
+      { timeout: 30_000 },
+    );
+  }
+
+  /**
+   * 画面が落ち着くまで待つ（2 フレーム経過し、有限の animation / transition が終わるまで。Shadow DOM 内も見る）。
+   * M3E のメニューやダイアログは開閉の transition 中に押すと外れるので、その前に使う。
+   * スクロール連動の animation（animation-timeline: scroll()）は終わらないので、document.timeline のものだけを見る
+   */
+  settle() {
+    return this.page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          const limit = performance.now() + 3000;
+          const busy = () => {
+            const roots: (Document | ShadowRoot)[] = [document];
+            for (const r of roots)
+              for (const el of r.querySelectorAll("*"))
+                if (el.shadowRoot) roots.push(el.shadowRoot);
+            return roots.some((r) =>
+              r.getAnimations().some((a) => {
+                const t = a.effect?.getComputedTiming();
+                return (
+                  a.timeline === document.timeline &&
+                  a.playState === "running" &&
+                  t !== undefined &&
+                  t.iterations !== Infinity
+                );
+              }),
+            );
+          };
+          const check = () =>
+            !busy() || performance.now() > limit ? done() : requestAnimationFrame(check);
+          requestAnimationFrame(() => requestAnimationFrame(check));
+        }),
+    );
+  }
+
+  /**
+   * SPA 内で移動する（デモのデータはメモリ上にあるので page.goto で読み直すと消える）。
+   * 校正画面を離れるときの「校正を完了しますか？」は「あとで」で閉じて進む
+   */
+  async go(path: string) {
+    const page = this.page;
+    const nav = page.evaluate(
+      (p) => {
+        const [to, q] = p.split("?");
+        const search = q ? Object.fromEntries(new URLSearchParams(q)) : undefined;
+        return globalThis.__mf100router!.navigate(search ? { to: to!, search } : { to: to! });
+      },
+      path.replace(/^https?:\/\/[^/]+/, ""),
+    );
+    let moved = false;
+    const leave = page.locator("m3e-dialog[open]", { hasText: "校正を完了しますか？" });
+    const watch = (async () => {
+      while (!moved) {
+        if (await leave.count()) {
+          await leave.locator("m3e-button", { hasText: "あとで" }).click();
+          return;
+        }
+        await page.waitForTimeout(100);
+      }
+    })();
+    try {
+      await nav;
+    } finally {
+      moved = true;
+    }
+    await watch;
+    await this.settle();
+  }
+
+  /** 別の人としてサインインし直す（入口の振り分けが終わり /make・/check に着くまで待つ） */
+  async signInAs(sub: DemoUser) {
+    await this.page.evaluate(() => globalThis.__mf100demo!.signOut());
+    await this.go("/signin");
+    await this.page.evaluate(async (s) => {
+      await globalThis.__mf100demo!.ensureSeeded();
+      await globalThis.__mf100demo!.signIn(s);
+    }, sub);
+    await this.page.waitForURL((u) => ["/make", "/check"].includes(u.pathname), {
+      timeout: 10_000,
+    });
+    await this.settle();
+  }
+
+  async user(sub: DemoUser) {
+    const all = await this.page.evaluate(() => globalThis.__mf100demo!.users());
+    const u = all.find((x) => x.sub === sub);
+    if (!u) throw new Error(`デモのユーザーがいない: ${sub}`);
+    return u;
+  }
+
+  /**
+   * デモの利用者の Nogiku のメールアドレスを替える。シードの利用者は送らないアドレス（*@example.invalid）なので、
+   * 送れるアドレスが要る spec が使う。画面に出るのは次の signInAs から
+   */
+  async setNogikuEmail(sub: DemoUser, email: string) {
+    const { id } = await this.user(sub);
+    await this.page.evaluate(
+      ([id, email]) => {
+        const demo = globalThis.__mf100demo!;
+        return demo.enqueue(() => demo.t.run((ctx) => ctx.db.patch(id, { email })));
+      },
+      [id, email] as const,
+    );
+  }
+
+  btn(text: string) {
+    return this.page.locator("m3e-button", { hasText: text }).first();
+  }
+
+  dialog() {
+    return this.page.locator("m3e-dialog[open]");
+  }
+
+  /** outlined form-field 内の M3E 日付（YYYY-MM-DD） */
+  async fillOutlinedDate(scope: Locator, fieldLabel: string, isoDate: string) {
+    const [y, m, d] = isoDate.split("-");
+    const group = scope.getByRole("group", { name: new RegExp(fieldLabel) });
+    await group.getByRole("spinbutton", { name: "年" }).fill(y!);
+    await group.getByRole("spinbutton", { name: "月" }).fill(m!);
+    await group.getByRole("spinbutton", { name: "日" }).fill(d!);
+    await group.getByRole("spinbutton", { name: "日" }).press("Tab");
+    // spinbutton だけでは React の onChange が走らないことがあるので date-input にも反映する
+    const dateInput = group.locator("xpath=ancestor::m3e-form-field[1]//m3e-date-input").first();
+    if ((await dateInput.count()) > 0) {
+      await dateInput.evaluate((el, iso) => {
+        const [yy, mm, dd] = iso.split("-").map((x) => Number(x));
+        const target = el as unknown as { value: Date | null };
+        target.value = new Date(yy!, mm! - 1, dd!);
+        el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+      }, isoDate);
+    }
+    await this.settle();
+  }
+
+  /** M3E select（form-field 内）で選択肢を選ぶ（候補は overlay で page 直下に出る） */
+  async pickSelectOption(scope: Locator, fieldLabel: string, option: string) {
+    const combo = scope.getByRole("combobox", { name: fieldLabel });
+    if ((await combo.count()) > 0) {
+      await combo.click();
+    } else {
+      const field = scope.locator("m3e-form-field", { hasText: fieldLabel });
+      await field.locator("m3e-select").click();
+    }
+    await this.settle();
+    await this.page.getByRole("option", { name: option, exact: true }).click();
+    await this.settle();
+  }
+
+  /** ユーザー選択 UI（UserPicker）で名前を検索して 1 人（または 1 グループ）選ぶ */
+  async pickUser(scope: Locator, name: string) {
+    const input = scope.locator(".picker__input").first();
+    await input.click();
+    await input.fill(name);
+    await this.page
+      .getByRole("option", { name: new RegExp(name) })
+      .first()
+      .click();
+    await this.settle();
+  }
+
+  /**
+   * 日本語入力の「確定」キーを押す（iPhone・Mac の Safari の形）。Safari は変換を閉じてから確定の keydown を送るので、
+   * isComposing は false で keyCode が 229。Playwright の press では作れないので、その形の keydown を入力欄に送る
+   */
+  async imeConfirm(input: Locator) {
+    await input.evaluate((el) => {
+      const e = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+      });
+      Object.defineProperty(e, "keyCode", { get: () => 229 });
+      el.dispatchEvent(e);
+    });
+  }
+
+  /** PDF の最初のページが描かれるまで待つ */
+  pdfReady() {
+    return this.page.waitForFunction(
+      () => (document.querySelector<HTMLCanvasElement>(".viewer__page canvas")?.width ?? 0) > 0,
+      null,
+      { timeout: 30_000 },
+    );
+  }
+
+  /** 制作物一覧から題名で開き、そのパスを返す */
+  async openWork(title: string) {
+    await this.go("/works");
+    const entry = this.page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await entry.click();
+    await this.page.waitForURL(/\/works\/[^/]+$/);
+    await this.settle();
+    return new URL(this.page.url()).pathname;
+  }
+
+  /**
+   * 版提出ダイアログを開いてファイルを置き、転送と検証が終わるまで待つ（確定はしない）。
+   * beforeStart は「アップロードを開始」の前に入力を足すところ（専門確認・提出前の確認など）
+   */
+  async uploadRevision(
+    buttonText: "最初の版を提出" | "新しい版を提出",
+    files: string[],
+    summary: string,
+    beforeStart?: () => Promise<void>,
+  ) {
+    const page = this.page;
+    await this.btn(buttonText).click();
+    await page.waitForSelector('m3e-dialog[open] input[type="file"]');
+    await page.setInputFiles('m3e-dialog[open] input[type="file"]', files);
+    await page.fill("m3e-dialog[open] textarea >> nth=0", summary);
+    if (beforeStart) await beforeStart();
+    await this.dialog().locator("m3e-button", { hasText: "アップロードを開始" }).click();
+    await expect(page.locator(".upload-item__state--verified")).toHaveCount(files.length, {
+      timeout: 30_000,
+    });
+  }
+
+  /** 提出前の確認（3 つ）に印を付ける */
+  async tickSelfChecks() {
+    for (const id of SELF_CHECKS)
+      await this.dialog().locator(`m3e-checkbox#self-check-${id}`).click();
+  }
+
+  /** 提出を確定して、その版（/v/<n>）の紙面が描かれるまで待つ（既定は PDF。文章は textReady）。版の URL を返す */
+  async confirmRevision(n: number, ready: () => Promise<unknown> = () => this.pdfReady()) {
+    await this.dialog().locator("m3e-button", { hasText: "提出する" }).click();
+    await this.page.waitForURL(new RegExp(`/v/${n}$`), { timeout: 15_000 });
+    await ready();
+    return new URL(this.page.url()).pathname;
+  }
+
+  /** 文章（テキスト）の版の本文が出るまで待つ */
+  textReady() {
+    return this.page.locator(".text-viewer__body").waitFor({ timeout: 30_000 });
+  }
+
+  /** 文章の本文の中の文字を選ぶ（指で長押しして選んだのと同じく、ページの選択を置き換える） */
+  async selectText(needle: string) {
+    await this.page.evaluate((n) => {
+      const body = document.querySelector(".text-viewer__body");
+      if (!body) throw new Error("文章の本文が無い");
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const i = node.textContent?.indexOf(n) ?? -1;
+        if (i < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + n.length);
+        getSelection()?.removeAllRanges();
+        getSelection()?.addRange(range);
+        return;
+      }
+      throw new Error(`本文に「${n}」が無い`);
+    }, needle);
+  }
+
+  /** 下のツールバーの、文字の選択を「コメント」と「文字（コピーなど）」で切り替えるトグル（aria-pressed が文字か） */
+  selectModeToggle() {
+    return this.page.locator(".ws__toolbar m3e-icon-button.ws__select-mode");
+  }
+
+  /** エディタの引き出し（コメント／版／情報）を開く */
+  async drawer(label: "コメント" | "版" | "情報") {
+    const page = this.page;
+    const bar = page.locator(".ws__side-toolbar");
+    if (await bar.isVisible()) {
+      await bar.locator(`m3e-icon-button[aria-label^="${label}"]`).click();
+    } else {
+      const tab = page.locator(".drawer .pane-tabs m3e-tab", { hasText: label }).first();
+      if ((await tab.getAttribute("selected")) === null) await tab.click();
+    }
+    await page.waitForSelector(".drawer__body");
+    await this.settle();
+  }
+
+  /** 紙面をなぞって範囲を選ぶ（投稿欄が開く。書いて送るのは send）。座標は紙面の幅・高さに対する割合 */
+  async drawRect(x0: number, y0: number, x1: number, y1: number) {
+    const page = this.page;
+    const box = await page.locator(".viewer__overlay").first().boundingBox();
+    if (!box) throw new Error("紙面が表示されていない");
+    await page.mouse.move(box.x + box.width * x0, box.y + box.height * y0);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * x1, box.y + box.height * y1, { steps: 8 });
+    await page.mouse.up();
+  }
+
+  /** 紙面をなぞって（範囲）コメントする。座標は紙面の幅・高さに対する割合 */
+  async commentOnRect(x0: number, y0: number, x1: number, y1: number, body: string) {
+    await this.drawRect(x0, y0, x1, y1);
+    await this.send(body);
+  }
+
+  /** 位置なしのコメント（コメントの一覧の下の入口） */
+  async freeComment(body: string) {
+    await this.page.getByRole("button", { name: "全体へのコメント" }).click();
+    await this.send(body);
+  }
+
+  /** 開いている新しいコメントの投稿欄に書いて投稿し、欄が閉じるまで待つ（広い画面は引き出しの下、狭い画面は紙面・画面下） */
+  async send(body: string) {
+    const page = this.page;
+    await page.waitForSelector(".compose-pop .rt__content");
+    await page.fill(".compose-pop .rt__content", body);
+    await page.locator(".compose-pop .rt__send").click();
+    await page.waitForSelector(".compose-pop", { state: "detached" });
+  }
+
+  /**
+   * 新しいコメントの投稿欄。広い画面は引き出し「コメント」の下（drawer）、839px 以下は紙面の上（viewer）か画面下（docked）。
+   * 場所を言わなければ、どこに出ているものでも
+   */
+  composer(where?: "drawer" | "viewer" | "docked") {
+    return this.page.locator(
+      where === "drawer"
+        ? ".comments__compose .compose-pop"
+        : where === "viewer"
+          ? ".viewer .compose-pop"
+          : where === "docked"
+            ? ".compose-pop--docked"
+            : ".compose-pop",
+    );
+  }
+
+  /** コメントの一覧のカード（校正のコメント。先頭に留まる「制作者からのコメント」は .creator-note で、ここには入らない） */
+  threads() {
+    return this.page.locator(".comments .thread");
+  }
+
+  /** 一覧のカードの下の行（押すとスレッドのパネルが開く。閉じるとフォーカスが戻る先） */
+  threadOpener(card: Locator) {
+    return card.locator(".thread__footer");
+  }
+
+  /** 一覧のカードを選んで（下の行は選んだカードにだけ出る）、下の行を押してスレッドのパネルを開く */
+  async openPanel(card: Locator) {
+    await card.locator(".thread__body").first().click();
+    await this.threadOpener(card).click();
+    await this.page.waitForSelector(".thread-panel");
+    await this.settle();
+    return this.page.locator(".thread-panel");
+  }
+
+  /** スレッドのパネルのバーの「コメントの一覧へ戻る」で一覧へ戻り、パネルが消えるまで待つ */
+  async closePanel(panel: Locator) {
+    await panel.locator(".thread-panel__bar .thread-panel__back").click();
+    await this.page.waitForSelector(".thread-panel", { state: "detached" });
+    await this.settle();
+  }
+
+  /** 引き出し「コメント」の枠（一覧と、開いたスレッドのパネルが入る） */
+  commentsDrawer() {
+    return this.page.locator(".comments");
+  }
+
+  /** 引き出し「コメント」の一覧（スレッドのパネルを開いている間は隠れる） */
+  commentsList() {
+    return this.page.locator(".comments__main");
+  }
+
+  /** スレッドのパネルのバーの前後のボタン（一覧の並びで前・次のスレッドへ。端では disabled） */
+  threadNav(panel: Locator) {
+    const buttons = panel.locator(".thread-panel__bar .thread-panel__nav m3e-icon-button");
+    return { prev: buttons.first(), next: buttons.last() };
+  }
+
+  /** スレッドのパネルの返信欄から返信し、流れに載るまで待つ */
+  async replyInPanel(panel: Locator, body: string) {
+    const replies = await panel.locator(".thread__replyitem").count();
+    const composer = panel.locator(".thread-panel__composer");
+    await composer.locator(".rt__content").fill(body);
+    await composer.locator(".rt__send").click();
+    await expect(panel.locator(".thread__replyitem")).toHaveCount(replies + 1);
+  }
+
+  /** スレッドのパネルのバーにある、返信の通知を受け取るトグル（aria-pressed が購読しているか） */
+  subscribeToggle(panel: Locator) {
+    return panel.locator(".thread-panel__bar m3e-icon-button.thread-panel__subscribe");
+  }
+
+  /** 元のコメントを訂正する（パネルの「その他の操作」→「訂正」で本文を入れ替えて保存） */
+  async editComment(panel: Locator, body: string) {
+    await panel.locator('.thread-panel__bar m3e-icon-button[aria-label="その他の操作"]').click();
+    await this.saveEdit(panel.locator(".thread-panel__root"), body);
+  }
+
+  /** 返信を訂正する（返信の「返信の操作」→「訂正」で本文を入れ替えて保存） */
+  async editReply(reply: Locator, body: string) {
+    await reply.locator('m3e-icon-button[aria-label="返信の操作"]').click();
+    await this.saveEdit(reply, body);
+  }
+
+  private async saveEdit(scope: Locator, body: string) {
+    await this.settle();
+    await this.page.locator("m3e-menu-item:visible", { hasText: "訂正" }).click();
+    const form = scope.locator(".thread__form");
+    await form.locator(".rt__content").fill(body);
+    await form.locator("m3e-button", { hasText: "訂正を保存" }).click();
+    await expect(form).toHaveCount(0);
+  }
+
+  /** エディタのアプリバーの「ピン留め」を押し、押された状態で保存し終わるまで待つ */
+  async pin() {
+    const button = this.page.locator('.shell__appbar m3e-icon-button[aria-label^="ピン留め"]');
+    const disabled = () =>
+      button.evaluate((el) => (el as HTMLElement & { disabled?: boolean }).disabled);
+    await expect.poll(disabled).toBe(false);
+    await button.click();
+    await expect(button).toHaveAttribute("selected");
+    await expect.poll(disabled).toBe(false);
+  }
+
+  /** 校正の入口（/check）の「ピン留め」の行 */
+  checkPinned() {
+    return this.page.locator(".hub[data-hub='check'] .check__pinned .hub-row");
+  }
+
+  /** アプリバーのベルから通知の一覧を開き、通知の行を返す（medium 以上のメニュー） */
+  async notifications() {
+    await this.page.locator('.bell m3e-icon-button[aria-label^="通知"]').click();
+    await this.page.waitForSelector("#notif-menu .notif-menu__header");
+    await this.settle();
+    return this.page.locator("#notif-menu .notif");
+  }
+
+  /**
+   * メニューを開くボタンを押し、開ききるまで待つ。M3E のメニューは祖先がスクロールすると閉じる。Playwright の click は
+   * 見える位置までのスクロールと押下を同じフレームで行うので、遅れて届く scroll で開いたメニューが閉じることがある
+   * （横に流れる表の「⋮」）。先にスクロールし、その scroll が届いてから押す
+   */
+  async openMenu(trigger: Locator) {
+    await trigger.scrollIntoViewIfNeeded();
+    await this.settle();
+    await trigger.click();
+    await this.settle();
+  }
+
+  /** 制作物一覧（/works）の行の「⋮」→「情報を編集」で編集のダイアログを開き、そのダイアログを返す（主管の行だけに出る） */
+  async editWorkFromList(title: string) {
+    const row = this.page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await this.openMenu(row.locator(`m3e-icon-button[aria-label="${title} の操作"]`));
+    await row.locator("m3e-menu m3e-menu-item", { hasText: "情報を編集" }).click();
+    return this.dialog();
+  }
+
+  /** 制作物一覧の「⋮ → 情報を編集」で目的・用途を保存する（情報タブからは編集しない。利用者指示 2026-11-05） */
+  async setWorkPurpose(title: string, purpose: string) {
+    await this.go("/works");
+    const dialog = await this.editWorkFromList(title);
+    await dialog
+      .locator("m3e-form-field", { hasText: "目的・用途" })
+      .locator("textarea")
+      .fill(purpose);
+    await dialog.locator("m3e-button", { hasText: "保存" }).click();
+    await this.page.waitForSelector("m3e-dialog[open]", { state: "detached" });
+    await this.settle();
+  }
+
+  /** 制作物一覧の「担当者」のセルから校正者を選ぶダイアログを開く（情報タブからは割り当てない） */
+  async openReviewersFromList(title: string) {
+    await this.go("/works");
+    const row = this.page.locator(WORKS_ENTRY, { hasText: title }).first();
+    await row.getByRole("button", { name: /の担当者を選ぶ/ }).click();
+    await this.page.waitForSelector('m3e-dialog[open] input[role="combobox"]');
+    return this.dialog();
+  }
+
+  /** アカウントのメニュー（compact はボトムシート）から「通知の設定」を開き、そのダイアログを返す */
+  async openNotificationSettings() {
+    const page = this.page;
+    await page.locator('m3e-icon-button[aria-label^="アカウント"]').click();
+    const item = page.locator('[data-action="notifications"]:visible');
+    await item.waitFor();
+    await this.settle();
+    await item.click();
+    const dialog = page.locator("m3e-dialog[open].push-dialog");
+    await dialog.waitFor();
+    await this.settle();
+    return dialog;
+  }
+
+  /** 「通知の設定」の「テスト通知を送る」（§112） */
+  sendTestNotificationButton() {
+    return this.page.locator('m3e-dialog[open] [data-action="send-test"]');
+  }
+
+  /** 「通知の設定」の届け先の行（登録メールアドレス・Slack（DM））。スイッチは行の中の m3e-switch */
+  notificationChannel(channel: "email" | "slack") {
+    return this.page.locator(`m3e-dialog[open] .notif-channel[data-channel="${channel}"]`);
+  }
+
+  /**
+   * 「通知の設定」の Slack（DM）の行で、ワークスペースの選択肢の index 番目を選び、その id（slackWorkspaces の id）を返す。
+   * id は select の中の m3e-option の value。開いたときに見えるのは M3E がダイアログの中に写した別の option で、value を持たない
+   */
+  async pickSlackWorkspace(index = 0): Promise<string> {
+    const picker = this.notificationChannel("slack").locator("m3e-select");
+    const id = await picker
+      .locator("m3e-option")
+      .nth(index)
+      .evaluate((el) => (el as HTMLElement & { value: string }).value);
+    await picker.click();
+    await this.settle();
+    await this.dialog().getByRole("option").nth(index).click();
+    await this.settle();
+    return id;
+  }
+
+  /** 「通知の設定」の Slack（DM）の行の「Slack のメールアドレス」の欄（§110。ワークスペースの登録があるときに出る） */
+  slackEmailInput() {
+    return this.notificationChannel("slack").locator('[data-field="slackEmail"] input');
+  }
+
+  /** 「Slack のメールアドレス」に書いて欄から離れる（離れたときに保存する。空なら消す） */
+  async setSlackEmail(value: string) {
+    const input = this.slackEmailInput();
+    await input.fill(value);
+    await input.blur();
+    await this.settle();
+  }
+
+  /** 管理 › Slack のワークスペースの行（data-team-id は登録した team_id） */
+  slackWorkspaceRow(teamId: string) {
+    return this.page.locator(`.admin-slack__row[data-team-id="${teamId}"]`);
+  }
+
+  /** 管理 › Slack の登録の欄に名前と team_id を入れて「登録」を押す */
+  async addSlackWorkspace(name: string, teamId: string) {
+    const form = this.page.locator(".admin-slack__form");
+    await form.locator('input[name="name"]').fill(name);
+    await form.locator('input[name="teamId"]').fill(teamId);
+    await form.locator('m3e-button[variant="filled"]').click();
+  }
+
+  /** 管理 › Slack の行の削除を押し、確かめのダイアログで削除して、閉じきるまで待つ */
+  async removeSlackWorkspace(teamId: string) {
+    await this.slackWorkspaceRow(teamId).locator("m3e-icon-button").click();
+    const confirm = this.dialog();
+    await confirm.waitFor();
+    await this.settle();
+    await confirm.locator('[slot="actions"] m3e-button[variant="filled"]').click();
+    await expect(this.dialog()).toHaveCount(0);
+    await this.settle();
+  }
+
+  /** 開いているダイアログを Esc で閉じ、閉じきるまで待つ */
+  async closeDialog() {
+    await this.page.keyboard.press("Escape");
+    await expect(this.dialog()).toHaveCount(0);
+    await this.settle();
+  }
+
+  /** アプリバーの「比べる」から版や操作を選ぶ（広い画面は Menu、compact は Bottom sheet） */
+  async compareWith(label: string) {
+    const page = this.page;
+    const compact = (page.viewportSize()?.width ?? 1440) < 600;
+    await page.locator('.shell__appbar m3e-icon-button[aria-label^="比べる"]').click();
+    if (compact) await page.waitForSelector("m3e-bottom-sheet.compare-sheet[open]");
+    else await page.waitForSelector("#compare-menu m3e-menu-item:visible");
+    await this.settle();
+    const item = compact
+      ? page.locator("m3e-bottom-sheet.compare-sheet m3e-list-action", { hasText: label }).first()
+      : page.locator("#compare-menu m3e-menu-item:visible", { hasText: label }).first();
+    await item.click();
+    await this.settle();
+  }
+}
+
+/** spec の入口: `app` は新しいデモのデータでサインイン画面まで開いた状態で渡る */
+export const test = base.extend<{ app: App }>({
+  app: async ({ page }, use) => {
+    page.on("pageerror", (e) => console.error("[pageerror]", e.message));
+    const app = new App(page);
+    await app.start();
+    await use(app);
+  },
+});
+export { expect };

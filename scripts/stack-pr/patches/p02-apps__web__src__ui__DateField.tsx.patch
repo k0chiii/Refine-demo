@@ -1,0 +1,17 @@
+---
+diff --git a/apps/web/src/ui/DateField.tsx b/apps/web/src/ui/DateField.tsx
+index f835e0e..8863180 100644
+--- a/apps/web/src/ui/DateField.tsx
++++ b/apps/web/src/ui/DateField.tsx
+@@ -165,7 +165,7 @@ export function DateField({
+         <p className="field__summary" id={summaryId} aria-live="polite">
+           {kind === "date"
+             ? value === null
+-              ? "日付だけでも、時刻を付けてもよい"
++              ? "時刻（任意）"
+               : time === null
+                 ? formatJstDate(value - 1)
+                 : formatJstShort(value)
+-- 
+2.47.3
+

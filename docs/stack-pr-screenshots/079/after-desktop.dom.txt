@@ -1,0 +1,4 @@
+capturedAt=2026-11-01T13:01:37.617Z
+url=http://127.0.0.1:4329/works
+scene=dashboard-stages-after
+captureUser=mock-nogiku-manager

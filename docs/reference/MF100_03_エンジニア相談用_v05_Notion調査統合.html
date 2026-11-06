@@ -1,0 +1,2046 @@
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1" name="viewport" />
+    <title>MF100｜エンジニア相談用 技術検討ブリーフ v0.5｜MF Notion横断調査</title>
+    <style>
+      :root {
+        --ink: #1e2831;
+        --muted: #596773;
+        --line: #dfe4e8;
+        --blue: #1b5d83;
+        --blue2: #214d68;
+        --soft: #f7f9fa;
+        --note: #f2f6f8;
+        --page: #fff;
+        --focus: #946d20;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        font-size: 15px;
+        line-height: 1.95;
+        letter-spacing: 0.005em;
+        background: var(--page);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--blue);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+      a:focus-visible,
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 3px;
+      }
+      .sitehead {
+        background: #fafbfc;
+        border-bottom: 1px solid var(--line);
+        padding: 58px max(32px, calc((100vw - 1200px) / 2)) 42px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--blue2);
+        letter-spacing: 0.09em;
+      }
+      .brandmark {
+        width: 29px;
+        height: 29px;
+        background: #214d68;
+        color: white;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        border-radius: 4px;
+      }
+      .h1 {
+        font-weight: 750;
+        font-size: clamp(29px, 4vw, 44px);
+        line-height: 1.38;
+        letter-spacing: -0.02em;
+        margin: 19px 0 12px;
+      }
+      .dek {
+        font-size: 17px;
+        max-width: 770px;
+        color: #415360;
+        line-height: 1.95;
+        margin: 0;
+      }
+      .meta {
+        color: #697780;
+        font-size: 12px;
+        margin-top: 22px;
+      }
+      .toptools {
+        margin: 22px 0 0;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .toptools a,
+      .toptools button {
+        font-size: 12px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        color: var(--blue);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .layout {
+        max-width: 1232px;
+        padding: 0 28px 90px;
+        margin: auto;
+        display: grid;
+        grid-template-columns: 218px minmax(0, 1fr);
+        column-gap: 70px;
+        align-items: start;
+      }
+      .sidenav {
+        position: sticky;
+        top: 24px;
+        grid-column: 1;
+        grid-row: 1 / span 30;
+        align-self: start;
+        max-height: calc(100vh - 45px);
+        overflow: auto;
+        padding: 38px 0 20px;
+      }
+      .sidenav p {
+        font-size: 11px;
+        font-weight: 800;
+        color: #70808b;
+        letter-spacing: 0.13em;
+        margin: 0 0 17px;
+      }
+      .sidenav a {
+        display: block;
+        font-size: 12px;
+        line-height: 1.6;
+        padding: 8px 8px 8px 12px;
+        border-left: 2px solid transparent;
+        text-decoration: none;
+        color: #506472;
+        margin: 2px 0;
+      }
+      .sidenav a:hover,
+      .sidenav a.current {
+        color: var(--blue);
+        border-left-color: var(--blue);
+        background: #f6f9fa;
+      }
+      section {
+        grid-column: 2;
+        padding: 53px 0 48px;
+        border-bottom: 1px solid var(--line);
+        scroll-margin-top: 28px;
+        min-width: 0;
+      }
+      section:last-of-type {
+        border-bottom: 0;
+      }
+      .sectionlabel {
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--blue);
+        letter-spacing: 0.12em;
+      }
+      h2 {
+        font-size: clamp(23px, 2.7vw, 30px);
+        line-height: 1.55;
+        letter-spacing: -0.02em;
+        margin: 8px 0 22px;
+        font-weight: 750;
+      }
+      h3 {
+        font-size: 18px;
+        line-height: 1.65;
+        margin: 30px 0 11px;
+        font-weight: 750;
+      }
+      h4 {
+        font-size: 16px;
+      }
+      p {
+        margin: 12px 0;
+      }
+      .lede {
+        font-size: 19px;
+        line-height: 1.9;
+        font-weight: 500;
+        color: #253b4a;
+        max-width: 68ch;
+      }
+      .sectionintro {
+        font-size: 16px;
+        color: #3f505b;
+      }
+      .note,
+      small {
+        font-size: 12px;
+        line-height: 1.8;
+        color: var(--muted);
+      }
+      .refs {
+        font-size: 11px;
+        white-space: nowrap;
+        margin-left: 5px;
+      }
+      .refs a {
+        font-weight: 700;
+      }
+      .callout {
+        padding: 17px 21px;
+        border: 1px solid #d1dfe7;
+        border-left: 3px solid var(--blue);
+        background: #fbfcfd;
+        margin: 22px 0;
+      }
+      .callout strong {
+        font-weight: 700;
+      }
+      .callout p {
+        margin: 5px 0;
+      }
+      .callout.warn {
+        border-color: #eadfcc;
+        border-left-color: #9c7c40;
+        background: #fffdfa;
+      }
+      .callout.warn strong {
+        color: #815e29;
+      }
+      .callout p:last-child {
+        margin-bottom: 0;
+      }
+      .eyebrow {
+        font-size: 11px;
+        color: var(--blue);
+        font-weight: 800;
+        letter-spacing: 0.1em;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 23px 0;
+      }
+      .card {
+        padding: 21px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 5px;
+      }
+      .card span,
+      .card small {
+        display: block;
+      }
+      .card span {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .card b {
+        display: block;
+        font-weight: 760;
+        font-size: clamp(19px, 2.4vw, 29px);
+        line-height: 1.35;
+        margin: 10px 0 6px;
+        overflow-wrap: anywhere;
+      }
+      .card small {
+        font-size: 11px;
+      }
+      .tablewrap {
+        overflow-x: auto;
+        margin: 19px 0 25px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        line-height: 1.75;
+        background: white;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 13px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        background: #f6f8f9;
+        color: #344857;
+        font-weight: 700;
+        white-space: normal;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      td:first-child {
+        font-weight: 650;
+        color: #263d4b;
+        min-width: 116px;
+      }
+      td strong {
+        color: var(--blue);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .flow {
+        display: flex;
+        gap: 18px;
+        margin: 20px 0;
+      }
+      .flow > div {
+        flex: 1;
+        min-width: 0;
+        padding: 15px 12px;
+        border: 1px solid #d1dfe6;
+        background: #f9fbfc;
+        position: relative;
+        text-align: center;
+      }
+      .flow > div:not(:last-child):after {
+        content: "→";
+        position: absolute;
+        right: -15px;
+        top: calc(50% - 17px);
+        font-size: 19px;
+        color: #6a8291;
+      }
+      .flow b {
+        display: block;
+        font-size: 13px;
+      }
+      .flow span {
+        font-size: 11px;
+        color: var(--muted);
+        display: block;
+        line-height: 1.6;
+        margin-top: 5px;
+      }
+      .chart {
+        border: 1px solid var(--line);
+        margin: 20px 0;
+        padding: 20px;
+        border-radius: 5px;
+      }
+      figcaption {
+        font-weight: 700;
+        margin: 0 0 15px;
+      }
+      figcaption small {
+        font-weight: 400;
+        display: block;
+      }
+      .barrow {
+        display: grid;
+        grid-template-columns: 126px minmax(0, 1fr) 40px;
+        gap: 14px;
+        align-items: center;
+        margin: 12px 0;
+        font-size: 12px;
+      }
+      .barrow b {
+        text-align: right;
+      }
+      .track {
+        height: 15px;
+        background: #f1f3f5;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .track i {
+        height: 100%;
+        display: block;
+        background: #467b99;
+      }
+      .architecture {
+        border: 1px solid var(--line);
+        padding: 20px;
+        background: #fcfdfd;
+      }
+      .architecture .layer {
+        background: #fff;
+        border: 1px solid #d3dfe6;
+        text-align: center;
+        padding: 16px;
+      }
+      .architecture .layer b {
+        display: block;
+      }
+      .architecture .layer small {
+        display: block;
+      }
+      .architecture .down {
+        text-align: center;
+        font-size: 21px;
+        line-height: 1.6;
+        color: #56819d;
+      }
+      .architecture .branches {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .tag {
+        display: inline-block;
+        border: 1px solid #d9e2e6;
+        border-radius: 3px;
+        font-size: 11px;
+        padding: 1px 7px;
+        margin: 2px 4px 2px 0;
+        color: var(--muted);
+      }
+      .sources {
+        columns: 2;
+        column-gap: 20px;
+        font-size: 12px;
+      }
+      .sources p {
+        break-inside: avoid;
+      }
+      .sources b {
+        display: inline-block;
+        width: 26px;
+      }
+      .eq {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.7;
+        background: #f5f7f8;
+        padding: 13px 16px;
+        overflow-wrap: anywhere;
+      }
+      .band {
+        background: #f3f7f9;
+        border-left: 3px solid var(--blue);
+        padding: 13px 16px;
+        font-weight: 700;
+        margin-top: 20px;
+      }
+      details {
+        border-top: 1px solid var(--line);
+        padding: 14px 0;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 700;
+        color: #25465a;
+      }
+      ul,
+      ol {
+        padding-left: 23px;
+      }
+      li {
+        margin: 5px 0;
+      }
+      .hl {
+        font-weight: 720;
+        color: var(--blue2);
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+      .kpi {
+        font-size: 31px;
+        font-weight: 780;
+        letter-spacing: -0.03em;
+        line-height: 1.4;
+      }
+      .smallcaps {
+        font-size: 12px;
+        font-weight: 700;
+        color: #60717c;
+        letter-spacing: 0.05em;
+      }
+      .fig {
+        margin: 16px 0;
+        padding: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+      .fig svg {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: auto;
+      }
+      .year {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 3px;
+        margin: 15px 0;
+      }
+      .year span {
+        font-size: 11px;
+        padding: 9px 0;
+        line-height: 1.1;
+        text-align: center;
+        border: 1px solid #dce4e9;
+        border-radius: 2px;
+      }
+      .year .on {
+        background: #dbeaf3;
+        color: #164a69;
+      }
+      .year .off {
+        background: #f1f3f4;
+        color: #60717c;
+      }
+      .formula {
+        font:
+          13px/1.85 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        background: #f6f7f8;
+        padding: 15px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        border: 1px solid var(--line);
+      }
+      .status {
+        font-size: 12px;
+        border-bottom: 1px dotted #99aebc;
+        color: #4d697a;
+      }
+      .foot {
+        max-width: 1200px;
+        margin: auto;
+        padding: 25px 28px 50px;
+        color: #77838c;
+        font-size: 12px;
+        border-top: 1px solid var(--line);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin: 18px 0;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        flex: 1;
+        min-width: 150px;
+      }
+      .field label {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 650;
+      }
+      .field input,
+      .field select {
+        padding: 10px 12px;
+        border: 1px solid #ccd9e1;
+        border-radius: 4px;
+        color: var(--ink);
+        font: inherit;
+        font-size: 14px;
+        background: white;
+        min-width: 0;
+      }
+      .statrow {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 15px 0;
+      }
+      .statrow .stat {
+        background: #fafbfc;
+        border: 1px solid var(--line);
+        padding: 18px;
+      }
+      .stat strong {
+        font-size: 24px;
+        display: block;
+      }
+      .stat span {
+        color: var(--muted);
+        font-size: 11px;
+        display: block;
+      }
+      .checklist label {
+        display: block;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .checklist input {
+        margin-right: 8px;
+        accent-color: #295e7e;
+      }
+      @media (max-width: 990px) {
+        .layout {
+          grid-template-columns: 175px 1fr;
+          gap: 25px;
+        }
+        .sitehead {
+          padding: 43px 26px;
+        }
+        .sidenav a {
+          font-size: 11px;
+        }
+        .cards {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 760px) {
+        .sitehead {
+          padding: 35px 22px 30px;
+        }
+        .layout {
+          display: block;
+          padding: 0 18px 40px;
+        }
+        .sidenav {
+          position: relative;
+          max-height: none;
+          top: auto;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2px;
+          padding: 20px 0;
+          margin: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .sidenav p {
+          grid-column: 1 / -1;
+          margin: 0 0 5px;
+        }
+        .sidenav a {
+          padding: 6px 8px;
+          font-size: 11px;
+        }
+        section {
+          padding: 38px 0;
+        }
+        .cards,
+        .statrow {
+          grid-template-columns: 1fr 1fr;
+        }
+        .split {
+          grid-template-columns: 1fr;
+        }
+        .flow {
+          flex-direction: column;
+        }
+        .flow > div:not(:last-child):after {
+          content: "↓";
+          right: calc(50% - 7px);
+          top: auto;
+          bottom: -22px;
+        }
+        .architecture .branches {
+          grid-template-columns: 1fr;
+        }
+        .sources {
+          columns: 1;
+        }
+        .barrow {
+          grid-template-columns: 98px 1fr 35px;
+          gap: 8px;
+        }
+        .year span {
+          font-size: 9px;
+        }
+        .field {
+          min-width: 130px;
+        }
+      }
+      @media (max-width: 480px) {
+        .cards,
+        .statrow {
+          grid-template-columns: 1fr;
+        }
+        .h1 {
+          font-size: 29px;
+        }
+        .sidenav {
+          grid-template-columns: 1fr 1fr;
+          gap: 1px;
+        }
+        .year {
+          gap: 2px;
+        }
+        .year span {
+          padding: 9px 0;
+          font-size: 8px;
+        }
+      }
+      @media print {
+        @page {
+          size: A4;
+          margin: 15mm;
+        }
+        body {
+          font-size: 10pt;
+          line-height: 1.65;
+        }
+        .sitehead {
+          padding: 0 0 15mm;
+          background: #fff;
+        }
+        .layout {
+          display: block;
+          padding: 0;
+        }
+        .sidenav,
+        .toptools {
+          display: none;
+        }
+        .h1 {
+          font-size: 29pt;
+        }
+        section {
+          padding: 8mm 0 10mm;
+          break-before: page;
+        }
+        h2 {
+          font-size: 19pt;
+        }
+        h3 {
+          font-size: 13pt;
+          break-after: avoid;
+        }
+        .tablewrap {
+          overflow: visible;
+          border: 0;
+        }
+        table {
+          font-size: 8.5pt;
+        }
+        th,
+        td {
+          padding: 6px;
+        }
+        .callout,
+        .cards,
+        .fig,
+        .chart,
+        .flow,
+        .architecture,
+        .statrow,
+        tr {
+          break-inside: avoid;
+        }
+        a {
+          color: inherit;
+        }
+        .foot {
+          padding: 12mm 0;
+        }
+        .lede {
+          font-size: 13pt;
+        }
+        * {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+      }
+
+      /* v0.4 / improved discussion layout */
+      .stack-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .stack-unit {
+        padding: 15px 18px;
+        background: #f5f8fa;
+        border: 1px solid #d5e0e8;
+        border-radius: 8px;
+      }
+      .stack-unit strong {
+        display: block;
+        font-size: 15px;
+        color: #153c5d;
+      }
+      .stack-unit small {
+        font-size: 12px;
+        color: #647685;
+      }
+      .stage-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 16px 0;
+      }
+      .stage-line span {
+        border: 1px solid #b5cbd6;
+        border-radius: 999px;
+        padding: 5px 12px;
+        background: #fff;
+        font-size: 12px;
+      }
+      .good {
+        color: #176952;
+        font-weight: 700;
+      }
+      .todo {
+        color: #986420;
+        font-weight: 700;
+      }
+      .inline-note {
+        font-size: 13px;
+        border-left: 3px solid #c0d4e0;
+        padding: 9px 12px;
+        background: #f6f9fb;
+      }
+      .fig svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      @media (max-width: 680px) {
+        .stack-grid {
+          grid-template-columns: 1fr;
+        }
+        .stage-line {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+    <style>
+      /* MF99 Notion knowledge appendix */
+      .evidence-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin: 22px 0;
+      }
+      .evidence-card {
+        border: 1px solid #d8e4e9;
+        background: #fff;
+        padding: 18px 20px;
+        border-radius: 10px;
+        min-width: 0;
+      }
+      .evidence-card strong {
+        display: block;
+        font-size: 16px;
+        line-height: 1.55;
+        color: #163d55;
+      }
+      .evidence-card p {
+        font-size: 13px;
+        margin: 10px 0;
+        line-height: 1.8;
+      }
+      .evidence-card .proof {
+        font-size: 12px;
+        color: #516b7a;
+        border-top: 1px solid #e6edf0;
+        padding-top: 10px;
+      }
+      .sourceflag {
+        font-size: 10px;
+        font-weight: 700;
+        color: #40627c;
+        letter-spacing: 0.06em;
+        display: block;
+        margin-bottom: 8px;
+      }
+      .evidence-card a {
+        overflow-wrap: anywhere;
+      }
+      .knowledge-lede {
+        border-left: 4px solid #306e91;
+        background: #f2f7f9;
+        padding: 18px 22px;
+        margin: 20px 0;
+      }
+      .highlight-table td:first-child {
+        white-space: nowrap;
+        font-weight: 700;
+      }
+      .priority-mark {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 20px;
+        background: #e6f2ed;
+        color: #17624b;
+        font-size: 11px;
+      }
+      @media (max-width: 750px) {
+        .evidence-grid {
+          grid-template-columns: 1fr;
+        }
+        .highlight-table td:first-child {
+          white-space: normal;
+        }
+      }
+      @media print {
+        .evidence-card {
+          break-inside: avoid;
+        }
+      }
+    </style>
+    <meta
+      content="MF100校正システムの技術検討資料。MF99校正振り返り、75期レビュー、0版、notation、Nogiku、UniQと運用教訓を統合。"
+      name="description"
+    />
+  </head>
+  <body>
+    <header class="sitehead">
+      <div class="brand">
+        <span class="brandmark">MF</span><span>MF100 / PROOFREADING SYSTEM / 03 / DISCUSSION</span>
+      </div>
+      <h1 class="h1">MF100 校正システム｜技術検討ブリーフ</h1>
+      <p class="dek">
+        技術スタック確定案とUniQの既存実績をもとに、エンジニアと実装・運用の論点を確認するための資料。
+      </p>
+      <div class="meta">2026年10月8日 / v0.4 / 構成確定案・既存実績・残論点を分けて記載</div>
+      <div class="toptools">
+        <button onclick="window.print()">印刷・PDF保存</button
+        ><a href="MF100_02_技術運用コスト_改訂版.html">関連する資料を読む →</a>
+      </div>
+    </header>
+    <main class="layout">
+      <nav aria-label="目次" class="sidenav">
+        <p>CONTENTS / 目次</p>
+        <a href="#exec">01 技術相談の要旨</a><a href="#domain">02 業務知識と確定条件</a
+        ><a href="#asis">03 現状の業務と改善要求</a><a href="#scope">04 内製範囲・再利用</a
+        ><a href="#architecture">05 採用技術とUniQ連携</a
+        ><a href="#model">06 最小限のデータモデル</a><a href="#cost">07 運用費とセルフホスト比較</a
+        ><a href="#risk">08 実証済み・未検証</a><a href="#mf-knowledge">09 MF Notionの横断調査</a
+        ><a href="#scope_est">10 開発工数と段階分け</a><a href="#questions">11 友人との4つの判断</a
+        ><a href="#refs">12 根拠・参照資料</a>
+      </nav>
+      <section id="exec">
+        <div class="sectionlabel">01 / DECISION</div>
+        <h2>技術相談の要旨</h2>
+        <p class="lede">
+          委員会の既存実績を使い、<strong>新しい校正業務だけを実装する</strong>。技術スタックは
+          React 19 + Vite + TanStack Router + Material 3 Expressive + Convex + Hono + R2 + Nogiku。
+        </p>
+        <div class="cards">
+          <div class="card">
+            <span>MF99 / 既存データ</span><b>572件</b><small>有効制作物・テスト除外後</small>
+          </div>
+          <div class="card">
+            <span>MF100 / 負荷仮定</span><b>17.2万件</b
+            ><small>572制作物 × 6版 × 5人 × 10指摘</small>
+          </div>
+          <div class="card">
+            <span>業務期間</span><b>7か月</b><small>11月〜5月。6〜10月はほぼ利用なし</small>
+          </div>
+        </div>
+        <aside class="callout">
+          <strong>重要な既存実績：MF99「UniQ」</strong>
+          <p>
+            ユーザー確認済み：NogikuとConvexの連携はUniQで実証済み。さらにUniQにはConvexセルフホストの手順と運用実績がある。<strong>接続できるかをゼロから調べるのではなく、既存実装をどう移植・共通化するか</strong>が検討対象。
+          </p>
+        </aside>
+        <p>
+          最初は<strong>Web / PWA</strong
+          >として提供する。デスクトップ専用ビルド（Tauri）は、OS連携が本当に必要と分かってから追加。開発と運用では<strong
+            >Convex Starter + R2</strong
+          >を費用面の基準案とし、既存Convexセルフホスト環境の再利用も同格の比較対象に置く。
+        </p>
+        <p class="inline-note">
+          認証の実証済みという事実と、UniQのコードがそのままコピー可能という判断は別。Issuer設定、使用クレーム、ユーザー同期、権限失効時の動作、セルフホスト／Cloudでの差はコードを確認して決める。
+        </p>
+      </section>
+      <section id="domain">
+        <div class="sectionlabel">02</div>
+        <h2>業務知識と確定条件</h2>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>概念</th>
+                <th>実際の意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>制作物（WorkItem）</td>
+                <td>広報文・ポスター・パンフ・UI・動画などの最終成果物。分類・担当・納期を持つ</td>
+              </tr>
+              <tr>
+                <td>版（Revision）</td>
+                <td>制作者が提出した内容の固定スナップショット。校正期限を持つ</td>
+              </tr>
+              <tr>
+                <td>指摘（Issue）</td>
+                <td>版をまたいでも同一の論点。コメントと対応状況、元本文を保持する</td>
+              </tr>
+              <tr>
+                <td>校正受付終了</td>
+                <td>版ごとの期限経過で新規コメント受付終了。未解決指摘は消えない</td>
+              </tr>
+              <tr>
+                <td>担当の確認完了</td>
+                <td>代表者による確認の記録。期限による受付終了とは独立する</td>
+              </tr>
+              <tr>
+                <td>校了（FinalApproval）</td>
+                <td>
+                  権限を持つ一人が制作物全体の完成を宣言。未解決指摘があれば原則禁止、例外理由必須
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flow">
+          <div><b>制作・提出</b><span>版を固定し受付開始</span></div>
+          <div><b>校正期間</b><span>コメント・回答・担当確認</span></div>
+          <div><b>期限で閉じる</b><span>未解決は残す</span></div>
+          <div><b>次版／校了</b><span>改善または最終承認</span></div>
+        </div>
+        <p>
+          動画・Webは最初から内部注釈を実装しない。版、担当、リンク、期限、最終承認だけ取り込み、必要時に外部校正画面を開く。
+        </p>
+      </section>
+      <section id="asis">
+        <div class="sectionlabel">03</div>
+        <h2>現状の業務と改善要求</h2>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>業務</th>
+                <th>As-Is</th>
+                <th>To-Be</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>提出</td>
+                <td>Notion ID確認 → n8nフォーム → Drive → Slack</td>
+                <td>制作物画面で提出し版とファイルを紐づける</td>
+              </tr>
+              <tr>
+                <td>校正</td>
+                <td>複数チャンネルの通知、Drive等のコメント</td>
+                <td>自分の担当一覧、統一のコメント状態とフィルタ</td>
+              </tr>
+              <tr>
+                <td>版履歴</td>
+                <td>Notion / Drive / Slackで参照</td>
+                <td>対象制作物内の版一覧、全版共通の論点番号</td>
+              </tr>
+              <tr>
+                <td>文章</td>
+                <td>Docs等が混在</td>
+                <td>内部エディタ＋版固定＋表記統一チェック</td>
+              </tr>
+              <tr>
+                <td>動画・Web</td>
+                <td>frame.io / Figma / Slack等</td>
+                <td>外部ビューを残し、状態管理を統合</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          As-Isは提示されたMF99の現行運用・refine仕様書に基づく。全局で同一の手順が使われていると保証するものではない。
+        </p>
+      </section>
+      <section id="scope">
+        <div class="sectionlabel">04 / SCOPE</div>
+        <h2>内製範囲と既存資産の再利用</h2>
+        <div class="split">
+          <div>
+            <h3>MF100で実装する</h3>
+            <ul>
+              <li>制作物・版・受付期限・校了の状態管理、権限制御、監査記録</li>
+              <li>PDF.js等によるPDF・画像の注釈、コメントの担当・状態・優先度フィルター</li>
+              <li>Tiptap等の内部文章エディタ、版固定、既存の表記統一辞書によるチェック</li>
+              <li>未解決指摘の次版引継ぎ（LLMは提案、人が確認）</li>
+              <li>HonoによるR2提出開始・完了確認・外部Webhook等の薄いAPI</li>
+            </ul>
+          </div>
+          <div>
+            <h3>新規に作らない／再利用する</h3>
+            <ul>
+              <li><strong>Nogiku Auth</strong>のSSO。MF100独自のパスワード認証は作らない</li>
+              <li><strong>Nogiku Access</strong>の組織・グループ権限を可能な範囲で再利用</li>
+              <li><strong>UniQのConvex連携実装・自己運用ノウハウ</strong>を参照</li>
+              <li>動画フレーム注釈・Webブラウザ内校正エンジンは初期段階で作らない</li>
+              <li>独立したD1/Drizzleによる第二の業務DB、全面的な独自認証基盤は作らない</li>
+              <li>AIによる校了の自動実行、全コメントへの常時LLM呼出はしない</li>
+            </ul>
+          </div>
+        </div>
+        <p class="inline-note">
+          データの正本はConvex。Honoで同じCRUDを重複実装しない。校了権限はNogikuの組織権限と、制作物単位の担当指定・例外ルールを合わせて最終判定する。
+        </p>
+      </section>
+      <section id="architecture">
+        <div class="sectionlabel">05 / ARCHITECTURE</div>
+        <h2>採用する技術構成と認証の境界</h2>
+        <div class="stack-grid">
+          <div class="stack-unit">
+            <strong>React 19 + Vite + TanStack Router</strong
+            ><small
+              >SPA / PWA。UIは @m3e/react を検証。PDF.js・Tiptap・TanStack
+              Tableを画面別に導入</small
+            >
+          </div>
+          <div class="stack-unit">
+            <strong>Convex Starter（業務の正本）</strong
+            ><small
+              >WorkItem、Revision、Issue、権限判定、校了・監査イベント、リアルタイム購読</small
+            >
+          </div>
+          <div class="stack-unit">
+            <strong>Hono on Cloudflare Workers</strong
+            ><small>OIDCの必要な中継、R2署名URL、提出確定、Webhook。認証境界はUniQ実装を確認</small>
+          </div>
+          <div class="stack-unit">
+            <strong>Cloudflare R2 / Nogiku</strong
+            ><small>R2は原本・プレビュー。Nogiku AuthはSSO、Nogiku Accessは組織権限</small>
+          </div>
+        </div>
+        <figure class="fig">
+          <svg
+            aria-label="ReactフロントエンドがNogikuで認証し、Convexで業務情報を更新。HonoがR2のアップロード署名URLを発行する構成。"
+            role="img"
+            viewbox="0 0 920 460"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <marker id="arrMF" markerheight="8" markerwidth="8" orient="auto" refx="6" refy="3">
+                <path d="M0 0 L6 3 L0 6" fill="none" stroke="#496b7f" stroke-width="1.6"></path>
+              </marker>
+            </defs>
+            <g fill="#163648" font-family="sans-serif">
+              <rect
+                fill="#e5f0f5"
+                height="68"
+                rx="10"
+                stroke="#90afbe"
+                width="430"
+                x="245"
+                y="15"
+              ></rect>
+              <text font-size="18" font-weight="700" text-anchor="middle" x="460" y="39">
+                Web / PWA（React + Vite + M3E）
+              </text>
+              <text font-size="13" text-anchor="middle" x="460" y="62">
+                TanStack Router・PDF注釈・文章エディタ
+              </text>
+              <rect
+                fill="#fff"
+                height="92"
+                rx="9"
+                stroke="#8fadb9"
+                width="255"
+                x="15"
+                y="150"
+              ></rect>
+              <text font-size="18" font-weight="700" text-anchor="middle" x="142" y="177">
+                Nogiku Auth / Access
+              </text>
+              <text font-size="13" text-anchor="middle" x="142" y="200">OIDC SSO・組織権限</text>
+              <text font-size="12" text-anchor="middle" x="142" y="220">
+                UniQでConvexとの連携実績
+              </text>
+              <rect
+                fill="#fff"
+                height="92"
+                rx="9"
+                stroke="#8fadb9"
+                width="255"
+                x="330"
+                y="150"
+              ></rect>
+              <text font-size="19" font-weight="700" text-anchor="middle" x="457" y="178">
+                Convex
+              </text>
+              <text font-size="13" text-anchor="middle" x="457" y="200">
+                業務DB・コメント・校了
+              </text>
+              <text font-size="12" text-anchor="middle" x="457" y="220">
+                主案 Cloud Starter / 代替 Self-hosted
+              </text>
+              <rect
+                fill="#fff"
+                height="92"
+                rx="9"
+                stroke="#8fadb9"
+                width="255"
+                x="645"
+                y="150"
+              ></rect>
+              <text font-size="19" font-weight="700" text-anchor="middle" x="772" y="180">
+                Hono / Workers
+              </text>
+              <text font-size="13" text-anchor="middle" x="772" y="202">
+                ファイルAPI・認可・Webhook
+              </text>
+              <rect
+                fill="#f2f8fa"
+                height="91"
+                rx="9"
+                stroke="#8fadb9"
+                width="255"
+                x="645"
+                y="316"
+              ></rect>
+              <text font-size="19" font-weight="700" text-anchor="middle" x="772" y="345">
+                Cloudflare R2
+              </text>
+              <text font-size="13" text-anchor="middle" x="772" y="368">
+                PDF・画像・原本・プレビュー
+              </text>
+              <rect
+                fill="#f2f8fa"
+                height="91"
+                rx="9"
+                stroke="#8fadb9"
+                width="255"
+                x="330"
+                y="316"
+              ></rect>
+              <text font-size="17" font-weight="700" text-anchor="middle" x="457" y="344">
+                LLM（限定実行）
+              </text>
+              <text font-size="13" text-anchor="middle" x="457" y="367">
+                未解決指摘の次版対応候補
+              </text>
+              <path
+                d="M355 83 L155 146"
+                fill="none"
+                marker-end="url(#arrMF)"
+                stroke="#64879b"
+                stroke-width="2"
+              ></path>
+              <path
+                d="M460 83 L457 146"
+                fill="none"
+                marker-end="url(#arrMF)"
+                stroke="#64879b"
+                stroke-width="2"
+              ></path>
+              <path
+                d="M565 83 L772 146"
+                fill="none"
+                marker-end="url(#arrMF)"
+                stroke="#64879b"
+                stroke-width="2"
+              ></path>
+              <path
+                d="M772 242 L772 311"
+                fill="none"
+                marker-end="url(#arrMF)"
+                stroke="#64879b"
+                stroke-width="2"
+              ></path>
+              <path
+                d="M585 194 L640 194"
+                fill="none"
+                marker-end="url(#arrMF)"
+                stroke="#64879b"
+                stroke-width="2"
+              ></path>
+              <path
+                d="M457 242 L457 311"
+                fill="none"
+                marker-end="url(#arrMF)"
+                stroke="#64879b"
+                stroke-width="2"
+              ></path>
+              <text fill="#647886" font-size="11" text-anchor="middle" x="611" y="180">
+                検証・確定
+              </text>
+              <text fill="#647886" font-size="12" text-anchor="middle" x="794" y="291">
+                署名URL
+              </text>
+              <text fill="#576d7a" font-size="12" text-anchor="middle" x="460" y="444">
+                ブラウザからR2へ直接アップロード。Honoはファイル本体を経由しない。
+              </text>
+            </g>
+          </svg>
+          <figcaption class="note">
+            論理構成図。トークン交換やセッション構造はUniQの実装調査後に確定する。矢印は概念上の依存関係であり、すべての通信経路を表していない。
+          </figcaption>
+        </figure>
+        <div class="callout">
+          <strong>UniQの実績を設計インプットとして使う</strong>
+          <p>
+            MF99
+            UniQはConvexを使用し、委員会内に<strong>Convexセルフホスト手順、本番・sta運用の知見、ドメイン構成</strong>がある。NogikuとのSSO連携も実証済み（ユーザー確認）。このため、MF100は認証方式自体の探索ではなく、<strong>同じ認証連携パターンを流用できるか</strong>を確認する。
+          </p>
+        </div>
+        <h3>移植前にコードで確認する境界</h3>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>既存実績</th>
+                <th>MF100への適用時に確認すること</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="good">Nogiku × ConvexのSSO連携は実証済み</td>
+                <td>
+                  UniQのクライアント登録、issuer /
+                  audience、JWTクレーム、トークン更新、ログアウト、失効時動作。Cloud版・自己運用版の互換性
+                </td>
+              </tr>
+              <tr>
+                <td class="good">UniQのConvex自己運用手順が存在</td>
+                <td>
+                  監視、バックアップ、復元、アップグレード、共有基盤のリソース余力。UniQと同一インスタンスは前提としない
+                </td>
+              </tr>
+              <tr>
+                <td class="todo">MF100固有のアクセス権限は要実装</td>
+                <td>
+                  利用者のNogiku IDと制作物担当者の関係、校了権限、年度切替、権限剥奪時の再認可
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="inline-note">
+          Cloudを選んだ場合もUniQの認証連携から学べるが、UniQは自己運用の実績があるため、<strong
+            >同一設定でCloud Starterに移せるか</strong
+          >を確認する。新たなIdPやパスワードDBを立てる設計にはしない。
+        </p>
+      </section>
+      <section id="model">
+        <div class="sectionlabel">06</div>
+        <h2>最小限のデータモデル</h2>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>モデル</th>
+                <th>主なフィールド</th>
+                <th>不変条件</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>WorkItem</td>
+                <td>年度・制作物ID・担当・種別・期限・完成状態</td>
+                <td>承認済みなら通常の新規版は不可</td>
+              </tr>
+              <tr>
+                <td>Revision</td>
+                <td>workItemId・番号・提出者・submittedAt・reviewUntil</td>
+                <td>提出後の本文・ファイル参照は不変</td>
+              </tr>
+              <tr>
+                <td>Asset</td>
+                <td>revisionId・objectKey・mime・hash・preview</td>
+                <td>原本を改変せず派生プレビューを区別</td>
+              </tr>
+              <tr>
+                <td>ReviewWindow</td>
+                <td>revisionId・openAt・closeAt・extensionReason</td>
+                <td>サーバー時刻で受付可否判定</td>
+              </tr>
+              <tr>
+                <td>Issue</td>
+                <td>threadId・type・severity・assignee・status</td>
+                <td>版を越えて共通IDを保持</td>
+              </tr>
+              <tr>
+                <td>Occurrence</td>
+                <td>issueId・revisionId・assetId・anchor・confidence</td>
+                <td>AIで再配置しても元のコメントは不変</td>
+              </tr>
+              <tr>
+                <td>ApprovalEvent</td>
+                <td>actorId・revisionId・exceptions・reason・at</td>
+                <td>一人の権限者による宣言として監査</td>
+              </tr>
+              <tr>
+                <td>NotationRule</td>
+                <td>pattern・replacement・exceptions・version</td>
+                <td>非エンジニア業務責任者が承認</td>
+              </tr>
+              <tr>
+                <td>IdentityLink</td>
+                <td>nogikuSubject・localUserId・年度・roleSnapshotUpdatedAt</td>
+                <td>識別子の安定性と権限反映周期を定める。認証情報の正本はNogiku</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section id="cost">
+        <div class="sectionlabel">07</div>
+        <h2>運用費とセルフホスト比較</h2>
+        <p class="lede">
+          キャッシュや静的配信を利用し、使っていない月の固定席料金をゼロにする方向から検証する。
+        </p>
+        <p class="lede">
+          11月から5月までを運用期、6月から10月を低稼働期として、使わない期間の固定費を原則持たない。
+        </p>
+        <div aria-label="年間稼働カレンダー" class="year">
+          <span class="on">1月<br />繁忙</span><span class="on">2月<br />繁忙</span
+          ><span class="on">3月<br />繁忙</span><span class="on">4月<br />繁忙</span
+          ><span class="on">5月<br />繁忙</span><span class="off">6月<br />閑散</span
+          ><span class="off">7月<br />閑散</span><span class="off">8月<br />閑散</span
+          ><span class="off">9月<br />閑散</span><span class="off">10月<br />閑散</span
+          ><span class="on">11月<br />繁忙</span><span class="on">12月<br />繁忙</span>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>期間</th>
+                <th>利用者ができること</th>
+                <th>費用の考え方</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>11〜5月（7か月）</td>
+                <td>通常運用：提出・校正・校了・指摘引継ぎ</td>
+                <td>必要な呼出・転送・AI処理を使った分だけ負担</td>
+              </tr>
+              <tr>
+                <td>6〜10月（5か月）</td>
+                <td>原則は閲覧のみ。年度資料整理や例外的確認は管理者が対応</td>
+                <td>保存データと最小限の管理費。大きな一括処理は停止</td>
+              </tr>
+              <tr>
+                <td>通年</td>
+                <td>過去の校了版・監査記録を保持し、バックアップから復元可能</td>
+                <td>保管容量・バックアップの費用はゼロにならない</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="callout">
+          <strong>停止と削除は違う</strong>
+          <p>
+            低稼働期はアプリの機能を制限しても、制作物の正本と監査履歴は消さない。全機能停止が許容されるかは業務側が決める。
+          </p>
+        </aside>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>シナリオ</th>
+                <th>年額・税別（目安）</th>
+                <th>前提</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Starter＋R2 最小</td>
+                <td><strong>約6,120円</strong></td>
+                <td>200GB R2・DB3GB。Function・I/Oなど無料枠内、AI等別</td>
+              </tr>
+              <tr>
+                <td>Starter＋R2 処理が多い場合</td>
+                <td><strong>約18,700円</strong></td>
+                <td>繁忙7か月、月300万回Function・DB I/O30GB・egress10GB</td>
+              </tr>
+              <tr>
+                <td>Professional 3席を7か月</td>
+                <td><strong>席代78,750円＋R2等</strong></td>
+                <td>月単位変更できるか要確認。S256が必要な場合</td>
+              </tr>
+              <tr>
+                <td>UniQの運用ノウハウを利用したConvex自己運用</td>
+                <td>追加費用は実測待ち</td>
+                <td>
+                  MF99で実績あり。MF100は別インスタンス想定で、CPU/RAM・永続領域・バックアップ・復旧体制を見積もる
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          1USD=150円。公表料金に基づく計算、利用量・税込・監視・通知・認証等は未確定。実運用値の予測精度を保証しない。
+        </p>
+        <h3>計算条件を変える</h3>
+        <p class="note">
+          R2とStarterの料金感度だけの簡易計算機。プロフェッショナルや監視・認証・AIの費用は含みません。
+        </p>
+        <div class="controls">
+          <div class="field">
+            <label for="gb">R2使用量（GB）</label
+            ><input id="gb" min="0" step="10" type="number" value="200" />
+          </div>
+          <div class="field">
+            <label for="db">Convex DB・索引（GB）</label
+            ><input id="db" min="0" step=".5" type="number" value="3" />
+          </div>
+          <div class="field">
+            <label for="calls">繁忙月のFunction（100万回）</label
+            ><input id="calls" min="0" step=".5" type="number" value="3" />
+          </div>
+          <div class="field">
+            <label for="io">繁忙月のDB I/O（GB）</label
+            ><input id="io" min="0" type="number" value="30" />
+          </div>
+          <div class="field">
+            <label for="egress">繁忙月DB送信（GB）</label
+            ><input id="egress" min="0" type="number" value="10" />
+          </div>
+        </div>
+        <div class="statrow">
+          <div class="stat"><strong id="costUSD">$125</strong><span>年間従量費用 / USD</span></div>
+          <div class="stat">
+            <strong id="costJPY">18,700円</strong><span>年間従量費用 / JPY</span>
+          </div>
+          <div class="stat">
+            <strong id="costOFF">約3.4USD</strong><span>低稼働月の保存費</span>
+          </div>
+        </div>
+        <p class="inline-note">
+          <strong>費用への影響：</strong>Nogiku
+          SSOは既存基盤の再利用が前提なので、MF100専用の認証SaaS席代は原則計上しない。ただしNogiku側の追加運用負荷、認証連携の実装・監査・障害時対応はゼロにならない。UniQ自己運用を流用するときも、共通サーバーのリソース配分を計測する。
+        </p>
+        <div class="callout warn">
+          <strong>比較の注意</strong>
+          <p>
+            自己運用案を「クラウド料金0円」とは扱わない。容量・証明書・脆弱性対応・バックアップ・災害復旧・年度交代の時間を数える。サーバーを既に所有している場合は、その実測の追加費用で比較する。
+          </p>
+        </div>
+      </section>
+      <section id="risk">
+        <div class="sectionlabel">08 / RISKS</div>
+        <h2>実証済みのことと、MF100で検証すること</h2>
+        <p>
+          認証連携自体はUniQで実績があるため、ゼロからの技術PoCとして扱わない。MF100固有の権限と機能、そして配備環境差を検証する。
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>論点</th>
+                <th>検証方法</th>
+                <th>合否の観点</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>UniQ認証実装の再利用</strong></td>
+                <td>
+                  UniQのOIDC設定・Convex
+                  auth構成・権限連携箇所を調査。MF100の小さい画面でログイン・失効を再現
+                </td>
+                <td>既存コードの転用範囲、JWT検証と権限反映の確認</td>
+              </tr>
+              <tr>
+                <td><strong>Convex Cloud vs 自己運用</strong></td>
+                <td>同一スキーマ・同一データ負荷でStarterと自己運用を比較</td>
+                <td>p95・失敗率・年額実費・障害復旧と年度引継ぎ</td>
+              </tr>
+              <tr>
+                <td>PDF／画像の位置指定</td>
+                <td>回転、解像度、ズーム、ページ順を変えたときのコメント位置を確認</td>
+                <td>別端末でもアンカー位置を復元できる</td>
+              </tr>
+              <tr>
+                <td>文章の版固定</td>
+                <td>文章編集→提出→コメント→次版作成の一連の操作</td>
+                <td>過去版が変更されず、表記辞書のバージョンも再現可能</td>
+              </tr>
+              <tr>
+                <td>未解決指摘のAI引継ぎ</td>
+                <td>50件程度を人が評価し、原文と元位置を常に表示</td>
+                <td>誤配置率、見逃し率、人の確認所要時間</td>
+              </tr>
+              <tr>
+                <td>R2大容量提出</td>
+                <td>100MB超のPDF/編集元ファイルで再開可能なmultipart、権限失効テスト</td>
+                <td>中断後に復旧し、権限を持たない利用者はダウンロード不可</td>
+              </tr>
+              <tr>
+                <td>年度引継ぎと復旧</td>
+                <td>未経験の次年度担当者が別環境でDB・ファイルを復元</td>
+                <td>校了記録・コメント・権限が欠落しない</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section id="mf-knowledge">
+        <div class="sectionlabel">09 / ADDITIONAL FIELD EVIDENCE</div>
+        <h2>MFのNotionを横断して見つかった、設計に効く知見</h2>
+        <p class="lede">
+          過去3世代の校正システム、MF99の利用者アンケート、校了指針、表記統一ツール、システム局の引き継ぎを横断。ここに書く数値・失敗・運用例は資料に記載されたものであり、右側の「MF100への示唆」は設計提案である。
+        </p>
+        <div class="knowledge-lede">
+          <strong>最重要の発見</strong>
+          <p>
+            MF100で解決すべき中心課題は「校正をオンライン化すること」ではない。<b>正しい制作物に辿り着き、途切れず提出し、対面・オンラインの指摘を保全し、校了の責任を明示する</b>ことである。Notion化で得た検索性は残し、75期システムで評価された軽さ・提出の容易さを取り戻す。
+          </p>
+        </div>
+        <div class="evidence-grid">
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 01 / 75期フィードバック</span
+            ><strong>軽さと提出体験は旧システムの強みだった</strong>
+            <p>
+              75期の校正サイトは「軽い」「提出が楽」「過去版へ戻りやすい」と評価された。一方、重いAIファイルや多数ファイルの提出失敗、校了誤操作、コメント通知の不具合も報告された。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >最初のPoCは美しいトップページより<b>1版あたり複数ファイルの再開可能な提出・過去版表示・校了確認画面</b>で検証する。
+            </p>
+            <a href="https://app.notion.com/p/15b5cf3bfa7680f486ccf7550d5407ce"
+              >75期 校正システムのフィードバック</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 02 / 99期振り返り</span
+            ><strong>Notionの検索性は残す価値がある</strong>
+            <p>
+              制作物を「担当」「制作担当」「関連担当」から検索でき、関係DBから参照できた点は高評価。一方、DBのフィルタ操作は重く、手動ID入力や有効性チェックによる状態の曖昧さが残った。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >制作物と担当のリレーション、複数軸の検索、サジェスト、登録・承認の状態分離はMVPに含める。
+            </p>
+            <a href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+              >refine 振り返りmtg</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 03 / 21人アンケート</span
+            ><strong>通知を全削除するのは誤り</strong>
+            <p>
+              21人回答の資料で校正リマインド回数は「多い」10人、「適切」11人。一方、必要性の設問では「必要」19人・「不要」0人。通知量への不満と、通知自体の必要性は両立している。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >マイタスクを正本にし、<b>未対応の人・期限が近い仕事・重要な状態変化</b>にだけ通知する。担当ごとの頻度設定も検討。
+            </p>
+            <a href="https://app.notion.com/p/2ff5cf3bfa76810c8395e4e8052324fa"
+              >校正システムアンケート（21人）</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 04 / 導入事故</span
+            ><strong>導入の遅れが二重運用を招いた</strong>
+            <p>
+              refineは2月下旬の運用開始になり、EVE合宿の制作物はSlackで版更新されてしまった。振り返りでは開発途中のユーザーフィードバック不足も反省として明示されている。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >繁忙期（11〜5月）の直前に、新制度すべてを一斉切り替えしない。PR/EVE/SPIで小規模パイロットを行い、既存運用との移行境界を合意する。
+            </p>
+            <a href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc"
+              >refine 振り返りmtg</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 05 / 正式な校了指針</span
+            ><strong>校了は単なる「コメントがゼロ」ではない</strong>
+            <p>
+              MF99の総論は校了を、目的達成と外部公開の適切さについて校了権限者が判断することと定義。媒体・制作担当・用途で権限者が異なり、制作者と校了権限者が同一となる一部ケースではPRs全員の合意という例外がある。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >校了は最終的に1名の操作で確定できる設計としつつ、<b>事前に要求する合議・例外承認・確認項目</b>を制作物ルールとして表現する。「登録外の文書・企画対応物」も移行前に分類する。
+            </p>
+            <a href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207"
+              >校正・校了指針 総論</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 06 / 文章校正</span
+            ><strong>「コメント未解決」は「未対応」と同義ではない</strong>
+            <p>
+              文章指針では、前版コメントを削除・解決済みにせず次版へ残す運用、反映しない指摘は理由をコメントする運用が示されている。指摘を次版にコピーするだけでは判断の状態が分からない。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              ><b>未反映・対応済み・見送り理由あり・次版で再確認</b
+              >を履歴上区別する。LLMの引継ぎは「コピー」ではなく、元指摘IDを持つ候補生成と人の確認にする。
+            </p>
+            <a href="https://app.notion.com/p/29c5cf3bfa7680e6b7b7fb06ebedc859"
+              >文章 校正・校了指針</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 07 / notation</span
+            ><strong>表記統一エンジンは既に委員会に存在</strong>
+            <p>
+              notationは誤表記を規則で検出して置換候補を出す。改善要望には正規表現の重複マッチ、正表記を再検出する問題、ルールのUI登録、PR/Admの用途別ルール切替などがある。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >表記チェックをLLMから作り直さず、<b>notationの辞書と正規表現をデータとして移行</b>する。版提出時のチェック結果とルール版を保存し、文脈の判断だけLLMへ。
+            </p>
+            <a href="https://app.notion.com/p/2ba5cf3bfa7680fa9b34d380da70ff13">notation 概要</a> ·
+            <a href="https://app.notion.com/p/28f5cf3bfa768083ade0f202938a7d21">改善要望</a>
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 08 / 0版制度</span
+            ><strong>ラフ・方向性確認は通常の校正と性質が違う</strong>
+            <p>
+              Web向けの「0版制度」では、Figmaや手書きラフを提出し、対面で方向性を検討することを推奨。初期段階で多案比較し、制作途中での大きな手戻りを避ける狙いがある。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >「0版/ラフ」と「1版以降」を分ける。最初は画像/PDF/外部Figmaリンクと議論ログだけで十分。画面に完成度や自動校了の期待を持ち込まない。
+            </p>
+            <a href="https://app.notion.com/p/2c95cf3bfa768069826fc72257cc307d">0版制度設計</a>
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 09 / MF99 SYS引き継ぎ</span
+            ><strong>セルフホストの安さと安全さは別物</strong>
+            <p>
+              システム局の引き継ぎではVPS保守負荷、監査ログ・バックアップの不足、アクセス権限の絞り込み、CI/CD、自動依存更新の重要性を挙げている。UniQにはConvexのセルフホスト運用実績がある。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b>Convex
+              Starterとの比較は月額料金だけでなく、<b>復元試験・担当2名以上・アクセス管理・監視・過年度データ削除規則</b>を含める。既存基盤に空きがあることは採用条件の一つにすぎない。
+            </p>
+            <a href="https://app.notion.com/p/3ef5cf3bfa76804bb15cf8a76f104a6b"
+              >システム局 引き継ぎ</a
+            >
+            ·
+            <a href="https://app.notion.com/p/3445cf3bfa7680588d34c6212370adbe"
+              >UniQ Convexセルフホスト</a
+            >
+          </div>
+          <div class="evidence-card">
+            <span class="sourceflag">FIELD INSIGHT 10 / 制度との緊張関係</span
+            ><strong>オンラインだけを正解としない</strong>
+            <p>
+              MF99の校正引き継ぎには、対面作業会を基本とし、その日の成果物を記録して次の作業までに追加校正する運用案がある。他方、遠隔で使いやすい個人別一覧も求められている。
+            </p>
+            <p class="proof">
+              <b>MF100への示唆：</b
+              >同じ制作物に「対面で合意した指摘」「画面上での注釈」「Slack議論への参照」を追加できる。<b>校正の現場を1つに強制せず、記録の正本だけを統合</b>する。
+            </p>
+            <a href="https://app.notion.com/p/3755cf3bfa7680a78933c300fc1f8c1e"
+              >校正システム引き継ぎ</a
+            >
+          </div>
+        </div>
+        <h3>要件に直結する、見落としやすい制度上の境界</h3>
+        <div class="tablewrap">
+          <table class="highlight-table">
+            <thead>
+              <tr>
+                <th>境界</th>
+                <th>取り扱い提案</th>
+                <th>根拠・留意点</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>制作物の登録と有効化</td>
+                <td>
+                  下書き登録と「対象に確定」を分け、誤ってチェックしても監査付きで修正可能にする
+                </td>
+                <td>
+                  有効性チェックで削除・未承認・進行中を区別しづらかった
+                  <a href="https://app.notion.com/p/36a5cf3bfa7680eb90f1e9399b173dfc">[source]</a>
+                </td>
+              </tr>
+              <tr>
+                <td>校正期間の終了</td>
+                <td>
+                  締切で新規指摘受付を終了。未解決コメントの履歴は永久の「未対応」表示にはせず、対応判断を別状態で保持
+                </td>
+                <td>
+                  現在の提案方針と文章指針の履歴保持を両立
+                  <a href="https://app.notion.com/p/29c5cf3bfa7680e6b7b7fb06ebedc859">[source]</a>
+                </td>
+              </tr>
+              <tr>
+                <td>完成宣言と承認規則</td>
+                <td>
+                  校了ボタンは責任ある単独操作。ただしルールに合議がある場合、必要な証跡がそろうまで警告・ブロック
+                </td>
+                <td>
+                  MF99には「制作者兼校了権者」の例外規則がある
+                  <a href="https://app.notion.com/p/2b95cf3bfa76805fbc4ae5ad3b853207">[source]</a>
+                </td>
+              </tr>
+              <tr>
+                <td>表記ルールの例外</td>
+                <td>誤表記でも広報文として意図的な場合は理由付きで無視できる</td>
+                <td>
+                  文章指針で意図的な逸脱のコメントが求められる
+                  <a href="https://app.notion.com/p/29c5cf3bfa7680e6b7b7fb06ebedc859">[source]</a>
+                </td>
+              </tr>
+              <tr>
+                <td>メディアごとの校正方法</td>
+                <td>
+                  文章・PDF・画像は内部機能。Figma・動画・Webは外部リンク＋レビュー期限・履歴から開始
+                </td>
+                <td>
+                  0版・Web校正はFigma上での対面議論も想定
+                  <a href="https://app.notion.com/p/2c95cf3bfa768069826fc72257cc307d">[source]</a>
+                </td>
+              </tr>
+              <tr>
+                <td>重いファイルと障害時</td>
+                <td>マルチパート・途中再開・サイズ明示・アップロード失敗後の退避経路を要求</td>
+                <td>
+                  75期・MF99の振り返りで提出失敗が反復
+                  <a href="https://app.notion.com/p/15b5cf3bfa7680f486ccf7550d5407ce">[source]</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>友人への相談で追加したい3つの質問</h3>
+        <div class="callout">
+          <p>
+            <b>Q5.</b> MF99の校了権限表のような「大ジャンル × 制作担当 × 個別例外」を、Nogiku
+            Accessと制作物DBのどちらで管理すべきか。
+          </p>
+          <p>
+            <b>Q6.</b>
+            notationの既存ルールを読み込む最短経路は何か。CSV/APIの再利用、正規表現の互換、ルール適用履歴はどこまで必要か。
+          </p>
+          <p>
+            <b>Q7.</b>
+            11月開始の繁忙期までに、どの担当・制作物を使ってパイロット運用を実施し、いつ旧フローへの新規登録を止めるべきか。
+          </p>
+        </div>
+        <p class="note">
+          調査範囲：主にMF99
+          Notion内のrefine、校正制度、校了指針、notation、UniQ、SYS引き継ぎ。過年度の運用上の意見には相互に異なる立場があり、すべてをMF100の確定要件として扱っていない。
+        </p>
+      </section>
+      <section id="scope_est">
+        <div class="sectionlabel">10</div>
+        <h2>開発工数と段階分け</h2>
+        <p>
+          開発時間の見積は工数上の仮定であり、採用技術や既存資産により大きく変動する。原本は共通開発・移行・試験420時間、初期機能180〜260時間、全体350〜600時間を例示していた。
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>段階</th>
+                <th>優先機能</th>
+                <th>工数への影響</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>PoC</td>
+                <td>認可、WorkItem、Revision、R2提出、PDF注釈</td>
+                <td>外部連携を増やさない。代表20件で検証</td>
+              </tr>
+              <tr>
+                <td>本運用</td>
+                <td>提出締切、校了、担当ダッシュボード、通知、監査、復元</td>
+                <td>運用品質の工数を削らない</td>
+              </tr>
+              <tr>
+                <td>文章</td>
+                <td>内部エディタ、版固定、表記統一辞書</td>
+                <td>共同編集を初期から求めるかで差が大きい</td>
+              </tr>
+              <tr>
+                <td>最適化</td>
+                <td>Jev分類、AI引継ぎ、媒体連携</td>
+                <td>誤判定評価・予算制御の工数を含む</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          見積はPoCで実際に使った時間を記録し再計算する。「開発者の趣味として面白い」と「年度内に保守できる」は別の基準で判断する。
+        </p>
+      </section>
+      <section id="questions">
+        <div class="sectionlabel">11 / DISCUSSION</div>
+        <h2>友人と確認したい4つの判断</h2>
+        <div class="checklist">
+          <label
+            ><input type="checkbox" />
+            <b>Q1.</b>
+            UniQのNogiku・Convexの実装はどこまで転用できるか。認証設定・ユーザーID・権限判定の共通化単位は？</label
+          >
+          <label
+            ><input type="checkbox" /> <b>Q2.</b> Convex
+            StarterとUniQ流の自己運用、<strong>委員会の保守体制込みでは</strong>どちらが最小コストか。ピーク100/500人時は？</label
+          >
+          <label
+            ><input type="checkbox" />
+            <b>Q3.</b>
+            PDF・画像注釈、内部文章エディタ、版間のAI引継ぎのうち、当日までに確実に完成させるMVPはどこまでか？</label
+          >
+          <label
+            ><input type="checkbox" />
+            <b>Q4.</b>
+            HonoによるR2ファイルAPIとConvexによる業務認可の境界をどう定義するか。誰がバックアップ・障害対応を担当するか？</label
+          >
+        </div>
+        <h3>その場で合意を残す欄</h3>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>議題</th>
+                <th>現時点の提案</th>
+                <th>担当／検証期限</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>フロントエンド</td>
+                <td>React 19 + Vite + TanStack Router + @m3e/react</td>
+                <td>相談時に決定</td>
+              </tr>
+              <tr>
+                <td>認証・権限</td>
+                <td>Nogiku Auth/Access＋UniQの連携実装参照、MF100の制作物単位権限は独自実装</td>
+                <td>UniQ担当者への確認</td>
+              </tr>
+              <tr>
+                <td>APIの境界</td>
+                <td>Hono＝R2／外部連携、Convex＝業務DB／トランザクション</td>
+                <td>相談時にレビュー</td>
+              </tr>
+              <tr>
+                <td>本番基盤</td>
+                <td>Convex Starter＋R2 と Convex自己運用＋R2を同じ負荷で比較</td>
+                <td>測定担当・日程を設定</td>
+              </tr>
+              <tr>
+                <td>最初のリリース</td>
+                <td>制作者の版提出、PDF／画像注釈、締切、校了、未解決コメント</td>
+                <td>工数再見積り</td>
+              </tr>
+              <tr>
+                <td>運用体制</td>
+                <td>バックアップと復元試験、最低2人で引継ぎ</td>
+                <td>担当者を設定</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="inline-note">
+          技術スタック全体を再選定する会議ではない。決定案を出発点に、既存資産の再利用と残る実装リスクだけを詰める。
+        </p>
+      </section>
+      <section id="refs">
+        <div class="sectionlabel">12</div>
+        <h2>根拠・参照資料</h2>
+        <p>
+          現行システムの業務モデル、件数、画像・PDF容量のサンプルは提示済みの
+          <a href="MF100_01_制度設計_改訂版.html">制度設計資料</a>・<a
+            href="MF100_02_技術運用コスト_改訂版.html"
+            >技術・運用資料</a
+          >を参照。主な参照元は以下の通り。
+        </p>
+        <ul>
+          <li>
+            <a href="https://app.notion.com/p/2d15cf3bfa768056a351c89ff384f3f6"
+              >MF99 UniQ（概要・リポジトリ）</a
+            >、<a href="https://github.com/UTokyo-Festival-Union/UniQ">UniQソースコード</a>、<a
+              href="https://app.notion.com/p/3445cf3bfa7680588d34c6212370adbe"
+              >Convexセルフホスト手順</a
+            >、<a href="https://app.notion.com/p/3265cf3bfa7680738e22d417060eb4fe"
+              >UniQ Convex開発メモ</a
+            >、<a href="https://app.notion.com/p/2ba5cf3bfa76806fb1a7fe146f82c3fb"
+              >Nogiku引き継ぎ資料</a
+            >
+          </li>
+          <li>
+            <a href="https://app.notion.com/p/2c15cf3bfa76806d84a5fd4ff9af9417">MF99 制作物DB</a
+            >、<a href="https://app.notion.com/p/2c15cf3bfa7680aa883ae8fa4f210de7">版DB</a>、<a
+              href="https://app.notion.com/p/3f25cf3bfa7680abb6fbc2b5b4855f03"
+              >要件定義の素 第2版</a
+            >
+          </li>
+          <li>
+            <a href="https://www.convex.dev/pricing">Convex Pricing</a>、<a
+              href="https://docs.convex.dev/production/state/limits"
+              >Convex Limits</a
+            >、<a href="https://docs.convex.dev/self-hosting">Convex Self Hosting</a>、<a
+              href="https://docs.convex.dev/production/pause-deployment"
+              >Pause deployment</a
+            >
+          </li>
+          <li>
+            <a href="https://developers.cloudflare.com/r2/pricing/">Cloudflare R2 Pricing</a>、<a
+              href="https://developers.cloudflare.com/workers/platform/pricing/"
+              >Cloudflare Workers Pricing</a
+            >
+          </li>
+        </ul>
+        <p class="note">
+          価格は2026年10月8日に確認。既存の572件の件数は原本の集計結果を再掲。AI分類モデルの選定と正確な課金はPoC段階で確定する。
+        </p>
+        <p class="note">
+          「Nogiku×Convex連携はUniQで実証済み」はユーザー提供の確定事実。取得したUniQ資料にはConvex採用とセルフホスト手順の記録があるが、認証トークンの詳細やMF100への移植互換性はソースコードレビュー前のため断定しない。
+        </p>
+      </section>
+    </main>
+    <footer class="foot">
+      MF100 /
+      校正システム再設計。現状のNotion・Drive・refine等に関する数値は提示された2026年10月8日作成資料を参照。将来の費用・工数は試算であり、実測値ではありません。
+    </footer>
+    <script>
+      const nav = document.querySelectorAll(".sidenav a");
+      const obs = new IntersectionObserver(
+        (es) => {
+          for (const e of es) {
+            if (e.isIntersecting) {
+              for (const a of nav) a.classList.toggle("current", a.hash === "#" + e.target.id);
+              break;
+            }
+          }
+        },
+        { rootMargin: "-10% 0px -70% 0px", threshold: 0 },
+      );
+      document.querySelectorAll("main section").forEach((s) => obs.observe(s));
+    </script>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const vals = () =>
+        ["gb", "db", "calls", "io", "egress"].map((id) => Math.max(0, Number($(id).value) || 0));
+      function calc() {
+        if (!$("gb")) return;
+        let [gb, db, calls, io, eg] = vals();
+        const storage = 12 * (Math.max(0, gb - 10) * 0.015 + Math.max(0, db - 0.5) * 0.22);
+        const busy =
+          7 *
+          (Math.max(0, calls - 1) * 2.2 + Math.max(0, io - 1) * 0.22 + Math.max(0, eg - 1) * 0.132);
+        const sum = storage + busy;
+        $("costUSD").textContent = "$" + sum.toFixed(2);
+        $("costJPY").textContent = Math.round(sum * 150).toLocaleString() + "円";
+        $("costOFF").textContent = "$" + (storage / 12).toFixed(2);
+      }
+      ["gb", "db", "calls", "io", "egress"].forEach((id) => $(id)?.addEventListener("input", calc));
+      calc();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,450 @@
+[
+  {
+    "id": "cloudflare-access",
+    "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/index.md",
+    "file": "sources/cloudflare-access.md",
+    "lines": 41,
+    "chars": 6129,
+    "sha256": "9cfc7cf8bd4a5c75b0c7fda5b8169be20967cf8143b312316325d82720221654"
+  },
+  {
+    "id": "cloudflare-ai",
+    "url": "https://developers.cloudflare.com/workers-ai/index.md",
+    "file": "sources/cloudflare-ai.md",
+    "lines": 128,
+    "chars": 6757,
+    "sha256": "7318d795429ca3a975970f9671b2247e9621510d01addf3143c9615f4f9ad499"
+  },
+  {
+    "id": "cloudflare-ai-gateway",
+    "url": "https://developers.cloudflare.com/ai-gateway/index.md",
+    "file": "sources/cloudflare-ai-gateway.md",
+    "lines": 106,
+    "chars": 5362,
+    "sha256": "ade95eded208496eb05d6013887befc89aa36053bdd677f71529b8ad69704382"
+  },
+  {
+    "id": "cloudflare-browser",
+    "url": "https://developers.cloudflare.com/browser-rendering/index.md",
+    "file": "sources/cloudflare-browser.md",
+    "lines": 96,
+    "chars": 4926,
+    "sha256": "3d3d8069c828a237fb7cf6ba4b057f4d03b73e639b2c2f527e6539fe3abd7970"
+  },
+  {
+    "id": "cloudflare-cache",
+    "url": "https://developers.cloudflare.com/workers/runtime-apis/cache/index.md",
+    "file": "sources/cloudflare-cache.md",
+    "lines": 212,
+    "chars": 12290,
+    "sha256": "aadd3ca0a797af579bf698f00cca4c2bb8f7c05634aaa097b2237b7c23911ca0"
+  },
+  {
+    "id": "cloudflare-containers",
+    "url": "https://developers.cloudflare.com/containers/index.md",
+    "file": "sources/cloudflare-containers.md",
+    "lines": 318,
+    "chars": 10467,
+    "sha256": "a1388e972ab11e86d57ac78ad79a7c7f4a7fa1958518365aa621efedee0e297d"
+  },
+  {
+    "id": "cloudflare-d1",
+    "url": "https://developers.cloudflare.com/d1/index.md",
+    "file": "sources/cloudflare-d1.md",
+    "lines": 106,
+    "chars": 5443,
+    "sha256": "9b79af806de66ce3d536717d3302f2367d597eefd42594a466504c4c8c40d448"
+  },
+  {
+    "id": "cloudflare-durable",
+    "url": "https://developers.cloudflare.com/durable-objects/index.md",
+    "file": "sources/cloudflare-durable.md",
+    "lines": 123,
+    "chars": 7232,
+    "sha256": "4ea20b4fbbd4027b13fdc7730cfb5b41f398d87084fd52dd6aa58c3e380ce621"
+  },
+  {
+    "id": "cloudflare-env",
+    "url": "https://developers.cloudflare.com/workers/wrangler/environments/index.md",
+    "file": "sources/cloudflare-env.md",
+    "lines": 423,
+    "chars": 15936,
+    "sha256": "48dc4d5c3c08c99a5da69267b2b45f2ffdc88b7128669c28b49083c5487ac345"
+  },
+  {
+    "id": "cloudflare-images",
+    "url": "https://developers.cloudflare.com/images/optimization/binding/index.md",
+    "file": "sources/cloudflare-images.md",
+    "lines": 309,
+    "chars": 14032,
+    "sha256": "8c6c664f6d05ab6c3aff3a37cf71117863d2e8a6e0616264a9135d08fbcefc01"
+  },
+  {
+    "id": "cloudflare-images-limits",
+    "url": "https://developers.cloudflare.com/images/get-started/limits/index.md",
+    "file": "sources/cloudflare-images-limits.md",
+    "lines": 137,
+    "chars": 7082,
+    "sha256": "7eae2be78b06604f9aa9b68965cc9095f9a32e24d6ea844d34b955be013ac957"
+  },
+  {
+    "id": "cloudflare-kv",
+    "url": "https://developers.cloudflare.com/kv/concepts/how-kv-works/index.md",
+    "file": "sources/cloudflare-kv.md",
+    "lines": 94,
+    "chars": 8205,
+    "sha256": "c364f0a06726cf732e7569f4b2886701a508867b026d6cb55c0343e4c203b518"
+  },
+  {
+    "id": "cloudflare-limits",
+    "url": "https://developers.cloudflare.com/workers/platform/limits/index.md",
+    "file": "sources/cloudflare-limits.md",
+    "lines": 459,
+    "chars": 27047,
+    "sha256": "574d5088a914872b338e03c727adf4ef4ef88a8f2a1bcc41bd3f7b200adfb25e"
+  },
+  {
+    "id": "cloudflare-media",
+    "url": "https://developers.cloudflare.com/stream/transform-videos/bindings/index.md",
+    "file": "sources/cloudflare-media.md",
+    "lines": 359,
+    "chars": 13949,
+    "sha256": "78313f4473274ba4224ac6a6a44143533ea47f1e3e66014ae04ef8dd213f04df"
+  },
+  {
+    "id": "cloudflare-observability",
+    "url": "https://developers.cloudflare.com/workers/observability/index.md",
+    "file": "sources/cloudflare-observability.md",
+    "lines": 102,
+    "chars": 6426,
+    "sha256": "9212b76c6877e03d2396a60d0f6c7aca387522d69e9dd59e67de72d419e716de"
+  },
+  {
+    "id": "cloudflare-queues",
+    "url": "https://developers.cloudflare.com/queues/reference/delivery-guarantees/index.md",
+    "file": "sources/cloudflare-queues.md",
+    "lines": 38,
+    "chars": 3882,
+    "sha256": "436231d56c4bee38c8ed1fb70dd1b546420362fba9743c3230497cbbfbda9a1c"
+  },
+  {
+    "id": "cloudflare-r2-events",
+    "url": "https://developers.cloudflare.com/r2/buckets/event-notifications/index.md",
+    "file": "sources/cloudflare-r2-events.md",
+    "lines": 132,
+    "chars": 8958,
+    "sha256": "a254caf36076e6252a79d2f78dc1092b6a0fa48507dbd5e311cc7dc706d95f29"
+  },
+  {
+    "id": "cloudflare-r2-lifecycle",
+    "url": "https://developers.cloudflare.com/r2/buckets/object-lifecycles/index.md",
+    "file": "sources/cloudflare-r2-lifecycle.md",
+    "lines": 242,
+    "chars": 9907,
+    "sha256": "e0db9e8577c5c6357599f6e7073c149c9978cc0780b87dda0815ac316d44e644"
+  },
+  {
+    "id": "cloudflare-r2-upload",
+    "url": "https://developers.cloudflare.com/r2/objects/upload-objects/index.md",
+    "file": "sources/cloudflare-r2-upload.md",
+    "lines": 967,
+    "chars": 30101,
+    "sha256": "7b1d2b59e4f586b0eba495d5015ecf956e91aaf6abaeba4ecdb9216bae666448"
+  },
+  {
+    "id": "cloudflare-rate-limit",
+    "url": "https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/index.md",
+    "file": "sources/cloudflare-rate-limit.md",
+    "lines": 311,
+    "chars": 14548,
+    "sha256": "3dc803126011c2d4a629189c5ef29fb3cd63998aeaf0e8fe3254a2c5188e1b97"
+  },
+  {
+    "id": "cloudflare-static",
+    "url": "https://developers.cloudflare.com/workers/static-assets/index.md",
+    "file": "sources/cloudflare-static.md",
+    "lines": 217,
+    "chars": 10081,
+    "sha256": "c7c1d88efdfc6cc9328cc92e84f65cb915d56dba24955fbe0fa5b1de9a4dae52"
+  },
+  {
+    "id": "cloudflare-stream",
+    "url": "https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream/index.md",
+    "file": "sources/cloudflare-stream.md",
+    "lines": 499,
+    "chars": 26406,
+    "sha256": "d09728089c9ff1972d1ebb09a7fc3248c02b6174d2451ed33e51744cd6038c10"
+  },
+  {
+    "id": "cloudflare-types",
+    "url": "https://developers.cloudflare.com/workers/languages/typescript/index.md",
+    "file": "sources/cloudflare-types.md",
+    "lines": 245,
+    "chars": 10913,
+    "sha256": "0f2ce6e08dad1fa7cc223a658cd960a1e4d146ff21aa9f50547ad0ff5d882c0a"
+  },
+  {
+    "id": "cloudflare-vectorize",
+    "url": "https://developers.cloudflare.com/vectorize/index.md",
+    "file": "sources/cloudflare-vectorize.md",
+    "lines": 98,
+    "chars": 5745,
+    "sha256": "cab0b7cb025c85eaa28282c2efd32b744d7a73651e51ccf22ea390a94ddbe283"
+  },
+  {
+    "id": "cloudflare-versions",
+    "url": "https://developers.cloudflare.com/workers/configuration/versions-and-deployments/rollbacks/index.md",
+    "file": "sources/cloudflare-versions.md",
+    "lines": 54,
+    "chars": 3144,
+    "sha256": "bf606a5b0d42b6735210560bcc1b6e7fa8180ce2d7bf3a342ad16cbd56fe8318"
+  },
+  {
+    "id": "cloudflare-vite",
+    "url": "https://developers.cloudflare.com/workers/vite-plugin/index.md",
+    "file": "sources/cloudflare-vite.md",
+    "lines": 64,
+    "chars": 5600,
+    "sha256": "9edaa3f0a2f10b38d46645f038df8022e41d8ac7545655eeba65599cccdca91e"
+  },
+  {
+    "id": "cloudflare-workflows",
+    "url": "https://developers.cloudflare.com/workflows/build/rules-of-workflows/index.md",
+    "file": "sources/cloudflare-workflows.md",
+    "lines": 1141,
+    "chars": 43005,
+    "sha256": "cbad48d87145c0268ee0a95967be9be8c900cb06fd1170eece4e7749364f442f"
+  },
+  {
+    "id": "convex-aggregate",
+    "url": "https://raw.githubusercontent.com/get-convex/aggregate/main/README.md",
+    "file": "sources/convex-aggregate.md",
+    "lines": 790,
+    "chars": 30912,
+    "sha256": "6096b876523e3ec2cf6e546dfacd68821e89818f7a66b3983d568087928725f7"
+  },
+  {
+    "id": "convex-backups",
+    "url": "https://docs.convex.dev/database/backup-restore.md",
+    "file": "sources/convex-backups.md",
+    "lines": 89,
+    "chars": 6579,
+    "sha256": "607041b2749083e39578cf5b23d1d123e11f33a2f0c4f88358dfe6764157113d"
+  },
+  {
+    "id": "convex-best-practices",
+    "url": "https://docs.convex.dev/understanding/best-practices.md",
+    "file": "sources/convex-best-practices.md",
+    "lines": 1549,
+    "chars": 38994,
+    "sha256": "6f44a1d09d2da8e3175b962370ea5e7f7d07cec006bbc537dd6ef2dbd0522fbf"
+  },
+  {
+    "id": "convex-components",
+    "url": "https://docs.convex.dev/components",
+    "file": "sources/convex-components.md",
+    "lines": 18,
+    "chars": 1357,
+    "sha256": "f9c85a9aab8a99e753b74e2ed4323b1a276f940ac71b93644d92cd3db1540c17"
+  },
+  {
+    "id": "convex-indexes",
+    "url": "https://docs.convex.dev/database/reading-data/indexes.md",
+    "file": "sources/convex-indexes.md",
+    "lines": 324,
+    "chars": 12868,
+    "sha256": "2470beee7b8b053927eb17d40663f9c20bac845c845ed2584eb5388124b1ac5d"
+  },
+  {
+    "id": "convex-migrations",
+    "url": "https://raw.githubusercontent.com/get-convex/migrations/main/README.md",
+    "file": "sources/convex-migrations.md",
+    "lines": 516,
+    "chars": 16190,
+    "sha256": "33cfb1337a5f83effe0b0484c91c895f9956b166d69bef632dda7f0bb79e684c"
+  },
+  {
+    "id": "convex-optimistic",
+    "url": "https://docs.convex.dev/client/react/optimistic-updates.md",
+    "file": "sources/convex-optimistic.md",
+    "lines": 174,
+    "chars": 5409,
+    "sha256": "ef656fb8259e059725a9d37fda861cdd3cdf92101ca0ea15dacf94706b9a93af"
+  },
+  {
+    "id": "convex-pagination",
+    "url": "https://docs.convex.dev/database/pagination.md",
+    "file": "sources/convex-pagination.md",
+    "lines": 329,
+    "chars": 9038,
+    "sha256": "7a8faed72f1cc6466b8c895434f4fe31a1e93e2f6053ac6ee83df4e9924709cb"
+  },
+  {
+    "id": "convex-presence",
+    "url": "https://raw.githubusercontent.com/get-convex/presence/main/README.md",
+    "file": "sources/convex-presence.md",
+    "lines": 147,
+    "chars": 4524,
+    "sha256": "9d1bf525f04856201988f4e20f0ae463ea0f0e1b8e3223c05dbe0f7a599e1eef"
+  },
+  {
+    "id": "convex-previews",
+    "url": "https://docs.convex.dev/production/multiple-deployments.md",
+    "file": "sources/convex-previews.md",
+    "lines": 164,
+    "chars": 10782,
+    "sha256": "b0da99ac45d96798ea32eb39fa721d8b34f0bf3e8bea166b32945dc0315f9b35"
+  },
+  {
+    "id": "convex-prosemirror",
+    "url": "https://raw.githubusercontent.com/get-convex/prosemirror-sync/main/README.md",
+    "file": "sources/convex-prosemirror.md",
+    "lines": 406,
+    "chars": 15593,
+    "sha256": "b131b6cd92e33bbb89f911c71f77039eac8ef095a0bdeee454f6ace724bd2743"
+  },
+  {
+    "id": "convex-rate-limiter",
+    "url": "https://raw.githubusercontent.com/get-convex/rate-limiter/main/README.md",
+    "file": "sources/convex-rate-limiter.md",
+    "lines": 419,
+    "chars": 14940,
+    "sha256": "3aff9898d4310d720073daca3226f16256a02901e5cfb7428c0897436d5ed648"
+  },
+  {
+    "id": "convex-scheduling",
+    "url": "https://docs.convex.dev/scheduling/scheduled-functions.md",
+    "file": "sources/convex-scheduling.md",
+    "lines": 210,
+    "chars": 8262,
+    "sha256": "12bf07c23a2906a7d899788e175dcb6d789406cbc19cf8545c6781dd32d0463e"
+  },
+  {
+    "id": "convex-search",
+    "url": "https://docs.convex.dev/search/text-search.md",
+    "file": "sources/convex-search.md",
+    "lines": 207,
+    "chars": 10026,
+    "sha256": "6d134889fd9acfbf1acd372e7d10bf3928fd3afe7ce46f168c8e255dc80029e9"
+  },
+  {
+    "id": "convex-vector",
+    "url": "https://docs.convex.dev/search/vector-search.md",
+    "file": "sources/convex-vector.md",
+    "lines": 421,
+    "chars": 14459,
+    "sha256": "73e19c50f1666f2a95718714e575246edd40e7c0a48aa1f64ff1d56549646d94"
+  },
+  {
+    "id": "convex-workflow",
+    "url": "https://raw.githubusercontent.com/get-convex/workflow/main/README.md",
+    "file": "sources/convex-workflow.md",
+    "lines": 864,
+    "chars": 29811,
+    "sha256": "4585a6a2973cec0a98b60504102c65623c9c65c98dbeffc0eb5fa5b1836205c6"
+  },
+  {
+    "id": "convex-workpool",
+    "url": "https://raw.githubusercontent.com/get-convex/workpool/main/README.md",
+    "file": "sources/convex-workpool.md",
+    "lines": 519,
+    "chars": 19632,
+    "sha256": "0b691fb9ee9242d13eff1184765649016a752261e4555ad8ae986f15db39aa0f"
+  },
+  {
+    "id": "vite-build",
+    "url": "https://viteplus.dev/guide/build.md",
+    "file": "sources/vite-build.md",
+    "lines": 44,
+    "chars": 1380,
+    "sha256": "7868abb28bee82924b683b8fa50060c018e3ff26a3a140b0fe6fc914eca39a43"
+  },
+  {
+    "id": "vite-cache",
+    "url": "https://viteplus.dev/guide/cache.md",
+    "file": "sources/vite-cache.md",
+    "lines": 115,
+    "chars": 4918,
+    "sha256": "139e308b56210f073ac8cb7d3de6b8079c92cc541fc294f2491406309286caf0"
+  },
+  {
+    "id": "vite-check",
+    "url": "https://viteplus.dev/guide/check.md",
+    "file": "sources/vite-check.md",
+    "lines": 67,
+    "chars": 3153,
+    "sha256": "f40d0a211d725a0a46b60e6672b4f0826e76a82c1572ce658912a27380a52009"
+  },
+  {
+    "id": "vite-ci",
+    "url": "https://viteplus.dev/guide/ci.md",
+    "file": "sources/vite-ci.md",
+    "lines": 160,
+    "chars": 5819,
+    "sha256": "8a1798826359428b394aee68264e77bbb60746e342f9a8a2182434d3aa6a64d9"
+  },
+  {
+    "id": "vite-ci-cache",
+    "url": "https://viteplus.dev/guide/github-actions-cache.md",
+    "file": "sources/vite-ci-cache.md",
+    "lines": 171,
+    "chars": 7555,
+    "sha256": "a796bdedf311887e80b9d1cbe30b58296942cf8212df620ced468ec047b0d603"
+  },
+  {
+    "id": "vite-config",
+    "url": "https://viteplus.dev/config.md",
+    "file": "sources/vite-config.md",
+    "lines": 52,
+    "chars": 1826,
+    "sha256": "8a62f0c92b99cac4882f4d579accd13877c3fd891e63dc43fbdccb9d0ca8ca71"
+  },
+  {
+    "id": "vite-migrate",
+    "url": "https://viteplus.dev/guide/migrate-rules.md",
+    "file": "sources/vite-migrate.md",
+    "lines": 310,
+    "chars": 28501,
+    "sha256": "3fb41d9f16ba34036618b44cd940e16dd1837263c4cdeaf7a45d892cfec49e28"
+  },
+  {
+    "id": "vite-pack",
+    "url": "https://viteplus.dev/guide/pack.md",
+    "file": "sources/vite-pack.md",
+    "lines": 73,
+    "chars": 2812,
+    "sha256": "02c5a3104005f8a3789965e82d41dd7cc215f50160511661b441e97e466bd3a1"
+  },
+  {
+    "id": "vite-run",
+    "url": "https://viteplus.dev/guide/run.md",
+    "file": "sources/vite-run.md",
+    "lines": 379,
+    "chars": 10832,
+    "sha256": "91e606452f9c0f5c7cfc00ab79539a791b5801bbd940db0f93db6d47798360ab"
+  },
+  {
+    "id": "vite-runtime",
+    "url": "https://viteplus.dev/guide/env.md",
+    "file": "sources/vite-runtime.md",
+    "lines": 331,
+    "chars": 19269,
+    "sha256": "3c222dfb51db56fba5b001ecc4e109a49ce7a98714d22c30984191da9e1bbc1e"
+  },
+  {
+    "id": "vite-staged",
+    "url": "https://viteplus.dev/guide/commit-hooks.md",
+    "file": "sources/vite-staged.md",
+    "lines": 190,
+    "chars": 8742,
+    "sha256": "f61cc849b0aa51aac02bdda1f20adec25c98d4aa631874915d2902b41c478fe0"
+  },
+  {
+    "id": "vite-test",
+    "url": "https://viteplus.dev/guide/test.md",
+    "file": "sources/vite-test.md",
+    "lines": 55,
+    "chars": 1959,
+    "sha256": "93d3fbadf287d1d55e3556477021a1809f3ea08624be66aa020a564994fc1d3c"
+  }
+]

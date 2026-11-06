@@ -1,0 +1,679 @@
+import type {
+  ApprovalConfirmation,
+  ApprovalEvent,
+  Artifact,
+  CommentEvent,
+  CommentFile,
+  CommentThread,
+  DocumentDraft,
+  FeedbackFile,
+  FeedbackPost,
+  FeedbackThread,
+  NotationRule,
+  ProofreadingRun,
+  RequiredCheck,
+  ReviewAssignment,
+  Revision,
+  RuleCategory,
+  RuleCategoryManager,
+  RuleProposal,
+  RuleRevision,
+  SlackLink,
+  SlackWorkspace,
+  UploadAttempt,
+  UploadItem,
+  UploadSession,
+  Work,
+  WorkPermissionGrant,
+  SocialProfile,
+  Team,
+  MemberGroup,
+} from "@mf100/domain";
+import { focusRevisionIdOf, revisionHeadsOf, workSummaryOf } from "@mf100/domain";
+import type {
+  AlignmentOverride,
+  AppContext,
+  AuditEntry,
+  Notification,
+  NotificationDeliveryRecord,
+  NotificationPrefsRecord,
+  PushSubscriptionRecord,
+  WorkPin,
+} from "../ports.ts";
+import { principals } from "./principals.ts";
+
+/**
+ * インメモリのポート実装。ユースケースの単体テストと、将来の UI プロトタイプ用。
+ * Convex アダプタと同じ契約（ID 払い出しはリポジトリ側）を満たす。
+ */
+/** プレーンなデータのみを扱うため JSON ベースの深いコピーで十分（undefined のキーは落ちる）。 */
+function clone<T>(value: T): T {
+  return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
+}
+
+export class FakeClock {
+  constructor(public current: number) {}
+  now(): number {
+    return this.current;
+  }
+  advance(ms: number): void {
+    this.current += ms;
+  }
+}
+
+class Table<T extends { id: string }> {
+  private seq = 0;
+  readonly rows = new Map<string, T>();
+  constructor(private readonly prefix: string) {}
+  insert(data: Omit<T, "id">): T {
+    const id = `${this.prefix}_${++this.seq}`;
+    const row = { ...(data as object), id } as T;
+    this.rows.set(id, clone(row));
+    return clone(row);
+  }
+  get(id: string): T | null {
+    const r = this.rows.get(id);
+    return r ? clone(r) : null;
+  }
+  put(row: T): void {
+    if (!this.rows.has(row.id)) throw new Error(`row not found: ${row.id}`);
+    this.rows.set(row.id, clone(row));
+  }
+  all(): T[] {
+    return [...this.rows.values()].map((r) => clone(r));
+  }
+}
+
+export interface InMemoryContext extends AppContext {
+  clock: FakeClock;
+  state: {
+    works: Table<Work>;
+    revisions: Table<Revision>;
+    artifacts: Table<Artifact>;
+    sessions: Table<UploadSession>;
+    items: Table<UploadItem>;
+    threads: Table<CommentThread>;
+    events: CommentEvent[];
+    assignments: ReviewAssignment[];
+    grants: WorkPermissionGrant[];
+    approvals: ApprovalEvent[];
+    confirmations: Table<ApprovalConfirmation>;
+    checks: Table<RequiredCheck>;
+    notifications: Table<Notification>;
+    pushSubscriptions: Table<PushSubscriptionRecord>;
+    notificationPrefs: Map<string, NotificationPrefsRecord>;
+    /** `${notificationId}|${destination}` → 決着 */
+    deliveries: Map<string, NotificationDeliveryRecord>;
+    slackWorkspaces: Table<SlackWorkspace>;
+    /** `${teamId}|${小文字のメールアドレス}` → Slack のメンバー（無ければ unresolved） */
+    slackMembers: Map<string, Exclude<SlackLink, { state: "unresolved" }>>;
+    documents: Table<DocumentDraft>;
+    socialProfiles: Table<SocialProfile>;
+    teams: Table<Team>;
+    groups: Table<MemberGroup>;
+    alignments: Table<AlignmentOverride>;
+    categories: Map<string, RuleCategory>;
+    rules: Map<string, NotationRule>;
+    ruleRevisions: RuleRevision[];
+    managers: RuleCategoryManager[];
+    proposals: Table<RuleProposal>;
+    runs: Table<ProofreadingRun>;
+    pins: WorkPin[];
+    feedbackThreads: Table<FeedbackThread>;
+    feedbackPosts: Table<FeedbackPost>;
+    feedbackFiles: Table<FeedbackFile>;
+    commentFiles: Table<CommentFile>;
+    attempts: Table<UploadAttempt>;
+    /** `${userId}|${threadId}` → 最後に読んだ時刻 */
+    feedbackReads: Map<string, number>;
+    commentReads: Map<string, number>;
+    threadSubscriptions: { userId: string; threadId: string; subscribedAt: number }[];
+    audit: AuditEntry[];
+    idempotency: Map<string, unknown>;
+    /** 表示名（テストで通知の文面を確かめるときに入れる）。ここに居る人を委員（名簿）とみなす */
+    names: Map<string, string>;
+    /**
+     * 表示名の無い委員（実在する利用者）。既定で scenario の主体が入っている。
+     * profiles（存在確認）はここと names を見る。listMembers（名簿の一覧）は names だけ。
+     */
+    members: Set<string>;
+    /** 登録メールアドレス（profiles が返す。無い人は null） */
+    emails: Map<string, string>;
+  };
+}
+
+export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryContext {
+  const state: InMemoryContext["state"] = {
+    works: new Table<Work>("work"),
+    revisions: new Table<Revision>("rev"),
+    artifacts: new Table<Artifact>("art"),
+    sessions: new Table<UploadSession>("ses"),
+    items: new Table<UploadItem>("item"),
+    threads: new Table<CommentThread>("thr"),
+    events: [],
+    assignments: [],
+    grants: [],
+    approvals: [],
+    confirmations: new Table<ApprovalConfirmation>("cnf"),
+    checks: new Table<RequiredCheck>("chk"),
+    notifications: new Table<Notification>("ntf"),
+    pushSubscriptions: new Table<PushSubscriptionRecord>("push"),
+    notificationPrefs: new Map(),
+    deliveries: new Map(),
+    slackWorkspaces: new Table<SlackWorkspace>("sws"),
+    slackMembers: new Map(),
+    documents: new Table<DocumentDraft>("doc"),
+    socialProfiles: new Table<SocialProfile>("sp"),
+    teams: new Table<Team>("team"),
+    groups: new Table<MemberGroup>("grp"),
+    alignments: new Table<AlignmentOverride>("aln"),
+    categories: new Map(),
+    rules: new Map(),
+    ruleRevisions: [],
+    managers: [],
+    proposals: new Table<RuleProposal>("prp"),
+    runs: new Table<ProofreadingRun>("run"),
+    pins: [],
+    feedbackThreads: new Table<FeedbackThread>("fbt"),
+    feedbackPosts: new Table<FeedbackPost>("fbp"),
+    feedbackFiles: new Table<FeedbackFile>("fbf"),
+    commentFiles: new Table<CommentFile>("cf"),
+    attempts: new Table<UploadAttempt>("att"),
+    feedbackReads: new Map(),
+    commentReads: new Map(),
+    threadSubscriptions: [],
+    audit: [],
+    idempotency: new Map(),
+    names: new Map(),
+    members: new Set(Object.values(principals).map((p) => p.userId)),
+    emails: new Map(),
+  };
+  const clock = new FakeClock(now);
+  return {
+    clock,
+    state,
+    people: {
+      displayName: async (id) => state.names.get(id) ?? null,
+      listMembers: async (limit) =>
+        [...new Set([...state.members, ...state.names.keys()])]
+          .slice(0, limit)
+          .map((id) => ({ id, name: state.names.get(id) ?? "", email: null })),
+      profiles: async (ids) =>
+        [...new Set(ids)].flatMap((id) =>
+          state.names.has(id) || state.members.has(id)
+            ? [{ id, name: state.names.get(id) ?? "", email: state.emails.get(id) ?? null }]
+            : [],
+        ),
+    },
+    works: {
+      findById: async (id) => state.works.get(id),
+      insert: async (w) => state.works.insert(w),
+      update: async (w) => state.works.put(w),
+      list: async (limit) => state.works.all().slice(0, limit),
+    },
+    revisions: {
+      findById: async (id) => state.revisions.get(id),
+      listByWork: async (workId) => state.revisions.all().filter((r) => r.workId === workId),
+      insert: async (r) => state.revisions.insert(r),
+      update: async (r) => state.revisions.put(r),
+      listOpenExpired: async (t, limit) =>
+        state.revisions
+          .all()
+          .filter(
+            (r) => r.reviewState === "open" && r.deadlineAt !== undefined && r.deadlineAt <= t,
+          )
+          .slice(0, limit),
+      listOpenDueWithin: async ({ after, upTo }, { cursor, limit }) => {
+        const all = state.revisions
+          .all()
+          .filter(
+            (r) =>
+              r.reviewState === "open" &&
+              r.deadlineAt !== undefined &&
+              r.deadlineAt > after &&
+              r.deadlineAt <= upTo,
+          )
+          .sort((a, b) => a.deadlineAt - b.deadlineAt);
+        const start = cursor === null ? 0 : Number(cursor);
+        const end = start + limit;
+        return {
+          page: all.slice(start, end),
+          continueCursor: end < all.length ? String(end) : null,
+        };
+      },
+    },
+    artifacts: {
+      findById: async (id) => state.artifacts.get(id),
+      listByRevision: async (revisionId) =>
+        state.artifacts.all().filter((a) => a.revisionId === revisionId),
+      insert: async (a) => state.artifacts.insert(a),
+    },
+    uploads: {
+      findById: async (id) => state.sessions.get(id),
+      insert: async (s) => state.sessions.insert(s),
+      update: async (s) => state.sessions.put(s),
+      listItems: async (sessionId) => state.items.all().filter((i) => i.sessionId === sessionId),
+      findItem: async (id) => state.items.get(id),
+      insertItem: async (i) => state.items.insert(i),
+      updateItem: async (i) => state.items.put(i),
+      listOpenExpired: async (t, limit) =>
+        state.sessions
+          .all()
+          .filter((s) => s.state === "open" && s.expiresAt <= t)
+          .slice(0, limit),
+      listAbandonedUnpurged: async (limit) =>
+        state.sessions
+          .all()
+          .filter((s) => s.state === "abandoned" && s.purgedAt === undefined)
+          .slice(0, limit),
+    },
+    attempts: {
+      findById: async (id) => state.attempts.get(id),
+      insert: async (a) => state.attempts.insert(a),
+      update: async (a) => state.attempts.put(a),
+      listByTarget: async (target, targetId) =>
+        state.attempts.all().filter((a) => a.target === target && a.targetId === targetId),
+      listOrphanCandidates: async (reservedBefore, limit) =>
+        state.attempts
+          .all()
+          .filter(
+            (a) =>
+              a.purgedAt === undefined &&
+              (a.state === "discarded" ||
+                (a.state === "reserved" && a.createdAt <= reservedBefore)),
+          )
+          .slice(0, limit),
+    },
+    threads: {
+      findById: async (id) => state.threads.get(id),
+      findByMigratedFrom: async (feedbackThreadId) =>
+        state.threads.all().find((t) => t.migratedFromFeedbackThreadId === feedbackThreadId) ??
+        null,
+      listByRevision: async (revisionId) =>
+        state.threads.all().filter((t) => t.revisionId === revisionId && t.deletedAt === undefined),
+      insert: async (t) => state.threads.insert(t),
+      insertMany: async (ts) => {
+        const out = [];
+        for (const t of ts) out.push(await state.threads.insert(t));
+        return out;
+      },
+      update: async (t) => state.threads.put(t),
+      appendEvent: async (e) => {
+        const id = `evt-${state.events.length + 1}`;
+        state.events.push({ ...clone(e), id });
+        return id;
+      },
+      listEvents: async (threadId) =>
+        state.events.filter((e) => e.threadId === threadId).map((e) => clone(e)),
+      listLatestEvents: async (threadId, limit) =>
+        limit > 0
+          ? state.events
+              .filter((e) => e.threadId === threadId)
+              .slice(-limit)
+              .map((e) => clone(e))
+          : [],
+      setEventReactions: async (eventId, reactions) => {
+        const e = state.events.find((x) => x.id === eventId);
+        if (!e) return;
+        if (reactions.length > 0) e.reactions = clone(reactions);
+        else delete e.reactions;
+      },
+      setReplyBody: async (eventId, { body, bodyFormat }) => {
+        const e = state.events.find((x) => x.id === eventId);
+        if (!e) return;
+        const { bodyFormat: _previous, ...rest } = e.payload ?? {};
+        void _previous;
+        e.payload = { ...rest, body, ...(bodyFormat ? { bodyFormat } : {}) };
+      },
+      readAt: async (userId, threadId) => state.commentReads.get(`${userId}|${threadId}`) ?? null,
+      markRead: async (userId, threadId, at) => {
+        const key = `${userId}|${threadId}`;
+        state.commentReads.set(key, Math.max(at, state.commentReads.get(key) ?? 0));
+      },
+      readsOf: async (userId, threadIds) => {
+        const out = new Map<string, number>();
+        for (const id of threadIds) {
+          const at = state.commentReads.get(`${userId}|${id}`);
+          if (at !== undefined) out.set(id, at);
+        }
+        return out;
+      },
+      listSubscribers: async (threadId) =>
+        state.threadSubscriptions.filter((s) => s.threadId === threadId).map((s) => s.userId),
+      isSubscribed: async (userId, threadId) =>
+        state.threadSubscriptions.some((s) => s.userId === userId && s.threadId === threadId),
+      setSubscribed: async (userId, threadId, on, at) => {
+        const mine = (s: { userId: string; threadId: string }) =>
+          s.userId === userId && s.threadId === threadId;
+        if (!on) state.threadSubscriptions = state.threadSubscriptions.filter((s) => !mine(s));
+        else if (!state.threadSubscriptions.some(mine))
+          state.threadSubscriptions.push({ userId, threadId, subscribedAt: at });
+      },
+    },
+    assignments: {
+      listByRevision: async (revisionId) =>
+        state.assignments.filter((a) => a.revisionId === revisionId).map((a) => clone(a)),
+      find: async (revisionId, reviewerId) => {
+        const a = state.assignments.find(
+          (x) => x.revisionId === revisionId && x.reviewerId === reviewerId,
+        );
+        return a ? clone(a) : null;
+      },
+      upsert: async (a) => {
+        const i = state.assignments.findIndex(
+          (x) => x.revisionId === a.revisionId && x.reviewerId === a.reviewerId,
+        );
+        if (i >= 0) state.assignments[i] = clone(a);
+        else state.assignments.push(clone(a));
+      },
+      delete: async (revisionId, reviewerId) => {
+        const i = state.assignments.findIndex(
+          (x) => x.revisionId === revisionId && x.reviewerId === reviewerId,
+        );
+        if (i >= 0) state.assignments.splice(i, 1);
+      },
+    },
+    acl: {
+      listByWork: async (workId) =>
+        state.grants.filter((g) => g.workId === workId).map((g) => clone(g)),
+      listForPrincipal: async (p) =>
+        state.grants
+          .filter(
+            (g) =>
+              (g.principalType === "user" && g.principalId === p.userId) ||
+              (g.principalType === "group" && p.groupIds.includes(g.principalId)),
+          )
+          .map((g) => clone(g)),
+      insert: async (g) => {
+        state.grants.push(clone(g));
+      },
+      update: async (g) => {
+        // ID を持たないため (主体, 付与時刻, レベル) で同定し、複数一致時は有効なものを優先する
+        const matches = state.grants
+          .map((x, idx) => ({ x, idx }))
+          .filter(
+            ({ x }) =>
+              x.workId === g.workId &&
+              x.principalType === g.principalType &&
+              x.principalId === g.principalId &&
+              x.grantedAt === g.grantedAt &&
+              x.permission === g.permission,
+          );
+        const i = (matches.find(({ x }) => x.revokedAt === undefined) ?? matches[0])?.idx ?? -1;
+        if (i < 0) throw new Error("grant not found");
+        state.grants[i] = clone(g);
+      },
+    },
+    approvals: {
+      append: async (e) => {
+        state.approvals.push(clone(e));
+      },
+      listByWork: async (workId) =>
+        state.approvals.filter((e) => e.workId === workId).map((e) => clone(e)),
+      insertConfirmation: async (c) => state.confirmations.insert(c),
+      listConfirmationsByRevision: async (revisionId) =>
+        state.confirmations
+          .all()
+          .filter((c) => c.revisionId === revisionId)
+          .sort((a, b) => a.confirmedAt - b.confirmedAt),
+    },
+    audit: {
+      record: async (e) => {
+        state.audit.push(clone(e));
+      },
+    },
+    checks: {
+      findById: async (id) => state.checks.get(id),
+      listByRevision: async (revisionId) =>
+        state.checks.all().filter((c) => c.revisionId === revisionId),
+      insert: async (c) => state.checks.insert(c),
+      update: async (c) => state.checks.put(c),
+    },
+    pushSubscriptions: {
+      findById: async (id) => state.pushSubscriptions.get(id),
+      findByEndpoint: async (endpoint) =>
+        state.pushSubscriptions.all().find((s) => s.endpoint === endpoint) ?? null,
+      listByUser: async (userId) =>
+        state.pushSubscriptions.all().filter((s) => s.userId === userId),
+      insert: async (sub) => state.pushSubscriptions.insert(sub),
+      update: async (sub) => state.pushSubscriptions.put(sub),
+      delete: async (id) => {
+        state.pushSubscriptions.rows.delete(id);
+      },
+    },
+    notificationPrefs: {
+      find: async (userId) => clone(state.notificationPrefs.get(userId) ?? null),
+      save: async (prefs) => {
+        state.notificationPrefs.set(prefs.userId, clone(prefs));
+      },
+    },
+    deliveries: {
+      listSettled: async (notificationId) =>
+        [...state.deliveries.values()]
+          .filter((d) => d.notificationId === notificationId)
+          .map((d) => d.destination),
+      settle: async (row) => {
+        const key = `${row.notificationId}|${row.destination}`;
+        if (!state.deliveries.has(key)) state.deliveries.set(key, clone(row));
+      },
+    },
+    slackWorkspaces: {
+      list: async () =>
+        state.slackWorkspaces
+          .all()
+          .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+          .slice(0, 100),
+      findById: async (id) => state.slackWorkspaces.get(id),
+      findByTeamId: async (teamId) =>
+        state.slackWorkspaces.all().find((w) => w.teamId === teamId) ?? null,
+      insert: async (workspace) => state.slackWorkspaces.insert(workspace),
+      delete: async (id) => {
+        state.slackWorkspaces.rows.delete(id);
+      },
+    },
+    slackMembers: {
+      find: async (teamId, email) =>
+        clone(state.slackMembers.get(`${teamId}|${email}`)) ?? { state: "unresolved" },
+      save: async (teamId, email, link) => {
+        state.slackMembers.set(`${teamId}|${email}`, clone(link));
+      },
+    },
+    notifications: {
+      insert: async (n) => state.notifications.insert(n),
+      listForUser: async (userId, limit) =>
+        state.notifications
+          .all()
+          .filter((n) => n.recipientId === userId)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, limit),
+      listUnreadForUser: async (userId, { createdAtOrBefore, limit, order = "asc" }) =>
+        state.notifications
+          .all()
+          .filter(
+            (n) =>
+              n.recipientId === userId &&
+              n.readAt === undefined &&
+              (createdAtOrBefore === undefined || n.createdAt <= createdAtOrBefore),
+          )
+          .sort((a, b) => (order === "asc" ? a.createdAt - b.createdAt : b.createdAt - a.createdAt))
+          .slice(0, limit),
+      findById: async (id) => state.notifications.get(id),
+      update: async (n) => state.notifications.put(n),
+      countUnread: async (userId) =>
+        state.notifications.all().filter((n) => n.recipientId === userId && n.readAt === undefined)
+          .length,
+    },
+    documents: {
+      findByWork: async (workId) => state.documents.all().find((d) => d.workId === workId) ?? null,
+      insert: async (d) => state.documents.insert(d),
+      update: async (d) => state.documents.put(d),
+    },
+    socialProfiles: {
+      list: async () => state.socialProfiles.all(),
+      findById: async (id) => state.socialProfiles.get(id),
+      insert: async (p) => state.socialProfiles.insert(p),
+      update: async (p) => state.socialProfiles.put(p),
+      remove: async (id) => {
+        state.socialProfiles.rows.delete(id);
+      },
+      countWorksUsing: async (id) =>
+        state.works.all().filter((w) => w.socialProfileId === id).length,
+    },
+    teams: {
+      list: async () => state.teams.all(),
+      findById: async (id) => state.teams.get(id),
+      insert: async (t) => state.teams.insert(t),
+      update: async (t) => state.teams.put(t),
+      remove: async (id) => {
+        state.teams.rows.delete(id);
+      },
+      countWorksUsing: async (id) =>
+        state.works.all().filter((w) => w.ownerTeamId === id || w.productionTeamIds.includes(id))
+          .length,
+    },
+    groups: {
+      list: async () => state.groups.all(),
+      findById: async (id) => state.groups.get(id),
+      insert: async (g) => state.groups.insert(g),
+      update: async (g) => state.groups.put(g),
+      remove: async (id) => {
+        state.groups.rows.delete(id);
+      },
+    },
+    workSummaries: {
+      async findByWork(workId) {
+        const work = state.works.get(workId);
+        if (!work) return null;
+        const revisions = state.revisions.all().filter((r) => r.workId === workId);
+        const focus = focusRevisionIdOf(revisionHeadsOf(revisions));
+        return workSummaryOf({
+          work,
+          revisions,
+          focusThreads: state.threads
+            .all()
+            .filter((t) => t.revisionId === focus && t.deletedAt === undefined),
+          approvalEvents: state.approvals.filter((e) => e.workId === workId),
+        });
+      },
+    },
+    home: {
+      listPins: async (userId) =>
+        state.pins
+          .filter((p) => p.userId === userId)
+          .sort((a, b) => b.pinnedAt - a.pinnedAt)
+          .map(clone),
+      addPin: async (pin) => {
+        state.pins.push(clone(pin));
+      },
+      removePin: async (userId, workId) => {
+        state.pins = state.pins.filter((p) => !(p.userId === userId && p.workId === workId));
+      },
+      listPinners: async (workId) =>
+        state.pins.filter((p) => p.workId === workId).map((p) => p.userId),
+    },
+    alignments: {
+      find: async (l, r) =>
+        state.alignments.all().find((x) => x.leftArtifactId === l && x.rightArtifactId === r) ??
+        null,
+      insert: async (x) => state.alignments.insert(x),
+      update: async (x) => state.alignments.put(x),
+    },
+    notation: {
+      listCategories: async () => [...state.categories.values()].map(clone),
+      upsertCategory: async (c) => {
+        state.categories.set(c.code, clone(c));
+      },
+      listRules: async () => [...state.rules.values()].map(clone),
+      listRulesInCategories: async (codes) => {
+        const wanted = new Set(codes);
+        return [...state.rules.values()].filter((r) => wanted.has(r.categoryCode)).map(clone);
+      },
+      findRule: async (id) => (state.rules.has(id) ? clone(state.rules.get(id)!) : null),
+      insertRule: async (r) => {
+        state.rules.set(r.ruleId, clone(r));
+      },
+      updateRule: async (r) => {
+        state.rules.set(r.ruleId, clone(r));
+      },
+      appendRevision: async (r) => {
+        state.ruleRevisions.push(clone(r));
+      },
+      listRevisions: async (id) => state.ruleRevisions.filter((r) => r.ruleId === id).map(clone),
+      listManagers: async () => state.managers.map(clone),
+      addManager: async (m) => {
+        state.managers.push(clone(m));
+      },
+      removeManager: async (u, c) => {
+        state.managers = state.managers.filter((m) => !(m.userId === u && m.categoryCode === c));
+      },
+      findProposal: async (id) => state.proposals.get(id),
+      findOpenProposalByKey: async (k) =>
+        state.proposals.all().find((p) => p.status === "open" && p.dedupeKey === k) ?? null,
+      listProposals: async (status, limit) =>
+        state.proposals
+          .all()
+          .filter((p) => status === null || p.status === status)
+          .sort((a, b) => b.proposedAt - a.proposedAt)
+          .slice(0, limit),
+      insertProposal: async (p) => state.proposals.insert(p),
+      updateProposal: async (p) => state.proposals.put(p),
+    },
+    proofreadingRuns: {
+      findById: async (id) => state.runs.get(id),
+      findByRevision: async (rid) => state.runs.all().find((r) => r.revisionId === rid) ?? null,
+      insert: async (r) => state.runs.insert(r),
+      update: async (r) => state.runs.put(r),
+    },
+    feedback: {
+      pageThreads: async (cursor, limit) => {
+        const all = state.feedbackThreads.all();
+        const from = cursor ?? 0;
+        const threads = all.slice(from, from + limit);
+        return { threads, nextCursor: from + limit < all.length ? from + limit : null };
+      },
+      listPosts: async (threadId) =>
+        state.feedbackPosts
+          .all()
+          .filter((p) => p.threadId === threadId)
+          .sort((a, b) => a.createdAt - b.createdAt),
+      findFile: async (id) => state.feedbackFiles.get(id),
+      listReads: async (threadId) =>
+        [...state.feedbackReads.entries()].flatMap(([key, readAt]) => {
+          const [userId, tid] = key.split("|");
+          return tid === threadId && userId ? [{ userId, readAt }] : [];
+        }),
+    },
+    commentFiles: {
+      findFile: async (id) => state.commentFiles.get(id),
+      insertFile: async (f) => state.commentFiles.insert(f),
+      updateFile: async (f) => state.commentFiles.put(f),
+      listByThread: async (threadId) =>
+        state.commentFiles.all().filter((f) => f.threadId === threadId),
+      listUnattachedFilesBefore: async (before, limit) =>
+        state.commentFiles
+          .all()
+          .filter(
+            (f) => f.threadId === undefined && f.abandonedAt === undefined && f.createdAt <= before,
+          )
+          .slice(0, limit),
+      listReleasedUnpurgedFiles: async (limit) =>
+        state.commentFiles
+          .all()
+          .filter(
+            (f) =>
+              (f.abandonedAt !== undefined || f.removedAt !== undefined) &&
+              f.purgedAt === undefined,
+          )
+          .slice(0, limit),
+    },
+    idempotency: {
+      get: async (scope, key) =>
+        state.idempotency.has(`${scope}|${key}`)
+          ? { result: clone(state.idempotency.get(`${scope}|${key}`)) }
+          : null,
+      put: async (scope, key, result) => {
+        state.idempotency.set(`${scope}|${key}`, clone(result));
+      },
+    },
+  };
+}

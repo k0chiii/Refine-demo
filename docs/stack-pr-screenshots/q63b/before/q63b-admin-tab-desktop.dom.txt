@@ -1,0 +1,4 @@
+capturedAt=2026-10-31T17:41:22.676Z
+url=http://127.0.0.1:4516/admin?view=teams
+scene=q63b-admin-tab
+marker:担当=担当

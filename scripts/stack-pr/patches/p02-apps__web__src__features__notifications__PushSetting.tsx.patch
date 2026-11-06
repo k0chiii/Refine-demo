@@ -1,0 +1,14 @@
+---
+diff --git a/apps/web/src/features/notifications/PushSetting.tsx b/apps/web/src/features/notifications/PushSetting.tsx
+index 7732f5f..77886bc 100644
+--- a/apps/web/src/features/notifications/PushSetting.tsx
++++ b/apps/web/src/features/notifications/PushSetting.tsx
+@@ -28,7 +28,7 @@ export function PushSetting() {
+     push.support === "needs_install"
+       ? "iPhone・iPad は「ホーム画面に追加」したアプリで受け取れます"
+       : push.support === "denied"
+-        ? "端末の設定で通知が拒否されています（設定 › 通知 から変えられます）"
++        ? "端末の設定で通知がオフになっています"
+         : push.local
+           ? "デモ: この端末の中で起きた通知をバナーとアイコンの数字で知らせます"
+           : "アプリを閉じていても届きます";

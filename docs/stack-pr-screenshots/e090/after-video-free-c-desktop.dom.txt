@@ -1,0 +1,5 @@
+capturedAt=2026-10-31T09:45:00.000Z
+url=/works/x/v/1
+scene=e090-after-video-c
+marker:位置なし=位置なし
+marker:キャンセル=キャンセル
