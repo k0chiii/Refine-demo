@@ -1,5 +1,6 @@
 import { subscriptProps } from "./Field";
-import { useId, useMemo, useState } from "react";
+import { acceptImeDigits } from "./imeDigits";
+import { useCallback, useId, useMemo, useState } from "react";
 import {
   deadlineFromJst,
   deadlineToJst,
@@ -104,6 +105,11 @@ export function DateField({
   const timeValue = useMemo(() => toLocalTime(time), [time]);
   const minValue = useMemo(() => (minDate === null ? null : toLocalDate(minDate)), [minDate]);
   const maxValue = useMemo(() => (maxDate === null ? null : toLocalDate(maxDate)), [maxDate]);
+  // 日本語入力のまま打った数字も受け付ける（imeDigits.ts）。日付・時刻の欄それぞれに付ける
+  const imeRef = useCallback(
+    (el: HTMLElement | null) => (el ? acceptImeDigits(el) : undefined),
+    [],
+  );
   const emitDate = (e: Event) => {
     const date = fromLocalDate((e.target as unknown as { value: Date | null }).value);
     const nextTime =
@@ -135,6 +141,7 @@ export function DateField({
             {label}
           </label>
           <M3eDateInput
+            ref={imeRef}
             id={inputId}
             type="date"
             aria-labelledby={`${id}-label`}
@@ -174,6 +181,7 @@ export function DateField({
               時刻
             </label>
             <M3eDateInput
+              ref={imeRef}
               id={timeId}
               type="time"
               timeFormat="24"

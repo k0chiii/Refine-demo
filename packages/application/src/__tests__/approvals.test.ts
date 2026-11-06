@@ -85,6 +85,48 @@ describe("校了と再開（A-08, A-09, A-10）", () => {
     expect(event.action).toBe("finalized");
   });
 
+  // 利用者指示 2026-11-06: 校了者もコメントを閉じられる（解決のみ）
+  it("校了者は残ったコメントを解決で閉じて通常校了できる。反映しない・次の版で対応・差し戻しはできない", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx);
+    const rev = await submitRevision(ctx, work.id);
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.reviewer.userId],
+      permission: "review",
+    });
+    const t = await postComment(ctx, principals.reviewer, {
+      revisionId: rev.id,
+      body: "団体名が誤り",
+      kind: "correction",
+      severity: "critical",
+    });
+
+    for (const action of ["rejected", "deferred"] as const)
+      await expect(
+        decideThread(ctx, principals.approver, { threadId: t.id, action, reason: "x" }),
+      ).rejects.toThrow(code("forbidden"));
+    await expect(
+      decideThread(ctx, principals.reviewer, { threadId: t.id, action: "resolved" }),
+    ).rejects.toThrow(code("forbidden"));
+
+    const resolved = await decideThread(ctx, principals.approver, {
+      threadId: t.id,
+      action: "resolved",
+    });
+    expect(resolved.resolution).toBe("resolved");
+    // 解決済みからの差し戻し（反映する）は採否なので、校了者はできない
+    await expect(
+      decideThread(ctx, principals.approver, { threadId: t.id, action: "accepted" }),
+    ).rejects.toThrow(code("forbidden"));
+
+    const { event } = await finalizeWork(ctx, principals.approver, {
+      workId: work.id,
+      revisionId: rev.id,
+    });
+    expect(event.action).toBe("finalized");
+  });
+
   it("A-09: 校了後の版提出・指摘は拒否。理由付き再開で履歴は消えない", async () => {
     const ctx = createInMemoryContext();
     const work = await seedWork(ctx);

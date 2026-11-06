@@ -65,6 +65,7 @@ export function ThreadPanel({
   placeState,
   meId,
   canDecide,
+  canResolve = false,
   canReply,
   revisionId,
   pending,
@@ -91,6 +92,8 @@ export function ThreadPanel({
   placeState?: WebAnchorState | undefined;
   meId: string | null;
   canDecide: boolean;
+  /** 解決で閉じられる（採否は決められない校了者。「解決」のボタンだけを出す） */
+  canResolve?: boolean;
   canReply: boolean;
   revisionId: string;
   pending?: boolean;
@@ -176,6 +179,7 @@ export function ThreadPanel({
   const menuId = `tm-${t.id}`;
   const hasMenu = canDecide || t.can.edit || t.can.delete;
   const showDecide = canDecide && !closed && mode !== "rejected" && mode !== "deferred";
+  const showResolve = canResolve && !canDecide && !closed;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const doDelete = useAction(async () => {
     await onDelete();
@@ -415,6 +419,19 @@ export function ThreadPanel({
             canReact={canReply}
             onToggle={(emoji) => toggleReaction({ threadId: t.id as Id<"commentThreads">, emoji })}
           />
+          {showResolve ? (
+            <div className="thread__decide">
+              <M3eButton
+                variant="filled"
+                size="small"
+                disabled={pending === true}
+                onClick={() => void onResolve()}
+              >
+                <M3eIcon slot="icon" name="check" />
+                解決
+              </M3eButton>
+            </div>
+          ) : null}
           {showDecide ? (
             <div className="thread__decide" role="group" aria-label="反映するかどうか">
               <M3eButton

@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import { useEditorState } from "@tiptap/react";
-import { Fragment, type ReactNode } from "react";
+import { createContext, Fragment, useContext, type ReactNode } from "react";
 import { M3eButton } from "@m3e/react/button";
 import { M3eButtonGroup } from "@m3e/react/button-group";
 import { M3eDivider } from "@m3e/react/divider";
@@ -9,10 +9,14 @@ import { M3eIconButton } from "@m3e/react/icon-button";
 import { M3eMenu, M3eMenuItem, M3eMenuItemRadio, M3eMenuTrigger } from "@m3e/react/menu";
 import { M3eToolbar } from "@m3e/react/toolbar";
 import { M3eTooltip } from "@m3e/react/tooltip";
-import { highlightColors, paragraphStyles, textColors, type ParagraphStyleId } from "./extensions";
+import { ChoiceGroup } from "@/ui/ChoiceGroup";
+import { paragraphStyles, type ParagraphStyleId } from "./extensions";
 
 /** ツールバーの幅に応じて、末尾側のまとまりからその他メニューへ畳む（M3 Toolbars › Adaptive: 入らない操作は末尾のオーバーフローメニューへ） */
-export type ToolbarTier = "full" | "mid" | "narrow";
+export type ToolbarTier = "full" | "mid" | "narrow" | "tight";
+
+/** 文章エディタの見せ方: プレビュー（今の編集画面）／原文（Markdown を直接書く） */
+export type WriteMode = "preview" | "source";
 
 export interface ToolbarActions {
   openLink: () => void;
@@ -35,16 +39,12 @@ export function useFormatState(editor: Editor | null) {
           : e.isActive("heading", { level: 3 })
             ? "h3"
             : "p";
-      const align = (["center", "right", "justify"] as const).find((a) =>
-        e.isActive({ textAlign: a }),
-      );
       return {
         bold: e.isActive("bold"),
         italic: e.isActive("italic"),
         underline: e.isActive("underline"),
         strike: e.isActive("strike"),
-        superscript: e.isActive("superscript"),
-        subscript: e.isActive("subscript"),
+        highlight: e.isActive("highlight"),
         link: e.isActive("link"),
         quote: e.isActive("blockquote"),
         bullet: e.isActive("bulletList"),
@@ -52,9 +52,6 @@ export function useFormatState(editor: Editor | null) {
         task: e.isActive("taskList"),
         table: e.isActive("table"),
         style,
-        align: align ?? "left",
-        color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
-        highlight: (e.getAttributes("highlight").color as string | undefined) ?? null,
         canUndo: e.can().undo(),
         canRedo: e.can().redo(),
         canSink: e.can().sinkListItem("listItem") || e.can().sinkListItem("taskItem"),
@@ -65,13 +62,6 @@ export function useFormatState(editor: Editor | null) {
   });
 }
 export type FormatState = NonNullable<ReturnType<typeof useFormatState>>;
-
-const alignOptions = [
-  { id: "left", label: "左揃え", icon: "format_align_left", shortcut: "Ctrl+Shift+L" },
-  { id: "center", label: "中央揃え", icon: "format_align_center", shortcut: "Ctrl+Shift+E" },
-  { id: "right", label: "右揃え", icon: "format_align_right", shortcut: "Ctrl+Shift+R" },
-  { id: "justify", label: "両端揃え", icon: "format_align_justify", shortcut: "Ctrl+Shift+J" },
-] as const;
 
 /** 書式のコマンド。ツールバー・メニュー・compact のシートが同じものを使う */
 export function formatCommands(editor: Editor) {
@@ -89,12 +79,8 @@ export function formatCommands(editor: Editor) {
     italic: () => c().toggleItalic().run(),
     underline: () => c().toggleUnderline().run(),
     strike: () => c().toggleStrike().run(),
-    superscript: () => c().toggleSuperscript().run(),
-    subscript: () => c().toggleSubscript().run(),
-    color: (v: string | null) => (v ? c().setColor(v).run() : c().unsetColor().run()),
-    highlight: (v: string | null) =>
-      v ? c().setHighlight({ color: v }).run() : c().unsetHighlight().run(),
-    align: (a: "left" | "center" | "right" | "justify") => c().setTextAlign(a).run(),
+    // ハイライトは色なしの 1 種類（Markdown の ==…== で往復できる）
+    highlight: () => c().toggleHighlight().run(),
     bullet: () => c().toggleBulletList().run(),
     ordered: () => c().toggleOrderedList().run(),
     task: () => c().toggleTaskList().run(),
@@ -120,6 +106,9 @@ export function formatCommands(editor: Editor) {
   };
 }
 
+/** 原文のあいだ true。書式のボタンは消さずに無効にする（ツールバーの形が跳ねない） */
+const SourceModeContext = createContext(false);
+
 /** アイコンボタン＋プレーンツールチップ（M3 Icon buttons: ホバーで操作名を出す。ショートカットも添える） */
 function TB({
   id,
@@ -129,6 +118,7 @@ function TB({
   on,
   toggle,
   disabled,
+  always,
   onClick,
   children,
 }: {
@@ -139,9 +129,13 @@ function TB({
   on?: boolean;
   toggle?: boolean;
   disabled?: boolean;
+  /** 原文のあいだも押せる */
+  always?: boolean;
   onClick?: () => void;
   children?: ReactNode;
 }) {
+  const source = useContext(SourceModeContext);
+  if (source && !always) disabled = true;
   return (
     <>
       <M3eIconButton
@@ -163,14 +157,6 @@ function TB({
 
 const Sep = () => <span className="wtb__sep" aria-hidden="true" />;
 
-function Swatch({ color, none }: { color: string | null; none?: string }) {
-  return color ? (
-    <span slot="icon" className="swatch" style={{ background: color }} aria-hidden="true" />
-  ) : (
-    <M3eIcon slot="icon" name={none ?? "format_color_reset"} />
-  );
-}
-
 /**
  * 文章エディタのツールバー（Google ドキュメントの上部ツールバーに相当）。
  * M3: 浮遊ツールバー（standard・rounded）。トグルは連結ボタングループ、選択肢はメニュー、入らない操作は末尾のその他メニュー。
@@ -180,22 +166,26 @@ export function WriteToolbar({
   state: s,
   tier,
   actions,
+  mode,
+  onMode,
 }: {
   editor: Editor;
   state: FormatState;
   tier: ToolbarTier;
   actions: ToolbarActions;
+  mode: WriteMode;
+  onMode: (mode: WriteMode) => void;
 }) {
   const cmd = formatCommands(editor);
   const styleLabel = paragraphStyles.find((p) => p.id === s.style)?.label ?? "標準テキスト";
-  const alignNow = alignOptions.find((a) => a.id === s.align) ?? alignOptions[0];
-  const showColor = tier === "full";
-  const showLists = tier !== "narrow";
+  // 原文のあいだは書式のボタンを消さずに無効にする（ツールバーの形が跳ねない）
+  const off = mode === "source";
+  const showLists = tier === "full" || tier === "mid";
   const showIndent = tier === "full";
-  const showAlign = tier !== "narrow";
+  const tight = tier === "tight";
 
   return (
-    <>
+    <SourceModeContext.Provider value={off}>
       <M3eToolbar className="wtb" shape="rounded" aria-label="書式">
         <TB
           id="wt-undo"
@@ -219,6 +209,7 @@ export function WriteToolbar({
           variant="text"
           className="wtb__style"
           aria-label={`段落スタイル: ${styleLabel}`}
+          {...(off ? { disabled: true } : {})}
           onMouseDown={(e: { preventDefault: () => void }) => e.preventDefault()}
         >
           {styleLabel}
@@ -255,17 +246,18 @@ export function WriteToolbar({
             on={s.underline}
             onClick={cmd.underline}
           />
+          {tight ? null : (
+            <TB
+              id="wt-highlight"
+              label="ハイライト"
+              shortcut="Ctrl+Shift+H"
+              icon="ink_highlighter"
+              toggle
+              on={s.highlight}
+              onClick={cmd.highlight}
+            />
+          )}
         </M3eButtonGroup>
-        {showColor ? (
-          <>
-            <TB id="wt-color" label="文字の色" icon="format_color_text">
-              <M3eMenuTrigger htmlFor="wt-color-menu" />
-            </TB>
-            <TB id="wt-highlight" label="ハイライトの色" icon="ink_highlighter">
-              <M3eMenuTrigger htmlFor="wt-highlight-menu" />
-            </TB>
-          </>
-        ) : null}
         <Sep />
         <TB
           id="wt-link"
@@ -276,14 +268,6 @@ export function WriteToolbar({
           on={s.link}
           onClick={actions.openLink}
         />
-        {showAlign ? (
-          <>
-            <Sep />
-            <TB id="wt-align" label={`配置: ${alignNow.label}`} icon={alignNow.icon}>
-              <M3eMenuTrigger htmlFor="wt-align-menu" />
-            </TB>
-          </>
-        ) : null}
         {showLists ? (
           <M3eButtonGroup variant="connected" multi className="wtb__group" aria-label="リスト">
             <TB
@@ -336,7 +320,27 @@ export function WriteToolbar({
           </>
         ) : null}
         <Sep />
-        <TB id="wt-more" label="その他" icon="more_vert">
+        {tight ? null : (
+          <ChoiceGroup<WriteMode>
+            label="編集の見せ方"
+            value={mode}
+            onChange={onMode}
+            choices={[
+              {
+                value: "source",
+                label: tier === "full" ? "原文" : <span className="sr-only">原文</span>,
+                icon: "markdown",
+              },
+              {
+                value: "preview",
+                label: tier === "full" ? "プレビュー" : <span className="sr-only">プレビュー</span>,
+                icon: "visibility",
+              },
+            ]}
+            className="wtb__mode"
+          />
+        )}
+        <TB id="wt-more" label="その他" icon="more_vert" always>
           <M3eMenuTrigger htmlFor="wt-more-menu" />
         </TB>
       </M3eToolbar>
@@ -352,31 +356,6 @@ export function WriteToolbar({
           </M3eMenuItemRadio>
         ))}
       </M3eMenu>
-      <ColorMenu
-        id="wt-color-menu"
-        colors={textColors}
-        current={s.color}
-        onPick={cmd.color}
-        none="format_color_reset"
-      />
-      <ColorMenu
-        id="wt-highlight-menu"
-        colors={highlightColors}
-        current={s.highlight}
-        onPick={cmd.highlight}
-        none="block"
-      />
-      <M3eMenu id="wt-align-menu" className="wtb-menu">
-        {alignOptions.map((a) => (
-          <M3eMenuItemRadio key={a.id} checked={s.align === a.id} onClick={() => cmd.align(a.id)}>
-            <M3eIcon slot="icon" name={a.icon} />
-            {a.label}
-            <span slot="trailing-text" className="wtb-menu__kbd">
-              {a.shortcut}
-            </span>
-          </M3eMenuItemRadio>
-        ))}
-      </M3eMenu>
       <M3eMenu id="wt-more-menu" className="wtb-menu">
         <MoreItem
           icon="format_strikethrough"
@@ -385,41 +364,24 @@ export function WriteToolbar({
           on={s.strike}
           onClick={cmd.strike}
         />
-        <MoreItem
-          icon="superscript"
-          label="上付き文字"
-          kbd="Ctrl+."
-          on={s.superscript}
-          onClick={cmd.superscript}
-        />
-        <MoreItem
-          icon="subscript"
-          label="下付き文字"
-          kbd="Ctrl+,"
-          on={s.subscript}
-          onClick={cmd.subscript}
-        />
         <MoreItem icon="format_quote" label="引用" on={s.quote} onClick={cmd.quote} />
-        {!showColor ? (
+        {tight ? (
           <>
-            <M3eMenuItem>
-              <M3eIcon slot="icon" name="format_color_text" />
-              文字の色
-              <M3eMenuTrigger htmlFor="wt-color-menu" />
-            </M3eMenuItem>
-            <M3eMenuItem>
-              <M3eIcon slot="icon" name="ink_highlighter" />
-              ハイライトの色
-              <M3eMenuTrigger htmlFor="wt-highlight-menu" />
-            </M3eMenuItem>
+            <MoreItem
+              icon="ink_highlighter"
+              label="ハイライト"
+              kbd="Ctrl+Shift+H"
+              on={s.highlight}
+              onClick={cmd.highlight}
+            />
+            <MoreItem
+              icon="markdown"
+              label="原文（Markdown）で編集"
+              on={mode === "source"}
+              always
+              onClick={() => onMode(mode === "source" ? "preview" : "source")}
+            />
           </>
-        ) : null}
-        {!showAlign ? (
-          <M3eMenuItem>
-            <M3eIcon slot="icon" name={alignNow.icon} />
-            配置
-            <M3eMenuTrigger htmlFor="wt-align-menu" />
-          </M3eMenuItem>
         ) : null}
         {!showLists ? (
           <>
@@ -466,7 +428,7 @@ export function WriteToolbar({
         ) : null}
         <M3eDivider />
         <MoreItem icon="table" label="表を挿入" onClick={cmd.table} />
-        <M3eMenuItem>
+        <M3eMenuItem {...(off ? { disabled: true } : {})}>
           <M3eIcon slot="icon" name="table_edit" />
           表の編集
           <M3eMenuTrigger htmlFor="wt-table-menu" />
@@ -489,24 +451,28 @@ export function WriteToolbar({
         <MoreItem
           icon="keyboard"
           label="キーボード ショートカット"
+          always
           kbd="Ctrl+/"
           onClick={actions.openShortcuts}
         />
         <M3eDivider />
-        <MoreItem icon="print" label="印刷" kbd="Ctrl+P" onClick={actions.print} />
+        <MoreItem icon="print" label="印刷" kbd="Ctrl+P" always onClick={actions.print} />
         <MoreItem
           icon="download"
           label="HTML でダウンロード"
+          always
           onClick={() => actions.download("html")}
         />
         <MoreItem
           icon="markdown"
           label="Markdown でダウンロード"
+          always
           onClick={() => actions.download("md")}
         />
         <MoreItem
           icon="text_snippet"
           label="テキストでダウンロード"
+          always
           onClick={() => actions.download("txt")}
         />
       </M3eMenu>
@@ -525,14 +491,14 @@ export function WriteToolbar({
         ).map(([label, icon, run], i) => (
           <Fragment key={label}>
             {i === 4 ? <M3eDivider /> : null}
-            <M3eMenuItem disabled={!s.table} onClick={run}>
+            <M3eMenuItem disabled={off || !s.table} onClick={run}>
               <M3eIcon slot="icon" name={icon} />
               {label}
             </M3eMenuItem>
           </Fragment>
         ))}
       </M3eMenu>
-    </>
+    </SourceModeContext.Provider>
   );
 }
 
@@ -542,6 +508,7 @@ function MoreItem({
   kbd,
   on,
   disabled,
+  always,
   onClick,
 }: {
   icon: string;
@@ -549,8 +516,12 @@ function MoreItem({
   kbd?: string;
   on?: boolean;
   disabled?: boolean;
+  /** 原文のあいだも押せる（印刷・ダウンロード・ショートカット一覧） */
+  always?: boolean;
   onClick: () => unknown;
 }) {
+  const source = useContext(SourceModeContext);
+  if (source && !always) disabled = true;
   return (
     <M3eMenuItem {...(disabled ? { disabled: true } : {})} onClick={() => void onClick()}>
       <M3eIcon slot="icon" name={on ? "check" : icon} />
@@ -561,34 +532,5 @@ function MoreItem({
         </span>
       ) : null}
     </M3eMenuItem>
-  );
-}
-
-function ColorMenu({
-  id,
-  colors,
-  current,
-  onPick,
-  none,
-}: {
-  id: string;
-  colors: Array<{ label: string; value: string | null }>;
-  current: string | null;
-  onPick: (v: string | null) => unknown;
-  none: string;
-}) {
-  return (
-    <M3eMenu id={id} className="wtb-menu">
-      {colors.map((c) => (
-        <M3eMenuItemRadio
-          key={c.label}
-          checked={(current ?? null) === c.value}
-          onClick={() => void onPick(c.value)}
-        >
-          <Swatch color={c.value} none={none} />
-          {c.label}
-        </M3eMenuItemRadio>
-      ))}
-    </M3eMenu>
   );
 }

@@ -106,7 +106,6 @@ import { StatusText } from "@/ui/Chip";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eButton } from "@m3e/react/button";
 import { M3eButtonGroup } from "@m3e/react/button-group";
-import { M3eDivider } from "@m3e/react/divider";
 import { M3eFilterChip, M3eFilterChipSet } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
 import { M3eIconButton } from "@m3e/react/icon-button";
@@ -596,9 +595,19 @@ export function Editor({
     data?.can.carryForward && revisionId ? { revisionId: revisionId as Id<"revisions"> } : "skip",
   );
   // 「添付を切り替え」には紙面に出せる添付（と外部リンク）だけを並べる。.ai などは 情報 › この版のファイル から落とす
-  const switchable = (data?.artifacts ?? []).filter(
-    (a) => isReviewableArtifact(a) || a.role === "external",
-  );
+  // SNS 投稿の版は、投稿のプレビュー（台帳）を先頭に置く。画像・本文を 1 つずつ開いたあとも、プレビューへ戻れるように
+  const switchable = [
+    ...(data?.artifacts ?? []).filter((a) => a.fileName === POST_MANIFEST_NAME),
+    ...(data?.artifacts ?? []).filter((a) => isReviewableArtifact(a) || a.role === "external"),
+  ];
+  /** 添付の切り替えの項目（アイコンと名前）。投稿のプレビューはファイル名でなく、端末のアイコンで見分ける */
+  const choiceOf = (a: (typeof switchable)[number]) =>
+    a.fileName === POST_MANIFEST_NAME
+      ? { icon: "smartphone", label: "投稿のプレビュー" }
+      : {
+          icon: "draft",
+          label: `${a.role === "external" ? (a.externalUrl && isFigmaUrl(a.externalUrl) ? "Figma: " : "外部: ") : ""}${a.fileName}`,
+        };
   // 版比較: 同じ制作物の他の版、または別の制作物の版（利用者指示 2026-10-17）。閲覧権限は revisions.get が確かめる
   const otherRaw = useQuery(api.revisions.get, compareWith ? { revisionId: compareWith } : "skip");
   // 相手を替えた直後に前の相手の結果が残ることがあるので、いま比べている版のものだけを使う
@@ -927,6 +936,7 @@ export function Editor({
         {...(webStates.has(t.id) ? { placeState: webStates.get(t.id)! } : {})}
         active={t.id === activeThreadId}
         canDecide={can?.decide ?? false}
+        canResolve={can?.resolve ?? false}
         canReply={can?.reply ?? false}
         pending={busy}
         now={now}
@@ -935,6 +945,10 @@ export function Editor({
         onOpen={() => openThread(t)}
         onDecideStart={(mode) => openThread(t, { mode })}
         onResolve={onResolve}
+        // 紙面の横・ピンのそばのカードは、その場で返信する（引き出しを開くと紙面が縮み、倍率が変わるため）
+        {...(layout !== "panel" && !mobile && revisionId
+          ? { reply: { revisionId, onSubmit: threadActions(t).onReply } }
+          : {})}
       />
     );
   };
@@ -1585,6 +1599,7 @@ export function Editor({
         {...(threadNav ? { nav: threadNav } : {})}
         meId={me?.id ?? null}
         canDecide={can?.decide ?? false}
+        canResolve={can?.resolve ?? false}
         canReply={can?.reply ?? false}
         revisionId={revisionId}
         pending={busy}
@@ -1833,8 +1848,7 @@ export function Editor({
             onClose={() => setArtifactSheet(false)}
             title="添付"
             items={switchable.map((a) => ({
-              icon: "draft",
-              label: `${a.role === "external" ? (a.externalUrl && isFigmaUrl(a.externalUrl) ? "Figma: " : "外部: ") : ""}${a.fileName}`,
+              ...choiceOf(a),
               selected: a.id === artifactId,
               onSelect: () => {
                 setArtifactId(a.id);
@@ -2028,7 +2042,14 @@ export function Editor({
                       <M3eIcon name={textSelect ? "text_select_start" : "chat_bubble"} />
                     </M3eIconButton>
                   ) : null}
-                  {/* 添付の切り替えとコメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
+                  {/* 添付の切り替え（投稿のプレビュー・ファイルごと）はクリップのボタン。コメントの位置（ピン）とは分ける */}
+                  {!mobile && switchable.length > 1 ? (
+                    <M3eIconButton aria-label="添付を切り替え" title="添付を切り替え">
+                      <M3eIcon name="attach_file" />
+                      <M3eMenuTrigger htmlFor="artifact-menu" />
+                    </M3eIconButton>
+                  ) : null}
+                  {/* コメントの並べ方（横に一覧・ピンの高さ・ピンだけ）はピンのボタンのメニュー */}
                   {!mobile ? (
                     <M3eIconButton
                       className="ws__more"
@@ -2133,32 +2154,6 @@ export function Editor({
             ) : null}
             {!mobile ? (
               <M3eMenu id="viewer-more-menu" positionY="above">
-                {switchable.length > 1 ? (
-                  <>
-                    <M3eMenuItemGroup aria-label="添付">
-                      {switchable.map((a) => (
-                        <M3eMenuItemRadio
-                          key={a.id}
-                          checked={a.id === artifactId}
-                          onClick={() => {
-                            setArtifactId(a.id);
-                            setPage(1);
-                            resetCompose();
-                          }}
-                        >
-                          <M3eIcon slot="icon" name="draft" />
-                          {a.role === "external"
-                            ? a.externalUrl && isFigmaUrl(a.externalUrl)
-                              ? "Figma: "
-                              : "外部: "
-                            : ""}
-                          {a.fileName}
-                        </M3eMenuItemRadio>
-                      ))}
-                    </M3eMenuItemGroup>
-                    <M3eDivider />
-                  </>
-                ) : null}
                 <M3eMenuItemGroup aria-label="コメントの表示">
                   {layouts.map((l) => (
                     <M3eMenuItemRadio
@@ -2173,26 +2168,24 @@ export function Editor({
                 </M3eMenuItemGroup>
               </M3eMenu>
             ) : null}
-            {switchable.length > 1 && mobile && !compact ? (
+            {switchable.length > 1 && !compact ? (
               <M3eMenu id="artifact-menu" positionY="above">
-                {switchable.map((a) => (
-                  <M3eMenuItem
-                    key={a.id}
-                    onClick={() => {
-                      setArtifactId(a.id);
-                      setPage(1);
-                      resetCompose();
-                    }}
-                  >
-                    <M3eIcon slot="icon" name={a.id === artifactId ? "check" : "draft"} />
-                    {a.role === "external"
-                      ? a.externalUrl && isFigmaUrl(a.externalUrl)
-                        ? "Figma: "
-                        : "外部: "
-                      : ""}
-                    {a.fileName}
-                  </M3eMenuItem>
-                ))}
+                <M3eMenuItemGroup aria-label="添付">
+                  {switchable.map((a) => (
+                    <M3eMenuItemRadio
+                      key={a.id}
+                      checked={a.id === artifactId}
+                      onClick={() => {
+                        setArtifactId(a.id);
+                        setPage(1);
+                        resetCompose();
+                      }}
+                    >
+                      <M3eIcon slot="icon" name={choiceOf(a).icon} />
+                      {choiceOf(a).label}
+                    </M3eMenuItemRadio>
+                  ))}
+                </M3eMenuItemGroup>
               </M3eMenu>
             ) : null}
             {!mobile ? (
