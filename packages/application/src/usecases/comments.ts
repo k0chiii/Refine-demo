@@ -23,6 +23,7 @@ import {
   recipientPrincipal,
   replyRecipients,
   storedThreadActivity,
+  THREAD_LATEST_REPLIES_SHOWN,
   THREAD_PARTICIPANTS_SHOWN,
   type ThreadActivity,
   type Severity,
@@ -337,6 +338,34 @@ export interface LatestReplyView {
 }
 
 /**
+ * 直近の返信を出すために、まず読むイベントの数（スレッドの後ろから）。返信の後に採否・担当・訂正・削除が
+ * いくつか続いても、出す返信（{@link THREAD_LATEST_REPLIES_SHOWN} 件）が入る数にしている。
+ */
+export const THREAD_RECENT_EVENTS_READ = 10;
+
+/**
+ * スレッドの直近の返信（`latestReplies` を全てのイベントに当てたものと同じ）。後ろの数件のイベントだけを読み、
+ * 出すべき返信が揃わないときだけ全てを読み直す。
+ *
+ * 後ろだけで足りる理由: イベントは追記だけで、追記の順は createdAt の順（どの書き込みも追記する時刻を createdAt にし、
+ * FB からの移行も古い順に追記する）。返信の削除（reply_deleted）は必ず消した返信より後に追記される。
+ * だから後ろの数件にある返信は、消されていればその印も同じ数件に入っていて、残っている返信のうち新しいものから並ぶ。
+ * 出す件数（最大 {@link THREAD_LATEST_REPLIES_SHOWN} 件、残っている返信がそれより少なければその数 = replyCount）が
+ * 後ろの数件で揃えば、全てから選んでも同じになる。数件に満たないスレッドは、それで全てである。
+ */
+async function loadLatestReplies(
+  ctx: AppContext,
+  threadId: string,
+  replyCount: number,
+): Promise<LatestReply[]> {
+  const recent = await ctx.threads.listLatestEvents(threadId, THREAD_RECENT_EVENTS_READ);
+  const shown = latestReplies(recent);
+  const wanted = Math.min(THREAD_LATEST_REPLIES_SHOWN, replyCount);
+  if (shown.length >= wanted || recent.length < THREAD_RECENT_EVENTS_READ) return shown;
+  return latestReplies(await ctx.threads.listEvents(threadId));
+}
+
+/**
  * スレッドごとのやり取りと閲覧者の未読（版の画面の一覧用）。やり取りはスレッドが持っていればそれを、
  * 無い古いスレッドはイベントから導く（移行しない）。自分の動きと、人の返信が無い自動校正の指摘は、読んだ時刻を引かない。
  */
@@ -349,11 +378,17 @@ export async function presentThreadActivity(
   const replies = new Map<string, LatestReply[]>();
   for (const t of threads) {
     const stored = storedThreadActivity(t);
-    // 返信のあるスレッドだけイベントを読む（返信の無いスレッドは読まない。古いスレッドは導くために読む）
-    const events =
-      stored === null || stored.replyCount > 0 ? await ctx.threads.listEvents(t.id) : null;
-    activities.set(t.id, stored ?? deriveThreadActivity(t, events ?? []));
-    if (events !== null) replies.set(t.id, latestReplies(events));
+    if (stored === null) {
+      // やり取りを持たない古いスレッドは、全てのイベントから導く
+      const events = await ctx.threads.listEvents(t.id);
+      activities.set(t.id, deriveThreadActivity(t, events));
+      replies.set(t.id, latestReplies(events));
+      continue;
+    }
+    activities.set(t.id, stored);
+    // 返信のあるスレッドだけイベントを読む（返信の無いスレッドは読まない）
+    if (stored.replyCount > 0)
+      replies.set(t.id, await loadLatestReplies(ctx, t.id, stored.replyCount));
   }
   // 読んだ時刻は、未読になりうるものだけ引く（自分の動き・人の返信が無い自動校正の指摘は常に既読）
   const check = threads.filter((t) => {

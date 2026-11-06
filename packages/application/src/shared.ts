@@ -2,6 +2,7 @@ import {
   allMembersCanView,
   canViewWork,
   DomainError,
+  isAccepting,
   isAllowed,
   memberTeamIds,
   personMatchesText,
@@ -11,6 +12,7 @@ import {
   splitMentionTokens,
   validateMentions,
   type Principal,
+  type Revision,
   type Team,
   type Work,
   type WorkAction,
@@ -38,6 +40,25 @@ export async function loadAuthorizedWork(
   const grants = await ctx.acl.listByWork(workId);
   requireAllowed(action, { work, grants, principal });
   return { work, grants };
+}
+
+/**
+ * 制作物の受付中の版の ID（無ければ null）。制作物の全ての版を読んで探した結果（`find(isAccepting)`）と同じものを、
+ * なるべく読まずに返す。
+ * - 開いた版が受付中ならそれ（受付中の版は制作物に高々 1 件）。読まない。
+ * - そうでなければ制作物の要約（書込みの側が同じ transaction で作り直す）の受付中の版。
+ *   ただし要約がこの版を受付中と言うのに、この版が受付中でなければ要約が古いので信じない。
+ * - 要約が無い（揃っていない古い制作物）・信じられないときは、全ての版から探す。
+ */
+export async function acceptingRevisionIdOf(
+  ctx: AppContext,
+  revision: Revision,
+): Promise<string | null> {
+  if (isAccepting(revision)) return revision.id;
+  const summary = await ctx.workSummaries.findByWork(revision.workId);
+  if (summary && summary.accepting?.id !== revision.id) return summary.accepting?.id ?? null;
+  const siblings = await ctx.revisions.listByWork(revision.workId);
+  return siblings.find(isAccepting)?.id ?? null;
 }
 
 /**

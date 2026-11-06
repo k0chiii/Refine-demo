@@ -1,4 +1,5 @@
 import {
+  acceptingRevisionIdOf,
   closeExpiredReviews,
   listCommentFileViews,
   loadAuthorizedWork,
@@ -8,7 +9,6 @@ import {
 } from "@mf100/application";
 import {
   DomainError,
-  isAccepting,
   isAllowed,
   isBeforeDeadline,
   isDeadlineReached,
@@ -45,8 +45,8 @@ export const get = query({
         "work.view",
       );
       const authz = { work, grants, principal };
-      const siblings = await app.revisions.listByWork(work.id);
-      const accepting = siblings.find(isAccepting) ?? null;
+      // 受付中の版（制作物の全ての版は読まない。要約が無い古い制作物だけ版から探す）
+      const acceptingId = await acceptingRevisionIdOf(app, revision);
       const now = Date.now();
       const artifacts = await app.artifacts.listByRevision(revision.id);
       // 削除されたコメントは出さない（listByRevision は削除済みを含めない。deletedKeepsReplies の古い行も同じ）
@@ -83,7 +83,7 @@ export const get = query({
       const canPostNow =
         isAllowed("comment.post", authz) &&
         work.lifecycle !== "finalized" &&
-        accepting?.id === revision.id &&
+        acceptingId === revision.id &&
         isBeforeDeadline(now, revision.deadlineAt);
       return {
         revision: {
@@ -126,7 +126,7 @@ export const get = query({
           canWaive: c.state === "pending" && work.lifecycle !== "finalized" && canManageChecks,
         })),
         myAssignment,
-        acceptingRevisionId: accepting?.id ?? null,
+        acceptingRevisionId: acceptingId,
         can: {
           comment: canPostNow,
           decide: isAllowed("comment.decide", authz) && work.lifecycle !== "finalized",
@@ -140,7 +140,7 @@ export const get = query({
           carryForward:
             isAllowed("comment.decide", authz) &&
             work.lifecycle !== "finalized" &&
-            accepting?.id === revision.id,
+            acceptingId === revision.id,
           completeReview: myAssignment !== null && isUnresponded(myAssignment),
         },
         /** UI が「なぜ投稿できないか」を説明するための理由 */
@@ -152,7 +152,7 @@ export const get = query({
               ? (revision.reviewClosedReason ?? "closed")
               : isDeadlineReached(now, revision.deadlineAt)
                 ? "deadline"
-                : accepting?.id !== revision.id
+                : acceptingId !== revision.id
                   ? "not_latest"
                   : "forbidden",
       };
