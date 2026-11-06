@@ -11,7 +11,7 @@ import {
   type Work,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
-import { canView, loadAuthorizedWork } from "../shared.ts";
+import { canView, loadAuthorizedWork, myGrantsLoader } from "../shared.ts";
 
 /**
  * 「版を提出する制作物」の現在の条件（L-15）。制度の判断なので値として外に出す（domain の既定をそのまま使う）。
@@ -86,13 +86,20 @@ export async function listSubmitTargets(
   policy: SubmitTargetPolicy = submitTargetPolicy,
 ): Promise<SubmitTarget[]> {
   const out: SubmitTarget[] = [];
+  const grantsOf = myGrantsLoader(ctx, principal);
   for (const work of works) {
     // 読む前に、制作物そのものだけで決まる除外をする（isSubmitTarget が必ず false にする条件と同じ）。
     // この問い合わせはシェルで常時購読されるので、候補にならない大多数の制作物の ACL・版を読まない
     // （読んだ分だけ、その制作物の版・ACL の書込みで全員の購読が再実行される）
     if (work.lifecycle !== "active") continue;
     if (policy.creatorOnly && !rolesOf(work, principal).isCreator) continue;
-    const grants = await ctx.acl.listByWork(work.id);
+    // 職責（制作者）で提出できるなら許可を読まない。足りない人だけ、本人に付いた許可を 1 回だけ読む
+    const byRole = isSubmitTarget(
+      { work, grants: [], principal },
+      { accepting: null },
+      { ...policy, includeAccepting: true },
+    );
+    const grants = byRole ? [] : await grantsOf(work.id);
     const authz = { work, grants, principal };
     // 版を読む前に、版に依らない条件（提出の権限）だけで落とす
     if (!isSubmitTarget(authz, { accepting: null }, { ...policy, includeAccepting: true }))

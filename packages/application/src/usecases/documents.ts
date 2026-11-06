@@ -8,7 +8,7 @@ import {
   type Work,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
-import { loadAuthorizedWork } from "../shared.ts";
+import { loadAuthorizedWork, myGrantsLoader } from "../shared.ts";
 
 export interface DocumentDraftView {
   draft: DocumentDraft | null;
@@ -83,10 +83,15 @@ export async function listWritableWorks(
   works: readonly Work[],
 ): Promise<WritableWork[]> {
   const out: WritableWork[] = [];
+  const grantsOf = myGrantsLoader(ctx, principal);
   for (const work of works) {
     if (work.lifecycle !== "active") continue;
-    const grants = await ctx.acl.listByWork(work.id);
-    if (!isAllowed("revision.submit", { work, grants, principal })) continue;
+    // 職責で書けるなら許可を読まない。足りない人だけ、本人に付いた許可を 1 回だけ読む
+    if (
+      !isAllowed("revision.submit", { work, grants: [], principal }) &&
+      !isAllowed("revision.submit", { work, grants: await grantsOf(work.id), principal })
+    )
+      continue;
     const draft = await ctx.documents.findByWork(work.id);
     out.push({
       workId: work.id,

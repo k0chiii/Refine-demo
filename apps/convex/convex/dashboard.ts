@@ -5,27 +5,41 @@ import {
   buildWorksDashboard,
   type AppContext,
 } from "@mf100/application";
-import { isAccepting, type Principal, type Work } from "@mf100/domain";
+import { isAccepting, overridesAllPermissions, type Principal, type Work } from "@mf100/domain";
 import type { Id } from "./_generated/dataModel";
-import { query } from "./_generated/server";
+import { query, type DatabaseReader } from "./_generated/server";
 import { createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { listMyWorks } from "./works.ts";
+import { listMyWorks, listWorksRelatedTo } from "./works.ts";
 
-/** 自分が関わる制作物から、ダッシュボードの節を作る問い合わせ */
+type Candidates = (db: DatabaseReader, principal: Principal) => Promise<Work[]>;
+
+/**
+ * 自分が関わる制作物から、ダッシュボードの節を作る問い合わせ。candidates は節に行が出うる制作物の読み方。
+ * 全件（制作物の状況）以外は索引から候補だけを読む: 読む量が減り、関係のない制作物の書込みで購読が再実行されない
+ */
 function dashboardQuery<T>(
   build: (ctx: AppContext, principal: Principal, works: Work[]) => Promise<T>,
+  candidates: Candidates = listMyWorks,
 ) {
   return query({
     args: {},
     handler: async (ctx): Promise<T> => {
       const { principal } = await requireUser(ctx);
-      const works = await listMyWorks(ctx.db, principal);
+      const works = await candidates(ctx.db, principal);
       return runUseCase(() => build(createReadContext(ctx.db), principal, works));
     },
   });
 }
+
+/** システム管理者はすべての操作ができるので全件。それ以外は職責・割当・許可から（{@link listWorksRelatedTo}） */
+const related =
+  (assignments: boolean): Candidates =>
+  (db, principal) =>
+    overridesAllPermissions(principal)
+      ? listMyWorks(db, principal)
+      : listWorksRelatedTo(db, principal, { assignments });
 
 /**
  * ダッシュボード（U-00）の全部の節。画面は節ごとの check・make・works を読む。
@@ -34,10 +48,10 @@ function dashboardQuery<T>(
 export const get = dashboardQuery(buildDashboard);
 
 /** 校正の入口と `/` の振り分け: 校正する・専門確認・校了・割り当てると、自分の分が終わったもの */
-export const check = dashboardQuery(buildCheckDashboard);
+export const check = dashboardQuery(buildCheckDashboard, related(true));
 
 /** 制作の入口: 提出する・返事をする・自分が制作者の制作物の行・自分宛てのコメント */
-export const make = dashboardQuery(buildMakeDashboard);
+export const make = dashboardQuery(buildMakeDashboard, related(false));
 
 /** 制作物の一覧の先頭: 制作物の状況（数字・滞っている制作物・内訳）とピン留め */
 export const works = dashboardQuery(buildWorksDashboard);

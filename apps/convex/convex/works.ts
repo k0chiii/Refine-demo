@@ -450,6 +450,88 @@ function summarize(
   };
 }
 
+/**
+ * 職責・割当・許可の索引から、自分に行が出うる制作物だけを読む（ダッシュボードの校正・制作の節）。works の全件は読まない。
+ * - roles: workRoles に入っている自分の職責（制作者・統括・校了者）
+ * - assignments: 自分の校正の割当（全状態）と専門確認の担当がある、受付中の版の制作物
+ * - grants: 自分（・所属グループ）に edit 以上の許可がある制作物
+ * - 職責の索引が未整備の古い行（rolesVersion 未設定）は、取りこぼさないよう必ず含める
+ * 並びは works の全件と同じ（作成順）。システム管理者はすべての操作ができるので、呼び出し側が全件を使う
+ */
+export async function listWorksRelatedTo(
+  db: DatabaseReader,
+  principal: Principal,
+  opts: { assignments: boolean },
+): Promise<Work[]> {
+  const ids = new Set<Id<"works">>();
+  for await (const row of db
+    .query("workRoles")
+    .withIndex("by_user", (q) => q.eq("userId", principal.userId)))
+    ids.add(row.workId);
+  for (const [principalType, principalId] of [
+    ["user", principal.userId] as const,
+    ...principal.groupIds.map((id) => ["group", id] as const),
+  ])
+    for await (const grant of db
+      .query("workPermissions")
+      .withIndex("by_principal", (q) =>
+        q.eq("principalType", principalType).eq("principalId", principalId),
+      ))
+      if (
+        grant.revokedAt === undefined &&
+        (grant.permission === "edit" || grant.permission === "manage")
+      )
+        ids.add(grant.workId);
+  if (opts.assignments) {
+    const revisionIds = new Set<Id<"revisions">>();
+    for (const state of ["pending", "viewed", "responded", "excused"] as const)
+      for await (const a of db
+        .query("reviewAssignments")
+        .withIndex("by_reviewer_state", (q) =>
+          q.eq("reviewerId", principal.userId).eq("state", state),
+        ))
+        revisionIds.add(a.revisionId);
+    for (const state of ["pending", "done", "waived"] as const)
+      for await (const c of db
+        .query("requiredChecks")
+        .withIndex("by_assignee_state", (q) =>
+          q.eq("assigneeId", principal.userId).eq("state", state),
+        ))
+        revisionIds.add(c.revisionId);
+    // 受付中の版の割当・専門確認だけが行になる。要約の受付中の版から引けば、版を読まずに受付中かも分かる。
+    // 要約の無い制作物（古い行）だけ版を読む
+    for (const id of revisionIds) {
+      const summary = await db
+        .query("workSummaries")
+        .withIndex("by_acceptingId", (q) => q.eq("acceptingId", id))
+        .first();
+      if (summary) {
+        ids.add(summary.workId);
+        continue;
+      }
+      const revision = await db.get(id);
+      if (revision?.reviewState !== "open") continue;
+      const own = await db
+        .query("workSummaries")
+        .withIndex("by_work", (q) => q.eq("workId", revision.workId))
+        .unique();
+      // 要約があるのに受付中の版が違う（＝この版は受付中でない）なら候補にしない
+      if (!own || own.acceptingId === null || own.acceptingId === id) ids.add(revision.workId);
+    }
+  }
+  for await (const work of db
+    .query("works")
+    .withIndex("by_roles_version", (q) => q.eq("rolesVersion", undefined)))
+    ids.add(work._id);
+  const docs = [];
+  for (const id of ids) {
+    const doc = await db.get(id);
+    if (doc) docs.push(doc);
+  }
+  docs.sort((a, b) => a._creationTime - b._creationTime);
+  return docs.map(workFromDoc);
+}
+
 /** Submission candidates from transactional role rows and explicit ACL; legacy rows remain a safe fallback until backfilled. */
 export async function listSubmissionCandidates(
   db: DatabaseReader,

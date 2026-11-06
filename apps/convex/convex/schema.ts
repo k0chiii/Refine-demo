@@ -364,7 +364,10 @@ export default defineSchema({
         lastCreatedAt: v.union(v.number(), v.null()),
       }),
     ),
-  }).index("by_work", ["workId"]),
+  })
+    .index("by_work", ["workId"])
+    /** 受付中の版から制作物を引く（ダッシュボードの候補。版を読まずに、受付中かも同時に分かる） */
+    .index("by_acceptingId", ["acceptingId"]),
 
   workRoles: defineTable({
     workId: v.id("works"),
@@ -943,6 +946,16 @@ export default defineSchema({
     .index("by_recipient", ["recipientId", "createdAt"])
     // 未読の数・「すべて既読」は未読（readAt なし）だけをこの索引で読む。createdAt で「押した時刻まで」に区切る
     .index("by_recipient_read_created", ["recipientId", "readAt", "createdAt"]),
+
+  /**
+   * 利用者ごとの未読の通知の数（notifications.unreadCount が全画面で購読するので、通知の行を数えずにこの 1 行を読む）。
+   * 通知の作成・既読・未読に戻すと同じトランザクションで lib/notificationCounters.ts が増減する。
+   * 行が無い利用者（移行前）は従来どおり未読の索引で数える。埋めるのは migrations:backfillNotificationCounters（運用者が実行）
+   */
+  notificationCounters: defineTable({
+    userId: v.string(),
+    unread: v.number(),
+  }).index("by_user", ["userId"]),
 
   /** 通知の受け取り方（利用者ごとに 1 行。外への通知に効く。利用者指示 2026-10-18・2026-10-28）。行が無ければ既定 */
   notificationPrefs: defineTable({

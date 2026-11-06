@@ -55,6 +55,7 @@ import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
 import type { Scheduler } from "convex/server";
 import { availableChannels, deliveryConfigFromEnv } from "./channels.ts";
 import { personProfileOf, userDisplayName } from "./users.ts";
+import { adjustUnreadCounter, readUnreadCount } from "./notificationCounters.ts";
 
 /**
  * application 層のポートを Convex の ctx.db で実装するアダプタ。
@@ -157,6 +158,8 @@ export function createAppContext(
     ids: [],
     scheduled: null,
   };
+  /** 未読が多くて数の行をその場で作れなかった利用者（同じトランザクションで数え直さない。lib/notificationCounters.ts） */
+  const uncountable = new Set<string>();
   /**
    * 受信者に外への届け先があるか（通知の種類によらない。止めた分類は送る時点の計画が落とす）。
    * 読むのは使える経路が要るものだけ（設定は email・slack が使えるとき、端末は push が使えるとき）
@@ -739,6 +742,7 @@ export function createAppContext(
     notifications: {
       async insert(n) {
         const id = await db.insert("notifications", compact(n));
+        if (n.readAt === undefined) await adjustUnreadCounter(db, n.recipientId, 1, uncountable);
         // 届け先があれば送信を予約する（送る内容は送る時点で作り直す）
         if (scheduler && (await hasReachableChannel(n.recipientId))) {
           deliveryBatch.ids.push(id);
@@ -775,17 +779,18 @@ export function createAppContext(
         return doc ? (fromDoc(doc) as Notification) : null;
       },
       async update(n) {
-        await db.replace(n.id as Id<"notifications">, compact(toFields(n)));
+        const id = n.id as Id<"notifications">;
+        const prev = await db.get("notifications", id);
+        await db.replace(id, compact(toFields(n)));
+        // 未読の数を同じトランザクションで合わせる（既読にする・未読に戻す。未読のまま・既読のままなら触らない）
+        const wasUnreadOf = prev && prev.readAt === undefined ? prev.recipientId : null;
+        const isUnreadOf = n.readAt === undefined ? n.recipientId : null;
+        if (wasUnreadOf !== isUnreadOf) {
+          if (wasUnreadOf !== null) await adjustUnreadCounter(db, wasUnreadOf, -1, uncountable);
+          if (isUnreadOf !== null) await adjustUnreadCounter(db, isUnreadOf, 1, uncountable);
+        }
       },
-      async countUnread(userId) {
-        const docs = await db
-          .query("notifications")
-          .withIndex("by_recipient_read_created", (q) =>
-            q.eq("recipientId", userId).eq("readAt", undefined),
-          )
-          .take(100);
-        return docs.length;
-      },
+      countUnread: (userId) => readUnreadCount(db, userId),
     },
     groups: {
       async list() {
@@ -1079,6 +1084,21 @@ export function createAppContext(
           .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
           .collect();
         return docs.map(stripGrant);
+      },
+      async listForPrincipal(principal) {
+        const out = [];
+        for (const [principalType, principalId] of [
+          ["user", principal.userId] as const,
+          ...principal.groupIds.map((id) => ["group", id] as const),
+        ])
+          for (const doc of await db
+            .query("workPermissions")
+            .withIndex("by_principal", (q) =>
+              q.eq("principalType", principalType).eq("principalId", principalId),
+            )
+            .take(1000))
+            out.push(stripGrant(doc));
+        return out;
       },
       async insert(grant) {
         await db.insert(
