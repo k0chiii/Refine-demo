@@ -29,6 +29,7 @@
 - **domain**: フレームワーク非依存。`planRevision` / `supersede` / `assertCanPostComment` / `evaluateFinalization` / `isAllowed` など、§5 の不変条件をここで表現する。制度承認待ちの値は `ApprovalPolicy` 等のデータにする。
 - **application**: ユースケース関数（`confirmSubmission`, `postComment`, `decideThread`, `finalizeWork`, `reopenWork`, `grantWorkPermission` …）と、それが必要とするポート（`WorkRepository` …、`Clock`, `AuditLogger`, `IdempotencyStore`）。インメモリ実装（`@mf100/application/testing`）で受け入れ条件を単体テストする。
 - **apps/convex**: `convex/lib/adapters.ts` がポートを `ctx.db` で実装。公開関数は「認証 → ユースケース呼出 → ドメイン例外を ConvexError に変換」だけ。1 mutation = 1 トランザクション。
+- **apps/cloudflare**: Convex に依存しない Cloudflare 完結の正本（Hono + Durable Object の SQLite）。同じポートを SQLite で実装し、application のテスト 40 本をそのまま通して確かめる。当面は Convex を使い続ける。対応表は [`CLOUDFLARE_BACKEND.md`](CLOUDFLARE_BACKEND.md)。
 - **apps/api**: ポート `TokenVerifier` / `BackendGateway` / `ObjectStore` に依存する Hono アプリ。本番は jose / ConvexHttpClient / R2、テストはフェイク。
 - **apps/web**: 画面は 制作（`/make`）／校正（`/check`）／制作物（`/works`）／エディタ（`/works/:id`, `/works/:id/v/N`）／管理（`/admin`）（`/` は最後に使った入口への振り分け。UI_M3E §83）（要件の U-01〜U-08 はこの中に収める。[`UI_M3E.md`](UI_M3E.md) §11）。アップロードのオーケストレーションは UI 非依存の `SubmissionFlow` に分離してテスト。座標変換はドメインの `toViewportRect / fromViewportRect` を使う。
 

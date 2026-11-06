@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mf100-cloudflare-development",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  // 業務データの正本は 1 つの Durable Object（SQLite）。入力ゲートが呼び出しを直列にするので、
+  // Convex の mutation と同じ「1 呼び出し = 1 つの直列化されたトランザクション」になる
+  "durable_objects": { "bindings": [{ "name": "DB", "class_name": "MF100Database" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MF100Database"] }],
+  // Convex の crons.ts と同じ仕事（受付終了は毎分、残りは毎時）。配分は src/db.ts の runJobs が持つ
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    // `wrangler dev` 用の既定値。本番の環境（env.production）はデプロイを決めたときに足す（DO の binding は環境に引き継がれない）
+    "ALLOWED_ORIGINS": "http://localhost:5173",
+    // 開発だけ: Cloudflare Access が無いとき X-MF100-Identity ヘッダ（JSON）を本人として受け付ける。本番では必ず deny
+    "DEV_IDENTITY": "allow",
+    // 初期ブートストラップ: ここに列挙した subject を校正システム管理者として扱う（Convex の MF100_SYSTEM_ADMIN_SUBJECTS と同じ）
+    "MF100_SYSTEM_ADMIN_SUBJECTS": "",
+  },
+  // Cloudflare Access で守るとき: `wrangler secret put ACCESS_TEAM` / `ACCESS_AUDIENCE`
+}
