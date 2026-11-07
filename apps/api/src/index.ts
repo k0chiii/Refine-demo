@@ -1,4 +1,5 @@
 import { workersAi } from "./workersAi";
+import { toHex } from "./toHex.ts";
 import { createAccessVerifier } from "./adapters/accessVerifier.ts";
 import { createFigmaClient } from "./adapters/figmaClient.ts";
 import { createR2Store } from "./adapters/r2Store.ts";
@@ -54,10 +55,7 @@ export async function handleRequest(
     ...(accessVerifiers.has(accessKey) ? { authorizeAccess: accessVerifiers.get(accessKey)! } : {}),
     allowExpensiveRequest: async (subject, operation) => {
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(subject));
-      const key =
-        operation +
-        ":" +
-        Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+      const key = `${operation}:${toHex(digest)}`;
       return (await env.EXPENSIVE_REQUESTS.limit({ key })).success;
     },
     reportRequest: (metric) => console.log(JSON.stringify(metric)),

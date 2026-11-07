@@ -9,7 +9,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
-import { formatDeadline, remaining } from "@/lib/format";
+import { formatDeadline } from "@/lib/format";
 import { ReviewDeadlineCell } from "@/features/review/UrgentReviewChip";
 import { lifecycleLabel } from "@/lib/labels";
 import { stageInfo } from "@/lib/stageInfo";

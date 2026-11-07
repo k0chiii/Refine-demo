@@ -14,6 +14,7 @@ import type {
   UploadOps,
 } from "../ports.ts";
 import { FigmaApiError, GatewayError } from "../ports.ts";
+import { toHex } from "../toHex.ts";
 
 export const fakeVerifier: TokenVerifier = {
   async verify(token) {
@@ -22,8 +23,7 @@ export const fakeVerifier: TokenVerifier = {
 };
 
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return toHex(await crypto.subtle.digest("SHA-256", buf));
 }
 
 /** Workers の crypto.DigestStream の代わり（Node の createHash でストリームのまま SHA-256 を取る） */

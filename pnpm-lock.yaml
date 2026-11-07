@@ -106,12 +106,6 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
-      '@mf100/convex':
-        specifier: workspace:*
-        version: link:../convex
-      convex-test:
-        specifier: 0.0.61
-        version: 0.0.61(convex@1.46.0(react@19.3.0))
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -124,9 +118,6 @@ importers:
 
   apps/convex:
     dependencies:
-      '@anthropic-ai/sdk':
-        specifier: ^0.133.0
-        version: 0.133.0(zod@4.6.5)
       '@auth/core':
         specifier: 0.41.3
         version: 0.41.3
@@ -197,9 +188,6 @@ importers:
       '@fontsource-variable/noto-sans-jp':
         specifier: ^5.3.1
         version: 5.3.1
-      '@fontsource/noto-sans-jp':
-        specifier: 5.3.0
-        version: 5.3.0
       '@humation/assets-humation-1':
         specifier: ^1.0.3
         version: 1.0.3
@@ -263,9 +251,6 @@ importers:
       '@tiptap/extension-text-style':
         specifier: 3.31.3
         version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
-      '@tiptap/extension-typography':
-        specifier: 3.31.3
-        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
       '@tiptap/extensions':
         specifier: 3.31.3
         version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
@@ -312,6 +297,9 @@ importers:
         specifier: 7.0.0
         version: 7.0.0
     devDependencies:
+      '@fontsource/noto-sans-jp':
+        specifier: 5.3.0
+        version: 5.3.0
       '@playwright/test':
         specifier: 1.64.0
         version: 1.64.0
@@ -378,15 +366,6 @@ importers:
         version: 1.2.0(@edge-runtime/vm@5.0.0)(@types/node@22.20.5)(@vitest/coverage-v8@5.0.4)(@vitest/ui@5.0.4(vitest@5.0.4))(esbuild@0.28.2)(jiti@2.7.0)(playwright@1.64.0)(typescript@5.9.3)
 
 packages:
-
-  '@anthropic-ai/sdk@0.133.0':
-    resolution: {integrity: sha512-jlqUN8p8ESTJj+GJnA4KjzbEfF1waEoGzRT8jwytlYGFFgv+/DUQOxlYGvYw10UzhD1kwLqYzxvA3FrTB2YWuQ==}
-    hasBin: true
-    peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
-    peerDependenciesMeta:
-      zod:
-        optional: true
 
   '@auth/core@0.41.3':
     resolution: {integrity: sha512-sJ3JMHHkXMD3aOjopv7mOBTO1Ocw4b0fAEXJBz6k7YHLpYQI6C40jCUPc5fNvUKxXRXNE1/sRISA15UrwWJBTw==}
@@ -1803,9 +1782,6 @@ packages:
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
 
-  '@stablelib/base64@1.0.1':
-    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
-
   '@tanstack/history@1.162.5':
     resolution: {integrity: sha512-w1+YvwmTkwt5n8yUqEH3IWZ9DsmorCZW/EQ3KYHnqEgIkOZpH54NvW6/Epq3Dzb8H0ifIeYX8PExvrNLIH5FIA==}
     engines: {node: '>=20.19'}
@@ -2039,11 +2015,6 @@ packages:
 
   '@tiptap/extension-text@3.31.3':
     resolution: {integrity: sha512-gdsWtF+taeaCu6V+5Ct10fGo0ACUy1GnYtbb+mcathBt8OqbT+Ws60p/yEmKesBDz2Hn+B5IcWy6+2BBZl5ZTg==}
-    peerDependencies:
-      '@tiptap/core': 3.31.3
-
-  '@tiptap/extension-typography@3.31.3':
-    resolution: {integrity: sha512-Ec2bsAR63dmiLD/5ph8ky3ptHWrBethbPG3a6p2FuB1VJ8LtlocCsDaXR5TvjZkUx2YQIaS2A+yzT5v7cumLgg==}
     peerDependencies:
       '@tiptap/core': 3.31.3
 
@@ -2719,9 +2690,6 @@ packages:
   fast-fifo@1.3.2:
     resolution: {integrity: sha512-/d9sfos4yxzpwkDkuN7k2SqFKtYNmCTzgfEpz82x34IM9/zc8KGxQoXg1liNC/izpRM/MBdt44Nmx41ZWqk+FQ==}
 
-  fast-sha256@1.3.0:
-    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
-
   fd-slicer@1.1.0:
     resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
 
@@ -2831,10 +2799,6 @@ packages:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
     hasBin: true
-
-  json-schema-to-ts@3.1.1:
-    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
-    engines: {node: '>=16'}
 
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
@@ -3266,9 +3230,6 @@ packages:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
-  standardwebhooks@1.1.1:
-    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
-
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
 
@@ -3334,9 +3295,6 @@ packages:
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
-
-  ts-algebra@2.0.0:
-    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -3616,13 +3574,6 @@ packages:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
-
-  '@anthropic-ai/sdk@0.133.0(zod@4.6.5)':
-    dependencies:
-      json-schema-to-ts: 3.1.1
-      standardwebhooks: 1.1.1
-    optionalDependencies:
-      zod: 4.6.5
 
   '@auth/core@0.41.3':
     dependencies:
@@ -4641,8 +4592,6 @@ snapshots:
 
   '@speed-highlight/core@1.2.24': {}
 
-  '@stablelib/base64@1.0.1': {}
-
   '@tanstack/history@1.162.5': {}
 
   '@tanstack/react-router@1.170.42(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
@@ -4875,10 +4824,6 @@ snapshots:
       '@tiptap/core': 3.31.3(@tiptap/pm@3.31.3)
 
   '@tiptap/extension-text@3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))':
-    dependencies:
-      '@tiptap/core': 3.31.3(@tiptap/pm@3.31.3)
-
-  '@tiptap/extension-typography@3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))':
     dependencies:
       '@tiptap/core': 3.31.3(@tiptap/pm@3.31.3)
 
@@ -5531,8 +5476,6 @@ snapshots:
 
   fast-fifo@1.3.2: {}
 
-  fast-sha256@1.3.0: {}
-
   fd-slicer@1.1.0:
     dependencies:
       pend: 1.2.0
@@ -5613,11 +5556,6 @@ snapshots:
   js-tokens@4.0.0: {}
 
   jsesc@3.1.0: {}
-
-  json-schema-to-ts@3.1.1:
-    dependencies:
-      '@babel/runtime': 7.29.10
-      ts-algebra: 2.0.0
 
   json5@2.2.3: {}
 
@@ -6187,11 +6125,6 @@ snapshots:
   source-map@0.6.1:
     optional: true
 
-  standardwebhooks@1.1.1:
-    dependencies:
-      '@stablelib/base64': 1.0.1
-      fast-sha256: 1.3.0
-
   std-env@4.3.0: {}
 
   streamx@2.28.1:
@@ -6285,8 +6218,6 @@ snapshots:
   totalist@3.0.1: {}
 
   tr46@0.0.3: {}
-
-  ts-algebra@2.0.0: {}
 
   tslib@2.8.1: {}
 

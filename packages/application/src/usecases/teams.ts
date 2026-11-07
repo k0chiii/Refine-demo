@@ -4,7 +4,7 @@ import {
   planTeamImport,
   sortTeams,
   TEAM_MAX,
-  teamNameKey,
+  normalizePersonKey,
   validateTeam,
   type Principal,
   type Team,
@@ -13,25 +13,7 @@ import {
   type TeamInput,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
-
-/** 所属する人（Notion の「ユーザ」）が委員の名簿にいるか。既にいた人は確かめ直さない */
-async function assertMembersExist(
-  ctx: AppContext,
-  after: readonly string[],
-  before: readonly string[],
-): Promise<void> {
-  const known = new Set(before);
-  const ids = after.filter((id) => !known.has(id));
-  if (ids.length === 0) return;
-  const found = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
-  const missing = ids.filter((id) => !found.has(id));
-  if (missing.length > 0)
-    throw new DomainError("team_invalid", {
-      field: "memberIds",
-      reason: "unknown_user",
-      userIds: missing,
-    });
-}
+import { assertMembersExist, requireSystemAdmin } from "../shared.ts";
 
 /**
  * 組織（局 › 担当）。利用者決定 2026-10-15「組織は管理画面で管理する（Nogiku との同期は後で）」。
@@ -39,10 +21,6 @@ async function assertMembersExist(
  */
 export async function listTeams(ctx: AppContext, _principal: Principal): Promise<Team[]> {
   return sortTeams(await ctx.teams.list());
-}
-
-function requireSystemAdmin(principal: Principal): void {
-  if (!principal.isSystemAdmin) throw new DomainError("forbidden", { reason: "system_admin_only" });
 }
 
 export async function saveTeam(
@@ -73,7 +51,7 @@ export async function saveTeam(
       all,
       id,
     );
-    await assertMembersExist(ctx, clean.memberIds ?? [], before.memberIds ?? []);
+    await assertMembersExist(ctx, clean.memberIds ?? [], before.memberIds ?? [], "team_invalid");
     if (clean.kind !== before.kind) {
       // 種類（局 ⇔ 担当）は、担当を持つ局・制作物が使っている局・担当では変えられない
       const hasChildren = all.some((t) => t.parentId === id);
@@ -100,7 +78,7 @@ export async function saveTeam(
   if (all.length >= TEAM_MAX)
     throw new DomainError("team_invalid", { reason: "limit", max: TEAM_MAX });
   const clean = validateTeam(rest, all);
-  await assertMembersExist(ctx, clean.memberIds ?? [], []);
+  await assertMembersExist(ctx, clean.memberIds ?? [], [], "team_invalid");
   const created = await ctx.teams.insert({ ...clean, updatedAt: now, updatedBy: principal.userId });
   await ctx.audit.record({
     entityType: "team",
@@ -161,7 +139,7 @@ export async function importTeams(
   if (all.length + plan.create.length > TEAM_MAX)
     throw new DomainError("team_invalid", { reason: "limit", max: TEAM_MAX });
   const members = new Set(plan.create.flatMap((c) => c.memberIds ?? []));
-  await assertMembersExist(ctx, [...members], []);
+  await assertMembersExist(ctx, [...members], [], "team_invalid");
   const now = ctx.clock.now();
   const current = [...all];
   const createdIds: string[] = [];
@@ -191,9 +169,9 @@ export async function importTeams(
   for (const c of plan.create) {
     if (c.team === null) continue;
     // 局は作り終えているので、名前かコードで引ける（planTeamImport と同じ照合）
-    const key = teamNameKey(c.bureau);
+    const key = normalizePersonKey(c.bureau);
     const bureau =
-      current.find((t) => t.kind === "bureau" && teamNameKey(t.name) === key) ??
+      current.find((t) => t.kind === "bureau" && normalizePersonKey(t.name) === key) ??
       findBureauByCode(c.bureau, current);
     if (!bureau) throw new DomainError("team_not_found", { bureau: c.bureau });
     await insert({ name: c.team, kind: "team", parentId: bureau.id, ...metaOf(c) });

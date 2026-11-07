@@ -8,13 +8,7 @@ import { useArtifactBlob } from "@/features/annotation/useArtifactBlob";
 import { Loading } from "@/ui/Loading";
 
 /** 詳細画面の PDF プレビュー（採用中または最新版の添付） */
-export function WorkDetailPreview({
-  workId,
-  revisionId,
-}: {
-  workId: Id<"works">;
-  revisionId: Id<"revisions"> | null;
-}) {
+export function WorkDetailPreview({ revisionId }: { revisionId: Id<"revisions"> | null }) {
   const data = useQuery(api.revisions.get, revisionId ? { revisionId } : "skip");
   const artifact = useMemo(() => {
     if (!data) return null;

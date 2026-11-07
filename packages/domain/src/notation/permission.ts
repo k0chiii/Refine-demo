@@ -40,14 +40,6 @@ export function notationRole(
   return "member";
 }
 
-export function canEditCategory(
-  principal: Principal,
-  categoryCode: string,
-  managedCategories: readonly string[],
-): boolean {
-  return notationRole(principal, categoryCode, managedCategories) !== "member";
-}
-
 export function canAssignManagers(principal: Principal): boolean {
   return (
     overridesAllPermissions(principal) || hasExplicit(principal, notationOrgPermissions.manageAll)

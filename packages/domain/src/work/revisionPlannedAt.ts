@@ -11,16 +11,6 @@ export interface RevisionPlannedLegacy {
   plannedSubmitAt?: Instant;
 }
 
-/** リストから sequence の予定日。無ければ旧 plannedSubmitAt を読む（移行しない・読取のみ） */
-export function revisionPlannedAtOf(
-  entries: readonly RevisionPlannedAtEntry[] | undefined,
-  revision: RevisionPlannedLegacy,
-): Instant | null {
-  const hit = entries?.find((e) => e.sequence === revision.sequence);
-  if (hit) return hit.at;
-  return revision.plannedSubmitAt ?? null;
-}
-
 /** 一覧に出す「次の版予定日」（最も早い未来の予定。無ければ null） */
 export function nextRevisionPlannedAt(
   entries: readonly RevisionPlannedAtEntry[] | undefined,

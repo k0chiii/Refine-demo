@@ -337,15 +337,6 @@ export function attachCommentFile(
   };
 }
 
-/** 放置された添付か（どこにも付けないまま期限を過ぎた） */
-export function isCommentFileStale(file: CommentFile, now: Instant): boolean {
-  return (
-    file.threadId === undefined &&
-    file.abandonedAt === undefined &&
-    now - file.createdAt >= COMMENT_FILE_TTL_MS
-  );
-}
-
 /** 付けたコメント・返信が削除されたので手放す（以後は誰も読めず、清掃が R2 から消す）。冪等 */
 export function removeCommentFile(file: CommentFile, now: Instant): CommentFile {
   if (file.removedAt !== undefined) return file;

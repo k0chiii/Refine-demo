@@ -4,8 +4,6 @@ import {
   canDeleteComment,
   commentDeleteAuthority,
   assertCanDeleteReply,
-  deleteThreadComment,
-  isActiveThread,
   planThreadDeletion,
   presentThread,
   projectThreadEvents,
@@ -40,10 +38,9 @@ describe("コメントの削除（投稿者は校了前だけ・システム管�
   });
 
   it("投稿者は削除できる。原文は書き換えない", () => {
-    const next = deleteThreadComment(makeThread(), "reviewer", "active", [], NOW);
+    const next = planThreadDeletion(makeThread(), "reviewer", "active", [], NOW).thread;
     expect(next.deletedAt).toBe(NOW);
     expect(next.body).toBe("誤字");
-    expect(isActiveThread(next)).toBe(false);
   });
 
   it("システム管理者は他人のコメントも、校了後も削除できる。権限の種類を区別する", () => {
@@ -56,36 +53,36 @@ describe("コメントの削除（投稿者は校了前だけ・システム管�
     expect(commentDeleteAuthority("reviewer", "creator", "active", { isSystemAdmin: false })).toBe(
       null,
     );
-    const next = deleteThreadComment(makeThread(), "admin", "finalized", [], NOW, admin);
+    const next = planThreadDeletion(makeThread(), "admin", "finalized", [], NOW, admin).thread;
     expect(next.deletedAt).toBe(NOW);
     expect(next.body).toBe("誤字");
   });
 
   it("他の人（制作者・管理者でない人）は削除できない", () => {
     for (const actor of ["creator", "admin", "someone"]) {
-      expect(() => deleteThreadComment(makeThread(), actor, "active", [], NOW)).toThrowError(
+      expect(() => planThreadDeletion(makeThread(), actor, "active", [], NOW)).toThrowError(
         code("comment_delete_not_author"),
       );
     }
   });
 
   it("校了後は投稿者でも削除できない", () => {
-    expect(() => deleteThreadComment(makeThread(), "reviewer", "finalized", [], NOW)).toThrowError(
+    expect(() => planThreadDeletion(makeThread(), "reviewer", "finalized", [], NOW)).toThrowError(
       code("work_already_finalized"),
     );
   });
 
   it("削除済みを重ねて削除はできない", () => {
     const gone = makeThread({ deletedAt: 5 });
-    expect(() => deleteThreadComment(gone, "reviewer", "active", [], NOW)).toThrowError(
+    expect(() => planThreadDeletion(gone, "reviewer", "active", [], NOW)).toThrowError(
       code("comment_thread_deleted"),
     );
   });
 
   it("削除したスレッドは返信の有無によらず一覧に残さない（deletedAt が付くだけ）", () => {
     for (const events of [[], [reply("e1", "reviewer")], [reply("e1", "creator")]]) {
-      const next = deleteThreadComment(makeThread(), "reviewer", "active", events, NOW);
-      expect(isActiveThread(next)).toBe(false);
+      const next = planThreadDeletion(makeThread(), "reviewer", "active", events, NOW).thread;
+      expect(next.deletedAt).toBe(NOW);
       expect(next.deletedKeepsReplies).toBeUndefined(); // 古い仕様の印は書かない
     }
   });

@@ -76,22 +76,6 @@ export function isFigmaUrl(url: string): boolean {
   return /^https:\/\/(?:www\.)?figma\.com\/(?:design|file|proto|board|slides)\//i.test(url);
 }
 
-/** 外部リンクは実体検証対象外。R2 添付はすべて verified であること。 */
-export function assertArtifactsReadyForConfirm(artifacts: readonly Artifact[]): void {
-  if (artifacts.length === 0) throw new DomainError("revision_no_artifacts");
-  const notReady = artifacts.filter((a) => a.role !== "external" && a.status !== "verified");
-  if (notReady.length > 0) {
-    throw new DomainError("revision_artifacts_not_verified", {
-      artifacts: notReady.map((a) => ({
-        id: a.id,
-        fileName: a.fileName,
-        status: a.status,
-        failureMessage: a.failureMessage,
-      })),
-    });
-  }
-}
-
 /**
  * 紙面に出して範囲コメントを付けられる種類（PDF・画像・文章・動画）。.ai などは保管・ダウンロードだけ。
  * 並びは版を開いたときに選ぶ順（pickReviewArtifact）

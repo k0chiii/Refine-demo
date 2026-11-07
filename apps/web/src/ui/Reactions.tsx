@@ -28,9 +28,6 @@ export const reactionNames: Record<string, string> = {
   "❤️": "好き",
 };
 
-/** マウスを乗せたときに出す、すぐ付けられるリアクション（Slack の操作バーと同じ） */
-export const QUICK_REACTIONS = ["👍", "🙏", "👀"] as const;
-
 /**
  * M3E の複数選択のチップの組は role="group" に aria-orientation を付ける（group には付けられない属性。axe の aria-allowed-attr）。
  * 最初の描画が済んだら外す（向きは vertical を変えたときにしか付け直されない）。

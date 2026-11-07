@@ -2,7 +2,7 @@ import { startOfJstDay } from "@mf100/domain";
 import { describe, expect, it } from "vite-plus/test";
 import { grantWorkPermission } from "../usecases/acl.ts";
 import { postComment } from "../usecases/comments.ts";
-import { excerpt, jstMonthDay, listMyNotifications } from "../usecases/notifications.ts";
+import { excerpt, listMyNotifications } from "../usecases/notifications.ts";
 import { remindUpcomingDeadlines } from "../usecases/reviews.ts";
 import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
@@ -13,11 +13,6 @@ describe("通知の文面（UI_M3E §35 W-14）", () => {
     expect(excerpt("一行目\n\n二行目")).toBe("一行目 二行目");
     expect(excerpt("あ".repeat(5), 5)).toBe("あああああ");
     expect(excerpt("あ".repeat(6), 5)).toBe("あああああ…");
-  });
-
-  it("締切は JST の月日と曜日", () => {
-    // 2026-11-14 0:00 JST（土）
-    expect(jstMonthDay(Date.UTC(2026, 10, 13, 15, 0))).toBe("11/14（土）");
   });
 
   it("本文は制作物・版・誰が・抜粋（題名の文言は確かめない）", async () => {

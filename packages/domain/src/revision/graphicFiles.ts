@@ -32,10 +32,6 @@ export function isIllustratorFile(fileName: string): boolean {
   return fileExtension(fileName) === "ai";
 }
 
-export function isInDesignFile(fileName: string): boolean {
-  return fileExtension(fileName) === "indd";
-}
-
 /** Illustrator / InDesign の原本か */
 export function isSourceFormatFile(fileName: string): boolean {
   return fileExtension(fileName) in sourceFormatMimeTypes;

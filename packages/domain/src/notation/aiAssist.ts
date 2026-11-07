@@ -14,11 +14,6 @@ export interface AiPolicy {
   maxChars: number;
 }
 
-export const defaultAiPolicy: AiPolicy = {
-  enabled: false,
-  maxChars: 20_000,
-};
-
 /** 使えない理由（使えるなら null） */
 export function aiBlockReason(policy: AiPolicy): string | null {
   if (!policy.enabled) return "AI 校正は設定されていません（API キー未設定または無効）";
