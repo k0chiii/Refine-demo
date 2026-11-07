@@ -112,7 +112,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm exec wrangler pages deploy ../web/dist-demo --project-name mf100-refine-demo --branch develop --commit-dirty=true
+        run: pnpm exec wrangler pages deploy ../web/dist-demo --project-name refine-gogatsusai-demo --branch develop --commit-dirty=true
 
   production:
     if: |
@@ -209,7 +209,7 @@ jobs:
           DEPLOY_SHA: ${{ steps.gate.outputs.sha }}
         run: |
           set -euo pipefail
-          pnpm exec wrangler pages deploy ../web/dist --project-name mf100-refine --branch main --commit-hash "$DEPLOY_SHA" | tee ../../.logs/pages-deploy.log
+          pnpm exec wrangler pages deploy ../web/dist --project-name refine-gogatsusai --branch main --commit-hash "$DEPLOY_SHA" | tee ../../.logs/pages-deploy.log
           node ../../scripts/record-deployment.mjs pages "../../.logs/releases/production-${DEPLOY_SHA}.json" ../../.logs/pages-deploy.log
       - name: 配信版の対応を保存
         if: always() && steps.gate.outputs.ok == 'true'

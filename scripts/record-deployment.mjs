@@ -10,7 +10,7 @@ if (component === "worker") {
     );
   manifest.workerVersion = id;
 } else if (component === "pages") {
-  const url = /https:\/\/[a-z0-9]+\.mf100-refine\.pages\.dev\b/i.exec(log)?.[0];
+  const url = /https:\/\/[a-z0-9]+\.refine-gogatsusai\.pages\.dev\b/i.exec(log)?.[0];
   if (!url)
     throw new Error("Pages deployment ID unavailable; inspect deployment before proceeding");
   manifest.pagesDeployment = url;

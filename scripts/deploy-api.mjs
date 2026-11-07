@@ -28,7 +28,7 @@ if (environment === "staging") {
     const parsed = new URL(origin.trim());
     if (
       parsed.protocol !== "https:" ||
-      parsed.origin === "https://mf100-refine.pages.dev" ||
+      parsed.origin === "https://refine.gogatsusai.jp" ||
       parsed.origin !== origin.trim()
     )
       throw new Error("Staging requires isolated HTTPS frontend origins");

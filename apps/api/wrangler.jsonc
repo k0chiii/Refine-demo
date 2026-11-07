@@ -5,10 +5,12 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  // namespace_id は同じアカウントなら別の Worker ともカウンタを共有する（公式）。委員会アカウントの他の Worker と
+  // 重ならないよう、ドキュメントの例（1001）ではなく MF100 専用の値にする（環境ごとに別）
   "ratelimits": [
     {
       "name": "EXPENSIVE_REQUESTS",
-      "namespace_id": "1001",
+      "namespace_id": "100101",
       "simple": { "limit": 30, "period": 60 },
     },
   ],
@@ -38,11 +40,11 @@
       "ratelimits": [
         {
           "name": "EXPENSIVE_REQUESTS",
-          "namespace_id": "1002",
+          "namespace_id": "100102",
           "simple": { "limit": 30, "period": 60 },
         },
       ],
-      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-assets-staging" }],
+      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-refine-assets-stg" }],
       "vars": {
         "CONVEX_URL": "http://127.0.0.1:3210",
         "CONVEX_SITE_URL": "http://127.0.0.1:3211",
@@ -55,15 +57,18 @@
       "ratelimits": [
         {
           "name": "EXPENSIVE_REQUESTS",
-          "namespace_id": "1003",
+          "namespace_id": "100103",
           "simple": { "limit": 30, "period": 60 },
         },
       ],
-      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-assets" }],
+      "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "mf100-refine-assets" }],
+      // 公開 URL は委員会の gogatsusai.jp ゾーンに固定する（Cloudflare アカウントが変わっても URL は変わらない）。
+      // Custom Domain は deploy のたびにここから作られ、証明書は自動発行。ダッシュボードで付けると次の deploy と食い違う
+      "routes": [{ "pattern": "api.refine.gogatsusai.jp", "custom_domain": true }],
       "vars": {
         "CONVEX_URL": "https://rosy-egret-142.convex.cloud",
         "CONVEX_SITE_URL": "https://rosy-egret-142.convex.site",
-        "ALLOWED_ORIGINS": "https://mf100-refine.pages.dev",
+        "ALLOWED_ORIGINS": "https://refine.gogatsusai.jp",
       },
     },
   },

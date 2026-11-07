@@ -6,7 +6,7 @@ interface __BaseEnv_Env {
 	EXPENSIVE_REQUESTS: RateLimit;
 	CONVEX_URL: "http://127.0.0.1:3210" | "https://rosy-egret-142.convex.cloud";
 	CONVEX_SITE_URL: "http://127.0.0.1:3211" | "https://rosy-egret-142.convex.site";
-	ALLOWED_ORIGINS: "http://localhost:5173" | "https://mf100-refine.pages.dev";
+	ALLOWED_ORIGINS: "http://localhost:5173" | "https://refine.gogatsusai.jp";
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
@@ -24,7 +24,7 @@ declare namespace Cloudflare {
 		EXPENSIVE_REQUESTS: RateLimit;
 		CONVEX_URL: "https://rosy-egret-142.convex.cloud";
 		CONVEX_SITE_URL: "https://rosy-egret-142.convex.site";
-		ALLOWED_ORIGINS: "https://mf100-refine.pages.dev";
+		ALLOWED_ORIGINS: "https://refine.gogatsusai.jp";
 	}
 	interface Env extends __BaseEnv_Env {}
 }
