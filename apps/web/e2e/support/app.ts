@@ -420,7 +420,7 @@ export class App {
     await this.send(body);
   }
 
-  /** 位置なしのコメント（コメントの一覧の下の入口） */
+  /** 位置なしのコメント（広い画面の紙面のツールバー。狭い画面は引き出し「コメント」を開いてから） */
   async freeComment(body: string) {
     await this.page.getByRole("button", { name: "全体へのコメント" }).click();
     await this.send(body);

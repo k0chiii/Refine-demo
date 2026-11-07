@@ -1617,6 +1617,17 @@ export function Editor({
         <div className="comments__main">
           <AutoProofreadStatus auto={auto} />
           <div className="comments__header">
+            {/* スマホは紙面のツールバーを引き出しが隠すので、位置なしのコメントはコメントの一覧（作る対象の集まり）から足す */}
+            {mobile && target && canComment && !isFigmaEmbed ? (
+              <M3eButton
+                variant="tonal"
+                className="comments__free"
+                onClick={() => openFreeComment()}
+              >
+                <M3eIcon slot="icon" name="add_comment" />
+                全体へのコメント
+              </M3eButton>
+            ) : null}
             <M3eFilterChipSet aria-label="コメントの絞り込み">
               {botCount > 0 ? (
                 <>
@@ -1674,7 +1685,7 @@ export function Editor({
             {!target ? (
               <p className="muted small comments__empty">版を提出するとコメントできます</p>
             ) : threads.length === 0 ? (
-              // 操作の説明は書かない（ツールバーの「全体コメント」と紙面の操作で分かる）。コメントできない人にだけ状態を出す
+              // 操作の説明は書かない（「全体コメント」のボタンと紙面の操作で分かる）。コメントできない人にだけ状態を出す
               canComment ? null : (
                 <p className="muted small comments__empty">コメントはありません</p>
               )
@@ -2001,7 +2012,7 @@ export function Editor({
                     </>
                   ) : null}
                   {/* 全体へのコメント（位置なし）。紙面の位置はなぞる・長押しだけ */}
-                  {canComment && !isFigmaEmbed ? (
+                  {canComment && !isFigmaEmbed && !mobile ? (
                     <M3eButton
                       className="ws__comment"
                       variant="tonal"
@@ -2011,7 +2022,7 @@ export function Editor({
                       onClick={() => openFreeComment()}
                     >
                       <M3eIcon slot="icon" name="add_comment" />
-                      {mobile ? null : "全体コメント"}
+                      全体コメント
                     </M3eButton>
                   ) : null}
                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
