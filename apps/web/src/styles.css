@@ -2975,6 +2975,9 @@ m3e-dialog {
 .comments--scrolled:not(.comments--sheet) .comments__header {
   background: var(--mf-surface-container);
 }
+.comments__marks {
+  margin-inline-start: auto;
+}
 .comments__header:empty {
   display: none;
 }
