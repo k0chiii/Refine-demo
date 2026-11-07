@@ -97,224 +97,212 @@ web の E2E の起こし方は spec の先頭のコメントにある。CI の�
 
 ### 内部関数で移していないもの
 
-内部（internal.*）58 本のうち 20 本を移した。残る 38 本は、Convex の部品の都合か、別の道具で代わっているか、一度きりの関数のため移していない。
+内部（internal.*）49 本のうち 20 本を移した。残る 29 本は、Convex の部品の都合か、別の道具で代わっているか、一度きりの関数のため移していない。
 
-| Convex の内部関数                                                                                      | 本数 | 移していない理由                                                                                     |
-| ------------------------------------------------------------------------------------------------------ | ---- | ---------------------------------------------------------------------------------------------------- |
-| `ai:prepare` / `recordUse` / `reserve`                                                                 | 3    | `ai:proofread` の内部の部品。Cloudflare は 1 つの関数の中で枠の確認と記録まで済ませる                |
-| `aiWorkflow:claim` / `execute` / `expire` / `finish` / `prepare`                                       | 5    | workflow の内部。Cloudflare は jobs の `aiProofread`（`executeAiJob`）と cron の `expireAiJobs`      |
-| `revisions:closeExpired` / `remindDeadlines`、`submissions:expireSessions`、`commentFiles:expireFiles` | 4    | cron の入口。`runJobs` が application のユースケースを直に呼ぶ                                       |
-| `dashboard:get`                                                                                        | 1    | 公開の `dashboard:check` / `make` / `works` の内部の実装                                             |
-| `delivery:*` 6 本、`deliveryNode:deliver` / `resolveSlack`                                             | 8    | 通知の配信。jobs の `deliver` / `resolveSlack` と `src/delivery`                                     |
-| `push:enqueue`、`pushNode:deliver`                                                                     | 2    | Web Push の配信。同じく jobs の `deliver`                                                            |
-| `notifications:continueMarkAllRead`、`planInfo:sync`                                                   | 2    | jobs の `continueMarkAllRead` / `planInfoSync`                                                       |
-| `semanticRules:current` / `indexRule` / `resolve` / `store`                                            | 4    | ルールの索引づけの部品。jobs の `indexRule` と `semanticRules:search` の中                           |
-| `feedbackMigration:*`                                                                                  | 5    | 旧 FB の一度きりの移行（手動起動）。FB は廃止済みで、公開の `comments:migratedFromFeedback` は移した |
-| `migrations/decision104:*` / `decision105:*`                                                           | 2    | Convex 上の既存データを直す一度きりの関数。取り込むのは直したあとのデータ                            |
-| `notationSeed:importSamples`、`seed:demo`                                                              | 2    | デモ・サンプルの投入。本番では使わない                                                               |
+| Convex の内部関数                                                                                      | 本数 | 移していない理由                                                                                |
+| ------------------------------------------------------------------------------------------------------ | ---- | ----------------------------------------------------------------------------------------------- |
+| `ai:prepare` / `recordUse` / `reserve`                                                                 | 3    | `ai:proofread` の内部の部品。Cloudflare は 1 つの関数の中で枠の確認と記録まで済ませる           |
+| `aiWorkflow:claim` / `execute` / `expire` / `finish` / `prepare`                                       | 5    | workflow の内部。Cloudflare は jobs の `aiProofread`（`executeAiJob`）と cron の `expireAiJobs` |
+| `revisions:closeExpired` / `remindDeadlines`、`submissions:expireSessions`、`commentFiles:expireFiles` | 4    | cron の入口。`runJobs` が application のユースケースを直に呼ぶ                                  |
+| `dashboard:get`                                                                                        | 1    | 公開の `dashboard:check` / `make` / `works` の内部の実装                                        |
+| `delivery:*` 6 本、`deliveryNode:deliver` / `resolveSlack`                                             | 8    | 通知の配信。jobs の `deliver` / `resolveSlack` と `src/delivery`                                |
+| `notifications:continueMarkAllRead`、`planInfo:sync`                                                   | 2    | jobs の `continueMarkAllRead` / `planInfoSync`                                                  |
+| `semanticRules:current` / `indexRule` / `resolve` / `store`                                            | 4    | ルールの索引づけの部品。jobs の `indexRule` と `semanticRules:search` の中                      |
+| `notationSeed:importSamples`、`seed:demo`                                                              | 2    | デモ・サンプルの投入。本番では使わない                                                          |
 
 Convex に無い名前が登録表に 5 本ある（`collaboration:getSnapshot` / `getSteps` / `latestVersion` / `submitSnapshot` / `submitSteps`）。Convex では prosemirror-sync の部品の関数で、Cloudflare は同じ名前で登録している。
 
 ### 出力
 
 - 公開（api.*）: 133（query 55 / mutation 76 / action 2）のうち Cloudflare にある 133
-- 内部（internal.*）: 58 のうち Cloudflare にある 20
+- 内部（internal.*）: 49 のうち Cloudflare にある 20
 - web / api が使う公開関数: 126 のうち Cloudflare にある 126（無い 0）
 - 登録表: 158（Convex に無い名前 5: collaboration:getSnapshot, collaboration:getSteps, collaboration:latestVersion, collaboration:submitSnapshot, collaboration:submitSteps）
 
-| 名前                                                 | Convex の種類 | 公開/内部 | web・api が使う | Cloudflare にある |
-| ---------------------------------------------------- | ------------- | --------- | --------------- | ----------------- |
-| `acl:adminWorks`                                     | query         | public    | 1 ファイル      | あり              |
-| `acl:grant`                                          | mutation      | public    | 1 ファイル      | あり              |
-| `acl:list`                                           | query         | public    | 1 ファイル      | あり              |
-| `acl:revoke`                                         | mutation      | public    | 1 ファイル      | あり              |
-| `acl:searchUsers`                                    | query         | public    | 1 ファイル      | あり              |
-| `acl:workSummary`                                    | query         | public    | -               | あり              |
-| `admin:auditLog`                                     | query         | public    | 1 ファイル      | あり              |
-| `admin:setGeneration`                                | mutation      | public    | 1 ファイル      | あり              |
-| `admin:setSystemAdmin`                               | mutation      | public    | 1 ファイル      | あり              |
-| `admin:workStats`                                    | query         | public    | 1 ファイル      | あり              |
-| `ai:prepare`                                         | query         | internal  | -               | -                 |
-| `ai:proofread`                                       | action        | public    | 1 ファイル      | あり              |
-| `ai:recordUse`                                       | mutation      | internal  | -               | -                 |
-| `ai:reserve`                                         | mutation      | internal  | -               | -                 |
-| `ai:status`                                          | query         | public    | 1 ファイル      | あり              |
-| `aiWorkflow:cancel`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `aiWorkflow:claim`                                   | mutation      | internal  | -               | -                 |
-| `aiWorkflow:execute`                                 | action        | internal  | -               | -                 |
-| `aiWorkflow:expire`                                  | mutation      | internal  | -               | -                 |
-| `aiWorkflow:finish`                                  | mutation      | internal  | -               | -                 |
-| `aiWorkflow:get`                                     | query         | public    | 1 ファイル      | あり              |
-| `aiWorkflow:prepare`                                 | query         | internal  | -               | -                 |
-| `aiWorkflow:start`                                   | mutation      | public    | 1 ファイル      | あり              |
-| `approvals:confirm`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `approvals:confirmationStatus`                       | query         | public    | 1 ファイル      | あり              |
-| `approvals:finalize`                                 | mutation      | public    | 1 ファイル      | あり              |
-| `approvals:reopen`                                   | mutation      | public    | 1 ファイル      | あり              |
-| `artifacts:authorizeAccess`                          | query         | public    | 2 ファイル      | あり              |
-| `checks:add`                                         | mutation      | public    | 1 ファイル      | あり              |
-| `checks:complete`                                    | mutation      | public    | 1 ファイル      | あり              |
-| `checks:waive`                                       | mutation      | public    | 1 ファイル      | あり              |
-| `collaboration:enable`                               | mutation      | public    | 1 ファイル      | あり              |
-| `commentFiles:authorizeFile`                         | query         | public    | 2 ファイル      | あり              |
-| `commentFiles:beginFileUpload`                       | mutation      | internal  | -               | あり              |
-| `commentFiles:beginThumbUpload`                      | mutation      | internal  | -               | あり              |
-| `commentFiles:completeFileUpload`                    | mutation      | internal  | -               | あり              |
-| `commentFiles:completeThumbUpload`                   | mutation      | internal  | -               | あり              |
-| `commentFiles:expireFiles`                           | mutation      | internal  | -               | -                 |
-| `commentFiles:failFileUpload`                        | mutation      | internal  | -               | あり              |
-| `commentFiles:prepare`                               | mutation      | public    | 1 ファイル      | あり              |
-| `comments:assign`                                    | mutation      | public    | 1 ファイル      | あり              |
-| `comments:carryCandidates`                           | query         | public    | 1 ファイル      | あり              |
-| `comments:carryForward`                              | mutation      | public    | 1 ファイル      | あり              |
-| `comments:decide`                                    | mutation      | public    | 1 ファイル      | あり              |
-| `comments:edit`                                      | mutation      | public    | 1 ファイル      | あり              |
-| `comments:editReply`                                 | mutation      | public    | 1 ファイル      | あり              |
-| `comments:events`                                    | query         | public    | 1 ファイル      | あり              |
-| `comments:markRead`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `comments:migratedFromFeedback`                      | query         | public    | 1 ファイル      | あり              |
-| `comments:post`                                      | mutation      | public    | 1 ファイル      | あり              |
-| `comments:remove`                                    | mutation      | public    | 1 ファイル      | あり              |
-| `comments:removeReply`                               | mutation      | public    | 1 ファイル      | あり              |
-| `comments:reply`                                     | mutation      | public    | 1 ファイル      | あり              |
-| `comments:searchMentionCandidates`                   | query         | public    | 1 ファイル      | あり              |
-| `comments:setSubscription`                           | mutation      | public    | 1 ファイル      | あり              |
-| `comments:toggleReaction`                            | mutation      | public    | 1 ファイル      | あり              |
-| `comparisons:getOverride`                            | query         | public    | 1 ファイル      | あり              |
-| `comparisons:saveOverride`                           | mutation      | public    | 1 ファイル      | あり              |
-| `dashboard:check`                                    | query         | public    | 3 ファイル      | あり              |
-| `dashboard:checkBadge`                               | query         | public    | 1 ファイル      | あり              |
-| `dashboard:get`                                      | query         | internal  | -               | -                 |
-| `dashboard:make`                                     | query         | public    | 1 ファイル      | あり              |
-| `dashboard:works`                                    | query         | public    | 3 ファイル      | あり              |
-| `delivery:enqueue`                                   | mutation      | internal  | -               | -                 |
-| `delivery:plan`                                      | query         | internal  | -               | -                 |
-| `delivery:record`                                    | mutation      | internal  | -               | -                 |
-| `delivery:recordSlackLookup`                         | mutation      | internal  | -               | -                 |
-| `delivery:reserveSlackDm`                            | mutation      | internal  | -               | -                 |
-| `delivery:slackTarget`                               | query         | internal  | -               | -                 |
-| `deliveryNode:deliver`                               | action        | internal  | -               | -                 |
-| `deliveryNode:resolveSlack`                          | action        | internal  | -               | -                 |
-| `documents:get`                                      | query         | public    | 3 ファイル      | あり              |
-| `documents:save`                                     | mutation      | public    | 3 ファイル      | あり              |
-| `documents:writable`                                 | query         | public    | 2 ファイル      | あり              |
-| `feedbackMigration:deleteBatch`                      | mutation      | internal  | -               | -                 |
-| `feedbackMigration:dryRunBatch`                      | query         | internal  | -               | -                 |
-| `feedbackMigration:migrateBatch`                     | mutation      | internal  | -               | -                 |
-| `feedbackMigration:run`                              | action        | internal  | -               | -                 |
-| `feedbackMigration:verifyBatch`                      | query         | internal  | -               | -                 |
-| `groups:list`                                        | query         | public    | 2 ファイル      | あり              |
-| `groups:remove`                                      | mutation      | public    | 1 ファイル      | あり              |
-| `groups:save`                                        | mutation      | public    | 1 ファイル      | あり              |
-| `home:pinned`                                        | query         | public    | 1 ファイル      | あり              |
-| `home:setPinned`                                     | mutation      | public    | 1 ファイル      | あり              |
-| `home:submitTargets`                                 | query         | public    | 1 ファイル      | あり              |
-| `me:me`                                              | query         | public    | 9 ファイル      | あり              |
-| `me:setAvatar`                                       | mutation      | public    | 1 ファイル      | あり              |
-| `migrations/decision104:upgradeViewPermissionGrants` | mutation      | internal  | -               | -                 |
-| `migrations/decision105:removeWorkConfidentiality`   | mutation      | internal  | -               | -                 |
-| `notation:categories`                                | query         | public    | 1 ファイル      | あり              |
-| `notation:decide`                                    | mutation      | public    | 1 ファイル      | あり              |
-| `notation:decideMany`                                | mutation      | public    | 1 ファイル      | あり              |
-| `notation:importBatch`                               | mutation      | public    | 1 ファイル      | あり              |
-| `notation:proposals`                                 | query         | public    | 2 ファイル      | あり              |
-| `notation:propose`                                   | mutation      | public    | 2 ファイル      | あり              |
-| `notation:ruleBook`                                  | query         | public    | 8 ファイル      | あり              |
-| `notation:ruleHistory`                               | query         | public    | 1 ファイル      | あり              |
-| `notation:rulesForWork`                              | query         | public    | 2 ファイル      | あり              |
-| `notation:save`                                      | mutation      | public    | 1 ファイル      | あり              |
-| `notation:setEnabled`                                | mutation      | public    | 1 ファイル      | あり              |
-| `notation:setManager`                                | mutation      | public    | 1 ファイル      | あり              |
-| `notation:upsertCategory`                            | mutation      | public    | 1 ファイル      | あり              |
-| `notationSeed:importSamples`                         | mutation      | internal  | -               | -                 |
-| `notificationPrefs:get`                              | query         | public    | 1 ファイル      | あり              |
-| `notificationPrefs:update`                           | mutation      | public    | 2 ファイル      | あり              |
-| `notifications:continueMarkAllRead`                  | mutation      | internal  | -               | -                 |
-| `notifications:list`                                 | query         | public    | 3 ファイル      | あり              |
-| `notifications:markAllRead`                          | mutation      | public    | 2 ファイル      | あり              |
-| `notifications:markRead`                             | mutation      | public    | 3 ファイル      | あり              |
-| `notifications:markThreadRead`                       | mutation      | public    | 1 ファイル      | あり              |
-| `notifications:markUnread`                           | mutation      | public    | 2 ファイル      | あり              |
-| `notifications:sendTest`                             | mutation      | public    | 1 ファイル      | あり              |
-| `notifications:unreadCount`                          | query         | public    | 2 ファイル      | あり              |
-| `planInfo:check`                                     | mutation      | public    | -               | あり              |
-| `planInfo:compare`                                   | mutation      | public    | -               | あり              |
-| `planInfo:sync`                                      | mutation      | internal  | -               | -                 |
-| `presence:disconnect`                                | mutation      | public    | 1 ファイル      | あり              |
-| `presence:heartbeat`                                 | mutation      | public    | 1 ファイル      | あり              |
-| `presence:list`                                      | query         | public    | 1 ファイル      | あり              |
-| `processing:cancel`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `processing:cleanupCandidates`                       | query         | internal  | -               | あり              |
-| `processing:complete`                                | mutation      | internal  | -               | あり              |
-| `processing:create`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `processing:expire`                                  | mutation      | internal  | -               | あり              |
-| `processing:fail`                                    | mutation      | internal  | -               | あり              |
-| `processing:figmaComplete`                           | mutation      | internal  | -               | あり              |
-| `processing:get`                                     | query         | public    | 2 ファイル      | あり              |
-| `processing:inspect`                                 | query         | internal  | -               | あり              |
-| `processing:markCleaned`                             | mutation      | internal  | -               | あり              |
-| `processing:status`                                  | query         | public    | 1 ファイル      | あり              |
-| `processing:streamSession`                           | mutation      | internal  | -               | あり              |
-| `proofreading:claim`                                 | mutation      | public    | 1 ファイル      | あり              |
-| `proofreading:fail`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `proofreading:retry`                                 | mutation      | public    | 1 ファイル      | あり              |
-| `proofreading:run`                                   | query         | public    | 1 ファイル      | あり              |
-| `proofreading:submit`                                | mutation      | public    | 1 ファイル      | あり              |
-| `push:config`                                        | query         | public    | 1 ファイル      | あり              |
-| `push:enqueue`                                       | mutation      | internal  | -               | -                 |
-| `push:status`                                        | query         | public    | 1 ファイル      | あり              |
-| `push:subscribe`                                     | mutation      | public    | 1 ファイル      | あり              |
-| `push:unsubscribe`                                   | mutation      | public    | 2 ファイル      | あり              |
-| `pushNode:deliver`                                   | action        | internal  | -               | -                 |
-| `reviews:complete`                                   | mutation      | public    | 2 ファイル      | あり              |
-| `reviews:myQueue`                                    | query         | public    | -               | あり              |
-| `reviews:setReviewers`                               | mutation      | public    | 2 ファイル      | あり              |
-| `revisions:closeExpired`                             | mutation      | internal  | -               | -                 |
-| `revisions:get`                                      | query         | public    | 8 ファイル      | あり              |
-| `revisions:markViewed`                               | mutation      | public    | 1 ファイル      | あり              |
-| `revisions:remindDeadlines`                          | mutation      | internal  | -               | -                 |
-| `seed:demo`                                          | mutation      | internal  | -               | -                 |
-| `semanticRules:current`                              | query         | internal  | -               | -                 |
-| `semanticRules:indexRule`                            | action        | internal  | -               | -                 |
-| `semanticRules:resolve`                              | query         | internal  | -               | -                 |
-| `semanticRules:search`                               | action        | public    | 1 ファイル      | あり              |
-| `semanticRules:store`                                | mutation      | internal  | -               | -                 |
-| `slackWorkspaces:add`                                | mutation      | public    | 1 ファイル      | あり              |
-| `slackWorkspaces:list`                               | query         | public    | 1 ファイル      | あり              |
-| `slackWorkspaces:remove`                             | mutation      | public    | 1 ファイル      | あり              |
-| `social:list`                                        | query         | public    | 5 ファイル      | あり              |
-| `social:remove`                                      | mutation      | public    | 1 ファイル      | あり              |
-| `social:save`                                        | mutation      | public    | 1 ファイル      | あり              |
-| `submissions:beginUpload`                            | mutation      | internal  | -               | あり              |
-| `submissions:completeUpload`                         | mutation      | internal  | -               | あり              |
-| `submissions:confirm`                                | mutation      | public    | 1 ファイル      | あり              |
-| `submissions:expireSessions`                         | mutation      | internal  | -               | -                 |
-| `submissions:failUpload`                             | mutation      | internal  | -               | あり              |
-| `submissions:get`                                    | query         | public    | -               | あり              |
-| `submissions:listOrphanObjects`                      | mutation      | internal  | -               | あり              |
-| `submissions:markObjectsPurged`                      | mutation      | internal  | -               | あり              |
-| `submissions:prepare`                                | mutation      | public    | 1 ファイル      | あり              |
-| `submissions:reset`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `submissions:resumeUpload`                           | mutation      | internal  | -               | あり              |
-| `submissions:voidRevision`                           | mutation      | public    | 1 ファイル      | あり              |
-| `teams:importBatch`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `teams:importDirectory`                              | query         | public    | 1 ファイル      | あり              |
-| `teams:list`                                         | query         | public    | 5 ファイル      | あり              |
-| `teams:remove`                                       | mutation      | public    | 1 ファイル      | あり              |
-| `teams:save`                                         | mutation      | public    | 1 ファイル      | あり              |
-| `users:avatars`                                      | query         | public    | 1 ファイル      | あり              |
-| `users:byIds`                                        | query         | public    | 1 ファイル      | あり              |
-| `users:search`                                       | query         | public    | 1 ファイル      | あり              |
-| `workMetrics:counts`                                 | query         | public    | -               | あり              |
-| `works:changeLifecycle`                              | mutation      | public    | -               | あり              |
-| `works:create`                                       | mutation      | public    | 1 ファイル      | あり              |
-| `works:get`                                          | query         | public    | 12 ファイル     | あり              |
-| `works:importBatch`                                  | mutation      | public    | 1 ファイル      | あり              |
-| `works:importDirectory`                              | query         | public    | 1 ファイル      | あり              |
-| `works:listMine`                                     | query         | public    | 1 ファイル      | あり              |
-| `works:listMinePage`                                 | query         | public    | 1 ファイル      | あり              |
-| `works:ogSummary`                                    | query         | internal  | -               | あり              |
-| `works:update`                                       | mutation      | public    | 4 ファイル      | あり              |
+| 名前                                | Convex の種類 | 公開/内部 | web・api が使う | Cloudflare にある |
+| ----------------------------------- | ------------- | --------- | --------------- | ----------------- |
+| `acl:adminWorks`                    | query         | public    | 1 ファイル      | あり              |
+| `acl:grant`                         | mutation      | public    | 1 ファイル      | あり              |
+| `acl:list`                          | query         | public    | 1 ファイル      | あり              |
+| `acl:revoke`                        | mutation      | public    | 1 ファイル      | あり              |
+| `acl:searchUsers`                   | query         | public    | 1 ファイル      | あり              |
+| `acl:workSummary`                   | query         | public    | -               | あり              |
+| `admin:auditLog`                    | query         | public    | 1 ファイル      | あり              |
+| `admin:setGeneration`               | mutation      | public    | 1 ファイル      | あり              |
+| `admin:setSystemAdmin`              | mutation      | public    | 1 ファイル      | あり              |
+| `admin:workStats`                   | query         | public    | 1 ファイル      | あり              |
+| `ai:prepare`                        | query         | internal  | -               | -                 |
+| `ai:proofread`                      | action        | public    | 1 ファイル      | あり              |
+| `ai:recordUse`                      | mutation      | internal  | -               | -                 |
+| `ai:reserve`                        | mutation      | internal  | -               | -                 |
+| `ai:status`                         | query         | public    | 1 ファイル      | あり              |
+| `aiWorkflow:cancel`                 | mutation      | public    | 1 ファイル      | あり              |
+| `aiWorkflow:claim`                  | mutation      | internal  | -               | -                 |
+| `aiWorkflow:execute`                | action        | internal  | -               | -                 |
+| `aiWorkflow:expire`                 | mutation      | internal  | -               | -                 |
+| `aiWorkflow:finish`                 | mutation      | internal  | -               | -                 |
+| `aiWorkflow:get`                    | query         | public    | 1 ファイル      | あり              |
+| `aiWorkflow:prepare`                | query         | internal  | -               | -                 |
+| `aiWorkflow:start`                  | mutation      | public    | 1 ファイル      | あり              |
+| `approvals:confirm`                 | mutation      | public    | 1 ファイル      | あり              |
+| `approvals:confirmationStatus`      | query         | public    | 1 ファイル      | あり              |
+| `approvals:finalize`                | mutation      | public    | 1 ファイル      | あり              |
+| `approvals:reopen`                  | mutation      | public    | 1 ファイル      | あり              |
+| `artifacts:authorizeAccess`         | query         | public    | 2 ファイル      | あり              |
+| `checks:add`                        | mutation      | public    | 1 ファイル      | あり              |
+| `checks:complete`                   | mutation      | public    | 1 ファイル      | あり              |
+| `checks:waive`                      | mutation      | public    | 1 ファイル      | あり              |
+| `collaboration:enable`              | mutation      | public    | 1 ファイル      | あり              |
+| `commentFiles:authorizeFile`        | query         | public    | 2 ファイル      | あり              |
+| `commentFiles:beginFileUpload`      | mutation      | internal  | -               | あり              |
+| `commentFiles:beginThumbUpload`     | mutation      | internal  | -               | あり              |
+| `commentFiles:completeFileUpload`   | mutation      | internal  | -               | あり              |
+| `commentFiles:completeThumbUpload`  | mutation      | internal  | -               | あり              |
+| `commentFiles:expireFiles`          | mutation      | internal  | -               | -                 |
+| `commentFiles:failFileUpload`       | mutation      | internal  | -               | あり              |
+| `commentFiles:prepare`              | mutation      | public    | 1 ファイル      | あり              |
+| `comments:assign`                   | mutation      | public    | 1 ファイル      | あり              |
+| `comments:carryCandidates`          | query         | public    | 1 ファイル      | あり              |
+| `comments:carryForward`             | mutation      | public    | 1 ファイル      | あり              |
+| `comments:decide`                   | mutation      | public    | 1 ファイル      | あり              |
+| `comments:edit`                     | mutation      | public    | 1 ファイル      | あり              |
+| `comments:editReply`                | mutation      | public    | 1 ファイル      | あり              |
+| `comments:events`                   | query         | public    | 1 ファイル      | あり              |
+| `comments:markRead`                 | mutation      | public    | 1 ファイル      | あり              |
+| `comments:migratedFromFeedback`     | query         | public    | 1 ファイル      | あり              |
+| `comments:post`                     | mutation      | public    | 1 ファイル      | あり              |
+| `comments:remove`                   | mutation      | public    | 1 ファイル      | あり              |
+| `comments:removeReply`              | mutation      | public    | 1 ファイル      | あり              |
+| `comments:reply`                    | mutation      | public    | 1 ファイル      | あり              |
+| `comments:searchMentionCandidates`  | query         | public    | 1 ファイル      | あり              |
+| `comments:setSubscription`          | mutation      | public    | 1 ファイル      | あり              |
+| `comments:toggleReaction`           | mutation      | public    | 1 ファイル      | あり              |
+| `comparisons:getOverride`           | query         | public    | 1 ファイル      | あり              |
+| `comparisons:saveOverride`          | mutation      | public    | 1 ファイル      | あり              |
+| `dashboard:check`                   | query         | public    | 3 ファイル      | あり              |
+| `dashboard:checkBadge`              | query         | public    | 1 ファイル      | あり              |
+| `dashboard:get`                     | query         | internal  | -               | -                 |
+| `dashboard:make`                    | query         | public    | 1 ファイル      | あり              |
+| `dashboard:works`                   | query         | public    | 3 ファイル      | あり              |
+| `delivery:enqueue`                  | mutation      | internal  | -               | -                 |
+| `delivery:plan`                     | query         | internal  | -               | -                 |
+| `delivery:record`                   | mutation      | internal  | -               | -                 |
+| `delivery:recordSlackLookup`        | mutation      | internal  | -               | -                 |
+| `delivery:reserveSlackDm`           | mutation      | internal  | -               | -                 |
+| `delivery:slackTarget`              | query         | internal  | -               | -                 |
+| `deliveryNode:deliver`              | action        | internal  | -               | -                 |
+| `deliveryNode:resolveSlack`         | action        | internal  | -               | -                 |
+| `documents:get`                     | query         | public    | 3 ファイル      | あり              |
+| `documents:save`                    | mutation      | public    | 3 ファイル      | あり              |
+| `documents:writable`                | query         | public    | 2 ファイル      | あり              |
+| `groups:list`                       | query         | public    | 2 ファイル      | あり              |
+| `groups:remove`                     | mutation      | public    | 1 ファイル      | あり              |
+| `groups:save`                       | mutation      | public    | 1 ファイル      | あり              |
+| `home:pinned`                       | query         | public    | 1 ファイル      | あり              |
+| `home:setPinned`                    | mutation      | public    | 1 ファイル      | あり              |
+| `home:submitTargets`                | query         | public    | 1 ファイル      | あり              |
+| `me:me`                             | query         | public    | 9 ファイル      | あり              |
+| `me:setAvatar`                      | mutation      | public    | 1 ファイル      | あり              |
+| `notation:categories`               | query         | public    | 1 ファイル      | あり              |
+| `notation:decide`                   | mutation      | public    | 1 ファイル      | あり              |
+| `notation:decideMany`               | mutation      | public    | 1 ファイル      | あり              |
+| `notation:importBatch`              | mutation      | public    | 1 ファイル      | あり              |
+| `notation:proposals`                | query         | public    | 2 ファイル      | あり              |
+| `notation:propose`                  | mutation      | public    | 2 ファイル      | あり              |
+| `notation:ruleBook`                 | query         | public    | 8 ファイル      | あり              |
+| `notation:ruleHistory`              | query         | public    | 1 ファイル      | あり              |
+| `notation:rulesForWork`             | query         | public    | 2 ファイル      | あり              |
+| `notation:save`                     | mutation      | public    | 1 ファイル      | あり              |
+| `notation:setEnabled`               | mutation      | public    | 1 ファイル      | あり              |
+| `notation:setManager`               | mutation      | public    | 1 ファイル      | あり              |
+| `notation:upsertCategory`           | mutation      | public    | 1 ファイル      | あり              |
+| `notationSeed:importSamples`        | mutation      | internal  | -               | -                 |
+| `notificationPrefs:get`             | query         | public    | 1 ファイル      | あり              |
+| `notificationPrefs:update`          | mutation      | public    | 2 ファイル      | あり              |
+| `notifications:continueMarkAllRead` | mutation      | internal  | -               | -                 |
+| `notifications:list`                | query         | public    | 3 ファイル      | あり              |
+| `notifications:markAllRead`         | mutation      | public    | 2 ファイル      | あり              |
+| `notifications:markRead`            | mutation      | public    | 3 ファイル      | あり              |
+| `notifications:markThreadRead`      | mutation      | public    | 1 ファイル      | あり              |
+| `notifications:markUnread`          | mutation      | public    | 2 ファイル      | あり              |
+| `notifications:sendTest`            | mutation      | public    | 1 ファイル      | あり              |
+| `notifications:unreadCount`         | query         | public    | 2 ファイル      | あり              |
+| `planInfo:check`                    | mutation      | public    | -               | あり              |
+| `planInfo:compare`                  | mutation      | public    | -               | あり              |
+| `planInfo:sync`                     | mutation      | internal  | -               | -                 |
+| `presence:disconnect`               | mutation      | public    | 1 ファイル      | あり              |
+| `presence:heartbeat`                | mutation      | public    | 1 ファイル      | あり              |
+| `presence:list`                     | query         | public    | 1 ファイル      | あり              |
+| `processing:cancel`                 | mutation      | public    | 1 ファイル      | あり              |
+| `processing:cleanupCandidates`      | query         | internal  | -               | あり              |
+| `processing:complete`               | mutation      | internal  | -               | あり              |
+| `processing:create`                 | mutation      | public    | 1 ファイル      | あり              |
+| `processing:expire`                 | mutation      | internal  | -               | あり              |
+| `processing:fail`                   | mutation      | internal  | -               | あり              |
+| `processing:figmaComplete`          | mutation      | internal  | -               | あり              |
+| `processing:get`                    | query         | public    | 2 ファイル      | あり              |
+| `processing:inspect`                | query         | internal  | -               | あり              |
+| `processing:markCleaned`            | mutation      | internal  | -               | あり              |
+| `processing:status`                 | query         | public    | 1 ファイル      | あり              |
+| `processing:streamSession`          | mutation      | internal  | -               | あり              |
+| `proofreading:claim`                | mutation      | public    | 1 ファイル      | あり              |
+| `proofreading:fail`                 | mutation      | public    | 1 ファイル      | あり              |
+| `proofreading:retry`                | mutation      | public    | 1 ファイル      | あり              |
+| `proofreading:run`                  | query         | public    | 1 ファイル      | あり              |
+| `proofreading:submit`               | mutation      | public    | 1 ファイル      | あり              |
+| `push:config`                       | query         | public    | 1 ファイル      | あり              |
+| `push:status`                       | query         | public    | 1 ファイル      | あり              |
+| `push:subscribe`                    | mutation      | public    | 1 ファイル      | あり              |
+| `push:unsubscribe`                  | mutation      | public    | 2 ファイル      | あり              |
+| `reviews:complete`                  | mutation      | public    | 2 ファイル      | あり              |
+| `reviews:myQueue`                   | query         | public    | -               | あり              |
+| `reviews:setReviewers`              | mutation      | public    | 2 ファイル      | あり              |
+| `revisions:closeExpired`            | mutation      | internal  | -               | -                 |
+| `revisions:get`                     | query         | public    | 8 ファイル      | あり              |
+| `revisions:markViewed`              | mutation      | public    | 1 ファイル      | あり              |
+| `revisions:remindDeadlines`         | mutation      | internal  | -               | -                 |
+| `seed:demo`                         | mutation      | internal  | -               | -                 |
+| `semanticRules:current`             | query         | internal  | -               | -                 |
+| `semanticRules:indexRule`           | action        | internal  | -               | -                 |
+| `semanticRules:resolve`             | query         | internal  | -               | -                 |
+| `semanticRules:search`              | action        | public    | 1 ファイル      | あり              |
+| `semanticRules:store`               | mutation      | internal  | -               | -                 |
+| `slackWorkspaces:add`               | mutation      | public    | 1 ファイル      | あり              |
+| `slackWorkspaces:list`              | query         | public    | 1 ファイル      | あり              |
+| `slackWorkspaces:remove`            | mutation      | public    | 1 ファイル      | あり              |
+| `social:list`                       | query         | public    | 5 ファイル      | あり              |
+| `social:remove`                     | mutation      | public    | 1 ファイル      | あり              |
+| `social:save`                       | mutation      | public    | 1 ファイル      | あり              |
+| `submissions:beginUpload`           | mutation      | internal  | -               | あり              |
+| `submissions:completeUpload`        | mutation      | internal  | -               | あり              |
+| `submissions:confirm`               | mutation      | public    | 1 ファイル      | あり              |
+| `submissions:expireSessions`        | mutation      | internal  | -               | -                 |
+| `submissions:failUpload`            | mutation      | internal  | -               | あり              |
+| `submissions:get`                   | query         | public    | -               | あり              |
+| `submissions:listOrphanObjects`     | mutation      | internal  | -               | あり              |
+| `submissions:markObjectsPurged`     | mutation      | internal  | -               | あり              |
+| `submissions:prepare`               | mutation      | public    | 1 ファイル      | あり              |
+| `submissions:reset`                 | mutation      | public    | 1 ファイル      | あり              |
+| `submissions:resumeUpload`          | mutation      | internal  | -               | あり              |
+| `submissions:voidRevision`          | mutation      | public    | 1 ファイル      | あり              |
+| `teams:importBatch`                 | mutation      | public    | 1 ファイル      | あり              |
+| `teams:importDirectory`             | query         | public    | 1 ファイル      | あり              |
+| `teams:list`                        | query         | public    | 5 ファイル      | あり              |
+| `teams:remove`                      | mutation      | public    | 1 ファイル      | あり              |
+| `teams:save`                        | mutation      | public    | 1 ファイル      | あり              |
+| `users:avatars`                     | query         | public    | 1 ファイル      | あり              |
+| `users:byIds`                       | query         | public    | 1 ファイル      | あり              |
+| `users:search`                      | query         | public    | 1 ファイル      | あり              |
+| `workMetrics:counts`                | query         | public    | -               | あり              |
+| `works:changeLifecycle`             | mutation      | public    | -               | あり              |
+| `works:create`                      | mutation      | public    | 1 ファイル      | あり              |
+| `works:get`                         | query         | public    | 12 ファイル     | あり              |
+| `works:importBatch`                 | mutation      | public    | 1 ファイル      | あり              |
+| `works:importDirectory`             | query         | public    | 1 ファイル      | あり              |
+| `works:listMine`                    | query         | public    | 1 ファイル      | あり              |
+| `works:listMinePage`                | query         | public    | 1 ファイル      | あり              |
+| `works:ogSummary`                   | query         | internal  | -               | あり              |
+| `works:update`                      | mutation      | public    | 4 ファイル      | あり              |
 
 ## 起動と設定
 

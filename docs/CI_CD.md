@@ -66,10 +66,10 @@ CI の壁時計（GitHub Actions）:
 
 ## CD（`deploy.yml`）
 
-| 先                     | いつ                                                                                                                                                                                                                                                       | 必要な設定                                                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| デモ版（実データなし） | **`develop` への push** で CI 完了後、集約ジョブ `verify` が success なら配る（e2e / visual の成否は問わない）。手動のデモ配布も同じ門。Secrets が無いあいだは配らずに飛ばす                                                                               | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                     |
-| 本番                   | **`main` への push**（通常は develop→main の merge）で CI 完了後、`verify` が success なら配る。Environment `production` に承認者を置けば配布前に止まる。手動 `workflow_dispatch`（`target: production`）も可。`seed_notation` / `fb_migration` は手動のみ | Environment `production` に Secrets: `CONVEX_DEPLOY_KEY`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`。Pages `mf100-refine`、R2 `mf100-assets` を一度だけ作る |
+| 先                     | いつ                                                                                                                                                                                                                                      | 必要な設定                                                                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| デモ版（実データなし） | **`develop` への push** で CI 完了後、集約ジョブ `verify` が success なら配る（e2e / visual の成否は問わない）。手動のデモ配布も同じ門。Secrets が無いあいだは配らずに飛ばす                                                              | リポジトリの Secrets: `CLOUDFLARE_API_TOKEN`（Pages の編集権限）・`CLOUDFLARE_ACCOUNT_ID`。Pages のプロジェクト `mf100-refine-demo` を一度だけ作っておく                                     |
+| 本番                   | **`main` への push**（通常は develop→main の merge）で CI 完了後、`verify` が success なら配る。Environment `production` に承認者を置けば配布前に止まる。手動 `workflow_dispatch`（`target: production`）も可。`seed_notation` は手動のみ | Environment `production` に Secrets: `CONVEX_DEPLOY_KEY`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`、Variables: `VITE_API_URL`。Pages `mf100-refine`、R2 `mf100-assets` を一度だけ作る |
 
 ## バックアップ照合（`backup-verify.yml`）
 
@@ -85,27 +85,6 @@ Web のビルドは、`VITE_CONVEX_URL` があるとき `dist/_worker.js` と `_
 
 - Deploy を手で起動するとき、`target: production` と一緒に `seed_notation` を入れると、Convex を配った直後に `convex run notationSeed:importSamples` を流す。
 - 入るのはデモ版と同じ表記ルール（`apps/convex/convex/lib/notationSamples.ts`）。同じ ruleId があれば飛ばすので、何度流しても増えない。記録上の実行者は最初のシステム管理者（いなければ失敗する）。
-
-## FB のコメントへの移行（2026-10-20）
-
-FB（フィードバック）を廃止してコメントへ移した（docs/UI_M3E.md §95）。本番のデータは、Deploy を手で起動して `target: production` と一緒に入力 `fb_migration` を選んで移す。配り終えてから、Convex の内部関数 `feedbackMigration:run` をデプロイキー（`CONVEX_DEPLOY_KEY`）で `convex run` し、返ったまとめ（JSON）を実行の Summary に出す。
-
-### 104A / 105A の移行（本番で 1 回）
-
-閲覧権限 `view` の廃止（104A）と機密区分 `confidentiality` の廃止（105A）。本番では 2026-11-03 に流し終えた（#253 の配布後）。スキーマの一時的な許容（`legacyPermissionLevel`・`legacyConfidentiality`）はその後に外した。別の環境（staging など）に古いデータがあるときは、配り終えたら同じ内部関数をデプロイキーで 1 回ずつ流す。
-
-```bash
-npx convex run migrations/decision104:upgradeViewPermissionGrants --prod
-npx convex run migrations/decision105:removeWorkConfidentiality --prod
-```
-
-返る数（`upgraded` / `patchedWorks` / `patchedEntries`）を記録する。
-
-1. `dry-run`: 何も書かず、移すスレッド・返信・添付・既読の数、未解決／解決済みの数、版が無くて移さない数、制作物ごとの上位 20 を数える。
-2. `migrate`: コメントへ移す。何度流しても増えない（移行済みは飛ばす）。
-3. `delete`: 全て移行済みであることを確かめてから、FB の行を全て消す。移っていないスレッドがあれば何も消さず `refused: true` を返す。R2 の実体には触れない。
-
-`none`（既定）は何も流さない。順番は dry-run → 件数を確かめる → migrate → 画面で確かめる → delete。FB の表は、delete を流し終えた後の変更で schema から落とす。
 
 ## 基盤の追加改善
 
