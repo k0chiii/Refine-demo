@@ -3568,13 +3568,6 @@ m3e-icon.icon--on {
     "GRAD" 0,
     "opsz" 24;
 }
-.swatch {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid var(--mf-outline-variant);
-}
 .wtb-menu__kbd {
   font: var(--mf-type-label-medium);
   color: var(--mf-on-surface-variant);
@@ -3616,6 +3609,46 @@ m3e-icon.icon--on {
     padding: 48px 32px;
     min-height: 0;
   }
+}
+/* 原文（Markdown）: 紙面と同じ場所・同じ余白に、等幅の欄を内容の高さまで伸ばして置く */
+.msrc__note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border-radius: var(--mf-shape-md, 12px);
+  background: var(--mf-secondary-container);
+  color: var(--mf-on-secondary-container);
+  font: var(--mf-type-body-medium);
+}
+.msrc__note m3e-icon {
+  flex: none;
+}
+.msrc__area {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 60vh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  caret-color: var(--mf-primary);
+  font:
+    400 0.9375rem / 1.75 ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Consolas,
+    "Noto Sans Mono CJK JP",
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
 }
 /* 本文の文字。段落スタイルを M3 のタイプスケールに対応させる（body-large / headline-medium / headline-small / title-large） */
 .doc {

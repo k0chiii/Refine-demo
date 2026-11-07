@@ -398,3 +398,15 @@
     animation: none;
   }
 }
+
+/* 紙面の横のカードの中の返信欄（選んだカードだけ）。カードの面の上なので、欄は 1 段明るい面にする */
+.thread__inline-reply {
+  margin-top: 8px;
+  cursor: auto;
+}
+.thread__inline-reply .thread__form {
+  margin-top: 0;
+}
+.thread__inline-reply .rt--composer {
+  background: var(--mf-surface-container-lowest);
+}

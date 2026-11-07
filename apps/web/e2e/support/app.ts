@@ -203,6 +203,16 @@ export class App {
     return this.page.locator("m3e-dialog[open]");
   }
 
+  /** 文章エディタの上のツールバーの「原文／プレビュー」の切り替え（radio） */
+  writeMode(name: "原文" | "プレビュー") {
+    return this.page.getByRole("radio", { name });
+  }
+
+  /** 文章エディタの Markdown の原文（原文のあいだだけ出る） */
+  writeSource() {
+    return this.page.getByRole("textbox", { name: "Markdown の原文" });
+  }
+
   /** outlined form-field 内の M3E 日付（YYYY-MM-DD） */
   async fillOutlinedDate(scope: Locator, fieldLabel: string, isoDate: string) {
     const [y, m, d] = isoDate.split("-");
@@ -266,6 +276,21 @@ export class App {
       Object.defineProperty(e, "keyCode", { get: () => 229 });
       el.dispatchEvent(e);
     });
+  }
+
+  /**
+   * 日本語入力のまま文字を打って確定する（変換中の文字を出してから確定。Chrome の IME と同じ合図の順）。
+   * Playwright の type は半角のキーしか送れないので、CDP の Input.imeSetComposition / insertText を使う。フォーカスは先に当てておく
+   */
+  async imeType(text: string) {
+    const cdp = await this.page.context().newCDPSession(this.page);
+    await cdp.send("Input.imeSetComposition", {
+      text,
+      selectionStart: text.length,
+      selectionEnd: text.length,
+    });
+    await cdp.send("Input.insertText", { text });
+    await cdp.detach();
   }
 
   /** PDF の最初のページが描かれるまで待つ */
@@ -351,6 +376,17 @@ export class App {
   /** 下のツールバーの、文字の選択を「コメント」と「文字（コピーなど）」で切り替えるトグル（aria-pressed が文字か） */
   selectModeToggle() {
     return this.page.locator(".ws__toolbar m3e-icon-button.ws__select-mode");
+  }
+
+  /** 紙面に出す添付を選ぶ（下部ツールバーのクリップのボタンのメニュー。SNS の版は「投稿のプレビュー」も並ぶ） */
+  async pickArtifact(name: string) {
+    await this.page.locator('.ws__toolbar m3e-icon-button[aria-label="添付を切り替え"]').click();
+    await this.page
+      .locator("#artifact-menu m3e-menu-item-radio", { hasText: name })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await this.settle();
   }
 
   /** エディタの引き出し（コメント／版／情報）を開く */

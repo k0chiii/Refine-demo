@@ -284,11 +284,11 @@ const autoProofreadDone = async (coldTimeout) => {
   );
   ocrWarm = true;
 };
-/** 添付の切替（下部ツールバーのピンのボタンのメニュー） */
+/** 添付の切替（下部ツールバーのクリップのボタンのメニュー） */
 const pickArtifact = async (name) => {
-  await page.locator('.ws__toolbar m3e-icon-button[aria-label="コメントの表示"]').click();
+  await page.locator('.ws__toolbar m3e-icon-button[aria-label="添付を切り替え"]').click();
   await page
-    .locator("#viewer-more-menu m3e-menu-item-radio:visible", { hasText: name })
+    .locator("#artifact-menu m3e-menu-item-radio:visible", { hasText: name })
     .first()
     .click();
   await settle();

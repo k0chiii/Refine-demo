@@ -130,6 +130,8 @@ export const get = query({
         can: {
           comment: canPostNow,
           decide: isAllowed("comment.decide", authz) && work.lifecycle !== "finalized",
+          /** コメントを解決で閉じられる（採否を決められなくても、校了者は解決だけできる） */
+          resolve: isAllowed("comment.resolve", authz) && work.lifecycle !== "finalized",
           reply: isAllowed("comment.reply", authz) && work.lifecycle !== "finalized",
           assign: isAllowed("review.assign", authz),
           addCheck: isAllowed("review.assign", authz) && work.lifecycle !== "finalized",

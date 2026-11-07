@@ -22,8 +22,6 @@ export function MobileFormatBar({
   state: s,
   keyboard,
   onStyle,
-  onColor,
-  onHighlight,
   onLink,
   onMore,
 }: {
@@ -32,8 +30,6 @@ export function MobileFormatBar({
   /** キーボードが出ているか（出ているときだけ「キーボードを閉じる」を出す） */
   keyboard: boolean;
   onStyle: () => void;
-  onColor: () => void;
-  onHighlight: () => void;
   onLink: () => void;
   onMore: () => void;
 }) {
@@ -96,8 +92,7 @@ export function MobileFormatBar({
         btn("斜体", "format_italic", s.italic, cmd.italic),
         btn("下線", "format_underlined", s.underline, cmd.underline),
         btn("取り消し線", "format_strikethrough", s.strike, cmd.strike),
-        btn("文字の色", "format_color_text", null, onColor),
-        btn("ハイライトの色", "ink_highlighter", null, onHighlight),
+        btn("ハイライト", "ink_highlighter", s.highlight, cmd.highlight),
       ],
     },
     block: {
@@ -108,9 +103,6 @@ export function MobileFormatBar({
         btn("チェックリスト", "checklist", s.task, cmd.task),
         btn("インデント減", "format_indent_decrease", null, cmd.lift),
         btn("インデント増", "format_indent_increase", null, cmd.sink),
-        btn("中央揃え", "format_align_center", s.align === "center", () =>
-          cmd.align(s.align === "center" ? "left" : "center"),
-        ),
       ],
     },
     insert: {
