@@ -32,7 +32,7 @@ export const SLIDE_DECK = "企画説明会スライド";
 export const SELF_CHECKS = ["theme_font", "balance", "committee_output"] as const;
 
 type Demo = {
-  /** 撮影の道具（scripts/stack-pr）は seed の選択肢を渡す。いまの seed.demo は選択肢を持たず受け流す */
+  /** 撮影の道具（削除済み）は seed の選択肢を渡していた。いまの seed.demo は選択肢を持たず受け流す */
   ensureSeeded(opts?: {
     skipPamphletComments?: boolean;
     skipPlanInfoWarnings?: boolean;

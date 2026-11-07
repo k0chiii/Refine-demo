@@ -5,7 +5,6 @@ import {
   resolveWorkImport,
   teamPath,
   workCsvTemplate,
-  workCsvTemplateColumns,
   type PersonMatch,
   type Team,
   type TeamRefMatch,

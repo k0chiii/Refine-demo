@@ -1,8 +1,9 @@
 import puppeteer from "@cloudflare/puppeteer";
-import type { Bindings } from "./env";
+import { backendSiteUrl, type Bindings } from "./env";
 import { createFigmaClient } from "./adapters/figmaClient";
 import { outputKey, publicSnapshotUrl } from "./processingSecurity";
 import { processingGateway } from "./processingGateway";
+import { toHex } from "./toHex";
 import type { Id } from "@mf100/convex/dataModel";
 
 export interface ProcessingEnv extends Bindings {
@@ -46,7 +47,7 @@ async function putDerived(
 }
 
 export async function processFileJob(env: ProcessingEnv, id: string): Promise<void> {
-  const service = processingGateway(env.CONVEX_SITE_URL, env.PROCESSING_SECRET);
+  const service = processingGateway(backendSiteUrl(env), env.PROCESSING_SECRET);
   const jobId = id as Id<"processingJobs">;
   const info = await service("inspect", { jobId });
   if (info.job.state === "ready") return;
@@ -79,9 +80,7 @@ export async function processFileJob(env: ProcessingEnv, id: string): Promise<vo
         if (!url) throw new Error("figma_render_failed");
         const bytes = await client.download(url);
         if (bytes.byteLength > MAX_DERIVED_BYTES) throw new Error("figma_image_too_large");
-        const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
-          .map((n) => n.toString(16).padStart(2, "0"))
-          .join("");
+        const sha = toHex(await crypto.subtle.digest("SHA-256", bytes));
         const meta = {
           nodeName: node.name,
           box: node.box,

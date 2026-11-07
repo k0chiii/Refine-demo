@@ -294,7 +294,7 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
       insert: async (t) => state.threads.insert(t),
       insertMany: async (ts) => {
         const out = [];
-        for (const t of ts) out.push(await state.threads.insert(t));
+        for (const t of ts) out.push(state.threads.insert(t));
         return out;
       },
       update: async (t) => state.threads.put(t),

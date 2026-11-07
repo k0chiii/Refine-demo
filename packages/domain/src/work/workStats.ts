@@ -2,6 +2,7 @@ import type { ApprovalEvent } from "../approval/ApprovalPolicy.ts";
 import type { CommentEvent, CommentThread } from "../comment/CommentThread.ts";
 import { teamPath, type Team } from "../org/team.ts";
 import { revisionLabel, type Revision } from "../revision/Revision.ts";
+import { csvCell } from "../shared/csvValues.ts";
 import { toJstDate } from "../shared/deadline.ts";
 import type { Instant } from "../shared/time.ts";
 import type { Work, WorkLifecycle } from "./Work.ts";
@@ -155,10 +156,6 @@ const statsColumns: ReadonlyArray<[string, (r: WorkStatsRow) => string]> = [
   ["持ち越し", (r) => String(r.deferredCount)],
   ["不採用・持ち越しの理由", (r) => r.decisionReasons],
 ];
-
-function csvCell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
 
 /** 集計の CSV（見出しは日本語、日付は JST の暦日）。Excel で文字化けしないよう先頭に BOM を付けるのは書き出す側 */
 export function workStatsToCsv(rows: readonly WorkStatsRow[]): string {

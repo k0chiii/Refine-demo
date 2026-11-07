@@ -2,6 +2,7 @@
 
 import type { DeliveryPlan, DeliveryTarget, SlackMemberKey } from "@mf100/application";
 import type { DeliveryChannel, DestinationKey, SendOutcome } from "@mf100/domain";
+import { sendWebPush, sleepFor, webPushOutcome } from "@mf100/platform";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
@@ -9,9 +10,7 @@ import { internalAction } from "./_generated/server";
 import type { DeliveryTargetArg } from "./delivery.ts";
 import { type DeliveryConfig, deliveryConfigFromEnv } from "./lib/channels.ts";
 import { sendEmail } from "./lib/email.ts";
-import { sleepFor } from "./lib/retryAfter.ts";
 import { lookupSlackMember, type MeichanConfig, postSlackDm } from "./lib/slack.ts";
-import { sendWebPush, webPushOutcome } from "./lib/webpush.ts";
 
 /*
  * 外への通知を送る（端末・Nogiku のメールアドレス・Slack の DM）。Node ランタイムで動かす（Web Push の WebCrypto の ECDH・HKDF を確実に使うため）。
@@ -75,7 +74,11 @@ async function send(
       const ref = { channel: "push", subscriptionId: t.device.id } as const;
       if (!c.push) return { outcome: NOT_CONFIGURED, ref };
       try {
-        const status = await sendWebPush(t.device, t.payload, c.push, { now: Date.now() });
+        const { status } = await sendWebPush({
+          subscription: t.device,
+          payload: t.payload,
+          vapid: c.push,
+        });
         return { outcome: webPushOutcome(status), ref };
       } catch {
         // 暗号化で投げた（購読の鍵が壊れているなど）。つながらないときと同じくやり直しに回す

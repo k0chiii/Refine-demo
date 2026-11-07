@@ -10,7 +10,7 @@ import { mkdirSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.OUT_DIR ?? resolve(here, "../out/motion");

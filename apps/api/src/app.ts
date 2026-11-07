@@ -28,7 +28,7 @@ import type {
   TokenVerifier,
   UploadOps,
 } from "./ports.ts";
-import { GatewayError } from "./ports.ts";
+import { GatewayError, gatewayStatus } from "./ports.ts";
 import { requestTelemetry, type RequestMetric } from "./telemetry.ts";
 
 export interface AppDeps {
@@ -46,7 +46,7 @@ export interface AppDeps {
   figma?: FigmaClient | null;
   /** gzip の実体を伸長しながら SHA-256 を取る口（既定は Workers の crypto.DigestStream。テストは差し替える） */
   sha256Sink?: () => Sha256Sink;
-  /** Figma の書き出しの倍率（domain の FigmaPolicy.renderScale。既定 2） */
+  /** Figma の書き出しの倍率（既定 2） */
   figmaScale?: number;
 }
 
@@ -555,18 +555,7 @@ export function createApp(deps: AppDeps) {
 
   app.onError((error, c) => {
     if (error instanceof GatewayError) {
-      const status =
-        error.code === "unauthenticated"
-          ? 401
-          : error.code === "upload_service_unavailable"
-            ? 503
-            : error.code === "bad_request"
-              ? 400
-              : error.code === "forbidden" || error.code.startsWith("acl_")
-                ? 403
-                : error.code.endsWith("not_found")
-                  ? 404
-                  : 409;
+      const status = gatewayStatus(error.code);
       return c.json({ code: error.code, details: error.details }, status);
     }
     console.error("http_unhandled_error");

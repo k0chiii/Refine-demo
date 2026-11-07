@@ -322,7 +322,7 @@ export async function authorizeCommentFile(
   const { fileId, variant } = input;
   const file = await ctx.commentFiles.findFile(fileId);
   if (!file) throw new DomainError("forbidden", { fileId });
-  const { work } = await loadAuthorizedWork(ctx, principal, file.workId, "work.view");
+  await loadAuthorizedWork(ctx, principal, file.workId, "work.view");
   let host: { threadDeleted: boolean; replyDeleted: boolean } | null = null;
   if (file.threadId !== undefined) {
     const thread = await ctx.threads.findById(file.threadId);

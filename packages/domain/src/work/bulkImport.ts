@@ -1,6 +1,12 @@
 import { parseCsv } from "../notation/importer.ts";
 import { matchTeam, type Team, type TeamMatch } from "../org/team.ts";
-import { parseCsvBoolean, parseCsvDateTime, splitCsvList } from "../shared/csvValues.ts";
+import {
+  csvCell,
+  normalizePersonKey,
+  parseCsvBoolean,
+  parseCsvDateTime,
+  splitCsvList,
+} from "../shared/csvValues.ts";
 import { toJstDate } from "../shared/deadline.ts";
 import type { Instant } from "../shared/time.ts";
 import {
@@ -173,11 +179,6 @@ const mediaAliases: Record<string, MediaType> = {
   その他: "other",
   other: "other",
 };
-
-/** 全角英数・全角空白をそろえ、連続する空白を 1 つに（名前・見出しの照合用） */
-export function normalizePersonKey(value: string): string {
-  return value.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
-}
 
 const splitList = splitCsvList;
 
@@ -652,10 +653,6 @@ export function resolveWorkImport(
     };
   });
   return { rows, errors: parsed.errors, ready: rows.filter((r) => r.input).length };
-}
-
-function csvCell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
 /**

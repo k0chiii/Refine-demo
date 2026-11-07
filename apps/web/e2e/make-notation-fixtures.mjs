@@ -6,7 +6,7 @@
  * - notation-scan.pdf: 文字を画像として貼った PDF（文字の無いページの OCR 用）
  * 実行: node e2e/make-notation-fixtures.mjs
  */
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";

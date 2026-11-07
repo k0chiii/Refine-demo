@@ -2,7 +2,7 @@ import { toHiragana } from "../account/personName.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
-import { teamNameKey } from "./team.ts";
+import { normalizePersonKey } from "../shared/csvValues.ts";
 
 /**
  * メンバーのグループ（利用者指示 2026-10-21「メンバーに対してグループという概念を作り、校正者や @メンションに
@@ -57,8 +57,8 @@ export function validateMemberGroup(
   if (Array.from(name).length > MEMBER_GROUP_NAME_MAX) throw invalid("name", "too_long");
   if (/[@＠]/.test(name)) throw invalid("name", "has_at");
   const others = existing.filter((g) => g.id !== selfId);
-  const key = teamNameKey(name);
-  if (others.some((g) => teamNameKey(g.name) === key))
+  const key = normalizePersonKey(name);
+  if (others.some((g) => normalizePersonKey(g.name) === key))
     throw new DomainError("group_duplicate", { name });
   const memberIds: UserId[] = [];
   for (const raw of input.memberIds) {
@@ -91,7 +91,7 @@ export function searchMemberGroups<G extends Pick<MemberGroup, "name" | "order">
   groups: readonly G[],
   text: string,
 ): G[] {
-  const fold = (s: string) => toHiragana(teamNameKey(s)).replace(/\s+/g, "");
+  const fold = (s: string) => toHiragana(normalizePersonKey(s)).replace(/\s+/g, "");
   const q = fold(text);
   return sortMemberGroups(groups.filter((g) => q === "" || fold(g.name).includes(q)));
 }

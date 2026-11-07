@@ -13,8 +13,7 @@
   },
   "scripts": {
     "test": "vp test run",
-    "typecheck": "vp run verify-types",
-    "pack": "vp pack"
+    "typecheck": "vp run verify-types"
   },
   "devDependencies": {
     "typescript": "5.9.3",

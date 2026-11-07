@@ -1,0 +1,30 @@
+{
+  "name": "@mf100/cloudflare",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MF100 業務データの正本の Cloudflare 版（Hono + Durable Object SQLite）。application 層のポートを SQLite で実装するアダプタ。Convex と同じ契約を、同じテストで確かめる。",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/ensure-dev-vars.mjs && wrangler dev --var DEV_IDENTITY:allow --var NOGIKU_MOCK_ENABLED:true",
+    "test": "vp test run",
+    "typecheck": "vp run verify-types",
+    "migrate:export": "node scripts/migrate/export-convex.mjs",
+    "migrate:import": "node scripts/migrate/import-to-worker.mjs",
+    "types": "wrangler types worker-configuration.d.ts --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@mf100/application": "workspace:*",
+    "@mf100/domain": "workspace:*",
+    "@mf100/platform": "workspace:*",
+    "hono": "4.13.13",
+    "jose": "6.2.10",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@mf100/convex": "workspace:*",
+    "convex-test": "0.0.61",
+    "typescript": "5.9.3",
+    "vite-plus": "1.2.0",
+    "wrangler": "^4.151.3"
+  }
+}

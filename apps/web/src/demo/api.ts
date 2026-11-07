@@ -1,5 +1,13 @@
 /** `@/integrations/api` の差し替え（デモモード）: Hono/R2 の代わりにメモリ上の Blob を使う。 */
 import { createCacheStorePersistence } from "@/lib/artifactCacheStore";
+import type {
+  CommentUploadOptions,
+  CommentUploadResult,
+  FigmaImportItemInput,
+  FigmaImportItemResult,
+  UploadResult,
+} from "@/integrations/api.types";
+import { saveBlob } from "@/lib/saveBlob";
 import {
   ArtifactError,
   ArtifactFiles,
@@ -20,6 +28,14 @@ import { demo } from "./backend";
 export const API_URL = "demo://";
 
 export { sha256Hex };
+
+export type {
+  CommentUploadOptions,
+  CommentUploadResult,
+  FigmaImportItemInput,
+  FigmaImportItemResult,
+  UploadResult,
+} from "@/integrations/api.types";
 
 /** 本番と同じ用意（ダウンロード専用の原本は gzip）。圧縮しても上限に収まらないときは理由つきで断る */
 async function encodeOrExplain(
@@ -46,13 +62,6 @@ const demoUploads: Array<{
 (globalThis as { __mf100DemoUploads?: typeof demoUploads }).__mf100DemoUploads = demoUploads;
 const gzipOf = (u: EncodedUpload) =>
   u.encoding === "gzip" ? { body: u.body, originalSize: u.originalSize } : undefined;
-
-export interface UploadResult {
-  itemId: string;
-  status: string;
-  failureMessage: string | null;
-  size: number;
-}
 
 export async function uploadItem(
   _token: string,
@@ -176,21 +185,6 @@ export async function downloadArtifact(token: string, artifactId: string, fileNa
 
 // ---------------------------------------------------------------- コメント・返信の添付（本番の /comment-files/* と同じ流れ）
 
-export interface CommentUploadResult {
-  fileId: string;
-  status: string;
-  failureMessage: string | null;
-  size: number;
-  thumb: boolean;
-}
-
-export interface CommentUploadOptions {
-  thumb?: Blob | null;
-  onProgress?: (fraction: number) => void;
-  signal?: AbortSignal;
-  onPhase?: (phase: UploadPhase) => void;
-}
-
 export async function uploadCommentFile(
   _token: string,
   fileId: string,
@@ -279,28 +273,7 @@ export async function clearFileStores(token: string | null): Promise<void> {
   );
 }
 
-function saveBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
 // ---------------------------------------------------------------- Figma の取り込み（デモ: 同梱の見本 PNG を使う。ネットワーク無し）
-
-export interface FigmaImportItemInput {
-  itemId: string;
-  fileKey: string;
-  nodeId: string;
-}
-export interface FigmaImportItemResult {
-  itemId: string;
-  status: string;
-  failureMessage: string | null;
-  nodeName: string | null;
-}
 
 export async function figmaStatus(_token: string): Promise<{ enabled: boolean }> {
   return { enabled: true };

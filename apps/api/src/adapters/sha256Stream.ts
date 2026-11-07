@@ -1,4 +1,5 @@
 import type { Sha256Sink } from "../ports.ts";
+import { toHex } from "../toHex.ts";
 
 type DigestStreamCtor = new (algorithm: string) => WritableStream<Uint8Array> & {
   digest: Promise<ArrayBuffer>;
@@ -15,8 +16,7 @@ export function workersSha256Sink(): Sha256Sink {
   return {
     writable: stream,
     async digest() {
-      const bytes = new Uint8Array(await stream.digest);
-      return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+      return toHex(await stream.digest);
     },
   };
 }

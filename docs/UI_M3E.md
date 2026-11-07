@@ -411,7 +411,7 @@ m3.material.io は Angular の SPA で、本文は `/_dsm/content/m3/<版>/<ペ�
 
 ## 16. 検索バーを一旦外す・レールのヘッダーをアプリバーに揃える（2026-10-14・利用者指摘）
 
-- **検索バー**: 利用者判断で一旦外した。部品は `features/work/WorkSearch.tsx` に残し、制作物一覧の `?q=` も残してある（戻すときは `_app.tsx` の題名スロットに置く）。アプリバーは題名も検索も無く、medium 以上はベル＋アカウント、compact はアカウントだけ。
+- **検索バー**: 利用者判断で一旦外した。部品（`WorkSearch.tsx`）は使わなくなったので消した。制作物一覧の `?q=` は残してある（戻すときは `_app.tsx` の題名スロットに部品を書き直す）。アプリバーは題名も検索も無く、medium 以上はベル＋アカウント、compact はアカウントだけ。
 - **高さが揃っていなかった理由**: M3 Navigation rail の規定「上端からヘッダー（メニュー）まで 44dp」を M3E がそのまま既定（`--m3e-nav-rail-top-space`）にしており、44 ＋ ボタン 40 の中心 ＝ 64 で、アプリバー（64）のアイコン中心 32 と 32 ずれていた。44 は Android のステータスバーを含む前提の値。
 - **対応**: web ではステータスバーが無いので、レールの上余白を 12 にして メニューの中心を 32 に揃えた（12 ＋ 40 / 2）。FAB と行き先はそのぶん上に詰まる（ヘッダーと FAB の間隔 16 は M3E 既定のまま）。
 - **アイコンの位置が動いて見えた理由**: 選択で太さ（wght）を 400 → 500、ホバーで 600 に変えていたため、字面が外側へ膨らんで動いて見えていた（枠の位置は実測で不変: アイコン x=36、幅 24）。M3 の active icon は「塗り（filled）」であって太さは変えない。wght を常に 400 にし、FILL だけを変化させるようにした。
@@ -2425,7 +2425,7 @@ domain（やり取り・未読・宛先）・application（返信の通知・未
 
 FB をコメントに統合する作業の最後。§92（書式）・§93（添付）・§94（スレッドのパネル・未読・返信の通知）でコメントが FB の代わりになったので、FB の画面と機能を無くし、本番にある FB はコメントへ移してから消す。**校了の条件（全コメントが解決）と、校了でコメントを閉じることは変えない**（1.A・2.A）。
 
-### 移し方（domain `feedback/migration.ts`・application `usecases/feedbackMigration.ts`）
+### 移し方（実行のコード〔domain `feedback/migration.ts`・Convex `feedbackMigration.ts`〕は削除済み。残るのは `usecases/feedbackMigration.ts` の `resolveMigratedFeedbackThread` だけ）
 
 対象は、削除されておらず、削除されていない投稿が 1 件以上ある FB のスレッド。1 スレッドが 1 つのコメントになる。
 
@@ -2438,13 +2438,9 @@ FB をコメントに統合する作業の最後。§92（書式）・§93（添
 - **R2 の清掃との関係**: 移した添付は `commentFiles` の行が `objectKey` を持つ。清掃は添付の行の `objectKey` で消す（コメントの添付と同じ）ので、移したコメントを削除したときだけ、その添付の実体を消す。FB の添付の清掃（`feedback:`）は廃止し、`feedbackFiles` の行を消す手順は R2 の削除を予約しない。旧い `feedback:` の印は読み捨てる。Hono の `GET /comment-files/:fileId` は Convex の認可が返す `objectKey` をそのまま配信するので、`feedback/…` のキーでも読める（試験で確認）。
 - **旧 FB の通知・リンク**: 既に届いている `feedback_posted` / `feedback_mentioned` の通知は、読むときに移し先のコメントへ付け替える（`threadId`・`revisionId` を移し先のものにする → ベルから `/revisions/{版}?thread={コメント}` が開く）。移していない通知は行き先を持たない（制作物・版・スレッドの ID を返さない）。見られるかは制作物の閲覧権限（`canViewWork`）で守る（FB 専用の判定はやめた）。新しい FB の通知は作らない。URL の `/feedback/{スレッド}` は `comments.migratedFromFeedback` で移し先を引いて開く（見つからなければ制作物の一覧）。
 
-### 本番での手順（Deploy の手動起動）
+### 本番での手順（廃止）
 
-Deploy を手で起動し（`target: production`）、入力 `fb_migration` を次の順に選ぶ。配り終えてから Convex の内部関数 `feedbackMigration:run` をデプロイキーで流し（`convex run`）、返ってきたまとめを実行の「Summary」に出す。内部関数なので利用者は呼べない。
-
-1. `dry-run`: 何も書かず、`scanned`（走査したスレッド）・`threads`（移すスレッド）・`replies`・`files`・`filesSkipped`・`reads`・`skippedNoRevision`・`skippedNotLive`・`alreadyMigrated`・`willBeOpen`・`willBeResolved` と、移すスレッドが多い制作物の上位 20（`topWorks`。ID のみ）を返す。件数を確かめる。
-2. `migrate`: コメントへ移す。10 スレッドずつトランザクションを分けて最後まで進む（1 回の呼び出しで終わる。5 分を超えるときは自分を予約して続け、結果は関数のログに出る）。**何度流しても増えない**（移行済みは `alreadyMigrated`）。dry-run と同じ内訳（`open` / `resolved`）を返す。
-3. `delete`: **全ての生きている FB のスレッドが移行済みであることを確かめてから**（版の無い制作物の FB など、移せなかった生きたスレッドが 1 つでも残っていれば消さない。利用者指示 2026-10-20「コメントとFBは消えないようにmigrateしたい」）、`feedbackReads`・`feedbackFiles`・`feedbackPosts`・`feedbackThreads` の行を全て消す。移っていないスレッドが 1 つでもあれば、何も消さず `refused: true` と `unsettledThreads` を返す。R2 の実体には触れない。
+Deploy の手動起動の入力 `fb_migration` と、Convex の内部関数 `feedbackMigration:*`（dry-run → migrate → delete）は削除した。
 
 FB の 4 つの表は、この変更では schema に残す（移行と削除のため）。`delete` を本番で流し終えた後の変更で、schema から落とす。
 

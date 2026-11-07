@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "hono/utils/buffer";
 import { boundedText } from "./boundedBody";
 /** Private service endpoint. Business authorization and quota reservation happen in Convex before calling. */
 export interface AiBinding {
@@ -11,10 +12,7 @@ export async function workersAi(
     return new Response(null, { status: 404 });
   const provided = request.headers.get("Authorization") ?? "";
   const expected = `Bearer ${options.secret}`;
-  let mismatch = provided.length ^ expected.length;
-  for (let n = 0; n < expected.length; n++)
-    mismatch |= (provided.charCodeAt(n) || 0) ^ expected.charCodeAt(n);
-  if (mismatch) return new Response(null, { status: 404 });
+  if (!(await timingSafeEqual(provided, expected))) return new Response(null, { status: 404 });
   if (request.method !== "POST") return new Response(null, { status: 405 });
   let input: { text?: unknown; rules?: unknown; model?: unknown };
   try {

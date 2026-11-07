@@ -2,15 +2,11 @@ import { api } from "@mf100/convex/api";
 import type { Id } from "@mf100/convex/dataModel";
 import { ConvexHttpClient } from "convex/browser";
 import { ConvexError } from "convex/values";
-import { createCoalescer } from "../inflight.ts";
 import type { BackendGateway, ThumbOps, UploadAttemptTarget, UploadOps } from "../ports.ts";
 import { GatewayError } from "../ports.ts";
+import { buildThumbOps, buildUploadOps, createAuthorizeCoalescer } from "./gatewayCommon.ts";
 
-/**
- * 実行中の同じ認可の問い合わせをまとめる（isolate の中で共有。結果は残さない。inflight.ts）。
- * キーに利用者のトークンを含めるので、別の利用者・別のトークンの結果が混ざることはない
- */
-const coalesceAuthorize = createCoalescer();
+const coalesceAuthorize = createAuthorizeCoalescer();
 
 export interface ConvexGatewayConfig {
   requestId?: string;
@@ -77,48 +73,30 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
     throw new Error(`upload service failed: ${res.status}`);
   };
 
-  const uploads = (prefix: string, idKey: "itemId" | "fileId"): UploadOps => ({
-    async begin(token, id) {
-      const target = await call<UploadAttemptTarget>(token, `${prefix}/begin`, { [idKey]: id });
-      if (
-        typeof target.attemptId !== "string" ||
-        typeof target.objectKey !== "string" ||
-        !target.objectKey
-      )
-        throw new Error("upload service returned an invalid target");
-      return target;
-    },
-    async resume(token, attemptId) {
-      return call(token, `${prefix}/resume`, { attemptId });
-    },
-    async complete(token, attemptId, meta) {
-      return call(token, `${prefix}/complete`, { attemptId, ...meta });
-    },
-    async fail(token, attemptId, message) {
-      await call(token, `${prefix}/fail`, { attemptId, message });
-    },
-  });
+  const uploads = (prefix: string, idKey: "itemId" | "fileId"): UploadOps =>
+    buildUploadOps({
+      begin: (token, id) => call<UploadAttemptTarget>(token, `${prefix}/begin`, { [idKey]: id }),
+      resume: (token, attemptId) => call(token, `${prefix}/resume`, { attemptId }),
+      complete: (token, attemptId, meta) =>
+        call(token, `${prefix}/complete`, { attemptId, ...meta }),
+      fail: async (token, attemptId, message) => {
+        await call(token, `${prefix}/fail`, { attemptId, message });
+      },
+    });
 
-  const thumbs: ThumbOps = {
-    async begin(token, fileId) {
-      const target = await call<{ objectKey: string; fileName: string }>(
-        token,
-        "/internal/comments/thumbs/begin",
-        { fileId },
-      );
-      if (typeof target.objectKey !== "string" || !target.objectKey)
-        throw new Error("upload service returned an invalid target");
-      return target;
-    },
-    async complete(token, fileId, meta) {
-      return call(token, "/internal/comments/thumbs/complete", { fileId, ...meta });
-    },
-  };
+  const thumbs: ThumbOps = buildThumbOps({
+    begin: (token, fileId) =>
+      call<{ objectKey: string; fileName: string }>(token, "/internal/comments/thumbs/begin", {
+        fileId,
+      }),
+    complete: (token, fileId, meta) =>
+      call(token, "/internal/comments/thumbs/complete", { fileId, ...meta }),
+  });
 
   return {
     itemUploads: uploads("/internal/uploads/items", "itemId"),
     authorizeArtifact(token, artifactId) {
-      return coalesceAuthorize(`artifact\n${artifactId}\n${token}`, () =>
+      return coalesceAuthorize.artifact(token, artifactId, () =>
         withAuth(token)
           .query(api.artifacts.authorizeAccess, { artifactId: artifactId as Id<"artifacts"> })
           .catch(translate),
@@ -127,7 +105,7 @@ export function createConvexGateway(config: ConvexGatewayConfig): BackendGateway
     commentUploads: uploads("/internal/comments/files", "fileId"),
     commentThumbs: thumbs,
     authorizeCommentFile(token, fileId, variant) {
-      return coalesceAuthorize(`comment\n${variant}\n${fileId}\n${token}`, () =>
+      return coalesceAuthorize.commentFile(token, fileId, variant, () =>
         withAuth(token).query(api.commentFiles.authorizeFile, { fileId, variant }).catch(translate),
       );
     },

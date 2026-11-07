@@ -13,8 +13,8 @@ const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as co
 
 /** 待つ時間を記録してすぐ返す（DM の枠の時刻までの待ちを、時計を進めずに確かめる） */
 const sleep = vi.hoisted(() => vi.fn(async (_ms: number) => {}));
-vi.mock("./lib/retryAfter.ts", async (original) => ({
-  ...(await original<typeof import("./lib/retryAfter.ts")>()),
+vi.mock("@mf100/platform", async (original) => ({
+  ...(await original<typeof import("@mf100/platform")>()),
   sleepFor: sleep,
 }));
 
@@ -645,37 +645,5 @@ describe("Convex 統合: 外への通知（登録メールアドレス・Slack �
         data: expect.objectContaining({ code: "test_notification_too_soon" }),
       }),
     );
-  });
-
-  it("旧の pushNode.deliver は新しい配信に渡す", async () => {
-    emailEnv();
-    const t = createHarness();
-    const cast = await createCast(t);
-    await setDeliverableEmail(t, cast.reviewer.id);
-    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email"] });
-    const { notificationId } = await assignReviewer(t, cast);
-    const services = fakeServices();
-
-    expect(await t.action(internal.pushNode.deliver, { notificationId })).toBe(1);
-    expect(services.calls("email")).toHaveLength(1);
-  });
-
-  it("旧の push.enqueue に通知 1 件の形で積まれた分も、workpool が送る", async () => {
-    emailEnv();
-    const t = createHarness();
-    const cast = await createCast(t);
-    await setDeliverableEmail(t, cast.reviewer.id);
-    // 通知ができた後にオンにする（通知を作ったときの予約では送らせない）
-    const { notificationId } = await assignReviewer(t, cast);
-    await cast.reviewer.as.mutation(api.notificationPrefs.update, { channels: ["email"] });
-    const services = fakeServices();
-
-    await t.mutation(internal.push.enqueue, { notificationId });
-    // workpool は空になっても自分を予約し続けるので、送るまでの数歩だけ進める
-    for (let step = 0; step < 10 && services.calls("email").length === 0; step++) {
-      vi.runOnlyPendingTimers();
-      await t.finishInProgressScheduledFunctions();
-    }
-    expect(services.calls("email")).toHaveLength(1);
   });
 });

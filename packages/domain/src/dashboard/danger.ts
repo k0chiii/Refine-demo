@@ -38,10 +38,3 @@ export function isWorkDanger(input: WorkDangerInput, now: Instant): boolean {
     return true;
   return false;
 }
-
-/** 危ない制作物の件数 */
-export function tallyWorkDanger(inputs: Iterable<WorkDangerInput>, now: Instant): number {
-  let n = 0;
-  for (const row of inputs) if (isWorkDanger(row, now)) n++;
-  return n;
-}

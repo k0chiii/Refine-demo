@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mf100-cloudflare-development",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  // 業務データの正本は 1 つの Durable Object（SQLite）。入力ゲートが呼び出しを直列にするので、
+  // Convex の mutation と同じ「1 呼び出し = 1 つの直列化されたトランザクション」になる
+  "durable_objects": { "bindings": [{ "name": "DB", "class_name": "MF100Database" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MF100Database"] }],
+  // Convex の crons.ts と同じ仕事（受付終了は毎分、残りは毎時）。配分は src/db.ts の runJobs が持つ
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    // `wrangler dev` 用の既定値。本番の環境（env.production）はデプロイを決めたときに足す（DO の binding は環境に引き継がれない）
+    "ALLOWED_ORIGINS": "http://localhost:5173",
+    // X-MF100-Identity ヘッダ（JSON）を本人として受け付けるのは手元だけ（package.json の dev が --var で allow にする）。
+    // 設定ファイルの既定は deny: Access の秘密を置き忘れた deploy で、誰でも名乗れる口が開かないように
+    "DEV_IDENTITY": "deny",
+    // 初期ブートストラップ: ここに列挙した subject を校正システム管理者として扱う（Convex の MF100_SYSTEM_ADMIN_SUBJECTS と同じ）
+    "MF100_SYSTEM_ADMIN_SUBJECTS": "",
+    // 認証（src/auth）。手元は Nogiku のモック（POST /auth/mock）。本番の env では必ず "false"
+    "SITE_URL": "http://localhost:8790",
+    "FRONTEND_URL": "http://localhost:5173",
+    "NOGIKU_MOCK_ENABLED": "false",
+  },
+  // 秘密: `wrangler secret put AUTH_PRIVATE_KEY_JWK`（`node scripts/auth-keygen.mjs` が出す JWK）。手元は .dev.vars（pnpm dev が作る）
+  // Nogiku 本番: NOGIKU_CLIENT_ID / NOGIKU_CLIENT_SECRET / NOGIKU_ISSUER（redirect_uri は `${SITE_URL}/auth/callback`）
+}

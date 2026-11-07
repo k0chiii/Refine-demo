@@ -1,6 +1,6 @@
 import { M3eAssistChip } from "@m3e/react/chips";
 import { M3eIcon } from "@m3e/react/icon";
-import { formatDeadline, formatDeadlineUntil, remaining } from "@/lib/format";
+import { formatDeadline, remaining } from "@/lib/format";
 
 /** M3E の assist chip（絵文字は使わない） */
 export function UrgentReviewChip({ className }: { className?: string }) {
@@ -30,18 +30,4 @@ export function ReviewDeadlineCell({
       <span className="mf-table__sub">{remaining(deadlineAt, now)}</span>
     </>
   );
-}
-
-/** 版一覧・エディタ: 受付中の表示 */
-export function formatOpenReviewDeadline(
-  urgent: boolean | undefined,
-  deadlineAt: number | undefined,
-  now: number,
-): string {
-  if (deadlineAt === undefined) return "校正中";
-  return `校正中・校正期日 ${formatDeadlineUntil(deadlineAt, now)}`;
-}
-
-export function formatOpenReviewDeadlinePrefix(urgent: boolean | undefined): boolean {
-  return urgent === true;
 }

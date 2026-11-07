@@ -3,7 +3,6 @@ import {
   DANGER_APPROVAL_TARGET_WINDOW_MS,
   DANGER_REVIEW_WINDOW_MS,
   isWorkDanger,
-  tallyWorkDanger,
 } from "../dashboard/danger.ts";
 
 const HOUR = 3_600_000;
@@ -40,17 +39,8 @@ describe("危ない KPI（decisions 39A）", () => {
     ).toBe(false);
   });
 
-  it("定数と件数", () => {
+  it("定数", () => {
     expect(DANGER_REVIEW_WINDOW_MS).toBe(24 * HOUR);
     expect(DANGER_APPROVAL_TARGET_WINDOW_MS).toBe(3 * DAY);
-    expect(
-      tallyWorkDanger(
-        [
-          { ...base, reviewDeadlineAt: NOW + HOUR },
-          { ...base, reviewDeadlineAt: NOW + 48 * HOUR },
-        ],
-        NOW,
-      ),
-    ).toBe(1);
   });
 });

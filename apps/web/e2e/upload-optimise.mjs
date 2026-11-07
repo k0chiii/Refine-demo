@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";

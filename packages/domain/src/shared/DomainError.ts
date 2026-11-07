@@ -139,11 +139,3 @@ export class DomainError extends Error {
 export function isDomainError(error: unknown): error is DomainError {
   return error instanceof DomainError;
 }
-
-export function assertDomain(
-  condition: unknown,
-  code: DomainErrorCode,
-  details?: Record<string, unknown>,
-): asserts condition {
-  if (!condition) throw new DomainError(code, details);
-}

@@ -14,6 +14,7 @@
 packages/domain        業務ルールの純粋 TypeScript（依存ゼロ）: Work / Revision / UploadSession / CommentThread / Approval / ACL
 packages/application   ユースケース + ポート（リポジトリ・時計・監査・冪等キー）。インメモリ実装でテスト
 apps/convex            Convex = 業務データの正本。schema、Nogiku SSO（UniQ 由来）、ポートの ctx.db アダプタ、公開関数、cron
+apps/cloudflare        Convex に依存しない Cloudflare 完結の正本（Hono + Durable Object の SQLite）。当面の本番は Convex。詳細は docs/CLOUDFLARE_BACKEND.md
 apps/api               Hono on Cloudflare Workers = HTTP 境界。R2 へのファイル提出・実体検証・認可付き配信のみ（業務 CRUD は持たない）
 apps/web               React 19 + TanStack Router + Material 3 Expressive（@m3e/react）+ PDF.js
 docs/                  要件・決定ログ・アーキテクチャ・テスト計画・調査結果・引き継ぎ

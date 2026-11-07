@@ -1,0 +1,192 @@
+import { migrateRateLimits } from "../rateLimit.ts";
+import type { Sql } from "./sql.ts";
+
+/**
+ * 文書テーブル方式: 行は JSON 1 つ（doc）。ドメインの型が育っても列を足さずに済む。
+ * 検索に使う項目だけを生成列にして index を張る（doc から引くので二重に持たない）。
+ *
+ * 主キー:
+ * - 既定は `id TEXT PRIMARY KEY`。自然キーの行（利用者×スレッドなど）は id に `a|b` を入れて upsert する。
+ * - keyless は追記だけの行（rowid が順序の正）。
+ */
+export interface TableSpec {
+  name: string;
+  keyless?: true;
+  /** doc の同名の項目を生成列にする。入れ子は `options.itemId` と書く（列の名前は `options_itemId`） */
+  cols?: readonly string[];
+  /** index を張る列の組（cols と同じ書き方） */
+  indexes?: readonly (readonly string[])[];
+  /** 一意 index を張る列の組（NULL は重複してよい） */
+  unique?: readonly (readonly string[])[];
+}
+
+export const TABLES: readonly TableSpec[] = [
+  // id は払い出した利用者 ID（Principal.userId）。subject は Nogiku の sub で、本人の特定（subject → id）にだけ使う
+  { name: "users", cols: ["name", "email", "nameKanji", "subject"], unique: [["subject"]] },
+  {
+    name: "works",
+    cols: ["socialProfileId", "ownerTeamId", "year", "lifecycle"],
+    indexes: [["socialProfileId"], ["year", "lifecycle"]],
+  },
+  {
+    name: "revisions",
+    cols: ["workId", "reviewState", "deadlineAt"],
+    indexes: [["workId"], ["reviewState", "deadlineAt"]],
+  },
+  { name: "artifacts", cols: ["revisionId"], indexes: [["revisionId"]] },
+  {
+    name: "uploadSessions",
+    cols: ["state", "expiresAt", "purgedAt"],
+    indexes: [["state", "expiresAt"]],
+  },
+  { name: "uploadItems", cols: ["sessionId"], indexes: [["sessionId"]] },
+  {
+    name: "uploadAttempts",
+    cols: ["target", "targetId", "state", "createdAt", "purgedAt"],
+    indexes: [["target", "targetId"], ["state"]],
+  },
+  {
+    name: "threads",
+    cols: ["revisionId", "deletedAt", "migratedFromFeedbackThreadId"],
+    indexes: [["revisionId"], ["migratedFromFeedbackThreadId"]],
+  },
+  { name: "events", cols: ["threadId"], indexes: [["threadId"]] },
+  { name: "commentReads", cols: ["userId", "threadId"], indexes: [["userId"]] },
+  { name: "threadSubscriptions", cols: ["userId", "threadId"], indexes: [["threadId"]] },
+  {
+    name: "assignments",
+    cols: ["revisionId", "reviewerId"],
+    indexes: [["revisionId"], ["reviewerId"]],
+  },
+  {
+    name: "grants",
+    keyless: true,
+    cols: ["workId", "principalType", "principalId"],
+    indexes: [["workId"], ["principalType", "principalId"]],
+  },
+  { name: "approvals", keyless: true, cols: ["workId"], indexes: [["workId"]] },
+  {
+    name: "confirmations",
+    cols: ["revisionId", "confirmedAt"],
+    indexes: [["revisionId"]],
+  },
+  {
+    name: "checks",
+    cols: ["revisionId", "assigneeId"],
+    indexes: [["revisionId"], ["assigneeId"]],
+  },
+  {
+    name: "notifications",
+    cols: ["recipientId", "readAt", "createdAt"],
+    indexes: [
+      ["recipientId", "createdAt"],
+      ["recipientId", "readAt"],
+    ],
+  },
+  { name: "pushSubscriptions", cols: ["userId", "endpoint"], indexes: [["userId"], ["endpoint"]] },
+  { name: "notificationPrefs" },
+  { name: "deliveries", cols: ["notificationId"], indexes: [["notificationId"]] },
+  { name: "slackWorkspaces", cols: ["name", "teamId"], indexes: [["teamId"]] },
+  { name: "slackMembers" },
+  { name: "documents", cols: ["workId"], indexes: [["workId"]] },
+  { name: "socialProfiles" },
+  { name: "teams" },
+  { name: "memberGroups" },
+  {
+    name: "alignments",
+    cols: ["leftArtifactId", "rightArtifactId"],
+    indexes: [["leftArtifactId"]],
+  },
+  { name: "categories" },
+  { name: "rules", cols: ["categoryCode"], indexes: [["categoryCode"]] },
+  { name: "ruleRevisions", keyless: true, cols: ["ruleId"], indexes: [["ruleId"]] },
+  { name: "managers" },
+  {
+    name: "proposals",
+    cols: ["status", "dedupeKey", "proposedAt"],
+    indexes: [["status", "dedupeKey"]],
+  },
+  { name: "runs", cols: ["revisionId"], indexes: [["revisionId"]] },
+  { name: "pins", cols: ["userId", "workId", "pinnedAt"], indexes: [["userId"], ["workId"]] },
+  { name: "feedbackThreads" },
+  { name: "feedbackPosts", cols: ["threadId", "createdAt"], indexes: [["threadId"]] },
+  { name: "feedbackFiles" },
+  { name: "feedbackReads", cols: ["threadId"], indexes: [["threadId"]] },
+  {
+    name: "commentFiles",
+    cols: ["threadId", "createdAt", "abandonedAt", "removedAt", "purgedAt"],
+    indexes: [["threadId"]],
+  },
+  // ---- 派生表（書き込みと同じトランザクションで作り直す。sqlite/derived.ts。Convex の lib/adapters.ts と同じ契約）
+  // 制作物ごとの要約。id は workId。acceptingId から「受付中の版の制作物」を引く（ダッシュボードの候補）
+  { name: "workSummaries", cols: ["acceptingId"], indexes: [["acceptingId"]] },
+  // 制作者・統括・校了者の職責の索引（by_user で「自分に関係する制作物」を引く）。id は workId|role|userId
+  { name: "workRoles", cols: ["workId", "userId"], indexes: [["userId"], ["workId"]] },
+  // 利用者ごとの未読の通知の数。id は userId
+  { name: "notificationCounters" },
+  { name: "audit", keyless: true },
+  { name: "idempotency" },
+  // ファイル処理の台帳（src/functions/processing.ts。apps/api の Queue / Workflow が /internal/processing で更新する）。
+  // index は Convex の by_user / by_state / by_state_cleaned / by_item と同じ。cleaned は未設定（NULL）が「まだ清掃していない」
+  {
+    name: "processingJobs",
+    cols: ["userId", "state", "cleaned", "createdAt", "options.itemId"],
+    indexes: [
+      ["userId"],
+      ["state", "createdAt"],
+      ["state", "cleaned", "createdAt"],
+      ["options.itemId"],
+    ],
+  },
+  // あとで動く仕事（src/jobs.ts）。ユースケースと同じトランザクションで積むので、巻き戻れば消える。id は仕事ごと
+  { name: "jobs", cols: ["kind", "runAt"], indexes: [["runAt"]] },
+  // AI 校正の一時保存（src/functions/aiWorkflow.ts）。本文は持たず、結果は 1 時間で消える。index は Convex の by_expiry / by_user_work と同じ
+  {
+    name: "aiJobs",
+    cols: ["userId", "workId", "expiresAt"],
+    indexes: [["expiresAt"], ["userId", "workId"]],
+  },
+  // ルールの埋め込み（src/functions/semanticRules.ts）。id は ruleId、vector は 1024 次元の配列
+  { name: "ruleEmbeddings" },
+  // 仕事の側の小さな状態（Slack の DM の枠など）。id は項目名
+  { name: "meta" },
+];
+
+/** 入れ子の項目（`options.itemId`）は、SQL の列の名前では `.` を `_` にする */
+const columnOf = (c: string): string => c.replaceAll(".", "_");
+
+function createTable(t: TableSpec): string {
+  const generated = (t.cols ?? []).map(
+    (c) => `${columnOf(c)} GENERATED ALWAYS AS (json_extract(doc, '$.${c}')) VIRTUAL`,
+  );
+  const head = t.keyless ? [] : ["id TEXT PRIMARY KEY"];
+  return `CREATE TABLE IF NOT EXISTS ${t.name} (${[...head, "doc TEXT NOT NULL", ...generated].join(", ")})`;
+}
+
+/**
+ * 全文検索の仮想表（FTS5）。TABLES の「doc 1 つの表」ではないので別に持つ。名前は書き込みと読みの追跡（run.ts）が使う。
+ * tokens は 1/2-gram の token（sqlite/workSearch.ts）。rowid は works の rowid と揃える（並びと、行の引き直しのため）
+ */
+export const FTS_TABLES: readonly string[] = ["workSearch"];
+
+/**
+ * 何度呼んでも同じ（CREATE ... IF NOT EXISTS だけ）。
+ * ponytail: 既にある表へ列は足さない。手元の `.wrangler/state` が古ければ消す（本番の DO はまだ無い）
+ */
+export function migrate(sql: Sql): void {
+  for (const t of TABLES) {
+    sql.exec(createTable(t));
+    for (const cols of t.indexes ?? [])
+      sql.exec(
+        `CREATE INDEX IF NOT EXISTS ix_${t.name}_${cols.map(columnOf).join("_")} ON ${t.name} (${cols.map(columnOf).join(", ")})`,
+      );
+    for (const cols of t.unique ?? [])
+      sql.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ux_${t.name}_${cols.map(columnOf).join("_")} ON ${t.name} (${cols.map(columnOf).join(", ")})`,
+      );
+  }
+  sql.exec(
+    "CREATE VIRTUAL TABLE IF NOT EXISTS workSearch USING fts5(tokens, workId UNINDEXED, year UNINDEXED, lifecycle UNINDEXED)",
+  );
+  migrateRateLimits(sql);
+}
