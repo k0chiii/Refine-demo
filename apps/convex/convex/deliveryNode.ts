@@ -74,7 +74,11 @@ async function send(
       const ref = { channel: "push", subscriptionId: t.device.id } as const;
       if (!c.push) return { outcome: NOT_CONFIGURED, ref };
       try {
-        const { status } = await sendWebPush({ subscription: t.device, payload: t.payload, vapid: c.push });
+        const { status } = await sendWebPush({
+          subscription: t.device,
+          payload: t.payload,
+          vapid: c.push,
+        });
         return { outcome: webPushOutcome(status), ref };
       } catch {
         // 暗号化で投げた（購読の鍵が壊れているなど）。つながらないときと同じくやり直しに回す
