@@ -132,6 +132,8 @@ export const revisions = {
         can: {
           comment: canPostNow,
           decide: isAllowed("comment.decide", authz) && work.lifecycle !== "finalized",
+          // 採否を決められなくても、校了者は解決で閉じられる（develop の PR #298 と同じ）
+          resolve: isAllowed("comment.resolve", authz) && work.lifecycle !== "finalized",
           reply: isAllowed("comment.reply", authz) && work.lifecycle !== "finalized",
           assign: isAllowed("review.assign", authz),
           addCheck: isAllowed("review.assign", authz) && work.lifecycle !== "finalized",
