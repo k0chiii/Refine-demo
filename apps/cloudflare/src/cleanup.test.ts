@@ -1,6 +1,6 @@
 import { expireUploadSessions } from "@mf100/application";
 import { describe, expect, it } from "vite-plus/test";
-import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
+import { app, callFn, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
 // R2 の清掃の口（submissions:listOrphanObjects / markObjectsPurged）を HTTP から 1 周させる。
 // 期待は apps/convex/convex/{commentFiles,mvp}.test.ts の清掃の部分から写した（Convex では http.ts の /internal/upload-orphans が束ねる）
@@ -10,23 +10,15 @@ const CLEANUP_SECRET = "cleanup-secret-0123456789";
 const BEARER = { Authorization: `Bearer ${CLEANUP_SECRET}` };
 const KEY = { "X-MF100-Service-Key": UPLOAD_SECRET };
 
-// oxlint-disable-next-line typescript/no-explicit-any
-type Json = any;
-
 function world() {
   const db = fakeDb(undefined, { MF100_SYSTEM_ADMIN_SUBJECTS: "u_admin" });
   const a = app(db, { MF100_UPLOAD_SECRET: UPLOAD_SECRET, MF100_CLEANUP_SECRET: CLEANUP_SECRET });
-  const call = async (
+  const call = (
     name: string,
     args: unknown,
     subject: string | null = "u_creator",
     headers: Record<string, string> = {},
-  ) => {
-    const res = await post(a, name, args, subject, headers);
-    const body = (await res.json()) as { value?: unknown };
-    expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-    return body.value as Json;
-  };
+  ) => callFn(a, name, args, subject, headers);
   /** apps/api の cloudflareCleanupGateway と同じ呼び方（利用者なし・Bearer だけ） */
   const cleanup = (name: string, args: unknown, headers: Record<string, string> = BEARER) =>
     post(a, `submissions:${name}`, args, null, headers);

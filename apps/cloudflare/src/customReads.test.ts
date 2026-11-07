@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Sql } from "./sqlite/sql.ts";
-import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
+import { app, callFn, failFn, fakeDb, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
 // Convex の画面向けの読み・管理者の操作（独自の関数）を、HTTP から 1 周させて戻りの形を確かめる。
 // 期待は apps/convex/convex/*.test.ts（commentReactions / commentDelete / commentReplyEdit / groups / me / notation /
@@ -29,21 +29,14 @@ function world(env: Record<string, string> = {}) {
   return {
     a,
     sql,
-    call: async (
+    call: (
       name: string,
       args: unknown,
       subject = "u_manager",
       headers: Record<string, string> = {},
-    ) => {
-      const res = await post(a, name, args, subject, headers);
-      const body = (await res.json()) as { value?: unknown };
-      expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-      return body.value as Json;
-    },
-    fail: async (name: string, args: unknown, subject: string | null = "u_manager") => {
-      const res = await post(a, name, args, subject);
-      return { status: res.status, ...((await res.json()) as { code: string }) };
-    },
+    ) => callFn(a, name, args, subject, headers),
+    fail: (name: string, args: unknown, subject: string | null = "u_manager") =>
+      failFn(a, name, args, subject),
   };
 }
 type World = ReturnType<typeof world>;

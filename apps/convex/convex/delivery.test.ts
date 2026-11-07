@@ -13,8 +13,8 @@ const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as co
 
 /** 待つ時間を記録してすぐ返す（DM の枠の時刻までの待ちを、時計を進めずに確かめる） */
 const sleep = vi.hoisted(() => vi.fn(async (_ms: number) => {}));
-vi.mock("./lib/retryAfter.ts", async (original) => ({
-  ...(await original<typeof import("./lib/retryAfter.ts")>()),
+vi.mock("@mf100/platform", async (original) => ({
+  ...(await original<typeof import("@mf100/platform")>()),
   sleepFor: sleep,
 }));
 

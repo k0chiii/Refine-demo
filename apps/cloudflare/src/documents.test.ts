@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
-import { app, fakeDb, post, signIn } from "./testing/http.ts";
+import { app, callFn, failFn, fakeDb, signIn } from "./testing/http.ts";
 
 // documents:*（文章の下書き）を HTTP から 1 周させる。期待は apps/convex/convex/documents.test.ts と collaboration.test.ts から写した
-
-/** 戻りの形を見るテストなので、型は付けずに値だけ引く */
-// oxlint-disable-next-line typescript/no-explicit-any
-type Json = any;
 
 const doc = (t: string) =>
   JSON.stringify({
@@ -16,16 +12,10 @@ const doc = (t: string) =>
 function world() {
   const db = fakeDb(undefined, { MF100_SYSTEM_ADMIN_SUBJECTS: "u_admin" });
   const a = app(db);
-  const call = async (name: string, args: unknown, subject = "u_creator") => {
-    const res = await post(a, name, args, subject);
-    const body = (await res.json()) as { value?: unknown };
-    expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-    return body.value as Json;
-  };
-  const fail = async (name: string, args: unknown, subject = "u_creator") => {
-    const res = await post(a, name, args, subject);
-    return { status: res.status, ...((await res.json()) as { code: string }) };
-  };
+  const call = (name: string, args: unknown, subject = "u_creator") =>
+    callFn(a, name, args, subject);
+  const fail = (name: string, args: unknown, subject = "u_creator") =>
+    failFn(a, name, args, subject);
   const create = async (title: string, mediaType = "document") =>
     (await call(
       "works:create",

@@ -1,9 +1,8 @@
 import { convexAuth } from "@convex-dev/auth/server";
+import { readNogikuAccessConfig, resolveRedirectTo } from "@mf100/platform";
 import type { Id } from "./_generated/dataModel";
 import type { DatabaseWriter, MutationCtx } from "./_generated/server";
 import { ensureAuthSiteUrl } from "./lib/authEnv.ts";
-import { readNogikuAccessConfig } from "./lib/nogikuAccess.ts";
-import { resolveRedirectTo } from "./lib/redirect.ts";
 import Nogiku from "./providers/nogiku.ts";
 import NogikuMock from "./providers/nogikuMock.ts";
 

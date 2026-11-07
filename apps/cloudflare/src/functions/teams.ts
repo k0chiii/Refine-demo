@@ -1,8 +1,8 @@
 import { deleteTeam, importTeams, listTeams, saveTeam } from "@mf100/application";
-import { normalizePersonKey, type DirectoryUser } from "@mf100/domain";
+import type { DirectoryUser } from "@mf100/domain";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
-import { takeUsers, userDisplayName } from "./users.ts";
+import { matchDirectoryUsers } from "./users.ts";
 import { object, vBureauCode } from "./validators.ts";
 
 // apps/convex/convex/teams.ts の写し。
@@ -91,24 +91,7 @@ export const teams = {
   "teams:importDirectory": query({
     auth: "user",
     args: object({ keys: z.array(z.string()) }),
-    handler: async (ctx, { keys }): Promise<DirectoryUser[]> => {
-      if (!ctx.principal!.isSystemAdmin) return [];
-      const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
-      if (wanted.size === 0) return [];
-      return takeUsers(ctx.sql, 5000)
-        .filter((u) => u.subject !== undefined)
-        .filter(
-          (u) =>
-            wanted.has(normalizePersonKey(u.name ?? "")) ||
-            wanted.has(normalizePersonKey(userDisplayName(u))) ||
-            (u.email !== undefined && wanted.has(normalizePersonKey(u.email))),
-        )
-        .map((u) => ({
-          id: u.id,
-          name: userDisplayName(u),
-          email: u.email ?? null,
-          ...(u.name ? { otherNames: [u.name] } : {}),
-        }));
-    },
+    handler: async (ctx, { keys }): Promise<DirectoryUser[]> =>
+      ctx.principal!.isSystemAdmin ? matchDirectoryUsers(ctx.sql, keys) : [],
   }),
 } satisfies Record<string, FnDef>;

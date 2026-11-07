@@ -31,13 +31,3 @@ export function nextRevisionPlannedAt(
   if (future.length === 0) return null;
   return Math.min(...future);
 }
-
-/** 旧 plannedSubmitAt を制作物リストの 1 件に取り込む（移行用） */
-export function upsertRevisionPlannedAt(
-  entries: readonly RevisionPlannedAtEntry[] | undefined,
-  sequence: number,
-  at: Instant,
-): RevisionPlannedAtEntry[] {
-  const rest = (entries ?? []).filter((e) => e.sequence !== sequence);
-  return [...rest, { sequence, at }].sort((a, b) => a.sequence - b.sequence);
-}

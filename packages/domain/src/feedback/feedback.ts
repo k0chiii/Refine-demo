@@ -5,7 +5,7 @@ import type { ReactionEntry } from "../shared/reactions.ts";
 
 /**
  * 制作のフィードバック（表現の議論）の旧データの型。利用者決定 2026-10-20「FB はコメントへ統合する」で、
- * 機能は廃止し、既存のスレッドは migration.ts でコメントへ移す。ここに残すのは、その移行と削除に要る型と判定だけ。
+ * 機能は廃止し、既存のスレッドは migration.ts でコメントへ移す。ここに残すのは、その移行と削除に要る型だけ。
  * FB の表（feedbackThreads / feedbackPosts / feedbackFiles / feedbackReads）は、本番で移行と削除を流した後の変更で schema から落とす。
  */
 
@@ -82,33 +82,4 @@ export interface FeedbackFile {
   abandonedAt?: Instant;
   /** R2 から実体を削除し終えた時刻（objectKey は履歴のため残す） */
   purgedAt?: Instant;
-}
-
-/**
- * 削除されていない（一覧・集計・画面に出す）スレッドか。
- * 削除されたスレッドのほか、投稿が全て削除されて残りが無いスレッド（postCount が 0）も出さない
- */
-export function isLiveFeedbackThread(
-  thread: Pick<FeedbackThread, "deletedAt" | "postCount">,
-): boolean {
-  return thread.deletedAt === undefined && thread.postCount > 0;
-}
-
-/** 題名を省いて立てるとき（紙面の場所からの相談）の題名: 本文の 1 行目、無ければ引用・ファイル */
-export const FEEDBACK_DERIVED_TITLE_MAX = 40;
-export function deriveFeedbackThreadTitle(input: {
-  body: string;
-  quote?: string;
-  fileCount?: number;
-}): string {
-  const clip = (s: string) => {
-    const chars = Array.from(s.replace(/\s+/g, " ").trim());
-    return chars.length > FEEDBACK_DERIVED_TITLE_MAX
-      ? `${chars.slice(0, FEEDBACK_DERIVED_TITLE_MAX - 1).join("")}…`
-      : chars.join("");
-  };
-  const first = input.body.split("\n").find((l) => l.trim() !== "");
-  if (first) return clip(first);
-  if (input.quote?.trim()) return clip(`「${input.quote.trim()}」について`);
-  return input.fileCount ? `ファイル ${input.fileCount} 件` : "相談";
 }

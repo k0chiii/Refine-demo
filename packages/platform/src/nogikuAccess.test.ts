@@ -23,7 +23,6 @@ describe("Nogiku Access 連携の設定", () => {
   });
 
   it("1 つでも欠ければ無効（部分設定で壊れた URL を叩かない）", () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(readNogikuAccessConfig({})).toBeUndefined();
     expect(
       readNogikuAccessConfig({ NOGIKU_ACCESS_API_URL: "https://access.example/api" }),
@@ -63,24 +62,20 @@ describe("組織権限の取得（permission/check）", () => {
       fetchOrgPermissions(config, "t", f as unknown as typeof fetch, timeoutMs);
 
     it("ネットワークエラー", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => {});
       expect(await run(() => Promise.reject(new TypeError("network")))).toBeUndefined();
     });
 
     it("非 2xx", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => {});
       expect(await run(async () => json({ error: "x" }, { status: 401 }))).toBeUndefined();
     });
 
     it("形の合わない応答", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => {});
       for (const body of [{}, null, "ok", { valid: true }, { valid: true, missing: [1] }])
         expect(await run(async () => json(body)), JSON.stringify(body)).toBeUndefined();
       expect(await run(async () => new Response("not json"))).toBeUndefined();
     });
 
     it("valid と missing が食い違う応答（権限を付けすぎない）", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => {});
       for (const body of [
         { valid: false, missing: [] },
         { valid: false, missing: ["unknown:permission"] },
@@ -90,7 +85,6 @@ describe("組織権限の取得（permission/check）", () => {
     });
 
     it("タイムアウト（応答が来ない API でログインを止めない）", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => {});
       const hang = (_url: unknown, init?: RequestInit) =>
         new Promise<Response>((_, reject) =>
           init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))),

@@ -1,13 +1,17 @@
 import type { SendOutcome } from "@mf100/domain";
+import { type Fetch, retryAfterHintMs } from "./retryAfter.ts";
 
 /*
- * Web Push の送信（外部ライブラリを使わず WebCrypto で実装）。
+ * Web Push の送信（外部ライブラリを使わず WebCrypto で実装。Workers にそのまま載る）。
  * - VAPID（RFC 8292）: ES256 の JWT でプッシュサービスに送り手を名乗る
  * - 本文の暗号化（RFC 8291 / RFC 8188 aes128gcm）: 端末の公開鍵と認証用の秘密で、端末だけが読めるようにする
- * 鍵は Convex の環境変数（VAPID_PUBLIC_KEY・VAPID_PRIVATE_KEY・VAPID_SUBJECT）。無ければ送らない。
+ * 鍵は env（VAPID_PUBLIC_KEY・VAPID_PRIVATE_KEY・VAPID_SUBJECT）。無ければ送らない。
+ * Workers と Convex の Node action のどちらでも動く（WebCrypto だけ）。
  */
 
 const utf8 = new TextEncoder();
+// workerd の型は encode が返す配列の下敷きを ArrayBuffer と言い切らないので、WebCrypto に渡すものはここで複製する
+const bytes = (text: string) => new Uint8Array(utf8.encode(text));
 
 export function base64urlEncode(bytes: Uint8Array): string {
   let bin = "";
@@ -57,8 +61,15 @@ export interface VapidKeys {
   subject: string;
 }
 
-/** 環境変数の鍵。揃っていなければ null（Web Push を使わない） */
-export function vapidKeysFromEnv(env: Record<string, string | undefined>): VapidKeys | null {
+/** Worker の Env（キーを列挙した型）と process.env（添字の型）のどちらも渡せる */
+type VapidEnv = Partial<
+  Record<"VAPID_PUBLIC_KEY" | "VAPID_PRIVATE_KEY" | "VAPID_SUBJECT", string | undefined>
+>;
+
+/** env の鍵。揃っていなければ null（Web Push を使わない） */
+export function vapidKeysFromEnv(
+  env: VapidEnv | Record<string, string | undefined>,
+): VapidKeys | null {
   const publicKey = env.VAPID_PUBLIC_KEY?.trim();
   const privateKey = env.VAPID_PRIVATE_KEY?.trim();
   const subject = env.VAPID_SUBJECT?.trim();
@@ -66,7 +77,10 @@ export function vapidKeysFromEnv(env: Record<string, string | undefined>): Vapid
   return { publicKey, privateKey, subject };
 }
 
-/** VAPID の Authorization ヘッダー（有効期限 12 時間） */
+/** VAPID の JWT の有効期限（RFC 8292 の上限は 24 時間。余裕を見て 12 時間） */
+const VAPID_TTL_SECONDS = 12 * 3600;
+
+/** VAPID の Authorization ヘッダー */
 export async function vapidAuthorization(
   endpoint: string,
   keys: VapidKeys,
@@ -77,7 +91,7 @@ export async function vapidAuthorization(
     utf8.encode(
       JSON.stringify({
         aud: new URL(endpoint).origin,
-        exp: Math.floor(nowMs / 1000) + 12 * 3600,
+        exp: Math.floor(nowMs / 1000) + VAPID_TTL_SECONDS,
         sub: keys.subject,
       }),
     ),
@@ -126,7 +140,9 @@ export async function encryptPushPayload(
     ((await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
       "deriveBits",
     ])) as CryptoKeyPair);
-  const asPublic = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+  const asPublic = new Uint8Array(
+    (await crypto.subtle.exportKey("raw", keyPair.publicKey)) as ArrayBuffer,
+  );
   const uaKey = await crypto.subtle.importKey(
     "raw",
     uaPublic,
@@ -134,9 +150,11 @@ export async function encryptPushPayload(
     false,
     [],
   );
-  const shared = new Uint8Array(
-    await crypto.subtle.deriveBits({ name: "ECDH", public: uaKey }, keyPair.privateKey, 256),
-  );
+  // workerd の型は `public` を `$public` と綴るが、実行時の名前は `public`（仕様どおり）。型の違いを両方で通すため cast する
+  const ecdh = { name: "ECDH", public: uaKey } as unknown as Parameters<
+    SubtleCrypto["deriveBits"]
+  >[0];
+  const shared = new Uint8Array(await crypto.subtle.deriveBits(ecdh, keyPair.privateKey, 256));
   const ikm = await hkdf(
     authSecret,
     shared,
@@ -144,8 +162,8 @@ export async function encryptPushPayload(
     32,
   );
   const salt = fixed?.salt ?? crypto.getRandomValues(new Uint8Array(16));
-  const cek = await hkdf(salt, ikm, utf8.encode("Content-Encoding: aes128gcm\0"), 16);
-  const nonce = await hkdf(salt, ikm, utf8.encode("Content-Encoding: nonce\0"), 12);
+  const cek = await hkdf(salt, ikm, bytes("Content-Encoding: aes128gcm\0"), 16);
+  const nonce = await hkdf(salt, ikm, bytes("Content-Encoding: nonce\0"), 12);
   const aes = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
   // 最後のレコード: 本文の後ろに区切り 0x02（詰め物なし）
   const sealed = new Uint8Array(
@@ -160,30 +178,52 @@ export async function encryptPushPayload(
   return concat(salt, rs, new Uint8Array([asPublic.length]), asPublic, sealed);
 }
 
-/** 1 端末に送る。プッシュサービスの HTTP の状態を返す（つながらなければ 0） */
+export interface WebPushRequest {
+  subscription: { endpoint: string; p256dh: string; auth: string };
+  payload: unknown;
+  vapid: VapidKeys;
+  /** VAPID の期限の起点（ms）。省略は今 */
+  now?: number;
+  /** プッシュサービスが端末の不在中に抱える秒数。省略は 24 時間 */
+  ttlSeconds?: number;
+}
+
+export interface WebPushResult {
+  /** プッシュサービスの HTTP の状態（つながらなければ 0） */
+  status: number;
+  /** 429・503 の Retry-After（ms。上限なし）。次の予定を決める手がかり */
+  retryAfterMs?: number;
+}
+
+/**
+ * 1 端末に送る。暗号化の失敗（購読の鍵が壊れている）は投げる。ネットワークの失敗は status 0 で返す
+ * （deliver が両方を retry に回す）
+ */
 export async function sendWebPush(
-  subscription: { endpoint: string; p256dh: string; auth: string },
-  payload: unknown,
-  keys: VapidKeys,
-  opts: { now: number; ttlSeconds?: number; fetch?: typeof fetch },
-): Promise<number> {
-  const body = await encryptPushPayload(utf8.encode(JSON.stringify(payload)), subscription);
-  const doFetch = opts.fetch ?? fetch;
+  req: WebPushRequest,
+  doFetch: Fetch = fetch,
+): Promise<WebPushResult> {
+  const { subscription, vapid } = req;
+  const now = req.now ?? Date.now();
+  const body = await encryptPushPayload(utf8.encode(JSON.stringify(req.payload)), subscription);
   try {
     const res = await doFetch(subscription.endpoint, {
       method: "POST",
       headers: {
-        Authorization: await vapidAuthorization(subscription.endpoint, keys, opts.now),
+        Authorization: await vapidAuthorization(subscription.endpoint, vapid, now),
         "Content-Encoding": "aes128gcm",
         "Content-Type": "application/octet-stream",
-        TTL: String(opts.ttlSeconds ?? 24 * 3600),
+        TTL: String(req.ttlSeconds ?? 24 * 3600),
         Urgency: "normal",
       },
       body,
     });
-    return res.status;
+    const retryAfter = retryAfterHintMs(res.headers.get("Retry-After"), now);
+    return retryAfter === undefined
+      ? { status: res.status }
+      : { status: res.status, retryAfterMs: retryAfter };
   } catch {
-    return 0;
+    return { status: 0 };
   }
 }
 

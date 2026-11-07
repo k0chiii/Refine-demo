@@ -2,10 +2,12 @@ import {
   DomainError,
   parseAvatarConfig,
   personDisplayName,
+  normalizePersonKey,
   personMatchesText,
   PROOFREADER_ID,
   PROOFREADER_NAME,
   type AvatarConfig,
+  type DirectoryUser,
 } from "@mf100/domain";
 import { z } from "zod";
 import type { Sql } from "../sqlite/sql.ts";
@@ -48,6 +50,42 @@ export function takeUsers(sql: Sql, limit: number): Array<UserDoc & { id: string
   return sql
     .exec("SELECT id, doc FROM users ORDER BY rowid LIMIT ?", limit)
     .map((r) => ({ ...(JSON.parse(r.doc as string) as UserDoc), id: r.id as string }));
+}
+
+/**
+ * 一括登録の照合に使う利用者（keys のメールアドレス・名前に当たる人だけ）。一度でもサインインした人（subject を持つ行）が対象。
+ * 権限の確認は呼ぶ側
+ */
+export function matchDirectoryUsers(sql: Sql, keys: readonly string[]): DirectoryUser[] {
+  const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
+  if (wanted.size === 0) return [];
+  return sql
+    .exec(
+      `SELECT id, json_extract(doc, '$.name') AS name, json_extract(doc, '$.hurigana') AS hurigana, email
+       FROM users WHERE subject IS NOT NULL ORDER BY rowid LIMIT 5000`,
+    )
+    .flatMap((r) => {
+      const kanji = typeof r.name === "string" ? r.name : undefined;
+      const display = userDisplayName({
+        ...(kanji !== undefined ? { name: kanji } : {}),
+        ...(typeof r.hurigana === "string" ? { hurigana: r.hurigana } : {}),
+      });
+      const email = typeof r.email === "string" ? r.email : undefined;
+      const hit =
+        wanted.has(normalizePersonKey(kanji ?? "")) ||
+        wanted.has(normalizePersonKey(display)) ||
+        (email !== undefined && wanted.has(normalizePersonKey(email)));
+      return hit
+        ? [
+            {
+              id: r.id as string,
+              name: display,
+              email: email ?? null,
+              ...(kanji ? { otherNames: [kanji] } : {}),
+            },
+          ]
+        : [];
+    });
 }
 
 /** ID の集まりから users の doc を引く（無い ID は入らない） */

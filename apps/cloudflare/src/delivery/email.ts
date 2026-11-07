@@ -1,5 +1,5 @@
 import type { EmailContent, SendOutcome } from "@mf100/domain";
-import { type Fetch, retryAfterMs, type Sleep, sleepFor } from "./http.ts";
+import { type Fetch, retryAfterMs, type Sleep, sleepFor } from "@mf100/platform";
 
 /*
  * 登録メールアドレスへの通知（Resend の HTTP API。無料枠 3,000 通/月・100 通/日）。

@@ -10,6 +10,7 @@ import {
   slackLookupTarget,
 } from "@mf100/application";
 import type { DeliveryChannel, DestinationKey, RejectReason, SendOutcome } from "@mf100/domain";
+import { type Fetch, type Sleep, sendWebPush, sleepFor, webPushOutcome } from "@mf100/platform";
 import {
   type DeliveryConfig,
   type DeliveryVars,
@@ -17,9 +18,7 @@ import {
   deliveryEnvOf,
 } from "./channels.ts";
 import { sendEmail } from "./email.ts";
-import { type Fetch, type Sleep, sleepFor } from "./http.ts";
 import { type MeichanConfig, resolveSlackMember, sendSlackDm } from "./slack.ts";
-import { sendWebPush, webPushOutcome } from "./webpush.ts";
 
 /*
  * 外への通知を送る（端末・Nogiku のメールアドレス・Slack の DM）。Convex の deliveryNode.ts / delivery.ts の写し。

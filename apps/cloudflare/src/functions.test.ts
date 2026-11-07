@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { describe, expect, it } from "vite-plus/test";
 import { functions, modules } from "./functions/index.ts";
-import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
+import { app, callFn, failFn, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
 // 動的 import の変数展開は Vite の変換時の一覧に縛られる（後から足したファイルを知らない）。eager な glob なら同じ時点で揃う
 const files = import.meta.glob("./functions/*.ts", { eager: true }) as Record<string, unknown>;
@@ -78,10 +78,6 @@ describe("登録表の形（全関数）", () => {
 
 // ------------------------------------------------------------------ 薄い包みを HTTP から 1 周させる
 
-/** 戻りの形は Convex と同じかを見るテストなので、型は付けずに値だけ引く */
-// oxlint-disable-next-line typescript/no-explicit-any
-type Json = any;
-
 const HOUR = 3_600_000;
 const NOW = Date.UTC(2026, 10, 1);
 
@@ -89,22 +85,13 @@ function world() {
   const a = app(fakeDb(undefined, { MF100_SYSTEM_ADMIN_SUBJECTS: "u_admin" }));
   return {
     a,
-    /** 200 を確かめて { value } の value を返す。外れたときは body を見せる */
-    call: async (
+    call: (
       name: string,
       args: unknown,
       subject = "u_manager",
       headers: Record<string, string> = {},
-    ) => {
-      const res = await post(a, name, args, subject, headers);
-      const body = (await res.json()) as { value?: unknown; code?: string };
-      expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-      return body.value as Json;
-    },
-    fail: async (name: string, args: unknown, subject = "u_manager") => {
-      const res = await post(a, name, args, subject);
-      return { status: res.status, ...((await res.json()) as { code: string }) };
-    },
+    ) => callFn(a, name, args, subject, headers),
+    fail: (name: string, args: unknown, subject = "u_manager") => failFn(a, name, args, subject),
   };
 }
 

@@ -1,18 +1,25 @@
 import { getNotificationSettings, updateNotificationPrefs } from "@mf100/application";
 import { z } from "zod";
-import { availableChannels } from "./channels.ts";
+import { availableChannels, deliveryConfigFromEnv } from "../delivery/channels.ts";
 import { mutation, query, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
 
 // apps/convex/convex/notificationPrefs.ts の写し。自分の設定だけを読み書きする
 
 export const notificationPrefs = {
-  /** 自分の設定（無ければ既定: 内容を表示・止めている分類なし・メールと Slack はオフ）と、届け先ごとの状態 */
+  /**
+   * 自分の設定（無ければ既定: 内容を表示・止めている分類なし・メールと Slack はオフ）と、届け先ごとの状態。
+   * 「使える届け先」の判定は配信（src/delivery/channels.ts）と同じ 1 か所（画面で使えると言った経路が、送るときに使えない食い違いを防ぐ）
+   */
   "notificationPrefs:get": query({
     auth: "user",
     args: object({}),
     handler: async (ctx) =>
-      getNotificationSettings(ctx.db, ctx.principal!, availableChannels(ctx.env)),
+      getNotificationSettings(
+        ctx.db,
+        ctx.principal!,
+        availableChannels(deliveryConfigFromEnv(ctx.env)),
+      ),
   }),
 
   /**

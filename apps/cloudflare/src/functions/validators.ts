@@ -29,16 +29,7 @@ export const vAvatarConfig = object({
   }).optional(),
   background: z.string().optional(),
 });
-/** 保存済みのアバター。外した部位（`bottom`）が残る古い値も読めるよう、部位・役割の名前は限定しない */
-export const vStoredAvatarConfig = object({
-  seed: z.string().optional(),
-  selections: z.record(z.string(), z.string()).optional(),
-  colors: z.record(z.string(), z.string()).optional(),
-  background: z.string().optional(),
-});
-
 export const vPermissionLevel = z.enum(["review", "edit", "manage"]);
-export const vPrincipalType = z.enum(["user", "group"]);
 export const vMediaType = z.enum([
   "pdf",
   "image",
@@ -258,15 +249,6 @@ export const vRuleDraftFields = {
   translations: object({ en: z.string().optional(), zh: z.string().optional() }).optional(),
 };
 export const vRuleDraft = object(vRuleDraftFields);
-export const vRuleFields = {
-  ...vRuleDraftFields,
-  revision: z.number(),
-  createdBy: z.string(),
-  updatedBy: z.string(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-  publishedAt: z.number().optional(),
-};
 export const vRuleCategoryFields = {
   code: z.string(),
   name: z.string(),
@@ -275,15 +257,6 @@ export const vRuleCategoryFields = {
   policyNotes: z.string(),
   order: z.number(),
 };
-export const vRuleSetSnapshot = object({
-  categories: z.array(z.string()),
-  year: z.number(),
-  // depth: 提出時の継承の深さ（古い版の記録には無い）
-  rules: z.array(
-    object({ ruleId: z.string(), revision: z.number(), depth: z.number().optional() }),
-  ),
-  hash: z.string(),
-});
 export const vProposalKind = z.enum(["new", "change", "report"]);
 export const vProposalStatus = z.enum(["open", "approved", "rejected"]);
 export const vProposalContext = object({
@@ -295,20 +268,6 @@ export const vProposalContext = object({
 });
 
 // ---------------------------------------------------------------- 自動校正
-export const vTextSource = z.enum(["document", "pdf_text", "ocr"]);
-export const vBotOrigin = object({
-  kind: z.literal("bot"),
-  detector: z.enum(["rule", "morphology", "ocr", "ai"]),
-  ruleId: z.string(),
-  ruleRevision: z.number(),
-  runId: z.string(),
-  fingerprint: z.string(),
-  confidence: z.enum(["high", "medium", "low"]),
-  needsReview: z.boolean(),
-  original: z.string(),
-  suggestion: z.string(),
-  textSource: vTextSource,
-});
 const vRect = object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 const vTextBox = object({ start: z.number(), end: z.number(), rect: vRect });
 export const vProofreadSegment = z.discriminatedUnion("kind", [
@@ -327,32 +286,3 @@ export const vProofreadSegment = z.discriminatedUnion("kind", [
     confidence: z.number(),
   }),
 ]);
-const vRunStatus = z.enum(["pending", "running", "done", "failed", "skipped"]);
-export const vProofreadingRunFields = {
-  workId: z.string(),
-  revisionId: z.string(),
-  status: vRunStatus,
-  snapshotHash: z.string(),
-  artifacts: z.array(
-    object({
-      artifactId: z.string(),
-      status: vRunStatus,
-      findings: z.number(),
-      source: vTextSource.optional(),
-      error: z.string().optional(),
-      leaseUntil: z.number().optional(),
-    }),
-  ),
-  attempts: z.number(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-  note: z.string().optional(),
-};
-
-/** フィードバックの投稿テンプレート（domain の feedbackTemplateIds） */
-export const vFeedbackTemplateId = z.enum(["creator_first", "creator_update", "reviewer"]);
-
-/** リアクション（絵文字ごとに押した人。domain の ReactionEntry） */
-export const vReactionEntries = z.array(
-  object({ emoji: z.string(), userIds: z.array(z.string()) }),
-);

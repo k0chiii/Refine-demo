@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MARK_ALL_READ_BATCH } from "@mf100/application";
+import { base64urlEncode } from "@mf100/platform";
 import { createApp } from "./app.ts";
-import { base64urlEncode } from "./delivery/webpush.ts";
 import type { Sql } from "./sqlite/sql.ts";
 import { app, fakeDb, post, signIn } from "./testing/http.ts";
 

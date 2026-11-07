@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Principal } from "@mf100/domain";
 import type { FnCtx } from "./functions/define.ts";
 import { listWorksRelatedTo } from "./functions/workList.ts";
-import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
+import { app, callFn, failFn, fakeDb, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
 // Convex の読み取りモデルのテスト（works.get.threadStats / revisionsGet / workSearch / workSummary / worksRowMenu ほか）の期待を、
 // HTTP から 1 周して写す。戻りは Convex と同じ形かを見るので、型は付けずに値だけ引く
@@ -17,21 +17,14 @@ const KEY = { "X-MF100-Service-Key": UPLOAD_SECRET };
 function world() {
   const db = fakeDb(undefined, { MF100_SYSTEM_ADMIN_SUBJECTS: "u_admin" });
   const a = app(db);
-  const call = async (
+  const call = (
     name: string,
     args: unknown,
     subject = "u_manager",
     headers: Record<string, string> = {},
-  ): Promise<Json> => {
-    const res = await post(a, name, args, subject, headers);
-    const body = (await res.json()) as { value?: unknown };
-    expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-    return body.value;
-  };
-  const fail = async (name: string, args: unknown, subject = "u_manager") => {
-    const res = await post(a, name, args, subject);
-    return { status: res.status, ...((await res.json()) as { code?: string }) };
-  };
+  ) => callFn(a, name, args, subject, headers);
+  const fail = (name: string, args: unknown, subject = "u_manager") =>
+    failFn(a, name, args, subject);
   return { a, db, call, fail, sql: db.sql };
 }
 type World = ReturnType<typeof world>;

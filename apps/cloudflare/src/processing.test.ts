@@ -1,7 +1,7 @@
 import { DomainError } from "@mf100/domain";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { Sql } from "./sqlite/sql.ts";
-import { app, fakeDb, post, signIn, UPLOAD_SECRET } from "./testing/http.ts";
+import { app, callFn, failFn, fakeDb, signIn, UPLOAD_SECRET } from "./testing/http.ts";
 
 // processing:*（ファイル処理の台帳）と /internal/processing を、HTTP から 1 周させる。
 // 期待は apps/convex/convex/processing.test.ts から写した（権限・同意・派生キー・権限剥奪後の拒否・進行中の制作物だけ）。
@@ -40,26 +40,18 @@ function world(env: Record<string, string> = {}) {
     },
   );
   const a = app(db, { MF100_UPLOAD_SECRET: UPLOAD_SECRET, PROCESSING_SECRET: SECRET });
-  const call = async (
+  const call = (
     name: string,
     args: unknown,
     subject = "u_creator",
     headers: Record<string, string> = {},
-  ) => {
-    const res = await post(a, name, args, subject, headers);
-    const body = (await res.json()) as { value?: unknown };
-    expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-    return body.value as Json;
-  };
-  const fail = async (
+  ) => callFn(a, name, args, subject, headers);
+  const fail = (
     name: string,
     args: unknown,
     subject: string | null = "u_creator",
     headers: Record<string, string> = {},
-  ) => {
-    const res = await post(a, name, args, subject, headers);
-    return { status: res.status, ...((await res.json()) as { code: string }) };
-  };
+  ) => failFn(a, name, args, subject, headers);
   /** apps/api の processingGateway と同じ呼び方 */
   const gateway = async (
     operation: string,

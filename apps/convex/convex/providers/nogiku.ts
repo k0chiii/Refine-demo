@@ -1,5 +1,5 @@
 import type { OAuthConfig, OAuthUserConfig } from "@auth/core/providers";
-import { fetchOrgPermissions, type NogikuAccessConfig } from "../lib/nogikuAccess.ts";
+import { fetchOrgPermissions, type NogikuAccessConfig } from "@mf100/platform";
 
 /**
  * Nogiku Auth を Auth.js / Convex Auth の OIDC provider として扱う定義。

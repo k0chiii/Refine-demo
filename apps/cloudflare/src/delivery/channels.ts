@@ -1,6 +1,6 @@
 import type { DeliveryEnv } from "@mf100/application";
 import { type ChannelAvailability, DELIVERY_CHANNELS } from "@mf100/domain";
-import { type VapidKeys, vapidKeysFromEnv } from "./webpush.ts";
+import { type VapidKeys, vapidKeysFromEnv } from "@mf100/platform";
 
 /*
  * 外への通知の経路ごとの秘密（Worker の env）。ここが env を読む唯一の場所で、計画・送信がこれを使う。

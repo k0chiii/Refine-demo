@@ -1,4 +1,5 @@
 import { personDisplayName } from "@mf100/domain";
+import { base64urlEncode } from "@mf100/platform";
 import type { Sql } from "../sqlite/sql.ts";
 
 /** Nogiku（またはモック）のプロフィール。providers/nogiku.ts の NogikuOAuthProfile と同じ項目 */
@@ -115,18 +116,14 @@ interface UserDoc {
 const encoder = new TextEncoder();
 
 export function randomToken(bytes = 32): string {
-  return base64url(crypto.getRandomValues(new Uint8Array(bytes)));
-}
-
-export function base64url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return base64urlEncode(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
 /** refresh は 256 bit の乱数なので、保存は塩なしの SHA-256 で足りる（DB が漏れても元に戻せない） */
 export async function sha256Base64url(text: string): Promise<string> {
-  return base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(text))));
+  return base64urlEncode(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(text))),
+  );
 }
 
 export function createAuthStore(sql: Sql, now: () => number = Date.now): AuthStore {

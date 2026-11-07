@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { aiConfig, gatewayOptions } from "./ai/provider.ts";
 import { expireAiJobs } from "./functions/aiWorkflow.ts";
-import { app, fakeDb, post, signIn } from "./testing/http.ts";
+import { app, callFn, failFn, fakeDb, post, signIn } from "./testing/http.ts";
 
 // ai:* / aiWorkflow:* / semanticRules:* と、その仕事（jobs の aiProofread・indexRule）を HTTP から 1 周させる。
 // 期待は apps/convex/convex/{ai,aiWorkflow,semanticRules}.test.ts から写した。提供元の fetch は偽物
@@ -53,16 +53,10 @@ const anthropicReply = (candidates: Candidate[]) =>
 function world(env: Record<string, string> = KEYED) {
   const db = fakeDb(undefined, env);
   const a = app(db);
-  const call = async (name: string, args: unknown, subject = "u_creator") => {
-    const res = await post(a, name, args, subject);
-    const body = (await res.json()) as { value?: unknown };
-    expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
-    return body.value as Json;
-  };
-  const fail = async (name: string, args: unknown, subject = "u_creator") => {
-    const res = await post(a, name, args, subject);
-    return { status: res.status, ...((await res.json()) as { code: string }) };
-  };
+  const call = (name: string, args: unknown, subject = "u_creator") =>
+    callFn(a, name, args, subject);
+  const fail = (name: string, args: unknown, subject = "u_creator") =>
+    failFn(a, name, args, subject);
   /** 提供元の代わり。db.host.fetch（action）と runDue の io（alarm）に同じものを渡す */
   const useFetch = (impl: (url: string, init: RequestInit) => Response | Promise<Response>) => {
     const fn = vi.fn<typeof fetch>(async (input, init) => impl(href(input), init ?? {}));

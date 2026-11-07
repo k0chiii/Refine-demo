@@ -1,10 +1,10 @@
 import { isPushSubscribed, subscribePush, unsubscribePush } from "@mf100/application";
+import { vapidKeysFromEnv } from "@mf100/platform";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { vapidKeysFromEnv } from "./lib/webpush.ts";
 
 /*
  * 端末への通知（Web Push）。利用者決定 2026-10-15（外部への送信の承認）。

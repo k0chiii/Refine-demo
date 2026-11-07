@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  nextRevisionPlannedAt,
-  revisionPlannedAtOf,
-  upsertRevisionPlannedAt,
-} from "../work/revisionPlannedAt.ts";
+import { nextRevisionPlannedAt, revisionPlannedAtOf } from "../work/revisionPlannedAt.ts";
 
 describe("revisionPlannedAt", () => {
   const now = Date.parse("2026-06-01T00:00:00+09:00");
@@ -31,14 +27,5 @@ describe("revisionPlannedAt", () => {
         now,
       ),
     ).toBe(soon);
-  });
-
-  it("upsertRevisionPlannedAt で sequence を置き換える", () => {
-    const a = Date.parse("2026-07-01T00:00:00+09:00");
-    const b = Date.parse("2026-07-10T00:00:00+09:00");
-    expect(upsertRevisionPlannedAt([{ sequence: 1, at: a }], 2, b)).toEqual([
-      { sequence: 1, at: a },
-      { sequence: 2, at: b },
-    ]);
   });
 });

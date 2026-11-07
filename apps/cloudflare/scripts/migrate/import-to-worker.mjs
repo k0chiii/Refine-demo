@@ -15,15 +15,16 @@
 // ponytail: 失敗した塊の再送は人が全体をやり直す（冪等なので安全）。塊ごとの再試行は持たない。
 
 import fs from "node:fs";
+import { parseArgs } from "node:util";
 
-const file = process.argv[2];
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`);
-  return i < 0 ? fallback : process.argv[i + 1];
-}
-const chunkRows = Number(arg("chunk", "1000"));
+const { values, positionals } = parseArgs({
+  allowPositionals: true,
+  options: { chunk: { type: "string", default: "1000" }, "dry-run": { type: "boolean" } },
+});
+const file = positionals[0];
+const chunkRows = Number(values.chunk);
 const CHUNK_BYTES = 4 * 1024 * 1024;
-const dryRun = process.argv.includes("--dry-run");
+const dryRun = values["dry-run"];
 
 const site = process.env.SITE_URL?.replace(/\/$/, "");
 const secret = process.env.MF100_IMPORT_SECRET;

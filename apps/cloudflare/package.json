@@ -15,6 +15,7 @@
   "dependencies": {
     "@mf100/application": "workspace:*",
     "@mf100/domain": "workspace:*",
+    "@mf100/platform": "workspace:*",
     "hono": "4.13.13",
     "jose": "6.2.10",
     "zod": "4.6.5"

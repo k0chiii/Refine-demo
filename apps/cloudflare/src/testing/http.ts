@@ -1,3 +1,4 @@
+import { expect } from "vite-plus/test";
 import { createApp } from "../app.ts";
 import { devIdentifier } from "../identity.ts";
 import { type JobIo, nextJobAt, runDueJobs } from "../jobs.ts";
@@ -138,4 +139,34 @@ export const post = (
 export async function signIn(a: ReturnType<typeof app>, subject: string): Promise<string> {
   const res = await post(a, "me:me", {}, subject);
   return ((await res.json()) as { value: { id: string } }).value.id;
+}
+
+/** 戻りの形は Convex と同じかを見るテストなので、型は付けずに値だけ引く */
+// oxlint-disable-next-line typescript/no-explicit-any
+type Json = any;
+
+/** 関数を呼んで 200 を確かめ、`{ value }` の value を返す。外れたときは body を見せる */
+export async function callFn(
+  a: ReturnType<typeof app>,
+  name: string,
+  args: unknown,
+  subject: string | null,
+  headers: Record<string, string> = {},
+): Promise<Json> {
+  const res = await post(a, name, args, subject, headers);
+  const body = (await res.json()) as { value?: unknown };
+  expect(res.status, `${name}: ${JSON.stringify(body)}`).toBe(200);
+  return body.value;
+}
+
+/** 関数を呼んで、断られたときの status と code を返す */
+export async function failFn(
+  a: ReturnType<typeof app>,
+  name: string,
+  args: unknown,
+  subject: string | null,
+  headers: Record<string, string> = {},
+) {
+  const res = await post(a, name, args, subject, headers);
+  return { status: res.status, ...((await res.json()) as { code: string }) };
 }

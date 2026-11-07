@@ -1,6 +1,6 @@
 import { isPushSubscribed, subscribePush, unsubscribePush } from "@mf100/application";
+import { vapidKeysFromEnv } from "@mf100/platform";
 import { z } from "zod";
-import { vapidKeysFromEnv } from "../delivery/webpush.ts";
 import { mutation, query, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
 

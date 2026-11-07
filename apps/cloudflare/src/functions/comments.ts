@@ -18,7 +18,6 @@ import {
   searchMentionGroups as searchMentionGroupsUseCase,
   setThreadSubscription,
   toggleCommentReaction,
-  type AppContext,
 } from "@mf100/application";
 import {
   DomainError,
@@ -26,60 +25,14 @@ import {
   isAllowed,
   projectThreadEvents,
   revisionLabel,
-  summarizeCommentReactions,
-  type ReactionEntry,
 } from "@mf100/domain";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
-import { resolveUsers, type UserSummary } from "./users.ts";
+import { loadGroupNames, mentionViews, reactionViews } from "./threadView.ts";
+import { resolveUsers } from "./users.ts";
 import { object, vAnchor, vDecision, vId, vSeverity, vThreadKind } from "./validators.ts";
 
-// apps/convex/convex/comments.ts の写し（lib/reactions.ts と lib/threadActivity.ts の必要な分を、下の helper に写した）
-
-/** 画面に渡すリアクションの集計（絵文字・人数・自分が付けたか・付けた人の名前） */
-const reactionViews = (
-  entries: readonly ReactionEntry[] | undefined,
-  viewerId: string,
-  users: ReadonlyMap<string, UserSummary>,
-) =>
-  summarizeCommentReactions(entries, viewerId).map(({ userIds, ...r }) => ({
-    ...r,
-    users: userIds.map((id) => ({ id, name: users.get(id)?.name ?? "（不明なユーザー）" })),
-  }));
-
-/** メンションしたグループの名前（ID → 名前）。消えたグループは入らない */
-async function loadGroupNames(
-  db: AppContext,
-  groupIds: Iterable<string>,
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  for (const id of new Set(groupIds)) {
-    const group = await db.groups.findById(id);
-    if (group) out.set(id, group.name);
-  }
-  return out;
-}
-
-/**
- * 本文の「@名前」を強調するための名前の一覧: メンションした人と、メンションしたグループ（ID は「group:ID」）。
- * 知らない人・消えたグループは出さない
- */
-function mentionViews(
-  userIds: readonly string[],
-  groupIds: readonly string[],
-  users: ReadonlyMap<string, UserSummary>,
-  groupNames: ReadonlyMap<string, string>,
-): UserSummary[] {
-  const out = userIds.flatMap((id) => {
-    const u = users.get(id);
-    return u ? [u] : [];
-  });
-  for (const id of groupIds) {
-    const name = groupNames.get(id);
-    if (name) out.push({ id: groupMentionToken(id), name, email: null });
-  }
-  return out;
-}
+// apps/convex/convex/comments.ts の写し（リアクション・メンションの表示用の部品は threadView.ts）
 
 const stringsOf = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];

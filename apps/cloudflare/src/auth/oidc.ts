@@ -1,5 +1,5 @@
 import { decodeJwt } from "jose";
-import { fetchOrgPermissions, type NogikuAccessConfig } from "./access.ts";
+import { fetchOrgPermissions, type NogikuAccessConfig } from "@mf100/platform";
 import { randomToken, sha256Base64url, type AuthProfile } from "./store.ts";
 
 /**

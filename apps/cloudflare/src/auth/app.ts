@@ -1,9 +1,8 @@
 import { Hono } from "hono";
-import { readNogikuAccessConfig } from "./access.ts";
+import { readNogikuAccessConfig, resolveRedirectTo } from "@mf100/platform";
 import type { AuthEnv } from "./env.ts";
 import { createJwt, type Jwt } from "./jwt.ts";
 import { createOidc } from "./oidc.ts";
-import { resolveRedirectTo } from "./redirect.ts";
 import { sha256Base64url, type AuthProfile, type AuthStore, type SessionGrant } from "./store.ts";
 
 export interface AuthDeps {

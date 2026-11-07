@@ -25,19 +25,20 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const { convertExport } = await import(path.resolve(here, "../../src/migrate/plan.ts"));
 
-function arg(name) {
-  const i = process.argv.indexOf(`--${name}`);
-  return i < 0 ? undefined : (process.argv[i + 1] ?? "");
-}
-const flag = (name) => process.argv.includes(`--${name}`);
-
-const zip = arg("zip");
-const dirArg = arg("dir");
-const out = arg("out");
+const { values } = parseArgs({
+  options: {
+    zip: { type: "string" },
+    dir: { type: "string" },
+    out: { type: "string" },
+    "allow-unknown": { type: "boolean" },
+  },
+});
+const { zip, dir: dirArg, out } = values;
 if ((!zip && !dirArg) || !out) {
   console.error(
     "usage: export-convex.mjs (--zip <file.zip> | --dir <extracted>) --out <file.jsonl>",
@@ -79,7 +80,7 @@ function readExport(dir) {
 try {
   const tables = readExport(root);
   const result = convertExport(tables);
-  if (result.unknown.length > 0 && !flag("allow-unknown")) {
+  if (result.unknown.length > 0 && !values["allow-unknown"]) {
     console.error("対応表（src/migrate/plan.ts）に無い場所があります。何も書きません:");
     for (const p of result.unknown) console.error(`  ${p}  (${tables.get(p).length} 行)`);
     process.exit(1);

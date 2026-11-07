@@ -2,8 +2,6 @@ import { orgPermissionCatalog } from "@mf100/domain";
 
 /**
  * Nogiku Access（組織権限）の取得。ログインした本人のアクセストークンで `POST {apiUrl}/permission/check` を呼ぶ。
- * apps/convex の lib/nogikuAccess.ts と同じ振る舞い。
- * ponytail: Convex 側と二重管理。Convex を畳むときにこちらへ一本化する
  */
 export interface NogikuAccessConfig {
   /** 末尾スラッシュなし */
@@ -15,11 +13,16 @@ export interface NogikuAccessConfig {
 /** ログインを待たせすぎない上限。超えたら保存値を変えずに先へ進む */
 const TIMEOUT_MS = 5000;
 
-export function readNogikuAccessConfig(env: {
-  NOGIKU_ACCESS_API_URL?: string | undefined;
-  NOGIKU_ACCESS_ORG_SLUG?: string | undefined;
-  NOGIKU_ACCESS_SYSTEM_ID?: string | undefined;
-}): NogikuAccessConfig | undefined {
+/** Worker の Env（キーを列挙した型）と process.env（添字の型）のどちらも渡せる */
+export function readNogikuAccessConfig(
+  env:
+    | {
+        NOGIKU_ACCESS_API_URL?: string | undefined;
+        NOGIKU_ACCESS_ORG_SLUG?: string | undefined;
+        NOGIKU_ACCESS_SYSTEM_ID?: string | undefined;
+      }
+    | Record<string, string | undefined>,
+): NogikuAccessConfig | undefined {
   const apiUrl = env.NOGIKU_ACCESS_API_URL?.replace(/\/+$/, "");
   const organization = env.NOGIKU_ACCESS_ORG_SLUG;
   const systemId = env.NOGIKU_ACCESS_SYSTEM_ID;
@@ -34,7 +37,7 @@ export function readNogikuAccessConfig(env: {
 export async function fetchOrgPermissions(
   config: NogikuAccessConfig,
   accessToken: string,
-  fetchImpl: typeof fetch,
+  fetchImpl: typeof fetch = fetch,
   timeoutMs: number = TIMEOUT_MS,
 ): Promise<string[] | undefined> {
   const requested: string[] = orgPermissionCatalog.map((p) => p.name);

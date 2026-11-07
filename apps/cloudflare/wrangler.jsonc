@@ -26,5 +26,4 @@
   },
   // 秘密: `wrangler secret put AUTH_PRIVATE_KEY_JWK`（`node scripts/auth-keygen.mjs` が出す JWK）。手元は .dev.vars（pnpm dev が作る）
   // Nogiku 本番: NOGIKU_CLIENT_ID / NOGIKU_CLIENT_SECRET / NOGIKU_ISSUER（redirect_uri は `${SITE_URL}/auth/callback`）
-  // Cloudflare Access で守るとき: `wrangler secret put ACCESS_TEAM` / `ACCESS_AUDIENCE`
 }

@@ -1,8 +1,7 @@
 /**
- * ログイン後の遷移先を検証して絶対 URL にする（apps/convex の lib/redirect.ts と同じ規則）。
+ * ログイン後の遷移先（redirectTo）を検証して絶対 URL にする。
  * 前方一致だと `https://app.example.attacker.test/` が `https://app.example` に通ってしまうので、URL を解析して origin とパスの境界を比べる。
  * 許さないものは例外。
- * ponytail: Convex 側と二重管理。Convex を畳むときにこちらへ一本化する
  */
 export function resolveRedirectTo(redirectTo: string, frontendUrl: string): string {
   const base = new URL(frontendUrl);

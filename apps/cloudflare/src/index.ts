@@ -1,30 +1,20 @@
 import { createApp } from "./app.ts";
 import { MF100Database } from "./db.ts";
-import { accessIdentifier, devIdentifier, type Identify } from "./identity.ts";
+import { devIdentifier, type Identify } from "./identity.ts";
 import { jwtIdentifier } from "./auth/identify.ts";
 import type { AuthStore } from "./auth/store.ts";
 
 export { MF100Database };
 
-/** JWKS の写しを isolate で使い回す（apps/api と同じ理由: リクエストごとに作ると毎回 certs を取りに行く） */
+/** 本人の特定を isolate で使い回す（env が同じあいだ。リクエストごとに JWT の検証の準備を作り直さない） */
 let identifier: { key: string; identify: Identify } | null = null;
 function identifierFor(env: Env): Identify {
-  const key = JSON.stringify([
-    env.ACCESS_TEAM,
-    env.ACCESS_AUDIENCE,
-    env.DEV_IDENTITY,
-    env.AUTH_PRIVATE_KEY_JWK,
-    env.SITE_URL,
-  ]);
+  const key = JSON.stringify([env.DEV_IDENTITY, env.AUTH_PRIVATE_KEY_JWK, env.SITE_URL]);
   if (identifier?.key === key) return identifier.identify;
-  // 本物の順: Worker の JWT（サインイン済み）→ Cloudflare Access → 手元のヘッダ
+  // 本物の順: Worker の JWT（サインイン済み）→ 手元のヘッダ
   const jwt = env.AUTH_PRIVATE_KEY_JWK ? jwtIdentifier(env) : null;
   const fallback: Identify =
-    env.ACCESS_TEAM && env.ACCESS_AUDIENCE
-      ? accessIdentifier(env.ACCESS_TEAM, env.ACCESS_AUDIENCE)
-      : (env.DEV_IDENTITY as string) === "allow"
-        ? devIdentifier
-        : async () => null;
+    (env.DEV_IDENTITY as string) === "allow" ? devIdentifier : async () => null;
   const identify: Identify = async (request) =>
     (jwt ? await jwt(request) : null) ?? (await fallback(request));
   identifier = { key, identify };

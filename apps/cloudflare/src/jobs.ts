@@ -29,7 +29,7 @@ import type { Sql } from "./sqlite/sql.ts";
  * あとで動く仕事。Convex の scheduler.runAfter / workpool に当たる。
  * 積むのはユースケースと同じトランザクションの中（巻き戻れば仕事も消える。Convex の scheduler と同じ性質）。
  * 動かすのは Durable Object の alarm（src/db.ts）で、cron も毎分 1 回拾う（alarm が落ちても止まらない）。
- * ponytail: feedbackMigration（Convex の手動起動の移行）は関数をまだ移していないので kind を持たない
+ * feedbackMigration（Convex の手動起動の移行）は実行のコードごと削除済みなので kind を持たない
  */
 
 /** 仕事の種類と、その引数（Convex の internal.* の args と同じ） */

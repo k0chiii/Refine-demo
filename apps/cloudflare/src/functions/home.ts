@@ -2,9 +2,7 @@ import { isWorkPinned, listSubmitTargets, setWorkPinned } from "@mf100/applicati
 import { z } from "zod";
 import { mutation, query, type FnCtx, type FnDef } from "./define.ts";
 import { object } from "./validators.ts";
-
-/** 候補にする制作物を読む上限（dashboard.ts の WORKS_SCAN_LIMIT と同じ） */
-const WORKS_SCAN_LIMIT = 2000;
+import { WORKS_SCAN_LIMIT } from "./workList.ts";
 
 /** 進行中の制作物（書ける・提出できる候補。権限は use case が確かめる） */
 export async function activeWorks(ctx: FnCtx) {

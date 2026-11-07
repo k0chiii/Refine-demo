@@ -1,6 +1,6 @@
 import type { SlackLookupResult } from "@mf100/application";
 import type { SendOutcome } from "@mf100/domain";
-import { type Fetch, retryAfterMs, type Sleep, sleepFor } from "./http.ts";
+import { type Fetch, retryAfterMs, type Sleep, sleepFor } from "@mf100/platform";
 
 /*
  * Slack の DM は「めいちゃん」（五月祭の slackbot）に HTTP で渡す（docs/SLACK_MEICHAN.md）。Slack API と Bot Token は使わない。

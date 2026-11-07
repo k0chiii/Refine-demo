@@ -14,7 +14,6 @@ import {
   isAllowed,
   isGrantActive,
   mayAssignReviewers,
-  normalizePersonKey,
   revisionLabel,
   revisionThreadStatsFromRevision,
   revisionThreadStatsOf,
@@ -22,7 +21,7 @@ import {
 } from "@mf100/domain";
 import { z } from "zod";
 import { mutation, query, type FnDef } from "./define.ts";
-import { resolveUsers, userDisplayName } from "./users.ts";
+import { matchDirectoryUsers, resolveUsers } from "./users.ts";
 import { listMinePageOf, listMyWorks, summarizeWorkList } from "./workList.ts";
 import {
   object,
@@ -189,38 +188,8 @@ export const works = {
   "works:importDirectory": query({
     auth: "user",
     args: object({ keys: z.array(z.string()) }),
-    handler: async (ctx, { keys }): Promise<DirectoryUser[]> => {
-      if (!canRegisterWorks(ctx.principal!)) return [];
-      const wanted = new Set(keys.slice(0, 2000).map(normalizePersonKey));
-      if (wanted.size === 0) return [];
-      return ctx.sql
-        .exec(
-          `SELECT id, json_extract(doc, '$.name') AS name, json_extract(doc, '$.hurigana') AS hurigana, email
-           FROM users WHERE subject IS NOT NULL ORDER BY rowid LIMIT 5000`,
-        )
-        .flatMap((r) => {
-          const kanji = typeof r.name === "string" ? r.name : undefined;
-          const display = userDisplayName({
-            ...(kanji !== undefined ? { name: kanji } : {}),
-            ...(typeof r.hurigana === "string" ? { hurigana: r.hurigana } : {}),
-          });
-          const email = typeof r.email === "string" ? r.email : undefined;
-          const hit =
-            wanted.has(normalizePersonKey(kanji ?? "")) ||
-            wanted.has(normalizePersonKey(display)) ||
-            (email !== undefined && wanted.has(normalizePersonKey(email)));
-          return hit
-            ? [
-                {
-                  id: r.id as string,
-                  name: display,
-                  email: email ?? null,
-                  ...(kanji ? { otherNames: [kanji] } : {}),
-                },
-              ]
-            : [];
-        });
-    },
+    handler: async (ctx, { keys }): Promise<DirectoryUser[]> =>
+      canRegisterWorks(ctx.principal!) ? matchDirectoryUsers(ctx.sql, keys) : [],
   }),
 
   /**

@@ -33,6 +33,7 @@
     "@convex-dev/workpool": "^0.4.14",
     "@mf100/application": "workspace:*",
     "@mf100/domain": "workspace:*",
+    "@mf100/platform": "workspace:*",
     "convex": "1.46.0"
   },
   "devDependencies": {
