@@ -210,3 +210,24 @@ export async function idempotent<T>(
   await ctx.idempotency.put(scope, key, result);
   return result;
 }
+
+/** システム管理者だけが通る（それ以外は forbidden） */
+export function requireSystemAdmin(principal: Principal): void {
+  if (!principal.isSystemAdmin) throw new DomainError("forbidden", { reason: "system_admin_only" });
+}
+
+/** 所属する人が委員の名簿にいるか。既にいた人は確かめ直さない。code は呼び元の「入力が不正」のコード */
+export async function assertMembersExist(
+  ctx: AppContext,
+  after: readonly string[],
+  before: readonly string[],
+  code: "group_invalid" | "team_invalid",
+): Promise<void> {
+  const known = new Set(before);
+  const ids = after.filter((id) => !known.has(id));
+  if (ids.length === 0) return;
+  const found = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length > 0)
+    throw new DomainError(code, { field: "memberIds", reason: "unknown_user", userIds: missing });
+}

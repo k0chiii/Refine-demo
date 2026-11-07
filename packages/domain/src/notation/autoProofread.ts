@@ -19,10 +19,6 @@ import { fnv1a } from "./ruleset.ts";
 export const PROOFREADER_ID = "bot:proofreader";
 export const PROOFREADER_NAME = "自動校正";
 
-export function isBotAuthor(id: string): boolean {
-  return id.startsWith("bot:");
-}
-
 /** 最初の検査のあと、失敗した添付を再試行できる回数 */
 export const PROOFREAD_MAX_RETRIES = 4;
 

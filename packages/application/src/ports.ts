@@ -445,7 +445,7 @@ export interface HomeRepository {
 }
 
 /**
- * 旧 FB（フィードバック）の読み取り。コメントへの移行（usecases/feedbackMigration.ts）だけが使う。
+ * 旧 FB（フィードバック）の読み取り。コメントへの移行の実行コードは削除済みで、いまはどの手順も呼ばない（表のデータを読む口として残す）。
  * FB の機能は廃止した（利用者決定 2026-10-20）ので、書き込みの口は持たない。
  */
 export interface FeedbackRepository {

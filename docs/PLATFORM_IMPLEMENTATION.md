@@ -14,7 +14,7 @@
 | V06 | 実装       | staged の読み取り専用検査と任意の pre-commit hook。ステージ外の自動修正なし                                                                                     |
 | V07 | 実装       | API の Cloudflare Vite plugin 開発・build・preview。従来 Wrangler / cron の経路も維持                                                                           |
 | V08 | 実装       | project 別 script と coverage-v8 5.0.4。coverage は text/json-summary/lcov、CI artifact に保存。E2E/PWA は独立                                                  |
-| V09 | 実装       | 既存 vp pack に加え package:domain で index.mjs・型宣言・独立した exports manifest を生成。workspace はソース参照を維持。公開はしない                           |
+| V09 | 削除       | domain の vp pack・package:domain は使われないので削除済み。workspace はソース参照を維持。公開はしない                                                          |
 | V10 | 実装       | create の既定にローカル package generator、domain/application の雛形。toolchain:migrate と版の照合を用意。実アップグレードは今回実行していない                  |
 
 ## Convex

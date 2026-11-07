@@ -5,6 +5,7 @@ import {
   validateSlackWorkspace,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
+import { requireSystemAdmin } from "../shared.ts";
 
 /*
  * Slack のワークスペース（管理画面「Slack」。docs/UI_M3E.md §105。利用者指示 2026-10-28「ADMINの管理画面でWS名とTEAM_IDの
@@ -14,10 +15,6 @@ import type { AppContext } from "../ports.ts";
 
 /** 登録できるワークスペースの数の上限（一覧は 100 件まで読む） */
 export const SLACK_WORKSPACE_MAX = 100;
-
-function requireSystemAdmin(principal: Principal): void {
-  if (!principal.isSystemAdmin) throw new DomainError("forbidden", { reason: "system_admin_only" });
-}
 
 export async function listSlackWorkspaces(
   ctx: AppContext,

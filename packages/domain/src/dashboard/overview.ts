@@ -93,20 +93,6 @@ export function revisionThreadStatsFromRevision(revision: {
   };
 }
 
-/** 指摘の数: 未解決と、片付いたもの */
-export function tallyResolutions(resolutions: Iterable<Resolution>): {
-  open: number;
-  done: number;
-} {
-  let open = 0;
-  let done = 0;
-  for (const r of resolutions) {
-    if (isUnresolvedResolution(r)) open++;
-    else done++;
-  }
-  return { open, done };
-}
-
 /** 注意の度合い: 期限超過 > 期限が近い > 手を付けるものがある > 落ち着いている */
 export type WorkUrgency = "overdue" | "soon" | "open" | "calm";
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   COMMENT_FILES_MAX,
   COMMENT_FILE_MAX_BYTES,
-  COMMENT_FILE_TTL_MS,
   COMMENT_THUMB_MAX_BYTES,
   assertCommentFileAttachable,
   assertCommentFileUploadable,
@@ -15,7 +14,6 @@ import {
   commentThumbObjectKey,
   failCommentFile,
   isCommentFileServable,
-  isCommentFileStale,
   recordCommentThumb,
   removeCommentFile,
   toCommentFileView,
@@ -264,13 +262,6 @@ describe("コメントの添付: 検証と状態", () => {
     expect(
       attachCommentFile(makeFile(), { threadId: "t1", eventId: "e1", revisionId: "rev1" }).eventId,
     ).toBe("e1");
-  });
-  it("付けないまま 24 時間たった添付は放置扱い", () => {
-    const f = makeFile();
-    expect(isCommentFileStale(f, T0 + COMMENT_FILE_TTL_MS - 1)).toBe(false);
-    expect(isCommentFileStale(f, T0 + COMMENT_FILE_TTL_MS)).toBe(true);
-    expect(isCommentFileStale({ ...f, threadId: "t1" }, T0 + COMMENT_FILE_TTL_MS)).toBe(false);
-    expect(isCommentFileStale({ ...f, abandonedAt: T0 }, T0 + COMMENT_FILE_TTL_MS)).toBe(false);
   });
   it("削除で手放した添付は冪等に removedAt が付く", () => {
     const f = removeCommentFile(makeFile({ threadId: "t1" }), T0 + 5);

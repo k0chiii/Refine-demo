@@ -129,24 +129,3 @@ export function collectFigmaUrls(text: string): Array<{ url: string; ref: FigmaR
 export function formatFigmaPlace(a: Extract<Anchor, { type: "figma_node" }>): string {
   return `フレーム: ${a.nodeName?.trim() || a.nodeId}`;
 }
-
-/**
- * Figma 連携のポリシー値（承認待ちの項目はコードで確定しない。CLAUDE.md）。
- * - enabled: REST API での取り込み。サーバーに FIGMA_ACCESS_TOKEN があるときだけ（利用者決定 2026-10-17: まず API で試す）
- * - writeBack: Figma へのコメント書き戻し（外部への実データ送信。承認まで false）
- * - allowRestricted: 取扱注意の制作物でも Figma へ取りに行くか（AI 校正と同じく既定 false）
- * - renderScale: 書き出しの倍率（`GET /v1/images` の scale）
- */
-export interface FigmaPolicy {
-  enabled: boolean;
-  writeBack: boolean;
-  allowRestricted: boolean;
-  renderScale: 1 | 2;
-}
-
-export const defaultFigmaPolicy: FigmaPolicy = {
-  enabled: false,
-  writeBack: false,
-  allowRestricted: false,
-  renderScale: 2,
-};

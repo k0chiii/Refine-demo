@@ -2,7 +2,7 @@
 # - デモ: develop への push で CI が終わったあと、verify が success なら配る。
 # - 本番: main への push（develop からの merge）で CI が終わったあと、verify が success なら配る。
 #   Environment production に承認者を置いていれば、そこで止まる（Settings › Environments）。
-# - 手動: workflow_dispatch で demo / production を選べる。seed_notation / fb_migration は手動本番のみ。
+# - 手動: workflow_dispatch で demo / production を選べる。seed_notation は手動本番のみ。
 name: Deploy
 
 on:
@@ -20,15 +20,6 @@ on:
         description: 本番に表記ルールの初期データ（デモ版と同じ）を入れる。既にある ruleId は飛ばす
         type: boolean
         default: false
-      fb_migration:
-        description: >-
-          FB（フィードバック）をコメントへ移す。配り終えてから Convex の内部関数 feedbackMigration:run を流し、結果を実行のまとめに出す。
-          dry-run=件数を数えるだけ（何も書かない）、migrate=コメントへ移す（何度流しても増えない）、
-          delete=移行済みを確かめてから FB の行を全て消す（移っていないスレッドがあれば何も消さない）。
-          順番は dry-run → migrate → delete。none は何もしない
-        type: choice
-        options: [none, dry-run, migrate, delete]
-        default: none
 
 concurrency:
   group: deploy-${{ github.event.workflow_run.head_branch || github.ref }}-${{ inputs.target || 'auto' }}
@@ -225,19 +216,3 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: pnpm exec convex run notationSeed:importSamples
-      - name: FB のコメントへの移行（手動本番・指定したときだけ）
-        if: github.event_name == 'workflow_dispatch' && inputs.fb_migration != 'none' && steps.gate.outputs.ok == 'true'
-        working-directory: apps/convex
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          FB_MIGRATION: ${{ inputs.fb_migration }}
-        run: |
-          set -euo pipefail
-          pnpm exec convex run feedbackMigration:run "{\"mode\":\"${FB_MIGRATION}\"}" | tee "$RUNNER_TEMP/fb-migration.json"
-          {
-            echo "### FB のコメントへの移行（${FB_MIGRATION}）"
-            echo
-            echo '```json'
-            cat "$RUNNER_TEMP/fb-migration.json"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"

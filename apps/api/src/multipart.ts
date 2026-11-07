@@ -36,11 +36,6 @@ function dropAccumulator(objectKey: string, uploadId: string) {
   partAccumulators.delete(accKey(objectKey, uploadId));
 }
 
-/** Exposed for tests that assert the fast path avoided a full body digest. */
-export function multipartAccumulatorCountForTests() {
-  return partAccumulators.size;
-}
-
 /** No completed object is deleted here: orphan cleanup decides deletion after atomic adoption/failure. */
 export async function multipartRequest(
   request: Request,

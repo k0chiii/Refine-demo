@@ -1,4 +1,5 @@
 import {
+  clamp01,
   pointFromCrop,
   pointToCrop,
   rectFromCrop,
@@ -82,12 +83,10 @@ export interface PostMarksValue {
 }
 
 export const PostMarksContext = createContext<PostMarksValue | null>(null);
-export const usePostMarks = () => useContext(PostMarksContext);
 
 /** 印の押せる半径（画面の px） */
 const HIT_R = 18;
 
-const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
 type P = { x: number; y: number };
 
 const pct = (v: number) => `${(v * 100).toFixed(3)}%`;

@@ -1,4 +1,5 @@
 import { FigmaApiError, type FigmaClient, type ObjectStore, type UploadOps } from "./ports.ts";
+import { toHex } from "./toHex.ts";
 
 /** ブラウザから来る取り込みの指示（項目は Convex の prepare で由来 figma 付きに作ってある） */
 export interface FigmaImportItem {
@@ -19,7 +20,7 @@ export interface FigmaImportDeps {
   figma: FigmaClient;
   uploads: UploadOps;
   store: ObjectStore;
-  /** 書き出しの倍率（domain の FigmaPolicy.renderScale） */
+  /** 書き出しの倍率 */
   scale: number;
   /** 429 のあとに待つ（テストでは即時） */
   sleep?: (ms: number) => Promise<void>;
@@ -198,6 +199,5 @@ export function describeFigmaError(error: unknown): string {
 }
 
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return toHex(await crypto.subtle.digest("SHA-256", buf));
 }

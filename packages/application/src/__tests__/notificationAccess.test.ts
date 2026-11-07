@@ -4,7 +4,6 @@ import {
   listMyNotifications,
   markAllNotificationsRead,
   notify,
-  REDACTED_NOTIFICATION,
 } from "../usecases/notifications.ts";
 import { remindUpcomingDeadlines } from "../usecases/reviews.ts";
 import { setWorkReviewers } from "../usecases/reviewers.ts";

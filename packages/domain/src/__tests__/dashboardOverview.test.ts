@@ -4,7 +4,6 @@ import {
   compareWorkRows,
   nextDeadlineOf,
   summarizeByBureau,
-  tallyResolutions,
   tallyStages,
   workStageOf,
   workStages,
@@ -52,15 +51,6 @@ describe("制作物の段階", () => {
     const t = tallyStages(["reviewing", "reviewing", "finalized"]);
     expect(t).toEqual({ unsubmitted: 0, reviewing: 2, lapsed: 0, on_hold: 0, finalized: 1 });
     expect(Object.keys(t)).toEqual([...workStages]);
-  });
-});
-
-describe("指摘の数え方", () => {
-  it("未対応・確認済み・採用済み未反映は未解決、反映済み・不採用・持越は片付いた", () => {
-    expect(
-      tallyResolutions(["open", "acknowledged", "accepted", "resolved", "rejected", "deferred"]),
-    ).toEqual({ open: 3, done: 3 });
-    expect(tallyResolutions([])).toEqual({ open: 0, done: 0 });
   });
 });
 

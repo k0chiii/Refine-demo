@@ -31,6 +31,10 @@
     "CONVEX_URL": "http://127.0.0.1:3210",
     "CONVEX_SITE_URL": "http://127.0.0.1:3211",
     "ALLOWED_ORIGINS": "http://localhost:5173",
+    // 業務の正本の切替（convex | cloudflare。既定は convex）。cloudflare のときは apps/cloudflare の URL（その SITE_URL と同じ値）を向ける。
+    // staging / production には書かない（無ければ convex）。cloudflare を試すときだけそこへ足す
+    "BACKEND": "convex",
+    "CLOUDFLARE_SITE_URL": "http://localhost:8790",
   },
   "env": {
     "staging": {

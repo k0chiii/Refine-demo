@@ -1,3 +1,19 @@
+import { saveBlob } from "@/lib/saveBlob";
+import type {
+  CommentUploadOptions,
+  CommentUploadResult,
+  FigmaImportItemInput,
+  FigmaImportItemResult,
+  UploadResult,
+} from "./api.types";
+
+export type {
+  CommentUploadOptions,
+  CommentUploadResult,
+  FigmaImportItemInput,
+  FigmaImportItemResult,
+  UploadResult,
+} from "./api.types";
 import { multipartUpload } from "@/lib/multipartUpload";
 import { createCacheStorePersistence } from "@/lib/artifactCacheStore";
 import {
@@ -21,13 +37,6 @@ import {
 export const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
 
 export { sha256Hex };
-
-export interface UploadResult {
-  itemId: string;
-  status: string;
-  failureMessage: string | null;
-  size: number;
-}
 
 /**
  * 版の提出物を送る。ダウンロード専用の原本は gzip して送る（lib/uploadEncoding）。申告する sha256・大きさは元の実体のもの。
@@ -148,29 +157,7 @@ export async function downloadArtifact(token: string, artifactId: string, fileNa
   saveBlob(await fetchArtifactBlob(token, artifactId), fileName);
 }
 
-function saveBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
 // ---------------------------------------------------------------- Figma の取り込み（Hono /figma/*）
-
-export interface FigmaImportItemInput {
-  itemId: string;
-  fileKey: string;
-  /** 「1:2」 */
-  nodeId: string;
-}
-export interface FigmaImportItemResult {
-  itemId: string;
-  status: string;
-  failureMessage: string | null;
-  nodeName: string | null;
-}
 
 /** Figma 連携が使えるか（Worker にトークンがあるか）。失敗したら使えないものとして扱う */
 export async function figmaStatus(token: string): Promise<{ enabled: boolean; queued?: boolean }> {
@@ -258,25 +245,6 @@ export async function importFigmaFrames(
 }
 
 // ---------------------------------------------------------------- コメント・返信の添付（Hono /comment-files/*）
-
-export interface CommentUploadResult {
-  fileId: string;
-  status: string;
-  failureMessage: string | null;
-  size: number;
-  /** サムネイルも置けたか（置けなくても添付は有効。一覧は原本で代替する） */
-  thumb: boolean;
-}
-
-export interface CommentUploadOptions {
-  /** 一覧用のサムネイル（attachmentCompress が作る WebP）。無ければ送らない */
-  thumb?: Blob | null;
-  /** 原本の送信の進み具合（0〜1。実際に送った量。圧縮・ハッシュの計算が済んでから動き出す） */
-  onProgress?: (fraction: number) => void;
-  /** 中止（本文の送信を打ち切る） */
-  signal?: AbortSignal;
-  onPhase?: (phase: UploadPhase) => void;
-}
 
 /** PUT を XHR で送り、実際に送れた量を知らせる（fetch は送信の進み具合を取れない） */
 function putWithProgress(

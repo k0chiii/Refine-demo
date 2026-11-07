@@ -67,6 +67,6 @@ export default defineConfig({
       reportsDirectory: "coverage",
       exclude: ["**/_generated/**", "**/test/**", "**/e2e/**", "**/routeTree.gen.ts"],
     },
-    projects: ["packages/*", "apps/convex", "apps/api", "apps/web"],
+    projects: ["packages/*", "apps/convex", "apps/api", "apps/cloudflare", "apps/web"],
   },
 });

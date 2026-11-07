@@ -22,7 +22,7 @@ import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from
 import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 
 // Service Worker 自身の通信（install 中の取得）を context の request として見るための実験機能
 process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = "1";

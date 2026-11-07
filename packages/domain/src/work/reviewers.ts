@@ -12,7 +12,6 @@ export type ReviewerRoster =
 
 /** 名簿から起こす割当の種別。版の提出種別（Revision.reviewType）とは別の定数。 */
 export const ROSTER_REVIEW_TYPE = "general" as const;
-export type RosterReviewType = typeof ROSTER_REVIEW_TYPE;
 
 export interface WorkReviewerFields {
   reviewerIds?: readonly UserId[] | undefined;

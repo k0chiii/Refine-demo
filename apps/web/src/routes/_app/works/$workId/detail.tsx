@@ -79,10 +79,7 @@ function WorkDetailShell() {
         <section className="detail-shell__preview" aria-label="プレビュー">
           <div className="detail-shell__preview-frame" data-testid="detail-preview">
             {previewRev ? (
-              <WorkDetailPreview
-                workId={workId as Id<"works">}
-                revisionId={previewRev.id as Id<"revisions">}
-              />
+              <WorkDetailPreview revisionId={previewRev.id as Id<"revisions">} />
             ) : (
               <p className="body-medium muted">提出された版がありません</p>
             )}

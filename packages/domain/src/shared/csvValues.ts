@@ -58,3 +58,13 @@ export function splitCsvList(value: string): string[] {
   }
   return out;
 }
+
+/** CSV の 1 セルを書き出す（カンマ・引用符・改行を含むときだけ引用符で囲む） */
+export function csvCell(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** 全角英数・全角空白をそろえ、連続する空白を 1 つに（名前・見出しの照合用。大文字小文字も無視） */
+export function normalizePersonKey(value: string): string {
+  return value.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}

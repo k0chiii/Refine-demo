@@ -24,7 +24,6 @@
     "test:convex": "vp test run --project convex",
     "test:web": "vp test run --project web",
     "test:coverage": "vp test run --coverage --testTimeout=20000 --maxWorkers=4",
-    "package:domain": "node scripts/package-domain.mjs",
     "create:package": "node templates/create-package/index.mjs",
     "toolchain:check": "node scripts/check-toolchain.mjs",
     "toolchain:migrate": "vp migrate --no-interactive",
@@ -32,7 +31,6 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "5.0.4",
-    "sharp": "0.33.5",
     "typescript": "5.9.3",
     "vite-plus": "1.2.0"
   },
