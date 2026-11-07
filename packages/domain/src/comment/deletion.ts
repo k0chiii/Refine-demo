@@ -24,11 +24,6 @@ import { canEditReply } from "./replyEdit.ts";
  * - 削除済みのスレッドは紙面の印・件数・未解決・校了の判定から外れる。
  */
 
-/** 削除されていない（件数・紙面の印・校了の判定の対象になる）スレッドか */
-export function isActiveThread(thread: Pick<CommentThread, "deletedAt">): boolean {
-  return thread.deletedAt === undefined;
-}
-
 /** 削除する人。システム管理者かどうかだけを渡す（本人かの判定は authorId と actorId で行う） */
 export interface DeleteActor {
   isSystemAdmin?: boolean;
@@ -148,18 +143,6 @@ export function planThreadDeletion(
       .filter((r) => !r.deleted)
       .map((r) => r.id),
   };
-}
-
-/** スレッドを削除した後の状態（planThreadDeletion のスレッド側） */
-export function deleteThreadComment(
-  thread: CommentThread,
-  actorId: UserId,
-  lifecycle: WorkLifecycle,
-  events: readonly CommentEvent[],
-  now: Instant,
-  actor: DeleteActor = {},
-): CommentThread {
-  return planThreadDeletion(thread, actorId, lifecycle, events, now, actor).thread;
 }
 
 /**

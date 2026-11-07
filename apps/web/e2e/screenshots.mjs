@@ -2,7 +2,7 @@
  * デモモード（バックエンド無し）で主要画面を一周し、e2e/out/screenshots に PNG を保存する（git 管理外）。
  *   1) pnpm build:demo && pnpm exec vp preview --mode demo --outDir dist-demo --port 4173
  *   2) BASE_URL=http://127.0.0.1:4173 pnpm screenshots
- * Chromium は PLAYWRIGHT_BROWSERS_PATH（または `npx playwright-core install chromium`）で解決する。
+ * Chromium は PLAYWRIGHT_BROWSERS_PATH（または `npx playwright install chromium`）で解決する。
  *
  * E2E_PART で流す範囲を選ぶ（既定 all = 全部を順に）。CI は PR で smoke（主要な流れだけ・数分）、main では
  * core / late / compact / v2 / web を別々のジョブで同時に流す（それぞれ新しいデモのデータから始まる。前の部の状態が要るものは
@@ -19,7 +19,7 @@ import { createRequire } from "node:module";
 import { deflateSync } from "node:zlib";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4173";

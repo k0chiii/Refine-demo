@@ -142,16 +142,3 @@ export function parseAvatarConfig(input: unknown): AvatarConfig | null {
   if (bg !== null) out.background = bg;
   return Object.keys(out).length === 0 ? null : out;
 }
-
-/** 2 つの設定が同じか（保存ボタンを出すかの判定） */
-export function sameAvatarConfig(a: AvatarConfig | null, b: AvatarConfig | null): boolean {
-  if (a === null || b === null) return a === b;
-  const key = (c: AvatarConfig) =>
-    JSON.stringify({
-      seed: c.seed ?? null,
-      selections: Object.entries(c.selections ?? {}).sort(([x], [y]) => x.localeCompare(y)),
-      colors: Object.entries(c.colors ?? {}).sort(([x], [y]) => x.localeCompare(y)),
-      background: c.background ?? null,
-    });
-  return key(a) === key(b);
-}

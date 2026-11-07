@@ -18,6 +18,7 @@ import {
   type NormalizedPoint,
   type NormalizedRect,
 } from "../comment/Anchor.ts";
+import { clamp01 } from "../shared/clamp.ts";
 import { POST_BODY_NAME, type SocialPost } from "./post.ts";
 
 /** プレビューの位置の計算に要る添付の最小の形（id とファイル名） */
@@ -132,8 +133,6 @@ export function locateTextRange(
 /** 画像の矩形がこれより小さければ、ドラッグではなくピン（クリック）として扱う（元画像に対する割合） */
 export const POST_IMAGE_RECT_MIN = 0.01;
 
-const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
-
 /**
  * 画像の位置のアンカーを作る（元画像基準の正規化座標。範囲外は画像の中に収める）。
  * 矩形が小さすぎれば（どちらかの辺が POST_IMAGE_RECT_MIN 未満）その中心のピンにする
@@ -216,11 +215,6 @@ export function resolvePostAnchor(
     };
   }
   return null;
-}
-
-/** 位置の表示用の名前（コメント入力欄・一覧の「場所」）。「本文」「2 枚目の画像」 */
-export function postTargetLabel(target: PostAnchorTarget): string {
-  return target.kind === "text" ? "本文" : `${target.index + 1} 枚目の画像`;
 }
 
 /** 元画像のうち、プレビューに見えている範囲（cropRect）。正規化座標 */

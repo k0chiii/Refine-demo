@@ -2,7 +2,7 @@
  * 版比較の試験用 PDF を作る（旧 5 ページ・新 6 ページ。新版は 3 ページ目に協賛ページを挿入し、4 ページ目の文章を一部変更）。
  * 日本語フォントは @fontsource/noto-sans-jp をそのまま使う。実行: node e2e/make-compare-fixtures.mjs
  */
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";

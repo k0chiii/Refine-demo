@@ -46,7 +46,7 @@ export interface AppDeps {
   figma?: FigmaClient | null;
   /** gzip の実体を伸長しながら SHA-256 を取る口（既定は Workers の crypto.DigestStream。テストは差し替える） */
   sha256Sink?: () => Sha256Sink;
-  /** Figma の書き出しの倍率（domain の FigmaPolicy.renderScale。既定 2） */
+  /** Figma の書き出しの倍率（既定 2） */
   figmaScale?: number;
 }
 

@@ -1,4 +1,3 @@
-import { createCoalescer } from "../inflight.ts";
 import type {
   ArtifactAccess,
   BackendGateway,
@@ -7,9 +6,9 @@ import type {
   UploadOps,
 } from "../ports.ts";
 import { GatewayError } from "../ports.ts";
+import { buildThumbOps, buildUploadOps, createAuthorizeCoalescer } from "./gatewayCommon.ts";
 
-/** 認可の問い合わせは実行中の同一のものだけまとめる（convexGateway と同じ。キーに利用者のトークンを含める） */
-const coalesceAuthorize = createCoalescer();
+const coalesceAuthorize = createAuthorizeCoalescer();
 
 export interface CloudflareGatewayConfig {
   requestId?: string;
@@ -83,52 +82,37 @@ export function createCloudflareGateway(config: CloudflareGatewayConfig): Backen
   const uploads = (
     fns: { begin: string; resume?: string; complete: string; fail: string },
     idKey: "itemId" | "fileId",
-  ): UploadOps => ({
-    async begin(token, id) {
-      const target = await call<UploadAttemptTarget>(fns.begin, token, { [idKey]: id }, true);
-      if (
-        typeof target.attemptId !== "string" ||
-        typeof target.objectKey !== "string" ||
-        !target.objectKey
-      )
-        throw new Error("upload service returned an invalid target");
-      return target;
-    },
-    ...(fns.resume
-      ? {
-          resume: (token: string, attemptId: string) =>
-            call<UploadAttemptTarget & { adopted: boolean }>(
-              fns.resume!,
-              token,
-              { attemptId },
-              true,
-            ),
-        }
-      : {}),
-    complete(token, attemptId, meta) {
-      return call(fns.complete, token, { attemptId, ...meta }, true);
-    },
-    async fail(token, attemptId, message) {
-      await call(fns.fail, token, { attemptId, message }, true);
-    },
-  });
+  ): UploadOps =>
+    buildUploadOps({
+      begin: (token, id) => call<UploadAttemptTarget>(fns.begin, token, { [idKey]: id }, true),
+      ...(fns.resume
+        ? {
+            resume: (token: string, attemptId: string) =>
+              call<UploadAttemptTarget & { adopted: boolean }>(
+                fns.resume!,
+                token,
+                { attemptId },
+                true,
+              ),
+          }
+        : {}),
+      complete: (token, attemptId, meta) => call(fns.complete, token, { attemptId, ...meta }, true),
+      fail: async (token, attemptId, message) => {
+        await call(fns.fail, token, { attemptId, message }, true);
+      },
+    });
 
-  const thumbs: ThumbOps = {
-    async begin(token, fileId) {
-      const target = await call<{ objectKey: string; fileName: string }>(
+  const thumbs: ThumbOps = buildThumbOps({
+    begin: (token, fileId) =>
+      call<{ objectKey: string; fileName: string }>(
         "commentFiles:beginThumbUpload",
         token,
         { fileId },
         true,
-      );
-      if (typeof target.objectKey !== "string" || !target.objectKey)
-        throw new Error("upload service returned an invalid target");
-      return target;
-    },
-    complete(token, fileId, meta) {
-      return call("commentFiles:completeThumbUpload", token, { fileId, ...meta }, true);
-    },
-  };
+      ),
+    complete: (token, fileId, meta) =>
+      call("commentFiles:completeThumbUpload", token, { fileId, ...meta }, true),
+  });
 
   return {
     itemUploads: uploads(
@@ -151,12 +135,12 @@ export function createCloudflareGateway(config: CloudflareGatewayConfig): Backen
     ),
     commentThumbs: thumbs,
     authorizeArtifact(token, artifactId) {
-      return coalesceAuthorize(`artifact\n${artifactId}\n${token}`, () =>
+      return coalesceAuthorize.artifact(token, artifactId, () =>
         call<ArtifactAccess>("artifacts:authorizeAccess", token, { artifactId }, false),
       );
     },
     authorizeCommentFile(token, fileId, variant) {
-      return coalesceAuthorize(`comment\n${variant}\n${fileId}\n${token}`, () =>
+      return coalesceAuthorize.commentFile(token, fileId, variant, () =>
         call<ArtifactAccess>("commentFiles:authorizeFile", token, { fileId, variant }, false),
       );
     },

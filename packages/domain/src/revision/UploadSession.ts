@@ -101,12 +101,6 @@ export function figmaFrameFileName(nodeName: string, nodeId: string): string {
  */
 export const MAX_UPLOAD_BYTES = 100 * 1000 * 1000;
 
-/** 申告されたサイズが上限内か。超えるときは upload_file_too_large（どのファイルか・上限を details に） */
-export function assertUploadSizeWithinLimit(fileName: string, size: number | undefined): void {
-  if (size !== undefined && size > MAX_UPLOAD_BYTES)
-    throw new DomainError("upload_file_too_large", { fileName, size, limit: MAX_UPLOAD_BYTES });
-}
-
 export function assertSessionOpen(session: UploadSession, now: Instant): void {
   if (session.state !== "open")
     throw new DomainError("upload_session_not_open", {

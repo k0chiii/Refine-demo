@@ -7,7 +7,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium } from "@playwright/test";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(here, "../public/icons");

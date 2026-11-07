@@ -1,3 +1,4 @@
+import { csvCell } from "../shared/csvValues.ts";
 import { compileRulePattern } from "./safeRegex.ts";
 import type { ExceptionCondition, NotationRule, RuleLanguage, RuleStrictness } from "./rule.ts";
 import { ruleLanguages, ruleStrictness } from "./rule.ts";
@@ -340,8 +341,6 @@ export function validateRuleDraft(r: RuleDraft): string[] {
   if (!ruleStrictness.includes(r.strictness)) errors.push("厳格さが不正です");
   return errors;
 }
-
-const csvCell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
 /**
  * CSV に書き出す（取り込みと同じ列名）。複数の表記はセル内の改行で区切る。

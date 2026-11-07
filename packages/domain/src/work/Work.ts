@@ -93,14 +93,6 @@ export interface Work {
   version: number;
 }
 
-/**
- * Notion の「有効性」（checkbox）に相当する値。中止（cancelled）した制作物だけが無効。別の真偽値は持たない
- * （Notion の「校了済み」も同じく lifecycle が finalized かどうかで導く）
- */
-export function isWorkEffective(work: Pick<Work, "lifecycle">): boolean {
-  return work.lifecycle !== "cancelled";
-}
-
 const transitions: Record<WorkLifecycle, readonly WorkLifecycle[]> = {
   draft: ["active", "cancelled"],
   // 保留は使わない（利用者指示 2026-11-05「保留はいらない」）。前から保留の制作物は進行中に戻すか中止できる

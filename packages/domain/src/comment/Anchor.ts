@@ -1,3 +1,4 @@
+import { clamp01 } from "../shared/clamp.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { ArtifactId } from "../shared/ids.ts";
 import { POST_MANIFEST_NAME } from "../social/post.ts";
@@ -327,8 +328,6 @@ export function webElementAnchor(
         : {}),
   };
 }
-
-const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
 
 /**
  * 動画の位置のアンカーを作る。時刻はミリ秒に丸め、終わりが始まりと同じか前なら時点にする。

@@ -1,5 +1,4 @@
 import { gatewayOptions } from "./gateway.ts";
-import Anthropic from "@anthropic-ai/sdk";
 import type { AiCandidate } from "@mf100/domain";
 import type { AiProofreadInput, AiProofreadProvider } from "./provider.ts";
 
@@ -36,13 +35,15 @@ const SCHEMA = {
 /** Anthropic（Claude）による校正の候補。結果は候補だけで、保存や自動の反映はしない */
 export class AnthropicProofreader implements AiProofreadProvider {
   readonly name = "Anthropic";
-  private readonly client = new Anthropic({
-    ...gatewayOptions(process.env.AI_GATEWAY_URL),
-    maxRetries: 0,
-  });
-  constructor(readonly model: string) {}
+  constructor(
+    readonly model: string,
+    private readonly fetcher: typeof fetch = fetch,
+  ) {}
 
   async proofread(input: AiProofreadInput): Promise<AiCandidate[]> {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) throw new Error("anthropic_not_configured");
+    const gateway = gatewayOptions(process.env.AI_GATEWAY_URL);
     const rules = input.rules
       .slice(0, 300)
       .map(
@@ -50,24 +51,44 @@ export class AnthropicProofreader implements AiProofreadProvider {
           `- ${r.ruleId}: ${r.correct.join(" / ")} ← ${r.incorrect.join(" / ")}${r.description ? `（${r.description}）` : ""}`,
       )
       .join("\n");
-    const response = await this.client.beta.messages.create({
-      model: this.model,
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
-      system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `表記ルール:\n${rules || "（なし）"}\n\n<本文>\n${input.text}\n</本文>`,
+    // SDK なしの素の fetch（apps/cloudflare/src/ai/provider.ts と同じ本体）。再試行はしない
+    const response = await this.fetcher(
+      `${gateway.baseURL ?? "https://api.anthropic.com"}/v1/messages`,
+      {
+        method: "POST",
+        signal: AbortSignal.timeout(600_000),
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "server-side-fallback-2026-07-01",
+          ...gateway.defaultHeaders,
         },
-      ],
-    });
-    if (response.stop_reason === "refusal") throw new Error("AI が応答を断りました");
-    if (response.stop_reason === "max_tokens")
-      throw new Error("AI の応答が長すぎて途中で切れました");
-    const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 16000,
+          fallbacks: "default",
+          output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
+          system: SYSTEM,
+          messages: [
+            {
+              role: "user",
+              content: `表記ルール:\n${rules || "（なし）"}\n\n<本文>\n${input.text}\n</本文>`,
+            },
+          ],
+        }),
+      },
+    );
+    if (!response.ok) throw new Error(`anthropic_${response.status}`);
+    const body = (await response.json()) as {
+      stop_reason?: string;
+      content?: { type: string; text?: string }[];
+    };
+    if (body.stop_reason === "refusal") throw new Error("AI が応答を断りました");
+    if (body.stop_reason === "max_tokens") throw new Error("AI の応答が長すぎて途中で切れました");
+    const text = (body.content ?? [])
+      .flatMap((b) => (b.type === "text" ? [b.text ?? ""] : []))
+      .join("");
     const parsed = JSON.parse(text) as { candidates?: AiCandidate[] };
     return Array.isArray(parsed.candidates) ? parsed.candidates : [];
   }

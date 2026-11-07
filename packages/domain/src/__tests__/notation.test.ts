@@ -3,18 +3,14 @@ import {
   aiBlockReason,
   applyFindings,
   canAssignManagers,
-  canEditCategory,
   compileRulePattern,
-  defaultAiPolicy,
   defaultRuleCategories,
   expandCategories,
-  isBotAuthor,
   isLikelyCatastrophic,
   notationRole,
   parseCsv,
   placeAiCandidates,
   planBotThreads,
-  PROOFREADER_ID,
   runStatusOf,
   rulesToCsv,
   rulesToJson,
@@ -539,7 +535,6 @@ describe("表記統一: 権限", () => {
     expect(notationRole(p({ orgPermissions: ["notation:manage"] }), "A1", [])).toBe("admin");
     expect(notationRole(p(), "B", ["B"])).toBe("manager");
     expect(notationRole(p({ orgPermissions: ["notation:category:C"] }), "C", [])).toBe("manager");
-    expect(canEditCategory(p(), "A1", ["B"])).toBe(false);
   });
   it('Nogiku 未接続の "*" では管理権限を与えない', () => {
     expect(notationRole(p({ orgPermissions: ["*"] }), "A1", [])).toBe("member");
@@ -635,7 +630,6 @@ describe("自動校正: スレッドの計画", () => {
         { artifactId: "b", status: "failed", findings: 0 },
       ]),
     ).toBe("failed");
-    expect(isBotAuthor(PROOFREADER_ID)).toBe(true);
   });
 });
 
@@ -659,7 +653,8 @@ describe("AI 校正の候補（サーバーでの確認）", () => {
     expect(f.every((x) => x.detector === "ai" && x.needsReview)).toBe(true);
   });
   it("有効なときだけ使える（API キー・enabled）", () => {
-    expect(aiBlockReason(defaultAiPolicy)).toMatch(/設定されていません/);
-    expect(aiBlockReason({ ...defaultAiPolicy, enabled: true })).toBeNull();
+    const policy = { enabled: false, maxChars: 20_000 };
+    expect(aiBlockReason(policy)).toMatch(/設定されていません/);
+    expect(aiBlockReason({ ...policy, enabled: true })).toBeNull();
   });
 });

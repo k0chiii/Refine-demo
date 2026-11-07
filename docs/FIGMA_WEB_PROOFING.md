@@ -173,7 +173,7 @@ Cloudflare: https://developers.cloudflare.com/browser-rendering/limits/ 、https
   - SSRF: 許可リストはホスト名の完全一致（ワイルドカードは明示登録）。https のみ、ポート 443 のみ、IP 直指定・`localhost`・`.internal` を拒否、リダイレクトは再検査。Workers のサブリクエストは IP 直指定不可・私的ネットワーク不到達（VPC 以外）だが、それに頼らない。
   - 認可: スクリーンショット・プロキシの取得は版の閲覧権限（`work.view`）を持つ本人のリクエストに限り、`GET /files/:artifactId` と同じ `private, no-store` で配信（A-11）。プロキシの URL に認可なしでアクセスできないよう、短命の署名付きパラメータでなく Bearer を要求（iframe なので Cookie か専用の短命トークン。D3 の方針に合わせる）。
   - 秘密: Figma のトークン／OAuth クライアントシークレット、Browser Rendering の資格情報、ステージングの Basic 認証は `wrangler secret`（既存の `MF100_UPLOAD_SECRET` と同じ扱い）。ブラウザへ渡さない。チャットで鍵を受け取らない。
-  - Figma への書き戻し・外部サイトへのアクセスは「外部への実データ送信」なので、既定は無効（`FigmaPolicy.writeBack=false`、`WebProofPolicy.allowedHosts=[]`）。`restricted` な制作物は AI 校正と同様に既定で外部送信しない。
+  - Figma への書き戻し・外部サイトへのアクセスは「外部への実データ送信」なので、既定は無効（ポリシー値は要るときに足す）。`restricted` な制作物は AI 校正と同様に既定で外部送信しない。
 - **プライバシー**: スクリーンショットにはサイトの個人情報が写り得る。版の添付と同じ保持・削除規程（D14）に従う。ライブ表示のコメントで取る `textQuote` は 200 文字（`TEXT_QUOTE_MAX`）に切る。
 - **性能**: スクリーンショットは提出確定の非同期ジョブ（版の `verified` は撮影完了を待たず、撮影は「補助添付」として後から付く／撮影失敗でも版は成立。方針は §8 Q4）。Figma の画像取得は 1 版 1 リクエスト。R2 保存は既存の試行キー方式（`receiveUpload` と同じ補償）。ライブ表示の iframe は端末切替で再読込しない（サイズだけ変える）。
 - **アクセシビリティ**: 端末切替はセグメントボタン／メニュー（M3E）でキーボード操作可。iframe には `title`（「ライブ表示: <サイト名>（iPhone 17、402×874）」）。印の読み上げは PDF と同じ。コメントモードの切替はトグル（`aria-pressed`）。ブリッジのハイライトは色だけでなく枠線＋ラベル。
@@ -263,22 +263,7 @@ export interface Artifact {
 - 再アンカーの判定（表示時に計算、保存しない）: `attached`（セレクタ一致）／`moved`（引用文で一致）／`detached`（座標だけ）。domain に純粋関数 `resolveWebAnchor(candidates, anchor)` を置き、ブリッジは候補の矩形と文字列を返すだけにする。
 - 「別の端末幅で付けたコメント」は `viewport` を比較して表示する（Atarim の方式）。
 
-**ポリシー値**（domain、環境変数から読む。AI 校正の `aiConfig()` と同型）
-
-```ts
-export interface FigmaPolicy {
-  enabled: boolean;
-  writeBack: boolean;
-  allowRestricted: boolean;
-  renderScale: 1 | 2;
-}
-export interface WebProofPolicy {
-  snapshotEnabled: boolean;
-  allowedProxyHosts: readonly string[];
-  defaultDevices: readonly string[] /* 例 ["iphone-17", "pc-1440"] */;
-  allowRestricted: boolean;
-}
-```
+**ポリシー値**は、要るときに足す（読まれていない項目を先に型にしない）。
 
 ### 6.2 API（Hono、`apps/api/src/app.ts` に追加。業務ルールは置かない）
 
@@ -343,8 +328,8 @@ MVP＝Phase 0＋Phase 1。これで「校正システム内で表示し、位置
 | 項目                                                                                                                                                                 | 状態                                                                               | 場所                                                                                                            |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `web_element`・`figma_node` アンカー、`validateAnchor`、`anchorFitsArtifact`、`webElementAnchor`                                                                     | 実装                                                                               | `packages/domain/src/comment/Anchor.ts`                                                                         |
-| 再アンカー `resolveWebAnchor`（attached / moved / detached）、`placeIn`・`relativeTo`・`toViewportUnit`、場所の表示、`WebProofPolicy`                                | 実装                                                                               | `packages/domain/src/web/webProof.ts`                                                                           |
-| Figma の URL の解釈（design / file / proto / ブランチ、node-id 1-2 → 1:2）、ディープリンク、Embed Kit 2.0 の URL、`FigmaPolicy`                                      | 実装                                                                               | `packages/domain/src/web/figma.ts`                                                                              |
+| 再アンカー `resolveWebAnchor`（attached / moved / detached）、`placeIn`・`toViewportUnit`、場所の表示                                | 実装                                                                               | `packages/domain/src/web/webProof.ts`                                                                           |
+| Figma の URL の解釈（design / file / proto / ブランチ、node-id 1-2 → 1:2）、ディープリンク、Embed Kit 2.0 の URL                                      | 実装                                                                               | `packages/domain/src/web/figma.ts`                                                                              |
 | `Artifact.origin`（figma / web_snapshot）、取り込み項目の由来とノード名の反映（`markItemVerified`）                                                                  | 実装                                                                               | `packages/domain/src/revision/Artifact.ts`・`UploadSession.ts`、Convex `artifacts.origin`・`uploadItems.origin` |
 | コメント・FB のアンカーと添付の種類の検査                                                                                                                            | 実装                                                                               | `packages/application/src/usecases/comments.ts`・`feedback.ts`                                                  |
 | Hono `GET /figma/status`・`POST /figma/import`（nodes → images → 取得 → 試行 → R2 → 採用。429 は Retry-After を 1 回）                                               | 実装（偽のクライアントで試験。本物の API はこの環境から呼んでいない）              | `apps/api/src/figmaImport.ts`・`adapters/figmaClient.ts`                                                        |

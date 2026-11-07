@@ -255,7 +255,7 @@ export class ArtifactDownload {
     this.whole = blob;
     this.done = true;
     this.chunks = [];
-    for (const l of [...this.listeners]) l.fn.end();
+    for (const l of this.listeners) l.fn.end();
     this.listeners.clear();
     this.wake();
     this.resolveBlob(blob);
@@ -268,7 +268,7 @@ export class ArtifactDownload {
     this.error = e;
     this.done = true;
     this.chunks = [];
-    for (const l of [...this.listeners]) l.fn.end(e);
+    for (const l of this.listeners) l.fn.end(e);
     this.listeners.clear();
     this.rejectReady(e);
     this.rejectBlob(e);
@@ -551,7 +551,7 @@ export class ArtifactFiles {
    * keepSubject を渡すと、その利用者の分だけ残す（サインイン直後に前の利用者の分を片付ける）
    */
   async clear(keepSubject?: string): Promise<void> {
-    for (const [key, e] of [...this.entries]) {
+    for (const [key, e] of this.entries) {
       if (keepSubject !== undefined && e.subject === keepSubject) continue;
       this.entries.delete(key);
       e.abort();

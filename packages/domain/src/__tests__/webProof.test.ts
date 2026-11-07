@@ -19,7 +19,6 @@ import {
 import {
   formatWebPlace,
   placeIn,
-  relativeTo,
   resolveWebAnchor,
   shortSelector,
   toViewportUnit,
@@ -169,8 +168,7 @@ describe("resolveWebAnchor（再アンカー: attached / moved / detached）", (
     );
   });
   it("矩形は要素の中の 0..1 ↔ 文書座標で往復できる。ビューポートに入っていない印は描かない", () => {
-    const rect = relativeTo(el, { x: 53, y: 1415, w: 185, h: 30 });
-    expect(rect).toEqual({ x: 0.1, y: 0.25, w: 0.5, h: 0.5 });
+    const rect = { x: 0.1, y: 0.25, w: 0.5, h: 0.5 };
     expect(placeIn({ rect }, el)).toEqual({ x: 53, y: 1415, w: 185, h: 30 });
     expect(placeIn({}, el)).toEqual(el);
     expect(

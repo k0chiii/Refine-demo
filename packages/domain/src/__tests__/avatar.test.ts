@@ -4,7 +4,6 @@ import {
   AVATAR_PART_SLOTS,
   DomainError,
   parseAvatarConfig,
-  sameAvatarConfig,
   validateAvatarConfig,
 } from "../index.ts";
 
@@ -98,19 +97,5 @@ describe("アバターの設定（形の検証と正規化）", () => {
     expect(parseAvatarConfig({ colors: { hair: "red" } })).toBeNull();
     expect(parseAvatarConfig("junk")).toBeNull();
     expect(parseAvatarConfig(undefined)).toBeNull();
-  });
-
-  it("同じ設定かは並び順によらない", () => {
-    expect(
-      sameAvatarConfig(
-        { selections: { head: "a", body: "b" }, colors: { hair: "000000" } },
-        { colors: { hair: "000000" }, selections: { body: "b", head: "a" } },
-      ),
-    ).toBe(true);
-    expect(sameAvatarConfig({ selections: { head: "a" } }, { selections: { head: "b" } })).toBe(
-      false,
-    );
-    expect(sameAvatarConfig(null, { seed: "x" })).toBe(false);
-    expect(sameAvatarConfig(null, null)).toBe(true);
   });
 });

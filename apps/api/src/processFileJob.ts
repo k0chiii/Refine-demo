@@ -3,6 +3,7 @@ import { backendSiteUrl, type Bindings } from "./env";
 import { createFigmaClient } from "./adapters/figmaClient";
 import { outputKey, publicSnapshotUrl } from "./processingSecurity";
 import { processingGateway } from "./processingGateway";
+import { toHex } from "./toHex";
 import type { Id } from "@mf100/convex/dataModel";
 
 export interface ProcessingEnv extends Bindings {
@@ -79,9 +80,7 @@ export async function processFileJob(env: ProcessingEnv, id: string): Promise<vo
         if (!url) throw new Error("figma_render_failed");
         const bytes = await client.download(url);
         if (bytes.byteLength > MAX_DERIVED_BYTES) throw new Error("figma_image_too_large");
-        const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
-          .map((n) => n.toString(16).padStart(2, "0"))
-          .join("");
+        const sha = toHex(await crypto.subtle.digest("SHA-256", bytes));
         const meta = {
           nodeName: node.name,
           box: node.box,

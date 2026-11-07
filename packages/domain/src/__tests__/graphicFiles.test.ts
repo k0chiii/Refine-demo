@@ -2,11 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   artifactFormatLabel,
   assertGraphicHasReviewableFile,
-  assertUploadSizeWithinLimit,
   hasPdfSignature,
   isGraphicSubmissionFile,
   markItemVerified,
-  MAX_UPLOAD_BYTES,
   needsPdfSignatureCheck,
   normalizeDeclaredFile,
   PDF_SIGNATURE_WINDOW,
@@ -163,18 +161,5 @@ describe("グラフィック制作物は紙面に出せるファイルが要る�
   it("グラフィック以外の媒体には課さない", () => {
     for (const mediaType of ["video", "web", "figma", "document", "sns", "other", undefined])
       expect(() => assertGraphicHasReviewableFile(mediaType, [a("other", "p.indd")])).not.toThrow();
-  });
-});
-
-describe("1 ファイルの大きさの上限", () => {
-  it("上限ちょうどまでは通り、超えると upload_file_too_large", () => {
-    expect(() => assertUploadSizeWithinLimit("a.ai", MAX_UPLOAD_BYTES)).not.toThrow();
-    expect(() => assertUploadSizeWithinLimit("a.ai", undefined)).not.toThrow();
-    expect(() => assertUploadSizeWithinLimit("a.ai", MAX_UPLOAD_BYTES + 1)).toThrow(
-      expect.objectContaining({ code: "upload_file_too_large" }),
-    );
-  });
-  it("数十 MB の原本は通る", () => {
-    expect(() => assertUploadSizeWithinLimit("poster.indd", 80_000_000)).not.toThrow();
   });
 });
