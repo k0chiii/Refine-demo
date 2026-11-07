@@ -1,7 +1,7 @@
 import { expect, test } from "../support/app";
 import { submitFirstTextRevision } from "../support/scenarios";
 
-// スマホは引き出しが紙面のツールバーを隠すので、位置なしのコメントはコメントの一覧から足す。ツールバーは幅に収まる
+// スマホは引き出しが紙面のツールバーを隠すので、位置なしのコメントと印の表示はコメントの一覧で扱う。ツールバーは幅に収まる
 test.describe("スマホの全体へのコメント", { tag: "@core" }, () => {
   test.use({ viewport: { width: 360, height: 800 }, hasTouch: true, isMobile: true });
 
@@ -26,5 +26,13 @@ test.describe("スマホの全体へのコメント", { tag: "@core" }, () => {
     await expect(app.threads().filter({ hasText: "全体の書体をそろえてください。" })).toHaveCount(
       1,
     );
+
+    // 印の表示の切り替えも一覧の中。隠しても一覧のカードは残る
+    await expect(toolbar.getByRole("button", { name: "コメントを隠す" })).toHaveCount(0);
+    await page.getByRole("button", { name: "コメントを隠す" }).click();
+    await expect(page.getByRole("button", { name: "コメントを表示する" })).toHaveAttribute(
+      "selected",
+    );
+    await expect(app.threads()).toHaveCount(1);
   });
 });

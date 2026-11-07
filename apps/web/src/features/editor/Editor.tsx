@@ -1617,7 +1617,7 @@ export function Editor({
         <div className="comments__main">
           <AutoProofreadStatus auto={auto} />
           <div className="comments__header">
-            {/* スマホは紙面のツールバーを引き出しが隠すので、位置なしのコメントはコメントの一覧（作る対象の集まり）から足す */}
+            {/* スマホは紙面のツールバーを引き出しが隠すので、位置なしのコメントと印の表示はコメントの一覧（その対象の集まり）で扱う */}
             {mobile && target && canComment && !isFigmaEmbed ? (
               <M3eButton
                 variant="tonal"
@@ -1652,6 +1652,19 @@ export function Editor({
                 </M3eFilterChip>
               ) : null}
             </M3eFilterChipSet>
+            {mobile && !isFigmaEmbed ? (
+              <M3eIconButton
+                className="ws__marks-toggle comments__marks"
+                aria-label={marksHidden ? "コメントを表示する" : "コメントを隠す"}
+                title={marksHidden ? "コメントを表示する" : "コメントを隠す"}
+                variant={marksHidden ? "tonal" : "standard"}
+                toggle
+                selected={marksHidden}
+                onClick={() => setMarksHidden((v) => !v)}
+              >
+                <M3eIcon name={marksHidden ? "visibility_off" : "visibility"} />
+              </M3eIconButton>
+            ) : null}
           </div>
           <div
             className="comments__list"
@@ -2026,7 +2039,7 @@ export function Editor({
                     </M3eButton>
                   ) : null}
                   {/* コメントの表示のオン・オフ（紙面の印と範囲を一時的に隠す）。コメントも一覧も消さない */}
-                  {!isFigmaEmbed ? (
+                  {!isFigmaEmbed && !mobile ? (
                     <M3eIconButton
                       className="ws__marks-toggle"
                       aria-label={marksHidden ? "コメントを表示する" : "コメントを隠す"}
