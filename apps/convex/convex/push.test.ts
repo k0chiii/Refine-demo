@@ -3,7 +3,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness } from "../test/harness";
 import { setupWork, submitFiles } from "../test/flows";
-import { base64urlEncode } from "./lib/webpush.ts";
+import { base64urlEncode } from "@mf100/platform";
 
 const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as const }];
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { M3eBottomSheet } from "@m3e/react/bottom-sheet";
 import { M3eIcon } from "@m3e/react/icon";

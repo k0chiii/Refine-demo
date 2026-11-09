@@ -1,5 +1,4 @@
 import {
-  formatWebPlace,
   formatWebViewport,
   type Anchor,
   type NormalizedRect,
@@ -174,11 +173,6 @@ type WebAnchor = Extract<Anchor, { type: "web_element" }>;
 /** 端末プリセットの表示名（保存した deviceId から。無ければ「幅 nnnpx」） */
 export function webDeviceLabel(vp: WebViewport): string | null {
   return WEB_DEVICES.find((d) => d.id === vp.deviceId)?.label ?? null;
-}
-
-/** 場所の短い表示（カード・一覧用）: 「iPhone 17（402px）・h2」 */
-export function webPlaceLabel(a: WebAnchor): string {
-  return formatWebPlace(a, webDeviceLabel(a.viewport));
 }
 
 /** 端末幅だけ: 「iPhone 17（402px）」「幅 1440px」 */

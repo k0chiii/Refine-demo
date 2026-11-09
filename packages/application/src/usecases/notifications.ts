@@ -40,13 +40,6 @@ export function excerpt(text: string, max = 120): string {
   return chars.length > max ? `${chars.slice(0, max).join("")}…` : chars.join("");
 }
 
-const weekdays = ["日", "月", "火", "水", "木", "金", "土"] as const;
-/** 締切の日付（JST）: 「11/14（土）」 */
-export function jstMonthDay(ms: number): string {
-  const d = new Date(ms + 9 * 3_600_000);
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}（${weekdays[d.getUTCDay()]}）`;
-}
-
 /** 「誰が」: 表示名に「さん」を付ける。分からなければ null */
 export async function personName(ctx: AppContext, userId: string): Promise<string | null> {
   const name = await ctx.people.displayName(userId).catch(() => null);

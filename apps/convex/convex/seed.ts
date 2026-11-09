@@ -413,7 +413,7 @@ export const demo = internalMutation({
         assignedAt: now,
       });
     }
-    // 撮影用の fixture（scripts/stack-pr/capture.ts が頼んだときだけ。e2e・デモの既定には影響しない）
+    // 撮影用の fixture（撮影の道具が頼んだときだけ。e2e・デモの既定には影響しない）
     if (args.seedPlanInfoMismatch) await seedPlanInfoMismatchFixture(ctx, ids, now, day);
     if (args.seedBacklogCapture) {
       await seedBacklogDelayScreenshotFixture(ctx, ids, now, day, {

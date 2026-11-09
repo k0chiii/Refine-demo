@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dir, "../../../apps/web");
 const require = createRequire(path.join(root, "package.json"));
-const { chromium } = require("playwright-core");
+const { chromium } = require("@playwright/test");
 const outDir = path.join(__dir, "after");
 const BASE = "http://127.0.0.1:4173";
 const FIXTURE = path.join(root, "e2e/fixtures/sample.pdf");

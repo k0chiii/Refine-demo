@@ -1,3 +1,4 @@
+import { backendSiteUrl } from "./env";
 import type { ProcessingEnv } from "./processFileJob";
 import { processingGateway, type ProcessingJob } from "./processingGateway";
 
@@ -12,7 +13,7 @@ function streamApi(env: ProcessingEnv) {
 export async function uploadStream(env: ProcessingEnv, info: ProcessingJob): Promise<string> {
   const api = streamApi(env);
   const jobId = info.job._id;
-  const service = processingGateway(env.CONVEX_SITE_URL, env.PROCESSING_SECRET);
+  const service = processingGateway(backendSiteUrl(env), env.PROCESSING_SECRET);
   if (!info.source) throw new Error("source_missing");
   const head = await env.ASSETS.head(info.source);
   if (!head) throw new Error("source_missing");

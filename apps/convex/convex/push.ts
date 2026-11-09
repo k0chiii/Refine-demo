@@ -1,12 +1,10 @@
 import { isPushSubscribed, subscribePush, unsubscribePush } from "@mf100/application";
-import { enqueueDeliveries, logDeliveryComplete } from "./delivery.ts";
-import { deliveryPool } from "./lib/deliveryPool.ts";
+import { vapidKeysFromEnv } from "@mf100/platform";
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { vapidKeysFromEnv } from "./lib/webpush.ts";
 
 /*
  * 端末への通知（Web Push）。利用者決定 2026-10-15（外部への送信の承認）。
@@ -54,28 +52,5 @@ export const unsubscribe = mutation({
   handler: async (ctx, { endpoint }) => {
     const { principal } = await requireUser(ctx);
     return unsubscribePush(createAppContext(ctx), principal, endpoint);
-  },
-});
-
-/**
- * 旧（delivery.enqueue に替えた）。替える前に予約された分のため、1 回のデプロイの間残す。
- * `notificationId`（単数）は、さらに前の形で予約されていた分
- */
-export const enqueue = internalMutation({
-  args: {
-    notificationIds: v.optional(v.array(v.string())),
-    notificationId: v.optional(v.string()),
-  },
-  handler: async (ctx, { notificationIds = [], notificationId }) => {
-    const ids = notificationId ? [...notificationIds, notificationId] : notificationIds;
-    await enqueueDeliveries(ctx, ids);
-  },
-});
-
-/** 旧（delivery.completed に替えた）。替える前に workpool に積んだ仕事の完了がこの名前を指す */
-export const completed = deliveryPool.defineOnComplete({
-  context: v.object({ notificationId: v.string() }),
-  handler: async (_ctx, { context, result }) => {
-    logDeliveryComplete(context.notificationId, result.kind);
   },
 });

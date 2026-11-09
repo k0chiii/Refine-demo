@@ -214,7 +214,6 @@ export function AnchorOverlay({
       const cur = press;
       if (!cur || cur.id !== e.pointerId) return;
       const d = drag;
-      const dist = Math.hypot(e.clientX - cur.cx, e.clientY - cur.cy);
       clearPress();
       drag = null;
       setDragRect(null);

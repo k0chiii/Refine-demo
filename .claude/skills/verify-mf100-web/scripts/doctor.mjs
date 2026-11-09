@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const base = process.argv[2] ?? process.env.BASE_URL ?? "http://127.0.0.1:4173";
 const web = fileURLToPath(new URL("../../../../apps/web/", import.meta.url));
-const { chromium } = createRequire(web + "package.json")("playwright-core");
+const { chromium } = createRequire(web + "package.json")("@playwright/test");
 const fail = (why) => {
   console.error(`doctor: NG ${base}: ${why}`);
   process.exit(1);

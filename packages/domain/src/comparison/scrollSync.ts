@@ -1,3 +1,4 @@
+import { clamp01 } from "../shared/clamp.ts";
 import { counterpartPage, type PagePair } from "./alignment.ts";
 import { normalizeForCompare } from "./similarity.ts";
 
@@ -78,8 +79,6 @@ export interface PagePosition {
   rel: number;
   relX?: number;
 }
-
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /**
  * 一方の表示位置 → もう一方の表示位置。対応ページが無い（追加・削除ページ）なら null を返し、呼び出し側は同期を止める。

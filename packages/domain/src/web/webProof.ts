@@ -1,5 +1,5 @@
 import type { Anchor, NormalizedRect, WebViewport } from "../comment/Anchor.ts";
-import { clampRect, TEXT_QUOTE_MAX } from "../comment/Anchor.ts";
+import { clampRect } from "../comment/Anchor.ts";
 
 /**
  * Web のライブ表示の校正（docs/FIGMA_WEB_PROOFING.md §3.3・§6.1）。
@@ -86,17 +86,6 @@ export function placeIn(anchor: Pick<WebAnchor, "rect" | "point">, element: Page
   return element;
 }
 
-/** 文書座標の矩形を、要素の中の 0..1 に直す（ブリッジが返した要素の矩形と選んだ範囲から） */
-export function relativeTo(element: PageRect, target: PageRect): NormalizedRect {
-  if (element.w <= 0 || element.h <= 0) return { x: 0, y: 0, w: 1, h: 1 };
-  return clampRect({
-    x: (target.x - element.x) / element.w,
-    y: (target.y - element.y) / element.h,
-    w: target.w / element.w,
-    h: target.h / element.h,
-  });
-}
-
 /**
  * 文書座標の矩形を、いま見えている範囲（スクロール位置とビューポートの大きさ）の 0..1 に直す。
  * 見えている範囲と重ならなければ null（画面の外の印は描かない）
@@ -148,27 +137,3 @@ export function shortSelector(css: string, tag: string): string {
   const cleaned = last.replace(/:nth-of-type\(\d+\)/g, "");
   return cleaned.length > 40 ? tag : cleaned || tag;
 }
-
-/** 引用文の長さの上限（ブリッジで切る値と同じ） */
-export const WEB_QUOTE_MAX = TEXT_QUOTE_MAX;
-
-/**
- * Web の校正のポリシー値（承認待ちの項目はコードで確定しない。CLAUDE.md）。
- * - snapshotEnabled: 提出確定時のスクリーンショット（Cloudflare Browser Rendering。課金の承認後）
- * - allowedProxyHosts: プロキシ表示を許すホスト（承認後に設定。空なら無効）
- * - defaultDevices: ライブ表示の既定の端末（Q5: スマホ 1 種＋PC 1 種）
- * - allowRestricted: 取扱注意の制作物の URL を外部（撮影・プロキシ）へ送るか
- */
-export interface WebProofPolicy {
-  snapshotEnabled: boolean;
-  allowedProxyHosts: readonly string[];
-  defaultDevices: readonly string[];
-  allowRestricted: boolean;
-}
-
-export const defaultWebProofPolicy: WebProofPolicy = {
-  snapshotEnabled: false,
-  allowedProxyHosts: [],
-  defaultDevices: ["iphone-17", "pc-1440"],
-  allowRestricted: false,
-};

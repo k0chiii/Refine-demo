@@ -3,7 +3,7 @@ import { parseCsv } from "../notation/importer.ts";
 import { DomainError } from "../shared/DomainError.ts";
 import type { UserId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
-import { splitCsvList } from "../shared/csvValues.ts";
+import { normalizePersonKey, splitCsvList } from "../shared/csvValues.ts";
 
 /**
  * 局のコード（Notion の担当 DB「局」の multi_select の選択肢。利用者決定 2026-10-17）。
@@ -71,11 +71,6 @@ export const TEAM_NAME_MAX = 40;
 /** 「局 › 担当」の区切り（表示・CSV の書き方の両方） */
 export const TEAM_PATH_SEPARATOR = " › ";
 
-/** 名前の照合用（全角英数・空白のゆれ・大文字小文字を無視） */
-export function teamNameKey(value: string): string {
-  return value.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
 const invalid = (field: string, reason: string) =>
   new DomainError("team_invalid", { field, reason });
 
@@ -116,8 +111,8 @@ export function validateTeam(
     throw invalid("kind", "unknown");
   }
   const siblings = others.filter((t) => t.kind === input.kind && t.parentId === parentId);
-  const key = teamNameKey(name);
-  if (siblings.some((t) => teamNameKey(t.name) === key))
+  const key = normalizePersonKey(name);
+  if (siblings.some((t) => normalizePersonKey(t.name) === key))
     throw new DomainError("team_duplicate", { name, parentId: parentId ?? null });
   let order: number;
   if (input.order !== undefined) {
@@ -164,11 +159,6 @@ export function memberTeamIds(
   userId: UserId,
 ): string[] {
   return teams.filter((t) => t.memberIds?.includes(userId)).map((t) => t.id);
-}
-
-/** 局の表示名「PR 広報局」（絵文字があれば先頭に）。担当は名前だけ */
-export function teamDisplayName(team: Pick<Team, "name" | "code" | "emoji">): string {
-  return [team.emoji, team.code, team.name].filter(Boolean).join(" ");
 }
 
 const byOrderThenName = (a: Team, b: Team) =>
@@ -225,10 +215,10 @@ function oneOf(candidates: Team[]): TeamMatch {
  * 名前は全角英数・空白のゆれ・大文字小文字を無視して完全一致で比べる。
  */
 export function matchTeam(ref: string, teams: readonly Team[]): TeamMatch {
-  const key = teamNameKey(ref);
+  const key = normalizePersonKey(ref);
   if (key === "") return { kind: "not_found" };
   // 名前そのもの（区切りの文字を含む名前もここで当たる）。局はコード（PR など）でも引ける
-  const whole = teams.filter((t) => teamNameKey(t.name) === key);
+  const whole = teams.filter((t) => normalizePersonKey(t.name) === key);
   if (whole.length) return oneOf(whole);
   const byCode = findBureauByCode(ref, teams);
   if (byCode) return { kind: "ok", team: byCode };
@@ -238,7 +228,8 @@ export function matchTeam(ref: string, teams: readonly Team[]): TeamMatch {
   const bureaus = teams.filter(
     (t) =>
       t.kind === "bureau" &&
-      (teamNameKey(t.name) === bureauKey || (t.code && teamNameKey(t.code) === bureauKey)),
+      (normalizePersonKey(t.name) === bureauKey ||
+        (t.code && normalizePersonKey(t.code) === bureauKey)),
   );
   const bureauIds = new Set(bureaus.map((b) => b.id));
   return oneOf(
@@ -247,7 +238,7 @@ export function matchTeam(ref: string, teams: readonly Team[]): TeamMatch {
         t.kind === "team" &&
         t.parentId !== undefined &&
         bureauIds.has(t.parentId) &&
-        teamNameKey(t.name) === childKey,
+        normalizePersonKey(t.name) === childKey,
     ),
   );
 }
@@ -391,9 +382,9 @@ function findTeamHeader(
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
     const map: Partial<Record<TeamColumn, number>> = {};
     rows[i]!.forEach((cell, k) => {
-      const v = teamNameKey(cell);
+      const v = normalizePersonKey(cell);
       for (const col of Object.keys(teamCsvColumns) as TeamColumn[])
-        if (map[col] === undefined && teamCsvColumns[col].some((a) => teamNameKey(a) === v))
+        if (map[col] === undefined && teamCsvColumns[col].some((a) => normalizePersonKey(a) === v))
           map[col] = k;
     });
     if (map.bureau !== undefined) return { index: i, map };
@@ -495,8 +486,8 @@ export interface TeamImportPlan {
 
 /** CSV の「局」（名前かコード）に当たる既存の局の ID */
 function existingBureauId(ref: string, existing: readonly Team[]): string | undefined {
-  const key = teamNameKey(ref);
-  const byName = existing.find((t) => t.kind === "bureau" && teamNameKey(t.name) === key);
+  const key = normalizePersonKey(ref);
+  const byName = existing.find((t) => t.kind === "bureau" && normalizePersonKey(t.name) === key);
   return (byName ?? findBureauByCode(ref, existing) ?? undefined)?.id;
 }
 
@@ -514,7 +505,7 @@ export function planTeamImport(
   const existingTeams = new Set(
     existing
       .filter((t) => t.kind === "team" && t.parentId !== undefined)
-      .map((t) => `${t.parentId}\u0000${teamNameKey(t.name)}`),
+      .map((t) => `${t.parentId}\u0000${normalizePersonKey(t.name)}`),
   );
   const create: TeamImportEntry[] = [];
   const plannedBureaus = new Map<string, TeamImportEntry>();
@@ -529,7 +520,7 @@ export function planTeamImport(
     return ids && ids.length > 0 ? { memberIds: [...ids] } : {};
   };
   for (const row of rows) {
-    const bKey = teamNameKey(row.bureau);
+    const bKey = normalizePersonKey(row.bureau);
     const bureauId = existingBureauId(row.bureau, existing);
     if (row.team === null) {
       if (bureauId !== undefined) existingCount++;
@@ -550,7 +541,7 @@ export function planTeamImport(
       }
       continue;
     }
-    const tKey = teamNameKey(row.team);
+    const tKey = normalizePersonKey(row.team);
     if (bureauId !== undefined && existingTeams.has(`${bureauId}\u0000${tKey}`)) {
       existingCount++;
       continue;

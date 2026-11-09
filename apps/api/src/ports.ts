@@ -114,6 +114,21 @@ export class GatewayError extends Error {
   }
 }
 
+/** GatewayError の code から返す HTTP の状態（Hono のエラー応答と platform.ts の /processing が共有する） */
+export function gatewayStatus(code: string): 401 | 503 | 400 | 403 | 404 | 409 {
+  return code === "unauthenticated"
+    ? 401
+    : code === "upload_service_unavailable"
+      ? 503
+      : code === "bad_request"
+        ? 400
+        : code === "forbidden" || code.startsWith("acl_")
+          ? 403
+          : code.endsWith("not_found")
+            ? 404
+            : 409;
+}
+
 /**
  * コメントの添付のサムネイル（PUT /comment-files/:fileId/thumb）。実体の転送と違い試行は作らず、
  * 添付の名前空間の下の固定キーに置く（付加的なもので、付ける前にだけ置ける）。

@@ -17,8 +17,4 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     environment: "node",
   },
-  pack: {
-    entry: ["src/index.ts"],
-    dts: true,
-  },
 });

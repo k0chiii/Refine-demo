@@ -10,6 +10,7 @@ import {
   type Principal,
 } from "@mf100/domain";
 import type { AppContext } from "../ports.ts";
+import { assertMembersExist } from "../shared.ts";
 
 /**
  * メンバーのグループ（利用者指示 2026-10-21）。校正者の割り当てとメンションで、所属する人をまとめて選ぶ。
@@ -28,25 +29,6 @@ function requireGroupsManage(principal: Principal): void {
     throw new DomainError("forbidden", { orgPermission: orgPermissions.groupsManage });
 }
 
-/** 所属する人が委員の名簿にいるか。既にいた人は確かめ直さない（担当の所属と同じ） */
-async function assertMembersExist(
-  ctx: AppContext,
-  after: readonly string[],
-  before: readonly string[],
-): Promise<void> {
-  const known = new Set(before);
-  const ids = after.filter((id) => !known.has(id));
-  if (ids.length === 0) return;
-  const found = new Set((await ctx.people.profiles(ids)).map((p) => p.id));
-  const missing = ids.filter((id) => !found.has(id));
-  if (missing.length > 0)
-    throw new DomainError("group_invalid", {
-      field: "memberIds",
-      reason: "unknown_user",
-      userIds: missing,
-    });
-}
-
 export async function saveMemberGroup(
   ctx: AppContext,
   principal: Principal,
@@ -61,7 +43,7 @@ export async function saveMemberGroup(
     if (!before) throw new DomainError("group_not_found", { groupId: id });
     // 並び順を省略したら今のまま
     const clean = validateMemberGroup({ ...rest, order: rest.order ?? before.order }, all, id);
-    await assertMembersExist(ctx, clean.memberIds, before.memberIds);
+    await assertMembersExist(ctx, clean.memberIds, before.memberIds, "group_invalid");
     const next: MemberGroup = { id, ...clean, updatedAt: now, updatedBy: principal.userId };
     await ctx.groups.update(next);
     await ctx.audit.record({
@@ -78,7 +60,7 @@ export async function saveMemberGroup(
   if (all.length >= MEMBER_GROUP_MAX)
     throw new DomainError("group_invalid", { reason: "limit", max: MEMBER_GROUP_MAX });
   const clean = validateMemberGroup(rest, all);
-  await assertMembersExist(ctx, clean.memberIds, []);
+  await assertMembersExist(ctx, clean.memberIds, [], "group_invalid");
   const created = await ctx.groups.insert({
     ...clean,
     updatedAt: now,

@@ -12,7 +12,6 @@ import {
   postImageAnchor,
   postImageArtifacts,
   postImageIndex,
-  postTargetLabel,
   postTextAnchor,
   rectFromCrop,
   rectToCrop,
@@ -195,7 +194,6 @@ describe("アンカー → 記録の中の場所", () => {
     const s = body.indexOf("詳しく");
     const t = resolvePostAnchor(post, artifacts, postTextAnchor("b", body, s, s + 3)!);
     expect(t).toEqual({ kind: "text", start: s, end: s + 3, quote: "詳しく", moved: false });
-    expect(postTargetLabel(t!)).toBe("本文");
     const r = resolvePostAnchor(post, artifacts, {
       type: "image_rect",
       artifactId: "i2",
@@ -207,7 +205,6 @@ describe("アンカー → 記録の中の場所", () => {
       key: "k2",
       rect: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
     });
-    expect(postTargetLabel(r!)).toBe("2 枚目の画像");
     const p = resolvePostAnchor(post, artifacts, {
       type: "image_pin",
       artifactId: "i1",

@@ -86,7 +86,7 @@ class FakePersistence implements ArtifactPersistence {
     this.store.delete(`${subject}/${id}`);
   }
   async clear(keep?: string) {
-    for (const k of [...this.store.keys()])
+    for (const k of this.store.keys())
       if (keep === undefined || !k.startsWith(`${keep}/`)) this.store.delete(k);
   }
 }

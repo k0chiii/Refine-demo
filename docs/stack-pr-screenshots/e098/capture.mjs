@@ -15,7 +15,7 @@ const root = process.env.MF100_WEB_ROOT
   ? path.resolve(process.env.MF100_WEB_ROOT)
   : path.resolve(__dir, "../../../apps/web");
 const require = createRequire(path.join(root, "package.json"));
-const { chromium } = require("playwright-core");
+const { chromium } = require("@playwright/test");
 const phase = process.argv.includes("--phase")
   ? process.argv[process.argv.indexOf("--phase") + 1]
   : "after";

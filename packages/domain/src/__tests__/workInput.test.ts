@@ -113,3 +113,17 @@ describe("制作物の不変条件（生成・変更で共通。PR #1 レビュ�
     ).toEqual(["new", "x"]);
   });
 });
+
+describe("applyWorkPatch は変更の対象の鍵だけを写す", () => {
+  it("id・lifecycle・version を patch に紛れ込ませても、元の値のまま（境界の JSON から別の制作物を上書きできない）", () => {
+    const work = makeWork({ id: "w_a", lifecycle: "active", version: 3 });
+    const next = applyWorkPatch(work, {
+      title: "改題",
+      ...({ id: "w_b", lifecycle: "finalized", version: 99 } as object),
+    });
+    expect(next.title).toBe("改題");
+    expect(next.id).toBe("w_a");
+    expect(next.lifecycle).toBe("active");
+    expect(next.version).toBe(4);
+  });
+});

@@ -210,26 +210,30 @@ export function assignWorkMetadata<T extends Partial<Work>>(target: T, meta: Wor
   return target;
 }
 
-/** Work の変更で受け付ける項目（組織・SNS アカウント・表記カテゴリの正規化と存在確認はアプリケーション層） */
+/**
+ * Work の変更で受け付ける項目（組織・SNS アカウント・表記カテゴリの正規化と存在確認はアプリケーション層）。
+ * 型でなく値で持つ: 境界（HTTP）から来た JSON の余計な鍵（id・lifecycle・version）を applyWorkPatch が写さないため
+ */
+export const workPatchKeys = [
+  "title",
+  "purpose",
+  "category",
+  "mediaType",
+  "deadlineAt",
+  "finishAt",
+  "creatorIds",
+  "approverId",
+  "approverIds",
+  "approvalQuorum",
+  "managerIds",
+  "legacyId",
+  "productionTeamIds",
+  "relatedTeamIds",
+  "notationCategories",
+] as const;
+
 export type WorkPatch = {
-  [
-    K in
-      | "title"
-      | "purpose"
-      | "category"
-      | "mediaType"
-      | "deadlineAt"
-      | "finishAt"
-      | "creatorIds"
-      | "approverId"
-      | "approverIds"
-      | "approvalQuorum"
-      | "managerIds"
-      | "legacyId"
-      | "productionTeamIds"
-      | "relatedTeamIds"
-      | "notationCategories"
-  ]?: Work[K] | undefined;
+  [K in (typeof workPatchKeys)[number]]?: Work[K] | undefined;
 } & WorkMetadataInput & {
     /** 登録済み企画情報（null で消す。decisions 69–72） */
     registeredPlanInfo?: import("./planInfo.ts").RegisteredPlanInfo | null;
@@ -251,7 +255,8 @@ export function applyWorkPatch(
     if (v === undefined) continue;
     if ((workMetadataKeys as readonly string[]).includes(k))
       (meta as Record<string, unknown>)[k] = v;
-    else defined[k] = v;
+    else if ((workPatchKeys as readonly string[]).includes(k)) defined[k] = v;
+    // それ以外の鍵（id・lifecycle・version など）は変更の対象ではないので写さない
   }
   if (patch.productionTeamIds !== undefined)
     defined.productionTeamIds = normalizeProductionTeamIds(patch.productionTeamIds, teamPolicy);

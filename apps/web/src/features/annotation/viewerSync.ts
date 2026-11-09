@@ -1,4 +1,4 @@
-import { alignShift, focalPoint, relAt, type PagePosition } from "@mf100/domain";
+import { alignShift, clamp01, focalPoint, relAt, type PagePosition } from "@mf100/domain";
 import { useLayoutEffect, useRef } from "react";
 import { peekZoomFocus, takeZoomFocus } from "@/lib/usePinchZoom";
 
@@ -38,8 +38,6 @@ export interface ViewerSyncProps {
 
 /** プログラムからのスクロールの後、この時間（ms）は利用者のスクロールとして扱わない（同期のループを防ぐ） */
 const PROGRAMMATIC_MS = 120;
-
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** 画面座標の点 → 舞台の割合 */
 function toStagePoint(stage: HTMLElement, pt: { x: number; y: number }): StagePoint {

@@ -1,0 +1,30 @@
+{
+  "name": "@mf100/platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Convex 版と Cloudflare 版が共有する部品（Web Push・ログイン後の遷移先の検証・Nogiku Access・Retry-After）。WebCrypto と fetch だけで動く。",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "default": "./src/testing.ts"
+    }
+  },
+  "scripts": {
+    "test": "vp test run",
+    "typecheck": "vp run verify-types",
+    "pack": "vp pack"
+  },
+  "dependencies": {
+    "@mf100/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite-plus": "1.2.0"
+  }
+}

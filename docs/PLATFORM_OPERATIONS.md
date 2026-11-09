@@ -64,6 +64,6 @@ AI Gateway/Access/既存 upload/cleanup の秘密については [PLATFORM_IMPLE
 
 ## ツールの更新と package の作成
 
-`pnpm create:package <name> [domain|application]` または root の `vp create` のローカル template を使う。既存ディレクトリは上書きしない。`pnpm package:domain` は独立した manifest と JS/型宣言を作るが公開しない。
+`pnpm create:package <name> [domain|application]` または root の `vp create` のローカル template を使う。既存ディレクトリは上書きしない。
 
 ツール更新時は隔離 branch で `pnpm toolchain:migrate` を実行し、package.json・lockfile・pnpm-workspace.yaml・設定の diff を確認する。Vite+、同梱 Vitest、override、coverage provider、setup-vp の固定値を同時に照合し、`pnpm toolchain:check`、check/test/typecheck、E2E/PWA を実行する。
