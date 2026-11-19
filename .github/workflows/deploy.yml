@@ -89,7 +89,7 @@ jobs:
       - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         if: env.HAS_CLOUDFLARE == 'true' && steps.gate.outputs.ok == 'true'
         with:
-          version: "1.2.0"
+          version: "1.5.1"
           node-version-file: .node-version
           cache: true
           run-install: |
@@ -159,7 +159,7 @@ jobs:
       - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
         if: steps.gate.outputs.ok == 'true'
         with:
-          version: "1.2.0"
+          version: "1.5.1"
           node-version-file: .node-version
           cache: true
           run-install: |
