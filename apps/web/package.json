@@ -79,7 +79,7 @@
     "convex-test": "0.0.61",
     "pngjs": "7.0.0",
     "typescript": "5.9.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
-    "vite-plus": "1.2.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.1",
+    "vite-plus": "1.5.1"
   }
 }

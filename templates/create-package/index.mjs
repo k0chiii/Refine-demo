@@ -19,7 +19,7 @@ export function createPackage(root, name, layer = "domain") {
           exports: { ".": { types: "./src/index.ts", default: "./src/index.ts" } },
           scripts: { test: "vp test run", typecheck: "vp run verify-types", pack: "vp pack" },
           ...(layer === "application" ? { dependencies: { "@mf100/domain": "workspace:*" } } : {}),
-          devDependencies: { typescript: "5.9.3", "vite-plus": "1.2.0" },
+          devDependencies: { typescript: "5.9.3", "vite-plus": "1.5.1" },
         },
         null,
         2,
