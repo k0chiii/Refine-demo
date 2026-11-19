@@ -188,10 +188,7 @@ export function normalizeWorkTags(tags: readonly string[]): string[] {
 // ---------------------------------------------------------------- リンク・ID
 /** 0 以上の整数（部数・制作日数）。空は null、読めなければ undefined */
 export function parseNonNegativeInteger(text: string): number | null | undefined {
-  const v = text
-    .normalize("NFKC")
-    .replace(/[,，]/g, "")
-    .trim();
+  const v = text.normalize("NFKC").replace(/[,，]/g, "").trim();
   if (v === "") return null;
   if (!/^\d{1,9}$/.test(v)) return undefined;
   return Number(v);

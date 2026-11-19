@@ -30,9 +30,10 @@
     "platform:config": "node scripts/platform-config.mjs"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "5.0.4",
+    "@vitest/coverage-v8": "5.1.0",
     "typescript": "5.9.3",
-    "vite-plus": "1.2.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.1",
+    "vite-plus": "1.5.1"
   },
   "engines": {
     "node": ">=22.18.0"
