@@ -1,7 +1,7 @@
 import { workProgressOf } from "@mf100/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { createCast, createHarness, createUser, HOUR, type Harness } from "../test/harness";
 import { profileReads } from "../test/readProfile";
 import { setupWork, submitFiles } from "../test/flows";
@@ -237,6 +237,9 @@ describe("受付中の版の校正の進み具合（workProgress）", () => {
     expect(done.writes.workProgress).toBe(1);
     expect(await stored(t, workId)).toMatchObject({ reviewers: { total: 3, done: 1 } });
     expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    await reviewers[2]!.as.mutation(api.reviews.complete, { revisionId });
+    expect(await stored(t, workId)).toMatchObject({ reviewers: { total: 3, done: 2 } });
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
 
     const checkId = await cast.manager.as.mutation(api.checks.add, {
       revisionId,
@@ -316,5 +319,180 @@ describe("受付中の版の校正の進み具合（workProgress）", () => {
       reviewers: { total: 4, done: 0 },
       checks: { total: 1, pending: 1 },
     });
+  });
+
+  it("専門確認を足す・完了にするたびに差を足しても、数え直した値と同じ（未完了が複数・完了のあと・免除で足す）", async () => {
+    const t = createHarness();
+    const { cast, workId, revisionId } = await rosterOf(t, 0);
+    const check = async () => expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    const add = (type: "photo" | "name" | "language") =>
+      cast.manager.as.mutation(api.checks.add, { revisionId, type });
+    const first = [await add("photo"), await add("name")];
+    await check();
+    expect(await stored(t, workId)).toMatchObject({ checks: { total: 2, pending: 2 } });
+    await t.run(async (ctx) => {
+      const app = createAppContext(ctx);
+      for (const id of first)
+        await app.checks.update({
+          ...(await app.checks.findById(id))!,
+          state: "done",
+          doneBy: cast.manager.id,
+        });
+    });
+    await check();
+    await add("language");
+    await check();
+    expect(await stored(t, workId)).toMatchObject({ checks: { total: 3, pending: 1 } });
+    await t.run((ctx) =>
+      createAppContext(ctx).checks.insert({
+        revisionId,
+        type: "rules",
+        label: "規程",
+        state: "waived",
+      }),
+    );
+    await check();
+    expect(await stored(t, workId)).toMatchObject({ checks: { total: 4, pending: 1 } });
+  });
+
+  it("完了どうしの書込み（完了 → 免除）は数を変えず、完了した割当を消すと完了の数も減る", async () => {
+    const t = createHarness();
+    const { cast, workId, revisionId, reviewers } = await rosterOf(t, 3);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: reviewers.map((r) => r.id),
+    });
+    const reviewerId = reviewers[0]!.id;
+    await reviewers[0]!.as.mutation(api.reviews.complete, { revisionId });
+    await t.run(async (ctx) => {
+      const app = createAppContext(ctx);
+      await app.assignments.upsert({
+        ...(await app.assignments.find(revisionId, reviewerId))!,
+        state: "excused",
+      });
+    });
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    expect(await stored(t, workId)).toMatchObject({ reviewers: { total: 3, done: 1 } });
+    await t.run((ctx) => createAppContext(ctx).assignments.delete(revisionId, reviewerId));
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    expect(await stored(t, workId)).toMatchObject({ reviewers: { total: 2, done: 0 } });
+  });
+
+  it("進み具合の行が無い・別の版を数えた行のときの割当の書込みは、差を足さず割当・専門確認から作り直す", async () => {
+    const t = createHarness();
+    const { cast, workId, revisionId, reviewers } = await rosterOf(t, 2);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: [reviewers[0]!.id],
+    });
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("workProgress").collect()) await ctx.db.delete(row._id);
+    });
+    await t.run((ctx) =>
+      createAppContext(ctx).assignments.upsert({
+        revisionId,
+        reviewerId: reviewers[1]!.id,
+        reviewType: "general",
+        state: "pending",
+      }),
+    );
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    expect(await stored(t, workId)).toMatchObject({ reviewers: { total: 2, done: 0 } });
+
+    // 差を足しても範囲に収まる数にしておく（別の版の数に足してしまえば、そのまま残る）
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("workProgress")
+        .withIndex("by_work", (q) => q.eq("workId", workId))
+        .unique();
+      await ctx.db.replace(row!._id, {
+        workId,
+        acceptingId: "somewhere-else",
+        reviewers: { total: 9, done: 0 },
+        checks: { total: 9, pending: 0 },
+      });
+    });
+    await reviewers[0]!.as.mutation(api.reviews.complete, { revisionId });
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+  });
+
+  it("数えた版が同じでも、差を足すと範囲を外れる（行がずれていた）ときは、割当・専門確認から作り直す", async () => {
+    const t = createHarness();
+    const { cast, workId, revisionId, reviewers } = await rosterOf(t, 3);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: reviewers.map((r) => r.id),
+    });
+    const photo = await cast.manager.as.mutation(api.checks.add, { revisionId, type: "photo" });
+    const drift = (counts: Partial<Pick<Doc<"workProgress">, "reviewers" | "checks">>) =>
+      t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("workProgress")
+          .withIndex("by_work", (q) => q.eq("workId", workId))
+          .unique();
+        await ctx.db.patch(row!._id, counts);
+      });
+    const check = async () => expect(await stored(t, workId)).toEqual(await recount(t, workId));
+
+    // 完了の数が人数を超える
+    await drift({ reviewers: { total: 0, done: 0 } });
+    await reviewers[0]!.as.mutation(api.reviews.complete, { revisionId });
+    await check();
+    // 完了の数が負になる
+    await drift({ reviewers: { total: 3, done: 0 } });
+    await t.run((ctx) => createAppContext(ctx).assignments.delete(revisionId, reviewers[0]!.id));
+    await check();
+    // 未完了の専門確認が負になる
+    await drift({ checks: { total: 1, pending: 0 } });
+    await t.run(async (ctx) => {
+      const app = createAppContext(ctx);
+      await app.checks.update({
+        ...(await app.checks.findById(photo))!,
+        state: "done",
+        doneBy: cast.manager.id,
+      });
+    });
+    await check();
+    // 未完了の専門確認が数を超える
+    await drift({ checks: { total: 0, pending: 1 } });
+    await cast.manager.as.mutation(api.checks.add, { revisionId, type: "name" });
+    await check();
+  });
+
+  it("割当の書込みは版の文書を 1 回だけ読む（進み具合に差を足すときに読み直さない）", async () => {
+    const t = createHarness();
+    const { revisionId, reviewers } = await rosterOf(t, 1);
+    const run = await profileReads(() =>
+      t.run((ctx) =>
+        createAppContext(ctx).assignments.upsert({
+          revisionId,
+          reviewerId: reviewers[0]!.id,
+          reviewType: "general",
+          state: "pending",
+        }),
+      ),
+    );
+    expect(run.writes.workProgress).toBe(1);
+    expect(run.byTable.revisions?.docs).toBe(1);
+  });
+
+  it("最後の 1 人が完了して完了の数が人数に並んでも、他の校正者の割当を読まない", async () => {
+    const reads = [];
+    for (const n of [2, 6]) {
+      const t = createHarness();
+      const { cast, workId, revisionId, reviewers } = await rosterOf(t, n);
+      await cast.manager.as.mutation(api.reviews.setReviewers, {
+        workId,
+        reviewerIds: reviewers.map((r) => r.id),
+      });
+      for (const r of reviewers.slice(0, -1))
+        await r.as.mutation(api.reviews.complete, { revisionId });
+      const last = await profileReads(() =>
+        reviewers.at(-1)!.as.mutation(api.reviews.complete, { revisionId }),
+      );
+      expect(await stored(t, workId)).toMatchObject({ reviewers: { total: n, done: n } });
+      reads.push(last.byTable.reviewAssignments?.docs);
+    }
+    expect(reads[1]).toBe(reads[0]);
   });
 });

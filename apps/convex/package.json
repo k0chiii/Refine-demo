@@ -18,7 +18,8 @@
     "codegen": "vp run generate-convex",
     "test": "vp test run",
     "typecheck": "vp run verify-types",
-    "deploy": "convex deploy"
+    "deploy": "convex deploy",
+    "mutation": "mutator"
   },
   "dependencies": {
     "@auth/core": "0.41.3",
