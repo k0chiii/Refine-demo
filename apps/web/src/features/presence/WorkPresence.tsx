@@ -24,12 +24,18 @@ function LiveWorkPresence({ workId }: { workId: string }) {
     let token: string | undefined;
     let stopped = false;
     let running = false;
+    let timer: number | undefined;
+    const leave = () => {
+      if (token) void disconnect({ sessionToken: token }).catch(() => {});
+      token = undefined;
+    };
     const send = async () => {
-      if (running || stopped) return;
+      if (running || stopped || document.hidden) return;
       running = true;
       try {
         const response = await heartbeat({ workId, sessionId });
-        if (stopped) await disconnect({ sessionToken: response.sessionToken });
+        // 送っている間に閉じた・隠れたときは、取れた合言葉をすぐ返す
+        if (stopped || document.hidden) await disconnect({ sessionToken: response.sessionToken });
         else token = response.sessionToken;
       } catch {
         // Revoked access or lost connection: the component expires the session server-side.
@@ -37,15 +43,30 @@ function LiveWorkPresence({ workId }: { workId: string }) {
         running = false;
       }
     };
-    void send();
-    // 間隔はサーバー（convex/presence.ts の INTERVAL）と合わせる。部品は 2.5 倍の間、心拍が無ければ切れたとみなす
-    const timer = window.setInterval(() => {
+    const start = () => {
       void send();
-    }, 30_000);
+      // 間隔はサーバー（convex/presence.ts の INTERVAL）と合わせる。部品は 2.5 倍の間、心拍が無ければ切れたとみなす
+      timer = window.setInterval(() => {
+        void send();
+      }, 60_000);
+    };
+    const stop = () => {
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    // 隠れたタブは心拍を止めて切る（誰も見ていない）。戻ったらすぐ心拍して再開する
+    const onVisibility = () => {
+      stop();
+      if (document.hidden) leave();
+      else start();
+    };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       stopped = true;
-      window.clearInterval(timer);
-      if (token) void disconnect({ sessionToken: token }).catch(() => {});
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+      leave();
     };
   }, [workId, heartbeat, disconnect]);
   const others = viewers?.filter((user) => !user.isMe) ?? [];
