@@ -55,14 +55,17 @@ export const start = mutation({
     if (pending) return pending._id;
     const quota = await reserveAi(ctx, principal, work.id, draft.text.length);
     if (!quota.ok) throw new Error("ai_quota_exceeded");
+    const expiresAt = Date.now() + 3_600_000;
     const id = await ctx.db.insert("aiJobs", {
       workId: work.id,
       userId: user._id,
       draftVersion: draft.version,
       state: "queued",
       createdAt: Date.now(),
-      expiresAt: Date.now() + 3_600_000,
+      expiresAt,
     });
+    // 結果の物理削除は期限の時刻に 1 回走らせる（毎時の cron は保険）。読み手はどれも expiresAt を見て期限切れを返さない
+    await ctx.scheduler.runAt(expiresAt, internal.aiWorkflow.expire, {});
     const workflowId = await workflows.start(ctx, internal.aiWorkflow.run, { jobId: id });
     await ctx.db.patch(id, { workflowId });
     return id;

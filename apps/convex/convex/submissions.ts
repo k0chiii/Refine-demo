@@ -18,6 +18,7 @@ import {
   voidRevisionUseCase,
 } from "@mf100/application";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createAppContext } from "./lib/adapters.ts";
 import { runUseCase } from "./lib/errors.ts";
@@ -169,6 +170,9 @@ export const confirm = mutation({
         principal,
         args,
       );
+      // 受付終了は期限の時刻に 1 回だけ走らせる（毎分の cron はやめた）。期限は版の作成時にしか決まらず、後から変える機能は無い。
+      // closeExpired は期限を過ぎた版だけを閉じる冪等な処理なので、版が差し替えで先に閉じても予約の取り消しは要らない
+      await ctx.scheduler.runAt(revision.deadlineAt, internal.revisions.closeExpired, {});
       return {
         revisionId: revision.id,
         sequence: revision.sequence,

@@ -637,10 +637,17 @@ export default defineSchema({
     state: assignmentState,
     viewedAt: v.optional(v.number()),
     respondedAt: v.optional(v.number()),
+    /**
+     * 割当先の版が受付中か（派生。版の受付状態を書く唯一の経路 `revisions.update` と割当の書込みが同じ transaction で揃える。
+     * lib/assignmentOpen.ts）。版が閉じても割当は pending / viewed のまま残るので、「自分の受付中の割当」を版を読まずに引くための印。
+     * 未設定の古い行は読む側が版から確かめる（`backfillAssignmentOpen` で埋めれば無くなる）
+     */
+    revisionOpen: v.optional(v.boolean()),
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_reviewer", ["revisionId", "reviewerId"])
-    .index("by_reviewer_state", ["reviewerId", "state"]),
+    .index("by_reviewer_state", ["reviewerId", "state"])
+    .index("by_reviewer_open_state", ["reviewerId", "revisionOpen", "state"]),
 
   /** 専門確認（必須チェック）（§2.2-4） */
   requiredChecks: defineTable({
