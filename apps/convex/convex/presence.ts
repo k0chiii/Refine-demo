@@ -11,9 +11,10 @@ const presence = new Presence(components.presence);
 /**
  * 心拍の間隔（ms）。画面側（features/presence/WorkPresence）も同じ間隔で送る。部品はこの 2.5 倍、心拍が無ければ切れたとみなす。
  * 15 秒 → 30 秒（2026-10-25）: 心拍は毎回 認証＋制作物の読み込みを伴う mutation で、閲覧中の人数の表示にそこまでの鮮度は要らない。
- * 閉じたタブはその場で disconnect を送るので、遅れが出るのは切断・クラッシュのときだけ（最長 75 秒）
+ * 30 秒 → 60 秒（2026-11-20）: 隠れたタブは画面側が心拍を止めて切る（呼び出し回数の約 4 割が presence だった）。
+ * 閉じたタブはその場で disconnect を送るので、遅れが出るのは切断・クラッシュのときだけ（最長 150 秒）
  */
-export const INTERVAL = 30_000;
+export const INTERVAL = 60_000;
 
 export const heartbeat = mutation({
   args: { workId: v.string(), sessionId: v.string() },

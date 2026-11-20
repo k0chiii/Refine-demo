@@ -43,9 +43,9 @@ export function migrateCollab(sql: Sql): void {
 
 // ---- 在席
 
-/** 心拍の間隔（ms）。画面（WorkPresence）も 30 秒で送る */
-export const PRESENCE_INTERVAL = 30_000;
-/** 部品と同じ: 心拍が 2.5 回ぶん（= 75 秒）途切れたら切れたとみなす */
+/** 心拍の間隔（ms）。画面（WorkPresence）も 60 秒で送る */
+export const PRESENCE_INTERVAL = 60_000;
+/** 部品と同じ: 心拍が 2.5 回ぶん（= 150 秒）途切れたら切れたとみなす */
 export const PRESENCE_TTL = PRESENCE_INTERVAL * 2.5;
 
 /**
