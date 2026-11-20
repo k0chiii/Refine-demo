@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness, HOUR, type Harness } from "../test/harness";
 import { profileReads } from "../test/readProfile";
 import { setupWork, submitFiles } from "../test/flows";
+import { openAssignmentRevisionIds, syncAssignmentsOpen } from "./lib/assignmentOpen";
 
 /**
  * 割当の印（reviewAssignments.revisionOpen）が、版の受付状態に沿って書込みの側で揃うこと、
@@ -89,10 +90,7 @@ describe("Convex 統合: 割当の印（revisionOpen）", () => {
     expect(incremental).toEqual(expected);
 
     // 印を消して移行（backfillAssignmentOpen）で作り直しても同じ
-    await t.run(async (ctx) => {
-      for (const r of await ctx.db.query("reviewAssignments").collect())
-        await ctx.db.patch(r._id, { revisionOpen: undefined });
-    });
+    await dropFlags(t);
     await t.mutation(internal.migrations.backfillAssignmentOpen, {
       cursor: null,
       oneBatchOnly: true,
@@ -119,10 +117,7 @@ describe("Convex 統合: 割当の印（revisionOpen）", () => {
     const withFlags = await read();
     // 差し替え後の版・期限前の版・受付中の版の 3 件（無効にした版・差し替えられた版は数えない）
     expect(withFlags.badge.count).toBe(3);
-    await t.run(async (ctx) => {
-      for (const r of await ctx.db.query("reviewAssignments").collect())
-        await ctx.db.patch(r._id, { revisionOpen: undefined });
-    });
+    await dropFlags(t);
     expect(await read()).toEqual(withFlags);
   });
 
@@ -139,4 +134,148 @@ describe("Convex 統合: 割当の印（revisionOpen）", () => {
     expect(byTable.workSummaries).toBeUndefined();
     expect(byTable.works).toBeUndefined();
   });
+
+  it("印の無い古い行でも、完了した割当は校正のバッジに数えない", async () => {
+    const t = createHarness();
+    const { cast, openRev } = await seed(t);
+    await cast.reviewer.as.mutation(api.reviews.complete, { revisionId: openRev.revisionId });
+    const withFlags = await cast.reviewer.as.query(api.dashboard.checkBadge, {});
+    expect(withFlags.count).toBe(2);
+    await dropFlags(t);
+    expect(await cast.reviewer.as.query(api.dashboard.checkBadge, {})).toEqual(withFlags);
+  });
+
+  it("自分の割当の版 ID は、印のある行を open に、印の無い古い行だけを legacy に分ける", async () => {
+    const t = createHarness();
+    const { cast, v1, v2, lapsedRev, openRev, voidedRev } = await seed(t);
+    const of = (states?: Array<"pending" | "viewed">) =>
+      t.run((ctx) => openAssignmentRevisionIds(ctx.db, cast.reviewer.id, states));
+    const accepting = [v2, lapsedRev, openRev].map((r) => r.revisionId).sort();
+    for (const ids of [await of(), await of(["pending", "viewed"])]) {
+      expect(ids.open.sort()).toEqual(accepting);
+      expect(ids.legacy).toEqual([]);
+    }
+    await dropFlags(t);
+    const legacy = await of();
+    expect(legacy.open).toEqual([]);
+    expect(legacy.legacy.sort()).toEqual(
+      [v1, v2, lapsedRev, openRev, voidedRev].map((r) => r.revisionId).sort(),
+    );
+  });
+
+  it("版の受付状態に揃えるとき、もう同じ印の割当は書き直さない", async () => {
+    const t = createHarness();
+    const { cast, openRev } = await seed(t);
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("reviewAssignments")
+        .withIndex("by_revision_reviewer", (q) =>
+          q.eq("revisionId", openRev.revisionId).eq("reviewerId", cast.reviewer.id),
+        )
+        .unique();
+      await ctx.db.patch(row!._id, { revisionOpen: undefined });
+    });
+    const run = await profileReads(() =>
+      t.run((ctx) => syncAssignmentsOpen(ctx.db, openRev.revisionId, true)),
+    );
+    // 校正者 2 人の割当のうち、印の無かった 1 行だけ書く
+    expect(run.writes).toEqual({ reviewAssignments: 1 });
+    expect(await flags(t)).toEqual(await truth(t));
+  });
+
+  it("印を揃える移行は、揃っている割当を書かず、版の文書が無い割当の印は閉じる", async () => {
+    const t = createHarness();
+    const { cast, openRev } = await seed(t);
+    const backfill = () =>
+      t.mutation(internal.migrations.backfillAssignmentOpen, { cursor: null, oneBatchOnly: true });
+    const again = await profileReads(backfill);
+    expect(again.writes.reviewAssignments).toBeUndefined();
+
+    await t.run((ctx) => ctx.db.delete(openRev.revisionId));
+    await backfill();
+    expect((await flags(t))[`${openRev.revisionId}|${cast.reviewer.id}`]).toBe(false);
+  });
+
+  it("受付中かの確かめは、一覧の行で当たれば要約も版も読まず、要約で当たれば版を読まない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const { revisionId } = await submitFiles(cast, workId, pdf);
+    await cast.manager.as.mutation(api.checks.add, {
+      revisionId,
+      type: "photo",
+      assigneeId: cast.reviewer.id,
+    });
+    const badge = () => profileReads(() => cast.reviewer.as.query(api.dashboard.checkBadge, {}));
+
+    const byCard = await badge();
+    expect(byCard.result.count).toBe(1);
+    expect(byCard.byTable.workSummaries).toBeUndefined();
+    expect(byCard.byTable.revisions).toBeUndefined();
+
+    await deleteAll(t, "workListCards");
+    const bySummary = await badge();
+    expect(bySummary.result.count).toBe(1);
+    expect(bySummary.byTable.revisions).toBeUndefined();
+
+    // 要約も無ければ版を読んで確かめる（上の 2 つが読まないことに意味がある前提）
+    await deleteAll(t, "workSummaries");
+    const byRevision = await badge();
+    expect(byRevision.result.count).toBe(1);
+    expect(byRevision.byTable.revisions?.docs).toBe(1);
+  });
+
+  it("版の文書が受付中でも、要約が別の版を受付中とするなら数えず、要約が受付中の版を持たないなら版を信じる", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const check = (revisionId: Id<"revisions">) =>
+      t.run((ctx) =>
+        ctx.db.insert("requiredChecks", {
+          revisionId,
+          type: "photo",
+          label: "写真",
+          assigneeId: cast.reviewer.id,
+          state: "pending",
+        }),
+      );
+    const badge = async () => (await cast.reviewer.as.query(api.dashboard.checkBadge, {})).count;
+
+    // 差し替えられた版の文書だけが受付中に戻った（要約・一覧の行は新しい版を受付中としている）
+    const replaced = await setupWork(t, cast, { title: "差し替え" });
+    const v1 = await submitFiles(cast, replaced, pdf);
+    vi.setSystemTime(Date.now() + HOUR);
+    await submitFiles(cast, replaced, pdf);
+    await check(v1.revisionId);
+    await t.run((ctx) => ctx.db.patch(v1.revisionId, { reviewState: "open" }));
+    expect(await badge()).toBe(0);
+
+    // 要約が受付中の版を持たない古い行で、一覧の行も無い
+    const stale = await setupWork(t, cast, { title: "古い要約" });
+    const { revisionId } = await submitFiles(cast, stale, pdf);
+    await check(revisionId);
+    await t.run(async (ctx) => {
+      for (const table of ["workListCards", "workSummaries"] as const) {
+        const row = await ctx.db
+          .query(table)
+          .withIndex("by_work", (q) => q.eq("workId", stale))
+          .unique();
+        if (table === "workListCards") await ctx.db.delete(row!._id);
+        else await ctx.db.patch(row!._id, { acceptingId: null });
+      }
+    });
+    expect(await badge()).toBe(1);
+  });
 });
+
+async function dropFlags(t: Harness) {
+  await t.run(async (ctx) => {
+    for (const r of await ctx.db.query("reviewAssignments").collect())
+      await ctx.db.patch(r._id, { revisionOpen: undefined });
+  });
+}
+
+async function deleteAll(t: Harness, table: "workListCards" | "workSummaries") {
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query(table).collect()) await ctx.db.delete(row._id);
+  });
+}

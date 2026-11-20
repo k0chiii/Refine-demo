@@ -127,6 +127,11 @@ describe("校了した制作物の数（workCounters）", () => {
     await setLifecycle(t, works[1]!, "finalized");
     await check();
     expect(await counts(t)).toEqual({ [teams.a]: 1 });
+    // 同じ鍵に 2 件あるときは、1 件を戻しても鍵は残り、1 だけ減る
+    await setLifecycle(t, works[5]!, "finalized");
+    await setLifecycle(t, works[1]!, "active");
+    await check();
+    expect(await counts(t)).toEqual({ [teams.a]: 1 });
     // 全体の状況は、いつでも全件を読んだ値と同じ
     const narrowed = await readAll(cast);
     await t.run(async (ctx) => {
@@ -156,5 +161,45 @@ describe("校了した制作物の数（workCounters）", () => {
     // 収まらないときは従来どおり先頭から上限まで読む
     const over = await profileReads(() => cast.manager.as.run((ctx) => worksSection(ctx, 5)));
     expect(over.byTable.works?.docs).toBeGreaterThanOrEqual(5);
+  });
+
+  it("校了の有無も主管担当も変わらない制作物の書込みは、数の行を読まず書かない", async () => {
+    const t = createHarness();
+    const { works } = await seed(t);
+    await t.mutation(internal.migrations.rebuildWorkCounters, {});
+    await setLifecycle(t, works[0]!, "finalized");
+    // 校了のまま・進行中のままの題名の変更。数の行は 1 行だけなので、読むだけでも制作物の書込みどうしが衝突する
+    for (const id of [works[0]!, works[5]!]) {
+      const run = await profileReads(() =>
+        t.run(async (ctx) => {
+          const app = createAppContext(ctx);
+          await app.works.update({ ...(await app.works.findById(id))!, title: "改題" });
+        }),
+      );
+      expect(run.writes.works).toBeGreaterThan(0);
+      expect(run.writes.workCounters).toBeUndefined();
+      expect(run.byTable.workCounters).toBeUndefined();
+    }
+  });
+
+  it("数え直し（rebuildWorkCounters）は、ずれた数を直し、数が同じなら鍵の順が違っても書かない", async () => {
+    const t = createHarness();
+    const { teams, works } = await seed(t);
+    await t.mutation(internal.migrations.rebuildWorkCounters, {});
+    // 保存した行の鍵は名前の順（none は担当の ID より後）に並び、数え直しは制作物の作成順に鍵を足す。
+    // 主管担当の無い制作物を先に作ったので、2 つは鍵の順だけが違う
+    await setLifecycle(t, works[3]!, "finalized");
+    await setLifecycle(t, works[5]!, "finalized");
+    const want = { [teams.a]: 1, none: 1 };
+    expect(await counts(t)).toEqual(want);
+    const same = await profileReads(() => t.mutation(internal.migrations.rebuildWorkCounters, {}));
+    expect(same.writes.workCounters).toBeUndefined();
+
+    await t.run(async (ctx) => {
+      const row = (await ctx.db.query("workCounters").unique())!;
+      await ctx.db.patch(row._id, { counts: { [teams.a]: 5 } });
+    });
+    expect(await t.mutation(internal.migrations.rebuildWorkCounters, {})).toEqual(want);
+    expect(await counts(t)).toEqual(want);
   });
 });

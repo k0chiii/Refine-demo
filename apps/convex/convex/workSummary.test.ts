@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import type { WithoutSystemFields } from "convex/server";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { createCast, createHarness, HOUR, type Harness } from "../test/harness";
+import type { Doc, Id } from "./_generated/dataModel";
+import { createCast, createHarness, HOUR, uploadVerified, type Harness } from "../test/harness";
+import { profileReads } from "../test/readProfile";
 import { setupWork, submitFiles } from "../test/flows";
+import { syncWorkSummary, WORK_SUMMARY_VERSION } from "./lib/workSummary";
 
 const pdf = [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf" as const }];
 
@@ -144,5 +147,152 @@ describe("制作物の要約（workSummaries）", () => {
       for (const row of await ctx.db.query("workSummaries").collect()) await ctx.db.delete(row._id);
     });
     expect(await readAll(cast)).not.toEqual(current);
+  });
+
+  it("版が古い・項目の欠けた要約は信じず、一覧・ダッシュボード・提出先は版から数え直した値を返す", async () => {
+    const t = createHarness();
+    const cast = await seed(t);
+    const current = await readAll(cast);
+    const rows = await t.run((ctx) => ctx.db.query("workSummaries").collect());
+    // 一覧は一覧の行（workListCards）があると要約を読まない
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("workListCards").collect()) await ctx.db.delete(row._id);
+    });
+    // 信じれば一覧・ダッシュボードの値が変わる中身。項目が 1 つでも欠けた行は、残りの項目も信じない
+    const wrong = {
+      latest: null,
+      accepting: null,
+      threads: { unresolved: 9, total: 9, lastCreatedAt: null },
+    };
+    const variants: Array<Record<string, unknown>> = [
+      { ...wrong, summaryVersion: undefined },
+      { ...wrong, summaryVersion: WORK_SUMMARY_VERSION - 1 },
+      { ...wrong, latest: undefined },
+      { ...wrong, accepting: undefined },
+      { ...wrong, threads: undefined },
+    ];
+    for (const variant of variants) {
+      await t.run(async (ctx) => {
+        for (const { _id, _creationTime, ...fields } of rows) {
+          void _creationTime;
+          const next: Record<string, unknown> = { ...fields, ...variant };
+          for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
+          await ctx.db.replace(_id, next as WithoutSystemFields<Doc<"workSummaries">>);
+        }
+      });
+      expect(await readAll(cast)).toEqual(current);
+    }
+  });
+
+  it("埋め直しの移行（backfillWorkSummaries）は、id だけの古い行を今の要約に作り直す", async () => {
+    const t = createHarness();
+    await seed(t);
+    const fields = () =>
+      t.run(async (ctx) =>
+        (await ctx.db.query("workSummaries").collect()).map(({ _id, _creationTime, ...rest }) => {
+          void [_id, _creationTime];
+          return rest;
+        }),
+      );
+    const want = await fields();
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("workSummaries").collect())
+        await ctx.db.replace(row._id, {
+          workId: row.workId,
+          latestId: row.latestId,
+          acceptingId: row.acceptingId,
+          declared: row.declared,
+        });
+    });
+    await t.mutation(internal.migrations.backfillWorkSummaries, {
+      cursor: null,
+      oneBatchOnly: true,
+    });
+    expect(await fields()).toEqual(want);
+  });
+
+  it("要約・一覧の行・進み具合の値が変わらない書込み（題名の変更）は、それらを書き直さない", async () => {
+    const t = createHarness();
+    const cast = await seed(t);
+    for (const work of await cast.manager.as.query(api.works.listMine, {})) {
+      const run = await profileReads(() =>
+        cast.manager.as.mutation(api.works.update, {
+          workId: work.id,
+          patch: { title: `${work.title}（改題）` },
+        }),
+      );
+      expect(run.writes.works).toBeGreaterThan(0);
+      expect(run.writes.workSummaries).toBeUndefined();
+      expect(run.writes.workListCards).toBeUndefined();
+      expect(run.writes.workProgress).toBeUndefined();
+    }
+  });
+
+  it("指摘の書込みは、一覧の行と進み具合を読まず書かない", async () => {
+    const t = createHarness();
+    const cast = await seed(t);
+    const reviewing = (await cast.manager.as.query(api.works.listMine, {})).find(
+      (w) => w.title === "受付中",
+    )!;
+    const run = await profileReads(() =>
+      cast.reviewer.as.mutation(api.comments.post, {
+        revisionId: reviewing.acceptingRevisionId as Id<"revisions">,
+        body: "句読点",
+        kind: "correction",
+        severity: "minor",
+      }),
+    );
+    expect(run.writes.workSummaries).toBe(1);
+    expect(run.byTable.workListCards).toBeUndefined();
+    expect(run.byTable.workProgress).toBeUndefined();
+  });
+
+  it("緊急の版を受け付けている制作物は、一覧の行からでも要約からでも緊急と出る", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast, { title: "緊急" });
+    const prepared = await cast.creator.as.mutation(api.submissions.prepare, {
+      workId,
+      kind: "standard",
+      reviewType: "general",
+      reviewUrgent: true,
+      deadlineAt: Date.now() + 6 * HOUR,
+      changeSummary: "急ぎ",
+      focusNotes: "",
+      items: [{ fileName: "a.pdf", mimeType: "application/pdf", type: "pdf", role: "source" }],
+    });
+    await uploadVerified(cast.creator, prepared.items[0]!.id, { size: 10, sha256: "a" });
+    await cast.creator.as.mutation(api.submissions.confirm, {
+      sessionId: prepared.sessionId as Id<"uploadSessions">,
+    });
+    const urgent = async () =>
+      (await cast.manager.as.query(api.works.listMine, {})).find((w) => w.id === workId)
+        ?.acceptingReviewUrgent;
+    expect(await urgent()).toBe(true);
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("workListCards").collect()) await ctx.db.delete(row._id);
+    });
+    expect(await urgent()).toBe(true);
+  });
+
+  it("校了の宣言を数えない制作物（校了者 1 人で校了した）は、要約を作り直すときに校了の履歴を読まない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const { revisionId } = await submitFiles(cast, workId, pdf);
+    await cast.approver.as.mutation(api.approvals.finalize, { workId, revisionId });
+    const events = await t.run((ctx) => ctx.db.query("approvalEvents").collect());
+    expect(events.length).toBeGreaterThan(0);
+    const run = await profileReads(() => t.run((ctx) => syncWorkSummary(ctx.db, workId)));
+    expect(run.byTable.approvalEvents).toBeUndefined();
+  });
+
+  it("制作物が無ければ、要約を作り直しても何も書かない", async () => {
+    const t = createHarness();
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    await t.run((ctx) => ctx.db.delete(workId));
+    const run = await profileReads(() => t.run((ctx) => syncWorkSummary(ctx.db, workId)));
+    expect(run.writes).toEqual({});
   });
 });
