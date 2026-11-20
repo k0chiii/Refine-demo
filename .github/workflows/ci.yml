@@ -4,6 +4,7 @@
 # - PR の単体は pnpm test。main / 手動は pnpm test:coverage（成果物）。
 # - e2e-smoke（PR）: 各ジョブ内でデモ版をビルドしてから @smoke と PWA。
 # - e2e（main・手動）: デモ版の全 spec（@cloudflare 以外）を 1 ジョブで並列。visual: screenshots.mjs（部ごと）と a11y。
+# - mutation（PR）: apps/convex の変異テストを差分の分だけ（Node 24）。
 # - e2e-cloudflare（main・手動）: Worker（apps/cloudflare）と web（--mode cloudflare）を起こして @cloudflare の疎通だけ。
 name: CI
 
@@ -130,6 +131,33 @@ jobs:
         run: |
           pnpm codegen
           git diff --exit-code -- apps/convex/convex/_generated
+
+  # 変異テスト（PR）: 読み取り削減の派生データの保守（apps/convex/mutator.config.ts）を、差分の分だけ。
+  # mutator は Node 24 以上が要るので、このジョブだけ Node を上げる。生き残った変異があれば exit 2。
+  mutation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.5.1"
+          node-version: "24"
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - uses: actions/cache@v4
+        with:
+          path: apps/convex/.mutator
+          key: mutator-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            mutator-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: 変異テスト（差分のみ）
+        working-directory: apps/convex
+        run: pnpm exec mutator --since origin/${{ github.base_ref }}
 
   # ブランチ保護の必須チェック名を verify のまま使えるようにする集約ジョブ
   verify:
