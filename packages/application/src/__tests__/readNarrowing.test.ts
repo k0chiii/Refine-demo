@@ -12,6 +12,7 @@ import { completeMyReview } from "../usecases/reviews.ts";
 import { DELETED_COMMENT_NOTIFICATION, listMyNotifications } from "../usecases/notifications.ts";
 import { setWorkReviewers } from "../usecases/reviewers.ts";
 import { isAllowedLazily, loadAuthorizedWorkOwnGrants, loadAuthorizedWork } from "../shared.ts";
+import { buildWorksDashboard, NO_TEAM } from "../usecases/dashboard.ts";
 import { createInMemoryContext } from "../testing/inMemory.ts";
 import { principals, seedWork, submitRevision } from "../testing/scenario.ts";
 
@@ -184,5 +185,59 @@ describe("受付中の版の進み具合は、割当・専門確認の今の状�
     await completeMyReview(ctx, principals.reviewer, revision.id);
     await check();
     expect((await ctx.workSummaries.findProgress(work.id, revision.id))?.reviewers.done).toBe(1);
+  });
+});
+
+describe("全体の状況: 校了した制作物は数だけで足しても、全件を渡したときと同じ", () => {
+  it("段階・局・全体の数が一致し、数の鍵は主管担当（担当は親の局に寄せる）", async () => {
+    const ctx = createInMemoryContext();
+    const bureau = await ctx.teams.insert({
+      name: "制作局",
+      kind: "bureau",
+      order: 1,
+      updatedAt: 0,
+      updatedBy: "u_sysadmin",
+    });
+    const bureau2 = await ctx.teams.insert({
+      name: "広報局",
+      kind: "bureau",
+      order: 2,
+      updatedAt: 0,
+      updatedBy: "u_sysadmin",
+    });
+    const team = await ctx.teams.insert({
+      name: "デザイン担当",
+      kind: "team",
+      parentId: bureau.id,
+      order: 1,
+      updatedAt: 0,
+      updatedBy: "u_sysadmin",
+    });
+    const make = async (title: string, ownerTeamId: string | undefined, final: boolean) => {
+      const w = await seedWork(ctx, { title, ...(ownerTeamId ? { ownerTeamId } : {}) });
+      const stored = (await ctx.works.findById(w.id))!;
+      if (final) await ctx.works.update({ ...stored, lifecycle: "finalized" });
+      return w.id;
+    };
+    await make("校了・局", bureau.id, true);
+    await make("校了・担当（親は制作局）", team.id, true);
+    await make("校了・広報局", bureau2.id, true);
+    await make("校了・担当なし", undefined, true);
+    const open = await make("進行中", bureau.id, false);
+    await submitRevision(ctx, open, { deadlineInHours: 48 });
+    const all = await ctx.works.list(100);
+    const full = await buildWorksDashboard(ctx, principals.manager, all);
+    const narrowed = await buildWorksDashboard(
+      ctx,
+      principals.manager,
+      all.filter((w) => w.lifecycle !== "finalized"),
+      { finalizedByTeam: { [bureau.id]: 1, [team.id]: 1, [bureau2.id]: 1, [NO_TEAM]: 1 } },
+    );
+    expect(narrowed).toEqual(full);
+    expect(full.overview.stages.finalized).toBe(4);
+    expect(full.overview.bureaus.find((b) => b.bureau === "制作局")).toMatchObject({
+      works: 3,
+      finalized: 2,
+    });
   });
 });

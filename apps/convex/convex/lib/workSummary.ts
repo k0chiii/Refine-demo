@@ -89,8 +89,35 @@ export async function syncWorkSummary(
     void _creationTime;
     if (!sameValue(stored, value)) await db.replace(_id, value);
   }
-  // 読んだスレッドを渡されたとき（スレッドの書込み）は、版の受付状態も割当・専門確認も変わらないので進み具合は触らない
-  if (!known) await syncWorkProgress(db, workDoc._id, summary.accepting?.id ?? null);
+  // 読んだスレッドを渡されたとき（スレッドの書込み）は、版の受付状態も割当・専門確認も変わらないので、
+  // 一覧の行・進み具合は触らない
+  if (!known) {
+    await syncWorkListCard(db, workDoc._id, summary);
+    await syncWorkProgress(db, workDoc._id, summary.accepting?.id ?? null);
+  }
+}
+
+/** 一覧の 1 行が要る値（最新の版の表示名・受付中の版の ID と期限・緊急・校了の宣言の数）。変わらなければ書かない */
+async function syncWorkListCard(db: DatabaseWriter, workId: Id<"works">, summary: WorkSummary) {
+  const value = {
+    workId,
+    latestLabel: summary.latest?.label ?? null,
+    acceptingId: summary.accepting?.id ?? null,
+    acceptingLabel: summary.accepting?.label ?? null,
+    acceptingDeadlineAt: summary.accepting?.deadlineAt ?? null,
+    acceptingReviewUrgent: summary.accepting?.reviewUrgent === true,
+    declared: summary.declared,
+  };
+  const existing = await db
+    .query("workListCards")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .unique();
+  if (!existing) await db.insert("workListCards", value);
+  else {
+    const { _id, _creationTime, ...stored } = existing;
+    void _creationTime;
+    if (!sameValue(stored, value)) await db.replace(_id, value);
+  }
 }
 
 /**

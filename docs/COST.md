@@ -237,3 +237,69 @@ READ_PROBE_SCALE=medium READ_PROBE_OUT=/tmp/probe.json pnpm --filter @mf100/conv
 - `dashboard.works` / `works.listMinePage`: 制作物の文書と要約を全件読むのが本体（60 + 24〜60 件）。残る無駄は進行中の制作物ごとの割当・専門確認の読み取り（`dashboard.works` の約 25%）で、校正者の人数・完了数と未完了の専門確認の数を `workSummaries` に持たせれば消える。ただし割当・専門確認の書込みすべてに要約の更新を足し、`summaryVersion` を上げて埋め直す変更になる。次の候補。
 - `notifications.list`: 読み取りの約 47% は、通知の先のコメントが削除されたかを見るためのスレッドの文書（20 件）。削除は稀なので、スレッドの文書ではなく「削除済みのスレッド」だけを引く索引（版 ×`deletedAt`）と、そのポート（両バックエンド）にできる。次の候補。
 - `dashboard.check` の残り: 自分の許可を全件読む `workPermissions`（約 28%）と、受付中の版を持つ制作物を見つけるための要約の読み取り（その後の `glanceWork` が同じ要約をもう一度読む）。
+
+## 10. 読み取りの実測（プローブ）第 2 弾（2026-11-20）
+
+第 1 弾（§9）の「手を付けなかったもの」を、「結果が使う文書だけを読む」から一歩進め、**1 回に読むバイト数**と**購読が再実行される範囲**の両方を減らした。道具・規模は §9 と同じ（`READ_PROBE_SCALE=medium`）。前 = `origin/develop`（第 1 弾のあと）、後 = この変更。**プローブの数字**であり、本番の計測値ではない。数え方の限界（`.filter()` で落ちた行を数えない・JSON の長さ）は §9 のとおり。
+
+| 問い合わせ（実行する人）                       | 前（docs / KB） | 後（docs / KB） | 変化（KB） |
+| ---------------------------------------------- | --------------- | --------------- | ---------- |
+| `revisions.get`（最新の版・指摘 20 件）        | 58 / 18.1       | 56 / 17.5       | -3%        |
+| `revisions.get`（前の版）                      | 22 / 7.0        | 20 / 6.5        | -8%        |
+| `dashboard.works`（制作者）                    | 162 / 70.5      | 86 / 42.4       | -40%       |
+| `works.listMinePage`（50 件のページ）          | 118 / 59.5      | 118 / 47.1      | -21%       |
+| `notifications.list`（制作者・20 件）          | 42 / 19.1       | 22 / 10.2       | -47%       |
+| `presence.heartbeat`（定常の心拍）             | 6 / 1.6         | 6 / 1.6         | 変更なし   |
+| `dashboard.check`（校正者）                    | 206 / 72.8      | 113 / 41.0      | -44%       |
+| `dashboard.make`（制作者）                     | 171 / 75.6      | 129 / 57.9      | -23%       |
+| `dashboard.checkBadge`（校正者）               | 27 / 8.7        | 27 / 6.7        | -22%       |
+| `home.submitTargets`（制作者）                 | 21 / 8.9        | 21 / 7.6        | -15%       |
+| `works.listMinePage`（全ページ・60 件）        | 156 / 74.4      | 156 / 59.4      | -20%       |
+| `comments.carryCandidates`（制作者）           | 22 / 8.6        | 22 / 8.6        | 変更なし   |
+| `dashboard.checkBadge`（校正者・印を埋める前） | 155 / 57.2      | 155 / 51.3      | -10%       |
+| `dashboard.check`（校正者・印を埋める前）      | 466 / 168.1     | 373 / 137.1     | -18%       |
+
+- **上位 5 本の合計**（`revisions.get`・`dashboard.works`・`works.listMinePage`・`presence.heartbeat`・`notifications.list`。本番のログの順）: 168.9KB → 118.8KB（**-29.7%**）。目標の -40% には届かなかった。残りの大半は「全制作物の文書そのもの」（`works` が `dashboard.works` で 21.9KB、`listMinePage` で 30.4KB）で、返す値に入る。これ以上は制作物の文書の複製（読む専用の表）を作る変更になるので見送った（下の「見送ったこと」）。`presence.heartbeat` と `works.get` はプローブの前の数字が無い（第 1 弾の表に無い）が、コードは変えていない。
+- **再実行の回数はプローブに出ない。** 下の「購読が再実行されなくなる範囲」が本番では効く（本番の I/O の大半は 1 回の大きさ × 再実行の回数）。数字にできていない。
+
+### 変えたこと
+
+| #   | 内容                                                                                                                                                                                                                                                                                                                          | 効いた問い合わせ                                                                         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1   | **受付中の版の校正の進み具合**（校正者の割当数・確認済み数・専門確認の数と未完了数）を、`workProgress`（制作物ごと 1 行）に持つ。割当・専門確認を書く経路（アダプタ）が同じ transaction で作り直す。要約（`workSummaries`）とは別の行にした（校正者が完了を押すたびに変わるので、要約に混ぜると要約を読む購読が再実行される） | `dashboard.works`（割当・専門確認 19KB → 行 5.5KB）、`dashboard.check`、`dashboard.make` |
+| 2   | **許可（ACL）は職責で足りるなら読まず、足りないときも本人の分だけ読む。** 制作物ごとの `isAllowed` は許可について単調（許可が増えて許されなくなることはない）なので、先に許可なしで判定し、false のときだけ本人の許可を読んで判定し直す（`isAllowedLazily`）。版の画面は `by_work_principal` の索引で本人の許可だけを引く     | `dashboard.check`（許可 72 件 → 0）、版の画面、通知、`markViewed`                        |
+| 3   | **削除されたコメントの通知**: スレッドの文書を 1 件ずつ読む代わりに、版の削除済みスレッドの ID を索引（`by_revision_deleted`。`deletedAt` が時刻の行だけ）で引く。ポート `threads.listDeletedIdsByRevision`（Convex・Cloudflare・インメモリ）。削除されていないスレッドの更新では通知の購読が再実行されなくなる               | `notifications.list` -9KB、`dashboard.make`                                              |
+| 4   | **一覧の行**（`workListCards`: 最新の版の表示名・受付中の版の ID / 表示名 / 期限 / 緊急・校了の宣言の数）。要約の約半分の大きさで、指摘・校正者の動きでは書き換わらない。`works.listMinePage`・`home.submitTargets`（ポート `workSummaries.findLabels`）・`acceptingWorkOf`（校正のバッジ・ダッシュボードの候補）が読む       | `listMinePage` -12KB、`submitTargets`、`checkBadge`                                      |
+| 5   | **校了した制作物の数**（`workCounters`: 主管担当ごとの数。1 行）。全体の状況（`dashboard.works`）は校了した制作物の文書を読まず、数（全体・段階・局）にだけ足す。行が無い・`allMembersCanView()` が偽のときは従来どおり全件                                                                                                   | `dashboard.works` -14.6KB                                                                |
+| 6   | **削除済みスレッドを読んで捨てない**（`by_revision_deleted` で `deletedAt` が無い行だけを引く。版の画面・要約・版の件数の数え直し）。プローブは `.filter()` で落ちた行を数えないので数字には出ないが、本番では削除したスレッドの分だけ読んでいた                                                                              | `revisions.get`、書込みの数え直し                                                        |
+| 7   | **edit 以上の許可の候補**を `by_principal_permission`（種別・主体・レベル・取消）で引く。校正者に付く review の許可を全件読んで捨てていた                                                                                                                                                                                     | `dashboard.check`・`dashboard.make`・提出先                                              |
+
+### 購読が再実行されなくなる範囲（プローブに出ない効果）
+
+- `works.listMinePage`・`home.submitTargets`（シェルの常時購読）: スレッドの投稿・採否・校正者の完了で、再実行されなくなった（要約ではなく一覧の行を読むため）。
+- `notifications.list`（シェルの常時購読）: 通知の先のスレッドへの返信・リアクション・既読の書込みで、再実行されなくなった（スレッドの文書を読まないため）。
+- 版の画面（`revisions.get`）: ほかの人への許可の付与・取消で再実行されなくなった。
+- 校正のバッジ（`dashboard.checkBadge`）: 受付中かの確認が要約でなく一覧の行になり、指摘の数の書込みで再実行されなくなった。
+
+### 認可の変更とテスト
+
+- 変えたのは「許可を読む量とタイミング」だけで、判定そのものは変えていない（`isAllowed`・`canViewWork` は domain のまま）。システム管理者・職責・許可の優先関係も同じ。
+- `isAllowedLazily` が、全操作 × 全主体 × 許可の組み合わせで「許可を全部渡した判定」と同じであること（`packages/application/src/__tests__/readNarrowing.test.ts`）。許可を読まなくてよいときに読まないこと。
+- 負の確認: 他の人への `manage`・`edit` は、職責も許可も無い人の `work.edit`・「割り当てる」に効かない。`review` の許可では「割り当てる」に出ない。取り消せば元に戻る（`readNarrowing.test.ts`、`dashboardSections.test.ts`、`apps/convex/convex/readNarrowing.test.ts`）。
+- `revisions.markViewed` は、閲覧は職責・ACL に依らず許される（105A）ので、許可を読まない `loadWorkAllowing` に替えた（判定は同じ）。
+
+### 派生データの作り方・取りこぼしたときの動き
+
+どれも「元の行を書いた同じ transaction で作り直す」派生データで、揃っていないときは読む側が従来の読み方に戻る（結果は同じ）。
+
+- `workProgress`: 行が無い・数えた版（`acceptingId`）が今の受付中の版と違うとき、割当・専門確認から数え直す。
+- `workListCards`: 行が無ければ要約→版の順に従来の読み方。
+- `workCounters`: 行が無ければ全件を読む。**割当・専門確認・制作物は、アダプタを通さずに書かない**（直接書くと数がずれる。シードのサンプルは行が揃わないので従来の読み方になる）。
+- バックフィル: `migrations:backfillWorkSummaries`（既存。`syncWorkSummary` が `workListCards`・`workProgress` も作る）と、`migrations:rebuildWorkCounters`（校了した制作物から数え直す内部 mutation）。手順は [PLATFORM_OPERATIONS.md](PLATFORM_OPERATIONS.md)。照合のテスト: `workProgress.test.ts`（書込みのたびに数え直した値と一致・行の欠け・古い行・埋め直し）、`workSummary.test.ts`（一覧の行と要約の一致）、`workCounters.test.ts`（増減と数え直しの一致・全件読みと同じ結果）。
+
+### 見送ったこと
+
+- **`works` の文書の複製（読む専用の軽い表）**: `dashboard.works` と一覧が読む文書の約 3 割（取りこぼしなく返す値）。複製を作る変更は、制作物の書込みごとの同期・バックフィル・差分テストの対象が大きい。未測定（見積りでは上位 5 本の合計をさらに 1〜2 割減らせる）。次の候補。
+- **要約の大きさ（最新と受付中の版が同じときの重複）**: 要約 1 行の約 25%。`summaryVersion` を上げる埋め直しが要る。上位 5 本の合計で 5% 未満の見積りなので見送った。
+- **`presence.heartbeat`**: 読むのは制作物の文書・利用者・presence の部品の行。制作物の文書を `workRoles` の存在確認に替えると 1 回 0.4KB 減るが、全体で 5% 未満の見積り。
+- **`dashboard.make` の通知（100 件を読んで 30 件に絞る）**: 59KB のうち 47KB。本番のログの上位に無いので手を付けていない（通知を新しい順に 30 件の種類で絞る索引が要る）。

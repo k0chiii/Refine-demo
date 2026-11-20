@@ -418,10 +418,30 @@ export async function listMyWorks(db: DatabaseReader, _principal: Principal): Pr
   return out;
 }
 
+/** 一覧の行が使う、受付中の版の値 */
+type ListAccepting = Pick<RevisionGlance, "id" | "deadlineAt" | "reviewUrgent">;
+
+/**
+ * 校了していない制作物（作成順。{@link listMyWorks} から校了を除いたものと同じ並び）。校了した制作物は数だけで足せる
+ * 全体の状況（dashboard.works）が、校了した制作物の文書を読まないために使う
+ */
+export async function listUnfinalizedWorks(db: DatabaseReader): Promise<Work[]> {
+  const docs = [];
+  for (const lifecycle of ["draft", "active", "on_hold", "cancelled"] as const)
+    docs.push(
+      ...(await db
+        .query("works")
+        .withIndex("by_lifecycle", (q) => q.eq("lifecycle", lifecycle))
+        .take(WORKS_SCAN_LIMIT)),
+    );
+  docs.sort((a, b) => a._creationTime - b._creationTime);
+  return docs.slice(0, WORKS_SCAN_LIMIT).map(workFromDoc);
+}
+
 function summarize(
   work: Work,
-  latest: RevisionGlance | null,
-  accepting: RevisionGlance | null,
+  latest: { label: string } | null,
+  accepting: ListAccepting | null,
   creators: string[],
 ) {
   return {
@@ -560,12 +580,38 @@ async function summarizeWorkList(
 ) {
   const app = createReadContext(ctx.db);
   const text = args.text?.trim().toLowerCase() ?? "";
-  const picked = [];
+  const picked: Array<{
+    work: Work;
+    latest: { label: string } | null;
+    accepting: ListAccepting | null;
+    declared: number;
+  }> = [];
   for (const work of mine) {
     if (args.year !== undefined && work.year !== args.year) continue;
     if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
     if (args.genre !== undefined && work.genre !== args.genre) continue;
     if (text && !workSearchText(work).includes(text)) continue;
+    // 一覧の行（workListCards。要約より小さく、指摘の数では書き換わらない）が揃っていれば、それだけを読む
+    const card = await ctx.db
+      .query("workListCards")
+      .withIndex("by_work", (q) => q.eq("workId", work.id as Id<"works">))
+      .unique();
+    if (card) {
+      picked.push({
+        work,
+        latest: card.latestLabel === null ? null : { label: card.latestLabel },
+        accepting:
+          card.acceptingId === null
+            ? null
+            : {
+                id: card.acceptingId,
+                deadlineAt: card.acceptingDeadlineAt ?? 0,
+                reviewUrgent: card.acceptingReviewUrgent,
+              },
+        declared: card.declared,
+      });
+      continue;
+    }
     // 要約が揃っていれば版を読まない。id だけの古い行は 2 件の版を、行が無ければ版の全件を読む
     const derived = await ctx.db
       .query("workSummaries")

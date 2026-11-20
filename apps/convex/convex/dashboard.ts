@@ -5,13 +5,19 @@ import {
   buildWorksDashboard,
   type AppContext,
 } from "@mf100/application";
-import { overridesAllPermissions, type Principal, type Work } from "@mf100/domain";
+import {
+  allMembersCanView,
+  overridesAllPermissions,
+  type Principal,
+  type Work,
+} from "@mf100/domain";
 import { internalQuery, query, type DatabaseReader, type QueryCtx } from "./_generated/server";
 import { createReadContext } from "./lib/adapters.ts";
 import { acceptingWorkOf, openAssignmentRevisionIds } from "./lib/assignmentOpen.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
-import { listMyWorks, listWorksRelatedTo } from "./works.ts";
+import { readFinalizedCounts } from "./lib/workCounters.ts";
+import { listMyWorks, listUnfinalizedWorks, listWorksRelatedTo } from "./works.ts";
 
 type Candidates = (db: DatabaseReader, principal: Principal) => Promise<Work[]>;
 
@@ -61,8 +67,30 @@ export const check = dashboardQuery(buildCheckDashboard, related(true));
 /** 制作の入口: 提出する・返事をする・自分が制作者の制作物の行・自分宛てのコメント */
 export const make = dashboardQuery(buildMakeDashboard, related(false));
 
-/** 制作物の一覧の先頭: 制作物の状況（数字・滞っている制作物・内訳）とピン留め */
-export const works = dashboardQuery(buildWorksDashboard);
+/**
+ * 制作物の一覧の先頭: 制作物の状況（数字・滞っている制作物・内訳）とピン留め。
+ * 校了した制作物は表の行にならず、数（全体・段階・局）にだけ効く。校了した数を持つ行（workCounters）が揃っていて、
+ * 校了した制作物を誰でも見られる（allMembersCanView）なら、校了した制作物の文書を読まずに数だけで足す。
+ * 行が無い（埋め直す前）・見られる人が限られる規則になったときは、従来どおり全件を読む
+ */
+export const works = query({
+  args: {},
+  handler: async (ctx: QueryCtx) => {
+    const { principal } = await requireUser(ctx);
+    const finalized = allMembersCanView() ? await readFinalizedCounts(ctx.db) : null;
+    const candidates = finalized
+      ? await listUnfinalizedWorks(ctx.db)
+      : await listMyWorks(ctx.db, principal);
+    return runUseCase(() =>
+      buildWorksDashboard(
+        createReadContext(ctx.db),
+        principal,
+        candidates,
+        finalized ? { finalizedByTeam: finalized } : {},
+      ),
+    );
+  },
+});
 
 /**
  * 校正のナビのバッジ（自分の手が要る数）: 未完了の割当（未着手・確認中）＋自分担当の未完了の専門確認。受付中の版だけ数える。

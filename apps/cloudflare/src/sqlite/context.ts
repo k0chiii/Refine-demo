@@ -530,6 +530,15 @@ export function createSqliteContext(
         // 書込み側が作り直した表を読む。行が無い・古い版の行だけ、元から数え直す（Convex の読みと同じ）
         return readWorkSummary(sql, workId) ?? computeWorkSummary(sql, work);
       },
+      findLabels: async (workId) => {
+        const work = works.get(workId);
+        if (!work) return null;
+        const summary = readWorkSummary(sql, workId) ?? computeWorkSummary(sql, work);
+        return {
+          latestLabel: summary.latest?.label ?? null,
+          acceptingLabel: summary.accepting?.label ?? null,
+        };
+      },
       findProgress: async (workId, acceptingId) => readWorkProgress(sql, workId, acceptingId),
     },
     home: {

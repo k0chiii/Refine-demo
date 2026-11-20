@@ -448,6 +448,13 @@ export interface WorkPin {
 export interface WorkSummaryRepository {
   findByWork(workId: WorkId): Promise<WorkSummary | null>;
   /**
+   * 最新の版・受付中の版の表示名だけ（提出先の候補など、ラベルだけ要る読み手向け）。指摘の数・校正者の動きでは変わらない
+   * 小さな行から読める実装なら、そちらを読む。行が揃っていなければ null（呼び出し側が findByWork か版から導く）
+   */
+  findLabels(
+    workId: WorkId,
+  ): Promise<{ latestLabel: string | null; acceptingLabel: string | null } | null>;
+  /**
    * 受付中の版（acceptingId）の校正の進み具合（割当・専門確認の数）。書込みの側が同じ transaction で作り直す派生データ。
    * 行が無い・別の版の分（古い）なら null: 呼び出し側が割当・専門確認から数え直す
    */

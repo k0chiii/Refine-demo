@@ -2,6 +2,7 @@ import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
+import { adjustFinalizedCount } from "./workCounters";
 import { syncWorkProgressOfRevision, syncWorkSummary, workSummaryFromDoc } from "./workSummary";
 import { isRevisionDocOpen, revisionOpenOf, syncAssignmentsOpen } from "./assignmentOpen";
 import type {
@@ -214,11 +215,14 @@ export function createAppContext(
         const id = await db.insert("works", compact(work as Strip<Doc<"works">>));
         const created = { ...work, id } as Work;
         await syncRoles(created);
+        await adjustFinalizedCount(db, null, created);
         return created;
       },
       async update(work) {
+        const before = await db.get("works", work.id as Id<"works">);
         await db.replace(work.id as Id<"works">, compact(toFields(work) as Strip<Doc<"works">>));
         await syncRoles(work);
+        await adjustFinalizedCount(db, before, work);
       },
       async list(limit) {
         const docs = await db.query("works").take(limit);
@@ -859,6 +863,13 @@ export function createAppContext(
           .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
           .unique();
         return doc && workSummaryFromDoc(doc);
+      },
+      async findLabels(workId) {
+        const card = await db
+          .query("workListCards")
+          .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+          .unique();
+        return card && { latestLabel: card.latestLabel, acceptingLabel: card.acceptingLabel };
       },
       async findProgress(workId, acceptingId) {
         const doc = await db

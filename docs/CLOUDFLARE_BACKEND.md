@@ -79,7 +79,7 @@ web の E2E の起こし方は spec の先頭のコメントにある。CI の�
 | R2 の清掃（`/internal/upload-orphans`）                   | `submissions:listOrphanObjects` / `markObjectsPurged`（Bearer `MF100_CLEANUP_SECRET`、利用者なし）。版・コメントの添付・試行を 1 本に束ねる                                         | 実装済 | 実際の R2 の削除は apps/api                                                                                                |
 | 全文検索（searchIndex 2 本）                              | SQLite FTS5。Convex と同じ 1/2-gram（`src/sqlite/workSearch.ts`）。本物の DO で通る                                                                                                 | 実装済 |                                                                                                                            |
 | ベクトル検索（vectorIndex 1 本）                          | ルールの埋め込みを SQLite に JSON で持ち、全件を JS でコサイン類似度（`semanticRules:search`）。埋め込みは apps/api の `/internal/ai/embed`                                         | 部分   | 実際のモデルでは未確認。千件を超えたら Vectorize                                                                           |
-| @convex-dev/aggregate                                     | `works` の `GROUP BY`。派生表の `workSummaries` / `workRoles` / `notificationCounters` は書き込みと同じトランザクションで作り直す                                                   | 実装済 | `workAggregateEntries` は持たない                                                                                          |
+| @convex-dev/aggregate                                     | `works` の `GROUP BY`。派生表の `workSummaries` / `workProgress` / `workRoles` / `notificationCounters` は書き込みと同じトランザクションで作り直す                                  | 実装済 | `workAggregateEntries` は持たない                                                                                          |
 | @convex-dev/migrations                                    | `migrate()` の `CREATE ... IF NOT EXISTS`                                                                                                                                           | 部分   | 既にある表へ列は足さない。本番の DO はまだ無いので不要                                                                     |
 | @convex-dev/presence                                      | `src/collab/store.ts`。同じ DO の表（心拍 60 秒、150 秒で切れ）                                                                                                                     | 実装済 |                                                                                                                            |
 | @convex-dev/prosemirror-sync                              | `collaboration:*`（`src/collab`）。1 行 1 ステップ。版の飛んだ送信は断る（Convex の部品より厳しい）                                                                                 | 実装済 |                                                                                                                            |
@@ -383,7 +383,7 @@ pnpm dev --port 8790     # .dev.vars に AUTH_PRIVATE_KEY_JWK が無ければ作
 
 - 取り込み先は、切り替え前の、まだ誰もサインインしていない空の DO が前提。先にサインインした人が同じ subject を別の id で持っていると、その行は取り込まない（`subject-taken-by-other-id`）。
 - 移さない表: 認証の状態（再サインインさせる）、AI の一時結果、Web Push の二重送り防止、集計・在席・rate limit・workpool・workflow の内部、`_storage`。`dashboardLayouts` と `recentWorks` は Cloudflare に表が無く、使っていないので移さない。
-- 移さず作り直す表: `workSummaries` / `workRoles` / `workSearch` / `notificationCounters`。
+- 移さず作り直す表: `workSummaries` / `workProgress` / `workRoles` / `workSearch` / `notificationCounters`。
 - 進行中の仕事（`processingJobs` の queued / running、open の `uploadSession`）は Convex の workpool・workflow に結び付いていて、移しても続きは動かない。切り替えは静かな時間に行い、verify の inflight で数を確かめる。
 
 ## 残る差と制限

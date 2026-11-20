@@ -189,6 +189,21 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     emails: new Map(),
   };
   const clock = new FakeClock(now);
+  /** 制作物の要約は、いつも元の行から導く（findByWork・findLabels が共有する。差し替えられても互いに影響しない） */
+  const summaryOf = (workId: string) => {
+    const work = state.works.get(workId);
+    if (!work) return null;
+    const revisions = state.revisions.all().filter((r) => r.workId === workId);
+    const focus = focusRevisionIdOf(revisionHeadsOf(revisions));
+    return workSummaryOf({
+      work,
+      revisions,
+      focusThreads: state.threads
+        .all()
+        .filter((t) => t.revisionId === focus && t.deletedAt === undefined),
+      approvalEvents: state.approvals.filter((e) => e.workId === workId),
+    });
+  };
   return {
     clock,
     state,
@@ -556,18 +571,16 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
     },
     workSummaries: {
       async findByWork(workId) {
-        const work = state.works.get(workId);
-        if (!work) return null;
-        const revisions = state.revisions.all().filter((r) => r.workId === workId);
-        const focus = focusRevisionIdOf(revisionHeadsOf(revisions));
-        return workSummaryOf({
-          work,
-          revisions,
-          focusThreads: state.threads
-            .all()
-            .filter((t) => t.revisionId === focus && t.deletedAt === undefined),
-          approvalEvents: state.approvals.filter((e) => e.workId === workId),
-        });
+        return summaryOf(workId);
+      },
+      async findLabels(workId) {
+        const summary = summaryOf(workId);
+        return (
+          summary && {
+            latestLabel: summary.latest?.label ?? null,
+            acceptingLabel: summary.accepting?.label ?? null,
+          }
+        );
       },
       async findProgress(workId, acceptingId) {
         const revision = state.revisions.get(acceptingId);

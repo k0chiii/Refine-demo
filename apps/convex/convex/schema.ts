@@ -365,6 +365,32 @@ export default defineSchema({
     .index("by_acceptingId", ["acceptingId"]),
 
   /**
+   * 制作物の一覧の 1 行が要る、版まわりの値だけを持つ小さな行（派生データ。lib/workSummary.ts の syncWorkSummary が作り直す）。
+   * 一覧（works.listMinePage）は要約（workSummaries。指摘の数まで持つ）の代わりにこれを読む: 読む量が約半分で、
+   * 指摘・校正者の動きでは書き換わらないので、一覧の購読が再実行されない
+   */
+  workListCards: defineTable({
+    workId: v.id("works"),
+    latestLabel: v.union(v.string(), v.null()),
+    acceptingId: v.union(v.string(), v.null()),
+    acceptingLabel: v.union(v.string(), v.null()),
+    acceptingDeadlineAt: v.union(v.number(), v.null()),
+    acceptingReviewUrgent: v.boolean(),
+    declared: v.number(),
+  })
+    .index("by_work", ["workId"])
+    /** 受付中の版から制作物を引く（校正のバッジ・ダッシュボードの候補。要約より小さい行で、受付中かも同時に分かる） */
+    .index("by_acceptingId", ["acceptingId"]),
+
+  /**
+   * 校了した制作物の数（主管担当ごと）。派生データ（lib/workCounters.ts）。1 行だけ。行が無い間は読む側が全件から数える
+   */
+  workCounters: defineTable({
+    name: v.literal("finalizedByTeam"),
+    counts: v.record(v.string(), v.number()),
+  }).index("by_name", ["name"]),
+
+  /**
    * 受付中の版の校正の進み具合（割当・専門確認の数）。派生データ（lib/workSummary.ts の syncWorkProgress）。
    * 要約（workSummaries）とは別の行: 校正者が完了を押すたびに変わるので、要約に混ぜると一覧・提出先の購読が再実行される。
    * acceptingId はこの数を数えた版。読む側は要約の受付中の版と照らし、違えば古いので割当・専門確認から数え直す

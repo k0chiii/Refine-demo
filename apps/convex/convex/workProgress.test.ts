@@ -155,7 +155,7 @@ describe("受付中の版の校正の進み具合（workProgress）", () => {
     expect(await readAll(cast)).toEqual(current);
   });
 
-  it("埋め直しの移行（要約の作り直し）で、消えた行が元に戻る", async () => {
+  it("埋め直しの移行（backfillWorkSummaries。syncWorkSummary）で、消えた行が元に戻る", async () => {
     const t = createHarness();
     const { workId } = await scenario(t);
     const want = await stored(t, workId);

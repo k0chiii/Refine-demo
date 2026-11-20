@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createCast, createHarness, createUser, HOUR, type TestUser } from "../test/harness";
 import { profileReads, type ReadProfile } from "../test/readProfile";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { createAppContext } from "./lib/adapters";
 import { syncWorkSummary } from "./lib/workSummary";
@@ -160,6 +160,8 @@ async function seed(): Promise<Seeded> {
     }
   }
   if (!openWork) throw new Error("probe: openWork を作れなかった");
+  // 本番で埋め直し（rebuildWorkCounters）を流したあとの状態にする
+  await t.mutation(internal.migrations.rebuildWorkCounters, {});
   return {
     t,
     heavyCreator: cast.creator,
@@ -282,6 +284,21 @@ describe("読み取りの量（計測）", () => {
     expect(results["comments.carryCandidates (creator)"]!.byTable.revisions!.docs).toBe(
       shape.revisions + 1,
     );
+  });
+
+  it("見張り: 全体の状況は割当・専門確認を読まず、一覧は要約を読まず、通知はスレッドを読まず、許可は読み捨てない", () => {
+    // 進み具合の行（workProgress）・一覧の行（workListCards）・削除済みスレッドの索引で足りるもの
+    expect(results["dashboard.works (creator)"]!.byTable.reviewAssignments).toBeUndefined();
+    expect(results["dashboard.works (creator)"]!.byTable.requiredChecks).toBeUndefined();
+    expect(results["works.listMinePage (1 page of 50)"]!.byTable.workSummaries).toBeUndefined();
+    expect(results["home.submitTargets (creator)"]!.byTable.workSummaries).toBeUndefined();
+    expect(results["notifications.list (creator)"]!.byTable.commentThreads).toBeUndefined();
+    // 校正者の review の許可は、edit 以上の候補を探すために読まない（索引の範囲に入らない）
+    expect(results["dashboard.check (reviewer)"]!.byTable.workPermissions).toBeUndefined();
+    // 版の画面は本人に当たる許可だけ（職責も許可も無い校正者の許可は 1 件）
+    expect(
+      results["revisions.get (latest)"]!.byTable.workPermissions?.docs ?? 0,
+    ).toBeLessThanOrEqual(1);
   });
 
   it("印が無い古い割当（移行の前）でも結果は同じで、読む量は移行前の水準（比べる用に記録）", async () => {

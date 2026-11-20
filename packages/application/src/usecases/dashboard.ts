@@ -187,6 +187,9 @@ export interface WorksDashboard extends Pick<
   summary: Pick<DashboardSummary, "dueSoon" | "overdue">;
 }
 
+/** 主管担当が未設定の制作物の数え方の鍵（校了した制作物の数。{@link buildWorksDashboard}） */
+export const NO_TEAM = "none";
+
 /** 閾値。制度ではなく表示の判断なので変更しやすいよう外に出す。 */
 export const dashboardPolicy = {
   staleAfterMs: 14 * 86_400_000,
@@ -406,6 +409,11 @@ interface OverviewParts {
   backlog: Dashboard["backlog"];
   /** 期限を過ぎたものも含む。{@link deadlinesAhead} で絞る */
   deadlines: DashboardItem[];
+  /**
+   * 校了した制作物のうち、1 件ずつ読まずに数だけ渡されたもの（局の名前ごと）。行は作らず、数（全体・段階・局）にだけ足す。
+   * 校了した制作物は表の行にならない（{@link openRows}）ので、数のほかに使うのは主管担当の局だけ
+   */
+  finalizedCounted: { bureau: string; count: number }[];
 }
 
 function emptyOverviewParts(
@@ -423,6 +431,7 @@ function emptyOverviewParts(
     checksPending: 0,
     backlog: { overdue: [], unassigned: [], stale: [], dueSoon: [] },
     deadlines: [],
+    finalizedCounted: [],
   };
 }
 
@@ -542,15 +551,19 @@ function openRows(rows: readonly WorkOverviewRow[]): WorkOverviewRow[] {
 }
 
 function overviewOf(parts: OverviewParts): DashboardOverview {
+  // 数だけ渡された校了の制作物は、校了の行 n 件と同じに数える（行そのものは校了の行なので表に出ない）
+  const counted = parts.finalizedCounted.flatMap(({ bureau, count }) =>
+    Array.from({ length: count }, () => ({ bureau, stage: "finalized" as const, unresolved: 0 })),
+  );
   return {
     asOf: parts.now,
-    total: parts.rows.length,
-    stages: tallyStages(parts.rows.map((r) => r.stage)),
+    total: parts.rows.length + counted.length,
+    stages: tallyStages([...parts.rows, ...counted].map((r) => r.stage)),
     threads: parts.threads,
     reviewers: parts.reviewers,
     checksPending: parts.checksPending,
     works: openRows(parts.rows),
-    bureaus: summarizeByBureau(parts.rows),
+    bureaus: summarizeByBureau([...parts.rows, ...counted]),
   };
 }
 
@@ -806,15 +819,28 @@ export async function buildMakeDashboard(
   };
 }
 
-/** 制作物の一覧の先頭（制作物の状況）とピン留めの節。通知と提出先の候補は読まない */
+/**
+ * 制作物の一覧の先頭（制作物の状況）とピン留めの節。通知と提出先の候補は読まない。
+ * finalizedByTeam は、`works` に含めなかった校了の制作物の数（主管担当の ID ごと。担当が未設定のものは "none"）。
+ * 校了した制作物は全体の数・段階・局の数にだけ効くので、1 件ずつ読まず数だけで足せる。
+ * 渡してよいのは、校了した制作物が誰にも見られる場合（{@link allMembersCanView}）だけで、呼び出し側が確かめる
+ */
 export async function buildWorksDashboard(
   ctx: AppContext,
   principal: Principal,
   works: Work[],
+  opts: { finalizedByTeam?: Readonly<Record<string, number>> } = {},
 ): Promise<WorksDashboard> {
   const grantsOf = myGrantsLoader(ctx, principal);
   const now = ctx.clock.now();
-  const parts = emptyOverviewParts(principal, await ctx.teams.list(), now);
+  const teams = await ctx.teams.list();
+  const parts = emptyOverviewParts(principal, teams, now);
+  for (const [teamId, count] of Object.entries(opts.finalizedByTeam ?? {}))
+    if (count > 0)
+      parts.finalizedCounted.push({
+        bureau: bureauNameOf(teamId === NO_TEAM ? undefined : teamId, teams),
+        count,
+      });
   for (const work of works) {
     if (!(await isVisible(ctx, principal, work, grantsOf))) continue;
     if (work.lifecycle !== "active") addInactiveRow(parts, work);
