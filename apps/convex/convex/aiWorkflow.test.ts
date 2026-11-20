@@ -104,3 +104,26 @@ describe("AI Workflow", () => {
     });
   });
 });
+describe("AI Workflow の一時結果の削除", () => {
+  it("期限の時刻に予約した削除が走り、cron なしで結果の行が消える", async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 9, 0, 0) });
+    try {
+      const { t, c, workId } = await setup();
+      vi.spyOn(provider, "createProvider").mockResolvedValue({
+        name: "Test",
+        model: "test",
+        proofread: async () => [],
+      });
+      const jobId = (await c.creator.as.mutation(api.aiWorkflow.start, {
+        workId,
+        draftVersion: 1,
+        consentToTemporaryStorage: true,
+      })) as Id<"aiJobs">;
+      expect(await t.run((ctx) => ctx.db.get(jobId))).not.toBeNull();
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+      expect(await t.run((ctx) => ctx.db.get(jobId))).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

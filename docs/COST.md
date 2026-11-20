@@ -61,7 +61,7 @@
 ### 2.3 Convex: 関数の種類・cron
 
 - **action は少ない**: `ai.proofread`（利用者が確認して押したときだけ。`apps/convex/convex/ai.ts:106`）、`deliveryNode.deliver`（外への届け先がある人への通知 1 件に 1 回。端末・メール・Slack をまとめて送る。`pushNode.deliver` を置き換えた）、`deliveryNode.resolveSlack`（Slack（DM）のスイッチを入れたときだけ）の 3 つ。mutation や query で足りるものを action にしている箇所はない。1 回の送信で書く mutation は 2 本から 1 本になり、送ったかを確かめる別の query は無くなった。メールは Resend の無料枠（3,000 通/月・100 通/日）が上限で、Slack の API の呼び出しに料金はかからない。
-- **cron**（`apps/convex/convex/crons.ts`）: 受付終了・リマインド・放置セッション・放置添付を毎時（月 約 2,900 回）。受付終了は表示のために書込みで購読を再実行させる必要がある（期限の判定自体は各 mutation の時刻比較で保証されるが、`revisions.get` は読み取りで時刻を読むため）。以前は 1 分ごとの cron（月 4.3 万回）でこれをしていたが、2026-11-20 から版の提出確定（`submissions.confirm`）が `scheduler.runAt(締切)` で `closeExpired` を予約する形に変えた。cron は予約が無い版の保険。期限は版を作るときにしか決まらず、後から変える機能は無い。`closeExpired` は期限を過ぎた版だけを閉じる冪等な処理なので、予約の取り消しは要らない。
+- **cron**（`apps/convex/convex/crons.ts`）: 受付終了・リマインド・放置セッション・放置添付を毎時（月 約 2,900 回）。受付終了は表示のために書込みで購読を再実行させる必要がある（期限の判定自体は各 mutation の時刻比較で保証されるが、`revisions.get` は読み取りで時刻を読むため）。以前は 1 分ごとの cron（月 4.3 万回）でこれをしていたが、2026-11-20 から版の提出確定（`submissions.confirm`）が `scheduler.runAt(締切)` で `closeExpired` を予約する形に変えた。cron は予約が無い版の保険。AI の一時結果の削除（`aiWorkflow.expire`）も 5 分ごとから、`aiWorkflow.start` が期限の時刻に予約する形にし、cron は毎時の保険にした（読み手は全て `expiresAt` を見て期限切れを返さない）。期限は版を作るときにしか決まらず、後から変える機能は無い。`closeExpired` は期限を過ぎた版だけを閉じる冪等な処理なので、予約の取り消しは要らない。
 - **大きな文書**: ファイル本体は R2 にあり Convex には入れていない。文章の下書き（`documentDrafts`）は本文を 2 重に（JSON と平文）持つが、書く人が限られ、量は小さい。
 - **ページネーション**: 一覧は上限つきの `take`（`listMyWorks` は 2,000 件、通知は 20 件）で、`.collect()` で無制限に読むのは `by_revision` / `by_work` のような**親で絞った小さな集合**と、表記統一のカテゴリ・ルール（400 件程度。今回、必要なカテゴリだけに絞った）だけ。
 - **使われていない問い合わせ**: `reviews.myQueue` は Web から呼ばれていなかったので消した（推奨 10）。

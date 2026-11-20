@@ -37,7 +37,7 @@ staging は専用 Convex/Worker/R2/Queue/Workflow/フロントエンド origin �
 | Convex           | `AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast`                                     | Worker の `WORKERS_AI_MODEL` と一致させる                                        |
 | Convex           | `RULE_EMBEDDINGS_ENABLED=true`                                                          | ルール本文の埋め込み送信と意味検索を有効化                                       |
 
-AI Gateway/Access/既存 upload/cleanup の秘密については [PLATFORM_IMPLEMENTATION.md](PLATFORM_IMPLEMENTATION.md) と [RECOVERY.md](RECOVERY.md) を参照。通常の同期 AI は本文・候補を保存しない。Workflow は利用者の一時保存同意が必要で、保存原稿の版を参照し、候補を本人にだけ最大 1 時間表示する。削除 cron は 5 分間隔。外部提供元の保持方針は別途確認する。
+AI Gateway/Access/既存 upload/cleanup の秘密については [PLATFORM_IMPLEMENTATION.md](PLATFORM_IMPLEMENTATION.md) と [RECOVERY.md](RECOVERY.md) を参照。通常の同期 AI は本文・候補を保存しない。Workflow は利用者の一時保存同意が必要で、保存原稿の版を参照し、候補を本人にだけ最大 1 時間表示する。削除は期限の時刻に予約した実行で行い（`aiWorkflow.start`）、cron は毎時の保険。外部提供元の保持方針は別途確認する。
 
 処理枠は利用者 20 件/日、作品 40 件/日、利用者の同時未完了 3 件。Workflow は最大 3 回の実行で同じ派生キーを使う。これは金額保証ではない。Stream の予約成功とその記録の間の障害では孤立動画が生じ得るため、Stream 側の job ID metadata も照合する。
 
