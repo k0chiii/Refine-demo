@@ -36,6 +36,9 @@ test.describe("スレッドの購読", { tag: "@core" }, () => {
     expect(threadId).toBeTruthy();
     const toggle = app.subscribeToggle(panel);
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    // 押した直後は画面（楽観更新）だけが「購読中」になり、保存はバックエンドの順番待ち。遅い環境ではその間にサインインし直す。
+    // そうなっても、押した人の操作として保存されること（購読が失われないこと）を、止めを入れて確かめる
+    await app.stallBackend(1_500);
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
 

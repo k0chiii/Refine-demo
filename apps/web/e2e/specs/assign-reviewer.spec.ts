@@ -68,8 +68,10 @@ test.describe("ユーザーの選択と日本語入力", { tag: "@core" }, () =>
     await expect(input).toHaveValue("ほんごう");
     await expect(chips).toHaveCount(0);
 
-    // ふつうの Enter（PC のキーボード）は、これまでどおり先頭の候補を決める
-    await expect(page.getByRole("option", { name: /ほんごう こうせい/ })).toBeVisible();
+    // ふつうの Enter（PC のキーボード）は、これまでどおり先頭の候補を決める。
+    // 検索は打ち止めてから問い合わせるので、絞り込みが届くまでは打つ前の一覧のまま（その中にも「ほんごう」はいる）。
+    // 「いる」ではなく、絞り込みが先頭に届いたことを待ってから押す（待たないと、古い一覧の先頭の人が入る）
+    await expect(page.getByRole("option").first()).toHaveText(/ほんごう こうせい/);
     await input.press("Enter");
     await expect(chips).toHaveCount(1);
     await expect(chips).toHaveText("ほんごう こうせい");

@@ -2,25 +2,26 @@ import { App, expect, test as base, WORKS_ENTRY } from "../support/app";
 
 /**
  * Cloudflare 版（`--mode cloudflare`。apps/cloudflare の Worker + Durable Object に向けた web）の疎通。
- * デモ版と違い、ブラウザの外にデータがある。このファイルだけは Worker と web を自分で起こして流す（CI の既定の対象ではない。
- * playwright.config.ts の webServer はデモ版なので、BASE_URL を渡して使わせない）。
+ * デモ版と違い、ブラウザの外にデータがある。だからデモ版の流れ（`pnpm e2e`・CI の e2e ジョブ）には含めない
+ * （playwright.config.ts が @cloudflare を外す）。専用の入口で流す。CI では e2e-cloudflare ジョブ。
  *
- *   # 1. Worker（空のデータから。web の origin を CORS に許す。制作者を管理者にして、登録できるようにする）
- *   cd apps/cloudflare && rm -rf .wrangler/state && \
- *     pnpm dev --port 8790 --var MF100_SYSTEM_ADMIN_SUBJECTS:mock-nogiku-creator --var ALLOWED_ORIGINS:http://localhost:5174
- *   # 2. web（ビルドして preview。VITE_* はビルドに焼き込まれる。`vp dev --mode cloudflare` でも動くが、dev は M3E の select が
- *   #    読み込みの競合で開かないことがあり（Lit の class-field-shadowing）、この spec は preview を前提にする）
- *   cd apps/web && VITE_CLOUDFLARE_URL=http://localhost:8790 VITE_NOGIKU_MOCK=true pnpm exec vp build --mode cloudflare && \
- *     pnpm exec vp preview --mode cloudflare --port 5174 --strictPort
- *   # 3. この spec（Worker の URL を 8790 以外にしたときは CLOUDFLARE_URL も。ブラウザは CHROMIUM_PATH で指定できる）
- *   cd apps/web && BASE_URL=http://localhost:5174 CLOUDFLARE_URL=http://localhost:8790 \
- *     pnpm exec playwright test e2e/specs/cloudflare-smoke.spec.ts
+ *   pnpm --filter @mf100/web e2e:cloudflare
+ *
+ * これが Worker（空のデータから。制作者を管理者にして登録できるようにし、web の origin を CORS に許す。127.0.0.1:8790）と
+ * web（`vp build --mode cloudflare` して preview。127.0.0.1:5174）を起こしてから、この spec だけを流す。
+ * preview を使うのは、dev だと M3E の select が読み込みの競合で開かないことがあるため（Lit の class-field-shadowing）。
+ * `localhost` ではなく 127.0.0.1 に揃えているのは、`localhost` が ::1 を先に引いて Worker（127.0.0.1 で待つ）に届かないため。
+ *
+ * 自分で起こしたものに向けるときは、Worker と web を手で起こし（apps/cloudflare の `pnpm dev --ip 127.0.0.1 --port 8790
+ * --var MF100_SYSTEM_ADMIN_SUBJECTS:mock-nogiku-creator --var ALLOWED_ORIGINS:<web の origin>`、apps/web を
+ * `VITE_CLOUDFLARE_URL=<Worker> VITE_NOGIKU_MOCK=true` で `vp build --mode cloudflare` → `vp preview --mode cloudflare`）、
+ * `BASE_URL=<web> CLOUDFLARE_URL=<Worker> E2E_CLOUDFLARE=1 pnpm exec playwright test` で流す。ブラウザは CHROMIUM_PATH で指定できる。
  *
  * 制作物の題名は実行のたびに変える（Worker のデータは spec をまたいで残るので、前回の分と取り違えない）。
  */
 // ルートからの vp check は node の型を持たないので、process は型を通さずに読む
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
-const CLOUDFLARE_URL = (env?.CLOUDFLARE_URL ?? "http://localhost:8790").replace(/\/$/, "");
+const CLOUDFLARE_URL = (env?.CLOUDFLARE_URL ?? "http://127.0.0.1:8790").replace(/\/$/, "");
 
 const test = base.extend<{ app: App }>({
   // デモの `__mf100demo` には頼らない。サインイン画面を開くだけ

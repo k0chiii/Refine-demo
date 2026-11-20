@@ -62,7 +62,7 @@
 
 - 手元: `pnpm check`・`pnpm test`・`pnpm typecheck`、画面に触れたら `pnpm --filter @mf100/web e2e:smoke`（デモ版のビルドから自動）と該当 spec。
 - PR: `verify` と `e2e-smoke`（`@smoke` と PWA）を同時に。
-- main: `verify`、spec を shard に分けた `e2e` と報告をまとめる `e2e-report`、撮影と a11y の `visual`（部ごと）。
+- main: `verify`、デモ版の全 spec（`@cloudflare` 以外）を流す `e2e`、Worker を起こして `@cloudflare` だけ流す `e2e-cloudflare`、撮影と a11y の `visual`（部ごと）。
 - 失敗の調査: Actions の成果物の HTML 報告に trace（操作ごとの DOM・ネットワーク・console）が入る。`pnpm exec playwright show-trace <trace.zip>`。
 - flaky は隠さない: CI のやり直しは 1 回だけで、やり直して通ったものは報告に flaky として残る。直すまで放置しない。
 
