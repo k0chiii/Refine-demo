@@ -17,7 +17,12 @@ import { acceptingWorkOf, openAssignmentRevisionIds } from "./lib/assignmentOpen
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { readFinalizedCounts } from "./lib/workCounters.ts";
-import { listMyWorks, listUnfinalizedWorks, listWorksRelatedTo } from "./works.ts";
+import {
+  listMyWorks,
+  listUnfinalizedWorks,
+  listWorksRelatedTo,
+  WORKS_SCAN_LIMIT,
+} from "./works.ts";
 
 type Candidates = (db: DatabaseReader, principal: Principal) => Promise<Work[]>;
 
@@ -71,25 +76,30 @@ export const make = dashboardQuery(buildMakeDashboard, related(false));
  * 制作物の一覧の先頭: 制作物の状況（数字・滞っている制作物・内訳）とピン留め。
  * 校了した制作物は表の行にならず、数（全体・段階・局）にだけ効く。校了した数を持つ行（workCounters）が揃っていて、
  * 校了した制作物を誰でも見られる（allMembersCanView）なら、校了した制作物の文書を読まずに数だけで足す。
- * 行が無い（埋め直す前）・見られる人が限られる規則になったときは、従来どおり全件を読む
+ * 行が無い（埋め直す前）・見られる人が限られる規則になったときは、従来どおり全件を読む。
+ * 従来の読み方は先頭 limit 件（作成順）で打ち切るので、数だけで足すのは、制作物の全体（校了していない分の文書＋校了の数）が
+ * limit に収まるときに限る。超えるときは、数の行の有無で結果が変わらないよう従来の読み方にする
  */
+export async function worksSection(ctx: QueryCtx, limit = WORKS_SCAN_LIMIT) {
+  const { principal } = await requireUser(ctx);
+  const counted = allMembersCanView() ? await readFinalizedCounts(ctx.db) : null;
+  const unfinalized = counted ? await listUnfinalizedWorks(ctx.db, limit) : null;
+  const finalizedTotal = counted ? Object.values(counted).reduce((sum, n) => sum + n, 0) : 0;
+  const narrowed = counted && unfinalized && unfinalized.length + finalizedTotal <= limit;
+  const candidates = narrowed ? unfinalized : await listMyWorks(ctx.db, principal, limit);
+  return runUseCase(() =>
+    buildWorksDashboard(
+      createReadContext(ctx.db),
+      principal,
+      candidates,
+      narrowed ? { finalizedByTeam: counted } : {},
+    ),
+  );
+}
+
 export const works = query({
   args: {},
-  handler: async (ctx: QueryCtx) => {
-    const { principal } = await requireUser(ctx);
-    const finalized = allMembersCanView() ? await readFinalizedCounts(ctx.db) : null;
-    const candidates = finalized
-      ? await listUnfinalizedWorks(ctx.db)
-      : await listMyWorks(ctx.db, principal);
-    return runUseCase(() =>
-      buildWorksDashboard(
-        createReadContext(ctx.db),
-        principal,
-        candidates,
-        finalized ? { finalizedByTeam: finalized } : {},
-      ),
-    );
-  },
+  handler: (ctx: QueryCtx) => worksSection(ctx),
 });
 
 /**

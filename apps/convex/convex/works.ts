@@ -406,15 +406,19 @@ export const listMine = query({
 });
 
 /** 一覧で読む制作物の上限（委員会の制作物は年度あたり高々数百件） */
-const WORKS_SCAN_LIMIT = 2000;
+export const WORKS_SCAN_LIMIT = 2000;
 
 /**
  * 自分が見られる制作物（105A: サインインした委員はすべて）。一覧・ダッシュボード・版提出の候補で共用。
  */
-export async function listMyWorks(db: DatabaseReader, _principal: Principal): Promise<Work[]> {
+export async function listMyWorks(
+  db: DatabaseReader,
+  _principal: Principal,
+  limit = WORKS_SCAN_LIMIT,
+): Promise<Work[]> {
   const app = createReadContext(db);
   const out: Work[] = [];
-  for (const work of await app.works.list(WORKS_SCAN_LIMIT)) out.push(work);
+  for (const work of await app.works.list(limit)) out.push(work);
   return out;
 }
 
@@ -425,17 +429,20 @@ type ListAccepting = Pick<RevisionGlance, "id" | "deadlineAt" | "reviewUrgent">;
  * 校了していない制作物（作成順。{@link listMyWorks} から校了を除いたものと同じ並び）。校了した制作物は数だけで足せる
  * 全体の状況（dashboard.works）が、校了した制作物の文書を読まないために使う
  */
-export async function listUnfinalizedWorks(db: DatabaseReader): Promise<Work[]> {
+export async function listUnfinalizedWorks(
+  db: DatabaseReader,
+  limit = WORKS_SCAN_LIMIT,
+): Promise<Work[]> {
   const docs = [];
   for (const lifecycle of ["draft", "active", "on_hold", "cancelled"] as const)
     docs.push(
       ...(await db
         .query("works")
         .withIndex("by_lifecycle", (q) => q.eq("lifecycle", lifecycle))
-        .take(WORKS_SCAN_LIMIT)),
+        .take(limit)),
     );
   docs.sort((a, b) => a._creationTime - b._creationTime);
-  return docs.slice(0, WORKS_SCAN_LIMIT).map(workFromDoc);
+  return docs.slice(0, limit).map(workFromDoc);
 }
 
 function summarize(

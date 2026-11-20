@@ -292,9 +292,9 @@ READ_PROBE_SCALE=medium READ_PROBE_OUT=/tmp/probe.json pnpm --filter @mf100/conv
 
 どれも「元の行を書いた同じ transaction で作り直す」派生データで、揃っていないときは読む側が従来の読み方に戻る（結果は同じ）。
 
-- `workProgress`: 行が無い・数えた版（`acceptingId`）が今の受付中の版と違うとき、割当・専門確認から数え直す。
+- `workProgress`: 割当・専門確認の書込みは、数が動くとき（追加・削除・完了／未完了の遷移）だけ行に差を足し、割当・専門確認は読み直さない。確認中への変更（pending → viewed）のように数が動かない書込みは、行を読みも書きもしない（同じ制作物の校正者が同時に版を開いても、行で OCC が衝突しない。名簿 N 人の同期の読み取りも N に比例）。行が無い・数えた版（`acceptingId`）が今の受付中の版と違う・差を足すと不整合になるときだけ、割当・専門確認から数え直す。
 - `workListCards`: 行が無ければ要約→版の順に従来の読み方。
-- `workCounters`: 行が無ければ全件を読む。**割当・専門確認・制作物は、アダプタを通さずに書かない**（直接書くと数がずれる。シードのサンプルは行が揃わないので従来の読み方になる）。
+- `workCounters`: 行が無ければ全件を読む。従来の読み方は先頭 2,000 件（作成順）で打ち切るので、数で足すのは「校了していない制作物の文書＋校了した数」が 2,000 に収まるときだけ（超えるときは行の有無で結果が変わらないよう従来の読み方）。**割当・専門確認・制作物は、アダプタを通さずに書かない**（直接書くと数がずれる。シードのサンプルは行が揃わないので従来の読み方になる）。
 - バックフィル: `migrations:backfillWorkSummaries`（既存。`syncWorkSummary` が `workListCards`・`workProgress` も作る）と、`migrations:rebuildWorkCounters`（校了した制作物から数え直す内部 mutation）。手順は [PLATFORM_OPERATIONS.md](PLATFORM_OPERATIONS.md)。照合のテスト: `workProgress.test.ts`（書込みのたびに数え直した値と一致・行の欠け・古い行・埋め直し）、`workSummary.test.ts`（一覧の行と要約の一致）、`workCounters.test.ts`（増減と数え直しの一致・全件読みと同じ結果）。
 
 ### 見送ったこと

@@ -2,7 +2,8 @@ import { workProgressOf } from "@mf100/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { createCast, createHarness, HOUR, type Harness } from "../test/harness";
+import { createCast, createHarness, createUser, HOUR, type Harness } from "../test/harness";
+import { profileReads } from "../test/readProfile";
 import { setupWork, submitFiles } from "../test/flows";
 import { createAppContext } from "./lib/adapters";
 import { syncWorkSummary } from "./lib/workSummary";
@@ -185,5 +186,135 @@ describe("受付中の版の校正の進み具合（workProgress）", () => {
     });
     expect(await stored(t, workId)).toEqual(before);
     expect(before?.acceptingId).toBe(second.revisionId);
+  });
+
+  /** 名簿に校正者を n 人載せる（制作物の準備と、人数ぶんの利用者） */
+  async function rosterOf(t: Harness, n: number) {
+    const cast = await createCast(t);
+    const workId = await setupWork(t, cast);
+    const { revisionId } = await submitFiles(cast, workId, pdf);
+    const reviewers = [];
+    for (let i = 0; i < n; i++) reviewers.push(await createUser(t, `r${n}-${i}`));
+    return { cast, workId, revisionId, reviewers };
+  }
+
+  it("確認中に変わるだけ（pending → viewed）の書込みは、進み具合の行も他の校正者の割当も読まず書かない", async () => {
+    const reads = [];
+    for (const n of [2, 12]) {
+      const t = createHarness();
+      const { cast, workId, revisionId, reviewers } = await rosterOf(t, n);
+      await cast.manager.as.mutation(api.reviews.setReviewers, {
+        workId,
+        reviewerIds: reviewers.map((r) => r.id),
+      });
+      const before = await stored(t, workId);
+      const viewed = await profileReads(() =>
+        reviewers[0]!.as.mutation(api.revisions.markViewed, { revisionId }),
+      );
+      // 割当の書込みは本人の 1 行だけ。進み具合の行は読みも書きもしない
+      expect(viewed.writes).toEqual({ reviewAssignments: 1 });
+      expect(viewed.byTable.workProgress).toBeUndefined();
+      reads.push(viewed.byTable.reviewAssignments?.docs);
+      expect(await stored(t, workId)).toEqual(before);
+      expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    }
+    // 校正者が 2 人でも 12 人でも、読む割当の数は同じ（他の人の行は読まない）
+    expect(reads[1]).toBe(reads[0]);
+    expect(reads[0]).toBeLessThanOrEqual(2);
+  });
+
+  it("確認中 → 完了は完了の数だけ足し、専門確認も数が動くときだけ行を書く", async () => {
+    const t = createHarness();
+    const { cast, workId, revisionId, reviewers } = await rosterOf(t, 3);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: reviewers.map((r) => r.id),
+    });
+    await reviewers[0]!.as.mutation(api.revisions.markViewed, { revisionId });
+    const done = await profileReads(() =>
+      reviewers[0]!.as.mutation(api.reviews.complete, { revisionId }),
+    );
+    expect(done.writes.workProgress).toBe(1);
+    expect(await stored(t, workId)).toMatchObject({ reviewers: { total: 3, done: 1 } });
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+
+    const checkId = await cast.manager.as.mutation(api.checks.add, {
+      revisionId,
+      type: "photo",
+      assigneeId: reviewers[1]!.id,
+    });
+    expect(await stored(t, workId)).toMatchObject({ checks: { total: 1, pending: 1 } });
+    // 状態が変わらない書込み（メモだけ）は進み具合の行を読まず書かない
+    const same = await profileReads(() =>
+      t.run(async (ctx) => {
+        const app = createAppContext(ctx);
+        await app.checks.update({ ...(await app.checks.findById(checkId))!, note: "メモ" });
+      }),
+    );
+    expect(same.writes).toEqual({ requiredChecks: 1 });
+    expect(same.byTable.workProgress).toBeUndefined();
+    // 完了にすると未完了の数が減る
+    await t.run(async (ctx) => {
+      const app = createAppContext(ctx);
+      await app.checks.update({
+        ...(await app.checks.findById(checkId))!,
+        state: "done",
+        doneBy: reviewers[1]!.id,
+      });
+    });
+    expect(await stored(t, workId)).toMatchObject({ checks: { total: 1, pending: 0 } });
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+  });
+
+  it("名簿に大勢を載せても割当の読み取りは人数に比例し、進み具合は数え直した値と同じ", async () => {
+    const readsOf = async (n: number) => {
+      const t = createHarness();
+      const { cast, workId, reviewers } = await rosterOf(t, n);
+      const ids = reviewers.map((r) => r.id);
+      const run = await profileReads(() =>
+        cast.manager.as.mutation(api.reviews.setReviewers, { workId, reviewerIds: ids }),
+      );
+      expect(await stored(t, workId)).toEqual(await recount(t, workId));
+      expect(await stored(t, workId)).toMatchObject({ reviewers: { total: n, done: 0 } });
+      // 一部を外し、一部を完了にしても、行は数え直した値のまま
+      await reviewers[0]!.as.mutation(api.reviews.complete, {
+        revisionId: (await recount(t, workId)).acceptingId as Id<"revisions">,
+      });
+      await cast.manager.as.mutation(api.reviews.setReviewers, {
+        workId,
+        reviewerIds: ids.slice(0, n - 10),
+      });
+      expect(await stored(t, workId)).toEqual(await recount(t, workId));
+      expect(await stored(t, workId)).toMatchObject({ reviewers: { total: n - 10, done: 1 } });
+      return run.byTable.reviewAssignments?.docs ?? 0;
+    };
+    const small = await readsOf(30);
+    const large = await readsOf(60);
+    // 1 人あたり定数（以前は 1 人追加するたびに全員を数え直したので 2 乗で増えた）
+    expect(small).toBeLessThanOrEqual(2 * 30);
+    expect(large).toBeLessThanOrEqual(2 * 60);
+    expect(large).toBeLessThanOrEqual(2.5 * small);
+  });
+
+  it("進み具合の行が無いときの割当の書込みは、割当・専門確認から作り直して数え直した値になる", async () => {
+    const t = createHarness();
+    const { cast, workId, revisionId, reviewers } = await rosterOf(t, 4);
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: reviewers.slice(0, 3).map((r) => r.id),
+    });
+    await cast.manager.as.mutation(api.checks.add, { revisionId, type: "photo" });
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("workProgress").collect()) await ctx.db.delete(row._id);
+    });
+    await cast.manager.as.mutation(api.reviews.setReviewers, {
+      workId,
+      reviewerIds: reviewers.map((r) => r.id),
+    });
+    expect(await stored(t, workId)).toEqual(await recount(t, workId));
+    expect(await stored(t, workId)).toMatchObject({
+      reviewers: { total: 4, done: 0 },
+      checks: { total: 1, pending: 1 },
+    });
   });
 });

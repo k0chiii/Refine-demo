@@ -157,11 +157,83 @@ export async function syncWorkProgress(
   }
 }
 
-/** 割当・専門確認を書いたあとに呼ぶ。その版が受付中なら、制作物の進み具合を作り直す（受付中でない版は数えない） */
-export async function syncWorkProgressOfRevision(db: DatabaseWriter, revisionId: string) {
-  const revision = await db.get("revisions", revisionId as Id<"revisions">);
-  if (revision && revision.reviewState === "open")
-    await syncWorkProgress(db, revision.workId, revision._id);
+type ProgressCounts = ReturnType<typeof workProgressOf>;
+
+/** 割当・専門確認 1 件の書込み（前 → 後。無ければ null）が、数に足す差。状態が変わっても数が動かなければ全部 0 */
+export function progressDelta(
+  before: { assignment?: { state: string }; check?: { state: string } } | null,
+  after: { assignment?: { state: string }; check?: { state: string } } | null,
+): ProgressCounts {
+  const counts = (side: typeof before) =>
+    workProgressOf({
+      assignments: side?.assignment ? [side.assignment as { state: never }] : [],
+      checks: side?.check ? [side.check as { state: never }] : [],
+    });
+  const b = counts(before);
+  const a = counts(after);
+  return {
+    reviewers: {
+      total: a.reviewers.total - b.reviewers.total,
+      done: a.reviewers.done - b.reviewers.done,
+    },
+    checks: {
+      total: a.checks.total - b.checks.total,
+      pending: a.checks.pending - b.checks.pending,
+    },
+  };
+}
+
+function isEmptyDelta(d: ProgressCounts): boolean {
+  return (
+    d.reviewers.total === 0 &&
+    d.reviewers.done === 0 &&
+    d.checks.total === 0 &&
+    d.checks.pending === 0
+  );
+}
+
+/**
+ * 割当・専門確認を書いたあとに呼ぶ。数が変わらない書込み（pending → viewed など）は何も読まず書かない。
+ * 変わるときは、その版が受付中なら、制作物の進み具合の行に差だけを足す（割当・専門確認は読み直さない）。
+ * 行が無い・数えた版が違う・足すと負になるときだけ、割当・専門確認から作り直す（受付中でない版は数えない）。
+ * 呼び出し側が版の文書を読んでいるときは渡す
+ */
+export async function applyWorkProgressDelta(
+  db: DatabaseWriter,
+  revisionId: string,
+  delta: ProgressCounts,
+  known?: Doc<"revisions"> | null,
+) {
+  if (isEmptyDelta(delta)) return;
+  const revision =
+    known !== undefined ? known : await db.get("revisions", revisionId as Id<"revisions">);
+  if (!revision || revision.reviewState !== "open") return;
+  const row = await db
+    .query("workProgress")
+    .withIndex("by_work", (q) => q.eq("workId", revision.workId))
+    .unique();
+  if (row && row.acceptingId === revision._id) {
+    const next = {
+      reviewers: {
+        total: row.reviewers.total + delta.reviewers.total,
+        done: row.reviewers.done + delta.reviewers.done,
+      },
+      checks: {
+        total: row.checks.total + delta.checks.total,
+        pending: row.checks.pending + delta.checks.pending,
+      },
+    };
+    const sane =
+      next.reviewers.done >= 0 &&
+      next.reviewers.done <= next.reviewers.total &&
+      next.checks.pending >= 0 &&
+      next.checks.pending <= next.checks.total;
+    if (sane) {
+      await db.patch(row._id, next);
+      return;
+    }
+  }
+  await syncWorkProgress(db, revision.workId, revision._id);
 }
 
 /** Skipping no-op replaces keeps list/dashboard subscriptions from re-running; stored key order is not ours. */

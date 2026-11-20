@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { createCast, createHarness, type Harness } from "../test/harness";
 import { profileReads } from "../test/readProfile";
 import { setupWork, submitFiles } from "../test/flows";
+import { worksSection } from "./dashboard";
 import { createAppContext } from "./lib/adapters";
 import { readFinalizedCounts } from "./lib/workCounters";
 
@@ -132,5 +133,28 @@ describe("校了した制作物の数（workCounters）", () => {
       for (const row of await ctx.db.query("workCounters").collect()) await ctx.db.delete(row._id);
     });
     expect(await readAll(cast)).toEqual(narrowed);
+  });
+
+  it("読む上限を超える数の制作物があっても、数の行が有っても無くても同じ結果を返す", async () => {
+    const t = createHarness();
+    const { cast, works } = await seed(t);
+    // 6 件: 校了 4・保留 1・進行中 1。作成順の先頭 4 件は全部校了
+    for (const id of works.slice(0, 4)) await setLifecycle(t, id, "finalized");
+    await setLifecycle(t, works[4]!, "on_hold");
+    const sectionAt = (limit: number) => cast.manager.as.run((ctx) => worksSection(ctx, limit));
+    const withoutRow: Record<number, unknown> = {};
+    const limits = [3, 4, 5, 6, 7, 100];
+    for (const limit of limits) withoutRow[limit] = await sectionAt(limit);
+    // 上限で打ち切る従来の読み方は、上限が小さいと校了の数を取りこぼす（この比較が意味を持つ前提）
+    expect(withoutRow[4]).not.toEqual(withoutRow[100]);
+
+    await t.mutation(internal.migrations.rebuildWorkCounters, {});
+    for (const limit of limits) expect(await sectionAt(limit)).toEqual(withoutRow[limit]);
+    // 収まるときは、数の行で校了した制作物の文書を読まない（上限が 6 以上）
+    const fits = await profileReads(() => cast.manager.as.run((ctx) => worksSection(ctx, 6)));
+    expect(fits.byTable.works?.docs).toBe(2);
+    // 収まらないときは従来どおり先頭から上限まで読む
+    const over = await profileReads(() => cast.manager.as.run((ctx) => worksSection(ctx, 5)));
+    expect(over.byTable.works?.docs).toBeGreaterThanOrEqual(5);
   });
 });

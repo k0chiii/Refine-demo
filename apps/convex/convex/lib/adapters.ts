@@ -3,8 +3,13 @@ import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
 import { adjustFinalizedCount } from "./workCounters";
-import { syncWorkProgressOfRevision, syncWorkSummary, workSummaryFromDoc } from "./workSummary";
-import { isRevisionDocOpen, revisionOpenOf, syncAssignmentsOpen } from "./assignmentOpen";
+import {
+  applyWorkProgressDelta,
+  progressDelta,
+  syncWorkSummary,
+  workSummaryFromDoc,
+} from "./workSummary";
+import { isRevisionDocOpen, syncAssignmentsOpen } from "./assignmentOpen";
 import type {
   AlignmentOverride,
   AppContext,
@@ -590,15 +595,22 @@ export function createAppContext(
           )
           .unique();
         const revisionId = assignment.revisionId as Id<"revisions">;
+        const revision = await db.get("revisions", revisionId);
         const fields = compact({
           ...assignment,
           revisionId,
           // 割当の印は版の今の状態から決める（replace で消えない・古い行にも付く）
-          revisionOpen: await revisionOpenOf(db, revisionId),
+          revisionOpen: revision !== null && isRevisionDocOpen(revision),
         });
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
-        await syncWorkProgressOfRevision(db, revisionId);
+        // 進み具合の行は、数が動くときだけ差を足す（pending → viewed は触らない）
+        await applyWorkProgressDelta(
+          db,
+          revisionId,
+          progressDelta(existing ? { assignment: existing } : null, { assignment }),
+          revision,
+        );
       },
       async delete(revisionId, reviewerId) {
         const existing = await db
@@ -609,7 +621,11 @@ export function createAppContext(
           .unique();
         if (existing) {
           await db.delete(existing._id);
-          await syncWorkProgressOfRevision(db, revisionId);
+          await applyWorkProgressDelta(
+            db,
+            revisionId,
+            progressDelta({ assignment: existing }, null),
+          );
         }
       },
     },
@@ -630,15 +646,28 @@ export function createAppContext(
           "requiredChecks",
           compact({ ...check, revisionId: check.revisionId as Id<"revisions"> }),
         );
-        await syncWorkProgressOfRevision(db, check.revisionId);
+        await applyWorkProgressDelta(db, check.revisionId, progressDelta(null, { check }));
         return { ...check, id } as RequiredCheck;
       },
       async update(check) {
+        const before = await db.get("requiredChecks", check.id as Id<"requiredChecks">);
         await db.replace(
           check.id as Id<"requiredChecks">,
           compact({ ...toFields(check), revisionId: check.revisionId as Id<"revisions"> }),
         );
-        await syncWorkProgressOfRevision(db, check.revisionId);
+        if (before && before.revisionId !== check.revisionId) {
+          await applyWorkProgressDelta(
+            db,
+            before.revisionId,
+            progressDelta({ check: before }, null),
+          );
+          await applyWorkProgressDelta(db, check.revisionId, progressDelta(null, { check }));
+        } else
+          await applyWorkProgressDelta(
+            db,
+            check.revisionId,
+            progressDelta(before ? { check: before } : null, { check }),
+          );
       },
     },
     pushSubscriptions: {
