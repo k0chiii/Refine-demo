@@ -37,6 +37,7 @@ import type {
   Work,
   WorkId,
   WorkPermissionGrant,
+  WorkProgress,
   WorkSummary,
   SocialProfile,
   Team,
@@ -117,6 +118,11 @@ export interface ThreadRepository {
   findByMigratedFrom(feedbackThreadId: string): Promise<CommentThread | null>;
   /** 版のスレッド。削除済み（deletedAt あり）は含めない（一覧・件数・未解決・校了の判定はこれで足りる） */
   listByRevision(revisionId: RevisionId): Promise<CommentThread[]>;
+  /**
+   * 版の削除済みスレッドの ID。削除は稀なので、通知の先が削除されたかを確かめるときに、スレッドの文書を 1 件ずつ読む代わりに使う
+   * （削除されていないスレッドの更新では読み集合が動かない）
+   */
+  listDeletedIdsByRevision(revisionId: RevisionId): Promise<string[]>;
   insert(thread: Omit<CommentThread, "id">): Promise<CommentThread>;
   /**
    * 同じ版のスレッドをまとめて足す（自動校正・企画情報の確認の指摘）。派生の件数（版・制作物の要約）は最後に 1 回だけ
@@ -303,6 +309,14 @@ export interface AclRepository {
   listForPrincipal(
     principal: Pick<Principal, "userId" | "groupIds">,
   ): Promise<WorkPermissionGrant[]>;
+  /**
+   * その制作物でその人（本人と所属グループ）に付いた許可（取消済みを含む）。listByWork から本人に当たる分だけを引く。
+   * 認可の判定（isAllowed）が見るのは本人に当たる許可だけなので、他の人の許可を読まずに済む
+   */
+  listForPrincipalOnWork(
+    workId: WorkId,
+    principal: Pick<Principal, "userId" | "groupIds">,
+  ): Promise<WorkPermissionGrant[]>;
   insert(grant: WorkPermissionGrant): Promise<void>;
   update(grant: WorkPermissionGrant): Promise<void>;
 }
@@ -433,6 +447,11 @@ export interface WorkPin {
  */
 export interface WorkSummaryRepository {
   findByWork(workId: WorkId): Promise<WorkSummary | null>;
+  /**
+   * 受付中の版（acceptingId）の校正の進み具合（割当・専門確認の数）。書込みの側が同じ transaction で作り直す派生データ。
+   * 行が無い・別の版の分（古い）なら null: 呼び出し側が割当・専門確認から数え直す
+   */
+  findProgress(workId: WorkId, acceptingId: RevisionId): Promise<WorkProgress | null>;
 }
 
 export interface HomeRepository {

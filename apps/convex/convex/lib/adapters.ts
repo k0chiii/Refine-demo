@@ -2,7 +2,7 @@ import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
-import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
+import { syncWorkProgressOfRevision, syncWorkSummary, workSummaryFromDoc } from "./workSummary";
 import { isRevisionDocOpen, revisionOpenOf, syncAssignmentsOpen } from "./assignmentOpen";
 import type {
   AlignmentOverride,
@@ -407,13 +407,24 @@ export function createAppContext(
         return doc ? (fromDoc(doc) as CommentThread) : null;
       },
       async listByRevision(revisionId) {
+        // 削除済みを読んで捨てない（索引で deletedAt の無い行だけを引く）
         const docs = await db
           .query("commentThreads")
-          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId as Id<"revisions">))
+          .withIndex("by_revision_deleted", (q) =>
+            q.eq("revisionId", revisionId as Id<"revisions">).eq("deletedAt", undefined),
+          )
           .collect();
-        return docs
-          .filter((d) => d.deletedAt === undefined)
-          .map((d) => fromDoc(d) as CommentThread);
+        return docs.map((d) => fromDoc(d) as CommentThread);
+      },
+      async listDeletedIdsByRevision(revisionId) {
+        // deletedAt が時刻の行だけ（undefined は数より前に並ぶので、0 以上で削除済みだけに当たる）
+        const docs = await db
+          .query("commentThreads")
+          .withIndex("by_revision_deleted", (q) =>
+            q.eq("revisionId", revisionId as Id<"revisions">).gte("deletedAt", 0),
+          )
+          .collect();
+        return docs.map((d) => d._id as string);
       },
       async insert(thread) {
         const id = await db.insert(
@@ -583,6 +594,7 @@ export function createAppContext(
         });
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
+        await syncWorkProgressOfRevision(db, revisionId);
       },
       async delete(revisionId, reviewerId) {
         const existing = await db
@@ -591,7 +603,10 @@ export function createAppContext(
             q.eq("revisionId", revisionId as Id<"revisions">).eq("reviewerId", reviewerId),
           )
           .unique();
-        if (existing) await db.delete(existing._id);
+        if (existing) {
+          await db.delete(existing._id);
+          await syncWorkProgressOfRevision(db, revisionId);
+        }
       },
     },
     checks: {
@@ -611,6 +626,7 @@ export function createAppContext(
           "requiredChecks",
           compact({ ...check, revisionId: check.revisionId as Id<"revisions"> }),
         );
+        await syncWorkProgressOfRevision(db, check.revisionId);
         return { ...check, id } as RequiredCheck;
       },
       async update(check) {
@@ -618,6 +634,7 @@ export function createAppContext(
           check.id as Id<"requiredChecks">,
           compact({ ...toFields(check), revisionId: check.revisionId as Id<"revisions"> }),
         );
+        await syncWorkProgressOfRevision(db, check.revisionId);
       },
     },
     pushSubscriptions: {
@@ -842,6 +859,15 @@ export function createAppContext(
           .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
           .unique();
         return doc && workSummaryFromDoc(doc);
+      },
+      async findProgress(workId, acceptingId) {
+        const doc = await db
+          .query("workProgress")
+          .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+          .unique();
+        // 数えた版が今の受付中の版と違えば古い（取りこぼし）。読む側が割当・専門確認から数え直す
+        if (!doc || doc.acceptingId !== acceptingId) return null;
+        return { reviewers: doc.reviewers, checks: doc.checks };
       },
     },
     home: {
@@ -1121,6 +1147,24 @@ export function createAppContext(
               q.eq("principalType", principalType).eq("principalId", principalId),
             )
             .take(1000))
+            out.push(stripGrant(doc));
+        return out;
+      },
+      async listForPrincipalOnWork(workId, principal) {
+        const out = [];
+        for (const [principalType, principalId] of [
+          ["user", principal.userId] as const,
+          ...principal.groupIds.map((id) => ["group", id] as const),
+        ])
+          for (const doc of await db
+            .query("workPermissions")
+            .withIndex("by_work_principal", (q) =>
+              q
+                .eq("workId", workId as Id<"works">)
+                .eq("principalType", principalType)
+                .eq("principalId", principalId),
+            )
+            .collect())
             out.push(stripGrant(doc));
         return out;
       },

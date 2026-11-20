@@ -2,6 +2,7 @@ import {
   countsDeclarations,
   focusRevisionIdOf,
   revisionHeadsOf,
+  workProgressOf,
   workSummaryOf,
   type ApprovalEvent,
   type Revision,
@@ -58,12 +59,12 @@ export async function syncWorkSummary(
     ? []
     : known && known.revisionId === focusId
       ? known.liveThreads
-      : (
-          await db
-            .query("commentThreads")
-            .withIndex("by_revision", (q) => q.eq("revisionId", focusId as Id<"revisions">))
-            .collect()
-        ).filter((t) => t.deletedAt === undefined);
+      : await db
+          .query("commentThreads")
+          .withIndex("by_revision_deleted", (q) =>
+            q.eq("revisionId", focusId as Id<"revisions">).eq("deletedAt", undefined),
+          )
+          .collect();
   const approvalEvents = countsDeclarations(work)
     ? ((await db
         .query("approvalEvents")
@@ -88,6 +89,52 @@ export async function syncWorkSummary(
     void _creationTime;
     if (!sameValue(stored, value)) await db.replace(_id, value);
   }
+  // 読んだスレッドを渡されたとき（スレッドの書込み）は、版の受付状態も割当・専門確認も変わらないので進み具合は触らない
+  if (!known) await syncWorkProgress(db, workDoc._id, summary.accepting?.id ?? null);
+}
+
+/**
+ * 受付中の版の校正の進み具合（workProgress）を、その版の割当・専門確認から作り直す。
+ * 呼ぶのは、受付中の版が変わりうる書込み（syncWorkSummary）と、割当・専門確認の書込み。変わらなければ書かない
+ */
+export async function syncWorkProgress(
+  db: DatabaseWriter,
+  workId: Id<"works">,
+  acceptingId: string | null,
+) {
+  const revisionId = acceptingId as Id<"revisions"> | null;
+  const progress = workProgressOf({
+    assignments: revisionId
+      ? await db
+          .query("reviewAssignments")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+          .collect()
+      : [],
+    checks: revisionId
+      ? await db
+          .query("requiredChecks")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+          .collect()
+      : [],
+  });
+  const value = { workId, acceptingId, ...progress };
+  const existing = await db
+    .query("workProgress")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .unique();
+  if (!existing) await db.insert("workProgress", value);
+  else {
+    const { _id, _creationTime, ...stored } = existing;
+    void _creationTime;
+    if (!sameValue(stored, value)) await db.replace(_id, value);
+  }
+}
+
+/** 割当・専門確認を書いたあとに呼ぶ。その版が受付中なら、制作物の進み具合を作り直す（受付中でない版は数えない） */
+export async function syncWorkProgressOfRevision(db: DatabaseWriter, revisionId: string) {
+  const revision = await db.get("revisions", revisionId as Id<"revisions">);
+  if (revision && revision.reviewState === "open")
+    await syncWorkProgress(db, revision.workId, revision._id);
 }
 
 /** Skipping no-op replaces keeps list/dashboard subscriptions from re-running; stored key order is not ours. */

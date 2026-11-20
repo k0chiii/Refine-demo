@@ -452,6 +452,30 @@ function summarize(
 }
 
 /**
+ * 本人（と所属グループ）に edit 以上の有効な許可がある制作物の ID。取消済みと review の許可は、索引の範囲に入らないので読まない
+ * （校正者には制作物ごとに review の許可が付くので、`by_principal` で全部読んで捨てていた分）
+ */
+async function editGrantWorkIds(db: DatabaseReader, principal: Principal): Promise<Id<"works">[]> {
+  const out: Id<"works">[] = [];
+  for (const [principalType, principalId] of [
+    ["user", principal.userId] as const,
+    ...principal.groupIds.map((id) => ["group", id] as const),
+  ])
+    for (const permission of ["edit", "manage"] as const)
+      for await (const grant of db
+        .query("workPermissions")
+        .withIndex("by_principal_permission", (q) =>
+          q
+            .eq("principalType", principalType)
+            .eq("principalId", principalId)
+            .eq("permission", permission)
+            .eq("revokedAt", undefined),
+        ))
+        out.push(grant.workId);
+  return out;
+}
+
+/**
  * 職責・割当・許可の索引から、自分に行が出うる制作物だけを読む（ダッシュボードの校正・制作の節）。works の全件は読まない。
  * - roles: workRoles に入っている自分の職責（制作者・統括・校了者）
  * - assignments: 自分の校正の割当（全状態）と専門確認の担当がある、受付中の版の制作物
@@ -469,20 +493,7 @@ export async function listWorksRelatedTo(
     .query("workRoles")
     .withIndex("by_user", (q) => q.eq("userId", principal.userId)))
     ids.add(row.workId);
-  for (const [principalType, principalId] of [
-    ["user", principal.userId] as const,
-    ...principal.groupIds.map((id) => ["group", id] as const),
-  ])
-    for await (const grant of db
-      .query("workPermissions")
-      .withIndex("by_principal", (q) =>
-        q.eq("principalType", principalType).eq("principalId", principalId),
-      ))
-      if (
-        grant.revokedAt === undefined &&
-        (grant.permission === "edit" || grant.permission === "manage")
-      )
-        ids.add(grant.workId);
+  for (const workId of await editGrantWorkIds(db, principal)) ids.add(workId);
   if (opts.assignments) {
     // 受付中の版の割当・専門確認だけが行になる。割当は「受付中の版の割当」の印の索引で引く（閉じた版の割当は読まない）。
     // 専門確認は担当している分を引き、版が受付中かを要約の索引で確かめる（受付中でなければ文書は読まない）
@@ -521,22 +532,7 @@ export async function listSubmissionCandidates(
   const ids = new Set<Id<"works">>();
   const roles = db.query("workRoles").withIndex("by_user", (q) => q.eq("userId", principal.userId));
   for await (const row of roles) ids.add(row.workId);
-  for (const [principalType, principalId] of [
-    ["user", principal.userId] as const,
-    ...principal.groupIds.map((id) => ["group", id] as const),
-  ]) {
-    for await (const grant of db
-      .query("workPermissions")
-      .withIndex("by_principal", (q) =>
-        q.eq("principalType", principalType).eq("principalId", principalId),
-      )) {
-      if (
-        grant.revokedAt === undefined &&
-        (grant.permission === "edit" || grant.permission === "manage")
-      )
-        ids.add(grant.workId);
-    }
-  }
+  for (const workId of await editGrantWorkIds(db, principal)) ids.add(workId);
   // Old installations never lose candidates while their derived index is repaired.
   for await (const work of db
     .query("works")

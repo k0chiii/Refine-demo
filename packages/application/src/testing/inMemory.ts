@@ -29,7 +29,7 @@ import type {
   Team,
   MemberGroup,
 } from "@mf100/domain";
-import { focusRevisionIdOf, revisionHeadsOf, workSummaryOf } from "@mf100/domain";
+import { focusRevisionIdOf, revisionHeadsOf, workProgressOf, workSummaryOf } from "@mf100/domain";
 import type {
   AlignmentOverride,
   AppContext,
@@ -291,6 +291,11 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
         null,
       listByRevision: async (revisionId) =>
         state.threads.all().filter((t) => t.revisionId === revisionId && t.deletedAt === undefined),
+      listDeletedIdsByRevision: async (revisionId) =>
+        state.threads
+          .all()
+          .filter((t) => t.revisionId === revisionId && t.deletedAt !== undefined)
+          .map((t) => t.id),
       insert: async (t) => state.threads.insert(t),
       insertMany: async (ts) => {
         const out = [];
@@ -382,6 +387,15 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
             (g) =>
               (g.principalType === "user" && g.principalId === p.userId) ||
               (g.principalType === "group" && p.groupIds.includes(g.principalId)),
+          )
+          .map((g) => clone(g)),
+      listForPrincipalOnWork: async (workId, p) =>
+        state.grants
+          .filter(
+            (g) =>
+              g.workId === workId &&
+              ((g.principalType === "user" && g.principalId === p.userId) ||
+                (g.principalType === "group" && p.groupIds.includes(g.principalId))),
           )
           .map((g) => clone(g)),
       insert: async (g) => {
@@ -553,6 +567,14 @@ export function createInMemoryContext(now = Date.UTC(2026, 10, 1)): InMemoryCont
             .all()
             .filter((t) => t.revisionId === focus && t.deletedAt === undefined),
           approvalEvents: state.approvals.filter((e) => e.workId === workId),
+        });
+      },
+      async findProgress(workId, acceptingId) {
+        const revision = state.revisions.get(acceptingId);
+        if (!revision || revision.workId !== workId) return null;
+        return workProgressOf({
+          assignments: state.assignments.filter((a) => a.revisionId === acceptingId),
+          checks: state.checks.all().filter((c) => c.revisionId === acceptingId),
         });
       },
     },

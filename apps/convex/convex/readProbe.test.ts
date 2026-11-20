@@ -213,6 +213,25 @@ describe("読み取りの量（計測）", () => {
     );
   });
 
+  it("presence.heartbeat / works.get", async () => {
+    const { heavyReviewer, openWork } = world;
+    const detail = await heavyReviewer.as.query(api.revisions.get, {
+      revisionId: openWork.revisionId,
+    });
+    const workId = detail.work.id;
+    // 1 回目は部屋・利用者の行を作る。2 回目以降（定常の心拍）を測る
+    await heavyReviewer.as.mutation(api.presence.heartbeat, {
+      workId,
+      sessionId: crypto.randomUUID(),
+    });
+    const sessionId = crypto.randomUUID();
+    await heavyReviewer.as.mutation(api.presence.heartbeat, { workId, sessionId });
+    await probe("presence.heartbeat (steady)", () =>
+      heavyReviewer.as.mutation(api.presence.heartbeat, { workId, sessionId }),
+    );
+    await probe("works.get", () => heavyReviewer.as.query(api.works.get, { workId }));
+  });
+
   it("dashboard.*", async () => {
     const { heavyReviewer, heavyCreator } = world;
     await probe("dashboard.works (creator)", () => heavyCreator.as.query(api.dashboard.works, {}));

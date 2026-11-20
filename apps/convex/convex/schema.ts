@@ -364,6 +364,18 @@ export default defineSchema({
     /** 受付中の版から制作物を引く（ダッシュボードの候補。版を読まずに、受付中かも同時に分かる） */
     .index("by_acceptingId", ["acceptingId"]),
 
+  /**
+   * 受付中の版の校正の進み具合（割当・専門確認の数）。派生データ（lib/workSummary.ts の syncWorkProgress）。
+   * 要約（workSummaries）とは別の行: 校正者が完了を押すたびに変わるので、要約に混ぜると一覧・提出先の購読が再実行される。
+   * acceptingId はこの数を数えた版。読む側は要約の受付中の版と照らし、違えば古いので割当・専門確認から数え直す
+   */
+  workProgress: defineTable({
+    workId: v.id("works"),
+    acceptingId: v.union(v.string(), v.null()),
+    reviewers: v.object({ total: v.number(), done: v.number() }),
+    checks: v.object({ total: v.number(), pending: v.number() }),
+  }).index("by_work", ["workId"]),
+
   workRoles: defineTable({
     workId: v.id("works"),
     userId: v.string(),
@@ -384,7 +396,11 @@ export default defineSchema({
     revokedAt: v.optional(v.number()),
   })
     .index("by_work", ["workId"])
-    .index("by_principal", ["principalType", "principalId"]),
+    .index("by_principal", ["principalType", "principalId"])
+    /** 本人の有効な（取消されていない）許可をレベル別に引く（ダッシュボードの候補は edit 以上だけ要る。review の許可は読まない） */
+    .index("by_principal_permission", ["principalType", "principalId", "permission", "revokedAt"])
+    /** その制作物でその人に付いた許可（認可の判定が見るのは本人に当たる許可だけ。他の人の許可を読まない） */
+    .index("by_work_principal", ["workId", "principalType", "principalId"]),
 
   revisions: defineTable({
     workId: v.id("works"),
@@ -549,6 +565,8 @@ export default defineSchema({
   })
     .index("by_revision", ["revisionId"])
     .index("by_revision_resolution", ["revisionId", "resolution"])
+    /** 版の生きているスレッド（deletedAt が無いもの）と、削除済みだけを、それぞれ読み捨てなしで引く */
+    .index("by_revision_deleted", ["revisionId", "deletedAt"])
     .index("by_migrated_from", ["migratedFromFeedbackThreadId"]),
 
   /** コメントのスレッドを最後に読んだ時刻（人 × スレッドで 1 行。未読の判定。FB の feedbackReads と同じ） */

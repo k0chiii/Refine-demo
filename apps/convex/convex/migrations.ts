@@ -36,6 +36,18 @@ export const backfillWorkSummaries = migrations.define({
 });
 
 /**
+ * 受付中の版の校正の進み具合（workProgress。割当・専門確認の数。lib/workSummary.ts の syncWorkProgress）を、制作物ごとに作る。
+ * 行の無い・数えた版が古い制作物は、読む側が割当・専門確認から数え直して動くので、流すまでは正しいまま少し多く読む。業務の値は変えない。
+ * Idempotent（変わらなければ書かない）。Operator-approved only: run after deploy（スキーマと読む側のデプロイのあと）、never as part of deployment.
+ */
+export const backfillWorkProgress = migrations.define({
+  table: "works",
+  migrateOne: async (ctx, doc) => {
+    await syncWorkSummary(ctx.db, doc._id);
+  },
+});
+
+/**
  * 校正の割当の「割当先の版が受付中か」（revisionOpen）を、版の今の状態から揃える（派生の印。lib/assignmentOpen.ts）。
  * 印の無い古い割当は読む側が版から確かめて動くので、流すまでは正しいまま少し多く読む。業務の値は変えない。
  * Idempotent。Operator-approved only: run after deploy（スキーマと読む側のデプロイのあと）、never as part of deployment.

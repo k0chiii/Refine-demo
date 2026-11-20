@@ -24,6 +24,7 @@ export function rebuildDerived(sql: Sql): void {
   // 古い行が残らないよう、行ごとに作り直す表は空にしてから入れる（workSearch は syncWorkSearch が rowid で突き合わせるので触らない）
   sql.exec("DELETE FROM workRoles");
   sql.exec("DELETE FROM workSummaries");
+  sql.exec("DELETE FROM workProgress");
   sql.exec("DELETE FROM notificationCounters");
 
   for (const r of sql.exec("SELECT id FROM revisions ORDER BY rowid"))

@@ -412,6 +412,7 @@ export const DROPPED: readonly { path: string; why: string }[] = [
 /** 移さず、取り込みのあとに元の行から作り直す表（sqlite/derived.ts。migrate/rebuild.ts が呼ぶ） */
 export const REBUILT: readonly { path: string; rebuiltAs: string }[] = [
   { path: "workSummaries", rebuiltAs: "workSummaries（syncWorkSummary）" },
+  { path: "workProgress", rebuiltAs: "workProgress（syncWorkSummary → syncWorkProgress）" },
   { path: "workRoles", rebuiltAs: "workRoles（syncWorkRoles）" },
   { path: "workSearch", rebuiltAs: "workSearch（FTS5。syncWorkSearch）" },
   { path: "notificationCounters", rebuiltAs: "notificationCounters（未読の数え直し）" },

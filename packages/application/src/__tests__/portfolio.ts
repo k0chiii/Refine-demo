@@ -82,6 +82,7 @@ export async function seedPortfolio() {
 
 export function withoutSummaries(ctx: InMemoryContext) {
   ctx.workSummaries.findByWork = async () => null;
+  ctx.workSummaries.findProgress = async () => null;
 }
 
 export const viewers = [
