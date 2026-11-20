@@ -38,8 +38,9 @@ describe("Convex 統合: ダッシュボードの節ごとの問い合わせ", (
     });
     const checked = await setupWork(t, cast, { title: "D" });
     const { revisionId: checkedRevision } = await submitFiles(cast, checked, pdf);
+    // 専門確認の書込みは本番と同じ経路（アダプタ）で行う。進み具合の行（workProgress）もここで揃う
     await t.run(async (ctx) => {
-      await ctx.db.insert("requiredChecks", {
+      await createAppContext(ctx).checks.insert({
         revisionId: checkedRevision,
         type: "photo",
         label: "写真",

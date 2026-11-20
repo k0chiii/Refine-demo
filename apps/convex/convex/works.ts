@@ -406,22 +406,49 @@ export const listMine = query({
 });
 
 /** 一覧で読む制作物の上限（委員会の制作物は年度あたり高々数百件） */
-const WORKS_SCAN_LIMIT = 2000;
+export const WORKS_SCAN_LIMIT = 2000;
 
 /**
  * 自分が見られる制作物（105A: サインインした委員はすべて）。一覧・ダッシュボード・版提出の候補で共用。
  */
-export async function listMyWorks(db: DatabaseReader, _principal: Principal): Promise<Work[]> {
+export async function listMyWorks(
+  db: DatabaseReader,
+  _principal: Principal,
+  limit = WORKS_SCAN_LIMIT,
+): Promise<Work[]> {
   const app = createReadContext(db);
   const out: Work[] = [];
-  for (const work of await app.works.list(WORKS_SCAN_LIMIT)) out.push(work);
+  for (const work of await app.works.list(limit)) out.push(work);
   return out;
+}
+
+/** 一覧の行が使う、受付中の版の値 */
+type ListAccepting = Pick<RevisionGlance, "id" | "deadlineAt" | "reviewUrgent">;
+
+/**
+ * 校了していない制作物（作成順。{@link listMyWorks} から校了を除いたものと同じ並び）。校了した制作物は数だけで足せる
+ * 全体の状況（dashboard.works）が、校了した制作物の文書を読まないために使う
+ */
+export async function listUnfinalizedWorks(
+  db: DatabaseReader,
+  limit = WORKS_SCAN_LIMIT,
+): Promise<Work[]> {
+  const docs = [];
+  for (const lifecycle of ["draft", "active", "on_hold", "cancelled"] as const)
+    docs.push(
+      ...(await db
+        .query("works")
+        .withIndex("by_lifecycle", (q) => q.eq("lifecycle", lifecycle))
+        .take(limit)),
+    );
+  docs.sort((a, b) => a._creationTime - b._creationTime);
+  return docs.slice(0, limit).map(workFromDoc);
 }
 
 function summarize(
   work: Work,
-  latest: RevisionGlance | null,
-  accepting: RevisionGlance | null,
+  latest: { label: string } | null,
+  accepting: ListAccepting | null,
   creators: string[],
 ) {
   return {
@@ -452,6 +479,30 @@ function summarize(
 }
 
 /**
+ * 本人（と所属グループ）に edit 以上の有効な許可がある制作物の ID。取消済みと review の許可は、索引の範囲に入らないので読まない
+ * （校正者には制作物ごとに review の許可が付くので、`by_principal` で全部読んで捨てていた分）
+ */
+async function editGrantWorkIds(db: DatabaseReader, principal: Principal): Promise<Id<"works">[]> {
+  const out: Id<"works">[] = [];
+  for (const [principalType, principalId] of [
+    ["user", principal.userId] as const,
+    ...principal.groupIds.map((id) => ["group", id] as const),
+  ])
+    for (const permission of ["edit", "manage"] as const)
+      for await (const grant of db
+        .query("workPermissions")
+        .withIndex("by_principal_permission", (q) =>
+          q
+            .eq("principalType", principalType)
+            .eq("principalId", principalId)
+            .eq("permission", permission)
+            .eq("revokedAt", undefined),
+        ))
+        out.push(grant.workId);
+  return out;
+}
+
+/**
  * 職責・割当・許可の索引から、自分に行が出うる制作物だけを読む（ダッシュボードの校正・制作の節）。works の全件は読まない。
  * - roles: workRoles に入っている自分の職責（制作者・統括・校了者）
  * - assignments: 自分の校正の割当（全状態）と専門確認の担当がある、受付中の版の制作物
@@ -469,20 +520,7 @@ export async function listWorksRelatedTo(
     .query("workRoles")
     .withIndex("by_user", (q) => q.eq("userId", principal.userId)))
     ids.add(row.workId);
-  for (const [principalType, principalId] of [
-    ["user", principal.userId] as const,
-    ...principal.groupIds.map((id) => ["group", id] as const),
-  ])
-    for await (const grant of db
-      .query("workPermissions")
-      .withIndex("by_principal", (q) =>
-        q.eq("principalType", principalType).eq("principalId", principalId),
-      ))
-      if (
-        grant.revokedAt === undefined &&
-        (grant.permission === "edit" || grant.permission === "manage")
-      )
-        ids.add(grant.workId);
+  for (const workId of await editGrantWorkIds(db, principal)) ids.add(workId);
   if (opts.assignments) {
     // 受付中の版の割当・専門確認だけが行になる。割当は「受付中の版の割当」の印の索引で引く（閉じた版の割当は読まない）。
     // 専門確認は担当している分を引き、版が受付中かを要約の索引で確かめる（受付中でなければ文書は読まない）
@@ -521,22 +559,7 @@ export async function listSubmissionCandidates(
   const ids = new Set<Id<"works">>();
   const roles = db.query("workRoles").withIndex("by_user", (q) => q.eq("userId", principal.userId));
   for await (const row of roles) ids.add(row.workId);
-  for (const [principalType, principalId] of [
-    ["user", principal.userId] as const,
-    ...principal.groupIds.map((id) => ["group", id] as const),
-  ]) {
-    for await (const grant of db
-      .query("workPermissions")
-      .withIndex("by_principal", (q) =>
-        q.eq("principalType", principalType).eq("principalId", principalId),
-      )) {
-      if (
-        grant.revokedAt === undefined &&
-        (grant.permission === "edit" || grant.permission === "manage")
-      )
-        ids.add(grant.workId);
-    }
-  }
+  for (const workId of await editGrantWorkIds(db, principal)) ids.add(workId);
   // Old installations never lose candidates while their derived index is repaired.
   for await (const work of db
     .query("works")
@@ -564,12 +587,38 @@ async function summarizeWorkList(
 ) {
   const app = createReadContext(ctx.db);
   const text = args.text?.trim().toLowerCase() ?? "";
-  const picked = [];
+  const picked: Array<{
+    work: Work;
+    latest: { label: string } | null;
+    accepting: ListAccepting | null;
+    declared: number;
+  }> = [];
   for (const work of mine) {
     if (args.year !== undefined && work.year !== args.year) continue;
     if (args.lifecycle !== undefined && work.lifecycle !== args.lifecycle) continue;
     if (args.genre !== undefined && work.genre !== args.genre) continue;
     if (text && !workSearchText(work).includes(text)) continue;
+    // 一覧の行（workListCards。要約より小さく、指摘の数では書き換わらない）が揃っていれば、それだけを読む
+    const card = await ctx.db
+      .query("workListCards")
+      .withIndex("by_work", (q) => q.eq("workId", work.id as Id<"works">))
+      .unique();
+    if (card) {
+      picked.push({
+        work,
+        latest: card.latestLabel === null ? null : { label: card.latestLabel },
+        accepting:
+          card.acceptingId === null
+            ? null
+            : {
+                id: card.acceptingId,
+                deadlineAt: card.acceptingDeadlineAt ?? 0,
+                reviewUrgent: card.acceptingReviewUrgent,
+              },
+        declared: card.declared,
+      });
+      continue;
+    }
     // 要約が揃っていれば版を読まない。id だけの古い行は 2 件の版を、行が無ければ版の全件を読む
     const derived = await ctx.db
       .query("workSummaries")

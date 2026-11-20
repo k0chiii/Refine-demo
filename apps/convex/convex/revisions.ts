@@ -2,7 +2,8 @@ import {
   acceptingRevisionIdOf,
   closeExpiredReviews,
   listCommentFileViews,
-  loadAuthorizedWork,
+  loadAuthorizedWorkOwnGrants,
+  loadWorkAllowing,
   markRevisionViewed,
   presentThreadActivity,
   remindUpcomingDeadlinesBatch,
@@ -38,7 +39,8 @@ export const get = query({
     return runUseCase(async () => {
       const revision = await app.revisions.findById(revisionId);
       if (!revision) throw new DomainError("forbidden", { revisionId });
-      const { work, grants } = await loadAuthorizedWork(
+      // 判定に使う許可は本人に当たる分だけ（制作物の許可を全件読まない）。他の人への許可の付与・取消で再実行されない
+      const { work, grants } = await loadAuthorizedWorkOwnGrants(
         app,
         principal,
         revision.workId,
@@ -171,7 +173,8 @@ export const markViewed = mutation({
       const app = createAppContext(ctx);
       const revision = await app.revisions.findById(revisionId);
       if (!revision) throw new DomainError("forbidden", { revisionId });
-      await loadAuthorizedWork(app, principal, revision.workId, "work.view");
+      // 閲覧は職責・ACL に依らず許される（105A）。許可は読まない
+      await loadWorkAllowing(app, principal, revision.workId, "work.view");
       await markRevisionViewed(app, principal, revisionId);
       return null;
     });

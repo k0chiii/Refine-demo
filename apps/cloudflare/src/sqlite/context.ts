@@ -44,9 +44,11 @@ import {
   adjustUnreadCounter,
   computeWorkSummary,
   readUnreadCount,
+  readWorkProgress,
   readWorkSummary,
   syncRevisionThreadStats,
   syncWorkRoles,
+  syncWorkProgressOfRevision,
   syncWorkSummary,
   threadCountsMayChange,
 } from "./derived.ts";
@@ -247,6 +249,10 @@ export function createSqliteContext(
         )[0] ?? null,
       listByRevision: async (revisionId) =>
         threads.select("WHERE revisionId = ? AND deletedAt IS NULL ORDER BY rowid", revisionId),
+      listDeletedIdsByRevision: async (revisionId) =>
+        threads
+          .select("WHERE revisionId = ? AND deletedAt IS NOT NULL ORDER BY rowid", revisionId)
+          .map((t) => t.id),
       // 版の件数と要約は、スレッドを書いたあとに数え直す（Convex の syncRevisionThreadStats と同じ）
       insert: async (t) => {
         const row = threads.insert(t);
@@ -325,8 +331,14 @@ export function createSqliteContext(
         assignments.select("WHERE revisionId = ? ORDER BY rowid", revisionId),
       find: async (revisionId, reviewerId) =>
         assignments.select("WHERE id = ?", keyOf(revisionId, reviewerId))[0] ?? null,
-      upsert: async (a) => assignments.upsert(keyOf(a.revisionId, a.reviewerId), a),
-      delete: async (revisionId, reviewerId) => assignments.delete(keyOf(revisionId, reviewerId)),
+      upsert: async (a) => {
+        assignments.upsert(keyOf(a.revisionId, a.reviewerId), a);
+        syncWorkProgressOfRevision(sql, a.revisionId);
+      },
+      delete: async (revisionId, reviewerId) => {
+        assignments.delete(keyOf(revisionId, reviewerId));
+        syncWorkProgressOfRevision(sql, revisionId);
+      },
     },
     acl: {
       listByWork: async (workId) => grants.select("WHERE workId = ? ORDER BY rowid", workId),
@@ -335,6 +347,15 @@ export function createSqliteContext(
           `WHERE (principalType = 'user' AND principalId = ?)
              OR (principalType = 'group' AND principalId IN (SELECT value FROM json_each(?)))
            ORDER BY rowid`,
+          p.userId,
+          JSON.stringify(p.groupIds),
+        ),
+      listForPrincipalOnWork: async (workId, p) =>
+        grants.select(
+          `WHERE workId = ? AND ((principalType = 'user' AND principalId = ?)
+             OR (principalType = 'group' AND principalId IN (SELECT value FROM json_each(?))))
+           ORDER BY rowid`,
+          workId,
           p.userId,
           JSON.stringify(p.groupIds),
         ),
@@ -371,8 +392,15 @@ export function createSqliteContext(
       findById: async (id) => checks.get(id),
       listByRevision: async (revisionId) =>
         checks.select("WHERE revisionId = ? ORDER BY rowid", revisionId),
-      insert: async (c) => checks.insert(c),
-      update: async (c) => checks.put(c),
+      insert: async (c) => {
+        const row = checks.insert(c);
+        syncWorkProgressOfRevision(sql, c.revisionId);
+        return row;
+      },
+      update: async (c) => {
+        checks.put(c);
+        syncWorkProgressOfRevision(sql, c.revisionId);
+      },
     },
     pushSubscriptions: {
       findById: async (id) => pushes.get(id),
@@ -502,6 +530,16 @@ export function createSqliteContext(
         // 書込み側が作り直した表を読む。行が無い・古い版の行だけ、元から数え直す（Convex の読みと同じ）
         return readWorkSummary(sql, workId) ?? computeWorkSummary(sql, work);
       },
+      findLabels: async (workId) => {
+        const work = works.get(workId);
+        if (!work) return null;
+        const summary = readWorkSummary(sql, workId) ?? computeWorkSummary(sql, work);
+        return {
+          latestLabel: summary.latest?.label ?? null,
+          acceptingLabel: summary.accepting?.label ?? null,
+        };
+      },
+      findProgress: async (workId, acceptingId) => readWorkProgress(sql, workId, acceptingId),
     },
     home: {
       listPins: async (userId) =>

@@ -11,7 +11,7 @@ import {
   type WorkPermissionGrant,
 } from "@mf100/domain";
 import type { AppContext, Notification, NotificationKind } from "../ports.ts";
-import { myGrantsLoader } from "../shared.ts";
+import { deletedThreadLoader, myGrantsLoader } from "../shared.ts";
 
 export interface NotifyInput {
   kind: NotificationKind;
@@ -82,26 +82,6 @@ function redact(n: Notification): Notification {
 /** 削除されたコメントの通知に出す文面。元の本文・抜粋は伏せ、コメントへの手がかり（ID）も返さない */
 export const DELETED_COMMENT_NOTIFICATION = { body: "削除されたコメントの通知です" } as const;
 
-/**
- * 通知の先のコメントが削除されたか（スレッドごとに 1 回だけ読む）。
- * 削除したコメントは一覧からも消える（紙面に印もカードも無い。返信のために残すこともしない）。
- */
-function deletedThreadLoader(ctx: AppContext) {
-  const cache = new Map<string, Promise<boolean>>();
-  return (n: Pick<Notification, "kind" | "threadId">): Promise<boolean> => {
-    if (n.threadId === undefined) return Promise.resolve(false);
-    let hit = cache.get(n.threadId);
-    if (!hit) {
-      hit = ctx.threads
-        .findById(n.threadId)
-        .then((t) => t !== null && t !== undefined && t.deletedAt !== undefined)
-        .catch(() => false);
-      cache.set(n.threadId, hit);
-    }
-    return hit;
-  };
-}
-
 /** 削除されたコメントの通知に変える（文面・抜粋を伏せ、消えたコメントへは飛ばさない） */
 function degradeDeletedComment(n: Notification): Notification {
   const { preview, threadId, ...rest } = n;
@@ -133,19 +113,27 @@ function subjectLoader(ctx: AppContext) {
 }
 
 /**
- * 一覧を読む本人から見た、通知の制作物。許可は本人の分を 1 回だけ読む（制作物ごとに ACL を読まない。
- * 見られるかの判定が見るのは本人に当たる許可だけ）
+ * 一覧を読む本人から見た、通知の制作物。見られるかは、職責などで足りるなら許可を読まずに判定し、足りないときだけ
+ * 本人の分の許可を 1 回だけ読む（制作物ごとに ACL を読まない。見られるかの判定が見るのは本人に当たる許可だけ）
  */
 function viewerSubjectLoader(ctx: AppContext, principal: Principal) {
   const grantsOf = myGrantsLoader(ctx, principal);
-  const cache = new Map<string, Promise<LoadedSubject>>();
-  return (workId: string): Promise<LoadedSubject> => {
+  const cache = new Map<string, Promise<{ work: Work; visible: boolean } | null>>();
+  return (workId: string) => {
     let hit = cache.get(workId);
     if (!hit) {
       hit = (async () => {
         const work = await ctx.works.findById(workId).catch(() => null);
         if (!work) return null;
-        return { work, grants: [...(await grantsOf(work.id))], teams: [] };
+        // canSeeNotificationSubject は許可について単調なので、許可なしで見られると分かれば許可を読まなくてよい
+        const visible =
+          canSeeNotificationSubject("work", { work, grants: [], principal }) ||
+          canSeeNotificationSubject("work", {
+            work,
+            grants: [...(await grantsOf(work.id))],
+            principal,
+          });
+        return { work, visible };
       })();
       cache.set(workId, hit);
     }
@@ -263,14 +251,7 @@ export async function presentNotifications(
       continue;
     }
     const loaded = await load(n.workId);
-    const visible =
-      loaded !== null &&
-      canSeeNotificationSubject("work", {
-        work: loaded.work,
-        grants: loaded.grants,
-        principal,
-      });
-    if (!visible) {
+    if (loaded === null || !loaded.visible) {
       out.push(redact(n));
       continue;
     }

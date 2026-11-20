@@ -79,6 +79,8 @@ describe("制作物の要約（workSummaries）", () => {
     );
 
     await t.run(async (ctx) => {
+      // 一覧の行（workListCards）が無い古い制作物も、要約から・版から同じ値を返す
+      for (const row of await ctx.db.query("workListCards").collect()) await ctx.db.delete(row._id);
       for (const row of await ctx.db.query("workSummaries").collect())
         await ctx.db.replace(row._id, {
           workId: row.workId,
@@ -93,6 +95,38 @@ describe("制作物の要約（workSummaries）", () => {
       for (const row of await ctx.db.query("workSummaries").collect()) await ctx.db.delete(row._id);
     });
     expect(await readAll(cast)).toEqual(current);
+  });
+
+  it("一覧の行（workListCards）は、書込みのたびに要約から作り直され、いつでも要約の値と一致する", async () => {
+    const t = createHarness();
+    const cast = await seed(t);
+    // 受付中の版を閉じ、新しい版を出し、校了の宣言の数が変わる書込みを通す
+    const check = async () =>
+      t.run(async (ctx) => {
+        const cards = await ctx.db.query("workListCards").collect();
+        const summaries = await ctx.db.query("workSummaries").collect();
+        expect(cards).toHaveLength(summaries.length);
+        for (const s of summaries) {
+          const c = cards.find((x) => x.workId === s.workId)!;
+          expect(c).toMatchObject({
+            latestLabel: s.latest?.label ?? null,
+            acceptingId: s.accepting?.id ?? null,
+            acceptingDeadlineAt: s.accepting?.deadlineAt ?? null,
+            acceptingReviewUrgent: s.accepting?.reviewUrgent === true,
+            declared: s.declared,
+          });
+        }
+      });
+    await check();
+    const list = await cast.manager.as.query(api.works.listMine, {});
+    const open = list.find((w) => w.title === "受付中")!;
+    vi.setSystemTime(Date.now() + HOUR);
+    await submitFiles(cast, open.id, pdf);
+    await check();
+    expect(
+      (await cast.manager.as.query(api.works.listMine, {})).find((w) => w.id === open.id)
+        ?.latestRevisionLabel,
+    ).toBe("第2版");
   });
 
   it("要約が揃っていれば、一覧・ダッシュボード・提出先は版とスレッドを読まない", async () => {

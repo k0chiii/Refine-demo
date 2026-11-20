@@ -4,7 +4,11 @@ import {
   focusRevisionIdOf,
   revisionHeadsOf,
   revisionThreadStatsOf,
+  workProgressOf,
   workSummaryOf,
+  type RequiredCheck,
+  type ReviewAssignment,
+  type WorkProgress,
   type ApprovalEvent,
   type CommentThread,
   type Revision,
@@ -92,6 +96,8 @@ export function syncWorkSummary(sql: Sql, workId: string, known?: KnownRevisionT
   const work = new Rows<Work>(sql, "works").select("WHERE id = ?", workId)[0];
   if (!work) return;
   const summary = computeWorkSummary(sql, work, known);
+  // スレッドの書込み（known）は受付状態も割当・専門確認も変えないので、進み具合は触らない
+  if (!known) syncWorkProgress(sql, workId, summary.accepting?.id ?? null);
   const value = {
     workId,
     latestId: summary.latest?.id ?? null,
@@ -103,6 +109,61 @@ export function syncWorkSummary(sql: Sql, workId: string, known?: KnownRevisionT
   // 同じ関数が同じ順で書くので、文字列が同じなら値も同じ
   if (stored?.doc === JSON.stringify(value)) return;
   new Rows<typeof value>(sql, "workSummaries").upsert(workId, value);
+}
+
+// ------------------------------------------------------------------ workProgress
+
+/** 表の行（id = workId）。doc の形は Convex の workProgress と同じ */
+interface ProgressRow extends WorkProgress {
+  workId: string;
+  /** この数を数えた版 */
+  acceptingId: string | null;
+}
+
+/**
+ * 受付中の版の進み具合を読む。行が無い・数えた版が今の受付中の版と違う（古い）なら null（読む側が割当・専門確認から数え直す。
+ * Convex の findProgress と同じ）
+ */
+export function readWorkProgress(
+  sql: Sql,
+  workId: string,
+  acceptingId: string,
+): WorkProgress | null {
+  const row = new Rows<ProgressRow>(sql, "workProgress").select("WHERE id = ?", workId)[0];
+  return row && row.acceptingId === acceptingId
+    ? { reviewers: row.reviewers, checks: row.checks }
+    : null;
+}
+
+/** 受付中の版の割当・専門確認から進み具合を作り直す。変わらなければ書かない（Convex の syncWorkProgress と同じ） */
+export function syncWorkProgress(sql: Sql, workId: string, acceptingId: string | null): void {
+  const progress = workProgressOf({
+    assignments: acceptingId
+      ? new Rows<ReviewAssignment>(sql, "assignments").select(
+          "WHERE revisionId = ? ORDER BY rowid",
+          acceptingId,
+        )
+      : [],
+    checks: acceptingId
+      ? new Rows<RequiredCheck>(sql, "checks").select(
+          "WHERE revisionId = ? ORDER BY rowid",
+          acceptingId,
+        )
+      : [],
+  });
+  const value = { workId, acceptingId, ...progress };
+  const [stored] = sql.exec("SELECT doc FROM workProgress WHERE id = ?", workId);
+  if (stored?.doc === JSON.stringify(value)) return;
+  new Rows<typeof value>(sql, "workProgress").upsert(workId, value);
+}
+
+/** 割当・専門確認を書いたあとに呼ぶ。その版が受付中なら、制作物の進み具合を作り直す（受付中でない版は数えない） */
+export function syncWorkProgressOfRevision(sql: Sql, revisionId: string): void {
+  const [rev] = sql.exec(
+    "SELECT json_extract(doc, '$.workId') AS workId, reviewState FROM revisions WHERE id = ?",
+    revisionId,
+  );
+  if (rev && rev.reviewState === "open") syncWorkProgress(sql, rev.workId as string, revisionId);
 }
 
 // ------------------------------------------------------------------ workRoles / workSearch

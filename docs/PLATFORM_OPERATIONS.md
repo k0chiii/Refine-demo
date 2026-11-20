@@ -49,6 +49,12 @@ AI Gateway/Access/既存 upload/cleanup の秘密については [PLATFORM_IMPLE
 
 `migrations:backfillAssignmentOpen` は校正の割当（`reviewAssignments`）の派生の印 `revisionOpen`（割当先の版が受付中か。2026-11-20。[COST.md](COST.md) §5・§9）を、版の今の状態から揃える。印は新しい書込みから自動で付く（版の受付状態を書く `revisions.update` が同じ transaction で割当の印も揃える）ので、流さなくても結果は変わらない。流すまでは印の無い古い割当を版から確かめるぶん、校正のバッジ・校正の入口の読み取りが従来の水準になる。配り終えてから運用者が `npx convex run migrations:backfillAssignmentOpen '{dryRun: true}' --prod`、続けて `--prod` で流し、`npx convex run --component migrations lib:getStatus --prod` で終わりを確かめる。何度流しても同じ。業務の値（割当の状態）は変えない。
 
+`migrations:backfillWorkSummaries` は制作物ごとの要約 `workSummaries` に加えて、読み取りを減らす派生の行 `workListCards`（制作物の一覧の行）と `workProgress`（受付中の版の校正の進み具合。割当・専門確認の数。2026-11-20。[COST.md](COST.md) §10）を作る。行は新しい書込みから自動で作り直される（割当・専門確認・版・校了の書込みが同じ transaction で揃える）ので、流さなくても結果は変わらない。流すまでは、行の無い制作物を従来の読み方（要約・版・割当・専門確認）で読むので、一覧・全体の状況の読み取りが減らない。配り終えてから運用者が `npx convex run migrations:backfillWorkSummaries '{dryRun: true}' --prod`、続けて `--prod` で流し、`npx convex run --component migrations lib:getStatus --prod` で終わりを確かめる。何度流しても同じ（変わらなければ書かない）。業務の値は変えない。
+
+`migrations:rebuildWorkCounters` は校了した制作物の数 `workCounters`（主管担当ごと。全体の状況が校了した制作物の文書を読まずに数えるため。[COST.md](COST.md) §10）を、校了した制作物から数え直して 1 行にする内部 mutation（1 回の mutation で校了した制作物を読む。数百件を想定）。**行ができるまで全体の状況は全件を読んで同じ値を返す**ので、流すまで結果は変わらない。行ができたあとは制作物を書くアダプタが同じ transaction で増減する。配り終えてから運用者が `npx convex run migrations:rebuildWorkCounters --prod` を 1 回流す（何度流しても同じ。制作物を書く操作と同時に流しても、1 つの transaction なので数は崩れない）。
+
+デプロイの順: Convex のスキーマ（表 `workProgress`・`workListCards`・`workCounters`、索引 `commentThreads.by_revision_deleted`・`workPermissions.by_work_principal`・`by_principal_permission`）と関数を同時に配る（索引の埋め込みが終わるまで配備は完了しない）→ `backfillWorkSummaries` → `rebuildWorkCounters`。Web は変えていない（問い合わせの形・戻りは同じ）。Cloudflare 側（`apps/cloudflare`）は同じポートを SQLite で実装しており、表 `workProgress` が増える（取り込みのあと `rebuildDerived` が作り直す）。
+
 埋め込みは有効化後に変更されたルールを更新する。既存ルールは `semanticRules.indexRule` を管理用 internal action として必要な ruleId ごとに実行する。対象は有効な現行ルール、モデルは bge-m3/1024 次元。意味検索の結果は現行版・適用カテゴリ・作品 ACL で再照合する。モデル変更時は別索引で作り直す。
 
 共同編集は通常保存の完了後に「共同編集を開始」する。切替後に古いクライアントから通常保存すると拒否する。提出済み版の原本・座標・コメントは書き換えない。デモの DB はタブごとに独立するため、共同編集/Presence/外部処理は本バックエンドで受入確認する。

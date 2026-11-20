@@ -391,6 +391,14 @@ export const DROPPED: readonly { path: string; why: string }[] = [
     path: "workAggregateEntries",
     why: "集計 component の入力。Cloudflare は works を GROUP BY で数える（sqlite/derived.ts）",
   },
+  {
+    path: "workListCards",
+    why: "制作物の一覧の行（Convex の読み取りを減らす派生表）。Cloudflare は要約（workSummaries）から読む",
+  },
+  {
+    path: "workCounters",
+    why: "校了した制作物の数（Convex の読み取りを減らす派生表）。Cloudflare は制作物から数える",
+  },
   // component の内部
   { path: "_components/presence", why: "在席。心拍で作り直る" },
   { path: "_components/rateLimiter", why: "rate limit の窓。短命" },
@@ -412,6 +420,7 @@ export const DROPPED: readonly { path: string; why: string }[] = [
 /** 移さず、取り込みのあとに元の行から作り直す表（sqlite/derived.ts。migrate/rebuild.ts が呼ぶ） */
 export const REBUILT: readonly { path: string; rebuiltAs: string }[] = [
   { path: "workSummaries", rebuiltAs: "workSummaries（syncWorkSummary）" },
+  { path: "workProgress", rebuiltAs: "workProgress（syncWorkSummary → syncWorkProgress）" },
   { path: "workRoles", rebuiltAs: "workRoles（syncWorkRoles）" },
   { path: "workSearch", rebuiltAs: "workSearch（FTS5。syncWorkSearch）" },
   { path: "notificationCounters", rebuiltAs: "notificationCounters（未読の数え直し）" },

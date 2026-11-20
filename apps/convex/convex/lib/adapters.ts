@@ -2,8 +2,14 @@ import { syncWorkAggregate } from "./workAggregate";
 import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
-import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
-import { isRevisionDocOpen, revisionOpenOf, syncAssignmentsOpen } from "./assignmentOpen";
+import { adjustFinalizedCount } from "./workCounters";
+import {
+  applyWorkProgressDelta,
+  progressDelta,
+  syncWorkSummary,
+  workSummaryFromDoc,
+} from "./workSummary";
+import { isRevisionDocOpen, syncAssignmentsOpen } from "./assignmentOpen";
 import type {
   AlignmentOverride,
   AppContext,
@@ -214,11 +220,14 @@ export function createAppContext(
         const id = await db.insert("works", compact(work as Strip<Doc<"works">>));
         const created = { ...work, id } as Work;
         await syncRoles(created);
+        await adjustFinalizedCount(db, null, created);
         return created;
       },
       async update(work) {
+        const before = await db.get("works", work.id as Id<"works">);
         await db.replace(work.id as Id<"works">, compact(toFields(work) as Strip<Doc<"works">>));
         await syncRoles(work);
+        await adjustFinalizedCount(db, before, work);
       },
       async list(limit) {
         const docs = await db.query("works").take(limit);
@@ -407,13 +416,24 @@ export function createAppContext(
         return doc ? (fromDoc(doc) as CommentThread) : null;
       },
       async listByRevision(revisionId) {
+        // 削除済みを読んで捨てない（索引で deletedAt の無い行だけを引く）
         const docs = await db
           .query("commentThreads")
-          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId as Id<"revisions">))
+          .withIndex("by_revision_deleted", (q) =>
+            q.eq("revisionId", revisionId as Id<"revisions">).eq("deletedAt", undefined),
+          )
           .collect();
-        return docs
-          .filter((d) => d.deletedAt === undefined)
-          .map((d) => fromDoc(d) as CommentThread);
+        return docs.map((d) => fromDoc(d) as CommentThread);
+      },
+      async listDeletedIdsByRevision(revisionId) {
+        // deletedAt が時刻の行だけ（undefined は数より前に並ぶので、0 以上で削除済みだけに当たる）
+        const docs = await db
+          .query("commentThreads")
+          .withIndex("by_revision_deleted", (q) =>
+            q.eq("revisionId", revisionId as Id<"revisions">).gte("deletedAt", 0),
+          )
+          .collect();
+        return docs.map((d) => d._id as string);
       },
       async insert(thread) {
         const id = await db.insert(
@@ -575,14 +595,22 @@ export function createAppContext(
           )
           .unique();
         const revisionId = assignment.revisionId as Id<"revisions">;
+        const revision = await db.get("revisions", revisionId);
         const fields = compact({
           ...assignment,
           revisionId,
           // 割当の印は版の今の状態から決める（replace で消えない・古い行にも付く）
-          revisionOpen: await revisionOpenOf(db, revisionId),
+          revisionOpen: revision !== null && isRevisionDocOpen(revision),
         });
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
+        // 進み具合の行は、数が動くときだけ差を足す（pending → viewed は触らない）
+        await applyWorkProgressDelta(
+          db,
+          revisionId,
+          progressDelta(existing ? { assignment: existing } : null, { assignment }),
+          revision,
+        );
       },
       async delete(revisionId, reviewerId) {
         const existing = await db
@@ -591,7 +619,14 @@ export function createAppContext(
             q.eq("revisionId", revisionId as Id<"revisions">).eq("reviewerId", reviewerId),
           )
           .unique();
-        if (existing) await db.delete(existing._id);
+        if (existing) {
+          await db.delete(existing._id);
+          await applyWorkProgressDelta(
+            db,
+            revisionId,
+            progressDelta({ assignment: existing }, null),
+          );
+        }
       },
     },
     checks: {
@@ -611,13 +646,28 @@ export function createAppContext(
           "requiredChecks",
           compact({ ...check, revisionId: check.revisionId as Id<"revisions"> }),
         );
+        await applyWorkProgressDelta(db, check.revisionId, progressDelta(null, { check }));
         return { ...check, id } as RequiredCheck;
       },
       async update(check) {
+        const before = await db.get("requiredChecks", check.id as Id<"requiredChecks">);
         await db.replace(
           check.id as Id<"requiredChecks">,
           compact({ ...toFields(check), revisionId: check.revisionId as Id<"revisions"> }),
         );
+        if (before && before.revisionId !== check.revisionId) {
+          await applyWorkProgressDelta(
+            db,
+            before.revisionId,
+            progressDelta({ check: before }, null),
+          );
+          await applyWorkProgressDelta(db, check.revisionId, progressDelta(null, { check }));
+        } else
+          await applyWorkProgressDelta(
+            db,
+            check.revisionId,
+            progressDelta(before ? { check: before } : null, { check }),
+          );
       },
     },
     pushSubscriptions: {
@@ -842,6 +892,22 @@ export function createAppContext(
           .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
           .unique();
         return doc && workSummaryFromDoc(doc);
+      },
+      async findLabels(workId) {
+        const card = await db
+          .query("workListCards")
+          .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+          .unique();
+        return card && { latestLabel: card.latestLabel, acceptingLabel: card.acceptingLabel };
+      },
+      async findProgress(workId, acceptingId) {
+        const doc = await db
+          .query("workProgress")
+          .withIndex("by_work", (q) => q.eq("workId", workId as Id<"works">))
+          .unique();
+        // 数えた版が今の受付中の版と違えば古い（取りこぼし）。読む側が割当・専門確認から数え直す
+        if (!doc || doc.acceptingId !== acceptingId) return null;
+        return { reviewers: doc.reviewers, checks: doc.checks };
       },
     },
     home: {
@@ -1121,6 +1187,24 @@ export function createAppContext(
               q.eq("principalType", principalType).eq("principalId", principalId),
             )
             .take(1000))
+            out.push(stripGrant(doc));
+        return out;
+      },
+      async listForPrincipalOnWork(workId, principal) {
+        const out = [];
+        for (const [principalType, principalId] of [
+          ["user", principal.userId] as const,
+          ...principal.groupIds.map((id) => ["group", id] as const),
+        ])
+          for (const doc of await db
+            .query("workPermissions")
+            .withIndex("by_work_principal", (q) =>
+              q
+                .eq("workId", workId as Id<"works">)
+                .eq("principalType", principalType)
+                .eq("principalId", principalId),
+            )
+            .collect())
             out.push(stripGrant(doc));
         return out;
       },

@@ -6,6 +6,7 @@ import {
   submitRouteFor,
   type MediaType,
   type Principal,
+  type Revision,
   type SubmitRoute,
   type SubmitTargetPolicy,
   type Work,
@@ -75,6 +76,14 @@ export interface SubmitTarget {
   acceptingLabel: string | null;
 }
 
+function labelsOf(revisions: readonly Revision[]) {
+  const heads = revisionHeadsOf(revisions);
+  return {
+    latestLabel: heads.latest?.label ?? null,
+    acceptingLabel: heads.accepting?.label ?? null,
+  };
+}
+
 /**
  * 自分が版を提出できる制作物を締切（納期）順に。`works` は呼び出し側が「自分が関わる制作物」に絞って渡す。
  * 閲覧と提出の権限はここで必ず確かめる（{@link isSubmitTarget} が `revision.submit` を見る）。
@@ -105,18 +114,19 @@ export async function listSubmitTargets(
     if (!isSubmitTarget(authz, { accepting: null }, { ...policy, includeAccepting: true }))
       continue;
     if (!(await canView(ctx, principal, work, grants))) continue;
-    const heads =
-      (await ctx.workSummaries.findByWork(work.id)) ??
-      revisionHeadsOf(await ctx.revisions.listByWork(work.id));
-    if (!isSubmitTarget(authz, heads, policy)) continue;
+    // ラベルだけ要るので、指摘の数まで持つ要約ではなく、版まわりだけの小さな行を読む（指摘の書込みで再実行されない）
+    const labels =
+      (await ctx.workSummaries.findLabels(work.id)) ??
+      labelsOf(await ctx.revisions.listByWork(work.id));
+    if (!isSubmitTarget(authz, { accepting: labels.acceptingLabel }, policy)) continue;
     out.push({
       workId: work.id,
       workTitle: work.title,
       mediaType: work.mediaType,
       route: submitRouteFor(work.mediaType),
       deadlineAt: work.deadlineAt ?? null,
-      latestLabel: heads.latest?.label ?? null,
-      acceptingLabel: heads.accepting?.label ?? null,
+      latestLabel: labels.latestLabel,
+      acceptingLabel: labels.acceptingLabel,
     });
   }
   return out.sort(

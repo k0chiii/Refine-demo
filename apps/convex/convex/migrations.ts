@@ -5,6 +5,7 @@ import type { GenericDataModel } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { syncWorkRoles, workFromDoc } from "./lib/adapters.ts";
 import { rebuildAssignmentOpen } from "./lib/assignmentOpen";
+import { rebuildFinalizedCounts } from "./lib/workCounters";
 import { syncWorkSummary } from "./lib/workSummary";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./lib/workSearch";
 import { recountUnread } from "./lib/notificationCounters";
@@ -25,8 +26,10 @@ export const backfillWorkRoles = migrations.define({
 });
 
 /**
- * Fill `workSummaries` to summaryVersion 2 for every work.
- * Idempotent. Operator-approved only (CLAUDE.md). Run via Migrations component / dashboard, not deploy.
+ * Fill `workSummaries` to summaryVersion 2 for every work. 同じ関数（syncWorkSummary）が、派生の
+ * `workListCards`（一覧の行）と `workProgress`（受付中の版の校正の進み具合）も作る。
+ * 行の無い制作物は、読む側が要約・割当・専門確認から数え直して動く（流すまでは正しいまま少し多く読む）。業務の値は変えない。
+ * Idempotent（変わらなければ書かない）。Operator-approved only (CLAUDE.md). Run via Migrations component / dashboard, not deploy.
  */
 export const backfillWorkSummaries = migrations.define({
   table: "works",
@@ -74,4 +77,17 @@ export const backfillNotificationCounters = migrations.define({
   migrateOne: async (ctx, user) => {
     await recountUnread(ctx.db, user._id);
   },
+});
+
+/**
+ * 校了した制作物の数（workCounters。主管担当ごと）を、校了した制作物から数え直して 1 行にする。
+ * 行ができるまでは、全体の状況（dashboard.works）は全件を読んで同じ値を返す（流すまでは正しいまま少し多く読む）。行ができたあとは
+ * 制作物を書く経路（アダプタ）が同じ transaction で増減する。業務の値は変えない。
+ * 1 回の mutation で校了した制作物を読む（数百件）。Idempotent（変わらなければ書かない）。
+ * Operator-approved only: run after deploy（スキーマと読む側のデプロイのあと）、never as part of deployment.
+ * 例: `npx convex run migrations:rebuildWorkCounters`
+ */
+export const rebuildWorkCounters = internalMutation({
+  args: {},
+  handler: async (ctx) => rebuildFinalizedCounts(ctx.db),
 });
