@@ -109,6 +109,12 @@ export async function acceptingWorkOf(
   db: DatabaseReader,
   revisionId: Id<"revisions">,
 ): Promise<Id<"works"> | null> {
+  // 一覧の行（要約より小さい）で引く。行が無い古い制作物は要約で引く
+  const card = await db
+    .query("workListCards")
+    .withIndex("by_acceptingId", (q) => q.eq("acceptingId", revisionId))
+    .first();
+  if (card) return card.workId;
   const summary = await db
     .query("workSummaries")
     .withIndex("by_acceptingId", (q) => q.eq("acceptingId", revisionId))

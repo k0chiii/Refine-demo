@@ -6,6 +6,8 @@ import {
   type Revision,
   type RevisionKind,
 } from "../revision/Revision.ts";
+import type { RequiredCheck } from "../review/RequiredCheck.ts";
+import type { ReviewAssignment } from "../review/ReviewAssignment.ts";
 import type { RevisionId } from "../shared/ids.ts";
 import type { Instant } from "../shared/time.ts";
 import { approvalSetupOf } from "../work/approvers.ts";
@@ -110,5 +112,34 @@ export function workSummaryOf(input: {
     declared: countsDeclarations(work)
       ? approvalProgressOf(work, input.approvalEvents, revisions).declaredIds.length
       : 0,
+  };
+}
+
+/**
+ * 受付中の版の校正の進み具合（校正者の割当と専門確認の数）。全体の状況の表が、割当・専門確認を 1 件ずつ読まずに使う値。
+ * 要約（{@link WorkSummary}）とは別の行に持つ: 校正者が完了を押すたびに変わるので、要約に混ぜると
+ * 要約だけを読む一覧・提出先の購読まで再実行される。受付中の版が無ければ全部 0
+ */
+export interface WorkProgress {
+  /** 割り当てた校正者の数と、確認を終えた数（完了・免除） */
+  reviewers: { total: number; done: number };
+  /** 専門確認の数と、未完了の数 */
+  checks: { total: number; pending: number };
+}
+
+export function workProgressOf(input: {
+  assignments: ReadonlyArray<Pick<ReviewAssignment, "state">>;
+  checks: ReadonlyArray<Pick<RequiredCheck, "state">>;
+}): WorkProgress {
+  return {
+    reviewers: {
+      total: input.assignments.length,
+      done: input.assignments.filter((a) => a.state === "responded" || a.state === "excused")
+        .length,
+    },
+    checks: {
+      total: input.checks.length,
+      pending: input.checks.filter((c) => c.state === "pending").length,
+    },
   };
 }

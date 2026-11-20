@@ -29,11 +29,10 @@ export async function syncRevisionThreadStats(db: DatabaseWriter, revisionId: st
   const revision = await db.get(id);
   // 以前は patch が投げていた（無い版へのスレッドは書込みごと失敗させる）
   if (!revision) throw new Error(`revision not found: ${revisionId}`);
-  const docs = await db
+  const live = await db
     .query("commentThreads")
-    .withIndex("by_revision", (q) => q.eq("revisionId", id))
+    .withIndex("by_revision_deleted", (q) => q.eq("revisionId", id).eq("deletedAt", undefined))
     .collect();
-  const live = docs.filter((d) => d.deletedAt === undefined);
   const stats = revisionThreadStatsOf(live);
   // 同じ値の patch でも版を読んだ購読（revisions.get・版の一覧）が走り直すので、変わったときだけ書く
   if (

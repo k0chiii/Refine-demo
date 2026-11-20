@@ -12,7 +12,11 @@ export interface ReadProfile extends TableReads {
   /** 索引の範囲・ページの読み取りを始めた回数（点読みの get は含めない） */
   ranges: number;
   byTable: Record<string, TableReads>;
+  /** 書込み（insert / patch / replace / delete）の回数。表ごと（変わらない書込みを書かないことの見張り用） */
+  writes: Record<string, number>;
 }
+
+const WRITE_OPS = new Set(["1.0/insert", "1.0/shallowMerge", "1.0/replace", "1.0/remove"]);
 
 interface Syscalls {
   syscall: (op: string, args: string) => string;
@@ -64,6 +68,11 @@ function install() {
       return async (op: string, args: string) => {
         const out = await a(op, args);
         if (!active) return out;
+        if (WRITE_OPS.has(op)) {
+          const parsed = decode(args);
+          const table = parsed?.table ?? tableOf(parsed?.id);
+          active.writes[table] = (active.writes[table] ?? 0) + 1;
+        }
         if (op === "1.0/get") add(decode(out));
         else if (op === "1.0/queryStreamNext") add(decode(out)?.value);
         else if (op === "1.0/queryPage") {
@@ -82,7 +91,7 @@ function install() {
 /** fn の間に読まれたドキュメントを数える（直列に 1 本ずつ使う） */
 export async function profileReads<T>(fn: () => Promise<T>): Promise<{ result: T } & ReadProfile> {
   install();
-  active = { docs: 0, bytes: 0, ranges: 0, byTable: {} };
+  active = { docs: 0, bytes: 0, ranges: 0, byTable: {}, writes: {} };
   try {
     const result = await fn();
     return { result, ...active };

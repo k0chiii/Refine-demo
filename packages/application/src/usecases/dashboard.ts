@@ -16,10 +16,10 @@ import {
   summarizeByBureau,
   tallyStages,
   threadTallyOf,
+  workProgressOf,
   workStageOf,
   workUrgency,
   type ApprovalEvent,
-  type AuthorizationContext,
   type BureauSummary,
   type CheckKind,
   type CheckProgress,
@@ -35,13 +35,15 @@ import {
   type Team,
   type ThreadTally,
   type Work,
+  type WorkAction,
   type WorkOverviewRow,
+  type WorkProgress,
   type WorkPermissionGrant,
   type WorkRoles,
   type WorkStage,
   type WorkSummary,
 } from "@mf100/domain";
-import { canView, myGrantsLoader } from "../shared.ts";
+import { canView, deletedThreadLoader, isAllowedLazily, myGrantsLoader } from "../shared.ts";
 import type { AppContext, NotificationKind } from "../ports.ts";
 import { listSubmitTargets, submitTargetPolicy, type DashboardRole } from "./home.ts";
 
@@ -185,6 +187,9 @@ export interface WorksDashboard extends Pick<
   summary: Pick<DashboardSummary, "dueSoon" | "overdue">;
 }
 
+/** 主管担当が未設定の制作物の数え方の鍵（校了した制作物の数。{@link buildWorksDashboard}） */
+export const NO_TEAM = "none";
+
 /** 閾値。制度ではなく表示の判断なので変更しやすいよう外に出す。 */
 export const dashboardPolicy = {
   staleAfterMs: 14 * 86_400_000,
@@ -232,50 +237,61 @@ function isReviewPending(a: ReviewAssignment | undefined): a is ReviewAssignment
 }
 
 /**
- * 見られる制作物なら、その人に当たる許可。見られなければ null。許可は本人の分を 1 回だけ読んだもの（{@link myGrantsLoader}）で、
- * 制作物ごとに ACL を読まない（認可が見るのは本人に当たる許可だけ）
+ * 見られる制作物か。許可（ACL）は、職責だけで判定できないときにだけ本人の分を読む（{@link myGrantsLoader}。
+ * 制作物ごとに ACL を読まない・読まなくて済むなら 1 件も読まない）。ホームの購読が読む範囲が狭まり、ACL の書込みで再実行されなくなる
  */
-async function visibleGrants(
+async function isVisible(
   ctx: AppContext,
   principal: Principal,
   work: Work,
   grantsOf: GrantsOf,
-): Promise<readonly WorkPermissionGrant[] | null> {
-  // 進行中でない制作物（完了・保留・取消）は表の 1 行に数えるだけ。ACL は「見られるか」の判定にだけ要るので、
-  // ACL を見ずに見られると分かる（通常の制作物）なら読まない。ホームの購読が読む範囲が狭まり、ACL の書込みで再実行されなくなる
-  if (work.lifecycle !== "active" && canViewWork({ work, grants: [], principal })) return [];
-  const grants = await grantsOf(work.id);
-  return (await canView(ctx, principal, work, grants)) ? grants : null;
+): Promise<boolean> {
+  // canViewWork は許可について単調なので、許可なしで見られると分かれば許可を読まなくてよい
+  if (canViewWork({ work, grants: [], principal })) return true;
+  return canView(ctx, principal, work, await grantsOf(work.id));
 }
 
 type GrantsOf = (workId: string) => Promise<readonly WorkPermissionGrant[]>;
 
+/** 受付中の版の校正の進み具合。数は要約の隣の行から読み、割当・専門確認は要るものだけ読む */
+interface OpenGlance {
+  revision: RevisionGlance;
+  reviewers: WorkProgress["reviewers"];
+  checks: WorkProgress["checks"];
+  /** 自分の割当（無ければ undefined。全員分は読まない） */
+  mine: () => Promise<ReviewAssignment | undefined>;
+  /** 専門確認の全件（0 件と分かっていれば読まない） */
+  checkList: () => Promise<RequiredCheck[]>;
+}
+
 /** 見られる進行中の制作物 1 件の材料。どの節もここから自分の行を作る */
 interface WorkGlance {
   work: Work;
-  authz: AuthorizationContext;
+  principal: Principal;
   roles: WorkRoles;
+  /** 本人に当たる許可（初めて要るときに 1 回だけ読む） */
+  grants: () => Promise<readonly WorkPermissionGrant[]>;
+  /** 操作してよいか。職責だけで足りるときは許可を読まない（{@link isAllowedLazily}） */
+  can: (action: WorkAction) => Promise<boolean>;
   summary: WorkSummary | null;
   latest: RevisionGlance | null;
   tally: ThreadTally;
   /** 受付中の版と、その割当・専門確認 */
-  open: {
-    revision: RevisionGlance;
-    assignments: ReviewAssignment[];
-    checks: RequiredCheck[];
-    pendingChecks: RequiredCheck[];
-    reviewersDone: number;
-    mine: ReviewAssignment | undefined;
-  } | null;
+  open: OpenGlance | null;
   revisionsOf: () => Promise<Revision[]>;
   approvalsOf: () => Promise<ApprovalEvent[]>;
+}
+
+function once<T>(load: () => Promise<T>): () => Promise<T> {
+  let hit: Promise<T> | null = null;
+  return () => (hit ??= load());
 }
 
 async function glanceWork(
   ctx: AppContext,
   principal: Principal,
   work: Work,
-  grants: readonly WorkPermissionGrant[],
+  grantsOf: GrantsOf,
 ): Promise<WorkGlance> {
   // 要約が揃っていれば版の全件もスレッドも読まない。揃っていない制作物だけ、全件から同じ値を数え直す
   const summary = await ctx.workSummaries.findByWork(work.id);
@@ -288,24 +304,34 @@ async function glanceWork(
   const focusId = focusRevisionIdOf(heads);
   const tally =
     summary?.threads ?? threadTallyOf(focusId ? await ctx.threads.listByRevision(focusId) : []);
+  const grants = once(() => grantsOf(work.id));
   let open: WorkGlance["open"] = null;
   if (heads.accepting) {
-    const assignments = await ctx.assignments.listByRevision(heads.accepting.id);
-    const checks = await ctx.checks.listByRevision(heads.accepting.id);
+    const accepting = heads.accepting;
+    const assignmentsOf = once(() => ctx.assignments.listByRevision(accepting.id));
+    const checksOf = once(() => ctx.checks.listByRevision(accepting.id));
+    // 数は、書込みの側が作り直した行から読む。行が無い・古い制作物は、割当・専門確認から同じ値を数え直す
+    const stored = await ctx.workSummaries.findProgress(work.id, accepting.id);
+    const progress =
+      stored ?? workProgressOf({ assignments: await assignmentsOf(), checks: await checksOf() });
     open = {
-      revision: heads.accepting,
-      assignments,
-      checks,
-      pendingChecks: checks.filter((c) => c.state === "pending"),
-      reviewersDone: assignments.filter((a) => a.state === "responded" || a.state === "excused")
-        .length,
-      mine: assignments.find((a) => a.reviewerId === principal.userId),
+      revision: accepting,
+      reviewers: progress.reviewers,
+      checks: progress.checks,
+      mine: stored
+        ? once(
+            async () => (await ctx.assignments.find(accepting.id, principal.userId)) ?? undefined,
+          )
+        : async () => (await assignmentsOf()).find((a) => a.reviewerId === principal.userId),
+      checkList: stored && stored.checks.total === 0 ? async () => [] : checksOf,
     };
   }
   return {
     work,
-    authz: { work, grants, principal },
+    principal,
     roles: rolesOf(work, principal),
+    grants,
+    can: (action) => isAllowedLazily(action, work, principal, grants),
     summary,
     latest: heads.latest,
     tally,
@@ -321,13 +347,14 @@ function emptyCheckTasks(): CheckTasks {
 
 /** 校正の仕事（校正する・専門確認・校了）と割り当てるを、受付中の版から足す */
 async function addCheckTasks(out: CheckTasks, g: WorkGlance): Promise<void> {
-  const { work, open, authz } = g;
+  const { work, open } = g;
   if (!open) return;
-  const { revision: accepting, assignments, checks, pendingChecks, reviewersDone, mine } = open;
-  const me = authz.principal.userId;
+  const { revision: accepting, reviewers, checks } = open;
+  const me = g.principal.userId;
   const { unresolved } = g.tally;
   const item = (count = 0) => itemOf(work, accepting, accepting.deadlineAt, count);
-  const progress = () => ({ done: reviewersDone, total: assignments.length });
+  const progress = () => ({ done: reviewers.done, total: reviewers.total });
+  const mine = await open.mine();
   if (isReviewPending(mine))
     out.mine.review.push({
       ...item(unresolved),
@@ -337,15 +364,17 @@ async function addCheckTasks(out: CheckTasks, g: WorkGlance): Promise<void> {
     });
   else if (mine)
     out.done.push({ ...item(), task: "review", taskState: "done", progress: progress() });
-  for (const c of pendingChecks.filter((c) => c.assigneeId === me))
-    out.mine.checks.push({ ...item(), note: c.label, task: "check", taskState: "pending" });
-  for (const c of checks.filter((c) => c.state !== "pending" && c.assigneeId === me))
-    out.done.push({ ...item(), note: c.label, task: "check", taskState: "done" });
+  for (const c of await open.checkList()) {
+    if (c.assigneeId !== me) continue;
+    if (c.state === "pending")
+      out.mine.checks.push({ ...item(), note: c.label, task: "check", taskState: "pending" });
+    else out.done.push({ ...item(), note: c.label, task: "check", taskState: "done" });
+  }
   if (
     accepting.kind === "standard" &&
     unresolved === 0 &&
-    pendingChecks.length === 0 &&
-    isAllowed("work.finalize", authz)
+    checks.pending === 0 &&
+    (await g.can("work.finalize"))
   ) {
     const quorum = approvalSetupOf(work).quorum;
     // 校了者が複数で、すでに自分が宣言した版は「校了待ち」に出さない（履歴を読むのは人数が 2 以上のときだけ）
@@ -358,13 +387,13 @@ async function addCheckTasks(out: CheckTasks, g: WorkGlance): Promise<void> {
       ...(quorum > 1 ? { progress: { done: declarations.length, total: quorum } } : {}),
     });
   }
-  if (assignments.length === 0 && isAllowed("review.assign", authz)) out.mine.assign.push(item());
+  if (reviewers.total === 0 && (await g.can("review.assign"))) out.mine.assign.push(item());
 }
 
 /** 返事をする: 採否判断ができ、受付中の版に未対応のコメントがある */
-function respondItem(g: WorkGlance): DashboardItem | null {
+async function respondItem(g: WorkGlance): Promise<DashboardItem | null> {
   const { open, tally } = g;
-  if (!open || tally.unresolved === 0 || !isAllowed("comment.decide", g.authz)) return null;
+  if (!open || tally.unresolved === 0 || !(await g.can("comment.decide"))) return null;
   return itemOf(g.work, open.revision, open.revision.deadlineAt, tally.unresolved);
 }
 
@@ -380,6 +409,11 @@ interface OverviewParts {
   backlog: Dashboard["backlog"];
   /** 期限を過ぎたものも含む。{@link deadlinesAhead} で絞る */
   deadlines: DashboardItem[];
+  /**
+   * 校了した制作物のうち、1 件ずつ読まずに数だけ渡されたもの（局の名前ごと）。行は作らず、数（全体・段階・局）にだけ足す。
+   * 校了した制作物は表の行にならない（{@link openRows}）ので、数のほかに使うのは主管担当の局だけ
+   */
+  finalizedCounted: { bureau: string; count: number }[];
 }
 
 function emptyOverviewParts(
@@ -397,6 +431,7 @@ function emptyOverviewParts(
     checksPending: 0,
     backlog: { overdue: [], unassigned: [], stale: [], dueSoon: [] },
     deadlines: [],
+    finalizedCounted: [],
   };
 }
 
@@ -449,21 +484,21 @@ async function addOverview(parts: OverviewParts, g: WorkGlance): Promise<void> {
   const detail: Partial<WorkOverviewRow> = {};
   let lastActivity = latest?.submittedAt ?? null;
   if (open) {
-    const { revision: accepting, assignments, pendingChecks, reviewersDone } = open;
+    const { revision: accepting, reviewers, checks } = open;
     const quorum = approvalSetupOf(work).quorum;
     countThreads();
-    parts.reviewers.total += assignments.length;
-    parts.reviewers.done += reviewersDone;
-    parts.checksPending += pendingChecks.length;
+    parts.reviewers.total += reviewers.total;
+    parts.reviewers.done += reviewers.done;
+    parts.checksPending += checks.pending;
     Object.assign(detail, {
       revisionId: accepting.id,
       revisionLabel: accepting.label,
       reviewDeadlineAt: accepting.deadlineAt,
       unresolved: tally.unresolved,
       threads: tally.total,
-      reviewersTotal: assignments.length,
-      reviewersDone,
-      checksPending: pendingChecks.length,
+      reviewersTotal: reviewers.total,
+      reviewersDone: reviewers.done,
+      checksPending: checks.pending,
       ...(roles.isCreator && quorum > 1
         ? {
             approvalDeclared:
@@ -475,10 +510,10 @@ async function addOverview(parts: OverviewParts, g: WorkGlance): Promise<void> {
     });
     if (tally.lastCreatedAt !== null)
       lastActivity = Math.max(lastActivity ?? 0, tally.lastCreatedAt);
-    if (assignments.length === 0)
+    if (reviewers.total === 0)
       backlog.unassigned.push(itemOf(work, accepting, accepting.deadlineAt));
-    // 校正の締切: 自分が校正する版、または職責のある制作物の受付中の版
-    if (isReviewPending(open.mine) || roleHolder)
+    // 校正の締切: 自分が校正する版、または職責のある制作物の受付中の版（職責があれば自分の割当は読まない）
+    if (roleHolder || isReviewPending(await open.mine()))
       deadlines.push({
         ...itemOf(work, accepting, accepting.deadlineAt, tally.unresolved),
         deadlineKind: "review",
@@ -516,15 +551,19 @@ function openRows(rows: readonly WorkOverviewRow[]): WorkOverviewRow[] {
 }
 
 function overviewOf(parts: OverviewParts): DashboardOverview {
+  // 数だけ渡された校了の制作物は、校了の行 n 件と同じに数える（行そのものは校了の行なので表に出ない）
+  const counted = parts.finalizedCounted.flatMap(({ bureau, count }) =>
+    Array.from({ length: count }, () => ({ bureau, stage: "finalized" as const, unresolved: 0 })),
+  );
   return {
     asOf: parts.now,
-    total: parts.rows.length,
-    stages: tallyStages(parts.rows.map((r) => r.stage)),
+    total: parts.rows.length + counted.length,
+    stages: tallyStages([...parts.rows, ...counted].map((r) => r.stage)),
     threads: parts.threads,
     reviewers: parts.reviewers,
     checksPending: parts.checksPending,
     works: openRows(parts.rows),
-    bureaus: summarizeByBureau(parts.rows),
+    bureaus: summarizeByBureau([...parts.rows, ...counted]),
   };
 }
 
@@ -577,22 +616,11 @@ async function mentionItems(
   const titleOf = async (workId: string): Promise<string | null> => {
     if (titles.has(workId)) return titles.get(workId)!;
     const work = await ctx.works.findById(workId).catch(() => null);
-    const title =
-      work && (await canView(ctx, principal, work, await grantsOf(work.id))) ? work.title : null;
+    const title = work && (await isVisible(ctx, principal, work, grantsOf)) ? work.title : null;
     titles.set(workId, title);
     return title;
   };
-  const goneThreads = new Map<string, boolean>();
-  const isCommentGone = async (n: { threadId?: string }): Promise<boolean> => {
-    if (n.threadId === undefined) return false;
-    let gone = goneThreads.get(n.threadId);
-    if (gone === undefined) {
-      const t = await ctx.threads.findById(n.threadId).catch(() => null);
-      gone = t?.deletedAt !== undefined;
-      goneThreads.set(n.threadId, gone);
-    }
-    return gone;
-  };
+  const isCommentGone = deletedThreadLoader(ctx);
   for (const n of await ctx.notifications.listForUser(principal.userId, 100)) {
     if (out.length >= dashboardPolicy.mentionsMax) break;
     if (!dashboardPolicy.mentionKinds.includes(n.kind)) continue;
@@ -629,7 +657,7 @@ async function pinnedItems(
   for (const p of await ctx.home.listPins(principal.userId)) {
     const work = await ctx.works.findById(p.workId);
     if (!work) continue;
-    if (!(await canView(ctx, principal, work, await grantsOf(work.id)))) continue;
+    if (!(await isVisible(ctx, principal, work, grantsOf))) continue;
     const { accepting, latest } =
       (await ctx.workSummaries.findByWork(work.id)) ??
       revisionHeadsOf(await ctx.revisions.listByWork(work.id));
@@ -645,6 +673,14 @@ async function pinnedItems(
     });
   }
   return out;
+}
+
+/** 校正者として関わる制作物か: 自分の割当がある、または職責はなく review 以上の許可がある（許可は職責で足りないときだけ読む） */
+async function isReviewerOn(g: WorkGlance): Promise<boolean> {
+  if (g.open && (await g.open.mine())) return true;
+  if (g.roles.isCreator || g.roles.isApprover || g.roles.isManager) return false;
+  const level = effectivePermission(await g.grants(), g.principal);
+  return level !== null && permissionIncludes(level, "review");
 }
 
 /**
@@ -672,25 +708,24 @@ export async function buildDashboard(
   };
   const visible: Work[] = [];
   for (const work of works) {
-    const grants = await visibleGrants(ctx, principal, work, grantsOf);
-    if (grants === null) continue;
+    if (!(await isVisible(ctx, principal, work, grantsOf))) continue;
     visible.push(work);
     if (work.lifecycle !== "active") {
       addInactiveRow(parts, work);
       continue;
     }
-    const g = await glanceWork(ctx, principal, work, grants);
-    const level = effectivePermission(grants, principal);
+    const g = await glanceWork(ctx, principal, work, grantsOf);
     const roleHolder = g.roles.isCreator || g.roles.isApprover || g.roles.isManager;
     if (g.roles.isCreator) roles.creator++;
     if (g.roles.isApprover) roles.approver++;
     if (g.roles.isManager) roles.manager++;
-    roles.checker +=
-      g.open?.pendingChecks.filter((c) => c.assigneeId === principal.userId).length ?? 0;
-    if (g.open?.mine || (level !== null && permissionIncludes(level, "review") && !roleHolder))
-      roles.reviewer++;
+    if (g.open)
+      roles.checker += (await g.open.checkList()).filter(
+        (c) => c.state === "pending" && c.assigneeId === principal.userId,
+      ).length;
+    if (await isReviewerOn(g)) roles.reviewer++;
     await addCheckTasks(tasks, g);
-    const r = respondItem(g);
+    const r = await respondItem(g);
     if (r) respond.push(r);
     await addOverview(parts, g);
   }
@@ -737,9 +772,8 @@ export async function buildCheckDashboard(
   const out = emptyCheckTasks();
   for (const work of works) {
     if (work.lifecycle !== "active") continue;
-    const grants = await visibleGrants(ctx, principal, work, grantsOf);
-    if (grants === null) continue;
-    await addCheckTasks(out, await glanceWork(ctx, principal, work, grants));
+    if (!(await isVisible(ctx, principal, work, grantsOf))) continue;
+    await addCheckTasks(out, await glanceWork(ctx, principal, work, grantsOf));
   }
   for (const list of Object.values(out.mine)) list.sort(byDeadline);
   const shown = new Set([...Object.values(out.mine).flat(), ...out.done].map((i) => i.workId));
@@ -763,16 +797,15 @@ export async function buildMakeDashboard(
   const respond: DashboardItem[] = [];
   const visible: Work[] = [];
   for (const work of works) {
-    const grants = await visibleGrants(ctx, principal, work, grantsOf);
-    if (grants === null) continue;
+    if (!(await isVisible(ctx, principal, work, grantsOf))) continue;
     visible.push(work);
     if (!rolesOf(work, principal).isCreator) continue;
     if (work.lifecycle !== "active") {
       addInactiveRow(parts, work);
       continue;
     }
-    const g = await glanceWork(ctx, principal, work, grants);
-    const r = respondItem(g);
+    const g = await glanceWork(ctx, principal, work, grantsOf);
+    const r = await respondItem(g);
     if (r) respond.push(r);
     await addOverview(parts, g);
   }
@@ -786,20 +819,32 @@ export async function buildMakeDashboard(
   };
 }
 
-/** 制作物の一覧の先頭（制作物の状況）とピン留めの節。通知と提出先の候補は読まない */
+/**
+ * 制作物の一覧の先頭（制作物の状況）とピン留めの節。通知と提出先の候補は読まない。
+ * finalizedByTeam は、`works` に含めなかった校了の制作物の数（主管担当の ID ごと。担当が未設定のものは "none"）。
+ * 校了した制作物は全体の数・段階・局の数にだけ効くので、1 件ずつ読まず数だけで足せる。
+ * 渡してよいのは、校了した制作物が誰にも見られる場合（{@link allMembersCanView}）だけで、呼び出し側が確かめる
+ */
 export async function buildWorksDashboard(
   ctx: AppContext,
   principal: Principal,
   works: Work[],
+  opts: { finalizedByTeam?: Readonly<Record<string, number>> } = {},
 ): Promise<WorksDashboard> {
   const grantsOf = myGrantsLoader(ctx, principal);
   const now = ctx.clock.now();
-  const parts = emptyOverviewParts(principal, await ctx.teams.list(), now);
+  const teams = await ctx.teams.list();
+  const parts = emptyOverviewParts(principal, teams, now);
+  for (const [teamId, count] of Object.entries(opts.finalizedByTeam ?? {}))
+    if (count > 0)
+      parts.finalizedCounted.push({
+        bureau: bureauNameOf(teamId === NO_TEAM ? undefined : teamId, teams),
+        count,
+      });
   for (const work of works) {
-    const grants = await visibleGrants(ctx, principal, work, grantsOf);
-    if (grants === null) continue;
+    if (!(await isVisible(ctx, principal, work, grantsOf))) continue;
     if (work.lifecycle !== "active") addInactiveRow(parts, work);
-    else await addOverview(parts, await glanceWork(ctx, principal, work, grants));
+    else await addOverview(parts, await glanceWork(ctx, principal, work, grantsOf));
   }
   sortBacklog(parts.backlog);
   const { upcoming, nextDeadline } = deadlinesAhead(parts.deadlines, now);

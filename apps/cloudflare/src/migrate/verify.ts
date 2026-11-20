@@ -79,6 +79,7 @@ export function tableCounts(sql: Sql): Record<string, number> {
     ...Object.keys(STORAGE),
     "workRoles",
     "workSummaries",
+    "workProgress",
     "notificationCounters",
   ])
     out[table] = Number(sql.exec(`SELECT count(*) AS n FROM ${table}`)[0]?.n ?? 0);

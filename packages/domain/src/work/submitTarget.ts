@@ -1,5 +1,4 @@
 import { isAllowed, rolesOf, type AuthorizationContext } from "../acl/authorize.ts";
-import type { RevisionHeads } from "../dashboard/workSummary.ts";
 import type { MediaType } from "./Work.ts";
 
 /**
@@ -44,7 +43,8 @@ export function submitRouteFor(mediaType: MediaType): SubmitRoute {
  */
 export function isSubmitTarget(
   authz: AuthorizationContext,
-  heads: Pick<RevisionHeads, "accepting">,
+  /** 受付中の版があるか（null なら無い）。版の中身は見ない */
+  heads: { accepting: unknown },
   policy: SubmitTargetPolicy = defaultSubmitTargetPolicy,
 ): boolean {
   if (!isAllowed("revision.submit", authz)) return false;

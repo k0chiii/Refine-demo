@@ -120,6 +120,8 @@ export const TABLES: readonly TableSpec[] = [
   // ---- 派生表（書き込みと同じトランザクションで作り直す。sqlite/derived.ts。Convex の lib/adapters.ts と同じ契約）
   // 制作物ごとの要約。id は workId。acceptingId から「受付中の版の制作物」を引く（ダッシュボードの候補）
   { name: "workSummaries", cols: ["acceptingId"], indexes: [["acceptingId"]] },
+  // 受付中の版の校正の進み具合（割当・専門確認の数）。id は workId。要約とは別の行（校正者の完了で変わるので、要約を読む購読を巻き込まない）
+  { name: "workProgress" },
   // 制作者・統括・校了者の職責の索引（by_user で「自分に関係する制作物」を引く）。id は workId|role|userId
   { name: "workRoles", cols: ["workId", "userId"], indexes: [["userId"], ["workId"]] },
   // 利用者ごとの未読の通知の数。id は userId

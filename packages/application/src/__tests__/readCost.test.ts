@@ -41,6 +41,7 @@ function counted(ctx: InMemoryContext) {
     aclMine: 0,
     revisions: 0,
     summaries: 0,
+    labels: 0,
     rulesAll: 0,
     rulesIn: [] as string[][],
   };
@@ -63,6 +64,11 @@ function counted(ctx: InMemoryContext) {
   ctx.workSummaries.findByWork = (id) => {
     calls.summaries++;
     return summaries(id);
+  };
+  const labels = ctx.workSummaries.findLabels.bind(ctx.workSummaries);
+  ctx.workSummaries.findLabels = (id) => {
+    calls.labels++;
+    return labels(id);
   };
   const all = ctx.notation.listRules.bind(ctx.notation);
   ctx.notation.listRules = () => {
@@ -95,10 +101,12 @@ describe("提出先の候補（常時購読）は、候補にならない制作�
     const calls = counted(ctx);
     const targets = await listSubmitTargets(ctx, principals.creator, works);
     expect(targets.map((t) => t.workTitle)).toEqual(["自分の制作物"]);
-    // 制作者は職責で提出できるので ACL は読まない。読んだのは候補の 1 件ぶんの要約だけ（他の 6 件は制作物そのものの値で除外）
+    // 制作者は職責で提出できるので ACL は読まない。読んだのは候補の 1 件ぶんの版のラベルだけ（他の 6 件は制作物そのものの値で除外）。
+    // ラベルは指摘の数まで持つ要約ではなく小さな行から読むので、指摘の書込みで再実行されない
     expect(calls.acl).toBe(0);
     expect(calls.aclMine).toBe(0);
-    expect(calls.summaries).toBe(1);
+    expect(calls.labels).toBe(1);
+    expect(calls.summaries).toBe(0);
     expect(calls.revisions).toBe(0);
   });
 });

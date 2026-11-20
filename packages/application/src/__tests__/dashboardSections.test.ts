@@ -5,7 +5,9 @@ import {
   buildMakeDashboard,
   buildWorksDashboard,
 } from "../usecases/dashboard.ts";
-import type { InMemoryContext } from "../testing/inMemory.ts";
+import { grantWorkPermission } from "../usecases/acl.ts";
+import { createInMemoryContext, type InMemoryContext } from "../testing/inMemory.ts";
+import { seedWork, submitRevision } from "../testing/scenario.ts";
 import { principals } from "../testing/scenario.ts";
 import { seedPortfolio, viewers, withoutSummaries } from "./portfolio.ts";
 
@@ -108,6 +110,71 @@ describe("ダッシュボードの節ごとの問い合わせ", () => {
     expect(ports.read("assignments.")).toBe(0);
     expect(ports.read("checks.")).toBe(0);
     expect(ports.read("home.")).toBe(0);
+  });
+
+  it("制作物の節は、校正者の割当・専門確認を 1 件ずつ読まない（進み具合の行から数える）。進み具合が無ければ読んで同じ値になる", async () => {
+    const { ctx, works } = await seedPortfolio();
+    const list = await works();
+    const ports = spyPorts(ctx);
+    const withProgress = await buildWorksDashboard(ctx, principals.manager, list);
+    expect(ports.read("assignments.listByRevision")).toBe(0);
+    expect(ports.read("checks.listByRevision")).toBe(0);
+    expect(withProgress.overview.reviewers.total).toBeGreaterThan(0);
+    expect(withProgress.overview.checksPending).toBeGreaterThan(0);
+    withoutSummaries(ctx);
+    expect(await buildWorksDashboard(ctx, principals.manager, list)).toEqual(withProgress);
+    expect(ports.read("assignments.listByRevision")).toBeGreaterThan(0);
+  });
+
+  it("進み具合が別の版の分（古い）なら信じず、割当・専門確認から数え直す", async () => {
+    const { ctx, works } = await seedPortfolio();
+    const list = await works();
+    const expected = await buildWorksDashboard(ctx, principals.manager, list);
+    const real = ctx.workSummaries.findProgress.bind(ctx.workSummaries);
+    // 古い行を読んだ場合（数えた版が今の受付中の版と違う）は、アダプタが null を返す契約。ここでは null を返して数え直す道を通す
+    ctx.workSummaries.findProgress = async (workId, acceptingId) =>
+      (await real(workId, acceptingId)) && null;
+    expect(await buildWorksDashboard(ctx, principals.manager, list)).toEqual(expected);
+  });
+
+  it("許可（ACL）は職責で足りるなら読まない。足りないときは本人の分だけ読み、判定は変わらない", async () => {
+    const { ctx, works } = await seedPortfolio();
+    const list = await works();
+    const ports = spyPorts(ctx);
+    for (const who of everyone) await buildWorksDashboard(ctx, who, list);
+    await buildMakeDashboard(ctx, principals.creator, list);
+    expect(ports.read("acl.")).toBe(0);
+  });
+
+  it("許可の無い人は「割り当てる」に出ない。edit の許可がある人だけが出る（許可を後から読んでも判定は同じ）", async () => {
+    const ctx = createInMemoryContext();
+    const work = await seedWork(ctx, { title: "未割当" });
+    await submitRevision(ctx, work.id, { deadlineInHours: 48 });
+    const list = [(await ctx.works.findById(work.id))!];
+    // 職責も許可も無い人
+    expect((await buildCheckDashboard(ctx, principals.stranger, list)).mine.assign).toEqual([]);
+    // 他の人への edit の許可は、この人の判定に効かない
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.reviewer.userId],
+      permission: "edit",
+    });
+    expect((await buildCheckDashboard(ctx, principals.stranger, list)).mine.assign).toEqual([]);
+    // review の許可では足りない
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.stranger.userId],
+      permission: "review",
+    });
+    expect((await buildCheckDashboard(ctx, principals.stranger, list)).mine.assign).toEqual([]);
+    await grantWorkPermission(ctx, principals.sysadmin, {
+      workId: work.id,
+      userIds: [principals.stranger.userId],
+      permission: "edit",
+    });
+    expect(
+      (await buildCheckDashboard(ctx, principals.stranger, list)).mine.assign.map((i) => i.workId),
+    ).toEqual([work.id]);
   });
 
   it("制作物の節は通知を読まない", async () => {

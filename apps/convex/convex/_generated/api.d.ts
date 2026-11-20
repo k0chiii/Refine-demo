@@ -51,6 +51,7 @@ import type * as lib_threadActivity from "../lib/threadActivity.js";
 import type * as lib_users from "../lib/users.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_workAggregate from "../lib/workAggregate.js";
+import type * as lib_workCounters from "../lib/workCounters.js";
 import type * as lib_workSearch from "../lib/workSearch.js";
 import type * as lib_workSummary from "../lib/workSummary.js";
 import type * as me from "../me.js";
@@ -128,6 +129,7 @@ declare const fullApi: ApiFromModules<{
   "lib/users": typeof lib_users;
   "lib/validators": typeof lib_validators;
   "lib/workAggregate": typeof lib_workAggregate;
+  "lib/workCounters": typeof lib_workCounters;
   "lib/workSearch": typeof lib_workSearch;
   "lib/workSummary": typeof lib_workSummary;
   me: typeof me;

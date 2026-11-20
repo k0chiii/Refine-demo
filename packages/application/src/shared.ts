@@ -43,6 +43,74 @@ export async function loadAuthorizedWork(
 }
 
 /**
+ * {@link loadAuthorizedWork} と同じ判定を、本人に当たる許可だけを読んで行う（制作物の ACL 全体を読まない）。
+ * 認可（isAllowed）が見るのは本人に当たる許可（本人宛て・所属グループ宛て）だけなので、返す grants を
+ * そのまま `{ work, grants, principal }` に渡して後続の isAllowed を判定してよい（他の人の許可は結果に効かない）。
+ * 読む量と、他の人への許可の付与・取消で購読が再実行される範囲を、本人の分に絞る
+ */
+export async function loadAuthorizedWorkOwnGrants(
+  ctx: AppContext,
+  principal: Principal,
+  workId: string,
+  action: WorkAction,
+): Promise<LoadedWork> {
+  const work = await ctx.works.findById(workId);
+  if (!work) throw new DomainError("forbidden", { workId, action });
+  const grants = await ctx.acl.listForPrincipalOnWork(workId, principal);
+  requireAllowed(action, { work, grants, principal });
+  return { work, grants };
+}
+
+/**
+ * ACL を読まずに判定できるときは読まない isAllowed。まず許可なしで判定し（職責・システム管理者で足りる）、
+ * 足りないときだけ本人の許可を読んで判定し直す。isAllowed は許可について単調（許可が増えて許されなくなることはない）なので、
+ * 許可なしで許されるなら許可を読んでも許される。結果は常に `isAllowed(action, { work, grants: 本人の許可, principal })` と同じ
+ */
+export async function isAllowedLazily(
+  action: WorkAction,
+  work: Work,
+  principal: Principal,
+  grantsOf: () => Promise<readonly WorkPermissionGrant[]>,
+): Promise<boolean> {
+  if (isAllowed(action, { work, grants: [], principal })) return true;
+  return isAllowed(action, { work, grants: await grantsOf(), principal });
+}
+
+/**
+ * 通知の先のコメントが削除されたか。
+ * 削除したコメントは一覧からも消える（紙面に印もカードも無い。返信のために残すこともしない）。
+ * 版が分かる通知は、スレッドの文書を 1 件ずつ読まず、版の削除済みスレッドの ID だけを引く（版ごとに 1 回。削除は稀なので
+ * 普段は何も読まず、削除されていないスレッドの更新では読み集合が動かない）。版が分からない通知だけスレッドを読む
+ */
+export function deletedThreadLoader(ctx: AppContext) {
+  const byRevision = new Map<string, Promise<Set<string>>>();
+  const byThread = new Map<string, Promise<boolean>>();
+  return async (n: { threadId?: string; revisionId?: string }): Promise<boolean> => {
+    if (n.threadId === undefined) return false;
+    if (n.revisionId !== undefined) {
+      let ids = byRevision.get(n.revisionId);
+      if (!ids) {
+        ids = ctx.threads
+          .listDeletedIdsByRevision(n.revisionId)
+          .then((list) => new Set(list))
+          .catch(() => new Set<string>());
+        byRevision.set(n.revisionId, ids);
+      }
+      return (await ids).has(n.threadId);
+    }
+    let hit = byThread.get(n.threadId);
+    if (!hit) {
+      hit = ctx.threads
+        .findById(n.threadId)
+        .then((t) => t !== null && t !== undefined && t.deletedAt !== undefined)
+        .catch(() => false);
+      byThread.set(n.threadId, hit);
+    }
+    return hit;
+  };
+}
+
+/**
  * 制作物の受付中の版の ID（無ければ null）。制作物の全ての版を読んで探した結果（`find(isAccepting)`）と同じものを、
  * なるべく読まずに返す。
  * - 開いた版が受付中ならそれ（受付中の版は制作物に高々 1 件）。読まない。

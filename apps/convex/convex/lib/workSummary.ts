@@ -2,6 +2,7 @@ import {
   countsDeclarations,
   focusRevisionIdOf,
   revisionHeadsOf,
+  workProgressOf,
   workSummaryOf,
   type ApprovalEvent,
   type Revision,
@@ -58,12 +59,12 @@ export async function syncWorkSummary(
     ? []
     : known && known.revisionId === focusId
       ? known.liveThreads
-      : (
-          await db
-            .query("commentThreads")
-            .withIndex("by_revision", (q) => q.eq("revisionId", focusId as Id<"revisions">))
-            .collect()
-        ).filter((t) => t.deletedAt === undefined);
+      : await db
+          .query("commentThreads")
+          .withIndex("by_revision_deleted", (q) =>
+            q.eq("revisionId", focusId as Id<"revisions">).eq("deletedAt", undefined),
+          )
+          .collect();
   const approvalEvents = countsDeclarations(work)
     ? ((await db
         .query("approvalEvents")
@@ -88,6 +89,151 @@ export async function syncWorkSummary(
     void _creationTime;
     if (!sameValue(stored, value)) await db.replace(_id, value);
   }
+  // 読んだスレッドを渡されたとき（スレッドの書込み）は、版の受付状態も割当・専門確認も変わらないので、
+  // 一覧の行・進み具合は触らない
+  if (!known) {
+    await syncWorkListCard(db, workDoc._id, summary);
+    await syncWorkProgress(db, workDoc._id, summary.accepting?.id ?? null);
+  }
+}
+
+/** 一覧の 1 行が要る値（最新の版の表示名・受付中の版の ID と期限・緊急・校了の宣言の数）。変わらなければ書かない */
+async function syncWorkListCard(db: DatabaseWriter, workId: Id<"works">, summary: WorkSummary) {
+  const value = {
+    workId,
+    latestLabel: summary.latest?.label ?? null,
+    acceptingId: summary.accepting?.id ?? null,
+    acceptingLabel: summary.accepting?.label ?? null,
+    acceptingDeadlineAt: summary.accepting?.deadlineAt ?? null,
+    acceptingReviewUrgent: summary.accepting?.reviewUrgent === true,
+    declared: summary.declared,
+  };
+  const existing = await db
+    .query("workListCards")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .unique();
+  if (!existing) await db.insert("workListCards", value);
+  else {
+    const { _id, _creationTime, ...stored } = existing;
+    void _creationTime;
+    if (!sameValue(stored, value)) await db.replace(_id, value);
+  }
+}
+
+/**
+ * 受付中の版の校正の進み具合（workProgress）を、その版の割当・専門確認から作り直す。
+ * 呼ぶのは、受付中の版が変わりうる書込み（syncWorkSummary）と、割当・専門確認の書込み。変わらなければ書かない
+ */
+export async function syncWorkProgress(
+  db: DatabaseWriter,
+  workId: Id<"works">,
+  acceptingId: string | null,
+) {
+  const revisionId = acceptingId as Id<"revisions"> | null;
+  const progress = workProgressOf({
+    assignments: revisionId
+      ? await db
+          .query("reviewAssignments")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+          .collect()
+      : [],
+    checks: revisionId
+      ? await db
+          .query("requiredChecks")
+          .withIndex("by_revision", (q) => q.eq("revisionId", revisionId))
+          .collect()
+      : [],
+  });
+  const value = { workId, acceptingId, ...progress };
+  const existing = await db
+    .query("workProgress")
+    .withIndex("by_work", (q) => q.eq("workId", workId))
+    .unique();
+  if (!existing) await db.insert("workProgress", value);
+  else {
+    const { _id, _creationTime, ...stored } = existing;
+    void _creationTime;
+    if (!sameValue(stored, value)) await db.replace(_id, value);
+  }
+}
+
+type ProgressCounts = ReturnType<typeof workProgressOf>;
+
+/** 割当・専門確認 1 件の書込み（前 → 後。無ければ null）が、数に足す差。状態が変わっても数が動かなければ全部 0 */
+export function progressDelta(
+  before: { assignment?: { state: string }; check?: { state: string } } | null,
+  after: { assignment?: { state: string }; check?: { state: string } } | null,
+): ProgressCounts {
+  const counts = (side: typeof before) =>
+    workProgressOf({
+      assignments: side?.assignment ? [side.assignment as { state: never }] : [],
+      checks: side?.check ? [side.check as { state: never }] : [],
+    });
+  const b = counts(before);
+  const a = counts(after);
+  return {
+    reviewers: {
+      total: a.reviewers.total - b.reviewers.total,
+      done: a.reviewers.done - b.reviewers.done,
+    },
+    checks: {
+      total: a.checks.total - b.checks.total,
+      pending: a.checks.pending - b.checks.pending,
+    },
+  };
+}
+
+function isEmptyDelta(d: ProgressCounts): boolean {
+  return (
+    d.reviewers.total === 0 &&
+    d.reviewers.done === 0 &&
+    d.checks.total === 0 &&
+    d.checks.pending === 0
+  );
+}
+
+/**
+ * 割当・専門確認を書いたあとに呼ぶ。数が変わらない書込み（pending → viewed など）は何も読まず書かない。
+ * 変わるときは、その版が受付中なら、制作物の進み具合の行に差だけを足す（割当・専門確認は読み直さない）。
+ * 行が無い・数えた版が違う・足すと負になるときだけ、割当・専門確認から作り直す（受付中でない版は数えない）。
+ * 呼び出し側が版の文書を読んでいるときは渡す
+ */
+export async function applyWorkProgressDelta(
+  db: DatabaseWriter,
+  revisionId: string,
+  delta: ProgressCounts,
+  known?: Doc<"revisions"> | null,
+) {
+  if (isEmptyDelta(delta)) return;
+  const revision =
+    known !== undefined ? known : await db.get("revisions", revisionId as Id<"revisions">);
+  if (!revision || revision.reviewState !== "open") return;
+  const row = await db
+    .query("workProgress")
+    .withIndex("by_work", (q) => q.eq("workId", revision.workId))
+    .unique();
+  if (row && row.acceptingId === revision._id) {
+    const next = {
+      reviewers: {
+        total: row.reviewers.total + delta.reviewers.total,
+        done: row.reviewers.done + delta.reviewers.done,
+      },
+      checks: {
+        total: row.checks.total + delta.checks.total,
+        pending: row.checks.pending + delta.checks.pending,
+      },
+    };
+    const sane =
+      next.reviewers.done >= 0 &&
+      next.reviewers.done <= next.reviewers.total &&
+      next.checks.pending >= 0 &&
+      next.checks.pending <= next.checks.total;
+    if (sane) {
+      await db.patch(row._id, next);
+      return;
+    }
+  }
+  await syncWorkProgress(db, revision.workId, revision._id);
 }
 
 /** Skipping no-op replaces keeps list/dashboard subscriptions from re-running; stored key order is not ours. */
