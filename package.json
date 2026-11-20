@@ -30,6 +30,7 @@
     "platform:config": "node scripts/platform-config.mjs"
   },
   "devDependencies": {
+    "@mizchi/mutator": "0.5.0",
     "@vitest/coverage-v8": "5.1.0",
     "typescript": "5.9.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.5.1",

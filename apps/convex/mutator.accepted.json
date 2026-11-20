@@ -1,0 +1,34 @@
+{
+  "19nxb2n7ui2": {
+    "reason": "等価: 比べるのは同じ表の行と作り直した値で、同じ欄の型は schema が決める。片方が null でない object なら、もう片方も object か null（null は次の比較で拾う）。primitive と object を比べる入力は無い",
+    "where": "convex/lib/workSummary.ts:241:7 typeof a !== \"object\" -> false"
+  },
+  "1cw759x2pdh": {
+    "reason": "等価: 受付中の版が無い（revisionId が null）ときに by_revision を引いても、revisionId が null の割当は schema 上無いので結果は空。読む文書・書込みは変わらない",
+    "where": "convex/lib/workSummary.ts:134:18 revisionId -> true"
+  },
+  "25n0dj0zx99": {
+    "reason": "等価: 数える版が無い（focusId が null）ときに索引を引いても、revisionId が null のスレッドは schema 上無いので結果は空。読む文書・書込みは変わらない（空の範囲を 1 つ引くだけ）",
+    "where": "convex/lib/workSummary.ts:58:24 !focusId -> false"
+  },
+  "2a2pzpe95oh": {
+    "reason": "等価: was が null のとき counts[\"null\"] を -1 として消すだけ。鍵は主管担当の ID（Convex の ID）か none で、\"null\" という鍵は無いので数は変わらない",
+    "where": "convex/lib/workCounters.ts:42:7 was !== null -> true"
+  },
+  "2gl1hh57pih": {
+    "reason": "等価: 比べるのは同じ表の行と作り直した値で、同じ欄の型は schema が決める。保存した行の object の欄は作り直した値にも必ずあり、object か null（null は次の比較で拾う）。object と primitive を比べる入力は無い",
+    "where": "convex/lib/workSummary.ts:241:46 typeof b !== \"object\" -> false"
+  },
+  "4c4jm3m3xb": {
+    "reason": "等価: 受付中の版が無い（revisionId が null）ときに by_revision を引いても、revisionId が null の専門確認は schema 上無いので結果は空。読む文書・書込みは変わらない",
+    "where": "convex/lib/workSummary.ts:140:13 revisionId -> true"
+  },
+  "9hb9fvqdjw": {
+    "reason": "等価: countsDeclarations が偽のとき workSummaryOf は approvalEvents を見ない（declared は 0）。この空配列は読まれない",
+    "where": "convex/lib/workSummary.ts:73:7 [] -> [\"Stryker was here!\"]"
+  },
+  "xwiqfxx19u": {
+    "reason": "等価: ここに来るのは要約の索引（by_acceptingId）でこの版が当たらなかったとき。同じ制作物の要約の acceptingId がこの版なら、その行が索引で当たって手前で返る。だからこの比較はいつも偽",
+    "where": "convex/lib/assignmentOpen.ts:130:46 own.acceptingId === revisionId -> false"
+  }
+}
