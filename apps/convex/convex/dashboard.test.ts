@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { api, internal } from "./_generated/api";
 import { createCast, createHarness } from "../test/harness";
 import { setupWork, submitFiles } from "../test/flows";
+import { createAppContext } from "./lib/adapters";
 import { principalOf } from "./lib/principal";
 import { syncWorkSummary } from "./lib/workSummary";
 import { listWorksRelatedTo } from "./works";
@@ -168,7 +169,16 @@ describe("Convex 統合: 校正のナビのバッジ", () => {
         assigneeId: cast.reviewer.id,
         state: "pending",
       });
-      await ctx.db.patch(closed, { reviewState: "closed" });
+    });
+    // 受付を終えるのは本番と同じ経路（アダプタの revisions.update）。割当の印（revisionOpen）もここで揃う
+    await t.run(async (ctx) => {
+      const app = createAppContext(ctx);
+      const revision = (await app.revisions.findById(closed))!;
+      await app.revisions.update({
+        ...revision,
+        reviewState: "closed",
+        reviewClosedReason: "deadline",
+      });
     });
 
     expect(await cast.reviewer.as.query(api.dashboard.checkBadge, {})).toEqual({ count: 3 });

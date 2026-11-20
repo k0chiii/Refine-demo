@@ -33,6 +33,7 @@ import type * as lib_ai_anthropic from "../lib/ai/anthropic.js";
 import type * as lib_ai_gateway from "../lib/ai/gateway.js";
 import type * as lib_ai_provider from "../lib/ai/provider.js";
 import type * as lib_ai_workersAi from "../lib/ai/workersAi.js";
+import type * as lib_assignmentOpen from "../lib/assignmentOpen.js";
 import type * as lib_authEnv from "../lib/authEnv.js";
 import type * as lib_channels from "../lib/channels.js";
 import type * as lib_deliveryPool from "../lib/deliveryPool.js";
@@ -109,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   "lib/ai/gateway": typeof lib_ai_gateway;
   "lib/ai/provider": typeof lib_ai_provider;
   "lib/ai/workersAi": typeof lib_ai_workersAi;
+  "lib/assignmentOpen": typeof lib_assignmentOpen;
   "lib/authEnv": typeof lib_authEnv;
   "lib/channels": typeof lib_channels;
   "lib/deliveryPool": typeof lib_deliveryPool;
