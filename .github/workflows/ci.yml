@@ -3,7 +3,8 @@
 # - verify-* : 整形・lint、型、単体テスト、codegen 差分を並列。集約ジョブ verify が必須チェック用。
 # - PR の単体は pnpm test。main / 手動は pnpm test:coverage（成果物）。
 # - e2e-smoke（PR）: 各ジョブ内でデモ版をビルドしてから @smoke と PWA。
-# - e2e（main・手動）: 全 spec を shard。visual: screenshots.mjs（部ごと）と a11y。
+# - e2e（main・手動）: デモ版の全 spec（@cloudflare 以外）を 1 ジョブで並列。visual: screenshots.mjs（部ごと）と a11y。
+# - e2e-cloudflare（main・手動）: Worker（apps/cloudflare）と web（--mode cloudflare）を起こして @cloudflare の疎通だけ。
 name: CI
 
 on:
@@ -211,6 +212,34 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+  # Cloudflare 版（Worker + Durable Object）の疎通。Worker と web は playwright.config.ts（E2E_CLOUDFLARE=1）が起こす。
+  # デモ版の e2e とは別のジョブにして、Worker を要る spec の失敗でデモ版の結果を隠さない
+  e2e-cloudflare:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: voidzero-dev/setup-vp@56918a6d0c629c55ae8b88826a7d47fda85769ee # v1.9.0
+        with:
+          version: "1.5.1"
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - name: Cloudflare 版の疎通（@cloudflare。Worker と web は config が起こす）
+        working-directory: apps/web
+        run: pnpm exec playwright test --reporter=github,list,html
+        env:
+          E2E_CLOUDFLARE: "1"
+      - name: 報告と失敗の trace を残す
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-cloudflare-report
           path: apps/web/playwright-report
           retention-days: 14
 

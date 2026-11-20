@@ -10,14 +10,54 @@ import { defineConfig, devices } from "@playwright/test";
  *   pnpm --filter @mf100/web e2e          # デモ版をビルドして全部
  *   pnpm --filter @mf100/web e2e:smoke    # @smoke だけ
  *   E2E_PREBUILT=1 …                      # dist-demo を建て直さない（CI はビルドを別の段で済ませる）
+ *
+ * Cloudflare 版の疎通（@cloudflare。e2e/specs/cloudflare-smoke.spec.ts）は、デモ版の流れには混ぜない（Worker が要る）。
+ *   pnpm --filter @mf100/web e2e:cloudflare   # E2E_CLOUDFLARE=1。Worker と web（--mode cloudflare）を起こして、@cloudflare だけ流す
+ * CI は e2e（デモ版・@cloudflare 以外）と e2e-cloudflare（こちら）を別のジョブにしている。
  */
 const PORT = Number(process.env.E2E_PORT ?? 4173);
-const BASE_URL = process.env.BASE_URL ?? `http://127.0.0.1:${PORT}`;
 const CI = Boolean(process.env.CI);
 const preview = `pnpm exec vp preview --mode demo --outDir dist-demo --port ${PORT} --host 127.0.0.1 --strictPort`;
 
+// Cloudflare 版の疎通。名前解決に頼らない（`localhost` は ::1 を先に引くが、Worker は 127.0.0.1 で待つ）ので、
+// Worker・web・spec が引く URL をすべて 127.0.0.1 で揃える。Worker の ALLOWED_ORIGINS は web の origin と一字一句同じでないと CORS で落ちる
+const CLOUDFLARE = Boolean(process.env.E2E_CLOUDFLARE);
+const CF_API_URL = "http://127.0.0.1:8790";
+const CF_WEB_URL = "http://127.0.0.1:5174";
+const BASE_URL = process.env.BASE_URL ?? (CLOUDFLARE ? CF_WEB_URL : `http://127.0.0.1:${PORT}`);
+
+const demoServer = {
+  command: process.env.E2E_PREBUILT
+    ? preview
+    : `pnpm exec vp build --mode demo --outDir dist-demo && ${preview}`,
+  url: BASE_URL,
+  reuseExistingServer: !CI,
+  timeout: 180_000,
+};
+
+const cloudflareServers = [
+  {
+    // 空のデータから（前回の Durable Object の状態を引き継がない）。制作者を管理者にして、登録できるようにする
+    command: `rm -rf .wrangler/state && pnpm dev --ip 127.0.0.1 --port 8790 --var MF100_SYSTEM_ADMIN_SUBJECTS:mock-nogiku-creator --var ALLOWED_ORIGINS:${CF_WEB_URL}`,
+    cwd: "../cloudflare",
+    url: `${CF_API_URL}/health`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+  },
+  {
+    // VITE_* はビルドに焼き込まれる。dev ではなく preview を使う理由は e2e/specs/cloudflare-smoke.spec.ts の冒頭
+    command: `pnpm exec vp build --mode cloudflare && pnpm exec vp preview --mode cloudflare --port 5174 --host 127.0.0.1 --strictPort`,
+    env: { VITE_CLOUDFLARE_URL: CF_API_URL, VITE_NOGIKU_MOCK: "true" },
+    url: CF_WEB_URL,
+    reuseExistingServer: false,
+    timeout: 180_000,
+  },
+];
+
 export default defineConfig({
   testDir: "./e2e/specs",
+  // デモ版の流れには Worker が要る @cloudflare を混ぜない。E2E_CLOUDFLARE=1 のときはその逆（@cloudflare だけ）
+  ...(CLOUDFLARE ? { grep: /@cloudflare/ } : { grepInvert: /@cloudflare/ }),
   outputDir: "./e2e/out/test-results",
   fullyParallel: true,
   forbidOnly: CI,
@@ -49,16 +89,5 @@ export default defineConfig({
     },
   ],
   // BASE_URL を渡したときは、建ててある preview（や dev）をそのまま使う
-  ...(process.env.BASE_URL
-    ? {}
-    : {
-        webServer: {
-          command: process.env.E2E_PREBUILT
-            ? preview
-            : `pnpm exec vp build --mode demo --outDir dist-demo && ${preview}`,
-          url: BASE_URL,
-          reuseExistingServer: !CI,
-          timeout: 180_000,
-        },
-      }),
+  ...(process.env.BASE_URL ? {} : { webServer: CLOUDFLARE ? cloudflareServers : demoServer }),
 });

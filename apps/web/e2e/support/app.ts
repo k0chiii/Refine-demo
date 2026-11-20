@@ -195,6 +195,18 @@ export class App {
     );
   }
 
+  /**
+   * デモのバックエンドの呼び出しの列を ms のあいだ止める（実行の途中で詰まったときの再現）。これより後に出した操作は、
+   * 画面だけ先に変わり（楽観更新）、バックエンドでの実行は止まりが終わるまで待たされる。
+   * 遅い CI で起きる「操作の直後にサインインし直す」競合を、速い手元でも決定的に起こすために使う
+   */
+  async stallBackend(ms: number) {
+    await this.page.evaluate((ms) => {
+      const demo = globalThis.__mf100demo!;
+      void demo.enqueue(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    }, ms);
+  }
+
   btn(text: string) {
     return this.page.locator("m3e-button", { hasText: text }).first();
   }

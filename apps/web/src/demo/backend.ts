@@ -248,12 +248,14 @@ class DemoBackend {
     ref: M,
     args: Record<string, unknown>,
   ): Promise<unknown> {
+    // 呼んだ時点の利用者で実行する。キューの順番待ちのあいだに signOut / signIn されても、別の人（や未サインイン）の
+    // 呼び出しにならない（本番の Convex が送信時の認証で実行するのと同じ。楽観更新で画面だけ先に変わる操作の直後に
+    // サインインし直すと、その操作が失われていた）
+    const as = this.identity() as unknown as {
+      mutation: (r: M, a: unknown) => Promise<unknown>;
+    };
     try {
-      return await this.enqueue(() =>
-        (
-          this.identity() as unknown as { mutation: (r: M, a: unknown) => Promise<unknown> }
-        ).mutation(ref, args),
-      );
+      return await this.enqueue(() => as.mutation(ref, args));
     } finally {
       this.bump();
     }
