@@ -1,6 +1,7 @@
 import { endOfJstDay } from "@mf100/domain";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
+import { syncAssignmentsOpen } from "./lib/assignmentOpen.ts";
 import { SAMPLE_RULE_DRAFTS } from "./lib/notationSamples.ts";
 
 /**
@@ -654,6 +655,7 @@ async function seedBacklogDelayScreenshotFixture(
         reviewClosedReason: "deadline",
         reviewClosedAt: closedAt,
       });
+      await syncAssignmentsOpen(ctx.db, revision._id, false);
     }
   }
 }

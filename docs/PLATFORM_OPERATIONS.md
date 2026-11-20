@@ -47,6 +47,8 @@ AI Gateway/Access/既存 upload/cleanup の秘密については [PLATFORM_IMPLE
 
 `migrations:moveWorkSearchTokens` は works に残った検索の token（`works.searchTokens`）を表 `workSearch` へ移す（2026-11-06。[DECISIONS.md](DECISIONS.md)「検索の token を別の表に」）。配り終えてから運用者が `npx convex run migrations:moveWorkSearchTokens '{dryRun: true}' --prod`、続けて `--prod` で流し、`npx convex run --component migrations lib:getStatus --prod` で終わりを確かめる。流す前の行も検索には出る（印 `searchVersion` の無い行を順に読む）が、その間の検索は遅い。
 
+`migrations:backfillAssignmentOpen` は校正の割当（`reviewAssignments`）の派生の印 `revisionOpen`（割当先の版が受付中か。2026-11-20。[COST.md](COST.md) §5・§9）を、版の今の状態から揃える。印は新しい書込みから自動で付く（版の受付状態を書く `revisions.update` が同じ transaction で割当の印も揃える）ので、流さなくても結果は変わらない。流すまでは印の無い古い割当を版から確かめるぶん、校正のバッジ・校正の入口の読み取りが従来の水準になる。配り終えてから運用者が `npx convex run migrations:backfillAssignmentOpen '{dryRun: true}' --prod`、続けて `--prod` で流し、`npx convex run --component migrations lib:getStatus --prod` で終わりを確かめる。何度流しても同じ。業務の値（割当の状態）は変えない。
+
 埋め込みは有効化後に変更されたルールを更新する。既存ルールは `semanticRules.indexRule` を管理用 internal action として必要な ruleId ごとに実行する。対象は有効な現行ルール、モデルは bge-m3/1024 次元。意味検索の結果は現行版・適用カテゴリ・作品 ACL で再照合する。モデル変更時は別索引で作り直す。
 
 共同編集は通常保存の完了後に「共同編集を開始」する。切替後に古いクライアントから通常保存すると拒否する。提出済み版の原本・座標・コメントは書き換えない。デモの DB はタブごとに独立するため、共同編集/Presence/外部処理は本バックエンドで受入確認する。

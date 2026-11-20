@@ -246,7 +246,13 @@ export const MAPPINGS: readonly Mapping[] = [
     (d) => pair(d.userId, d.threadId),
     (d) => ({ userId: d.userId, threadId: d.threadId, subscribedAt: d.subscribedAt }),
   ),
-  keyed("reviewAssignments", "assignments", (d) => pair(d.revisionId, d.reviewerId)),
+  // revisionOpen は Convex の派生の印（受付中の割当の索引用。convex/lib/assignmentOpen.ts）。Cloudflare は持たない
+  keyed(
+    "reviewAssignments",
+    "assignments",
+    (d) => pair(d.revisionId, d.reviewerId),
+    (d) => rest(d, ["revisionOpen"]),
+  ),
   keyless("workPermissions", "grants"),
   keyless("approvalEvents", "approvals"),
   docs("approvalConfirmations", "confirmations"),

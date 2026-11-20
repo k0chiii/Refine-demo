@@ -845,16 +845,33 @@ export async function listCarryCandidates(
   principal: Principal,
   targetRevisionId: string,
 ): Promise<CommentThread[]> {
+  return (await listCarryCandidatesWithLabels(ctx, principal, targetRevisionId)).candidates;
+}
+
+/**
+ * {@link listCarryCandidates} に、候補の版の表示名（版 ID → 「第 2 版」など）を添える。
+ * 候補を探すために読んだ版の一覧からそのまま作るので、表示名のために版を読み直さない。
+ */
+export async function listCarryCandidatesWithLabels(
+  ctx: AppContext,
+  principal: Principal,
+  targetRevisionId: string,
+): Promise<{ candidates: CommentThread[]; revisionLabels: Map<string, string> }> {
   const target = await ctx.revisions.findById(targetRevisionId);
   if (!target) throw new DomainError("forbidden", { revisionId: targetRevisionId });
   await loadAuthorizedWork(ctx, principal, target.workId, "work.view");
-  const out: CommentThread[] = [];
+  const candidates: CommentThread[] = [];
+  const revisionLabels = new Map<string, string>();
   for (const r of await ctx.revisions.listByWork(target.workId)) {
     if (r.id === target.id || r.reviewState === "open" || r.submittedAt > target.submittedAt)
       continue;
-    for (const t of await ctx.threads.listByRevision(r.id)) if (isCarryCandidate(t)) out.push(t);
+    for (const t of await ctx.threads.listByRevision(r.id))
+      if (isCarryCandidate(t)) {
+        candidates.push(t);
+        revisionLabels.set(r.id, revisionLabel(r));
+      }
   }
-  return out;
+  return { candidates, revisionLabels };
 }
 
 /** 前版のコメントを次版へ持ち越す（F-07）。採否判断者のみ。元のコメントは deferred にし、新スレッドを作る。 */

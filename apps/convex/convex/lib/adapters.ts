@@ -3,6 +3,7 @@ import type { MutationCtx } from "../_generated/server";
 import { syncRevisionThreadStats, threadCountsMayChange } from "./revisionThreadStats";
 import { WORK_SEARCH_VERSION, syncWorkSearch } from "./workSearch";
 import { syncWorkSummary, workSummaryFromDoc } from "./workSummary";
+import { isRevisionDocOpen, revisionOpenOf, syncAssignmentsOpen } from "./assignmentOpen";
 import type {
   AlignmentOverride,
   AppContext,
@@ -44,6 +45,7 @@ import {
   ACCOUNT_CHANNELS,
   approversOf,
   deliverableEmail,
+  isAccepting,
   normalizeNotificationPrefs,
   parseDestinationKey,
   reachableChannels,
@@ -241,10 +243,13 @@ export function createAppContext(
         return { ...revision, id } as Revision;
       },
       async update(revision) {
-        await db.replace(
-          revision.id as Id<"revisions">,
-          compact(toFields(revision) as Strip<Doc<"revisions">>),
-        );
+        const id = revision.id as Id<"revisions">;
+        const before = await db.get("revisions", id);
+        await db.replace(id, compact(toFields(revision) as Strip<Doc<"revisions">>));
+        // 版の受付状態を書くのはここだけ。受付中かが変わったら、割当の印（revisionOpen）も同じ transaction で揃える
+        const open = isAccepting(revision);
+        if (before === null || isRevisionDocOpen(before) !== open)
+          await syncAssignmentsOpen(db, id, open);
         await syncWorkSummary(db, revision.workId);
       },
       async listOpenExpired(now, limit) {
@@ -569,9 +574,12 @@ export function createAppContext(
               .eq("reviewerId", assignment.reviewerId),
           )
           .unique();
+        const revisionId = assignment.revisionId as Id<"revisions">;
         const fields = compact({
           ...assignment,
-          revisionId: assignment.revisionId as Id<"revisions">,
+          revisionId,
+          // 割当の印は版の今の状態から決める（replace で消えない・古い行にも付く）
+          revisionOpen: await revisionOpenOf(db, revisionId),
         });
         if (existing) await db.replace(existing._id, fields);
         else await db.insert("reviewAssignments", fields);
@@ -1309,9 +1317,11 @@ function commentEventFromDoc(d: Doc<"commentEvents">): CommentEvent {
 }
 
 function stripAssignment(d: Doc<"reviewAssignments">): ReviewAssignment {
-  const { _id, _creationTime, ...rest } = d;
+  const { _id, _creationTime, revisionOpen, ...rest } = d;
   void _id;
   void _creationTime;
+  // 派生の印（lib/assignmentOpen.ts）は業務の値ではない
+  void revisionOpen;
   return rest as ReviewAssignment;
 }
 

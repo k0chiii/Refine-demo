@@ -168,6 +168,8 @@ function convexExport(): Map<string, ConvexDoc[]> {
           reviewerId: REVIEWER,
           reviewType: "general",
           state: "pending",
+          // Convex の派生の印（受付中の割当の索引用）。Cloudflare へは持ち込まない
+          revisionOpen: true,
         }),
       ],
     ],
@@ -390,6 +392,9 @@ describe("convertExport（表の対応表）", () => {
       expect(work).not.toHaveProperty(gone);
     // 参照はそのまま文字列
     expect(rows.find((r) => r.table === "revisions")!.doc).toMatchObject({ id: REV, workId: WORK });
+    const assignment = rows.find((r) => r.table === "assignments")!.doc;
+    expect(assignment).toMatchObject({ revisionId: REV, reviewerId: REVIEWER, state: "pending" });
+    expect(assignment).not.toHaveProperty("revisionOpen");
   });
 
   it("users: _id を id に、subject は nogikuSubject か auth の accounts から。名前は auth/store.ts と同じ形", () => {

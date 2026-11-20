@@ -5,10 +5,10 @@ import {
   buildWorksDashboard,
   type AppContext,
 } from "@mf100/application";
-import { isAccepting, overridesAllPermissions, type Principal, type Work } from "@mf100/domain";
-import type { Id } from "./_generated/dataModel";
+import { overridesAllPermissions, type Principal, type Work } from "@mf100/domain";
 import { internalQuery, query, type DatabaseReader, type QueryCtx } from "./_generated/server";
 import { createReadContext } from "./lib/adapters.ts";
+import { acceptingWorkOf, openAssignmentRevisionIds } from "./lib/assignmentOpen.ts";
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { listMyWorks, listWorksRelatedTo } from "./works.ts";
@@ -74,26 +74,20 @@ export const checkBadge = query({
   handler: async (ctx) => {
     const { principal } = await requireUser(ctx);
     const me = principal.userId;
-    const revisionIds: Array<Id<"revisions">> = [];
-    for (const state of ["pending", "viewed"] as const)
-      for (const a of await ctx.db
-        .query("reviewAssignments")
-        .withIndex("by_reviewer_state", (q) => q.eq("reviewerId", me).eq("state", state))
-        .collect())
-        revisionIds.push(a.revisionId);
+    // 自分の未完了の割当のうち、受付中の版のものだけを印の索引で引く（閉じた版の割当は pending / viewed のまま残るが読まない）
+    const assignments = await openAssignmentRevisionIds(ctx.db, me, ["pending", "viewed"]);
+    let count = assignments.open.length;
+    const unknown = [...assignments.legacy];
     for (const c of await ctx.db
       .query("requiredChecks")
       .withIndex("by_assignee_state", (q) => q.eq("assigneeId", me).eq("state", "pending"))
       .collect())
-      revisionIds.push(c.revisionId);
-    const read = createReadContext(ctx.db);
+      unknown.push(c.revisionId);
     const accepting = new Map<string, boolean>();
-    let count = 0;
-    for (const id of revisionIds) {
+    for (const id of unknown) {
       let ok = accepting.get(id);
       if (ok === undefined) {
-        const revision = await read.revisions.findById(id);
-        ok = revision !== null && isAccepting(revision);
+        ok = (await acceptingWorkOf(ctx.db, id)) !== null;
         accepting.set(id, ok);
       }
       if (ok) count++;

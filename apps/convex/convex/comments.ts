@@ -6,7 +6,7 @@ import {
   deleteThread,
   editReply as editReplyUseCase,
   editThread,
-  listCarryCandidates,
+  listCarryCandidatesWithLabels,
   listCommentFileViews,
   markCommentRead,
   replyFileIds,
@@ -18,13 +18,7 @@ import {
   setThreadSubscription,
   toggleCommentReaction,
 } from "@mf100/application";
-import {
-  DomainError,
-  groupMentionToken,
-  isAllowed,
-  projectThreadEvents,
-  revisionLabel,
-} from "@mf100/domain";
+import { DomainError, groupMentionToken, isAllowed, projectThreadEvents } from "@mf100/domain";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAppContext, createReadContext } from "./lib/adapters.ts";
@@ -289,14 +283,11 @@ export const carryCandidates = query({
     const { principal } = await requireUser(ctx);
     const app = createReadContext(ctx.db);
     return runUseCase(async () => {
-      const candidates = await listCarryCandidates(app, principal, revisionId);
-      const revisions = new Map<string, string>();
-      for (const c of candidates) {
-        if (!revisions.has(c.revisionId)) {
-          const r = await app.revisions.findById(c.revisionId);
-          revisions.set(c.revisionId, r ? revisionLabel(r) : "?");
-        }
-      }
+      const { candidates, revisionLabels } = await listCarryCandidatesWithLabels(
+        app,
+        principal,
+        revisionId,
+      );
       const users = await resolveUsers(
         ctx.db,
         candidates.map((c) => c.authorId),
@@ -305,7 +296,7 @@ export const carryCandidates = query({
         .map((c) => ({
           ...c,
           author: users.get(c.authorId),
-          revisionLabel: revisions.get(c.revisionId) ?? "?",
+          revisionLabel: revisionLabels.get(c.revisionId) ?? "?",
         }))
         .sort((a, b) => a.createdAt - b.createdAt);
     });

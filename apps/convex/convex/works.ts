@@ -48,6 +48,7 @@ import { createAppContext, createReadContext, workFromDoc } from "./lib/adapters
 import { runUseCase } from "./lib/errors.ts";
 import { requireUser } from "./lib/principal.ts";
 import { resolveUsers, userDisplayName } from "./lib/users.ts";
+import { acceptingWorkOf, openAssignmentRevisionIds } from "./lib/assignmentOpen.ts";
 import { workSummaryFromDoc } from "./lib/workSummary.ts";
 import {
   vLifecycleTarget,
@@ -483,14 +484,10 @@ export async function listWorksRelatedTo(
       )
         ids.add(grant.workId);
   if (opts.assignments) {
-    const revisionIds = new Set<Id<"revisions">>();
-    for (const state of ["pending", "viewed", "responded", "excused"] as const)
-      for await (const a of db
-        .query("reviewAssignments")
-        .withIndex("by_reviewer_state", (q) =>
-          q.eq("reviewerId", principal.userId).eq("state", state),
-        ))
-        revisionIds.add(a.revisionId);
+    // 受付中の版の割当・専門確認だけが行になる。割当は「受付中の版の割当」の印の索引で引く（閉じた版の割当は読まない）。
+    // 専門確認は担当している分を引き、版が受付中かを要約の索引で確かめる（受付中でなければ文書は読まない）
+    const assigned = await openAssignmentRevisionIds(db, principal.userId);
+    const revisionIds = new Set<Id<"revisions">>([...assigned.open, ...assigned.legacy]);
     for (const state of ["pending", "done", "waived"] as const)
       for await (const c of db
         .query("requiredChecks")
@@ -498,25 +495,9 @@ export async function listWorksRelatedTo(
           q.eq("assigneeId", principal.userId).eq("state", state),
         ))
         revisionIds.add(c.revisionId);
-    // 受付中の版の割当・専門確認だけが行になる。要約の受付中の版から引けば、版を読まずに受付中かも分かる。
-    // 要約の無い制作物（古い行）だけ版を読む
     for (const id of revisionIds) {
-      const summary = await db
-        .query("workSummaries")
-        .withIndex("by_acceptingId", (q) => q.eq("acceptingId", id))
-        .first();
-      if (summary) {
-        ids.add(summary.workId);
-        continue;
-      }
-      const revision = await db.get(id);
-      if (revision?.reviewState !== "open") continue;
-      const own = await db
-        .query("workSummaries")
-        .withIndex("by_work", (q) => q.eq("workId", revision.workId))
-        .unique();
-      // 要約があるのに受付中の版が違う（＝この版は受付中でない）なら候補にしない
-      if (!own || own.acceptingId === null || own.acceptingId === id) ids.add(revision.workId);
+      const workId = await acceptingWorkOf(db, id);
+      if (workId) ids.add(workId);
     }
   }
   for await (const work of db
